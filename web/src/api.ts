@@ -281,6 +281,7 @@ export interface BridgeControlMsg {
     | "world_watchlist_changed"
     | "world_board_changed"
     | "world_ledger_changed"
+    | "world_profiles_changed"
     | "agent_conversation_changed";
   reason?: string;
   pane_id?: string;

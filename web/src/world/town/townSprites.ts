@@ -147,12 +147,28 @@ const SHIRTS = [
 ];
 const PANTS = ["#2e3447", "#4a3b2f", "#30404a", "#3b3247"];
 
+export type TownOutfit = "shirt" | "hoodie" | "coat" | "dress" | "captain";
+export type TownAccessory =
+  | "none"
+  | "glasses"
+  | "headset"
+  | "scarf"
+  | "badge"
+  | "pencil";
+
+/**
+ * A character's appearance. `style` is the hair: 0 short, 1 long, 2 cap,
+ * 3 bun, 4 shaved. An agent without a profile gets a look derived from its
+ * identity (shirt, no accessory); a profile pins every field.
+ */
 export type TownLook = {
   skin: string;
   hair: string;
   shirt: string;
   pants: string;
-  style: 0 | 1 | 2;
+  style: 0 | 1 | 2 | 3 | 4;
+  outfit?: TownOutfit;
+  accessory?: TownAccessory;
 };
 
 /** Deterministic appearance for an identity. */
@@ -172,6 +188,14 @@ export function townLookFor(identity: string): TownLook {
 export type TownDirection = "down" | "up" | "left" | "right";
 export type TownPose = "stand" | "sit" | "carry";
 
+const NAVY = "#1f2a44";
+const NAVY_DARK = "#141c30";
+const GOLD = "#ffd166";
+const FRAME = "#2a2a2a";
+const LENS = "#9fd3ff";
+const HEADSET = "#30343c";
+const SCARF = "#d9644a";
+
 function drawCharacter(
   R: Rect,
   look: TownLook,
@@ -181,8 +205,13 @@ function drawCharacter(
   blink: boolean,
 ) {
   const { skin, hair, shirt, pants, style } = look;
-  const sd = townShade(shirt, -0.28);
-  const sl = townShade(shirt, 0.25);
+  const outfit = look.outfit ?? "shirt";
+  const accessory = look.accessory ?? "none";
+  // A coat or a captain's jacket covers the shirt; the shirt shows inside.
+  const top =
+    outfit === "coat" ? "#eef0ea" : outfit === "captain" ? NAVY : shirt;
+  const sd = townShade(top, -0.28);
+  const sl = townShade(top, 0.25);
   const hl = townShade(hair, 0.3);
   const hd = townShade(hair, -0.25);
   const sk2 = townShade(skin, -0.18);
@@ -190,7 +219,16 @@ function drawCharacter(
   const eye = "#231d2b";
   const cap = townShade(shirt, -0.42);
   if (dir !== "right") {
-    if (pose !== "sit") {
+    if (outfit === "dress") {
+      R(2, 12, 8, 3, top);
+      R(2, 14, 8, 1, sd);
+      if (pose !== "sit") {
+        R(3, 15, 2, 1, skin);
+        R(7, 15, 2, 1, skin);
+        R(3, 16, 2, 1, shoe);
+        R(7, 16, 2, 1, shoe);
+      }
+    } else if (pose !== "sit") {
       const lUp = frame === 1;
       const rUp = frame === 3;
       R(3, 13, 6, 1, pants);
@@ -200,24 +238,36 @@ function drawCharacter(
       R(3, lUp ? 15 : 16, 2, 1, shoe);
       R(7, rUp ? 15 : 16, 2, 1, shoe);
     }
-    R(2, 8, 8, 5, shirt);
+    R(2, 8, 8, 5, top);
     R(9, 8, 1, 5, sd);
     R(2, 12, 8, 1, sd);
-    if (dir === "down") R(5, 8, 2, 2, sl);
+    if (dir === "down") {
+      if (outfit === "coat") {
+        R(5, 8, 2, 5, shirt);
+        R(4, 8, 1, 5, "#cfd3c8");
+      } else if (outfit === "hoodie") {
+        R(4, 8, 4, 1, sl);
+        R(5, 10, 2, 2, sd);
+      } else if (outfit === "captain") {
+        R(5, 8, 2, 5, GOLD);
+        R(2, 8, 1, 1, GOLD);
+        R(9, 8, 1, 1, GOLD);
+      } else R(5, 8, 2, 2, sl);
+    }
     if (pose === "sit") {
-      R(1, 8, 1, 2, shirt);
+      R(1, 8, 1, 2, top);
       R(10, 8, 1, 2, sd);
       R(2, frame ? 9 : 10, 1, 1, skin);
       R(9, frame ? 10 : 9, 1, 1, skin);
     } else if (pose === "carry") {
-      R(1, 4, 1, 5, shirt);
+      R(1, 4, 1, 5, top);
       R(10, 4, 1, 5, sd);
       R(1, 3, 1, 1, skin);
       R(10, 3, 1, 1, skin);
     } else {
       const lh = frame === 3 ? 12 : 11;
       const rh = frame === 1 ? 12 : 11;
-      R(1, 8, 1, lh - 8, shirt);
+      R(1, 8, 1, lh - 8, top);
       R(10, 8, 1, rh - 8, sd);
       R(1, lh, 1, 1, skin);
       R(10, rh, 1, 1, skin);
@@ -235,6 +285,9 @@ function drawCharacter(
         R(2, 1, 8, 2, cap);
         R(2, 3, 9, 1, townShade(cap, -0.25));
         R(4, 1, 2, 1, townShade(cap, 0.25));
+      } else if (style === 4) {
+        R(3, 1, 6, 2, skin);
+        R(3, 2, 6, 1, townShade(hair, 0.1));
       } else {
         R(3, 0, 6, 1, hair);
         R(2, 1, 8, 2, hair);
@@ -246,21 +299,62 @@ function drawCharacter(
           R(2, 4, 1, 4, hair);
           R(9, 4, 1, 4, hair);
         }
+        if (style === 3) R(9, 0, 2, 2, hair);
+      }
+      if (outfit === "captain") {
+        R(2, 0, 8, 2, NAVY);
+        R(1, 2, 10, 1, NAVY_DARK);
+        R(5, 0, 2, 1, GOLD);
+      }
+      if (accessory === "glasses") {
+        R(3, 4, 6, 1, FRAME);
+        R(3, 4, 1, 1, LENS);
+        R(8, 4, 1, 1, LENS);
+      } else if (accessory === "headset") {
+        R(2, 1, 8, 1, HEADSET);
+        R(1, 3, 2, 3, HEADSET);
+        R(9, 3, 2, 3, HEADSET);
+        R(9, 6, 1, 1, "#ff7a6b");
+      } else if (accessory === "scarf") {
+        R(2, 7, 8, 2, SCARF);
+        R(3, 9, 2, 2, townShade(SCARF, -0.2));
+      } else if (accessory === "badge") {
+        R(3, 9, 2, 2, GOLD);
+        R(3, 9, 1, 1, "#fff3c4");
+      } else if (accessory === "pencil") {
+        R(9, 0, 1, 4, "#e0b33c");
+        R(9, 0, 1, 1, "#ff9fb0");
       }
     } else {
-      R(3, 0, 6, 1, hair);
-      R(2, 1, 8, 5, hair);
-      R(3, 6, 6, 1, hd);
-      R(4, 1, 2, 1, hl);
-      if (style === 1) R(2, 6, 8, 2, hair);
+      if (style === 4) R(3, 1, 6, 5, townShade(skin, -0.05));
+      else {
+        R(3, 0, 6, 1, hair);
+        R(2, 1, 8, 5, hair);
+        R(3, 6, 6, 1, hd);
+        R(4, 1, 2, 1, hl);
+        if (style === 1) R(2, 6, 8, 2, hair);
+        if (style === 3) R(4, 0, 4, 2, hd);
+      }
       if (style === 2) {
         R(3, 0, 6, 1, cap);
         R(2, 1, 8, 2, cap);
       }
+      if (outfit === "captain") {
+        R(2, 0, 8, 2, NAVY);
+        R(1, 2, 10, 1, NAVY_DARK);
+      }
+      if (accessory === "headset") R(2, 1, 8, 1, HEADSET);
+      if (accessory === "scarf") R(2, 7, 8, 2, SCARF);
     }
     return;
   }
-  if (pose !== "sit") {
+  if (outfit === "dress") {
+    R(3, 12, 6, 3, top);
+    if (pose !== "sit") {
+      R(4, 15, 2, 1, skin);
+      R(4, 16, 3, 1, shoe);
+    }
+  } else if (pose !== "sit") {
     if (frame % 2 === 0) {
       R(4, 13, 4, 3, pants);
       R(4, 16, 5, 1, shoe);
@@ -271,7 +365,7 @@ function drawCharacter(
       R(6, 16, 3, 1, shoe);
     }
   }
-  R(3, 8, 6, 5, shirt);
+  R(3, 8, 6, 5, top);
   R(3, 12, 6, 1, sd);
   R(8, 8, 1, 4, sd);
   if (pose === "carry") {
@@ -297,6 +391,8 @@ function drawCharacter(
     R(3, 1, 7, 2, cap);
     R(8, 3, 3, 1, townShade(cap, -0.25));
     R(3, 3, 2, 2, hair);
+  } else if (style === 4) {
+    R(4, 1, 5, 2, skin);
   } else {
     R(4, 0, 5, 1, hair);
     R(3, 1, 7, 2, hair);
@@ -304,13 +400,27 @@ function drawCharacter(
     R(6, 3, 2, 1, hair);
     R(5, 1, 2, 1, hl);
     if (style === 1) R(3, 6, 2, 2, hair);
+    if (style === 3) R(2, 0, 2, 2, hair);
   }
+  if (outfit === "captain") {
+    R(3, 0, 7, 2, NAVY);
+    R(3, 2, 8, 1, NAVY_DARK);
+  }
+  if (accessory === "glasses") {
+    R(6, 4, 3, 1, FRAME);
+    R(7, 4, 1, 1, LENS);
+  } else if (accessory === "headset") {
+    R(4, 1, 1, 4, HEADSET);
+    R(3, 3, 2, 2, HEADSET);
+    R(5, 6, 3, 1, HEADSET);
+  } else if (accessory === "scarf") R(3, 7, 6, 2, SCARF);
+  else if (accessory === "pencil") R(8, 0, 1, 3, "#e0b33c");
 }
 
 const characterCache = new Map<string, TownCanvas>();
 
 export function townLookKey(look: TownLook) {
-  return `${look.skin}${look.hair}${look.shirt}${look.pants}${look.style}`;
+  return `${look.skin}${look.hair}${look.shirt}${look.pants}${look.style}${look.outfit ?? ""}${look.accessory ?? ""}`;
 }
 
 /** A 14x20 character frame, cached by appearance. */
@@ -660,6 +770,52 @@ export function townScreen(state: string, frame: number) {
     },
     null,
   );
+}
+
+/** What a desk's quest marker shows: progress through the agent's quest. */
+export type TownQuestMark = {
+  done: number;
+  total: number;
+  status: "active" | "done" | "blocked" | "paused";
+};
+
+const QUEST_COLORS: Record<TownQuestMark["status"], string> = {
+  active: "#6fc3ff",
+  done: "#7be08f",
+  blocked: "#ffb547",
+  paused: "#a9b2a4",
+};
+const questBars = new Map<string, TownCanvas>();
+
+/**
+ * A quest marker over a desk: a gold flag beside a bar filled with the
+ * quest's progress. A quest with no steps (a goal or loop) shows the flag.
+ */
+export function townQuestBar(mark: TownQuestMark) {
+  const width = 20;
+  const filled =
+    mark.total > 0
+      ? Math.round((Math.min(mark.done, mark.total) / mark.total) * width)
+      : 0;
+  const key = `${mark.status}:${filled}:${mark.total > 0}`;
+  const cached = questBars.get(key);
+  if (cached) return cached;
+  const canvas = townSprite(mark.total > 0 ? width + 6 : 4, 6, (R) => {
+    // The flag: a pole and a pennant in the quest's colour.
+    R(0, 0, 1, 6, "#d9c39b");
+    R(
+      1,
+      0,
+      3,
+      3,
+      mark.status === "active" ? "#ffd166" : QUEST_COLORS[mark.status],
+    );
+    if (mark.total === 0) return;
+    R(6, 1, width, 4, "#11161d");
+    if (filled) R(6, 1, filled, 4, QUEST_COLORS[mark.status]);
+  });
+  questBars.set(key, canvas);
+  return canvas;
 }
 
 const portraits = new Map<string, string>();

@@ -75,8 +75,11 @@ npm install --global @ivoryheart/herdr-world
 
 Choose one channel. Homebrew uses the published platform archive; npm installs a
 small launcher and the matching platform binary. npm needs Node.js 22.14.0 or newer
-and optional dependencies enabled. Neither channel installs or starts Herdr. For
-an existing installation, stop the old World process before upgrading the channel.
+and optional dependencies enabled. `brew install` and `brew upgrade` install and
+upgrade Herdr too (Homebrew's bottle, or the verified prebuilt binary on Intel
+Macs); npm leaves Herdr to you (see [Herdr installation and upgrades](#herdr-installation-and-upgrades)).
+Neither starts Herdr. For an existing installation, stop the old World process
+before upgrading the channel.
 
 For a release candidate, request its exact version. The standalone installer
 accepts `HERDR_WORLD_VERSION=X.Y.Z-rc.N`, npm accepts
@@ -161,18 +164,107 @@ new service and profiles before removing an old versioned bundle; reinstalling t
 old channel or relinking an old bundle is the rollback path. A new 0.2.x version
 continues to use the same World profiles, settings, token, and browser namespace.
 
-## Managed Herdr setup
+## Herdr installation and upgrades
 
-For the default local profile, World can install or start the pinned Herdr runtime:
+Each Herdr World release verifies one Herdr release (currently 0.9.5) and pins its
+SHA-256 checksums. World installs and upgrades Herdr to that release, and installs
+the Herdr integrations for the harnesses it supports, so it works with a Herdr it was
+tested with:
 
 ```bash
 herdr-world herdr status
-herdr-world herdr setup
+herdr-world herdr setup             # install if missing, then start a user service
+herdr-world herdr upgrade           # Herdr, harness integrations and plugin
+herdr-world herdr upgrade --install # also install Herdr when none is found
 ```
 
-The same action appears in the UI when the default local sockets are unavailable.
-Managed setup is intentionally limited to the default local configuration; named
-sessions, explicit sockets, and SSH targets must be started by their operator.
+World looks for Herdr in `HERDR_BIN_PATH`, then `PATH`, then Herdr's default
+location: `~/.local/bin/herdr` on Linux and macOS, or
+`%LOCALAPPDATA%\Programs\Herdr\bin\herdr.exe` on Windows (`HERDR_INSTALL_DIR`
+overrides both, as it does for Herdr's own installers). A Herdr that World installs
+lands there, so `herdr` and `herdr update` find it afterwards.
+
+When it runs:
+
+- **Standalone installer** (`install-herdr-world.sh`): after installing World it runs
+  `herdr-world herdr upgrade --install`. Set `HERDR_WORLD_SKIP_HERDR=1` to install only
+  World. A Herdr problem prints a warning and leaves World installed.
+- **`herdr-world update` and the in-app update**: once the new World is in place, the
+  new release runs the Herdr step, even when it keeps the same Herdr version, because
+  the harness integrations and the plugin follow the World release. In the browser it
+  is its own notice after the reload. That notice appears only when something
+  changed, and it reports a failed step as incomplete.
+- **Menu**: **Runtime → Upgrade Herdr** appears when Herdr or its running server is
+  older than the verified release. **Runtime → Update Herdr integrations** appears
+  when only harness integrations or the plugin are behind.
+- **Homebrew**: on Apple Silicon and Linux the Formula depends on Homebrew's `herdr`
+  bottle, so Homebrew decides that version. Homebrew has no Intel Mac bottle, so on
+  Intel Macs the Formula installs Herdr's own prebuilt `herdr-macos-x86_64` binary
+  for the verified release (pinned by the same checksum), not a source build. If
+  Homebrew's `herdr` is already installed there, `brew link` reports the conflict;
+  uninstall one of them.
+- **npm and Windows archives**: run `herdr-world herdr upgrade --install` once
+  yourself, or use the menu.
+
+What the upgrade does:
+
+1. **Binary.** It downloads the verified release and checks its checksum and
+   `herdr --version` before replacing anything. On Linux and macOS the old binary
+   stays beside the new one as `herdr.previous`, and a failed check restores it.
+   On Windows, World runs Herdr's own `install.ps1` (checksum-pinned) with the
+   verified package; that installer keeps earlier releases and switches only after
+   its own checks. World upgrades a Windows Herdr only in the layout that installer
+   manages: its visible bin, its `current` junction or a release directory under
+   `%USERPROFILE%\.herdr` (`HERDR_HOME`), which PATH may point at directly. A Herdr
+   that Herdr World 0.2.6 or earlier installed under
+   `%APPDATA%\herdr-world\herdr\<version>` (found even though it is not on PATH)
+   moves to Herdr's default location, and the old copy stays as a backup. Whenever
+   an upgrade moves Herdr (from that legacy copy, or from a release directory on
+   PATH to the default bin), World's Herdr scheduled task is re-registered at the
+   new path without being restarted. A Herdr elsewhere is reported and left alone. World never downgrades
+   a newer Herdr. It also leaves Homebrew, mise, asdf and Nix installs, and any
+   shim, to their manager; it prints the command to use.
+2. **Running server.** A Herdr server keeps running its old version until it is
+   replaced. On Linux and macOS, World asks the server to hand its panes to the new
+   version live, as `herdr update --handoff` does, but only when the server supports
+   it and World can prove that nothing supervises it. Herdr starts the new server as
+   a child of the old one, so a service manager or wrapper would end the panes or
+   start a competing server when the old one exits. The proven case is Linux: the
+   server owning the control socket is a daemonized Herdr (its parent is init or
+   the user's systemd manager) in a terminal or login scope. Everywhere else the old
+   server keeps your panes and World says that a restart is needed: macOS (no
+   unprivileged check can rule out a launchd job or wrapper), Windows, any systemd
+   service, a wrapper parent, an unidentifiable owner, an older server or a failed
+   handoff. World never stops or restarts Herdr itself, and never hands
+   a newer or unidentified server to an older release. A handoff that leaves no
+   server running is reported as a failure.
+3. **Harness integrations.** World supports the Codex, Claude and Pi harnesses. For
+   each one installed on this machine (its `codex`, `claude` or `pi` command is on
+   `PATH`), World runs `herdr integration install codex|claude|pi`. It does so
+   without prompting when the integration is missing or outdated, and for every
+   present harness after a Herdr upgrade: a new Herdr can change what an
+   integration installs, as 0.9.5 did when it dropped Codex turn hooks. Harnesses
+   that are not installed are skipped.
+4. **Plugin.** If the `ivoryheart.herdr-world` plugin was installed from GitHub,
+   World pins it to this World's release or release-candidate tag with
+   `herdr plugin install IvoryHeart/herdr-world --ref vX.Y.Z --yes`. A linked plugin,
+   a pre-merge preview or a source build is left alone.
+
+To roll back a Linux or macOS Herdr binary, move `herdr.previous` back over `herdr`;
+the running server is unaffected.
+
+Managed setup and upgrades act on this machine's Herdr. Setup is limited to the
+default local configuration: named sessions, explicit sockets and SSH targets must
+be started by their operator.
+
+**SSH hosts (design, not yet available).** The plan is a per-connection **Upgrade
+Herdr on this host** action that the owner confirms each time. Over the
+connection's OpenSSH command it would read the remote `herdr --version`. Only when
+Herdr's published manifest offers exactly the version and checksum this World
+verified would it run the remote `herdr update --handoff`; Herdr's updater verifies
+the download and refuses package-managed installs. It would then run the same
+harness-integration step remotely and report the outcome. It would never install
+Herdr on a host that lacks it.
 
 ## Local and SSH connections
 
@@ -218,6 +310,33 @@ herdr-world --socket-path /path/to/herdr.sock \
 herdr-world --ssh-host workbox
 ```
 
+## Agent profiles and the launcher
+
+**New agent** starts a harness in a new Herdr tab through the connection that
+owns the chosen room (`tab.create`, then `agent.start` with the profile's
+arguments, then a readiness wait and the first prompt). Agent kinds come from
+the host's Herdr (`server.agent_manifests`); an older Herdr offers Claude and
+Codex. Profiles are stored atomically, with owner-only permissions, in
+`~/.config/herdr-world/agent-profiles.json` on Unix or
+`%APPDATA%\herdr-world\agent-profiles.json` on Windows; override the path
+with `HERDR_WORLD_AGENT_PROFILES_PATH`. Profiles refuse text that looks like a
+credential and never hold one.
+
+To show whether a harness is installed and logged in, the service runs each
+harness's own status command on the room's host (locally, or over the
+connection's OpenSSH destination): `claude auth status` and
+`codex login status`. It keeps only whether the harness is logged in and the
+login method; the commands' other output, which can name the account, is
+discarded. It also lists `SKILL.md` folders by name. A service whose `PATH`
+lacks the harness still finds it in the usual install folders (such as
+`~/.local/bin`). **Log in** opens a new tab and shows the harness's fixed login
+command (`claude auth login`, `codex login --device-auth`), wrapped in `sh -c`
+so it finds the executable the same way, with **Copy** and **Open its tab**.
+You run it there and finish the login yourself. World types nothing into the
+tab: Herdr can't tell a prompt from a startup script waiting for a key. Windows
+hosts are not probed: their harnesses show no status, and every agent kind
+their Herdr supports stays available. Log in is not offered there.
+
 ## Optional cost metrics
 
 The Town board can show token use and reported cost from a Prometheus-compatible
@@ -239,6 +358,43 @@ queries every 30 seconds for Codex token counters and Claude token/reported-cost
 counters, caps response size and model rows, and does not estimate missing prices.
 Provider failure appears as degraded or unavailable Economy data; connections,
 topology, terminal conversations and Inspector operations continue normally.
+
+## Built-in sources: GitHub and Jira
+
+World shows your pull requests and tickets on Board's Work lens and as desk
+badges in Town. Both sources ship with World and are on by default; switch
+either off in **Settings → Sources**. Each is read only while a visible browser
+tab shows it, at most once a minute, and a failed refresh keeps the last items.
+Requests answer within two seconds with what World has while a slow `gh`,
+Jira or SSH lookup finishes in the background.
+
+- **GitHub** runs `gh` as the service user. Install the
+  [GitHub CLI](https://cli.github.com/) for that user and run `gh auth login`
+  (for a user service, the same account the service runs as). Until then the
+  source says **Sign in with gh auth login**. World stores no GitHub token.
+  Merged pull requests cover the last 7 days by default (1 to 90 in
+  **Settings → Sources**, saved as `custom.world_sources.github.mergedDays`);
+  World reads them 100 per request, up to GitHub search's 1,000 results.
+- **Jira Cloud** needs your site (`example.atlassian.net`), account email and an
+  [API token](https://id.atlassian.com/manage-profile/security/api-tokens),
+  entered in **Settings → Sources**. The site and email are saved in
+  `settings.json` (`custom.world_sources`); the token is saved in an owner-only
+  `source-secrets.json` (or `source-secrets-<hash>.json` beside a custom
+  `HERDR_WORLD_SETTINGS_PATH`) in World's data directory and is never sent to the
+  browser. Changing the site or email removes the saved token. The filter defaults to `(assignee = currentUser() OR watcher =
+  currentUser()) AND (statusCategory != Done OR updated >= -7d) ORDER BY updated DESC`;
+  up to 100 tickets are read.
+
+To link a pull request to an agent, World reads the branch and GitHub remotes
+of the agent's checkout: its reported checkout (`herdr-world agent-checkout`),
+else its pane's directory, else its workspace's worktree. It runs `git` locally
+for local profiles and over the profile's SSH destination for SSH profiles;
+Windows hosts are not read. At most 32 checkouts are read per refresh and each
+is cached for two minutes. A pull request an agent reports with `--pr` links
+directly. Without `git` on that host, or for a directory that is not a
+repository, pull requests and tickets still show; only that agent's desk link
+is missing, and World reports no error for it. If GitHub or Jira is down,
+that source shows an error and keeps its last items.
 
 ## Herdr plugin
 

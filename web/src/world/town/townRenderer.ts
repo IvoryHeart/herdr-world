@@ -52,12 +52,14 @@ import {
   TOWN_TILE as T,
   townDeskSlots,
   townDeskTable,
+  townGeometryKey,
   townSeat,
   type TownCell,
   type TownLayout,
 } from "./townLayout";
 import type { TownModel } from "./townModel";
 import type { TerminalColor } from "../terminalColor";
+import { profileLookFor, profilesSnapshot } from "../agentProfiles";
 import {
   paintTownFacade,
   paintTownGround,
@@ -72,8 +74,10 @@ import {
   townCharacter,
   townHash,
   townLookFor,
+  townQuestBar,
   townScreen,
   type TownCanvas,
+  type TownQuestMark,
   type TownLook,
 } from "./townSprites";
 
@@ -96,12 +100,23 @@ export type TownRendererDiagnostics = {
   summoned: string[];
   desks: number;
   /** Animated node counts, kept compatible with existing browser evidence. */
-  animation: { characters: number; monitors: number; statuses: number };
+  animation: {
+    characters: number;
+    monitors: number;
+    statuses: number;
+    quests: number;
+  };
   layout: null | {
     width: number;
     height: number;
     buildings: number;
     rooms: number;
+    /** The container shape: stacked buildings, room and desk columns. */
+    formFactor: string;
+    roomColumns: number;
+    deskColumns: number;
+    /** Room and building placement (townGeometryKey), to see reflows. */
+    geometry: string;
   };
   /** Drag outcomes as drawn: lifts, landings (each with its dust), returns. */
   drags: { lifts: number; landings: number; returns: number; dust: number };
@@ -135,7 +150,7 @@ function diagnostics(): TownRendererDiagnostics {
     walking: 0,
     summoned: [],
     desks: 0,
-    animation: { characters: 0, monitors: 0, statuses: 0 },
+    animation: { characters: 0, monitors: 0, statuses: 0, quests: 0 },
     layout: null,
     drags: { lifts: 0, landings: 0, returns: 0, dust: 0 },
   };
@@ -152,6 +167,8 @@ export type TownSceneState = {
   /** Building currently held open (for example while moving a desk). */
   openHostKey: string | null;
   calm: boolean;
+  /** Quest progress by agent key, shown over the agent's desk. */
+  quests?: ReadonlyMap<string, TownQuestMark>;
 };
 
 export type TownRendererHandle = {
@@ -358,6 +375,7 @@ export async function createTownRenderer(
   let buildings: BuildingView[] = [];
   const actorViews = new Map<string, ActorView>();
   const bubbles = new Map<string, Sprite>();
+  const questMarks = new Map<string, Sprite>();
   let ownedTextures: Texture[] = [];
   let level: TownLevel = "overview";
   let disposed = false;
@@ -491,6 +509,10 @@ export async function createTownRenderer(
       height: layout.height,
       buildings: layout.buildings.length,
       rooms: layout.buildings.reduce((sum, b) => sum + b.rooms.length, 0),
+      formFactor: layout.shape.formFactor,
+      roomColumns: layout.shape.roomColumns,
+      deskColumns: layout.shape.deskColumns,
+      geometry: townGeometryKey(layout),
     };
     for (const view of actorViews.values()) {
       view.sprite.destroy();
@@ -814,10 +836,26 @@ export async function createTownRenderer(
     };
   };
 
+  // An agent launched from a profile wears the profile's look; any other
+  // agent's look is derived from its identity.
   const looks = new Map<string, TownLook>();
+  let looksRevision = -1;
   const lookOf = (key: string) => {
-    let look = looks.get(key);
-    if (!look) looks.set(key, (look = townLookFor(key)));
+    const profiles = profilesSnapshot();
+    if ((profiles?.revision ?? -1) !== looksRevision) {
+      looks.clear();
+      looksRevision = profiles?.revision ?? -1;
+    }
+    const terminal = model?.agents.get(key)?.currentTerminalRef;
+    const cacheKey = `${key}|${terminal?.nativeId ?? ""}`;
+    let look = looks.get(cacheKey);
+    if (!look) {
+      look =
+        (terminal &&
+          profileLookFor(profiles, terminal.connectionId, terminal.nativeId)) ||
+        townLookFor(key);
+      looks.set(cacheKey, look);
+    }
     return look;
   };
 
@@ -946,6 +984,7 @@ export async function createTownRenderer(
       const moving = actor.mode === "walk";
       const frame = moving ? Math.floor(actor.walked / 6) % 4 : 0;
       const bob = moving && frame % 2 ? -1 : 0;
+      view.look = lookOf(actor.key);
       view.sprite.texture = textureOf(
         townCharacter(view.look, actor.dir, frame, "stand", blink(actor.key)),
       );
@@ -1047,6 +1086,57 @@ export async function createTownRenderer(
       if (!wanted.has(key)) {
         bubble.destroy();
         bubbles.delete(key);
+      }
+  };
+
+  // A seated agent's quest progress shows on it once desks are drawn (in a
+  // room and at a desk, not over the overview's room cards), clear of its
+  // status bubble. It leaves with the agent.
+  const updateQuests = () => {
+    const scale = Math.min(3, Math.max(2, Math.round(camera.z * 1.5)));
+    const wanted = new Set<string>();
+    if (model && (level === "room" || level === "desk"))
+      for (const [key, mark] of state.quests ?? []) {
+        const actor = actors.actors.get(key);
+        const seat = model.agentSeats.get(key);
+        const cell = seat && layoutCells.get(seat.deskKey);
+        if (actor?.mode !== "seat" || !seat || !cell) continue;
+        const geometry = townSeat(cell, seat.seat);
+        // Seat tags fill the aisle above a top seat, so its mark sits on
+        // the agent, under its status bubble. A bottom seat's sits on the
+        // table, above its bubble.
+        const point = camera.toScreen(
+          geometry.cx,
+          geometry.top ? geometry.tableY + 14 : geometry.tableY + 33,
+        );
+        if (
+          point.x < -60 ||
+          point.y < -40 ||
+          point.x > camera.viewport.width + 60 ||
+          point.y > camera.viewport.height + 40
+        )
+          continue;
+        wanted.add(key);
+        let sprite = questMarks.get(key);
+        if (!sprite) {
+          sprite = new Sprite(Texture.EMPTY);
+          sprite.anchor.set(0.5, 1);
+          sprite.label = "town-quest";
+          screenLayer.addChild(sprite);
+          questMarks.set(key, sprite);
+        }
+        sprite.texture = textureOf(townQuestBar(mark));
+        sprite.scale.set(scale);
+        const bubble = geometry.top ? undefined : bubbles.get(key);
+        sprite.position.set(
+          Math.round(point.x),
+          Math.round(point.y - 2 - (bubble ? bubble.height + 2 : 0)),
+        );
+      }
+    for (const [key, sprite] of questMarks)
+      if (!wanted.has(key)) {
+        sprite.destroy();
+        questMarks.delete(key);
       }
   };
 
@@ -1246,6 +1336,7 @@ export async function createTownRenderer(
     updatePods(deskBlend, camera.z >= 0.6, lite, blink);
     updateActors(Math.max(deskBlend, townBlend(0.35, 0.6, camera.z)));
     updateBubbles();
+    updateQuests();
     drawEffects();
     const dragging = updateDrag(dt);
     app.renderer.render(app.stage);
@@ -1262,6 +1353,7 @@ export async function createTownRenderer(
         0,
       ),
       statuses: bubbles.size,
+      quests: questMarks.size,
     };
     onFrame(camera, level);
     if (!stats.ready) stats.ready = true;
@@ -1678,6 +1770,7 @@ export async function createTownRenderer(
       frames?.dispose();
       clearScene();
       for (const bubble of bubbles.values()) bubble.destroy();
+      for (const mark of questMarks.values()) mark.destroy();
       app.destroy(true, { children: true, texture: false });
       stats.destroys += 1;
       stats.activeApplications = Math.max(0, stats.activeApplications - 1);

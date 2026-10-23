@@ -4,7 +4,10 @@ import { basename, join } from "node:path";
 import { taskSummarySessionFingerprint } from "../herdr/task-summary";
 import {
   conversationMessages,
+  runningTool,
   latestAssistantMessage,
+  type AgentQuest,
+  type AnswerUnconfirmedReason,
   type Conversation,
   type ConversationBinding,
   type ConversationLatest,
@@ -17,6 +20,11 @@ import {
   type DeliveryClock,
   type DeliveryView,
 } from "./conversation-delivery";
+import {
+  parsePendingPrompt,
+  PROMPT_SCREEN_LINES,
+  type PendingPrompt,
+} from "./pending-prompt";
 import { codexHome, type AgentSessionFileAccess } from "./session-file-access";
 import type { SessionProjectionCache } from "./session-projection-cache";
 import {
@@ -84,6 +92,9 @@ export function paneBinding(
     ),
   };
 }
+
+/** Herdr statuses that show an agent moved on from a prompt. */
+const MOVED_ON = new Set(["working", "idle", "done"]);
 
 /** A plain name for the session a pane's `agent.get` reply describes. */
 export function sessionLabel(
@@ -261,8 +272,13 @@ export function createHerdrConversationSource(args: {
     unavailable: { reason, detail, ...extra },
   });
 
-  const resolve = async (paneId: string, reuseCodexTitle = false) => {
-    const info = await agentInfo(paneId);
+  const resolve = async (
+    paneId: string,
+    reuseCodexTitle = false,
+    // An agent record already listed (`agent.list`), or null for none.
+    listed?: { info: Record<string, unknown> | null },
+  ) => {
+    const info = listed ? listed.info : await agentInfo(paneId);
     const agent = normalizeAgentName(stringValue(info?.agent));
     const base: Omit<Conversation, "status" | "unavailable"> = {
       conversation_version: 1,
@@ -270,13 +286,17 @@ export function createHerdrConversationSource(args: {
       pane_id: paneId,
       agent: agent || null,
       agent_status: stringValue(info?.agent_status) || null,
+      terminal_title: stringValue(info?.terminal_title).trim() || null,
+      running_tool: null,
       session_binding: null,
       session_fingerprint: null,
       session_label: null,
       updated_at: null,
       messages: [],
       latest: null,
+      quest: null,
       deliveries: deliveries.list(paneId),
+      pending_prompt: null,
     };
     if (args.remotePlatform === "windows")
       return unavailable(
@@ -379,6 +399,8 @@ export function createHerdrConversationSource(args: {
         updated_at: new Date(projection.file.mtimeMs).toISOString(),
         messages,
         latest: latestAssistantMessage(messages),
+        quest: projection.quest,
+        running_tool: runningTool(projection.entries),
       } satisfies Conversation;
     } catch (error) {
       args.cache.invalidate(resolved);
@@ -428,6 +450,40 @@ export function createHerdrConversationSource(args: {
     deliveries.evaluate(paneId, current, views);
   };
 
+  /** The session and Herdr state a prompt is read under. */
+  const promptContext = (info: Record<string, unknown> | null) => ({
+    session: info
+      ? JSON.stringify([
+          isRecord(info.agent_session) ? info.agent_session.value : null,
+          stringValue(info.terminal_title),
+        ])
+      : null,
+    seq:
+      typeof info?.state_change_seq === "number" ? info.state_change_seq : null,
+  });
+
+  /** The prompt a blocked agent shows at the bottom of its screen. */
+  const readPrompt = async (
+    paneId: string,
+    info: Record<string, unknown> | null,
+  ): Promise<PendingPrompt | null> => {
+    const result = await args.herdrCall("pane.read", {
+      pane_id: paneId,
+      source: "recent",
+      lines: PROMPT_SCREEN_LINES,
+      format: "text",
+      strip_ansi: true,
+    });
+    const text = screenText(result);
+    return text === null
+      ? null
+      : parsePendingPrompt(
+          normalizeAgentName(stringValue(info?.agent)),
+          text,
+          promptContext(info),
+        );
+  };
+
   const read = async ({
     pane_id,
   }: {
@@ -435,14 +491,159 @@ export function createHerdrConversationSource(args: {
   }): Promise<Conversation> => {
     const shown = await readShown(pane_id);
     await settle(pane_id, shown);
-    return { ...shown, deliveries: deliveries.list(pane_id) };
+    // A blocked agent's question is on its screen, not in its transcript.
+    const pending_prompt =
+      shown.agent_status === "blocked"
+        ? await agentInfo(pane_id)
+            .then((info) =>
+              stringValue(info?.agent_status) === "blocked"
+                ? readPrompt(pane_id, info)
+                : null,
+            )
+            .catch(() => null)
+        : null;
+    return { ...shown, deliveries: deliveries.list(pane_id), pending_prompt };
   };
 
   const latest = async (target: { pane_id: string }) =>
     withoutMessages(await read(target));
 
+  /** Run `each` for the named panes, or every agent pane, four at a time. */
+  const eachPane = async <T>(
+    paneIds: readonly string[] | undefined,
+    each: (paneId: string) => Promise<T>,
+  ) => {
+    const ids =
+      paneIds ??
+      (await (async () => {
+        const result = await args.herdrCall("agent.list", {});
+        const agents =
+          isRecord(result) && Array.isArray(result.agents) ? result.agents : [];
+        return agents
+          .filter(isRecord)
+          .map((agent) => stringValue(agent.pane_id))
+          .filter(Boolean);
+      })());
+    const results: T[] = [];
+    // Bound filesystem and SSH work when many agents are open.
+    let next = 0;
+    await Promise.all(
+      Array.from({ length: Math.min(4, ids.length) }, async () => {
+        while (next < ids.length) {
+          const index = next++;
+          results[index] = await each(ids[index]!);
+        }
+      }),
+    );
+    return results;
+  };
+
   return {
     id: "herdr",
+    answer: async ({ pane_id, key, prompt_fingerprint }) => {
+      // Herdr has no conditional input (herdr#4764), so the key cannot be
+      // made conditional on the prompt. World checks as close to the key as
+      // it can: Herdr's state, the screen, then Herdr's state again, and any
+      // difference refuses. A change between the last check and the key is
+      // not caught; Chat says so on the card and docs/CHAT.md explains it.
+      const before = await agentInfo(pane_id);
+      const refuse = (
+        reason: "not_blocked" | "changed" | "unknown_option",
+        message: string,
+        pending_prompt: PendingPrompt | null = null,
+      ) => ({ status: "refused" as const, reason, message, pending_prompt });
+      if (stringValue(before?.agent_status) !== "blocked")
+        return refuse(
+          "not_blocked",
+          "The agent is no longer waiting on a question. Nothing was sent.",
+        );
+      const prompt = await readPrompt(pane_id, before);
+      if (!prompt || prompt.fingerprint !== prompt_fingerprint)
+        return refuse(
+          "changed",
+          "The question changed. Nothing was sent; check it and answer again.",
+          prompt,
+        );
+      const option = prompt.options.find((candidate) => candidate.key === key);
+      if (!option)
+        return refuse(
+          "unknown_option",
+          "That is not one of the agent's options. Nothing was sent; answer in the Terminal.",
+          prompt,
+        );
+      const after = await agentInfo(pane_id);
+      const same = (name: string) =>
+        JSON.stringify(after?.[name] ?? null) ===
+        JSON.stringify(before?.[name] ?? null);
+      if (
+        stringValue(after?.agent_status) !== "blocked" ||
+        ![
+          "state_change_seq",
+          "agent_session",
+          "terminal_title",
+          "revision",
+        ].every(same)
+      )
+        return refuse(
+          "changed",
+          "The agent changed while Chat checked its question. Nothing was sent; check it and answer again.",
+        );
+      await args.herdrCall(
+        "pane.send_input",
+        option.key === "escape"
+          ? { pane_id, text: "", keys: ["escape"] }
+          : { pane_id, text: option.key, keys: [] },
+      );
+      // An answer is acknowledged only on evidence that this agent moved on
+      // from this prompt: the same session, then a status that shows progress
+      // (working, idle or done), or a new state and a different question on
+      // a readable screen. No agent, another session, an unrecognised status,
+      // an unreadable screen or the same question leaves it unconfirmed, with
+      // the reason.
+      const unconfirmed = await agentInfo(pane_id)
+        .then(async (info): Promise<AnswerUnconfirmedReason | null> => {
+          const status = stringValue(info?.agent_status);
+          if (!info || !status) return "agent_missing";
+          if (
+            JSON.stringify(info.agent_session ?? null) !==
+            JSON.stringify(before?.agent_session ?? null)
+          )
+            return "session_changed";
+          if (MOVED_ON.has(status)) return null;
+          if (status !== "blocked") return "unknown_status";
+          // Read under the checked state, so only what the screen shows
+          // counts as a different question. A form's next question can
+          // follow with no new Herdr state; a new state with a changed
+          // screen is the agent's next prompt.
+          const shown = await readPrompt(pane_id, before);
+          if (!shown) return "unreadable";
+          const asks = (asked: PendingPrompt) =>
+            JSON.stringify([
+              asked.question,
+              asked.request,
+              asked.options.map((option) => option.label),
+            ]);
+          // Only a recognised menu is a next question; a partial or
+          // unrecognised screen (no options) proves nothing, whether or not
+          // Herdr's state moved.
+          if (!shown.options.length) return "still_showing";
+          return asks(shown) !== asks(prompt) ||
+            (shown.fingerprint !== prompt.fingerprint &&
+              info.state_change_seq !== before?.state_change_seq)
+            ? null
+            : "still_showing";
+        })
+        .catch(() => "unreadable" as const);
+      return {
+        status: "sent" as const,
+        key: option.key,
+        number: option.number,
+        label: option.label,
+        acknowledged: unconfirmed === null,
+        unconfirmed_reason: unconfirmed,
+        prompt_fingerprint: prompt.fingerprint,
+      };
+    },
     dismiss: ({ pane_id, delivery_id }) =>
       deliveries.dismiss(pane_id, delivery_id),
     dispose: () => {
@@ -485,6 +686,8 @@ export function createHerdrConversationSource(args: {
       return {
         key: JSON.stringify([
           base.agent_status,
+          // A change of task in the title is news; its spinner turning is not.
+          base.terminal_title?.replace(/^[^\p{L}\p{N}]+/u, "") ?? null,
           base.session_binding,
           base.session_fingerprint,
           resolved.reason ?? null,
@@ -502,52 +705,92 @@ export function createHerdrConversationSource(args: {
         ],
       };
     },
-    latestAll: async (paneIds) => {
-      const ids =
-        paneIds ??
-        (await (async () => {
-          const result = await args.herdrCall("agent.list", {});
-          const agents =
-            isRecord(result) && Array.isArray(result.agents)
-              ? result.agents
-              : [];
-          return agents
-            .filter(isRecord)
-            .map((agent) => stringValue(agent.pane_id))
-            .filter(Boolean);
-        })());
-      const results: Conversation[] = [];
-      // Bound filesystem and SSH work when many agents are open.
-      let next = 0;
-      await Promise.all(
-        Array.from({ length: Math.min(4, ids.length) }, async () => {
-          while (next < ids.length) {
-            const index = next++;
-            const pane_id = ids[index]!;
-            results[index] = await read({ pane_id }).catch((error) =>
-              unavailable(
-                {
-                  conversation_version: 1,
-                  source: "herdr",
-                  pane_id,
-                  agent: null,
-                  agent_status: null,
-                  session_binding: null,
-                  session_fingerprint: null,
-                  session_label: null,
-                  updated_at: null,
-                  messages: [],
-                  latest: null,
-                  deliveries: [],
-                },
-                "read_failed",
-                error instanceof Error ? error.message : String(error),
-              ),
-            );
+    latestAll: async (paneIds) =>
+      (
+        await eachPane(paneIds, (pane_id) =>
+          read({ pane_id }).catch((error) =>
+            unavailable(
+              {
+                conversation_version: 1,
+                source: "herdr",
+                pane_id,
+                agent: null,
+                agent_status: null,
+                session_binding: null,
+                session_fingerprint: null,
+                session_label: null,
+                terminal_title: null,
+                running_tool: null,
+                updated_at: null,
+                messages: [],
+                latest: null,
+                quest: null,
+                deliveries: [],
+                pending_prompt: null,
+              },
+              "read_failed",
+              error instanceof Error ? error.message : String(error),
+            ),
+          ),
+        )
+      ).map(withoutMessages),
+    // One agent.list for every pane, not an agent.get each: a busy World
+    // asks for hundreds of panes, and per-pane calls would queue ahead of
+    // terminal input on the same Herdr connection.
+    quests: async (paneIds) => {
+      const listed = new Map<string, Record<string, unknown>>();
+      let listFailed = false;
+      try {
+        const result = await args.herdrCall("agent.list", {});
+        const agents =
+          isRecord(result) && Array.isArray(result.agents) ? result.agents : [];
+        for (const agent of agents.filter(isRecord)) {
+          const id = stringValue(agent.pane_id);
+          if (id) listed.set(id, agent);
+        }
+      } catch (error) {
+        if (!paneIds) throw error;
+        listFailed = true;
+      }
+      return eachPane(
+        paneIds ?? [...listed.keys()],
+        async (pane_id): Promise<AgentQuest> => {
+          const empty = {
+            pane_id,
+            agent: null,
+            session_binding: null,
+            session_fingerprint: null,
+            quest: null,
+          };
+          if (listFailed) return { ...empty, read_failed: true };
+          let step: Awaited<ReturnType<typeof resolve>>;
+          try {
+            step = await resolve(pane_id, true, {
+              info: listed.get(pane_id) ?? null,
+            });
+          } catch {
+            return { ...empty, read_failed: true };
           }
-        }),
+          if (!("resolved" in step)) return { ...empty, agent: step.agent };
+          const { base, resolved } = step;
+          const found = {
+            pane_id,
+            agent: base.agent,
+            session_binding: base.session_binding,
+            session_fingerprint: base.session_fingerprint,
+          };
+          try {
+            return {
+              ...found,
+              quest: resolved.file ? await args.cache.quest(resolved) : null,
+            };
+          } catch {
+            // The session is known: say which, so a browser keeps the last
+            // quest only if it came from this session.
+            return { ...found, quest: null, read_failed: true };
+          }
+        },
       );
-      return results.map(withoutMessages);
     },
     send: async ({ pane_id, text, session_fingerprint, baseline }) => {
       if (!text.trim())
@@ -706,4 +949,15 @@ export function createHerdrConversationSource(args: {
       return { status: "sent", delivery };
     },
   };
+}
+
+/** The text of a `pane.read` reply, wherever Herdr nests it. */
+function screenText(result: unknown): string | null {
+  if (!isRecord(result)) return null;
+  if (typeof result.text === "string") return result.text;
+  for (const value of Object.values(result)) {
+    const nested = screenText(value);
+    if (nested !== null) return nested;
+  }
+  return null;
 }

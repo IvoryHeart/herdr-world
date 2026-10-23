@@ -153,14 +153,27 @@ import {
 import { linkedNoteText, sendNote } from "./world/board-send";
 import { checkAnchor } from "./world/board-anchor";
 import { herdrEventName } from "./utils/herdr-events";
-import { startFromNote } from "./world/board-start";
 import { spawnRecordOps } from "./world/relations";
+import { agentKinds, launchAgent } from "./agent/launch";
+import { profileLaunch } from "./agent/profile-launch";
+import { ProfileStore } from "./agent/profile-store";
+import { discoverSkills } from "./agent/skills";
+import { harnessReadiness, openHarnessLogin } from "./agent/harness-readiness";
+import { tabCardKey } from "../../shared/terminalColor";
 import {
   createOfficeObservabilityHttpHandler,
   resolveOfficeObservabilityBootstrap,
   withOfficeObservabilityEndpoint,
 } from "./world/observability-http";
 import { OfficeObservabilityService } from "./world/observability";
+import {
+  createSourcesHttpHandler,
+  storedSourceSettings,
+  withSourceSettings,
+} from "./sources/http";
+import { SourcesService } from "./sources/service";
+import { CheckoutResolver } from "./sources/links";
+import { readSourceSecrets, writeSourceSecrets } from "./sources/secrets";
 import {
   removeWorktreeWithRecovery,
   WORKTREE_REMOVE_TIMEOUT_MS,
@@ -323,6 +336,7 @@ const IMPORTANT_RPC_METHODS = new Set([
   "agent_conversation.latest",
   "agent_conversation.send",
   "agent_conversation.dismiss",
+  "agent_conversation.answer",
   "agent_conversation.watch",
   "agent_conversation.unwatch",
   "agent_history.get",
@@ -520,6 +534,21 @@ function board() {
     log: (message) => console.warn(message),
   });
   return boardStore;
+}
+
+let profileStore: ProfileStore | null = null;
+/** Opened on first use, like Board's store. */
+function profiles() {
+  profileStore ??= new ProfileStore(undefined, {
+    log: (message) => console.warn(message),
+  });
+  return profileStore;
+}
+function publishProfilesChanged(revision: number) {
+  const line = JSON.stringify({
+    control: { type: "world_profiles_changed", revision },
+  });
+  for (const ws of clients) safeSend(ws, line, "world-profiles");
 }
 
 /**
@@ -827,20 +856,39 @@ function resumeAssistantIfLoaded() {
     });
 }
 
-const { handleHerdrStatus, handleHerdrSetup } = createHerdrSetupHandlers({
+function defaultConnectionProfile() {
+  return connectionProfiles
+    .list()
+    .find((profile) => profile.id === connectionManager.defaultId());
+}
+
+const {
+  handleHerdrStatus,
+  handleHerdrSetup,
+  handleHerdrUpgrade,
+  handleHerdrUpgradeStatus,
+} = createHerdrSetupHandlers({
   ping: () => {
     const runtime = connectionManager.defaultReadyRuntime();
     return runtime
       ? runtime.herdr.ping()
       : new HerdrClient(config.socketPath).ping();
   },
-  guard: () =>
-    herdrSetupGuardForProfile(
-      config,
-      connectionProfiles
-        .list()
-        .find((profile) => profile.id === connectionManager.defaultId()),
-    ),
+  guard: () => herdrSetupGuardForProfile(config, defaultConnectionProfile()),
+  upgrade: {
+    worldVersion: APP_VERSION,
+    server: () => {
+      const profile = defaultConnectionProfile();
+      if (profile?.type !== "local") return undefined;
+      const client = () => new HerdrClient(profile.control_socket_path);
+      return {
+        socketPath: profile.control_socket_path,
+        ping: () => client().ping(),
+        call: (method, params, timeoutMs) =>
+          client().call(method, params, timeoutMs),
+      };
+    },
+  },
 });
 
 function runtimeFactoryForProfile(
@@ -965,6 +1013,51 @@ const connectionProfiles = new ConnectionProfileService({
   bootstrap: connectionBootstrap,
   createRuntime: runtimeFactoryForProfile,
 });
+
+// Built-in sources (GitHub, Jira). On by default; each runs only while a
+// browser asks and keeps its credentials in private service storage.
+const runSourceProcess = async (argv: string[], timeoutMs: number) => {
+  try {
+    return await runProcessWithCodeTimeout(argv, timeoutMs, {
+      env: {
+        ...process.env,
+        GH_PROMPT_DISABLED: "1",
+        GIT_TERMINAL_PROMPT: "0",
+        NO_COLOR: "1",
+      },
+    });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT")
+      return { code: 127, stdout: "", stderr: "" };
+    throw error;
+  }
+};
+const worldSources = new SourcesService({
+  settings: await readGuiSettings()
+    .then(storedSourceSettings)
+    .catch(() => ({})),
+  persistSettings: async (sources) => {
+    await updateGuiSettings((settings) =>
+      withSourceSettings(settings, sources),
+    );
+  },
+  secrets: { read: () => readSourceSecrets(), write: writeSourceSecrets },
+  run: runSourceProcess,
+  topology: async () =>
+    worldSnapshots ? (await worldSnapshots.snapshot()).connections : [],
+  resolver: new CheckoutResolver(runSourceProcess, (connectionId) => {
+    if (connectionId === STARTUP_DEFAULT_CONNECTION_ID && config.sshHost)
+      return { kind: "ssh", destination: config.sshHost };
+    const profile = connectionProfiles
+      .list()
+      .find((entry) => entry.id === connectionId);
+    if (profile?.type === "local") return { kind: "local" };
+    if (profile?.type === "ssh" && profile.remote_platform !== "windows")
+      return { kind: "ssh", destination: profile.ssh_destination };
+    return null;
+  }),
+});
+const handleWorldSources = createSourcesHttpHandler(worldSources);
 
 function notifyBrowserClientCount() {
   connectionManager.forEachCurrentRuntime((runtime) => {
@@ -1286,6 +1379,28 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
     }
     return;
   }
+  if (method === "world.profiles.get") {
+    try {
+      sendReply({ id, result: profiles().get() }, "world-profiles-get");
+    } catch (error) {
+      sendError("world-profiles-get-error", error);
+    }
+    return;
+  }
+  if (method === "world.profiles.save" || method === "world.profiles.delete") {
+    try {
+      const p = (params ?? {}) as Record<string, unknown>;
+      const result =
+        method === "world.profiles.save"
+          ? profiles().save(p.profile)
+          : profiles().delete(String(p.id ?? ""));
+      publishProfilesChanged(result.revision);
+      sendReply({ id, result }, "world-profiles-write");
+    } catch (error) {
+      sendError("world-profiles-write-error", error);
+    }
+    return;
+  }
   if (method === "world.watchlist.list") {
     sendReply({ id, result: worldWatchlist.list() }, "world-watchlist-list");
     return;
@@ -1550,20 +1665,140 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
 
   // Town desk and agent moves: several confirmed pane moves on this exact
   // connection and runtime generation, with rollback (see world/desk-move).
-  if (method === "board.start_agent") {
+  // The launcher: kinds and skills on this host, and a new agent in a new
+  // tab, from a profile or a quick pick of a kind (agent/launch.ts).
+  // Installed and logged in, per supported harness, from each harness's own
+  // status command (agent/harness-readiness.ts). Onboarding uses it too.
+  if (method === "launcher.readiness") {
+    try {
+      const kinds = await agentKinds((rpc, rpcParams) =>
+        herdr.call(rpc, rpcParams, 10_000),
+      );
+      const readiness = await harnessReadiness({
+        kinds,
+        host: sshHost(),
+        windows: sshHost()
+          ? connection.remotePlatform === "windows"
+          : process.platform === "win32",
+        run: runProcessWithCodeTimeout,
+        shQuote,
+      });
+      sendReply({ id, result: { readiness } }, method);
+    } catch (error) {
+      sendError(`${method}-error`, error);
+    }
+    return;
+  }
+  if (method === "launcher.login") {
     try {
       const p = (params ?? {}) as Record<string, unknown>;
-      const result = await startFromNote(
-        (rpc, rpcParams) => herdr.call(rpc, rpcParams, 70_000),
+      const result = await openHarnessLogin(
+        (rpc, rpcParams) => herdr.call(rpc, rpcParams, 10_000),
         {
           workspace_id: String(p.workspace_id ?? ""),
           kind: String(p.kind ?? ""),
-          name: String(p.name ?? "").slice(0, 64) || "note",
-          text: String(p.text ?? ""),
+          windows: sshHost()
+            ? connection.remotePlatform === "windows"
+            : process.platform === "win32",
           isCurrent: requestIsCurrent,
         },
       );
-      // The note's agent spawned this one: stamp it so World groups them.
+      sendReply({ id, result }, method);
+    } catch (error) {
+      sendError(`${method}-error`, error);
+    } finally {
+      if (route.scope === "connection" && route.isCurrent())
+        publishWorldInvalidation(route.connectionId, route.generation);
+    }
+    return;
+  }
+  if (method === "launcher.catalog") {
+    try {
+      const p = (params ?? {}) as Record<string, unknown>;
+      const call = (rpc: string, rpcParams: Record<string, unknown>) =>
+        herdr.call(rpc, rpcParams, 10_000);
+      const workspaceId = String(p.workspace_id ?? "");
+      let cwd = "";
+      if (workspaceId) {
+        const listed = (await call("pane.list", {}).catch(() => null)) as {
+          panes?: Record<string, unknown>[];
+        } | null;
+        const pane = listed?.panes?.find((x) => x.workspace_id === workspaceId);
+        cwd = String(pane?.foreground_cwd || pane?.cwd || "");
+      }
+      const host = {
+        host: sshHost(),
+        windows: sshHost()
+          ? connection.remotePlatform === "windows"
+          : process.platform === "win32",
+        run: runProcessWithCodeTimeout,
+        shQuote,
+      };
+      const kinds = await agentKinds(call);
+      const [skills, readiness] = await Promise.all([
+        discoverSkills({ cwd, ...host }).catch(() => []),
+        harnessReadiness({ kinds, ...host }).catch(() => []),
+      ]);
+      sendReply({ id, result: { kinds, skills, readiness } }, method);
+    } catch (error) {
+      sendError(`${method}-error`, error);
+    }
+    return;
+  }
+  if (method === "launcher.start") {
+    try {
+      const p = (params ?? {}) as Record<string, unknown>;
+      const profileId = typeof p.profile_id === "string" ? p.profile_id : "";
+      const profile = profileId ? profiles().profile(profileId) : null;
+      if (profileId && !profile)
+        throw new Error("That profile no longer exists.");
+      const call = (rpc: string, rpcParams: Record<string, unknown>) =>
+        herdr.call(rpc, rpcParams, 70_000);
+      const result = await launchAgent(call, {
+        workspace_id: String(p.workspace_id ?? ""),
+        ...profileLaunch(profile ?? null, {
+          kind: String(p.kind ?? ""),
+          label: String(p.label ?? "")
+            .trim()
+            .slice(0, 64),
+          text: String(p.text ?? "").slice(0, 16_000),
+        }),
+        isCurrent: requestIsCurrent,
+      });
+      if (profile && result.terminal_id && route.scope === "connection") {
+        try {
+          publishProfilesChanged(
+            profiles().assign({
+              connection_id: route.connectionId,
+              terminal_id: result.terminal_id,
+              profile_id: profile.id,
+            }).revision,
+          );
+          if (profile.color && result.tab_id) {
+            const workspaceIds = await moveWorkspaceIds(call, {
+              workspace_id: String(p.workspace_id ?? ""),
+            });
+            publishBoardChanged(
+              board().patch([
+                {
+                  op: "card.color",
+                  key: tabCardKey(
+                    route.connectionId,
+                    result.tab_id,
+                    workspaceIds,
+                  ),
+                  color: profile.color,
+                },
+              ]).revision,
+            );
+          }
+        } catch (error) {
+          logger.warn("A launched agent kept no profile record", {
+            detail: String(error),
+          });
+        }
+      }
+      // A Board note's agent spawned this one: stamp it so World groups them.
       const parent =
         typeof p.parent_pane_id === "string" ? p.parent_pane_id : "";
       if (parent && result.pane_id && requestIsCurrent())
@@ -1575,7 +1810,7 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
             ? p.parent_terminal_id
             : undefined,
         ).catch((error) =>
-          logger.warn("Board could not stamp the agent it started", {
+          logger.warn("World could not stamp the agent it started", {
             detail: String(error),
           }),
         );
@@ -1583,8 +1818,6 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
     } catch (error) {
       sendError(`${method}-error`, error);
     } finally {
-      // Starting an agent in a new tab need not raise a Herdr event after
-      // the tab appears, so the World views would keep showing a shell.
       if (route.scope === "connection" && route.isCurrent())
         publishWorldInvalidation(route.connectionId, route.generation);
     }
@@ -1786,6 +2019,7 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
     method === "agent_conversation.get" ||
     method === "agent_conversation.latest" ||
     method === "agent_conversation.send" ||
+    method === "agent_conversation.answer" ||
     method === "agent_conversation.dismiss"
   ) {
     try {
@@ -1797,42 +2031,63 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
       const result =
         method === "agent_conversation.get"
           ? await source.read({ pane_id: paneId })
-          : method === "agent_conversation.dismiss"
-            ? {
-                dismissed: source.dismiss({
-                  pane_id: paneId,
-                  delivery_id:
-                    typeof p.delivery_id === "string" ? p.delivery_id : "",
-                }),
-              }
-            : method === "agent_conversation.send"
-              ? await source.send({
-                  pane_id: paneId,
-                  text: typeof p.text === "string" ? p.text : "",
-                  session_fingerprint:
-                    typeof p.session_fingerprint === "string"
-                      ? p.session_fingerprint
-                      : "",
-                  ...(Array.isArray(p.baseline)
-                    ? {
-                        baseline: p.baseline.filter(
-                          (id): id is string => typeof id === "string",
-                        ),
-                      }
-                    : {}),
-                })
-              : paneId
-                ? await source.latest({ pane_id: paneId })
-                : {
-                    conversations: await source.latestAll(
-                      Array.isArray(p.pane_ids)
-                        ? p.pane_ids.filter(
+          : method === "agent_conversation.answer"
+            ? await source.answer({
+                pane_id: paneId,
+                key: typeof p.key === "string" ? p.key : "",
+                prompt_fingerprint:
+                  typeof p.prompt_fingerprint === "string"
+                    ? p.prompt_fingerprint
+                    : "",
+              })
+            : method === "agent_conversation.dismiss"
+              ? {
+                  dismissed: source.dismiss({
+                    pane_id: paneId,
+                    delivery_id:
+                      typeof p.delivery_id === "string" ? p.delivery_id : "",
+                  }),
+                }
+              : method === "agent_conversation.send"
+                ? await source.send({
+                    pane_id: paneId,
+                    text: typeof p.text === "string" ? p.text : "",
+                    session_fingerprint:
+                      typeof p.session_fingerprint === "string"
+                        ? p.session_fingerprint
+                        : "",
+                    ...(Array.isArray(p.baseline)
+                      ? {
+                          baseline: p.baseline.filter(
                             (id): id is string => typeof id === "string",
-                          )
-                        : undefined,
-                    ),
-                  };
+                          ),
+                        }
+                      : {}),
+                  })
+                : paneId
+                  ? await source.latest({ pane_id: paneId })
+                  : {
+                      conversations: await source.latestAll(
+                        Array.isArray(p.pane_ids)
+                          ? p.pane_ids.filter(
+                              (id): id is string => typeof id === "string",
+                            )
+                          : undefined,
+                      ),
+                    };
       sendReply({ id, result }, method);
+    } catch (e) {
+      sendError(`${method}-error`, e);
+    }
+    return;
+  }
+  if (method === "agent_quest.list") {
+    try {
+      const ids = Array.isArray(params?.pane_ids)
+        ? params.pane_ids.filter((id): id is string => typeof id === "string")
+        : undefined;
+      const quests = await connection.agentSessions.conversation.quests(ids);
+      sendReply({ id, result: { quests } }, method);
     } catch (e) {
       sendError(`${method}-error`, e);
     }
@@ -2478,11 +2733,17 @@ function main() {
             server.timeout(req, UPDATE_HTTP_IDLE_TIMEOUT_SECONDS);
             return handleHerdrSetup(req);
           }
+          if (url.pathname === "/api/herdr/upgrade") {
+            if (req.method === "POST") return handleHerdrUpgrade(req);
+            if (req.method === "GET") return handleHerdrUpgradeStatus();
+          }
           const officeObservabilityResponse = await handleOfficeObservability(
             req,
             url.pathname,
           );
           if (officeObservabilityResponse) return officeObservabilityResponse;
+          const sourcesResponse = await handleWorldSources(req, url.pathname);
+          if (sourcesResponse) return sourcesResponse;
           const connectionRoute = parseConnectionHttpRoute(
             requestPathname,
             req.method,

@@ -436,19 +436,27 @@ async function run() {
         '.town-view-shell .world-semantic-target[data-kind="agent"]',
       )!
       .click();
-    // A tap opens the agent's one window on Chat; its Terminal view is one
-    // tap away in the window's top selector.
-    const terminalTab = () =>
+    // A tap opens the agent's one window on Chat. On a phone the window
+    // looks like the terminal: its views sit under ⋯ with the agents.
+    const windowMenu = () =>
       document.querySelector<HTMLButtonElement>(
-        '.workspace-inspector [role="tab"][aria-label="Terminal"]',
+        '.workspace-inspector button[aria-label="More actions for Inspector window"]',
       );
     await until(
       () =>
         document.querySelector('.workspace-inspector[data-view="history"]') &&
-        terminalTab(),
+        windowMenu(),
       "Town agent window on Chat",
     );
-    terminalTab()!.click();
+    windowMenu()!.click();
+    const terminalItem = () =>
+      [
+        ...document.querySelectorAll<HTMLButtonElement>(
+          '[role="menu"][aria-label="Window actions"] [role="menuitemradio"]',
+        ),
+      ].find((item) => item.textContent === "Terminal");
+    await until(terminalItem, "Terminal in the window's ⋯ menu");
+    terminalItem()!.click();
     await until(
       () =>
         document.querySelector(

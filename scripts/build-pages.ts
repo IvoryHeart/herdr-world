@@ -89,6 +89,19 @@ if (!build.success) {
   throw new AggregateError(build.logs, "Failed to optimize the Pages site");
 }
 
+// The film draws its Town with the app's own Town code, bundled beside it.
+const filmTown = await Bun.build({
+  entrypoints: [join(sourceDirectory, "film/town-art.ts")],
+  outdir: join(outputDirectory, "film"),
+  format: "iife",
+  minify: true,
+  target: "browser",
+});
+if (!filmTown.success) {
+  throw new AggregateError(filmTown.logs, "Failed to bundle the film's Town");
+}
+await rm(join(outputDirectory, "film/town-art.ts"));
+
 await writeFile(join(outputDirectory, ".nojekyll"), "");
 await versionSiteAssets(outputDirectory);
 await verifySiteReferences(outputDirectory);

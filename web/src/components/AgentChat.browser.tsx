@@ -5,6 +5,7 @@ import { AgentChat, type Conversation } from "./AgentChat";
 import "../styles/tokens.css";
 import "../styles/base.css";
 import "../styles/vendor.css";
+import "./WorkspaceInspectorHost.css";
 
 const failures: string[] = [];
 function check(condition: boolean, message: string) {
@@ -14,10 +15,51 @@ async function settle() {
   await new Promise((resolve) => setTimeout(resolve, 80));
 }
 
-const conversation = (
-  messages: Conversation["messages"],
-  status = "idle",
-): Conversation => ({
+type Messages = NonNullable<Conversation["messages"]>;
+
+/** History's window of the same messages, as agent_history.get sends it. */
+let historyRevision = 0;
+const historyOf = (messages: Messages) => ({
+  history_version: 2,
+  mode: "snapshot",
+  cursor: { epoch: "fixture", revision: ++historyRevision },
+  window_limit: 200,
+  agent: "claude",
+  pane_id: "p",
+  workspace_id: "Example",
+  tab_id: "tab",
+  updated_at: "2026-10-22T09:00:00Z",
+  path: "",
+  entries: messages.map((message) =>
+    message.kind === "notice"
+      ? {
+          id: message.id,
+          role: "assistant",
+          kind: "message",
+          text: "",
+          notice: message.text,
+          sent_at: message.sent_at,
+        }
+      : message.kind === "activity"
+        ? {
+            id: message.id,
+            role: "tool",
+            kind: "tool_call",
+            tool_name: message.tools?.[0]?.name ?? "tool",
+            text: "",
+            sent_at: message.sent_at,
+          }
+        : {
+            id: message.id,
+            role: message.role,
+            kind: message.kind === "error" ? "error" : "message",
+            text: message.text,
+            sent_at: message.sent_at,
+          },
+  ),
+});
+
+const conversation = (messages: Messages, status = "idle"): Conversation => ({
   conversation_version: 1,
   pane_id: "p",
   agent: "claude",
@@ -37,7 +79,7 @@ const message = (
   id: string,
   role: "user" | "assistant",
   text: string,
-): Conversation["messages"][number] => ({
+): Messages[number] => ({
   id,
   role,
   kind: "message",
@@ -128,6 +170,10 @@ async function run() {
     message("a1", "assistant", "It describes the **demo** project."),
   ]);
   let sendResult: unknown = { status: "sent" };
+  /** Replaces the snapshot answer for agent_history.get while set. */
+  let historyAnswer: ((params: Record<string, unknown>) => unknown) | null =
+    null;
+  let answerAcknowledged = false;
   bridge.connection = () => ({
     connectionId: "test",
     generation: 1,
@@ -137,7 +183,28 @@ async function run() {
     call: async (method: string, params: Record<string, unknown> = {}) => {
       calls.push({ method, params });
       if (method === "agent_conversation.send") return sendResult;
-      if (method === "agent_conversation.get") return reply;
+      if (method === "agent_conversation.answer")
+        return {
+          status: "sent",
+          number: "2",
+          label: "Yes, always",
+          acknowledged: answerAcknowledged,
+          unconfirmed_reason: answerAcknowledged ? null : "session_changed",
+          prompt_fingerprint: params.prompt_fingerprint,
+        };
+      if (method === "pane.send_input") return {};
+      if (method === "agent_conversation.latest")
+        return { ...reply, messages: undefined };
+      // A transcript caught mid-write fails History's read too.
+      if (
+        method === "agent_history.get" &&
+        reply.unavailable?.reason === "read_failed"
+      )
+        throw new Error(reply.unavailable.detail);
+      if (method === "agent_history.get")
+        return historyAnswer
+          ? historyAnswer(params)
+          : historyOf(reply.messages ?? []);
       if (
         method === "agent_conversation.watch" ||
         method === "agent_conversation.unwatch"
@@ -177,7 +244,7 @@ async function run() {
     );
   const count = (method: string) =>
     calls.filter((call) => call.method === method).length;
-  const reads = () => count("agent_conversation.get");
+  const reads = () => count("agent_conversation.latest");
   try {
     render("idle", false);
     await settle();
@@ -190,21 +257,29 @@ async function run() {
       count("agent_conversation.watch") === 1,
       "Opening Chat must ask the service to watch the pane",
     );
-    const bubbles = [...container.querySelectorAll(".agent-chat-message")];
+    const bubbles = [
+      ...container.querySelectorAll(
+        ".agent-history-chat-message:not(.is-pending)",
+      ),
+    ];
     check(
-      bubbles.map((node) => node.getAttribute("data-role")).join() ===
-        "user,assistant",
+      bubbles
+        .map((node) =>
+          node.classList.contains("is-user") ? "user" : "assistant",
+        )
+        .join() === "user,assistant",
       "Chat must show user and assistant bubbles in order",
     );
     check(
-      container.querySelector(".agent-chat-message.is-assistant strong")
+      container.querySelector(".agent-history-chat-message.is-assistant strong")
         ?.textContent === "demo",
       "Assistant text must render as Markdown",
     );
     check(
-      container.querySelector(".agent-chat-activity")?.textContent ===
-        "Used Read",
-      "Tool activity must render as one summary line",
+      (
+        container.querySelector(".agent-history-chat-tools")?.textContent ?? ""
+      ).includes("Read"),
+      "Tool activity must render as one collapsed tool block",
     );
     check(
       !container.querySelector(".xterm, canvas, pre.terminal"),
@@ -219,7 +294,7 @@ async function run() {
     check(reads() === 1, "A change to another pane must not reread");
     reply = conversation(
       [
-        ...reply.messages,
+        ...(reply.messages ?? []),
         message("u2", "user", "Thanks"),
         message("a2", "assistant", "You're welcome."),
       ],
@@ -229,7 +304,8 @@ async function run() {
     await settle();
     check(reads() === 2, "A pushed change must reread the conversation");
     check(
-      container.querySelectorAll(".agent-chat-message").length === 4,
+      container.querySelectorAll(".agent-history-chat-message:not(.is-pending)")
+        .length === 4,
       "A reread must show new messages",
     );
 
@@ -559,8 +635,8 @@ async function run() {
     push();
     await settle();
     check(
-      container.querySelectorAll(".agent-chat-message").length === 4 &&
-        !container.querySelector(".agent-chat-unavailable"),
+      container.querySelectorAll(".agent-history-chat-message:not(.is-pending)")
+        .length === 4 && !container.querySelector(".agent-chat-unavailable"),
       "A failed read must keep the last good conversation",
     );
     check(
@@ -615,9 +691,11 @@ async function run() {
     push();
     await settle();
     check(
-      container.querySelector(".agent-chat-divider")?.textContent ===
+      container.querySelector(".agent-history-chat-divider")?.textContent ===
         "Conversation compacted" &&
-        container.querySelectorAll(".agent-chat-message").length === 2,
+        container.querySelectorAll(
+          ".agent-history-chat-message:not(.is-pending)",
+        ).length === 2,
       "A compaction must render as a divider, not a message",
     );
 
@@ -676,6 +754,308 @@ async function run() {
       "A missing integration must offer to copy its command and refresh",
     );
 
+    // A blocked agent's question becomes an ask card with its whole
+    // request. A number answers only while that card has focus; Chat then
+    // says it sent the key, and that it was answered once the agent moved on.
+    const asking = {
+      question: ["Do you want to proceed?"],
+      request: ["Bash command", "echo safe", "git push -u origin agent/demo"],
+      options: [
+        { number: "1", label: "Yes", key: "1" },
+        { number: "2", label: "Yes, always", key: "2" },
+        { number: "3", label: "No, and tell the agent what to do", key: "3" },
+      ],
+      fingerprint: "f1",
+    };
+    reply = {
+      ...conversation([message("u7", "user", "Push it")], "blocked"),
+      pending_prompt: asking,
+    };
+    render("blocked", true, 50);
+    push();
+    await settle();
+    const card = container.querySelector<HTMLElement>(".agent-chat-ask")!;
+    check(
+      card.querySelector("pre")?.textContent ===
+        "Bash command\necho safe\ngit push -u origin agent/demo" &&
+        card.textContent?.includes("Do you want to proceed?") === true &&
+        card.querySelectorAll(".agent-chat-ask-options button").length === 3,
+      "A blocked agent's question must show its whole request and options",
+    );
+    const answers = () =>
+      calls.filter((call) => call.method === "agent_conversation.answer");
+    // Outside the card, a number answers nothing.
+    container
+      .querySelector<HTMLElement>(".agent-chat-list")!
+      .dispatchEvent(new KeyboardEvent("keydown", { key: "2", bubbles: true }));
+    await settle();
+    check(answers().length === 0, "A number outside the card must not answer");
+    // A held key repeats nothing.
+    card.focus();
+    card.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "2", bubbles: true, repeat: true }),
+    );
+    await settle();
+    check(answers().length === 0, "A repeated key must not answer");
+    card.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "2", bubbles: true }),
+    );
+    await settle();
+    check(
+      answers().length === 1 &&
+        answers()[0]!.params.key === "2" &&
+        answers()[0]!.params.prompt_fingerprint === "f1",
+      `A number on the focused card must answer with the prompt's fingerprint (${JSON.stringify(answers()[0]?.params)})`,
+    );
+    check(
+      (
+        container.querySelector(".agent-chat-answered")?.textContent ?? ""
+      ).startsWith("Sent 2 · Yes, always") &&
+        !container.querySelector(".agent-chat-ask"),
+      "A sent answer must replace the card with what was sent",
+    );
+    check(
+      (
+        container.querySelector(".agent-chat-answered")?.textContent ?? ""
+      ).includes("another session now, so the key may have reached it"),
+      "An unconfirmed answer must say why Chat cannot confirm it",
+    );
+    // The receipt survives the transcript moving on.
+    reply = {
+      ...reply,
+      messages: [
+        ...(reply.messages ?? []),
+        message("a7", "assistant", "Pushed."),
+      ],
+      pending_prompt: null,
+    };
+    push();
+    await settle();
+    check(
+      container.querySelector(".agent-chat-answered") !== null,
+      "The answer's receipt must stay after the transcript updates",
+    );
+    // A prompt Chat cannot read safely offers the Terminal, never a guess.
+    reply = {
+      ...reply,
+      pending_prompt: {
+        question: ["Here is the plan:", "1. Inspect", "2. Test"],
+        request: [],
+        options: [],
+        fingerprint: "f2",
+      },
+    };
+    push();
+    await settle();
+    check(
+      container.querySelectorAll(".agent-chat-ask-options button").length ===
+        0 &&
+        (
+          container.querySelector(".agent-chat-ask")?.textContent ?? ""
+        ).includes("Answer in the Terminal"),
+      "An unreadable prompt must offer the Terminal and no answers",
+    );
+    // A question form's choices carry the description shown under each.
+    reply = {
+      ...reply,
+      pending_prompt: {
+        question: ["Which colour should the demo banner be?"],
+        request: ["☐ Banner colour"],
+        options: [
+          {
+            number: "1",
+            label: "Red",
+            key: "1",
+            description: "Set the demo banner to red.",
+          },
+          { number: "2", label: "Green", key: "2" },
+        ],
+        fingerprint: "f2q",
+      },
+    };
+    push();
+    await settle();
+    const choices = [
+      ...container.querySelectorAll(".agent-chat-ask-options button"),
+    ];
+    check(
+      choices.length === 2 &&
+        choices[0]!.querySelector("small")?.textContent ===
+          "Set the demo banner to red." &&
+        !choices[1]!.querySelector("small"),
+      "A question's choices must show their descriptions",
+    );
+    // Two Chats with questions: a key on one card never answers the other.
+    reply = {
+      ...reply,
+      pending_prompt: { ...asking, fingerprint: "f3" },
+    };
+    root.render(
+      <div>
+        <AgentChat
+          pane={pane("blocked", 51)}
+          active
+          onOpenTerminal={() => {}}
+          onClose={() => {}}
+        />
+        <AgentChat
+          pane={{ ...pane("blocked", 51), pane_id: "q" }}
+          active
+          onOpenTerminal={() => {}}
+          onClose={() => {}}
+        />
+      </div>,
+    );
+    await settle();
+    await settle();
+    const cards = container.querySelectorAll<HTMLElement>(".agent-chat-ask");
+    const before = answers().length;
+    // This time the agent moves on, so the receipt says it was answered.
+    answerAcknowledged = true;
+    cards[0]!.focus();
+    cards[0]!.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "1", bubbles: true }),
+    );
+    await settle();
+    check(
+      cards.length === 2 &&
+        answers().length === before + 1 &&
+        answers()[before]!.params.pane_id === "p",
+      `One key must answer only the focused Chat (${answers().length - before})`,
+    );
+    check(
+      (
+        container.querySelector(".agent-chat-answered")?.textContent ?? ""
+      ).startsWith("You answered 2 · Yes, always"),
+      "An answer the agent moved on from must say it was answered",
+    );
+    render("working", true, 52);
+    await settle();
+    // The Now bar: Herdr's status, the task from the terminal title and the
+    // time since the status changed; the step running now has its own timer.
+    reply = {
+      ...conversation([message("u8", "user", "Run the tests")], "working"),
+      terminal_title: "✳ Running tests",
+      running_tool: {
+        id: "toolu_8",
+        name: "Bash",
+        summary: "bun test server/src/link",
+        started_at: new Date(Date.now() - 3_000).toISOString(),
+      },
+    };
+    render("idle", true, 60);
+    push();
+    await settle();
+    render("working", true, 61);
+    // The display clock ticks once a second from when it started, so a fixed
+    // wait can read it before its first full second; wait for that instead.
+    for (
+      let waited = 0;
+      waited < 5_000 &&
+      !/^[1-9]\d*s$/.test(
+        container.querySelector(".agent-chat-now .agent-chat-now-time")
+          ?.textContent ?? "",
+      );
+      waited += 100
+    )
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    const now = container.querySelector(".agent-chat-now");
+    check(
+      now?.querySelector(".agent-chat-status")?.textContent === "Working" &&
+        now.querySelector(".agent-chat-now-title")?.textContent ===
+          "Running tests" &&
+        /^[1-9]\d*s$/.test(
+          now.querySelector(".agent-chat-now-time")?.textContent ?? "",
+        ),
+      `The Now bar must show the status, task and time (${now?.textContent})`,
+    );
+    const step = container.querySelector(".agent-chat-running");
+    check(
+      step?.textContent?.includes("Bash") === true &&
+        step.textContent.includes("bun test server/src/link") &&
+        /[3-9]s$/.test(step.textContent) &&
+        step.getAttribute("data-call-id") === "toolu_8",
+      `The running step must name its tool, command and time (${step?.textContent})`,
+    );
+    // Stop presses Esc in the pane; so does Esc twice, never once.
+    const escapes = () =>
+      calls.filter(
+        (call) =>
+          call.method === "pane.send_input" &&
+          JSON.stringify(call.params.keys) === '["escape"]',
+      ).length;
+    container.querySelector<HTMLButtonElement>(".agent-chat-stop")!.click();
+    await settle();
+    check(escapes() === 1, "Stop must press Esc in the agent's pane");
+    const list = container.querySelector<HTMLElement>(".agent-chat-list")!;
+    list.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+    );
+    await settle();
+    check(
+      escapes() === 1 &&
+        (
+          container.querySelector(".agent-chat-now-note")?.textContent ?? ""
+        ).includes("Press Esc again"),
+      "One Esc must only ask for a second",
+    );
+    list.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+    );
+    await settle();
+    check(escapes() === 2, "Esc twice must press Esc in the agent's pane");
+    // Only the status and task are announced; the clocks tick silently.
+    check(
+      !container.querySelector(".agent-chat-now")?.hasAttribute("aria-live") &&
+        container
+          .querySelector(".agent-chat-now-live")
+          ?.getAttribute("aria-live") === "polite" &&
+        [...container.querySelectorAll(".agent-chat-now-time")].every(
+          (time) =>
+            time.getAttribute("aria-hidden") === "true" &&
+            !time.closest("[aria-live], [role='status']"),
+        ),
+      "The Now bar's clocks must not be inside a live region",
+    );
+    // An Esc another handler used does not arm Stop, and the note to press
+    // again lasts only as long as a second Esc would stop.
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    list.addEventListener("keydown", (event) => event.preventDefault(), {
+      once: true,
+    });
+    list.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Escape",
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    list.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+    );
+    await settle();
+    check(escapes() === 2, "An Esc already handled must not count");
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    check(
+      !(
+        container.querySelector(".agent-chat-now-note")?.textContent ?? ""
+      ).includes("Press Esc again"),
+      "The note to press Esc again must clear when its window ends",
+    );
+    // A call still open while the agent waits for approval, or after it
+    // stopped, is not running.
+    for (const [status, sequence] of [
+      ["blocked", 62],
+      ["idle", 63],
+    ] as const) {
+      render(status, true, sequence);
+      await settle();
+      check(
+        !container.querySelector(".agent-chat-running") &&
+          !container.querySelector(".agent-chat-now .agent-chat-now-time"),
+        `An open call must not show as running while ${status}`,
+      );
+    }
     // A long conversation scrolls in the window, phone and desktop widths
     // alike: it opens at the newest message, keeps the reader's place when a
     // message lands while they read back, and Jump to latest returns.
@@ -694,7 +1074,7 @@ async function run() {
       render("idle");
       await settle();
       await settle();
-      const list = container.querySelector<HTMLElement>(".agent-chat-list")!;
+      const list = container.querySelector<HTMLElement>(".agent-history-chat")!;
       check(
         list.scrollHeight > list.clientHeight * 2,
         `a long conversation should scroll at ${width}px`,
@@ -707,7 +1087,7 @@ async function run() {
       list.dispatchEvent(new Event("scroll"));
       await settle();
       const jump = () =>
-        container.querySelector<HTMLButtonElement>(".agent-chat-jump");
+        container.querySelector<HTMLButtonElement>(".agent-history-chat-jump");
       check(jump() !== null, `Jump to latest should show at ${width}px`);
       reply = conversation([
         ...long,
@@ -739,6 +1119,280 @@ async function run() {
       );
     }
     container.style.width = "800px";
+
+    // A remounted Chat shows the conversation it had at once, from the kept
+    // window, before the next read answers.
+    {
+      reply = conversation([
+        message("keep-u", "user", "Keep this question"),
+        message("keep-a", "assistant", "Kept answer"),
+      ]);
+      render("idle");
+      push();
+      await settle();
+      await settle();
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => (release = resolve));
+      historyAnswer = async () => {
+        await gate;
+        return historyOf(reply.messages ?? []);
+      };
+      root.render(<div />);
+      await settle();
+      render("idle");
+      await settle();
+      check(
+        (
+          container.querySelector(".agent-history-chat")?.textContent ?? ""
+        ).includes("Kept answer"),
+        "A remounted Chat lost its conversation while the next read was pending",
+      );
+      release();
+      historyAnswer = null;
+      await settle();
+    }
+
+    // A long, busy transcript stays responsive: History's window arrives once
+    // and each change brings only what changed, so nothing re-reads or
+    // re-renders the whole conversation. No task may block for 200 ms.
+    {
+      const longTasks: number[] = [];
+      const observer = new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) longTasks.push(entry.duration);
+      });
+      observer.observe({ type: "longtask" });
+      let revision = 1000;
+      const base: Record<string, unknown>[] = [];
+      // 150 messages, so the 20 added below stay within History's window of
+      // 200 conversation entries and every delta's order is the whole window.
+      for (let index = 0; index < 150; index += 1) {
+        base.push({
+          id: `busy-${index}`,
+          role: index % 2 ? "assistant" : "user",
+          kind: "message",
+          text: `Busy message ${index}: **the queue** keeps its order.`,
+          sent_at: "2026-10-22T09:00:00Z",
+        });
+        for (let tool = 0; tool < 15; tool += 1)
+          base.push({
+            id: `busy-${index}-tool-${tool}`,
+            role: "tool",
+            kind: tool % 2 ? "tool_result" : "tool_call",
+            tool_name: "Bash",
+            text: "",
+            text_bytes: 5000,
+            text_hash: `h${index}-${tool}`,
+            sent_at: "2026-10-22T09:00:00Z",
+          });
+      }
+      const order = base.map((entry) => entry.id as string);
+      const head = {
+        history_version: 2,
+        window_limit: 200,
+        agent: "claude",
+        pane_id: "p",
+        workspace_id: "Example",
+        tab_id: "tab",
+        updated_at: "2026-10-22T09:00:00Z",
+        path: "",
+      };
+      let added: Record<string, unknown>[] = [];
+      historyAnswer = (params) => {
+        const cursor = params.cursor as { revision: number } | null;
+        if (!cursor || cursor.revision < 1000)
+          return {
+            ...head,
+            mode: "snapshot",
+            cursor: { epoch: "busy", revision },
+            entries: base,
+          };
+        const upserts = added;
+        added = [];
+        const base_revision = revision;
+        revision += 1;
+        return {
+          ...head,
+          mode: "delta",
+          cursor: { epoch: "busy", revision },
+          base_revision,
+          upserts,
+          removed: [],
+          order: [...order],
+        };
+      };
+      reply = conversation([message("busy-0", "user", "Busy message 0")]);
+      push();
+      await settle();
+      await settle();
+      longTasks.length = 0;
+      for (let step = 0; step < 20; step += 1) {
+        const id = `busy-new-${step}`;
+        added.push({
+          id,
+          role: "tool",
+          kind: "tool_call",
+          tool_name: "Bash",
+          text: "",
+          text_bytes: 3000,
+          text_hash: `n${step}`,
+          sent_at: "2026-10-22T09:00:00Z",
+        });
+        added.push({
+          id: `${id}-reply`,
+          role: "assistant",
+          kind: "message",
+          text: `Live update ${step}.`,
+          sent_at: "2026-10-22T09:00:00Z",
+        });
+        order.push(id, `${id}-reply`);
+        push();
+        await new Promise((resolve) => setTimeout(resolve, 40));
+      }
+      await settle();
+      await settle();
+      observer.disconnect();
+      check(
+        (
+          container.querySelector(".agent-history-chat")?.textContent ?? ""
+        ).includes("Live update 19."),
+        "The busy conversation did not show its newest message",
+      );
+      check(
+        Math.max(0, ...longTasks) < 200,
+        `A busy conversation blocked the page: long tasks ${JSON.stringify(longTasks.map(Math.round))}`,
+      );
+
+      // In the Inspector's window body, at the body sizes of a phone
+      // (390×844), a laptop (1280×800), a half screen (960×1080), a wide
+      // screen (1920×1080), a portrait screen (1080×1920) and a small floating
+      // window, the long conversation scrolls inside the window and the
+      // composer stays in it.
+      for (const [width, height] of [
+        [390, 660],
+        [480, 525],
+        [480, 800],
+        [560, 800],
+        [560, 1640],
+        [320, 260],
+      ] as const) {
+        root.render(
+          <div
+            className="workspace-inspector-body"
+            style={{ width, height, display: "flex" }}
+          >
+            <div className="workspace-inspector-resource inspector-history-resource">
+              <AgentChat
+                pane={pane("idle")}
+                active
+                onOpenTerminal={() => {}}
+                onClose={() => {}}
+              />
+            </div>
+          </div>,
+        );
+        await settle();
+        await settle();
+        const body = container
+          .querySelector(".workspace-inspector-body")!
+          .getBoundingClientRect();
+        const list = container.querySelector<HTMLElement>(
+          ".agent-history-chat",
+        );
+        const composer = container
+          .querySelector(".agent-chat-composer")
+          ?.getBoundingClientRect();
+        check(
+          !!list &&
+            list.scrollHeight > list.clientHeight &&
+            list.getBoundingClientRect().bottom <= body.bottom + 1,
+          `At ${width}×${height} the conversation does not scroll inside the window`,
+        );
+        check(
+          !!composer &&
+            composer.height > 0 &&
+            composer.top >= body.top &&
+            composer.bottom <= body.bottom + 1,
+          `At ${width}×${height} the composer is outside the window`,
+        );
+      }
+      historyAnswer = null;
+    }
+
+    // History's read fails while the summary reads: Chat says so instead of
+    // loading forever, and Refresh retries History as well.
+    {
+      reply = conversation([message("r1", "assistant", "Recovered answer")]);
+      historyAnswer = () => {
+        throw new Error("History read failed.");
+      };
+      root.render(<div />);
+      await settle();
+      render("idle", true, 99);
+      await settle();
+      await settle();
+      const text = () =>
+        container.querySelector(".agent-chat")?.textContent ?? "";
+      check(
+        text().includes("History read failed.") &&
+          !text().includes("Loading conversation"),
+        `A failed History read was not shown: ${text().slice(0, 200)}`,
+      );
+      historyAnswer = null;
+      container
+        .querySelector<HTMLButtonElement>('[aria-label="Refresh conversation"]')
+        ?.click();
+      await settle();
+      await settle();
+      check(
+        text().includes("Recovered answer") &&
+          !text().includes("History read failed."),
+        "Refresh did not retry History's read",
+      );
+
+      // Loaded, then a failed read, then a retry that succeeds with nothing
+      // new (the same cursor): the warning goes and the messages stay.
+      const refresh = () =>
+        container
+          .querySelector<HTMLButtonElement>(
+            '[aria-label="Refresh conversation"]',
+          )
+          ?.click();
+      historyAnswer = () => {
+        throw new Error("History read failed again.");
+      };
+      refresh();
+      await settle();
+      await settle();
+      check(
+        text().includes("History read failed again.") &&
+          text().includes("Recovered answer"),
+        "A failed History refresh must warn and keep the last window",
+      );
+      let unchanged = 0;
+      historyAnswer = (params) => {
+        unchanged += 1;
+        const cursor = params.cursor as { epoch: string; revision: number };
+        return {
+          ...historyOf([]),
+          mode: "delta",
+          cursor,
+          base_revision: cursor.revision,
+          upserts: [],
+          removed: [],
+          entries: undefined,
+        };
+      };
+      refresh();
+      await settle();
+      await settle();
+      check(
+        unchanged > 0 &&
+          !text().includes("History read failed again.") &&
+          text().includes("Recovered answer"),
+        "A successful History retry with nothing new left the warning up",
+      );
+      historyAnswer = null;
+    }
 
     const unwatched = count("agent_conversation.unwatch");
     render("done", false);

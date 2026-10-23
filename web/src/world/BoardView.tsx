@@ -1,13 +1,26 @@
+import { QuestChip } from "../components/QuestLog";
+import { useAgentQuests } from "./agentQuests";
 import {
   ChevronDown,
   ChevronUp,
   Trash2,
   EllipsisVertical,
+  GitPullRequest,
   Maximize2,
   Minus,
   Plus,
   Sparkles,
 } from "lucide-react";
+import {
+  harnessLabel,
+  launchAgent,
+  launcherCatalog,
+  openProfileEditor,
+  profilesSnapshot,
+  readinessNote,
+  useAgentProfiles,
+  type LauncherCatalog,
+} from "./agentProfiles";
 import {
   lazy,
   startTransition,
@@ -98,6 +111,7 @@ import type { WorldCanvasAnchor } from "./worldConnectorGeometry";
 import { WorldSearchResults } from "./WorldSearchResults";
 import { WorldViewToolbar } from "./WorldViewToolbar";
 import { defaultTerminalColor, TERMINAL_COLOR_HEX } from "./terminalColor";
+import { WorkLens } from "./board/WorkLens";
 import "./board/board.css";
 import {
   relationTeams,
@@ -247,6 +261,8 @@ async function createTabThroughStore(
     };
   }
 }
+/** A start choice is a kind the host supports or `profile:<id>`. */
+const PROFILE_CHOICE = "profile:";
 async function startAgentThroughService(
   space: BoardWorkspace,
   kind: string,
@@ -254,32 +270,34 @@ async function startAgentThroughService(
   text: string,
   parent?: { paneId: string; terminalId?: string },
 ) {
-  const { bridge } = await import("../api");
-  return (await bridge.connection(space.connectionId, space.generation).call(
-    "board.start_agent",
+  // The shared launcher (agent/launch.ts), as Town and Spaces use.
+  const profileId = kind.startsWith(PROFILE_CHOICE)
+    ? kind.slice(PROFILE_CHOICE.length)
+    : undefined;
+  return (await launchAgent(
     {
-      workspace_id: space.nativeId,
-      kind,
-      name,
-      text,
-      ...(parent
-        ? {
-            parent_pane_id: parent.paneId,
-            ...(parent.terminalId
-              ? { parent_terminal_id: parent.terminalId }
-              : {}),
-          }
-        : {}),
+      connectionId: space.connectionId,
+      generation: space.generation,
+      workspaceId: space.nativeId,
+      workspaceLabel: space.label,
     },
-    120_000,
+    {
+      profileId,
+      kind: profileId ? undefined : kind,
+      label: name,
+      text,
+      parent,
+    },
   )) as StartOutcome;
 }
+function startLabel(kind: string) {
+  if (!kind.startsWith(PROFILE_CHOICE)) return harnessLabel(kind);
+  const id = kind.slice(PROFILE_CHOICE.length);
+  return profilesSnapshot()?.profiles.find((p) => p.id === id)?.name ?? id;
+}
+/** Until the host answers, the kinds every Herdr World release has offered. */
+const FALLBACK_KINDS = ["claude", "codex"];
 const NO_CARD_COLORS: Readonly<Record<string, CardColor>> = {};
-/** Agents Board offers to start; Herdr validates the kind. */
-const START_KINDS = [
-  { kind: "claude", label: "Claude" },
-  { kind: "codex", label: "Codex" },
-];
 async function checkAnchorThroughService(host: BoardHost, anchor: BoardAnchor) {
   const { bridge } = await import("../api");
   return (await bridge
@@ -465,6 +483,8 @@ export default function BoardView({
   // never holds up typing in a terminal.
   const shownWorld = useDeferredValue(world);
   const fullModel = useMemo(() => projectBoard(shownWorld), [shownWorld]);
+  // Each agent's quest, as a progress chip on its card.
+  const quests = useAgentQuests(shownWorld.leaves);
   // A large board's first render is only the frame; its cards follow in a
   // transition, which yields to input while it builds.
   const [built, setBuilt] = useState(
@@ -525,6 +545,8 @@ export default function BoardView({
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   const [query, setQuery] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [workOpen, setWorkOpen] = useState(false);
+  const workButtonRef = useRef<HTMLButtonElement | null>(null);
   /** The pane chooser: to pick a pane, or to finish a string to one. */
   const [chooser, setChooser] = useState<{
     tabKey: string;
@@ -1675,7 +1697,7 @@ export default function BoardView({
   /* ---------- Pointer input ---------- */
   /** What a pointer landed on; null for controls and text being edited. */
   function classify(target: HTMLElement): GestureTarget | null {
-    if (target.closest("[contenteditable='true']")) return null;
+    if (target.closest("[contenteditable='true'], .work-lens")) return null;
     if (
       target.closest("button, input, a, label") &&
       !target.closest(".board-card")
@@ -2109,6 +2131,8 @@ export default function BoardView({
   }
 
   const onWheel = useCallback((event: WheelEvent) => {
+    // The Work lens scrolls its own columns.
+    if ((event.target as Element | null)?.closest?.(".work-lens")) return;
     event.preventDefault();
     camGoal.current = null;
     panVelocity.current = null;
@@ -2822,13 +2846,14 @@ export default function BoardView({
       }
       return;
     }
-    setToast({ text: `Starting ${kind} in ${space.label}…` });
+    const label = startLabel(kind);
+    setToast({ text: `Starting ${label} in ${space.label}…` });
     try {
-      const outcome = await startAgent(space, kind, name || kind, "");
+      const outcome = await startAgent(space, kind, name || label, "");
       setToast({
         text:
           outcome.status === "started"
-            ? `Started ${kind} in ${space.label}`
+            ? `Started ${label} in ${space.label}`
             : (outcome.message ?? "The agent was not started."),
       });
     } catch (error) {
@@ -2843,7 +2868,7 @@ export default function BoardView({
   ) => {
     setStartFor(null);
     const name = chosenName || noteTabName(note);
-    setToast({ text: `Starting ${kind} in ${space.label}…` });
+    setToast({ text: `Starting ${startLabel(kind)} in ${space.label}…` });
     try {
       // A note strung to one pane on this host asks that pane's agent's
       // helper: the new agent is its child (with the terminal seen there).
@@ -3150,7 +3175,7 @@ export default function BoardView({
           if (
             card ||
             target.closest(
-              ".board-controls, .board-zone-label, .board-notebar, .board-chooser, .board-cut, .board-toast, .board-trace, .board-banner, .board-tray",
+              ".board-controls, .board-zone-label, .board-notebar, .board-chooser, .board-cut, .board-toast, .board-trace, .board-banner, .board-tray, .work-lens",
             )
           )
             return;
@@ -3360,6 +3385,9 @@ export default function BoardView({
                       <span className="board-dot" />
                     )}
                     <span className="board-label">{tab.label}</span>
+                    {!multi && pane?.isAgent && quests.get(pane.leaf.id) ? (
+                      <QuestChip quest={quests.get(pane.leaf.id)!} />
+                    ) : null}
                     <span className="board-who">
                       {multi
                         ? `${tab.panes.length} panes`
@@ -3390,6 +3418,9 @@ export default function BoardView({
                           <span className="board-pane-name">
                             {paneName(row)}
                           </span>
+                          {row.isAgent && quests.get(row.leaf.id) ? (
+                            <QuestChip quest={quests.get(row.leaf.id)!} />
+                          ) : null}
                           <span className="board-pane-state">
                             {row.isAgent ? STATUS_LABEL[row.status] : "shell"}
                           </span>
@@ -3875,6 +3906,15 @@ export default function BoardView({
               {detached.length}
             </button>
           ) : null}
+          <button
+            ref={workButtonRef}
+            type="button"
+            aria-label="Work: pull requests and tickets"
+            aria-pressed={workOpen}
+            onClick={() => setWorkOpen(!workOpen)}
+          >
+            <GitPullRequest size={15} aria-hidden="true" />
+          </button>
           <div className="board-menu-wrap">
             <button
               type="button"
@@ -3909,6 +3949,21 @@ export default function BoardView({
             ) : null}
           </div>
         </div>
+        {workOpen ? (
+          <WorkLens
+            world={world}
+            anchor={() => workButtonRef.current}
+            onClose={() => setWorkOpen(false)}
+            onSelectAgent={(id) => {
+              setWorkOpen(false);
+              const tab = model.tabs.find((entry) =>
+                entry.panes.some((pane) => pane.leaf.id === id),
+              );
+              if (tab) focusWorkspace(tab.workspaceKey);
+              onSelect(id);
+            }}
+          />
+        ) : null}
         {DEVTOOLS && tracing ? (
           <TraceOverlay
             view="board"
@@ -4050,11 +4105,42 @@ function NewTabDialog({
   // null is a plain terminal; a note always starts an agent.
   const [kind, setKind] = useState<string | null | undefined>(undefined);
   const [name, setName] = useState("");
-  const kinds: { kind: string | null; label: string }[] = [
-    ...(note ? [] : [{ kind: null, label: "Terminal" }]),
-    ...START_KINDS,
-  ];
   const space = workspaces.find((s) => s.key === workspace);
+  const { document: profileDocument } = useAgentProfiles();
+  // The kinds the chosen workspace's host supports, and their readiness.
+  const [catalog, setCatalog] = useState<LauncherCatalog | null>(null);
+  const spaceConnection = space?.connectionId;
+  const spaceGeneration = space?.generation;
+  const spaceWorkspace = space?.nativeId;
+  useEffect(() => {
+    setCatalog(null);
+    if (!spaceConnection || spaceGeneration === undefined || !spaceWorkspace)
+      return;
+    let current = true;
+    launcherCatalog({
+      connectionId: spaceConnection,
+      generation: spaceGeneration,
+      workspaceId: spaceWorkspace,
+    })
+      .then((next) => current && next.kinds.length && setCatalog(next))
+      .catch(() => {});
+    return () => {
+      current = false;
+    };
+  }, [spaceConnection, spaceGeneration, spaceWorkspace]);
+  const kinds: { kind: string | null; label: string; note?: string }[] = [
+    ...(note ? [] : [{ kind: null, label: "Terminal" }]),
+    ...(profileDocument?.profiles ?? []).map((profile) => ({
+      kind: PROFILE_CHOICE + profile.id,
+      label: profile.name,
+      note: readinessNote(profile.harness, catalog)?.text,
+    })),
+    ...(catalog?.kinds ?? FALLBACK_KINDS).map((choice) => ({
+      kind: choice,
+      label: harnessLabel(choice),
+      note: readinessNote(choice, catalog)?.text,
+    })),
+  ];
   const title = note
     ? "Start an agent with this note"
     : `New tab${space ? ` in ${space.label}` : ""}`;
@@ -4097,16 +4183,24 @@ function NewTabDialog({
           <div className="board-kinds" role="radiogroup">
             {kinds.map((choice) => (
               <button
-                key={choice.label}
+                key={choice.kind ?? "terminal"}
                 type="button"
                 role="radio"
                 aria-checked={kind === choice.kind}
+                title={choice.note}
                 onClick={() => setKind(choice.kind)}
               >
                 {choice.label}
               </button>
             ))}
           </div>
+          <button
+            type="button"
+            className="board-link"
+            onClick={() => openProfileEditor()}
+          >
+            Edit profiles
+          </button>
         </fieldset>
         <label className="board-field">
           <span>Tab name (optional)</span>
