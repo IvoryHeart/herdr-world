@@ -1,4 +1,5 @@
 import { useLayer } from "../layerStack";
+import { paneAgentTitle } from "../agentName";
 import type { Tab } from "../types";
 import { useEffect, useLayoutEffect, useRef } from "react";
 import {
@@ -53,7 +54,8 @@ function meaningfulTabLabel(label: string): string {
 function nestedAgentTitle(pane: Pane, tabLabel: string): string[] {
   const location = agentLocationName(pane);
   const agent = pane.agent?.trim() || "Agent";
-  const primary = meaningfulTabLabel(tabLabel) || location || agent;
+  const name = pane.agent_name?.trim();
+  const primary = name || meaningfulTabLabel(tabLabel) || location || agent;
   return [
     ...new Set([primary, location, hasAgentIcon(pane.agent) ? "" : agent]),
   ].filter(Boolean);
@@ -154,7 +156,7 @@ export function AgentRow({
     rawTabLabel,
   );
   const details = [
-    `${pane.agent?.trim() || "Agent"} pane ${pane.pane_id}`,
+    `${paneAgentTitle(pane) || "Agent"} pane ${pane.pane_id}`,
     rawTabLabel ? `tab ${rawTabLabel}` : `tab ${pane.tab_id}`,
     `status ${pane.agent_status}`,
     ...new Set([pane.foreground_cwd, pane.cwd].filter(Boolean)),
@@ -271,7 +273,7 @@ export function AgentRow({
       aria-label={
         nested
           ? details
-          : `${pane.agent ?? "Agent"} pane${tabLabel ? `, tab ${tabLabel}` : ""}, status ${pane.agent_status}`
+          : `${paneAgentTitle(pane) || "Agent"} pane${tabLabel ? `, tab ${tabLabel}` : ""}, status ${pane.agent_status}`
       }
     >
       <AgentStatusIcon agent={pane.agent} status={pane.agent_status} />
@@ -303,7 +305,7 @@ export function AgentRow({
         </div>
         {!nested ? (
           <div className="agent-sub muted">
-            {pane.agent ?? "Terminal"}
+            {paneAgentTitle(pane) || "Terminal"}
             {pane.cwd ? ` · ${basename(pane.cwd)}` : ""}
           </div>
         ) : null}
@@ -413,7 +415,7 @@ export function AgentContextMenu({
     top: state.y,
     zIndex: 1000,
   };
-  const agentName = state.pane.agent ?? "Agent";
+  const agentName = paneAgentTitle(state.pane) || "Agent";
   const locationName = agentLocationName(state.pane);
 
   return (
