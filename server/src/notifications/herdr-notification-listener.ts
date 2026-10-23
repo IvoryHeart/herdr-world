@@ -1,6 +1,7 @@
 import { EndpointClient } from "../bridge/endpoint-client";
 import type { SemanticNotification } from "../bridge/semantic-notification";
 import type { TaskEvent } from "./task-events";
+import { notificationSender } from "../../../shared/notificationSender";
 
 /**
  * Where task notifications come from.
@@ -34,8 +35,15 @@ export function taskEventFromSemanticNotification(
       kind = "blocked";
       break;
     case "custom":
-      // `herdr notification show` carries no kind; its sound says which one.
-      kind = notification.sound === "request" ? "blocked" : "completed";
+      // `herdr notification show` arrives without a pane. Its sound says
+      // what it is: request asks for the owner, done reports a finish
+      // (observer alerts), and no sound is a message for the owner.
+      kind =
+        notification.sound === "request"
+          ? "blocked"
+          : notification.sound === "done"
+            ? "completed"
+            : "message";
       break;
     default:
       return null;
@@ -43,6 +51,7 @@ export function taskEventFromSemanticNotification(
   return {
     kind,
     agent: notification.agent ?? "Agent",
+    sender: notificationSender(notification.agent),
     title: notification.title,
     ...(notification.body ? { body: notification.body } : {}),
     ...(notification.workspaceId

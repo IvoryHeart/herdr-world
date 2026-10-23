@@ -1,3 +1,4 @@
+import { profileWrite } from "../agent/profile-store";
 import { recordSpawnClaims } from "../world/relations";
 import { WorldSnapshotAdmission } from "../bridge/world-snapshot-admission";
 import { sendWorldSnapshotReply } from "../bridge/world-snapshot-reply";
@@ -106,13 +107,10 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
     }
     return;
   }
-  if (method === "world.profiles.save" || method === "world.profiles.delete") {
+  const profilesWrite = profileWrite(method);
+  if (profilesWrite) {
     try {
-      const p = (params ?? {}) as Record<string, unknown>;
-      const result =
-        method === "world.profiles.save"
-          ? profiles().save(p.profile)
-          : profiles().delete(String(p.id ?? ""));
+      const result = profilesWrite(profiles(), params);
       publishProfilesChanged(result.revision);
       sendReply({ id, result }, "world-profiles-write");
     } catch (error) {

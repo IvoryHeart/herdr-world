@@ -55,7 +55,7 @@ async function withBrowser(
 function registration() {
   return {
     active: {
-      scriptURL: origin + "/task-notifications-sw.js?v=2",
+      scriptURL: origin + "/task-notifications-sw.js?v=4",
       state: "activated",
     },
     showNotification: mock(async () => {}),
@@ -109,7 +109,7 @@ describe("task notification transport", () => {
       await Promise.resolve();
       await Promise.resolve();
       expect(active.showNotification).not.toHaveBeenCalled();
-      expect(register).toHaveBeenCalledWith("/task-notifications-sw.js?v=2", {
+      expect(register).toHaveBeenCalledWith("/task-notifications-sw.js?v=4", {
         updateViaCache: "none",
       });
       pending.active = active.active;
@@ -404,8 +404,42 @@ describe("notification service worker clicks", () => {
     expect(showNotification).toHaveBeenCalledWith(message.title, {
       body: message.body,
       tag: message.tag,
+      silent: false,
       data: { type: TASK_NOTIFICATION_ACTIVATE_EVENT, target },
     });
+    // While a page plays World's chimes, push stays silent; a claim far in
+    // the future is ignored.
+    const pushAgain = async () => {
+      listeners.push({
+        data: { json: () => message },
+        waitUntil: (value: Promise<void>) => {
+          pending = value;
+        },
+      });
+      await pending;
+      return (showNotification.mock.calls.slice(-1)[0] as unknown[])[1];
+    };
+    listeners.message({
+      data: { type: "herdr-world:chimes-active", until: Date.now() + 600_000 },
+    });
+    expect(await pushAgain()).toMatchObject({ silent: false });
+    listeners.message({
+      data: { type: "herdr-world:chimes-active", until: Date.now() + 30_000 },
+    });
+    expect(await pushAgain()).toMatchObject({ silent: true });
+    listeners.message({
+      source: { id: "another-page" },
+      data: {
+        type: "herdr-world:chime-policy",
+        mode: "fallback",
+        until: Date.now() + 30_000,
+      },
+    });
+    expect(await pushAgain()).toMatchObject({ silent: true });
+    listeners.message({
+      data: { type: "herdr-world:chimes-active", until: Date.now() - 1 },
+    });
+    expect(await pushAgain()).toMatchObject({ silent: false });
     listeners.push({
       data: {
         json: () => {
@@ -438,6 +472,7 @@ describe("notification service worker clicks", () => {
     expect(showNotification).toHaveBeenLastCalledWith("codex needs input", {
       body: "idle",
       tag: "herdr-world-task",
+      silent: false,
       data: { type: TASK_NOTIFICATION_ACTIVATE_EVENT, target: null },
     });
   });
@@ -469,7 +504,9 @@ describe("notification service worker clicks", () => {
       },
     );
     expect(Object.keys(listeners).sort()).toEqual([
+      "activate",
       "install",
+      "message",
       "notificationclick",
       "push",
     ]);

@@ -1,4 +1,4 @@
-import { Copy, Dices, Play, Plus, Save, Trash2 } from "lucide-react";
+import { Copy, Dices, Play, Plus, Save, Trash2, Volume2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ACCESSORIES,
@@ -17,6 +17,14 @@ import {
   type AgentLook,
   type AgentProfile,
 } from "../../../shared/agentProfile";
+import {
+  DEFAULT_CHIMES,
+  TIMBRES,
+  TIMBRE_LABELS,
+  type Timbre,
+} from "../../../shared/chimes";
+import { chimeDevice } from "../chimes/chimeCenter";
+import { previewChime } from "../chimes/player";
 import { ColorSwatches } from "../components/ColorSwatch";
 import { CloseButton } from "../components/CloseButton";
 import { useLayer } from "../layerStack";
@@ -40,7 +48,7 @@ const TABS: [Tab, string][] = [
   ["brain", "Brain"],
   ["skills", "Skills & tools"],
   ["brief", "Brief"],
-  ["look", "Look"],
+  ["look", "Look & sound"],
 ];
 const LABELS: Record<string, string> = {
   short: "Short",
@@ -89,6 +97,7 @@ export function ProfileEditor({
   useLayer(true, () => onClose(), { element: () => ref.current });
   const { document, error: loadError } = useAgentProfiles();
   const profiles = document?.profiles ?? [];
+  const chimes = document?.chimes ?? DEFAULT_CHIMES;
   const [selectedId, setSelectedId] = useState<string | null>(
     initialId ?? null,
   );
@@ -349,6 +358,20 @@ export function ProfileEditor({
                     />
                     <small>Its tab, desk and card colour.</small>
                   </div>
+                  <label className="profile-check">
+                    <input
+                      type="checkbox"
+                      checked={draft.town_master}
+                      onChange={(event) =>
+                        update({ town_master: event.target.checked })
+                      }
+                    />
+                    Offer its agents the Town master role
+                  </label>
+                  <small className="agent-launcher-note">
+                    Settings → Sounds then suggests making an agent launched
+                    from it the Town master; only you assign the role.
+                  </small>
                 </div>
               ) : null}
               {tab === "brain" ? (
@@ -592,6 +615,12 @@ export function ProfileEditor({
                     current={draft.look.accessory}
                     onPick={(accessory) => updateLook({ accessory })}
                   />
+                  <ChimeField
+                    current={draft.chime}
+                    master={chimes.timbres.town_master}
+                    crew={chimes.timbres.crew}
+                    onPick={(chime) => update({ chime })}
+                  />
                   <button
                     type="button"
                     onClick={() =>
@@ -731,6 +760,61 @@ function LookOptions<T extends string>({
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+/**
+ * The profile's chime: its class's default, or one of World's sounds except
+ * the Town master's, which is the master's alone.
+ */
+function ChimeField({
+  current,
+  master,
+  crew,
+  onPick,
+}: {
+  current: Timbre | null;
+  master: Timbre;
+  crew: Timbre;
+  onPick(chime: Timbre | null): void;
+}) {
+  return (
+    <div className="agent-field">
+      <span>Chime</span>
+      <div className="profile-chime">
+        <select
+          aria-label="Chime"
+          value={current ?? ""}
+          onChange={(event) =>
+            onPick((event.target.value || null) as Timbre | null)
+          }
+        >
+          <option value="">Class default ({TIMBRE_LABELS[crew]})</option>
+          {TIMBRES.filter((timbre) => timbre !== master).map((timbre) => (
+            <option key={timbre} value={timbre}>
+              {TIMBRE_LABELS[timbre]}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          title="Play its needs-you chime"
+          onClick={() =>
+            void previewChime(
+              current ?? crew,
+              "needs_you",
+              chimeDevice().volume,
+            )
+          }
+        >
+          <Volume2 size={13} aria-hidden="true" /> Preview
+        </button>
+      </div>
+      <small>
+        Agents launched from this profile chime with it. The Town master always
+        sounds as {TIMBRE_LABELS[master]}.
+      </small>
     </div>
   );
 }

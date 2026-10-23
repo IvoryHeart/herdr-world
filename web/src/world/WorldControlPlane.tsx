@@ -1,5 +1,6 @@
 import { Suspense, useEffect, useState } from "react";
 import { worldLocalStorage } from "../browserStorage";
+import { useChimeHost, WORLD_SOUNDS_EVENT } from "../chimes/chimeHost";
 import { CreateWorkspaceDialog } from "../components/CreateWorkspaceDialog";
 import { ConfirmDialog } from "../components/ModalDialogs";
 import { lazyWithReload } from "../lazyWithReload";
@@ -7,6 +8,7 @@ import { connectionSnapshot, store } from "../store";
 import { WORKSPACE_INSPECTOR_CLOSE_EVENT } from "../workspaceResource";
 import {
   type LaunchTarget,
+  useAgentProfiles,
   WORLD_AGENT_LAUNCH_EVENT,
   WORLD_AGENT_PROFILES_EVENT,
 } from "./agentProfiles";
@@ -54,6 +56,11 @@ const AgentLauncherDialog = lazyWithReload("world-agent-launcher", () =>
     default: module.AgentLauncherDialog,
   })),
 );
+const SoundsDialog = lazyWithReload("world-sounds", () =>
+  import("./SoundsDialog").then((module) => ({
+    default: module.SoundsDialog,
+  })),
+);
 const ProfileEditor = lazyWithReload("world-profile-editor", () =>
   import("./ProfileEditor").then((module) => ({
     default: module.ProfileEditor,
@@ -75,6 +82,11 @@ function AgentDialogs({
     (Partial<LaunchTarget> & { profileId?: string }) | null
   >(null);
   const [editing, setEditing] = useState<{ profileId?: string } | null>(null);
+  const [sounds, setSounds] = useState(false);
+  // Chimes need the profiles document (Town master, profile chimes) and
+  // unlocked audio whichever view is open.
+  useAgentProfiles();
+  useChimeHost();
   // A launched agent or login terminal opens once World's snapshot shows it.
   const [pendingOpen, setPendingOpen] = useState<{
     connectionId: string;
@@ -96,15 +108,21 @@ function AgentDialogs({
       setLaunch({ ...(event as CustomEvent<LaunchTarget>).detail });
     const onProfiles = (event: Event) =>
       setEditing({ profileId: (event as CustomEvent<string>).detail });
+    const onSounds = () => setSounds(true);
     window.addEventListener(WORLD_AGENT_LAUNCH_EVENT, onLaunch);
     window.addEventListener(WORLD_AGENT_PROFILES_EVENT, onProfiles);
+    window.addEventListener(WORLD_SOUNDS_EVENT, onSounds);
     return () => {
       window.removeEventListener(WORLD_AGENT_LAUNCH_EVENT, onLaunch);
       window.removeEventListener(WORLD_AGENT_PROFILES_EVENT, onProfiles);
+      window.removeEventListener(WORLD_SOUNDS_EVENT, onSounds);
     };
   }, []);
   return (
     <Suspense fallback={null}>
+      {sounds ? (
+        <SoundsDialog world={world} onClose={() => setSounds(false)} />
+      ) : null}
       {editing ? (
         <ProfileEditor
           world={world}
