@@ -5,5 +5,6 @@
   reaches reception, and while any agent is focused only focused agents and the
   Town master's needs-you chime. World keeps the choice for the agent's
   terminal on every device and drops it once the terminal closes, including
-  closes missed while disconnected. The control works in Town, Board and
+  closes missed while disconnected, retrying if settings change during the
+  listing. The control works in Town, Board and
   Spaces, and reports a failed save so it can be retried.

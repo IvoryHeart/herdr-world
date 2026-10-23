@@ -52,7 +52,8 @@ export async function pruneGoneInterest(
     isCurrent: () => boolean;
     changed: (revision: number) => void;
   },
-) {
+): Promise<void> {
+  if (!host.isCurrent()) return;
   const prefix = interestKeyPrefix(connectionId);
   const observed = board.get();
   const stored = Object.keys(observed.layout.interest);
@@ -68,7 +69,8 @@ export async function pruneGoneInterest(
     }
     // A newer edit (even clearing and restoring the same choice) must never
     // be removed using a listing that predates it.
-    if (board.get().revision !== observed.revision) return;
+    if (board.get().revision !== observed.revision)
+      return pruneGoneInterest(board, connectionId, host);
     const ops = goneInterestOps(observed, connectionId, terminals);
     if (ops.length) host.changed(board.patch(ops).revision);
   } catch (error) {

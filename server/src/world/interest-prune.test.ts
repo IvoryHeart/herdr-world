@@ -148,13 +148,31 @@ describe("agent interest", () => {
     ]) {
       const store = seeded();
       const reply = Promise.withResolvers<unknown>();
-      const live = { ...host(null), call: () => reply.promise };
+      const fresh = Promise.withResolvers<unknown>();
+      const retried = Promise.withResolvers<void>();
+      let calls = 0;
+      const live = {
+        ...host(null),
+        call: () => {
+          if (++calls === 1) return reply.promise;
+          retried.resolve();
+          return fresh.promise;
+        },
+      };
       const pruning = pruneGoneInterest(store, "conn-a", live);
       store.patch(ops);
       const edited = store.get();
       reply.resolve({ panes: [{ terminal_id: "term_2" }] });
+      await retried.promise;
+      expect(store.get()).toEqual(edited);
+      fresh.resolve({
+        panes: ["term_1", "term_2", "term_new"].map((terminal_id) => ({
+          terminal_id,
+        })),
+      });
       await pruning;
       expect(store.get()).toEqual(edited);
+      expect(calls).toBe(2);
       expect(live.revisions).toEqual([]);
     }
   });
@@ -210,6 +228,38 @@ describe("agent interest", () => {
     } finally {
       await manager.stopAll();
     }
+  });
+
+  test("reconnect retries after a concurrent edit on another host", async () => {
+    const store = seeded();
+    const older = Promise.withResolvers<unknown>();
+    let calls = 0;
+    const reconciliation = reconcileReadyInterest(
+      store,
+      {
+        connectionId: "conn-a",
+        isCurrent: () => true,
+        runtime: {
+          herdr: {
+            call: async () => {
+              calls += 1;
+              return calls === 1 ? older.promise : { panes: [] };
+            },
+          },
+        },
+      },
+      () => {},
+    );
+    const newer = interestKey("conn-b", "term_live");
+    store.patch([{ op: "interest.set", key: newer, interest: "muted" }]);
+    older.resolve({ panes: [] });
+    await reconciliation;
+    expect(calls).toBe(2);
+    expect(store.get().layout.interest).toEqual({
+      [elsewhere]: "muted",
+      [newer]: "muted",
+    });
+    expect(Object.values(store.get().layout.interest)).not.toContain("focused");
   });
 
   test("closing a pane, tab or workspace triggers a check; other events do not", () => {
