@@ -126,6 +126,9 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    agents also wait there until you open their terminal or mark that completion
    reviewed, then join idle agents in the lounge. These locations visualize
    status; they do not move the underlying pane or change its host.
+   On a phone, tap the counts chip under search to open the Town board with
+   working, needs-you and finished counts and spend. Tap it again or press
+   Escape to close the board.
 4. Tap an agent or its table to open its window on **Chat**: World's Inspector,
    with **Chat**, **Terminal**, **Changes** and **Files** in its top selector.
    In Town it docks on the right; drag its title to undock it. Chat shows the
