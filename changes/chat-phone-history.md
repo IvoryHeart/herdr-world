@@ -17,7 +17,8 @@
 ### Fixed
 
 - A docked Chat window restored on page load, for an agent on a host the page
-  had not opened yet, no longer stays blank until the agent is clicked.
+  had not opened yet, no longer stays blank until the agent is clicked, even
+  when the connection comes up after the window mounts.
 - Chat no longer runs off the right edge on phones: a long path, command,
   link or title wraps or scrolls inside its own bubble, and wide tables
   scroll instead of squeezing every cell to one letter a line.
@@ -25,8 +26,9 @@
   yet seen" when Claude Code records the image as `[Image #N]`.
 - A message sent from Chat over several lines no longer stays "Sent; not yet
   seen" or shows twice with its `pasted_content` tags: Chat reads Claude
-  Code's paste wrapper, shows the words marked **Pasted**, and otherwise takes
-  the first turn written after the send.
+  Code's paste wrapper and shows the words marked **Pasted**. When the harness
+  rewrites a send, only a compatible later turn can match it by order; an
+  unrelated prompt from another client leaves the send waiting.
 - A sent message waiting for a busy agent sits at its send time as
   "Delivered · waiting for <agent>", never below replies written since.
 - A loop the agent scheduled once (`ScheduleWakeup`) no longer shows as in

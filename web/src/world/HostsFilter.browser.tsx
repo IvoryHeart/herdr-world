@@ -71,9 +71,10 @@ const operation =
   new URLSearchParams(location.search).get("operation") ?? "filters";
 const requestedView =
   new URLSearchParams(location.search).get("view") ?? "board";
+const coldMaster = operation.startsWith("cold-master");
 const coldHost =
   operation === "cold-host" ||
-  operation === "cold-master" ||
+  coldMaster ||
   operation === "navigator" ||
   operation === "spaces-navigator" ||
   operation === "bare-navigator" ||
@@ -235,7 +236,7 @@ function snapshot() {
               panes: dense && id === "beta" ? densePanes : fixturePanes,
               // Beta's agent is the Town master, by its Herdr name.
               agents:
-                operation === "cold-master" && id === "beta"
+                coldMaster && id === "beta"
                   ? [
                       {
                         pane_id: "shared",
@@ -737,10 +738,23 @@ async function operationalScenario(unmount: () => void) {
     );
     return;
   }
-  if (operation === "cold-master") {
+  if (coldMaster) {
     // On load, Town docks its master's window without focusing it. That
     // host's session has not loaded yet; the window must fill in by itself,
     // never stay an empty frame until the agent is clicked.
+    if (operation === "cold-master-connect") {
+      await waitFor(
+        () => !!document.querySelector(".world-inspector-loading"),
+        "The docked master's window did not mount before connecting",
+      );
+      check(
+        store.get().sessionsByConnectionId.beta?.workspaces.length === 0,
+        "The disconnected host unexpectedly loaded its session",
+      );
+      flushSync(() =>
+        __storeTesting.replaceState({ ...store.get(), status: "connected" }),
+      );
+    }
     await waitFor(
       () =>
         !![
@@ -2090,7 +2104,7 @@ async function run() {
   localStorage.clear();
   // The legacy operational preference must not become an overview filter.
   worldLocalStorage.setItem("worldSelectedConnection", "beta");
-  if (operation === "cold-master")
+  if (coldMaster)
     writeOfficePreferences(worldLocalStorage, {
       ...readOfficePreferences(worldLocalStorage),
       townMaster: "betamaster",
@@ -2506,7 +2520,7 @@ async function run() {
   bridge.call = client.call;
   __storeTesting.replaceState({
     ...store.get(),
-    status: "connected",
+    status: operation === "cold-master-connect" ? "disconnected" : "connected",
     navigationMode: coldHost ? "browser-local" : "shared",
     catalogueReady: true,
     activeConnectionId: "alpha",
