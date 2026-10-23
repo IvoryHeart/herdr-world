@@ -1,0 +1,704 @@
+<!doctype html>
+<html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body>
+<meta charset="utf-8">
+<title>Herdr Window Chrome</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=Rubik:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: control strip on top, one scaled device stage (before screenshot or live after-mock), numbers beside it, then the audit and rules below. Single committed dusk look taken from the Town v4 prototype. */
+:root{
+  --ground:#2f4a2b;
+  --page:#151a22;
+  --panel:rgba(17,21,29,.92);
+  --solid:#11151d;
+  --edge:#090c11;
+  --hi:rgba(255,255,255,.07);
+  --line:rgba(255,255,255,.08);
+  --text:#f1efe6;
+  --muted:#a9b2a4;
+  --accent:#ffd166;
+  --gold:#e3aa3a;
+  --work:#6fc3ff;
+  --wait:#ffb547;
+  --done:#7be08f;
+  --idle:#d9c39b;
+  --danger:#ff7a6b;
+  --btn:#273141;
+  --btn-on:#3a4459;
+  --term:#0d1117;
+  --calm-bg:#1b2029;
+  --calm-bar:#20262f;
+  --calm-line:#2d3540;
+  --calm-text:#dfe3ea;
+  --calm-muted:#8b95a3;
+  --calm-accent:#7aa5ff;
+  --f-display:"Pixelify Sans", ui-monospace, monospace;
+  --f-body:"Rubik", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono:"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  color-scheme:dark;
+}
+html,body{background:var(--page);color:var(--text);font-family:var(--f-body)}
+body{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px;line-height:1.45}
+*{box-sizing:border-box}
+h1,h2,h3{font-family:var(--f-display);font-weight:700;letter-spacing:.02em;text-wrap:balance;margin:0}
+h1{font-size:28px}
+h2{font-size:20px;color:var(--accent);margin-bottom:10px}
+h3{font-size:15px;margin-bottom:6px}
+p{margin:0}
+.wrap{max-width:1500px;margin:0 auto;display:flex;flex-direction:column;gap:22px}
+.intro{display:flex;flex-direction:column;gap:6px;max-width:80ch}
+.intro p{color:var(--muted)}
+.hudpanel{background:var(--panel);border:2px solid var(--edge);border-radius:12px;box-shadow:inset 0 0 0 1px var(--hi),0 10px 30px rgba(0,0,0,.35)}
+button{font:600 13px var(--f-body);color:var(--text);background:var(--btn);border:2px solid var(--edge);border-radius:9px;box-shadow:inset 0 -3px 0 rgba(0,0,0,.35),inset 0 2px 0 rgba(255,255,255,.07);padding:6px 11px;min-height:36px;cursor:pointer}
+button:hover{filter:brightness(1.12)}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button[aria-pressed="true"]{background:var(--btn-on);outline:1px solid rgba(255,255,255,.2)}
+.controls{display:flex;flex-wrap:wrap;gap:10px 18px;padding:10px 12px;align-items:center}
+.group{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.group>span{font:700 12px var(--f-display);color:var(--muted);letter-spacing:.06em;margin-right:4px}
+.group small{display:block;font-weight:500;font-size:10.5px;color:var(--muted)}
+.stagegrid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;align-items:start}
+@media (max-width:980px){.stagegrid{grid-template-columns:minmax(0,1fr)}}
+.stagebox{min-width:0;padding:12px;display:flex;justify-content:center;background:#0b0e13;border-radius:12px;border:2px solid var(--edge);overflow:hidden}
+.scaler{position:relative;flex:none}
+.device{position:absolute;left:0;top:0;transform-origin:0 0;overflow:hidden;border-radius:6px;background:var(--ground);container:dev / size;font-family:var(--f-body)}
+.device>img.before{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:top left;max-width:none}
+.numbers{padding:14px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.numbers dl{display:grid;grid-template-columns:1fr auto;gap:6px 10px;margin:0;font-size:13px}
+.numbers dt{color:var(--muted)}
+.numbers dd{margin:0;font-variant-numeric:tabular-nums;text-align:right;font-weight:600}
+.numbers dd i{font-style:normal;color:var(--done)}
+.numbers .note{font-size:12.5px;color:var(--muted)}
+.cap{font-size:12px;color:var(--muted);text-align:center;margin-top:6px}
+section.block{padding:16px 18px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;font-size:13px;min-width:720px;width:100%}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font:700 12px var(--f-display);color:var(--muted);letter-spacing:.05em}
+td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+.freq{display:inline-block;font:600 11px var(--f-body);padding:2px 8px;border-radius:999px;background:#222b39;white-space:nowrap}
+.freq.f1{color:var(--done)}.freq.f2{color:var(--work)}.freq.f3{color:var(--idle)}.freq.f4{color:var(--muted)}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+.cols>div{min-width:0}
+ul.plain{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:5px;font-size:13.5px}
+code{font:500 12px var(--f-mono);color:#cfd6c9;background:#0d1117;padding:1px 5px;border-radius:4px}
+
+/* ============ mock: shared pieces ============ */
+.dv-btn{font:600 13px var(--f-body);color:var(--text);background:var(--btn);border:2px solid var(--edge);border-radius:9px;box-shadow:inset 0 -3px 0 rgba(0,0,0,.35),inset 0 2px 0 rgba(255,255,255,.07);min-height:40px;min-width:40px;padding:0 11px;display:inline-flex;align-items:center;justify-content:center;gap:6px;cursor:pointer}
+.ico{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.dot{width:9px;height:9px;border-radius:2px;display:inline-block;flex:none;box-shadow:0 0 0 2px rgba(0,0,0,.35)}
+.pill{display:inline-flex;align-items:center;gap:5px;font:600 11.5px var(--f-body);padding:2px 8px;border-radius:999px;background:#222b39;border:1px solid rgba(255,255,255,.08);white-space:nowrap}
+.pill.working{color:var(--work)}.pill.waiting{color:var(--wait)}.pill.idle{color:var(--idle)}
+.backdrop{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center top;max-width:none}
+
+/* Town HUD top bar: overlay, 12px inset, 44px row */
+.hud-top{position:absolute;top:12px;left:16px;right:16px;display:flex;gap:8px;align-items:center;z-index:3}
+.hud-top .panel{background:var(--panel);border:2px solid var(--edge);border-radius:12px;box-shadow:inset 0 0 0 1px var(--hi),0 10px 30px rgba(0,0,0,.35);min-height:44px;display:flex;align-items:center;gap:4px;padding:2px 4px}
+.brand b{font:700 16px/1 var(--f-display);padding-right:6px}
+.logo{width:22px;height:22px;border-radius:5px;background:linear-gradient(135deg,#e3aa3a 0 50%,#6fc3ff 50%);box-shadow:0 0 0 2px var(--edge)}
+.counts .c{display:flex;align-items:center;gap:6px;padding:0 8px;font:600 13px var(--f-body);font-variant-numeric:tabular-nums}
+.counts .attn{background:#3a2c14;color:#ffd79a;border-radius:8px;min-height:34px;border:0;box-shadow:none;padding:0 10px}
+.hud-top .spacer{flex:1}
+.hud-top .ghost{background:transparent;border-color:transparent;box-shadow:none;min-height:36px}
+.jump{color:var(--muted);font-weight:500;padding:0 12px!important}
+.jump kbd{font:600 11px var(--f-mono);background:#141a24;border:1px solid rgba(255,255,255,.12);border-radius:5px;padding:1px 6px}
+.viewsel{font:600 13px var(--f-body);padding:0 10px!important}
+@container dev (max-width:640px){
+  .hud-top{top:10px;left:10px;right:10px;gap:6px}
+  .brand b,.jump span,.jump kbd,.viewsel,.hosts span,.counts .lbl{display:none}
+  .counts .c{padding:0 6px}
+}
+@container dev (max-width:1100px){ .hosts span{display:none} }
+
+/* Needs-you tray */
+.tray{position:absolute;z-index:3;background:var(--panel);border:2px solid var(--edge);border-radius:12px;box-shadow:inset 0 0 0 1px var(--hi),0 10px 30px rgba(0,0,0,.35);padding:6px;display:flex;gap:6px}
+.tray .tl{font:700 13px var(--f-display);color:var(--accent);padding:2px 6px;letter-spacing:.03em;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.tchip{display:flex;align-items:center;gap:8px;padding:4px 10px 4px 4px;min-height:44px;border-left:4px solid var(--wait);background:var(--btn);border-radius:9px;border-top:2px solid var(--edge);border-right:2px solid var(--edge);border-bottom:2px solid var(--edge)}
+.tchip .av{width:28px;height:32px;border-radius:6px;background:radial-gradient(circle at 50% 40%,#3b4a63,#1b2230)}
+.tchip b{display:block;font:600 13px var(--f-body)}
+.tchip small{display:block;font-size:11px;color:var(--muted)}
+.tray{left:16px;top:70px;width:216px;flex-direction:column}
+@container dev (max-width:899px){ .tray{top:auto;width:auto;flex-direction:row;align-items:center;left:72px;right:72px;bottom:calc(var(--nav-h,0px) + 10px)} }
+
+/* Camera cluster */
+.camera{position:absolute;z-index:3;right:16px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:6px;padding:6px;background:var(--panel);border:2px solid var(--edge);border-radius:12px;box-shadow:inset 0 0 0 1px var(--hi),0 10px 30px rgba(0,0,0,.35);transition:right .3s}
+.camera .dv-btn{width:44px;height:44px;padding:0;font:700 20px var(--f-display)}
+.camera .fit{font-size:12px;letter-spacing:.04em}
+.device[data-dock="right"] .camera{right:calc(var(--dock-w) + 32px)}
+.device[data-dock="bottom"] .camera{top:auto;transform:none;bottom:calc(var(--dock-h) + 28px)}
+.camfab{display:none}
+@container dev (max-width:640px){
+  .camera{display:none}
+  .camfab{display:flex;position:absolute;z-index:4;right:10px;bottom:calc(var(--nav-h,0px) + 10px);width:52px;height:52px;align-items:center;justify-content:center;background:var(--panel);border:2px solid var(--edge);border-radius:12px;box-shadow:inset 0 0 0 1px var(--hi),0 10px 30px rgba(0,0,0,.35)}
+  .camfab .dv-btn{width:44px;height:44px;padding:0}
+  .campop{position:absolute;right:0;bottom:58px;display:flex;gap:6px;padding:6px;background:var(--panel);border:2px solid var(--edge);border-radius:12px}
+  .campop .dv-btn{width:44px;height:44px;font:700 20px var(--f-display);padding:0}
+}
+.camtoast{position:absolute;left:50%;top:70px;transform:translateX(-50%);z-index:6;padding:8px 14px;font-size:13px;background:var(--panel);border:2px solid var(--edge);border-radius:12px;white-space:nowrap}
+
+/* Phone bottom nav (kept) */
+.mnav{position:absolute;left:0;right:0;bottom:0;height:75px;background:#181d27;border-top:1px solid var(--line);display:flex;justify-content:space-around;align-items:center;z-index:2;font-size:12px;color:var(--muted)}
+.mnav span{display:flex;flex-direction:column;align-items:center;gap:4px}
+.mnav span.on{color:var(--text)}
+
+/* Workspaces drawer (the sidebar, off by default in Town) */
+.drawer{position:absolute;z-index:5;left:16px;top:70px;bottom:16px;width:284px;padding:12px;display:flex;flex-direction:column;gap:6px;background:var(--panel);border:2px solid var(--edge);border-radius:12px;box-shadow:inset 0 0 0 1px var(--hi),0 10px 30px rgba(0,0,0,.35);font-size:13px}
+.drawer .ws{font:700 15px var(--f-display);margin-top:6px}
+.drawer .row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;color:var(--muted)}
+.drawer .row.on{background:#222b39;color:var(--text)}
+.drawer .row em{margin-left:auto;font-style:normal;font-size:11px}
+
+/* ============ window (shared frame) ============ */
+.win{position:absolute;z-index:4;display:flex;flex-direction:column;overflow:hidden;container:win / inline-size}
+.win[data-skin="town"]{background:var(--panel);border:2px solid var(--edge);border-radius:12px;box-shadow:inset 0 0 0 1px var(--hi),0 10px 30px rgba(0,0,0,.35)}
+.wbar{display:flex;align-items:center;gap:6px;flex:none}
+.win[data-skin="town"] .wbar{padding:8px;border-bottom:1px solid var(--line);min-height:58px}
+.who{display:flex;align-items:center;gap:8px;min-width:0;flex:1 1 auto}
+.avatar{width:32px;height:36px;border-radius:7px;flex:none;position:relative;background:radial-gradient(circle at 50% 38%,#e0835f 0 26%,#3b4a63 27%,#1b2230);box-shadow:0 0 0 2px var(--swatch,#6fc3ff)}
+.avatar.fm{background:radial-gradient(circle at 50% 38%,#ffd166 0 26%,#3b4a63 27%,#1b2230)}
+.ident{min-width:88px;flex:1 1 auto;display:flex;flex-direction:column}
+.ident b{font:700 16px/1.1 var(--f-display);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:6px}
+.where{all:unset;cursor:pointer;color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;border-radius:4px}
+.where:hover{color:var(--text)}
+.where:focus-visible{outline:2px solid var(--accent)}
+.views{display:flex;gap:4px;flex:none;padding:3px;border-radius:10px;background:rgba(0,0,0,.25)}
+.chip{font:600 12.5px var(--f-body);display:inline-flex;align-items:center;gap:6px;min-height:34px;padding:0 9px;border-radius:8px;border:0;background:transparent;box-shadow:none;color:var(--muted);cursor:pointer}
+.chip[aria-selected="true"]{background:var(--btn-on);color:var(--text);box-shadow:inset 0 -2px 0 rgba(0,0,0,.35),0 0 0 1px rgba(255,255,255,.14)}
+.chip .n{font-size:10.5px;background:#3a2c14;color:#ffd79a;border-radius:999px;padding:0 6px}
+.chip .t{display:none}
+/* Header follows the window's own width: >=640 icon+label, 360-639 icons, <360 active view + views in ⋯ */
+@container win (min-width:640px){ .chip .t{display:inline} .next .nl{display:inline} }
+.next .nl{display:none}
+.wmenu .mview{display:none}
+@container win (max-width:359px){ .views .chip[aria-selected="false"]{display:none} .wmenu .mview{display:flex} .ident{min-width:56px} }
+.next{white-space:nowrap;flex:none}
+.st.working{color:var(--work)}.st.idle{color:var(--idle)}
+.next.hot{background:var(--gold);color:#1f1606}
+.wmenu{position:absolute;right:8px;top:54px;z-index:8;width:220px;padding:6px;background:var(--solid);border:2px solid var(--edge);border-radius:10px;box-shadow:0 12px 30px rgba(0,0,0,.5);display:flex;flex-direction:column}
+.wmenu .mi{all:unset;cursor:pointer;display:flex;justify-content:space-between;gap:10px;padding:8px 10px;border-radius:7px;font-size:13px}
+.wmenu .mi:hover,.wmenu .mi:focus-visible{background:#222b39}
+.wmenu .mi kbd{font:500 11px var(--f-mono);color:var(--muted)}
+.wmenu hr{border:0;border-top:1px solid var(--line);margin:4px 2px;width:auto}
+.wmenu .sw{display:flex;gap:6px;padding:6px 10px}
+.wmenu .sw i{width:16px;height:16px;border-radius:4px;box-shadow:0 0 0 2px var(--edge)}
+.wpop{position:absolute;left:52px;top:54px;z-index:8;width:min(330px,calc(100% - 64px));padding:12px;background:var(--solid);border:2px solid var(--edge);border-radius:10px;box-shadow:0 12px 30px rgba(0,0,0,.5);font-size:12.5px;display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 10px}
+.wpop dt{color:var(--muted)}.wpop dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.panes{display:flex;gap:6px;padding:6px 8px;border-bottom:1px solid var(--line);overflow-x:auto;flex:none}
+.panes .chip{background:var(--btn);color:var(--text);border:2px solid var(--edge);min-height:32px}
+.panes .chip[aria-pressed="true"]{background:var(--btn-on)}
+.wbody{flex:1;min-height:0;overflow:auto;position:relative}
+.screen{margin:0;padding:10px 12px;background:var(--term);font:400 12px/1.6 var(--f-mono);color:#c9d1c3;white-space:pre-wrap;min-height:100%}
+.screen .p{color:var(--done)}.screen .d{color:#6e7681}.screen .w{color:var(--wait)}.screen .q{display:block;border:1px solid #5a4410;background:#1d1708;border-radius:6px;padding:6px 9px;margin:6px 0;color:#ffe0a8}
+.chatv{padding:14px;display:flex;flex-direction:column;gap:12px;font-size:13.5px}
+.chatv .me{align-self:flex-end;background:#2a3446;padding:8px 12px;border-radius:14px;max-width:80%}
+.chatv .ag{max-width:92%;color:#e6e3d8}
+.chatv .owner{font-size:11px;color:var(--muted);text-align:center;border:1px dashed var(--line);border-radius:8px;padding:6px}
+.listv{padding:6px 8px;font-size:13px}
+.listv .tb{display:flex;align-items:center;gap:8px;padding:4px 4px 8px;color:var(--muted);font-size:12px;border-bottom:1px solid var(--line);margin-bottom:4px;flex-wrap:wrap}
+.listv .tb .pill{font-size:11px}
+.listv .r{display:flex;gap:8px;padding:6px;border-radius:6px;align-items:center}
+.listv .r:hover{background:#1b2230}
+.listv .r code{background:none;padding:0}
+.listv .r .add{color:var(--done);margin-left:auto;font:600 11px var(--f-mono)}.listv .r .del{color:var(--danger);font:600 11px var(--f-mono)}
+.compose{display:flex;gap:6px;padding:8px;border-top:1px solid var(--line);flex:none}
+.compose input{flex:1;min-width:0;font:400 14px var(--f-body);color:var(--text);background:var(--term);border:2px solid var(--edge);border-radius:9px;padding:0 12px;min-height:40px}
+.collapsed .panes,.collapsed .wbody,.collapsed .compose{display:none}
+.win.collapsed{height:auto!important}
+.avtab{all:unset;cursor:pointer;position:relative;display:inline-flex;border-radius:8px;opacity:.6;transform:scale(.82)}
+.avtab:hover,.avtab:focus-visible{opacity:1}
+.avtab:focus-visible{outline:2px solid var(--accent)}
+.avtab .badge{position:absolute;right:-2px;top:-2px;width:9px;height:9px;border-radius:50%;background:var(--wait);box-shadow:0 0 0 2px var(--edge)}
+.cviews{display:flex;gap:2px;flex:none}
+.cviews .chip{min-height:40px;padding:0 7px}
+.compose .dv-btn.on{background:var(--btn-on);color:var(--work)}
+.vpop{position:absolute;left:8px;bottom:56px;z-index:8;width:200px;padding:6px;background:var(--solid);border:2px solid var(--edge);border-radius:10px;display:flex;flex-direction:column}
+.vpop .mi,.zsheet .mi{all:unset;cursor:pointer;display:flex;align-items:center;gap:8px;padding:10px;border-radius:7px;font-size:14px;min-height:24px}
+.vpop .mi:hover,.zsheet .mi:hover,.zsheet .mi.on{background:#222b39}
+.vpop .n{font-size:10.5px;background:#3a2c14;color:#ffd79a;border-radius:999px;padding:0 6px}
+.zpick{position:absolute;z-index:3;top:0;left:50%;transform:translateX(-50%);display:flex;gap:2px;padding:4px 6px 5px;background:var(--panel);border:2px solid var(--edge);border-top:0;border-radius:0 0 12px 12px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+.zp{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 9px;border-radius:8px;font:600 12px var(--f-body);color:var(--muted)}
+.zp span{display:none}
+.zp.on{background:var(--btn-on);color:var(--text)}.zp.on span{display:inline}
+.zp:hover{color:var(--text)}
+.zp.exit{border-left:1px solid var(--line);border-radius:0 8px 8px 0;margin-left:4px;font-size:11px}
+.zfab{position:absolute;z-index:5;left:10px;bottom:10px}
+.zfab>.dv-btn{width:52px;height:52px;padding:0;border-radius:14px;background:var(--panel)}
+.zsheet{position:absolute;left:0;bottom:60px;width:200px;padding:6px;background:var(--solid);border:2px solid var(--edge);border-radius:12px;box-shadow:0 12px 30px rgba(0,0,0,.5);display:flex;flex-direction:column}
+.zsheet hr{border:0;border-top:1px solid var(--line);margin:4px 2px}
+.thumbviews{display:none}
+/* phone: the window covers the screen; the selector stays in the header */
+.win.cover{inset:0;border-radius:0;border:0;background:var(--solid)!important}
+.win.cover .wbar{gap:4px;padding:6px}
+.win.cover .views{display:none}
+.wmenu .sec{font:700 11px var(--f-body);color:var(--muted);letter-spacing:.06em;padding:6px 10px 2px}
+.wmenu .mi[aria-checked="true"]{background:#222b39}
+.win.cover .chip{min-height:40px;padding:0 8px}
+.win.cover .ident{min-width:64px}
+.win.cover .thumbviews{display:flex;justify-content:space-between;padding:6px 8px 0;border-top:1px solid var(--line);flex:none}
+.win.cover .thumbviews .chip{flex:1;justify-content:center;min-height:44px}
+.win.cover .thumbviews .chip .t{display:inline}
+.win.cover .compose{border-top:0}
+
+/* calm skin (Board) and term skin (Spaces) on the same frame */
+.win[data-skin="calm"]{background:var(--calm-bg);border:1px solid var(--calm-line);border-radius:10px;box-shadow:0 16px 40px rgba(0,0,0,.45);color:var(--calm-text)}
+.win[data-skin="calm"] .wbar{min-height:38px;padding:3px 4px 3px 10px;border-bottom:1px solid var(--calm-line);background:var(--calm-bar)}
+.win[data-skin="calm"] .ident b{font:600 13px var(--f-body);flex:none}
+.win[data-skin="calm"] .ident{min-width:0;overflow:hidden}
+.win[data-skin="calm"] .ident{flex-direction:row;align-items:baseline;gap:8px}
+.win[data-skin="calm"] .where{font-size:11.5px;color:var(--calm-muted)}
+.win[data-skin="calm"] .views{background:transparent;padding:0}
+.win[data-skin="calm"] .chip{min-height:28px;font-size:12px;padding:0 8px;color:var(--calm-muted)}
+.win[data-skin="calm"] .chip[aria-selected="true"]{background:#2b3340;color:var(--calm-text);box-shadow:none}
+.win[data-skin="calm"] .ib{all:unset;cursor:pointer;width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;color:var(--calm-muted)}
+.win[data-skin="calm"] .ib:hover{background:#2b3340;color:var(--calm-text)}
+.win[data-skin="calm"] .ib:focus-visible{outline:2px solid var(--calm-accent)}
+.swatch{width:10px;height:10px;border-radius:3px;background:var(--swatch,#6fc3ff);flex:none}
+.win[data-skin="calm"] .wmenu,.win[data-skin="calm"] .wpop{top:40px;background:#161b23;border-color:var(--calm-line)}
+.win[data-skin="calm"] .wpop{left:10px}
+.win[data-skin="calm"] .screen{background:#0f1319}
+
+/* calm app bar (Board) and merged title+tabs bar (Spaces) */
+.appbar{position:absolute;left:0;right:0;top:0;display:flex;align-items:center;gap:8px;padding:0 10px;background:#161b23;border-bottom:1px solid var(--calm-line);z-index:3;color:var(--calm-text);font-size:13px}
+.appbar .b{font:700 14px var(--f-body);display:flex;align-items:center;gap:8px}
+.appbar .seg{display:flex;align-items:center;gap:4px;padding:0 9px;height:28px;border-radius:7px;background:#20262f;color:var(--calm-text);font-size:12.5px;white-space:nowrap}
+.appbar .seg.muted{color:var(--calm-muted)}
+.appbar .sp{flex:1}
+.appbar .tab{display:flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:7px;color:var(--calm-muted);font-size:12.5px;white-space:nowrap}
+.appbar .tab.on{background:#262d38;color:var(--calm-text);box-shadow:inset 0 -2px 0 var(--calm-accent)}
+.appbar .tab i{width:3px;height:14px;border-radius:2px;background:var(--swatch)}
+.cover-strip{position:absolute;left:0;right:0;background:#161b23;z-index:2}
+</style>
+
+<div class="wrap">
+  <header class="intro">
+    <h1>Herdr World window chrome</h1>
+    <p>FM-DESIGN phase 1. Pick a viewport and a view, then flip between the real capture from <code>main</code> and the proposed chrome. Everything on the right is a live mock: click the view chips, the location line under a name, <b>⋯</b>, and on phone the camera button (tap to fit, hold to zoom). Data is synthetic.</p>
+  </header>
+
+  <div class="controls hudpanel" role="group" aria-label="Prototype controls">
+    <div class="group" id="g-vp"><span>VIEWPORT</span></div>
+    <div class="group" id="g-view"><span>VIEW</span></div>
+    <div class="group" id="g-mode"><span>SHOW</span></div>
+    <div class="group" id="g-extra"></div>
+  </div>
+
+  <div class="stagegrid">
+    <div>
+      <div class="stagebox" id="stagebox"><div class="scaler" id="scaler"><div class="device" id="device"></div></div></div>
+      <p class="cap" id="cap"></p>
+    </div>
+    <aside class="numbers hudpanel" aria-live="polite">
+      <h3 id="n-title">Chrome</h3>
+      <dl id="n-list"></dl>
+      <p class="note" id="n-note"></p>
+    </aside>
+  </div>
+
+  <section class="block hudpanel">
+    <h2>One bar per window</h2>
+    <div class="cols">
+      <div>
+        <h3>Town window (v4 skin)</h3>
+        <ul class="plain">
+          <li><b>‹ Back</b> · avatar (its ring is the terminal colour) · <b>name</b> + status pill, with a <b>location line</b> underneath (room · desk · branch). Tap the location line for branch, worktree, path and PR.</li>
+          <li><b>One top selector</b> with Chat, Terminal, Changes and Files sits in the bar on desktop. It is labelled from a 640px-wide window, icons from 360px, and below that only the active view shows, with the rest in ⋯. On a phone the window looks like the terminal: the name and status in the bar, and ⋯ lists the views, the other agents and terminals to switch to, and the window's actions.</li>
+          <li><b>Next ›</b> is the primary action on desktop and turns gold when someone else needs you. On a phone it moves into ⋯, because the need-you pill already covers it.</li>
+          <li><b>⋯</b> holds the rare actions: snap, float or dock, maximise, minimise, colour and pop-out. Double-click the bar to maximise; drag it to the edges to snap.</li>
+          <li>Pane chips get a second row only when the desk has 2 or more panes. At the bottom there is only Chat's composer (attach, reply box, send), and only in Chat. Terminal, Changes and Files have no bottom bar.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Board and Spaces (calm skin, same frame)</h3>
+        <ul class="plain">
+          <li>A 38px bar holding the colour swatch, name, location line, view chips, then <b>⋯</b>, maximise and close. Minimise and snap move into <b>⋯</b>.</li>
+          <li>The PR card is no longer a 58px band above Changes; PR status lives in the location popover and as a pill in the Changes toolbar.</li>
+          <li>The repository icon, the second maximise button and the separate colour button are dropped. Each existed twice.</li>
+          <li>Spaces merges the app bar and the tab strip into one 40px title bar with the tabs inside it, the way VS Code, Warp and Zed do.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Town shell</h3>
+        <ul class="plain">
+          <li>The app top bar, tab strip and sidebar are off by default in Town. The canvas runs full-bleed under a prototype-style HUD bar: brand, counts, a <b>need you</b> pill, Jump to… <code>/</code>, view, hosts and menu.</li>
+          <li>The ☰ on the brand opens Workspaces as a drawer over the map, and the choice is remembered per view. Zen (<code>Ctrl+Alt+Z</code>) in Town hides the HUD down to the need-you pill.</li>
+          <li>The Needs-you tray is a left rail at 900px and up, and a bottom strip below that.</li>
+          <li>Camera: a vertical +, −, ALL cluster on desktop that moves out of the dock's way. On phone it becomes one 44px fit button: tap fits the town, a long press opens − and +, and pinch zooms.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="block hudpanel">
+    <h2>Five viewports</h2>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Viewport</th><th>Town dock</th><th>Window bar</th><th>Tray and camera</th><th>Board / Spaces</th></tr></thead>
+      <tbody>
+        <tr><td>Phone 390 × 844</td><td>The window fills the screen like the terminal. Back returns to the map.</td><td>‹, portrait, name, status pill and ⋯. ⋯ holds View (Chat, Terminal, Changes, Files), Switch to (other agents and terminals) and Window. Next is reached through the need-you pill.</td><td>Bottom strip, with the view picker at bottom left and one 44px camera button. In Zen there is no bottom nav.</td><td>Unchanged: phone Board and Spaces already use one header.</td></tr>
+        <tr><td>Mac laptop 1440 × 900</td><td>Right dock, <code>min(520px, 40vw)</code>. FirstMate and the agent share it as avatar tabs in the bar.</td><td>Town skin. Icon chips.</td><td>Left rail. Camera beside the dock.</td><td>Calm 44px app bar. Spaces uses a 40px merged bar.</td></tr>
+        <tr><td>Half-width Linux 1270 × 1300</td><td>Right dock, 508px, with avatar tabs.</td><td>As laptop.</td><td>Left rail. Hosts shrinks to an icon.</td><td>Sidebar follows the user's preference. Inspector windows open at 60% width.</td></tr>
+        <tr><td>Wide Linux 2560 × 1300</td><td>Right dock of 520px, with avatar tabs. Undock a tab to float it beside the dock.</td><td>Icon chips; labels appear at 640px or wider.</td><td>Left rail. Camera beside the dock.</td><td>As laptop.</td></tr>
+        <tr><td>Portrait 1080 × 1800</td><td>Bottom dock at 45% height and full width, with avatar tabs. Width is scarce here; height is not.</td><td>Town skin.</td><td>Left rail. Camera above the dock.</td><td>Spaces terminal gains the 84px.</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section class="block hudpanel">
+    <h2>Audit: every control in today's three bars</h2>
+    <p style="color:var(--muted);font-size:13px">Measured on <code>main</code> at 70dd4de7 with a throwaway Herdr 0.9.3 session. The window header is 119px in every viewport (identity 44 + view tabs 34 + branch row ≈ 41). Changes and Commits add a 58px PR card underneath, so 177px of a 520px window is chrome.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Bar</th><th>Control</th><th>What it does</th><th>Use</th><th>New home</th></tr></thead>
+      <tbody>
+        <tr><td>1 identity</td><td>Kind · state (“AGENT · WORKING”)</td><td>Pane kind and Herdr state</td><td><span class="freq f1">glance, always</span></td><td>Status pill beside the name</td></tr>
+        <tr><td>1 identity</td><td>Name + icon</td><td>Pane or agent name</td><td><span class="freq f1">always</span></td><td>Name, with an avatar whose ring is the colour</td></tr>
+        <tr><td>1 identity</td><td>Location / cwd / task (Inspector)</td><td>Path or task summary</td><td><span class="freq f3">sometimes</span></td><td>Location line, with full detail in its popover</td></tr>
+        <tr><td>1 controls</td><td>Snap menu</td><td>Halves, quarters, float</td><td><span class="freq f3">sometimes</span></td><td>⋯ menu, plus dragging to edges</td></tr>
+        <tr><td>1 controls</td><td>Minimise</td><td>Hide the window to the switcher</td><td><span class="freq f3">sometimes</span></td><td>⋯ (Town); ⋯ (calm)</td></tr>
+        <tr><td>1 controls</td><td>Maximise / restore</td><td>Fill the work area</td><td><span class="freq f2">often</span></td><td>Double-click the bar; ⋯ in Town; a button in calm</td></tr>
+        <tr><td>1 controls</td><td>Close</td><td>Close the window</td><td><span class="freq f2">often</span></td><td>‹ Back (Town); × (calm)</td></tr>
+        <tr><td>1 controls</td><td>Dock / float / dock side / expand / pop-out</td><td>Inspector placement modes</td><td><span class="freq f4">rare</span></td><td>⋯ menu</td></tr>
+        <tr><td>1 controls</td><td>Colour swatch (#261)</td><td>Pick the terminal colour</td><td><span class="freq f4">rare</span></td><td>Avatar ring or swatch; picker under ⋯ → Colour</td></tr>
+        <tr><td>1 controls</td><td>Repository status (PR icon)</td><td>PR card popover</td><td><span class="freq f3">sometimes</span></td><td>Location popover. The icon goes, because it duplicates bar 3.</td></tr>
+        <tr><td>2 views</td><td>Terminal · Files · Changes (+count) · Commits · Chat</td><td>Switch the view</td><td><span class="freq f1">constant</span></td><td>One top selector in the bar on desktop; ⋯ on phones, where the window looks like the terminal</td></tr>
+        <tr><td>3 branch</td><td>Branch-link icon row</td><td>Opens PR status</td><td><span class="freq f4">rare</span></td><td>Removed; the location popover covers it</td></tr>
+        <tr><td>3 PR card</td><td>“PR/MR status” card (Changes, Commits)</td><td>Provider PR state, refresh</td><td><span class="freq f3">sometimes</span></td><td>Pill in the Changes toolbar plus the popover</td></tr>
+        <tr><td>Town</td><td>Camera + − ALL (+ ⋮ on phone)</td><td>Zoom and fit</td><td><span class="freq f2">often</span></td><td>Desktop cluster; one 44px fit button on phone (was 56 × 190)</td></tr>
+        <tr><td>App</td><td>Top bar 59–65px + tab strip 43px + sidebar 306px</td><td>Brand, version, view, search, hosts, Ranger, Actions, Menu; Herdr tabs; navigator</td><td><span class="freq f3">mixed</span></td><td>Town: HUD overlay plus drawer. Board: a 44px bar. Spaces: a merged 40px bar.</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section class="block hudpanel">
+    <h2>Prior art used</h2>
+    <ul class="plain">
+      <li><b>VS Code, Zed and Warp</b> put tabs in the title bar, which is the model for the Spaces merged bar. VS Code's breadcrumb, shown on demand, is the model for the location line and its popover.</li>
+      <li><b>iTerm2 compact and minimal themes</b> drop the title bar into the tab row. Window actions go in a menu and maximise is a double-click.</li>
+      <li><b>claude.ai and ChatGPT</b> use one slim header with the content first and the composer at the bottom. The Town window follows that layout, and Chat owns its contents.</li>
+      <li><b>The Town v4 prototype</b> supplies the docked terminal header (‹, name, where, Next ›), the camera cluster, the Needs-you tray, chunky 40–44px targets and the panel material.</li>
+    </ul>
+  </section>
+</div>
+
+<script>
+(() => {
+'use strict';
+const VPS = [
+  {id:'phone', label:'Phone', sub:'390 × 844', w:390, h:844},
+  {id:'laptop', label:'Mac laptop', sub:'1440 × 900', w:1440, h:900},
+  {id:'half', label:'Half Linux', sub:'1270 × 1300', w:1270, h:1300},
+  {id:'wide', label:'Wide Linux', sub:'2560 × 1300', w:2560, h:1300},
+  {id:'portrait', label:'Portrait', sub:'1080 × 1800', w:1080, h:1800},
+];
+const VIEWS = ['Town','Board','Spaces'];
+const MODES = ['Before','After'];
+let st = {vp:'laptop', view:'Town', mode:'After', open:true, drawer:false, opt:'B', picker:false};
+try { const s = JSON.parse(localStorage.getItem('chrome-proto') || 'null'); if (s) st = {...st, ...s, drawer:false, picker:false}; } catch {}
+const save = () => { try { localStorage.setItem('chrome-proto', JSON.stringify(st)); } catch {} };
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (m) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
+
+const I = {
+  term:'<svg class="ico" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/></svg>',
+  chat:'<svg class="ico" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg>',
+  files:'<svg class="ico" viewBox="0 0 24 24"><path d="M3 6h7l2 2h9v11H3z"/></svg>',
+  diff:'<svg class="ico" viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M10 11h5M12.5 8.5v5M10 17h5"/></svg>',
+  more:'<svg class="ico" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></svg>',
+  max:'<svg class="ico" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>',
+  x:'<svg class="ico" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  search:'<svg class="ico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg>',
+  hosts:'<svg class="ico" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="6" rx="1.5"/><rect x="4" y="14" width="16" height="6" rx="1.5"/></svg>',
+  menu:'<svg class="ico" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>',
+  fit:'<svg class="ico" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/><circle cx="12" cy="12" r="2"/></svg>',
+  plus:'<svg class="ico" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+  town:'<svg class="ico" viewBox="0 0 24 24"><path d="M4 20V9l8-5 8 5v11zM10 20v-5h4v5"/></svg>',
+  board:'<svg class="ico" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 4v16"/></svg>',
+  desk:'<svg class="ico" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7"/><rect x="13" y="4" width="7" height="7"/><rect x="4" y="13" width="7" height="7"/><rect x="13" y="13" width="7" height="7"/></svg>',
+  spaces:'<svg class="ico" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 9h18"/></svg>',
+};
+
+/* measured on main (before) and the design targets (after) */
+const NUM = {
+  Town: {
+    phone:{rows:[['Top bar reserved','61 → 0','overlay 44'],['Bottom nav','75 → 75','kept'],['Camera stack','56×190 → 44×44',''],['Window bar','61 → 58','already one bar']], note:'Phone Town is already close: the terminal has one header. The gains are the overlaid HUD and the camera button.'},
+    laptop:{rows:[['Top chrome above map','124 → 0','HUD overlays'],['Sidebar width','306 → 0','drawer on demand'],['Window bar','119 → 58','−61'],['Window bar on Changes','177 → 58','−119'],['Map area','66% → 100%','of the viewport']]},
+    half:{rows:[['Top chrome above map','124 → 0',''],['Sidebar width','306 → 0','24% of the width'],['Window bar','119 → 58','−61'],['Window bar on Changes','177 → 58','−119']]},
+    wide:{rows:[['Top chrome above map','124 → 0',''],['Sidebar width','306 → 0',''],['Window bar','119 → 58','−61'],['Docked windows','floating → 2 × 520','']]},
+    portrait:{rows:[['Top chrome above map','130 → 0',''],['Sidebar width','306 → 0','28% of the width'],['Window bar','119 → 58','−61'],['Dock','floating → bottom 45%','']]},
+  },
+  Board: {
+    phone:{rows:[['Top bar','61 → 61','unchanged']], note:'Phone Board keeps its current layout; it already has one bar.'},
+    laptop:{rows:[['Top chrome above board','124 → 44','−80'],['Inspector bar','119 → 38','−81'],['Inspector on Changes','177 → 38','−139']]},
+    half:{rows:[['Top chrome above board','124 → 44','−80'],['Inspector bar','119 → 38','−81']]},
+    wide:{rows:[['Top chrome above board','124 → 44','−80'],['Inspector bar','119 → 38','−81']]},
+    portrait:{rows:[['Top chrome above board','130 → 44','−86'],['Inspector bar','119 → 38','−81']]},
+  },
+  Spaces: {
+    phone:{rows:[['Terminal header','61 → 61','unchanged']], note:'Phone Spaces is already one header over the terminal.'},
+    laptop:{rows:[['Chrome above terminal','124 → 40','−84 (+5 rows)']]},
+    half:{rows:[['Chrome above terminal','124 → 40','−84']]},
+    wide:{rows:[['Chrome above terminal','124 → 40','−84']]},
+    portrait:{rows:[['Chrome above terminal','124 → 40','−84']]},
+  },
+};
+
+function seg(groupId, items, key, fmt) {
+  const g = $(groupId);
+  g.querySelectorAll('button').forEach((b) => b.remove());
+  for (const it of items) {
+    const v = typeof it === 'string' ? it : it.id;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.setAttribute('aria-pressed', String(st[key] === v));
+    b.innerHTML = fmt ? fmt(it) : esc(v);
+    b.onclick = () => { st[key] = v; save(); render(); };
+    g.append(b);
+  }
+}
+function extras() {
+  const g = $('g-extra'); g.innerHTML = '';
+  if (st.view === 'Town') {
+    const b = document.createElement('button'); b.type = 'button';
+    b.setAttribute('aria-pressed', String(st.open));
+    b.textContent = st.open ? 'Window open' : 'Map only';
+    b.onclick = () => { st.open = !st.open; save(); render(); };
+    g.append(b);
+    if (st.vp !== 'phone' && st.open) {
+      for (const [k, l] of [['', 'Docked width'], ['600', '600px window'], ['340', '340px window']]) {
+        const o = document.createElement('button'); o.type = 'button';
+        o.setAttribute('aria-pressed', String((st.ww || '') === k)); o.textContent = l;
+        o.onclick = () => { st.ww = k; save(); render(); };
+        g.append(o);
+      }
+    }
+  }
+}
+
+/* ---------- window mock ---------- */
+const VIEW_DEFS = [['chat','Chat',I.chat],['terminal','Terminal',I.term],['changes','Changes',I.diff],['files','Files',I.files]];
+function chips(cur, id) {
+  return VIEW_DEFS.map(([k,l,ic]) => `<button type="button" class="chip" role="tab" data-win="${id}" data-v="${k}" aria-selected="${cur===k}" aria-label="${l}">${ic}<span class="t">${l}</span>${k==='changes'?'<span class="n">2</span>':''}</button>`).join('');
+}
+function body(v, w) {
+  if (v === 'terminal') return `<pre class="screen"><span class="p">dev@example:lantern-notes$</span> bun test src/notes
+<span class="d">bun test v1.4 (synthetic)</span>
+ ✓ index groups notes by tag <span class="d">[3ms]</span>
+ ✓ search ranks titles first <span class="d">[5ms]</span>
+ ✓ export keeps front matter <span class="d">[2ms]</span>
+
+ 3 pass · 0 fail
+<span class="p">dev@example:lantern-notes$</span> git diff --stat
+ src/index.ts | 14 ++++++++------
+ src/tags.ts  |  6 ++++++
+<span class="q">Apply the tag-index refactor to src/index.ts? [y/n]</span></pre>`;
+  if (v === 'chat') return `<div class="chatv"><div class="owner">Conversation and answers: FM-CHAT-LAYOUT. The composer is the only thing at the bottom, and only in Chat.</div><div class="me">Can you split the tag index out of index.ts?</div><div class="ag">Done. <code>src/tags.ts</code> now owns grouping; <code>index.ts</code> imports it. Tests pass (3/3). Want me to update the guide too?</div><div class="me">Yes, keep it short.</div></div>`;
+  if (v === 'files') return `<div class="listv"><div class="tb">~/demo/lantern-notes</div>${['README.md','src/','  index.ts','  tags.ts','  search.ts','docs/','  guide.md'].map((f)=>`<div class="r">${f.endsWith('/')?I.files:''}<code>${esc(f)}</code></div>`).join('')}</div>`;
+  return `<div class="listv"><div class="tb">2 files · <span class="pill">⎇ feature/compact-chrome</span><span class="pill">No PR provider</span></div><div class="r"><code>src/index.ts</code><span class="add">+8</span><span class="del">−6</span></div><div class="r"><code>src/tags.ts</code><span class="add">+6</span><span class="del">−0</span></div></div>`;
+}
+const WIN = {
+  a:{name:'claude', status:'working', where:'lantern-notes · desk 1 · ⎇ feature/compact-chrome', view:'chat', swatch:'#6fc3ff', panes:['claude','tests'], fm:false},
+  fm:{name:'FirstMate', status:'idle', where:'Town master chat · this machine', view:'chat', swatch:'#ffd166', panes:null, fm:true},
+};
+let menuOpen = null, popOpen = null, activeTab = 'a';
+function townWin(id, style, opts = {}) {
+  const w = WIN[id];
+  const cover = !!opts.cover;
+  return `<section class="win ${cover?'cover':''} ${opts.collapsed?'collapsed':''}" data-skin="town" data-id="${id}" style="${style};--swatch:${w.swatch}" aria-label="${w.name} window">
+    <header class="wbar" title="Drag to move · double-click to maximise">
+      <button type="button" class="dv-btn" aria-label="Back to the town" style="font-size:20px;padding:0">‹</button>
+      <div class="who">${opts.tabs?opts.tabs.map((t)=>t===id?'':`<button type="button" class="avtab" data-tab="${t}" aria-label="Switch to ${WIN[t].name}" title="${WIN[t].name}"><span class="avatar ${WIN[t].fm?'fm':''}" style="--swatch:${WIN[t].swatch}"></span>${t==='fm'?'':'<i class="badge"></i>'}</button>`).join(''):''}<span class="avatar ${w.fm?'fm':''}"></span><div class="ident"><b>${esc(w.name)}</b><button type="button" class="where" data-pop="${id}" aria-expanded="${popOpen===id}"><span class="st ${w.status}">● ${w.status==='working'?'Working':'On a break'}</span> · ${esc(w.where)} ▾</button></div></div>
+      <div class="views" role="tablist" aria-label="Views">${chips(w.view, id)}</div>
+      ${w.fm||cover?'':`<button type="button" class="dv-btn next hot" aria-label="Next agent that needs you (1)" title="Next agent that needs you"><span class="nl">Next </span>(1) ›</button>`}
+      <button type="button" class="dv-btn" data-menu="${id}" aria-label="More window actions" aria-expanded="${menuOpen===id}">${I.more}</button>
+      ${menuOpen===id?menu(id,'town'):''}${popOpen===id?pop(id):''}
+    </header>
+    ${w.panes && !opts.collapsed ? `<nav class="panes" aria-label="Panes on this desk">${w.panes.map((p,i)=>`<button type="button" class="chip" aria-pressed="${i===0}"><i class="dot" style="background:${i===0?'var(--work)':'#7fbf7a'}"></i>${p}</button>`).join('')}</nav>` : ''}
+    <div class="wbody">${body(w.view)}</div>
+    ${w.view==='chat'?`<form class="compose" onsubmit="return false"><button type="button" class="dv-btn" aria-label="Attach">📎</button><input aria-label="Reply" placeholder="Reply to ${esc(w.name)}…"><button type="button" class="dv-btn">Send</button></form>`:''}
+  </section>`;
+}
+let viewPop = false;
+function calmWin(id, style) {
+  const w = WIN[id];
+  return `<section class="win" data-skin="calm" data-id="${id}" style="${style};--swatch:${w.swatch}" aria-label="${w.name} Inspector window">
+    <header class="wbar" title="Drag to move · double-click to maximise">
+      <div class="who"><span class="swatch"></span><div class="ident"><b>${esc(w.name)}</b><button type="button" class="where" data-pop="${id}" aria-expanded="${popOpen===id}"><i class="dot" style="background:var(--work);width:7px;height:7px"></i> working · ${esc(w.where)} ▾</button></div></div>
+      <div class="views" role="tablist" aria-label="Views">${chips(w.view, id)}</div>
+      <button type="button" class="ib" data-menu="${id}" aria-label="More window actions" aria-expanded="${menuOpen===id}">${I.more}</button>
+      <button type="button" class="ib" aria-label="Maximise">${I.max}</button>
+      <button type="button" class="ib" aria-label="Close">${I.x}</button>
+      ${menuOpen===id?menu(id,'calm'):''}${popOpen===id?pop(id):''}
+    </header>
+    <div class="wbody">${body(w.view)}</div>
+  </section>`;
+}
+function menu(id, skin) {
+  // A phone shows the window like its terminal: views and other agents live in ⋯.
+  const w = WIN[id];
+  const views = st.vp === 'phone' && skin === 'town' ? `<div class="sec">VIEW</div>${VIEW_DEFS.map(([k,l])=>`<button type="button" class="mi" role="menuitemradio" aria-checked="${w.view===k}" data-win="${id}" data-v="${k}">${l}<kbd>${k==='changes'?'2':''}</kbd></button>`).join('')}<div class="sec">SWITCH TO</div><button type="button" class="mi" role="menuitem">codex<kbd>needs you · orbit-api</kbd></button><button type="button" class="mi" role="menuitem">FirstMate<kbd>Town master</kbd></button><button type="button" class="mi" role="menuitem">tests<kbd>shell · lantern-notes</kbd></button><div class="sec">WINDOW</div>` : '';
+  const items = [['Maximise','double-click'],['Minimise',''],['Snap left','drag ←'],['Snap right','drag →'],['Snap top / bottom',''],[skin==='town'?'Undock (float)':'Dock to the right',''],['Open terminal window','']];
+  const mviews = VIEW_DEFS.map(([k,l,ic])=>`<button type="button" class="mi mview" role="menuitem" data-win="${id}" data-v="${k}">${l}<kbd>${k==='changes'?'2':''}</kbd></button>`).join('');
+  return `<div class="wmenu" role="menu">${mviews}${views}${items.map(([l,k])=>`<button type="button" class="mi" role="menuitem">${l}<kbd>${k}</kbd></button>`).join('')}<hr><div class="sw" aria-label="Colour">${['#6fc3ff','#7be08f','#ffb547','#ff7a6b','#c79bff','#d9c39b'].map(c=>`<i style="background:${c}"></i>`).join('')}</div><hr><button type="button" class="mi" role="menuitem">Close<kbd>Esc</kbd></button></div>`;
+}
+function pop(id) {
+  const fm = WIN[id].fm;
+  return `<dl class="wpop">${fm ? '<dt>Host</dt><dd>This machine</dd><dt>Role</dt><dd>Town master chat</dd>' : '<dt>Host</dt><dd>This machine</dd><dt>Room</dt><dd>lantern-notes (workspace)</dd><dt>Desk</dt><dd>desk 1 (tab) · pane 1 of 2</dd><dt>Branch</dt><dd>⎇ feature/compact-chrome</dd><dt>Worktree</dt><dd>main checkout</dd><dt>Path</dt><dd><code>~/demo/lantern-notes</code> · Copy</dd><dt>PR</dt><dd>No provider configured</dd>'}</dl>`;
+}
+
+/* ---------- device scenes ---------- */
+function townHud(vp) {
+  const phone = vp.w < 641;
+  return `<div class="hud-top">
+    <div class="panel brand"><button type="button" class="dv-btn ghost" data-drawer aria-label="Workspaces" aria-expanded="${st.drawer}">${I.menu}</button>${phone?'':'<span class="logo"></span><b>Herdr World</b>'}</div>
+    <div class="panel counts" role="status"><span class="c" title="Working"><i class="dot" style="background:var(--work)"></i>1</span><span class="c" title="Finished"><i class="dot" style="background:var(--done)"></i>0</span><span class="c" title="On a break"><i class="dot" style="background:var(--idle)"></i>1</span><button type="button" class="c attn"><i class="dot" style="background:var(--wait)"></i>1<span class="lbl">&nbsp;need you</span></button></div>
+    <div class="spacer"></div>
+    <button type="button" class="dv-btn jump" style="min-height:44px">${I.search}<span>Jump to…</span><kbd>/</kbd></button>
+    <button type="button" class="dv-btn hosts" style="min-height:44px">${I.hosts}<span>All hosts</span></button>
+    <button type="button" class="dv-btn" style="min-height:44px" aria-label="Menu">${I.more}</button>
+  </div>`;
+}
+function tray(vp) {
+  const narrow = vp.w < 900;
+  return `<div class="tray"><div class="tl">NEEDS YOU 1${narrow?'':'<button type="button" class="dv-btn" style="min-height:28px;min-width:28px;padding:0">‹</button>'}</div><div class="tchip"><span class="av"></span><span><b>codex</b>${narrow?'':'<small>orbit-api · approve tests</small>'}</span></div></div>`;
+}
+function camera() {
+  return `<div class="camera" aria-label="Camera"><button type="button" class="dv-btn" aria-label="Zoom in">+</button><button type="button" class="dv-btn" aria-label="Zoom out">−</button><button type="button" class="dv-btn fit" aria-label="Show the whole town">ALL</button></div>
+  <div class="camfab" id="camfab"><button type="button" class="dv-btn" id="camBtn" aria-label="Fit the whole town (hold for zoom)">${I.fit}</button>${camPop?'<div class="campop"><button type="button" class="dv-btn" aria-label="Zoom out">−</button><button type="button" class="dv-btn" aria-label="Zoom in">+</button></div>':''}</div>
+  ${camToast?'<div class="camtoast">Fitted the whole town</div>':''}`;
+}
+let camPop = false, camToast = false;
+const PICK = [['Town',I.town],['Board',I.board],['Desk',I.desk],['Spaces',I.spaces]];
+function picker(vp) {
+  const phone = vp.w < 641;
+  if (!phone) return `<div class="zpick" role="group" aria-label="World view">${PICK.map(([l,ic])=>`<button type="button" class="zp ${l==='Town'?'on':''}" aria-pressed="${l==='Town'}" title="${l}">${ic}<span>${l}</span></button>`).join('')}<button type="button" class="zp exit" title="Show the bars (Ctrl+Alt+Z)">Exit Zen</button></div>`;
+  return `<div class="zfab"><button type="button" class="dv-btn" id="pickBtn" aria-haspopup="menu" aria-expanded="${st.picker}" aria-label="Switch view: Town">${I.town}</button>${st.picker?`<div class="zsheet" role="menu">${PICK.map(([l,ic])=>`<button type="button" class="mi ${l==='Town'?'on':''}" role="menuitem">${ic} ${l}</button>`).join('')}<hr><button type="button" class="mi" role="menuitem">Show the bars</button></div>`:''}</div>`;
+}
+function drawer() {
+  return `<nav class="drawer" aria-label="Workspaces"><b style="font:700 13px var(--f-display);color:var(--muted)">WORKSPACES</b>
+    <div class="ws">lantern-notes</div><div class="row on"><i class="dot" style="background:var(--work)"></i>claude<em>Working</em></div><div class="row"><i class="dot" style="background:#7fbf7a"></i>tests<em>shell</em></div>
+    <div class="ws">orbit-api</div><div class="row"><i class="dot" style="background:var(--wait)"></i>codex<em>Needs you</em></div><div class="row"><i class="dot" style="background:#7fbf7a"></i>server<em>shell</em></div>
+    <div class="ws">tide-charts</div><div class="row"><i class="dot" style="background:var(--idle)"></i>claude<em>On a break</em></div>
+    <p style="color:var(--muted);font-size:12px;margin-top:auto">Opened from ☰. Closes on Esc or a tap on the map. Shown pinned if you pin it.</p></nav>`;
+}
+function townScene(vp) {
+  const d = $('device');
+  const phone = vp.w < 641, portrait = vp.h > vp.w && !phone, wide = vp.w >= 1800;
+  let html = `<img class="backdrop" alt="" src="img/${vp.id}-backdrop.webp">`;
+  let dock = 'none';
+  const dw = st.ww ? +st.ww : Math.min(520, Math.round(vp.w * 0.4));
+  if (phone) d.style.setProperty('--nav-h', '0px');
+  html += townHud(vp) + tray(vp) + camera();
+  if (!(phone && st.open)) html += picker(vp);
+  if (false) html += `<div class="mnav"><span class="on">${I.town}Town</span><span>${I.board}Board</span><span>${I.desk}Desk</span><span>${I.spaces}Spaces</span></div>`;
+  if (st.open) {
+    if (phone) {
+      html += townWin('a', 'inset:0', {cover:true});
+    } else if (portrait) {
+      dock = 'bottom';
+      const dh = Math.round(vp.h * 0.45);
+      d.style.setProperty('--dock-h', dh + 'px');
+      html += townWin(activeTab, `left:16px;right:16px;bottom:16px;height:${dh}px`, {tabs:['a','fm']});
+    } else {
+      dock = 'right';
+      d.style.setProperty('--dock-w', dw + 'px');
+      html += townWin(activeTab, `right:16px;top:70px;width:${dw}px;bottom:16px`, {tabs:['a','fm']});
+    }
+  }
+  if (st.drawer) html += drawer();
+  d.dataset.dock = dock;
+  d.innerHTML = html;
+}
+function boardScene(vp) {
+  const d = $('device');
+  if (vp.w < 641) { d.innerHTML = `<img class="before" alt="Phone Board on main, unchanged" src="img/phone-board.webp">`; return; }
+  const top = vp.h > vp.w ? 130 : 124;
+  const shift = top - 44;
+  const ww = Math.min(760, Math.round(vp.w * 0.6));
+  d.innerHTML = `<img class="before" alt="" src="img/${vp.id}-board.webp" style="inset:auto;top:-${shift}px;left:0;height:auto;object-fit:initial;width:100%">
+    <div class="cover-strip" style="top:${vp.h - shift}px;bottom:0"></div>
+    <div class="appbar" style="height:44px"><span class="b"><span class="logo"></span>Herdr World</span><span class="seg">${I.board} Board ▾</span><span class="seg muted" style="min-width:220px">${I.search} Search Board</span><span class="sp"></span><span class="seg">${I.hosts} All hosts</span><span class="seg muted">${I.more}</span></div>
+    ${calmWin('a', `left:${Math.round(vp.w*0.3)}px;top:150px;width:${ww}px;height:520px`)}`;
+}
+function spacesScene(vp) {
+  const d = $('device');
+  if (vp.w < 641) { d.innerHTML = `<img class="before" alt="Phone Spaces on main, unchanged" src="img/phone-spaces.webp">`; return; }
+  const top = vp.h > vp.w ? 124 : 124;
+  const shift = top - 40;
+  d.innerHTML = `<img class="before" alt="" src="img/${vp.id}-spaces.webp" style="inset:auto;top:-${shift}px;left:0;height:auto;object-fit:initial;width:100%">
+    <div class="cover-strip" style="top:${vp.h - shift}px;bottom:0;background:#0b0d12"></div>
+    <div class="appbar" style="height:40px"><span class="b"><span class="logo"></span></span><span class="seg">${I.spaces} Spaces ▾</span>
+      <span class="tab on" style="--swatch:#6fc3ff"><i></i>claude · Tab 1 <span style="opacity:.6">×</span></span><span class="tab" style="--swatch:#7be08f"><i></i>tests</span><span class="tab">+</span>
+      <span class="sp"></span><span class="seg muted">${I.search}</span><span class="seg">${I.hosts} All hosts</span><span class="seg muted">${I.more}</span></div>`;
+}
+
+function beforeSrc(vp) {
+  if (st.view === 'Town') return `img/${vp.id}-${st.open ? 'town-term' : 'town'}.webp`;
+  return `img/${vp.id}-${st.view.toLowerCase()}.webp`;
+}
+
+function fit() {
+  const vp = VPS.find((v) => v.id === st.vp);
+  const box = $('stagebox');
+  const avail = box.clientWidth - 24;
+  const maxH = Math.max(360, window.innerHeight - 220);
+  const s = Math.min(1, avail / vp.w, maxH / vp.h);
+  $('scaler').style.width = Math.round(vp.w * s) + 'px';
+  $('scaler').style.height = Math.round(vp.h * s) + 'px';
+  $('device').style.transform = `scale(${s})`;
+  $('cap').textContent = `${vp.label} · ${vp.w} × ${vp.h} · shown at ${Math.round(s * 100)}%`;
+}
+
+function render() {
+  seg('g-vp', VPS, 'vp', (v) => `${esc(v.label)}<small>${esc(v.sub)}</small>`);
+  seg('g-view', VIEWS, 'view');
+  seg('g-mode', MODES, 'mode');
+  extras();
+  const vp = VPS.find((v) => v.id === st.vp);
+  const d = $('device');
+  d.style.width = vp.w + 'px'; d.style.height = vp.h + 'px';
+  d.removeAttribute('style'); d.style.width = vp.w + 'px'; d.style.height = vp.h + 'px';
+  if (st.mode === 'Before') {
+    d.dataset.dock = 'none';
+    d.innerHTML = `<img class="before" alt="${esc(st.view)} on main at ${vp.w} × ${vp.h}" src="${beforeSrc(vp)}">`;
+  } else if (st.view === 'Town') townScene(vp);
+  else if (st.view === 'Board') boardScene(vp);
+  else spacesScene(vp);
+  const n = NUM[st.view][vp.id];
+  $('n-title').textContent = `${st.view} · ${vp.label}`;
+  $('n-list').innerHTML = n.rows.map(([k, v, x]) => `<dt>${esc(k)}</dt><dd>${esc(v)}${x ? `<br><i>${esc(x)}</i>` : ''}</dd>`).join('');
+  $('n-note').textContent = n.note || 'Pixels are CSS px measured on main (before) against this design (after). The HUD bar overlays the map rather than reserving space.';
+  fit();
+}
+
+document.addEventListener('click', (e) => {
+  const t = e.target.closest('button');
+  if (!t || !$('device').contains(t)) { if (menuOpen || popOpen) { menuOpen = popOpen = null; if ($('device').contains(e.target)) render(); } return; }
+  if (t.dataset.v) { WIN[t.dataset.win].view = t.dataset.v; menuOpen = null; viewPop = false; render(); return; }
+  if (t.dataset.tab) { activeTab = t.dataset.tab; render(); return; }
+  if (t.id === 'viewBtn') { viewPop = !viewPop; render(); return; }
+  if (t.id === 'pickBtn') { st.picker = !st.picker; render(); return; }
+  if (t.dataset.menu) { menuOpen = menuOpen === t.dataset.menu ? null : t.dataset.menu; popOpen = null; render(); return; }
+  if (t.dataset.pop) { popOpen = popOpen === t.dataset.pop ? null : t.dataset.pop; menuOpen = null; render(); return; }
+  if (t.hasAttribute('data-drawer')) { st.drawer = !st.drawer; render(); return; }
+  if (t.getAttribute('aria-label') === 'Back to the town') { st.open = false; save(); render(); return; }
+  if (t.classList.contains('tchip') || t.classList.contains('attn')) { st.open = true; save(); render(); return; }
+  if (menuOpen || popOpen) { menuOpen = popOpen = null; render(); }
+});
+let holdT = null, held = false;
+document.addEventListener('pointerdown', (e) => {
+  if (!e.target.closest('#camBtn')) return;
+  held = false;
+  holdT = setTimeout(() => { held = true; camPop = true; render(); }, 450);
+});
+document.addEventListener('pointerup', (e) => {
+  clearTimeout(holdT);
+  if (!e.target.closest('#camBtn') || held) return;
+  camPop = false; camToast = true; render();
+  setTimeout(() => { camToast = false; render(); }, 1200);
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && (menuOpen || popOpen || st.drawer || camPop)) { menuOpen = popOpen = null; st.drawer = false; camPop = false; render(); } });
+addEventListener('resize', fit);
+render();
+})();
+</script>
+</body></html>

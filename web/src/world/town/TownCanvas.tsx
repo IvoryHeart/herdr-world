@@ -72,7 +72,7 @@ import {
   nextTownTask,
   type TownRendererHandle,
 } from "./townRenderer";
-import { townPortrait } from "./townSprites";
+import { townPortrait, type TownQuestMark } from "./townSprites";
 import { townTargets, type TownTarget } from "./townTargets";
 import { yieldWorldTask } from "../worldObject";
 import {
@@ -133,6 +133,7 @@ const REFLOW_IDLE_MS = 1200;
 const portrait = townPortrait;
 const NO_COLORS: TerminalColors = {};
 const NO_KEYS: ReadonlySet<string> = new Set();
+const NO_QUESTS: ReadonlyMap<string, TownQuestMark> = new Map();
 
 function ago(since: number, now: number) {
   const seconds = Math.max(0, Math.round((now - since) / 1000));
@@ -144,6 +145,7 @@ export function TownCanvas({
   selectedKey,
   completionSeenKeys,
   summonedKeys = NO_KEYS,
+  quests = NO_QUESTS,
   conversationTargets,
   onSelect,
   onActivateAgent,
@@ -170,6 +172,8 @@ export function TownCanvas({
   completionSeenKeys: ReadonlySet<string>;
   /** Agents the user opened, who walk back to their desks. */
   summonedKeys?: ReadonlySet<string>;
+  /** Quest progress by agent key, marked over each agent's desk. */
+  quests?: ReadonlyMap<string, TownQuestMark>;
   conversationTargets: readonly WorldConversationAnchorTarget[];
   onSelect: (key: string) => void;
   onActivateAgent: (key: string) => void;
@@ -275,6 +279,7 @@ export function TownCanvas({
     calm,
     completionSeenKeys,
     summonedKeys,
+    quests,
     conversationTargets,
     onSelect,
     onActivateAgent,
@@ -293,6 +298,7 @@ export function TownCanvas({
     hover,
     completionSeenKeys,
     summonedKeys,
+    quests,
     conversationTargets,
     onSelect,
     onActivateAgent,
@@ -546,6 +552,7 @@ export function TownCanvas({
     summonedKeys: latest.current.summonedKeys,
     openHostKey: null,
     calm: latest.current.calm,
+    quests: latest.current.quests,
   });
 
   useEffect(() => {
@@ -696,7 +703,7 @@ export function TownCanvas({
   useEffect(() => {
     rendererRef.current?.setState(sceneState());
     scheduleAnchors();
-  }, [selectedKey, hover, completionSeenKeys, summonedKeys, calm]);
+  }, [selectedKey, hover, completionSeenKeys, summonedKeys, calm, quests]);
 
   useEffect(() => {
     scheduleAnchors();
