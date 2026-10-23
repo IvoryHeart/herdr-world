@@ -15,6 +15,7 @@ import {
   useWindowWorkArea,
 } from "./windows/useWindowManager";
 import { visibleWindowIds } from "./windows/windowManager";
+import { useWorldPanels } from "./windows/WorldPanel";
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { worldLocalStorage } from "../browserStorage";
 import { type WindowArrangementControl } from "../components/WindowArrangementMenu";
@@ -95,6 +96,8 @@ export function useWorldInspectorWindows({
   onInspectorConversationsChangeRef,
   onInspectorTerminalPortalRef,
 }: Input) {
+  // Non-Inspector windows, such as Town's summary, share the manager.
+  const { panels } = useWorldPanels();
   const [windowLayer, setWindowLayer] = useState<HTMLDivElement | null>(null);
   const windowStage = useWindowWorkArea(windowLayer, active);
   const { mobile: compactArrangement } = useLayoutPreferences();
@@ -122,14 +125,35 @@ export function useWorldInspectorWindows({
       })),
     [inspectorConversations, windowStage, view, officeInspectorPresentation],
   );
+  const managedInputs = useMemo(
+    () =>
+      panels.length
+        ? [
+            ...windowInputs,
+            ...panels.map(({ id, label, initialSnap }) => ({
+              id,
+              label,
+              initialSnap,
+            })),
+          ]
+        : windowInputs,
+    [windowInputs, panels],
+  );
   const { state: managedWindows, dispatch: windowCommand } = useWindowManager(
-    windowInputs,
+    managedInputs,
     windowStage,
   );
   const activeInspectorId = managedWindows.activeId;
+  // A panel window in front means no Inspector is active.
   useLayoutEffect(
-    () => onActiveInspectorChange(activeInspectorId),
-    [activeInspectorId, onActiveInspectorChange],
+    () =>
+      onActiveInspectorChange(
+        activeInspectorId &&
+          panels.some((panel) => panel.id === activeInspectorId)
+          ? null
+          : activeInspectorId,
+      ),
+    [activeInspectorId, onActiveInspectorChange, panels],
   );
   const contextRailInspector = inspectorConversations.find(
     (conversation) =>
