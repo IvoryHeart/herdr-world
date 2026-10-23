@@ -818,8 +818,47 @@
   color: #c9b79a;
 }
 
+.town-board-chip {
+  display: none;
+}
+
+/* Phones: a compact chip under the search bar opens the full board. */
 @media (max-width: 640px) {
+  .town-board-chip {
+    position: absolute;
+    left: 12px;
+    top: 52px;
+    display: inline-flex;
+    gap: 8px;
+    align-items: center;
+    min-height: 32px;
+    padding: 0 10px;
+    color: #f1efe6;
+    background: rgba(30, 22, 14, 0.94);
+    border: 2px solid #7a5536;
+    border-radius: 999px;
+    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.3);
+    font:
+      700 12px "Silkscreen",
+      "Pixelify Sans",
+      ui-monospace,
+      monospace;
+    font-variant-numeric: tabular-nums;
+    pointer-events: auto;
+    cursor: pointer;
+  }
+  .town-board-chip [data-status="blocked"] {
+    color: #f6b54a;
+  }
+  .town-board-chip [data-status="done"] {
+    color: #8fd18f;
+  }
   .town-board {
+    top: 92px;
+    left: 12px;
+    width: min(240px, calc(100vw - 24px));
+  }
+  .town-board[data-open="false"] {
     display: none;
   }
 }

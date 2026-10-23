@@ -554,13 +554,47 @@ async function run() {
     "town did not lay out three buildings",
   );
   const narrowTown = diagnostics.layout?.formFactor === "narrow";
-  const roomCards = host.querySelectorAll(".town-room-card");
   const totalRooms = base.connections.reduce(
     (sum, c) => sum + (c.snapshot?.workspaces.length ?? 0),
     0,
   );
   // Wide screens show every building at home. A phone stacks buildings and
-  // their rooms in one column, so it draws the buildings in view.
+  // their rooms in one column, so it draws the buildings in view. Under load
+  // the room overlays can follow the renderer by a frame or more: wait.
+  await waitFor(
+    () =>
+      narrowTown
+        ? host.querySelectorAll(".town-room").length > 0
+        : host.querySelectorAll(".town-room").length === totalRooms,
+    "the town's rooms were never drawn",
+  );
+  // Phones show the Town board as a compact chip that opens the full board;
+  // wider screens show the board itself.
+  {
+    const chip = host.querySelector<HTMLButtonElement>(".town-board-chip")!;
+    const board = host.querySelector<HTMLElement>(".town-board")!;
+    const shown = (element: HTMLElement) =>
+      getComputedStyle(element).display !== "none";
+    if (window.innerWidth <= 640) {
+      check(
+        shown(chip) && !shown(board),
+        "a phone shows the Town board chip, not the board",
+      );
+      chip.click();
+      await waitFor(() => shown(board), "the chip did not open the Town board");
+      check(
+        chip.getAttribute("aria-expanded") === "true",
+        "the open chip is not marked expanded",
+      );
+      chip.click();
+      await waitFor(() => !shown(board), "the chip did not close the board");
+    } else
+      check(
+        !shown(chip) && shown(board),
+        "a wide screen shows the Town board, not its chip",
+      );
+  }
+  const roomCards = host.querySelectorAll(".town-room-card");
   const drawnRooms = host.querySelectorAll(".town-room").length;
   check(
     narrowTown ? drawnRooms > 0 : drawnRooms === totalRooms,
