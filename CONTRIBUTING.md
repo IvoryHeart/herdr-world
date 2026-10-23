@@ -35,6 +35,7 @@ assets required by server typechecks and process tests.
 | Completed candidate | Stage intended files, run `bun run format:staged` once, restage and inspect the diff. The command rejects staged files with unstaged edits; docs-only candidates are a safe no-op. |
 | Branch push | The installed pre-push hook runs `bun run check:changed` for code: static checks plus the tests the change affects. A Markdown-only follow-up to a passed code gate runs `bun run check:docs`. CI runs the full gate on the PR head. |
 | Full local gate | `bun run check:delivery` runs every check, in parallel lanes; `HERDR_WORLD_PREPUSH=full git push` makes the hook run it. |
+| Disk hygiene | `bun run agent:worktree -- prune` removes merged, clean agent worktrees (see [agent development](docs/agent-development.md#keep-the-disk-healthy)); heavy checks refuse to start below 3 GB free (`HERDR_WORLD_MIN_FREE_GB`). |
 
 Run `bun run install-hooks` once per clone to point Git at the tracked
 `.githooks/` directory. Its `pre-commit` hook checks formatting and lint without
@@ -220,11 +221,16 @@ A PR with nothing user-facing (tests, CI, contributor tooling) instead puts
 `Changelog: none — <specific reason>` in its description. PR links in entries are
 optional; do not push again solely to add one after the PR opens.
 
-After a merge, CI runs the full check again on the new main commit. If it fails,
-the Main gate workflow opens one `main-red` issue that names the merge commit and
-its PR, and prepares a revert PR, which it never merges. Rerun the failed jobs
-first when the failure is a known flake; otherwise merge the revert or land a
-fix. Later red commits are added to the open issue, not to new ones, and the next
+After a merge, CI runs the full check again on main. Merges that land while a
+main check is running are checked together, once, at the newest of them. If a
+check fails, the Main gate workflow opens one `main-red` issue. It names the
+merge commit and its PR and prepares a revert PR, which it never merges; when the
+check covered several merges, it lists them all and prepares no revert. A run
+whose failed steps show only a known infrastructure flake (a fresh runner's
+Chrome startup timeout or the runner's control-group error) and at most one
+failing test is rerun once first, and alerts only if it fails again. Rerun the
+failed jobs first when the failure is a known flake; otherwise merge the revert,
+revert the merge that broke it, or land a fix. Later red commits are added to the open issue, not to new ones, and the next
 green main run at or after the red commit closes the issue and its revert PR.
 
 Unlabeled PRs get `documentation` (docs-only), `dependencies` (dependency updates),

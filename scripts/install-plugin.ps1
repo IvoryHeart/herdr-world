@@ -27,6 +27,25 @@ if (!$uri.IsAbsoluteUri -or $uri.UserInfo -or $uri.Query -or $uri.Fragment -or
 
 $serverDir = Join-Path $pluginRoot 'server'
 New-Item -ItemType Directory -Path $serverDir -Force | Out-Null
+# The staging copy is executed below, and Windows or an antivirus scan can keep
+# that image locked briefly after the process exits. Removing it is cleanup, not
+# installation: retry for a few seconds, then leave the folder for a later
+# install to sweep. It must never fail a finished install or replace a real error.
+function Remove-Staging([string]$path, [int]$attempts) {
+  for ($attempt = 1; $attempt -le $attempts; $attempt++) {
+    try {
+      Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction Stop
+      return $true
+    } catch {
+      if ($attempt -lt $attempts) { Start-Sleep -Milliseconds 300 }
+    }
+  }
+  return $false
+}
+# Folders left that way by earlier installs; recent ones may belong to a running install.
+Get-ChildItem -LiteralPath $serverDir -Directory -Force -Filter '.plugin-install-*' -ErrorAction SilentlyContinue |
+  Where-Object { $_.LastWriteTimeUtc -lt [DateTime]::UtcNow.AddHours(-1) } |
+  ForEach-Object { [void](Remove-Staging $_.FullName 1) }
 $staging = Join-Path $serverDir ('.plugin-install-' + [IO.Path]::GetRandomFileName())
 New-Item -ItemType Directory -Path $staging | Out-Null
 try {
@@ -109,5 +128,7 @@ try {
   }
   Write-Output "Installed Herdr World plugin binary $version"
 } finally {
-  Remove-Item -LiteralPath $staging -Recurse -Force
+  if (!(Remove-Staging $staging 10)) {
+    [Console]::Error.WriteLine("Herdr World plugin: could not remove the temporary folder $staging yet; a later install removes it.")
+  }
 }
