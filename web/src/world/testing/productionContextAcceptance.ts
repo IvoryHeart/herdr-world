@@ -22,6 +22,7 @@ import {
   waitForBrowserFixture,
 } from "../../browserChrome";
 import { worldBrowserBundle } from "./worldBrowserBundle";
+import { chromeRenderingFlags } from "./chromeRendering";
 
 const chrome =
   Bun.env.CHROME_BIN || Bun.which("google-chrome") || Bun.which("chromium");
@@ -504,8 +505,7 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
             "--headless=new",
             "--no-sandbox",
             "--disable-dev-shm-usage",
-            "--use-angle=swiftshader",
-            "--enable-unsafe-swiftshader",
+            ...(await chromeRenderingFlags(chrome!)),
             "--disable-background-timer-throttling",
             "--disable-renderer-backgrounding",
             "--disable-backgrounding-occluded-windows",

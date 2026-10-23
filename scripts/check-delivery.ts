@@ -1,6 +1,5 @@
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { mkdirSync, readFileSync } from "node:fs";
+import { basename, join } from "node:path";
 import {
   CHROME,
   TEST,
@@ -10,6 +9,7 @@ import {
   gitChanges,
   type Affected,
 } from "./affected";
+import { acquireCheckSlot, type CheckClass, heldEnv } from "./check-lock";
 import { guardDiskSpace } from "./disk-guard";
 import { worldBrowserSuites, worldTimedSuites } from "./world-browser-suites";
 
@@ -28,25 +28,32 @@ import { worldBrowserSuites, worldTimedSuites } from "./world-browser-suites";
  * `--full` runs everything (`check:delivery`). Without it (`check:changed`,
  * the pre-push default) only what the change affects runs (see affected.ts);
  * CI's full gate stays the authority. `--browser` runs only the Chrome lanes
- * (`test:browser`). Each lane writes its own log; the
- * summary and any failing lane's output come last. One gate runs at a time
- * per machine: a second waits rather than competing for the CPU.
+ * (`test:browser`), and `--static` only the static lane (`check:static`, the
+ * pre-push check for a push that only merges main). Each lane writes its own
+ * log; the summary and any failing lane's output come last. Each lane waits
+ * for its slot in the machine-wide check queue (check-lock.ts), so gates in
+ * other worktrees share the CPU instead of competing: one browser lane and
+ * one verification at a time, two light lanes.
  */
 
 type Lane = {
   name: string;
+  queue: CheckClass;
   commands: string[][];
   env?: Record<string, string>;
 };
 
 const args = process.argv.slice(2);
 const browserOnly = args.includes("--browser");
-const full = args.includes("--full") || browserOnly;
+const staticOnly = args.includes("--static");
+const full = args.includes("--full") || browserOnly || staticOnly;
 const base = args.find((arg) => arg.startsWith("--base="))?.slice(7);
 const root = process.cwd();
 const logs = join(root, ".agents/delivery/lanes");
 
 function scope(): Affected & { why: string } {
+  if (staticOnly)
+    return { full: true, reason: "requested", why: "static checks only" };
   if (full) return { full: true, reason: "requested", why: "full gate" };
   const from = base || mergeBase();
   if (!from)
@@ -108,12 +115,14 @@ function plan(selection: Affected) {
   if (unit.length && !browserOnly)
     busy.push({
       name: "unit",
+      queue: "light",
       commands: [["bun", "scripts/run-tests.ts", ...unit]],
     });
   const untimed = browser.filter((path) => !timed.has(path));
   if (untimed.length)
     busy.push({
       name: "browser",
+      queue: "browser",
       commands: [["bun", "scripts/run-world-tests.ts", ...untimed]],
       env: { HERDR_WORLD_TEST_LABEL: "browser" },
     });
@@ -122,6 +131,7 @@ function plan(selection: Affected) {
   if (chrome.length || timedSuites.length)
     quiet.push({
       name: "quiet",
+      queue: "browser",
       commands: [
         ...(chrome.length
           ? [["bun", "scripts/run-tests.ts", ...chrome, "--parallel=2"]]
@@ -144,17 +154,32 @@ function plan(selection: Affected) {
       ? [
           {
             name: "verification",
+            queue: "verification",
             commands: [["bun", "run", "verification:gate"]],
           },
         ]
       : [];
-  return { busy, quiet, verification };
+  return staticOnly
+    ? { busy: [], quiet: [], verification: [] }
+    : { busy, quiet, verification };
 }
 
 type Result = { name: string; code: number; seconds: number; log: string };
 
 async function runLane(lane: Lane): Promise<Result> {
   const log = join(logs, `${lane.name}.log`);
+  const release = await acquireCheckSlot(lane.queue, {
+    lane: lane.name,
+    worktree: basename(root),
+  });
+  try {
+    return await runLaneCommands(lane, log);
+  } finally {
+    release();
+  }
+}
+
+async function runLaneCommands(lane: Lane, log: string): Promise<Result> {
   const began = performance.now();
   const out = Bun.file(log).writer();
   let code = 0;
@@ -164,7 +189,7 @@ async function runLane(lane: Lane): Promise<Result> {
       cwd: root,
       stdout: "pipe",
       stderr: "pipe",
-      env: { ...process.env, ...lane.env },
+      env: { ...process.env, ...lane.env, ...heldEnv(lane.queue) },
     });
     const pump = async (stream: ReadableStream<Uint8Array>) => {
       for await (const chunk of stream) out.write(chunk);
@@ -182,46 +207,6 @@ async function runLane(lane: Lane): Promise<Result> {
   };
 }
 
-/** One gate per machine: wait for a running one rather than compete. */
-async function lock() {
-  const dir = join(tmpdir(), "herdr-world-delivery-gate.lock");
-  const owner = join(dir, "pid");
-  let waited = false;
-  for (;;) {
-    try {
-      mkdirSync(dir);
-      writeFileSync(owner, String(process.pid));
-      return () => rmSync(dir, { recursive: true, force: true });
-    } catch {
-      let pid = 0;
-      try {
-        pid = Number(readFileSync(owner, "utf8"));
-      } catch {
-        // Being created or removed: try again.
-      }
-      const alive = (() => {
-        try {
-          process.kill(pid, 0);
-          return true;
-        } catch {
-          return false;
-        }
-      })();
-      if (pid && !alive) {
-        rmSync(dir, { recursive: true, force: true });
-        continue;
-      }
-      if (!waited) {
-        console.info(
-          `[gate] another delivery gate (pid ${pid || "?"}) is running; waiting`,
-        );
-        waited = true;
-      }
-      await Bun.sleep(2000);
-    }
-  }
-}
-
 guardDiskSpace(
   browserOnly ? "the browser checks" : full ? "the full gate" : "the gate",
   root,
@@ -231,35 +216,32 @@ const { busy, quiet, verification } = plan(selection);
 const lanes = [...verification, ...busy, ...quiet];
 mkdirSync(logs, { recursive: true });
 console.info(
-  `[gate] ${browserOnly ? "browser" : selection.full ? "full" : "changed"}: ${selection.why}; lanes: ${[...(browserOnly ? [] : ["static"]), ...lanes.map((lane) => lane.name)].join(", ")}`,
+  `[gate] ${staticOnly ? "static" : browserOnly ? "browser" : selection.full ? "full" : "changed"}: ${selection.why}; lanes: ${[...(browserOnly ? [] : ["static"]), ...lanes.map((lane) => lane.name)].join(", ")}`,
 );
 if (!selection.full)
   console.info(
     `[gate] unit ${selection.unit.length}, browser ${selection.browser.length}, verification ${selection.verification ? "yes" : "no"}`,
   );
-const release = await lock();
 const results: Result[] = [];
-try {
-  if (!browserOnly)
-    results.push(await runLane({ name: "static", commands: STATIC }));
-  if (results.every((result) => result.code === 0)) {
-    const ok = (list: Result[]) => list.every((result) => result.code === 0);
-    const tests = (async () => {
-      const done = await Promise.all(busy.map(runLane));
-      // Quiet lanes need the CPU: they start once the busy lanes finish,
-      // and only if those passed.
-      return ok(done)
-        ? [...done, ...(await Promise.all(quiet.map(runLane)))]
-        : done;
-    })();
-    const [checked, tested] = await Promise.all([
-      Promise.all(verification.map(runLane)),
-      tests,
-    ]);
-    results.push(...checked, ...tested);
-  }
-} finally {
-  release();
+if (!browserOnly)
+  results.push(
+    await runLane({ name: "static", queue: "light", commands: STATIC }),
+  );
+if (results.every((result) => result.code === 0)) {
+  const ok = (list: Result[]) => list.every((result) => result.code === 0);
+  const tests = (async () => {
+    const done = await Promise.all(busy.map(runLane));
+    // Quiet lanes need the CPU: they start once the busy lanes finish,
+    // and only if those passed.
+    return ok(done)
+      ? [...done, ...(await Promise.all(quiet.map(runLane)))]
+      : done;
+  })();
+  const [checked, tested] = await Promise.all([
+    Promise.all(verification.map(runLane)),
+    tests,
+  ]);
+  results.push(...checked, ...tested);
 }
 
 const failed = results.filter((result) => result.code !== 0);
