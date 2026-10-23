@@ -1356,9 +1356,8 @@ function inspectorAgentContext(
     agent: pane.agent,
     // Spaces shows the same state badge as World: Herdr's statuses are the tones.
     statusTone: status,
-    ...(pane.display_agent?.trim()
-      ? { agentName: pane.display_agent.trim() }
-      : {}),
+    // The agent's Herdr name (agent.list), not its display label.
+    ...(pane.agent_name?.trim() ? { agentName: pane.agent_name.trim() } : {}),
     ...(pane.task_summary?.trim()
       ? { taskSummary: pane.task_summary.trim() }
       : {}),
