@@ -4,6 +4,7 @@ import {
   FLOATING_TERMINAL_GEOMETRY_KEY,
   floatingTerminalGeometryId,
   readFloatingTerminalDock,
+  readFloatingTerminalDockWidth,
   readFloatingTerminalGeometry,
   writeFloatingTerminalDock,
   writeFloatingTerminalGeometry,
@@ -146,5 +147,27 @@ describe("window docks", () => {
     );
     expect(readFloatingTerminalDock(storage, "c")).toBeNull();
     expect(readFloatingTerminalDock(storage, "d")).toBe("left");
+  });
+
+  test("keep a left or right dock's resized width, and drop it otherwise", () => {
+    const store = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => void store.set(key, value),
+    };
+    writeFloatingTerminalDock(storage, "a", "right", 640);
+    expect(readFloatingTerminalDock(storage, "a")).toBe("right");
+    expect(readFloatingTerminalDockWidth(storage, "a")).toBe(640);
+    writeFloatingTerminalDock(storage, "a", "right");
+    expect(readFloatingTerminalDockWidth(storage, "a")).toBeNull();
+    store.set(
+      FLOATING_TERMINAL_DOCK_KEY,
+      JSON.stringify([
+        { id: "b", dock: "top", width: 640 },
+        { id: "c", dock: "left", width: -5 },
+      ]),
+    );
+    expect(readFloatingTerminalDockWidth(storage, "b")).toBeNull();
+    expect(readFloatingTerminalDockWidth(storage, "c")).toBeNull();
   });
 });

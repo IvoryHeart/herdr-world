@@ -128,7 +128,8 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    status; they do not move the underlying pane or change its host.
 4. Tap an agent or its table to open its window on **Chat**: World's Inspector,
    with **Chat**, **Terminal**, **Changes** and **Files** in its top selector.
-   In Town it docks on the right; drag its title to undock it. Chat shows the
+   In Town it docks on the right at a readable width; drag its left edge to
+   resize it (Town remembers the width), or drag its title to undock it. Chat shows the
    conversation's latest 200 entries, scrolls back inside the window, and
    offers **Jump to latest**; the composer stays at the bottom. The **NEEDS YOU** list provides another route to waiting
    agents and becomes a bottom tray on phones; it hides when no agent is

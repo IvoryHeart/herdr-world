@@ -133,10 +133,24 @@ export function readFloatingTerminalDock(
   }
 }
 
+/** The width a left or right dock was resized to, or null for half. */
+export function readFloatingTerminalDockWidth(
+  storage: Pick<Storage, "getItem">,
+  id: string,
+): number | null {
+  try {
+    const saved = parseDocks(storage.getItem(FLOATING_TERMINAL_DOCK_KEY));
+    return saved.find((entry) => entry.id === id)?.width ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export function writeFloatingTerminalDock(
   storage: GeometryStorage,
   id: string,
   dock: FloatingTerminalDock,
+  width?: number,
 ) {
   try {
     const retained = parseDocks(
@@ -144,7 +158,11 @@ export function writeFloatingTerminalDock(
     ).filter((entry) => entry.id !== id);
     storage.setItem(
       FLOATING_TERMINAL_DOCK_KEY,
-      JSON.stringify([...retained, { id, dock }].slice(-MAX_SAVED_GEOMETRIES)),
+      JSON.stringify(
+        [...retained, { id, dock, ...(width ? { width } : {}) }].slice(
+          -MAX_SAVED_GEOMETRIES,
+        ),
+      ),
     );
   } catch {
     // A presentation preference must never prevent terminal use.
@@ -153,19 +171,31 @@ export function writeFloatingTerminalDock(
 
 function parseDocks(
   raw: string | null,
-): { id: string; dock: FloatingTerminalDock }[] {
+): { id: string; dock: FloatingTerminalDock; width?: number }[] {
   if (!raw) return [];
   const value: unknown = JSON.parse(raw);
   if (!Array.isArray(value)) return [];
   return value.flatMap((candidate) => {
     if (!candidate || typeof candidate !== "object") return [];
-    const { id, dock } = candidate as Record<string, unknown>;
+    const { id, dock, width } = candidate as Record<string, unknown>;
     return typeof id === "string" &&
       id.length > 0 &&
       id.length <= 1_024 &&
       typeof dock === "string" &&
       DOCKS.has(dock)
-      ? [{ id, dock: dock as FloatingTerminalDock }]
+      ? [
+          {
+            id,
+            dock: dock as FloatingTerminalDock,
+            ...(typeof width === "number" &&
+            Number.isFinite(width) &&
+            width > 0 &&
+            width <= 100_000 &&
+            (dock === "left" || dock === "right")
+              ? { width }
+              : {}),
+          },
+        ]
       : [];
   });
 }

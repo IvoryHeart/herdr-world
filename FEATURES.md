@@ -27,7 +27,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     window, with **Jump to latest** when you have scrolled back and the
     composer always at the bottom. Reopening or redocking the window keeps the
     conversation. In Town it
-    docks on the right by default (**Menu → Inspector opening**), can be
+    docks on the right by default (**Menu → Inspector opening**), 520px wide
+    (at most half the screen) so Town stays in view and lines stay readable.
+    Drag its inner edge to resize it; Town remembers the width. It can be
     undocked, and keeps the dock it was left with. On a phone, the Chat view
     shows only its own composer, without the terminal key bar.
   - The top selector follows the window's own width, docked, floating or on a

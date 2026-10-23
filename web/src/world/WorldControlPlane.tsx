@@ -19,6 +19,7 @@ import {
 import { terminalColorKey } from "./terminalColor";
 import { setDeskPinned, useDeskPins } from "./useDeskPins";
 import { useTerminalColorChoices } from "./useTerminalColors";
+import { dockedWidthAfterPlace } from "./windows/windowManager";
 import { useWorldInspectorController } from "./useWorldInspectorController";
 import { useWorldVisualActions } from "./useWorldVisualActions";
 import WorldInspectorConversationView from "./WorldInspectorConversation";
@@ -548,10 +549,20 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                       floatingTerminalGeometryId(conversation),
                       rect,
                     );
+                    // Resizing a dock from its inner edge keeps it docked,
+                    // and Town remembers the width.
+                    const dockWidth = dockedWidthAfterPlace(
+                      entry,
+                      rect,
+                      windowStage,
+                    );
                     rememberTownDock(
                       worldLocalStorage,
                       floatingTerminalGeometryId(conversation),
-                      "float",
+                      dockWidth !== null && entry.placement.kind === "snap"
+                        ? entry.placement.target
+                        : "float",
+                      dockWidth ?? undefined,
                     );
                     windowCommand({ type: "place", id: entry.id, rect });
                   }}
