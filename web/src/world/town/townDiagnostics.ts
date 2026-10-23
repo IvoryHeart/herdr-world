@@ -2,6 +2,14 @@
 import { worldRendererCountersEnabled } from "../devtools/renderer";
 import type { TownLevel } from "./townCamera";
 
+/** Why Town drew a frame and what it asked for next (development trace). */
+export type TownFrameTrace = {
+  reasons: string[];
+  next: "state" | "motion" | null;
+  /** What keeps a state frame coming: the camera, actors, a drag… */
+  causes: string[];
+};
+
 export type TownRendererDiagnostics = {
   mounts: number;
   destroys: number;
@@ -15,6 +23,8 @@ export type TownRendererDiagnostics = {
   lastError: string | null;
   level: TownLevel | null;
   zoom: number;
+  /** True until the current camera flight reaches its target. */
+  flying: boolean;
   actors: number;
   walking: number;
   /** Agents opened by the user whose goal is their own desk. */
@@ -67,6 +77,7 @@ export function diagnostics(): TownRendererDiagnostics {
     lastError: null,
     level: null,
     zoom: 1,
+    flying: false,
     actors: 0,
     walking: 0,
     summoned: [],
