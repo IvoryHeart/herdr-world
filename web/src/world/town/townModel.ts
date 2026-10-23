@@ -10,12 +10,14 @@ import {
   hostColorKey,
   placeColor,
   terminalColor,
+  terminalColorKey,
   workspaceColorKey,
   type TerminalColor,
   type TerminalColorTarget,
   type TerminalColors,
 } from "../terminalColor";
-import type { TownInput } from "./townLayout";
+import type { DeskPins } from "../useDeskPins";
+import type { TownInput, TownPinnedCells } from "./townLayout";
 
 export type TownSeatRef = { deskKey: string; seat: number };
 
@@ -35,6 +37,14 @@ export type TownModel = {
   deskColors: ReadonlyMap<string, TerminalColor>;
   /** Rooms' and buildings' chosen colours; absent ones use their defaults. */
   placeColors: TownPlaceColors;
+  /** Pinned desks (useDeskPins.ts): each keeps its cell, its agents stay. */
+  deskPins: ReadonlyMap<string, TownDeskPin>;
+};
+
+/** A pinned desk: the key its pin is saved under, and its cell once placed. */
+export type TownDeskPin = {
+  key: string;
+  cell: { col: number; row: number } | null;
 };
 
 export type TownPlaceColors = {
@@ -146,9 +156,37 @@ export function townDeskColors(
   return deskColors;
 }
 
+/**
+ * Each pinned desk, by desk key. Like colours, kept apart from the model's
+ * layout input; layoutTown takes the cells (`townPinnedCells`).
+ */
+export function townDeskPins(
+  projection: HerdrOfficeProjection,
+  pins: DeskPins,
+): ReadonlyMap<string, TownDeskPin> {
+  const deskPins = new Map<string, TownDeskPin>();
+  if (!Object.keys(pins).length) return deskPins;
+  const ids = workspaceIdsOf(projection);
+  for (const room of projection.rooms)
+    for (const desk of room.desks) {
+      const key = terminalColorKey(deskTarget(room, desk, ids));
+      const pin = pins[key];
+      if (pin) deskPins.set(desk.key, { key, cell: pin.cell });
+    }
+  return deskPins;
+}
+
+/** The pinned desks' cells as the layout takes them. */
+export function townPinnedCells(
+  deskPins: ReadonlyMap<string, TownDeskPin>,
+): TownPinnedCells {
+  return new Map([...deskPins].map(([deskKey, pin]) => [deskKey, pin.cell]));
+}
+
 export function townModelFromProjection(
   projection: HerdrOfficeProjection,
   colors: TerminalColors = {},
+  pins: DeskPins = {},
 ): TownModel {
   const hosts = new Map(projection.hosts.map((host) => [host.key, host]));
   const rooms = new Map<string, OfficeRoom>();
@@ -218,6 +256,7 @@ export function townModelFromProjection(
     roomCounts,
     deskColors: townDeskColors(projection, colors),
     placeColors: townPlaceColors(projection, colors),
+    deskPins: townDeskPins(projection, pins),
   };
 }
 

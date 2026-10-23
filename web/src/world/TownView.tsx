@@ -44,6 +44,7 @@ import {
 } from "./useTerminalColors";
 import { hostColorKey } from "./terminalColor";
 import { TOWN_HOST_THEMES } from "./town/townPaint";
+import { useDeskPins } from "./useDeskPins";
 import {
   sendTownReply,
   townChoices,
@@ -167,9 +168,17 @@ export default function TownView({
     [],
   );
   const layoutPreferences = useLayoutPreferences();
+  const deskPins = useDeskPins();
+  // Only which tabs are pinned matters to admission, not their cells.
+  const pinnedTabKeys = Object.keys(deskPins).sort().join("\n");
+  const pinnedTabs = useMemo(
+    () => new Set(pinnedTabKeys ? pinnedTabKeys.split("\n") : []),
+    [pinnedTabKeys],
+  );
   const observedOffice = useMemo(
-    (): HerdrOfficeProjection => projectOffice(world, Date.now(), selectedId),
-    [world, selectedId, projectOffice],
+    (): HerdrOfficeProjection =>
+      projectOffice(world, Date.now(), selectedId, pinnedTabs),
+    [world, selectedId, projectOffice, pinnedTabs],
   );
   const townFinished = useTownFinished(observedOffice);
   // Terminal frames and unrelated store updates must not reconcile the scene.
@@ -1386,6 +1395,7 @@ export default function TownView({
             trace={trace}
             projection={office}
             terminalColors={terminalColors}
+            deskPins={deskPins}
             selectedKey={townSelectedKey}
             completionSeenKeys={completionSeenKeys}
             summonedKeys={summonedKeys}

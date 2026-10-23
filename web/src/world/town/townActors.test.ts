@@ -10,6 +10,8 @@ function world(
   deskCount = 4,
   /** Herdr's tab order, as desk indexes; agents keep their desks. */
   order?: number[],
+  /** Pinned desks, as desk indexes. */
+  pinned: number[] = [],
 ) {
   const deskKeys = Array.from(
     { length: deskCount },
@@ -44,7 +46,10 @@ function world(
       },
     ]),
   );
-  const model = { agents, agentSeats } as unknown as TownModel;
+  const deskPins = new Map(
+    pinned.map((i) => [deskKeys[i]!, { key: `pin-${i}`, cell: null }]),
+  );
+  const model = { agents, agentSeats, deskPins } as unknown as TownModel;
   return { layout, model, actorWorld: townActorWorld(layout, model) };
 }
 
@@ -233,4 +238,48 @@ test("an agent sitting down at a desk that moved gets up and sits at its new pla
   const geometry = townSeat(moved.actorWorld.cells.get("room/desk-0")!, 0);
   expect(actor.mode).toBe("seat");
   expect([actor.x, actor.y]).toEqual([geometry.cx, geometry.seatedY]);
+});
+
+test("an agent at a pinned desk never goes to the lounge", () => {
+  const actors = new TownActors();
+  actors.sync(
+    world({ a: "working", b: "working" }, 4, undefined, [0]).actorWorld,
+    false,
+  );
+  actors.sync(
+    world({ a: "idle", b: "idle" }, 4, undefined, [0]).actorWorld,
+    false,
+  );
+  settle(actors);
+  // a sits at pinned desk 0; b's desk is not pinned, so b takes a break.
+  expect(actors.actors.get("a")!.mode).toBe("seat");
+  expect(actors.actors.get("a")!.spot).toBeNull();
+  expect(actors.actors.get("b")!.spot).not.toBeNull();
+});
+
+test("a pinned agent waits at reception on doubt or completion, then walks straight back", () => {
+  for (const status of ["blocked", "done"] as const) {
+    const actors = new TownActors();
+    const pinned = (s: Status) => world({ a: s }, 4, undefined, [0]).actorWorld;
+    actors.sync(pinned("working"), false);
+    actors.sync(pinned(status), false);
+    settle(actors);
+    expect(actors.actors.get("a")!.queueSlot).toBe(0);
+    // Seen (Town presents a checked finish as idle): back to the desk, not
+    // the lounge.
+    actors.sync(pinned("idle"), false);
+    const goal = actors.actors.get("a")!.goal;
+    expect(goal?.kind).toBe("seat");
+    settle(actors);
+    expect(actors.actors.get("a")!.mode).toBe("seat");
+    expect(actors.actors.get("a")!.spot).toBeNull();
+  }
+});
+
+test("unpinning lets an idle agent go to the lounge again", () => {
+  const actors = new TownActors();
+  actors.sync(world({ a: "idle" }, 4, undefined, [0]).actorWorld, true);
+  expect(actors.actors.get("a")!.mode).toBe("seat");
+  actors.sync(world({ a: "idle" }).actorWorld, false);
+  expect(actors.actors.get("a")!.goal?.kind).toBe("lounge");
 });

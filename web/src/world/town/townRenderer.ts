@@ -809,6 +809,20 @@ export async function createTownRenderer(
     );
     for (const slot of slots)
       if (!slot.top) make(sprites.chairBack, X + slot.chairX, Y + 45);
+    // A pinned desk wears a pin on its table's corner.
+    if (model!.deskPins.has(desk.key)) {
+      const px = X + place.x + place.w - 3;
+      const py = Y + 18;
+      container.addChild(
+        new Graphics()
+          .moveTo(px, py)
+          .lineTo(px - 3, py + 6)
+          .stroke({ color: 0x3a3a3a, width: 1 })
+          .circle(px, py, 3)
+          .fill(0xe5534b)
+          .stroke({ color: 0xffffff, width: 1 }),
+      );
+    }
     parent.addChild(container);
     return {
       container,
@@ -1710,11 +1724,12 @@ export async function createTownRenderer(
     },
     setScene(nextModel, nextLayout, nextState) {
       const layoutChanged = nextLayout !== layout;
-      // Tables, carpets and roofs are baked with their colours, so a new
-      // colour rebuilds.
+      // Tables, carpets and roofs are baked with their colours (and tables
+      // with their pins), so a new colour or pin rebuilds.
       const colorsChanged =
         nextModel.deskColors !== model?.deskColors ||
-        nextModel.placeColors !== model?.placeColors;
+        nextModel.placeColors !== model?.placeColors ||
+        nextModel.deskPins !== model?.deskPins;
       const first = !layout;
       model = nextModel;
       layout = nextLayout;
@@ -1727,7 +1742,7 @@ export async function createTownRenderer(
         return;
       }
       const places = nextModel.placeColors;
-      const key = `${[...places.rooms].join(",")}/${[...places.hosts].join(",")}/${nextLayout.width}x${nextLayout.height}:${nextLayout.buildings.map((b) => `${b.hostKey}@${b.x},${b.y},${b.w},${b.h}:${b.rooms.map((r) => r.cells.map((c) => (c.deskKey ? `${c.deskKey}#${c.seats}#${deskColor(c.deskKey)}` : "-")).join(",")).join("|")}`).join(";")}`;
+      const key = `${[...places.rooms].join(",")}/${[...places.hosts].join(",")}/${nextLayout.width}x${nextLayout.height}:${nextLayout.buildings.map((b) => `${b.hostKey}@${b.x},${b.y},${b.w},${b.h}:${b.rooms.map((r) => r.cells.map((c) => (c.deskKey ? `${c.deskKey}#${c.seats}#${deskColor(c.deskKey)}${model!.deskPins.has(c.deskKey) ? "#pin" : ""}` : "-")).join(",")).join("|")}`).join(";")}`;
       if (key !== sceneKey) {
         sceneKey = key;
         buildScene();

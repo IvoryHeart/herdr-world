@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
+import { useWindowManager } from "./useWindowManager";
+import { WindowControls } from "./WindowControls";
 import { WindowFrame } from "./WindowFrame";
 import { WindowSurface } from "./WindowSurface";
-import { WindowControls } from "./WindowControls";
 import { WindowSwitcher } from "./WindowSwitcher";
-import { useWindowManager } from "./useWindowManager";
-import { snapGeometry, windowGeometry, type Size } from "./windowManager";
 import { RESIZE_EDGES, resizeWindow } from "./windowInteraction";
+import { type Size, snapGeometry, windowGeometry } from "./windowManager";
 
 const initialInputs = ["A", "B"].map((id, index) => ({
   id,
@@ -19,14 +19,16 @@ let harness: ReturnType<typeof useWindowManager> & {
   setSize(size: Size): void;
   setCompact(value: boolean): void;
   setInputs(value: typeof initialInputs): void;
+  pins: Record<string, boolean>;
 };
 let terminalActivations = 0;
 function Fixture() {
   const [size, setSize] = useState({ width: 1000, height: 600 });
   const [compact, setCompact] = useState(false);
   const [inputs, setInputs] = useState(initialInputs);
+  const [pins, setPins] = useState<Record<string, boolean>>({});
   const manager = useWindowManager(inputs, size);
-  harness = { ...manager, size, setSize, setCompact, setInputs };
+  harness = { ...manager, size, setSize, setCompact, setInputs, pins };
   const { state, dispatch } = manager;
   return (
     <>
@@ -92,6 +94,11 @@ function Fixture() {
                     onSnap: (target) =>
                       dispatch({ type: "snap", id: entry.id, target }),
                     onFloat: () => dispatch({ type: "float", id: entry.id }),
+                    pin: {
+                      pinned: pins[entry.id] ?? false,
+                      onPin: (pinned) =>
+                        setPins((value) => ({ ...value, [entry.id]: pinned })),
+                    },
                   }}
                 />
               </header>
@@ -277,6 +284,29 @@ async function run() {
     Boolean(document.querySelector(".world-window-divider")),
     "viewport resize lost shared divider",
   );
+  // The desk pin is an item in ⋯, on desktop and in a compact window alike.
+  const pinItem = async () => {
+    flushSync(() =>
+      document
+        .querySelector<HTMLButtonElement>('[aria-label="More actions for A"]')!
+        .click(),
+    );
+    return document.querySelector<HTMLButtonElement>(
+      '.world-window-snap-menu [role="menuitemcheckbox"]',
+    );
+  };
+  let item = await pinItem();
+  check(
+    item?.textContent === "Pin desk in Town" &&
+      item.getAttribute("aria-checked") === "false",
+    "window menu lacks the desk pin item",
+  );
+  flushSync(() => item!.click());
+  check(
+    harness.pins.A === true &&
+      !document.querySelector(".world-window-snap-menu"),
+    "menu pin item did not pin the desk and close the menu",
+  );
   const desktop = JSON.stringify(harness.state.windows);
   flushSync(() => harness.setCompact(true));
   check(
@@ -284,6 +314,15 @@ async function run() {
       !document.querySelector("[data-window-resize]"),
     "compact mode exposed desktop frames or handles",
   );
+  item = await pinItem();
+  check(
+    item?.textContent === "Unpin desk in Town" &&
+      item.getAttribute("aria-checked") === "true" &&
+      document.activeElement !== item,
+    "a compact window's menu lacks the pinned desk's item, or focused it",
+  );
+  flushSync(() => item!.click());
+  check(harness.pins.A === false, "compact window menu did not unpin the desk");
   flushSync(() => harness.setCompact(false));
   check(
     JSON.stringify(harness.state.windows) === desktop,
