@@ -239,7 +239,9 @@ before a restart can never match again: once a current snapshot that lists
 every pane of the connection shows its terminals closed, the service drops it
 (an offline host keeps it, shown stale). Stamp the restored agents again to
 relate them. Groups never span connections; the service refuses one that
-would. A stamp
+would. The service saves a claim for every stamp in a snapshot before sending
+it, so the browser derives relations from saved claims and groups alone and
+never scans panes for stamps. A stamp
 with `spawned_by_terminal` is resolved only by that terminal, never by a pane
 ID that may since name another pane. Inside an agent pane `HERDR_SOCKET_PATH` selects
 that pane's own Herdr ahead of `--session`; pass `--socket-path` to target

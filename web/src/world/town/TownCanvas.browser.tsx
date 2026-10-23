@@ -20,9 +20,12 @@ import "../world.css";
 import {
   joinGroup,
   leaveGroups,
+  observedSpawnClaims,
   type RelationGroup,
+  type SpawnClaim,
   type TerminalRef,
 } from "../../../../shared/relations";
+import { relationObservations } from "../relations";
 import { worldLocalStorage } from "../../browserStorage";
 import {
   readOfficePreferences,
@@ -372,7 +375,7 @@ let boardDocument = {
   layout: { anchors: {}, offsets: {}, pinned: {}, folded: [], colors: {} },
   notes: [],
   strings: [],
-  relations: { spawns: [], groups: [] as RelationGroup[] },
+  relations: { spawns: [] as SpawnClaim[], groups: [] as RelationGroup[] },
 };
 const boardListeners = new Set<
   (control: { type: string; revision?: number }) => void
@@ -626,6 +629,11 @@ async function run() {
   layoutShell.append(host);
   document.body.append(layoutShell);
   const base = topology(7);
+  // The service saves a claim for each spawn stamp it sees.
+  boardDocument.relations.spawns = observedSpawnClaims(
+    relationObservations(base.connections),
+    1,
+  );
   herdrTabs = (connectionId) =>
     base.connections.find((c) => c.connectionId === connectionId)?.snapshot
       ?.tabs ?? [];
