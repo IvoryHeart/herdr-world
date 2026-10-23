@@ -30,7 +30,14 @@ import { useAgentHistoryWindow } from "./useAgentHistoryWindow";
 import { AttachmentChips } from "./AttachmentChips";
 import { CodexSessionLink } from "./CodexSessionLink";
 import { QuestLog } from "./QuestLog";
-import type { ConversationStep } from "./chat/blocks/steps";
+import { useStepEvidence } from "./chat/useStepEvidence";
+import {
+  DOUBLE_ESCAPE_MS,
+  elapsed,
+  STATUS_WORDS,
+  STOPS_WITH_ESCAPE,
+  titleTask,
+} from "./chat/blocks/now";
 import type { Quest } from "../../../server/src/agent/quest";
 import "./AgentChat.css";
 
@@ -251,29 +258,6 @@ function AskCard({
   );
 }
 
-/** Harnesses where Esc interrupts the current turn without quitting. */
-const STOPS_WITH_ESCAPE = new Set(["claude", "codex", "pi"]);
-/** Two presses of Esc this close together stop the agent. */
-const DOUBLE_ESCAPE_MS = 700;
-
-function elapsed(ms: number) {
-  const seconds = Math.max(0, Math.floor(ms / 1000));
-  return seconds < 60
-    ? `${seconds}s`
-    : `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, "0")}s`;
-}
-
-/** The task a harness names in its title, without its spinner glyph. */
-const titleTask = (title: string | null | undefined) =>
-  title?.replace(/^[^\p{L}\p{N}]+/u, "").trim() || null;
-
-const STATUS_WORDS: Record<string, string> = {
-  working: "Working",
-  blocked: "Needs you",
-  done: "Done",
-  idle: "Idle",
-};
-
 /**
  * Chat reads only the conversation read model and sends with Herdr's agent
  * prompt. While Chat shows a pane, the service watches it and pushes
@@ -391,74 +375,13 @@ export function AgentChat({
     () => groupHistoryChatItems(history.messages),
     [history.messages],
   );
-  // The step model's evidence for History's rows, by tool-call ID. Chat
-  // asks only for the calls in History's window that it does not have yet,
-  // or that had not finished (running, or interrupted, which a late result
-  // can still settle). It keeps only the window's calls, so it is bounded as
-  // History is, and a step that did not change keeps its object, so its row
-  // need not redraw.
-  const [stepEvidence, setStepEvidence] = useState<
-    ReadonlyMap<string, ConversationStep>
-  >(() => new Map());
-  const evidenceSession = `${pane.pane_id}\u0000${conversation?.session_fingerprint ?? ""}`;
-  const evidenceSessionRef = useRef(evidenceSession);
-  if (evidenceSessionRef.current !== evidenceSession) {
-    evidenceSessionRef.current = evidenceSession;
-    if (stepEvidence.size) setStepEvidence(new Map());
-  }
-  // Rebuilt whenever History's window changes, which is also when a running
-  // call may have finished.
-  const callIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const entry of history.messages)
-      if (entry.role === "tool" && entry.source_call_id)
-        ids.add(entry.source_call_id);
-    return [...ids];
-  }, [history.messages]);
-  useEffect(() => {
-    const inWindow = new Set(callIds);
-    if ([...stepEvidence.keys()].some((id) => !inWindow.has(id))) {
-      setStepEvidence(
-        new Map([...stepEvidence].filter(([id]) => inWindow.has(id))),
-      );
-      return;
-    }
-    if (!active || details) return;
-    const wanted = callIds.filter((id) => {
-      const known = stepEvidence.get(id);
-      return (
-        !known || known.state === "running" || known.state === "interrupted"
-      );
-    });
-    if (!wanted.length) return;
-    let current = true;
-    void connectionClient
-      .call("agent_conversation.steps", {
-        pane_id: pane.pane_id,
-        call_ids: wanted,
-      })
-      .then((result) => {
-        const steps = (result as { steps?: ConversationStep[] }).steps ?? [];
-        if (!current || !steps.length) return;
-        setStepEvidence((previous) => {
-          let next: Map<string, ConversationStep> | null = null;
-          for (const step of steps) {
-            if (!step.call_id || !inWindow.has(step.call_id)) continue;
-            const known = previous.get(step.call_id);
-            if (known && JSON.stringify(known) === JSON.stringify(step))
-              continue;
-            next ??= new Map(previous);
-            next.set(step.call_id, step);
-          }
-          return next ?? previous;
-        });
-      })
-      // Evidence is extra; a failed read leaves the plain rows.
-      .catch(() => {});
-    return () => {
-      current = false;
-    };
-  }, [active, callIds, connectionClient, details, pane.pane_id, stepEvidence]);
+  const stepEvidence = useStepEvidence({
+    client: connectionClient,
+    paneId: pane.pane_id,
+    sessionFingerprint: conversation?.session_fingerprint ?? null,
+    entries: history.messages,
+    enabled: active && !details,
+  });
 
   // While visible, ask the service to watch this pane and reread when it says
   // the conversation changed, or after the connection comes back.
