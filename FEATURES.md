@@ -13,7 +13,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   Each host is a building, each workspace a room, each tab a team table and each
   pane a seat. Plain terminals show prompts. Additional panes beyond the drawn
   seats remain available through the table's count and chooser. Each table
-  carries its tab's name on a nameplate at its front edge.
+  carries its tab's name on a nameplate at its front edge. Agents go by the
+  name Herdr gives them (`firstmate`), else their harness (`claude`); window
+  and Inspector titles put the name first (`firstmate · claude`).
   - The Town board counts agents working, needing you and done, with spend
     when a metrics provider is configured. Wide screens show it at the top
     left; phones show a compact chip under the search bar that opens it.
@@ -139,6 +141,13 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   colour with **Default colour** the same way. Herdr has no tab colour, so the World service
   saves the choice keyed by host and Herdr tab ID, the same on every device. A
   closed tab's saved colour is dropped.
+  - Workspaces and hosts have colours too. A workspace's colour is its Town
+    room's carpet (swatch beside the room's name), its Board card and a dot in
+    the Spaces sidebar (its menu offers the palette); its tabs without a colour
+    of their own take it. A host's colour is its Town building's roof (swatch on
+    its reception board), its Board zone (swatch on the zone label) and its
+    Spaces header; it is not passed on to tabs. **Default colour** returns a
+    place to its own default.
   - A desk moved to another room keeps the colour it showed, even a default or
     its old room's, saved as its own colour: it no longer follows its room's
     colour, and **Default colour** resets it to its new tab's default.
@@ -506,6 +515,9 @@ See [resource ownership](docs/ARCHITECTURE.md#workspace-resource-ownership).
   with each choice's description) or plan approval, Chat shows it as an ask
   card and answers with the option you pick (click or its number key), after
   checking the question has not changed.
+  Each tool call's row in Chat carries its evidence: a plain label, its state
+  and time, a pass or fail badge for a test run, and when opened, the edit's
+  diff, the test strip with its first failure, or the end of its output.
   It refreshes when the service sees the transcript, title or status change,
   without browser polling, and keeps the last good view if a read fails. When
   it cannot read the conversation it shows the reason with the matching action:

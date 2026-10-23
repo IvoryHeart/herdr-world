@@ -7,8 +7,11 @@ import type {
   OfficeRoom,
 } from "../herdrOfficeProjection";
 import {
+  hostColorKey,
+  placeColor,
   terminalColor,
   terminalColorKey,
+  workspaceColorKey,
   type TerminalColor,
   type TerminalColorTarget,
   type TerminalColors,
@@ -32,6 +35,8 @@ export type TownModel = {
   roomCounts: ReadonlyMap<string, TownRoomCounts>;
   /** Each desk's terminal colour (its Herdr tab's, see terminalColor.ts). */
   deskColors: ReadonlyMap<string, TerminalColor>;
+  /** Rooms' and buildings' chosen colours; absent ones use their defaults. */
+  placeColors: TownPlaceColors;
   /** Pinned desks (useDeskPins.ts): each keeps its cell, its agents stay. */
   deskPins: ReadonlyMap<string, TownDeskPin>;
 };
@@ -41,6 +46,53 @@ export type TownDeskPin = {
   key: string;
   cell: { col: number; row: number } | null;
 };
+
+export type TownPlaceColors = {
+  rooms: ReadonlyMap<string, TerminalColor>;
+  hosts: ReadonlyMap<string, TerminalColor>;
+};
+export const NO_PLACE_COLORS: TownPlaceColors = {
+  rooms: new Map(),
+  hosts: new Map(),
+};
+
+/** What a room's colour is saved under: its workspace's card key. */
+export const townRoomColorKey = (room: OfficeRoom) =>
+  workspaceColorKey(room.workspaceRef.connectionId, room.workspaceRef.nativeId);
+
+/** The chosen colours of the projection's rooms and buildings. */
+export function townPlaceColors(
+  projection: HerdrOfficeProjection,
+  colors: TerminalColors,
+): TownPlaceColors {
+  const rooms = new Map<string, TerminalColor>();
+  for (const room of projection.rooms) {
+    const color = placeColor(colors, townRoomColorKey(room));
+    if (color) rooms.set(room.key, color);
+  }
+  const hosts = new Map<string, TerminalColor>();
+  // Every building, even one with no rooms shown, has its host's colour.
+  for (const host of projection.hosts) {
+    const color = placeColor(colors, hostColorKey(host.connectionId));
+    if (color) hosts.set(host.key, color);
+  }
+  return rooms.size || hosts.size ? { rooms, hosts } : NO_PLACE_COLORS;
+}
+
+/** The same colours keep the same object, so nothing is repainted. */
+export function keepPlaceColors(
+  last: TownPlaceColors,
+  next: TownPlaceColors,
+): TownPlaceColors {
+  const same = (
+    a: ReadonlyMap<string, string>,
+    b: ReadonlyMap<string, string>,
+  ) =>
+    a.size === b.size && [...a].every(([key, color]) => b.get(key) === color);
+  return same(last.rooms, next.rooms) && same(last.hosts, next.hosts)
+    ? last
+    : next;
+}
 
 export type TownRoomCounts = {
   desks: number;
@@ -203,6 +255,7 @@ export function townModelFromProjection(
     agentSeats,
     roomCounts,
     deskColors: townDeskColors(projection, colors),
+    placeColors: townPlaceColors(projection, colors),
     deskPins: townDeskPins(projection, pins),
   };
 }

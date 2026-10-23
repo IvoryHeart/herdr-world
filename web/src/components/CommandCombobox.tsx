@@ -1,4 +1,5 @@
 import { useCreationProgress } from "../creationRequests";
+import { paneAgentListing, paneAgentTitle } from "../agentName";
 import { useCloseGlobalMenuForDialog } from "./useCloseGlobalMenuForDialog";
 import {
   ArrowDown,
@@ -49,7 +50,7 @@ import {
   terminalComposerDraftPaneIds,
 } from "../terminalComposer";
 import type { FileExplorerEntry, Pane, Tab, Workspace } from "../types";
-import { basename, shortId } from "../utils";
+import { shortId } from "../utils";
 import { canCreateWorktree, worktreeCreationSource } from "../worktree";
 import { AgentIcon } from "./AgentIcon";
 import { CreateWorkspaceDialog } from "./CreateWorkspaceDialog";
@@ -120,16 +121,6 @@ function tabName(tab?: Tab) {
 
 function workspaceName(workspace?: Workspace) {
   return workspace?.label || workspace?.workspace_id || "";
-}
-
-function agentName(pane: Pane) {
-  return [
-    pane.agent || "Agent",
-    basename(pane.foreground_cwd || pane.cwd),
-    shortId(pane.pane_id),
-  ]
-    .filter(Boolean)
-    .join(" · ");
 }
 
 export { normalizeSearchText };
@@ -382,7 +373,7 @@ function OwnedCommandCombobox({
     () =>
       s.panes
         .filter((p) => p.agent && p.agent_status !== "unknown")
-        .sort((a, b) => agentName(a).localeCompare(agentName(b))),
+        .sort((a, b) => paneAgentListing(a).localeCompare(paneAgentListing(b))),
     [s.panes],
   );
   const focusedWorkspaceTabs = useMemo(
@@ -992,7 +983,7 @@ function OwnedCommandCombobox({
       key: "close-active-agent-pane",
       icon: <X size={15} />,
       title: "Close active agent pane",
-      detail: agentName(activeAgent),
+      detail: paneAgentListing(activeAgent),
       keywords: ["close agent", "delete agent", "remove agent", "close pane"],
       danger: true,
       run: () => {
@@ -1006,13 +997,13 @@ function OwnedCommandCombobox({
     agentActions.push({
       key: `focus-agent-${pane.pane_id}`,
       icon: <AgentIcon agent={pane.agent} compact />,
-      title: `Focus agent: ${agentName(pane)}`,
+      title: `Focus agent: ${paneAgentListing(pane)}`,
       detail: pane.agent_status,
       keywords: [
         "switch agent",
         "open agent",
         "select agent",
-        pane.agent ?? "",
+        paneAgentTitle(pane),
       ],
       run: () => store.focusPane(pane.pane_id),
     });

@@ -20,6 +20,10 @@ import { WORKSPACE_PINS_STORAGE_KEY } from "../workspacePins";
 import { COLLAPSED_WORKTREE_GROUPS_STORAGE_KEY } from "../workspaceTreeCollapse";
 import { WORKSPACE_AGENT_LAYOUT_STORAGE_KEY } from "../workspaceAgentLayout";
 import { WorkspaceTree } from "./WorkspaceTree";
+import {
+  WorkspaceColorContext,
+  type WorkspaceColorControl,
+} from "./workspaceColor";
 
 // Isolate browser globals and React's module graph from other Bun tests.
 if (process.env.HERDR_WORLD_WORKSPACE_STORAGE_DOM_TEST !== "1") {
@@ -205,6 +209,101 @@ if (process.env.HERDR_WORLD_WORKSPACE_STORAGE_DOM_TEST !== "1") {
       container.remove();
       __storeTesting.replaceState(previousState);
       __resetTabPinsForTests();
+      for (const [key, descriptor] of originals) {
+        if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+        else delete (globalThis as Record<string, unknown>)[key];
+      }
+      await browser.happyDOM.close();
+    }
+  });
+
+  test("a workspace shows its chosen colour and its menu changes it", async () => {
+    const browser = new Window({ url: "http://localhost" });
+    const originals = new Map<string, PropertyDescriptor | undefined>();
+    for (const [key, value] of Object.entries({
+      window: browser,
+      document: browser.document,
+      navigator: browser.navigator,
+      HTMLElement: browser.HTMLElement,
+      Element: browser.Element,
+      Node: browser.Node,
+      localStorage: browser.localStorage,
+      sessionStorage: browser.sessionStorage,
+      IS_REACT_ACT_ENVIRONMENT: true,
+    })) {
+      originals.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
+      Object.defineProperty(globalThis, key, {
+        value,
+        configurable: true,
+        writable: true,
+      });
+    }
+    const previousState = store.get();
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    const chosen: [string, string | null][] = [];
+    const control: WorkspaceColorControl = {
+      palette: [
+        { id: "teal", hex: "#39b5a4" },
+        { id: "red", hex: "#e5534b" },
+      ],
+      colorOf: (id) =>
+        id === "w1"
+          ? { id: "teal", custom: true }
+          : { id: "default", custom: false },
+      onColor: (id, color) => {
+        chosen.push([id, color]);
+      },
+    };
+    try {
+      __storeTesting.replaceState({
+        ...previousState,
+        activeConnectionId: "alpha",
+        workspaces: ["w1", "w2"].map((id, index) => ({
+          workspace_id: id,
+          number: index + 1,
+          label: `Workspace ${id}`,
+          focused: false,
+          pane_count: 0,
+          tab_count: 0,
+          agent_status: "working",
+        })),
+        panes: [],
+      });
+      await act(async () =>
+        root.render(
+          createElement(
+            WorkspaceColorContext.Provider,
+            { value: control },
+            createElement(WorkspaceTree),
+          ),
+        ),
+      );
+      const dots = container.querySelectorAll<HTMLElement>(".ws-color");
+      // Only the workspace with a chosen colour shows a dot, in that colour.
+      expect(dots.length).toBe(1);
+      expect(dots[0]!.style.background).toContain("#39b5a4");
+      const row = container.querySelector(".tree-row")!;
+      await act(async () => {
+        row.dispatchEvent(
+          new browser.MouseEvent("contextmenu", {
+            bubbles: true,
+            clientX: 10,
+            clientY: 10,
+          }) as unknown as Event,
+        );
+      });
+      const red = document.querySelector<HTMLButtonElement>(
+        '[aria-label="Workspace colour"] [aria-label="Colour red"]',
+      );
+      expect(red).not.toBeNull();
+      await act(async () => red!.click());
+      expect(chosen).toEqual([["w1", "red"]]);
+    } finally {
+      await act(async () => root.unmount());
+      container.remove();
+      __storeTesting.replaceState(previousState);
       for (const [key, descriptor] of originals) {
         if (descriptor) Object.defineProperty(globalThis, key, descriptor);
         else delete (globalThis as Record<string, unknown>)[key];

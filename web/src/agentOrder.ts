@@ -138,6 +138,15 @@ export function withAgentActivity(
   }
   return panes.map((pane) => {
     const agent = byPane.get(pane.pane_id);
+    const sameAgent =
+      !!agent &&
+      agent.terminal_id === pane.terminal_id &&
+      agent.agent === pane.agent;
+    const name =
+      sameAgent && typeof agent.name === "string"
+        ? agent.name.trim().slice(0, 100)
+        : "";
+    const named = name ? { ...pane, agent_name: name } : pane;
     // Done and Idle share Herdr's underlying Idle state and sequence; only
     // the seen flag changes. The list calls can straddle an acknowledgement.
     const sameCompletedState =
@@ -150,11 +159,11 @@ export function withAgentActivity(
       agent.agent !== pane.agent ||
       (agent.agent_status !== pane.agent_status && !sameCompletedState)
     )
-      return pane;
+      return named;
     const sequence = agent.state_change_seq;
     const activity = agent.last_activity_at;
     return {
-      ...pane,
+      ...named,
       ...(typeof sequence === "number" &&
       Number.isSafeInteger(sequence) &&
       sequence >= 0
