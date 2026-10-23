@@ -800,6 +800,67 @@ describe("Pixel Office projection", () => {
     });
   });
 
+  test("an expanded room keeps Fold after closures below the folded target, then explicitly shrinks", () => {
+    const worldFor = (count: number) => {
+      const tabs = Array.from({ length: count }, (_, index) =>
+        tab(`tab-${index}`, index + 1),
+      );
+      return buildWorldObject(
+        [
+          connection(
+            "local",
+            tabs,
+            tabs.map((entry) => pane(entry.tab_id, "idle")),
+          ),
+        ],
+        "local",
+      );
+    };
+    const full = worldFor(100);
+    const key = projectWorldOffice(full, 1, null, TOWN_PRESENTATION_BOUNDS)
+      .rooms[0]!.key;
+    const expandedRooms = new Set([key]);
+    const project = (
+      world: ReturnType<typeof worldFor>,
+      expanded: ReadonlySet<string>,
+    ) =>
+      projectWorldOffice(
+        world,
+        2,
+        null,
+        TOWN_PRESENTATION_BOUNDS,
+        new Set(),
+        expanded,
+      );
+    for (const shape of Object.values(TOWN_SHAPES))
+      for (const count of [0, 20, 24]) {
+        const first = layoutTown(
+          townModelFromProjection(project(full, expandedRooms)).input,
+          shape,
+        );
+        const small = worldFor(count);
+        const closed = project(small, expandedRooms);
+        expect(closed.rooms[0]!.deskFold).toBe("expanded");
+        const retained = layoutTown(
+          townModelFromProjection(closed).input,
+          shape,
+          first.memory,
+        );
+        expect(retained.layout.buildings[0]!.rooms[0]!.h).toBe(
+          first.layout.buildings[0]!.rooms[0]!.h,
+        );
+        const folded = layoutTown(
+          townModelFromProjection(project(small, new Set())).input,
+          shape,
+          retained.memory,
+        );
+        expect(folded.layout.buildings[0]!.rooms[0]!.h).toBeLessThan(
+          retained.layout.buildings[0]!.rooms[0]!.h,
+        );
+        expect(folded.layout.deskCells.size).toBe(count);
+      }
+  });
+
   test("Town folds a room past 24 desks to its busiest, and an expanded room shows the rest", () => {
     const shown = (
       count: number,

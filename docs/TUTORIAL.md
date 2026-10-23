@@ -210,7 +210,8 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    finishes and verified agents with open questions stay visible beyond that
    count. Press **+N** on its plaque to expand it to a normal limit of 127 tables;
    the same tables stay visible beyond that limit. **+N** counts only hidden tables.
-   Press **Fold** to put it back. Rooms sit in columns that suit your screen
+   **Fold** remains available after tabs close; press it to shrink the room back.
+   Rooms sit in columns that suit your screen
    (one on a phone), and a growing room pushes down only the rooms below it,
    once you let go of the town. Town moves the tab in Herdr, so Spaces
    shows the new order too, and moving a tab in Spaces moves its table. The

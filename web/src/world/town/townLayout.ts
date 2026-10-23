@@ -321,7 +321,7 @@ function draftBuilding(
   const placed = rooms.map((room) => {
     const previous = memory.get(room.key);
     const folded =
-      previous?.deskFold === "expanded" && room.deskFold === "folded";
+      previous?.deskFold === "expanded" && room.deskFold !== "expanded";
     const {
       memory: roomMemory,
       overflow,

@@ -151,8 +151,8 @@ export type OfficeRoom = {
   observedDeskCount: number;
   observedAgentCount: number;
   /**
-   * Set when the room has more desks than it shows folded: "folded" shows
-   * the busiest `foldedDesksPerRoom`, "expanded" shows up to `desksPerRoom`.
+   * Fold targets `foldedDesksPerRoom`; expansion targets `desksPerRoom`.
+   * Expanded state survives closures so the user can still explicitly Fold.
    */
   deskFold?: "folded" | "expanded";
 };
@@ -597,7 +597,7 @@ export function projectWorldOffice(
       desks,
       roomAgents: shownAgents,
       omittedDeskCount: Math.max(0, entry.source.coverage.tabs - desks.length),
-      ...(folds
+      ...(folds || expanded
         ? { deskFold: expanded ? ("expanded" as const) : ("folded" as const) }
         : {}),
       omittedAgentCount: Math.max(

@@ -1114,7 +1114,8 @@ downward, and its building grows around it. A folded room SHALL use a default
 bound of 24 desks, and an expanded room a default bound of 127; Fold SHALL
 restore the 24-desk bound and allow the room to shrink, while retaining pinned
 cells and its building column. Ordinary tab closures SHALL keep the live size
-step. Selected and pinned desks, every desk represented
+step. An expanded room SHALL retain its Fold control after closures, including
+at or below 24 desks, until the user folds it. Selected and pinned desks, every desk represented
 by the shared Town call list (blocked agents and unreviewed finishes), and the
 desk of a verified, qualified asking agent with an open question SHALL remain
 visible past either bound. Admission SHALL consume desk keys from that shared
