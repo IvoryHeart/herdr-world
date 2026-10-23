@@ -392,14 +392,15 @@ assign tasks, or provide a Clear operation.
 World groups terminals that know each other. Each relation lists its evidence,
 one entry per source, with the source's system of record and whether it holds
 now: a **spawn** (Herdr pane metadata while it lives, then World's saved copy)
-or a **manual group** (saved by World). Evidence for a terminal that is gone or
+or a **manual Team** (saved by World). Evidence for a terminal that is gone or
 on a stale host is shown as stale, not dropped. Herdr records no creator for a
 tab or pane, so a spawner stamps the child:
 `herdr-world stamp CHILD_PANE PARENT_PANE` (`bun run agent:stamp --` in a
 checkout). Board's **Start an agent** stamps the new agent when its note is
 strung to one pane. Town draws teams as walls and connectors; Board strings
 related cards and groups a tab dropped on another tab, or chosen with
-**Group…** and a tap; **Ungroup** undoes it.
+**Group…** and a tap; **Ungroup** undoes it. Existing saved magnetic groups
+migrate automatically to kind Team; these controls continue to act on Teams.
 
 ### Agent CLI (`herdr-world --skill`)
 
