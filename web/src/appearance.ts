@@ -1,3 +1,5 @@
+import { worldLocalStorage } from "./browserStorage";
+
 export const ACCENT_OPTIONS = [
   { value: "neutral", label: "Default" },
   { value: "blue", label: "Blue" },
@@ -149,4 +151,30 @@ export function normalizeZenMode(value: string | null): boolean {
 
 export function serializeZenMode(value: boolean): string {
   return value ? "1" : "0";
+}
+
+const ZEN_MODE_KEY = "zenMode";
+
+// A scoped surface keeps its own Zen choice, and starts from its default
+// until the user picks one.
+export function zenModeKey(scope: string | undefined) {
+  return scope ? `${ZEN_MODE_KEY}.${scope}` : ZEN_MODE_KEY;
+}
+
+export function loadZenMode(key = ZEN_MODE_KEY, fallback = false): boolean {
+  const value = worldLocalStorage.getItem(key);
+  return value === null ? fallback : normalizeZenMode(value);
+}
+
+/**
+ * Whether Zen covers the current screen. On a phone it covers a root screen
+ * only: those its host opts in, and the workspace list when asked.
+ */
+export function zenCovers(
+  mobile: boolean,
+  onMobile: boolean,
+  onMobileList: boolean,
+  mobileView: string,
+) {
+  return !mobile || onMobile || (onMobileList && mobileView === "workspaces");
 }

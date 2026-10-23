@@ -13,6 +13,8 @@ import { TerminalView } from "./components/TerminalView";
 import { ThemedSelect } from "./components/ThemedSelect";
 import { WindowArrangementMenu } from "./components/WindowArrangementMenu";
 import { ColorSwatchButton } from "./components/ColorSwatch";
+import { InterestButton } from "./components/InterestButton";
+import type { Interest } from "../../shared/interest";
 import { WindowControls } from "./world/windows/WindowControls";
 import { TERMINAL_COLOR_PALETTE } from "./world/terminalColor";
 import type { Pane } from "./types";
@@ -99,8 +101,10 @@ updateLayoutPreferences({ mode: phone ? "mobile" : "desktop" });
 rememberTerminalInputMode("direct");
 
 const chosen: (string | null)[] = [];
+const interests: Interest[] = [];
 function TerminalWindow() {
   const [color, setColor] = useState({ id: "blue", custom: false });
+  const [interest, setInterest] = useState<Interest>("watching");
   const [sort, setSort] = useState("attention");
   const onColor = (id: string | null) => {
     chosen.push(id);
@@ -114,6 +118,13 @@ function TerminalWindow() {
         style={{ display: "flex", alignItems: "center", gap: 4 }}
       >
         <ColorSwatchButton label="Terminal colour" {...choice} />
+        <InterestButton
+          current={interest}
+          onInterest={(next) => {
+            interests.push(next);
+            setInterest(next);
+          }}
+        />
         <span style={{ flex: 1 }}>builder</span>
         <ThemedSelect
           aria-label="Sort order"
@@ -360,6 +371,25 @@ async function run() {
   );
   check(chosen[chosen.length - 1] === null, "Default colour did not reset");
   check(!swatches(), "Default colour left the picker open");
+
+  // The agent's interest: a header button opening three choices, one layer.
+  const choices = () => $(".interest-popover");
+  await press($('button[aria-label="Interest: Watching"]'), "interest");
+  check(Boolean(choices()), "the interest button did not open its choices");
+  await press($(".interest-popover .interest-choice:nth-child(2)"), "Muted");
+  check(
+    interests[interests.length - 1] === "muted",
+    `interest chose ${interests[interests.length - 1]}`,
+  );
+  check(!choices(), "choosing an interest left its choices open");
+  check(
+    $('button[aria-label="Interest: Muted"]') !== null,
+    "the header does not show the chosen interest",
+  );
+  await press($('button[aria-label="Interest: Muted"]'), "interest");
+  if (phone) await back();
+  else await escape();
+  check(!choices(), "Back or Escape left the interest choices open");
 
   if (phone) {
     // The phone's Back closes the top layer only.

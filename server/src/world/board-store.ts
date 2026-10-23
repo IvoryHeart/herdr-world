@@ -18,6 +18,11 @@ import {
   type SpawnClaim,
   type TerminalRef,
 } from "../../../shared/relations";
+import {
+  isInterestKey,
+  STORED_INTERESTS,
+  type StoredInterest,
+} from "../../../shared/interest";
 
 /**
  * Board's saved state: layout, notes and strings. One document for the World
@@ -82,6 +87,8 @@ export type BoardLayoutDocument = {
    * its cell (null until Town first places it), and its agents stay at it.
    */
   desk_pins: Record<string, DeskPin>;
+  /** Terminal key (shared/interest.ts) to the viewer's muted or focused. */
+  interest: Record<string, StoredInterest>;
 };
 /** A desk's cell in its Town room: column and row, from the top left. */
 export type DeskCell = { col: number; row: number };
@@ -141,6 +148,8 @@ export type BoardOp =
   | { op: "desk.unpin"; key: string }
   /** Record where Town put a pinned desk; only a desk still pinned, unplaced. */
   | { op: "desk.place"; key: string; cell: DeskCell }
+  /** Mute or focus an agent's terminal, or return it to watching with null. */
+  | { op: "interest.set"; key: string; interest: StoredInterest | null }
   | {
       op: "anchor.witness";
       string_id: string;
@@ -275,6 +284,7 @@ export function emptyBoardDocument(): BoardDocument {
       folded: [],
       colors: {},
       desk_pins: {},
+      interest: {},
     },
     notes: [],
     strings: [],
@@ -354,6 +364,17 @@ function deskPins(value: unknown): Record<string, DeskPin> {
     text(key, "desk_pins key", BOARD_LIMITS.key);
     if (!isObject(entry)) fail("desk pin");
     out[key] = { cell: entry.cell === null ? null : deskCell(entry.cell) };
+  }
+  return out;
+}
+function interests(value: unknown): Record<string, StoredInterest> {
+  if (value === undefined) return {};
+  if (!isObject(value)) fail("interest must be an object");
+  const out: Record<string, StoredInterest> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    text(key, "interest key", BOARD_LIMITS.key);
+    if (!STORED_INTERESTS.includes(entry as StoredInterest)) fail("interest");
+    out[key] = entry as StoredInterest;
   }
   return out;
 }
@@ -477,6 +498,8 @@ export function parseBoardDocument(value: unknown): BoardDocument {
       colors: colors(layout.colors),
       // Boards saved before desk pins have none.
       desk_pins: deskPins(layout.desk_pins),
+      // Boards saved before interest have none: every agent is watched.
+      interest: interests(layout.interest),
     },
     notes: notes.map((entry) => {
       const rev =
@@ -504,7 +527,8 @@ function checkBounds(document: BoardDocument) {
     Object.keys(layout.pinned).length +
     layout.folded.length +
     Object.keys(layout.colors).length +
-    Object.keys(layout.desk_pins).length;
+    Object.keys(layout.desk_pins).length +
+    Object.keys(layout.interest).length;
   if (entries > BOARD_LIMITS.layoutEntries)
     fail(`at most ${BOARD_LIMITS.layoutEntries} layout entries`);
   const noteIds = new Set(document.notes.map((entry) => entry.id));
@@ -588,6 +612,13 @@ export class BoardStore {
     replaceDataFile(this.path, payload);
     this.document = next;
     return this.get();
+  }
+  /**
+   * Apply the operations only if the board is still at `revision`; null when
+   * a newer edit landed meanwhile, so the caller can read again.
+   */
+  patchIf(revision: number, ops: readonly BoardOp[]): BoardDocument | null {
+    return this.document.revision === revision ? this.patch(ops) : null;
   }
 }
 
@@ -740,6 +771,15 @@ function applyOp(next: BoardDocument, op: BoardOp, current: BoardDocument) {
         next.layout.desk_pins[text(op.key, "desk key", BOARD_LIMITS.key)];
       const cell = deskCell(op.cell);
       if (pin && !pin.cell) pin.cell = cell;
+      return;
+    }
+    case "interest.set": {
+      const key = text(op.key, "interest key", BOARD_LIMITS.key);
+      if (!isInterestKey(key)) fail("interest key");
+      if (op.interest === null) delete next.layout.interest[key];
+      else if (STORED_INTERESTS.includes(op.interest))
+        next.layout.interest[key] = op.interest;
+      else fail("interest");
       return;
     }
     case "anchor.witness": {
@@ -920,55 +960,5 @@ export function tabClosedOps(
   ]);
 }
 
-/**
- * After a move that failed (and maybe rolled back), panes can sit under new
- * IDs. Using only what the outcome positively observed (terminal to pane and
- * tab), a pane anchor whose witnessed terminal was seen takes that pane's ID,
- * and a tab anchor whose witnessed terminals were all seen in one tab takes
- * that tab.
- * Anchors with no observed terminal are left as they are (unresolved).
- */
-export function reconcileOps(
-  document: BoardDocument,
-  connectionId: string,
-  topology: readonly { terminal_id: string; pane_id: string; tab_id: string }[],
-): BoardOp[] {
-  const byTerminal = new Map(
-    topology.map((entry) => [entry.terminal_id, entry]),
-  );
-  const rewrite = (end: BoardEnd): BoardEnd => {
-    if (!("anchor" in end) || end.anchor.connection_id !== connectionId)
-      return end;
-    const { anchor } = end;
-    const seen = anchor.witness.flatMap((terminal) => {
-      const entry = byTerminal.get(terminal);
-      return entry ? [entry] : [];
-    });
-    if (!seen.length) return end;
-    if (anchor.kind === "pane") {
-      const pane = seen[0]!.pane_id;
-      return pane === anchor.native_id
-        ? end
-        : { anchor: { ...anchor, native_id: pane } };
-    }
-    if (anchor.kind === "tab") {
-      // Only when every witnessed terminal was seen, all in one tab: a
-      // partial observation may have missed panes still in the old tab.
-      if (seen.length !== anchor.witness.length) return end;
-      const tabs = new Set(seen.map((entry) => entry.tab_id));
-      const [tab] = [...tabs];
-      return tabs.size === 1 && tab !== anchor.native_id
-        ? { anchor: { ...anchor, native_id: tab! } }
-        : end;
-    }
-    return end;
-  };
-  const ops: BoardOp[] = [];
-  for (const string of document.strings) {
-    const from = rewrite(string.from),
-      to = rewrite(string.to);
-    if (from !== string.from || to !== string.to)
-      ops.push({ op: "string.put", string: { ...string, from, to } });
-  }
-  return ops;
-}
+// Moved out so this module stays within the size ratchet; importers keep it.
+export { reconcileOps } from "./board-reconcile";

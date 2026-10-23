@@ -392,6 +392,13 @@
   }
 }
 
+@container workspace-inspector (max-width: 299px) {
+  /* Interest adds a control; retain the name and targets in narrow Columns. */
+  .workspace-inspector-head[data-views-in-menu]:has(> .interest-button) {
+    gap: 2px;
+  }
+}
+
 /* A managed window whose bar is crowded keeps only the active view's chip;
    every view is in the window's ⋯. */
 .workspace-inspector-head[data-views-in-menu]

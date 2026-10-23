@@ -362,12 +362,15 @@ export default function WorldFoundationApp() {
           // On a phone an open agent window's own bar replaces the topbar:
           // one bar, with Back, the views and the window's actions.
           topbarHidden={Boolean(canReturnToView)}
-          // Town opens full-bleed: Zen is its default, kept apart from the
-          // other views' choice. On a phone, Zen covers the root screens;
-          // a terminal or Spaces keeps its bar for Back.
-          zenScope={view === "town" ? "town" : undefined}
-          zenDefault={view === "town"}
+          // Every World view opens full-bleed: Zen with the floating view
+          // picker is the default, one choice for all views, kept apart from
+          // the shell's own Zen setting. On a phone, Zen covers every root
+          // screen, Spaces' list included; a terminal is a detail screen and
+          // keeps its own bar, with Back.
+          zenScope="world"
+          zenDefault
           zenOnMobile={mobile && view !== "spaces" && !canReturnToView}
+          zenOnMobileList={view === "spaces"}
           renderZenControl={(exitZen) => (
             <WorldViewPicker
               view={view}
