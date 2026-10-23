@@ -159,7 +159,8 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    that live pane. When no supported choices appear, use **Open chat** to reply
    in the agent's window, or **Open terminal** in the card's header (or the
    window's **Terminal** view). The window's **Chat** composer sends with
-   Herdr's agent prompt.
+   Herdr's agent prompt. As in the terminal composer, Enter starts a new line;
+   **Send** or `Ctrl+Enter` (`Cmd+Enter` on a Mac) sends.
    A Codex conversation inferred from its shared daemon is read-only: Chat
    offers no composer or answer buttons. In Codex's Terminal, run `/title` and
    add **Thread ID**, or use **Details → Link Codex session** to preview and
@@ -168,8 +169,8 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    file shows a chip while it uploads, then done or failed; retry a failed one
    (or pick it again) or remove it. **Send** waits for uploads. Uploads go to
    the selected pane's host; review the message and attached paths before
-   sending. Choose **Inspector** for files and changes, or **Open terminal**
-   for direct work.
+   sending. The window's **Files** and **Changes** views hold its files and
+   changes; **Open terminal** is for direct work.
    The swatch beside a room's name colours that workspace (its carpet here,
    its card in Board and a dot in the Spaces sidebar), and the swatch on a
    building's reception board colours the host (its roof, Board zone and

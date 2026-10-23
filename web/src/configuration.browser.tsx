@@ -2,6 +2,7 @@ import "./styles/tokens.css";
 import "./styles/base.css";
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
+import { getChatTextScale } from "./textScales";
 import { flushSync } from "react-dom";
 import { bridge, type HerdrEventMsg } from "./api";
 import { ConfigMenu } from "./components/ConfigMenu";
@@ -667,6 +668,27 @@ async function run() {
   check(
     document.documentElement.dataset.theme === "light",
     "theme preference stopped working",
+  );
+  // Chat text follows the terminal size until set on its own; its value
+  // button links it back.
+  check(
+    getChatTextScale() === null &&
+      !!document.querySelector(
+        '[aria-label="Chat text size follows the terminal, currently 100%"]',
+      ),
+    "Chat text must start linked to the terminal font size",
+  );
+  click("Increase Chat text size");
+  await settle();
+  check(
+    getChatTextScale() === 105,
+    `Chat text did not unlink (${getChatTextScale()})`,
+  );
+  click("Link Chat text size to the terminal, currently 105%");
+  await settle();
+  check(
+    getChatTextScale() === null,
+    "Chat text did not link to the terminal again",
   );
   for (let i = 0; i < (innerWidth <= 320 ? 10 : 5); i++)
     click("Increase interface scale");

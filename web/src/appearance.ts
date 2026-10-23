@@ -85,6 +85,23 @@ export function normalizeTerminalFontScale(
     : normalizeUiScale(legacyUiScale);
 }
 
+// Chat's text follows the terminal font scale unless set on its own (null
+// while linked). Its base is a step above the interface's 12px.
+export const CHAT_TEXT_BASE_PX = 13;
+
+export function normalizeChatTextScale(value: string | null): number | null {
+  return value === null || value === "linked"
+    ? null
+    : clampTerminalFontScale(Number(value));
+}
+
+export function chatTextSize(
+  chatTextScale: number | null,
+  terminalFontScale: number,
+): string {
+  return `${(CHAT_TEXT_BASE_PX * (chatTextScale ?? terminalFontScale)) / 100}px`;
+}
+
 // The terminal surface cancels page zoom so xterm's mouse coordinates, cell
 // measurements, and IME overlay share CSS pixels, and sizes its font from the
 // terminal font scale alone.
