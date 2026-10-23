@@ -129,12 +129,11 @@ import {
   clientBoardOps,
   moveFollowOps,
   reconcileOps,
-  tabClosedOps,
   BoardConflictError,
   BoardStore,
   type BoardOp,
 } from "./world/board-store";
-import { closesTerminals, pruneGoneInterest } from "./world/interest-prune";
+import { afterHerdrClose } from "./world/board-closing";
 import {
   readPaneRecipient,
   recipientOps,
@@ -563,36 +562,6 @@ async function moveWorkspaceIds(
   return ids;
 }
 
-async function dropClosedTabSettings(
-  connectionId: string,
-  tabId: string,
-  call: (method: string, params: Record<string, unknown>) => Promise<unknown>,
-  isCurrent: () => boolean,
-) {
-  try {
-    const { colors, desk_pins: pins } = board().get().layout;
-    const saved = (key: string) => Boolean(colors[key] || pins[key]);
-    const plain = saved(`${connectionId}:${tabId}`);
-    if (!plain && !saved(`${connectionId}:tab:${tabId}`)) return;
-    const absent =
-      plain &&
-      (
-        await checkAnchor(call, {
-          kind: "workspace",
-          native_id: tabId,
-          isCurrent,
-        })
-      ).state === "absent";
-    if (!isCurrent()) return;
-    const ops = tabClosedOps(board().get(), connectionId, tabId, absent);
-    if (ops.length) publishBoardChanged(board().patch(ops).revision);
-  } catch (error) {
-    logger.warn("Board could not drop a closed tab's colour or pin", {
-      detail: String(error),
-    });
-  }
-}
-
 /**
  * Record which agent each newly strung pane end is for: the agent the
  * browser showed, confirmed by reading the pane on its host's current
@@ -865,24 +834,18 @@ function runtimeFactoryForProfile(
         onEvent: (event, eventIdentity) => {
           if (!context.isCurrent()) return;
           publishWorldInvalidation(eventIdentity.id, context.generation);
-          const closedTab =
-            herdrEventName(event)?.replaceAll("_", ".") === "tab.closed"
-              ? (event as { data?: { tab_id?: unknown } }).data?.tab_id
-              : undefined;
-          if (typeof closedTab === "string" && closedTab)
-            void dropClosedTabSettings(
-              eventIdentity.id,
-              closedTab,
-              (rpc, rpcParams) => runtime.herdr.call(rpc, rpcParams, 10_000),
-              context.isCurrent,
-            );
-          if (closesTerminals(herdrEventName(event)))
-            void pruneGoneInterest(board(), eventIdentity.id, {
+          afterHerdrClose(
+            board(),
+            eventIdentity.id,
+            herdrEventName(event),
+            event,
+            {
               call: (rpc, rpcParams) =>
                 runtime.herdr.call(rpc, rpcParams, 10_000),
               isCurrent: context.isCurrent,
               changed: publishBoardChanged,
-            });
+            },
+          );
           logger.debug("Herdr event", {
             connection: eventIdentity.id,
             detail: summarizeHerdrEvent(event),
