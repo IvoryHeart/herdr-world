@@ -8,6 +8,7 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
+  utimesSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -46,7 +47,19 @@ test.skipIf(process.platform !== "win32")(
       const fixture = join(root, "fixture.ts");
       writeFileSync(
         fixture,
-        `if (process.argv[2] === "version" || process.argv[2] === "--version" || (process.argv[2] === "plugin" && process.argv[3] === "version" && !process.env.PLUGIN_REJECT_NATIVE)) console.log("herdr-world 9.8.7"); else process.exit(2);`,
+        [
+          // The test's holder opens this executable without delete sharing,
+          // as an antivirus scan can right after the installer runs it. The
+          // binary announces itself and returns only once the hold is in place.
+          `if (process.argv[2] === "--version" && process.env.STAGING_LOCK_MS) {`,
+          `  await Bun.write(process.execPath + ".running", "");`,
+          `  let held = false;`,
+          `  for (let i = 0; i < 400 && !(held = await Bun.file(process.execPath + ".held").exists()); i++) await Bun.sleep(50);`,
+          `  if (!held) console.error("staging hold timed out");`,
+          `}`,
+          `if (process.argv[2] === "--version" && process.env.WRONG_VERSION) console.log("herdr-world 0.0.0");`,
+          `else if (process.argv[2] === "version" || process.argv[2] === "--version" || (process.argv[2] === "plugin" && process.argv[3] === "version" && !process.env.PLUGIN_REJECT_NATIVE)) console.log("herdr-world 9.8.7"); else process.exit(2);`,
+        ].join("\n"),
       );
       expect(
         Bun.spawnSync([
@@ -84,6 +97,8 @@ test.skipIf(process.platform !== "win32")(
       const validArchive = packageArchive("9.8.7");
       const invalidArchive = packageArchive("9.8.6");
       let failure = "none";
+      // PowerShell holders for the locked cases; they release after 6 s.
+      const holders: Array<ReturnType<typeof Bun.spawn>> = [];
       host = Bun.serve({
         hostname: "127.0.0.1",
         port: 0,
@@ -109,6 +124,8 @@ test.skipIf(process.platform !== "win32")(
         "native-command",
         "download",
         "launcher-replacement",
+        "locked-failure",
+        "locked-staging",
       ]) {
         writeFileSync(
           archive,
@@ -139,6 +156,23 @@ test.skipIf(process.platform !== "win32")(
           failure === "launcher-replacement"
             ? `$locked = [IO.File]::Open('${compatibilityPath}', [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read); try { & '${scriptPath}' } finally { $locked.Dispose() }`
             : `& '${scriptPath}'`;
+        if (failure.startsWith("locked-"))
+          holders.push(
+            Bun.spawn(
+              [
+                powershell,
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "$deadline=[DateTime]::UtcNow.AddSeconds(60); do { $m = Get-ChildItem -LiteralPath $env:HOLD_ROOT -Recurse -Force -Filter 'herdr-world.exe.running' -ErrorAction SilentlyContinue | Where-Object { !(Test-Path -LiteralPath ($_.FullName -replace '\\.running$', '.held')) } | Select-Object -First 1; if (!$m) { Start-Sleep -Milliseconds 20 } } until ($m -or [DateTime]::UtcNow -gt $deadline); $exe = $m.FullName -replace '\\.running$', ''; $f = [IO.File]::Open($exe, 'Open', 'Read', 'Read'); New-Item -ItemType File -Path ($exe + '.held') | Out-Null; Start-Sleep -Milliseconds 6000; $f.Dispose()",
+              ],
+              {
+                env: { ...process.env, HOLD_ROOT: join(root, "server") },
+                stdout: "ignore",
+                stderr: "inherit",
+              },
+            ),
+          );
         const child = Bun.spawn(
           [
             powershell,
@@ -154,6 +188,8 @@ test.skipIf(process.platform !== "win32")(
               ...installerEnv,
               HERDR_WORLD_RELEASE_BASE_URL: `http://127.0.0.1:${host.port}`,
               PLUGIN_REJECT_NATIVE: failure === "native-command" ? "1" : "",
+              STAGING_LOCK_MS: failure.startsWith("locked-") ? "6000" : "",
+              WRONG_VERSION: failure === "locked-failure" ? "1" : "",
             },
             stdout: "pipe",
             stderr: "pipe",
@@ -163,6 +199,21 @@ test.skipIf(process.platform !== "win32")(
           child.exited,
           new Response(child.stderr).text(),
         ]);
+        if (failure.startsWith("locked-")) {
+          // A held staging copy is reported and left behind, never fatal, and
+          // never hides the real outcome.
+          expect(stderr).toContain("could not remove the temporary folder");
+          if (failure === "locked-failure") {
+            expect(code).not.toBe(0);
+            expect(stderr).toContain("Binary version mismatch");
+          } else expect(code, stderr).toBe(0);
+          expect(
+            readdirSync(join(root, "server")).filter((name) =>
+              name.startsWith(".plugin-install-"),
+            ),
+          ).toHaveLength(failure === "locked-failure" ? 1 : 2);
+          continue;
+        }
         if (["fresh", "none"].includes(failure)) {
           expect(code, stderr).toBe(0);
           expect(
@@ -190,6 +241,50 @@ test.skipIf(process.platform !== "win32")(
         "'",
         "''",
       );
+      // Once the holders exit, the next install sweeps leftovers older than an
+      // hour and keeps a recent one, which may belong to a running install.
+      for (const holder of holders) await holder.exited;
+      const server = join(root, "server");
+      const recent = join(server, ".plugin-install-recent");
+      mkdirSync(recent);
+      const hourAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+      for (const name of readdirSync(server))
+        if (
+          name.startsWith(".plugin-install-") &&
+          name !== ".plugin-install-recent"
+        )
+          utimesSync(join(server, name), hourAgo, hourAgo);
+      // Async: the installer downloads from this process's own Bun.serve fixture.
+      const sweep = Bun.spawn(
+        [
+          powershell,
+          "-NoProfile",
+          "-NonInteractive",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-Command",
+          `& '${script}'`,
+        ],
+        {
+          env: {
+            ...installerEnv,
+            HERDR_WORLD_RELEASE_BASE_URL: `http://127.0.0.1:${host.port}`,
+          },
+          stdout: "ignore",
+          stderr: "pipe",
+        },
+      );
+      const [sweepCode, sweepError] = await Promise.all([
+        sweep.exited,
+        new Response(sweep.stderr).text(),
+      ]);
+      expect(sweepCode, sweepError).toBe(0);
+      expect(readdirSync(server)).toEqual([
+        ".plugin-install-recent",
+        "herdr-world-plugin.exe",
+        "herdr-world.exe",
+      ]);
+      rmSync(recent, { recursive: true });
       const emptyOverride = Bun.spawnSync(
         [
           powershell,
