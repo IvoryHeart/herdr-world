@@ -299,8 +299,8 @@ fixed rules, without a model (`server/src/agent/quest.ts`). It is computed with
 the projection, over the whole transcript rather than Chat's 200-entry window,
 and each connection keeps up to 256 quests, so a quest whose transcript has not
 changed is answered without reading it again. Chat shows the quest log above
-the conversation; Town marks progress at a seated agent; Board puts a chip on
-the agent's card.
+the conversation; Town stands a pennant beside the agent's seat, which names
+the quest on hover or tap; Board puts a chip on the agent's card.
 
 A quest has a `title`, a `source` (`todo`, `plan`, `goal` or `loop`), the
 harness `tool` it came from, a `status` (`active`, `done`, `blocked` or

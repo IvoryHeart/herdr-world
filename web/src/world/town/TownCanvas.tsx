@@ -1,4 +1,5 @@
 import {
+  Fragment,
   memo,
   useCallback,
   useEffect,
@@ -72,7 +73,7 @@ import {
   nextTownTask,
   type TownRendererHandle,
 } from "./townRenderer";
-import { townPortrait, type TownQuestMark } from "./townSprites";
+import { townPortrait } from "./townSprites";
 import { townTargets, type TownTarget } from "./townTargets";
 import { yieldWorldTask } from "../worldObject";
 import {
@@ -135,6 +136,16 @@ const REFLOW_IDLE_MS = 1200;
 const portrait = townPortrait;
 const NO_COLORS: TerminalColors = {};
 const NO_KEYS: ReadonlySet<string> = new Set();
+/** What a seat's quest pennant shows: the agent's quest and its progress. */
+export type TownQuestMark = {
+  title: string;
+  /** Short progress: "2/5", "Loop ×3", or the source's name. */
+  progress: string;
+  done: number;
+  total: number;
+  status: "active" | "done" | "blocked" | "paused";
+};
+
 const NO_QUESTS: ReadonlyMap<string, TownQuestMark> = new Map();
 
 function ago(since: number, now: number) {
@@ -554,7 +565,6 @@ export function TownCanvas({
     summonedKeys: latest.current.summonedKeys,
     openHostKey: null,
     calm: latest.current.calm,
-    quests: latest.current.quests,
   });
 
   useEffect(() => {
@@ -705,7 +715,7 @@ export function TownCanvas({
   useEffect(() => {
     rendererRef.current?.setState(sceneState());
     scheduleAnchors();
-  }, [selectedKey, hover, completionSeenKeys, summonedKeys, calm, quests]);
+  }, [selectedKey, hover, completionSeenKeys, summonedKeys, calm]);
 
   useEffect(() => {
     scheduleAnchors();
@@ -1297,6 +1307,7 @@ export function TownCanvas({
           }}
           onFocusTarget={focusTarget}
           deskBadges={deskBadges}
+          quests={quests}
         />
       </div>
       <TownBoard model={model} observability={observability} />
@@ -1506,6 +1517,56 @@ function TownDeskBadgeLink({
   ) : null;
 }
 
+/**
+ * A quest pennant beside a seated agent: a swallowtail flag in the quest's
+ * status colour, with its progress bar when it has steps. Hover, focus or
+ * a tap shows "Quest" and its title.
+ */
+function TownQuestPennant({
+  quest,
+  agentLabel,
+  top,
+  x,
+}: {
+  quest: TownQuestMark;
+  agentLabel: string;
+  top: boolean;
+  x: number;
+}) {
+  const [open, setOpen] = useState(false);
+  const label = `Quest: ${quest.title}, ${quest.progress}`;
+  return (
+    <button
+      type="button"
+      className={`town-quest${top ? " town-quest-top" : ""}`}
+      data-status={quest.status}
+      data-open={open || undefined}
+      style={{ left: x }}
+      aria-label={`${label}, ${agentLabel}`}
+      aria-expanded={open}
+      onClick={(event) => {
+        event.stopPropagation();
+        setOpen((value) => !value);
+      }}
+      onBlur={() => setOpen(false)}
+    >
+      <span className="town-quest-flag" aria-hidden="true" />
+      {quest.total > 0 ? (
+        <span className="town-quest-bar" aria-hidden="true">
+          <i
+            style={{
+              width: `${(Math.min(quest.done, quest.total) / quest.total) * 100}%`,
+            }}
+          />
+        </span>
+      ) : null}
+      <span className="town-quest-label" aria-hidden="true">
+        <b>Quest</b> {quest.title} <small>{quest.progress}</small>
+      </span>
+    </button>
+  );
+}
+
 const TownWorldLayer = memo(function TownWorldLayer({
   model,
   layout,
@@ -1520,12 +1581,15 @@ const TownWorldLayer = memo(function TownWorldLayer({
   visible,
   onHoverEntry,
   deskBadges,
+  quests,
 }: {
   model: TownModel;
   layout: TownLayout;
   visible: TownVisible;
   /** Pull request or ticket chips for desks (World sources). */
   deskBadges: ReadonlyMap<string, TownDeskBadge>;
+  /** Quests by agent key, as pennants at their seats. */
+  quests: ReadonlyMap<string, TownQuestMark>;
   onHoverEntry(key: string | null, rect?: DOMRect): void;
   selectedKey: string | null;
   blockedSince: ReadonlyMap<string, number>;
@@ -1750,15 +1814,27 @@ const TownWorldLayer = memo(function TownWorldLayer({
                             ) : null}
                             {townDeskSlots(cell.seats).map((slot, seat) => {
                               const device = desk.paneDevices[seat];
+                              const quest = device?.agentKey
+                                ? quests.get(device.agentKey)
+                                : undefined;
                               return device ? (
-                                <span
-                                  key={device.key}
-                                  aria-hidden="true"
-                                  className={`town-seat-tag${slot.top ? " town-seat-tag-top" : ""}${device.agentKey ? "" : " town-seat-tag-shell"}`}
-                                  style={{ left: slot.chairX + 7 }}
-                                >
-                                  {device.displayLabel}
-                                </span>
+                                <Fragment key={device.key}>
+                                  <span
+                                    aria-hidden="true"
+                                    className={`town-seat-tag${slot.top ? " town-seat-tag-top" : ""}${device.agentKey ? "" : " town-seat-tag-shell"}`}
+                                    style={{ left: slot.chairX + 7 }}
+                                  >
+                                    {device.displayLabel}
+                                  </span>
+                                  {quest ? (
+                                    <TownQuestPennant
+                                      quest={quest}
+                                      agentLabel={device.displayLabel}
+                                      top={slot.top}
+                                      x={slot.chairX + 7}
+                                    />
+                                  ) : null}
+                                </Fragment>
                               ) : null;
                             })}
                           </div>

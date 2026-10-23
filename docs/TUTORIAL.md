@@ -142,9 +142,10 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    **Terminal**; that tap also brings the agent back and, like the chat, does
    not mark its work reviewed.
    Zoom into a room: an agent with a quest (its own todo list, plan, Codex goal
-   or `/loop`) shows a flag and progress bar at its seat. Open its chat to
-   read the quest log above the conversation: each objective as pending,
-   active, done or blocked.
+   or `/loop`) shows a swallowtail pennant beside its seat, with a progress
+   bar when the quest has steps; tap the pennant to see **Quest** and its
+   title. Open its chat to read the quest log above the conversation: each
+   objective as pending, active, done or blocked.
 5. Read the question before using an answer button: it sends the offered key to
    that live pane. When no supported choices appear, use **Open chat** to reply
    in the agent's window, or **Open terminal** in the card's header (or the

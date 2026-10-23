@@ -1,6 +1,5 @@
 import { requestAgentLaunch } from "./agentProfiles";
 import { questMark, useAgentQuests } from "./agentQuests";
-import type { TownQuestMark } from "./town/townSprites";
 import {
   useCreationProgress,
   creationPendingReason,
@@ -34,7 +33,7 @@ import {
   useStoreSelector,
 } from "../store";
 import { WORLD_OBSERVABILITY_UPDATED_EVENT } from "../workspaceResource";
-import { TownCanvas } from "./town/TownCanvas";
+import { TownCanvas, type TownQuestMark } from "./town/TownCanvas";
 import { townDeskColorTarget } from "./town/townModel";
 import { resolveTerminal, type TerminalColor } from "./terminalColor";
 import { setTerminalColor, useTerminalColors } from "./useTerminalColors";
