@@ -99,6 +99,14 @@ const emptyDocument = (): BoardDocument => ({
   strings: [],
 });
 let saved: BoardDocument = emptyDocument();
+// `?colors=demo` (for screenshots) starts with chosen workspace and host colours.
+if (params.get("colors") === "demo")
+  saved.layout.colors = {
+    "studio:w1": "teal",
+    "studio:w2": "pink",
+    "@host:studio": "purple",
+    "@host:build-box": "orange",
+  };
 function apply(ops: BoardOp[]) {
   const next = structuredClone(saved);
   for (const op of ops) {

@@ -261,6 +261,14 @@ let boardDocument: BoardDocument = {
   notes: [],
   strings: [],
 };
+// `?colors=demo` (for screenshots) starts with chosen room and host colours.
+if (params.get("colors") === "demo")
+  boardDocument.layout.colors = {
+    "local:local-orbit": "teal",
+    "local:local-harbor": "pink",
+    "@host:local": "purple",
+    "@host:build": "orange",
+  };
 const bridgeCall = bridge.call.bind(bridge);
 (bridge as unknown as { call: typeof bridge.call }).call = (async (
   method: string,
@@ -1014,76 +1022,6 @@ async function run() {
   );
   check(selected.length === 0, "a room tap must not open an Inspector");
 
-  // A room takes its workspace's colour, chosen beside its name; a building
-  // takes its host's, chosen on its reception board. Both are saved with the
-  // terminal colours, and a room's carpet shows its colour.
-  {
-    const pick = async (trigger: HTMLButtonElement, color: string) => {
-      trigger.click();
-      await waitFor(
-        () =>
-          document.querySelector(
-            `.color-swatch-popover [aria-label="Colour ${color}"]`,
-          ) !== null,
-        `${trigger.getAttribute("aria-label")} did not open the palette`,
-      );
-      document
-        .querySelector<HTMLButtonElement>(
-          `.color-swatch-popover [aria-label="Colour ${color}"]`,
-        )!
-        .click();
-    };
-    const roomSwatch = host.querySelector<HTMLButtonElement>(
-      'button[aria-label^="Colour of room "]',
-    );
-    check(roomSwatch !== null, "a room offers its colour beside its name");
-    if (roomSwatch) {
-      await pick(roomSwatch, "teal");
-      await waitFor(
-        () => Object.values(boardDocument.layout.colors ?? {}).includes("teal"),
-        "choosing a room colour did not save it",
-      );
-      const [key] = Object.entries(boardDocument.layout.colors ?? {}).find(
-        ([, color]) => color === "teal",
-      )!;
-      check(
-        /^[^@:][^:]*:[^:]+$/.test(key) && !key.includes(":tab:"),
-        `a room colour is saved under its workspace's card key (${key})`,
-      );
-      const card = roomSwatch
-        .closest(".town-room")!
-        .querySelector<HTMLElement>(".town-room-card");
-      await waitFor(
-        () =>
-          host
-            .querySelector<HTMLButtonElement>(
-              'button[aria-label^="Colour of room "]',
-            )
-            ?.getAttribute("aria-label")
-            ?.endsWith(": teal") === true,
-        "the room's swatch does not show its new colour",
-      );
-      check(
-        !card || card.style.getPropertyValue("--carpet") !== "",
-        "the room card has a carpet colour",
-      );
-    }
-    const buildingSwatch = host.querySelector<HTMLButtonElement>(
-      'button[aria-label$="\'s building"], button[aria-label*="\'s building:"]',
-    );
-    check(buildingSwatch !== null, "a building offers its colour on reception");
-    if (buildingSwatch) {
-      await pick(buildingSwatch, "pink");
-      await waitFor(
-        () =>
-          Object.entries(boardDocument.layout.colors ?? {}).some(
-            ([key, color]) => key.startsWith("@host:") && color === "pink",
-          ),
-        "choosing a building colour did not save it under its host",
-      );
-    }
-  }
-
   // From the keyboard, M on a desk lists the host's other rooms; choosing one
   // asks the service to move that desk there.
   const deskTarget = [
@@ -1408,6 +1346,76 @@ async function run() {
     diagnostics.lastError === null,
     `renderer error: ${diagnostics.lastError}`,
   );
+
+  // Last, as picking moves focus and the camera: a room takes its workspace's colour, chosen beside its name; a building
+  // takes its host's, chosen on its reception board. Both are saved with the
+  // terminal colours, and a room's carpet shows its colour.
+  {
+    const pick = async (trigger: HTMLButtonElement, color: string) => {
+      trigger.click();
+      await waitFor(
+        () =>
+          document.querySelector(
+            `.color-swatch-popover [aria-label="Colour ${color}"]`,
+          ) !== null,
+        `${trigger.getAttribute("aria-label")} did not open the palette`,
+      );
+      document
+        .querySelector<HTMLButtonElement>(
+          `.color-swatch-popover [aria-label="Colour ${color}"]`,
+        )!
+        .click();
+    };
+    const roomSwatch = host.querySelector<HTMLButtonElement>(
+      'button[aria-label^="Colour of room "]',
+    );
+    check(roomSwatch !== null, "a room offers its colour beside its name");
+    if (roomSwatch) {
+      await pick(roomSwatch, "teal");
+      await waitFor(
+        () => Object.values(boardDocument.layout.colors ?? {}).includes("teal"),
+        "choosing a room colour did not save it",
+      );
+      const [key] = Object.entries(boardDocument.layout.colors ?? {}).find(
+        ([, color]) => color === "teal",
+      )!;
+      check(
+        /^[^@:][^:]*:[^:]+$/.test(key) && !key.includes(":tab:"),
+        `a room colour is saved under its workspace's card key (${key})`,
+      );
+      const card = roomSwatch
+        .closest(".town-room")!
+        .querySelector<HTMLElement>(".town-room-card");
+      await waitFor(
+        () =>
+          host
+            .querySelector<HTMLButtonElement>(
+              'button[aria-label^="Colour of room "]',
+            )
+            ?.getAttribute("aria-label")
+            ?.endsWith(": teal") === true,
+        "the room's swatch does not show its new colour",
+      );
+      check(
+        !card || card.style.getPropertyValue("--carpet") !== "",
+        "the room card has a carpet colour",
+      );
+    }
+    const buildingSwatch = host.querySelector<HTMLButtonElement>(
+      'button[aria-label$="\'s building"], button[aria-label*="\'s building:"]',
+    );
+    check(buildingSwatch !== null, "a building offers its colour on reception");
+    if (buildingSwatch) {
+      await pick(buildingSwatch, "pink");
+      await waitFor(
+        () =>
+          Object.entries(boardDocument.layout.colors ?? {}).some(
+            ([key, color]) => key.startsWith("@host:") && color === "pink",
+          ),
+        "choosing a building colour did not save it under its host",
+      );
+    }
+  }
 
   // StrictMode mounts twice; exactly one renderer and canvas must survive.
   check(
