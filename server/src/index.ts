@@ -44,6 +44,7 @@ import { readGuiSettings, updateGuiSettings } from "./config/gui-settings";
 import { cliCommands, runCli, topLevelHelp } from "./cli";
 import { CONTINUE_TO_SERVER, defaultCliContext } from "./cli/command";
 import { runTaskSummaryCommand } from "./herdr/task-summary";
+import { stampLaunchParent } from "./herdr/spawn-stamp";
 import { runAgentCheckoutCommand } from "./herdr/agent-checkout";
 import { createWebPushService } from "./notifications/web-push";
 import { enrichIntegrationVersions } from "./herdr/integration-versions";
@@ -133,11 +134,12 @@ import {
   clientBoardOps,
   moveFollowOps,
   reconcileOps,
-  tabClosedOps,
   BoardConflictError,
   BoardStore,
   type BoardOp,
 } from "./world/board-store";
+import { afterHerdrClose } from "./world/board-closing";
+import { reconcileReadyInterest } from "./world/interest-prune";
 import {
   readPaneRecipient,
   recipientOps,
@@ -146,6 +148,8 @@ import {
 import { linkedNoteText, sendNote } from "./world/board-send";
 import { checkAnchor } from "./world/board-anchor";
 import { herdrEventName } from "./utils/herdr-events";
+import { recordSpawnClaims } from "./world/relations";
+import { moveWorkspaceIds } from "./world/move-workspace-ids";
 import { agentKinds, launchAgent } from "./agent/launch";
 import { profileLaunch } from "./agent/profile-launch";
 import { ProfileStore } from "./agent/profile-store";
@@ -520,7 +524,6 @@ const readyConnectionGenerations = new Map<string, number>();
 let worldSnapshots: WorldSnapshotService<LegacyConnectionRuntime> | null = null;
 const worldWatchlist = new WorldWatchlistRegistry();
 let boardStore: BoardStore | null = null;
-/** Opened on first use, so a World without Board never touches the file. */
 function board() {
   boardStore ??= new BoardStore(undefined, {
     log: (message) => console.warn(message),
@@ -541,60 +544,6 @@ function publishProfilesChanged(revision: number) {
     control: { type: "world_profiles_changed", revision },
   });
   for (const ws of clients) safeSend(ws, line, "world-profiles");
-}
-
-/**
- * A tab Herdr closed on the current runtime loses its saved colour, so colours
- * of closed tabs do not accumulate. The tab's plain key could also be an older
- * Herdr workspace's ID; it goes only once Herdr says no such workspace exists.
- */
-/** The host's workspace IDs after a move, with both rooms of the move. */
-async function moveWorkspaceIds(
-  call: (method: string, params: Record<string, unknown>) => Promise<unknown>,
-  moved: { workspace_id: string; source_workspace_id?: string },
-) {
-  const ids = new Set([moved.workspace_id]);
-  if (moved.source_workspace_id) ids.add(moved.source_workspace_id);
-  try {
-    const listed = (await call("workspace.list", {})) as {
-      workspaces?: { workspace_id?: unknown }[];
-    };
-    for (const entry of listed?.workspaces ?? [])
-      if (typeof entry.workspace_id === "string") ids.add(entry.workspace_id);
-  } catch {
-    // The two rooms of the move are what a colliding tab key usually needs.
-  }
-  return ids;
-}
-
-async function dropClosedTabSettings(
-  connectionId: string,
-  tabId: string,
-  call: (method: string, params: Record<string, unknown>) => Promise<unknown>,
-  isCurrent: () => boolean,
-) {
-  try {
-    const { colors, desk_pins: pins } = board().get().layout;
-    const saved = (key: string) => Boolean(colors[key] || pins[key]);
-    const plain = saved(`${connectionId}:${tabId}`);
-    if (!plain && !saved(`${connectionId}:tab:${tabId}`)) return;
-    const absent =
-      plain &&
-      (
-        await checkAnchor(call, {
-          kind: "workspace",
-          native_id: tabId,
-          isCurrent,
-        })
-      ).state === "absent";
-    if (!isCurrent()) return;
-    const ops = tabClosedOps(board().get(), connectionId, tabId, absent);
-    if (ops.length) publishBoardChanged(board().patch(ops).revision);
-  } catch (error) {
-    logger.warn("Board could not drop a closed tab's colour or pin", {
-      detail: String(error),
-    });
-  }
 }
 
 /**
@@ -700,6 +649,11 @@ const connectionManager = new ConnectionManager<LegacyConnectionRuntime>(
       return;
     }
     if (status.state !== "ready") return;
+    void reconcileReadyInterest(
+      board(),
+      connectionManager.readyRuntimeLease(status.id),
+      publishBoardChanged,
+    );
     resumeAssistantIfLoaded();
     if (reporter.recovered(fields)) {
       readyConnectionGenerations.set(status.id, status.generation);
@@ -869,17 +823,18 @@ function runtimeFactoryForProfile(
         onEvent: (event, eventIdentity) => {
           if (!context.isCurrent()) return;
           publishWorldInvalidation(eventIdentity.id, context.generation);
-          const closedTab =
-            herdrEventName(event)?.replaceAll("_", ".") === "tab.closed"
-              ? (event as { data?: { tab_id?: unknown } }).data?.tab_id
-              : undefined;
-          if (typeof closedTab === "string" && closedTab)
-            void dropClosedTabSettings(
-              eventIdentity.id,
-              closedTab,
-              (rpc, rpcParams) => runtime.herdr.call(rpc, rpcParams, 10_000),
-              context.isCurrent,
-            );
+          afterHerdrClose(
+            board(),
+            eventIdentity.id,
+            herdrEventName(event),
+            event,
+            {
+              call: (rpc, rpcParams) =>
+                runtime.herdr.call(rpc, rpcParams, 10_000),
+              isCurrent: context.isCurrent,
+              changed: publishBoardChanged,
+            },
+          );
           logger.debug("Herdr event", {
             connection: eventIdentity.id,
             detail: summarizeHerdrEvent(event),
@@ -1233,9 +1188,11 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
         req.accept_world_snapshot_chunk_admission === true
       )
         transfer = snapshotAdmission.open(ws, id);
+      const snapshot = await snapshots.snapshot(params);
+      recordSpawnClaims(board(), snapshot, publishBoardChanged, logger);
       await sendWorldSnapshotReply(
         id,
-        await snapshots.snapshot(params),
+        snapshot,
         req.accept_world_snapshot_chunks === true,
         (payload) => safeSend(ws, payload, "world-snapshot"),
         () => clients.has(ws),
@@ -1698,6 +1655,14 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
           });
         }
       }
+      // A Board note's agent spawned this one: stamp it so World groups them.
+      if (result.pane_id && requestIsCurrent())
+        await stampLaunchParent(
+          (rpc, rpcParams) => herdr.call(rpc, rpcParams, 10_000),
+          p,
+          result.pane_id,
+          logger,
+        );
       sendReply({ id, result }, method);
     } catch (error) {
       sendError(`${method}-error`, error);
@@ -1839,6 +1804,7 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
                     ? {
                         before: colorsBefore,
                         workspaceIds: await moveWorkspaceIds(call, result),
+                        inherited: p.inherited_color === true,
                       }
                     : undefined,
                 )

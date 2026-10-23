@@ -121,6 +121,19 @@ import type { WorldCanvasAnchor } from "./worldConnectorGeometry";
 import { worldMotionPreference } from "./worldFrameScheduler";
 import type { WorldAgentStatus, WorldObject } from "./worldObject";
 import "./board/board.css";
+import "./board/boardRelations.css";
+import {
+  relationTeams,
+  terminalKey,
+  type TerminalRef,
+} from "../../../shared/relations";
+import { inheritedColorKey } from "../../../shared/terminalColor";
+import {
+  groupTerminals,
+  ungroupTerminals,
+  useRelations,
+  withInheritedColors,
+} from "./relations";
 
 /**
  * Board: hosts as zones, workspaces as cards and tabs as cards around their
@@ -264,6 +277,7 @@ async function startAgentThroughService(
   kind: string,
   name: string,
   text: string,
+  parent?: { paneId: string; terminalId?: string },
 ) {
   // The shared launcher (agent/launch.ts), as Town and Spaces use.
   const profileId = kind.startsWith(PROFILE_CHOICE)
@@ -276,7 +290,13 @@ async function startAgentThroughService(
       workspaceId: space.nativeId,
       workspaceLabel: space.label,
     },
-    { profileId, kind: profileId ? undefined : kind, label: name, text },
+    {
+      profileId,
+      kind: profileId ? undefined : kind,
+      label: name,
+      text,
+      parent,
+    },
   )) as StartOutcome;
 }
 function startLabel(kind: string) {
@@ -286,6 +306,7 @@ function startLabel(kind: string) {
 }
 /** Until the host answers, the kinds every Herdr World release has offered. */
 const FALLBACK_KINDS = ["claude", "codex"];
+const NO_CARD_COLORS: Readonly<Record<string, CardColor>> = {};
 async function checkAnchorThroughService(host: BoardHost, anchor: BoardAnchor) {
   const { bridge } = await import("../api");
   return (await bridge
@@ -448,6 +469,8 @@ export default function BoardView({
     kind: string,
     name: string,
     text: string,
+    /** The pane that spawns it, stamped on the new pane (spawned_by). */
+    parent?: { paneId: string; terminalId?: string },
   ) => Promise<StartOutcome>;
   /** Nodes with an open Inspector window, so World can draw their lines. */
   conversationNodeIds?: readonly string[];
@@ -486,6 +509,7 @@ export default function BoardView({
     return () => boardStore.stop();
   }, [boardStore]);
   const { document: saved } = useBoardDocument(boardStore);
+  const related = useRelations(world, boardStore);
   const [editing, setEditing] = useState<string | null>(null);
   /** The text being typed into a note, kept apart from the saved notes. */
   const draftRef = useRef<{ started: BoardNote; text: string } | null>(null);
@@ -500,6 +524,8 @@ export default function BoardView({
   const [noteSelected, setNoteSelected] = useState<string | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
   const [stringFrom, setStringFrom] = useState<StringEnd | null>(null);
+  /** A tab card waiting for the card it groups with (Group in its bar). */
+  const [groupFrom, setGroupFrom] = useState<string | null>(null);
   const [trayOpen, setTrayOpen] = useState(false);
   /** The note an agent is being started for, while the chooser is open. */
   const [startFor, setStartFor] = useState<string | null>(null);
@@ -615,6 +641,10 @@ export default function BoardView({
   const fitted = useRef(false);
   const farRef = useRef(far);
   const yarnEls = useRef(new Map<string, SVGPathElement[]>());
+  /** Strings between cards whose terminals know each other (relations). */
+  const relationEls = useRef(new Map<string, SVGPathElement>());
+  /** The tab card a held tab would group with on release. */
+  const teammate = useRef<string | null>(null);
   const cutRef = useRef<HTMLButtonElement>(null);
   /** The note or card bar, and the card it rides above. */
   const barRef = useRef<HTMLDivElement>(null);
@@ -651,6 +681,8 @@ export default function BoardView({
     saved,
     picked,
     noteSelected,
+    related,
+    groupFrom,
   });
   latest.current = {
     model,
@@ -660,6 +692,8 @@ export default function BoardView({
     saved,
     picked,
     noteSelected,
+    related,
+    groupFrom,
   };
 
   const kindOf = (key: string, m: BoardModel) =>
@@ -1548,6 +1582,51 @@ export default function BoardView({
         for (const el of pair) el.remove();
         yarnEls.current.delete(id);
       }
+    const { relations, places } = latest.current.related;
+    const drawn = new Set<string>();
+    for (const relation of relations) {
+      const ends = [relation.a, relation.b].map((ref) => {
+        const place = places.get(terminalKey(ref));
+        return place
+          ? pointOf(
+              {
+                anchor: {
+                  connection_id: ref.connection_id,
+                  kind: "pane",
+                  native_id: place.paneId,
+                  witness: [ref.terminal_id],
+                },
+              },
+              m,
+            )
+          : null;
+      });
+      const [a, b] = ends;
+      if (!a || !b || (a.at.x === b.at.x && a.at.y === b.at.y)) continue;
+      drawn.add(relation.key);
+      let line = relationEls.current.get(relation.key);
+      if (line && line.ownerSVGElement !== svg) line = undefined;
+      if (!line) {
+        line = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        line.dataset.relation = relation.key;
+        svg.prepend(line);
+        relationEls.current.set(relation.key, line);
+      }
+      const spawned = relation.evidence.some(
+        (entry) => entry.kind === "spawned",
+      );
+      line.dataset.kind = spawned ? "spawned" : "manual";
+      line.setAttribute(
+        "class",
+        `board-yarn board-relation${relation.strength && a.firm && b.firm ? "" : " board-yarn-loose"}`,
+      );
+      setAttr(line, "d", sag(a.at, b.at).d);
+    }
+    for (const [key, line] of relationEls.current)
+      if (!drawn.has(key)) {
+        line.remove();
+        relationEls.current.delete(key);
+      }
     const d = stringDrag.current;
     if (d) {
       const from = pointOf(endFor(d.from, m) ?? { note: "" }, m) ?? {
@@ -1598,7 +1677,7 @@ export default function BoardView({
   }
   useEffect(() => {
     invalidate("change");
-  }, [saved, picked]);
+  }, [saved, picked, related]);
 
   /** The saved end for a card (or a pane in it), or null for an unknown card. */
   function endFor(end: StringEnd, m: BoardModel): BoardEnd | null {
@@ -1916,6 +1995,32 @@ export default function BoardView({
     warmUp();
     const tab = latest.current.model.tabByKey.get(h.key);
     if (!tab) return;
+    // Over another tab card it glows, and a drop there groups the two. No
+    // dwell as in Town: Board's elastic cards slide away from a resting one,
+    // and they do not overlap unless dragged onto each other.
+    const over = document
+      .elementsFromPoint(screen.x, screen.y)
+      .map((el) => (el as HTMLElement).closest?.<HTMLElement>(".board-card"))
+      .find((el) => el?.dataset.key && el.dataset.key !== h.key)?.dataset.key;
+    const mate =
+      over &&
+      latest.current.model.tabByKey.get(over)?.hostKey === tab.hostKey &&
+      !sameTeam(h.key, over)
+        ? over
+        : null;
+    if (mate !== teammate.current) {
+      if (teammate.current)
+        cardEls.current.get(teammate.current)?.classList.remove("board-glue");
+      if (mate) cardEls.current.get(mate)?.classList.add("board-glue");
+      cardEls.current.get(h.key)?.classList.toggle("board-gluing", !!mate);
+      teammate.current = mate;
+    }
+    if (teammate.current) {
+      if (glue.current)
+        cardEls.current.get(glue.current)?.classList.remove("board-glue");
+      glue.current = null;
+      return;
+    }
     const under = document
       .elementsFromPoint(screen.x, screen.y)
       .map((el) =>
@@ -1962,6 +2067,23 @@ export default function BoardView({
       invalidate("note");
       return;
     }
+    if (teammate.current) {
+      const mate = teammate.current;
+      cardEls.current.get(mate)?.classList.remove("board-glue");
+      cardEls.current.get(h.key)?.classList.remove("board-gluing");
+      teammate.current = null;
+      // Snap beside the teammate and stay there.
+      const other = cards.current.get(mate);
+      if (other) {
+        card.x =
+          other.x + (sizeOf(mate, "tab").w + sizeOf(h.key, "tab").w) / 2 + 24;
+        card.y = other.y;
+      }
+      keepWhereItIs(h.key, m);
+      warmUp();
+      void groupCards(h.key, mate);
+      return;
+    }
     if (glue.current) {
       const workspaceKey = glue.current;
       cardEls.current.get(workspaceKey)?.classList.remove("board-glue");
@@ -1991,10 +2113,21 @@ export default function BoardView({
       setPicked(null);
       setNoteSelected(null);
       setStringFrom(null);
+      setGroupFrom(null);
       return;
     }
     if (target.kind !== "card") return;
     setPicked(null);
+    if (groupFrom) {
+      setGroupFrom(null);
+      const from = m.tabByKey.get(groupFrom);
+      const to = m.tabByKey.get(target.key);
+      if (from && to && from.key !== to.key) {
+        if (from.hostKey === to.hostKey) void groupCards(from.key, to.key);
+        else setToast({ text: "Tabs group only within one host" });
+        return;
+      }
+    }
     if (stringFrom) {
       finishString(stringFrom, {
         cardKey: target.key,
@@ -2760,7 +2893,29 @@ export default function BoardView({
     const name = chosenName || noteTabName(note);
     setToast({ text: `Starting ${startLabel(kind)} in ${space.label}…` });
     try {
-      const outcome = await startAgent(space, kind, name, note.text);
+      // A note strung to one pane on this host asks that pane's agent's
+      // helper: the new agent is its child (with the terminal seen there).
+      const panes = (latest.current.saved?.strings ?? []).flatMap((entry) =>
+        entry.detached
+          ? []
+          : [entry.from, entry.to].flatMap((end, index, ends) =>
+              "anchor" in end &&
+              end.anchor.kind === "pane" &&
+              end.anchor.connection_id === space.connectionId &&
+              "note" in ends[1 - index]! &&
+              (ends[1 - index] as { note: string }).note === note.id
+                ? [end.anchor]
+                : [],
+            ),
+      );
+      const only =
+        new Set(panes.map((anchor) => anchor.native_id)).size === 1
+          ? panes[0]
+          : undefined;
+      const parent = only
+        ? { paneId: only.native_id, terminalId: only.witness[0] }
+        : undefined;
+      const outcome = await startAgent(space, kind, name, note.text, parent);
       // String the note to the new pane whenever one was created, so the
       // agent can be found (and sent the note later if it was not ready).
       if (outcome.pane_id && outcome.terminal_id)
@@ -2790,6 +2945,61 @@ export default function BoardView({
     } catch (error) {
       setToast({ text: `The agent may not have started: ${String(error)}` });
     }
+  };
+  /** A tab card's terminals, the identity relations use. */
+  const tabTerminals = (key: string): TerminalRef[] => {
+    const m = latest.current.model;
+    const tab = m.tabByKey.get(key);
+    const host = tab && m.hostByKey.get(tab.hostKey);
+    // Its agent first: a group holds one terminal per tab.
+    return tab && host
+      ? [...tab.panes]
+          .sort((a, b) => Number(b.isAgent) - Number(a.isAgent))
+          .slice(0, 16)
+          .map((pane) => ({
+            connection_id: host.connectionId,
+            terminal_id: pane.leaf.terminalId,
+          }))
+      : [];
+  };
+  const teamOf = (key: string) => {
+    const teams = relationTeams(latest.current.related.relations);
+    for (const ref of tabTerminals(key)) {
+      const team = teams.get(terminalKey(ref));
+      if (team) return team;
+    }
+    return null;
+  };
+  const sameTeam = (a: string, b: string) => {
+    const team = teamOf(a);
+    return team !== null && team === teamOf(b);
+  };
+  /** The tab is in a manual group the user can leave. */
+  const groupedTab = (key: string) => {
+    const refs = new Set(tabTerminals(key).map(terminalKey));
+    return (saved?.relations?.groups ?? []).some((group) =>
+      group.members.some((member) => refs.has(terminalKey(member))),
+    );
+  };
+  const groupCards = async (fromKey: string, toKey: string) => {
+    const members = tabTerminals(fromKey).slice(0, 1);
+    const target = tabTerminals(toKey).slice(0, 1);
+    if (!members.length || !target.length) return;
+    const problem = await groupTerminals(members, target, boardStore);
+    const m = latest.current.model;
+    setToast({
+      text: problem
+        ? `Not grouped: ${problem}`
+        : `${m.tabByKey.get(fromKey)?.label ?? "Tab"} grouped with ${m.tabByKey.get(toKey)?.label ?? "tab"}`,
+    });
+  };
+  const ungroupCard = async (key: string) => {
+    const problem = await ungroupTerminals(tabTerminals(key), boardStore);
+    setToast({
+      text: problem
+        ? `Still grouped: ${problem}`
+        : `${latest.current.model.tabByKey.get(key)?.label ?? "Tab"} left its group`,
+    });
   };
   const cutString = (id: string) => {
     setPicked(null);
@@ -2881,9 +3091,14 @@ export default function BoardView({
    * Colours the user chose. A tab is a terminal and always has its terminal
    * colour (terminalColor.ts): its own, its workspace's, or the default.
    */
-  const cardColors = saved?.layout.colors ?? {};
+  const cardColors = saved?.layout.colors ?? NO_CARD_COLORS;
+  const shownColors = useMemo(
+    () => withInheritedColors(cardColors, related.relations, related.places),
+    [cardColors, related],
+  );
   const tabColor = (tab: BoardTab) =>
     cardColors[tab.key] ??
+    shownColors[inheritedColorKey(tab.key)] ??
     cardColors[tab.workspaceKey] ??
     defaultTerminalColor(tab.key);
   /** The workspace or tab whose colour the bar changes. */
@@ -2892,6 +3107,10 @@ export default function BoardView({
     [...selectedKeys].find((key) => model.workspaceByKey.has(key)) ??
     null;
   barKey.current = noteSelected ? NOTE_PREFIX + noteSelected : colorKey;
+  // A pending Group… belongs to the tab whose bar offered it.
+  useEffect(() => {
+    if (groupFrom && groupFrom !== colorKey) setGroupFrom(null);
+  }, [colorKey, groupFrom]);
   useEffect(() => {
     invalidate("bar");
   }, [noteSelected, colorKey]);
@@ -3596,6 +3815,19 @@ export default function BoardView({
                 model.tabByKey.has(colorKey) ? "Default colour" : "No colour"
               }
               onColor={(color) => setCardColor(colorKey, color)}
+              team={
+                model.tabByKey.has(colorKey)
+                  ? {
+                      grouped: groupedTab(colorKey),
+                      waiting: groupFrom === colorKey,
+                      onGroup: () => {
+                        setGroupFrom(colorKey);
+                        setToast({ text: "Tap the card to group with" });
+                      },
+                      onUngroup: () => void ungroupCard(colorKey),
+                    }
+                  : undefined
+              }
               pinned={pinnedKeys.has(colorKey)}
               onPin={() => togglePin(colorKey)}
             />
@@ -4194,6 +4426,7 @@ function CardBar({
   color,
   resetLabel,
   onColor,
+  team,
   pinned,
   onPin,
 }: {
@@ -4201,6 +4434,13 @@ function CardBar({
   color: CardColor | null;
   resetLabel: string;
   onColor(color: CardColor | null): void;
+  /** For a tab: group it with another card, or take it out of its group. */
+  team?: {
+    grouped: boolean;
+    waiting: boolean;
+    onGroup(): void;
+    onUngroup(): void;
+  };
   pinned: boolean;
   onPin(): void;
 }) {
@@ -4228,6 +4468,15 @@ function CardBar({
       >
         {resetLabel}
       </button>
+      {team ? (
+        <button
+          type="button"
+          aria-pressed={team.waiting}
+          onClick={team.grouped ? team.onUngroup : team.onGroup}
+        >
+          {team.grouped ? "Ungroup" : "Group…"}
+        </button>
+      ) : null}
       <button
         type="button"
         className="board-pin-toggle"
