@@ -332,6 +332,37 @@ counters, caps response size and model rows, and does not estimate missing price
 Provider failure appears as degraded or unavailable Economy data; connections,
 topology, terminal conversations and Inspector operations continue normally.
 
+## Built-in sources: GitHub and Jira
+
+World shows your pull requests and tickets on Board's Work lens and as desk
+badges in Town. Both sources ship with World and are on by default; switch
+either off in **Settings → Sources**. Each is read only while a visible browser
+tab shows it, at most once a minute, and a failed refresh keeps the last items.
+Requests answer within two seconds with what World has while a slow `gh`,
+Jira or SSH lookup finishes in the background.
+
+- **GitHub** runs `gh` as the service user. Install the
+  [GitHub CLI](https://cli.github.com/) for that user and run `gh auth login`
+  (for a user service, the same account the service runs as). Until then the
+  source says **Sign in with gh auth login**. World stores no GitHub token.
+- **Jira Cloud** needs your site (`example.atlassian.net`), account email and an
+  [API token](https://id.atlassian.com/manage-profile/security/api-tokens),
+  entered in **Settings → Sources**. The site and email are saved in
+  `settings.json` (`custom.world_sources`); the token is saved in an owner-only
+  `source-secrets.json` (or `source-secrets-<hash>.json` beside a custom
+  `HERDR_WORLD_SETTINGS_PATH`) in World's data directory and is never sent to the
+  browser. Changing the site or email removes the saved token. The filter defaults to `(assignee = currentUser() OR watcher =
+  currentUser()) AND (statusCategory != Done OR updated >= -7d) ORDER BY updated DESC`;
+  up to 100 tickets are read.
+
+To link a pull request to an agent, World reads the branch and GitHub remotes
+of the agent's checkout: its reported checkout (`herdr-world agent-checkout`),
+else its pane's directory, else its workspace's worktree. It runs `git` locally
+for local profiles and over the profile's SSH destination for SSH profiles;
+Windows hosts are not read. At most 32 checkouts are read per refresh and each
+is cached for two minutes. A pull request an agent reports with `--pr` links
+directly.
+
 ## Herdr plugin
 
 The plugin ID is `ivoryheart.herdr-world`. For an unreleased checkout, build the

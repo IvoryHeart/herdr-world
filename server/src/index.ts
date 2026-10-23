@@ -150,6 +150,14 @@ import {
 } from "./world/observability-http";
 import { OfficeObservabilityService } from "./world/observability";
 import {
+  createSourcesHttpHandler,
+  storedSourceSettings,
+  withSourceSettings,
+} from "./sources/http";
+import { SourcesService } from "./sources/service";
+import { CheckoutResolver } from "./sources/links";
+import { readSourceSecrets, writeSourceSecrets } from "./sources/secrets";
+import {
   removeWorktreeWithRecovery,
   WORKTREE_REMOVE_TIMEOUT_MS,
 } from "./worktree/remove";
@@ -904,6 +912,51 @@ const connectionProfiles = new ConnectionProfileService({
   bootstrap: connectionBootstrap,
   createRuntime: runtimeFactoryForProfile,
 });
+
+// Built-in sources (GitHub, Jira). On by default; each runs only while a
+// browser asks and keeps its credentials in private service storage.
+const runSourceProcess = async (argv: string[], timeoutMs: number) => {
+  try {
+    return await runProcessWithCodeTimeout(argv, timeoutMs, {
+      env: {
+        ...process.env,
+        GH_PROMPT_DISABLED: "1",
+        GIT_TERMINAL_PROMPT: "0",
+        NO_COLOR: "1",
+      },
+    });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT")
+      return { code: 127, stdout: "", stderr: "" };
+    throw error;
+  }
+};
+const worldSources = new SourcesService({
+  settings: await readGuiSettings()
+    .then(storedSourceSettings)
+    .catch(() => ({})),
+  persistSettings: async (sources) => {
+    await updateGuiSettings((settings) =>
+      withSourceSettings(settings, sources),
+    );
+  },
+  secrets: { read: () => readSourceSecrets(), write: writeSourceSecrets },
+  run: runSourceProcess,
+  topology: async () =>
+    worldSnapshots ? (await worldSnapshots.snapshot()).connections : [],
+  resolver: new CheckoutResolver(runSourceProcess, (connectionId) => {
+    if (connectionId === STARTUP_DEFAULT_CONNECTION_ID && config.sshHost)
+      return { kind: "ssh", destination: config.sshHost };
+    const profile = connectionProfiles
+      .list()
+      .find((entry) => entry.id === connectionId);
+    if (profile?.type === "local") return { kind: "local" };
+    if (profile?.type === "ssh" && profile.remote_platform !== "windows")
+      return { kind: "ssh", destination: profile.ssh_destination };
+    return null;
+  }),
+});
+const handleWorldSources = createSourcesHttpHandler(worldSources);
 
 function notifyBrowserClientCount() {
   connectionManager.forEachCurrentRuntime((runtime) => {
@@ -2383,6 +2436,8 @@ function main() {
             url.pathname,
           );
           if (officeObservabilityResponse) return officeObservabilityResponse;
+          const sourcesResponse = await handleWorldSources(req, url.pathname);
+          if (sourcesResponse) return sourcesResponse;
           const connectionRoute = parseConnectionHttpRoute(
             requestPathname,
             req.method,
