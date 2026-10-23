@@ -15,6 +15,7 @@ import {
   type FixtureSpace,
 } from "./board/boardFixture";
 import { defaultTerminalColor } from "./terminalColor";
+import { currentBoardCardPins } from "./board/boardCardPins";
 import { worldSourcesStore } from "./worldSources";
 import "./world.css";
 
@@ -203,6 +204,14 @@ const emptyDocument = (): BoardDocument => ({
   strings: [],
 });
 let saved: BoardDocument = emptyDocument();
+// `?colors=demo` (for screenshots) starts with chosen workspace and host colours.
+if (params.get("colors") === "demo")
+  saved.layout.colors = {
+    "studio:w1": "teal",
+    "studio:w2": "pink",
+    "@host:studio": "purple",
+    "@host:build-box": "orange",
+  };
 function apply(ops: BoardOp[]) {
   const next = structuredClone(saved);
   for (const op of ops) {
@@ -1656,6 +1665,49 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
     },
   ],
   [
+    "a host's colour tints its zone and is saved under the host",
+    async () => {
+      const label = host.querySelector<HTMLElement>(
+        ".board-zone-label[data-host]",
+      )!;
+      const swatch =
+        label.querySelector<HTMLButtonElement>(".board-zone-color")!;
+      check(Boolean(swatch), "a host's zone label offers its colour");
+      swatch.click();
+      await waitFor(
+        () =>
+          document.querySelector(
+            '.color-swatch-popover [aria-label="Colour purple"]',
+          ) !== null,
+        "the host colour button did not open the palette",
+      );
+      document
+        .querySelector<HTMLButtonElement>(
+          '.color-swatch-popover [aria-label="Colour purple"]',
+        )!
+        .click();
+      await waitFor(
+        () =>
+          Object.entries(saved.layout.colors ?? {}).some(
+            ([key, color]) => key.startsWith("@host:") && color === "purple",
+          ),
+        "choosing a host colour did not save it under the host",
+      );
+      const zone = label.closest<HTMLElement>(".board-zone")!;
+      await waitFor(
+        () => zone.style.getPropertyValue("--board-zone") !== "",
+        "a host's colour does not tint its zone",
+      );
+      // Tabs keep their own colours: a host's is not inherited.
+      check(
+        !Object.keys(saved.layout.colors ?? {}).some(
+          (key) => !key.startsWith("@host:"),
+        ),
+        "choosing a host colour must not colour its workspaces or tabs",
+      );
+    },
+  ],
+  [
     "colours",
     async () => {
       // Colours: the user picks a tab or workspace colour; status keeps its own.
@@ -1760,6 +1812,66 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         await waitFor(
           () => !saved.layout.colors?.[tabKey],
           "Default colour clears it",
+        );
+        // Pin: the card stays where it is through Tidy, with a badge.
+        const pinButton = () =>
+          host.querySelector<HTMLButtonElement>(
+            '[aria-label="Colour of review"] .board-pin-toggle',
+          )!;
+        check(!card(tabKey)!.querySelector(".board-pin"), "no badge unpinned");
+        pinButton().click();
+        await waitFor(
+          () => Boolean(saved.layout.pinned[tabKey]),
+          "the pin is saved",
+        );
+        check(
+          Boolean(
+            card(tabKey)!.querySelector('.board-pin[aria-label="Pinned"]'),
+          ) && pinButton().getAttribute("aria-pressed") === "true",
+          "a pinned card shows its badge and the bar says Unpin",
+        );
+        // Push the pinned card's neighbour onto it, then tidy its workspace:
+        // auto-layout moves the others, never the pinned card.
+        const pinnedAt = at(tabKey)!;
+        host
+          .querySelector<HTMLButtonElement>(
+            '[aria-label="Tidy this workspace\'s tabs"], [aria-label="Tidy the board"]',
+          )!
+          .click();
+        await rest();
+        {
+          const now = at(tabKey)!;
+          check(
+            Math.hypot(now.x - pinnedAt.x, now.y - pinnedAt.y) < 2,
+            "Tidy leaves a pinned card where it is",
+          );
+        }
+        pinButton().click();
+        await waitFor(
+          () => !saved.layout.pinned[tabKey],
+          "Unpin removes the pin",
+        );
+        check(!card(tabKey)!.querySelector(".board-pin"), "unpinned, no badge");
+        // A phone's full-screen terminal pins the card from its header,
+        // through what Board publishes for it.
+        check(
+          !currentBoardCardPins().pinned.has(tabKey),
+          "Board publishes the card unpinned",
+        );
+        currentBoardCardPins().toggle!(tabKey);
+        await waitFor(
+          () =>
+            Boolean(saved.layout.pinned[tabKey]) &&
+            currentBoardCardPins().pinned.has(tabKey) &&
+            Boolean(card(tabKey)!.querySelector(".board-pin")),
+          "the window header pins the card",
+        );
+        currentBoardCardPins().toggle!(tabKey);
+        await waitFor(
+          () =>
+            !saved.layout.pinned[tabKey] &&
+            !currentBoardCardPins().pinned.has(tabKey),
+          "the window header unpins it",
         );
         mount(2, world, null);
         await settle(50);

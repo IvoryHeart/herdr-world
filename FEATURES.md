@@ -79,6 +79,18 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     with more than 127 tabs keeps its three newest and busiest tables and
     hides idle ones first. Town asks Herdr to move the tab and
     shows the new order when Herdr reports it; agents stay with their table.
+  - **Pin a desk** from its agent window's **⋯** menu (**Pin desk in Town**),
+    on a phone too. A
+    pinned table wears a pin and keeps its place: tab reorders, a room growing
+    or Town's own placement leave it, and it cannot be dragged until you unpin
+    it (other tables fill the free places in tab order). In a room with more
+    tabs than Town shows, pinned tables (and their agents) are always shown, before the newest and busiest. Its agents stay at it:
+    they never go to the lounge, leave only to wait at reception (blocked, or
+    finished and not yet seen) and walk straight back once you have seen them.
+    The pin is a World view setting, saved on the World service beside
+    terminal colours, so every device sees it; Herdr is unchanged, and
+    Spaces' tab pins (close protection in this browser) are separate. A pin
+    follows its tab when the tab moves to another room and goes when it closes.
   - Cached failed-host buildings stay stale and non-actionable. Search and Hosts
     use the shared aggregate. Reception and lounge positions only show status;
     only an explicit move changes Herdr's layout, always within one host.
@@ -124,6 +136,13 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   colour with **Default colour** the same way. Herdr has no tab colour, so the World service
   saves the choice keyed by host and Herdr tab ID, the same on every device. A
   closed tab's saved colour is dropped.
+  - Workspaces and hosts have colours too. A workspace's colour is its Town
+    room's carpet (swatch beside the room's name), its Board card and a dot in
+    the Spaces sidebar (its menu offers the palette); its tabs without a colour
+    of their own take it. A host's colour is its Town building's roof (swatch on
+    its reception board), its Board zone (swatch on the zone label) and its
+    Spaces header; it is not passed on to tabs. **Default colour** returns a
+    place to its own default.
   - A desk moved to another room keeps the colour it showed, even a default or
     its old room's, saved as its own colour: it no longer follows its room's
     colour, and **Default colour** resets it to its new tab's default.
@@ -134,6 +153,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   pans the board, as in Town) and settle within a second; workspaces fold into a count and open
   into free space; Tidy (with Undo) rearranges a workspace or the board and
   carries strung notes along. Zoomed out, workspaces show a square per pane.
+  - **Pin** in a selected card's bar keeps the card where it is: it shows a
+    pin, and placement, Tidy and settling leave it until **Unpin** (a drag
+    still moves it). On a phone, where the card's terminal covers Board, the
+    pin in the terminal's header pins its card. Pins are saved with the board
+    on the World service.
   - Tabs list each pane as a row; plain-shell tabs look like terminals; only a
     working agent's tab (or the selected one) pulses (a ⋯ setting).
   - An agent with a quest shows a ⚑ chip with its progress (such as 2/5, or

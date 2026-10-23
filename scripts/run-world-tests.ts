@@ -2,6 +2,8 @@ import { mkdtemp, rm, mkdir } from "node:fs/promises";
 import { availableParallelism, tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildWorldBrowserBundle } from "../web/src/world/testing/browserBundles";
+import { acquireCheckSlot, heldEnv } from "./check-lock";
+import { guardDiskSpace } from "./disk-guard";
 import {
   assertWorldBrowserInventory,
   selectWorldBrowserShard,
@@ -26,6 +28,7 @@ if (named.length && shard)
   throw new Error("Name World browser suites or a shard, not both");
 const files = named.length ? named : selectWorldBrowserShard(shard);
 const testArgs = args.filter((arg) => arg !== shardArg);
+guardDiskSpace("the World browser suites");
 await assertWorldBrowserInventory();
 const chrome =
   Bun.env.CHROME_BIN ||
@@ -44,6 +47,9 @@ const label = shard
   ? `shard-${shard.replace("/", "-of-")}`
   : (Bun.env.HERDR_WORLD_TEST_LABEL ?? "local");
 await mkdir(".agents/delivery", { recursive: true });
+// One World browser run per machine; under the delivery gate this process
+// already runs inside the gate's browser slot and skips the wait.
+const release = await acquireCheckSlot("browser", { lane: `world ${label}` });
 try {
   const began = performance.now();
   await buildWorldBrowserBundle("HostsFilter", directory);
@@ -81,6 +87,7 @@ try {
         CHROME_BIN: chrome,
         HERDR_WORLD_TEST_ASSETS: directory,
         HERDR_TEST_EXCLUDE_WORLD_BROWSER: "0",
+        ...heldEnv("browser"),
       },
     },
   );
@@ -95,5 +102,6 @@ try {
     process.off("SIGTERM", terminate);
   }
 } finally {
+  release();
   await rm(directory, { recursive: true, force: true });
 }

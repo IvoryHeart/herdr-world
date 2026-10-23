@@ -1,117 +1,125 @@
-import { QuestChip } from "../components/QuestLog";
-import { useAgentQuests } from "./agentQuests";
 import {
   ChevronDown,
   ChevronUp,
-  Trash2,
   EllipsisVertical,
   GitPullRequest,
   Maximize2,
   Minus,
+  Pin,
   Plus,
   Sparkles,
+  Trash2,
 } from "lucide-react";
 import {
+  type CSSProperties,
+  lazy,
+  type PointerEvent as ReactPointerEvent,
+  Suspense,
+  startTransition,
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { createPortal } from "react-dom";
+import { worldLocalStorage } from "../browserStorage";
+import { QuestChip } from "../components/QuestLog";
+import {
   harnessLabel,
+  type LauncherCatalog,
   launchAgent,
   launcherCatalog,
   openProfileEditor,
   profilesSnapshot,
   readinessNote,
   useAgentProfiles,
-  type LauncherCatalog,
 } from "./agentProfiles";
-import {
-  lazy,
-  startTransition,
-  Suspense,
-  useDeferredValue,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties,
-  type PointerEvent as ReactPointerEvent,
-} from "react";
-import { createPortal } from "react-dom";
-import { worldLocalStorage } from "../browserStorage";
+import { useAgentQuests } from "./agentQuests";
 import {
   anchorFor,
   confirmed,
   nextWitness,
   targetOf,
 } from "./board/boardAnchors";
+import { publishBoardCardPins } from "./board/boardCardPins";
 import {
-  NOTE_COLORS,
-  CARD_COLORS,
-  type CardColor,
-  sharedBoardStore,
-  useBoardDocument,
+  type BoardAnchor,
   type BoardDocumentStore,
   type BoardEnd,
-  type BoardAnchor,
   type BoardNote,
   type BoardOp,
   type BoardString,
+  CARD_COLORS,
+  type CardColor,
+  NOTE_COLORS,
+  sharedBoardStore,
+  useBoardDocument,
 } from "./board/boardDocument";
 import {
-  boardStatusOrder,
-  projectBoard,
+  createDraftStore,
+  KEPT_DRAFTS_KEY,
+  type KeptDraft,
+  useKeptDrafts,
+} from "./board/boardDrafts";
+import {
+  type GestureEffect,
+  type GestureEvent,
+  type GestureTarget,
+  HOLD_MS,
+  initialGesture,
+  stepGesture,
+  waitsForHold,
+} from "./board/boardGesture";
+import {
   type BoardHost,
   type BoardModel,
   type BoardPane,
   type BoardTab,
   type BoardWorkspace,
+  boardStatusOrder,
+  projectBoard,
 } from "./board/boardModel";
 import {
-  HOLD_MS,
-  initialGesture,
-  stepGesture,
-  waitsForHold,
-  type GestureEffect,
-  type GestureEvent,
-  type GestureTarget,
-} from "./board/boardGesture";
-import { createFrameLoop, type FrameLoop } from "./board/boardScheduler";
-import { worldMotionPreference } from "./worldFrameScheduler";
-import { DEVTOOLS, NO_TRACE } from "./devtools/flag";
-import { openTrace, rememberTrace, traceGesture } from "./devtools/trace";
-import { TraceOverlay } from "./devtools/TraceOverlay";
-import {
-  KEPT_DRAFTS_KEY,
-  createDraftStore,
-  useKeptDrafts,
-  type KeptDraft,
-} from "./board/boardDrafts";
-import {
   cool,
-  stepPhysics,
-  warm,
   type PhysicsCard,
   type PhysicsState,
+  stepPhysics,
+  warm,
 } from "./board/boardPhysics";
 import {
-  DEFAULT_SIZE,
+  type BoardLayout,
   clearSpots,
   cloneLayout,
+  DEFAULT_SIZE,
   emptyLayout,
+  type Point,
   placeNew,
   positions,
-  rectAt,
-  tidy,
-  type BoardLayout,
-  type Point,
   type Rect,
+  rectAt,
   type Size,
+  tidy,
 } from "./board/boardPlacement";
-import type { WorldAgentStatus, WorldObject } from "./worldObject";
-import type { WorldCanvasAnchor } from "./worldConnectorGeometry";
+import { createFrameLoop, type FrameLoop } from "./board/boardScheduler";
+import { BoardZoneColor } from "./board/BoardZoneColor";
+import { WorkLens } from "./board/WorkLens";
+import { DEVTOOLS, NO_TRACE } from "./devtools/flag";
+import { TraceOverlay } from "./devtools/TraceOverlay";
+import { openTrace, rememberTrace, traceGesture } from "./devtools/trace";
+import {
+  defaultTerminalColor,
+  hostColorKey,
+  placeColor,
+  TERMINAL_COLOR_HEX,
+} from "./terminalColor";
 import { WorldSearchResults } from "./WorldSearchResults";
 import { WorldViewToolbar } from "./WorldViewToolbar";
-import { defaultTerminalColor, TERMINAL_COLOR_HEX } from "./terminalColor";
-import { WorkLens } from "./board/WorkLens";
+import type { WorldCanvasAnchor } from "./worldConnectorGeometry";
+import { worldMotionPreference } from "./worldFrameScheduler";
+import type { WorldAgentStatus, WorldObject } from "./worldObject";
 import "./board/board.css";
 
 /**
@@ -518,6 +526,17 @@ export default function BoardView({
   const renderKeysRef = useRef<Set<string> | null>(null);
   const selectedKeysRef = useRef<ReadonlySet<string>>(new Set());
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+  /** Cards pinned in place (layout.pinned), for their badge and the bar. */
+  const [pinnedKeys, setPinnedKeys] = useState<ReadonlySet<string>>(new Set());
+  const togglePinRef = useRef<(key: string) => void>(() => {});
+  // A phone's full-screen terminal pins its card from its header.
+  useEffect(() => {
+    publishBoardCardPins({
+      pinned: pinnedKeys,
+      toggle: (key) => togglePinRef.current(key),
+    });
+  }, [pinnedKeys]);
+  useEffect(() => () => publishBoardCardPins(null), []);
   const [query, setQuery] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const [workOpen, setWorkOpen] = useState(false);
@@ -863,6 +882,7 @@ export default function BoardView({
         { phone: isPhone(), sizeOf },
       );
       travelToLayout(model);
+      setPinnedKeys(new Set(layout.current.pinned.keys()));
       const folded = new Set(saved.layout.folded);
       if (
         folded.size !== latest.current.collapsed.size ||
@@ -892,6 +912,7 @@ export default function BoardView({
         }
       }
       setCollapsed(new Set(saved.layout.folded));
+      setPinnedKeys(new Set(layout.current.pinned.keys()));
       fit(true);
     }
     invalidate("change");
@@ -2247,6 +2268,7 @@ export default function BoardView({
         window.clearTimeout(tidyFit.current);
         layout.current = before;
         travelToLayout(latest.current.model);
+        setPinnedKeys(new Set(layout.current.pinned.keys()));
         placeNotes(notesWere);
         setToast({ text: "Restored" });
       },
@@ -2875,6 +2897,32 @@ export default function BoardView({
   }, [noteSelected, colorKey]);
   const setCardColor = (key: string, color: CardColor | null) =>
     void report(boardStore.patch([{ op: "card.color", key, color }]));
+  // Stable, so zones whose colour is unchanged skip rendering their pickers.
+  const setCardColorRef = useRef(setCardColor);
+  setCardColorRef.current = setCardColor;
+  const setZoneColor = useCallback(
+    (key: string, color: CardColor | null) =>
+      setCardColorRef.current(key, color),
+    [],
+  );
+  /**
+   * Pin a card where it is, or unpin it. A pinned card never moves on its
+   * own: placement, tidying and settling leave it; only a drag moves it.
+   * Unpinned, it belongs where it is beside its owner.
+   */
+  const togglePin = (key: string) => {
+    const card = cards.current.get(key);
+    if (!card) return;
+    if (layout.current.pinned.has(key)) {
+      layout.current.pinned.delete(key);
+      keepWhereItIs(key, model);
+    } else {
+      layout.current.pinned.set(key, { x: card.x, y: card.y });
+      scheduleSave();
+    }
+    setPinnedKeys(new Set(layout.current.pinned.keys()));
+  };
+  togglePinRef.current = togglePin;
 
   const toolbar = (
     <WorldViewToolbar
@@ -2975,37 +3023,55 @@ export default function BoardView({
           </div>
         ) : null}
         <div ref={worldRef} className="board-world">
-          {model.hosts.map((host) => (
-            <div
-              key={host.key}
-              className={`board-zone${host.stale ? " board-stale" : ""}`}
-              ref={(el) => {
-                if (el) zoneEls.current.set(host.key, el);
-                else zoneEls.current.delete(host.key);
-              }}
-            >
+          {model.hosts.map((host) => {
+            // A host's chosen colour tints its zone (it is not inherited).
+            const hostKey = hostColorKey(host.connectionId);
+            const hostColor = placeColor(cardColors, hostKey);
+            return (
               <div
-                className="board-zone-label"
-                data-host={host.key}
-                data-world-node-anchor={host.id}
-                title="Drag to move the whole host"
+                key={host.key}
+                className={`board-zone${host.stale ? " board-stale" : ""}`}
+                style={
+                  hostColor
+                    ? ({
+                        "--board-zone": TERMINAL_COLOR_HEX[hostColor],
+                      } as CSSProperties)
+                    : undefined
+                }
+                ref={(el) => {
+                  if (el) zoneEls.current.set(host.key, el);
+                  else zoneEls.current.delete(host.key);
+                }}
               >
-                {host.label}
-                {host.stale ? (
-                  <small>offline</small>
-                ) : (
-                  <button
-                    type="button"
-                    className="board-zone-add"
-                    aria-label={`New workspace on ${host.label}`}
-                    onClick={() => setNewWorkspaceOn(host)}
-                  >
-                    +
-                  </button>
-                )}
+                <div
+                  className="board-zone-label"
+                  data-host={host.key}
+                  data-world-node-anchor={host.id}
+                  title="Drag to move the whole host"
+                >
+                  <BoardZoneColor
+                    colorKey={hostKey}
+                    hostLabel={host.label}
+                    color={hostColor}
+                    onColor={setZoneColor}
+                  />
+                  {host.label}
+                  {host.stale ? (
+                    <small>offline</small>
+                  ) : (
+                    <button
+                      type="button"
+                      className="board-zone-add"
+                      aria-label={`New workspace on ${host.label}`}
+                      onClick={() => setNewWorkspaceOn(host)}
+                    >
+                      +
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
           <svg ref={svgRef} className="board-wires" aria-hidden="true" />
           {/* Cards in their own container, new when a large board is built,
               so React appends them as one subtree instead of placing each
@@ -3055,6 +3121,7 @@ export default function BoardView({
                   }}
                 >
                   <div className="board-row">
+                    {pinnedKeys.has(space.key) ? <PinBadge /> : null}
                     <span className="board-label">{space.label}</span>
                     <button
                       type="button"
@@ -3167,6 +3234,7 @@ export default function BoardView({
                       <span className="board-dot" />
                     )}
                     <span className="board-label">{tab.label}</span>
+                    {pinnedKeys.has(tab.key) ? <PinBadge /> : null}
                     {!multi && pane?.isAgent && quests.get(pane.leaf.id) ? (
                       <QuestChip quest={quests.get(pane.leaf.id)!} />
                     ) : null}
@@ -3528,6 +3596,8 @@ export default function BoardView({
                 model.tabByKey.has(colorKey) ? "Default colour" : "No colour"
               }
               onColor={(color) => setCardColor(colorKey, color)}
+              pinned={pinnedKeys.has(colorKey)}
+              onPin={() => togglePin(colorKey)}
             />
           ) : null}
           {noteSelected && saved?.notes.find((n) => n.id === noteSelected) ? (
@@ -4109,17 +4179,30 @@ const tintStyle = (color: CardColor | undefined) =>
     ? ({ "--tint": TERMINAL_COLOR_HEX[color] } as CSSProperties)
     : undefined;
 
+/** Marks a card pinned in place. */
+function PinBadge() {
+  return (
+    <span className="board-pin" role="img" aria-label="Pinned" title="Pinned">
+      <Pin size={12} aria-hidden="true" />
+    </span>
+  );
+}
+
 /** The selected workspace or tab's colour: the user's choice, never a status. */
 function CardBar({
   label,
   color,
   resetLabel,
   onColor,
+  pinned,
+  onPin,
 }: {
   label: string;
   color: CardColor | null;
   resetLabel: string;
   onColor(color: CardColor | null): void;
+  pinned: boolean;
+  onPin(): void;
 }) {
   return (
     <div
@@ -4144,6 +4227,20 @@ function CardBar({
         onClick={() => onColor(null)}
       >
         {resetLabel}
+      </button>
+      <button
+        type="button"
+        className="board-pin-toggle"
+        aria-pressed={pinned}
+        title={
+          pinned
+            ? "Let it move with auto-layout again"
+            : "Keep it here: auto-layout and grouping leave it"
+        }
+        onClick={onPin}
+      >
+        <Pin size={14} aria-hidden="true" />
+        {pinned ? "Unpin" : "Pin"}
       </button>
     </div>
   );

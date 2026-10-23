@@ -1265,6 +1265,43 @@ pane target wherever it stands.
 - **THEN** it walks to its host's reception behind any waiting agents and shows a
   completion marker, and inspecting it does not change Herdr state
 
+### Requirement: Pinned Town desks
+
+The user SHALL be able to pin and unpin a Town desk from its agent window's
+menu. A pin SHALL be a World view setting saved on the World service with the
+terminal colours, keyed by the desk's tab, so every device sees it; it SHALL NOT
+change Herdr and SHALL be separate from Spaces' browser-local tab pins. A pinned
+desk SHALL show a pin and keep its cell in its room through tab reorders,
+capacity steps and rebuilt scenes; the room SHALL grow to hold the cell, and
+the other desks SHALL take the free cells in tab order. A pinned desk SHALL NOT
+be picked up for a drag, nor be a reorder target, until unpinned. An agent at
+a pinned desk SHALL NOT go to the lounge: it SHALL leave its seat only for
+reception, when blocked or done and not yet checked, and SHALL return to its
+seat once checked or answered. A pin SHALL follow its tab to another workspace
+and SHALL be dropped when its tab closes. When a room has more desks than Town
+presents, its pinned desks and the selected desk, with their agents, SHALL
+still be presented, even past the bound, and other desks SHALL be omitted
+instead; only pins beyond the 127 desks a room can draw MAY go undrawn.
+
+#### Scenario: A pinned agent finishes and is seen
+
+- **WHEN** an agent at a pinned desk finishes and the user checks it
+- **THEN** it waits at reception until checked and then walks back to its seat,
+  never to the lounge
+
+#### Scenario: A pinned desk in a crowded room
+
+- **WHEN** a room's tabs exceed Town's desk bound and more of its tabs are
+  pinned than the bound, with another desk selected
+- **THEN** every pinned desk, the selected desk and their agents stay
+  presented, and only unpinned desks are omitted
+
+#### Scenario: A room reflows around a pinned desk
+
+- **WHEN** tabs are added or reordered in a room with a pinned desk
+- **THEN** the pinned desk keeps its cell and the other desks fill the free
+  cells in tab order
+
 ### Requirement: Town attention rail
 
 Town SHALL present the agents that need the user in the same order as Desk
@@ -1671,6 +1708,27 @@ and in the terminal window's menu, as well as in the Spaces tab menu, the Town
 peek and Board. Every picker SHALL be the same palette with **Default colour**,
 opened as a transient layer.
 
+Workspaces and hosts SHALL have colours of their own from the same palette,
+saved by the World service with terminal colours: a workspace's under its Board
+card key, a host's under a key no card can have. A workspace's colour SHALL be
+offered and shown on its Board card, on its Town room (carpet and room card,
+with the picker beside the room's name) and in the Spaces sidebar (a dot before
+its name, the palette in its menu). A host's colour SHALL be offered and shown
+on its Town building (roof, with the picker on its reception board), its Board
+zone and its Spaces sidebar header. Without one, a workspace SHALL show its
+default (Town's carpet, no Board tint) and a host its theme. A tab without a
+colour of its own SHALL take its workspace's chosen colour, then its own
+default; a host's colour SHALL NOT be inherited, so tabs keep their varied
+defaults. No inherited colour SHALL overwrite a chosen one, and each place's
+own colour MAY be reset.
+
+#### Scenario: Colour a workspace and a host
+
+- **WHEN** the user picks teal for a workspace and pink for its host
+- **THEN** the workspace's Town carpet, Board card and Spaces dot show teal, its
+  tabs without a colour of their own show teal, the host's Town roof, Board zone
+  and Spaces header show pink, and no tab shows pink because of the host
+
 #### Scenario: Colour a tab in Spaces
 
 - **WHEN** the user picks pink from a tab's menu in Spaces
@@ -1747,6 +1805,14 @@ place them into free space. Tidy SHALL rearrange the selected workspace's tabs,
 or the whole board when nothing is selected, and SHALL offer an undo that
 restores the previous positions. A pinned card SHALL keep its board position and
 SHALL NOT follow its workspace.
+
+#### Scenario: Pin a card
+
+- **WHEN** the user pins a selected card from its bar (on a phone, from its
+  terminal's header) and then tidies its workspace
+- **THEN** the card shows a pin badge and keeps its position while the other
+  cards are rearranged, and unpinning it lets it belong where it is beside its
+  workspace again
 
 #### Scenario: Drag a workspace
 

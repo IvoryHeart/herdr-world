@@ -35,9 +35,16 @@ import {
 } from "../store";
 import { WORLD_OBSERVABILITY_UPDATED_EVENT } from "../workspaceResource";
 import { TownCanvas } from "./town/TownCanvas";
-import { townDeskColorTarget } from "./town/townModel";
+import { townDeskColorTarget, townRoomColorKey } from "./town/townModel";
 import { resolveTerminal, type TerminalColor } from "./terminalColor";
-import { setTerminalColor, useTerminalColors } from "./useTerminalColors";
+import {
+  setTerminalColor,
+  usePlaceColorChoices,
+  useTerminalColors,
+} from "./useTerminalColors";
+import { hostColorKey } from "./terminalColor";
+import { TOWN_HOST_THEMES } from "./town/townPaint";
+import { useDeskPins } from "./useDeskPins";
 import {
   sendTownReply,
   townChoices,
@@ -161,9 +168,17 @@ export default function TownView({
     [],
   );
   const layoutPreferences = useLayoutPreferences();
+  const deskPins = useDeskPins();
+  // Only which tabs are pinned matters to admission, not their cells.
+  const pinnedTabKeys = Object.keys(deskPins).sort().join("\n");
+  const pinnedTabs = useMemo(
+    () => new Set(pinnedTabKeys ? pinnedTabKeys.split("\n") : []),
+    [pinnedTabKeys],
+  );
   const observedOffice = useMemo(
-    (): HerdrOfficeProjection => projectOffice(world, Date.now(), selectedId),
-    [world, selectedId, projectOffice],
+    (): HerdrOfficeProjection =>
+      projectOffice(world, Date.now(), selectedId, pinnedTabs),
+    [world, selectedId, projectOffice, pinnedTabs],
   );
   const townFinished = useTownFinished(observedOffice);
   // Terminal frames and unrelated store updates must not reconcile the scene.
@@ -637,6 +652,24 @@ export default function TownView({
     return entry ? `${entry.roomLabel} · ${entry.hostLabel}` : "";
   };
   const terminalColors = useTerminalColors();
+  const placeChoices = usePlaceColorChoices();
+  /** A room's or building's colour for the shared picker (see placeColor). */
+  const placeColorOf = (kind: "room" | "host", key: string) => {
+    if (kind === "room") {
+      const room = office.rooms.find((entry) => entry.key === key);
+      return room ? placeChoices(townRoomColorKey(room)) : null;
+    }
+    const host = office.hosts.find((entry) => entry.key === key);
+    if (!host) return null;
+    const theme =
+      TOWN_HOST_THEMES[
+        host.deterministicSkin.themeIndex % TOWN_HOST_THEMES.length
+      ]!;
+    return {
+      ...placeChoices(hostColorKey(host.connectionId)),
+      defaultHex: theme.roof,
+    };
+  };
   const deviceByKey = useMemo(
     () => lazyIndex(office.paneRoster, (entry) => entry.device.key),
     [office.paneRoster],
@@ -1362,6 +1395,7 @@ export default function TownView({
             trace={trace}
             projection={office}
             terminalColors={terminalColors}
+            deskPins={deskPins}
             selectedKey={townSelectedKey}
             completionSeenKeys={completionSeenKeys}
             summonedKeys={summonedKeys}
@@ -1418,6 +1452,7 @@ export default function TownView({
                 setPeek(null);
                 setMoveFlow({ step: "room", deskKey });
               },
+              placeColor: placeColorOf,
               onMoveAgent: (agentKey) => {
                 setPeek(null);
                 setMoveFlow({ step: "desk", agentKey });
