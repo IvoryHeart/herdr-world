@@ -545,6 +545,20 @@ async function run() {
   // renders its body into this element while open.
   const panelBody = document.createElement("div");
   panelBody.className = "fixture-panel-body";
+  // A plain frame so screenshots show the window; the real frame is design's.
+  Object.assign(panelBody.style, {
+    position: "fixed",
+    zIndex: "50",
+    overflow: "auto",
+    background: "#16181d",
+    color: "#e8e6e1",
+    fontFamily: "system-ui, sans-serif",
+    border: "1px solid #333",
+    borderRadius: "10px",
+    ...(window.innerWidth <= 640
+      ? { inset: "0", borderRadius: "0" }
+      : { top: "56px", right: "16px", width: "380px", maxHeight: "80vh" }),
+  });
   document.body.append(panelBody);
   const panelEntries: WorldPanelEntry[] = [];
   const panels = {

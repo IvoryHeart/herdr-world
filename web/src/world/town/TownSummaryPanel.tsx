@@ -47,7 +47,11 @@ export function TownSummaryPanel({
               <SummaryItem
                 key={item.agent.key}
                 item={item}
-                detail={`waiting ${townSummaryAge(item.since, now).replace(" ago", "")}`}
+                detail={
+                  townSummaryAge(item.since, now) === "just now"
+                    ? "waiting under a minute"
+                    : `waiting ${townSummaryAge(item.since, now).replace(" ago", "")}`
+                }
                 action="Answer"
                 onOpen={onOpenAgent}
               />
