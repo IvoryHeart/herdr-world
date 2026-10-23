@@ -1,8 +1,12 @@
 import { expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   diffHunks,
   matchMoves,
   normalize,
+  type Hunk,
   type Plumbing,
   statementLines,
 } from "./move-check";
@@ -14,6 +18,237 @@ const file = (from: string, to: string, ...body: string[]) => [
   `+++ b/${to}`,
   ...body,
 ];
+
+const hunk = (
+  file: string,
+  sign: Hunk["sign"],
+  at: number,
+  ...text: string[]
+): Hunk => ({
+  file,
+  sign,
+  lines: text.map((text, i) => ({ text, at: at + i })),
+});
+const anchor = (name: string) => [
+  `function ${name}() {`,
+  `  return ${name}Value;`,
+  "}",
+];
+
+test("the CLI uses histogram alignment to leave retained core bodies out of the move inventory", () => {
+  const directory = mkdtempSync(join(tmpdir(), "move-check-"));
+  const git = (...args: string[]) => {
+    const result = Bun.spawnSync(["git", ...args], {
+      cwd: directory,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    if (result.exitCode) throw new Error(result.stderr.toString());
+    return result.stdout.toString().trim();
+  };
+  const commit = () => {
+    git("add", ".");
+    git(
+      "-c",
+      "user.name=Example",
+      "-c",
+      "user.email=example@example.com",
+      "-c",
+      "commit.gpgsign=false",
+      "commit",
+      "--quiet",
+      "-m",
+      "Fixture",
+    );
+    return git("rev-parse", "HEAD");
+  };
+  try {
+    git("init", "--quiet");
+    mkdirSync(join(directory, "hooks"));
+    git("config", "core.hooksPath", join(directory, "hooks"));
+    const bodies = Array.from({ length: 20 }, (_, i) =>
+      [
+        `function build${i}() {`,
+        "  const state = {",
+        ...Array.from({ length: 30 }, (_, j) => `    value${j},`),
+        "  };",
+        "  return state;",
+        "}",
+      ].join("\n"),
+    );
+    writeFileSync(join(directory, "core.ts"), bodies.join("\n") + "\n");
+    const base = commit();
+    const retained = bodies.filter((_, i) => i % 5 === 1);
+    const extracted = bodies.filter((_, i) => i % 5 !== 1);
+    writeFileSync(
+      join(directory, "core.ts"),
+      [
+        "import {",
+        ...bodies.flatMap((_, i) => (i % 5 === 1 ? [] : [`  build${i},`])),
+        '} from "./part";',
+        ...retained,
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      join(directory, "part.ts"),
+      extracted.map((body) => `export ${body}`).join("\n") + "\n",
+    );
+    commit();
+    const result = Bun.spawnSync(
+      [process.execPath, join(import.meta.dir, "move-check.ts"), base],
+      {
+        cwd: directory,
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    expect(result.stderr.toString()).toBe("");
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.toString()).toContain(
+      "every changed line moved in order",
+    );
+    expect(result.stdout.toString()).toContain(
+      "Ignored import/export plumbing in core.ts",
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("thirteen short split pieces join unique ordered mappings established by full runs", () => {
+  // Like the store split: interleaved constants go to different modules, and
+  // a hook's final two lines are in a separate diff hunk from its body.
+  const pieces: Array<[string, string[]]> = [
+    ["notices.ts", ["const ENABLED = true;", "const PREFERENCES = {};"]],
+    ["notices.ts", ["const DISMISS_MS = 1000;", "const DONE_MS = DISMISS_MS;"]],
+    ["updates.ts", ["const RETRY_MS = 2000;", "const RETRY_STEP_MS = 10;"]],
+    ["sessions.ts", ["const RECENT_LIMIT = 12;"]],
+    ["notices.ts", ["const ACTIVATE_EVENT =", "  'example:activate';"]],
+    ["worktree.ts", ["const REMOVED_EVENT = 'example:removed';"]],
+    ["refresh.ts", ["const pending = new Map();"]],
+  ];
+  const before: string[] = [];
+  const separators: string[] = [];
+  const targets = new Map<string, string[]>();
+  pieces.forEach(([file, lines], i) => {
+    const separator = anchor(`separator${i}`);
+    before.push(...lines.map((line) => line.trim()), ...separator);
+    separators.push(...separator);
+    targets.set(file, [
+      ...(targets.get(file) ?? []),
+      ...lines.map((line) => line.trim()),
+    ]);
+  });
+  for (const [file, lines] of targets) {
+    const body = anchor(file.replace(".ts", ""));
+    before.push(...body);
+    lines.push(...body);
+  }
+  before.push(...anchor("hook"));
+  const report = matchMoves([
+    hunk("core.ts", "-", 1, ...before),
+    hunk("core.ts", "-", before.length + 2, "return subscribe(snapshot);", "}"),
+    ...[...targets].map(([file, lines]) => hunk(file, "+", 1, ...lines)),
+    hunk("types.ts", "+", 1, ...separators),
+    hunk(
+      "react.ts",
+      "+",
+      1,
+      ...anchor("hook"),
+      "return subscribe(snapshot);",
+      "}",
+    ),
+  ]);
+  expect(report.lost).toEqual([]);
+  expect(report.extra).toEqual([]);
+  expect(
+    report.runs
+      .filter((run) => run.lines < 3)
+      .reduce((sum, run) => sum + run.lines, 0),
+  ).toBe(13);
+});
+
+test("short fragments reordered relative to a pair's anchor stay reported", () => {
+  const report = matchMoves([
+    hunk("core.ts", "-", 1, "const early = 1;"),
+    hunk("core.ts", "-", 10, ...anchor("body")),
+    hunk("core.ts", "-", 20, "const late = 2;"),
+    hunk(
+      "part.ts",
+      "+",
+      1,
+      "const late = 2;",
+      ...anchor("body"),
+      "const early = 1;",
+    ),
+  ]);
+  expect(report.lost).toHaveLength(2);
+  expect(report.extra).toHaveLength(2);
+  expect(report.runs).toHaveLength(1);
+});
+
+test("short fragments have to preserve their order between anchors", () => {
+  const report = matchMoves([
+    hunk("core.ts", "-", 1, ...anchor("start")),
+    hunk("core.ts", "-", 10, "const first = 1;"),
+    hunk("core.ts", "-", 20, "const second = 2;"),
+    hunk("core.ts", "-", 30, ...anchor("end")),
+    hunk(
+      "part.ts",
+      "+",
+      1,
+      ...anchor("start"),
+      "const second = 2;",
+      "const first = 1;",
+      ...anchor("end"),
+    ),
+  ]);
+  expect(report.lost.length).toBeGreaterThan(0);
+  expect(report.extra.length).toBeGreaterThan(0);
+});
+
+test("duplicate eligible short destinations are ambiguous across hunks and files", () => {
+  for (const duplicateFile of ["part.ts", "other.ts"]) {
+    const report = matchMoves([
+      hunk("core.ts", "-", 1, ...anchor("start")),
+      hunk("core.ts", "-", 10, "const value = 1;"),
+      hunk("core.ts", "-", 20, ...anchor("other")),
+      hunk("part.ts", "+", 1, ...anchor("start")),
+      hunk("part.ts", "+", 10, "const value = 1;"),
+      hunk(duplicateFile, "+", 20, "const value = 1;", ...anchor("other")),
+    ]);
+    expect(report.lost).toEqual([
+      { file: "core.ts", line: "const value = 1;" },
+    ]);
+    expect(report.extra).toHaveLength(2);
+  }
+});
+
+test("a short destination is consumed only once", () => {
+  const report = matchMoves([
+    hunk("core.ts", "-", 1, ...anchor("start")),
+    hunk("core.ts", "-", 10, "const value = 1;"),
+    hunk("core.ts", "-", 20, "const value = 1;"),
+    hunk("part.ts", "+", 1, ...anchor("start")),
+    hunk("part.ts", "+", 10, "const value = 1;"),
+  ]);
+  expect(report.lost).toHaveLength(1);
+  expect(report.extra).toEqual([]);
+});
+
+test("an anchored split does not hide a same-file short reorder or executable edit", () => {
+  for (const added of ["run();", "changed();"]) {
+    const report = matchMoves([
+      hunk("core.ts", "-", 1, ...anchor("body")),
+      hunk("core.ts", "-", 10, "run();"),
+      hunk("part.ts", "+", 1, ...anchor("body")),
+      hunk(added === "run();" ? "core.ts" : "part.ts", "+", 20, added),
+    ]);
+    expect(report.lost).toEqual([{ file: "core.ts", line: "run();" }]);
+    expect(report.extra).toHaveLength(1);
+  }
+});
 
 test("a split into a new file with new imports and exports is a move", () => {
   const report = matchMoves(
