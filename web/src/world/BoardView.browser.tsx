@@ -2571,7 +2571,7 @@ async function run() {
 
 // `?mode=preview`: the synthetic board with one spawn, for screenshots.
 if (mode === "preview")
-  void fresh().then(() =>
+  void fresh().then(async () => {
     mount(
       2,
       variant((leaf) =>
@@ -2585,8 +2585,14 @@ if (mode === "preview")
           : leaf,
       ),
       null,
-    ),
-  );
+    );
+    // Fixture time is manual: run it so the board settles, then fit it.
+    for (let frame = 0; frame < 120; frame += 1) await clock.advance(16);
+    document
+      .querySelector<HTMLButtonElement>('[aria-label="Fit everything"]')
+      ?.click();
+    for (let frame = 0; frame < 120; frame += 1) await clock.advance(16);
+  });
 
 if (mode === "test")
   run()
