@@ -5,6 +5,7 @@ import {
   mainDescription,
   parseDelta,
   parseMain,
+  settleVerdict,
 } from "./web-asset-headroom";
 
 const MiB = 1024 * 1024;
@@ -72,4 +73,46 @@ test("the workflow judges PRs and re-judges them on every main push", async () =
   expect(pr.env.PR_FROM_FORK).toContain(
     "head.repo.full_name != github.repository",
   );
+});
+
+test("main advancing before the PR's last post cannot leave a stale pass", async () => {
+  const delta = { files: 0, bytes: 100 * 1024 };
+  const base = { files: 140, bytes: 13 * MiB };
+  // Main moves twice while the PR run posts; each new tip's size is recorded
+  // (its own run re-judged open PRs, which this run's posts could overwrite).
+  const tips = ["main-2", "main-3", "main-3"];
+  const sizes: Record<string, { files: number; bytes: number }> = {
+    "main-2": { files: 142, bytes: 13.1 * MiB },
+    "main-3": { files: 144, bytes: 13.24 * MiB },
+  };
+  const posts: string[] = [];
+  const verdict = await settleVerdict({
+    baseSha: "main-1",
+    base,
+    delta,
+    readTip: async () => tips.shift()!,
+    readMainSize: async (sha) => sizes[sha],
+    post: async (state) => {
+      posts.push(state);
+    },
+  });
+  expect(verdict.state).toBe("failure");
+  // The last post is the verdict against the newest main.
+  expect(posts.at(-1)).toBe("failure");
+});
+
+test("a new tip without a recorded size is left to main's own run", async () => {
+  const posts: string[] = [];
+  const verdict = await settleVerdict({
+    baseSha: "main-1",
+    base: { files: 140, bytes: 13 * MiB },
+    delta: { files: 0, bytes: 0 },
+    readTip: async () => "main-2",
+    readMainSize: async () => undefined,
+    post: async (state) => {
+      posts.push(state);
+    },
+  });
+  expect(verdict.state).toBe("success");
+  expect(posts).toEqual(["success"]);
 });

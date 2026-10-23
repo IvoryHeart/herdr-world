@@ -61,6 +61,35 @@ export function parseDelta(description: string): Size | undefined {
     : undefined;
 }
 
+/**
+ * Post a PR's verdict against the newest main whose size is known, and repeat
+ * while main moves under it, so this run's last post is never older than a
+ * main run's re-judging. A main tip without a recorded size yet is left to its
+ * own run, which records the size before re-judging open PRs.
+ */
+export async function settleVerdict(options: {
+  baseSha: string;
+  base: Size;
+  delta: Size;
+  readTip: () => Promise<string>;
+  readMainSize: (sha: string) => Promise<Size | undefined>;
+  post: (state: "success" | "failure", description: string) => Promise<void>;
+  rounds?: number;
+}): Promise<ReturnType<typeof judge>> {
+  let against = { sha: options.baseSha, size: options.base };
+  let verdict = judge(against.size, options.delta);
+  for (let round = 0; round < (options.rounds ?? 5); round++) {
+    await options.post(verdict.state, verdict.description);
+    const tip = await options.readTip();
+    if (tip === against.sha) break;
+    const size = await options.readMainSize(tip);
+    if (!size) break;
+    against = { sha: tip, size };
+    verdict = judge(size, options.delta);
+  }
+  return verdict;
+}
+
 async function sh(command: string[], cwd = process.cwd()) {
   const child = Bun.spawn(command, { cwd, stdout: "pipe", stderr: "inherit" });
   const [out, code] = await Promise.all([
@@ -128,23 +157,21 @@ async function main() {
       files: merged.files - base.files,
       bytes: merged.bytes - base.bytes,
     };
-    let verdict = judge(base, delta);
     // A fork's token cannot post statuses: the job's own result carries it.
     const post = Bun.env.PR_FROM_FORK !== "true";
-    if (post) await status(repo, head, verdict.state, verdict.description, url);
-    // Main may have moved while this ran, and its re-judging may have missed
-    // this PR. Main records its size before re-judging PRs, so whichever run
-    // finishes last judges against the newest main.
-    const tip = (
-      await sh(["gh", "api", `repos/${repo}/commits/main`, "--jq", ".sha"])
-    ).trim();
-    const current =
-      tip !== baseSha ? parseMain(await recorded(repo, tip)) : undefined;
-    if (current) {
-      verdict = judge(current, delta);
-      if (post)
-        await status(repo, head, verdict.state, verdict.description, url);
-    }
+    const verdict = await settleVerdict({
+      baseSha,
+      base,
+      delta,
+      readTip: async () =>
+        (
+          await sh(["gh", "api", `repos/${repo}/commits/main`, "--jq", ".sha"])
+        ).trim(),
+      readMainSize: async (sha) => parseMain(await recorded(repo, sha)),
+      post: async (state, description) => {
+        if (post) await status(repo, head, state, description, url);
+      },
+    });
     console.info(verdict.description);
     if (verdict.state === "failure") process.exitCode = 1;
     return;
