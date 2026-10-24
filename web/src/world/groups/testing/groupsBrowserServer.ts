@@ -74,6 +74,28 @@ export async function groupsBrowserServer(directory: string) {
         stale: false,
         actionable: true,
         snapshot: {
+          coverage: {
+            workspaces: 1,
+            tabs: 5,
+            panes: 5,
+            agent_panes: 5,
+            status: { working: 4, idle: 0, blocked: 1, done: 0, unknown: 0 },
+            by_workspace: [
+              {
+                workspace_id: "room-1",
+                tabs: 5,
+                panes: 5,
+                agent_panes: 5,
+                status: {
+                  working: 4,
+                  idle: 0,
+                  blocked: 1,
+                  done: 0,
+                  unknown: 0,
+                },
+              },
+            ],
+          },
           workspaces: [{ workspace_id: "room-1", label: "Workshop" }],
           tabs: panes.map((pane, index) => ({
             tab_id: pane.tab_id,

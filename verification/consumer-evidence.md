@@ -126,8 +126,12 @@ proves stale reviewed revisions cannot delete or change a newer Group and return
 the current document. The panel's registered browser suite uses real panel/window
 components and the actual service Group store/handler: kind filters, away and
 ambiguous states, linked PR warnings and a competing edit during confirmation at
-wide/phone sizes. Browser execution and five-view screenshots are batch-close
-requirements; quick item checks do not claim those outcomes before execution.
+actual 320/360/390/430/1440 CSS-pixel widths. The fixture includes the required
+snapshot coverage and asserts admission of its current connection before UI
+checks. It waits for rendered edit controls, inspects a qualified ambiguous match
+without resolving membership, and checks every member after a refused transfer.
+Local browser execution and synthetic roster/detail captures cover these five
+widths; final batch checks and independent acceptance remain required.
 
 The shared GroupOp move is type-only and has no contract impact. The optional
 Board revision guard preserves legacy omitted-revision behavior and synchronous
@@ -147,8 +151,8 @@ refusal and opaque ID safety. A real browser-store/chime-source installer test
 proves an explicit mute reaches actual chime decisions and force-Watch restores
 sound; existing shared shouldChime, chime center, host/device and prune consumers
 retain Town-master, motif, seen, device and current-topology boundaries. The
-registered panel fixture adds Default/Watch controls and unchanged needs-you counts
-for batch-close browser execution. No terminal choice is copied from membership.
+registered panel consumer exercises Default/Watch controls and unchanged needs-you
+counts at all five actual viewports. No terminal choice is copied from membership.
 These finite precedence and existing atomic-storage adapters warrant direct
 exhaustive evidence rather than a separate model of the same small table.
 
@@ -159,8 +163,9 @@ panel to cover Pod-only rows, first Now item, current PR warnings, cached/unknow
 work, loading/error/empty distinction, placement between Hosts and Spend, and
 unchanged reception markup. The production hook mounts the optional section only
 while Summary is open. The registered Groups browser fixture exercises its real
-Groups-open event and shared panel focus path; browser execution and five-view
-screenshots remain batch-close acceptance. This adds a projection consumer, not
+Groups-open event and shared panel focus path, including minimized-window restore,
+at all five actual viewports. Final batch verification and review remain delivery
+acceptance. This adds a projection consumer, not
 a new membership, ordering or recovery protocol, so direct consumer evidence is
 appropriate alongside the existing Summary and panel tests.
 

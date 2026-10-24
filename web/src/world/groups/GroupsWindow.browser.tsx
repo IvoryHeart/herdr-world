@@ -143,6 +143,7 @@ function Fixture({ world }: { world: WorldObject }) {
   );
 }
 const failures: string[] = [];
+const params = new URL(location.href).searchParams;
 const check = (condition: unknown, message: string) => {
   if (!condition) failures.push(message);
 };
@@ -161,7 +162,11 @@ const waitFor = (condition: () => unknown) =>
     });
     const timer = setTimeout(() => {
       observer.disconnect();
-      reject(new Error("Groups UI did not reach expected state"));
+      reject(
+        new Error(
+          `Groups UI did not reach expected state: ${document.querySelector(".groups-window")?.textContent?.slice(0, 1200) ?? "panel absent"}`,
+        ),
+      );
     }, 10_000);
     observer.observe(document, {
       childList: true,
@@ -181,11 +186,20 @@ const click = (text: string) => {
   button.click();
 };
 async function run() {
+  if (params.has("width"))
+    check(
+      innerWidth === Number(params.get("width")),
+      `Expected ${params.get("width")} CSS px, got ${innerWidth}`,
+    );
   const payload = await (await fetch("/snapshot")).json();
   const observed = parseWorldSnapshotResult(payload)!;
   const world = buildWorldObject(observed.connections);
   worldRuntimeStore.start();
   await worldRuntimeStore.refresh();
+  if (worldRuntimeStore.get().status !== "ready")
+    throw new Error(`Fixture runtime: ${worldRuntimeStore.get().error}`);
+  if (worldRuntimeStore.get().connections.length !== 1)
+    throw new Error("Fixture must admit one current connection");
   const root = createRoot(document.getElementById("root")!);
   flushSync(() => root.render(<Fixture world={world} />));
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
@@ -193,10 +207,15 @@ async function run() {
   await waitFor(() => document.querySelector(".groups-summary-pod"));
   document.querySelector<HTMLButtonElement>(".groups-summary-pod")!.click();
   await waitFor(() => document.querySelector(".group-detail"));
+  const detail = document.querySelector<HTMLElement>(".groups-window")!;
+  check(
+    detail.scrollWidth <= detail.clientWidth,
+    "Group detail fits without horizontal scrolling",
+  );
   check(
     Boolean(
       document
-        .querySelector(".group-detail")
+        .querySelector(".world-panel-title")
         ?.textContent?.includes("Pod · Chat"),
     ),
     "Summary must open the current Pod through the shared Groups event",
@@ -227,7 +246,7 @@ async function run() {
   check(
     Boolean(
       document
-        .querySelector(".group-detail")
+        .querySelector(".world-panel-title")
         ?.textContent?.includes("Pod · Chat"),
     ),
     "Summary must restore the minimized Groups detail",
@@ -274,6 +293,26 @@ async function run() {
       .querySelector(".group-detail")
       ?.textContent?.includes("membership remains ambiguous"),
     "duplicate names remain ambiguous",
+  );
+  click("Inspect connection-a · pane-3");
+  await waitFor(() =>
+    document.querySelector("[data-inspected]")?.getAttribute("data-inspected"),
+  );
+  check(
+    document
+      .querySelector("[data-inspected]")
+      ?.getAttribute("data-inspected") ===
+      world.leaves.find(
+        (leaf) =>
+          leaf.connectionId === "connection-a" && leaf.nativeId === "pane-3",
+      )?.id,
+    "ambiguous match inspection opens only the qualified current terminal",
+  );
+  check(
+    document
+      .querySelector(".group-detail")
+      ?.textContent?.includes("membership remains ambiguous"),
+    "inspection never resolves ambiguous membership",
   );
   const groupInterest = document.querySelector<HTMLButtonElement>(
     '[aria-label^="Group interest:"]',
@@ -327,6 +366,7 @@ async function run() {
     "Groups reuse linked PR cards",
   );
   click("Add…");
+  await waitFor(() => document.querySelector(".group-edit select"));
   const select =
     document.querySelector<HTMLSelectElement>(".group-edit select")!;
   const setter = Object.getOwnPropertyDescriptor(
@@ -345,9 +385,9 @@ async function run() {
     document.querySelector("[role=alert]")?.textContent?.includes("changed"),
   );
   check(
-    !document
-      .querySelector(".group-detail .group-member-name")
-      ?.textContent?.includes("bPresent"),
+    ![...document.querySelectorAll(".group-detail .group-member-name b")].some(
+      (member) => member.textContent === "b",
+    ),
     "stale confirmation must not transfer a new role",
   );
   click("Back to Groups");
@@ -358,13 +398,18 @@ async function run() {
       ?.textContent?.includes("Town updated"),
     "revision conflict refreshes the roster",
   );
-  root.unmount();
+  if (!params.has("capture")) root.unmount();
   worldRuntimeStore.stop();
   await fetch("/result", { method: "POST", body: JSON.stringify(failures) });
 }
 run().catch(async (error) => {
   await fetch("/result", {
     method: "POST",
-    body: JSON.stringify([...failures, String(error)]),
+    body: JSON.stringify([
+      ...failures,
+      error instanceof Error
+        ? (error.stack?.split("\n").slice(0, 8).join("\n") ?? String(error))
+        : String(error),
+    ]),
   });
 });
