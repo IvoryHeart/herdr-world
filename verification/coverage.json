@@ -333,6 +333,8 @@
         "web/src/terminalComposerCommands.test.ts",
         "web/src/mobileTerminalShortcuts.test.ts",
         "web/src/components/TerminalComposer.dom.test.ts",
+        "web/src/components/TerminalComposer.chat.test.ts",
+        "web/src/components/VisualPreview.test.ts",
         "web/src/components/TerminalComposer.uploads.test.ts",
         "web/src/components/TerminalView.inputMode.test.ts"
       ],
@@ -342,7 +344,7 @@
       "status": "alternative-evidence",
       "remaining": "No abstract shell semantics or automatic command execution is claimed; terminal dispatch authority is covered separately.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
-      "evidenceDecision": "Pure command resolution/catalogue tests and qualified composer draft tests directly cover aliases, key normalization and owner identity.",
+      "evidenceDecision": "Pure command resolution/catalogue and qualified draft tests cover aliases, key normalization and owner identity. The shared Chat composer DOM consumer covers native editing/completion, IME-safe Ctrl/Cmd+Enter send, multiline Enter, overflow command browsing, isolated drafts and transactional refusal restoration; source race tests cover native queued admission and unchecked slash-command receipts.",
       "partialEvidence": {
         "models": [],
         "contracts": ["verification/consumer-evidence.md"],
@@ -351,6 +353,8 @@
           "web/src/terminalComposerCommands.test.ts",
           "web/src/mobileTerminalShortcuts.test.ts",
           "web/src/components/TerminalComposer.dom.test.ts",
+          "web/src/components/TerminalComposer.chat.test.ts",
+          "web/src/components/VisualPreview.test.ts",
           "web/src/components/TerminalComposer.uploads.test.ts",
           "web/src/components/TerminalView.inputMode.test.ts"
         ],
@@ -572,6 +576,10 @@
       "requirement": "openspec/specs/world-surfaces/spec.md",
       "properties": "Cached results cannot cross connection/checkout/generation; old fetch cannot repopulate replacement cache",
       "existingTests": [
+        "web/src/agentWorktreeClient.test.ts",
+        "web/src/useAgentWorktree.test.ts",
+        "web/src/world/WorldInspectorWorktree.test.ts",
+        "web/src/components/AgentWorktreePicker.test.ts",
         "web/src/workspaceResource.test.ts",
         "web/src/components/FileExplorerDialog.test.ts"
       ],
@@ -588,13 +596,17 @@
           "verification/composition.md"
         ],
         "tests": [
+          "web/src/agentWorktreeClient.test.ts",
+          "web/src/useAgentWorktree.test.ts",
+          "web/src/world/WorldInspectorWorktree.test.ts",
+          "web/src/components/AgentWorktreePicker.test.ts",
           "web/src/workspaceResource.test.ts",
           "web/src/components/FileExplorerDialog.test.ts"
         ],
         "checks": ["bun run check", "bun run verification:check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
       },
-      "evidenceDecision": "Runtime currency remains the cache admission identity. File Explorer regressions independently reject retired prefetches and in-flight previews while preserving healthy contexts.",
+      "evidenceDecision": "Runtime currency remains cache admission identity; agent-worktree candidate/revision also separates roots within one workspace. Actual Inspector delayed-preview and retained-selection tests cover same-path binding replacement independently of saved preferences. Direct stale/occupant tests, all sixteen source-presence combinations and a real linked Git/HTTP fixture cover the new adapter; maintained lease/preparation models retain their existing authority bounds.",
       "promotion": {
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
@@ -916,6 +928,9 @@
       "requirement": "openspec/specs/world-surfaces/spec.md",
       "properties": "Atomic publication and session identity; old reports cannot overwrite newer state",
       "existingTests": [
+        "server/src/agent/worktree.test.ts",
+        "server/src/agent/worktree-session.test.ts",
+        "server/src/workspace/agent-worktree-files.test.ts",
         "server/src/agent/session-history.test.ts",
         "server/src/agent/conversation-matrix.test.ts",
         "server/src/agent/conversation-watch.test.ts",
@@ -951,6 +966,9 @@
           "verification/composition.md"
         ],
         "tests": [
+          "server/src/agent/worktree.test.ts",
+          "server/src/agent/worktree-session.test.ts",
+          "server/src/workspace/agent-worktree-files.test.ts",
           "server/src/agent/session-history.test.ts",
           "server/src/agent/codex-session-link.test.ts",
           "server/src/connections/session-link-routing.test.ts",

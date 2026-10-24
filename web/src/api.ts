@@ -1,5 +1,6 @@
 import type { BridgeControlMsg } from "./bridgeControl";
 export type { BridgeControlMsg } from "./bridgeControl";
+import type { ConnectionClient } from "./connectionClient";
 import { isValidPopupPayload } from "./popupPayload";
 import {
   isAssistantSnapshot,
@@ -286,18 +287,7 @@ export class UncertainRequestError extends Error {
   }
 }
 
-export interface ConnectionClient {
-  readonly connectionId: string;
-  readonly generation: number;
-  readonly serverRuntimeGeneration: number | null;
-  call(
-    method: string,
-    params?: Record<string, unknown>,
-    timeoutMs?: number | null,
-  ): Promise<any>;
-  isCurrent(): boolean;
-  acceptsServerGeneration(value: unknown): boolean;
-}
+export type { ConnectionClient } from "./connectionClient";
 
 const STARTUP_DEFAULT_CONNECTION_ID = "startup-default";
 const RPC_TIMEOUT_MS = 30000;

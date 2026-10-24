@@ -1,0 +1,33 @@
+.modal-backdrop.workspace-inspector-location-backdrop {
+  align-items: flex-end;
+  padding: 0;
+}
+.modal.workspace-inspector-location-sheet {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: none;
+  max-height: calc(90dvh - env(safe-area-inset-top, 0px));
+  margin: 0;
+  padding: 0 12px calc(12px + env(safe-area-inset-bottom, 0px));
+  border-radius: 16px 16px 0 0;
+}
+.workspace-inspector-location-sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.workspace-inspector-location-sheet-head h2 {
+  margin: 0;
+  font-size: 14px;
+}
+.workspace-inspector-location-sheet-content {
+  min-height: 0;
+  overflow-y: auto;
+  padding-top: 12px;
+}
+.workspace-inspector-repository-popover > .agent-worktree-picker {
+  padding: 12px;
+  margin: 0;
+}

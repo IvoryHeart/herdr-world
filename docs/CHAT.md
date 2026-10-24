@@ -17,14 +17,25 @@ view that you open on purpose.
   When there is evidence it went to another session, a red notice
   names both sessions and pauses Send until you dismiss it; when Chat can no
   longer check, it says so (see [Delivery](#delivery)).
-- Does not send commands: a slash command word such as `/compact` or
-  `/review:fast`, or for Claude Code text that starts with `!` or `#`, is
-  refused with a pointer to the Terminal, because a command can switch the
-  session and is not recorded as something you said. A message that starts
-  with a path, such as `/var/log/app.log fails`, is sent.
+- Sends all slash commands, including custom and plugin commands, through the
+  same session-qualified `agent prompt` as messages. A slim command row says
+  **sent, not checked** until the literal command appears in its own transcript;
+  this confirms text was seen, never that the command had its intended effect.
+  Commands may intentionally switch sessions. Claude Code's `!` and `#`
+  terminal input modes still require the Terminal. A message starting with a
+  path, such as `/var/log/app.log fails`, is ordinary message text.
 - Refreshes when the service says the conversation changed (see
   [Refresh](#refresh)). The browser has no timer. **Refresh** rereads on demand.
-- Shows what is happening now. The Now bar at the top has Herdr's status, the
+- Adds the shared pull request card below an agent message that announces a
+  known PR with **READY** or **opened**, or names a PR on its current work
+  claim. An ambiguous bare number gets no card. **Details** shows current CI,
+  reviews and the owner's actions. When this conversation owns the claim,
+  **Ask the author to fix** sends a `↳ #N` message through Chat; it keeps any
+  unsent draft. A retired host, runtime or agent session cannot supply a claim.
+- Shows what is happening now. The Now bar shows Herdr's status as a 14px
+  circle (blue working ring, yellow needs-you mark,
+  green done tick, grey idle dot), with its word kept for screen readers and
+  the tooltip. Reduced motion shows a still working dot. It also shows the
   task the harness names in its terminal title (such as "Running tests"), and
   the time since Chat saw the status change. The step running now (a tool call
   in the transcript with no result yet) shows at the end of the conversation
@@ -101,16 +112,61 @@ view that you open on purpose.
 - When the conversation is unavailable, Chat shows the reason and the action it
   names: the integration command to copy, the Codex session link, **Refresh**
   and **Open Terminal**. It offers no composer then.
-- In the composer, Enter starts a new line. **Send**, or the terminal
-  composer's send shortcut (`Ctrl+Enter`, `Cmd+Enter` on a Mac, as set in
-  shortcuts), sends.
-- The paperclip (or a paste) attaches files. Each uploads to the pane's host
-  with a progress chip, and its path joins the message; **Send** waits for
-  uploads. A path that finishes after Chat closed joins the message when Chat
-  opens again for that pane. Paths go after any text already typed; a message
-  that starts with an uploaded path is not a slash command.
+- Chat uses the same full **Compose** component as the Terminal: the paperclip attaches
+  files and typing **/** opens that harness's command palette. **⋮ → Browse
+  commands** opens the same palette. The ⋮ menu follows the shared Back/Escape
+  stack, closing before the underlying window. The placeholder names the same
+  agent as the window bar. Enter starts a new line;
+  the paper-plane **Send** button, `Ctrl+Enter` or `Cmd+Enter` sends.
+  Direct mode, Insert draft and the terminal
+  key bar stay out of Chat.
+- Each bound conversation has its own draft, separate from Terminal drafts.
+  Drafts remain usable when another host has focus; a replaced runtime cannot
+  send or upload through the retired draft.
+  **Add a file** (paperclip) or paste uploads to that pane's host with progress chips;
+  completed paths enter at the saved caret, and **Send** waits for uploads.
+  A completion after Chat closes updates only that conversation's draft.
+  Failed sends restore the submitted text before any newer draft.
+- While Herdr reports the agent working, an accepted send shows
+  **Queued · sent to <agent>**, with its send time. Herdr owns admission and
+  scheduling; World keeps no second queue. Without a transcript receipt it
+  remains **Sent, not seen in the transcript** when checking ends. Blocked
+  sends remain refused with their reason and keep the draft.
+- While you read back, the existing floating **Jump to latest** shows **3 new**
+  when three agent messages arrive. Your own messages, queued sends, tool
+  activity and transcript notices do not count. Reaching the bottom clears it;
+  opening another session starts fresh. Answer numbers remain scoped to the
+  focused question card; no global answer keys or extra key bar are added.
 - **Details** opens the earlier History view: Timeline, tool output, transcript
   preview and export.
+
+## Files and Changes worktree
+
+The agent window's Files and Changes use the same selected worktree. Open its
+location line for **Worktree** candidates, source labels and **Refresh**.
+Evidence is ordered live pane cwd, then that session's native transcript/Codex
+rollout cwd or checkout report, then its branch in the known repository's
+worktree list. A higher-ranked live directory keeps precedence; lower sources
+and other listed trees remain explicit viewing choices, useful for `git -C`.
+When Herdr reports a changed foreground cwd, the observation refreshes.
+Choosing a viewing worktree changes Files and Changes together; it does not
+change the agent's terminal directory.
+
+To review a different branch, open **location line → Worktree**, choose its
+branch-labelled candidate, then select **Changes → Against main**. **Working
+tree** shows uncommitted edits; **Against main** shows committed branch changes
+since the merge base. An old branch already merged into main can correctly show
+no changes in both modes even while the agent works in another listed tree.
+
+Ambiguous choices and stale evidence never silently use the launch checkout.
+The service rechecks the subject, revision and root for both RPC and HTTP
+resources; a new session cannot inherit the old selection. This changes the
+Inspector's resource target, without changing Chat's bound session, draft or
+prompt adapter. A viewed tree is never an ownership claim.
+
+An unreadable transcript does not suppress a usable live or reported worktree.
+When the selected binding changes, retained files reload through the new binding
+and replies from the previous binding are discarded.
 
 ## Read model
 
@@ -135,6 +191,7 @@ compression does not grant a stronger binding or enable Send for a guess.
 | `agent_conversation.answer` | `pane_id`, `key`, `prompt_fingerprint` | `{ status: "sent", number, label, acknowledged, unconfirmed_reason, prompt_fingerprint }` or `{ status: "refused", reason, message, pending_prompt }` |
 | `agent_conversation.steps` | `pane_id`, `call_ids` (at most 500) | `{ steps }`: the step model for those tool calls, by the harness's call ID; calls it cannot find are left out |
 | `agent_conversation.watch` / `.unwatch` | `pane_id` | `{ ok: true }`; see [Refresh](#refresh) |
+| `agent_worktree.get` | qualified `subject` (connection, generation, pane/terminal, session), optional `refresh` | Worktree observation with revision/time, candidates and attributed evidence; selected candidate plus subject/revision is submitted with resource requests |
 | `agent_quest.list` | `pane_ids`, or nothing for every agent | `{ quests }`: per pane, `agent`, `session_binding`, `session_fingerprint` and `quest`; see [Quests](#quests) |
 
 A conversation carries `agent`, `agent_status`, `terminal_title`, `running_tool`
@@ -227,11 +284,16 @@ Each send leaves a receipt for the pane, bound to the session it was sent to:
 
 | State | Meaning | Shown |
 | --- | --- | --- |
-| `pending` | Herdr took it, but it is not yet in the session's transcript (a busy harness writes a queued message only when the agent takes it up) | In that session's conversation at its send time, never below replies written since, as "Delivered · waiting for <agent>" with grey ticks. After the pane moves on, as a line "Still checking <session>". Both have **Stop checking** |
+| `pending` | Herdr took it, but it is not yet in the session's transcript (a busy harness writes a queued message only when the agent takes it up) | In that session's conversation at its send time, never below replies written since, as "Queued · sent to <agent>" for working-state admission, otherwise "Sent, not seen in the transcript", with its send time. After the pane moves on, as a line "Still checking <session>". Both have **Stop checking** |
 | `matched` | The same words appeared in its own session clearly after the send; or, when none did, the first user turn written there after the send that its harness could have rewritten it into (a paste or image placeholder, or words around the typed ones) | That transcript message is marked with blue ticks, "Sent from Chat; matched by its words", or "Sent from Chat; matched by order". Both show order, not cause |
 | `misdelivered` | Evidence of a switch after the send | A red notice naming both sessions; Send is paused until it is dismissed |
 | `uncertain` | The same words appeared at about the time of the send, or both in its own session and first in the session the pane moved to | A notice saying Chat cannot tell, with **Dismiss** |
-| `unverified` | Chat can no longer check | A notice saying why, with **Dismiss** |
+| `unverified` | Chat can no longer check | Its own session keeps a "Sent, not seen in the transcript" bubble; another session shows the reason. Both have **Dismiss** |
+
+Command receipts carry `kind: "command"`; native working-state admission adds
+`queued: true`. Commands use only literal own-transcript matching, never the
+rewritten-message fallback or another session as misdelivery evidence. Without
+that receipt they remain **sent, not checked**, even after a session switch.
 
 Each receipt carries `sent_at` (this service's clock, for display) and
 `transcript_at` (the same moment on the transcript host's clock, using the
@@ -364,8 +426,10 @@ A quest is what an agent is working through, read from its own transcript by
 fixed rules, without a model (`server/src/agent/quest.ts`). It is computed with
 the projection, over the whole transcript rather than Chat's 200-entry window,
 and each connection keeps up to 256 quests, so a quest whose transcript has not
-changed is answered without reading it again. Chat shows the quest log above
-the conversation; Town stands a pennant beside the agent's seat, which names
+changed is answered without reading it again. Chat places the current quest at
+the start of its section inside the scrolling conversation. It starts as one slim **title · progress** row; expand its button
+to read the objectives, without repeating the agent identity or status.
+Town stands a pennant beside the agent's seat, which names
 the quest on hover or tap; Board puts a chip on the agent's card.
 
 A quest has a `title`, a `source` (`todo`, `plan`, `goal` or `loop`), the

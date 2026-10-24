@@ -151,7 +151,10 @@ hosts stay usable.
    In Town it docks on the right at a readable width; drag its left edge to
    resize it (Town remembers the width), or drag its title to undock it. Chat shows the
    conversation's latest 200 entries, scrolls back inside the window, and
-   offers **Jump to latest**; the composer stays at the bottom. The **NEEDS YOU** list provides another route to waiting
+   offers **Jump to latest**; the composer stays at the bottom. Enter adds a line;
+   the paper-plane button, **Ctrl+Enter** or **Cmd+Enter** sends. The paperclip
+   attaches files; type **/** or use **⋮ → Browse commands** for command suggestions.
+   The **NEEDS YOU** list provides another route to waiting
    agents and becomes a bottom tray on phones; it hides when no agent is
    blocked. The Town master's chat (**Menu → Town master**, `firstmate` by
    default) opens docked once per visit on wide screens. Hover an agent for a
@@ -160,30 +163,46 @@ hosts stay usable.
    question when one can be identified, and refreshes when the conversation
    changes. Opening
    an agent brings it back to its desk from reception or the lounge until its
-   status changes. To open terminals instead, set **Menu → Town opens** to
-   **Terminal**; that tap also brings the agent back and, like the chat, does
+   status changes. To open terminals instead, set **Menu → Agents open** to
+   **Terminal** (Board and Desk follow it too); that tap also brings the agent back and, like the chat, does
    not mark its work reviewed.
    Zoom into a room: an agent with a quest (its own todo list, plan, Codex goal
    or `/loop`) shows a swallowtail pennant beside its seat, with a progress
    bar when the quest has steps; tap the pennant to see **Quest** and its
-   title. Open its chat to read the quest log above the conversation: each
-   objective as pending, active, done or blocked.
+   title. Open its chat to see a slim quest title and progress row in the conversation.
+   Expand it to read each objective as pending, active, done or blocked; the
+   row scrolls with the messages.
+   While you scroll back in Chat, **Jump to latest** counts new agent messages;
+   reach the bottom to clear the count.
+   Chat's Now circle has the status word on hover: blue for working, yellow
+   for needs you, green for done and grey for idle.
 5. Read the question before using an answer button: it sends the offered key to
    that live pane. When no supported choices appear, use **Open chat** to reply
    in the agent's window, or **Open terminal** in the card's header (or the
    window's **Terminal** view). The window's **Chat** composer sends with
-   Herdr's agent prompt. As in the terminal composer, Enter starts a new line;
-   **Send** or `Ctrl+Enter` (`Cmd+Enter` on a Mac) sends.
+   Herdr's agent prompt. Enter sends; Shift+Enter starts a new line. **Send**
+   or `Ctrl+Enter` (`Cmd+Enter` on a Mac) also sends. Use **/ Commands** for
+   the harness's palette or type any slash command; its receipt stays
+   **sent, not checked** until its text appears in the transcript.
    A Codex conversation inferred from its shared daemon is read-only: Chat
    offers no composer or answer buttons. In Codex's Terminal, run `/title` and
    add **Thread ID**, or use **Details → Link Codex session** to preview and
    confirm the intended thread. Ambiguous panes or threads stay unbound.
-6. Use the paperclip in the window's **Chat** composer to attach files. Each
+6. Use **+ Add file** in the window's **Chat** composer to attach files. Each
    file shows a chip while it uploads, then done or failed; retry a failed one
    (or pick it again) or remove it. **Send** waits for uploads. Uploads go to
    the selected pane's host; review the message and attached paths before
-   sending. The window's **Files** and **Changes** views hold its files and
-   changes; **Open terminal** is for direct work.
+   sending. The window's **Files** and **Changes** use the same agent worktree,
+   rather than its launch checkout. Open the location line for **Worktree**
+   (a bottom sheet on phones):
+   the source mark explains the evidence, and radio choices switch both views.
+   If choices are ambiguous or stale, use **Choose a worktree** and **Refresh**;
+   resource access waits for a current selection. **Open terminal** is for
+   direct work.
+   A known PR named in an agent's **READY** or **opened** announcement, or its
+   current work claim, gets a PR card in Chat. Open **Details** for CI and
+   reviews. **Ask the author to fix** sends a `↳ #N` message when this
+   conversation owns the PR's claim; your unsent draft is kept.
    The swatch beside a room's name colours that workspace (its carpet here,
    its card in Board and a dot in the Spaces sidebar), and the swatch on a
    building's reception board colours the host (its roof, Board zone and
@@ -376,7 +395,9 @@ on your phone and desktop.
    placement, tidying and settling leave it until you **Unpin** it (you can
    still drag it). On a phone, tap the pin in the card's terminal header.
 4. Tap a workspace, tab or pane row to open its Inspector with Terminal, Files,
-   Changes and Chat; a line joins each Inspector window to its card. Double-click a tab to open its terminal.
+   Changes and Chat; a line joins each Inspector window to its card. Tapping or
+   double-clicking an agent's tab opens its Chat, as in Town; a plain shell, or an
+   agent without Chat, opens its terminal.
 5. Double-click (or double-tap) empty board to pin a note and type; double-click
    a note to edit it. Tap a note for its bar: colour, **Edit**, **String to…**, **Delete** (or press Delete).
 6. Drag a card's red dot onto a pane row, a tab or a workspace to string a note

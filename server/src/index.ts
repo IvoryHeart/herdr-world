@@ -1,4 +1,5 @@
 import { serializeWorldInvalidation } from "./world/invalidation";
+import { workspaceFileParams } from "./http/workspace-file-params";
 import type { BridgeRpcContext, ConnectionRpcContext } from "./rpc/context";
 import { handleAgentRpc } from "./rpc/agent";
 import { handleBoardTownRpc } from "./rpc/board-town";
@@ -1309,10 +1310,7 @@ async function handleConnectionHttpRequest(
     } else if (endpoint === "file-download") {
       try {
         response = await connection.files.downloadWorkspaceFile({
-          workspace_id: url.searchParams.get("workspace_id"),
-          path: url.searchParams.get("path"),
-          scope: url.searchParams.get("scope"),
-          inline: url.searchParams.get("inline") === "1",
+          ...workspaceFileParams(url),
           range: req.headers.get("range") ?? undefined,
           if_range: req.headers.get("if-range") ?? undefined,
         });
@@ -1322,11 +1320,7 @@ async function handleConnectionHttpRequest(
     } else if (endpoint === "file-upload") {
       try {
         const result = await connection.files.uploadWorkspaceFile(
-          {
-            workspace_id: url.searchParams.get("workspace_id"),
-            directory: url.searchParams.get("directory"),
-            filename: url.searchParams.get("filename"),
-          },
+          workspaceFileParams(url),
           req,
         );
         response = Response.json(result);
@@ -1338,10 +1332,9 @@ async function handleConnectionHttpRequest(
       }
     } else {
       try {
-        const result = await connection.files.deleteWorkspaceFile({
-          workspace_id: url.searchParams.get("workspace_id"),
-          path: url.searchParams.get("path"),
-        });
+        const result = await connection.files.deleteWorkspaceFile(
+          workspaceFileParams(url),
+        );
         response = Response.json(result);
       } catch (error) {
         response = Response.json(

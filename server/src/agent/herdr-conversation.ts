@@ -1,3 +1,4 @@
+import { isSlashCommand } from "../../../shared/conversationInput";
 import { existsSync, type FSWatcher, watch } from "node:fs";
 import { basename, join } from "node:path";
 import {
@@ -791,16 +792,9 @@ export function createHerdrConversationSource(args: {
           reason: "unavailable",
           message: "Chat cannot send on a Windows host yet.",
         };
-      // A command can switch the session by design and is not recorded as
-      // something the user said, so Chat could never settle it.
-      // A pasted path such as /var/log/… is a message, not a command word.
-      if (/^\/[A-Za-z][\w:-]*(\s|$)/.test(text.trimStart()))
-        return {
-          status: "refused",
-          reason: "command",
-          message:
-            "Chat does not send commands such as /compact, because it cannot check where they went. Nothing was sent; use the Terminal tab.",
-        };
+      // All slash commands use the same qualified admission, with unchecked
+      // receipts because changing sessions can be their intended effect.
+      const command = isSlashCommand(text);
       if (deliveries.full(pane_id))
         return {
           status: "refused",
@@ -921,6 +915,8 @@ export function createHerdrConversationSource(args: {
       const sentAgent = normalizeAgentName(stringValue(sent.agent));
       const landed = paneBinding(sentAgent, sent, args.context, verified);
       const delivery = deliveries.record(pane_id, {
+        ...(command ? { kind: "command" as const } : {}),
+        queued: stringValue(info?.agent_status) === "working",
         text,
         fingerprint: bound.fingerprint,
         expected:

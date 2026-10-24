@@ -1,24 +1,14 @@
+import "./AgentChat.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  Copy,
-  ListTree,
-  Paperclip,
-  RefreshCw,
-  Send,
-  SquareTerminal,
-} from "lucide-react";
+import { Copy, ListTree, RefreshCw, SquareTerminal } from "lucide-react";
 import { watchConversation } from "../conversationWatch";
+import { attachmentUploading } from "../attachmentUploads";
 import {
-  startAttachmentUploads,
-  useAttachmentDelivery,
-  useAttachmentUploads,
-} from "../attachmentUploads";
-import { terminalUploadedPathsText } from "../terminalFileDrop";
-import { shortcutMatches, shortcutTitle } from "../shortcutPreferences";
-import {
-  uploadTerminalFile,
-  uploadTerminalImage,
-} from "../terminalImageUpload";
+  beginTerminalComposerSubmission,
+  finishTerminalComposerSubmission,
+  terminalComposerUploadCount,
+} from "../terminalComposer";
+import { ChatComposer, chatComposerDraftKey } from "./chat/ChatComposer";
 import { copyTextWithFeedback } from "../copyText";
 import type { Pane } from "../types";
 import { useConnectionClient } from "../useConnectionClient";
@@ -29,19 +19,18 @@ import type { HistoryEntry } from "./agentHistory";
 import { groupHistoryChatItems } from "./agentHistoryView";
 import { useAgentHistoryWindow } from "./useAgentHistoryWindow";
 import { matchedTurns, placedSends } from "./chat/pendingSends";
-import { AttachmentChips } from "./AttachmentChips";
 import { CodexSessionLink } from "./CodexSessionLink";
 import { QuestLog } from "./QuestLog";
 import { useStepEvidence } from "./chat/useStepEvidence";
+import { useChatBlocks } from "./chat/useChatBlocks";
+import { ChatAfterBlocks, decorateChat } from "./chat/blocks/registry";
+import type { WorkItem } from "../../../shared/worldSources";
 import {
   DOUBLE_ESCAPE_MS,
   elapsed,
-  STATUS_WORDS,
   STOPS_WITH_ESCAPE,
   titleTask,
 } from "./chat/blocks/now";
-import "./AgentChat.css";
-import { AskCard, UNCONFIRMED } from "./chat/blocks/ask";
 import type {
   AnswerResult,
   Conversation,
@@ -49,6 +38,7 @@ import type {
   UnconfirmedReason,
 } from "./chat/types";
 import "./chat/blocks/now.css";
+import { ChatStatusBadge } from "./chat/blocks/status-badge";
 
 export type {
   Conversation,
@@ -72,49 +62,27 @@ export function AgentChat({
   wide = false,
   onOpenTerminal,
   onClose,
+  workSessionFingerprint,
+  recipientLabel,
 }: {
   pane: Pane;
   active: boolean;
   wide?: boolean;
   onOpenTerminal?: () => void;
   onClose: () => void;
+  workSessionFingerprint?: string;
+  recipientLabel?: string;
 }) {
   const connectionClient = useConnectionClient();
   const [conversation, setConversation] = useState<Conversation | null>(null);
   // Set when the newest read failed; the last good conversation stays shown.
   const [stale, setStale] = useState("");
   const [loading, setLoading] = useState(false);
-  const [draft, setDraft] = useState("");
-  const [sending, setSending] = useState(false);
   const [notice, setNotice] = useState("");
   const [details, setDetails] = useState(false);
   const seqRef = useRef(0);
   const listRef = useRef<HTMLDivElement>(null);
   const shownRef = useRef<Conversation | null>(null);
-  const filePicker = useRef<HTMLInputElement>(null);
-  const uploadScope = `agent-chat\u0000${connectionClient.connectionId}\u0000${connectionClient.serverRuntimeGeneration}\u0000${pane.pane_id}`;
-  const uploading = useAttachmentUploads(uploadScope).some(
-    (upload) => upload.status === "uploading",
-  );
-  // Files upload through the pane's connection, as the terminal composer's
-  // do. Each finished path joins the message of whichever Chat is open for
-  // this pane, even if the one that started the upload has closed since.
-  const attach = (files: File[]) => {
-    if (!files.length) return;
-    void startAttachmentUploads(uploadScope, files, async (file, onProgress) =>
-      terminalUploadedPathsText([
-        await (file.type.startsWith("image/")
-          ? uploadTerminalImage
-          : uploadTerminalFile)(connectionClient, file, onProgress),
-      ]),
-    );
-  };
-  useAttachmentDelivery(uploadScope, (text) =>
-    setDraft((current) =>
-      current && !/\s$/.test(current) ? `${current} ${text}` : current + text,
-    ),
-  );
-
   // Chat's status, session and receipts come from the conversation summary
   // (agent_conversation.latest, without messages); the messages themselves
   // are History's window below, so a long, busy transcript is never re-read
@@ -197,54 +165,47 @@ export function AgentChat({
     return stop;
   }, [active, connectionClient, details, load, pane.pane_id, refreshHistory]);
 
-  const send = useCallback(async () => {
-    const text = draft.trim();
-    if (
-      !text ||
-      sending ||
-      uploading ||
-      !conversation?.session_fingerprint ||
-      conversation.deliveries?.some(
-        (delivery) => delivery.state === "misdelivered",
+  const send = useCallback(
+    async (value: string) => {
+      const text = value.trim();
+      if (!text) throw new Error("Write a message first.");
+      if (!connectionClient.isCurrent() || !conversation?.session_fingerprint)
+        throw new Error(
+          "The conversation changed. Nothing was sent; check it before sending again.",
+        );
+      if (
+        conversation.deliveries?.some(
+          (delivery) => delivery.state === "misdelivered",
+        )
       )
-    )
-      return;
-    setSending(true);
-    setNotice("");
-    try {
+        throw new Error(
+          "Read and dismiss the session-switch notice before sending.",
+        );
+      setNotice("");
       const result = (await connectionClient.call("agent_conversation.send", {
         pane_id: pane.pane_id,
         text,
         session_fingerprint: conversation.session_fingerprint,
-        // What Chat showed: a send checks for the message after these.
         baseline: history.messages
           .filter((message) => message.role === "user")
           .map((message) => message.id),
       })) as SendResult;
-      if (result.status === "sent") {
-        setDraft("");
-        load();
-        refreshHistory();
-      } else {
-        setNotice(result.message);
+      if (result.status !== "sent") {
         if (result.reason === "changed") load();
+        throw new Error(result.message);
       }
-    } catch (reason) {
-      setNotice(reason instanceof Error ? reason.message : String(reason));
-    } finally {
-      setSending(false);
-    }
-  }, [
-    connectionClient,
-    conversation,
-    draft,
-    history.messages,
-    load,
-    pane.pane_id,
-    refreshHistory,
-    sending,
-    uploading,
-  ]);
+      load();
+      refreshHistory();
+    },
+    [
+      connectionClient,
+      conversation,
+      history.messages,
+      load,
+      pane.pane_id,
+      refreshHistory,
+    ],
+  );
 
   const dismiss = useCallback(
     (deliveryId: string) => {
@@ -257,6 +218,46 @@ export function AgentChat({
     },
     [connectionClient, load, pane.pane_id],
   );
+
+  const draftKey = chatComposerDraftKey(
+    connectionClient,
+    pane,
+    conversation?.session_fingerprint,
+  );
+  const sendRef = useRef({ send, draftKey });
+  sendRef.current = { send, draftKey };
+  const askAuthor = useCallback((item: WorkItem) => {
+    const current = sendRef.current;
+    if (
+      terminalComposerUploadCount(current.draftKey) ||
+      attachmentUploading(current.draftKey)
+    ) {
+      setNotice("Wait for the uploads before sending.");
+      return;
+    }
+    if (!beginTerminalComposerSubmission(current.draftKey)) return;
+    void current
+      .send(`↳ #${item.number} Please fix the findings on this pull request.`)
+      .catch((reason: unknown) =>
+        setNotice(reason instanceof Error ? reason.message : String(reason)),
+      )
+      .finally(() => finishTerminalComposerSubmission(current.draftKey));
+  }, []);
+  const decorationTokens = useChatBlocks({
+    entries: history.messages,
+    steps: stepEvidence,
+    owner: {
+      connectionId: connectionClient.connectionId,
+      generation: connectionClient.serverRuntimeGeneration,
+      paneId: pane.pane_id,
+      sessionFingerprint: workSessionFingerprint,
+      label: pane.agent_name ?? pane.agent ?? "the agent",
+    },
+    onAskAuthor:
+      conversation?.status === "ok" && conversation.session_fingerprint
+        ? askAuthor
+        : undefined,
+  });
 
   // The agent's question: answered by pressing one option's key in its pane,
   // only when the user picks it. The service checks the agent still shows
@@ -418,27 +419,35 @@ export function AgentChat({
     );
   }
 
-  const status = conversation?.agent_status ?? pane.agent_status;
   const unavailable = conversation?.unavailable;
   const deliveries = conversation?.deliveries ?? [];
   const pending = deliveries.filter(
     (delivery) =>
-      delivery.state === "pending" &&
+      delivery.kind !== "command" &&
+      (delivery.state === "pending" || delivery.state === "unverified") &&
       delivery.fingerprint === conversation?.session_fingerprint,
+  );
+  const commands = deliveries.filter(
+    (delivery) => delivery.kind === "command" && delivery.state !== "matched",
   );
   const matched = matchedTurns(deliveries, conversation?.session_fingerprint);
   // Sent to a session the pane has since left: still checked there.
   const elsewhere = deliveries.filter(
     (delivery) =>
+      delivery.kind !== "command" &&
       delivery.state === "pending" &&
       delivery.fingerprint !== conversation?.session_fingerprint,
   );
   const misdelivered = deliveries.filter(
-    (delivery) => delivery.state === "misdelivered",
+    (delivery) =>
+      delivery.kind !== "command" && delivery.state === "misdelivered",
   );
   const unverified = deliveries.filter(
     (delivery) =>
-      delivery.state === "unverified" || delivery.state === "uncertain",
+      delivery.kind !== "command" &&
+      (delivery.state === "uncertain" ||
+        (delivery.state === "unverified" &&
+          delivery.fingerprint !== conversation?.session_fingerprint)),
   );
   const canSend =
     conversation?.status === "ok" && !!conversation.session_fingerprint;
@@ -447,12 +456,7 @@ export function AgentChat({
       <div className="agent-chat-toolbar agent-chat-now">
         {/* Only the status and task are announced; the clocks are not. */}
         <span className="agent-chat-now-live" aria-live="polite">
-          <span className={`agent-chat-status is-${liveStatus.toLowerCase()}`}>
-            {liveStatus === "working" ? (
-              <span className="agent-chat-spinner" aria-hidden="true" />
-            ) : null}
-            {STATUS_WORDS[liveStatus] ?? status}
-          </span>
+          <ChatStatusBadge status={liveStatus} />
           <span
             className="agent-chat-now-title"
             title={conversation?.terminal_title ?? ""}
@@ -461,7 +465,7 @@ export function AgentChat({
           </span>
         </span>
         {stopNote ? (
-          <span className="agent-chat-now-note" role="status">
+          <span className="agent-chat-now-note" role="status" title={stopNote}>
             {stopNote}
           </span>
         ) : null}
@@ -506,7 +510,6 @@ export function AgentChat({
           <ListTree size={13} /> Details
         </button>
       </div>
-      <QuestLog quest={conversation?.quest} />
       {misdelivered.map((delivery) => (
         <div key={delivery.id} className="agent-chat-misdelivered" role="alert">
           {delivery.evidence === "herdr" ? (
@@ -646,68 +649,61 @@ export function AgentChat({
             items={chatItems}
             listRef={listRef}
             contentRef={contentRef}
-            followKey={pane.pane_id}
+            followKey={JSON.stringify([
+              connectionClient.connectionId,
+              connectionClient.serverRuntimeGeneration,
+              pane.pane_id,
+              conversation?.session_fingerprint,
+            ])}
+            countNewAgentMessages
             toolLoading={history.toolEntryLoading}
             onLoadTool={history.loadToolEntry}
-            placed={placedSends(
-              pending,
-              conversation?.agent ?? pane.agent ?? "the agent",
-              dismiss,
-            )}
+            placed={[
+              ...(conversation?.quest
+                ? [
+                    {
+                      key: `quest:${conversation.session_fingerprint}:${conversation.quest.started_at}`,
+                      at: conversation.quest.started_at,
+                      node: (
+                        <QuestLog
+                          key={`${conversation.session_fingerprint}:${conversation.quest.started_at}`}
+                          quest={conversation.quest}
+                          compact
+                        />
+                      ),
+                    },
+                  ]
+                : []),
+              ...placedSends(
+                [...pending, ...commands],
+                recipientLabel ??
+                  conversation?.agent ??
+                  pane.agent ??
+                  "the agent",
+                dismiss,
+              ),
+            ]}
             hasOlder={history.hasOlder}
             olderLoading={history.olderLoading}
             onLoadOlder={history.loadOlder}
             onAtLatest={history.dropOlder}
             onOpen={setExpanded}
             matchedIds={matched}
-            stepEvidence={stepEvidence}
-            after={[
-              running ? (
-                <div
-                  key="running"
-                  className="agent-chat-running"
-                  data-call-id={running.id}
-                >
-                  <span className="agent-chat-spinner" aria-hidden="true" />
-                  {/* Announced when the step starts, not as its clock ticks. */}
-                  <span className="agent-chat-running-label" role="status">
-                    <b>{running.name}</b>
-                    {running.summary ? <code>{running.summary}</code> : null}
-                  </span>
-                  {Number.isFinite(Date.parse(running.started_at)) &&
-                  clock >= Date.parse(running.started_at) ? (
-                    <span className="agent-chat-now-time" aria-hidden="true">
-                      {elapsed(clock - Date.parse(running.started_at))}
-                    </span>
-                  ) : null}
-                </div>
-              ) : null,
-              answered ? (
-                <p key="answered" className="agent-chat-answered" role="status">
-                  {answered.acknowledged ? "You answered" : "Sent"}{" "}
-                  <b>
-                    {answered.number} · {answered.label}
-                  </b>
-                  {answered.acknowledged
-                    ? null
-                    : ` · ${UNCONFIRMED[answered.unconfirmed_reason ?? "still_showing"]}`}
-                  <span className="agent-chat-answered-question">
-                    {answered.question.join(" ")}
-                  </span>
-                </p>
-              ) : null,
-              showAsk && prompt ? (
-                <AskCard
-                  key="ask"
-                  agent={conversation?.agent ?? "The agent"}
-                  prompt={prompt}
-                  answering={answering}
-                  notice={askNotice}
-                  onAnswer={(key) => void answer(key)}
-                  onOpenTerminal={onOpenTerminal}
-                />
-              ) : null,
-            ]}
+            decorate={decorateChat}
+            decorationTokens={decorationTokens}
+            after={
+              <ChatAfterBlocks
+                running={running}
+                clock={clock}
+                answered={answered}
+                prompt={showAsk ? prompt : null}
+                agent={conversation?.agent ?? "The agent"}
+                answering={answering}
+                notice={askNotice}
+                onAnswer={(key) => void answer(key)}
+                onOpenTerminal={onOpenTerminal}
+              />
+            }
           />
           <AgentMessageDialog
             message={expanded}
@@ -730,84 +726,22 @@ export function AgentChat({
         </div>
       ) : null}
       {canSend ? (
-        <form
-          className="agent-chat-composer"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void send();
-          }}
-        >
-          {notice ? (
-            <p className="agent-chat-notice" role="alert">
-              {notice}
-            </p>
-          ) : null}
-          <AttachmentChips scope={uploadScope} />
-          <div className="agent-chat-composer-row">
-            <button
-              type="button"
-              className="agent-chat-attach"
-              aria-label="Attach files"
-              title="Attach files"
-              onClick={() => filePicker.current?.click()}
-            >
-              <Paperclip size={14} />
-            </button>
-            <input
-              ref={filePicker}
-              type="file"
-              multiple
-              hidden
-              onChange={(event) => {
-                const files = Array.from(event.target.files ?? []);
-                // Reset so picking the same file again still fires change.
-                event.target.value = "";
-                attach(files);
-              }}
-            />
-            <textarea
-              value={draft}
-              rows={2}
-              placeholder={`Message ${conversation?.agent ?? "agent"}`}
-              aria-label="Message"
-              onChange={(event) => setDraft(event.target.value)}
-              onPaste={(event) => {
-                const files = Array.from(event.clipboardData.files);
-                if (!files.length) return;
-                event.preventDefault();
-                attach(files);
-              }}
-              // As in World's terminal composer: Enter starts a new line, and
-              // the composer's send shortcut (Ctrl/Cmd+Enter) sends.
-              onKeyDown={(event) => {
-                if (
-                  event.nativeEvent.isComposing ||
-                  event.keyCode === 229 ||
-                  !shortcutMatches(event.nativeEvent, "composer.send")
-                )
-                  return;
-                event.preventDefault();
-                void send();
-              }}
-            />
-            <button
-              type="submit"
-              disabled={
-                sending || uploading || !draft.trim() || misdelivered.length > 0
-              }
-              aria-label="Send"
-              title={
-                misdelivered.length > 0
-                  ? "Dismiss the notice about the other session first"
-                  : uploading
-                    ? "Waiting for uploads"
-                    : shortcutTitle("Send", "composer.send")
-              }
-            >
-              <Send size={14} />
-            </button>
-          </div>
-        </form>
+        <ChatComposer
+          client={connectionClient}
+          pane={pane}
+          fingerprint={conversation?.session_fingerprint ?? ""}
+          recipient={
+            recipientLabel ?? conversation?.agent ?? pane.agent ?? "agent"
+          }
+          notice={notice}
+          disabledReason={
+            misdelivered.length
+              ? "Read and dismiss the session-switch notice before sending."
+              : undefined
+          }
+          onSubmit={send}
+          onError={setNotice}
+        />
       ) : null}
     </div>
   );

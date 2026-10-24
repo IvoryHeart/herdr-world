@@ -40,24 +40,6 @@
   flex: 1 1 auto;
 }
 
-.agent-chat-status {
-  padding: 1px 7px;
-  color: var(--muted);
-  font-size: 11px;
-  border: 1px solid var(--border-soft);
-  border-radius: 999px;
-}
-
-.agent-chat-status.is-working {
-  color: var(--accent);
-  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
-}
-
-.agent-chat-status.is-blocked {
-  color: var(--danger-text);
-  border-color: var(--danger-border);
-}
-
 /* The message list is History's (AgentHistoryChat), which scrolls inside;
    this column only gives it the space between the toolbar and the composer,
    so the composer always stays in the window. */
@@ -124,46 +106,6 @@
   flex: 0 0 auto;
   padding: 8px 10px 10px;
   border-top: 1px solid var(--border-soft);
-}
-
-.agent-chat-composer-row {
-  display: flex;
-  align-items: flex-end;
-  gap: 6px;
-  max-width: 820px;
-  margin: 0 auto;
-}
-
-.agent-chat-composer textarea {
-  flex: 1 1 auto;
-  min-height: 38px;
-  max-height: 40vh;
-  padding: 8px 10px;
-  color: var(--text);
-  font: inherit;
-  font-size: var(--chat-font-size, 13px);
-  background: var(--input-bg);
-  border: 1px solid var(--border-soft);
-  border-radius: 10px;
-  resize: vertical;
-}
-
-.agent-chat-composer button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  color: var(--bg);
-  background: var(--accent);
-  border: 0;
-  border-radius: 10px;
-  cursor: pointer;
-}
-
-.agent-chat-composer button:disabled {
-  opacity: 0.45;
-  cursor: default;
 }
 
 .agent-chat-notice {

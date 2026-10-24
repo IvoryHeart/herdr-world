@@ -154,3 +154,24 @@
 .quest-chip.is-paused {
   color: var(--quest-paused);
 }
+
+/* Chat's context belongs to the scrolling transcript, never to window chrome. */
+.quest-log.is-compact {
+  margin: 4px 0;
+  padding: 0 8px;
+  border-left-width: 1px;
+}
+.quest-log.is-compact .quest-log-head {
+  min-height: 32px;
+}
+.quest-log.is-compact .quest-log-title {
+  font-weight: 500;
+}
+.quest-log.is-compact .quest-log-count::before {
+  content: "· ";
+}
+@media (pointer: coarse), (max-width: 640px) {
+  .quest-log.is-compact .quest-log-head {
+    min-height: 44px;
+  }
+}

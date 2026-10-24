@@ -61,6 +61,7 @@ import { HtmlPreviewError, readHtmlPreviewFile } from "./html-preview-files";
 import { HTML_PREVIEW_CSP, renderHtmlPreview } from "./html-preview";
 import { searchWorkspaceFiles } from "./search";
 
+const agentRoot = Symbol("agent worktree root");
 const MAX_FILE_RESOLUTION_CANDIDATES = 32;
 const MAX_FILE_RESOLUTION_PATH_LENGTH = 4096;
 
@@ -71,6 +72,7 @@ export function createFileHandlers({
   shQuote,
   lastStepBaselines,
   revealPath = revealLocalPath,
+  resolveAgentWorktreeTarget,
 }: {
   herdr: HerdrClient;
   sshHost: () => string | undefined;
@@ -78,11 +80,15 @@ export function createFileHandlers({
   shQuote: (value: string) => string;
   lastStepBaselines?: LastStepBaselineStore;
   revealPath?: typeof revealLocalPath;
+  resolveAgentWorktreeTarget?: (
+    target: unknown,
+  ) => Promise<{ root: string; workspaceId: string }>;
 }) {
   async function explorerRoot(
     workspaceId: string,
     workspace: any,
   ): Promise<string> {
+    if (workspace[agentRoot]) return workspace[agentRoot] as string;
     const checkoutPath = getCheckoutPath(workspace);
     if (checkoutPath) return checkoutPath;
     const paneResult = await herdr.call("pane.list");
@@ -99,11 +105,26 @@ export function createFileHandlers({
     );
   }
 
-  async function getWorkspace(workspaceId: string) {
+  async function getWorkspace(
+    workspaceId: string,
+    params: Record<string, unknown>,
+  ) {
     const result = await herdr.call("workspace.get", {
       workspace_id: workspaceId,
     });
-    return (result as any)?.workspace ?? result;
+    const workspace = (result as any)?.workspace ?? result;
+    if (params.agent_worktree === undefined) return workspace;
+    if (!resolveAgentWorktreeTarget)
+      throw new Error("Agent worktree selection is unavailable.");
+    const selected = await resolveAgentWorktreeTarget(params.agent_worktree);
+    if (selected.workspaceId !== workspaceId)
+      throw new Error("Agent worktree no longer belongs to this workspace.");
+    return {
+      ...workspace,
+      cwd: selected.root,
+      worktree: { ...workspace.worktree, checkout_path: selected.root },
+      [agentRoot]: selected.root,
+    };
   }
 
   async function fileTarget(params: Record<string, unknown>, method: string) {
@@ -111,7 +132,7 @@ export function createFileHandlers({
     if (!workspaceId) throw new Error(`${method} requires workspace_id`);
     const path = sanitizePreviewPath(params.path);
     if (!path) throw new Error(`${method} requires path`);
-    const workspace = await getWorkspace(workspaceId);
+    const workspace = await getWorkspace(workspaceId, params);
     const checkoutPath = await explorerRoot(workspaceId, workspace);
     if (!checkoutPath) throw new Error("workspace has no directory path");
     return { workspaceId, workspace, checkoutPath, path };
@@ -128,7 +149,7 @@ export function createFileHandlers({
         ? sanitizeFilesystemPath(params.path)
         : sanitizeExplorerPath(params.path);
     if (!path) throw new Error(`${method} requires path`);
-    const workspace = await getWorkspace(workspaceId);
+    const workspace = await getWorkspace(workspaceId, params);
     const checkoutPath = await explorerRoot(workspaceId, workspace);
     if (!checkoutPath) throw new Error("workspace has no directory path");
     return { checkoutPath, path };
@@ -139,7 +160,7 @@ export function createFileHandlers({
     if (!workspaceId) throw new Error("file.upload requires workspace_id");
     const directory = sanitizeExplorerPath(params.directory);
     const filename = sanitizeUploadFilename(params.filename);
-    const workspace = await getWorkspace(workspaceId);
+    const workspace = await getWorkspace(workspaceId, params);
     const checkoutPath = await explorerRoot(workspaceId, workspace);
     if (!checkoutPath) throw new Error("workspace has no directory path");
     return { workspaceId, checkoutPath, directory, filename };
@@ -150,7 +171,7 @@ export function createFileHandlers({
     if (!workspaceId) throw new Error("file.delete requires workspace_id");
     const path = sanitizeExplorerPath(params.path);
     if (!path) throw new Error("file.delete requires path");
-    const workspace = await getWorkspace(workspaceId);
+    const workspace = await getWorkspace(workspaceId, params);
     const checkoutPath = await explorerRoot(workspaceId, workspace);
     if (!checkoutPath) throw new Error("workspace has no directory path");
     return { workspaceId, checkoutPath, path };
@@ -159,7 +180,7 @@ export function createFileHandlers({
   async function listFiles(params: Record<string, unknown>) {
     const workspaceId = String(params.workspace_id ?? "");
     if (!workspaceId) throw new Error("file.list requires workspace_id");
-    const workspace = await getWorkspace(workspaceId);
+    const workspace = await getWorkspace(workspaceId, params);
     const checkoutPath = await explorerRoot(workspaceId, workspace);
     if (!checkoutPath) throw new Error("workspace has no directory path");
     const filesystem = params.scope === "filesystem";
@@ -245,7 +266,7 @@ export function createFileHandlers({
     ) {
       throw new Error("invalid file.search query");
     }
-    const workspace = await getWorkspace(workspaceId);
+    const workspace = await getWorkspace(workspaceId, params);
     const root = await explorerRoot(workspaceId, workspace);
     if (!root) throw new Error("workspace has no directory path");
     const result = await searchWorkspaceFiles({
@@ -284,7 +305,7 @@ export function createFileHandlers({
     if (typeof params.path !== "string" || !params.path) {
       throw new Error("file.reveal requires path");
     }
-    const workspace = await getWorkspace(workspaceId);
+    const workspace = await getWorkspace(workspaceId, params);
     const root = changes
       ? await gitRoot(workspaceId, workspace)
       : await explorerRoot(workspaceId, workspace);
@@ -329,7 +350,7 @@ export function createFileHandlers({
     if (candidates.length === 0) {
       return { workspace_id: workspaceId, files: [] };
     }
-    const workspace = await getWorkspace(workspaceId);
+    const workspace = await getWorkspace(workspaceId, params);
     const checkoutPath = await explorerRoot(workspaceId, workspace);
     if (!checkoutPath) throw new Error("workspace has no directory path");
     const paths = Array.from(new Set(candidates.map((entry) => entry.path)));
@@ -504,7 +525,7 @@ export function createFileHandlers({
       path === undefined
         ? sanitizeUploadFilename(params.name)
         : path.split("/").pop()!;
-    const workspace = await getWorkspace(workspaceId);
+    const workspace = await getWorkspace(workspaceId, params);
     const rootPath = await explorerRoot(workspaceId, workspace);
     if (!rootPath) throw new Error("workspace has no directory path");
     const host = sshHost();
@@ -525,6 +546,7 @@ export function createFileHandlers({
   }
 
   async function gitRoot(workspaceId: string, workspace: any) {
+    if (workspace[agentRoot]) return workspace[agentRoot] as string;
     const host = sshHost();
     const tried = new Set<string>();
     let lastError = "workspace is not inside a git repository";
@@ -581,7 +603,7 @@ export function createFileHandlers({
   ) {
     const workspaceId = String(params.workspace_id ?? "");
     if (!workspaceId) throw new Error(`${method} requires workspace_id`);
-    const workspace = await getWorkspace(workspaceId);
+    const workspace = await getWorkspace(workspaceId, params);
     const root = await gitRoot(workspaceId, workspace);
     return { workspaceId, workspace, root };
   }

@@ -35,7 +35,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     Tapping an agent or its table, activating it (double-click,
     **Shift+Enter**), the needs-you list, **N** and **Next** open that window on
     **Chat**: the conversation's latest 200 entries, which scroll inside the
-    window, with **Jump to latest** when you have scrolled back and the
+    window, with **Jump to latest** when you have scrolled back (counting new
+    agent messages until you reach the bottom) and the
     composer always at the bottom. Reopening or redocking the window keeps the
     conversation. In Town it
     docks on the right by default (**Menu → Inspector opening**), 520px wide
@@ -43,6 +44,21 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     Drag its inner edge to resize it; Town remembers the width. It can be
     undocked, and keeps the dock it was left with. On a phone, the Chat view
     shows only its own composer, without the terminal key bar.
+  - An agent's known PR announcement or current work claim can show a compact
+    pull request card in Chat. **Details** has CI, reviews and owner actions;
+    **Ask the author to fix** sends `↳ #N` to the author in this conversation.
+    The current quest appears as a collapsed title/progress row in the scrolling
+    conversation; expand it for objectives.
+    Chat's Now status uses a small circle with a status tooltip and screen-reader
+    text: blue working ring, yellow needs-you mark, green done tick, grey idle dot.
+  - Chat reuses Terminal's full **Compose** editor, attachments and harness
+    command palette, with a separate conversation draft. Enter adds a line;
+    Ctrl+Enter, Cmd+Enter or the paper-plane button sends. Type `/` or use
+    **⋮ → Browse commands** for suggestions; the paperclip attaches files.
+    Every slash command is allowed and stays **sent,
+    not checked** until transcript evidence. Native working-state admission
+    shows queued message bubbles with the recipient and time; blocked sends
+    preserve the draft and the refusal reason.
   - The top selector follows the window's own width, docked, floating or on a
     phone: labelled from 640px, icons (with their names as tooltips) below
     that, and below 360px only the active view, with the others under ⋯.
@@ -59,8 +75,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   - Tapping an agent or its table brings the agent back: from reception or the
     lounge it walks to its desk and stays there until its status changes. A
     table stands for an agent that needs you (waiting, then finished) before
-    the one seated there. **Menu → Town opens** chooses whether that tap opens
-    the chat (the default) or the terminal; either way the tap does not mark
+    the one seated there. **Menu → Agents open** chooses whether that tap opens
+    the chat (the default) or the terminal, in Town, Board and Desk alike; either way the tap does not mark
     finished work reviewed. **Open terminal** in the peek does, as before.
   - A seated agent with a quest (its own todo list, plan, Codex goal or loop)
     shows a blue pennant (green when done, amber when blocked) beside it in
@@ -218,6 +234,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   pans the board, as in Town) and settle within a second; workspaces fold into a count and open
   into free space; Tidy (with Undo) rearranges a workspace or the board and
   carries strung notes along. Zoomed out, workspaces show a square per pane.
+  - Tapping or double-clicking a tab or pane row opens an agent on Chat (as in
+    Town, by **Agents open**), and a plain shell, or an agent without Chat, on
+    its terminal.
   - **Pin** in a selected card's bar keeps the card where it is: it shows a
     pin, and placement, Tidy and settling leave it until **Unpin** (a drag
     still moves it). On a phone, where the card's terminal covers Board, the
@@ -275,14 +294,15 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   - **Agents** lists every agent in the host filter, those you recently opened from the
     Desk first, then each workspace by recent activity. **Reviewed** lists the
     stops you marked, newest first, with **Reopen**; marking offers **Undo**.
-  - On wide screens, opening a card snaps that agent's Inspector to the right (terminal,
-    files, changes, history) beside the Desk as a reading pane and folds the lanes
-    into one queue. `J`/`K` preview the next agent there, `Enter` moves into its
-    terminal and `Esc` closes the pane. Phones open the Inspector full screen.
+  - On wide screens, opening a card snaps that agent's Inspector to the right (on
+    Chat, or the terminal when the agent has no Chat or **Agents open** is set to
+    Terminal) beside the Desk as a reading pane and folds the lanes
+    into one queue. `J`/`K` preview the next agent there, `Enter` opens it using
+    **Agents open** and `Esc` closes the pane. Phones open the Inspector full screen.
   - One search (`/`) filters every mode by agent name, thread title, harness,
     workspace, tab, folder, request and report. Agents are named by the thread
     title their harness writes to the terminal when they have no Herdr name.
-  - `J`/`K` move between cards; `Enter` opens the agent's terminal Inspector to
+  - `J`/`K` move between cards; `Enter` opens the agent's Inspector using **Agents open** to
     answer, review, or watch. Hosts outside the filter appear as summary chips.
 - **Spaces** is the focused operational workspace: terminals, files, changes,
   annotations, worktrees, and Agent History for one selected connection.
@@ -482,15 +502,30 @@ no pane is named, since any process can leave it out; `me` and `spawned-by`
 need a verified pane. The CLI never
 merges, deletes panes, tabs or workspaces, or reaches outside World.
 
-### Agent checkout context
+### Agent worktree in Files and Changes
 
-An active agent can report its exact checkout once with `herdr-world
-agent-checkout /absolute/checkout --pane w1:p1`. The Inspector reads branch and
-bounded changed-file status from that checkout on the same qualified connection,
-and labels any optional HTTPS link as **Reported PR**. Reports belong to the
-exact active session without a timer; session replacement or a Herdr restart makes
-the Agent checkout unavailable. **Workspace changes** remains an explicit, separate
-choice. Agent checkout has no Git mutation controls or Clear command.
+An agent's **Files** and **Changes** share one worktree, independently of its
+launch directory. The service considers the live Herdr pane `foreground_cwd`,
+then the same agent session's native transcript/Codex rollout cwd or explicit
+checkout report, then its branch matched in a scoped `git worktree list`.
+The location line names the selected tree and branch; its source mark explains
+**Live pane**, **Session cwd**, **Agent report** or **Branch match**.
+
+Open that location popover for **Worktree** candidates and **Refresh**; phones
+use the same choices in a bottom sheet. Pick a
+radio choice to apply it to Files and Changes together. Repository-listed
+alternatives are viewing choices, never branch ownership claims. Equal-rank
+matches need a choice; stale or replaced-session evidence stops resource access
+until refreshed. Files never silently falls back to the workspace checkout.
+Detached HEAD is supported. An outside-Git or inaccessible cwd is shown as
+unconfirmed evidence, without scanning neighboring repositories.
+
+An agent may still report its checkout with `herdr-world agent-checkout
+/absolute/checkout --pane w1:p1`, optionally `--pr HTTPS_URL`. The report belongs
+to that exact session, expires with replacement/restart, and its link is labelled
+**Reported PR**. It is evidence rather than a claim of ownership; viewing another
+candidate does not rewrite it. Existing file and Git actions use the selected
+root and revalidate its qualified binding before acting.
 
 ## Workspace, Tab, and Pane Navigation
 
@@ -640,15 +675,16 @@ See [resource ownership](docs/ARCHITECTURE.md#workspace-resource-ownership).
   terminal, and hides context the harness injects as user turns. It sends with
   Herdr's agent prompt only to a session Herdr ties to the pane (a reported
   session or a Codex title thread), not to one World guessed from the folder.
-  The paperclip attaches files, which upload to the pane's host and add their
+  **+ Add file** attaches files, which upload to the pane's host and add their
   paths to the message.
   A sent message shows as not yet seen until its session's transcript has
   the same words, and then as matched by its words, never as delivered.
   When there is evidence it went to another session, a red notice names both
   sessions and pauses Send until dismissed; when Chat can no longer check, it
   says so, or that it cannot tell when the same words appeared at about the
-  same time. Slash commands, and Claude Code's `!` and `#`, go through the
-  Terminal.
+  same time. All slash commands use Chat's shared Compose editor and have
+  **sent, not checked** receipts until their text appears in the transcript.
+  Claude Code's `!` and `#` modes still use the Terminal.
   A Now bar shows the agent's status, its current task from the terminal title
   and how long it has been at it, with Stop (or Esc twice) for Claude Code,
   Codex and Pi; the step running now shows with its command and timer.
@@ -664,8 +700,9 @@ See [resource ownership](docs/ARCHITECTURE.md#workspace-resource-ownership).
   it cannot read the conversation it shows the reason with the matching action:
   copy the integration command, link a Codex session, **Refresh** or **Open
   Terminal**. **Details** opens the History view below. See [Chat](docs/CHAT.md).
-- Above the conversation, Chat shows the agent's quest in a foldable log: its
-  title, a progress bar and each objective as pending, active, done or blocked,
+- Inside the scrolling conversation, Chat shows the current quest as one
+  collapsed title/progress row. Expand it for the progress bar and objectives
+  as pending, active, done or blocked,
   read without a model from the harness's own todos (Claude Code `TodoWrite` and
   tasks, Codex `update_plan`, Kimi `SetTodoList`), approved plan, Codex goal or
   `/loop`. See [Quests](docs/CHAT.md#quests).

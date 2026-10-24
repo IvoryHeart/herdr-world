@@ -95,7 +95,7 @@ async function run() {
       <DeskBoard
         world={world}
         client={client}
-        onOpenTerminal={async (id) => {
+        onOpen={async (id) => {
           opened.push(id);
         }}
       />,
@@ -196,7 +196,7 @@ async function run() {
       <DeskBoard
         world={world}
         client={client}
-        onOpenTerminal={async (id) => {
+        onOpen={async (id) => {
           opened.push(id);
         }}
         reading="alpha"
@@ -346,7 +346,7 @@ async function run() {
       <DeskBoard
         world={filtered}
         client={resolve}
-        onOpenTerminal={async (id) => {
+        onOpen={async (id) => {
           opened.push(id);
         }}
       />,
@@ -379,7 +379,7 @@ async function run() {
       <DeskBoard
         world={{ ...filtered, leaves: [remote], hosts: [filtered.hosts[1]] }}
         client={resolve}
-        onOpenTerminal={async (id) => {
+        onOpen={async (id) => {
           opened.push(id);
         }}
       />,
@@ -421,7 +421,7 @@ async function run() {
         key="slow-host"
         world={{ ...filtered, leaves: [remote, leaves[0]] }}
         client={independent}
-        onOpenTerminal={async () => {}}
+        onOpen={async () => {}}
       />,
     ),
   );
@@ -450,7 +450,7 @@ async function run() {
           leaves: [{ ...remote, status: "blocked" }, leaves[0]],
         }}
         client={independent}
-        onOpenTerminal={async () => {}}
+        onOpen={async () => {}}
       />,
     ),
   );
