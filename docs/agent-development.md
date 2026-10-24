@@ -125,6 +125,21 @@ unrecognised remainder cannot make a resolved fraction confirm readiness.
 PR actions remain in the browser's confirmation flow, outside the World CLI,
 skills and MCP.
 
+## Limit merge conflict churn
+
+Before parallel changes, identify shared implementation files and keep one writer
+for overlapping edits. Recent recurring integration surfaces include the service
+entry point, Town canvas, Chat and the file-size exception ledger. A source split
+and a feature touching the same code should land in an agreed order; otherwise
+the feature must deliberately follow the split's new module boundaries.
+
+Use changelog fragments rather than editing the assembled `CHANGELOG.md`. Bring
+an older branch forward once before final verification, inspect the conflicting
+paths and preserve both behaviors. Do not repeatedly merge main solely to chase
+an unrelated red CI run: first identify the failed leaf job and whether main
+shares it. Branch age increases exposure, but overlapping changes cause the
+conflict; a very old branch can still merge cleanly when its files are separate.
+
 ## Run an optional visible team
 
 For HWF operating guidance, use the repo-local
