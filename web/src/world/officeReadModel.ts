@@ -2,8 +2,9 @@ import type {
   HerdrOfficeProjection,
   OfficeAgent,
   OfficePaneDevice,
+  OfficeRosterEntry,
 } from "./herdrOfficeProjection";
-import type { WorldAgentStatus } from "./worldObject";
+import type { WorldAgentStatus, WorldHostObject } from "./worldObject";
 
 export type OfficeStatusCounts = Readonly<Record<WorldAgentStatus, number>>;
 export type OfficeReadModel = {
@@ -13,6 +14,10 @@ export type OfficeReadModel = {
 };
 
 const projections = new WeakMap<HerdrOfficeProjection, OfficeReadModel>();
+const canonicalCounts = new WeakMap<
+  readonly OfficeRosterEntry[],
+  OfficeStatusCounts
+>();
 const emptyCounts = () => ({
   blocked: 0,
   working: 0,
@@ -23,7 +28,10 @@ const emptyCounts = () => ({
 
 /** Build beside the cooperative canonical roster, before snapshot publication. */
 export function createOfficeReadModel(
-  hosts: readonly { connectionId: string; generation: number }[],
+  hosts: readonly Pick<
+    WorldHostObject,
+    "connectionId" | "generation" | "connection"
+  >[],
   agentOf: OfficeReadModel["agentOf"],
   paneOf: (key: string) => OfficePaneDevice | undefined,
 ) {
@@ -34,17 +42,25 @@ export function createOfficeReadModel(
     agentForPane: (connectionId, paneId) => {
       const host = hosts.find((host) => host.connectionId === connectionId);
       if (!host) return undefined;
+      const generation = host.connection.snapshotGeneration ?? host.generation;
       const pane = paneOf(
-        JSON.stringify([connectionId, host.generation, "pane-device", paneId]),
+        JSON.stringify([connectionId, generation, "pane-device", paneId]),
       );
       return pane?.agentKey ? agentOf(pane.agentKey) : undefined;
     },
   };
   return {
     model,
-    // World already counted these statuses; preserve its immutable contribution.
-    addRoom(key: string, statuses: OfficeStatusCounts) {
-      counts.set(key, statuses);
+    // Exact aggregate coverage can exceed the admitted canonical agent roster.
+    addRoom(key: string, roster: readonly OfficeRosterEntry[]) {
+      let contribution = canonicalCounts.get(roster);
+      if (!contribution) {
+        const next = emptyCounts();
+        for (const { agent } of roster) next[agent.semanticStatus] += 1;
+        contribution = next;
+        canonicalCounts.set(roster, contribution);
+      }
+      counts.set(key, contribution);
     },
   };
 }

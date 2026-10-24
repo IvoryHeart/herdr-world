@@ -868,7 +868,7 @@ export function projectWorldOffice(
     );
   if (!prepared)
     for (const entry of allRooms)
-      read.addRoom(entry.room.key, entry.source.coverage.status);
+      read.addRoom(entry.room.key, canonicalRoomRoster(entry).agents);
   setOfficeReadModel(result, read.model);
   return result;
 }
@@ -1021,7 +1021,7 @@ export async function prepareWorldOffice(
     const room = buildRoom(space, hosts.get(space.parentId)!);
     preparedRooms.set(space, room);
     const canonical = canonicalRoomRoster(room);
-    observation.readModel.addRoom(room.room.key, space.coverage.status);
+    observation.readModel.addRoom(room.room.key, canonical.agents);
     const range = {
       agents: [observation.roster.length, 0] as [number, number],
       desks: [observation.desks.length, 0] as [number, number],
