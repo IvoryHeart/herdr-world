@@ -863,13 +863,27 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
       await settle(50);
       check(
         ready.querySelectorAll('[aria-label="Readiness"] li[data-state="pass"]')
-          .length === 5 &&
+          .length === 5,
+        "details show all five readiness rules",
+      );
+      check(
+        ready.textContent?.includes(
+          "Reviewer names are explicit sender claims, not verified identities",
+        ) === true &&
           ready.textContent?.includes(
-            "GitHub doesn't let you approve your own PR.",
-          ) === true &&
-          ready.textContent?.includes("per rev2's comment") === true &&
-          ready.textContent?.includes("2 behind main") === true,
-        "details show each rule, the reviewer's provenance and the head",
+            "a shared GitHub login does not identify a crew reviewer",
+          ) === true,
+        "details distinguish reviewer claims from shared account identity",
+      );
+      check(
+        ready.querySelector(
+          'a[href="https://github.com/example-org/web-app/pull/43#issuecomment-1"]',
+        ) !== null,
+        "details preserve the original reviewer source link",
+      );
+      check(
+        ready.textContent?.includes("2 behind main") === true,
+        "details preserve the head's distance behind main",
       );
       button(ready, "Close…").click();
       await settle(50);
