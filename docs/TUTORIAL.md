@@ -380,7 +380,9 @@ on your phone and desktop.
    asks first, with **Don't ask again**, and always asks before moving a
    workspace's last tab, which closes that workspace. Strings follow the move.
 
-9. Press the pull request button in Board's controls to open **Work**: your
+9. Press the labelled **Work** pill, first in Board's bottom-right controls:
+   if an Inspector fills the phone screen, close it with **X** or **Back** first.
+   Work opens your
    GitHub pull requests in columns from **In review** through **Fixing**,
    **Green** and **Ready to merge** to **Merged**, and on the **Tickets** tab
    your Jira tickets and assigned issues by status. A card names the agents
@@ -407,8 +409,11 @@ on your phone and desktop.
 After Herdr restarts, Board cannot prove that a workspace or agent is the one a
 string was made with, so it draws those strings dashed and asks once per host:
 **Keep** or **Detach**. A string whose target closed waits in **Needs a home**
-(the red count in the controls), where you can re-attach its note or discard
-the string; notes always stay. If Board misbehaves, describe the steps that led
+(a separate **Needs a home · n** control), where you can re-attach its note or discard
+the string; notes always stay. At zero or when space is tight, the action remains
+in **⋮ → Needs a home (n)**. On phones, **Tidy** is in **⋮**, and Fit then the zoom
+buttons move there as needed; **Work** keeps its text and the controls stay on one
+row. If Board misbehaves, describe the steps that led
 there in a bug report.
 
 **You are done when:** you can find your workspace card, pin a note and string it

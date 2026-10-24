@@ -1655,6 +1655,7 @@
         "scripts/pages-content.test.ts",
         "web/src/world/board/boardPlacement.test.ts",
         "web/src/world/board/boardGesture.test.ts",
+        "web/src/world/board/boardControlsLayout.test.ts",
         "web/src/world/interaction/gesture.test.ts",
         "web/src/world/board/boardAnchors.test.ts",
         "web/src/world/board/boardDrafts.test.ts",

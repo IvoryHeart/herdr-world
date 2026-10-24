@@ -732,8 +732,159 @@ async function seedStrungNote() {
   return "note:seeded";
 }
 
+/** Secondary controls can live in the single-row overflow on a phone. */
+async function boardAction(selector: string) {
+  let button = host.querySelector<HTMLButtonElement>(selector);
+  if (!button) {
+    host
+      .querySelector<HTMLButtonElement>('[aria-label="Board settings"]')!
+      .click();
+    await waitFor(
+      () => Boolean(host.querySelector(selector)),
+      `overflow action missing: ${selector}`,
+    );
+    button = host.querySelector<HTMLButtonElement>(selector);
+  }
+  return button!;
+}
+
 /** Board scenarios, each on a fresh board (see fresh()); run in order. */
 const scenarios: [name: string, run: () => Promise<void>][] = [
+  [
+    "Work stays labelled and note actions survive mobile overflow",
+    async () => {
+      check(
+        innerWidth === Number(params.get("width")),
+        `CSS viewport ${innerWidth} must match requested width ${params.get("width")}`,
+      );
+      const work = host.querySelector<HTMLButtonElement>(
+        '[aria-label="Work: pull requests and tickets"]',
+      )!;
+      const row = host.querySelector<HTMLElement>(
+        ".board-controls-space > .board-controls",
+      )!;
+      check(
+        work.textContent?.trim() === "Work" && row.firstElementChild === work,
+        "Work is the first visibly labelled action",
+      );
+      const buttons = [...row.children]
+        .map((node) =>
+          node.matches("button") ? node : node.querySelector("button"),
+        )
+        .filter(Boolean) as HTMLButtonElement[];
+      const rect = row.getBoundingClientRect();
+      check(
+        rect.left >= 0 && rect.right <= innerWidth,
+        "Board controls fit the viewport in one row",
+      );
+      check(
+        buttons.every(
+          (button) =>
+            Math.abs(
+              button.getBoundingClientRect().top -
+                work.getBoundingClientRect().top,
+            ) < 1,
+        ),
+        "controls never wrap to a second row",
+      );
+      check(
+        work.getBoundingClientRect().height >= (innerWidth <= 720 ? 44 : 36),
+        "Work keeps the prescribed touch height",
+      );
+      check(
+        innerWidth > 720 ||
+          !row.querySelector('button[aria-label="Tidy the board"]'),
+        "phone Tidy lives in the menu",
+      );
+      work.click();
+      await waitFor(
+        () =>
+          Boolean(
+            host.querySelector('.work-lens [role="tab"][aria-selected="true"]'),
+          ),
+        "labelled Work opens Pull requests",
+      );
+      check(
+        work.getAttribute("aria-pressed") === "true",
+        "open Work is a pressed mode",
+      );
+      check(
+        host.querySelector('.work-lens [role="tab"][aria-selected="true"]')
+          ?.textContent === "Pull requests",
+        "Work defaults to Pull requests",
+      );
+      host
+        .querySelector<HTMLButtonElement>('[aria-label="Close Work"]')!
+        .click();
+      await waitFor(() => !host.querySelector(".work-lens"), "Work closes");
+      check(
+        work.getAttribute("aria-pressed") === "false",
+        "closed Work clears its pressed state",
+      );
+      const empty = await boardAction(".board-tray-button");
+      check(
+        empty.textContent === "Needs a home (0)",
+        "zero-count note action remains explicitly available in overflow",
+      );
+      empty.click();
+      await waitFor(
+        () => Boolean(host.querySelector(".board-tray")),
+        "empty note tray opens",
+      );
+      check(
+        Boolean(
+          host
+            .querySelector(".board-tray")
+            ?.textContent?.includes("All strings have a home."),
+        ),
+        "zero-count tray explains its empty state",
+      );
+      host
+        .querySelector<HTMLButtonElement>('.board-tray [aria-label="Close"]')!
+        .click();
+      await seedStrungNote();
+      const gone = strungPane()!.native_id;
+      closedPanes.add(gone);
+      mount(
+        2,
+        variant((leaf) => (leaf.nativeId === gone ? null : leaf)),
+      );
+      await waitFor(
+        () => saved.strings[0]?.detached === true,
+        "closed target produces one detached note string",
+      );
+      const home = await boardAction(".board-tray-button");
+      check(
+        home.textContent === "Needs a home · 1" ||
+          home.textContent === "Needs a home (1)",
+        "detached note count has its own label and action",
+      );
+      const changedRow = host
+        .querySelector<HTMLElement>(".board-controls-space > .board-controls")!
+        .getBoundingClientRect();
+      check(
+        changedRow.left >= 0 && changedRow.right <= innerWidth,
+        "a changed note count still fits the single-row controls",
+      );
+      check(
+        innerWidth <= 720 ||
+          home.parentElement?.getAttribute("role") === "group",
+        "desktop notes keep their separate chip immediately after Work",
+      );
+      check(
+        host
+          .querySelector('[aria-label="Work: pull requests and tickets"]')
+          ?.textContent?.trim() === "Work",
+        "note count never becomes a Work count",
+      );
+      home.click();
+      await waitFor(
+        () => host.querySelectorAll(".board-tray-row").length === 1,
+        "separate note action opens its existing tray",
+      );
+      closedPanes.clear();
+    },
+  ],
   [
     "work lens shows pull requests and tickets and jumps to the agent",
     async () => {
@@ -1226,9 +1377,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
       const snapshot = ["studio:w2", "studio:w2:t1", "build-box:w2"].map(
         (key) => [key, at(key)!] as const,
       );
-      host
-        .querySelector<HTMLButtonElement>('[aria-label="Tidy the board"]')!
-        .click();
+      (await boardAction('[aria-label="Tidy the board"]')).click();
       // The Undo notice shows at once and lasts a few seconds; look before
       // waiting for the cards to settle, which takes longer on a slow runner.
       await waitFor(
@@ -1279,6 +1428,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
       );
       const textbox = document.activeElement as HTMLElement;
       textbox.textContent = "Ship the login fix";
+      check(document.hasFocus(), "note editing has browser focus before blur");
       textbox.blur();
       await waitFor(
         () => saved.notes[0]?.text === "Ship the login fix",
@@ -1716,7 +1866,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         "a closed target detaches its string",
       );
       check(saved.notes.length === 1, "the note stays on the board");
-      host.querySelector<HTMLButtonElement>(".board-tray-button")!.click();
+      (await boardAction(".board-tray-button")).click();
       await waitFor(
         () => host.querySelectorAll(".board-tray-row").length === 1,
         "Needs a home lists the string",
@@ -2049,11 +2199,11 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         // Push the pinned card's neighbour onto it, then tidy its workspace:
         // auto-layout moves the others, never the pinned card.
         const pinnedAt = at(tabKey)!;
-        host
-          .querySelector<HTMLButtonElement>(
+        (
+          await boardAction(
             '[aria-label="Tidy this workspace\'s tabs"], [aria-label="Tidy the board"]',
-          )!
-          .click();
+          )
+        ).click();
         await rest();
         {
           const now = at(tabKey)!;
@@ -2320,7 +2470,8 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
               leaf.connectionId === "studio" && leaf.nativeId === paneId,
           )!.tabId
         }`;
-        // Drag the strung tab's own workspace, so Tidy has to bring the tab back.
+        // Drag the strung tab's own workspace above its row, so the setup stays
+        // clear of Tidy's destination on both narrow and wide boards.
         const wsKey = tabKey.split(":").slice(0, 2).join(":");
         await bringIntoView(() => card(wsKey)!);
         const ws = card(wsKey)!;
@@ -2329,11 +2480,11 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         const wc = centre(ws.querySelector(".board-label")!);
         pointer(ws, "pointerdown", wc.x, wc.y, 31);
         for (let i = 1; i <= 8; i++) {
-          pointer(ws, "pointermove", wc.x + i * 25, wc.y + i * 10, 31);
+          pointer(ws, "pointermove", wc.x + i * 25, wc.y - i * 10, 31);
           await settle(16);
         }
         await settle(150);
-        pointer(ws, "pointerup", wc.x + 200, wc.y + 80, 31);
+        pointer(ws, "pointerup", wc.x + 200, wc.y - 80, 31);
         await rest();
         await settle(700);
         check(
@@ -2345,9 +2496,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         );
         const noteBefore = at(noteKey)!,
           tabBefore = at(tabKey)!;
-        host
-          .querySelector<HTMLButtonElement>('[aria-label="Tidy the board"]')!
-          .click();
+        (await boardAction('[aria-label="Tidy the board"]')).click();
         // Wait for the cards themselves to come to rest, not a fixed time: slow
         // runners finish the tween later.
         const still = async () => {
@@ -2526,9 +2675,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
           );
         };
         check(onCard(), "the dropped note sits on a card");
-        host
-          .querySelector<HTMLButtonElement>('[aria-label="Tidy the board"]')!
-          .click();
+        (await boardAction('[aria-label="Tidy the board"]')).click();
         await rest();
         await settle(400);
         // Tidy then fits the board; on a phone that is the overview, which
@@ -2816,9 +2963,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
           "an unresolved draft survives switching views",
         );
         // A later notice does not take the draft away.
-        host
-          .querySelector<HTMLButtonElement>('[aria-label="Tidy the board"]')!
-          .click();
+        (await boardAction('[aria-label="Tidy the board"]')).click();
         await settle(100);
         check(
           Boolean(host.querySelector(".board-unsaved")),

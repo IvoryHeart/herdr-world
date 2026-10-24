@@ -243,7 +243,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     strings whose target closed wait in Needs a home. Selecting a card opens
     the shared Inspector. Development builds add an event trace for bug reports
     ([development tools](docs/development.md#development-tools)).
-  - **Work** (the pull request button in Board's controls) lays your pull
+  - **Work**, the first labelled pill in Board's bottom-right controls, lays your pull
     requests out as columns: In review, Fixing (changes requested, checks
     failing or conflicts), Green (checks pass, a required review is pending),
     Ready to merge (approved, or passing where no review is required) and
@@ -252,6 +252,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     to the pull request or ticket and names the agents working on it; tap an
     agent to jump to its card. Escape, Back or a press outside closes it. See
     [Sources](#sources-github-and-jira).
+    On phones, close a full-screen Inspector with X/Back to return to these
+    controls. Work keeps its label and 44-pixel tap height. **Needs a home · n**
+    remains a separate action for detached note strings; at zero or when space
+    is tight, find it in **⋮ → Needs a home (n)**. Phone **Tidy** lives in **⋮**;
+    Fit and zoom buttons also move there as needed to keep one row.
   See the [Board exercise](./docs/TUTORIAL.md#board).
 
 - **Desk** organizes the filtered hosts' agents by what

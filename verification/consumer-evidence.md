@@ -164,6 +164,24 @@ screenshots remain batch-close acceptance. This adds a projection consumer, not
 a new membership, ordering or recovery protocol, so direct consumer evidence is
 appropriate alongside the existing Summary and panel tests.
 
+### Mobile Board Work controls (Q43)
+
+The control policy comes from the owner/PM/design ruling: Work remains first and
+labelled, note strings retain their own action (including zero), and overflow
+removes Notes before Fit and zoom without wrapping. Direct finite tests cover
+every available width from 128 to 800 for phone/desktop and zero/nonzero counts,
+retaining each action exactly once. Production uses actual measured control
+widths on resize and font/count changes, outside the frame/physics loop. The real
+Board browser consumer sets and asserts actual 320/360/390/430/1440 CSS-pixel
+viewports through Chrome device metrics (window-size alone clamps at 500), with
+focus emulation for native note blur, and checks reduced motion:
+label/order/touch height, one-row bounds, Work opening Pull requests, zero-count
+empty tray and a detached string's distinct tray action. Existing Board tests
+retain Tidy/undo and note reattachment. This is a presentation projection over
+existing callbacks, not a new movement/authority protocol. Five-view screenshots
+and the full batch gate remain delivery acceptance; the owner's private mobile
+image and authenticated PR-list contents are not public verification fixtures.
+
 ## Review and remaining obligations
 
 Evidence statuses describe concrete decisions; independent acceptance is recorded separately. Review 5516249164 accepts every Q01–Q43 bounded mapping and alternative. Mandatory consumers and excluded claims remain binding. Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); owner-approved PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding. Review must inspect the intended requirement, model/reducer domain, adapter fidelity, actual consumer tests and excluded claims. Q21 has its separate bounded exhaustive contract. Q26–Q28 retain their separately accepted Ranger storage/permission assumptions.

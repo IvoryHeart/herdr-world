@@ -1718,6 +1718,17 @@ authoritative host, workspace, tab or pane ancestry. A host whose topology is
 cached after failure SHALL be visibly stale and its cards SHALL be
 non-actionable. Town SHALL be unaffected.
 
+Board SHALL lead its bottom-right controls with a visible labelled Work pill,
+with a filled pressed state, opening the existing Work lens. It SHALL keep the
+label and a 44-CSS-pixel tap height on phones (36 on desktop). Needs a home SHALL
+remain a distinct detached-note action after Work, with its own count and tray;
+at zero it SHALL remain in the menu and open an explicit empty state. Note counts
+SHALL NOT appear as Work counts. On phones Tidy SHALL move to the menu. When the
+single row cannot fit, Needs a home SHALL move to the menu before Fit and then
+zoom in/out; Work SHALL retain its visible slot and text. The bar SHALL NOT wrap.
+A full-screen Inspector SHALL continue to cover Board until closed by X/Back;
+Work SHALL NOT be duplicated inside it.
+
 A workspace card SHALL count its agents by status and its shells. The user MAY
 give any workspace or tab card a colour from a fixed palette, saved with the
 board; a tab card SHALL show its terminal colour (see Terminal colour), so a tab
@@ -1726,6 +1737,13 @@ SHALL never stand for or hide a status: status keeps its own colours on the dot,
 ring, badge and overview squares. From an actionable workspace card the user MAY
 open a plain terminal tab or start an agent in a new tab without a note, and
 from a live host's label MAY open World's New workspace dialog.
+
+#### Scenario: Find Work and detached notes on a narrow phone
+
+- **WHEN** the user returns from a full-screen Inspector to Board
+- **THEN** Work is the first labelled control and opens Pull requests
+- **AND** the separate Needs a home action remains reachable, including at zero
+- **AND** secondary actions use the menu instead of wrapping or hiding Work text
 
 #### Scenario: Open Board
 
