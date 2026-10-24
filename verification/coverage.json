@@ -326,6 +326,7 @@
         "web/src/mobileTerminalShortcuts.test.ts",
         "web/src/components/TerminalComposer.dom.test.ts",
         "web/src/components/TerminalComposer.chat.test.ts",
+        "web/src/components/VisualPreview.test.ts",
         "web/src/components/TerminalComposer.uploads.test.ts",
         "web/src/components/TerminalView.inputMode.test.ts"
       ],
@@ -345,6 +346,7 @@
           "web/src/mobileTerminalShortcuts.test.ts",
           "web/src/components/TerminalComposer.dom.test.ts",
           "web/src/components/TerminalComposer.chat.test.ts",
+          "web/src/components/VisualPreview.test.ts",
           "web/src/components/TerminalComposer.uploads.test.ts",
           "web/src/components/TerminalView.inputMode.test.ts"
         ],

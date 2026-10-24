@@ -119,6 +119,8 @@ view that you open on purpose.
   `Cmd+Enter` on a Mac) also send. Direct mode, Insert draft and the terminal
   key bar stay out of Chat.
 - Each bound conversation has its own draft, separate from Terminal drafts.
+  Drafts remain usable when another host has focus; a replaced runtime cannot
+  send or upload through the retired draft.
   **+ Add file** or paste uploads to that pane's host with progress chips;
   completed paths enter at the saved caret, and **Send** waits for uploads.
   A completion after Chat closes updates only that conversation's draft.
@@ -144,6 +146,12 @@ Evidence is ordered live pane cwd, then that session's native transcript/Codex
 rollout cwd or checkout report, then its branch in the known repository's
 worktree list. A higher-ranked live directory keeps precedence; lower sources
 and other listed trees remain explicit viewing choices, useful for `git -C`.
+
+To review a different branch, open **location line → Worktree**, choose its
+branch-labelled candidate, then select **Changes → Against main**. **Working
+tree** shows uncommitted edits; **Against main** shows committed branch changes
+since the merge base. An old branch already merged into main can correctly show
+no changes in both modes even while the agent works in another listed tree.
 
 Ambiguous choices and stale evidence never silently use the launch checkout.
 The service rechecks the subject, revision and root for both RPC and HTTP

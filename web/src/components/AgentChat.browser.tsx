@@ -5,6 +5,7 @@ import { AgentChat, type Conversation } from "./AgentChat";
 import { ChatComposer } from "./chat/ChatComposer";
 import { useAgentHistoryWindow } from "./useAgentHistoryWindow";
 import { useConnectionClient } from "../useConnectionClient";
+import { activateTerminalComposerDraftScope } from "../terminalComposer";
 import type { ConversationStep } from "./chat/blocks/steps";
 import { EMPTY_WORLD_SOURCES, worldSourcesStore } from "../world/worldSources";
 import "../styles/tokens.css";
@@ -111,6 +112,7 @@ const message = (
  */
 const uploadRequests: {
   filename: string;
+  endpoint: string;
   answer(ok: boolean): void;
 }[] = [];
 class FixtureUploadRequest {
@@ -139,9 +141,12 @@ class FixtureUploadRequest {
       total: body.size,
       lengthComputable: true,
     } as ProgressEvent);
-    const filename = this.url.searchParams.get("filename") ?? "";
+    const filename =
+      this.url.searchParams.get("filename") ??
+      (body instanceof File ? body.name : "image.png");
     uploadRequests.push({
       filename,
+      endpoint: this.url.pathname,
       answer: (ok) => {
         this.status = ok ? 200 : 507;
         this.headers =
@@ -158,6 +163,19 @@ class FixtureUploadRequest {
 }
 
 async function run() {
+  if (location.search === "?limited-apis") {
+    check(
+      typeof crypto.randomUUID === "undefined" &&
+        typeof crypto.subtle === "undefined" &&
+        typeof navigator.clipboard === "undefined",
+      "Send and upload must work without secure-context-only APIs",
+    );
+  }
+  // Match App's production admission, including a background Inspector host.
+  // Without active scopes an invalid Chat key silently passes this fixture.
+  activateTerminalComposerDraftScope("spaces", 3, [
+    { connectionId: "test", connectionGeneration: 1 },
+  ]);
   const originalConnection = bridge.connection;
   const originalControl = bridge.onControl;
   const controls = new Set<(control: BridgeControlMsg) => void>();
@@ -734,6 +752,44 @@ async function run() {
           container.querySelector<HTMLTextAreaElement>("textarea")?.value ?? ""
         ).includes("/uploads/log.txt"),
         "A retry after Chat reopened must reach the open draft",
+      );
+
+      // Clipboard image events work without navigator.clipboard permissions.
+      const clipboard = new DataTransfer();
+      clipboard.items.add(
+        new File(["synthetic image"], "screenshot.png", {
+          type: "image/png",
+        }),
+      );
+      container.querySelector("textarea")!.dispatchEvent(
+        new ClipboardEvent("paste", {
+          bubbles: true,
+          cancelable: true,
+          clipboardData: clipboard,
+        }),
+      );
+      await settle();
+      check(
+        uploadRequests[6]?.endpoint.endsWith("/upload-image") === true,
+        "Pasting a screenshot must start the owning host's image upload",
+      );
+      uploadRequests[6]!.answer(true);
+      await settle();
+      const attachedText =
+        container.querySelector<HTMLTextAreaElement>("textarea")!.value;
+      check(
+        attachedText.includes("/uploads/screenshot.png"),
+        "The pasted screenshot's path must reach this conversation's draft",
+      );
+      const sendsBeforeAttachments = count("agent_conversation.send");
+      send().click();
+      await settle();
+      check(
+        count("agent_conversation.send") === sendsBeforeAttachments + 1 &&
+          calls
+            .filter((call) => call.method === "agent_conversation.send")
+            .slice(-1)[0]?.params.text === attachedText.trim(),
+        "Send must submit the draft including uploaded files and screenshots exactly once",
       );
     } finally {
       window.XMLHttpRequest = originalRequest;

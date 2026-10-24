@@ -1,5 +1,6 @@
 import type { ConnectionClient } from "../../api";
 import type { Pane } from "../../types";
+import { connectionClientScopeGeneration } from "../../useConnectionClient";
 import {
   uploadTerminalFile,
   uploadTerminalImage,
@@ -9,16 +10,16 @@ import { TerminalComposer } from "../TerminalComposer";
 
 const noop = () => {};
 
-/** Drafts cannot cross terminal ownership, runtime or conversation replacement. */
+/** App admits the connection/runtime prefix; the suffix isolates Chat ownership. */
 export const chatComposerDraftKey = (
   client: ConnectionClient,
   pane: Pane,
   fingerprint: string | null | undefined,
 ) =>
   JSON.stringify([
-    "chat",
     client.connectionId,
-    client.serverRuntimeGeneration,
+    connectionClientScopeGeneration(client),
+    "chat",
     pane.terminal_id,
     pane.pane_id,
     fingerprint ?? null,

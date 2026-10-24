@@ -41,13 +41,87 @@ if (process.env.CHAT_COMPOSER_DOM_TEST !== "1") {
       });
     }
     const { createRoot } = await import("react-dom/client");
-    const { TerminalComposer } = await import("./TerminalComposer");
+    const { ChatComposer, chatComposerDraftKey } = await import(
+      "./chat/ChatComposer"
+    );
     const drafts = await import("../terminalComposer");
+    // Exercise App admission before mounting the real Chat wrapper.
+    {
+      const pane = {
+        terminal_id: "terminal-a",
+        pane_id: "pane-a",
+      } as import("../types").Pane;
+      const client = {
+        connectionId: "scope-host",
+        generation: 19,
+        serverRuntimeGeneration: 7,
+      } as import("../api").ConnectionClient;
+      for (const runtime of [7, null]) {
+        const owner = { ...client, serverRuntimeGeneration: runtime };
+        const generation = runtime ?? owner.generation;
+        drafts.activateTerminalComposerDraftScope(
+          owner.connectionId,
+          generation,
+        );
+        const key = chatComposerDraftKey(owner, pane, "session-a");
+        drafts.writeTerminalComposerDraft(key, "current draft");
+        expect(drafts.readTerminalComposerDraft(key)).toBe("current draft");
+        expect(drafts.beginTerminalComposerSubmission(key)).toBe(true);
+        expect(drafts.beginTerminalComposerUpload(key)).toBe(true);
+        for (const other of [
+          chatComposerDraftKey(owner, pane, "session-b"),
+          chatComposerDraftKey(
+            owner,
+            { ...pane, terminal_id: "terminal-b" },
+            "session-a",
+          ),
+          chatComposerDraftKey(
+            owner,
+            { ...pane, pane_id: "pane-b" },
+            "session-a",
+          ),
+          drafts.terminalComposerDraftKey(
+            owner.connectionId,
+            generation,
+            pane.pane_id,
+          ),
+        ])
+          expect(drafts.readTerminalComposerDraft(other)).toBe("");
+
+        drafts.activateTerminalComposerDraftScope(
+          owner.connectionId,
+          generation + 1,
+        );
+        expect(drafts.readTerminalComposerDraft(key)).toBe("");
+        expect(drafts.beginTerminalComposerSubmission(key)).toBe(false);
+        expect(drafts.beginTerminalComposerUpload(key)).toBe(false);
+        drafts.insertIntoTerminalComposerDraft(key, "/uploads/late.png");
+        expect(drafts.readTerminalComposerDraft(key)).toBe("");
+      }
+    }
     const host = document.createElement("div");
     document.body.append(host);
     const root = createRoot(host);
-    const chatKey = "chat:alpha:7:terminal-a:session-a";
-    const terminalKey = "terminal:alpha:7:terminal-a";
+    // App retains all managed runtime scopes, including an Inspector whose
+    // host is not the focused Spaces host. Its browser lease is a separate epoch.
+    const client = {
+      connectionId: "alpha",
+      generation: 19,
+      serverRuntimeGeneration: 7,
+      isCurrent: () => true,
+      acceptsServerGeneration: (value: unknown) => value === 7,
+      call: async () => ({}),
+    };
+    const pane = {
+      terminal_id: "terminal-a",
+      pane_id: "pane-a",
+      agent: "claude",
+    } as import("../types").Pane;
+    const chatKey = chatComposerDraftKey(client, pane, "session-a");
+    const terminalKey = drafts.terminalComposerDraftKey("alpha", 7, "pane-a");
+    drafts.activateTerminalComposerDraftScope("spaces", 3, [
+      { connectionId: "alpha", connectionGeneration: 7 },
+    ]);
     const sent: string[] = [];
     const errors: string[] = [];
     let pending = Promise.withResolvers<void>();
@@ -56,24 +130,16 @@ if (process.env.CHAT_COMPOSER_DOM_TEST !== "1") {
     try {
       await act(async () =>
         root.render(
-          createElement(TerminalComposer, {
-            surface: "chat",
+          createElement(ChatComposer, {
+            client,
+            pane,
+            fingerprint: "session-a",
             recipient: "Mira-claude",
-            draftKey: chatKey,
-            agent: "claude",
-            mode: "composer",
-            directDisabled: true,
-            onModeChange() {},
-            onFocusDirect() {},
-            shortcutRows: [],
-            onRunShortcut() {},
-            onClose() {},
+            notice: "",
             onSubmit: async (text: string) => {
               sent.push(text);
               await pending.promise;
             },
-            onUploadImage: async () => "image.png",
-            onUploadFile: async () => "file.txt",
             onError: (error: string) => errors.push(error),
           }),
         ),
