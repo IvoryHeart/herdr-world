@@ -1,4 +1,11 @@
-import { Copy, LogIn, Play, RefreshCw, Settings2 } from "lucide-react";
+import {
+  Copy,
+  LogIn,
+  Play,
+  RefreshCw,
+  Settings2,
+  Terminal,
+} from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   agentNameFor,
@@ -21,12 +28,13 @@ import {
 } from "./agentProfiles";
 import { ProfileSprite } from "./ProfileSprite";
 import type { WorldObject } from "./worldObject";
+import { store } from "../store";
 import "./agentProfiles.css";
 
 /**
- * New agent: pick a room, optionally say what to do, then tap a profile or a
- * kind. The service creates the tab, starts the harness, waits until it is
- * ready and sends the first prompt (agent/launch.ts).
+ * Pick a room and a plain Terminal, profile or agent kind. Agent choices
+ * create the tab, start the harness, wait until it is ready and send the first
+ * prompt (agent/launch.ts); Terminal uses the shared qualified creation action.
  */
 export function AgentLauncherDialog({
   world,
@@ -147,6 +155,28 @@ export function AgentLauncherDialog({
     }
   };
 
+  const createTerminal = async () => {
+    if (!target || busy) return;
+    setBusy("Terminal");
+    setOutcome(null);
+    setError(null);
+    try {
+      await store.createQualifiedTab(
+        {
+          connectionId: target.connectionId,
+          runtimeGeneration: target.generation,
+        },
+        target.workspaceId,
+        { numberedLabel: true },
+      );
+      onClose();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const logIn = async (kind: string) => {
     if (!target) return;
     setOutcome(null);
@@ -210,7 +240,7 @@ export function AgentLauncherDialog({
               </select>
             </label>
             <label className="agent-field">
-              <span>Task (optional)</span>
+              <span>Agent task (optional)</span>
               <textarea
                 value={task}
                 rows={2}
@@ -231,6 +261,18 @@ export function AgentLauncherDialog({
                 </button>
               </p>
             ))}
+            <button
+              type="button"
+              className="agent-launcher-card"
+              disabled={Boolean(busy)}
+              onClick={() => void createTerminal()}
+            >
+              <Terminal size={24} aria-hidden="true" />
+              <span>
+                <b>Terminal</b>
+                <small>A plain shell in this room</small>
+              </span>
+            </button>
             <div className="agent-launcher-section-head">
               <h3>From a profile</h3>
               <button type="button" onClick={onEditProfiles}>

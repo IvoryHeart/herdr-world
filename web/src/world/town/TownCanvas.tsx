@@ -32,16 +32,8 @@ import { DEVTOOLS, NO_TRACE, type ViewTrace } from "../devtools/flag";
 import { traceGesture } from "../devtools/trace";
 import { EllipsisVertical } from "lucide-react";
 import { useMobileControls } from "../../components/MobileControls";
+import { Plus } from "lucide-react";
 import {
-  Bot,
-  ChevronsDown,
-  ChevronsUp,
-  Pencil,
-  Plus,
-  Trash2,
-} from "lucide-react";
-import {
-  TOWN_PRESENTATION_BOUNDS,
   type HerdrOfficeProjection,
   type OfficeAgent,
 } from "../herdrOfficeProjection";
@@ -116,6 +108,7 @@ import {
   type TownDeskBadge,
 } from "./townBadges";
 import { DeskWorkBadge } from "./DeskWorkBadge";
+import { TownRoomPlaque } from "./TownRoomPlaque";
 import "./town.css";
 import {
   markAway,
@@ -138,8 +131,7 @@ export type TownRoomActions = {
   showCreateSeat(roomKey: string): boolean;
   canCreateSeat(roomKey: string): boolean;
   createSeatReason(roomKey: string): string | null;
-  onCreateSeat(roomKey: string): void;
-  /** Open the launcher for this room: a new agent from a profile or a kind. */
+  /** Open this room's launcher: Terminal, a profile or an agent kind. */
   onNewAgent(roomKey: string): void;
   showCreateRoom(roomKey: string | null): boolean;
   canCreateRoom(roomKey: string | null): boolean;
@@ -2031,98 +2023,33 @@ const TownWorldLayer = memo(function TownWorldLayer({
                         );
                       })
                     : null}
-                  <div className="town-room-plaque">
-                    <span className="town-room-plaque-name">
-                      {label} <small>{c.desks}</small>
-                    </span>
-                    {c.blocked ? (
-                      <span className="town-room-plaque-badge">
-                        !{c.blocked}
-                      </span>
-                    ) : null}
-                    {room.deskFold && roomActions.onToggleFold ? (
-                      <button
-                        className="world-room-overlay-action town-plaque-action town-plaque-agent"
-                        type="button"
-                        aria-expanded={room.deskFold === "expanded"}
-                        aria-label={
-                          room.deskFold === "folded"
-                            ? `Expand room ${label} toward ${Math.min(room.observedDeskCount, TOWN_PRESENTATION_BOUNDS.desksPerRoom)} desks`
-                            : `Fold room ${label} to its busiest desks`
-                        }
-                        title={
-                          room.deskFold === "folded"
-                            ? `Expand toward ${Math.min(room.observedDeskCount, TOWN_PRESENTATION_BOUNDS.desksPerRoom)} desks; protected desks stay visible`
-                            : "Show only the busiest desks"
-                        }
-                        onClick={() => roomActions.onToggleFold?.(room.key)}
-                      >
-                        {room.deskFold === "folded" ? (
-                          <ChevronsDown size={12} aria-hidden="true" />
-                        ) : (
-                          <ChevronsUp size={12} aria-hidden="true" />
-                        )}
-                        <span>
-                          {room.deskFold === "folded" ? `+${overflow}` : "Fold"}
-                        </span>
-                      </button>
-                    ) : null}
-                    {roomColor ? (
-                      <ColorSwatchButton
-                        className="town-plaque-action town-place-color"
-                        label={`Colour of room ${label}`}
-                        defaultHex={townCarpetFor(room.key)}
-                        {...roomColor}
-                      />
-                    ) : null}
-                    <button
-                      className="world-room-overlay-action town-plaque-action town-plaque-agent"
-                      type="button"
-                      aria-label={`New agent in ${label}`}
-                      title={
-                        roomActions.createSeatReason(room.key) ??
-                        `Start a new agent in ${label}`
+                  <TownRoomPlaque
+                    room={room}
+                    label={label}
+                    width={placed.w * T}
+                    counts={c}
+                    overflow={overflow}
+                    color={
+                      roomColor && {
+                        defaultHex: townCarpetFor(room.key),
+                        ...roomColor,
                       }
-                      disabled={!roomActions.canCreateSeat(room.key)}
-                      onClick={() => roomActions.onNewAgent(room.key)}
-                    >
-                      <Bot size={12} aria-hidden="true" />
-                      <span>New agent</span>
-                    </button>
-                    <button
-                      className="world-room-overlay-action world-room-overlay-action-rename town-plaque-action"
-                      type="button"
-                      aria-label={`Rename room ${label}`}
-                      title={`Rename ${label}`}
-                      disabled={!roomActions.canRenameRoom(room.key)}
-                      onClick={() => roomActions.onRenameRoom(room.key)}
-                    >
-                      <Pencil size={11} aria-hidden="true" />
-                    </button>
-                    <button
-                      className="world-room-overlay-action world-room-overlay-action-danger town-plaque-action"
-                      type="button"
-                      aria-label={`Close room ${label}`}
-                      title={`Close ${label}`}
-                      disabled={!roomActions.canCloseRoom(room.key)}
-                      onClick={() => roomActions.onCloseRoom(room.key)}
-                    >
-                      <Trash2 size={11} aria-hidden="true" />
-                    </button>
-                  </div>
+                    }
+                    actions={roomActions}
+                  />
                   {roomActions.showCreateSeat(room.key) && freeCell ? (
                     <>
                       <button
                         className="world-new-seat-canvas-action town-new-seat"
                         type="button"
-                        aria-label={`New seat in ${label}`}
-                        title={reason ?? `Start a new seat in ${label}`}
+                        aria-label={`New agent or terminal in ${label}`}
+                        title={reason ?? `New agent or terminal in ${label}`}
                         disabled={!roomActions.canCreateSeat(room.key)}
                         style={{
                           left: (freeCell.x - placed.x + 1) * T,
                           top: (freeCell.y - placed.y) * T + 4,
                         }}
-                        onClick={() => roomActions.onCreateSeat(room.key)}
+                        onClick={() => roomActions.onNewAgent(room.key)}
                       >
                         <Plus size={18} aria-hidden="true" />
                       </button>
