@@ -237,7 +237,27 @@ describe("pull request verb endpoint", () => {
       const query = argv.at(-1)!;
       if (query.includes("headRefOid reviewDecision")) return state();
       if (query.includes("pullRequest(number:"))
-        return ok(JSON.stringify({ data: {} }));
+        return ok(
+          JSON.stringify({
+            data: {
+              p0: {
+                pullRequest: {
+                  headRefOid: HEAD,
+                  body: "",
+                  author: { login: "synthetic-owner" },
+                  headRef: { compare: { aheadBy: 0 } },
+                  files: { totalCount: 0, nodes: [] },
+                  commits: { nodes: [{ commit: { oid: HEAD } }] },
+                  latest: {
+                    nodes: [{ commit: { oid: HEAD, statusCheckRollup: null } }],
+                  },
+                  reviews: { nodes: [] },
+                  comments: { nodes: [] },
+                },
+              },
+            },
+          }),
+        );
       return ok(
         JSON.stringify({
           data: {

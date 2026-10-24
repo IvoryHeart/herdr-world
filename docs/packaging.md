@@ -64,3 +64,12 @@ commands, then installs the World executable and a copy named
 service operations through the canonical executable. No second release artifact
 or bundled Herdr runtime is needed. Unreleased source builds and local linking
 continue to use Bun through `scripts/world-plugin.ts build-source`.
+
+Native compatibility acceptance compiles an isolated fixture with an empty PATH
+and verifies the cached action verbs over HTTP and HTTPS. Its asynchronous
+lifecycle awaits the existing bounded installer-fixture cleanup, yielding between
+retryable filesystem failures. Persistent cleanup failures still fail the test;
+if the body also fails, an `AggregateError` retains both original errors. Fixture
+cleanup does not relax installer validation or change the shipped launcher.
+Portable lifecycle and filesystem-denial regressions complement the native
+Windows lock tests; local passes do not establish native Windows acceptance.

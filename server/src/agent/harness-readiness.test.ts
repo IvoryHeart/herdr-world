@@ -6,6 +6,7 @@ import { runProcessWithCodeTimeout, shQuote } from "../utils/process-utils";
 import {
   harnessReadiness,
   loginCommand,
+  readReadiness,
   openHarnessLogin,
 } from "./harness-readiness";
 
@@ -55,7 +56,7 @@ describe("Harness readiness", () => {
       { pi: "exit 0" },
     );
     const readiness = await check(["claude", "codex", "pi", "gemini"]);
-    expect(readiness).toEqual([
+    expect(readiness).toMatchObject([
       {
         kind: "claude",
         installed: true,
@@ -81,7 +82,7 @@ describe("Harness readiness", () => {
     ]);
   });
 
-  test("a Windows host is not probed and reports nothing", async () => {
+  test("a Windows host reports unsupported evidence without probing", async () => {
     // Nothing known blocks no kind: the launcher keeps every kind Herdr
     // supports there.
     expect(
@@ -93,7 +94,19 @@ describe("Harness readiness", () => {
           throw new Error("probed");
         },
       }),
-    ).toEqual([]);
+    ).toMatchObject([
+      {
+        kind: "claude",
+        installed: null,
+        logged_in: null,
+        can_log_in: false,
+        probe: {
+          source: "world-harness-probe",
+          state: "unsupported",
+          reason: "windows-unsupported",
+        },
+      },
+    ]);
   });
 
   test("login opens a tab and types nothing; the user runs the command", async () => {
@@ -161,4 +174,158 @@ describe("Harness readiness", () => {
     expect(missing.code).toBe(127);
     expect(missing.stdout).toContain("codex is not installed here.");
   });
+});
+
+describe("Readiness evidence boundaries", () => {
+  const probe = (run: Parameters<typeof harnessReadiness>[0]["run"]) =>
+    harnessReadiness({ kinds: ["codex"], windows: false, shQuote, run });
+
+  test("a transport exit never confirms absence or trusts partial success", async () => {
+    for (const stdout of [
+      "",
+      "@@kind codex\n@@found\nLogged in using ChatGPT\n@@exit 0\n@@end\n",
+    ]) {
+      const [result] = await probe(async () => ({
+        code: 255,
+        stdout,
+        stderr: "private account output",
+      }));
+      expect(result?.installed).toBeNull();
+      expect(result?.logged_in).toBeNull();
+      expect(JSON.stringify(result)).not.toContain("private account output");
+    }
+  });
+
+  test("timeouts and rejected probes remain unknown without forwarding errors", async () => {
+    for (const message of [
+      "sh timed out after 20000ms",
+      "private connection failure",
+    ]) {
+      const [result] = await probe(async () => {
+        throw new Error(message);
+      });
+      expect(result?.installed).toBeNull();
+      expect(result?.logged_in).toBeNull();
+      expect(JSON.stringify(result)).not.toContain(message);
+    }
+  });
+
+  test("missing, duplicate and incomplete sections cannot confirm absence", () => {
+    for (const output of [
+      "",
+      "@@kind other\n@@missing\n@@end\n",
+      "@@kind codex\n@@missing\n",
+      "@@kind codex\n@@missing\n@@end\n@@kind codex\n@@missing\n@@end\n",
+    ]) {
+      expect(readReadiness(["codex"], output)[0]?.installed).toBeNull();
+    }
+    expect(
+      readReadiness(["codex"], "@@kind codex\n@@missing\n@@end\n")[0]
+        ?.installed,
+    ).toBe(false);
+  });
+
+  test("arbitrary Codex status errors and mismatched Claude status stay unknown", () => {
+    for (const [kind, text, code] of [
+      ["codex", "Network unavailable", 1],
+      ["codex", "Not logged in", 2],
+      ["codex", "unexpected success", 0],
+      ["claude", '{"loggedIn":false}', 2],
+      ["claude", '{"loggedIn":true}', 1],
+      ["claude", '{"loggedIn":"false"}', 0],
+    ] as const) {
+      const [result] = readReadiness(
+        [kind],
+        `@@kind ${kind}\n@@found\n${text}\n@@exit ${code}\n@@end\n`,
+      );
+      expect(result?.installed).toBe(true);
+      expect(result?.logged_in).toBeNull();
+    }
+  });
+});
+
+test("complete supported status, malformed JSON and private methods are distinguished", () => {
+  const record = (kind: string, text: string, code: number) =>
+    `@@kind ${kind}\n@@found\n${text}\n@@exit ${code}\n@@end\n`;
+  for (const [kind, text, code, loggedIn] of [
+    ["codex", "Not logged in", 1, false],
+    ["codex", "Logged in using ChatGPT", 0, true],
+    ["codex", "Logged in using API key - synthetic-secret", 0, true],
+    ...[
+      "access token",
+      "personal access token",
+      "workload identity",
+      "Amazon Bedrock API key",
+      "Amazon Bedrock AWS access keys",
+    ].map((label) => ["codex", `Logged in using ${label}`, 0, true] as const),
+    [
+      "codex",
+      "API key configured - synthetic-secret\nAuthentication is checked when you send a request.",
+      0,
+      null,
+    ],
+    ["claude", '{"loggedIn":false}', 1, false],
+    [
+      "claude",
+      '{"loggedIn":true,"authMethod":"private-account","email":"dev@example.com"}',
+      0,
+      true,
+    ],
+    ["claude", '{"loggedIn":', 0, null],
+    ["claude", 'unexpected output\n{"loggedIn":false}', 1, null],
+    ["codex", "Network unavailable\nNot logged in", 1, null],
+  ] as const) {
+    const result = readReadiness([kind], record(kind, text, code), 123)[0]!;
+    expect(result.installed).toBe(true);
+    expect(result.logged_in).toBe(loggedIn);
+    expect(result.probe.observed_at).toBe(123);
+    expect(result.probe.state).toBe(loggedIn === null ? "unknown" : "ok");
+    expect(JSON.stringify(result)).not.toMatch(
+      /synthetic-secret|private-account|example.com/,
+    );
+  }
+});
+
+test("safe failure provenance and per-kind partial output remain bounded", async () => {
+  const result = await harnessReadiness({
+    kinds: ["codex"],
+    windows: false,
+    shQuote,
+    run: async () => {
+      throw new Error("sh timed out after 20000ms");
+    },
+  });
+  expect(result[0]?.probe).toMatchObject({
+    source: "world-harness-probe",
+    state: "unknown",
+    reason: "timeout",
+  });
+  expect(Number.isSafeInteger(result[0]?.probe.observed_at)).toBe(true);
+  const partial = readReadiness(
+    ["codex", "claude"],
+    "@@kind codex\n@@missing\n@@end\n@@kind claude\n",
+    123,
+  );
+  expect(partial[0]?.installed).toBe(false);
+  expect(partial[1]?.installed).toBeNull();
+});
+
+test("oversized, trailing and malformed records cannot report confirmed absence", () => {
+  for (const output of [
+    "@@kind codex\n@@missing\n@@end\ntrailing",
+    "@@kind codex\n@@missing-extra\n@@end\n",
+    "x".repeat(200_001),
+  ]) {
+    expect(readReadiness(["codex"], output, 123)[0]?.installed).toBeNull();
+  }
+});
+
+test("oversized status cannot hide a trailing error after a recognized prefix", async () => {
+  const check = host({
+    codex: `printf 'Logged in using ChatGPT'; printf '%5000s' ''; echo 'Unrelated failure'; exit 0`,
+  });
+  const [result] = await check(["codex"]);
+  expect(result?.installed).toBe(true);
+  expect(result?.logged_in).toBeNull();
+  expect(result?.probe.reason).toBe("unreadable-status");
 });

@@ -1,0 +1,35 @@
+.connection-recovery {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-width: min(280px, 70vw);
+  color: var(--text, #f1efe6);
+  white-space: normal;
+  pointer-events: auto;
+}
+.connection-recovery button {
+  min-height: 40px;
+  min-width: 88px;
+  padding: 6px 10px;
+  font: inherit;
+  color: var(--text, #f1efe6);
+  background: var(--panel-2, #222632);
+  border: 1px solid var(--border, #6b7280);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.connection-recovery button:disabled {
+  cursor: wait;
+}
+.connection-recovery small {
+  flex-basis: 100%;
+}
+.town-building-layer[data-stale="true"] .town-building-sign strong,
+.town-reception[data-stale="true"] {
+  border-color: #879092;
+}
+.town-building-sign .connection-recovery span {
+  white-space: normal;
+  background: none;
+}

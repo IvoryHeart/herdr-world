@@ -38,10 +38,14 @@ export async function runPullRequestVerb(
   run: RunProcess,
   item: WorkItem,
   request: PullRequestVerbRequest,
+  /** Source generation/detail authority, owned by SourcesService. */
+  admission: () => string | null = () => null,
 ): Promise<VerbOutcome> {
   if (!actionablePullRequest(item) || !item.repo || item.number === undefined)
     return { ok: false, detail: "World can't act on this pull request." };
   const target = [String(item.number), "--repo", item.repo];
+  const initialBlock = admission();
+  if (initialBlock) return { ok: false, detail: initialBlock };
   if (request.verb === "ready") {
     if (!item.draft)
       return { ok: false, detail: "It is already ready for review." };
@@ -66,6 +70,8 @@ export async function runPullRequestVerb(
   if (now.head !== seen) return { ok: false, detail: HEAD_CHANGED };
   if (now.review === "REVIEW_REQUIRED" || now.review === "CHANGES_REQUESTED")
     return { ok: false, detail: REVIEW_REQUIRED };
+  const retired = admission();
+  if (retired) return { ok: false, detail: retired };
   const merged = await gh(run, [
     "gh",
     "pr",

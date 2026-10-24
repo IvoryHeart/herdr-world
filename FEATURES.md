@@ -147,7 +147,12 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     terminal colours, so every device sees it; Herdr is unchanged, and
     Spaces' tab pins (close protection in this browser) are separate. A pin
     follows its tab when the tab moves to another room and goes when it closes.
-  - Cached failed-host buildings stay stale and non-actionable. Search and Hosts
+  - Cached failed-host buildings, agents and Board cards stay stale and
+    non-actionable. **Disconnected · Reconnect** appears on Town's building and
+    reception and Board's host label. Transient SSH outages keep retrying with
+    capped backoff; explicit disconnect/removal and permanent failures stop
+    recovery. Cached work never becomes current until a fresh runtime snapshot
+    is admitted. Search and Hosts
     use the shared aggregate. Reception and lounge positions only show status;
     only an explicit move changes Herdr's layout, always within one host.
   See the [Town exercise](./docs/TUTORIAL.md#town).
@@ -167,7 +172,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     `codex login status`; Pi reports only whether it is installed). **Log in**
     opens a small tab and shows the harness's own login command to copy and
     run there. World never types into it, and never sees or stores
-    credentials.
+    credentials. Failed or unreadable probes remain unknown, with the safe
+    check source/time, **Check again** and existing **Edit profiles** controls;
+    only confirmed absence blocks a supported harness. Windows probes remain
+    unsupported. See [readiness evidence](./docs/harness-readiness.md).
   - **Agent profiles** (Menu → Agent profiles, Actions → Agent profiles, or
     Edit profiles in the launcher and Board) set a name, home room, role,
     colour, brain (harness, model, Codex reasoning effort, permission mode),
@@ -392,15 +400,24 @@ each source's state, switch it off or configure it.
   lens names it on the card. A link holds only for the agent session and
   Herdr runtime it was made in.
 - **Your open pull requests** get a card in Work with CI on the head (a dot
-  per check), each rev agent's latest result ("per rev4's comment", read from
-  its `RESULT #N: …` line; GitHub can't take your own approval, so reviews are
-  comments) and your merge rules: not a draft, every finding confirmed, CI
+  per check), each explicitly attributed rev agent's latest `RESULT #N: …`
+  from a formal review or comment, and your merge rules: not a draft, every finding confirmed, CI
   green on the head, mergeable, and screenshots for a change to the web app
   or site. Each rule shows ✓, ✗ or ? (World can't tell; a confirmation of an
   older head is ?). **Details** lists the failing checks with links, the
-  reviewers, the head commit and how far it is behind its base. A card says
+  reviewers, the head commit and how far it is behind its base. RESULT posts
+  without a clear reviewer claim stay visible as **Unknown reviewer**, with
+  **View RESULT source** links, and cannot confirm readiness. Names are sender
+  claims, not verified identities; a shared GitHub login does not identify a
+  crew reviewer. Reviewed heads come only from review commit metadata or an
+  explicit, unambiguous SHA, never a timestamp. A card says
   **Ready to merge** when every rule holds, and **Stalled** when CI failed on
   the head and its agent is idle.
+- Cards show GitHub detail health and its own read time. Expired or failed
+  reads retain matching **stale · cached evidence**; list success does not
+  refresh it. Findings/screenshots stay unknown and World requires fresh
+  detail before merging. Use **Refresh Sources** to retry. See
+  [detail health and bounds](docs/github-pr-detail-health.md).
 - **Merge…**, **Close…** and **Mark ready…** (for a draft) open a sheet that
   says exactly what happens; nothing runs until you confirm. Merge makes a
   merge commit, keeps the branch and refuses if anyone pushed since you

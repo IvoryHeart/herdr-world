@@ -1,3 +1,4 @@
+import { serializeWorldInvalidation } from "./world/invalidation";
 import { workspaceFileParams } from "./http/workspace-file-params";
 import type { BridgeRpcContext, ConnectionRpcContext } from "./rpc/context";
 import { handleAgentRpc } from "./rpc/agent";
@@ -524,14 +525,12 @@ function publishWorldInvalidation(
     observedLate ? undefined : connectionId,
   );
   if (revision === undefined) return;
-  const line = JSON.stringify({
-    control: {
-      type: "world_invalidated",
-      connection_id: connectionId,
-      connection_generation: connectionGeneration,
-      revision,
-    },
-  });
+  const line = serializeWorldInvalidation(
+    connectionId,
+    connectionGeneration,
+    revision,
+    connectionManager,
+  );
   for (const ws of clients) safeSend(ws, line, "world-invalidation");
 }
 

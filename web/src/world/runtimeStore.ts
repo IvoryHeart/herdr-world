@@ -359,6 +359,10 @@ async function prepareWorldSnapshotResult(
 export class WorldRuntimeStore {
   private state: WorldRuntimeState = INITIAL_STATE;
   private readonly listeners = new Set<() => void>();
+  private connectionHealth = new Map<
+    string,
+    { generation: number; state: ConnectionLifecycleState }
+  >();
   private observationEpoch = 0;
   private refreshInFlight: Promise<void> | null = null;
   private refreshQueued = false;
@@ -399,7 +403,10 @@ export class WorldRuntimeStore {
   start() {
     if (this.unlistenControl) return;
     this.unlistenControl = this.client.onControl((control) => {
-      if (control.type === "world_invalidated") this.scheduleRefresh();
+      if (control.type === "world_invalidated") {
+        this.observeConnectionHealth(control);
+        this.scheduleRefresh();
+      }
     });
     this.unlistenStatus = this.client.onStatus((status) => {
       if (status === "connected") void this.refresh();
@@ -414,6 +421,7 @@ export class WorldRuntimeStore {
   }
 
   stop() {
+    this.connectionHealth.clear();
     this.observationEpoch += 1;
     this.refreshQueued = false;
     this.unlistenControl?.();
@@ -544,6 +552,9 @@ export class WorldRuntimeStore {
       // Preparation yields to input and lifecycle events. Revalidate each
       // captured owner after those boundaries without retiring healthy siblings.
       for (;;) {
+        parsed.connections = parsed.connections.map((c) =>
+          this.withConnectionHealth(c),
+        );
         const world = await prepareWorldObject(parsed.connections, current, {
           yieldTask: () => this.preparationYield("object"),
         });
@@ -557,6 +568,11 @@ export class WorldRuntimeStore {
         if (!current()) return;
         let changed = false;
         const connections = parsed.connections.map((connection) => {
+          const observed = this.withConnectionHealth(connection);
+          if (observed !== connection) {
+            changed = true;
+            return observed;
+          }
           if (
             !connection.actionable ||
             !this.client.connection ||
@@ -579,6 +595,9 @@ export class WorldRuntimeStore {
         this.appliedPriorityVersion,
         priorityVersion,
       );
+      const retained = new Set(parsed.connections.map((c) => c.connectionId));
+      for (const id of this.connectionHealth.keys())
+        if (!retained.has(id)) this.connectionHealth.delete(id);
       this.set({ ...parsed, status: "ready", error: null });
     } catch (error) {
       if (observationEpoch !== this.observationEpoch) return;
@@ -588,7 +607,57 @@ export class WorldRuntimeStore {
     }
   }
 
+  private observeConnectionHealth(control: BridgeControlMsg) {
+    const id = control.connection_id;
+    const generation = control.connection_generation;
+    const state = control.connection_state;
+    if (
+      typeof id !== "string" ||
+      !id ||
+      !Number.isSafeInteger(generation) ||
+      generation! < 0 ||
+      !state ||
+      !CONNECTION_STATES.has(state)
+    )
+      return;
+    const previous = this.connectionHealth.get(id);
+    const retained = this.state.connections.find((c) => c.connectionId === id);
+    if (
+      generation! <
+      Math.max(previous?.generation ?? -1, retained?.generation ?? -1)
+    )
+      return;
+    this.connectionHealth.set(id, { generation: generation!, state });
+    const connections = this.state.connections.map((c) =>
+      this.withConnectionHealth(c),
+    );
+    if (connections.some((c, index) => c !== this.state.connections[index]))
+      this.set({ ...this.state, connections });
+  }
+
+  private withConnectionHealth(
+    connection: WorldRuntimeConnection,
+  ): WorldRuntimeConnection {
+    const health = this.connectionHealth.get(connection.connectionId);
+    if (
+      !health ||
+      health.generation < connection.generation ||
+      (health.generation === connection.generation &&
+        health.state === connection.state &&
+        (!connection.actionable || health.state === "ready"))
+    )
+      return connection;
+    return {
+      ...connection,
+      generation: health.generation,
+      state: health.state,
+      stale: connection.snapshot !== null,
+      actionable: false,
+    };
+  }
+
   private invalidateObservation(message: string) {
+    this.connectionHealth.clear();
     this.observationEpoch += 1;
     this.refreshQueued = false;
     this.markUnavailable(message);

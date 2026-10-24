@@ -1,3 +1,4 @@
+import type { ConnectionLifecycleState } from "../../api";
 import type {
   WorldAgentStatus,
   WorldHostObject,
@@ -16,6 +17,7 @@ import { cardKey, tabCardKey } from "../../../../shared/terminalColor";
  */
 
 export type BoardHost = {
+  connectionState?: ConnectionLifecycleState;
   key: string;
   /** World's ID for the host, shared with the other views' anchors. */
   id: string;
@@ -132,7 +134,8 @@ function projectHost(host: WorldHostObject): HostProjection {
       connectionId: host.connectionId,
       generation: host.generation,
       label: host.label,
-      stale: host.stale,
+      connectionState: host.connection.state,
+      stale: host.stale || !host.actionable,
       workspaceKeys: [],
     };
     const workspaceIds = new Set(host.spaces.map((space) => space.nativeId));
@@ -146,7 +149,7 @@ function projectHost(host: WorldHostObject): HostProjection {
         const list = panesByTab.get(leaf.tabId) ?? [];
         list.push({
           key: boardKey(leaf.connectionId, leaf.nativeId),
-          status: leaf.status,
+          status: leaf.stale ? "unknown" : leaf.status,
           isAgent: leaf.kind === "agent",
           leaf,
         });
