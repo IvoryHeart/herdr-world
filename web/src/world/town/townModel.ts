@@ -220,12 +220,9 @@ export function townModelFromProjection(
   const admit = (agent: OfficeAgent) => {
     const counts = roomCounts.get(agent.roomKey);
     if (!counts || agents.has(agent.key)) return;
-    const shown = agent.stale
-      ? { ...agent, semanticStatus: "unknown" as const }
-      : agent;
-    agents.set(agent.key, shown);
+    agents.set(agent.key, agent);
     counts.agents += 1;
-    counts[shown.semanticStatus] += 1;
+    counts[agent.semanticStatus] += 1;
   };
   for (const entry of projection.roster) admit(entry.agent);
   for (const room of projection.rooms)

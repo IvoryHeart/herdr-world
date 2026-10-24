@@ -42,14 +42,6 @@ with that World service rather than connecting to independently deployed bridges
 - **THEN** that profile reports an actionable bounded failure and World does not retry the request
   against another profile
 
-#### Scenario: Transient SSH outage outlasts the initial retries
-- **WHEN** a managed SSH profile keeps failing with a classified retryable transport error
-- **THEN** default recovery continues with capped exponential jitter until it recovers or is
-  explicitly stopped; permanent/unclassified failures do not acquire indefinite retries
-- **AND** cached Town/Board topology is visibly stale and non-actionable, with explicit
-  per-host Reconnect controls; healthy sibling hosts keep their own authority
-- **AND** a ready lifecycle signal alone cannot promote an older cached generation
-
 ### Requirement: Return bounded aggregate observation with host-local progress
 
 `world.snapshot` SHALL return the complete managed-connection catalogue within 20 seconds when

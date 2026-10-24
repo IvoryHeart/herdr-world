@@ -273,7 +273,7 @@ async function codexThreadFromTitle(
 }
 
 const CODEX_FULL_ID =
-  /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?=\.jsonl(?:\.zst)?$)/i;
+  /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?=\.jsonl$)/i;
 
 async function findClaudeSession(
   id: string,

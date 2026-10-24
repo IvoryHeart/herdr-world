@@ -71,43 +71,6 @@ const link = (
 });
 
 describe("World sources in the browser", () => {
-  test("service transport failure retains detail links but withdraws fresh authority", async () => {
-    const entry = pr(7, {
-      headSha: "c".repeat(40),
-      prObservation: {
-        source: "github",
-        state: "fresh",
-        headSha: "c".repeat(40),
-        readAt: 1000,
-        expiresAt: 601000,
-      },
-      pr: {
-        baseRef: "main",
-        behindBy: 0,
-        checks: [],
-        checksTruncated: false,
-        reviewers: [],
-        uiChange: false,
-        images: 0,
-      },
-    });
-    worldSourcesStore.publishSettled(snapshot([entry]));
-    worldSourcesStore.useFetch(async () => {
-      throw new Error("synthetic transport failure");
-    });
-    try {
-      await worldSourcesStore.refresh(true);
-      const retained = worldSourcesStore.snapshot().items[0]!;
-      expect(retained.pr).toEqual(entry.pr);
-      expect(retained.prObservation).toMatchObject({
-        state: "stale",
-        readAt: 1000,
-      });
-    } finally {
-      worldSourcesStore.useFetch(fetch);
-      worldSourcesStore.publishSettled(snapshot([]));
-    }
-  });
   test("decoding drops malformed items, unsafe URLs and links to unknown items", () => {
     const decoded = parseWorldSources({
       observedAt: 7,

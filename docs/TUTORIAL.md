@@ -106,12 +106,6 @@ and these redirects are included in [0.2.6](./releases/v0.2.6.md).
 **Hosts** starts at **All hosts**. Choose a host set to reduce the overview;
 use **Manage connections** to add or reconnect a local or SSH profile. Filtering
 changes what you see and does not disconnect hosts or retarget open terminals.
-If a host disconnects, its cached building and agents remain visible as stale
-history. Town's building and reception and Board's host label show
-**Disconnected · Reconnect**; their old agents cannot open live Chat or terminals.
-Transient SSH failures retry with backoff. Tap **Reconnect** to restart that
-host's connection, or use **Manage connections** to inspect its error. Other
-hosts stay usable.
 
 ### Explore Town: find work that needs you
 
@@ -324,11 +318,6 @@ a starting brief and a look in Town. World starts it in a new tab for you.
    opens a small tab and shows the harness's own login command
    (`claude auth login`, `codex login --device-auth`). **Copy** it, **Open its
    tab**, run it and finish the login there, then **Check again**.
-   Failed, incomplete or unsupported checks show **unknown**, never “not
-   installed” or “logged out”. You can still try a supported harness; use
-   **Check again** to retry or **Edit profiles** to review its configuration.
-   The check's source and completion time are shown separately from profile
-   settings. Windows readiness checks are unsupported.
 5. World creates the tab, starts the agent, waits until it is ready and sends
    the brief, then opens its terminal. The tab takes the profile's colour and
    the agent wears the profile's look in Town. If the agent stops on a question
@@ -435,14 +424,7 @@ on your phone and desktop.
    for one of your open pull requests, tap the badge to open the same card.
    Your own open pull requests get a fuller card: CI dots, each rev agent's
    result and **Ready ✓** when your merge rules hold. **Details** shows each
-   rule, the failing checks and the reviewers' formal reviews or comments.
-   **Unknown reviewer** means the RESULT post has no clear reviewer claim;
-   use **View RESULT source** to inspect it. It does not confirm readiness.
-   The card also shows **GitHub details fresh**, **stale · cached evidence**
-   or **unavailable**, with its own read time. A refreshed list does not renew
-   cached detail. Choose **Refresh Sources** to retry; stale or unavailable
-   findings/screenshots remain unknown and must be refreshed before Merge.
-   **Merge…**,
+   rule, the failing checks and the reviewers' comments. **Merge…**,
    **Close…** and **Mark ready…** ask first and say exactly what happens;
    while GitHub still requires a review, use **Open on GitHub** or **Copy
    merge command** and merge it yourself.

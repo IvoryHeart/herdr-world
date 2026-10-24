@@ -1,5 +1,3 @@
-import { boardObservation } from "./board/boardObservation";
-import { ConnectionRecoveryBanner } from "./ConnectionRecoveryBanner";
 import {
   ChevronDown,
   ChevronUp,
@@ -495,8 +493,7 @@ export default function BoardView({
 }) {
   // Topology updates render at low priority and in slices, so a large board
   // never holds up typing in a terminal.
-  const deferredWorld = useDeferredValue(world);
-  const shownWorld = boardObservation(world, deferredWorld);
+  const shownWorld = useDeferredValue(world);
   const fullModel = useMemo(() => projectBoard(shownWorld), [shownWorld]);
   // Each agent's quest, as a progress chip on its card.
   const quests = useAgentQuests(shownWorld.leaves);
@@ -3274,11 +3271,7 @@ export default function BoardView({
                   />
                   {host.label}
                   {host.stale ? (
-                    <ConnectionRecoveryBanner
-                      connectionId={host.connectionId}
-                      label={host.label}
-                      state={host.connectionState}
-                    />
+                    <small>offline</small>
                   ) : (
                     <button
                       type="button"

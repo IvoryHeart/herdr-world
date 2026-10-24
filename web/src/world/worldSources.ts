@@ -1,8 +1,4 @@
 import { useSyncExternalStore } from "react";
-import {
-  parsePullRequestDetailObservation,
-  qualifyPullRequestDetail,
-} from "../../../shared/pullRequestFreshness";
 import type {
   PullRequestAction,
   PullRequestCheck,
@@ -217,23 +213,16 @@ function parseDetail(value: unknown): PullRequestDetail | null {
       ),
     checksTruncated: detail.checksTruncated === true,
     reviewers: (Array.isArray(detail.reviewers) ? detail.reviewers : [])
-      .slice(0, 80)
+      .slice(0, 20)
       .map(record)
       .flatMap((entry): PullRequestReviewer[] =>
-        (entry.reviewer === null || text(entry.reviewer)) &&
-        OUTCOMES.has(entry.outcome as string)
+        text(entry.reviewer) && OUTCOMES.has(entry.outcome as string)
           ? [
               {
-                reviewer: text(entry.reviewer),
-                ...(text(entry.sourceId)
-                  ? { sourceId: text(entry.sourceId)! }
-                  : {}),
+                reviewer: text(entry.reviewer)!,
                 url: httpsText(entry.url) ?? "",
                 at: number(entry.at),
-                outcome:
-                  entry.reviewer === null
-                    ? "unknown"
-                    : (entry.outcome as PullRequestReviewer["outcome"]),
+                outcome: entry.outcome as PullRequestReviewer["outcome"],
                 line: text(entry.line) ?? "",
                 commit: sha(entry.commit),
                 commitsSince: count(entry.commitsSince),
@@ -311,7 +300,6 @@ function parseItem(value: unknown): WorkItem | null {
   )
     return null;
   const detail = parseDetail(item.pr);
-  const observation = parsePullRequestDetailObservation(item.prObservation);
   const optionalText = (name: string) =>
     text(item[name]) ? { [name]: text(item[name]) } : {};
   return {
@@ -337,7 +325,6 @@ function parseItem(value: unknown): WorkItem | null {
     ...optionalText("base"),
     ...(sha(item.headSha) ? { headSha: sha(item.headSha)! } : {}),
     ...(detail ? { pr: detail } : {}),
-    ...(observation ? { prObservation: observation } : {}),
     ...(number(item.finishedAt) ? { finishedAt: number(item.finishedAt) } : {}),
     ...(typeof item.draft === "boolean" ? { draft: item.draft } : {}),
     ...(["pass", "fail", "pending", "none"].includes(item.checks as string)
@@ -436,14 +423,7 @@ class WorldSourcesStore {
     const task = fetchWorldSources(this.#fetch, force)
       .then((snapshot) => this.#publish(sequence, snapshot))
       .catch(() => {
-        // Retain display evidence, but an unreachable service cannot renew it.
-        this.#publish(sequence, {
-          ...this.#snapshot,
-          refreshing: false,
-          items: this.#snapshot.items.map((item) =>
-            qualifyPullRequestDetail(item, this.#snapshot.observedAt, false),
-          ),
-        });
+        // The service is unreachable; keep the last snapshot.
       })
       .finally(() => {
         if (this.#inFlight === task) this.#inFlight = null;

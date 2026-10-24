@@ -1,4 +1,3 @@
-import { fixturePullRequest as detailedPr } from "./testing/pullRequestFixture";
 // First: the page runs on test time (see testing/testClock.ts).
 import { clock } from "./testing/installTestClock";
 import { StrictMode } from "react";
@@ -60,6 +59,49 @@ const mergedWeek = Array.from({ length: 150 }, (_, index) => ({
 // Your own open pull requests, read in detail: one ready to merge, one that
 // GitHub still holds for a review.
 const prHead = (digit: string) => digit.repeat(40);
+const detailedPr = (number: number, fields: Record<string, unknown> = {}) => ({
+  key: `github:pr:example-org/web-app#${number}`,
+  source: "github",
+  kind: "pull_request",
+  ref: `example-org/web-app#${number}`,
+  title: `Synthetic card change ${number}`,
+  url: `https://github.com/example-org/web-app/pull/${number}`,
+  lane: "ready",
+  status: "open",
+  roles: ["author"],
+  updatedAt: 2,
+  number,
+  repo: "example-org/web-app",
+  base: "main",
+  headSha: prHead(String(number % 10)),
+  draft: false,
+  checks: "pass",
+  review: "approved",
+  mergeable: "mergeable",
+  pr: {
+    baseRef: "main",
+    behindBy: 2,
+    checks: [
+      { name: "Unit tests", state: "pass", required: true },
+      { name: "Browser suite", state: "pass", required: false },
+    ],
+    checksTruncated: false,
+    reviewers: [
+      {
+        reviewer: "rev2",
+        url: `https://github.com/example-org/web-app/pull/${number}#issuecomment-1`,
+        at: 1,
+        outcome: "confirmed",
+        line: "2/2 resolved, 0 new.",
+        commit: prHead(String(number % 10)),
+        commitsSince: 0,
+      },
+    ],
+    uiChange: true,
+    images: 5,
+  },
+  ...fields,
+});
 /** #43's head; a scenario moves it to show a push while a sheet is open. */
 let head43 = prHead("3");
 /** Verb requests the cards sent, and GitHub's (synthetic) answer. */
@@ -863,27 +905,13 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
       await settle(50);
       check(
         ready.querySelectorAll('[aria-label="Readiness"] li[data-state="pass"]')
-          .length === 5,
-        "details show all five readiness rules",
-      );
-      check(
-        ready.textContent?.includes(
-          "Reviewer names are explicit sender claims, not verified identities",
-        ) === true &&
+          .length === 5 &&
           ready.textContent?.includes(
-            "a shared GitHub login does not identify a crew reviewer",
-          ) === true,
-        "details distinguish reviewer claims from shared account identity",
-      );
-      check(
-        ready.querySelector(
-          'a[href="https://github.com/example-org/web-app/pull/43#issuecomment-1"]',
-        ) !== null,
-        "details preserve the original reviewer source link",
-      );
-      check(
-        ready.textContent?.includes("2 behind main") === true,
-        "details preserve the head's distance behind main",
+            "GitHub doesn't let you approve your own PR.",
+          ) === true &&
+          ready.textContent?.includes("per rev2's comment") === true &&
+          ready.textContent?.includes("2 behind main") === true,
+        "details show each rule, the reviewer's provenance and the head",
       );
       button(ready, "Close…").click();
       await settle(50);

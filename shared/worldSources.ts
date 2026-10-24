@@ -78,15 +78,6 @@ export type WorkReview =
   | "none";
 export type WorkRole = "author" | "reviewer" | "assignee" | "watcher";
 
-/** Detail health is independent of a successful GitHub list refresh. */
-export type PullRequestDetailObservation = {
-  source: "github";
-  state: "fresh" | "stale" | "unavailable";
-  headSha: string;
-  readAt: number | null;
-  expiresAt: number | null;
-};
-
 export type WorkItem = {
   /** Stable across refreshes: `github:pr:owner/repo#12`, `jira:ABC-1`. */
   key: string;
@@ -119,7 +110,6 @@ export type WorkItem = {
   headSha?: string;
   /** Your open pull requests: checks, reviewer results and files, read in detail. */
   pr?: PullRequestDetail;
-  prObservation?: PullRequestDetailObservation;
 };
 
 /** A work item linked to the agent pane whose checkout or report names it. */

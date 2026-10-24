@@ -1,10 +1,6 @@
 import { ChevronRight, Copy, ExternalLink } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
-  freshPullRequestDetail,
-  PR_DETAILS_UNAVAILABLE,
-} from "../../../shared/pullRequestFreshness";
-import {
   actionablePullRequest,
   confirmedAt,
   mergeCommand,
@@ -16,13 +12,11 @@ import {
   verbConsequence,
   type PullRequestAttention,
   type PullRequestCheck,
-  type PullRequestReviewer,
   type PullRequestVerb,
   type ReadinessRule,
 } from "../../../shared/pullRequests";
 import { workBadgeText, type WorkItem } from "../../../shared/worldSources";
 import { runPullRequestVerb } from "./worldSources";
-import { PullRequestDetailHealth } from "./PullRequestDetailHealth";
 import "./pullRequestCard.css";
 
 /**
@@ -69,41 +63,24 @@ export function PullRequestCard({
   /** Ask the agent on it to fix, as a Chat message; absent where there is no Chat. */
   onAskAuthor?(item: WorkItem): void;
 }) {
-  const [, expireDetail] = useState(0);
-  const now = Date.now();
   const [open, setOpen] = useState(false);
   // A sheet holds the head it was opened on: the confirm is for that head.
   const [sheet, setSheetState] = useState<{
     verb: PullRequestVerb;
     head: string | undefined;
   } | null>(null);
-  const setSheet = (verb: PullRequestVerb | null) => {
-    if (verb === "merge" && !freshPullRequestDetail(item)) {
-      expireDetail((value) => value + 1);
-      return;
-    }
+  const setSheet = (verb: PullRequestVerb | null) =>
     setSheetState(verb ? { verb, head: item.headSha } : null);
-  };
   const [state, setState] = useState<
     | { kind: "idle" }
     | { kind: "running"; verb: PullRequestVerb }
     | { kind: "done"; verb: PullRequestVerb; seen: string }
     | { kind: "failed"; detail: string }
   >({ kind: "idle" });
-  const rules = pullRequestReadiness(item, now);
+  const rules = pullRequestReadiness(item);
   const failing = rules.filter((rule) => rule.state === "fail");
   const ready = rules.every((rule) => rule.state === "pass");
   const actionable = actionablePullRequest(item);
-  const detailFresh = freshPullRequestDetail(item, now);
-  useEffect(() => {
-    if (!freshPullRequestDetail(item)) return;
-    const expiresAt = item.prObservation!.expiresAt!;
-    const timer = window.setTimeout(
-      () => expireDetail((value) => value + 1),
-      Math.max(0, expiresAt - Date.now()),
-    );
-    return () => window.clearTimeout(timer);
-  }, [item]);
   const blocked = mergeUnavailable(item);
   // GitHub's answer replaces "Merged" once the source shows the change.
   const seen = `${item.lane}|${item.draft}|${item.headSha}`;
@@ -118,23 +95,12 @@ export function PullRequestCard({
       setState({ kind: "failed", detail: HEAD_CHANGED });
     }
   }, [sheet, item.headSha]);
-  useEffect(() => {
-    if (sheet?.verb === "merge" && !detailFresh) {
-      setSheetState(null);
-      setState({ kind: "failed", detail: PR_DETAILS_UNAVAILABLE });
-    }
-  }, [sheet, detailFresh]);
 
   const run = async (
     verb: PullRequestVerb,
     head: string | undefined,
     comment?: string,
   ) => {
-    if (verb === "merge" && !freshPullRequestDetail(item)) {
-      setSheet(null);
-      setState({ kind: "failed", detail: PR_DETAILS_UNAVAILABLE });
-      return;
-    }
     setSheet(null);
     setState({ kind: "running", verb });
     try {
@@ -156,9 +122,7 @@ export function PullRequestCard({
   };
 
   const running = state.kind === "running";
-  const mergeControl = !actionable ? null : !detailFresh ? (
-    <span>Refresh Sources before merge</span>
-  ) : blocked ? (
+  const mergeControl = !actionable ? null : blocked ? (
     <MergeCommand item={item} reason={blocked} />
   ) : (
     <button
@@ -192,14 +156,10 @@ export function PullRequestCard({
         <p className="pr-card-title">{item.title}</p>
       </header>
       <p className="pr-card-summary">
-        <CheckDots item={item} fresh={detailFresh} />
+        <CheckDots item={item} />
         {item.pr?.reviewers.map((entry) => (
-          <span
-            key={entry.sourceId || entry.url || entry.reviewer}
-            data-outcome={detailFresh ? entry.outcome : "unknown"}
-          >
-            {entry.reviewer ?? "Unknown reviewer"}{" "}
-            {detailFresh ? "" : "cached "}
+          <span key={entry.reviewer} data-outcome={entry.outcome}>
+            {entry.reviewer}{" "}
             {entry.outcome === "confirmed"
               ? entry.commitsSince === 0
                 ? "confirmed"
@@ -221,10 +181,7 @@ export function PullRequestCard({
           </span>
         ) : null}
       </p>
-      {actionable ? (
-        <PullRequestDetailHealth item={item} fresh={detailFresh} />
-      ) : null}
-      {attention && (attention.reason !== "ready" || ready) ? (
+      {attention ? (
         <p className="pr-card-attention" data-reason={attention.reason}>
           {attention.reason === "stalled"
             ? `Stalled: ${attention.label}`
@@ -268,7 +225,38 @@ export function PullRequestCard({
             checks={item.pr?.checks}
             truncated={item.pr?.checksTruncated}
           />
-          <PullRequestReviews reviewers={item.pr?.reviewers} />
+          <section aria-label="Reviews">
+            <h4>Reviews</h4>
+            {item.pr?.reviewers.length ? (
+              <ul>
+                {item.pr.reviewers.map((entry) => (
+                  <li key={entry.reviewer} data-outcome={entry.outcome}>
+                    <b>{entry.reviewer}</b>{" "}
+                    {entry.line || "No RESULT line in its latest post"}
+                    <small>
+                      {entry.outcome === "confirmed"
+                        ? `${confirmedAt(entry)} · `
+                        : ""}
+                      {entry.url ? (
+                        <a
+                          href={entry.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          per {entry.reviewer}'s comment
+                        </a>
+                      ) : (
+                        `per ${entry.reviewer}'s comment`
+                      )}
+                    </small>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p>{item.pr ? "No reviewer result yet." : "Not read yet."}</p>
+            )}
+            <p className="pr-card-note">{REVIEWS_COME_FROM_COMMENTS}</p>
+          </section>
           <p className="pr-card-facts">
             {item.headSha ? (
               <>
@@ -331,8 +319,8 @@ export function PullRequestCard({
   );
 }
 
-function CheckDots({ item, fresh }: { item: WorkItem; fresh: boolean }) {
-  const checks = fresh ? item.pr?.checks : undefined;
+function CheckDots({ item }: { item: WorkItem }) {
+  const checks = item.pr?.checks;
   if (!checks?.length)
     return item.checks && item.checks !== "none" ? (
       <span data-state={item.checks}>CI {item.checks}</span>
@@ -516,49 +504,5 @@ function ConfirmSheet({
         </button>
       </div>
     </div>
-  );
-}
-
-/** Parsed evidence only; unattributed posts remain individually linked. */
-export function PullRequestReviews({
-  reviewers,
-}: {
-  reviewers?: PullRequestReviewer[];
-}) {
-  return (
-    <section aria-label="Reviews">
-      <h4>Reviews</h4>
-      {reviewers?.length ? (
-        <ul>
-          {reviewers.map((entry) => (
-            <li
-              key={entry.sourceId || entry.url || entry.reviewer}
-              data-outcome={entry.outcome}
-            >
-              <b>{entry.reviewer ?? "Unknown reviewer"}</b>{" "}
-              {entry.line || "No RESULT line in its latest post"}
-              {!entry.reviewer ? <span> · Attribution unknown</span> : null}
-              <small>
-                {entry.outcome === "confirmed" && entry.reviewer
-                  ? `${confirmedAt(entry)} · `
-                  : ""}
-                {entry.url ? (
-                  <a href={entry.url} target="_blank" rel="noopener noreferrer">
-                    {entry.reviewer
-                      ? `per ${entry.reviewer}'s review or comment`
-                      : "View RESULT source"}
-                  </a>
-                ) : (
-                  "Source link unavailable"
-                )}
-              </small>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p>{reviewers ? "No reviewer result yet." : "Not read yet."}</p>
-      )}
-      <p className="pr-card-note">{REVIEWS_COME_FROM_COMMENTS}</p>
-    </section>
   );
 }

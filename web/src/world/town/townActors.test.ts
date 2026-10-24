@@ -283,20 +283,3 @@ test("unpinning lets an idle agent go to the lounge again", () => {
   actors.sync(world({ a: "idle" }).actorWorld, false);
   expect(actors.actors.get("a")!.goal?.kind).toBe("lounge");
 });
-
-test("stale agents freeze without keeping an animation loop alive and resume on recovery", () => {
-  const actors = new TownActors();
-  actors.sync(world({ a: "working" }).actorWorld, true);
-  const moving = world({ a: "blocked" });
-  actors.sync(moving.actorWorld, false);
-  expect(actors.busy).toBe(true);
-  moving.model.agents.get("a")!.stale = true;
-  const actor = actors.actors.get("a")!;
-  const position = [actor.x, actor.y];
-  for (let i = 0; i < 20; i++) expect(actors.step(1 / 30)).toBe(false);
-  expect([actor.x, actor.y]).toEqual(position);
-  expect(actors.busy).toBe(false);
-  moving.model.agents.get("a")!.stale = false;
-  expect(actors.step(1 / 30)).toBe(true);
-  expect([actor.x, actor.y]).not.toEqual(position);
-});

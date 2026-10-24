@@ -1,6 +1,5 @@
 import {
   DETAIL_BATCH,
-  DETAIL_MAX_AGE_MS,
   detailQuery,
   detailsDue,
   detailStamp,
@@ -145,10 +144,7 @@ export async function refreshGitHub(
     );
     if (result.code !== 0 || result.stdout.length > MAX_OUTPUT)
       throw new Error("GitHub request failed");
-    const response = record(JSON.parse(result.stdout));
-    if (Array.isArray(response.errors) && response.errors.length)
-      throw new Error("GitHub returned a partial response");
-    return record(response.data);
+    return record(record(JSON.parse(result.stdout)).data);
   };
   try {
     const data = await query(githubQuery(now, mergedDays));
@@ -180,8 +176,8 @@ export async function refreshGitHub(
 
 /**
  * Read your open pull requests in detail where due, then attach each detail
- * that still describes the pull request. A failed batch retains matching
- * display evidence with stale health; it never refreshes its authority.
+ * that still describes the pull request. A failed batch leaves its pull
+ * requests without detail (their rules show unknown); the list stands.
  */
 async function readDetails(
   items: WorkItem[],
@@ -198,43 +194,23 @@ async function readDetails(
   const keys = new Set(own.map((item) => item.key));
   for (const key of cache.keys()) if (!keys.has(key)) cache.delete(key);
   const due = detailsDue(own, cache, now);
-  const failed = (item: WorkItem) => {
-    const known = cache.get(item.key);
-    if (known) cache.set(item.key, { ...known, failed: true });
-  };
   for (let index = 0; index < due.length; index += DETAIL_BATCH) {
     const batch = due.slice(index, index + DETAIL_BATCH);
     let parsed: ReturnType<typeof parseDetails>;
     try {
       parsed = parseDetails(batch, await query(detailQuery(batch)));
     } catch {
-      batch.forEach(failed);
       break;
     }
     for (const item of batch) {
       const detail = parsed.get(item.key);
       if (detail)
         cache.set(item.key, { stamp: detailStamp(item), readAt: now, detail });
-      else failed(item);
     }
   }
   for (const item of own) {
     const known = cache.get(item.key);
-    const matching = known?.stamp === detailStamp(item) ? known : undefined;
-    if (matching) item.pr = matching.detail;
-    item.prObservation = {
-      source: "github",
-      headSha: item.headSha ?? "",
-      state: matching
-        ? !matching.failed &&
-          now >= matching.readAt &&
-          now - matching.readAt < DETAIL_MAX_AGE_MS
-          ? "fresh"
-          : "stale"
-        : "unavailable",
-      readAt: matching?.readAt ?? null,
-      expiresAt: matching ? matching.readAt + DETAIL_MAX_AGE_MS : null,
-    };
+    if (known && known.stamp === detailStamp(item)) item.pr = known.detail;
   }
 }
 

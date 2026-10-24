@@ -1,6 +1,3 @@
-import { TownBuildingSign } from "./TownBuildingSign";
-import { TownBuildingSigns } from "./townBuildingSigns";
-import { ConnectionRecoveryBanner } from "../ConnectionRecoveryBanner";
 import {
   Fragment,
   memo,
@@ -531,12 +528,8 @@ export function TownCanvas({
   };
 
   const levelRef = useRef<TownLevel>("overview");
-  const [signs] = useState(
-    () =>
-      new TownBuildingSigns(() =>
-        rendererRef.current?.invalidate("building-sign"),
-      ),
-  );
+  const signs = useRef(new Map<string, HTMLElement>());
+  const signsFor = useRef<TownLayout | null>(null);
   const lastCamera = useRef("");
   const hoverEntry = useCallback(
     (key: string | null, rect?: DOMRect) =>
@@ -573,7 +566,23 @@ export function TownCanvas({
       }
       const renderer = rendererRef.current;
       if (renderer) {
-        signs.update((hostKey) => renderer.roofAlpha(hostKey));
+        if (signsFor.current !== latest.current.layout) {
+          signsFor.current = latest.current.layout;
+          signs.current = new Map(
+            [
+              ...layer.querySelectorAll<HTMLElement>("[data-building-sign]"),
+            ].map((sign) => [sign.dataset.buildingSign!, sign]),
+          );
+        }
+        for (const [hostKey, sign] of signs.current) {
+          const opacity = String(
+            Math.round(renderer.roofAlpha(hostKey) * 100) / 100,
+          );
+          if (sign.style.opacity !== opacity) {
+            sign.style.opacity = opacity;
+            sign.style.visibility = opacity === "0" ? "hidden" : "visible";
+          }
+        }
         if (level !== "overview")
           for (const pennant of pennants.current) markAway(pennant, renderer);
       }
@@ -1463,7 +1472,6 @@ export function TownCanvas({
           model={model}
           layout={layout}
           visible={visible}
-          signs={signs}
           onHoverEntry={hoverEntry}
           selectedKey={selectedKey}
           blockedSince={blockedSince.current}
@@ -1730,9 +1738,7 @@ const TownWorldLayer = memo(function TownWorldLayer({
   quests,
   renderer,
   pennants,
-  signs,
 }: {
-  signs: TownBuildingSigns;
   model: TownModel;
   layout: TownLayout;
   teams: TownTeams;
@@ -1812,34 +1818,27 @@ const TownWorldLayer = memo(function TownWorldLayer({
           { rooms: 0, desks: 0, working: 0 },
         );
         return (
-          <div
-            key={building.hostKey}
-            className="town-building-layer"
-            data-stale={host?.stale || undefined}
-          >
-            <TownBuildingSign
-              hostKey={building.hostKey}
-              signs={signs}
-              left={(building.x + building.w / 2) * T}
-              top={(building.y + building.h * 0.38) * T}
+          <div key={building.hostKey} className="town-building-layer">
+            <div
+              className="town-building-sign"
+              data-building-sign={building.hostKey}
+              style={{
+                left: (building.x + building.w / 2) * T,
+                top: (building.y + building.h * 0.38) * T,
+              }}
             >
               <strong>{host?.displayLabel ?? building.hostKey}</strong>
-              {host?.stale ? (
-                <ConnectionRecoveryBanner
-                  connectionId={host.connectionId}
-                  label={host.displayLabel}
-                  state={host.runtimeState}
-                />
-              ) : (
-                <span>{`${counts.rooms} rooms · ${counts.desks} desks · ${counts.working} working`}</span>
-              )}
+              <span>
+                {host?.stale
+                  ? "Offline · last known state"
+                  : `${counts.rooms} rooms · ${counts.desks} desks · ${counts.working} working`}
+              </span>
               {queue.length ? (
                 <em aria-label={`${queue.length} need you`}>!{queue.length}</em>
               ) : null}
-            </TownBuildingSign>
+            </div>
             <div
               className={`town-reception${queue.length ? " town-reception-busy" : ""}`}
-              data-stale={host?.stale || undefined}
               style={{
                 left: building.doorX * T,
                 top: (building.y + building.h + TOWN_FACADE) * T + 6,
@@ -1860,13 +1859,6 @@ const TownWorldLayer = memo(function TownWorldLayer({
                 </span>
                 {queue.length ? <b>{queue.length}</b> : null}
               </div>
-              {host?.stale ? (
-                <ConnectionRecoveryBanner
-                  connectionId={host.connectionId}
-                  label={host.displayLabel}
-                  state={host.runtimeState}
-                />
-              ) : null}
               {visitors.length ? (
                 <div className="town-reception-queue">
                   {shown.map((agent) => (
@@ -2336,7 +2328,6 @@ function ReceptionEntry({
       type="button"
       className={`town-reception-entry${agent.semanticStatus === "done" ? " town-reception-done" : ""}`}
       data-agent-key={agent.key}
-      disabled={agent.stale || !agent.canOpenInSpaces}
       aria-label={
         agent.semanticStatus === "done"
           ? `${agent.displayLabel}, finished`

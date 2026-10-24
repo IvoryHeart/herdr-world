@@ -32,9 +32,6 @@ const unavailableObservability = {
 test.skipIf(!chrome).each([
   [1440, 900, "typical", 0],
   [390, 900, "typical", 0],
-  // Stable cached/healthy hosts: cold signs and cull/remount use committed refs.
-  [390, 844, "recovery", 0],
-  [1440, 900, "recovery", 0],
   [1440, 900, "max", 0],
   // Extended rooms (100, 50 and 24 desks) on a phone, half-width, wide and
   // portrait screens: the town's shape follows the container.

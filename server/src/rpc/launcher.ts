@@ -1,11 +1,12 @@
 import { moveWorkspaceIds } from "../world/move-workspace-ids";
 import { stampLaunchParent } from "../herdr/spawn-stamp";
 import { tabCardKey } from "../../../shared/terminalColor";
-import { openHarnessLogin } from "../agent/harness-readiness";
-import { launchAgent } from "../agent/launch";
+import { harnessReadiness, openHarnessLogin } from "../agent/harness-readiness";
+import { agentKinds, launchAgent } from "../agent/launch";
 import { profileLaunch } from "../agent/profile-launch";
+import { discoverSkills } from "../agent/skills";
+import { runProcessWithCodeTimeout, shQuote } from "../utils/process-utils";
 import type { ConnectionRpcContext } from "./context";
-import { probeLauncher } from "./launcher-probe";
 
 /** The launcher on one connection: harness readiness, login, catalog and start (launcher.*). */
 export function handleLauncherRpc(
@@ -52,7 +53,18 @@ async function dispatchLauncherRpc(
   // status command (agent/harness-readiness.ts). Onboarding uses it too.
   if (method === "launcher.readiness") {
     try {
-      const { readiness } = await probeLauncher(rpc, false);
+      const kinds = await agentKinds((rpc, rpcParams) =>
+        herdr.call(rpc, rpcParams, 10_000),
+      );
+      const readiness = await harnessReadiness({
+        kinds,
+        host: sshHost(),
+        windows: sshHost()
+          ? connection.remotePlatform === "windows"
+          : process.platform === "win32",
+        run: runProcessWithCodeTimeout,
+        shQuote,
+      });
       sendReply({ id, result: { readiness } }, method);
     } catch (error) {
       sendError(`${method}-error`, error);
@@ -84,8 +96,32 @@ async function dispatchLauncherRpc(
   }
   if (method === "launcher.catalog") {
     try {
-      const result = await probeLauncher(rpc, true);
-      sendReply({ id, result }, method);
+      const p = (params ?? {}) as Record<string, unknown>;
+      const call = (rpc: string, rpcParams: Record<string, unknown>) =>
+        herdr.call(rpc, rpcParams, 10_000);
+      const workspaceId = String(p.workspace_id ?? "");
+      let cwd = "";
+      if (workspaceId) {
+        const listed = (await call("pane.list", {}).catch(() => null)) as {
+          panes?: Record<string, unknown>[];
+        } | null;
+        const pane = listed?.panes?.find((x) => x.workspace_id === workspaceId);
+        cwd = String(pane?.foreground_cwd || pane?.cwd || "");
+      }
+      const host = {
+        host: sshHost(),
+        windows: sshHost()
+          ? connection.remotePlatform === "windows"
+          : process.platform === "win32",
+        run: runProcessWithCodeTimeout,
+        shQuote,
+      };
+      const kinds = await agentKinds(call);
+      const [skills, readiness] = await Promise.all([
+        discoverSkills({ cwd, ...host }).catch(() => []),
+        harnessReadiness({ kinds, ...host }).catch(() => []),
+      ]);
+      sendReply({ id, result: { kinds, skills, readiness } }, method);
     } catch (error) {
       sendError(`${method}-error`, error);
     }

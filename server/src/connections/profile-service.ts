@@ -122,7 +122,6 @@ export class ConnectionProbeError extends Error {
 export type ConnectionRetryOptions = {
   baseDelayMs?: number;
   maxDelayMs?: number;
-  /** Optional finite policy; ordinary transient recovery continues until stopped. */
   maxAttempts?: number;
   stableResetMs?: number;
   random?: () => number;
@@ -248,10 +247,7 @@ export class ConnectionProfileService<
       this.retryBaseDelayMs,
       args.retry?.maxDelayMs ?? 30_000,
     );
-    this.retryMaxAttempts = Math.max(
-      1,
-      args.retry?.maxAttempts ?? Number.POSITIVE_INFINITY,
-    );
+    this.retryMaxAttempts = Math.max(1, args.retry?.maxAttempts ?? 6);
     this.retryStableResetMs = Math.max(1, args.retry?.stableResetMs ?? 30_000);
     this.retryRandom = args.retry?.random ?? Math.random;
     this.retrySchedule =
@@ -287,8 +283,8 @@ export class ConnectionProfileService<
         entry?.profile.type === "ssh" &&
         state?.enabled &&
         state.attempt < this.retryMaxAttempts &&
-        ((error instanceof SshTunnelError && error.retryable) ||
-          (error instanceof ConnectionProbeError && error.retryable)),
+        (!(error instanceof SshTunnelError) || error.retryable) &&
+        (!(error instanceof ConnectionProbeError) || error.retryable),
     );
   }
 

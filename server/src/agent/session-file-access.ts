@@ -4,19 +4,12 @@ import { basename, join, resolve } from "node:path";
 import { sshCommandArgv } from "../bridge/ssh-command";
 import type { SessionFile } from "./session-types";
 import {
-  plainTranscriptPath,
-  transcriptPaths,
-  transcriptPrefix,
-  transcriptText,
-} from "./session-transcript";
-import {
   listCodexDaemonThreads,
   listCodexDaemonThreadBatch,
   type CodexDaemonThread,
 } from "./codex-app-server";
 
 const SESSION_FILE_TIMEOUT_MS = 15_000;
-const COMPRESSED_PREFIX_TRANSFER_LIMIT = 1024 * 1024;
 
 type RunBinaryProcessWithTimeout = (
   argv: string[],
@@ -77,14 +70,12 @@ async function findLocalCodexSessionByPrefix(prefix: string) {
   for (const directory of ["sessions", "archived_sessions"]) {
     const root = join(codexHome(), directory);
     try {
-      for await (const path of new Bun.Glob(
-        `**/*-${prefix}*.jsonl{,.zst}`,
-      ).scan({
+      for await (const path of new Bun.Glob(`**/*-${prefix}*.jsonl`).scan({
         cwd: root,
         absolute: true,
         onlyFiles: true,
       })) {
-        matches.add(plainTranscriptPath(path));
+        matches.add(path);
         if (matches.size > 1) return "ambiguous";
       }
     } catch (error) {
@@ -101,16 +92,15 @@ async function findLocalCodexSession(id: string) {
   for (const directory of ["sessions", "archived_sessions"]) {
     const root = join(codexHome(), directory);
     try {
-      for await (const path of new Bun.Glob("**/*.jsonl{,.zst}").scan({
+      for await (const path of new Bun.Glob("**/*.jsonl").scan({
         cwd: root,
         absolute: true,
         onlyFiles: true,
       })) {
-        const plain = plainTranscriptPath(path);
-        if (!basename(plain).endsWith(`-${id}.jsonl`)) continue;
-        if (found && found !== plain)
+        if (!basename(path).endsWith(`-${id}.jsonl`)) continue;
+        if (found)
           throw new Error("Multiple transcripts match this Codex session ID.");
-        found = plain;
+        found = path;
       }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
@@ -120,39 +110,29 @@ async function findLocalCodexSession(id: string) {
 }
 
 async function localSessionFile(path: string): Promise<SessionFile | null> {
-  for (const candidate of transcriptPaths(path)) {
-    try {
-      const info = await stat(candidate);
-      if (!info.isFile()) continue;
-      return {
-        path: candidate,
-        mtimeMs: info.mtimeMs,
-        size: info.size,
-        identity: `${info.dev}:${info.ino}`,
-        changeToken: String(info.ctimeMs),
-      };
-    } catch {
-      // Compression/materialization can replace a transcript representation.
-    }
+  try {
+    const info = await stat(path);
+    if (!info.isFile()) return null;
+    return {
+      path,
+      mtimeMs: info.mtimeMs,
+      size: info.size,
+      identity: `${info.dev}:${info.ino}`,
+      changeToken: String(info.ctimeMs),
+    };
+  } catch {
+    return null;
   }
-  return null;
-}
-
-async function localReadFile(path: string) {
-  const file = await localSessionFile(path);
-  return Bun.file(file?.path ?? path);
 }
 
 export const localAgentSessionFiles: AgentSessionFileAccess = {
   remote: false,
   statFile: localSessionFile,
-  async readText(path) {
-    const file = await localReadFile(path);
-    return transcriptText(file.name!, file.stream());
-  },
+  readText: (path) => Bun.file(path).text(),
   async readPrefix(path, byteLimit) {
-    const file = await localReadFile(path);
-    return transcriptPrefix(file.name!, file.stream(), byteLimit);
+    return new Uint8Array(
+      await Bun.file(path).slice(0, byteLimit).arrayBuffer(),
+    );
   },
   async readDownloadBody(path) {
     return Bun.file(path);
@@ -207,21 +187,9 @@ export function createAgentSessionFileAccess(args: {
   }
 
   async function statFile(path: string) {
-    const candidates = transcriptPaths(path);
-    const select =
-      candidates.length === 1
-        ? ""
-        : `
-if [ -f ${args.shQuote(candidates[0])} ]; then
-  path=${args.shQuote(candidates[0])}
-elif [ -f ${args.shQuote(candidates[1])} ]; then
-  path=${args.shQuote(candidates[1])}
-fi
-`;
     const command = `
 set -eu
 path=${args.shQuote(path)}
-${select}
 [ -f "$path" ] || exit 44
 size="$(stat -c %s "$path" 2>/dev/null || stat -f %z "$path")"
 mtime="$(stat -c %Y "$path" 2>/dev/null || stat -f %m "$path")"
@@ -247,13 +215,6 @@ printf '%s\\t%s\\t%s\\t%s\\t%s\\n' "$size" "$mtime" "$path64" "$identity" "$chan
       );
     }
     return parseRemoteFileMetadata(result.stdout.toString("utf8"));
-  }
-
-  async function readPath(path: string) {
-    // Ordinary provider reads keep their existing single SSH request.
-    if (!path.endsWith(".jsonl.zst") && !basename(path).startsWith("rollout-"))
-      return path;
-    return (await statFile(path))?.path ?? path;
   }
 
   return {
@@ -298,13 +259,12 @@ match=""
 for directory in "$root/sessions" "$root/archived_sessions"; do
   [ -d "$directory" ] || continue
   while IFS= read -r -d '' candidate; do
-    case "$candidate" in *.jsonl.zst) [ ! -f "\${candidate%.zst}" ] || continue ;; esac
     if [ -n "$match" ]; then
       printf '%s\\n' 'Multiple transcripts match this Codex session ID.' >&2
       exit 1
     fi
     match="$candidate"
-  done < <(find "$directory" -type f \\( -name "*-$id.jsonl" -o -name "*-$id.jsonl.zst" \\) -print0)
+  done < <(find "$directory" -type f -name "*-$id.jsonl" -print0)
 done
 [ -z "$match" ] || printf '%s\\n' "$match"
 `;
@@ -327,11 +287,10 @@ match=""
 for directory in "$root/sessions" "$root/archived_sessions"; do
   [ -d "$directory" ] || continue
   while IFS= read -r -d '' candidate; do
-    case "$candidate" in *.jsonl.zst) [ ! -f "\${candidate%.zst}" ] || continue ;; esac
     # Paths are absolute, so this marker cannot be one.
     if [ -n "$match" ]; then printf 'ambiguous\\n'; exit 0; fi
     match="$candidate"
-  done < <(find "$directory" -type f \\( -name "*-$prefix*.jsonl" -o -name "*-$prefix*.jsonl.zst" \\) -print0)
+  done < <(find "$directory" -type f -name "*-$prefix*.jsonl" -print0)
 done
 [ -z "$match" ] || printf '%s\\n' "$match"
 `;
@@ -340,33 +299,14 @@ done
       return path ? statFile(path) : null;
     },
     async readText(path) {
-      const actual = await readPath(path);
-      const bytes = await runRemote(`set -eu\ncat ${args.shQuote(actual)}`);
-      return transcriptText(actual, new Response(Uint8Array.from(bytes)).body!);
+      return (await runRemote(`set -eu\ncat ${args.shQuote(path)}`)).toString(
+        "utf8",
+      );
     },
     async readPrefix(path, byteLimit) {
-      const actual = await readPath(path);
-      const compressed = actual.endsWith(".jsonl.zst");
-      const transferLimit = compressed
-        ? COMPRESSED_PREFIX_TRANSFER_LIMIT
-        : Math.max(1, Math.floor(byteLimit));
-      const bytes = await runRemote(
-        `set -eu\nhead -c ${transferLimit} ${args.shQuote(actual)}`,
+      return runRemote(
+        `set -eu\nhead -c ${Math.max(1, Math.floor(byteLimit))} ${args.shQuote(path)}`,
       );
-      try {
-        return await transcriptPrefix(
-          actual,
-          new Response(Uint8Array.from(bytes)).body!,
-          byteLimit,
-        );
-      } catch (error) {
-        if (compressed && bytes.length === COMPRESSED_PREFIX_TRANSFER_LIMIT)
-          throw new Error(
-            "Compressed transcript prefix exceeds the 1 MiB transfer budget.",
-            { cause: error },
-          );
-        throw error;
-      }
     },
     async readDownloadBody(path) {
       const bytes = await runRemote(`set -eu\ncat ${args.shQuote(path)}`);

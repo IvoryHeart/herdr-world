@@ -178,10 +178,6 @@ Codex thread named in the pane's title, or an unambiguous read-only daemon
 inference, through the same session resolver and
 projection cache as History ([History synchronization](HISTORY.md)).
 
-Codex rollouts can be plain `.jsonl` or compressed `.jsonl.zst`. Chat and
-History read both on local and SSH connections without changing Codex's files;
-compression does not grant a stronger binding or enable Send for a guess.
-
 | RPC | Parameters | Reply |
 | --- | --- | --- |
 | `agent_conversation.get` | `pane_id` | A conversation |

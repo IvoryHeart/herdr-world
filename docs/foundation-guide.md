@@ -120,20 +120,6 @@ preferences; [styles](../web/src/styles/) hold shared design tokens and base
 styles. Follow imports from the owning row before editing a similarly named
 component.
 
-The [focused store](../web/src/store.ts) retains the shared mutable connection
-state and public command object. Its [types](../web/src/store/types.ts),
-[session transitions](../web/src/store/sessions.ts),
-[refresh scheduling](../web/src/store/refresh.ts),
-[notifications](../web/src/store/notifications.ts),
-[updates and polling](../web/src/store/updates.ts),
-[creation](../web/src/store/creation.ts),
-[qualified commands](../web/src/store/operations.ts),
-[React bindings](../web/src/store/react.ts) and
-[worktree notices](../web/src/store/worktree.ts) live in focused modules.
-Consumers continue to import from `web/src/store.ts`. Internal slices read
-that module's live bindings only when their functions run; module initialization
-must not read or call back into the mutable store.
-
 ## Follow a request across the boundary
 
 1. **Capture an owner.** The [connection selector](../web/src/components/ConnectionSwitcher.tsx)
