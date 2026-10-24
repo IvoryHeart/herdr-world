@@ -84,15 +84,18 @@ export function actionablePullRequest(item: WorkItem) {
   );
 }
 
-export function pullRequestReadiness(item: WorkItem): ReadinessRule[] {
-  const detail = freshPullRequestDetail(item) ? item.pr : undefined;
+export function pullRequestReadiness(
+  item: WorkItem,
+  now = Date.now(),
+): ReadinessRule[] {
+  const detail = freshPullRequestDetail(item, now) ? item.pr : undefined;
   const failing = detail?.checks.filter((check) => check.state === "fail");
   const running = detail?.checks.filter((check) => check.state === "pending");
   return [
     item.draft
       ? rule("draft", "Not a draft", "fail", "Still a draft")
       : rule("draft", "Not a draft", "pass", "Ready for review"),
-    findingsRule(item),
+    findingsRule(item, now),
     item.checks === "pass"
       ? rule("checks", "CI green on head", "pass", "All checks passed")
       : item.checks === "fail"
@@ -129,9 +132,9 @@ export function pullRequestReadiness(item: WorkItem): ReadinessRule[] {
   ];
 }
 
-function findingsRule(item: WorkItem): ReadinessRule {
+function findingsRule(item: WorkItem, now: number): ReadinessRule {
   const label = "Every finding confirmed";
-  if (!freshPullRequestDetail(item))
+  if (!freshPullRequestDetail(item, now))
     return rule(
       "findings",
       label,
@@ -221,10 +224,10 @@ function rule(
   return { id, label, state, detail };
 }
 
-export function readyToMerge(item: WorkItem) {
+export function readyToMerge(item: WorkItem, now = Date.now()) {
   return (
     actionablePullRequest(item) &&
-    pullRequestReadiness(item).every((entry) => entry.state === "pass")
+    pullRequestReadiness(item, now).every((entry) => entry.state === "pass")
   );
 }
 
@@ -305,7 +308,8 @@ export function pullRequestAttention(
   format: (time: number) => string,
 ): PullRequestAttention | null {
   if (!actionablePullRequest(item)) return null;
-  if (readyToMerge(item)) return { reason: "ready", label: "Ready to merge" };
+  if (readyToMerge(item, now))
+    return { reason: "ready", label: "Ready to merge" };
   const since = stalledAt(item, authors);
   if (
     since === null ||

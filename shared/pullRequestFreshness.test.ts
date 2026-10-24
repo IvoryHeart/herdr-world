@@ -51,6 +51,10 @@ const item: WorkItem = {
 };
 
 test("missing, stale, mismatched and malformed qualifications never grant detail readiness", () => {
+  expect(freshPullRequestDetail(item)).toBe(false);
+  expect(pullRequestReadiness(item).some((rule) => rule.state !== "pass")).toBe(
+    true,
+  );
   expect(freshPullRequestDetail(item, 1000)).toBe(true);
   expect(freshPullRequestDetail(item, observation.expiresAt)).toBe(false);
   expect(freshPullRequestDetail(item, 999)).toBe(false);
@@ -69,7 +73,7 @@ test("missing, stale, mismatched and malformed qualifications never grant detail
         .map((r) => r.state),
     ).toEqual(["unknown", "unknown"]);
   }
-  expect(pullRequestReadiness(item).map((r) => r.state)).toEqual([
+  expect(pullRequestReadiness(item, 1000).map((r) => r.state)).toEqual([
     "pass",
     "pass",
     "pass",

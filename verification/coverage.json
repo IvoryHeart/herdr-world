@@ -1735,7 +1735,8 @@
           "web/src/world/BoardView.test.ts",
           "server/src/sources/pullRequestFreshness.test.ts",
           "shared/pullRequestFreshness.test.ts",
-          "web/src/world/PullRequestFreshness.test.ts"
+          "web/src/world/PullRequestFreshness.test.ts",
+          "web/src/world/PullRequestExpiry.test.ts"
         ],
         "checks": ["bun run check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."

@@ -1,12 +1,16 @@
 import { useState } from "react";
-import { freshPullRequestDetail } from "../../../shared/pullRequestFreshness";
 import type { WorkItem } from "../../../shared/worldSources";
 import { worldSourcesStore } from "./worldSources";
 
 /** GitHub list health never stands in for the time the detail was read. */
-export function PullRequestDetailHealth({ item }: { item: WorkItem }) {
+export function PullRequestDetailHealth({
+  item,
+  fresh: current,
+}: {
+  item: WorkItem;
+  fresh: boolean;
+}) {
   const [refreshing, setRefreshing] = useState(false);
-  const current = freshPullRequestDetail(item);
   const observation = item.prObservation;
   const readAt = observation?.readAt;
   return (

@@ -69,25 +69,41 @@ export function PullRequestCard({
   /** Ask the agent on it to fix, as a Chat message; absent where there is no Chat. */
   onAskAuthor?(item: WorkItem): void;
 }) {
+  const [, expireDetail] = useState(0);
+  const now = Date.now();
   const [open, setOpen] = useState(false);
   // A sheet holds the head it was opened on: the confirm is for that head.
   const [sheet, setSheetState] = useState<{
     verb: PullRequestVerb;
     head: string | undefined;
   } | null>(null);
-  const setSheet = (verb: PullRequestVerb | null) =>
+  const setSheet = (verb: PullRequestVerb | null) => {
+    if (verb === "merge" && !freshPullRequestDetail(item)) {
+      expireDetail((value) => value + 1);
+      return;
+    }
     setSheetState(verb ? { verb, head: item.headSha } : null);
+  };
   const [state, setState] = useState<
     | { kind: "idle" }
     | { kind: "running"; verb: PullRequestVerb }
     | { kind: "done"; verb: PullRequestVerb; seen: string }
     | { kind: "failed"; detail: string }
   >({ kind: "idle" });
-  const rules = pullRequestReadiness(item);
+  const rules = pullRequestReadiness(item, now);
   const failing = rules.filter((rule) => rule.state === "fail");
   const ready = rules.every((rule) => rule.state === "pass");
   const actionable = actionablePullRequest(item);
-  const detailFresh = freshPullRequestDetail(item);
+  const detailFresh = freshPullRequestDetail(item, now);
+  useEffect(() => {
+    if (!freshPullRequestDetail(item)) return;
+    const expiresAt = item.prObservation!.expiresAt!;
+    const timer = window.setTimeout(
+      () => expireDetail((value) => value + 1),
+      Math.max(0, expiresAt - Date.now()),
+    );
+    return () => window.clearTimeout(timer);
+  }, [item]);
   const blocked = mergeUnavailable(item);
   // GitHub's answer replaces "Merged" once the source shows the change.
   const seen = `${item.lane}|${item.draft}|${item.headSha}`;
@@ -114,7 +130,7 @@ export function PullRequestCard({
     head: string | undefined,
     comment?: string,
   ) => {
-    if (verb === "merge" && !detailFresh) {
+    if (verb === "merge" && !freshPullRequestDetail(item)) {
       setSheet(null);
       setState({ kind: "failed", detail: PR_DETAILS_UNAVAILABLE });
       return;
@@ -176,7 +192,7 @@ export function PullRequestCard({
         <p className="pr-card-title">{item.title}</p>
       </header>
       <p className="pr-card-summary">
-        <CheckDots item={item} />
+        <CheckDots item={item} fresh={detailFresh} />
         {item.pr?.reviewers.map((entry) => (
           <span
             key={entry.sourceId || entry.url || entry.reviewer}
@@ -205,7 +221,9 @@ export function PullRequestCard({
           </span>
         ) : null}
       </p>
-      {actionable ? <PullRequestDetailHealth item={item} /> : null}
+      {actionable ? (
+        <PullRequestDetailHealth item={item} fresh={detailFresh} />
+      ) : null}
       {attention ? (
         <p className="pr-card-attention" data-reason={attention.reason}>
           {attention.reason === "stalled"
@@ -313,8 +331,8 @@ export function PullRequestCard({
   );
 }
 
-function CheckDots({ item }: { item: WorkItem }) {
-  const checks = freshPullRequestDetail(item) ? item.pr?.checks : undefined;
+function CheckDots({ item, fresh }: { item: WorkItem; fresh: boolean }) {
+  const checks = fresh ? item.pr?.checks : undefined;
   if (!checks?.length)
     return item.checks && item.checks !== "none" ? (
       <span data-state={item.checks}>CI {item.checks}</span>

@@ -73,7 +73,26 @@ test("browser retains detail provenance and treats old/malformed qualifications 
   expect(html).not.toContain("Old context");
   expect(html).not.toContain("Merge…");
   expect(html).not.toContain('data-ready="true"');
+  const readAt = Date.now() - 1000;
   const fresh = renderToStaticMarkup(
+    createElement(PullRequestCard, {
+      item: {
+        ...item,
+        prObservation: {
+          ...item.prObservation!,
+          state: "fresh",
+          readAt,
+          expiresAt: readAt + 600000,
+        },
+      },
+    }),
+  );
+  expect(fresh).toContain("GitHub details fresh");
+  expect(fresh).toContain("Merge…");
+});
+
+test("an expired fresh marker cannot display fresh details or offer merge", () => {
+  const html = renderToStaticMarkup(
     createElement(PullRequestCard, {
       item: {
         ...item,
@@ -81,6 +100,8 @@ test("browser retains detail provenance and treats old/malformed qualifications 
       },
     }),
   );
-  expect(fresh).toContain("GitHub details fresh");
-  expect(fresh).toContain("Merge…");
+  expect(html).toContain('data-detail-state="stale"');
+  expect(html).toContain("Refresh Sources before merge");
+  expect(html).not.toContain("Merge…");
+  expect(html).not.toContain('data-ready="true"');
 });

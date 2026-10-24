@@ -85,6 +85,8 @@ Direct fixtures in `server/src/sources/pullRequestReviews.test.ts` and
 `pullRequestDetail.test.ts` exercise canonical and current legacy posts,
 quoted/author replies, shared-login refusal, distinct unknown sources, explicit
 correction, latest named results, SHA ambiguity/conflicts and typed open counts.
+Canonical and formal-current records also carry historical RED/comparison SHAs;
+those references cannot supply or contradict an actual reviewed-head claim.
 `shared/pullRequests.test.ts` covers readiness precedence; browser decoder and
 static review rendering tests cover retention and useful unknown source links.
 These are bounded pure parsing/projection rules, so a state model would repeat
@@ -170,6 +172,11 @@ partial batches, recovery, 10/20 bounds and unread-tail ordering, disable/window
 reconfiguration cache races, source failure and pre-merge expiry/retirement.
 Shared wire/readiness and browser decoder/static card fixtures independently
 check malformed qualification and stale-versus-current presentation. Existing
+isolated mounted-card expiry tests advance the observing clock and invoke its
+scheduled deadline without another source snapshot: readiness and fresh detail
+presentation retire, an open merge sheet closes, read provenance stays unchanged,
+and unmount cancels the deadline. These are actual React consumer checks; the
+service retains its independent expiry and native admission checks. Existing
 native review/head action tests remain mandatory. This bounded cache/projection
 boundary is directly exercised with controlled clock/deferred responses rather
 than a new model that duplicates those external-format rules. It proves no

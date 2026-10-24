@@ -13,6 +13,7 @@ import {
 import type { WorkItem } from "./worldSources";
 
 const HEAD = "c".repeat(40);
+const DETAIL_READ_AT = Date.now();
 
 const reviewer = (
   fields: Partial<PullRequestReviewer> = {},
@@ -63,8 +64,8 @@ const item = (fields: Partial<WorkItem> = {}): WorkItem => ({
     source: "github",
     state: "fresh",
     headSha: HEAD,
-    readAt: 1,
-    expiresAt: 600_001,
+    readAt: DETAIL_READ_AT,
+    expiresAt: DETAIL_READ_AT + 600_000,
   },
   ...fields,
 });
@@ -248,10 +249,15 @@ describe("pull request attention", () => {
   const idle = [{ label: "teams", idle: true }];
 
   test("ready to merge when every rule holds", () => {
-    expect(pullRequestAttention(item(), [], 0, null, time)).toEqual({
+    expect(
+      pullRequestAttention(item(), [], DETAIL_READ_AT, null, time),
+    ).toEqual({
       reason: "ready",
       label: "Ready to merge",
     });
+    expect(
+      pullRequestAttention(item(), [], DETAIL_READ_AT + 600_000, null, time),
+    ).toBeNull();
   });
 
   test("stalled when CI failed on the head and its agent is idle, once it has held a moment", () => {

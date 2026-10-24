@@ -38,8 +38,8 @@ export function parsePullRequestDetailObservation(
   };
 }
 
-/** The service qualifies freshness; callers with its clock also enforce expiry. */
-export function freshPullRequestDetail(item: WorkItem, now?: number) {
+/** The observing clock may withdraw freshness; it never renews read provenance. */
+export function freshPullRequestDetail(item: WorkItem, now = Date.now()) {
   const observation = parsePullRequestDetailObservation(item.prObservation);
   return Boolean(
     item.pr &&
@@ -53,10 +53,9 @@ export function freshPullRequestDetail(item: WorkItem, now?: number) {
       observation.expiresAt !== null &&
       observation.expiresAt ===
         observation.readAt + PULL_REQUEST_DETAIL_MAX_AGE_MS &&
-      (now === undefined ||
-        (Number.isFinite(now) &&
-          now >= observation.readAt &&
-          now < observation.expiresAt)),
+      Number.isFinite(now) &&
+      now >= observation.readAt &&
+      now < observation.expiresAt,
   );
 }
 

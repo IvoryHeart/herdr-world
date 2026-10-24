@@ -874,6 +874,7 @@ async function run() {
   const agents = worldFor(base.connections).leaves.filter(
     (leaf) => leaf.kind === "agent",
   );
+  const detailReadAt = Date.now();
   worldSourcesStore.useFetch(async () =>
     Response.json({
       observedAt: 1,
@@ -894,6 +895,13 @@ async function run() {
           repo: "example-org/atlas",
           base: "main",
           headSha: "7".repeat(40),
+          prObservation: {
+            source: "github",
+            state: "fresh",
+            headSha: "7".repeat(40),
+            readAt: detailReadAt,
+            expiresAt: detailReadAt + 600000,
+          },
           draft: false,
           checks: "pass",
           review: "review_required",
