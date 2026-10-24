@@ -18,7 +18,7 @@ if (process.env.CHAT_COMPOSER_DOM_TEST !== "1") {
     expect(code).toBe(0);
   }, 15000);
 } else {
-  test("Chat has the existing palette, isolated draft, Enter send and transactional failure restore", async () => {
+  test("Chat has the existing palette, isolated draft, modified Enter send and transactional failure restore", async () => {
     const browser = new Window({ url: "https://world.example.test" });
     const originals = new Map<string, PropertyDescriptor | undefined>();
     for (const [key, value] of Object.entries({
@@ -28,8 +28,13 @@ if (process.env.CHAT_COMPOSER_DOM_TEST !== "1") {
       HTMLElement: browser.HTMLElement,
       HTMLButtonElement: browser.HTMLButtonElement,
       HTMLTextAreaElement: browser.HTMLTextAreaElement,
+      HTMLInputElement: browser.HTMLInputElement,
       Element: browser.Element,
       Node: browser.Node,
+      NodeFilter: browser.NodeFilter,
+      MutationObserver: browser.MutationObserver,
+      CustomEvent: browser.CustomEvent,
+      getComputedStyle: browser.getComputedStyle.bind(browser),
       localStorage: browser.localStorage,
       IS_REACT_ACT_ENVIRONMENT: true,
     })) {
@@ -162,6 +167,32 @@ if (process.env.CHAT_COMPOSER_DOM_TEST !== "1") {
       expect(
         host.querySelector(".terminal-composer-shortcuts-toggle"),
       ).toBeNull();
+      expect(
+        host.querySelector<HTMLButtonElement>(
+          ".terminal-composer-commands-toggle",
+        )?.hidden,
+      ).toBe(true);
+      await act(async () => {
+        host
+          .querySelector<HTMLButtonElement>(
+            '[aria-label="More composer controls"]',
+          )!
+          .click();
+      });
+      const browseCommands = Array.from(
+        browser.document.querySelectorAll("button"),
+      ).find((button) => button.textContent?.includes("Browse commands"));
+      expect(browseCommands).toBeDefined();
+      await act(async () => browseCommands!.click());
+      expect(textarea.getAttribute("aria-expanded")).toBe("true");
+      await act(async () =>
+        dispatch(
+          new browser.KeyboardEvent("keydown", {
+            key: "Escape",
+            bubbles: true,
+          }),
+        ),
+      );
       await act(async () => {
         textarea.focus();
         Object.getOwnPropertyDescriptor(
@@ -170,6 +201,7 @@ if (process.env.CHAT_COMPOSER_DOM_TEST !== "1") {
         )!.set!.call(textarea, "/comp");
         dispatch(new browser.Event("input", { bubbles: true }));
       });
+      expect(textarea.getAttribute("aria-expanded")).toBe("true");
       await act(async () => {
         dispatch(
           new browser.KeyboardEvent("keydown", { key: "Tab", bubbles: true }),
@@ -204,6 +236,16 @@ if (process.env.CHAT_COMPOSER_DOM_TEST !== "1") {
           new browser.KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
         ),
       );
+      expect(sent).toEqual([]);
+      await act(async () =>
+        dispatch(
+          new browser.KeyboardEvent("keydown", {
+            key: "Enter",
+            ctrlKey: true,
+            bubbles: true,
+          }),
+        ),
+      );
       expect(sent).toEqual(["/custom.plugin anything"]);
       expect(drafts.readTerminalComposerDraft(chatKey)).toBe("");
       await act(async () => {
@@ -227,6 +269,19 @@ if (process.env.CHAT_COMPOSER_DOM_TEST !== "1") {
         await Promise.resolve();
       });
       expect(drafts.readTerminalComposerDraft(chatKey)).toBe("");
+      await act(async () => {
+        drafts.writeTerminalComposerDraft(chatKey, "Mac send");
+      });
+      await act(async () =>
+        dispatch(
+          new browser.KeyboardEvent("keydown", {
+            key: "Enter",
+            metaKey: true,
+            bubbles: true,
+          }),
+        ),
+      );
+      expect(sent[sent.length - 1]).toBe("Mac send");
     } finally {
       await act(async () => root.unmount());
       drafts.clearTerminalComposerDraft(chatKey);

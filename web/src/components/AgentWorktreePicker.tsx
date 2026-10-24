@@ -73,6 +73,10 @@ export function AgentWorktreePicker({ view }: { view: AgentWorktreeView }) {
     <section className="agent-worktree-picker">
       <fieldset>
         <legend>Worktree</legend>
+        <p>
+          This selects the worktree shown in Files and Changes; it does not
+          change the agent&apos;s terminal directory.
+        </p>
         {view.observation?.candidates.map((candidate) => (
           <label key={candidate.candidateId} className="agent-worktree-choice">
             <input

@@ -112,16 +112,17 @@ view that you open on purpose.
 - When the conversation is unavailable, Chat shows the reason and the action it
   names: the integration command to copy, the Codex session link, **Refresh**
   and **Open Terminal**. It offers no composer then.
-- Chat uses the same full **Compose** component as the Terminal: **+** attaches
-  files and **/ Commands** opens that harness's command palette. Its placeholder
-  names the same agent as the window bar. Enter sends, Shift+Enter starts a new
-  line; **Send** and the configured terminal send shortcut (`Ctrl+Enter`,
-  `Cmd+Enter` on a Mac) also send. Direct mode, Insert draft and the terminal
+- Chat uses the same full **Compose** component as the Terminal: the paperclip attaches
+  files and typing **/** opens that harness's command palette. **⋮ → Browse
+  commands** opens the same palette. Its placeholder
+  names the same agent as the window bar. Enter starts a new line;
+  the paper-plane **Send** button, `Ctrl+Enter` or `Cmd+Enter` sends.
+  Direct mode, Insert draft and the terminal
   key bar stay out of Chat.
 - Each bound conversation has its own draft, separate from Terminal drafts.
   Drafts remain usable when another host has focus; a replaced runtime cannot
   send or upload through the retired draft.
-  **+ Add file** or paste uploads to that pane's host with progress chips;
+  **Add a file** (paperclip) or paste uploads to that pane's host with progress chips;
   completed paths enter at the saved caret, and **Send** waits for uploads.
   A completion after Chat closes updates only that conversation's draft.
   Failed sends restore the submitted text before any newer draft.
@@ -146,6 +147,9 @@ Evidence is ordered live pane cwd, then that session's native transcript/Codex
 rollout cwd or checkout report, then its branch in the known repository's
 worktree list. A higher-ranked live directory keeps precedence; lower sources
 and other listed trees remain explicit viewing choices, useful for `git -C`.
+When Herdr reports a changed foreground cwd, the observation refreshes.
+Choosing a viewing worktree changes Files and Changes together; it does not
+change the agent's terminal directory.
 
 To review a different branch, open **location line → Worktree**, choose its
 branch-labelled candidate, then select **Changes → Against main**. **Working

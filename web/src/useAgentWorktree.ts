@@ -31,6 +31,7 @@ export function useAgentWorktree(
     paneId?: string;
     terminalId?: string;
     sessionFingerprint?: string;
+    foregroundCwd?: string;
   },
 ) {
   const subject = useMemo(
@@ -53,9 +54,18 @@ export function useAgentWorktree(
     null,
   );
   const refreshRef = useRef(() => {});
+  const observedForegroundCwd = useRef<{
+    owner: string;
+    cwd: string | undefined;
+  } | null>(null);
   const refresh = useCallback(() => refreshRef.current(), []);
   useEffect(() => {
     if (!input.enabled || !subject.paneId) return;
+    const priorForegroundCwd = observedForegroundCwd.current;
+    const foregroundCwdChanged =
+      priorForegroundCwd?.owner === owner &&
+      priorForegroundCwd.cwd !== input.foregroundCwd;
+    observedForegroundCwd.current = { owner, cwd: input.foregroundCwd };
     let alive = true;
     let pending = false;
     let again = false;
@@ -126,7 +136,7 @@ export function useAgentWorktree(
       }
     };
     refreshRef.current = () => void load(true);
-    void load(input.active ?? false);
+    void load(foregroundCwdChanged || (input.active ?? false));
     const stop = bridge.onControl((control) => {
       if (
         (input.active ?? true) &&
@@ -142,7 +152,14 @@ export function useAgentWorktree(
       refreshRef.current = () => {};
       stop();
     };
-  }, [client, owner, subject, input.enabled, input.active]);
+  }, [
+    client,
+    owner,
+    subject,
+    input.enabled,
+    input.active,
+    input.foregroundCwd,
+  ]);
   const observation = read.owner === owner ? read.observation : null;
   const selected =
     observation?.candidates.find(

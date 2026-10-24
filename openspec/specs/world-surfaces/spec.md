@@ -1505,8 +1505,11 @@ Opening the terminal from a peek SHALL follow the Inspector presentation prefere
 
 Chat SHALL reuse TerminalComposer, its harness command palette, editing and uploads,
 with a separate draft qualified by connection, runtime, terminal, pane and session.
-Chat SHALL hide Direct mode, Insert draft and the terminal key bar. Enter SHALL send;
-Shift+Enter SHALL insert a new line. Submissions SHALL use the bound conversation's
+Chat SHALL hide Direct mode, Insert draft and the terminal key bar. Enter SHALL
+insert a new line. Ctrl+Enter, Cmd+Enter and the paper-plane Send button SHALL send.
+The paperclip SHALL attach files. Typing `/` or choosing Browse commands in the
+vertical-ellipsis controls menu SHALL open the shared harness command palette.
+Submissions SHALL use the bound conversation's
 agent prompt rather than terminal insertion. Every slash command SHALL be allowed.
 
 Native working-state admission SHALL show a queued bubble with recipient and send

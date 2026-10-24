@@ -8,6 +8,9 @@
   Unreadable transcript evidence does not hide a usable live worktree, replaced
   bindings retire pending previews, and agent windows omit unrelated launch-tree
   Changes counts.
+- Files and Changes refresh their worktree evidence when Herdr reports a changed
+  foreground directory; the chooser clarifies that viewing a tree does not move
+  the agent's terminal.
 
 ### Added
 
@@ -17,8 +20,10 @@
 - Chat's Now status uses a small state circle, with its status word available
   to screen readers and on hover; reduced motion keeps the working dot still.
 - Chat now uses the full shared Compose editor, attachments and harness command
-  palette. Enter sends and Shift+Enter adds a line, with drafts kept per
-  conversation. Slash commands have honest unchecked receipts, and native
+  palette, opened by typing `/` or from the **⋮** controls menu. A paperclip
+  attaches files. The paper-plane button, Ctrl+Enter or Cmd+Enter sends;
+  Enter adds a line, with
+  drafts kept per conversation. Slash commands have honest unchecked receipts, and native
   working-state sends show queued bubbles until their transcript receipt.
 - The current quest takes one slim title/progress row inside the conversation;
   expand it for objectives without adding a fixed toolbar.

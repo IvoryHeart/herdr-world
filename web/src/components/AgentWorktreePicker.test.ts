@@ -47,6 +47,9 @@ test("ambiguous worktrees use one short line and native radio choices in the pop
     createElement(AgentWorktreePicker, { view }),
   );
   expect(html).toContain("<legend>Worktree</legend>");
+  expect(html).toContain(
+    "This selects the worktree shown in Files and Changes; it does not change the agent&#x27;s terminal directory.",
+  );
   expect(html.match(/type="radio"/g)?.length).toBe(2);
   expect(html).toContain("Branch match");
   expect(html).toContain("ambiguous");

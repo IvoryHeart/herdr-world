@@ -145,7 +145,10 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    In Town it docks on the right at a readable width; drag its left edge to
    resize it (Town remembers the width), or drag its title to undock it. Chat shows the
    conversation's latest 200 entries, scrolls back inside the window, and
-   offers **Jump to latest**; the composer stays at the bottom. The **NEEDS YOU** list provides another route to waiting
+   offers **Jump to latest**; the composer stays at the bottom. Enter adds a line;
+   the paper-plane button, **Ctrl+Enter** or **Cmd+Enter** sends. The paperclip
+   attaches files; type **/** or use **⋮ → Browse commands** for command suggestions.
+   The **NEEDS YOU** list provides another route to waiting
    agents and becomes a bottom tray on phones; it hides when no agent is
    blocked. The Town master's chat (**Menu → Town master**, `firstmate` by
    default) opens docked once per visit on wide screens. Hover an agent for a

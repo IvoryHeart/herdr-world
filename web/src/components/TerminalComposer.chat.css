@@ -36,7 +36,7 @@
   min-width: 0;
   padding: 0;
 }
-.terminal-composer[data-surface="chat"] .terminal-composer-commands-toggle {
+.terminal-composer[data-surface="chat"] .terminal-composer-more {
   grid-column: 3;
   grid-row: 2;
 }
@@ -102,6 +102,31 @@
   overflow: auto;
   color: var(--text);
   background: var(--panel);
+}
+.chat-composer-tools-popover {
+  z-index: 100;
+  padding: 6px;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.chat-composer-tools-popover button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  min-height: 44px;
+  padding: 8px 12px;
+  color: inherit;
+  font: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+}
+.chat-composer-tools-popover button:hover,
+.chat-composer-tools-popover button:focus-visible {
+  background: var(--accent-soft);
 }
 @media (pointer: coarse) {
   .terminal-composer[data-surface="chat"] {

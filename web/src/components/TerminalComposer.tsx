@@ -8,7 +8,7 @@ import {
   CornerDownLeft,
   Keyboard,
   Paperclip,
-  Plus,
+  Send,
   SquareTerminal,
   TextCursorInput,
   X,
@@ -64,6 +64,7 @@ import { AttachmentChips } from "./AttachmentChips";
 import "./TerminalComposer.css";
 import "./TerminalComposer.chat.css";
 import { TerminalComposerPalette } from "./TerminalComposerPalette";
+import { ChatComposerTools } from "./chat/ChatComposerTools";
 import type { TerminalInputMode } from "../terminalInputMode";
 export type { TerminalInputMode } from "../terminalInputMode";
 
@@ -698,6 +699,20 @@ export function TerminalComposer({
       commandPickerRef.current?.focus({ preventScroll: true });
   };
 
+  const browseCommands = () => {
+    flushSync(() => {
+      if (mode === "direct") {
+        temporaryComposerRef.current = true;
+        onModeChange("composer");
+      }
+      setPickerMode("browse");
+      setActiveCommand(0);
+      setReplacement(null);
+      onShortcutsVisibleChange?.(false);
+    });
+    focusPickerWithoutKeyboard();
+  };
+
   const closeCommandPicker = () => {
     const editorFocused = commandEditorFocused();
     dismissCommands();
@@ -857,7 +872,7 @@ export function TerminalComposer({
               input.click();
             }}
           >
-            {surface === "chat" ? <Plus size={15} /> : <Paperclip size={15} />}
+            <Paperclip size={15} aria-hidden="true" />
           </button>
           {hasShortcuts ? (
             <button
@@ -899,8 +914,9 @@ export function TerminalComposer({
           <button
             type="button"
             className="terminal-composer-commands-toggle"
+            hidden={surface === "chat"}
             aria-label="Commands"
-            ref={commandsButtonRef}
+            ref={surface === "chat" ? undefined : commandsButtonRef}
             aria-expanded={presentedPickerOpen}
             aria-controls={
               presentedPickerOpen && !replacement ? pickerId : undefined
@@ -912,19 +928,7 @@ export function TerminalComposer({
                 : "No built-in commands for this agent; type any command in the draft"
             }
             onMouseDown={keepTextareaFocus}
-            onClick={() => {
-              flushSync(() => {
-                if (mode === "direct") {
-                  temporaryComposerRef.current = true;
-                  onModeChange("composer");
-                }
-                setPickerMode("browse");
-                setActiveCommand(0);
-                setReplacement(null);
-                onShortcutsVisibleChange?.(false);
-              });
-              focusPickerWithoutKeyboard();
-            }}
+            onClick={browseCommands}
           >
             {surface === "chat" ? (
               <span aria-hidden="true">/</span>
@@ -932,6 +936,14 @@ export function TerminalComposer({
               <SquareTerminal size={17} aria-hidden="true" />
             )}
           </button>
+          {surface === "chat" ? (
+            <ChatComposerTools
+              buttonRef={commandsButtonRef}
+              disabled={busy || composing}
+              commandsAvailable={commands.length > 0}
+              onCommands={browseCommands}
+            />
+          ) : null}
           <div
             className="terminal-composer-submit-actions"
             hidden={mode !== "composer"}
@@ -976,7 +988,7 @@ export function TerminalComposer({
               className="terminal-composer-submit is-primary"
               title={
                 surface === "chat"
-                  ? "Send message (Enter)"
+                  ? "Send message (Ctrl+Enter or Cmd+Enter)"
                   : shortcutTitle(
                       "Insert into the terminal and send Enter",
                       "composer.send",
@@ -995,8 +1007,14 @@ export function TerminalComposer({
               onPointerUp={(event) => submitPointerUp(event, true)}
               onClick={(event) => submitClick(event, true)}
             >
-              <CornerDownLeft size={14} />
-              Send
+              {surface === "chat" ? (
+                <Send size={18} aria-hidden="true" />
+              ) : (
+                <>
+                  <CornerDownLeft size={14} />
+                  Send
+                </>
+              )}
             </button>
           </div>
           <button
@@ -1207,17 +1225,11 @@ export function TerminalComposer({
                 e.keyCode === 229
               )
                 return;
-              if (shortcutMatches(e.nativeEvent, "composer.send")) {
-                e.preventDefault();
-                void submit(true);
-                return;
-              }
-              if (
-                surface === "chat" &&
-                e.key === "Enter" &&
-                !e.shiftKey &&
-                !e.altKey
-              ) {
+              const sendShortcut =
+                surface === "chat"
+                  ? e.key === "Enter" && (e.ctrlKey || e.metaKey) && !e.altKey
+                  : shortcutMatches(e.nativeEvent, "composer.send");
+              if (sendShortcut) {
                 e.preventDefault();
                 void submit(true);
                 return;

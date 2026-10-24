@@ -57,6 +57,7 @@ if (process.env.WORKTREE_DOM_TEST !== "1") {
     };
     const pending: {
       subject: AgentWorktreeSubject;
+      refresh: boolean;
       deferred: ReturnType<
         typeof Promise.withResolvers<AgentWorktreeObservation>
       >;
@@ -73,6 +74,7 @@ if (process.env.WORKTREE_DOM_TEST !== "1") {
           const deferred = Promise.withResolvers<AgentWorktreeObservation>();
           pending.push({
             subject: params.subject as AgentWorktreeSubject,
+            refresh: params.refresh === true,
             deferred,
           });
           return deferred.promise;
@@ -82,12 +84,19 @@ if (process.env.WORKTREE_DOM_TEST !== "1") {
       },
     };
     let latest!: ReturnType<typeof useAgentWorktree>;
-    function Probe({ occupant }: { occupant: string }) {
+    function Probe({
+      occupant,
+      foregroundCwd,
+    }: {
+      occupant: string;
+      foregroundCwd?: string;
+    }) {
       latest = useAgentWorktree(client, {
         enabled: true,
         paneId: occupant,
         terminalId: `terminal-${occupant}`,
         sessionFingerprint: occupant.repeat(64),
+        foregroundCwd,
       });
       return null;
     }
@@ -165,6 +174,20 @@ if (process.env.WORKTREE_DOM_TEST !== "1") {
         latest.client.call("file.list", { workspace_id: "workspace" }),
       ).rejects.toThrow("Choose");
       expect(resources.length).toBe(1);
+      await act(async () =>
+        root.render(
+          createElement(Probe, {
+            occupant: "b",
+            foregroundCwd: "/project/b/agent",
+          }),
+        ),
+      );
+      expect(pending.length).toBe(4);
+      expect(pending[3]?.refresh).toBe(true);
+      await act(async () =>
+        pending[3]!.deferred.resolve(observation(pending[3]!.subject)),
+      );
+      expect(latest.view?.observation?.state).toBe("resolved");
     } finally {
       await act(async () => root.unmount());
       bridge.onControl = originalOnControl;

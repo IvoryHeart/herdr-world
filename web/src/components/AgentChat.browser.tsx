@@ -377,24 +377,26 @@ async function run() {
     };
     type("Run the tests");
     await settle();
-    // Shift+Enter keeps native multiline editing; Enter sends in Chat.
-    const enter = new KeyboardEvent("keydown", {
-      key: "Enter",
-      shiftKey: true,
-      bubbles: true,
-      cancelable: true,
-    });
-    textarea.dispatchEvent(enter);
-    await settle();
-    check(
-      !enter.defaultPrevented &&
-        !calls.some((call) => call.method === "agent_conversation.send"),
-      "Shift+Enter must start a new line, not send",
-    );
+    // Both plain and Shift+Enter keep native multiline editing in Chat.
+    for (const shiftKey of [false, true]) {
+      const enter = new KeyboardEvent("keydown", {
+        key: "Enter",
+        shiftKey,
+        bubbles: true,
+        cancelable: true,
+      });
+      textarea.dispatchEvent(enter);
+      await settle();
+      check(
+        !enter.defaultPrevented &&
+          !calls.some((call) => call.method === "agent_conversation.send"),
+        "Enter must preserve native multiline editing without sending",
+      );
+    }
     check(
       container.querySelector<HTMLButtonElement>('button[aria-label="Send"]')
-        ?.title === "Send message (Enter)",
-      "The shared Chat Send button must name Enter",
+        ?.title === "Send message (Ctrl+Enter or Cmd+Enter)",
+      "The shared Chat Send button must name its modified Enter shortcuts",
     );
     // The composer's send shortcut (Ctrl+Enter, Cmd+Enter on a Mac) sends.
     for (const modifier of ["ctrlKey", "metaKey"] as const) {
@@ -2375,7 +2377,13 @@ async function run() {
       );
       await settle();
       container
-        .querySelector<HTMLButtonElement>('button[aria-label="Commands"]')!
+        .querySelector<HTMLButtonElement>(
+          'button[aria-label="More composer controls"]',
+        )!
+        .click();
+      await settle();
+      Array.from(document.querySelectorAll("button"))
+        .find((button) => button.textContent?.includes("Browse commands"))!
         .click();
       await settle();
       const command = container.querySelector<HTMLButtonElement>(

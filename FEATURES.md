@@ -52,8 +52,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     Chat's Now status uses a small circle with a status tooltip and screen-reader
     text: blue working ring, yellow needs-you mark, green done tick, grey idle dot.
   - Chat reuses Terminal's full **Compose** editor, attachments and harness
-    command palette, with a separate conversation draft. Enter sends;
-    Shift+Enter adds a line. Every slash command is allowed and stays **sent,
+    command palette, with a separate conversation draft. Enter adds a line;
+    Ctrl+Enter, Cmd+Enter or the paper-plane button sends. Type `/` or use
+    **⋮ → Browse commands** for suggestions; the paperclip attaches files.
+    Every slash command is allowed and stays **sent,
     not checked** until transcript evidence. Native working-state admission
     shows queued message bubbles with the recipient and time; blocked sends
     preserve the draft and the refusal reason.

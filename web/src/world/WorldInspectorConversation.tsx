@@ -187,6 +187,7 @@ function InspectorResources({
     paneId: conversation.paneId,
     terminalId: historyPane?.terminal_id,
     sessionFingerprint: conversation.agentSessionFingerprint,
+    foregroundCwd: historyPane?.foreground_cwd,
   });
   const connectionClient = worktree.client;
   const scope = useMemo(
