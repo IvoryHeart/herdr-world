@@ -92,3 +92,22 @@ the implementation boundary. Existing PR action tests retain browser-only,
 confirmed exact-head admission. Real GitHub pagination/completeness and live
 browser interaction remain excluded from this local fixture evidence; the
 closing batch gate, site build and consumer/CI checks remain required.
+
+
+### Harness readiness (Q01, Q43)
+
+Only a complete executable lookup may confirm absence; only recognized native
+status may confirm sign-out. Failed/partial/unsupported observations stay
+unknown, and a retired connection generation cannot publish or retarget a
+probe. These properties come from the qualified runtime and readiness contract,
+not from treating every CLI exit as authentication evidence.
+
+`harness-readiness.test.ts` uses synthetic processes/records for the parsing and
+failure boundary. `launcher-probe.test.ts` exercises captured host, discovery
+and process retirement plus actual RPC replies through the qualified publisher.
+`shared/harnessReadiness.test.ts`, `agentProfiles.test.ts` and the readiness
+summary's static-markup tests exercise safe wire normalization and presentation.
+The existing runtime-leases model covers authority; finite parser/consumer
+fixtures are the direct alternative for external status formats. This does not
+prove every CLI version, native account/SSH outcome, or viewport interaction;
+platform/browser checks and the batch's complete gate remain required.

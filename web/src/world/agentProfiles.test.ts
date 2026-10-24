@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { STARTER_PROFILES } from "../../../shared/agentProfile";
+import { unknownHarnessReadiness } from "../../../shared/harnessReadiness";
 import { DEFAULT_CHIMES } from "../../../shared/chimes";
 import {
   harnessLabel,
   profileLookFor,
   readinessNote,
+  parseLauncherCatalog,
   retainedOutcome,
   type LaunchTarget,
   type ProfilesDocument,
@@ -37,9 +39,34 @@ describe("Agent profiles in the browser", () => {
       kinds: ["claude", "codex", "pi"],
       skills: [],
       readiness: [
-        { kind: "claude", installed: true, logged_in: false, can_log_in: true },
-        { kind: "codex", installed: false, logged_in: null, can_log_in: false },
-        { kind: "pi", installed: true, logged_in: null, can_log_in: false },
+        {
+          kind: "claude",
+          installed: true,
+          logged_in: false,
+          can_log_in: true,
+          probe: {
+            source: "world-harness-probe" as const,
+            state: "ok" as const,
+            reason: "complete" as const,
+            observed_at: 123,
+          },
+        },
+        {
+          kind: "codex",
+          installed: false,
+          logged_in: null,
+          can_log_in: false,
+          probe: {
+            source: "world-harness-probe" as const,
+            state: "ok" as const,
+            reason: "complete" as const,
+            observed_at: 123,
+          },
+        },
+        {
+          ...unknownHarnessReadiness("pi", "auth-unsupported", 123),
+          installed: true,
+        },
       ],
     };
     expect(readinessNote("claude", catalog)).toEqual({
@@ -48,7 +75,11 @@ describe("Agent profiles in the browser", () => {
       login: true,
     });
     expect(readinessNote("codex", catalog)?.blocked).toBe(true);
-    expect(readinessNote("pi", catalog)).toBeNull();
+    expect(readinessNote("pi", catalog)).toMatchObject({
+      blocked: false,
+      login: false,
+      text: "Installed; login check not supported",
+    });
     expect(readinessNote("muse", catalog)?.text).toMatch(/Not supported/);
     expect(readinessNote("claude", null)).toBeNull();
     expect(harnessLabel("claude")).toBe("Claude");
@@ -79,4 +110,55 @@ describe("Agent profiles in the browser", () => {
       terminal: null,
     });
   });
+});
+
+test("unknown and older readiness cannot block a supported kind or offer login", () => {
+  for (const readiness of [
+    undefined,
+    [{ kind: "codex", installed: false }],
+    [{ kind: "codex", installed: "no" }],
+  ]) {
+    const catalog = parseLauncherCatalog({
+      kinds: ["codex"],
+      skills: [],
+      readiness,
+    });
+    expect(catalog.readiness[0]?.installed).toBeNull();
+    expect(readinessNote("codex", catalog)).toEqual({
+      blocked: false,
+      login: false,
+      text: "Readiness unknown — Check again",
+    });
+  }
+  const windows = {
+    kinds: ["codex"],
+    skills: [],
+    readiness: [unknownHarnessReadiness("codex", "windows-unsupported", 123)],
+  };
+  expect(readinessNote("codex", windows)).toMatchObject({
+    blocked: false,
+    login: false,
+    text: "Readiness is not checked on Windows",
+  });
+});
+
+test("duplicate readiness and unknown auth remain distinct from sign-out", () => {
+  const ready = {
+    ...unknownHarnessReadiness("codex", "unreadable-status", 123),
+    installed: true,
+    can_log_in: true,
+  };
+  const catalog = parseLauncherCatalog({
+    kinds: ["codex"],
+    readiness: [ready],
+  });
+  expect(readinessNote("codex", catalog)).toEqual({
+    blocked: false,
+    login: false,
+    text: "Login status unknown — Check again",
+  });
+  expect(
+    parseLauncherCatalog({ kinds: ["codex"], readiness: [ready, ready] })
+      .readiness[0]?.installed,
+  ).toBeNull();
 });

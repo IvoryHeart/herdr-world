@@ -144,7 +144,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     `codex login status`; Pi reports only whether it is installed). **Log in**
     opens a small tab and shows the harness's own login command to copy and
     run there. World never types into it, and never sees or stores
-    credentials.
+    credentials. Failed or unreadable probes remain unknown, with the safe
+    check source/time, **Check again** and existing **Edit profiles** controls;
+    only confirmed absence blocks a supported harness. Windows probes remain
+    unsupported. See [readiness evidence](./docs/harness-readiness.md).
   - **Agent profiles** (Menu → Agent profiles, Actions → Agent profiles, or
     Edit profiles in the launcher and Board) set a name, home room, role,
     colour, brain (harness, model, Codex reasoning effort, permission mode),

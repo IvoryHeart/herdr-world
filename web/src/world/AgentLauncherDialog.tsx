@@ -19,6 +19,7 @@ import {
   type RetainedOutcome,
   type LauncherCatalog,
 } from "./agentProfiles";
+import { HarnessReadinessSummary } from "./HarnessReadinessSummary";
 import { ProfileSprite } from "./ProfileSprite";
 import type { WorldObject } from "./worldObject";
 import "./agentProfiles.css";
@@ -273,6 +274,7 @@ export function AgentLauncherDialog({
                 <RefreshCw size={13} aria-hidden="true" /> Check again
               </button>
             </div>
+            {catalog ? <HarnessReadinessSummary catalog={catalog} /> : null}
             <div className="agent-launcher-kinds">
               {!catalog && !catalogError ? (
                 <span className="agent-launcher-note">

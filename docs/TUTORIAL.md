@@ -287,6 +287,11 @@ a starting brief and a look in Town. World starts it in a new tab for you.
    opens a small tab and shows the harness's own login command
    (`claude auth login`, `codex login --device-auth`). **Copy** it, **Open its
    tab**, run it and finish the login there, then **Check again**.
+   Failed, incomplete or unsupported checks show **unknown**, never “not
+   installed” or “logged out”. You can still try a supported harness; use
+   **Check again** to retry or **Edit profiles** to review its configuration.
+   The check's source and completion time are shown separately from profile
+   settings. Windows readiness checks are unsupported.
 5. World creates the tab, starts the agent, waits until it is ready and sends
    the brief, then opens its terminal. The tab takes the profile's colour and
    the agent wears the profile's look in Town. If the agent stops on a question
