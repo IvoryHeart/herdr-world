@@ -77,3 +77,36 @@ test("HTTP previews and downloads preserve selected subject/revision, and root s
     filePreviewCacheKey(other, "workspace", "file.txt"),
   );
 });
+
+test("a retired binding rejects pending responses and further resource calls without invalidating its successor", async () => {
+  const reply = Promise.withResolvers<unknown>();
+  let current = true;
+  let refreshed = 0;
+  const requests: string[] = [];
+  const client = agentWorktreeClient(
+    {
+      ...base,
+      call: async (method) => {
+        requests.push(method);
+        return reply.promise;
+      },
+    },
+    target,
+    () => refreshed++,
+    () => current,
+  );
+  const read = client.call("file.read", { path: "same.txt" });
+  current = false;
+  reply.resolve({ text: "OLD ROOT CONTENT" });
+  await expect(read).rejects.toThrow("Worktree");
+  expect(client.isCurrent()).toBe(true);
+  await expect(
+    client.call("git.file_action", { action: "stage", path: "same.txt" }),
+  ).rejects.toThrow("Worktree");
+  expect(requests).toEqual(["file.read"]);
+  expect(refreshed).toBe(0);
+  await client.call("agent_conversation.send", {
+    text: "Still bound to this session",
+  });
+  expect(requests).toEqual(["file.read", "agent_conversation.send"]);
+});

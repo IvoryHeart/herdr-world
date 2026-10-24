@@ -5,7 +5,11 @@ export function agentWorktreeClient(
   base: ConnectionClient,
   target: AgentWorktreeTarget | null,
   onBindingChanged?: () => void,
+  isBindingCurrent: () => boolean = () => true,
 ): ConnectionClient {
+  const isResourceCurrent = () => base.isCurrent() && isBindingCurrent();
+  const changed = () =>
+    new Error("Worktree selection changed; refresh before reading.");
   return {
     get connectionId() {
       return base.connectionId;
@@ -28,6 +32,7 @@ export function agentWorktreeClient(
             "Host is unavailable; refresh its worktree before reading.",
           ),
         );
+      if (!isBindingCurrent()) return Promise.reject(changed());
       if (!target)
         return Promise.reject(
           new Error(
@@ -36,8 +41,13 @@ export function agentWorktreeClient(
         );
       return base
         .call(method, { ...params, agent_worktree: target }, timeout)
+        .then((value) => {
+          if (!isResourceCurrent()) throw changed();
+          return value;
+        })
         .catch((error: unknown) => {
           if (
+            isResourceCurrent() &&
             error instanceof Error &&
             /^(?:Worktree (?:selection|binding|branch)|Selected worktree|The agent (?:session )?changed)/u.test(
               error.message,

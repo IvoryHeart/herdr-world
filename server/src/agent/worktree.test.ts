@@ -35,6 +35,7 @@ function fixture(onInspect?: (path: string) => Promise<void>) {
       foreground_cwd: "/project/main",
       tokens: {} as Record<string, string | null>,
     },
+    metadataUnavailable: false,
     metadata: {
       cwd: "/project/agent",
       branch: "agent/topic",
@@ -69,7 +70,11 @@ function fixture(onInspect?: (path: string) => Promise<void>) {
       return state.roots.get(path) ?? null;
     },
     list: async () => state.lists,
-    readSessionMetadata: async () => state.metadata,
+    readSessionMetadata: async () => {
+      if (state.metadataUnavailable)
+        throw new Error("Synthetic transcript read failure");
+      return state.metadata;
+    },
   });
   return { model, state, subject, session };
 }
@@ -290,4 +295,30 @@ test("a replaced root incarnation or new equal-rank branch candidate expires adm
   await expect(model.resolve(target(inferred))).rejects.toThrow(
     "branch matches changed",
   );
+});
+
+test("unavailable transcript evidence cannot veto live or own reported worktrees", async () => {
+  const { model, state, subject, session } = fixture();
+  state.metadataUnavailable = true;
+  const live = await model.get(subject);
+  expect(live.state).toBe("resolved");
+  expect(
+    live.candidates.find(
+      (candidate) => candidate.candidateId === live.selectedCandidateId,
+    )?.source,
+  ).toBe("foreground_cwd");
+  expect((await model.resolve(target(live))).root).toBe("/project/main");
+  state.pane.foreground_cwd = "/outside-git";
+  state.pane.tokens = agentCheckoutTokens(session, "/project/agent");
+  const reported = await model.get(subject, { refresh: true });
+  expect(reported.state).toBe("resolved");
+  expect(
+    reported.candidates.find(
+      (candidate) => candidate.candidateId === reported.selectedCandidateId,
+    )?.source,
+  ).toBe("agent_report");
+  expect((await model.resolve(target(reported))).root).toBe("/project/agent");
+  state.pane.agent_session = { ...session, value: "replacement-session" };
+  expect((await model.get(subject)).state).toBe("unavailable");
+  await expect(model.resolve(target(reported))).rejects.toThrow();
 });

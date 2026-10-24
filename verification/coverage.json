@@ -568,6 +568,7 @@
       "existingTests": [
         "web/src/agentWorktreeClient.test.ts",
         "web/src/useAgentWorktree.test.ts",
+        "web/src/world/WorldInspectorWorktree.test.ts",
         "web/src/components/AgentWorktreePicker.test.ts",
         "web/src/workspaceResource.test.ts",
         "web/src/components/FileExplorerDialog.test.ts"
@@ -587,6 +588,7 @@
         "tests": [
           "web/src/agentWorktreeClient.test.ts",
           "web/src/useAgentWorktree.test.ts",
+          "web/src/world/WorldInspectorWorktree.test.ts",
           "web/src/components/AgentWorktreePicker.test.ts",
           "web/src/workspaceResource.test.ts",
           "web/src/components/FileExplorerDialog.test.ts"
@@ -594,7 +596,7 @@
         "checks": ["bun run check", "bun run verification:check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
       },
-      "evidenceDecision": "Runtime currency remains cache admission identity; agent-worktree candidate/revision also separates roots within one workspace. Direct stale/occupant tests, all sixteen source-presence combinations and a real linked Git/HTTP fixture cover the new adapter; maintained lease/preparation models retain their existing authority bounds.",
+      "evidenceDecision": "Runtime currency remains cache admission identity; agent-worktree candidate/revision also separates roots within one workspace. Actual Inspector delayed-preview and retained-selection tests cover same-path binding replacement independently of saved preferences. Direct stale/occupant tests, all sixteen source-presence combinations and a real linked Git/HTTP fixture cover the new adapter; maintained lease/preparation models retain their existing authority bounds.",
       "promotion": {
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",

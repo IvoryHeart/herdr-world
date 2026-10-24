@@ -373,7 +373,7 @@ export function WorkspaceInspectorHost({
     ({
       "--workspace-inspector-navigation-width": `${navigationRatios[view] * 100}%`,
     }) as CSSProperties;
-  const changeCount = changedCount(workspace);
+  const changeCount = agentWorktree ? 0 : changedCount(workspace);
   const availableViews = normalizeInspectorViews(state.availableViews);
   const filesAvailable = availableViews.includes("files");
   const changesAvailable = availableViews.includes("changes");

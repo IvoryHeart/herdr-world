@@ -224,15 +224,19 @@ function InspectorResources({
     },
     [],
   );
-  const scopeKey = scope ? resourceStateKey(scope) : null;
-  const scopeKeyRef = useRef(scopeKey);
+  const resourceKey = JSON.stringify([
+    scope ? resourceStateKey(scope) : null,
+    connectionClientScopeKey(connectionClient),
+  ]);
+  const resourceBinding = useMemo(() => Symbol(resourceKey), [resourceKey]);
+  const resourceBindingRef = useRef(resourceBinding);
   useLayoutEffect(() => {
-    if (scopeKeyRef.current === scopeKey) return;
-    scopeKeyRef.current = scopeKey;
+    if (resourceBindingRef.current === resourceBinding) return;
+    resourceBindingRef.current = resourceBinding;
     previewRequestRef.current += 1;
     setFileSelection(emptyFile());
     setDiffSelection(emptyDiff());
-  }, [scopeKey]);
+  }, [resourceBinding]);
   const terminalPortalChangeRef = useRef(onTerminalPortalChange);
   const focusRef = useRef(onFocus);
   terminalPortalChangeRef.current = onTerminalPortalChange;
@@ -277,7 +281,12 @@ function InspectorResources({
 
   const loadFile = useCallback(
     (entry: FileExplorerEntry, fragment?: string) => {
-      if (!workspace) return;
+      if (
+        !workspace ||
+        !connectionClient.isCurrent() ||
+        resourceBindingRef.current !== resourceBinding
+      )
+        return;
       const requestId = previewRequestRef.current + 1;
       previewRequestRef.current = requestId;
       setFileSelection({
@@ -322,7 +331,7 @@ function InspectorResources({
           });
         });
     },
-    [connectionClient, workspace],
+    [connectionClient, workspace, resourceBinding],
   );
 
   useEffect(() => {
@@ -518,8 +527,20 @@ function InspectorResources({
               previewRequestRef={previewRequestRef}
               diffSelection={diffSelection}
               connectionClient={connectionClient}
-              onFileSelectionChange={setFileSelection}
-              onDiffSelectionChange={setDiffSelection}
+              onFileSelectionChange={(selection) => {
+                if (
+                  connectionClient.isCurrent() &&
+                  resourceBindingRef.current === resourceBinding
+                )
+                  setFileSelection(selection);
+              }}
+              onDiffSelectionChange={(selection) => {
+                if (
+                  connectionClient.isCurrent() &&
+                  resourceBindingRef.current === resourceBinding
+                )
+                  setDiffSelection(selection);
+              }}
               onOpenDiffFile={(entry) => entry && openFile(entry.path)}
               annotations={readAnnotationDraft(scope)}
               onCreateAnnotation={createAnnotation}

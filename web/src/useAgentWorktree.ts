@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type {
   AgentWorktreeCandidate,
   AgentWorktreeObservation,
@@ -174,12 +181,27 @@ export function useAgentWorktree(
     );
     refresh();
   }, [owner, refresh]);
+  const bindingKey = JSON.stringify([input.enabled, target]);
+  const binding = useMemo(() => Symbol(bindingKey), [bindingKey]);
+  const admittedBinding = useRef<symbol | null>(binding);
+  admittedBinding.current = binding;
+  useLayoutEffect(() => {
+    admittedBinding.current = binding;
+    return () => {
+      if (admittedBinding.current === binding) admittedBinding.current = null;
+    };
+  }, [binding]);
   const scopedClient = useMemo(
     () =>
       input.enabled
-        ? agentWorktreeClient(client, target, bindingChanged)
+        ? agentWorktreeClient(
+            client,
+            target,
+            bindingChanged,
+            () => admittedBinding.current === binding,
+          )
         : client,
-    [client, input.enabled, target, bindingChanged],
+    [client, input.enabled, target, bindingChanged, binding],
   );
   const select = useCallback((id: string) => setChoice({ owner, id }), [owner]);
   const view: AgentWorktreeView | undefined = input.enabled

@@ -128,6 +128,17 @@ if (process.env.WORKTREE_DOM_TEST !== "1") {
         pending[1]!.deferred.resolve(observation(pending[1]!.subject));
       });
       expect(latest.view?.selected?.canonicalRoot).toBe("/project/b/agent");
+      const priorChoiceClient = latest.client;
+      await act(async () => latest.view!.select("b-main"));
+      expect(priorChoiceClient.isCurrent()).toBe(true);
+      await expect(priorChoiceClient.call("file.list")).rejects.toThrow(
+        "Worktree",
+      );
+      await act(async () => latest.view!.select("b-agent"));
+      expect(priorChoiceClient.isCurrent()).toBe(true);
+      await expect(priorChoiceClient.call("file.list")).rejects.toThrow(
+        "Worktree",
+      );
       await act(async () => latest.view!.select("b-main"));
       await latest.client.call("file.list", { workspace_id: "workspace" });
       expect(resources[0]?.agent_worktree).toMatchObject({

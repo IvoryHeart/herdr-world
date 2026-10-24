@@ -151,6 +151,10 @@ resources; a new session cannot inherit the old selection. This changes the
 Inspector's resource target, without changing Chat's bound session, draft or
 prompt adapter. A viewed tree is never an ownership claim.
 
+An unreadable transcript does not suppress a usable live or reported worktree.
+When the selected binding changes, retained files reload through the new binding
+and replies from the previous binding are discarded.
+
 ## Read model
 
 Each connection owns one conversation source. Herdr is the first source; another

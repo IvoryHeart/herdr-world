@@ -85,9 +85,14 @@ export function createAgentWorktree(args: {
       throw new Error(
         "The agent session changed. Refresh its worktree before reading.",
       );
-    const metadata = fingerprint
-      ? await args.readSessionMetadata(subject.paneId, fingerprint)
-      : null;
+    let metadata: Metadata | null = null;
+    if (fingerprint) {
+      try {
+        metadata = await args.readSessionMetadata(subject.paneId, fingerprint);
+      } catch {
+        // Transcript evidence is optional; the pane/session checks remain authoritative.
+      }
+    }
     const report = session
       ? parseAgentCheckoutTokens(pane.tokens, session)
       : null;

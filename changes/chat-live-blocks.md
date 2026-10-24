@@ -3,6 +3,9 @@
 - Agent Files and Changes now share an evidenced worktree target rather than
   silently using the launch checkout. The location popover shows sources and
   alternate worktrees; stale or ambiguous evidence requires a current choice.
+  Unreadable transcript evidence does not hide a usable live worktree, replaced
+  bindings retire pending previews, and agent windows omit unrelated launch-tree
+  Changes counts.
 
 ### Added
 

@@ -97,6 +97,23 @@ const workspaceBase: Workspace = {
   active_tab_id: "work",
   agent_status: "working",
   cwd: "/repo",
+  worktree: {
+    repo_key: "studio",
+    repo_name: "Studio",
+    repo_root: "/repo",
+    checkout_path: "/repo",
+    is_linked_worktree: false,
+    git_status: {
+      branch: "main",
+      ahead: 0,
+      behind: 0,
+      staged: 2,
+      unstaged: 3,
+      untracked: 2,
+      conflicted: 0,
+      dirty: true,
+    },
+  },
 };
 const tabs: Tab[] = [
   {
@@ -3578,6 +3595,14 @@ async function run() {
     () => Boolean(compactChangesResource?.querySelector(".diff-viewer-side")),
     "compact agent worktree Changes",
   );
+  const selectedTreeBadge = () =>
+    persistentReviewerInspector?.querySelector(
+      '[role="tab"][aria-label="Changes"] .workspace-inspector-count',
+    );
+  check(
+    !selectedTreeBadge(),
+    "A clean agent worktree must not display the dirty launch checkout's count",
+  );
   // The same location popover supplies explicit choices when evidence is ambiguous.
   ambiguousAgentWorktrees = true;
   persistentReviewerInspector!
@@ -3634,6 +3659,10 @@ async function run() {
       ),
       "The phone location chooser must use the shared dialog/handle sheet pattern",
     );
+  check(
+    !selectedTreeBadge(),
+    "An ambiguous agent worktree must not inherit the launch checkout's count",
+  );
   const worktreeRequestsStart = calls.length;
   (worktreeChoices[0] as HTMLInputElement).click();
   await until(
@@ -3662,6 +3691,40 @@ async function run() {
       .querySelector(".workspace-inspector-location")
       ?.textContent?.includes("reviewer-pane") === true,
     "Location line must identify the selected worktree, not the launch checkout",
+  );
+  const alternateChoiceStart = calls.length;
+  document
+    .querySelectorAll<HTMLInputElement>(
+      '.agent-worktree-picker input[type="radio"]',
+    )[1]!
+    .click();
+  await until(
+    () =>
+      calls
+        .slice(alternateChoiceStart)
+        .some(
+          (call) =>
+            call.method === "git.diff_summary" &&
+            (call.params.agent_worktree as { candidateId?: string } | undefined)
+              ?.candidateId === "reviewer-pane-main",
+        ),
+    "alternate selected worktree Changes status",
+  );
+  check(
+    !selectedTreeBadge(),
+    "Changing the selected worktree must not restore the launch-workspace count",
+  );
+  document
+    .querySelectorAll<HTMLInputElement>(
+      '.agent-worktree-picker input[type="radio"]',
+    )[0]!
+    .click();
+  await until(
+    () =>
+      persistentReviewerInspector!
+        .querySelector(".workspace-inspector-location")
+        ?.textContent?.includes("reviewer-pane"),
+    "restore selected agent worktree",
   );
   persistentReviewerInspector!
     .querySelector<HTMLButtonElement>(".workspace-inspector-location")!
