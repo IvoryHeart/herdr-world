@@ -706,6 +706,10 @@ in this connection. See [update controls](../FEATURES.md#automatic-branch-update
 
 ### 3.2 Continue from your phone
 
+On a computer, click inside terminal output to send physical arrow keys and
+Ctrl combinations directly to that terminal. Opening Message does not disable
+desktop terminal input; unsent Message drafts remain separate.
+
 First complete chapter 4's [Tailscale + Serve](#tailscale) setup and access checks.
 Use its HTTPS URL: `127.0.0.1` on a phone means the phone, not the work computer.
 

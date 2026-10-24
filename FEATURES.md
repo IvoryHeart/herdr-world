@@ -592,6 +592,9 @@ commit a search selection. Press K in the recent switcher to convert it to searc
 - Display Herdr's server-rendered terminal at browser rows/columns, with splits.
 - Send normal input, modified Enter, macOS line-editing shortcuts, multiline
   paste, IME composition, and rapid CJK punctuation.
+- On desktop, click terminal output to use physical arrow keys and Ctrl
+  combinations, including after opening an agent's Message or switching views.
+  The phone-only Composer does not disable desktop input or discard its draft.
 - Scroll history by wheel, trackpad, touch, or half-page
   `Alt/Option+Page Up`/`Page Down`. Full page keys go to terminal apps (such as
   nano) or Herdr history when the shell owns them; mobile buttons route the same

@@ -336,7 +336,8 @@
         "web/src/components/TerminalComposer.chat.test.ts",
         "web/src/components/VisualPreview.test.ts",
         "web/src/components/TerminalComposer.uploads.test.ts",
-        "web/src/components/TerminalView.inputMode.test.ts"
+        "web/src/components/TerminalView.inputMode.test.ts",
+        "web/src/uiScale.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
       "technique": "alternative",
@@ -356,7 +357,8 @@
           "web/src/components/TerminalComposer.chat.test.ts",
           "web/src/components/VisualPreview.test.ts",
           "web/src/components/TerminalComposer.uploads.test.ts",
-          "web/src/components/TerminalView.inputMode.test.ts"
+          "web/src/components/TerminalView.inputMode.test.ts",
+          "web/src/uiScale.test.ts"
         ],
         "checks": ["bun run check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
