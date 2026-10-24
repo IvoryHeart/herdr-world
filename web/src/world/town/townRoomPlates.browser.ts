@@ -53,12 +53,45 @@ export async function checkTownRoomPlates(
       return (
         !!count &&
         !!swatch &&
-        count.textContent === "1" &&
+        /^\d+\/\d+$/.test(count.textContent ?? "") &&
+        count.title === count.getAttribute("aria-label") &&
+        getComputedStyle(count).fontVariantNumeric.includes("tabular-nums") &&
         count.scrollWidth <= count.clientWidth + 1 &&
         (!badge || badge.scrollWidth <= badge.clientWidth + 1)
       );
     }),
     "room count, colour and blocked badge must stay visible outside the truncated name",
+  );
+  const counters = plates.map(
+    (plate) => plate.querySelector<HTMLElement>(".town-room-plaque-count")!,
+  );
+  check(
+    counters.some(
+      (count) =>
+        count.textContent === "3/8" &&
+        count.title === "3 of 8 agents active: 2 working, 1 waiting on you",
+    ),
+    "mixed agent statuses must show 3/8, without counting plain terminals or asks",
+  );
+  check(
+    ["0/2", "0/0", "2/2"].every((value) =>
+      counters.some((count) => count.textContent === value),
+    ),
+    "idle, empty and all-active rooms need explicit active/total counts",
+  );
+  check(
+    counters.every((count) => {
+      const total = count.querySelector<HTMLElement>(
+        ".town-room-plaque-total",
+      )!;
+      const zero = count.textContent!.startsWith("0/");
+      return zero
+        ? Number(getComputedStyle(count).opacity) < 1 &&
+            Number(getComputedStyle(total).opacity) === 1
+        : Number(getComputedStyle(count).opacity) === 1 &&
+            Number(getComputedStyle(total).opacity) < 1;
+    }),
+    "the total must be muted, and zero-active counters must be wholly muted",
   );
   const plate = plates[0]!;
   const nameBox = plate

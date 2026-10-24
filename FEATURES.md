@@ -95,9 +95,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     **Town calm motion** reduces ambient animation. Room actions support
     workspace/tab creation and room management on the captured host. Room
     plates fit their room width; only the name truncates, with its full text in
-    a tooltip. Colour, desk count and blocked badge remain visible. Hover or
-    focus a plate (tap on touch screens) for Rename and Close below it, with
-    40px targets.
+    a tooltip. Colour, active/total agent count and blocked badge remain visible.
+    Active means working or waiting on you; the total excludes plain terminals.
+    Hover the count for its working/waiting breakdown. Hover or focus a plate
+    (tap on touch screens) for Rename and Close below it, with 40px targets.
   - Drag a table onto another room of the same host, or an agent onto another
     table, to move it (hold, then drag on phones; **M** on a focused table or
     agent from the keyboard). A carried table lifts and sways after the
