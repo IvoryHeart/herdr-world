@@ -130,6 +130,18 @@ infinite progress or model OS/network failure. Static markup/injected recovery
 verbs check explicit truthful controls; real viewport and SSH outcomes remain
 closing browser/platform acceptance. See coverage.json for the required tests.
 
+### Native plugin fixture lifecycle (Q36)
+
+The native compatibility fixture awaits the existing bounded, yielding cleanup
+after its body settles. Persistent and nonretryable cleanup failures remain
+fatal; a dual failure retains the original body and cleanup errors, rather than
+letting a finally exception hide an assertion. Direct portable lifecycle tests
+and controlled transient/persistent filesystem denial exercise this test-harness
+boundary. Existing Windows held-file tests and the HTTP/HTTPS compiled fixtures
+supply separate native evidence. No installer policy, model, production launcher
+or release authority changed. Local filesystem fixtures do not identify the
+lock holder in an earlier Windows run or establish that run's body succeeded.
+
 ### PR detail freshness (Q43, #372)
 
 Successful list reads do not renew detail authority. Exact head/list-stamp
