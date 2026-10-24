@@ -2,7 +2,7 @@
 
 These synthetic scenes show the controls and evidence states introduced by
 #369, #371, #372 and #378. The captured application source is commit
-`49105072ca7c5c459c85bd14122fe61f5a53e740`. All images use Linux headless Chrome,
+`a52ac5b0b9e010266391eca261020cc81d3ad378`. All images use Linux headless Chrome,
 device scale 1 and the CSS viewport dimensions below; the laptop size does not
 claim a native macOS run.
 
@@ -53,7 +53,9 @@ The maintained TownCanvas recovery cases additionally cover cold signs,
 normal roof hiding, camera culling and remounting, unchanged layout geometry,
 and renderer disposal. They run in the repository's browser suite. These image
 captures are visual and interaction evidence, not a replacement for that suite,
-behavioral verification or the unchanged latency budget.
+behavioral verification or the unchanged latency budget. The isolated mounted
+PR-card regression also retires an open merge sheet at expiry without another
+source snapshot; these screenshots show the resulting stale presentation.
 
 No real account, SSH host, live session or repository is represented. Mocked
 Reconnect calls do not demonstrate native SSH recovery. The captures do not claim
