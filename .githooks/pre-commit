@@ -11,5 +11,4 @@ run_check() {
   fi
 }
 
-run_check bun run format:check
-run_check bun run lint
+run_check bun run check:commit
