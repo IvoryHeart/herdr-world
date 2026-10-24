@@ -22,7 +22,7 @@
 - Chat now uses the full shared Compose editor, attachments and harness command
   palette, opened by typing `/` or from the **⋮** controls menu. A paperclip
   attaches files. The paper-plane button, Ctrl+Enter or Cmd+Enter sends;
-  Enter adds a line, with
+  the enabled Send button has a yellow background. Enter adds a line, with
   drafts kept per conversation. Slash commands have honest unchecked receipts, and native
   working-state sends show queued bubbles until their transcript receipt.
 - The current quest takes one slim title/progress row inside the conversation;

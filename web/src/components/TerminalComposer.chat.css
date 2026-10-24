@@ -82,6 +82,11 @@
 .terminal-composer[data-surface="chat"] .terminal-composer-submit.is-primary {
   background: var(--chat-composer-button-bg, var(--accent-soft));
 }
+.terminal-composer[data-surface="chat"]
+  .terminal-composer-submit.is-primary:not(:disabled) {
+  color: var(--chat-composer-send-color, #151820);
+  background: var(--chat-composer-send-bg, #f0c453);
+}
 .terminal-composer[data-surface="chat"] .terminal-composer-hint {
   grid-column: 1 / -1;
   grid-row: 3;
