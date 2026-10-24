@@ -1073,8 +1073,17 @@ workspace, tab or pane ancestry.
 
 A room's nameplate SHALL fit within its projected room width with padding.
 Only the name SHALL truncate, at its end, with the full name available as a
-tooltip and accessible label. The leading editable colour swatch, desk count
-and trailing blocked badge SHALL retain their contents. Rename and Close SHALL
+tooltip and accessible label. The leading editable colour swatch, ACTIVE/TOTAL
+agent count and trailing blocked badge SHALL retain their contents. ACTIVE SHALL
+sum the room's existing per-agent working and blocked semantic status counts,
+as used by the Town board. TOTAL SHALL count its canonical observed agents,
+including done, idle and unknown reports, and exclude plain terminals. Done or
+finished agents (seen or unseen), idle agents and unknown agents SHALL NOT count
+as active. Needs-you items such as open asks SHALL NOT add to either agent count.
+The counter SHALL explain its working/waiting breakdown in a tooltip and accessible
+label. Its numerals SHALL be tabular, its total fraction muted, and its whole count
+muted when ACTIVE is zero; it SHALL stay fixed ahead of the blocked badge while
+only the room name truncates. Rename and Close SHALL
 appear below the plate on hover or keyboard focus, and on a touch of the plate,
 with targets at least 40 CSS pixels wide and tall. These controls SHALL NOT
 reserve name width while hidden. The dashed empty-seat **+** inside a room

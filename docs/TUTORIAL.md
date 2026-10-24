@@ -122,8 +122,10 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    when the scene has focus. Tap a room to zoom in. Large towns may initially
    show roofs; zoom in to see room summaries and desks. Phones stack buildings
    vertically. Room nameplates fit their rooms: long names end in an ellipsis;
-   hover the name for its full text. The colour, desk count and blocked badge
-   stay visible. Hover or focus a plate to reveal Rename and Close below it;
+   hover the name for its full text. The colour, active/total agent count and
+   blocked badge stay visible. Active means working or waiting on you; plain
+   terminals are excluded from the total. Hover the count for the working/waiting
+   breakdown. Hover or focus a plate to reveal Rename and Close below it;
    on a touch screen, tap the plate first. The dashed **+** seat inside a room
    opens its launcher with that room selected. Choose **Terminal** for a plain
    tab, a profile, or an agent kind. If the requested room is no longer
