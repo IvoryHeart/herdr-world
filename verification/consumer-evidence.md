@@ -142,6 +142,19 @@ supply separate native evidence. No installer policy, model, production launcher
 or release authority changed. Local filesystem fixtures do not identify the
 lock holder in an earlier Windows run or establish that run's body succeeded.
 
+### Committed Town building signs (Q39, Q43)
+
+Sign refs register only committed DOM nodes and request a renderer frame. Their
+registration identity prevents a retiring ref from removing a newer node for the
+same host. Pure lifecycle and isolated React DOM tests cover cold commit,
+status-only ref stability, culling/remount, late cleanup and suspended renders
+that never commit. Roof opacity continues to come from the normal renderer.
+The maintained Town browser suite includes phone/wide cold-mount and camera-cull
+cases that require visible failed/healthy building signs and receptions without
+changing topology or overriding CSS. These browser cases require closing-batch
+execution; DOM fixtures alone do not establish pixels, camera/GPU behavior or the
+unchanged 200 ms responsiveness budget.
+
 ### PR detail freshness (Q43, #372)
 
 Successful list reads do not renew detail authority. Exact head/list-stamp

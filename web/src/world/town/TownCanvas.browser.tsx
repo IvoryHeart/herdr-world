@@ -1,3 +1,4 @@
+import { checkTownBuildingSigns } from "./townBuildingSigns.browser";
 window.__HERDR_WORLD_RENDERER_DEBUG__ = true;
 import { TERMINAL_COMPOSER_REQUEST_EVENT } from "../terminalComposerRequest";
 import { StrictMode, useEffect, useState } from "react";
@@ -167,13 +168,15 @@ function topology(seed: number): Topology {
   const agentPanes: Pane[] = [];
   const connections = HOSTS.map((host): WorldRuntimeConnection => {
     const roomNames =
-      scale === "navigation"
-        ? host === HOSTS[0]
-          ? Array.from({ length: 128 }, (_, index) => `focus-room-${index}`)
-          : [`${host.id}-destination`]
-        : scale === "max"
-          ? host.rooms
-          : host.rooms.slice(0, 5 + Math.floor(r() * 4));
+      scale === "recovery"
+        ? host.rooms.slice(0, 1)
+        : scale === "navigation"
+          ? host === HOSTS[0]
+            ? Array.from({ length: 128 }, (_, index) => `focus-room-${index}`)
+            : [`${host.id}-destination`]
+          : scale === "max"
+            ? host.rooms
+            : host.rooms.slice(0, 5 + Math.floor(r() * 4));
     const workspaces: Workspace[] = [];
     const tabs: Tab[] = [];
     const panes: Pane[] = [];
@@ -186,13 +189,15 @@ function topology(seed: number): Topology {
           ? [scale === "protected" ? 160 : 100, 50, 24][roomIndex]
           : 0;
       const deskCount =
-        scale === "navigation"
-          ? 1
-          : extended
-            ? extended
-            : scale === "max"
-              ? 11 + Math.floor(r() * 5)
-              : 3 + Math.floor(r() * r() * 13);
+        scale === "recovery"
+          ? 4
+          : scale === "navigation"
+            ? 1
+            : extended
+              ? extended
+              : scale === "max"
+                ? 11 + Math.floor(r() * 5)
+                : 3 + Math.floor(r() * r() * 13);
       let paneTotal = 0;
       for (let d = 0; d < deskCount; d += 1) {
         const tabId = `${workspaceId}-tab-${d}`;
@@ -285,6 +290,14 @@ function topology(seed: number): Topology {
       },
     };
   });
+  if (scale === "recovery") {
+    connections.splice(2);
+    Object.assign(connections[0]!, {
+      state: "error",
+      stale: true,
+      actionable: false,
+    });
+  }
   return { connections, agentPanes };
 }
 
@@ -924,6 +937,8 @@ async function run() {
       ? { inset: "0", borderRadius: "0" }
       : { top: "56px", right: "16px", width: "380px", maxHeight: "80vh" }),
   });
+  // This case never opens Summary; its empty phone stand-in must not mask Town.
+  if (scale === "recovery") panelBody.hidden = true;
   document.body.append(panelBody);
   const panelEntries: WorldPanelEntry[] = [];
   const panels = {
@@ -962,6 +977,18 @@ async function run() {
       </WorldPanelsContext.Provider>
     </StrictMode>,
   );
+  if (scale === "recovery") {
+    try {
+      await checkTownBuildingSigns(host, waitFor, check);
+    } finally {
+      root.unmount();
+      await waitFor(
+        () => window.__HERDR_TOWN_RENDERER__?.activeApplications === 0,
+        "recovery sign proof unmount left a live renderer",
+      );
+    }
+    return;
+  }
   if (scale === "navigation") {
     const summaryButton = () =>
       window.innerWidth <= 640

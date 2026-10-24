@@ -4,3 +4,5 @@
   keep live actions disabled, and offer an explicit Reconnect control.
 - Continue automatic recovery from transient SSH tunnel failures with capped
   backoff instead of leaving a reachable host permanently failed after six tries.
+- Show Town building signs when their DOM first mounts or returns after camera
+  culling, including the failed-host Reconnect control at roof level.

@@ -1502,6 +1502,8 @@
       "properties": "Unmount disposes one renderer; late initialization cannot resurrect it; reload attempts stay bounded",
       "existingTests": [
         "web/src/world/town/TownCanvas.test.ts",
+        "web/src/world/town/townBuildingSigns.test.ts",
+        "web/src/world/town/TownBuildingSign.test.ts",
         "web/src/lazyWithReload.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
@@ -1510,12 +1512,14 @@
       "status": "alternative-evidence",
       "remaining": "GPU/browser/URL behavior requires the actual implementation; arbitrary device/driver failure schedules are excluded.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
-      "evidenceDecision": "The Town renderer browser test (StrictMode double mount leaves one renderer and canvas; unmount leaves none) and the lazy-module tests exercise graphics destruction and reload/lifetime behavior.",
+      "evidenceDecision": "The Town renderer browser test (StrictMode double mount leaves one renderer and canvas; unmount leaves none) and the lazy-module tests exercise graphics destruction and reload/lifetime behavior. Committed building-sign lifecycle fixtures cover cold commit, ref stability across status renders, cull/remount, suspended uncommitted nodes and replacement-safe cleanup. Maintained phone/wide browser cases require visible building/reception recovery after cold mount and camera culling with normal roof fading; their execution and the unchanged responsiveness budget remain closing browser acceptance.",
       "partialEvidence": {
         "models": [],
         "contracts": ["verification/consumer-evidence.md"],
         "tests": [
           "web/src/world/town/TownCanvas.test.ts",
+          "web/src/world/town/townBuildingSigns.test.ts",
+          "web/src/world/town/TownBuildingSign.test.ts",
           "web/src/lazyWithReload.test.ts"
         ],
         "checks": ["bun run check"],

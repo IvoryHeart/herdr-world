@@ -8,6 +8,11 @@ but its snapshot is unavailable, the label says **Stale** rather than claiming
 a transport disconnect. **Reconnect** uses the existing profile recovery verb
 on that exact connection ID, then refreshes its catalogue and aggregate.
 
+Building signs follow the normal roof fade: they show at roof level and hide
+when zoomed into the building. Committed sign nodes register for the next renderer
+frame on first mount and after camera culling; status-only renders do not detach
+them. Reception recovery remains available when the roof sign is hidden.
+
 Cached agents do not advertise current working/urgent activity. Town freezes
 their motion and rejects live Chat/terminal opens for agent, pane and desk
 targets. Board's cached panes show unknown activity and reject operations.
