@@ -1,4 +1,5 @@
 import type { WorkItem } from "./worldSources";
+import { freshPullRequestDetail } from "./pullRequestFreshness";
 
 /**
  * What World reads about one of your open pull requests beyond its lane, and
@@ -18,13 +19,15 @@ export type PullRequestCheck = {
 };
 
 /**
- * A reviewer agent's latest `RESULT #N: …` line on the pull request. Rev
- * agents post as comments from the owner's account, so the reviewer is read
- * from the text: its basis is inferred.
+ * Latest explicitly attributed reviewer results and unattributed RESULT evidence.
+ * A crew name is a sender claim from the text, not a verified identity; a shared
+ * GitHub login never establishes it. Unknown posts retain separate source links.
  */
 export type PullRequestReviewer = {
-  /** The name the comment opens with, such as `rev4`. */
-  reviewer: string;
+  /** Explicit sender claim such as `rev4`; null when absent or conflicting. */
+  reviewer: string | null;
+  /** Stable GitHub review/comment ID, with its URL as the legacy fallback. */
+  sourceId?: string;
   url: string;
   at: number;
   /** `confirmed`: every finding resolved and none new; `open`: some remain. */
@@ -67,7 +70,7 @@ export type ReadinessRule = {
 };
 
 export const REVIEWS_COME_FROM_COMMENTS =
-  "Reviews come from rev agents as comments. GitHub doesn't let you approve your own PR.";
+  "Reviews come from formal reviews and comments. Reviewer names are explicit sender claims, not verified identities; a shared GitHub login does not identify a crew reviewer.";
 
 export const shortSha = (sha: string) => sha.slice(0, 7);
 
@@ -81,15 +84,18 @@ export function actionablePullRequest(item: WorkItem) {
   );
 }
 
-export function pullRequestReadiness(item: WorkItem): ReadinessRule[] {
-  const detail = item.pr;
+export function pullRequestReadiness(
+  item: WorkItem,
+  now = Date.now(),
+): ReadinessRule[] {
+  const detail = freshPullRequestDetail(item, now) ? item.pr : undefined;
   const failing = detail?.checks.filter((check) => check.state === "fail");
   const running = detail?.checks.filter((check) => check.state === "pending");
   return [
     item.draft
       ? rule("draft", "Not a draft", "fail", "Still a draft")
       : rule("draft", "Not a draft", "pass", "Ready for review"),
-    findingsRule(item),
+    findingsRule(item, now),
     item.checks === "pass"
       ? rule("checks", "CI green on head", "pass", "All checks passed")
       : item.checks === "fail"
@@ -126,8 +132,15 @@ export function pullRequestReadiness(item: WorkItem): ReadinessRule[] {
   ];
 }
 
-function findingsRule(item: WorkItem): ReadinessRule {
+function findingsRule(item: WorkItem, now: number): ReadinessRule {
   const label = "Every finding confirmed";
+  if (!freshPullRequestDetail(item, now))
+    return rule(
+      "findings",
+      label,
+      "unknown",
+      "Details stale or unavailable; refresh Sources",
+    );
   const reviewers = item.pr?.reviewers;
   if (!reviewers) return rule("findings", label, "unknown", "Not read yet");
   if (!reviewers.length)
@@ -138,15 +151,23 @@ function findingsRule(item: WorkItem): ReadinessRule {
       "findings",
       label,
       "fail",
-      open.map((entry) => `${entry.reviewer}: ${entry.line}`).join("; "),
+      open
+        .map(
+          (entry) => `${entry.reviewer ?? "Unknown reviewer"}: ${entry.line}`,
+        )
+        .join("; "),
     );
-  const unread = reviewers.filter((entry) => entry.outcome === "unknown");
+  const unread = reviewers.filter(
+    (entry) => entry.outcome === "unknown" || !entry.reviewer,
+  );
   if (unread.length)
     return rule(
       "findings",
       label,
       "unknown",
-      `Can't read ${unread.map((entry) => entry.reviewer).join(", ")}'s result`,
+      unread.some((entry) => !entry.reviewer)
+        ? "Reviewer attribution unknown; inspect the linked RESULT evidence"
+        : `Can't read ${unread.map((entry) => entry.reviewer).join(", ")}'s result`,
     );
   // A confirmation of an older head says nothing about what came after.
   const stale = reviewers.filter(
@@ -169,6 +190,7 @@ function findingsRule(item: WorkItem): ReadinessRule {
 
 /** `rev2 confirmed at 1a2b3c4 · 2 commits since`. */
 export function confirmedAt(entry: PullRequestReviewer) {
+  if (!entry.reviewer) return "Unknown reviewer; attribution required";
   if (!entry.commit) return `${entry.reviewer} confirmed, head unknown`;
   const since =
     entry.commitsSince === null
@@ -202,10 +224,10 @@ function rule(
   return { id, label, state, detail };
 }
 
-export function readyToMerge(item: WorkItem) {
+export function readyToMerge(item: WorkItem, now = Date.now()) {
   return (
     actionablePullRequest(item) &&
-    pullRequestReadiness(item).every((entry) => entry.state === "pass")
+    pullRequestReadiness(item, now).every((entry) => entry.state === "pass")
   );
 }
 
@@ -286,7 +308,8 @@ export function pullRequestAttention(
   format: (time: number) => string,
 ): PullRequestAttention | null {
   if (!actionablePullRequest(item)) return null;
-  if (readyToMerge(item)) return { reason: "ready", label: "Ready to merge" };
+  if (readyToMerge(item, now))
+    return { reason: "ready", label: "Ready to merge" };
   const since = stalledAt(item, authors);
   if (
     since === null ||

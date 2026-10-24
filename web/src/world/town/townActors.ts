@@ -495,6 +495,7 @@ export class TownActors {
     this.clock += dt;
     let moved = false;
     for (const actor of this.actors.values()) {
+      if (this.world?.model.agents.get(actor.key)?.stale) continue;
       if (actor.mode === "walk") {
         moved = true;
         let remaining = WALK_SPEED * dt;
@@ -576,7 +577,11 @@ export class TownActors {
   /** Whether any actor is still moving. */
   get busy() {
     for (const actor of this.actors.values())
-      if (actor.mode === "walk" || actor.mode === "tween") return true;
+      if (
+        !this.world?.model.agents.get(actor.key)?.stale &&
+        (actor.mode === "walk" || actor.mode === "tween")
+      )
+        return true;
     return false;
   }
 }

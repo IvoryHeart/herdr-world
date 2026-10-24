@@ -1,4 +1,9 @@
 import type { PullRequestAction } from "../../../shared/pullRequests";
+import {
+  freshPullRequestDetail,
+  PR_DETAILS_UNAVAILABLE,
+  qualifyPullRequestDetail,
+} from "../../../shared/pullRequestFreshness";
 import type {
   WorkItem,
   WorkLink,
@@ -247,6 +252,7 @@ export class SourcesService {
    * with who asked: the viewer, as their browser session reported it.
    */
   async pullRequestVerb(key: string, request: PullRequestVerbRequest) {
+    const generation = this.#sources.github.generation;
     const item = this.enabled("github")
       ? this.#sources.github.items.find((entry) => entry.key === key)
       : undefined;
@@ -263,7 +269,27 @@ export class SourcesService {
     this.#acting.add(key);
     let outcome;
     try {
-      outcome = await runPullRequestVerb(this.#options.run, item, request);
+      outcome = await runPullRequestVerb(
+        this.#options.run,
+        item,
+        request,
+        () => {
+          const source = this.#sources.github;
+          if (
+            !this.enabled("github") ||
+            source.generation !== generation ||
+            source.state !== "connected"
+          )
+            return "GitHub source changed or is unavailable. Refresh Sources and try again.";
+          const current = source.items.find((entry) => entry.key === key);
+          if (!current || current.headSha !== item.headSha)
+            return "Head changed: review again.";
+          return request.verb === "merge" &&
+            !freshPullRequestDetail(current, this.#now())
+            ? PR_DETAILS_UNAVAILABLE
+            : null;
+        },
+      );
     } finally {
       this.#acting.delete(key);
     }
@@ -277,7 +303,7 @@ export class SourcesService {
       sender: { basis: "reported", via: "browser" },
     };
     this.#actions = [action, ...this.#actions].slice(0, MAX_ACTIONS);
-    if (outcome.ok) {
+    if (outcome.ok && this.#sources.github.generation === generation) {
       this.#details.delete(key);
       this.#sources.github.checkedAt = 0;
     }
@@ -286,7 +312,15 @@ export class SourcesService {
 
   #items() {
     return (["github", "jira"] as const).flatMap((id) =>
-      this.enabled(id) ? this.#sources[id].items : [],
+      this.enabled(id)
+        ? this.#sources[id].items.map((item) =>
+            qualifyPullRequestDetail(
+              item,
+              this.#now(),
+              this.#sources[id].state === "connected",
+            ),
+          )
+        : [],
     );
   }
 
@@ -384,8 +418,10 @@ export class SourcesService {
     source.refreshing = null;
     source.checkedAt = 0;
     this.#linkedAt = 0;
+    // A retired fetch keeps only its retired map, including on window changes.
+    if (id === "github")
+      this.#details = keepItems ? new Map(this.#details) : new Map();
     if (keepItems) return;
-    if (id === "github") this.#details.clear();
     source.items = [];
     source.state = "not_connected";
     source.detail = "Checking…";

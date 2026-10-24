@@ -1,6 +1,7 @@
+import type { OfficeHost } from "./officeHost";
+export type { OfficeHost } from "./officeHost";
 import type {
   WorldAgentStatus,
-  WorldHostState,
   WorldLeafObject,
   WorldObject,
   WorldSpaceObject,
@@ -57,21 +58,6 @@ export type OfficeQualifiedTarget = {
   kind: "workspace" | "tab" | "pane" | "terminal";
   nativeId: string;
   worldId: string;
-};
-
-export type OfficeHost = {
-  key: string;
-  connectionId: string;
-  displayLabel: string;
-  accessibleLabel?: string;
-  displayOrder: number;
-  connectionState: WorldHostState;
-  observed: boolean;
-  stale: boolean;
-  compatibleWithWorld: boolean;
-  compatibleWithSpaces: boolean;
-  selected: boolean;
-  deterministicSkin: { themeIndex: number; badge: string };
 };
 
 export type OfficeAgentDestination = "room" | "reception" | "bar";
@@ -512,6 +498,7 @@ export function projectWorldOffice(
       accessibleLabel: host.label,
       displayOrder,
       connectionState: host.hostState,
+      runtimeState: host.connection.state,
       observed: host.connection.snapshot !== null,
       stale: host.stale || host.hostState === "offline-stale",
       compatibleWithWorld:
@@ -975,6 +962,7 @@ export async function prepareWorldOffice(
         accessibleLabel: host.label,
         displayOrder,
         connectionState: host.hostState,
+        runtimeState: host.connection.state,
         observed: host.connection.snapshot !== null,
         stale: host.stale || host.hostState === "offline-stale",
         compatibleWithWorld:

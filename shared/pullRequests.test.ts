@@ -13,6 +13,7 @@ import {
 import type { WorkItem } from "./worldSources";
 
 const HEAD = "c".repeat(40);
+const DETAIL_READ_AT = Date.now();
 
 const reviewer = (
   fields: Partial<PullRequestReviewer> = {},
@@ -59,6 +60,13 @@ const item = (fields: Partial<WorkItem> = {}): WorkItem => ({
   review: "review_required",
   mergeable: "mergeable",
   pr: detail(),
+  prObservation: {
+    source: "github",
+    state: "fresh",
+    headSha: HEAD,
+    readAt: DETAIL_READ_AT,
+    expiresAt: DETAIL_READ_AT + 600_000,
+  },
   ...fields,
 });
 
@@ -68,6 +76,42 @@ const states = (entry: WorkItem) =>
   );
 
 describe("pull request readiness", () => {
+  test("unattributed evidence cannot clear findings or hide behind named confirmations", () => {
+    const unknown = reviewer({
+      reviewer: null,
+      outcome: "unknown",
+      sourceId: "review-1",
+    });
+    const entry = item({ pr: detail({ reviewers: [reviewer(), unknown] }) });
+    const findings = pullRequestReadiness(entry).find(
+      (rule) => rule.id === "findings",
+    )!;
+    expect(findings.state).toBe("unknown");
+    expect(findings.detail).toContain("attribution unknown");
+    expect(readyToMerge(entry)).toBe(false);
+    // Even malformed/legacy evidence with no identity cannot assert clear.
+    expect(
+      states(
+        item({
+          pr: detail({ reviewers: [{ ...unknown, outcome: "confirmed" }] }),
+        }),
+      ),
+    ).toMatchObject({ findings: "unknown" });
+    // A known open finding still wins over the unknown attribution.
+    expect(
+      states(
+        item({
+          pr: detail({
+            reviewers: [
+              unknown,
+              reviewer({ outcome: "open", line: "1 P2 open" }),
+            ],
+          }),
+        }),
+      ),
+    ).toMatchObject({ findings: "fail" });
+  });
+
   test("ready when every one of the owner's rules holds", () => {
     expect(states(item())).toEqual({
       draft: "pass",
@@ -205,10 +249,15 @@ describe("pull request attention", () => {
   const idle = [{ label: "teams", idle: true }];
 
   test("ready to merge when every rule holds", () => {
-    expect(pullRequestAttention(item(), [], 0, null, time)).toEqual({
+    expect(
+      pullRequestAttention(item(), [], DETAIL_READ_AT, null, time),
+    ).toEqual({
       reason: "ready",
       label: "Ready to merge",
     });
+    expect(
+      pullRequestAttention(item(), [], DETAIL_READ_AT + 600_000, null, time),
+    ).toBeNull();
   });
 
   test("stalled when CI failed on the head and its agent is idle, once it has held a moment", () => {

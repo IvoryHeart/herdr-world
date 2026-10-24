@@ -7,6 +7,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   renameSync,
   writeFileSync,
 } from "node:fs";
@@ -18,6 +19,12 @@ import { VERIFIED_HERDR_VERSION } from "../server/src/herdr/release";
 
 const repository = "IvoryHeart/herdr-world";
 
+export function createInstallerFixtureRoot(parent = tmpdir()): string {
+  return realpathSync.native(
+    mkdtempSync(join(parent, "world installer upgrade ")),
+  );
+}
+
 export class InstallerCommandError extends Error {
   constructor(
     readonly argv: string[],
@@ -26,8 +33,14 @@ export class InstallerCommandError extends Error {
     readonly stderr: string,
     readonly cwd: string,
   ) {
+    let canonical: string | null = null;
+    try {
+      canonical = realpathSync.native(cwd);
+    } catch {
+      // A removed or inaccessible cwd must not replace the command failure.
+    }
     super(
-      `${basename(argv[0])} ${argv.slice(1).join(" ")} exited ${exitCode}\n${stdout.slice(-2000)}\n${stderr.slice(-2000)}`,
+      `${basename(argv[0])} ${argv.slice(1).join(" ")} exited ${exitCode}\ncwd: ${JSON.stringify({ requested: cwd, canonical })}\n${stdout.slice(-2000)}\n${stderr.slice(-2000)}`,
     );
     // Keep complete output for classification without dumping it in failures.
     Object.defineProperties(this, {
@@ -378,7 +391,7 @@ export async function verify() {
     readFileSync(`${archive}.sha256`, "utf8").trim(),
     `${digest(archive)}  ${archiveName}`,
   );
-  const root = mkdtempSync(join(tmpdir(), "world installer upgrade "));
+  const root = createInstallerFixtureRoot();
   const reportDir = resolve(
     process.env.INSTALLER_REPORT_DIR ??
       join(source, ".agents/installer-report"),

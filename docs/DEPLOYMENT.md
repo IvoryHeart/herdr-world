@@ -679,7 +679,29 @@ Use explicit socket paths if the server has a non-default configuration.
 Run `ssh workbox true` as the same user that runs World. Resolve any host-key prompt,
 agent/key problem, jump-host rule, or remote socket absence there. World reports
 bounded diagnostics and deliberately does not retry authentication and host-key
-failures.
+failures. Classified transient tunnel exits and timeouts, including exit 255
+during initial remote HOME discovery, use the existing
+per-profile exponential backoff with jitter. By default recovery continues while
+the connection is enabled; each delay is capped at 30 seconds (15–30 seconds
+once capped), rather than stopping permanently after six failures. Disconnect,
+removal, replacement and service shutdown cancel or retire pending recovery.
+Unclassified, authentication, permission, host-key and unsupported failures do
+not acquire an endless retry policy. An explicitly supplied finite retry budget
+remains finite.
+
+Cached topology stays stale and non-actionable. Town's building and reception,
+and Board's host label, show **Disconnected · Reconnect** for a failed runtime.
+Use **Reconnect** to reset that profile's existing recovery flow; healthy sibling
+hosts keep their own runtimes. A completed connection alone does not promote old
+cached topology: a current-generation snapshot is needed. See
+[connection recovery](world-connection-recovery.md).
+
+A non-interactive SSH shell can omit `herdr` from PATH even when it is installed.
+POSIX World forwarding resolves the remote home and connects to the saved/inferred
+Herdr sockets; it does not require a bare `herdr` command. For separate CLI
+version/status diagnostics, resolve the actual native executable or its standard
+installation path. PATH lookup failure is not proof of absence or version skew.
+This recovery fix changes no remote installation or server.
 
 ### Another device cannot open World
 
