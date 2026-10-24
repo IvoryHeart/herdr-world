@@ -53,7 +53,14 @@
 }
 
 .town-room-plaque-count {
-  opacity: 0.8;
+  font-variant-numeric: tabular-nums;
+}
+.town-room-plaque-total,
+.town-room-plaque-count.is-inactive {
+  opacity: 0.6;
+}
+.town-room-plaque-count.is-inactive .town-room-plaque-total {
+  opacity: 1;
 }
 .town-room-plaque-badge {
   color: #2a1a04;

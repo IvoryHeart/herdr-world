@@ -22,18 +22,20 @@ export function TownRoomPlaque({
   room: OfficeRoom;
   label: string;
   width: number;
-  counts: Pick<TownRoomCounts, "desks" | "blocked">;
+  counts: Pick<TownRoomCounts, "agents" | "working" | "blocked">;
   overflow: number;
   color: PlaceColorChoice | null;
   actions: TownRoomActions;
 }) {
   const folded = room.deskFold === "folded";
+  const active = counts.working + counts.blocked;
+  const activityLabel = `${active} of ${counts.agents} ${counts.agents === 1 ? "agent" : "agents"} active: ${counts.working} working, ${counts.blocked} waiting on you`;
   return (
     <div
       className="town-room-plaque"
       style={{ "--room-w": `${width}px` } as CSSProperties}
       role="group"
-      aria-label={`${label}: ${counts.desks} desks${counts.blocked ? `, ${counts.blocked} need you` : ""}`}
+      aria-label={`${label}: ${activityLabel}`}
       tabIndex={0}
       onPointerDown={(event) => {
         if (event.pointerType === "touch")
@@ -77,10 +79,12 @@ export function TownRoomPlaque({
           </button>
         ) : null}
         <span
-          className="town-room-plaque-count"
-          aria-label={`${counts.desks} desks`}
+          className={`town-room-plaque-count${active === 0 ? " is-inactive" : ""}`}
+          title={activityLabel}
+          aria-label={activityLabel}
         >
-          {counts.desks}
+          <span>{active}</span>
+          <span className="town-room-plaque-total">/{counts.agents}</span>
         </span>
         {counts.blocked ? (
           <span className="town-room-plaque-badge">!{counts.blocked}</span>
