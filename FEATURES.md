@@ -156,6 +156,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     use the shared aggregate. Reception and lounge positions only show status;
     only an explicit move changes Herdr's layout, always within one host.
   See the [Town exercise](./docs/TUTORIAL.md#town).
+- **Per-host Herdr identity.** **Manage connections → Check version again**
+  reads the selected card's running server version and protocol. Compatibility
+  expires after one minute; failed or disconnected checks remain unknown.
+  The installed binary is separate and unknown. Upgrade is explicitly unavailable
+  until its target and safe handoff are verified; no remote update runs.
 - **New agent and agent profiles.** **New agent** starts an agent in a new
   tab of a room you choose, from a profile (one tap) or from any agent kind the
   host's Herdr supports. It is in the Actions menu of Town and Board, on each

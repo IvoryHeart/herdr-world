@@ -710,6 +710,13 @@ On a computer, click inside terminal output to send physical arrow keys and
 Ctrl combinations directly to that terminal. Opening Message does not disable
 desktop terminal input; unsent Message drafts remain separate.
 
+To check a host, open **Manage connections** and use **Check version again** on
+its card. The running Herdr version and protocol are specific to that host;
+after one minute, check again before relying on compatibility. A failed check
+stays unknown: reconnect the host and retry. The installed binary is not inferred
+from its server. The connection card explains why upgrade is unavailable and
+does not run an update command.
+
 First complete chapter 4's [Tailscale + Serve](#tailscale) setup and access checks.
 Use its HTTPS URL: `127.0.0.1` on a phone means the phone, not the work computer.
 

@@ -594,8 +594,6 @@ export function TerminalView({
   const composerModeRef = useRef(composerMode);
   composerModeRef.current = composerMode;
   const composerEditingRef = useRef(false);
-  // The terminal Composer is mobile-only; its open state must never disable
-  // desktop terminal input while CSS hides the dock.
   composerEditingRef.current =
     isMobileLayout() && composerOpen && composerMode === "composer";
   const pendingExplicitModeRef = useRef<TerminalInputMode | null>(null);
@@ -641,8 +639,7 @@ export function TerminalView({
     termInstance,
   ]);
   useLayoutEffect(() => {
-    // Selecting a split is not new link content: preserve its mouse-down link.
-    // Still end mobile input/selection and dismiss actions on focus changes.
+    // Reset mobile input on split focus changes without invalidating its link.
     setFileLinkMenu(null);
     setWorkspaceDirectory(null);
     touchSelectionRef.current?.reset();
