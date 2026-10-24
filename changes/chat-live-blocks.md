@@ -11,6 +11,8 @@
 - Files and Changes refresh their worktree evidence when Herdr reports a changed
   foreground directory; the chooser clarifies that viewing a tree does not move
   the agent's terminal.
+- Chat's overflow menu follows the shared Back/Escape layer stack so closing it
+  preserves the underlying window and the unsent draft.
 
 ### Added
 

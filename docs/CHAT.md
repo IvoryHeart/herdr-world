@@ -114,8 +114,9 @@ view that you open on purpose.
   and **Open Terminal**. It offers no composer then.
 - Chat uses the same full **Compose** component as the Terminal: the paperclip attaches
   files and typing **/** opens that harness's command palette. **⋮ → Browse
-  commands** opens the same palette. Its placeholder
-  names the same agent as the window bar. Enter starts a new line;
+  commands** opens the same palette. The ⋮ menu follows the shared Back/Escape
+  stack, closing before the underlying window. The placeholder names the same
+  agent as the window bar. Enter starts a new line;
   the paper-plane **Send** button, `Ctrl+Enter` or `Cmd+Enter` sends.
   Direct mode, Insert draft and the terminal
   key bar stay out of Chat.

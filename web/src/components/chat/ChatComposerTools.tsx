@@ -1,6 +1,6 @@
-import * as Popover from "@radix-ui/react-popover";
 import { EllipsisVertical } from "lucide-react";
-import { useRef, type Ref } from "react";
+import { useState, type Ref } from "react";
+import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 
 export function ChatComposerTools({
   buttonRef,
@@ -13,14 +13,10 @@ export function ChatComposerTools({
   commandsAvailable: boolean;
   onCommands: () => void;
 }) {
-  const openingCommands = useRef(false);
+  const [open, setOpen] = useState(false);
   return (
-    <Popover.Root
-      onOpenChange={(open) => {
-        if (open) openingCommands.current = false;
-      }}
-    >
-      <Popover.Trigger asChild>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
         <button
           ref={buttonRef}
           type="button"
@@ -31,32 +27,25 @@ export function ChatComposerTools({
         >
           <EllipsisVertical size={18} aria-hidden="true" />
         </button>
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Content
-          className="chat-composer-tools-popover"
-          aria-label="Composer controls"
-          side="top"
-          align="end"
-          sideOffset={6}
-          onCloseAutoFocus={(event) => {
-            if (openingCommands.current) event.preventDefault();
+      </PopoverTrigger>
+      <PopoverContent
+        className="chat-composer-tools-popover"
+        aria-label="Composer controls"
+        side="top"
+        align="end"
+        sideOffset={6}
+      >
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(false);
+            onCommands();
           }}
+          disabled={!commandsAvailable}
         >
-          <Popover.Close asChild>
-            <button
-              type="button"
-              onClick={() => {
-                openingCommands.current = true;
-                onCommands();
-              }}
-              disabled={!commandsAvailable}
-            >
-              Browse commands <kbd>/</kbd>
-            </button>
-          </Popover.Close>
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover.Root>
+          Browse commands <kbd>/</kbd>
+        </button>
+      </PopoverContent>
+    </Popover>
   );
 }

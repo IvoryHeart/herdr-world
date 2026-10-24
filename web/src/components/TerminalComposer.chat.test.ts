@@ -46,6 +46,7 @@ if (process.env.CHAT_COMPOSER_DOM_TEST !== "1") {
       });
     }
     const { createRoot } = await import("react-dom/client");
+    const { closeTopLayer, openLayerCount } = await import("../layerStack");
     const { ChatComposer, chatComposerDraftKey } = await import(
       "./chat/ChatComposer"
     );
@@ -173,6 +174,9 @@ if (process.env.CHAT_COMPOSER_DOM_TEST !== "1") {
         )?.hidden,
       ).toBe(true);
       await act(async () => {
+        drafts.writeTerminalComposerDraft(chatKey, "back-safe draft");
+      });
+      await act(async () => {
         host
           .querySelector<HTMLButtonElement>(
             '[aria-label="More composer controls"]',
@@ -183,8 +187,31 @@ if (process.env.CHAT_COMPOSER_DOM_TEST !== "1") {
         browser.document.querySelectorAll("button"),
       ).find((button) => button.textContent?.includes("Browse commands"));
       expect(browseCommands).toBeDefined();
-      await act(async () => browseCommands!.click());
+      expect(openLayerCount()).toBe(1);
+      await act(async () => {
+        expect(closeTopLayer()).toBe(true);
+      });
+      expect(openLayerCount()).toBe(0);
+      expect(document.querySelector(".chat-composer-tools-popover")).toBeNull();
+      expect(host.querySelector("textarea")).toBe(textarea);
+      expect(drafts.readTerminalComposerDraft(chatKey)).toBe("back-safe draft");
+      expect(sent).toEqual([]);
+      await act(async () => {
+        host
+          .querySelector<HTMLButtonElement>(
+            '[aria-label="More composer controls"]',
+          )!
+          .click();
+      });
+      await act(async () => {
+        Array.from(browser.document.querySelectorAll("button"))
+          .find((button) => button.textContent?.includes("Browse commands"))!
+          .click();
+      });
       expect(textarea.getAttribute("aria-expanded")).toBe("true");
+      expect(document.activeElement?.getAttribute("aria-label")).toBe(
+        "Agent commands",
+      );
       await act(async () =>
         dispatch(
           new browser.KeyboardEvent("keydown", {
