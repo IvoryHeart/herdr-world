@@ -45,6 +45,12 @@ scheduled delay is 15–30 seconds. The delay is separate from a connection
 attempt's own timeout and cleanup. An explicit finite `maxAttempts` policy in
 `ConnectionRetryOptions` remains supported; this is not a new browser setting.
 
+Initial SSH HOME discovery uses the same classifier before a forwarding process
+exists. A structured subprocess exit 255 is classified from its captured stderr;
+transient failures enter that existing scheduler, while authentication and
+host-key failures remain permanent. Other exit codes, invalid HOME output and
+arbitrary errors remain unclassified, even if their text resembles a timeout.
+
 Authentication, host-key, permission, unsupported and unclassified failures do
 not gain indefinite recovery. Disconnect, removal, replacement and shutdown
 invalidate retry intent. A fired callback waits for failed-runtime cleanup and
@@ -68,3 +74,9 @@ Existing runtime models retain authority/administration bounds; fixtures do not
 prove real SSH availability, infinite progress, native account behavior or
 viewport/pixel outcomes. Five-viewport Town/Board proofs, the complete normal
 gate and current-head CI belong to the closing batch, not the individual item.
+
+The HOME preflight regression runs the real tunnel, subprocess and profile
+recovery code with synthetic local child output, controlled timers and simulated
+forwarding/socket readiness. It covers eight failed preflights before success,
+permanent/unknown failures, queued and in-flight cancellation, and healthy sibling
+leases. It never invokes SSH or establishes a remote host's version or availability.

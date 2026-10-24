@@ -679,7 +679,8 @@ Use explicit socket paths if the server has a non-default configuration.
 Run `ssh workbox true` as the same user that runs World. Resolve any host-key prompt,
 agent/key problem, jump-host rule, or remote socket absence there. World reports
 bounded diagnostics and deliberately does not retry authentication and host-key
-failures. Classified transient tunnel exits and timeouts use the existing
+failures. Classified transient tunnel exits and timeouts, including exit 255
+during initial remote HOME discovery, use the existing
 per-profile exponential backoff with jitter. By default recovery continues while
 the connection is enabled; each delay is capped at 30 seconds (15–30 seconds
 once capped), rather than stopping permanently after six failures. Disconnect,

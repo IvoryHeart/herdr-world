@@ -1,5 +1,6 @@
 import { existsSync, rmSync } from "node:fs";
 import { type Logger, silentLogger } from "../utils/logger";
+import { ProcessExitError } from "../utils/process-utils";
 import { sshCommandArgv, sshTunnelArgv } from "./ssh-command";
 import { createWindowsSshTunnel } from "./ssh-windows";
 
@@ -257,9 +258,19 @@ export function createSshTunnelManager(args: {
 
   async function remoteHome(host: string): Promise<string> {
     if (cachedRemoteHome?.host === host) return cachedRemoteHome.home;
-    const { stdout } = await args.runProcess(
-      sshCommandArgv(host, `printf %s "$HOME"`),
-    );
+    const { stdout } = await args
+      .runProcess(sshCommandArgv(host, `printf %s "$HOME"`))
+      .catch((error: unknown) => {
+        if (!(error instanceof ProcessExitError) || error.exitCode !== 255) {
+          throw error;
+        }
+        const classified = classifySshTunnelFailure(
+          error.exitCode,
+          error.stderr,
+        );
+        classified.cause = error;
+        throw classified;
+      });
     const home = stdout.trim();
     if (!home.startsWith("/")) {
       throw new Error(`could not resolve remote HOME for ${host}`);

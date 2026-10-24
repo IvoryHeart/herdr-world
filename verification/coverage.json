@@ -58,6 +58,7 @@
       "properties": "Replacement uses the new factory; retries are host-local; persisted catalogue and default remain consistent",
       "existingTests": [
         "server/src/connections/profile-service.test.ts",
+        "server/src/connections/ssh-preflight-recovery.test.ts",
         "server/src/connections/profiles.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/145",
@@ -74,6 +75,7 @@
         ],
         "tests": [
           "server/src/connections/profile-service.test.ts",
+          "server/src/connections/ssh-preflight-recovery.test.ts",
           "server/src/connections/profiles.test.ts"
         ],
         "checks": ["bun run check", "bun run verification:check"],
@@ -95,12 +97,14 @@
       "existingTests": [
         "server/src/connections/profile-service.test.ts",
         "server/src/connections/ssh-profile-runtime.test.ts",
+        "server/src/connections/ssh-preflight-recovery.test.ts",
+        "server/src/utils/process-utils.test.ts",
         "server/src/bridge/ssh-tunnel.test.ts",
         "server/src/bridge/ssh-windows.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
       "technique": "shared-lifecycle",
-      "assessment": "transport exit and cancellation consumer mapping; real SSH remains platform evidence",
+      "assessment": "transport/preflight exit classification and cancellation consumer mapping; real SSH remains platform evidence",
       "status": "shared-model",
       "remaining": "Real OpenSSH, OS process and Windows transport semantics remain platform checks; the manager model does not simulate SSH.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
@@ -112,6 +116,8 @@
         ],
         "tests": [
           "server/src/connections/ssh-profile-runtime.test.ts",
+          "server/src/connections/ssh-preflight-recovery.test.ts",
+          "server/src/utils/process-utils.test.ts",
           "server/src/bridge/ssh-tunnel.test.ts",
           "server/src/bridge/ssh-windows.test.ts"
         ],

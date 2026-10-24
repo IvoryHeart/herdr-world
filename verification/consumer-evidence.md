@@ -132,6 +132,18 @@ infinite progress or model OS/network failure. Static markup/injected recovery
 verbs check explicit truthful controls; real viewport and SSH outcomes remain
 closing browser/platform acceptance. See coverage.json for the required tests.
 
+`ssh-preflight-recovery.test.ts` exercises the actual remote HOME discovery,
+subprocess error boundary and profile scheduler together. Synthetic local child
+processes return eight exit-255 timeouts before success; forwarding and socket
+readiness are simulated. Permanent authentication/host-key failures, non-255
+exits, invalid HOME output and arbitrary timeout-looking errors cannot acquire
+retry. Disconnect/removal fence queued callbacks and in-flight results without
+replacing a healthy sibling lease. `process-utils.test.ts` checks structured exit
+facts and unchanged messages without serializing captured output. These direct
+fixtures extend the existing classification consumer mapping, not its model or
+generic-error allowlist, and do not establish live SSH availability, version skew
+or an owner's viewport outcome. The closing batch retains full-gate acceptance.
+
 ### Native plugin fixture lifecycle (Q36)
 
 The native compatibility fixture awaits the existing bounded, yielding cleanup
