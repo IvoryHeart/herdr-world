@@ -69,3 +69,16 @@ test("the chip names the quest and its current step", () => {
   expect(html).toContain("1/3");
   expect(html).toContain("now: Add retry");
 });
+
+test("Chat's compact quest starts as one accessible title/progress row", () => {
+  const html = renderToStaticMarkup(
+    createElement(QuestLog, { quest, compact: true }),
+  );
+  expect(html).toContain("is-compact");
+  expect(html).toContain('aria-expanded="false"');
+  expect(html).toContain("Add retry to the example client");
+  expect(html).toContain("1/3");
+  expect(html).not.toContain("progressbar");
+  expect(html).not.toContain("quest-log-steps");
+  expect(html).not.toContain("In progress");
+});

@@ -53,14 +53,20 @@ export function QuestChip({ quest }: { quest: Quest }) {
  * objectives, read from the agent's own todos, plan, goal or loop. It folds
  * to one line; nothing is shown when the transcript records no quest.
  */
-export function QuestLog({ quest }: { quest: Quest | null | undefined }) {
-  const [open, setOpen] = useState(true);
+export function QuestLog({
+  quest,
+  compact = false,
+}: {
+  quest: Quest | null | undefined;
+  compact?: boolean;
+}) {
+  const [open, setOpen] = useState(!compact);
   if (!quest) return null;
   const { done, total } = quest.progress;
   const percent = total > 0 ? Math.round((done / total) * 100) : null;
   return (
     <section
-      className={`quest-log is-${quest.status}`}
+      className={`quest-log is-${quest.status}${compact ? " is-compact" : ""}`}
       aria-label="Quest"
       data-quest-source={quest.source}
     >
@@ -76,7 +82,7 @@ export function QuestLog({ quest }: { quest: Quest | null | undefined }) {
         <span className="quest-log-title">{quest.title}</span>
         <span className="quest-log-count">{questProgressText(quest)}</span>
       </button>
-      {percent !== null ? (
+      {percent !== null && (!compact || open) ? (
         <div
           className="quest-log-bar"
           role="progressbar"

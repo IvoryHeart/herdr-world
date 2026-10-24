@@ -1,3 +1,4 @@
+import { sessionWorktreeMetadata } from "./worktree-session";
 import { randomUUID } from "node:crypto";
 import type { AgentSessionFileAccess } from "./session-file-access";
 import type { AgentSessionResolved, SessionFile } from "./session-types";
@@ -51,6 +52,7 @@ export async function readSessionProjection(
     messages,
     entries: historyEntriesFromTrajectory(projectionFile, trajectory),
     quest: questFromSession(agent, trajectory, records),
+    worktree: sessionWorktreeMetadata(agent, records),
     stats: {
       turns: messages.filter((message) => message.role === "user").length,
       records: records.length,

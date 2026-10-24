@@ -8,6 +8,12 @@ import {
   type WorkspaceInspectorRequest,
 } from "../workspaceResource";
 import { type WorldRuntimePriority } from "./runtimeStore";
+import { readOfficePreferences, type TownOpens } from "./officePreferences";
+import { worldLocalStorage } from "../browserStorage";
+import {
+  normalizeAgentName,
+  SESSION_AGENTS,
+} from "../../../server/src/agent/chat-harnesses";
 import {
   type WorldHostObject,
   type WorldObject,
@@ -133,6 +139,56 @@ export function worldIntentInitialView(
   if (views.includes("terminal")) return "terminal";
   return views[0] ?? null;
 }
+
+/**
+ * What opening an agent or terminal shows, wherever it is opened (Town,
+ * Board, Desk): an agent's Chat when Chat can read its harness and the Agents
+ * open setting chooses Chat, otherwise its terminal. A plain shell opens its
+ * terminal.
+ */
+export function worldNodeOpenView(
+  node: WorldObjectNode,
+  opens: TownOpens,
+): InspectorView | null {
+  if (
+    opens === "chat" &&
+    node.kind === "agent" &&
+    SESSION_AGENTS.has(normalizeAgentName(node.pane.agent ?? "")) &&
+    worldIntentViews(node).includes("history")
+  )
+    return "history";
+  return worldIntentInitialView(node, "terminal");
+}
+
+/**
+ * worldNodeOpenView with the Agents open setting as it is now. openTerminalById
+ * takes a view, or null for this default (Chat, else terminal).
+ */
+export const defaultOpenView = (node: WorldObjectNode) =>
+  worldNodeOpenView(node, readOfficePreferences(worldLocalStorage).townOpens);
+
+/** Whether the selected node's host is still ready at its generation. */
+export function ownerReady(
+  selected: WorldObjectNode | null,
+  { connections }: { connections: readonly ConnectionSummary[] },
+) {
+  return (
+    !!selected &&
+    connections.some(
+      (owner) =>
+        owner.id === selected.connectionId &&
+        owner.state === "ready" &&
+        owner.generation === selected.generation,
+    )
+  );
+}
+
+/** A host, or a node from an old or unactionable snapshot, shows its profile. */
+export const selectionShowsProfile = (
+  selected: WorldObjectNode | null,
+  current: boolean,
+) =>
+  !!selected && (selected.kind === "host" || !current || !selected.actionable);
 
 export function worldSnapshotPriorityForNode(
   node: WorldObjectNode,

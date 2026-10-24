@@ -98,6 +98,23 @@ const workspaceBase: Workspace = {
   active_tab_id: "work",
   agent_status: "working",
   cwd: "/repo",
+  worktree: {
+    repo_key: "studio",
+    repo_name: "Studio",
+    repo_root: "/repo",
+    checkout_path: "/repo",
+    is_linked_worktree: false,
+    git_status: {
+      branch: "main",
+      ahead: 0,
+      behind: 0,
+      staged: 2,
+      unstaged: 3,
+      untracked: 2,
+      conflicted: 0,
+      dirty: true,
+    },
+  },
 };
 const tabs: Tab[] = [
   {
@@ -137,7 +154,9 @@ const panes: Pane[] = [
     workspace_id: workspaceBase.workspace_id,
     tab_id: tabs[1]!.tab_id,
     focused: false,
-    agent: "reviewer",
+    // A harness Chat reads, so the Reviewer opens on Chat; the Builder's
+    // harness is one Chat cannot read, so it opens its terminal.
+    agent: "claude",
     display_agent: "Reviewer",
     agent_status: "idle",
     revision: 1,
@@ -152,6 +171,7 @@ const rememberedTabPanes = new Map<string, string>();
 let worldRevision = 1;
 let runtimeGeneration = 7;
 let rejectNextWorldSnapshot = false;
+let ambiguousAgentWorktrees = false;
 let staleNextWorldSnapshot = false;
 let omitNextWorldTopology = false;
 let siblingObservationGate: Promise<void> | null = null;
@@ -169,8 +189,8 @@ let agents: Record<string, unknown>[] = [
   {
     pane_id: "reviewer-pane",
     terminal_id: "reviewer-terminal",
-    agent: "reviewer",
-    agent_session: { agent: "reviewer", kind: "id", value: "review-a" },
+    agent: "claude",
+    agent_session: { agent: "claude", kind: "id", value: "review-a" },
   },
 ];
 const terminalListeners = new Set<(push: TerminalPush) => void>();
@@ -438,10 +458,51 @@ const client: ConnectionClient = {
       if (delayed) await delayed.promise;
       return { layout: delayed?.layout ?? layout() };
     }
+    if (method === "agent_worktree.get") {
+      const subject = params.subject as { paneId: string };
+      const at = "2026-01-01T00:00:00Z";
+      return {
+        subject,
+        revision: ambiguousAgentWorktrees ? "ambiguous" : "resolved",
+        observedAt: at,
+        state: ambiguousAgentWorktrees ? "ambiguous" : "resolved",
+        selectedCandidateId: ambiguousAgentWorktrees
+          ? null
+          : `${subject.paneId}-agent`,
+        candidates: ["agent", "main"].map((kind) => ({
+          candidateId: `${subject.paneId}-${kind}`,
+          canonicalRoot:
+            kind === "agent"
+              ? `/repo/.agents/worktrees/${subject.paneId}`
+              : "/repo",
+          gitCommonDir: "/repo/.git",
+          branch: kind === "agent" ? "agent/review" : "main",
+          source: ambiguousAgentWorktrees
+            ? "branch_match"
+            : kind === "agent"
+              ? "foreground_cwd"
+              : "worktree_list",
+          evidence: {
+            sourceRef: "Synthetic worktree observation",
+            observedAt: at,
+            basis:
+              ambiguousAgentWorktrees || kind === "main"
+                ? "inferred"
+                : "reported",
+          },
+        })),
+      };
+    }
     if (method === "file.list") {
       return {
         workspace_id: workspaceBase.workspace_id,
-        root: "/repo",
+        root: (
+          params.agent_worktree as
+            | { candidateId?: string; subject?: { paneId?: string } }
+            | undefined
+        )?.candidateId?.endsWith("-agent")
+          ? `/repo/.agents/worktrees/${(params.agent_worktree as { subject: { paneId: string } }).subject.paneId}`
+          : "/repo",
         checkout_path: "/repo",
         path: "",
         entries: [],
@@ -537,11 +598,14 @@ function agentTarget(label: string) {
   );
 }
 
-/** Opens an agent's Inspector from Town: a click only selects it. */
+/** The view an agent opens on: Chat when Chat reads its harness. */
+const opensOn = (label: string) =>
+  label === "Reviewer" ? "history" : "terminal";
+
 /**
  * Open an agent's terminal from Town as a user does: activating the agent
- * opens its window on Chat, and the window's Terminal view shows the
- * terminal.
+ * opens its window on Chat when Chat reads its harness (else on its
+ * terminal), and the window's Terminal view shows the terminal.
  */
 async function openAgent(label: string) {
   const target = agentTarget(label)!;
@@ -550,13 +614,13 @@ async function openAgent(label: string) {
     target.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
   });
   const window = `[role="dialog"][aria-label="${label} Inspector"]`;
-  // The window opens on Chat first, even when it was already open.
+  // The window opens on its first view, even when it was already open.
   await until(
     () =>
       document.querySelector(
-        `${window} .workspace-inspector[data-view="history"]`,
+        `${window} .workspace-inspector[data-view="${opensOn(label)}"]`,
       ),
-    `${label} window on Chat`,
+    `${label} window on ${opensOn(label) === "history" ? "Chat" : "its terminal"}`,
   );
   flushSync(() =>
     document
@@ -1288,18 +1352,24 @@ async function run() {
     () => !document.querySelector(".config-dropdown"),
     "Town settings closed before shell Actions",
   );
+  function reviewerInspectorActive() {
+    const frame = document.querySelector<HTMLElement>(
+      ".world-managed-window.is-active",
+    );
+    return (
+      frame?.dataset.windowId ===
+        JSON.stringify(["local", 7, "studio", "review"]) &&
+      Boolean(frame.querySelector(".workspace-inspector-agent-identity"))
+    );
+  }
   const floatingPreferenceNavigatorRow = () =>
     [...document.querySelectorAll<HTMLElement>(".sidebar .agent-row")].find(
-      (row) => row.getAttribute("aria-label")?.startsWith("reviewer pane"),
+      (row) => row.getAttribute("aria-label")?.startsWith("claude pane"),
     );
   flushSync(() => floatingPreferenceNavigatorRow()?.click());
   await until(
     () =>
-      document
-        .querySelector(
-          ".world-managed-window.is-active .workspace-inspector-agent-identity",
-        )
-        ?.textContent?.includes("Reviewer") &&
+      reviewerInspectorActive() &&
       document.querySelectorAll('[role="dialog"][aria-label$=" Inspector"]')
         .length === 1,
     "shared navigator opens a managed Inspector",
@@ -2409,7 +2479,7 @@ async function run() {
   );
   const reviewerNavigatorRow = [
     ...document.querySelectorAll<HTMLElement>(".sidebar .agent-row"),
-  ].find((row) => row.getAttribute("aria-label")?.startsWith("reviewer pane"));
+  ].find((row) => row.getAttribute("aria-label")?.startsWith("claude pane"));
   check(
     Boolean(reviewerNavigatorRow),
     "shared navigator omitted the Reviewer agent",
@@ -2422,11 +2492,7 @@ async function run() {
   flushSync(() => reviewerNavigatorRow?.click());
   await settle();
   check(
-    !document
-      .querySelector(
-        ".world-managed-window.is-active .workspace-inspector-agent-identity",
-      )
-      ?.textContent?.includes("Reviewer"),
+    !reviewerInspectorActive(),
     "shared navigator admitted Reviewer before its exact focus completed",
   );
   check(
@@ -2437,11 +2503,7 @@ async function run() {
   delayedPaneGet = null;
   await until(
     () =>
-      document
-        .querySelector(
-          ".world-managed-window.is-active .workspace-inspector-agent-identity",
-        )
-        ?.textContent?.includes("Reviewer") &&
+      reviewerInspectorActive() &&
       store.get().selectedPaneId === "reviewer-pane",
     "shared navigator exact Reviewer focus",
   );
@@ -2480,11 +2542,7 @@ async function run() {
   reviewerTopTab?.click();
   await until(
     () =>
-      document
-        .querySelector(
-          ".world-managed-window.is-active .workspace-inspector-agent-identity",
-        )
-        ?.textContent?.includes("Reviewer") &&
+      reviewerInspectorActive() &&
       store.get().selectedPaneId === "reviewer-pane",
     "top workspace tab exact Reviewer Inspector",
   );
@@ -2537,11 +2595,7 @@ async function run() {
     "created-seat admission deadline",
   );
   check(
-    document
-      .querySelector(
-        ".world-managed-window.is-active .workspace-inspector-agent-identity",
-      )
-      ?.textContent?.includes("Reviewer") === true,
+    reviewerInspectorActive() === true,
     "created-seat deadline replaced the prior Reviewer Inspector",
   );
   rejectNextPaneGetId = null;
@@ -2549,11 +2603,7 @@ async function run() {
   delayedPaneGet = null;
   await settle();
   check(
-    document
-      .querySelector(
-        ".world-managed-window.is-active .workspace-inspector-agent-identity",
-      )
-      ?.textContent?.includes("Reviewer") === true &&
+    reviewerInspectorActive() === true &&
       calls.filter(
         ({ method, params }) =>
           method === "pane.get" && params.pane_id === "created-pane-3",
@@ -2764,15 +2814,7 @@ async function run() {
   );
 
   await openAgent("Reviewer");
-  await until(
-    () =>
-      document
-        .querySelector(
-          ".world-managed-window.is-active .workspace-inspector-agent-identity",
-        )
-        ?.textContent?.includes("Reviewer"),
-    "Reviewer Inspector",
-  );
+  await until(() => reviewerInspectorActive(), "Reviewer Inspector");
   const builderWindow = document.querySelector<HTMLElement>(
     '[role="dialog"][aria-label="Builder Inspector"]',
   )!;
@@ -3097,12 +3139,7 @@ async function run() {
 
   await openAgent("Reviewer");
   await until(
-    () =>
-      document
-        .querySelector(
-          ".world-managed-window.is-active .workspace-inspector-agent-identity",
-        )
-        ?.textContent?.includes("Reviewer"),
+    () => reviewerInspectorActive(),
     "Reviewer replacement Inspector",
   );
   check(
@@ -3160,6 +3197,13 @@ async function run() {
         document.querySelector(".world-managed-window.is-active") ?? document,
       ),
     "Builder Board Inspector replacement",
+  );
+  // Chat cannot read the Builder's harness, so Board opens its terminal.
+  check(
+    document
+      .querySelector(".world-managed-window.is-active .workspace-inspector")
+      ?.getAttribute("data-view") === "terminal",
+    "Board opens an agent whose harness Chat cannot read on its terminal",
   );
   document
     .querySelector<HTMLButtonElement>(
@@ -3274,13 +3318,31 @@ async function run() {
   await until(() => boardTarget("Reviewer"), "Reviewer Board target");
   flushSync(() => boardTarget("Reviewer")!.click());
   await until(
+    () => reviewerInspectorActive(),
+    "Reviewer docked Inspector before Spaces handoff",
+  );
+  // Chat reads the Reviewer's harness, so Board opens it on Chat.
+  await until(
     () =>
       document
-        .querySelector(
-          ".world-managed-window.is-active .workspace-inspector-agent-identity",
-        )
-        ?.textContent?.includes("Reviewer"),
-    "Reviewer docked Inspector before Spaces handoff",
+        .querySelector(".world-managed-window.is-active .workspace-inspector")
+        ?.getAttribute("data-view") === "history",
+    "Board opens an agent Chat reads on Chat",
+  );
+  // The compact checks below read its terminal, as a user switching views.
+  flushSync(() =>
+    document
+      .querySelector<HTMLButtonElement>(
+        '.world-managed-window.is-active [role="tab"][aria-label="Terminal"]',
+      )!
+      .click(),
+  );
+  await until(
+    () =>
+      document
+        .querySelector(".world-managed-window.is-active .workspace-inspector")
+        ?.getAttribute("data-view") === "terminal",
+    "Reviewer's Terminal view before Spaces handoff",
   );
   await settle();
   const persistentControlPlane = document.querySelector(".world-control-plane");
@@ -3553,22 +3615,144 @@ async function run() {
     ".inspector-changes-resource:not(.is-hidden)",
   );
   await until(
-    () =>
-      Boolean(compactChangesResource?.querySelector("button:not([disabled])")),
-    "compact Agent checkout unavailable state",
+    () => Boolean(compactChangesResource?.querySelector(".diff-viewer-side")),
+    "compact agent worktree Changes",
   );
-  const workspaceChangesChoice = [
-    ...compactChangesResource!.querySelectorAll<HTMLButtonElement>("button"),
-  ].find((button) => button.textContent === "Workspace changes");
+  const selectedTreeBadge = () =>
+    persistentReviewerInspector?.querySelector(
+      '[role="tab"][aria-label="Changes"] .workspace-inspector-count',
+    );
   check(
-    Boolean(workspaceChangesChoice),
-    "Agent checkout unavailable state did not offer Workspace changes",
+    !selectedTreeBadge(),
+    "A clean agent worktree must not display the dirty launch checkout's count",
   );
-  workspaceChangesChoice?.click();
+  // The same location popover supplies explicit choices when evidence is ambiguous.
+  ambiguousAgentWorktrees = true;
+  persistentReviewerInspector!
+    .querySelector<HTMLButtonElement>(".workspace-inspector-location")!
+    .click();
+  await until(
+    () => Boolean(document.querySelector(".agent-worktree-picker")),
+    "agent worktree location popover",
+  );
+  [
+    ...document.querySelectorAll<HTMLButtonElement>(
+      ".agent-worktree-picker button",
+    ),
+  ]
+    .find((button) => button.textContent === "Refresh")!
+    .click();
+  await until(
+    () =>
+      Boolean(
+        compactChangesResource?.querySelector(
+          ".workspace-inspector-unavailable",
+        ),
+      ),
+    "ambiguous worktree empty state",
+  );
+  check(
+    !compactChangesResource?.querySelector(".diff-viewer-side"),
+    "Ambiguous worktree evidence must not mount workspace Changes as fallback",
+  );
+  persistentReviewerInspector!
+    .querySelector<HTMLButtonElement>(".workspace-inspector-location")!
+    .click();
+  [...compactChangesResource!.querySelectorAll<HTMLButtonElement>("button")]
+    .find((button) => button.textContent === "Choose a worktree")!
+    .click();
+  await until(
+    () => Boolean(document.querySelector(".agent-worktree-picker")),
+    "Choose a worktree reopens the same location popover",
+  );
+  const worktreeChoices = document.querySelectorAll<HTMLInputElement>(
+    '.agent-worktree-picker input[type="radio"]',
+  );
+  check(
+    worktreeChoices.length === 2 &&
+      [...worktreeChoices].every((radio) => !radio.checked),
+    "Ambiguous worktrees must offer two unselected native radio choices",
+  );
+  if (document.documentElement.dataset.layout === "mobile")
+    check(
+      Boolean(
+        document.querySelector(
+          '.workspace-inspector-location-sheet[aria-modal="true"] .mobile-sheet-handle',
+        ),
+      ),
+      "The phone location chooser must use the shared dialog/handle sheet pattern",
+    );
+  check(
+    !selectedTreeBadge(),
+    "An ambiguous agent worktree must not inherit the launch checkout's count",
+  );
+  const worktreeRequestsStart = calls.length;
+  (worktreeChoices[0] as HTMLInputElement).click();
   await until(
     () => Boolean(compactChangesResource?.querySelector(".diff-viewer-side")),
-    "compact Workspace changes choice",
+    "explicit agent worktree choice",
   );
+  await until(
+    () =>
+      ["file.list", "git.diff_summary"].every((method) =>
+        calls
+          .slice(worktreeRequestsStart)
+          .some(
+            (call) =>
+              call.method === method &&
+              (
+                call.params.agent_worktree as
+                  | { candidateId?: string }
+                  | undefined
+              )?.candidateId === "reviewer-pane-agent",
+          ),
+      ),
+    "same chosen root for Files and Changes",
+  );
+  check(
+    persistentReviewerInspector!
+      .querySelector(".workspace-inspector-location")
+      ?.textContent?.includes("reviewer-pane") === true,
+    "Location line must identify the selected worktree, not the launch checkout",
+  );
+  const alternateChoiceStart = calls.length;
+  document
+    .querySelectorAll<HTMLInputElement>(
+      '.agent-worktree-picker input[type="radio"]',
+    )[1]!
+    .click();
+  await until(
+    () =>
+      calls
+        .slice(alternateChoiceStart)
+        .some(
+          (call) =>
+            call.method === "git.diff_summary" &&
+            (call.params.agent_worktree as { candidateId?: string } | undefined)
+              ?.candidateId === "reviewer-pane-main",
+        ),
+    "alternate selected worktree Changes status",
+  );
+  check(
+    !selectedTreeBadge(),
+    "Changing the selected worktree must not restore the launch-workspace count",
+  );
+  document
+    .querySelectorAll<HTMLInputElement>(
+      '.agent-worktree-picker input[type="radio"]',
+    )[0]!
+    .click();
+  await until(
+    () =>
+      persistentReviewerInspector!
+        .querySelector(".workspace-inspector-location")
+        ?.textContent?.includes("reviewer-pane"),
+    "restore selected agent worktree",
+  );
+  persistentReviewerInspector!
+    .querySelector<HTMLButtonElement>(".workspace-inspector-location")!
+    .click();
+  ambiguousAgentWorktrees = false;
   check(
     (compactChangesResource?.getBoundingClientRect().height ?? 0) > 0 &&
       (compactChangesResource
@@ -3808,13 +3992,7 @@ async function run() {
   viewSelect.value = "board";
   viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
   await until(
-    () =>
-      document.querySelector(".board") &&
-      document
-        .querySelector(
-          ".world-managed-window.is-active .workspace-inspector-agent-identity",
-        )
-        ?.textContent?.includes("Reviewer"),
+    () => document.querySelector(".board") && reviewerInspectorActive(),
     "qualified Inspector conversations after Spaces handoff",
   );
   await settle();
@@ -3836,12 +4014,7 @@ async function run() {
   await until(() => boardTarget("Reviewer"), "Reviewer before retirement");
   flushSync(() => boardTarget("Reviewer")!.click());
   await until(
-    () =>
-      document
-        .querySelector(
-          ".world-managed-window.is-active .workspace-inspector-agent-identity",
-        )
-        ?.textContent?.includes("Reviewer"),
+    () => reviewerInspectorActive(),
     "selected Reviewer before retirement",
   );
   await settle();
@@ -3856,15 +4029,23 @@ async function run() {
     () => reviewerInspector.getAttribute("data-view") === "files",
     "Reviewer Files state before session replacement",
   );
+  const worktreeBeforeReplacement = calls.length;
+  const replacementSession = {
+    source: "herdr:claude",
+    agent: "claude",
+    kind: "id",
+    value: "review-b",
+  };
+  Object.assign(panes[1]!, { agent_session: replacementSession });
   panes[1]!.display_agent = "Reviewer Next";
   agents = [
     {
       pane_id: "reviewer-pane",
       terminal_id: "reviewer-terminal",
-      agent: "reviewer",
+      agent: "claude",
       display_agent: "Reviewer Next",
       task_summary: "Reviewing the replacement session",
-      agent_session: { agent: "reviewer", kind: "id", value: "review-b" },
+      agent_session: replacementSession,
     },
   ];
   worldRevision += 1;
@@ -3884,10 +4065,18 @@ async function run() {
     "reconciled replacement Reviewer session",
   );
   check(
-    document
-      .querySelector(".world-managed-window.is-active .workspace-inspector")
-      ?.textContent?.includes("Reviewing the replacement session") === true,
-    "replacement session did not refresh the Inspector context",
+    calls.slice(worktreeBeforeReplacement).some(({ method, params }) => {
+      const subject = params.subject as
+        | { paneId?: string; sessionFingerprint?: string | null }
+        | undefined;
+      return (
+        method === "agent_worktree.get" &&
+        subject?.paneId === "reviewer-pane" &&
+        typeof subject.sessionFingerprint === "string" &&
+        /^[a-f0-9]{64}$/u.test(subject.sessionFingerprint)
+      );
+    }),
+    "replacement session did not refresh its qualified worktree context",
   );
 
   const splitBuilderWindow = document.querySelector<HTMLElement>(
@@ -4924,6 +5113,113 @@ async function run() {
   )?.set?.call(officeViewSelect, "town");
   officeViewSelect?.dispatchEvent(new Event("change", { bubbles: true }));
   await settle();
+
+  // Reuse a shell's tab window for a readable agent while its focus request
+  // is pending. The target's views determine what opens, not the shell's.
+  Object.getOwnPropertyDescriptor(
+    HTMLSelectElement.prototype,
+    "value",
+  )?.set?.call(officeViewSelect, "board");
+  officeViewSelect?.dispatchEvent(new Event("change", { bubbles: true }));
+  await until(() => document.querySelector(".board"), "Board for tab reuse");
+  await arrangeWindows("Close all terminal windows");
+  const reuseTab: Tab = {
+    ...tabs[0]!,
+    tab_id: "open-rule-tab",
+    number: 90,
+    label: "Open Rule Shell",
+    focused: false,
+    pane_count: 1,
+  };
+  const reuseShell: Pane = {
+    ...panes[0]!,
+    pane_id: "open-rule-shell",
+    terminal_id: "open-rule-shell-terminal",
+    tab_id: reuseTab.tab_id,
+    focused: false,
+    agent: undefined,
+    agent_session: undefined,
+    agent_name: undefined,
+    display_agent: undefined,
+    agent_status: "unknown",
+  };
+  tabs.push(reuseTab);
+  panes.push(reuseShell);
+  worldRevision += 1;
+  await worldRuntimeStore.refresh();
+  await until(() => boardTarget(reuseTab.label), "new shell tab on Board");
+  boardTarget(reuseTab.label)!.dispatchEvent(
+    new MouseEvent("dblclick", { bubbles: true }),
+  );
+  await until(
+    () =>
+      document.querySelector(
+        '.world-managed-window.is-active .workspace-inspector[data-view="terminal"] [data-pane-id="open-rule-shell"]',
+      ),
+    "shell tab opened in its floating terminal window",
+  );
+  const reuseWindow = document.querySelector<HTMLElement>(
+    ".world-managed-window.is-active",
+  )!;
+  check(
+    !reuseWindow.querySelector('[role="tab"][aria-label="Chat"]'),
+    "shell window unexpectedly offers Chat before the agent appears",
+  );
+  const reuseAgent: Pane = {
+    ...reuseShell,
+    pane_id: "open-rule-agent",
+    terminal_id: "open-rule-agent-terminal",
+    agent: "claude",
+    agent_name: "Open Rule Agent",
+    display_agent: "Open Rule Agent",
+    agent_status: "idle",
+    agent_session: { value: "open-rule-session" },
+  };
+  panes.push(reuseAgent);
+  reuseTab.pane_count = 2;
+  agents.push({
+    ...reuseAgent,
+    agent_session: { agent: "claude", kind: "id", value: "open-rule-session" },
+  });
+  worldRevision += 1;
+  await worldRuntimeStore.refresh();
+  await until(
+    () => boardTarget("Open Rule Agent"),
+    "readable sibling on Board",
+  );
+  const pendingAgentFocus = Promise.withResolvers<void>();
+  delayedPaneGet = {
+    paneId: reuseAgent.pane_id,
+    promise: pendingAgentFocus.promise,
+  };
+  const priorAgentGets = calls.filter(
+    ({ method, params }) =>
+      method === "pane.get" && params.pane_id === reuseAgent.pane_id,
+  ).length;
+  boardTarget("Open Rule Agent")!.dispatchEvent(
+    new MouseEvent("dblclick", { bubbles: true }),
+  );
+  await until(
+    () =>
+      calls.filter(
+        ({ method, params }) =>
+          method === "pane.get" && params.pane_id === reuseAgent.pane_id,
+      ).length > priorAgentGets,
+    "reused window waits for the readable agent focus reply",
+  );
+  pendingAgentFocus.resolve();
+  delayedPaneGet = null;
+  await until(
+    () =>
+      reuseWindow.querySelector('.workspace-inspector[data-view="history"]'),
+    "shell window reused on the readable agent's requested Chat view",
+  );
+  check(
+    reuseWindow.isConnected &&
+      document.querySelectorAll(".world-managed-window .workspace-inspector")
+        .length === 1,
+    "opening the readable sibling replaced or duplicated its tab window",
+  );
 
   runtimeGeneration += 1;
   worldRevision += 1;

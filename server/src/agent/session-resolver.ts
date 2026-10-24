@@ -25,6 +25,7 @@ import {
   findAntigravitySessionForCwd,
 } from "./antigravity-session";
 import { findMuseSession, type MuseMetadataCache } from "./muse-session";
+import { normalizeAgentName, SESSION_AGENTS } from "./chat-harnesses";
 import {
   codexPanes,
   inferCodexDaemonThread,
@@ -37,20 +38,10 @@ import {
 import {
   integrationInstallCommand,
   isRecord,
-  normalizeAgentName,
   stringValue,
 } from "./session-utils";
 
-/** Harnesses with a transcript reader; Herdr can detect more than these. */
-export const SESSION_AGENTS: ReadonlySet<string> = new Set([
-  "codex",
-  "claude",
-  "kimi",
-  "grok",
-  "pi",
-  "muse",
-  "agy",
-]);
+export { SESSION_AGENTS };
 
 export type AgentSessionResolverContext = {
   pathCache: Map<string, string>;

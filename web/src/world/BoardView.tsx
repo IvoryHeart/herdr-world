@@ -434,7 +434,7 @@ export default function BoardView({
   toolbarPortal = null,
   selectedId,
   onSelect,
-  onOpenTerminal,
+  onOpen,
   store,
   sendNote = sendNoteThroughService,
   checkAnchor = checkAnchorThroughService,
@@ -449,7 +449,8 @@ export default function BoardView({
   toolbarPortal?: Element | null;
   selectedId: string | null;
   onSelect(id: string): unknown;
-  onOpenTerminal(id: string): unknown;
+  /** Open a pane as the user opens it: an agent's Chat, else its terminal. */
+  onOpen(id: string): unknown;
   /** Board's saved state; World's own service store by default. */
   store?: BoardDocumentStore;
   /** Send a note to an agent's pane; World's service by default. */
@@ -679,7 +680,7 @@ export default function BoardView({
     model,
     collapsed,
     onSelect,
-    onOpenTerminal,
+    onOpen,
     saved,
     picked,
     noteSelected,
@@ -690,7 +691,7 @@ export default function BoardView({
     model,
     collapsed,
     onSelect,
-    onOpenTerminal,
+    onOpen,
     saved,
     picked,
     noteSelected,
@@ -2198,7 +2199,7 @@ export default function BoardView({
     const pane =
       tab.panes.find((candidate) => candidate.key === paneKey) ??
       primaryPane(tab);
-    if (pane && tab.actionable) void onOpenTerminal(pane.leaf.id);
+    if (pane && tab.actionable) void onOpen(pane.leaf.id);
   };
   /** Center a workspace and zoom in until its tabs show; unfold it if folded. */
   function focusWorkspace(key: string) {
@@ -3892,7 +3893,7 @@ export default function BoardView({
                     !chooser.stringFrom &&
                     model.tabByKey.get(chooser.tabKey)!.actionable
                   )
-                    void onOpenTerminal(row.leaf.id);
+                    void onOpen(row.leaf.id);
                 }}
               >
                 {row.isAgent ? (

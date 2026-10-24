@@ -12,7 +12,10 @@ export function elapsed(ms: number) {
 
 /** The task a harness names in its title, without its spinner glyph. */
 export const titleTask = (title: string | null | undefined) =>
-  title?.replace(/^[^\p{L}\p{N}]+/u, "").trim() || null;
+  title
+    ?.replace(/^[^\p{L}\p{N}]+/u, "")
+    .replace(/^(?:working|needs you|blocked|done|idle)\s*:\s*/iu, "")
+    .trim() || null;
 
 export const STATUS_WORDS: Record<string, string> = {
   working: "Working",

@@ -6,6 +6,7 @@ import * as drafts from "../terminalComposer";
 import { defaultMobileTerminalShortcutRows } from "../mobileTerminalShortcuts";
 import { terminalComposerCommands } from "../terminalComposerCommands";
 import { TerminalComposer, type TerminalInputMode } from "./TerminalComposer";
+import { TerminalComposerPalette } from "./TerminalComposerPalette";
 
 type Element = React.ReactElement<Record<string, unknown>>;
 type Host = {
@@ -163,6 +164,14 @@ test.each(["claude", "grok-build", "agy"])(
     function visit(node: React.ReactNode) {
       React.Children.forEach(node, (child) => {
         if (!React.isValidElement<Record<string, unknown>>(child)) return;
+        if (child.type === TerminalComposerPalette) {
+          visit(
+            TerminalComposerPalette(
+              child.props as Parameters<typeof TerminalComposerPalette>[0],
+            ),
+          );
+          return;
+        }
         elements.push(child);
         const ref =
           (child as typeof child & { ref?: React.MutableRefObject<unknown> })
