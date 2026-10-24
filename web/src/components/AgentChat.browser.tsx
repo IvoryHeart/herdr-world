@@ -2,13 +2,17 @@ import { createRoot } from "react-dom/client";
 import { bridge, type BridgeControlMsg } from "../api";
 import type { Pane } from "../types";
 import { AgentChat, type Conversation } from "./AgentChat";
+import { ChatComposer } from "./chat/ChatComposer";
 import { useAgentHistoryWindow } from "./useAgentHistoryWindow";
 import { useConnectionClient } from "../useConnectionClient";
+import { activateTerminalComposerDraftScope } from "../terminalComposer";
 import type { ConversationStep } from "./chat/blocks/steps";
+import { EMPTY_WORLD_SOURCES, worldSourcesStore } from "../world/worldSources";
 import "../styles/tokens.css";
 import "../styles/base.css";
 import "../styles/vendor.css";
 import "./WorkspaceInspectorHost.css";
+import "../world/windows/windows.css";
 
 const failures: string[] = [];
 function check(condition: boolean, message: string) {
@@ -108,6 +112,7 @@ const message = (
  */
 const uploadRequests: {
   filename: string;
+  endpoint: string;
   answer(ok: boolean): void;
 }[] = [];
 class FixtureUploadRequest {
@@ -136,9 +141,12 @@ class FixtureUploadRequest {
       total: body.size,
       lengthComputable: true,
     } as ProgressEvent);
-    const filename = this.url.searchParams.get("filename") ?? "";
+    const filename =
+      this.url.searchParams.get("filename") ??
+      (body instanceof File ? body.name : "image.png");
     uploadRequests.push({
       filename,
+      endpoint: this.url.pathname,
       answer: (ok) => {
         this.status = ok ? 200 : 507;
         this.headers =
@@ -155,6 +163,19 @@ class FixtureUploadRequest {
 }
 
 async function run() {
+  if (location.search === "?limited-apis") {
+    check(
+      typeof crypto.randomUUID === "undefined" &&
+        typeof crypto.subtle === "undefined" &&
+        typeof navigator.clipboard === "undefined",
+      "Send and upload must work without secure-context-only APIs",
+    );
+  }
+  // Match App's production admission, including a background Inspector host.
+  // Without active scopes an invalid Chat key silently passes this fixture.
+  activateTerminalComposerDraftScope("spaces", 3, [
+    { connectionId: "test", connectionGeneration: 1 },
+  ]);
   const originalConnection = bridge.connection;
   const originalControl = bridge.onControl;
   const controls = new Set<(control: BridgeControlMsg) => void>();
@@ -351,31 +372,31 @@ async function run() {
         "value",
       )!.set!;
       setter.call(textarea, value);
+      textarea.setSelectionRange(value.length, value.length);
       textarea.dispatchEvent(new Event("input", { bubbles: true }));
     };
     type("Run the tests");
     await settle();
-    // As in World's composer, Enter is a new line: it neither sends nor is
-    // held back from the textarea.
-    const enter = new KeyboardEvent("keydown", {
-      key: "Enter",
-      bubbles: true,
-      cancelable: true,
-    });
-    textarea.dispatchEvent(enter);
-    await settle();
+    // Both plain and Shift+Enter keep native multiline editing in Chat.
+    for (const shiftKey of [false, true]) {
+      const enter = new KeyboardEvent("keydown", {
+        key: "Enter",
+        shiftKey,
+        bubbles: true,
+        cancelable: true,
+      });
+      textarea.dispatchEvent(enter);
+      await settle();
+      check(
+        !enter.defaultPrevented &&
+          !calls.some((call) => call.method === "agent_conversation.send"),
+        "Enter must preserve native multiline editing without sending",
+      );
+    }
     check(
-      !enter.defaultPrevented &&
-        !calls.some((call) => call.method === "agent_conversation.send"),
-      "Enter must start a new line, not send",
-    );
-    check(
-      /^Send \((Ctrl|Meta|Cmd|⌘)/.test(
-        container
-          .querySelector<HTMLButtonElement>('button[aria-label="Send"]')
-          ?.getAttribute("title") ?? "",
-      ),
-      "The Send button must name its keyboard shortcut",
+      container.querySelector<HTMLButtonElement>('button[aria-label="Send"]')
+        ?.title === "Send message (Ctrl+Enter or Cmd+Enter)",
+      "The shared Chat Send button must name its modified Enter shortcuts",
     );
     // The composer's send shortcut (Ctrl+Enter, Cmd+Enter on a Mac) sends.
     for (const modifier of ["ctrlKey", "metaKey"] as const) {
@@ -413,6 +434,7 @@ async function run() {
           text: "Run the tests",
           sent_at: sentAt,
           state: "pending",
+          queued: true,
           expected: "claude session shown",
           fingerprint: "a".repeat(64),
         },
@@ -444,8 +466,8 @@ async function run() {
     check(
       pendingBubbles.length === 1 &&
         pendingBubble?.textContent?.includes("Run the tests") === true &&
-        pendingBubble.textContent.includes("Delivered · waiting for claude"),
-      "A pending send must show only in its own conversation, as delivered and waiting",
+        pendingBubble.textContent.includes("Queued · sent to claude"),
+      "A pending send must show only in its own conversation, as queued without claiming delivery",
     );
     const matched = container.querySelector('[data-delivery="matched"]');
     check(
@@ -512,7 +534,7 @@ async function run() {
         sendButton?.disabled === true,
       "A misdelivered send must name the session that got it and pause Send",
     );
-    const unverified = container.querySelector(".is-unverified");
+    const unverified = container.querySelector('[data-delivery="unverified"]');
     check(
       unverified?.textContent?.includes("can no longer check") === true &&
         unverified.textContent.includes("Earlier message"),
@@ -554,6 +576,53 @@ async function run() {
       "A refused send must say why",
     );
     check(textarea.value === "Another", "A refused draft must stay");
+
+    // Commands use native admission and remain unchecked until transcript evidence.
+    sendResult = { status: "sent" };
+    type("/custom.plugin anything");
+    await settle();
+    container
+      .querySelector<HTMLButtonElement>('button[aria-label="Send"]')!
+      .click();
+    await settle();
+    check(
+      !calls.some((call) => call.method === "terminal.write"),
+      "Chat commands must use agent.prompt rather than terminal input",
+    );
+    check(
+      calls.some(
+        (call) =>
+          call.method === "agent_conversation.send" &&
+          call.params.text === "/custom.plugin anything",
+      ),
+      "Custom slash commands must use the conversation send adapter",
+    );
+    reply = {
+      ...reply,
+      deliveries: [
+        {
+          id: "command-1",
+          text: "/custom.plugin anything",
+          sent_at: sentAt,
+          fingerprint: "a".repeat(64),
+          expected: "claude session shown",
+          state: "pending",
+          kind: "command",
+        },
+      ],
+    };
+    push();
+    await settle();
+    check(
+      container
+        .querySelector('.agent-chat-command-receipt[data-delivery="unchecked"]')
+        ?.textContent?.includes("sent, not checked") === true,
+      "A command receipt must not claim its effect was checked",
+    );
+    reply = { ...reply, deliveries: [] };
+    push();
+    type("Another");
+    await settle();
 
     // Attachments upload with a chip each; Send waits for them.
     const originalRequest = window.XMLHttpRequest;
@@ -617,7 +686,7 @@ async function run() {
         "A finished upload must show a done chip",
       );
       check(
-        textarea.value === "Another /uploads/report.txt ",
+        textarea.value.trim() === "Another /uploads/report.txt",
         "A finished upload must add its path to the message",
       );
       check(!send().disabled, "Send must be enabled once uploads finish");
@@ -685,6 +754,44 @@ async function run() {
           container.querySelector<HTMLTextAreaElement>("textarea")?.value ?? ""
         ).includes("/uploads/log.txt"),
         "A retry after Chat reopened must reach the open draft",
+      );
+
+      // Clipboard image events work without navigator.clipboard permissions.
+      const clipboard = new DataTransfer();
+      clipboard.items.add(
+        new File(["synthetic image"], "screenshot.png", {
+          type: "image/png",
+        }),
+      );
+      container.querySelector("textarea")!.dispatchEvent(
+        new ClipboardEvent("paste", {
+          bubbles: true,
+          cancelable: true,
+          clipboardData: clipboard,
+        }),
+      );
+      await settle();
+      check(
+        uploadRequests[6]?.endpoint.endsWith("/upload-image") === true,
+        "Pasting a screenshot must start the owning host's image upload",
+      );
+      uploadRequests[6]!.answer(true);
+      await settle();
+      const attachedText =
+        container.querySelector<HTMLTextAreaElement>("textarea")!.value;
+      check(
+        attachedText.includes("/uploads/screenshot.png"),
+        "The pasted screenshot's path must reach this conversation's draft",
+      );
+      const sendsBeforeAttachments = count("agent_conversation.send");
+      send().click();
+      await settle();
+      check(
+        count("agent_conversation.send") === sendsBeforeAttachments + 1 &&
+          calls
+            .filter((call) => call.method === "agent_conversation.send")
+            .slice(-1)[0]?.params.text === attachedText.trim(),
+        "Send must submit the draft including uploaded files and screenshots exactly once",
       );
     } finally {
       window.XMLHttpRequest = originalRequest;
@@ -1204,7 +1311,9 @@ async function run() {
       await new Promise((resolve) => setTimeout(resolve, 100));
     const now = container.querySelector(".agent-chat-now");
     check(
-      now?.querySelector(".agent-chat-status")?.textContent === "Working" &&
+      now?.querySelector(".agent-chat-state-word")?.textContent === "Working" &&
+        now.querySelector('.agent-chat-state-circle[title="Working"]') !==
+          null &&
         now.querySelector(".agent-chat-now-title")?.textContent ===
           "Running tests" &&
         /^[1-9]\d*s$/.test(
@@ -1212,6 +1321,27 @@ async function run() {
         ),
       `The Now bar must show the status, task and time (${now?.textContent})`,
     );
+    container.style.width = "390px";
+    container.classList.add("is-town-skin");
+    await settle();
+    const nowButtons = [
+      ...now!.querySelectorAll<HTMLButtonElement>("button"),
+    ].map((button) => button.getBoundingClientRect());
+    check(
+      nowButtons.every(
+        (rect) =>
+          Math.abs(
+            rect.top +
+              rect.height / 2 -
+              (nowButtons[0]!.top + nowButtons[0]!.height / 2),
+          ) < 2,
+      ) &&
+        getComputedStyle(now!.querySelector(".agent-chat-state-circle")!)
+          .display !== "none",
+      "Town's phone Now row must keep its circle, Stop, refresh and Details on one line",
+    );
+    container.classList.remove("is-town-skin");
+    container.style.width = "800px";
     const runningRow = container.querySelector(".agent-chat-running");
     check(
       runningRow?.textContent?.includes("Bash") === true &&
@@ -1343,6 +1473,24 @@ async function run() {
         list.scrollTop < 4,
         `a new message moved a reader who scrolled up at ${width}px`,
       );
+      check(
+        jump()?.textContent?.includes("1 new") === true,
+        "Catch-up must count a new agent message while reading back",
+      );
+      reply = conversation([
+        ...long,
+        message(`long-${width}-new`, "assistant", "A new message lands."),
+        message(`long-${width}-mine`, "user", "My follow-up"),
+        message(`long-${width}-notice`, "assistant", "Compacted"),
+      ]);
+      reply.messages![reply.messages!.length - 1]!.kind = "notice";
+      push();
+      await settle();
+      check(
+        jump()?.textContent?.includes("1 new") === true,
+        "Own messages and compaction notices must not inflate catch-up",
+      );
+
       jump()!.click();
       await settle();
       check(
@@ -1399,6 +1547,25 @@ async function run() {
     // and each change brings only what changed, so nothing re-reads or
     // re-renders the whole conversation. No task may block for 200 ms.
     {
+      worldSourcesStore.publishSettled({
+        ...EMPTY_WORLD_SOURCES,
+        items: [
+          {
+            key: "github:pr:example/project#42",
+            source: "github",
+            kind: "pull_request",
+            ref: "example/project#42",
+            title: "Fix Chat",
+            number: 42,
+            repo: "example/project",
+            url: "https://github.com/example/project/pull/42",
+            lane: "review",
+            status: "OPEN",
+            roles: ["author"],
+            updatedAt: 1,
+          },
+        ],
+      });
       const longTasks: number[] = [];
       const observer = new PerformanceObserver((list) => {
         for (const entry of list.getEntries()) longTasks.push(entry.duration);
@@ -1413,7 +1580,10 @@ async function run() {
           id: `busy-${index}`,
           role: index % 2 ? "assistant" : "user",
           kind: "message",
-          text: `Busy message ${index}: **the queue** keeps its order.`,
+          text:
+            index === 1
+              ? "READY #42"
+              : `Busy message ${index}: **the queue** keeps its order.`,
           sent_at: "2026-10-22T09:00:00Z",
         });
         for (let tool = 0; tool < 15; tool += 1)
@@ -1492,6 +1662,12 @@ async function run() {
       push();
       await settle();
       await settle();
+      check(
+        !!container.querySelector(
+          '.pr-card[aria-label="Pull request example/project#42"]',
+        ),
+        "The busy fixture did not exercise the PR block registry",
+      );
       longTasks.length = 0;
       for (let step = 0; step < 20; step += 1) {
         const id = `busy-new-${step}`;
@@ -1681,6 +1857,29 @@ async function run() {
         !!container.querySelector(".agent-history-chat pre"),
         `The phone check needs its code block rendered: ${container.querySelector(".agent-history-chat-bubble")?.innerHTML.slice(0, 300)}`,
       );
+      const context = list.querySelector<HTMLElement>(".quest-log.is-compact");
+      const contextToggle =
+        context?.querySelector<HTMLButtonElement>(".quest-log-head");
+      check(
+        !!context &&
+          contextToggle?.getAttribute("aria-expanded") === "false" &&
+          !context.querySelector(".quest-log-steps"),
+        "Quest context must start collapsed inside the scrolling conversation",
+      );
+      check(
+        getComputedStyle(context!).position !== "sticky",
+        "Quest context must not form another sticky bar",
+      );
+      contextToggle!.focus();
+      contextToggle!.click();
+      await settle();
+      check(
+        contextToggle!.getAttribute("aria-expanded") === "true" &&
+          !!context!.querySelector(".quest-log-steps .is-active"),
+        "Quest objectives must expand inline from a keyboard-reachable button",
+      );
+      contextToggle!.click();
+      await settle();
       // Every element, not a chosen few: whatever widens the window counts.
       const wider = [
         ...container.querySelectorAll<HTMLElement>(".agent-chat *"),
@@ -1998,7 +2197,7 @@ async function run() {
 
     // A send not yet in the transcript (a busy harness writes a queued
     // message only when the agent takes it up) sits at its send time, never
-    // below replies written since, as delivered and waiting. A multi-line
+    // below replies written since, as queued without claiming delivery. A multi-line
     // turn Claude Code wrapped as a paste shows the words, marked pasted.
     {
       const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
@@ -2070,8 +2269,8 @@ async function run() {
         (
           container.querySelector('[data-delivery="pending"]')?.textContent ??
           ""
-        ).includes("Delivered · waiting for claude"),
-        "An unseen send must read as delivered and waiting",
+        ).includes("Sent, not seen in the transcript"),
+        "An unseen send must remain honest without claiming delivery",
       );
       check(
         !(container.textContent ?? "").includes("pasted_content") &&
@@ -2163,6 +2362,45 @@ async function run() {
       count("agent_conversation.unwatch") === unwatched + 1,
       "Hiding Chat must stop watching the pane",
     );
+    for (const width of [390, 320]) {
+      container.style.width = `${width}px`;
+      root.render(
+        <ChatComposer
+          client={bridge.connection()}
+          pane={pane("idle")}
+          fingerprint="placeholder-fixture"
+          recipient="Mira-claude"
+          notice=""
+          onSubmit={async () => {}}
+          onError={() => {}}
+        />,
+      );
+      await settle();
+      container
+        .querySelector<HTMLButtonElement>(
+          'button[aria-label="More composer controls"]',
+        )!
+        .click();
+      await settle();
+      Array.from(document.querySelectorAll("button"))
+        .find((button) => button.textContent?.includes("Browse commands"))!
+        .click();
+      await settle();
+      const command = container.querySelector<HTMLButtonElement>(
+        ".terminal-composer-command-list button",
+      )!;
+      check(
+        getComputedStyle(command).display === "flex" &&
+          command.getBoundingClientRect().height >= 44,
+        "Chat must reuse styled command rows on desktop as well as phones",
+      );
+      const editor = container.querySelector<HTMLTextAreaElement>("textarea")!;
+      check(
+        editor.placeholder === "Message Mira-claude…" &&
+          editor.clientHeight + 1 >= editor.scrollHeight,
+        `The ${width}px Chat editor must show its full recipient placeholder`,
+      );
+    }
   } finally {
     root.unmount();
     container.remove();

@@ -226,30 +226,52 @@ not embed or launch a separately branded Roamgate application.
 - **THEN** only that runtime reconnects and newly opened resources require current target admission,
   without retiring other hosts or replaying the stale action
 
-### Requirement: Agent checkout source-control context
+### Requirement: Agent worktree source-control context
 
-For an actionable agent Inspector, World SHALL read Agent checkout context only from
-a complete versioned report whose session fingerprint matches the exact active pane
-session on the Inspector's connection and generation. It SHALL use a bounded
-read-only Git query on that reported checkout, show its branch and changed files,
-and keep Workspace changes as an explicit separate choice. World SHALL NOT infer
-the checkout from workspace or terminal CWD, another session, or another host. A
-reported HTTPS PR link SHALL be labelled Reported PR. Agent checkout SHALL expose no
-Git mutations. Reports omit TTL and Clear; they become unavailable on session
-replacement, pane closure, or Herdr restart.
+An agent Inspector's Files and Changes SHALL share one selected worktree,
+independently of its workspace launch directory. World SHALL rank evidenced
+candidates from live Herdr pane foreground_cwd, then that exact occupant's own
+session/transcript/Codex rollout cwd or session-bound checkout report, then its
+branch matched within an explicitly known repository's Git worktree list.
+Roots SHALL be canonicalized on the target runtime, including SSH. Detached HEAD
+SHALL remain a valid root with null branch. An outside-Git or unreadable cwd SHALL
+remain attributed unconfirmed evidence, without guessed sibling repositories.
 
-#### Scenario: Agent checkout differs from workspace changes
+The observation SHALL carry connection, generation, pane/terminal and session,
+revision/time, source/reference/basis and resolved, ambiguous, unavailable or
+stale state. A client SHALL submit a candidate identity plus qualified subject
+and revision; the service SHALL resolve and revalidate it for RPC and HTTP file
+reads, previews, downloads and actions. Old occupants, moved/replaced roots or
+retired generations SHALL NOT fall back to another root or host.
 
-- **WHEN** two agents in one workspace report different current-session worktrees
-- **THEN** each Inspector shows its own reported branch and changed files, while
-  Workspace changes remains separately labelled and selectable
+The existing location line SHALL show the selected tree/branch and source mark.
+Its popover SHALL offer Worktree radio choices and Refresh, with phone tap
+rows at least 44px. Equal-rank ambiguity SHALL require an explicit choice.
+Stale evidence SHALL remain visible but SHALL NOT admit resources. The empty
+Files/Changes state SHALL open the same chooser. Other entries from that scoped
+worktree list MAY be offered as worktree_list viewer choices; they SHALL NOT
+become automatic bindings or claims of agent/branch ownership. Selection SHALL
+apply to Files and Changes together and remain separate from observed claims.
 
-#### Scenario: Checkout report is absent or replaced
+Existing explicit checkout reports SHALL retain versioned session guards and
+Reported PR attribution; viewing another root SHALL NOT rewrite those reports.
+Observers SHALL refresh from events or explicit demand rather than polling.
+Unchanged source bindings MAY reuse a bounded observation; selected roots and
+inferred branch ambiguity SHALL still be revalidated at operation boundaries.
 
-- **WHEN** metadata is absent, malformed, lost after restart, or its session or
-  generation changes while a request is pending
-- **THEN** Agent checkout shows an unavailable reason and a Workspace changes
-  choice, and no old checkout, PR, or changed files enter that Inspector
+#### Scenario: Agent changes directory or uses another linked checkout
+
+- **WHEN** an agent launched in the main checkout has stronger live/session
+  evidence for a linked worktree, or the user deliberately chooses a listed tree
+- **THEN** Files, Changes and HTTP previews use that same qualified selected root,
+  and the location popover explains the source without asserting ownership
+
+#### Scenario: Worktree evidence conflicts or expires
+
+- **WHEN** equal-rank candidates conflict, a source/root changes while a request
+  is pending, or the occupant/generation is replaced
+- **THEN** no stale or guessed default admits access; the chooser retains
+  attributable evidence and resource access waits for a current selection
 
 ### Requirement: Terminal file links use the originating Inspector
 
@@ -1405,10 +1427,12 @@ when it is waiting), answer options only when the pane's latest lines present a
 numbered menu or a yes/no prompt, and actions to reply, open the Inspector, open
 the terminal from the peek's header and go to the next waiting agent. Tapping an
 agent, or the table of an agent away at reception or in the lounge, SHALL open
-what the Town opens preference names: the agent's one window, World's
-Inspector, on its Chat view (the default), or its terminal; tapping a room SHALL
-only zoom to it. Activating an agent or its table, the needs-you list, N and
-Next SHALL open the same window on Chat; no separate peek chat window SHALL
+what the Agents open preference names: the agent's one window, World's
+Inspector, on its Chat view (the default) when Chat reads the agent's harness,
+otherwise its terminal; tapping a room SHALL only zoom to it. Activating an
+agent or its table, the needs-you list, N and Next SHALL open the agent the same
+way, and so SHALL opening an agent's card or pane row in Board and an agent in
+Desk; a plain shell SHALL open its terminal. No separate peek chat window SHALL
 exist, and the peek card SHALL only preview an agent on hover. In Town the
 Inspector SHALL dock right by default and keep the dock each window was left
 with. Its top selector SHALL list Chat, Terminal, Changes and Files (Commits
@@ -1452,14 +1476,21 @@ Opening the terminal from a peek SHALL follow the Inspector presentation prefere
 
 #### Scenario: Tap the table of an agent waiting at reception
 
-- **WHEN** Town opens Chat and the user taps the table of an agent that is
+- **WHEN** Agents open names Chat and the user taps the table of an agent that is
   waiting at reception
 - **THEN** that agent's window opens on Chat, the agent walks back to its desk,
   and no terminal or peek card opens
 
+#### Scenario: Board opens an agent on Chat
+
+- **WHEN** Agents open names Chat and the user opens an agent's tab in Board
+  whose harness Chat reads, then a plain shell's tab and an agent whose harness
+  Chat cannot read
+- **THEN** the first window opens on Chat and the other two on their terminals
+
 #### Scenario: Town opens Terminal
 
-- **WHEN** the user sets Town opens to Terminal and taps the table of a
+- **WHEN** the user sets Agents open to Terminal and taps the table of a
   finished agent waiting at reception
 - **THEN** that agent's terminal opens, no peek opens, the agent walks back to
   its desk, and its completion is not marked reviewed
@@ -1469,6 +1500,40 @@ Opening the terminal from a peek SHALL follow the Inspector presentation prefere
 - **WHEN** a blocked agent's latest lines contain neither a numbered menu nor a
   yes/no prompt
 - **THEN** the peek offers Reply and the terminal without answer buttons
+
+### Requirement: Shared Chat composer and honest send receipts
+
+Chat SHALL reuse TerminalComposer, its harness command palette, editing and uploads,
+with a separate draft qualified by connection, runtime, terminal, pane and session.
+Chat SHALL hide Direct mode, Insert draft and the terminal key bar. Enter SHALL
+insert a new line. Ctrl+Enter, Cmd+Enter and the paper-plane Send button SHALL send.
+The paperclip SHALL attach files. Typing `/` or choosing Browse commands in the
+vertical-ellipsis controls menu SHALL open the shared harness command palette.
+Submissions SHALL use the bound conversation's
+agent prompt rather than terminal insertion. Every slash command SHALL be allowed.
+
+Native working-state admission SHALL show a queued bubble with recipient and send
+time until transcript evidence arrives. World SHALL NOT add a second send queue.
+Blocked sends SHALL preserve the draft and show the refusal. Commands without a
+literal own-transcript receipt SHALL say **sent, not checked**; neither a session
+switch nor a rewritten user turn SHALL claim their effect was checked or misdelivered.
+
+The current quest SHALL appear at the start of its section inside the scrolling
+conversation, collapsed to a title/progress row. Its keyboard-reachable expand
+button SHALL expose aria-expanded and reveal objectives inline. The row SHALL
+repeat no agent identity or status and SHALL NOT be sticky.
+
+While the reader is scrolled away, the existing floating catch-up button SHALL
+count only new agent messages, excluding own sends, queued bubbles, tool activity
+and transcript notices. Reaching the bottom or changing sessions SHALL clear it.
+Older-page loading SHALL NOT increment the count. Focused answer keys and the
+existing double-Escape stop SHALL retain their existing scope.
+
+#### Scenario: A command intentionally switches sessions
+
+- **WHEN** a bound Chat sends a slash command and the harness switches sessions
+- **THEN** its slim receipt remains **sent, not checked** without pausing normal sends
+  as a misdelivery; no command effect is inferred
 
 ### Requirement: Town peeks show recent chatter and take replies
 

@@ -1,12 +1,6 @@
 /* The Now bar: status, the task in the terminal title, time, and Stop. */
 .agent-chat-now {
-  flex-wrap: wrap;
-}
-
-.agent-chat-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
+  flex-wrap: nowrap;
 }
 
 .agent-chat-now-title {
@@ -20,6 +14,10 @@
 }
 
 .agent-chat-now-note {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--muted);
   font-size: 11.5px;
 }
@@ -61,7 +59,7 @@
 /* The status and task: the Now bar's one live region. */
 .agent-chat-now-live {
   display: flex;
-  flex: 1 1 12em;
+  flex: 1 1 0;
   align-items: center;
   gap: 6px;
   min-width: 0;

@@ -1,3 +1,5 @@
+import { createAgentWorktree } from "../agent/worktree";
+import { createWorktreeGit } from "../agent/worktree-git";
 import {
   createTaskEventTracker,
   type TaskEvent,
@@ -182,6 +184,17 @@ export function createLegacyConnectionRuntime(args: {
     runProcessWithCodeTimeout,
     shQuote,
   });
+  const agentWorktree = unixOnlyHandlers(
+    remotePlatform,
+    "Agent worktree",
+    createAgentWorktree({
+      connectionId: identity.id,
+      generation: args.connectionGeneration ?? 0,
+      herdr,
+      ...createWorktreeGit({ sshHost, runProcessWithCodeTimeout, shQuote }),
+      readSessionMetadata: agentSessions.readWorktreeMetadata,
+    }),
+  );
   const worktreeParents = createWorktreeParentStore({
     connectionId: identity.id,
     herdr,
@@ -206,6 +219,7 @@ export function createLegacyConnectionRuntime(args: {
       runProcessWithCodeTimeout,
       shQuote,
       lastStepBaselines,
+      resolveAgentWorktreeTarget: agentWorktree.resolve,
     }),
   );
   const status = createStatusEnricher({
@@ -763,6 +777,7 @@ export function createLegacyConnectionRuntime(args: {
     terminalBridge,
     agentSessions,
     agentCheckout,
+    agentWorktree,
     recoveryIdentity,
     taskNotificationSource,
     startTransport,

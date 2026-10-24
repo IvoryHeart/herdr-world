@@ -1,10 +1,11 @@
+import { agentWorktreeHttpEndpoint } from "./agentWorktreeClient";
 import type { ConnectionClient } from "./api";
 import { connectionHttpPath } from "./connectionHttp";
 import { relativePathWithinCheckout } from "./workspaceResource";
 
 type FileUrlClient = Pick<
   ConnectionClient,
-  "connectionId" | "serverRuntimeGeneration"
+  "connectionId" | "serverRuntimeGeneration" | "agentWorktree"
 >;
 
 export function workspaceFileUrl(
@@ -16,7 +17,7 @@ export function workspaceFileUrl(
   const url = new URL(
     connectionHttpPath(
       client.connectionId,
-      "/file/download",
+      agentWorktreeHttpEndpoint(client, "/file/download"),
       client.serverRuntimeGeneration,
     ),
     "http://herdr.local",

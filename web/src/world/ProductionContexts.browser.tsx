@@ -645,7 +645,7 @@ async function run() {
             selectedId={selectedId}
             conversationNodeIds={selectedId ? [selectedId] : []}
             onSelect={() => {}}
-            onOpenTerminal={async () => {}}
+            onOpen={async () => {}}
             onSelectedAnchorChange={(anchor) => {
               anchored = !!anchor;
             }}

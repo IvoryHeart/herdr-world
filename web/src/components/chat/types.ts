@@ -82,6 +82,8 @@ export type UnconfirmedReason =
   | "still_showing";
 
 export type ConversationDelivery = {
+  kind?: "command";
+  queued?: boolean;
   id: string;
   text: string;
   sent_at: string;

@@ -1,0 +1,80 @@
+.agent-worktree-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.agent-worktree-line-text {
+  display: inline-flex;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.agent-worktree-line-name {
+  min-width: 0;
+  direction: rtl;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+}
+.agent-worktree-line-branch {
+  flex: 0 1 auto;
+  max-width: 65%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.agent-worktree-line.is-stale {
+  color: var(--muted);
+}
+.agent-worktree-line.is-ambiguous {
+  color: var(--warning-text);
+}
+.agent-worktree-picker {
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-soft);
+  margin-bottom: 10px;
+}
+.agent-worktree-picker fieldset {
+  padding: 0;
+  border: 0;
+  margin: 0;
+}
+.agent-worktree-picker legend {
+  padding: 0;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+.agent-worktree-choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 4px;
+  cursor: pointer;
+}
+.agent-worktree-choice > span {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.agent-worktree-choice-path {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agent-worktree-choice small,
+.agent-worktree-picker p {
+  color: var(--muted);
+  font-size: 12px;
+}
+.agent-worktree-picker p {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 640px), (pointer: coarse) {
+  .agent-worktree-choice {
+    min-height: 44px;
+  }
+}

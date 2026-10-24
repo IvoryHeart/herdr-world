@@ -34,6 +34,9 @@ import {
   worldIntentViews,
   worldInspectorContext,
   worldIntentInitialView,
+  defaultOpenView,
+  ownerReady,
+  selectionShowsProfile,
   snapshotPriorityForConversation,
   snapshotPriorityForSurface,
   focusWorldNode,
@@ -585,6 +588,7 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
     if (signal?.aborted) return Promise.resolve(false);
     const node = world.nodeById.get(id);
     const nodeId = id;
+    const opens = node ? defaultOpenView(node) : null;
     if (
       view === "town" &&
       officeInspectorPresentation === "floating" &&
@@ -603,9 +607,9 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
         existing &&
         worldInspectorWindowId(existing) === dockedInspectorIdRef.current
       ) {
-        return applySelection(nodeId, null, true, world, signal);
+        return applySelection(nodeId, opens, true, world, signal);
       }
-      return openFloatingInspector(node, signal)
+      return openFloatingInspector(node, signal, opens ?? "terminal")
         .then(() => true)
         .catch((cause) => {
           if (!signal?.aborted) {
@@ -616,7 +620,7 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
           return false;
         });
     }
-    return applySelection(nodeId, null, true, world, signal);
+    return applySelection(nodeId, opens, true, world, signal);
   };
   const workspaceSurfaceSelectionHandlerRef = useRef<
     (selection: WorkspaceSurfaceSelection) => Promise<boolean>
@@ -822,6 +826,7 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
   const openFloatingInspector = async (
     node: WorldObjectNode,
     signal?: AbortSignal,
+    requested: InspectorView = "terminal",
   ) => {
     if (signal?.aborted) {
       throw new Error("Inspector activation was superseded");
@@ -832,8 +837,8 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
         worldInspectorWindowIdForNode(node),
     );
     if (existing) {
-      const requestedView = existing.availableViews.includes("terminal")
-        ? "terminal"
+      const requestedView = worldIntentViews(node).includes(requested)
+        ? requested
         : undefined;
       if (worldInspectorWindowId(existing) === dockedInspectorId) {
         if (
@@ -867,7 +872,7 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
       focusInspectorTerminal(worldInspectorWindowId(existing));
       return;
     }
-    const conversation = conversationFor(node, "terminal");
+    const conversation = conversationFor(node, requested);
     if (!conversation) throw new Error("This Inspector is no longer available");
     const requestId = intentRequestRef.current + 1;
     intentRequestRef.current = requestId;
@@ -900,8 +905,8 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
   // Preview an agent in the Desk's reading pane without moving keyboard focus
   // out of the queue; opening (above) also focuses its terminal.
   const previewTerminalById = async (id: string) => {
-    if (!world.nodeById.get(id)) return;
-    await applySelection(id, "terminal", false, world);
+    const node = world.nodeById.get(id);
+    if (node) await applySelection(id, defaultOpenView(node), false, world);
   };
   const closeDeskReading = () => {
     if (contextRailInspector) closeInspector(contextRailInspector);
@@ -911,10 +916,12 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
     id: string,
     signal?: AbortSignal,
     candidateWorld = world,
+    requested: InspectorView | null = "terminal",
   ) => {
     if (signal?.aborted) throw new Error("Terminal activation was superseded");
     const node = candidateWorld.nodeById.get(id);
     if (!node) throw new Error("This terminal is no longer available");
+    const opened = requested ?? defaultOpenView(node) ?? "terminal";
     try {
       const existing = inspectorConversationsRef.current.find(
         (conversation) =>
@@ -931,20 +938,20 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
               worldInspectorWindowId(existing) ===
                 dockedInspectorIdRef.current)))
       ) {
-        if (
-          !(await applySelection(id, "terminal", true, candidateWorld, signal))
-        ) {
+        if (!(await applySelection(id, opened, true, candidateWorld, signal))) {
           throw new Error("This terminal could not be opened");
         }
         return;
       }
-      await openFloatingInspector(node, signal);
+      await openFloatingInspector(node, signal, opened);
     } catch (cause) {
       if (!signal?.aborted)
         setIntentError(cause instanceof Error ? cause.message : String(cause));
       throw cause;
     }
   };
+  const openNodeById = (id: string, signal?: AbortSignal) =>
+    openTerminalById(id, signal, world, null);
   useWorldCreatedTerminal({ active, intentRequestRef, openTerminalById });
 
   const closeInspector = (conversation: WorldInspectorConversation) => {
@@ -1052,14 +1059,7 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
     onDockedInspectorIdChange(null);
   };
 
-  const selectedLeaseCurrent =
-    selected &&
-    connectionSelection.connections.some(
-      (owner) =>
-        owner.id === selected.connectionId &&
-        owner.state === "ready" &&
-        owner.generation === selected.generation,
-    );
+  const selectedLeaseCurrent = ownerReady(selected, connectionSelection);
   // Only a host that disconnects or restarts cancels opening. A snapshot taken
   // while Herdr changes (a tab being created, for example) is briefly stale and
   // not actionable; treating that as new intent would cancel the new tab's
@@ -1071,12 +1071,6 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
     }
   }, [selectedLeaseCurrent, selected, intentRequestRef]);
 
-  const showSelectionProfile = Boolean(
-    selected &&
-      (selected.kind === "host" ||
-        !currentSelectionGeneration ||
-        !selected.actionable),
-  );
   return {
     ...props,
     openInBackground,
@@ -1132,10 +1126,14 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
     previewTerminalById,
     closeDeskReading,
     openTerminalById,
+    openNodeById,
     closeInspector,
     focusFloatingInspector,
     retireInspectors,
-    showSelectionProfile,
+    showSelectionProfile: selectionShowsProfile(
+      selected,
+      Boolean(currentSelectionGeneration),
+    ),
   };
 }
 
