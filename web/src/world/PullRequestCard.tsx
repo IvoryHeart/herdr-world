@@ -1,6 +1,10 @@
 import { ChevronRight, Copy, ExternalLink } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
+  freshPullRequestDetail,
+  PR_DETAILS_UNAVAILABLE,
+} from "../../../shared/pullRequestFreshness";
+import {
   actionablePullRequest,
   confirmedAt,
   mergeCommand,
@@ -18,6 +22,7 @@ import {
 } from "../../../shared/pullRequests";
 import { workBadgeText, type WorkItem } from "../../../shared/worldSources";
 import { runPullRequestVerb } from "./worldSources";
+import { PullRequestDetailHealth } from "./PullRequestDetailHealth";
 import "./pullRequestCard.css";
 
 /**
@@ -82,6 +87,7 @@ export function PullRequestCard({
   const failing = rules.filter((rule) => rule.state === "fail");
   const ready = rules.every((rule) => rule.state === "pass");
   const actionable = actionablePullRequest(item);
+  const detailFresh = freshPullRequestDetail(item);
   const blocked = mergeUnavailable(item);
   // GitHub's answer replaces "Merged" once the source shows the change.
   const seen = `${item.lane}|${item.draft}|${item.headSha}`;
@@ -96,12 +102,23 @@ export function PullRequestCard({
       setState({ kind: "failed", detail: HEAD_CHANGED });
     }
   }, [sheet, item.headSha]);
+  useEffect(() => {
+    if (sheet?.verb === "merge" && !detailFresh) {
+      setSheetState(null);
+      setState({ kind: "failed", detail: PR_DETAILS_UNAVAILABLE });
+    }
+  }, [sheet, detailFresh]);
 
   const run = async (
     verb: PullRequestVerb,
     head: string | undefined,
     comment?: string,
   ) => {
+    if (verb === "merge" && !detailFresh) {
+      setSheet(null);
+      setState({ kind: "failed", detail: PR_DETAILS_UNAVAILABLE });
+      return;
+    }
     setSheet(null);
     setState({ kind: "running", verb });
     try {
@@ -123,7 +140,9 @@ export function PullRequestCard({
   };
 
   const running = state.kind === "running";
-  const mergeControl = !actionable ? null : blocked ? (
+  const mergeControl = !actionable ? null : !detailFresh ? (
+    <span>Refresh Sources before merge</span>
+  ) : blocked ? (
     <MergeCommand item={item} reason={blocked} />
   ) : (
     <button
@@ -161,9 +180,10 @@ export function PullRequestCard({
         {item.pr?.reviewers.map((entry) => (
           <span
             key={entry.sourceId || entry.url || entry.reviewer}
-            data-outcome={entry.outcome}
+            data-outcome={detailFresh ? entry.outcome : "unknown"}
           >
             {entry.reviewer ?? "Unknown reviewer"}{" "}
+            {detailFresh ? "" : "cached "}
             {entry.outcome === "confirmed"
               ? entry.commitsSince === 0
                 ? "confirmed"
@@ -185,6 +205,7 @@ export function PullRequestCard({
           </span>
         ) : null}
       </p>
+      {actionable ? <PullRequestDetailHealth item={item} /> : null}
       {attention ? (
         <p className="pr-card-attention" data-reason={attention.reason}>
           {attention.reason === "stalled"
@@ -293,7 +314,7 @@ export function PullRequestCard({
 }
 
 function CheckDots({ item }: { item: WorkItem }) {
-  const checks = item.pr?.checks;
+  const checks = freshPullRequestDetail(item) ? item.pr?.checks : undefined;
   if (!checks?.length)
     return item.checks && item.checks !== "none" ? (
       <span data-state={item.checks}>CI {item.checks}</span>

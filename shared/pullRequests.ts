@@ -1,4 +1,5 @@
 import type { WorkItem } from "./worldSources";
+import { freshPullRequestDetail } from "./pullRequestFreshness";
 
 /**
  * What World reads about one of your open pull requests beyond its lane, and
@@ -84,7 +85,7 @@ export function actionablePullRequest(item: WorkItem) {
 }
 
 export function pullRequestReadiness(item: WorkItem): ReadinessRule[] {
-  const detail = item.pr;
+  const detail = freshPullRequestDetail(item) ? item.pr : undefined;
   const failing = detail?.checks.filter((check) => check.state === "fail");
   const running = detail?.checks.filter((check) => check.state === "pending");
   return [
@@ -130,6 +131,13 @@ export function pullRequestReadiness(item: WorkItem): ReadinessRule[] {
 
 function findingsRule(item: WorkItem): ReadinessRule {
   const label = "Every finding confirmed";
+  if (!freshPullRequestDetail(item))
+    return rule(
+      "findings",
+      label,
+      "unknown",
+      "Details stale or unavailable; refresh Sources",
+    );
   const reviewers = item.pr?.reviewers;
   if (!reviewers) return rule("findings", label, "unknown", "Not read yet");
   if (!reviewers.length)

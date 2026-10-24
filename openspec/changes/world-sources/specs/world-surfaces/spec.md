@@ -29,6 +29,22 @@ SHALL remain visible with its source link and SHALL NOT confirm readiness.
 Reviewed heads SHALL come only from review commit metadata or an unambiguous
 explicit SHA, never timestamps; conflicting claims SHALL remain unknown.
 
+Pull request detail SHALL have its own source, head and read-time qualification,
+independent of successful list refreshes. Failed, partial, expired or deferred
+detail SHALL NOT establish current readiness or authorize a merge. Matching
+cached evidence MAY remain visible as stale with its original observation time.
+The service SHALL retain bounded ten-item detail requests and at most twenty
+details per refresh, isolate retired configuration caches, and revalidate source
+generation, detail expiry and exact-head admission before dispatching a merge.
+
+#### Scenario: List succeeds while expired detail fails
+- **WHEN** an unchanged pull request list succeeds but its expired detail read
+  fails or returns only a partial response
+- **THEN** matching old evidence remains labelled stale, findings and screenshot
+  readiness remain unknown, and a list success does not update its read time
+- **AND** Refresh Sources can recover current detail within the existing bounds;
+  a changed head never inherits the old detail
+
 #### Scenario: Prerequisite missing
 - **WHEN** `gh` is not signed in, or Jira has no site, email or token
 - **THEN** that source shows not connected with how to connect it, and other

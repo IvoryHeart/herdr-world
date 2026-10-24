@@ -59,6 +59,13 @@ const item = (fields: Partial<WorkItem> = {}): WorkItem => ({
   review: "review_required",
   mergeable: "mergeable",
   pr: detail(),
+  prObservation: {
+    source: "github",
+    state: "fresh",
+    headSha: HEAD,
+    readAt: 1,
+    expiresAt: 600_001,
+  },
   ...fields,
 });
 

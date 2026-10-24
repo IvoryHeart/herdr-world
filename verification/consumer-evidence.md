@@ -129,3 +129,24 @@ replacement/cleanup cancellation. Continuing default retry does not establish
 infinite progress or model OS/network failure. Static markup/injected recovery
 verbs check explicit truthful controls; real viewport and SSH outcomes remain
 closing browser/platform acceptance. See coverage.json for the required tests.
+
+### PR detail freshness (Q43, #372)
+
+Successful list reads do not renew detail authority. Exact head/list-stamp
+matching, a bounded original read/expiry time and complete detail coverage are
+required; expired, failed, partial and deferred detail cannot pass findings or
+screenshot readiness or admit a merge. Cached links remain qualified display
+evidence. Source reconfiguration isolates cache writers, and a generation or
+expiry change during the live native pre-merge check prevents dispatch.
+
+Injected clock/process regressions in `pullRequestFreshness.test.ts` exercise
+expiry plus failure, unchanged cache reuse, changed head, null/missing sections,
+partial batches, recovery, 10/20 bounds and unread-tail ordering, disable/window
+reconfiguration cache races, source failure and pre-merge expiry/retirement.
+Shared wire/readiness and browser decoder/static card fixtures independently
+check malformed qualification and stale-versus-current presentation. Existing
+native review/head action tests remain mandatory. This bounded cache/projection
+boundary is directly exercised with controlled clock/deferred responses rather
+than a new model that duplicates those external-format rules. It proves no
+complete GitHub history, network liveness, or operation rollback after native
+dispatch; full behavioral verification and browser/CI acceptance still apply.

@@ -1,4 +1,8 @@
 import { useSyncExternalStore } from "react";
+import {
+  parsePullRequestDetailObservation,
+  qualifyPullRequestDetail,
+} from "../../../shared/pullRequestFreshness";
 import type {
   PullRequestAction,
   PullRequestCheck,
@@ -307,6 +311,7 @@ function parseItem(value: unknown): WorkItem | null {
   )
     return null;
   const detail = parseDetail(item.pr);
+  const observation = parsePullRequestDetailObservation(item.prObservation);
   const optionalText = (name: string) =>
     text(item[name]) ? { [name]: text(item[name]) } : {};
   return {
@@ -332,6 +337,7 @@ function parseItem(value: unknown): WorkItem | null {
     ...optionalText("base"),
     ...(sha(item.headSha) ? { headSha: sha(item.headSha)! } : {}),
     ...(detail ? { pr: detail } : {}),
+    ...(observation ? { prObservation: observation } : {}),
     ...(number(item.finishedAt) ? { finishedAt: number(item.finishedAt) } : {}),
     ...(typeof item.draft === "boolean" ? { draft: item.draft } : {}),
     ...(["pass", "fail", "pending", "none"].includes(item.checks as string)
@@ -430,7 +436,14 @@ class WorldSourcesStore {
     const task = fetchWorldSources(this.#fetch, force)
       .then((snapshot) => this.#publish(sequence, snapshot))
       .catch(() => {
-        // The service is unreachable; keep the last snapshot.
+        // Retain display evidence, but an unreachable service cannot renew it.
+        this.#publish(sequence, {
+          ...this.#snapshot,
+          refreshing: false,
+          items: this.#snapshot.items.map((item) =>
+            qualifyPullRequestDetail(item, this.#snapshot.observedAt, false),
+          ),
+        });
       })
       .finally(() => {
         if (this.#inFlight === task) this.#inFlight = null;

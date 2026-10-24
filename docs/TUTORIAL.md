@@ -408,6 +408,10 @@ on your phone and desktop.
    rule, the failing checks and the reviewers' formal reviews or comments.
    **Unknown reviewer** means the RESULT post has no clear reviewer claim;
    use **View RESULT source** to inspect it. It does not confirm readiness.
+   The card also shows **GitHub details fresh**, **stale · cached evidence**
+   or **unavailable**, with its own read time. A refreshed list does not renew
+   cached detail. Choose **Refresh Sources** to retry; stale or unavailable
+   findings/screenshots remain unknown and must be refreshed before Merge.
    **Merge…**,
    **Close…** and **Mark ready…** ask first and say exactly what happens;
    while GitHub still requires a review, use **Open on GitHub** or **Copy

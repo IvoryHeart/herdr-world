@@ -5,6 +5,7 @@ import type {
   PullRequestReviewer,
 } from "../../../shared/pullRequests";
 import type { WorkItem } from "../../../shared/worldSources";
+import { PULL_REQUEST_DETAIL_MAX_AGE_MS } from "../../../shared/pullRequestFreshness";
 import { record } from "./github";
 
 /**
@@ -20,7 +21,7 @@ export const DETAIL_BATCH = 10;
 /** Pull requests read in detail per refresh; the rest wait for the next one. */
 export const DETAIL_PER_REFRESH = 20;
 /** Read again after this long even when nothing on it changed. */
-export const DETAIL_MAX_AGE_MS = 10 * 60_000;
+export const DETAIL_MAX_AGE_MS = PULL_REQUEST_DETAIL_MAX_AGE_MS;
 const MAX_CHECKS = 100;
 const MAX_LINE = 200;
 
@@ -28,6 +29,7 @@ export type CachedDetail = {
   stamp: string;
   readAt: number;
   detail: PullRequestDetail;
+  failed?: boolean;
 };
 
 /** What, on the list, says a pull request changed. */
@@ -39,6 +41,7 @@ export function detailStamp(item: WorkItem) {
     item.mergeable,
     item.draft,
     item.review,
+    item.base,
   ].join("|");
 }
 
@@ -56,7 +59,10 @@ export function detailsDue(
         ? 0
         : known.stamp !== detailStamp(item)
           ? 1
-          : item.checks === "pending" || now - known.readAt >= DETAIL_MAX_AGE_MS
+          : known.failed ||
+              item.checks === "pending" ||
+              now < known.readAt ||
+              now - known.readAt >= DETAIL_MAX_AGE_MS
             ? 2
             : null;
       return { item, rank, readAt: known?.readAt ?? 0 };
@@ -101,9 +107,40 @@ export function parseDetails(
   const result = new Map<string, PullRequestDetail | null>();
   items.forEach((item, index) => {
     const pr = record(record(data[`p${index}`]).pullRequest);
-    result.set(item.key, Object.keys(pr).length ? parseDetail(item, pr) : null);
+    result.set(
+      item.key,
+      completeDetail(item, pr) ? parseDetail(item, pr) : null,
+    );
   });
   return result;
+}
+
+/** Missing/partial fields or a head that moved mid-read never refresh authority. */
+function completeDetail(item: WorkItem, pr: Record<string, unknown>) {
+  const collection = (value: unknown) => Array.isArray(record(value).nodes);
+  const files = record(pr.files);
+  const latest = record(nodes(pr.latest).at(-1)?.commit);
+  const rollup = latest.statusCheckRollup;
+  const contexts = record(record(rollup).contexts);
+  return (
+    pr.headRefOid === item.headSha &&
+    typeof pr.body === "string" &&
+    typeof record(pr.author).login === "string" &&
+    (pr.headRef === null || Object.hasOwn(record(pr.headRef), "compare")) &&
+    collection(files) &&
+    Number.isSafeInteger(files.totalCount) &&
+    Number(files.totalCount) >= 0 &&
+    nodes(files).every((file) => typeof file.path === "string") &&
+    collection(pr.commits) &&
+    nodes(pr.commits).some(
+      (node) => record(node.commit).oid === item.headSha,
+    ) &&
+    latest.oid === item.headSha &&
+    (rollup === null ||
+      (collection(contexts) && Number.isSafeInteger(contexts.totalCount))) &&
+    collection(pr.reviews) &&
+    collection(pr.comments)
+  );
 }
 
 /** Comments from people with standing in the repository, not passers-by. */

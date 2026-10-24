@@ -386,6 +386,11 @@ each source's state, switch it off or configure it.
   explicit, unambiguous SHA, never a timestamp. A card says
   **Ready to merge** when every rule holds, and **Stalled** when CI failed on
   the head and its agent is idle.
+- Cards show GitHub detail health and its own read time. Expired or failed
+  reads retain matching **stale · cached evidence**; list success does not
+  refresh it. Findings/screenshots stay unknown and World requires fresh
+  detail before merging. Use **Refresh Sources** to retry. See
+  [detail health and bounds](docs/github-pr-detail-health.md).
 - **Merge…**, **Close…** and **Mark ready…** (for a draft) open a sheet that
   says exactly what happens; nothing runs until you confirm. Merge makes a
   merge commit, keeps the branch and refuses if anyone pushed since you
