@@ -117,7 +117,10 @@ claims, quoted replies and fenced examples cannot establish a reviewer.
 
 World uses formal review commit metadata or an explicitly named full SHA or
 unique prefix; conflicting claims and ambiguous prefixes stay unknown. It
-never derives the reviewed head from timestamps. RESULT-only evidence remains
+never derives the reviewed head from timestamps. A historical RED/GREEN SHA
+mentioned in findings or comparison prose does not claim the reviewed head and
+cannot contradict formal review metadata or the canonical header.
+RESULT-only evidence remains
 separately linked as unknown attribution; a later named review does not claim
 an earlier anonymous post. Correct the original post to attribute it. Positive
 open-finding counts take precedence over clear or unknown wording, and an

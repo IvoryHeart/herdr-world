@@ -224,6 +224,46 @@ describe("explicit reviewer evidence", () => {
 });
 
 describe("reviewed head binding", () => {
+  test.each([undefined, HEAD])(
+    "historical evidence prose cannot contradict explicit reviewed head (%s)",
+    (metadata) => {
+      const body = `Reviewer: rev2\nReviewed commit: ${HEAD}\n${result}\n\nHistorical RED at ${OLD}; comparison of ${OLD}.\nPreviously reviewed head ${OLD} failed before this repair.`;
+      expect(
+        reviewerResults(
+          7,
+          [post(body, 1, { commit: metadata })],
+          commits,
+          HEAD,
+        ),
+      ).toMatchObject([
+        {
+          reviewer: "rev2",
+          commit: HEAD,
+          outcome: "confirmed",
+          commitsSince: 0,
+        },
+      ]);
+    },
+  );
+
+  test("historical prose alone cannot bind a RESULT to a reviewed head", () => {
+    expect(
+      reviewerResults(
+        7,
+        [post(`Reviewer: rev2\n${result}\nHistorical RED at ${HEAD}`)],
+        commits,
+        HEAD,
+      ),
+    ).toMatchObject([{ commit: null, commitsSince: null }]);
+  });
+
+  test("different explicit reviewed headers still conflict even with matching metadata", () => {
+    const body = `Reviewer: rev2\nReviewed commit: ${HEAD}\nReviewed head: ${OLD}\n${result}`;
+    expect(
+      reviewerResults(7, [post(body, 1, { commit: HEAD })], commits, HEAD),
+    ).toMatchObject([{ commit: null, outcome: "unknown" }]);
+  });
+
   test("metadata keeps a stale review stale regardless of its timestamp", () => {
     expect(
       reviewerResults(

@@ -446,13 +446,25 @@ function reviewedCommit(
   if (typeof metadata === "string" && /^[0-9a-f]{40}$/iu.test(metadata))
     claims.add(metadata.toLowerCase());
   const known = new Set([...commits.map((entry) => entry.oid), head]);
+  // Findings may compare historical RED/GREEN commits. Only declarations or
+  // explicit reviewer headers claim which head this review actually examined.
+  const declarations = body
+    .replace(/[*_]/gu, "")
+    .split(/\r?\n/u)
+    .filter(
+      (line) =>
+        /^\s*(?:Reviewed (?:commit|head)\s*:|(?:reviewed|confirmed)\s+(?:the\s+)?(?:(?:current|published|exact|final)\s+)*head\s|(?:review|confirmation)\s+(?:at|of)\s)/iu.test(
+          line,
+        ) || reviewerOf(line),
+    )
+    .join("\n");
   const patterns = [
-    /\b(?:at|of)\s+`?([0-9a-f]{7,40})\b/giu,
+    /\b(?:review|confirmation)\s+(?:at|of)\s+`?([0-9a-f]{7,40})\b/giu,
     /^\s*Reviewed (?:commit|head)\s*:\s*`?([0-9a-f]{7,40})\b/gimu,
     /\b(?:reviewed|confirmed)\s+(?:the\s+)?(?:(?:current|published|exact|final)\s+)*head\s+`?([0-9a-f]{7,40})\b/giu,
   ];
   for (const pattern of patterns)
-    for (const match of body.matchAll(pattern)) {
+    for (const match of declarations.matchAll(pattern)) {
       const sha = match[1]!.toLowerCase();
       if (sha.length === 40) claims.add(sha);
       else {
