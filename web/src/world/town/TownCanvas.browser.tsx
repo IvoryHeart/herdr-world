@@ -7,10 +7,13 @@ import type { Pane, Tab, Workspace } from "../../types";
 import type { WorldRuntimeConnection } from "../runtimeStore";
 import { buildWorldObject, type WorldObject } from "../worldObject";
 import TownView from "../TownView";
+import { AgentLauncherDialog } from "../AgentLauncherDialog";
+import { WORLD_AGENT_LAUNCH_EVENT, type LaunchTarget } from "../agentProfiles";
 import { projectWorldOffice } from "../herdrOfficeProjection";
 import type { WorldAsk } from "../worldAsks";
 import { townCalls, unseenTownCompletions } from "./TownRail";
 import { townAttentionDesks } from "./townAttention";
+import { checkTownRoomPlates } from "./townRoomPlates.browser";
 import type { BoardDocument, BoardOp } from "../board/boardDocument";
 import {
   WorldPanelsContext,
@@ -174,7 +177,7 @@ function topology(seed: number): Topology {
           ? host === HOSTS[0]
             ? Array.from({ length: 128 }, (_, index) => `focus-room-${index}`)
             : [`${host.id}-destination`]
-          : scale === "max"
+          : scale === "max" || scale === "plates"
             ? host.rooms
             : host.rooms.slice(0, 5 + Math.floor(r() * 4));
     const workspaces: Workspace[] = [];
@@ -191,7 +194,7 @@ function topology(seed: number): Topology {
       const deskCount =
         scale === "recovery"
           ? 4
-          : scale === "navigation"
+          : scale === "navigation" || scale === "plates"
             ? 1
             : extended
               ? extended
@@ -242,7 +245,10 @@ function topology(seed: number): Topology {
       workspaces.push({
         workspace_id: workspaceId,
         number: roomIndex + 1,
-        label: roomName,
+        label:
+          scale === "plates"
+            ? `${roomName} release planning, validation and follow-up for the next delivery across neighbouring rooms and working teams`
+            : roomName,
         focused: roomIndex === 0,
         pane_count: paneTotal,
         tab_count: deskCount,
@@ -839,6 +845,15 @@ async function run() {
   /** Windows opened without focusing their pane (the docked Town master). */
   const unfocusedOpens: string[] = [];
   function Harness() {
+    const [launch, setLaunch] = useState<LaunchTarget | null>(null);
+    useEffect(() => {
+      if (scale !== "plates") return;
+      const open = (event: Event) =>
+        setLaunch((event as CustomEvent<LaunchTarget>).detail);
+      window.addEventListener(WORLD_AGENT_LAUNCH_EVENT, open);
+      return () => window.removeEventListener(WORLD_AGENT_LAUNCH_EVENT, open);
+    }, []);
+
     const [world, set] = useState(() => worldFor(base.connections));
     const [selectedId, setSelectedId] = useState<string | null>(() =>
       scale === "navigation"
@@ -851,22 +866,33 @@ async function run() {
       setWorld = set;
     }, []);
     return (
-      <TownView
-        world={world}
-        selectedId={selectedId}
-        onSelect={(id) => {
-          selected.push(id);
-          setSelectedId(id);
-        }}
-        onOpenTerminal={async (id) => {
-          opened.push(id);
-        }}
-        floatingTerminals={[]}
-        onOpenInspectorView={(id, view, focus = true) => {
-          inspected.push([id, view]);
-          if (!focus) unfocusedOpens.push(id);
-        }}
-      />
+      <>
+        <TownView
+          world={world}
+          selectedId={selectedId}
+          onSelect={(id) => {
+            selected.push(id);
+            setSelectedId(id);
+          }}
+          onOpenTerminal={async (id) => {
+            opened.push(id);
+          }}
+          floatingTerminals={[]}
+          onOpenInspectorView={(id, view, focus = true) => {
+            inspected.push([id, view]);
+            if (!focus) unfocusedOpens.push(id);
+          }}
+        />
+        {launch && scale === "plates" ? (
+          <AgentLauncherDialog
+            world={world}
+            initial={launch}
+            onOpen={() => {}}
+            onEditProfiles={() => {}}
+            onClose={() => setLaunch(null)}
+          />
+        ) : null}
+      </>
     );
   }
   // Every agent works on one synthetic pull request of yours, read in detail,
@@ -933,6 +959,7 @@ async function run() {
   panelBody.className = "fixture-panel-body";
   // A plain frame so screenshots show the window; the real frame is design's.
   Object.assign(panelBody.style, {
+    display: "none",
     position: "fixed",
     zIndex: "50",
     overflow: "auto",
@@ -954,9 +981,11 @@ async function run() {
     panelBodyRef: () => () => {},
     register: (entry: WorldPanelEntry) => {
       panelEntries.push(entry);
+      panelBody.style.display = "";
       return () => {
         const at = panelEntries.indexOf(entry);
         if (at >= 0) panelEntries.splice(at, 1);
+        if (!panelEntries.length) panelBody.style.display = "none";
       };
     },
     bodies: { "panel:town-summary": panelBody },
@@ -1126,6 +1155,17 @@ async function run() {
       ) !== null,
     "town targets did not finish progressive admission",
   );
+
+  if (scale === "plates" && mode === "test") {
+    await checkTownRoomPlates(host, check, waitFor, {
+      connectionId: base.connections[0]!.connectionId,
+      generation: base.connections[0]!.generation,
+      workspaceId: base.connections[0]!.snapshot!.workspaces[0]!.workspace_id,
+    });
+    root.unmount();
+    await settle();
+    return;
+  }
 
   if (scale === "protected" && mode === "test") {
     const rendered = window.__HERDR_TOWN_RENDERER__!;
@@ -1540,7 +1580,7 @@ async function run() {
   // Room actions hidden at the overview must not take a tap.
   const hiddenActions = [
     ...host.querySelectorAll<HTMLElement>(
-      '[aria-label^="Rename room"], [aria-label^="Close room"], [aria-label="New room"], [aria-label^="New seat in"]',
+      '[aria-label^="Rename room"], [aria-label^="Close room"], [aria-label="New room"], [aria-label^="New agent or terminal in"]',
     ),
   ];
   const tappable = hiddenActions.filter((action) => {
@@ -1557,7 +1597,8 @@ async function run() {
     `${tappable.length} hidden room actions take taps at the overview`,
   );
   check(
-    host.querySelectorAll('[aria-label^="New seat in"]').length > 0,
+    host.querySelectorAll('[aria-label^="New agent or terminal in"]').length >
+      0,
     "rooms with free spots need a new seat action",
   );
 

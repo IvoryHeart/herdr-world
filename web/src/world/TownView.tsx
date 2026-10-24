@@ -4,7 +4,6 @@ import { questMark, useAgentQuests } from "./agentQuests";
 import {
   useCreationProgress,
   creationPendingReason,
-  creationFailureMessage,
 } from "../creationRequests";
 import {
   requestAgentMove,
@@ -405,26 +404,6 @@ export default function TownView({
       message: `${action} failed`,
       detail: cause instanceof Error ? cause.message : String(cause),
     });
-  };
-  const createSeat = async (roomKey: string) => {
-    const room = roomForKey(roomKey);
-    if (!room || !canCreateSeat(roomKey)) return;
-    try {
-      await store.createQualifiedTab(
-        {
-          connectionId: room.workspaceRef.connectionId,
-          runtimeGeneration: room.observedGeneration,
-        },
-        room.workspaceRef.nativeId,
-        { numberedLabel: true },
-      );
-    } catch (cause) {
-      store.notify({
-        kind: "error",
-        message: creationFailureMessage(cause, "Tab"),
-        detail: String(cause),
-      });
-    }
   };
   const submitRenameRoom = async (label: string) => {
     if (
@@ -1362,7 +1341,6 @@ export default function TownView({
               showCreateSeat,
               canCreateSeat,
               createSeatReason,
-              onCreateSeat: (roomKey) => void createSeat(roomKey),
               onNewAgent: (roomKey) => {
                 const room = roomForKey(roomKey);
                 if (!room || !canCreateSeat(roomKey)) return;

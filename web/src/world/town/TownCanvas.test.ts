@@ -44,6 +44,8 @@ test.skipIf(!chrome).each([
   [1080, 1920, "extended", 0],
   // Regress fixed-delay zoom-out retries on a slow software renderer.
   [1080, 1920, "extended", 300],
+  [1440, 900, "plates", 0],
+  [390, 844, "plates", 0],
   // Every one of 130 protected desks keeps its browser target past both bounds.
   [390, 844, "protected", 0],
   // Request a room beyond admission while renderer initialization is held.

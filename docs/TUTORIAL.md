@@ -127,7 +127,13 @@ hosts stay usable.
    **ALL** shows the whole town. Drag the background to pan, or use arrow keys
    when the scene has focus. Tap a room to zoom in. Large towns may initially
    show roofs; zoom in to see room summaries and desks. Phones stack buildings
-   vertically.
+   vertically. Room nameplates fit their rooms: long names end in an ellipsis;
+   hover the name for its full text. The colour, desk count and blocked badge
+   stay visible. Hover or focus a plate to reveal Rename and Close below it;
+   on a touch screen, tap the plate first. The dashed **+** seat inside a room
+   opens its launcher with that room selected. Choose **Terminal** for a plain
+   tab, a profile, or an agent kind. If the requested room is no longer
+   available, choose a current room in the launcher before creating anything.
 3. Look at reception for blocked agents waiting for input, oldest first. Finished
    agents also wait there until you open their terminal or mark that completion
    reviewed, then join idle agents in the lounge. These locations visualize
@@ -288,10 +294,11 @@ a starting brief and a look in Town. World starts it in a new tab for you.
    dress the character and watch it walk, turn and sit in the preview, and
    pick its **Chime** (or keep the class default). **What a
    launch runs** shows the exact Herdr command. Press **Save**.
-3. Open **New agent**: **Actions → New agent**, **New agent** on a
-   room's plaque (on a phone, tap the room first), or the robot beside **+** in
-   Spaces' tab bar. Choose the room, optionally type a task, and tap a profile,
-   or tap a kind under **Quick start** for a plain agent.
+3. Open **New agent**: **Actions → New agent**, the dashed **+** seat inside
+   a Town room (zoom into the room first), or the robot beside **+** in Spaces'
+   tab bar. The seat preselects its room. Choose **Terminal**, the first choice,
+   for a plain shell tab; to start an agent, optionally type a task and tap a
+   profile or a kind under **Quick start**.
 4. If a harness is logged out on that host, the launcher says so: **Log in**
    opens a small tab and shows the harness's own login command
    (`claude auth login`, `codex login --device-auth`). **Copy** it, **Open its
