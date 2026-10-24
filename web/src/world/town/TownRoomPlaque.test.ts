@@ -78,6 +78,8 @@ test.each([
     ],
     "3/8",
   ],
+  [["working"], "1/1"],
+  [["idle"], "0/1"],
   [["idle", "idle"], "0/2"],
   [[], "0/0"],
   [["working", "blocked", "working"], "3/3"],
@@ -101,7 +103,7 @@ test.each([
     expect(counts.agents).toBe(statuses.length);
     expect(counts.agents).toBe(total);
     expect(counts.desks).toBe(1);
-    const description = `${active} of ${total} agents active: ${board.working} working, ${board.blocked} waiting on you`;
+    const description = `${active} of ${total} ${total === 1 ? "agent" : "agents"} active: ${board.working} working, ${board.blocked} waiting on you`;
     const browser = new Window();
     try {
       browser.document.body.innerHTML = renderToStaticMarkup(

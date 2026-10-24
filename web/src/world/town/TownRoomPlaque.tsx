@@ -29,7 +29,7 @@ export function TownRoomPlaque({
 }) {
   const folded = room.deskFold === "folded";
   const active = counts.working + counts.blocked;
-  const activityLabel = `${active} of ${counts.agents} agents active: ${counts.working} working, ${counts.blocked} waiting on you`;
+  const activityLabel = `${active} of ${counts.agents} ${counts.agents === 1 ? "agent" : "agents"} active: ${counts.working} working, ${counts.blocked} waiting on you`;
   return (
     <div
       className="town-room-plaque"
