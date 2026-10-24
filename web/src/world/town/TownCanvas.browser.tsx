@@ -204,16 +204,41 @@ function topology(seed: number): Topology {
                 ? 11 + Math.floor(r() * 5)
                 : 3 + Math.floor(r() * r() * 13);
       let paneTotal = 0;
+      const plateStatuses =
+        scale === "plates"
+          ? [
+              [
+                "working",
+                "working",
+                "blocked",
+                "idle",
+                "idle",
+                "done",
+                "done",
+                "unknown",
+              ],
+              ["idle", "idle"],
+              ["working", "blocked"],
+              [],
+              ["done", "unknown"],
+              ["working"],
+              ["blocked"],
+              ["working", "working"],
+            ][roomIndex]!
+          : null;
       for (let d = 0; d < deskCount; d += 1) {
         const tabId = `${workspaceId}-tab-${d}`;
         // One crowded desk has more panes than drawn seats.
-        const paneCount =
-          host === HOSTS[0] && roomIndex === 0 && d === 0
+        const paneCount = plateStatuses
+          ? plateStatuses.length + 2
+          : host === HOSTS[0] && roomIndex === 0 && d === 0
             ? 6
             : scale === "max"
               ? 3 + Math.floor(r() * 2)
               : 2 + Math.floor(r() * 3);
-        const agents = Math.min(paneCount, 1 + (r() < 0.55 ? 1 : 0));
+        const agents = plateStatuses
+          ? plateStatuses.length
+          : Math.min(paneCount, 1 + (r() < 0.55 ? 1 : 0));
         tabs.push({
           tab_id: tabId,
           workspace_id: workspaceId,
@@ -234,7 +259,9 @@ function topology(seed: number): Topology {
             focused: p === 0,
             agent: isAgent ? AGENTS[Math.floor(r() * AGENTS.length)]! : "",
             agent_status: isAgent
-              ? STATUSES[Math.floor(r() * STATUSES.length)]!
+              ? plateStatuses
+                ? plateStatuses[p]!
+                : STATUSES[Math.floor(r() * STATUSES.length)]!
               : "",
             task_summary: isAgent ? `${name} on ${roomName}` : undefined,
             revision: 1,
@@ -818,7 +845,9 @@ async function run() {
   herdrTabs = (connectionId) =>
     base.connections.find((c) => c.connectionId === connectionId)?.snapshot
       ?.tabs ?? [];
-  const blocked = base.agentPanes.filter((_, index) => index % 23 === 4);
+  const blocked = base.agentPanes.filter((pane, index) =>
+    scale === "plates" ? pane.agent_status === "blocked" : index % 23 === 4,
+  );
   for (const pane of blocked) pane.agent_status = "blocked";
   if (scale === "protected")
     for (const pane of base.agentPanes) {
