@@ -33,6 +33,7 @@ import {
 } from "./inspectorTerminalHandoff";
 import { CREATED_PANE_ADMISSION_TIMEOUT_MS } from "./officeRoomActions";
 import { worldRuntimeStore } from "./runtimeStore";
+import { worldObjectId } from "./worldObject";
 import WorldFoundationApp from "./WorldFoundationApp";
 import { worldInspectorWindowId } from "./worldTerminalPresentation";
 import type { BoardDocument, BoardOp } from "./board/boardDocument";
@@ -763,6 +764,26 @@ async function run() {
     ),
     "Town required a topology mutation before enabling initial room actions",
   );
+  const chooseRoomTerminal = async (before: number) => {
+    await until(
+      () => document.querySelector(".agent-launcher-card"),
+      "Town room launcher",
+    );
+    check(
+      document.querySelector<HTMLSelectElement>(".agent-launcher select")
+        ?.value === worldObjectId(client.connectionId, "space", "studio") &&
+        calls.filter(({ method }) => method === "tab.create").length === before,
+      "Town seat must select its qualified room and wait for a launcher choice",
+    );
+    const terminalChoice = document.querySelector<HTMLButtonElement>(
+      ".agent-launcher-card",
+    )!;
+    check(
+      terminalChoice.textContent?.includes("Terminal"),
+      "The first Town launcher choice must be Terminal",
+    );
+    terminalChoice.click();
+  };
   const browserLocalCreateCount = calls.filter(
     ({ method }) => method === "tab.create",
   ).length;
@@ -778,6 +799,7 @@ async function run() {
       ".world-new-seat-canvas-action:not(:disabled)",
     )!
     .click();
+  await chooseRoomTerminal(browserLocalCreateCount);
   await until(
     () =>
       calls.filter(({ method }) => method === "tab.create").length ===
@@ -2488,6 +2510,7 @@ async function run() {
     promise: sharedDeadlineFocusGate.promise,
   };
   createSeatButton?.click();
+  await chooseRoomTerminal(seatCreatesBeforeClick);
   await until(
     () =>
       calls.filter(({ method }) => method === "tab.create").length ===

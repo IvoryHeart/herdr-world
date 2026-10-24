@@ -175,8 +175,7 @@
   white-space: nowrap;
 }
 
-.town-room-card-badge,
-.town-room-plaque-badge {
+.town-room-card-badge {
   font:
     700 11px "Silkscreen",
     ui-monospace,
@@ -224,69 +223,7 @@
   outline-offset: 2px;
 }
 
-/* Room plaques (room and desk levels). */
-.town-room-plaque {
-  left: 50%;
-  top: 9px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 6px 3px 8px;
-  color: #ffe9c2;
-  background: #6e4a2e;
-  border: 2px solid #3b2414;
-  border-radius: 5px;
-  opacity: 0;
-  pointer-events: none;
-  /* Hidden overlays take no taps, including their buttons. */
-  visibility: hidden;
-  white-space: nowrap;
-}
-
-.town-room-plaque-name {
-  font:
-    700 12px "Silkscreen",
-    "Pixelify Sans",
-    ui-monospace,
-    monospace;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-}
-
-.town-room-plaque-name small {
-  margin-left: 4px;
-  opacity: 0.75;
-}
-
-.town-plaque-action {
-  position: static !important;
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  color: #ffe9c2;
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.town-plaque-action.town-plaque-agent {
-  display: inline-flex;
-  gap: 3px;
-  width: auto;
-  padding: 0 6px;
-  font-size: 10px;
-  font-weight: 700;
-}
-
-.town-plaque-action:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.town-new-seat {
+.town-world .town-new-seat {
   position: absolute;
   display: grid;
   place-items: center;
