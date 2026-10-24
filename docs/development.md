@@ -42,7 +42,8 @@ bun run test:world --shard=1/6 # reproduce one CI shard, one browser at a time
 bun run test:world --shard=latency # the latency-budget suites, as CI's quiet job runs them
 bun run test --web-browser    # Chrome-driven suites outside World, as CI's web job runs them
 bun run build:site            # landing page/tutorial
-bun run check                 # complete PR candidate
+bun run check                 # repository checks and tests
+bun run check:delivery        # full local gate, including behavioral verification
 ```
 
 The test wrapper runs ordinary files in parallel using up to eight available CPUs.
@@ -174,6 +175,14 @@ files; use `test:world` for the complete World browser matrix.
 `bun run check` validates dependency notices, formatting, lint, all types/tests,
 production frontend/server builds and OpenSpec contracts. Generated output belongs in
 ignored directories and must not be committed.
+
+Its static checks come from the same lane as `check:delivery` and `check:changed`.
+That lane checks source types without invoking server's asset-building
+`pretypecheck`, then builds and validates production assets once. `check:commit`
+is the read-only format/lint guard used by the Git hook; `check:source` adds the
+asset-building type check and tests for release preparation and tag validation.
+`precommit` remains a compatibility alias for `check:source`. See the
+[pipeline ownership guide](ci-pipelines.md) for the full command matrix.
 
 ## Architecture while developing
 
