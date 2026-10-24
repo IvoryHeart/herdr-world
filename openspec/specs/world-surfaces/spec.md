@@ -1080,7 +1080,10 @@ with targets at least 40 CSS pixels wide and tall. These controls SHALL NOT
 reserve name width while hidden. The dashed empty-seat **+** inside a room
 SHALL open the existing launcher with that qualified room selected; Terminal
 SHALL be its first choice for a plain tab, alongside profiles and agent kinds.
-The plate SHALL NOT contain a separate New agent text button.
+The plate SHALL NOT contain a separate New agent text button. If the selected
+room or captured generation is unavailable, the launcher SHALL require a deliberate
+choice of a current room before creation; an unqualified launcher entry MAY default
+to an available room.
 
 A building for a host whose topology is cached after failure SHALL be visibly
 stale and its entities SHALL be non-actionable. Town SHALL NOT invent activity,

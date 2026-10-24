@@ -61,18 +61,33 @@ export function AgentLauncherDialog({
   const preferred = initial.profileId
     ? profiles.find((p) => p.id === initial.profileId)
     : undefined;
-  const [roomId, setRoomId] = useState<string>(() => {
+  const [selection, setSelection] = useState<{
+    id: string;
+    generation: number;
+  } | null>(() => {
+    const explicit =
+      initial.connectionId !== undefined ||
+      initial.workspaceId !== undefined ||
+      initial.generation !== undefined;
     const exact = rooms.find(
       (space) =>
         space.connectionId === initial.connectionId &&
-        space.nativeId === initial.workspaceId,
+        space.nativeId === initial.workspaceId &&
+        space.generation === initial.generation,
     );
     const home = preferred?.home_room
       ? rooms.find((space) => space.label === preferred.home_room)
       : undefined;
-    return (exact ?? home ?? rooms[0])?.id ?? "";
+    const chosen = explicit ? exact : (home ?? rooms[0]);
+    return chosen ? { id: chosen.id, generation: chosen.generation } : null;
   });
-  const room = rooms.find((space) => space.id === roomId) ?? null;
+  const room = selection
+    ? (rooms.find(
+        (space) =>
+          space.id === selection.id &&
+          space.generation === selection.generation,
+      ) ?? null)
+    : null;
   const target: LaunchTarget | null = room && {
     connectionId: room.connectionId,
     generation: room.generation,
@@ -91,10 +106,10 @@ export function AgentLauncherDialog({
   const generation = room?.generation;
   const workspaceId = room?.nativeId;
   useEffect(() => {
-    if (!connectionId || generation === undefined || !workspaceId) return;
-    let current = true;
     setCatalog(null);
     setCatalogError(null);
+    if (!connectionId || generation === undefined || !workspaceId) return;
+    let current = true;
     launcherCatalog({ connectionId, generation, workspaceId })
       .then((next) => current && setCatalog(next))
       .catch(
@@ -226,12 +241,32 @@ export function AgentLauncherDialog({
           </p>
         ) : (
           <>
+            {!room ? (
+              <p className="agent-launcher-note" role="status">
+                The requested room is unavailable. Choose a current room to
+                continue.
+              </p>
+            ) : null}
             <label className="agent-field">
               <span>Room</span>
               <select
-                value={roomId}
-                onChange={(event) => setRoomId(event.target.value)}
+                value={room?.id ?? ""}
+                onChange={(event) => {
+                  const chosen = rooms.find(
+                    (space) => space.id === event.target.value,
+                  );
+                  setSelection(
+                    chosen
+                      ? { id: chosen.id, generation: chosen.generation }
+                      : null,
+                  );
+                }}
               >
+                {!room ? (
+                  <option value="" disabled>
+                    Choose a current room
+                  </option>
+                ) : null}
                 {rooms.map((space) => (
                   <option key={space.id} value={space.id}>
                     {space.label} · {space.hostLabel}
@@ -264,7 +299,7 @@ export function AgentLauncherDialog({
             <button
               type="button"
               className="agent-launcher-card"
-              disabled={Boolean(busy)}
+              disabled={!target || Boolean(busy)}
               onClick={() => void createTerminal()}
             >
               <Terminal size={24} aria-hidden="true" />
@@ -287,7 +322,9 @@ export function AgentLauncherDialog({
                     key={profile.id}
                     type="button"
                     className="agent-launcher-card"
-                    disabled={Boolean(busy) || !catalog || note?.blocked}
+                    disabled={
+                      !target || Boolean(busy) || !catalog || note?.blocked
+                    }
                     title={note?.text ?? `Start ${profile.name} here`}
                     aria-label={`Start ${profile.name}`}
                     onClick={() => void launch({ profile })}
@@ -316,7 +353,7 @@ export function AgentLauncherDialog({
               </button>
             </div>
             <div className="agent-launcher-kinds">
-              {!catalog && !catalogError ? (
+              {target && !catalog && !catalogError ? (
                 <span className="agent-launcher-note">
                   Asking the host which agents it supports…
                 </span>
@@ -328,7 +365,7 @@ export function AgentLauncherDialog({
                     key={kind}
                     type="button"
                     className="agent-launcher-kind"
-                    disabled={Boolean(busy) || note?.blocked}
+                    disabled={!target || Boolean(busy) || note?.blocked}
                     title={note?.text ?? `Start ${harnessLabel(kind)} here`}
                     onClick={() => void launch({ kind })}
                   >

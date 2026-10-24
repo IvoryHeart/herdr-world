@@ -126,7 +126,8 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    stay visible. Hover or focus a plate to reveal Rename and Close below it;
    on a touch screen, tap the plate first. The dashed **+** seat inside a room
    opens its launcher with that room selected. Choose **Terminal** for a plain
-   tab, a profile, or an agent kind.
+   tab, a profile, or an agent kind. If the requested room is no longer
+   available, choose a current room in the launcher before creating anything.
 3. Look at reception for blocked agents waiting for input, oldest first. Finished
    agents also wait there until you open their terminal or mark that completion
    reviewed, then join idle agents in the lounge. These locations visualize
