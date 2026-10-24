@@ -1,3 +1,4 @@
+import { ConnectionRecoveryBanner } from "../ConnectionRecoveryBanner";
 import {
   Fragment,
   memo,
@@ -1826,7 +1827,11 @@ const TownWorldLayer = memo(function TownWorldLayer({
           { rooms: 0, desks: 0, working: 0 },
         );
         return (
-          <div key={building.hostKey} className="town-building-layer">
+          <div
+            key={building.hostKey}
+            className="town-building-layer"
+            data-stale={host?.stale || undefined}
+          >
             <div
               className="town-building-sign"
               data-building-sign={building.hostKey}
@@ -1836,17 +1841,22 @@ const TownWorldLayer = memo(function TownWorldLayer({
               }}
             >
               <strong>{host?.displayLabel ?? building.hostKey}</strong>
-              <span>
-                {host?.stale
-                  ? "Offline · last known state"
-                  : `${counts.rooms} rooms · ${counts.desks} desks · ${counts.working} working`}
-              </span>
+              {host?.stale ? (
+                <ConnectionRecoveryBanner
+                  connectionId={host.connectionId}
+                  label={host.displayLabel}
+                  state={host.runtimeState}
+                />
+              ) : (
+                <span>{`${counts.rooms} rooms · ${counts.desks} desks · ${counts.working} working`}</span>
+              )}
               {queue.length ? (
                 <em aria-label={`${queue.length} need you`}>!{queue.length}</em>
               ) : null}
             </div>
             <div
               className={`town-reception${queue.length ? " town-reception-busy" : ""}`}
+              data-stale={host?.stale || undefined}
               style={{
                 left: building.doorX * T,
                 top: (building.y + building.h + TOWN_FACADE) * T + 6,
@@ -1867,6 +1877,13 @@ const TownWorldLayer = memo(function TownWorldLayer({
                 </span>
                 {queue.length ? <b>{queue.length}</b> : null}
               </div>
+              {host?.stale ? (
+                <ConnectionRecoveryBanner
+                  connectionId={host.connectionId}
+                  label={host.displayLabel}
+                  state={host.runtimeState}
+                />
+              ) : null}
               {visitors.length ? (
                 <div className="town-reception-queue">
                   {shown.map((agent) => (
@@ -2401,6 +2418,7 @@ function ReceptionEntry({
       type="button"
       className={`town-reception-entry${agent.semanticStatus === "done" ? " town-reception-done" : ""}`}
       data-agent-key={agent.key}
+      disabled={agent.stale || !agent.canOpenInSpaces}
       aria-label={
         agent.semanticStatus === "done"
           ? `${agent.displayLabel}, finished`

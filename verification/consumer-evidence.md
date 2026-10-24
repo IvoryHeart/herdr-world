@@ -111,3 +111,21 @@ The existing runtime-leases model covers authority; finite parser/consumer
 fixtures are the direct alternative for external status formats. This does not
 prove every CLI version, native account/SSH outcome, or viewport interaction;
 platform/browser checks and the batch's complete gate remain required.
+
+
+### Failed-host cache and SSH recovery (Q02, Q03, Q43)
+
+A lifecycle report may retire only its exact connection/generation; cached data
+must stay stale and non-actionable during discovery and after an older response.
+A later ready status is insufficient to restore actions without a fresh admitted
+snapshot. Direct invalidation/runtime-store, Board projection/defer and Town
+open/motion tests exercise these presentation and consumer boundaries. Existing
+runtime authority models remain unchanged; native availability is not inferred.
+
+Profile-service controlled timers exercise default recovery through eight
+classified transient failures followed by success, with bounded exponential
+jitter, stable healthy siblings, explicit finite retry policy and stop/remove/
+replacement/cleanup cancellation. Continuing default retry does not establish
+infinite progress or model OS/network failure. Static markup/injected recovery
+verbs check explicit truthful controls; real viewport and SSH outcomes remain
+closing browser/platform acceptance. See coverage.json for the required tests.

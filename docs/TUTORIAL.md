@@ -106,6 +106,12 @@ and these redirects are included in [0.2.6](./releases/v0.2.6.md).
 **Hosts** starts at **All hosts**. Choose a host set to reduce the overview;
 use **Manage connections** to add or reconnect a local or SSH profile. Filtering
 changes what you see and does not disconnect hosts or retarget open terminals.
+If a host disconnects, its cached building and agents remain visible as stale
+history. Town's building and reception and Board's host label show
+**Disconnected · Reconnect**; their old agents cannot open live Chat or terminals.
+Transient SSH failures retry with backoff. Tap **Reconnect** to restart that
+host's connection, or use **Manage connections** to inspect its error. Other
+hosts stay usable.
 
 ### Explore Town: find work that needs you
 

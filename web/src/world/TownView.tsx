@@ -1,3 +1,4 @@
+import { inspectTownTerminal, townTargetActionable } from "./town/townOpen";
 import { requestAgentLaunch } from "./agentProfiles";
 import { questMark, useAgentQuests } from "./agentQuests";
 import {
@@ -509,31 +510,13 @@ export default function TownView({
    * terminal marks its work reviewed, unless `markSeen` is false: a Town tap
    * opens without reviewing, whichever view Town opens.
    */
-  const inspectOfficeTerminal = async (key: string, markSeen = true) => {
-    const device = office.paneRoster.find(
-      ({ device }) => device.key === key,
-    )?.device;
-    if (device) {
-      await onOpenTerminal(device.nodeId);
-      return;
-    }
-    const agent = office.roster.find(({ agent }) => agent.key === key)?.agent;
-    if (agent) {
-      await onOpenTerminal(agent.nodeId);
-      if (markSeen && agent.semanticStatus === "done")
-        markCompletionSeen(agent);
-      return;
-    }
-    const desk = office.deskRoster.find(({ desk }) => desk.key === key)?.desk;
-    if (!desk) return;
-    const occupant = desk.occupantAgentKey
-      ? office.roster.find(
-          ({ agent: candidate }) => candidate.key === desk.occupantAgentKey,
-        )?.agent
-      : null;
-    const nodeId = occupant?.nodeId ?? desk.terminalSelectionKeys[0];
-    if (nodeId) await onOpenTerminal(nodeId);
-  };
+  const inspectOfficeTerminal = (key: string, markSeen = true) =>
+    inspectTownTerminal(
+      office,
+      key,
+      onOpenTerminal,
+      markSeen ? markCompletionSeen : undefined,
+    );
   const openOfficeTerminal = (key: string, markSeen = true) => {
     void inspectOfficeTerminal(key, markSeen).catch(() => undefined);
   };
@@ -905,6 +888,7 @@ export default function TownView({
       teams,
     });
   const openReply = (key: string) => {
+    if (!townTargetActionable(office, key)) return;
     // A desk with more panes than seats lists them all rather than guessing.
     if (crowdedDesk(key)) {
       window.clearTimeout(peekTimer.current);
@@ -1015,7 +999,7 @@ export default function TownView({
    */
   const openChat = (agentKey: string, focus = true) => {
     const agent = agentByKey.get(agentKey)?.agent;
-    if (!agent) return;
+    if (!agent || agent.stale || !agent.canOpenInSpaces) return;
     if (DEVTOOLS) trace.record("peek", { key: agentKey });
     window.clearTimeout(peekTimer.current);
     holdPeek.current = false;

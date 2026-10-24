@@ -1,3 +1,5 @@
+import type { BridgeControlMsg } from "./bridgeControl";
+export type { BridgeControlMsg } from "./bridgeControl";
 import { isValidPopupPayload } from "./popupPayload";
 import {
   isAssistantSnapshot,
@@ -250,24 +252,6 @@ export interface TerminalClosedPush {
   connection_generation?: number;
   terminal_id: string;
   reason?: string;
-}
-
-export interface BridgeControlMsg {
-  type:
-    | "pause_connection"
-    | "world_invalidated"
-    | "world_watchlist_changed"
-    | "world_board_changed"
-    | "world_ledger_changed"
-    | "world_profiles_changed"
-    | "agent_conversation_changed";
-  reason?: string;
-  pane_id?: string;
-  connection_id?: string;
-  connection_generation?: number;
-  revision?: number;
-  /** world_ledger_changed: a question was asked or answered. */
-  asks?: boolean;
 }
 
 type Pending = {

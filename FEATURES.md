@@ -126,7 +126,12 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     terminal colours, so every device sees it; Herdr is unchanged, and
     Spaces' tab pins (close protection in this browser) are separate. A pin
     follows its tab when the tab moves to another room and goes when it closes.
-  - Cached failed-host buildings stay stale and non-actionable. Search and Hosts
+  - Cached failed-host buildings, agents and Board cards stay stale and
+    non-actionable. **Disconnected · Reconnect** appears on Town's building and
+    reception and Board's host label. Transient SSH outages keep retrying with
+    capped backoff; explicit disconnect/removal and permanent failures stop
+    recovery. Cached work never becomes current until a fresh runtime snapshot
+    is admitted. Search and Hosts
     use the shared aggregate. Reception and lounge positions only show status;
     only an explicit move changes Herdr's layout, always within one host.
   See the [Town exercise](./docs/TUTORIAL.md#town).
