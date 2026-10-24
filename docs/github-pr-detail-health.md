@@ -20,7 +20,9 @@ stamp never inherits the previous detail.
 
 The browser also checks expiry when rendering and schedules retirement at the
 original deadline. An idle card becomes stale, withdraws readiness and closes
-an open merge sheet without waiting for the next source poll. Its local clock
+an open merge sheet without waiting for the next source poll. A ready hint
+supplied by its parent is also withheld unless the card's current rules pass.
+Its local clock
 can withhold freshness but cannot renew the detail read time. The service keeps
 its independent clock and admission checks for every merge.
 

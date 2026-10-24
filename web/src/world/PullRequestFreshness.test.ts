@@ -94,6 +94,7 @@ test("browser retains detail provenance and treats old/malformed qualifications 
 test("an expired fresh marker cannot display fresh details or offer merge", () => {
   const html = renderToStaticMarkup(
     createElement(PullRequestCard, {
+      attention: { reason: "ready", label: "Ready to merge" },
       item: {
         ...item,
         prObservation: { ...item.prObservation!, state: "fresh" },
@@ -104,4 +105,5 @@ test("an expired fresh marker cannot display fresh details or offer merge", () =
   expect(html).toContain("Refresh Sources before merge");
   expect(html).not.toContain("Merge…");
   expect(html).not.toContain('data-ready="true"');
+  expect(html).not.toContain("Ready to merge");
 });

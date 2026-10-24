@@ -224,7 +224,7 @@ export function PullRequestCard({
       {actionable ? (
         <PullRequestDetailHealth item={item} fresh={detailFresh} />
       ) : null}
-      {attention ? (
+      {attention && (attention.reason !== "ready" || ready) ? (
         <p className="pr-card-attention" data-reason={attention.reason}>
           {attention.reason === "stalled"
             ? `Stalled: ${attention.label}`

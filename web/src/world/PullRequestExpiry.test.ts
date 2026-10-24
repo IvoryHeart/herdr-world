@@ -67,11 +67,19 @@ if (process.env.HERDR_PR_EXPIRY_DOM_TEST !== "1") {
       expiresAt: now + 1000,
     };
     try {
-      await act(async () => root.render(h(PullRequestCard, { item })));
+      await act(async () =>
+        root.render(
+          h(PullRequestCard, {
+            item,
+            attention: { reason: "ready", label: "Ready to merge" },
+          }),
+        ),
+      );
       expect(
         container.querySelector('[data-detail-state="fresh"]'),
       ).not.toBeNull();
       expect(container.querySelector('[data-ready="true"]')).not.toBeNull();
+      expect(container.textContent).toContain("Ready to merge");
       const merge = [...container.querySelectorAll("button")].find(
         (b) => b.textContent === "Merge…",
       )!;
@@ -93,6 +101,7 @@ if (process.env.HERDR_PR_EXPIRY_DOM_TEST !== "1") {
       expect(container.querySelector(".pr-card-sheet")).toBeNull();
       expect(container.textContent).toContain("Refresh Sources before merge");
       expect(container.textContent).not.toContain("Merge…");
+      expect(container.textContent).not.toContain("Ready to merge");
       expect(item.prObservation.state).toBe("fresh");
       expect(item.prObservation.readAt).toBe(1_000_000 - ttl + 1000);
     } finally {
