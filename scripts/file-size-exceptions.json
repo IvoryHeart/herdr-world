@@ -31,10 +31,10 @@
     "web/src/store.ts": 5737,
     "web/src/styles/layout/app.css": 1083,
     "web/src/world/DeskView.tsx": 1217,
-    "web/src/world/TownView.tsx": 1493,
+    "web/src/world/TownView.tsx": 1471,
     "web/src/world/board/board.css": 1419,
     "web/src/world/herdrOfficeProjection.ts": 1303,
-    "web/src/world/town/town.css": 1446,
+    "web/src/world/town/town.css": 1383,
     "web/src/world/town/townRenderer.ts": 1674,
     "web/src/world/useWorldInspectorController.ts": 1142,
     "web/src/world/worldObject.ts": 1216

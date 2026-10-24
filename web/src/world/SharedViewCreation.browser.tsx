@@ -525,10 +525,42 @@ async function run() {
     !alpha.attached.has("b-1-terminal"),
     "Second room was eagerly attached",
   );
+  const chooseTerminal = async (
+    connectionId: string,
+    workspaceId: string,
+    repeat = false,
+  ) => {
+    await until(
+      () => document.querySelector(".agent-launcher-card"),
+      "room launcher Terminal choice",
+    );
+    const expected = buildWorldObject(
+      worldRuntimeStore.get().connections,
+      "alpha",
+    ).spaces.find(
+      (space) =>
+        space.connectionId === connectionId && space.nativeId === workspaceId,
+    );
+    check(
+      document.querySelector<HTMLSelectElement>(".agent-launcher select")
+        ?.value === expected?.id,
+      "Room launcher changed the seat's qualified destination",
+    );
+    const terminal = document.querySelector<HTMLButtonElement>(
+      ".agent-launcher-card",
+    )!;
+    check(
+      terminal.textContent?.includes("Terminal"),
+      "The first room launcher choice must be Terminal",
+    );
+    terminal.click();
+    if (repeat) terminal.click();
+  };
   const gate = Promise.withResolvers<void>();
   heldMutation = gate.promise;
   fullRoom.click();
   fullRoom.click();
+  await chooseTerminal("alpha", "b", true);
   await until(
     () => calls.some((call) => call.method === "tab.create"),
     "second-room prepared dispatch",
@@ -570,6 +602,7 @@ async function run() {
   );
   check(!betaRoom.disabled, "Cold inactive host was not preparable");
   betaRoom.click();
+  await chooseTerminal("beta", "a");
   await createdInspector(2);
   check(
     store.get().activeConnectionId === "alpha",

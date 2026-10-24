@@ -91,7 +91,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     detail. Drag to pan; focused arrow keys pan too. Tap a room to zoom in.
     Phones stack buildings vertically; large towns can initially show roofs.
     **Town calm motion** reduces ambient animation. Room actions support
-    workspace/tab creation and room management on the captured host.
+    workspace/tab creation and room management on the captured host. Room
+    plates fit their room width; only the name truncates, with its full text in
+    a tooltip. Colour, desk count and blocked badge remain visible. Hover or
+    focus a plate (tap on touch screens) for Rename and Close below it, with
+    40px targets.
   - Drag a table onto another room of the same host, or an agent onto another
     table, to move it (hold, then drag on phones; **M** on a focused table or
     agent from the keyboard). A carried table lifts and sways after the
@@ -147,9 +151,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
 - **New agent and agent profiles.** **New agent** starts an agent in a new
   tab of a room you choose, from a profile (one tap) or from any agent kind the
   host's Herdr supports. It is in the Actions menu of Town and Board, on each
-  Town room's plaque (on
-  phones, tap a room, then **New agent**), beside **+** in Spaces' tab bar,
-  and in Board's New tab dialog. World creates the tab, starts the harness
+  Town room's dashed **+** seat (zoom into the room first), beside **+** in
+  Spaces' tab bar,
+  and in Board's New tab dialog. The room seat preselects its room; the
+  launcher's first choice, **Terminal**, creates a plain shell tab. World
+  creates an agent's tab, starts the harness
   through Herdr, waits until it is ready, then sends the first prompt; if the
   harness stops on a question (such as Claude's folder trust) or exits at
   once, it says so and offers to open the tab.
