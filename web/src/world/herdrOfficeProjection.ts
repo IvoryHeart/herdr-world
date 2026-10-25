@@ -1,6 +1,35 @@
 import type { OfficeHost } from "./officeHost";
 export type { OfficeHost } from "./officeHost";
 import type {
+  OfficeAgent,
+  OfficeAgentDestination,
+  OfficeCoverage,
+  OfficeDesk,
+  OfficeDeskRosterEntry,
+  OfficePaneDevice,
+  OfficePaneRosterEntry,
+  OfficeQualifiedTarget,
+  OfficeReception,
+  OfficeRoom,
+  OfficeRoomRosterEntry,
+  OfficeRosterEntry,
+} from "./officeProjectionTypes";
+export type {
+  OfficeAgent,
+  OfficeAgentDestination,
+  OfficeAgentPlacement,
+  OfficeCoverage,
+  OfficeDesk,
+  OfficeDeskRosterEntry,
+  OfficePaneDevice,
+  OfficePaneRosterEntry,
+  OfficeQualifiedTarget,
+  OfficeReception,
+  OfficeRoom,
+  OfficeRoomRosterEntry,
+  OfficeRosterEntry,
+} from "./officeProjectionTypes";
+import type {
   WorldAgentStatus,
   WorldLeafObject,
   WorldObject,
@@ -39,179 +68,20 @@ export type OfficePresentationBounds = {
   readonly [K in keyof typeof OFFICE_PRESENTATION_BOUNDS]: number;
 };
 
+export const TOWN_DESK_EXPANSION_STEP = 20;
+
 /**
- * Town rooms normally expand to 127 desks; protected desks can exceed it.
+ * Town rooms reveal a native-order prefix, expanding by 20 desks per action.
  * Layout grows for every admitted desk; other bounds match Office.
  */
 export const TOWN_PRESENTATION_BOUNDS: OfficePresentationBounds = Object.freeze(
   {
     ...OFFICE_PRESENTATION_BOUNDS,
-    desksPerRoom: 127,
+    desksPerRoom: 24 + TOWN_DESK_EXPANSION_STEP,
     foldedDesksPerRoom: 24,
     roomAgentsPerRoom: 127 * 4,
   },
 );
-
-export type OfficeQualifiedTarget = {
-  connectionId: string;
-  generation: number;
-  kind: "workspace" | "tab" | "pane" | "terminal";
-  nativeId: string;
-  worldId: string;
-};
-
-export type OfficeAgentDestination = "room" | "reception" | "bar";
-export type OfficeAgentPlacement = "seated" | "standing" | "waiting" | "bar";
-
-export type OfficeAgent = {
-  key: string;
-  nodeId: string;
-  currentPaneRef: OfficeQualifiedTarget;
-  currentTerminalRef: OfficeQualifiedTarget;
-  currentTabRef: OfficeQualifiedTarget;
-  deskKey: string | null;
-  observedGeneration: number;
-  roomKey: string;
-  hostKey: string;
-  displayLabel: string;
-  /** The name Herdr gives the agent (agent.list), when it has one. */
-  agentName?: string;
-  /** Its harness ("claude", "codex"), which picks its artwork. */
-  harness?: string;
-  taskSummary?: string;
-  semanticStatus: WorldAgentStatus;
-  stateLabels: Partial<Record<WorldAgentStatus, string>>;
-  focused: boolean;
-  destination: OfficeAgentDestination;
-  placement: OfficeAgentPlacement;
-  stale: boolean;
-  canOpenInSpaces: boolean;
-  characterIndex: number;
-};
-
-export type OfficePaneDevice = {
-  key: string;
-  nodeId: string;
-  paneRef: OfficeQualifiedTarget;
-  terminalRef: OfficeQualifiedTarget;
-  deskKey: string;
-  hostKey: string;
-  roomKey: string;
-  displayLabel: string;
-  order: number;
-  stale: boolean;
-  canOpenInSpaces: boolean;
-  agentKey?: string;
-  agentSessionFingerprint?: string;
-};
-
-export type OfficePaneRosterEntry = {
-  device: OfficePaneDevice;
-  roomLabel: string;
-  deskLabel: string;
-  hostLabel: string;
-  presented: boolean;
-};
-
-export type OfficeDesk = {
-  key: string;
-  hostKey: string;
-  roomKey: string;
-  tabRef: OfficeQualifiedTarget;
-  terminalSelectionKeys: string[];
-  observedGeneration: number;
-  displayLabel: string;
-  order: number;
-  stale: boolean;
-  canOpenInSpaces: boolean;
-  occupantAgentKey?: string;
-  completionAgentKeys: string[];
-  paneDevices: OfficePaneDevice[];
-  observedPaneCount: number;
-  omittedPaneCount: number;
-};
-
-export type OfficeRoom = {
-  key: string;
-  hostKey: string;
-  workspaceRef: OfficeQualifiedTarget;
-  observedGeneration: number;
-  displayLabel: string;
-  accessibleLabel?: string;
-  order: number;
-  stale: boolean;
-  canOpenInSpaces: boolean;
-  desks: OfficeDesk[];
-  roomAgents: OfficeAgent[];
-  omittedDeskCount: number;
-  omittedAgentCount: number;
-  observedDeskCount: number;
-  observedAgentCount: number;
-  /**
-   * Fold targets `foldedDesksPerRoom`; expansion targets `desksPerRoom`.
-   * Expanded state survives closures so the user can still explicitly Fold.
-   */
-  deskFold?: "folded" | "expanded";
-};
-
-export type OfficeReception = {
-  key: string;
-  hostKey: string;
-  hostLabel: string;
-  stale: boolean;
-  waitingAgents: OfficeAgent[];
-  observedWaitingAgentCount: number;
-  overflowCount: number;
-};
-
-export type OfficeRosterEntry = {
-  agent: OfficeAgent;
-  roomKey: string;
-  roomLabel: string;
-  hostKey: string;
-  hostLabel: string;
-  roomPresented: boolean;
-  deskPresented: boolean;
-  destinationPresented: boolean;
-};
-
-export type OfficeDeskRosterEntry = {
-  desk: OfficeDesk;
-  roomLabel: string;
-  hostLabel: string;
-  presented: boolean;
-};
-
-export type OfficeRoomRosterEntry = {
-  key: string;
-  hostKey: string;
-  hostLabel: string;
-  workspaceRef: OfficeQualifiedTarget;
-  observedGeneration: number;
-  displayLabel: string;
-  order: number;
-  stale: boolean;
-  canOpenInSpaces: boolean;
-  presented: boolean;
-};
-
-export type OfficeCoverage = {
-  configuredHosts: number;
-  observedHosts: number;
-  compatibleHosts: number;
-  connectingHosts: number;
-  staleHosts: number;
-  observedWorkspaces: number;
-  observedDesks: number;
-  observedAgents: number;
-  status: Record<WorldAgentStatus, number>;
-  omittedRooms: number;
-  omittedDesks: number;
-  omittedRoomAgents: number;
-  omittedReceptionDesks: number;
-  omittedWaitingAgents: number;
-  omittedBarAgents: number;
-};
 
 export type HerdrOfficeProjection = {
   version: 1;
@@ -254,6 +124,7 @@ type ProjectedRoom = {
     | "observedDeskCount"
     | "observedAgentCount"
     | "deskFold"
+    | "deskRenderLimit"
   >;
   desks: OfficeDesk[];
   agents: OfficeAgent[];
@@ -280,7 +151,7 @@ export function createOfficeProjector(
   let previousPreferredRoom: string | null = null;
   let previousExpanded: ReadonlySet<string> = NO_EXPANDED_ROOMS;
   let previousPinned: ReadonlySet<string> = NO_PINNED_TABS;
-  let previousProtected: ReadonlySet<string> = NO_PINNED_TABS;
+  let previousDeskLimits: ReadonlyMap<string, number> = NO_DESK_LIMITS;
   const intern = <T extends { key: string }>(next: T[], prior: T[]) => {
     const byKey = new Map(prior.map((item) => [item.key, item]));
     const result = next.map((item) => {
@@ -298,19 +169,21 @@ export function createOfficeProjector(
     selectedId: string | null,
     pinnedTabs: ReadonlySet<string> = NO_PINNED_TABS,
     expandedRooms: ReadonlySet<string> = NO_EXPANDED_ROOMS,
-    protectedDesks: ReadonlySet<string> = NO_PINNED_TABS,
     preferredRoomKey: string | null = null,
+    expandedDeskLimits: ReadonlyMap<string, number> = NO_DESK_LIMITS,
   ): HerdrOfficeProjection => {
     let next: HerdrOfficeProjection | null = null;
     const inputs = previous && projectionInputs.get(previous);
-    // Pinned desks are admitted first, and expanding or folding a room changes
-    // its bound; changes to attention desks also require fresh admission.
+    // Cache fold targets and Office pin priorities. Town admission itself
+    // remains a native-order prefix regardless of activity or selection.
     const sameAdmission =
       preferredRoomKey === previousPreferredRoom &&
       pinnedTabs === previousPinned &&
       expandedRooms === previousExpanded &&
-      protectedDesks.size === previousProtected.size &&
-      [...protectedDesks].every((key) => previousProtected.has(key));
+      expandedDeskLimits.size === previousDeskLimits.size &&
+      [...expandedDeskLimits].every(
+        ([key, limit]) => previousDeskLimits.get(key) === limit,
+      );
     if (
       previous &&
       inputs &&
@@ -440,8 +313,8 @@ export function createOfficeProjector(
         bounds,
         pinnedTabs,
         expandedRooms,
-        protectedDesks,
         preferredRoomKey,
+        expandedDeskLimits,
       );
     if (previous && next.rooms !== previous.rooms) {
       // Compare content once at projection admission, never once per canvas frame.
@@ -455,18 +328,19 @@ export function createOfficeProjector(
     previousPreferredRoom = preferredRoomKey;
     previousExpanded = expandedRooms;
     previousPinned = pinnedTabs;
-    previousProtected = new Set(protectedDesks);
+    previousDeskLimits = new Map(expandedDeskLimits);
     previous = next;
     return next;
   };
 }
 
 const NO_PINNED_TABS: ReadonlySet<string> = new Set();
+const NO_DESK_LIMITS: ReadonlyMap<string, number> = new Map();
 
 /**
  * `pinnedTabs` holds the tab card keys of Town's pinned desks (useDeskPins.ts):
- * past a room's desk bound they are admitted right after the selected desk,
- * so a pinned desk never drops out of its room.
+ * Office reserves bounded capacity for them. Town instead keeps a contiguous
+ * prefix; its pin cells apply only while those tabs are admitted.
  */
 export function projectWorldOffice(
   world: WorldObject,
@@ -476,10 +350,10 @@ export function projectWorldOffice(
   pinnedTabs: ReadonlySet<string> = NO_PINNED_TABS,
   /** Rooms the user expanded past `foldedDesksPerRoom` (room keys). */
   expandedRooms: ReadonlySet<string> = NO_EXPANDED_ROOMS,
-  /** Qualified desk keys supplied by Town's complete attention read model. */
-  protectedDesks: ReadonlySet<string> = NO_PINNED_TABS,
   /** A validated qualified room requested by camera navigation. */
   preferredRoomKey: string | null = null,
+  /** Current incremental expansion target for each expanded room. */
+  expandedDeskLimits: ReadonlyMap<string, number> = NO_DESK_LIMITS,
 ): HerdrOfficeProjection {
   const selection = selectedId ? world.nodeById.get(selectedId) : undefined;
   const selectedSpaceId =
@@ -558,15 +432,23 @@ export function projectWorldOffice(
   const rooms = presentedRooms.map((entry) => {
     const expanded = expandedRooms.has(entry.room.key);
     const folds = entry.desks.length > bounds.foldedDesksPerRoom;
+    const deskRenderLimit = expanded
+      ? Math.max(
+          bounds.foldedDesksPerRoom + TOWN_DESK_EXPANSION_STEP,
+          expandedDeskLimits.get(entry.room.key) ?? bounds.desksPerRoom,
+        )
+      : bounds.foldedDesksPerRoom;
     const desks = boundedDesks(
       entry.desks,
       entry.agents,
-      expanded ? bounds.desksPerRoom : bounds.foldedDesksPerRoom,
+      deskRenderLimit,
       (desk) =>
         entry.source.id === selectedSpaceId &&
         desk.tabRef.nativeId === selectedLeaf?.tabId,
-      (desk) => pinned(desk) || protectedDesks.has(desk.key),
-    ).map((desk) => {
+      pinned,
+      bounds === TOWN_PRESENTATION_BOUNDS,
+    );
+    const presentedDesks = desks.map((desk) => {
       const devices = boundedWithPriority(
         projectPaneDevices(entry.source.children, desk),
         bounds.paneDevicesPerDesk,
@@ -579,13 +461,17 @@ export function projectWorldOffice(
       };
     });
     const seated = new Set(
-      desks.flatMap(({ occupantAgentKey }) =>
+      presentedDesks.flatMap(({ occupantAgentKey }) =>
         occupantAgentKey ? [occupantAgentKey] : [],
       ),
     );
-    const deskOrder = new Map(desks.map((desk, index) => [desk.key, index]));
+    const deskOrder = new Map(
+      presentedDesks.map((desk, index) => [desk.key, index]),
+    );
     // A pinned desk keeps its agents too.
-    const pinnedDesks = new Set(desks.filter(pinned).map((desk) => desk.key));
+    const pinnedDesks = new Set(
+      presentedDesks.filter(pinned).map((desk) => desk.key),
+    );
     const keptAgent = (agent: { key: string; deskKey: string | null }) =>
       agent.key === selectedId ||
       (agent.deskKey !== null && pinnedDesks.has(agent.deskKey));
@@ -608,9 +494,12 @@ export function projectWorldOffice(
     );
     return {
       ...entry.room,
-      desks,
+      desks: presentedDesks,
       roomAgents: shownAgents,
-      omittedDeskCount: Math.max(0, entry.source.coverage.tabs - desks.length),
+      omittedDeskCount: Math.max(
+        0,
+        entry.source.coverage.tabs - presentedDesks.length,
+      ),
       ...(folds || expanded
         ? { deskFold: expanded ? ("expanded" as const) : ("folded" as const) }
         : {}),
@@ -622,6 +511,7 @@ export function projectWorldOffice(
       ),
       observedDeskCount: entry.source.coverage.tabs,
       observedAgentCount: entry.source.coverage.agents,
+      deskRenderLimit,
     };
   });
   const roomByKey = new Map(rooms.map((room) => [room.key, room]));

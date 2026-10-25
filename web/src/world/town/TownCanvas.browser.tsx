@@ -9,11 +9,9 @@ import { buildWorldObject, type WorldObject } from "../worldObject";
 import TownView from "../TownView";
 import { AgentLauncherDialog } from "../AgentLauncherDialog";
 import { WORLD_AGENT_LAUNCH_EVENT, type LaunchTarget } from "../agentProfiles";
-import { projectWorldOffice } from "../herdrOfficeProjection";
 import type { WorldAsk } from "../worldAsks";
-import { townCalls, unseenTownCompletions } from "./TownRail";
-import { townAttentionDesks } from "./townAttention";
 import { checkTownRoomPlates } from "./townRoomPlates.browser";
+import { checkTownRoomFold } from "./townRoomFold.browser";
 import type { BoardDocument, BoardOp } from "../board/boardDocument";
 import {
   WorldPanelsContext,
@@ -29,10 +27,7 @@ import {
   type BridgeControlMsg,
   type ConnectionClient,
 } from "../../api";
-import {
-  officeCompletionIdentity,
-  readCompletionSeen,
-} from "../completionSeenState";
+import { readCompletionSeen } from "../completionSeenState";
 import { worldSourcesStore } from "../worldSources";
 import "../world.css";
 import {
@@ -173,15 +168,30 @@ function topology(seed: number): Topology {
   const agentPanes: Pane[] = [];
   const connections = HOSTS.map((host): WorldRuntimeConnection => {
     const roomNames =
-      scale === "recovery"
-        ? host.rooms.slice(0, 1)
-        : scale === "navigation"
+      scale === "fold"
+        ? host === HOSTS[0]
+          ? ["fold-room"]
+          : [`${host.id}-room`]
+        : scale === "fold-protected"
           ? host === HOSTS[0]
-            ? Array.from({ length: 128 }, (_, index) => `focus-room-${index}`)
-            : [`${host.id}-destination`]
-          : scale === "max" || scale === "plates"
-            ? host.rooms
-            : host.rooms.slice(0, 5 + Math.floor(r() * 4));
+            ? ["all-protected-room"]
+            : [`${host.id}-room`]
+          : scale === "incremental"
+            ? host === HOSTS[0]
+              ? ["incremental-room"]
+              : [`${host.id}-room`]
+            : scale === "recovery"
+              ? host.rooms.slice(0, 1)
+              : scale === "navigation"
+                ? host === HOSTS[0]
+                  ? Array.from(
+                      { length: 128 },
+                      (_, index) => `focus-room-${index}`,
+                    )
+                  : [`${host.id}-destination`]
+                : scale === "max" || scale === "plates"
+                  ? host.rooms
+                  : host.rooms.slice(0, 5 + Math.floor(r() * 4));
     const workspaces: Workspace[] = [];
     const tabs: Tab[] = [];
     const panes: Pane[] = [];
@@ -194,16 +204,36 @@ function topology(seed: number): Topology {
           ? [scale === "protected" ? 160 : 100, 50, 24][roomIndex]
           : 0;
       const deskCount =
-        scale === "recovery"
-          ? 4
-          : scale === "navigation" || scale === "plates"
-            ? 1
-            : extended
-              ? extended
-              : scale === "max"
-                ? 11 + Math.floor(r() * 5)
-                : 3 + Math.floor(r() * r() * 13);
+        scale === "incremental" && host === HOSTS[0] && roomIndex === 0
+          ? 100
+          : (scale === "fold" || scale === "fold-protected") &&
+              host === HOSTS[0] &&
+              roomIndex === 0
+            ? 26
+            : scale === "recovery"
+              ? 4
+              : scale === "navigation" || scale === "plates"
+                ? 1
+                : extended
+                  ? extended
+                  : scale === "max"
+                    ? 11 + Math.floor(r() * 5)
+                    : 3 + Math.floor(r() * r() * 13);
       let paneTotal = 0;
+      const foldStatuses =
+        scale === "fold" && host === HOSTS[0] && roomIndex === 0
+          ? Array.from({ length: deskCount }, (_, index) =>
+              index === 0 || index === 24
+                ? "blocked"
+                : index === 25
+                  ? "done"
+                  : index < 3
+                    ? "working"
+                    : "idle",
+            )
+          : scale === "fold-protected" && host === HOSTS[0]
+            ? Array.from({ length: deskCount }, () => "working")
+            : null;
       const plateStatuses =
         scale === "plates"
           ? [
@@ -229,16 +259,20 @@ function topology(seed: number): Topology {
       for (let d = 0; d < deskCount; d += 1) {
         const tabId = `${workspaceId}-tab-${d}`;
         // One crowded desk has more panes than drawn seats.
-        const paneCount = plateStatuses
-          ? plateStatuses.length + 2
-          : host === HOSTS[0] && roomIndex === 0 && d === 0
-            ? 6
-            : scale === "max"
-              ? 3 + Math.floor(r() * 2)
-              : 2 + Math.floor(r() * 3);
-        const agents = plateStatuses
-          ? plateStatuses.length
-          : Math.min(paneCount, 1 + (r() < 0.55 ? 1 : 0));
+        const paneCount = foldStatuses
+          ? 1
+          : plateStatuses
+            ? plateStatuses.length + 2
+            : host === HOSTS[0] && roomIndex === 0 && d === 0
+              ? 6
+              : scale === "max"
+                ? 3 + Math.floor(r() * 2)
+                : 2 + Math.floor(r() * 3);
+        const agents = foldStatuses
+          ? 1
+          : plateStatuses
+            ? plateStatuses.length
+            : Math.min(paneCount, 1 + (r() < 0.55 ? 1 : 0));
         tabs.push({
           tab_id: tabId,
           workspace_id: workspaceId,
@@ -259,9 +293,15 @@ function topology(seed: number): Topology {
             focused: p === 0,
             agent: isAgent ? AGENTS[Math.floor(r() * AGENTS.length)]! : "",
             agent_status: isAgent
-              ? plateStatuses
-                ? plateStatuses[p]!
-                : STATUSES[Math.floor(r() * STATUSES.length)]!
+              ? foldStatuses
+                ? foldStatuses[d]!
+                : plateStatuses
+                  ? plateStatuses[p]!
+                  : scale === "incremental"
+                    ? d === 0
+                      ? "done"
+                      : "idle"
+                    : STATUSES[Math.floor(r() * STATUSES.length)]!
               : "",
             task_summary: isAgent ? `${name} on ${roomName}` : undefined,
             revision: 1,
@@ -1198,6 +1238,65 @@ async function run() {
     return;
   }
 
+  if (scale === "fold" && mode === "test") {
+    const foldRoomAgents = base.agentPanes.filter((pane) =>
+      pane.workspace_id.includes("fold-room"),
+    );
+    await checkTownRoomFold(
+      host,
+      check,
+      waitFor,
+      foldRoomAgents.filter(
+        (pane) =>
+          pane.agent_status === "working" || pane.agent_status === "blocked",
+      ).length,
+      foldRoomAgents.length,
+    );
+    root.unmount();
+    await settle();
+    return;
+  }
+
+  if (scale === "fold-protected" && mode === "test") {
+    const rendered = window.__HERDR_TOWN_RENDERER__!;
+    const card = [
+      ...host.querySelectorAll<HTMLButtonElement>(".town-room-card"),
+    ].find((candidate) =>
+      candidate.textContent?.includes("all-protected-room"),
+    );
+    check(card !== undefined, "all-protected room has no overview card");
+    if (card) {
+      const room = card.closest<HTMLElement>(".town-room");
+      check(
+        room?.querySelector(".town-fold-tile") !== null,
+        "a 26-tab working room must still offer its two hidden tabs",
+      );
+      const beforeFrames = rendered.frames;
+      card.click();
+      await waitFor(
+        () =>
+          rendered.frames > beforeFrames &&
+          !rendered.flying &&
+          rendered.level !== "overview",
+        "all-protected room focus never settled",
+      );
+      await waitFor(
+        () =>
+          [
+            ...host.querySelectorAll<HTMLElement>(
+              '.world-semantic-target[data-kind="desk"]',
+            ),
+          ].filter((target) =>
+            target.dataset.targetKey?.includes("all-protected-room"),
+          ).length === 24,
+        "a working room must still fold to the first 24 tabs",
+      );
+    }
+    root.unmount();
+    await settle();
+    return;
+  }
+
   if (scale === "protected" && mode === "test") {
     const rendered = window.__HERDR_TOWN_RENDERER__!;
     const orbitCard = () =>
@@ -1232,27 +1331,42 @@ async function run() {
     );
     check(
       Array.from(
-        { length: 130 },
+        { length: 24 },
         (_, index) => `local-orbit-tab-${index}`,
       ).every((key) => visible.has(key)),
-      "protected desks beyond 127 lost their browser targets",
+      "the folded prefix lost one of its first 24 tab targets",
     );
     const orbit = [...visible].filter((key) =>
       key.startsWith("local-orbit-tab-"),
     ).length;
     const expand = host.querySelector<HTMLButtonElement>(
-      'button[aria-label^="Expand room orbit"]',
+      '.town-fold-tile[aria-label^="Show "]',
     );
     check(
-      expand?.textContent?.trim() === `+${160 - orbit}`,
+      expand?.querySelector("span")?.textContent === `+${160 - orbit}`,
       `protected room plaque ${expand?.textContent?.trim()} disagrees with ${orbit} visible desks of 160`,
     );
     check(
-      expand?.getAttribute("aria-label") ===
-        "Expand room orbit toward 127 desks" &&
-        expand.title.includes("127 desks") &&
-        !expand.title.includes("all 160"),
-      "expansion accessibility text overpromises all 160 desks",
+      orbit === 24,
+      "attention must not promote later tabs into the native-order prefix",
+    );
+    check(
+      !!expand?.querySelector(".town-fold-needs"),
+      "hidden attention needs the red fold indicator",
+    );
+    const remainingDesks = 160 - orbit;
+    const expectedReveal =
+      remainingDesks > 20
+        ? "Show up to 20 more hidden desks in orbit"
+        : `Show the remaining ${remainingDesks} hidden ${remainingDesks === 1 ? "desk" : "desks"} in orbit`;
+    const expectedTitle =
+      remainingDesks > 20
+        ? "Show up to 20 more hidden desks"
+        : `Show the remaining ${remainingDesks} hidden ${remainingDesks === 1 ? "desk" : "desks"}`;
+    check(
+      expand?.getAttribute("aria-label")?.startsWith(expectedReveal) === true &&
+        expand.title.startsWith(expectedTitle),
+      "fold tile needs an accurate hidden-desk accessibility label",
     );
     check(
       rendered.lastError === null,
@@ -1514,84 +1628,146 @@ async function run() {
   );
   const waitingEntries = host.querySelectorAll(".town-reception-entry").length;
   check(waitingEntries > 0, "blocked agents did not appear at reception");
-  // A room past 24 desks shows its busiest until expanded into a longer room.
+  // Folding shows a contiguous prefix in the same native order as Spaces.
   const perRoom = new Map<string, number>();
   for (const entry of base.connections.flatMap((c) => c.snapshot?.tabs ?? []))
     perRoom.set(entry.workspace_id, (perRoom.get(entry.workspace_id) ?? 0) + 1);
-  const expectedOffice = projectWorldOffice(
-    worldFor(base.connections),
-    Date.now(),
-  );
-  const seen = readCompletionSeen(worldLocalStorage);
-  const expectedCalls = townCalls(
-    expectedOffice.roster,
-    new Map(),
-    unseenTownCompletions(
-      expectedOffice.roster,
-      new Set(
-        expectedOffice.roster
-          .filter(({ agent }) => seen.has(officeCompletionIdentity(agent)))
-          .map(({ agent }) => agent.key),
-      ),
-    ),
-    (key) => expectedOffice.roster.find(({ agent }) => agent.key === key),
-  );
-  const protectedDesks = townAttentionDesks(
-    expectedCalls,
-    ledger.asks,
-    expectedOffice.roster,
-  );
-  const protectedCounts = new Map<string, number>();
-  for (const { desk } of expectedOffice.deskRoster)
-    if (protectedDesks.has(desk.key)) {
-      const id = expectedOffice.rooms.find(({ key }) => key === desk.roomKey)!
-        .workspaceRef.nativeId;
-      protectedCounts.set(id, (protectedCounts.get(id) ?? 0) + 1);
-    }
   const drawn = (expanded: string | null) =>
     [...perRoom].reduce(
       (sum, [id, count]) =>
-        sum +
-        Math.max(
-          id === expanded ? count : Math.min(count, 24),
-          protectedCounts.get(id) ?? 0,
-        ),
+        sum + (id === expanded ? count : Math.min(count, 24)),
       0,
     );
-  const visibleDeskKeys = new Set(
-    [
-      ...host.querySelectorAll<HTMLElement>(
-        '.world-semantic-target[data-kind="desk"]',
-      ),
-    ].map((target) => target.dataset.targetKey),
-  );
-  check(
-    [...protectedDesks].every((key) => visibleDeskKeys.has(key)),
-    "fold hid a desk from the shared call/ask attention source",
-  );
   check(
     diagnostics.desks === drawn(null),
     `a folded town drew ${diagnostics.desks} of ${drawn(null)} desks`,
   );
-  if (scale === "extended") {
+  if (scale === "extended" || scale === "incremental") {
+    const roomId =
+      scale === "extended" ? "local-orbit" : "local-incremental-room";
+    const roomLabel = scale === "extended" ? "orbit" : "incremental-room";
+    const roomElement = [
+      ...host.querySelectorAll<HTMLElement>(".town-room"),
+    ].find(
+      (candidate) =>
+        candidate.querySelector(".town-room-plaque-name")?.textContent ===
+        roomLabel,
+    );
     const expand = () =>
-      host.querySelector<HTMLButtonElement>(
-        'button[aria-label^="Expand room orbit"]',
+      roomElement?.querySelector<HTMLButtonElement>(
+        '.town-fold-tile[aria-label^="Show "]',
       );
-    check(expand() !== null, "the 100-desk room offers no Expand");
-    expand()?.click();
-    // Wait for the drawn targets: the reflow waits for the press to settle.
-    await waitFor(
-      () =>
-        diagnostics.desks === drawn("local-orbit") &&
-        host.querySelectorAll('.world-semantic-target[data-kind="desk"]')
-          .length === drawn("local-orbit"),
-      `expanding the 100-desk room drew ${diagnostics.desks} of ${drawn("local-orbit")} desks`,
+    const orbitDeskCount = () =>
+      [
+        ...host.querySelectorAll<HTMLElement>(
+          '.world-semantic-target[data-kind="desk"]',
+        ),
+      ].filter((target) => target.dataset.targetKey?.includes(`${roomId}-tab-`))
+        .length;
+    const orbitDeskTotal = perRoom.get(roomId) ?? 0;
+    check(expand() !== null, `the ${roomId} room offers no Expand`);
+    if (scale === "incremental") {
+      expand()?.click();
+      await waitFor(
+        () =>
+          orbitDeskCount() === 44 &&
+          host.querySelector(
+            '.world-semantic-targets-overlay[aria-busy="false"]',
+          ) !== null,
+        "the first expansion did not reveal 20 additional desks",
+      );
+      const reset =
+        roomElement?.querySelector<HTMLButtonElement>(".town-fold-reset");
+      check(!!reset, "a partly expanded room must offer Fold immediately");
+      const controls = [
+        roomElement?.querySelector<HTMLElement>(
+          ".world-new-seat-canvas-action",
+        ),
+        expand(),
+        reset,
+      ].filter((control): control is HTMLElement => !!control);
+      const boxes = controls.map((control) => control.getBoundingClientRect());
+      check(
+        boxes.length === 3 &&
+          boxes.every((box) => box.width >= 40 && box.height >= 40),
+        "partial expansion keeps three 40px action targets",
+      );
+      check(
+        boxes.every(
+          (box, index) => index === 0 || box.left >= boxes[index - 1]!.right,
+        ),
+        "partial expansion action targets overlap",
+      );
+      reset?.click();
+      await waitFor(
+        () =>
+          orbitDeskCount() === 24 &&
+          host.querySelector(
+            '.world-semantic-targets-overlay[aria-busy="false"]',
+          ) !== null,
+        "one Fold click after the first expansion did not restore 24 desks",
+      );
+    }
+    let expansionSteps = 0;
+    while (orbitDeskCount() < orbitDeskTotal) {
+      const before = orbitDeskCount();
+      const button = expand();
+      check(
+        button !== null,
+        `a partially expanded ${roomId} room lost its Expand tile`,
+      );
+      if (!button) break;
+      button.click();
+      await waitFor(
+        () =>
+          orbitDeskCount() > before &&
+          host.querySelector(
+            '.world-semantic-targets-overlay[aria-busy="false"]',
+          ) !== null,
+        () => {
+          const current = expand();
+          return `the next Expand click left ${roomId} at ${orbitDeskCount()} of ${orbitDeskTotal} desks (tile=${current?.textContent?.trim() ?? "missing"}; label=${current?.getAttribute("aria-label") ?? "missing"})`;
+        },
+      );
+      expansionSteps += 1;
+      check(
+        orbitDeskCount() - before <= 20,
+        `${roomId} revealed more than 20 desks in one click`,
+      );
+      if (expansionSteps === 1 && orbitDeskCount() < orbitDeskTotal)
+        check(
+          expand()
+            ?.getAttribute("aria-label")
+            ?.includes("up to 20 more hidden") === true,
+          "the incremental Expand label promises more desks than one click reveals",
+        );
+    }
+    check(
+      scale === "extended" || expansionSteps > 1,
+      "a 100-desk idle room expanded in only one click",
     );
     check(
-      host.querySelector('button[aria-label^="Fold room orbit"]') !== null,
-      "an expanded room offers Fold",
+      orbitDeskCount() === orbitDeskTotal,
+      `expanding ${roomId} drew ${orbitDeskCount()} of ${orbitDeskTotal} desks`,
     );
+    if (scale === "incremental") {
+      const fold = roomElement?.querySelector<HTMLButtonElement>(
+        `.town-fold-tile[aria-label="Fold ${roomLabel} back to 24 desks"]`,
+      );
+      check(fold !== null, "an expanded room offers Fold");
+      fold?.click();
+      await waitFor(
+        () =>
+          orbitDeskCount() === 24 &&
+          host.querySelector(
+            '.world-semantic-targets-overlay[aria-busy="false"]',
+          ) !== null,
+        "one Fold click did not restore the 24-desk target",
+      );
+      root.unmount();
+      await settle();
+      return;
+    }
   }
   const deskTargets = host.querySelectorAll(
     '.world-semantic-target[data-kind="desk"]',
@@ -2649,11 +2825,11 @@ async function run() {
     const expandedDesks = diagnostics.desks;
     const expandedGeometry = diagnostics.layout!.geometry;
     host
-      .querySelector<HTMLButtonElement>('button[aria-label^="Fold room orbit"]')
+      .querySelector<HTMLButtonElement>('.town-fold-tile[aria-label^="Fold "]')
       ?.click();
     const foldedPlaque = () =>
       host.querySelector<HTMLButtonElement>(
-        'button[aria-label^="Expand room orbit"]',
+        '.town-fold-tile[aria-label^="Show "]',
       );
     await waitFor(
       () =>
@@ -2679,7 +2855,8 @@ async function run() {
       JSON.parse(target.dataset.targetKey!)[2].startsWith("local-orbit-tab-"),
     ).length;
     check(
-      foldedPlaque()!.textContent?.trim() === `+${100 - orbitDesks}`,
+      foldedPlaque()!.querySelector("span")?.textContent ===
+        `+${100 - orbitDesks}`,
       `fold plaque ${foldedPlaque()!.textContent?.trim()} disagrees with ${orbitDesks} visible desks of 100`,
     );
 
@@ -2882,7 +3059,9 @@ async function run() {
 
 run()
   .catch((error: unknown) => {
-    failures.push(error instanceof Error ? error.message : String(error));
+    failures.push(
+      error instanceof Error ? (error.stack ?? error.message) : String(error),
+    );
   })
   .finally(() => {
     if (mode === "test")

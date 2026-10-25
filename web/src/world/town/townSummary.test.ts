@@ -12,7 +12,7 @@ import type { WorldRuntimeConnection } from "../runtimeStore";
 import { buildWorldObject, worldObjectForHosts } from "../worldObject";
 import { officeReadModel } from "../officeReadModel";
 import { withTownFinished } from "./townFinished";
-import { townAttentionDesks } from "./townAttention";
+import { townFoldedActivity } from "./townFoldedActivity";
 import { townCalls, type TownCall } from "./TownRail";
 import type { WorldAsk } from "../worldAsks";
 import { townSummary, townSummaryAge } from "./townSummary";
@@ -225,11 +225,6 @@ test("verified asks use snapshot-qualified indexes across host collisions and ge
       return Reflect.get(target, key, receiver);
     },
   });
-  const resolve = officeReadModel(cached).agentForPane;
-  expect([...townAttentionDesks([], [ask], cached.roster, resolve)]).toEqual([
-    agent.deskKey!,
-  ]);
-  expect([...townAttentionDesks([], [], cached.roster, resolve)]).toEqual([]);
   const withAsk = townSummary(cached, [], NO_METRICS, undefined, [ask]);
   expect(withAsk.counts.needsYou).toBe(1);
   expect(townSummary(cached, [], NO_METRICS).hosts).toBe(withAsk.hosts);
@@ -254,9 +249,6 @@ test("verified asks use snapshot-qualified indexes across host collisions and ge
   await prepareWorldOffice(replacement);
   const current = project(replacement, 3, null);
   const lookup = officeReadModel(current).agentForPane;
-  expect([...townAttentionDesks([], [ask], current.roster, lookup)]).toEqual(
-    [],
-  );
   expect(
     lookup("other", agent.currentPaneRef.nativeId)?.observedGeneration,
   ).toBe(2);
@@ -331,7 +323,7 @@ test("bounded prepared totals retain exact finish and seen deltas on observed ag
   expect(base.coverage.status.idle).toBe(18);
 });
 
-test("a verified Ask keeps its folded desk during a cached-generation reconnect and releases it on removal", async () => {
+test("a verified Ask marks its hidden desk during a cached-generation reconnect without changing tab order", async () => {
   const { connection } = office({ alpha: Array<string>(30).fill("idle") });
   const world = buildWorldObject(
     [
@@ -350,8 +342,11 @@ test("a verified Ask keeps its folded desk during a cached-generation reconnect 
   const pins = new Set<string>();
   const expanded = new Set<string>();
   const baseline = project(world, 1, null, pins, expanded);
+  const visibleDesks = new Set(
+    baseline.rooms.flatMap((room) => room.desks.map((desk) => desk.key)),
+  );
   const agent = baseline.roster.find(
-    ({ agent }) => agent.currentPaneRef.nativeId === "alpha:t0:p",
+    ({ agent }) => agent.deskKey && !visibleDesks.has(agent.deskKey),
   )!.agent;
   expect(
     baseline.rooms[0]!.desks.some((desk) => desk.key === agent.deskKey),
@@ -370,21 +365,23 @@ test("a verified Ask keeps its folded desk during a cached-generation reconnect 
       terminal_id: agent.currentTerminalRef.nativeId,
     },
   };
-  const legacy = townAttentionDesks([], [ask], baseline.roster);
-  const indexed = townAttentionDesks(
-    [],
-    [ask],
-    baseline.roster,
-    officeReadModel(baseline).agentForPane,
-  );
-  expect([...indexed]).toEqual([...legacy]);
-  expect([...indexed]).toEqual([agent.deskKey!]);
-  const protectedOffice = project(world, 2, null, pins, expanded, indexed);
+  const foldedOffice = project(world, 2, null, pins, expanded);
   expect(
-    protectedOffice.rooms[0]!.desks.some((desk) => desk.key === agent.deskKey),
-  ).toBe(true);
+    foldedOffice.rooms[0]!.desks.some((desk) => desk.key === agent.deskKey),
+  ).toBe(false);
+  foldedOffice.roster = new Proxy(foldedOffice.roster, {
+    get(target, key, receiver) {
+      if (key === Symbol.iterator)
+        throw Error("hidden Ask indicator scanned the roster");
+      return Reflect.get(target, key, receiver);
+    },
+  });
   expect(
-    officeReadModel(protectedOffice).agentForPane(
+    townFoldedActivity(foldedOffice, [], [ask]).get(agent.roomKey),
+  ).toEqual({ needsYou: true, done: false });
+  expect(townFoldedActivity(foldedOffice, [], []).size).toBe(0);
+  expect(
+    officeReadModel(foldedOffice).agentForPane(
       "studio",
       agent.currentPaneRef.nativeId,
     )?.observedGeneration,
@@ -393,16 +390,9 @@ test("a verified Ask keeps its folded desk during a cached-generation reconnect 
     ...ask,
     actor: { ...ask.actor, terminal_id: "another-terminal" },
   };
-  expect([
-    ...townAttentionDesks(
-      [],
-      [mismatched],
-      baseline.roster,
-      officeReadModel(baseline).agentForPane,
-    ),
-  ]).toEqual([]);
+  expect(townFoldedActivity(foldedOffice, [], [mismatched]).size).toBe(0);
   expect(
-    project(world, 3, null, pins, expanded, new Set()).rooms[0]!.desks.some(
+    project(world, 3, null, pins, expanded).rooms[0]!.desks.some(
       (desk) => desk.key === agent.deskKey,
     ),
   ).toBe(false);
