@@ -2,6 +2,7 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import {
   inferredWindows,
+  canonicalReviewer,
   renderComment,
   renderTable,
   validateWindow,
@@ -15,7 +16,7 @@ import {
   type Seat,
 } from "./usage-records";
 import { postComment, prMetadata, run } from "./usage-github";
-import { UsageStore } from "./usage-store";
+import { UsageStore, type Assignment } from "./usage-store";
 
 type Options = {
   command: string;
@@ -109,10 +110,10 @@ export function parsePrOptions(args: string[]): Options {
     throw new Error("--post is only valid for comment");
   if (
     options.command === "assign" &&
-    (!options.seat || !options.role || !options.from)
+    (!options.seat || !options.role || !options.from || !options.until)
   )
     throw new Error(
-      "assign requires --seat, --role and --from (assignment timestamp)",
+      "assign requires --seat, --role, --from (assignment) and --until (last push)",
     );
   if (options.from && options.until && options.from >= options.until)
     throw new Error("--from must precede --until");
@@ -157,6 +158,21 @@ export function uniqueSeats(seats: Seat[]) {
     );
   }
   return [...result.values()];
+}
+export function prMissingCount(
+  pr: number,
+  unavailable: Seat[],
+  windows: Window[],
+  assignments: Assignment[],
+) {
+  const relevant = [...windows, ...assignments].filter((w) => w.pr === pr);
+  return new Set(
+    unavailable
+      .filter((s) =>
+        relevant.some((w) => w.session === s.session && w.seat === s.seat),
+      )
+      .map((s) => `${s.family}:${s.session}`),
+  ).size;
 }
 export async function prUsageMain(args: string[]) {
   const options = parsePrOptions(args);
@@ -204,7 +220,7 @@ export async function prUsageMain(args: string[]) {
         session: seat.session,
         role: options.role!,
         from: options.from!,
-        until: options.until ?? "9999-12-31T23:59:59.999Z",
+        until: options.until!,
         source: "assignment",
       });
       store.assign(
@@ -214,7 +230,7 @@ export async function prUsageMain(args: string[]) {
           session: seat.session,
           role: options.role!,
           from: options.from!,
-          until: options.until,
+          until: options.until!,
         },
         seat,
       );
@@ -241,9 +257,9 @@ export async function prUsageMain(args: string[]) {
     const metadata = await prMetadata(repo, options.pr);
     const now = new Date().toISOString();
     const windows: Window[] = [];
-    let missing = 0;
+    const unavailable: Seat[] = [];
     const loaded = await resolveLogs(seats, options.roots, (seat) => {
-      missing++;
+      unavailable.push(seat);
       if (
         options.sessions.includes(seat.session) ||
         options.sessions.includes(seat.path ?? "")
@@ -266,7 +282,7 @@ export async function prUsageMain(args: string[]) {
     for (const assignment of store
       .assignments()
       .filter((a) => a.pr === options.pr)) {
-      const until = assignment.until ?? metadata.pushedAt;
+      const until = assignment.until;
       if (until && until > assignment.from)
         windows.push({ ...assignment, until, source: "assignment" });
       else
@@ -274,11 +290,33 @@ export async function prUsageMain(args: string[]) {
           "An assignment has no usable last-push boundary; register --until to attribute its usage.",
         );
     }
+    const validReviews = new Set(
+      metadata.reviews.flatMap((r) => {
+        const seat = canonicalReviewer(r.body, options.pr);
+        return seat
+          ? [JSON.stringify([seat, new Date(r.submittedAt).toISOString()])]
+          : [];
+      }),
+    );
+    const retainedWindows = store
+      .windows(options.pr)
+      .filter(
+        (w) =>
+          w.source !== "review" ||
+          validReviews.has(JSON.stringify([w.seat, w.until])),
+      );
+    const missing = prMissingCount(
+      options.pr,
+      unavailable,
+      [...retainedWindows, ...windows],
+      store.assignments(),
+    );
     store.refresh(
       options.pr,
       loaded.map((r) => ({ seat: r.seat, events: r.parsed.events })),
       windows,
       missing,
+      validReviews,
     );
     const rows = store.rows();
     if (options.command === "comment") {

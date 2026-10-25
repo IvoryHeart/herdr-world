@@ -1,5 +1,7 @@
 import { readFile, realpath } from "node:fs/promises";
-import { basename, isAbsolute } from "node:path";
+import { existsSync } from "node:fs";
+import { basename, dirname, isAbsolute, join } from "node:path";
+import { codexUsage, reconcileEvents, snapshotId } from "./usage-reconcile";
 
 export type Family = "codex" | "claude";
 export type Seat = {
@@ -23,6 +25,8 @@ export type UsageEvent = Tokens & {
   model: string;
   effort: string;
   at: string;
+  snapshot?: string;
+  replaces?: string[];
 };
 export type Turn = { at: string; text: string };
 export type ParsedSession = { events: UsageEvent[]; turns: Turn[] };
@@ -83,7 +87,6 @@ export function parseSession(seat: Seat, lines: string): ParsedSession {
   }
   const events = new Map<string, UsageEvent>();
   const turns: Turn[] = [];
-  const dedicated = records.some((r) => r.type === "token_usage_record");
   const userEvents = records.some(
     (r) => r.type === "event_msg" && r.payload?.type === "user_message",
   );
@@ -129,7 +132,6 @@ export function parseSession(seat: Seat, lines: string): ParsedSession {
       if (events.has(id)) throw new Error("Duplicate Codex response usage");
     } else {
       if (
-        dedicated ||
         record.type !== "event_msg" ||
         payload.type !== "token_count" ||
         !payload.info?.last_token_usage
@@ -138,11 +140,14 @@ export function parseSession(seat: Seat, lines: string): ParsedSession {
       usage = payload.info.last_token_usage;
       const cumulative = payload.info.total_token_usage;
       // Token-count notifications can repeat without a new response.
-      id = `count:${cumulative ? JSON.stringify(cumulative) : `${record.timestamp}:${JSON.stringify(usage)}`}`;
+      id = cumulative
+        ? snapshotId(cumulative)
+        : `count:${record.timestamp}:${JSON.stringify(codexUsage(usage))}`;
       if (events.has(id)) continue;
     }
     if (!Number.isFinite(Date.parse(record.timestamp)))
       throw new Error("Invalid usage timestamp");
+    const codex = seat.family === "codex" ? codexUsage(usage) : null;
     const cached = number(
       seat.family === "codex"
         ? usage.cached_input_tokens
@@ -163,11 +168,15 @@ export function parseSession(seat: Seat, lines: string): ParsedSession {
       at: new Date(record.timestamp).toISOString(),
       model: message?.model ?? payload.model ?? model,
       effort: payload.effort ?? payload.reasoning_effort ?? effort,
-      input: seat.family === "codex" ? rawInput - cached : rawInput,
+      input:
+        seat.family === "codex" ? rawInput - cached - codex!.write : rawInput,
       cacheRead: cached,
-      cacheWrite: number(usage.cache_creation_input_tokens),
+      cacheWrite: codex?.write ?? number(usage.cache_creation_input_tokens),
       output,
       responses: 1,
+      ...(record.type === "token_usage_record" && payload.thread_token_usage
+        ? { snapshot: snapshotId(payload.thread_token_usage) }
+        : {}),
     };
     const prior = events.get(id);
     if (prior) {
@@ -183,7 +192,7 @@ export function parseSession(seat: Seat, lines: string): ParsedSession {
     } else events.set(id, event);
   }
   return {
-    events: [...events.values()],
+    events: reconcileEvents([...events.values()]),
     turns: turns.sort((a, b) => a.at.localeCompare(b.at)),
   };
 }
@@ -225,6 +234,7 @@ export async function resolveLogs(
   for (const seat of seats) {
     let resolved: Seat;
     let parsed: ParsedSession;
+    const consumed: string[] = [];
     try {
       const matches = isAbsolute(seat.session)
         ? [seat.session]
@@ -237,16 +247,38 @@ export async function resolveLogs(
         );
       resolved = { ...seat, path: await realpath(matches[0]!) };
       parsed = parseSession(resolved, await readFile(resolved.path!, "utf8"));
+      consumed.push(resolved.path!);
+      if (seat.family === "claude") {
+        const companionRoot = join(
+          dirname(resolved.path!),
+          basename(resolved.path!, ".jsonl"),
+          "subagents",
+        );
+        if (existsSync(companionRoot))
+          for await (const child of new Bun.Glob("**/*.jsonl").scan({
+            cwd: companionRoot,
+            absolute: true,
+            onlyFiles: true,
+          })) {
+            const childPath = await realpath(child);
+            consumed.push(childPath);
+            parsed.events.push(
+              ...parseSession(resolved, await readFile(childPath, "utf8"))
+                .events,
+            );
+          }
+        parsed.events = reconcileEvents(parsed.events);
+      }
     } catch (error) {
       if (!onMissing) throw error;
       onMissing(seat);
       continue;
     }
-    if (seenPaths.has(resolved.path!))
+    if (consumed.some((path) => seenPaths.has(path)))
       throw new Error(
         "Two session identifiers resolve to the same log; select one canonical session",
       );
-    seenPaths.add(resolved.path!);
+    consumed.forEach((path) => seenPaths.add(path));
     result.push({ seat: resolved, parsed });
   }
   return result;

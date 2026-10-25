@@ -3,6 +3,7 @@ import { mkdirSync, chmodSync } from "node:fs";
 import { dirname } from "node:path";
 import { attribute, type Row, type Window } from "./usage-attribution";
 import type { Seat, UsageEvent } from "./usage-records";
+import { reconcileEvents } from "./usage-reconcile";
 
 export type Assignment = {
   pr: number;
@@ -10,7 +11,7 @@ export type Assignment = {
   session: string;
   role: Window["role"];
   from: string;
-  until?: string;
+  until: string;
 };
 
 /** Own tables only: coordlab's gate database and schema remain independent. */
@@ -46,6 +47,9 @@ export class UsageStore {
   }
   rows() {
     return this.values<Row>("usage_rows");
+  }
+  windows(pr: number) {
+    return this.values<Window>("usage_windows").filter((w) => w.pr === pr);
   }
   missing(pr: number) {
     return (
@@ -92,45 +96,45 @@ export class UsageStore {
     sessions: { seat: Seat; events: UsageEvent[] }[],
     windows: Window[],
     missing: number,
+    validReviews?: Set<string>,
   ) {
     this.db
       .transaction(() => {
-        const retained = this.values<Window>("usage_windows").filter(
+        const retained = this.windows(pr).filter(
           (w) =>
-            w.pr === pr &&
-            w.source !== "assignment" &&
-            !sessions.some((s) => s.seat.session === w.session),
+            w.source !== "review" ||
+            !validReviews ||
+            validReviews.has(JSON.stringify([w.seat, w.until])),
         );
         for (const { seat, events } of sessions) {
           const key = `${seat.family}:${seat.session}`;
           this.db
             .query("INSERT OR REPLACE INTO usage_sessions VALUES (?, ?)")
             .run(key, JSON.stringify(seat));
-          // Upsert rather than delete: a live/truncated/moved log must not erase measured usage.
-          for (const event of events) {
-            const id = JSON.stringify([seat.family, seat.session, event.id]);
-            const previous = this.db
-              .query("SELECT payload FROM usage_events WHERE key = ?")
-              .get(id) as { payload: string } | null;
-            const merged = { ...event };
-            if (previous) {
-              const prior = JSON.parse(previous.payload) as UsageEvent;
-              for (const field of [
-                "input",
-                "cacheRead",
-                "cacheWrite",
-                "output",
-              ] as const)
-                merged[field] = Math.max(prior[field], event[field]);
-              merged.at = prior.at < event.at ? prior.at : event.at;
-            }
+          const previous = (
+            this.db
+              .query("SELECT payload FROM usage_events WHERE session_key = ?")
+              .all(key) as { payload: string }[]
+          ).map((r) => JSON.parse(r.payload) as UsageEvent);
+          const reconciled = reconcileEvents([...previous, ...events]);
+          this.db
+            .query("DELETE FROM usage_events WHERE session_key = ?")
+            .run(key);
+          for (const merged of reconciled) {
+            const id = JSON.stringify([seat.family, seat.session, merged.id]);
             this.db
               .query("INSERT OR REPLACE INTO usage_events VALUES (?, ?, ?)")
               .run(id, key, JSON.stringify(merged));
           }
         }
         this.db.query("DELETE FROM usage_windows WHERE pr = ?").run(pr);
-        for (const window of [...windows, ...retained])
+        const mergedWindows = new Map(
+          [...retained, ...windows].map((w) => [
+            JSON.stringify([w.pr, w.session, w.seat, w.role, w.from, w.source]),
+            w,
+          ]),
+        );
+        for (const window of mergedWindows.values())
           this.db
             .query("INSERT INTO usage_windows VALUES (?, ?)")
             .run(pr, JSON.stringify(window));

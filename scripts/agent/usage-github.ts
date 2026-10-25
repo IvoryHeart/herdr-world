@@ -35,7 +35,6 @@ export async function pages<T>(
   }
 }
 export type PrMetadata = {
-  pushedAt: string | null;
   mergedAt: string | null;
   reviews: Review[];
 };
@@ -44,33 +43,17 @@ export async function prMetadata(
   pr: number,
   runner: Runner = run,
 ): Promise<PrMetadata> {
-  const [owner, name] = repo.split("/");
-  const data = JSON.parse(
-    await runner([
-      "gh",
-      "api",
-      "graphql",
-      "-f",
-      `query=query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){mergedAt commits(last:1){nodes{commit{pushedDate}}}}}}`,
-      "-f",
-      `owner=${owner}`,
-      "-f",
-      `name=${name}`,
-      "-F",
-      `number=${pr}`,
-    ]),
-  );
-  if (data.errors?.length)
-    throw new Error("GitHub could not establish PR push metadata");
-  const pull = data.data?.repository?.pullRequest;
-  if (!pull) throw new Error("Pull request was not found");
-  const reviews = await pages<{ body: string; submitted_at: string }>(
-    `repos/${repo}/pulls/${pr}/reviews`,
-    runner,
-  );
+  const [pull, reviews] = await Promise.all([
+    runner(["gh", "api", `repos/${repo}/pulls/${pr}`]).then(
+      (value) => JSON.parse(value) as { merged_at: string | null },
+    ),
+    pages<{ body: string; submitted_at: string }>(
+      `repos/${repo}/pulls/${pr}/reviews`,
+      runner,
+    ),
+  ]);
   return {
-    pushedAt: pull.commits.nodes[0]?.commit.pushedDate ?? null,
-    mergedAt: pull.mergedAt,
+    mergedAt: pull.merged_at,
     reviews: reviews
       .filter((r) => r.submitted_at)
       .map((r) => ({ body: r.body, submittedAt: r.submitted_at })),

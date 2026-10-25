@@ -143,8 +143,9 @@ Repository workflow lives in [AGENTS.md](../AGENTS.md) and
 [agent development](agent-development.md). The optional visible-team recipe is
 under [`.hwf/workflows/`](../.hwf/workflows/). Per-PR contributor token accounting
 uses [the usage guide](agent-usage-audit.md), [CLI](../scripts/agent/pr-usage.ts),
-[parsers](../scripts/agent/usage-records.ts), [attribution](../scripts/agent/usage-attribution.ts)
-and [local ledger](../scripts/agent/usage-store.ts); focused tests are beside each module.
+[parsers](../scripts/agent/usage-records.ts), [attribution](../scripts/agent/usage-attribution.ts),
+[reconciliation](../scripts/agent/usage-reconcile.ts) and [local ledger](../scripts/agent/usage-store.ts);
+focused tests are beside these modules.
 Use synthetic data in tracked evidence.
 The optional [Quint adoption spike](quint-adoption-spike.md) inventories formal
 modeling candidates and records bounded model/replay experiments; it is not a CI gate.

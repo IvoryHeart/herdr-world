@@ -181,3 +181,58 @@ test("live partial final JSONL lines are deferred but corrupt complete records f
     "Malformed",
   );
 });
+
+test("Claude session discovery includes child transcripts under the parent seat", async () => {
+  const root = await mkdtemp(join(tmpdir(), "usage-children-"));
+  try {
+    const message = (id: string, output: number) =>
+      JSON.stringify({
+        type: "assistant",
+        timestamp: at,
+        message: {
+          id,
+          model: "claude-opus-5-5",
+          usage: { output_tokens: output },
+        },
+      });
+    await Bun.write(join(root, `${session.session}.jsonl`), message("main", 2));
+    await Bun.write(
+      join(root, session.session, "subagents", "agent-example.jsonl"),
+      `${message("child", 3)}\n${message("child", 5)}`,
+    );
+    const [result] = await resolveLogs([session], {
+      codex: root,
+      claude: root,
+    });
+    expect(
+      result?.parsed.events.map((e) => [e.id, e.output, e.session]),
+    ).toEqual([
+      ["main", 2, session.session],
+      ["child", 5, session.session],
+    ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("incomplete Codex dedicated and snapshot records are rejected rather than filled with zero", () => {
+  const incomplete = { input_tokens: 100 };
+  for (const record of [
+    {
+      type: "token_usage_record",
+      timestamp: at,
+      payload: { response_id: "incomplete", usage: incomplete },
+    },
+    {
+      type: "event_msg",
+      timestamp: at,
+      payload: {
+        type: "token_count",
+        info: { last_token_usage: incomplete, total_token_usage: incomplete },
+      },
+    },
+  ])
+    expect(() =>
+      parseSession({ ...session, family: "codex" }, lines(record)),
+    ).toThrow("Incomplete Codex");
+});

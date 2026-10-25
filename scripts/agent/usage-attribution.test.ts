@@ -166,11 +166,51 @@ test("public comments exclude session, seat, path, effort and arbitrary model st
     expect(comment).not.toContain(secret);
   expect(comment).toContain("<!-- crew-usage -->");
   expect(comment).toContain("| reviewer | unknown |");
-  expect(comment).toContain("Shared local unattributed pool: 35 tokens");
+  expect(comment).not.toContain("Shared local unattributed pool:");
   expect(comment).toContain("| **PR total** | | 5 | 20 | 0 | 10 | 1 | 35 |");
   expect(
     renderComment(7, [
       { ...privateRow, model: "gpt-6.secret.example.invalid" },
     ]),
   ).not.toContain("secret.example.invalid");
+});
+
+test("unrelated local unattributed usage cannot change a public PR comment", () => {
+  const rows = attribute([event("builder", middle)], [window(7)]);
+  const unrelated = {
+    ...rows[0]!,
+    pr: null,
+    role: "unattributed" as const,
+    input: 987654321,
+    responses: 999,
+  };
+  expect(renderComment(7, [...rows, unrelated])).toBe(renderComment(7, rows));
+});
+
+test("shared review requests and conflicting canonical claims cannot establish a precise window", () => {
+  const seat = { seat: "rev2", family: "codex" as const, session: "synthetic" };
+  const body = `Reviewer: rev2\nReviewed commit: ${"a".repeat(40)}\nRESULT #7: 0/0 resolved, 0 new`;
+  expect(
+    inferredWindows(
+      seat,
+      [{ at: from, text: "Please review #7 and #8" }],
+      7,
+      [{ body, submittedAt: until }],
+      until,
+    ),
+  ).toEqual([]);
+  for (const suffix of [
+    "\nReviewer: rev5",
+    "\nRESULT #8: 0/0 resolved, 0 new",
+  ]) {
+    expect(
+      inferredWindows(
+        seat,
+        [{ at: from, text: "Please review #7" }],
+        7,
+        [{ body: body + suffix, submittedAt: until }],
+        until,
+      ),
+    ).toEqual([]);
+  }
 });

@@ -28,8 +28,9 @@ The tool discovers named seats, harness kind and `agent_session.value` from
 accepts a session ID or absolute JSONL path; an undiscovered session also needs
 `--seat` and `--family codex|claude`. Discovery and prior registrations are combined,
 so rotated/closed seats remain measurable while their logs remain available.
-Unavailable or malformed discovered logs are counted in the caveats; an unreadable
-explicitly requested session fails the refresh.
+Unavailable or malformed logs count as gaps only when an assignment or established
+window links their session to this PR. Unrelated historical sessions do not affect
+the public comment. An unreadable explicitly requested session fails the refresh.
 
 Register each builder/fixer assignment with its actual assignment timestamp. Use
 separate windows for separate tasks in a shared session:
@@ -39,18 +40,20 @@ bun run agent:usage assign 123 --seat builder --role builder \
   --from 2026-10-25T10:00:00Z --until 2026-10-25T11:00:00Z
 ```
 
-`--until` is the actual last-push timestamp, exclusive. Refresh it by rerunning the
-same assignment (same PR, session, role and start) after another push. If omitted,
-the tool uses GitHub's head commit `pushedDate` when available. GitHub often returns
-no push timestamp; those windows stay unattributed until an explicit `--until` is
-registered. Commit authored/committed times and PR update times are not push times.
+`--until` is required and records the actual last-push timestamp, exclusive. Refresh
+it by rerunning the same assignment (same PR, session, role and start) after another
+push. Use a recorded push completion time, such as the local remote-tracking
+reflog after a successful push. GitHub's deprecated `pushedDate` is not a usable
+source. Commit authored/committed times and PR update times are not push times.
 Choose one exact session with `--session` when a seat has rotated. Roles are
 `builder`, `fixer`, `reviewer:<seat>` and `coordinator`; explicit windows can also
 supply missing reviewer/coordinator evidence.
 
-Review windows start at a local prompt requesting review/confirmation of `#N` and
+Review windows start at a local prompt requesting review/confirmation of exactly
+one `#N` and
 end at that seat's canonical GitHub review `RESULT #N` submission timestamp.
-Missing or ambiguous reviewer claims cannot establish a window. FirstMate/clerk
+Missing or conflicting sender/PR claims cannot establish a window; quoted or
+fenced claims do not override the canonical header. FirstMate/clerk
 prompts mentioning exactly one `#N` produce coordinator estimates, ending at the
 next user prompt or 30 minutes, whichever is earlier. Multi-PR prompts remain
 unattributed. Only user prompt text is inspected for these heuristics; assistant
@@ -58,8 +61,9 @@ prose is not evidence of an assignment.
 
 Each response belongs to at most one PR/role. Windows use `[from, until)`;
 conflicting claims remain `unattributed`. Explicit assignments and completed
-reviews take precedence over coordinator estimates. The report includes the
-shared local unattributed pool, excluded from PR totals. That pool covers loaded
+reviews take precedence over coordinator estimates. The local report includes the
+shared unattributed pool, excluded from PR totals. Public comments omit that
+pool's counts so unrelated local work cannot affect published totals. That pool covers loaded
 sessions, including other work, and is not an estimate of missing PR usage.
 
 ## Local ledger and measurement limits
@@ -71,11 +75,17 @@ are touched. Coordlab's separate `gate.sqlite` is not modified. Keep the ledger
 private and retain it before pruning worktrees or deleting harness logs.
 
 Codex uses per-response `token_usage_record` entries, including recorded compaction
-calls, with model/effort from rollout context. Older logs fall back to
-`token_count.info.last_token_usage`, deduplicating repeated cumulative snapshots;
-when per-response records exist, snapshot mirrors are ignored. Claude assistant
-chunks are deduplicated by `message.id`, taking the maximum of each usage field
-and retaining `message.model`. Each streamed response is attributed at its first
+calls, with model/effort from rollout context. `token_count.info.last_token_usage`
+snapshots are deduplicated by cumulative usage and reconciled with dedicated
+records through their thread usage counter. Older records without that counter
+require a unique exact timestamp/usage match to identify a mirror; unmatched
+historical snapshots remain measured. A later dedicated record replaces its
+already stored fallback representation, so cold and incremental imports agree.
+Incomplete Codex accounting is a measurement gap, never a recorded zero.
+Claude assistant chunks are deduplicated by `message.id`, taking the maximum of
+each usage field and retaining `message.model`. Companion transcripts under
+`<session>/subagents/` are included under the parent seat/session and attributed
+by their response timestamps; child prompts do not establish parent assignments. Each streamed response is attributed at its first
 usage timestamp. A partial final JSONL line is deferred until the next refresh.
 
 Input in PR reports excludes cache reads/writes for both harnesses; output includes
@@ -83,8 +93,9 @@ reasoning. Total is input + cache read + cache write + output. These are recorde
 tokens, not billed cost. Unknown models remain unknown in public comments; arbitrary
 local strings, session IDs/paths/URLs, hostnames, usernames and emails are omitted.
 Undiscovered sessions, unavailable logs, unrecorded compactions and responses after
-the last refresh are outside the measured boundary. Previously recorded responses
-are retained if a log becomes unavailable. Updating at merge requires running the
+the last refresh are outside the measured boundary. Previously recorded responses and established windows
+are retained if a log becomes unavailable or readable history is shortened.
+Current GitHub evidence can invalidate a previously inferred review claim. Updating at merge requires running the
 command again; there is no background scheduler.
 
 ## Optional bounded Codex audit

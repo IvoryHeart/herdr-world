@@ -114,6 +114,50 @@ function mentionedPrs(text: string) {
   ];
 }
 
+export function canonicalReviewer(body: string, pr: number): string | null {
+  const header =
+    /^Reviewer: ([a-zA-Z0-9_-]+)\r?\nReviewed commit: ([a-f0-9]{40})\r?\nRESULT #([1-9]\d*):/i.exec(
+      body,
+    );
+  if (!header || Number(header[3]) !== pr) return null;
+  let fence: string | null = null;
+  const text = body
+    .split(/\r?\n/)
+    .filter((line) => {
+      if (/^\s*>/.test(line)) return false;
+      const marker = /^\s*(`{3,}|~{3,})/.exec(line)?.[1];
+      if (marker) {
+        if (!fence) fence = marker;
+        else if (marker[0] === fence[0] && marker.length >= fence.length)
+          fence = null;
+        return false;
+      }
+      return !fence;
+    })
+    .join("\n")
+    .replace(/[*`]/g, "");
+  const reviewers = new Set(
+    [...text.matchAll(/^Reviewer:\s*([a-zA-Z0-9_-]+)\s*$/gim)].map((m) =>
+      m[1]!.toLowerCase(),
+    ),
+  );
+  const targets = new Set(
+    [...text.matchAll(/^RESULT #([1-9]\d*):/gim)].map((m) => Number(m[1])),
+  );
+  const commits = new Set(
+    [...text.matchAll(/^Reviewed commit:\s*([a-f0-9]{40})\s*$/gim)].map((m) =>
+      m[1]!.toLowerCase(),
+    ),
+  );
+  return reviewers.size === 1 &&
+    reviewers.has(header[1]!.toLowerCase()) &&
+    targets.size === 1 &&
+    targets.has(pr) &&
+    commits.size === 1
+    ? header[1]!
+    : null;
+}
+
 /** Local prompts establish starts; GitHub RESULT timestamps establish review ends. */
 export function inferredWindows(
   seat: Seat,
@@ -126,11 +170,7 @@ export function inferredWindows(
   for (const review of [...reviews].sort((a, b) =>
     a.submittedAt.localeCompare(b.submittedAt),
   )) {
-    const match =
-      /^Reviewer: ([a-zA-Z0-9_-]+)\r?\nReviewed commit: [a-f0-9]{40}\r?\nRESULT #([1-9]\d*):/i.exec(
-        review.body,
-      );
-    if (!match || match[1] !== seat.seat || Number(match[2]) !== pr) continue;
+    if (canonicalReviewer(review.body, pr) !== seat.seat) continue;
     const previous = windows
       .filter((w) => w.role === `reviewer:${seat.seat}`)
       .at(-1)?.until;
@@ -139,7 +179,8 @@ export function inferredWindows(
       (turn) =>
         turn.at < until &&
         (!previous || turn.at >= previous) &&
-        mentionedPrs(turn.text).includes(pr) &&
+        mentionedPrs(turn.text).length === 1 &&
+        mentionedPrs(turn.text)[0] === pr &&
         /\breview\b|\bconfirm\b/i.test(turn.text),
     );
     if (!requests.length) continue;
@@ -235,8 +276,6 @@ export function renderComment(
   const selected = rows.filter((r) => r.pr === pr);
   const groups = new Map<string, Tokens>();
   const total = emptyTokens();
-  const unassigned = emptyTokens();
-  for (const row of rows) if (row.pr === null) addTokens(unassigned, row);
   for (const row of selected) {
     const key = `${publicRole(row.role)}${row.estimate ? " (estimate)" : ""} | ${publicModel(row.model, row.family)}`;
     const tokens = groups.get(key) ?? emptyTokens();
@@ -257,10 +296,10 @@ export function renderComment(
       .map(([key, t]) => `| ${key} | ${cells(t)} |`),
     `| **PR total** | | ${cells(total)} |`,
     "",
-    `Shared local unattributed pool: ${tokenTotal(unassigned)} tokens across ${unassigned.responses} responses (excluded from this PR total).`,
+    "Unattributed usage remains in the private local ledger and is excluded from this PR total.",
     "",
-    "Recorded tokens are not billed cost. Input excludes cache reads/writes; reasoning is included in output. Claude streamed chunks use per-message field maxima; Codex uses per-response records, or token-count snapshots when those records are absent.",
+    "Recorded tokens are not billed cost. Input excludes cache reads/writes; reasoning is included in output. Claude streamed chunks use per-message field maxima and include child transcripts. Codex snapshot mirrors are reconciled with dedicated response records.",
     "Assignment windows end at the recorded last push. Reviews use local request prompts and GitHub RESULT timestamps. Coordinator usage is a bounded mention heuristic (estimate, at most 30 minutes per turn). Ambiguous overlaps and usage outside windows remain unattributed. Missing logs, unrecorded compactions and work outside discovered/registered sessions are not measured.",
-    `Unavailable session logs: ${missingSessions}. Refresh this same comment at merge; later work is absent until refreshed.`,
+    `Unavailable or incomplete PR session logs: ${missingSessions} (previously measured rows are retained). Refresh this same comment at merge; later work is absent until refreshed.`,
   ].join("\n");
 }
