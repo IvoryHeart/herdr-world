@@ -42,7 +42,7 @@ test.skipIf(!chrome).each([
   [960, 1080, "extended", 0],
   [1440, 900, "extended", 0],
   [1080, 1920, "extended", 0],
-  // Regress fixed-delay zoom-out retries on a slow software renderer.
+  // Enter the first card check from desk level; also regress slow zoom-out flights.
   [1080, 1920, "extended", 300],
   // Ordinary idle desks expand in repeated 20-desk steps until fully visible.
   [390, 844, "incremental", 0],
