@@ -126,6 +126,9 @@ export function loadConfig(path: string): GateConfig {
     flakes: value.flakes ?? [],
     rerunBudget: value.rerunBudget ?? 1,
     ...(value.requiredChecks ? { requiredChecks: value.requiredChecks } : {}),
+    ...(value.aggregateChecks
+      ? { aggregateChecks: value.aggregateChecks }
+      : {}),
     ...(value.remote ? { remote: value.remote } : {}),
   };
 }

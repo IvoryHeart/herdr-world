@@ -34,6 +34,13 @@ export type GateConfig = {
   /** Failed attempts of an allowlisted check that a green rerun may cover. */
   rerunBudget: number;
   /**
+   * Checks that only summarise others, such as a required roll-up job. Never
+   * inferred: a named aggregate's failed attempt is excused only when every
+   * other check that failed in that same run attempt is a listed flake
+   * within budget.
+   */
+  aggregateChecks?: string[];
+  /**
    * Required checks added to those GitHub's rules report. Set it, even to an
    * empty list, when the rules can't be read or require nothing.
    */
@@ -60,6 +67,8 @@ export type CheckAttempt = {
 
 /** Which workflow execution an Actions job belongs to. */
 export type Execution = {
+  /** The workflow run the job belongs to. */
+  runId: number;
   workflowId: number;
   /** Increments with each run of the workflow. */
   runNumber: number;
@@ -318,20 +327,24 @@ function reruns(
   config: GateConfig,
   notes: string[],
 ): Condition[] {
-  const failed = new Map<string, number>();
   const { latest, superseded, unordered } = latestChecks(
     item.pr?.checks ?? [],
     executions,
   );
-  // One failed job counts once, whether the Actions attempts list or the
-  // commit's superseded check runs reported it.
-  const seen = new Set<string>();
-  const count = (name: string, job: number | null | undefined) => {
+  // Each failed job once, with the run attempt it failed in when known,
+  // whether the Actions attempts list or a superseded check run reported it.
+  const failures: { name: string; attempt: string | null }[] = [];
+  const seen = new Set<number>();
+  const record = (
+    name: string,
+    job: number | null | undefined,
+    attempt: string | null,
+  ) => {
     if (job != null) {
-      if (seen.has(String(job))) return;
-      seen.add(String(job));
+      if (seen.has(job)) return;
+      seen.add(job);
     }
-    failed.set(name, (failed.get(name) ?? 0) + 1);
+    failures.push({ name, attempt });
   };
   for (const attempt of attempts)
     if (
@@ -339,10 +352,42 @@ function reruns(
         attempt.conclusion.toLowerCase(),
       )
     )
-      count(attempt.name, attempt.jobId);
+      record(
+        attempt.name,
+        attempt.jobId,
+        `${attempt.runId}/${attempt.attempt}`,
+      );
   // A rerun leaves the earlier execution's checks on the commit.
   for (const check of superseded)
-    if (check.state === "fail") count(check.name, jobId(check));
+    if (check.state === "fail") {
+      const id = jobId(check);
+      const execution = id === null ? undefined : executions[String(id)];
+      record(
+        check.name,
+        id,
+        execution ? `${execution.runId}/${execution.attempt}` : null,
+      );
+    }
+  const failed = new Map<string, number>();
+  for (const failure of failures)
+    failed.set(failure.name, (failed.get(failure.name) ?? 0) + 1);
+  const excusable = (name: string) =>
+    config.flakes.includes(name) &&
+    (failed.get(name) ?? 0) <= config.rerunBudget;
+  // An aggregate's failed attempt is excused only by listed flakes failing
+  // in that same attempt; alone, beside anything else, or unplaced, it isn't.
+  const aggregateExcused = (name: string) =>
+    failures
+      .filter((failure) => failure.name === name)
+      .every((failure) => {
+        if (failure.attempt === null) return false;
+        const others = failures.filter(
+          (other) => other.attempt === failure.attempt && other.name !== name,
+        );
+        return (
+          others.length > 0 && others.every((other) => excusable(other.name))
+        );
+      });
   const result: Condition[] = unordered.length
     ? [
         condition(
@@ -356,14 +401,24 @@ function reruns(
     const count = failed.get(check.name);
     if (!count || check.state !== "pass") continue;
     const retained = `${check.name}: ${count} failed attempt${count === 1 ? "" : "s"} retained`;
-    if (config.flakes.includes(check.name) && count <= config.rerunBudget)
-      notes.push(retained);
+    if (excusable(check.name)) notes.push(retained);
+    else if (
+      config.aggregateChecks?.includes(check.name) &&
+      aggregateExcused(check.name)
+    )
+      notes.push(`${retained}; each failed only with listed flakes`);
     else
       result.push(
         condition(
           "rerun",
           "judgment",
-          `${retained}; green only after a rerun ${config.flakes.includes(check.name) ? "over budget" : "of a check not on the flake list"}`,
+          `${retained}; green only after a rerun ${
+            config.aggregateChecks?.includes(check.name)
+              ? "of an aggregate that failed beside more than listed flakes"
+              : config.flakes.includes(check.name)
+                ? "over budget"
+                : "of a check not on the flake list"
+          }`,
           check.url,
         ),
       );

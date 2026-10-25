@@ -172,9 +172,15 @@ const runs = (entries: Record<number, [number, number]>) =>
   Object.fromEntries(
     Object.entries(entries).map(([id, [runNumber, attempt]]) => [
       id,
-      { workflowId: 9, runNumber, attempt },
+      { runId: 1000 + runNumber, workflowId: 9, runNumber, attempt },
     ]),
   );
+
+/** The crew's roll-up job named as an aggregate. */
+const aggregates: GateConfig = {
+  ...config,
+  aggregateChecks: ["Delivery checks"],
+};
 
 const allConfirm = (head: string) =>
   TRIO.map((reviewer) => confirm(reviewer, head));
@@ -485,8 +491,8 @@ export const CASES: Case[] = [
         { name: "Browser tests", state: "pass", required: false, url: job(12) },
       ],
       executions: {
-        11: { workflowId: 9, runNumber: 1, attempt: 1 },
-        12: { workflowId: 8, runNumber: 7, attempt: 1 },
+        11: { runId: 1001, workflowId: 9, runNumber: 1, attempt: 1 },
+        12: { runId: 2007, workflowId: 8, runNumber: 7, attempt: 1 },
       },
     }),
     expect: { state: "UNKNOWN", conditions: { "checks-order": "unknown" } },
@@ -511,6 +517,88 @@ export const CASES: Case[] = [
       attempts: [{ ...attempt("Browser tests"), jobId: 11 }],
     }),
     expect: { state: "READY" },
+  },
+  {
+    name: "A4o a named aggregate that failed only with a listed flake is excused",
+    now: NOW,
+    config: aggregates,
+    input: input({
+      head: SHA.fixed,
+      posts: allConfirm(SHA.fixed),
+      attempts: [
+        { ...attempt("Browser tests"), jobId: 101 },
+        { ...attempt("Delivery checks"), jobId: 102 },
+      ],
+    }),
+    expect: { state: "READY" },
+  },
+  {
+    name: "A4p a named aggregate that failed beside a non-flake needs judgment",
+    now: NOW,
+    config: aggregates,
+    input: input({
+      head: SHA.fixed,
+      posts: allConfirm(SHA.fixed),
+      checks: [...GREEN, { name: "Lint", state: "pass", required: false }],
+      attempts: [
+        { ...attempt("Lint"), jobId: 101 },
+        { ...attempt("Delivery checks"), jobId: 102 },
+      ],
+    }),
+    expect: { state: "NEEDS_JUDGMENT", conditions: { rerun: "judgment" } },
+  },
+  {
+    name: "A4q a named aggregate that failed alone needs judgment",
+    now: NOW,
+    config: aggregates,
+    input: input({
+      head: SHA.fixed,
+      posts: allConfirm(SHA.fixed),
+      attempts: [{ ...attempt("Delivery checks"), jobId: 102 }],
+    }),
+    expect: { state: "NEEDS_JUDGMENT", conditions: { rerun: "judgment" } },
+  },
+  {
+    name: "A4r an aggregate is never inferred: unnamed, it needs judgment",
+    now: NOW,
+    input: input({
+      head: SHA.fixed,
+      posts: allConfirm(SHA.fixed),
+      attempts: [
+        { ...attempt("Browser tests"), jobId: 101 },
+        { ...attempt("Delivery checks"), jobId: 102 },
+      ],
+    }),
+    expect: { state: "NEEDS_JUDGMENT", conditions: { rerun: "judgment" } },
+  },
+  {
+    name: "A4s a flake over budget in the same attempt does not excuse the aggregate",
+    now: NOW,
+    config: aggregates,
+    input: input({
+      head: SHA.fixed,
+      posts: allConfirm(SHA.fixed),
+      attempts: [
+        { ...attempt("Browser tests"), jobId: 101 },
+        { ...attempt("Delivery checks"), jobId: 102 },
+        { ...attempt("Browser tests"), attempt: 2, jobId: 103 },
+      ],
+    }),
+    expect: { state: "NEEDS_JUDGMENT", conditions: { rerun: "judgment" } },
+  },
+  {
+    name: "A4t a flake in a different run attempt does not excuse the aggregate",
+    now: NOW,
+    config: aggregates,
+    input: input({
+      head: SHA.fixed,
+      posts: allConfirm(SHA.fixed),
+      attempts: [
+        { ...attempt("Browser tests"), jobId: 101 },
+        { ...attempt("Delivery checks"), runId: 12, jobId: 102 },
+      ],
+    }),
+    expect: { state: "NEEDS_JUDGMENT", conditions: { rerun: "judgment" } },
   },
   {
     name: "A4f an unknown required-check inventory is UNKNOWN",

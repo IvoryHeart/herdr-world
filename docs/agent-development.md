@@ -180,6 +180,13 @@ check. The gate adds:
 - **CI attempts.** A check that went green on a rerun keeps its failed
   attempts on record. Only a configured flake within its rerun budget stays
   READY; any other rerun needs judgment.
+- **Aggregate checks.** Name roll-up jobs that only summarise other jobs in
+  `aggregateChecks`; they are never inferred. A named aggregate's failed
+  attempt is excused only when every other check that failed in that same
+  run attempt is a listed flake within its budget. If it failed alone, beside
+  any other failure, or in an attempt the gate can't place, it needs
+  judgment. Never list an aggregate as a flake: that would excuse a rerun of
+  anything it summarises.
 - **Holds.** A hold lasts across heads until it is released.
 
 `merge-line` and `check-claim` read the PR again before answering, so a hold,
@@ -195,7 +202,7 @@ Configuration and state stay untracked in the primary checkout's
 `.agents/crew-gate/`, which every worktree shares:
 
 - `config.json` holds the repository, reviewers, flakes, rerun budget and
-  optional required checks. Start from
+  optional required and aggregate checks. Start from
   [`config.example.json`](../scripts/agent/gate/config.example.json).
 - `gate.sqlite` keeps every pass's inputs and config, reviewer claims, check
   attempts, decisions and verdict transitions. Comment text is reduced to

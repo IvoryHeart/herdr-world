@@ -6,5 +6,6 @@
     "prs": {}
   },
   "flakes": ["Browser tests"],
-  "rerunBudget": 1
+  "rerunBudget": 1,
+  "aggregateChecks": ["Delivery checks"]
 }
