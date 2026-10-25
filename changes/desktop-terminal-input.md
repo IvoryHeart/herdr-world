@@ -6,3 +6,6 @@
 
 - Keep the phone's Direct terminal button visible while editing an expanded
   Message draft, and distinguish `/ Commands` from Direct terminal typing.
+
+- Restore side-by-side Composer / Direct mode controls for terminal input,
+  keeping command suggestions separate and preserving the draft in Direct mode.

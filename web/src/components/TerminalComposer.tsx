@@ -9,7 +9,6 @@ import {
   Keyboard,
   Paperclip,
   Send,
-  SquareTerminal,
   TextCursorInput,
   X,
 } from "lucide-react";
@@ -91,14 +90,8 @@ export function readTerminalComposerShortcutsOpen(): boolean {
  * sidesteps the xterm helper-textarea races described in the IME recovery
  * code. Drafts are write-through to the in-memory store so pane switches and
  * virtual-keyboard resizes never lose text.
- *
- * The configurable mobile shortcut keys live at the top of the dock so the
- * composer is the single mobile input control surface. Direct mode reuses
- * xterm's input channel; the native editor stays mounted to preserve its caret.
- *
- * Files arrive through clipboard paste, drop, or the file picker, upload once, and
- * land at the draft caret in Composer. Direct captures a guarded terminal
- * insertion at the initiating gesture, without changing the draft or sending Enter.
+ * Composer / Direct select draft editing or xterm input. The mounted editor
+ * preserves its draft and caret while hidden in Direct mode.
  */
 export function TerminalComposer({
   draftKey,
@@ -842,6 +835,50 @@ export function TerminalComposer({
       >
         <AttachmentChips scope={draftKey} />
         <div className="terminal-composer-toolbar" hidden={!accessoriesOpen}>
+          <div
+            className="terminal-composer-mode"
+            role="group"
+            aria-label="Input mode"
+            hidden={surface === "chat"}
+          >
+            <button
+              type="button"
+              aria-pressed={mode === "composer"}
+              disabled={composing}
+              onMouseDown={keepTextareaFocus}
+              onClick={() => {
+                if (composingRef.current) return;
+                activateMessage(true);
+                textareaRef.current?.focus({ preventScroll: true });
+              }}
+            >
+              Composer
+            </button>
+            <button
+              type="button"
+              className="terminal-mobile-direct"
+              aria-label="Type directly into the terminal"
+              title="Type directly into the terminal"
+              aria-pressed={mode === "direct"}
+              data-input-active={directInputActive || undefined}
+              disabled={directDisabled || composing}
+              onMouseDown={keepTextareaFocus}
+              onClick={() => {
+                if (composingRef.current || directDisabled) return;
+                flushSync(() => {
+                  dismissCommands();
+                  setEditorFocused(false);
+                  setToolPointerPending(false);
+                  setExpanded(false);
+                  onModeChange("direct", true);
+                });
+                textareaRef.current?.blur?.();
+                onFocusDirect();
+              }}
+            >
+              Direct
+            </button>
+          </div>
           <button
             type="button"
             className="terminal-composer-attach"
@@ -1101,7 +1138,16 @@ export function TerminalComposer({
             }}
           />
         ) : null}
-        <div className="terminal-mobile-input-bar">
+        <div
+          className="terminal-composer-direct"
+          hidden={surface === "chat" || mode !== "direct"}
+        >
+          Typing goes directly to the terminal. Your Composer draft is saved.
+        </div>
+        <div
+          className="terminal-mobile-input-bar"
+          hidden={surface !== "chat" && mode === "direct"}
+        >
           <textarea
             ref={textareaRef}
             className="terminal-composer-input terminal-mobile-message"
@@ -1233,30 +1279,6 @@ export function TerminalComposer({
               commandKeyDown(e);
             }}
           />
-          <button
-            type="button"
-            className="terminal-mobile-direct"
-            hidden={surface === "chat"}
-            aria-label="Type directly into the terminal"
-            title="Type directly into the terminal"
-            aria-pressed={directInputActive ?? (open && mode === "direct")}
-            disabled={directDisabled || composing}
-            onMouseDown={keepTextareaFocus}
-            onClick={() => {
-              if (composingRef.current || directDisabled) return;
-              flushSync(() => {
-                dismissCommands();
-                setEditorFocused(false);
-                setToolPointerPending(false);
-                setExpanded(false);
-                onModeChange("direct", true);
-              });
-              textareaRef.current?.blur?.();
-              onFocusDirect();
-            }}
-          >
-            <SquareTerminal size={19} aria-hidden="true" />
-          </button>
         </div>
         <input
           ref={fileInputRef}

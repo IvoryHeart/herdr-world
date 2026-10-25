@@ -155,6 +155,14 @@ async function run() {
         ".terminal-mobile-direct",
       );
       check(editor && direct, "Direct controls missing");
+      const modeGroup = host.querySelector('[aria-label="Input mode"]');
+      check(modeGroup, "Input mode selector missing");
+      check(
+        modeGroup.textContent?.includes("Composer") &&
+          modeGroup.textContent.includes("Direct"),
+        "Composer and Direct are not side-by-side labelled modes",
+      );
+      check(modeGroup.contains(direct), "Direct is outside the mode selector");
       await click(editor);
       await boundary();
       check(
@@ -214,6 +222,25 @@ async function run() {
       check(
         readTerminalComposerDraft(draftKey) === "preserved draft\nsecond line",
         "Direct keys changed draft",
+      );
+      check(
+        !editor.getBoundingClientRect().height,
+        "Direct still shows Message editor",
+      );
+      const composer = Array.from(modeGroup.querySelectorAll("button")).find(
+        (button) => button.textContent === "Composer",
+      );
+      check(composer, "Composer mode missing");
+      await click(composer);
+      check(
+        document.activeElement === editor &&
+          editor.value === "preserved draft\nsecond line",
+        "Returning to Composer did not restore draft and editor focus",
+      );
+      check(
+        composer.getAttribute("aria-pressed") === "true" &&
+          direct.getAttribute("aria-pressed") === "false",
+        "Mode selector does not show current mode",
       );
       return;
     }

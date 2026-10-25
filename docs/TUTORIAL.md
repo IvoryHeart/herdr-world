@@ -723,9 +723,10 @@ Use its HTTPS URL: `127.0.0.1` on a phone means the phone, not the work computer
 1. Open Herdr World in the mobile browser and select your practice project and
    agent pane. Authenticate first if your deployment requires login.
 2. Tap **Message** below the terminal to raise the keyboard and compose; use
-   **Direct** (the terminal icon at the right of Message) to type straight into
-   the terminal. Direct stays available while a long draft is expanded and keeps
-   that draft intact. **/ Commands** opens command suggestions for the draft;
+   the side-by-side **Composer / Direct** selector to choose draft editing or
+   typing straight into the terminal. Direct saves and hides the draft; Composer
+   restores it. Both modes stay available while a long draft is expanded.
+   **/ Commands** opens command suggestions for the draft;
    it does not turn on Direct. The input stays below the output.
    Tabs and More live in the shared top app bar. Use the shortcut rows for arrow
    keys, Ctrl and other actions that are awkward on a touch keyboard.

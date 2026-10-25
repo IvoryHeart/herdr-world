@@ -237,3 +237,30 @@
 .town-composer .terminal-mobile-direct {
   display: inline-flex;
 }
+
+.terminal-composer-mode {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--panel-2);
+}
+.terminal-composer-mode button {
+  min-height: 44px;
+  padding: 0 10px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+}
+.terminal-composer-mode button[aria-pressed="true"] {
+  color: var(--text-strong);
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.terminal-composer-direct {
+  color: var(--muted);
+  font-size: 12px;
+}

@@ -600,8 +600,9 @@ commit a search selection. Press K in the recent switcher to convert it to searc
 - On desktop, click terminal output to use physical arrow keys and Ctrl
   combinations, including after opening an agent's Message or switching views.
   The phone-only Composer does not disable desktop input or discard its draft.
-  On phones, Direct remains accessible while editing an expanded draft; the
-  separate `/ Commands` control inserts command suggestions into the draft.
+  On phones, side-by-side Composer / Direct controls stay accessible while
+  editing an expanded draft; Direct hides and saves it, and Composer restores it.
+  The separate `/ Commands` control inserts command suggestions into the draft.
 - Scroll history by wheel, trackpad, touch, or half-page
   `Alt/Option+Page Up`/`Page Down`. Full page keys go to terminal apps (such as
   nano) or Herdr history when the shell owns them; mobile buttons route the same
