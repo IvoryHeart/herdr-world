@@ -3,7 +3,10 @@ import { Window } from "happy-dom";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { Pane, Tab, Workspace } from "../../types";
-import { projectWorldOffice } from "../herdrOfficeProjection";
+import {
+  projectWorldOffice,
+  TOWN_PRESENTATION_BOUNDS,
+} from "../herdrOfficeProjection";
 import { officeReadModel } from "../officeReadModel";
 import type { WorldRuntimeConnection } from "../runtimeStore";
 import { buildWorldObject, type WorldAgentStatus } from "../worldObject";
@@ -135,3 +138,81 @@ test.each([
     }
   },
 );
+
+test("a folded plaque totals hidden agents as well as its 24 visible desks", async () => {
+  const statuses = Array.from({ length: 26 }, (_, index) =>
+    index < 2 ? "idle" : "working",
+  );
+  const tabs: Tab[] = statuses.map((status, index) => ({
+    workspace_id: "room",
+    tab_id: `desk-${index}`,
+    label: `Desk ${index + 1}`,
+    number: index + 1,
+    focused: index === 0,
+    pane_count: 1,
+    agent_status: status,
+  }));
+  const panes: Pane[] = tabs.map((tab, index) => ({
+    pane_id: `pane-${index}`,
+    terminal_id: `terminal-${index}`,
+    workspace_id: "room",
+    tab_id: tab.tab_id,
+    agent: "claude",
+    focused: index === 0,
+    agent_status: statuses[index]!,
+    revision: 1,
+  }));
+  const workspace: Workspace = {
+    workspace_id: "room",
+    label: "Studio",
+    number: 1,
+    focused: true,
+    tab_count: tabs.length,
+    pane_count: panes.length,
+    active_tab_id: tabs[0]!.tab_id,
+    agent_status: "working",
+  };
+  const connection: WorldRuntimeConnection = {
+    connectionId: "host",
+    label: "Host",
+    source: "saved-profile",
+    isDefault: true,
+    state: "ready",
+    generation: 1,
+    snapshotGeneration: 1,
+    stale: false,
+    actionable: true,
+    snapshot: { workspaces: [workspace], tabs, panes, agents: [] },
+  };
+  const office = projectWorldOffice(
+    buildWorldObject([connection], "host"),
+    1,
+    null,
+    TOWN_PRESENTATION_BOUNDS,
+  );
+  const room = office.rooms[0]!;
+  const counts = townModelFromProjection(office).roomCounts.get(room.key)!;
+
+  expect(room.desks).toHaveLength(24);
+  expect(counts.agents).toBe(26);
+  expect(counts.working).toBe(24);
+  expect(counts.idle).toBe(2);
+  const browser = new Window();
+  try {
+    browser.document.body.innerHTML = renderToStaticMarkup(
+      createElement(TownRoomPlaque, {
+        room,
+        label: "Studio",
+        width: 176,
+        counts,
+        color: null,
+        actions,
+      }),
+    );
+    expect(
+      browser.document.querySelector(".town-room-plaque-count")?.textContent,
+    ).toBe("24/26");
+  } finally {
+    await browser.happyDOM.close();
+  }
+});

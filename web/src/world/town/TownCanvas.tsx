@@ -37,6 +37,7 @@ import { EllipsisVertical } from "lucide-react";
 import { useMobileControls } from "../../components/MobileControls";
 import { ChevronsLeft, ChevronsRight, Plus } from "lucide-react";
 import {
+  TOWN_DESK_EXPANSION_STEP,
   type HerdrOfficeProjection,
   type OfficeAgent,
 } from "../herdrOfficeProjection";
@@ -167,8 +168,8 @@ export type TownRoomActions = {
   ): Promise<TownMoveResult>;
   /** An agent dragged onto another desk; resolves how the move ended. */
   onDropAgent(agentKey: string, deskKey: string): Promise<TownMoveResult>;
-  /** Grow a folded room to show all its desks, or fold it back. */
-  onToggleFold?(roomKey: string): void;
+  /** Reveal the next group of desks, or fold the room back to 24. */
+  onToggleFold?(roomKey: string, nextLimit?: number): void;
   /** A desk dragged onto another desk: join its team (townTeams.ts). */
   onGroupDesk(deskKey: string, targetDeskKey: string): Promise<TownMoveResult>;
   /** A grouped desk dropped on its own room's floor: leave its team. */
@@ -1903,6 +1904,11 @@ const TownWorldLayer = memo(function TownWorldLayer({
               const foldCell = placed.foldActionCells?.[1];
               const overflow =
                 room.omittedDeskCount + placed.overflowDeskKeys.length;
+              const revealCount = Math.min(TOWN_DESK_EXPANSION_STEP, overflow);
+              const revealDescription =
+                overflow > 20
+                  ? `Show up to ${revealCount} more hidden ${revealCount === 1 ? "desk" : "desks"}`
+                  : `Show the remaining ${overflow} hidden ${overflow === 1 ? "desk" : "desks"}`;
               const reason = roomActions.createSeatReason(room.key);
               const roomColor = roomActions.placeColor("room", room.key);
               return (
@@ -2077,20 +2083,23 @@ const TownWorldLayer = memo(function TownWorldLayer({
                       ) : null}
                     </>
                   ) : null}
-                  {room.deskFold && foldCell && roomActions.onToggleFold ? (
+                  {room.deskFold &&
+                  foldCell &&
+                  roomActions.onToggleFold &&
+                  (room.deskFold === "expanded" || overflow > 0) ? (
                     <button
                       className="town-new-seat town-fold-tile"
                       type="button"
                       aria-expanded={room.deskFold === "expanded"}
                       aria-label={
-                        room.deskFold === "folded"
-                          ? `Show ${overflow} hidden ${overflow === 1 ? "desk" : "desks"} in ${label}`
-                          : `Fold ${label} to its protected desks`
+                        overflow > 0
+                          ? `${revealDescription} in ${label}`
+                          : `Fold ${label} back to 24 desks`
                       }
                       title={
-                        room.deskFold === "folded"
-                          ? `Show ${overflow} hidden ${overflow === 1 ? "desk" : "desks"}`
-                          : "Fold idle, finished and unnamed desks"
+                        overflow > 0
+                          ? revealDescription
+                          : "Fold this room back to 24 desks"
                       }
                       style={{
                         left: (foldCell.x - placed.x + 1) * T,
@@ -2100,9 +2109,19 @@ const TownWorldLayer = memo(function TownWorldLayer({
                         justifyContent: "center",
                         gap: 3,
                       }}
-                      onClick={() => roomActions.onToggleFold?.(room.key)}
+                      onClick={() =>
+                        roomActions.onToggleFold?.(
+                          room.key,
+                          overflow > 0
+                            ? Math.min(
+                                room.observedDeskCount,
+                                room.desks.length + TOWN_DESK_EXPANSION_STEP,
+                              )
+                            : undefined,
+                        )
+                      }
                     >
-                      {room.deskFold === "folded" ? (
+                      {overflow > 0 ? (
                         <>
                           <ChevronsRight size={16} aria-hidden="true" />
                           <span>+{overflow}</span>

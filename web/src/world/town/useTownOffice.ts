@@ -54,15 +54,31 @@ export function useTownOffice(world: WorldObject, selectedId: string | null) {
   const [expandedRooms, setExpandedRooms] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
-  const toggleRoomFold = useCallback(
-    (roomKey: string) =>
-      setExpandedRooms((current) => {
-        const next = new Set(current);
-        if (!next.delete(roomKey)) next.add(roomKey);
+  const [expandedDeskLimits, setExpandedDeskLimits] = useState<
+    ReadonlyMap<string, number>
+  >(() => new Map());
+  const toggleRoomFold = useCallback((roomKey: string, nextLimit?: number) => {
+    if (nextLimit !== undefined) {
+      setExpandedRooms((current) => new Set(current).add(roomKey));
+      setExpandedDeskLimits((current) => {
+        const next = new Map(current);
+        next.set(roomKey, nextLimit);
         return next;
-      }),
-    [],
-  );
+      });
+      return;
+    }
+    setExpandedRooms((current) => {
+      const next = new Set(current);
+      next.delete(roomKey);
+      return next;
+    });
+    setExpandedDeskLimits((limits) => {
+      if (!limits.has(roomKey)) return limits;
+      const next = new Map(limits);
+      next.delete(roomKey);
+      return next;
+    });
+  }, []);
   const observedOffice = useMemo(
     (): HerdrOfficeProjection =>
       projectOffice(
@@ -73,6 +89,7 @@ export function useTownOffice(world: WorldObject, selectedId: string | null) {
         expandedRooms,
         undefined,
         roomFocus?.roomKey ?? null,
+        expandedDeskLimits,
       ),
     [
       world,
@@ -80,6 +97,7 @@ export function useTownOffice(world: WorldObject, selectedId: string | null) {
       projectOffice,
       pinnedTabs,
       expandedRooms,
+      expandedDeskLimits,
       roomFocus?.roomKey,
     ],
   );
@@ -93,12 +111,14 @@ export function useTownOffice(world: WorldObject, selectedId: string | null) {
         expandedRooms,
         protectedDesks,
         roomFocus?.roomKey ?? null,
+        expandedDeskLimits,
       ),
     [
       world,
       selectedId,
       pinnedTabs,
       expandedRooms,
+      expandedDeskLimits,
       projectPresentation,
       roomFocus?.roomKey,
     ],

@@ -10,8 +10,8 @@
 export const TOWN_TILE = 16;
 
 /**
- * The usual expanded presentation target. Admission can exceed it for protected
- * desks; layout extends downward for every admitted desk and one free cell.
+ * The usual expanded presentation target. Protected desks can exceed it;
+ * Town reveals further desks in steps while layout reserves action cells.
  */
 export const TOWN_DEFAULT_RENDERED_DESKS = 8 * 16 - 1;
 
@@ -260,7 +260,9 @@ function placeRoomDesks(
     }
   const needed = Math.max(
     deskKeys.length + (reserveFoldActions ? 2 : 1),
-    ...[...fixed.values()].map(({ row }) => (row + 1) * maxCols - 1),
+    ...[...fixed.values()].map(
+      ({ col, row }) => row * maxCols + col + (reserveFoldActions ? 3 : 1),
+    ),
   );
   const tiers = townRoomTiers(maxCols, needed, previous?.tier ?? 0);
   let tier = townTierFor(

@@ -246,13 +246,12 @@ hosts stay usable.
    the room's free spot to put it last of the tables shown. A room grows as
    tabs open, up to eight tables wide on a wide screen, six on a portrait or
    half-width screen and four on a phone, then row by row. A folded room normally
-   shows up to 24 tables. Selected and pinned tables, working desks, the three
-   newest desks and desks that need you stay visible beyond that count. Use the
-   room's bottom-right **» +N** tile beside the dashed **+** seat
-   to expand it to a normal limit of 127 tables; the same tables stay visible
-   beyond that limit. **+N** counts only hidden tables. The same tile toggles
-   **Fold** and remains available after tabs close, so you can shrink the room
-   back.
+   shows up to 24 tables. Selected and pinned tables, desks that need you,
+   working desks and the three newest desks stay visible beyond that target.
+   Use the room's bottom-right **» +N** tile beside the dashed **+** seat to
+   reveal about 20 more tables per click until the whole room is shown. **+N**
+   counts only currently hidden tables. The same tile folds the room straight
+   back to 24 tables and remains available after tabs close.
    Rooms sit in columns that suit your screen
    (one on a phone), and a growing room pushes down only the rooms below it,
    once you let go of the town. Town moves the tab in Herdr, so Spaces

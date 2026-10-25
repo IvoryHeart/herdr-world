@@ -1157,24 +1157,27 @@ adjacent action spots while Fold is available: a room grows square until it
 reaches its shape's width (four desks on a phone, six on
 portrait and mid-width screens, eight on wide screens) and then extends
 downward, and its building grows around it. A folded room SHALL use a default
-bound of 24 desks, and an expanded room a default bound of 127; Fold SHALL
-restore the 24-desk bound and allow the room to shrink, while retaining pinned
-cells and its building column. Ordinary tab closures SHALL keep the live size
-step. An expanded room SHALL retain its Fold control after closures, including
-at or below 24 desks, until the user folds it. Selected and pinned desks, every desk represented
-by the shared Town call list (blocked agents and unreviewed finishes), and the
-desk of a verified, qualified asking agent with an open question SHALL remain
-visible past either bound. Admission SHALL consume desk keys from that shared
-attention source after its finished/seen overlay, without independently inferring
-attention from projection status or matching question actors by label. A room
-with more tabs than it draws SHALL always keep selected and pinned desks,
-working desks, desks represented by the shared needs-you items, and the three
-newest tabs, even when their number exceeds the fold target. Among other desks,
-Town SHALL keep unknown agents before done, idle and unnamed desks, with stable
-desk identity breaking ties. No protected desk SHALL contribute to the hidden
-count. Town SHALL count every hidden desk on the room and place its **» +N**
-Expand/Fold tile at the room's bottom-right beside the same-height new-seat tile.
-The control SHALL use two adjacent reserved cells so it does not overlap desks.
+bound of 24 desks. Each Expand action SHALL raise the room's target by about 20
+desks, up to all observed desks; Fold SHALL restore the 24-desk target in one
+action and allow the room to shrink, while retaining pinned cells and its
+building column. There SHALL be no hard expanded desk ceiling: repeated Expand
+actions SHALL eventually reveal every observed desk.
+Ordinary tab closures SHALL keep the live size step. An expanded room SHALL
+retain its Fold control after closures, including at or below 24 desks, until
+the user folds it. Selected desks SHALL rank with pinned desks, followed by
+desks represented by the shared Town call list (blocked agents and unreviewed
+finishes) or a verified, qualified asking agent with an open question, working
+desks, and the three newest tabs. Admission SHALL consume desk keys from that
+shared attention source after its finished/seen overlay, without independently
+inferring attention from projection status or matching question actors by
+label. This priority order SHALL fill the 24-desk folded target and each
+incremental expanded target; stable desk identity SHALL break ties, with
+unknown agents before done, idle and unnamed desks. In a folded room, selected,
+pinned, needs-you, working and newest desks SHALL remain visible even when they
+exceed the folded target. Town SHALL count every currently hidden desk on the room and place its
+**» +N** Expand/Fold tile at the room's bottom-right beside the same-height
+new-seat tile. The control SHALL use two adjacent reserved cells so it does not
+overlap desks.
 Zooming into a room taller or wider than the usable view, from its
 card or with Zoom in, SHALL open at its first desks. While a
 scene is live, a topology change SHALL NOT reorder rooms or move a desk to
@@ -1344,9 +1347,9 @@ reception, when blocked or done and not yet checked, and SHALL return to its
 seat once checked or answered. A pin SHALL follow its tab to another workspace
 and SHALL be dropped when its tab closes. When a room has more desks than Town
 presents, its pinned desks and the selected desk, with their agents, SHALL
-still be presented, even past the bound, and other desks SHALL be omitted
-instead. Layout SHALL extend for every admitted pinned or selected desk,
-even beyond the normal 127-desk expanded target.
+still be presented, even past the current target, and other desks SHALL be
+omitted instead. Layout SHALL extend for every admitted pinned or selected
+desk, even beyond the current incremental expansion target.
 
 #### Scenario: A pinned agent finishes and is seen
 

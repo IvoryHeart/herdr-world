@@ -44,6 +44,8 @@ test.skipIf(!chrome).each([
   [1080, 1920, "extended", 0],
   // Regress fixed-delay zoom-out retries on a slow software renderer.
   [1080, 1920, "extended", 300],
+  // Ordinary idle desks expand in repeated 20-desk steps until fully visible.
+  [390, 844, "incremental", 0],
   [1440, 900, "plates", 0],
   [390, 844, "plates", 0],
   // Stable 26-desk fold fixture proves protected admission and both room tiles.
@@ -52,6 +54,7 @@ test.skipIf(!chrome).each([
   [1440, 900, "fold", 0],
   [1080, 1920, "fold", 0],
   [2560, 1440, "fold", 0],
+  [390, 844, "fold-protected", 0],
   // Every one of 130 protected desks keeps its browser target past both bounds.
   [390, 844, "protected", 0],
   // Request a room beyond admission while renderer initialization is held.

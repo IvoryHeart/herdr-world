@@ -39,14 +39,16 @@ export type OfficePresentationBounds = {
   readonly [K in keyof typeof OFFICE_PRESENTATION_BOUNDS]: number;
 };
 
+export const TOWN_DESK_EXPANSION_STEP = 20;
+
 /**
- * Town rooms normally expand to 127 desks; protected desks can exceed it.
- * Layout grows for every admitted desk; other bounds match Office.
+ * Town rooms expand by roughly 20 desks per action; protected desks can exceed
+ * the current target. Layout grows for every admitted desk; other bounds match Office.
  */
 export const TOWN_PRESENTATION_BOUNDS: OfficePresentationBounds = Object.freeze(
   {
     ...OFFICE_PRESENTATION_BOUNDS,
-    desksPerRoom: 127,
+    desksPerRoom: 24 + TOWN_DESK_EXPANSION_STEP,
     foldedDesksPerRoom: 24,
     roomAgentsPerRoom: 127 * 4,
   },
@@ -147,10 +149,8 @@ export type OfficeRoom = {
   omittedAgentCount: number;
   observedDeskCount: number;
   observedAgentCount: number;
-  /**
-   * Fold targets `foldedDesksPerRoom`; expansion targets `desksPerRoom`.
-   * Expanded state survives closures so the user can still explicitly Fold.
-   */
+  deskRenderLimit: number;
+  /** Current per-room reveal target; expansion survives closures until Fold. */
   deskFold?: "folded" | "expanded";
 };
 
@@ -254,6 +254,7 @@ type ProjectedRoom = {
     | "observedDeskCount"
     | "observedAgentCount"
     | "deskFold"
+    | "deskRenderLimit"
   >;
   desks: OfficeDesk[];
   agents: OfficeAgent[];
@@ -281,6 +282,7 @@ export function createOfficeProjector(
   let previousExpanded: ReadonlySet<string> = NO_EXPANDED_ROOMS;
   let previousPinned: ReadonlySet<string> = NO_PINNED_TABS;
   let previousProtected: ReadonlySet<string> = NO_PINNED_TABS;
+  let previousDeskLimits: ReadonlyMap<string, number> = NO_DESK_LIMITS;
   const intern = <T extends { key: string }>(next: T[], prior: T[]) => {
     const byKey = new Map(prior.map((item) => [item.key, item]));
     const result = next.map((item) => {
@@ -300,6 +302,7 @@ export function createOfficeProjector(
     expandedRooms: ReadonlySet<string> = NO_EXPANDED_ROOMS,
     protectedDesks: ReadonlySet<string> = NO_PINNED_TABS,
     preferredRoomKey: string | null = null,
+    expandedDeskLimits: ReadonlyMap<string, number> = NO_DESK_LIMITS,
   ): HerdrOfficeProjection => {
     let next: HerdrOfficeProjection | null = null;
     const inputs = previous && projectionInputs.get(previous);
@@ -309,6 +312,10 @@ export function createOfficeProjector(
       preferredRoomKey === previousPreferredRoom &&
       pinnedTabs === previousPinned &&
       expandedRooms === previousExpanded &&
+      expandedDeskLimits.size === previousDeskLimits.size &&
+      [...expandedDeskLimits].every(
+        ([key, limit]) => previousDeskLimits.get(key) === limit,
+      ) &&
       protectedDesks.size === previousProtected.size &&
       [...protectedDesks].every((key) => previousProtected.has(key));
     if (
@@ -442,6 +449,7 @@ export function createOfficeProjector(
         expandedRooms,
         protectedDesks,
         preferredRoomKey,
+        expandedDeskLimits,
       );
     if (previous && next.rooms !== previous.rooms) {
       // Compare content once at projection admission, never once per canvas frame.
@@ -456,12 +464,14 @@ export function createOfficeProjector(
     previousExpanded = expandedRooms;
     previousPinned = pinnedTabs;
     previousProtected = new Set(protectedDesks);
+    previousDeskLimits = new Map(expandedDeskLimits);
     previous = next;
     return next;
   };
 }
 
 const NO_PINNED_TABS: ReadonlySet<string> = new Set();
+const NO_DESK_LIMITS: ReadonlyMap<string, number> = new Map();
 
 /**
  * `pinnedTabs` holds the tab card keys of Town's pinned desks (useDeskPins.ts):
@@ -480,6 +490,8 @@ export function projectWorldOffice(
   protectedDesks: ReadonlySet<string> = NO_PINNED_TABS,
   /** A validated qualified room requested by camera navigation. */
   preferredRoomKey: string | null = null,
+  /** Current incremental expansion target for each expanded room. */
+  expandedDeskLimits: ReadonlyMap<string, number> = NO_DESK_LIMITS,
 ): HerdrOfficeProjection {
   const selection = selectedId ? world.nodeById.get(selectedId) : undefined;
   const selectedSpaceId =
@@ -558,16 +570,24 @@ export function projectWorldOffice(
   const rooms = presentedRooms.map((entry) => {
     const expanded = expandedRooms.has(entry.room.key);
     const folds = entry.desks.length > bounds.foldedDesksPerRoom;
+    const deskRenderLimit = expanded
+      ? Math.max(
+          bounds.foldedDesksPerRoom + TOWN_DESK_EXPANSION_STEP,
+          expandedDeskLimits.get(entry.room.key) ?? bounds.desksPerRoom,
+        )
+      : bounds.foldedDesksPerRoom;
     const desks = boundedDesks(
       entry.desks,
       entry.agents,
-      expanded ? bounds.desksPerRoom : bounds.foldedDesksPerRoom,
+      deskRenderLimit,
       (desk) =>
         entry.source.id === selectedSpaceId &&
         desk.tabRef.nativeId === selectedLeaf?.tabId,
-      (desk) => pinned(desk) || protectedDesks.has(desk.key),
+      pinned,
       bounds === TOWN_PRESENTATION_BOUNDS,
-    ).map((desk) => {
+      (desk) => protectedDesks.has(desk.key),
+    );
+    const presentedDesks = desks.map((desk) => {
       const devices = boundedWithPriority(
         projectPaneDevices(entry.source.children, desk),
         bounds.paneDevicesPerDesk,
@@ -580,13 +600,17 @@ export function projectWorldOffice(
       };
     });
     const seated = new Set(
-      desks.flatMap(({ occupantAgentKey }) =>
+      presentedDesks.flatMap(({ occupantAgentKey }) =>
         occupantAgentKey ? [occupantAgentKey] : [],
       ),
     );
-    const deskOrder = new Map(desks.map((desk, index) => [desk.key, index]));
+    const deskOrder = new Map(
+      presentedDesks.map((desk, index) => [desk.key, index]),
+    );
     // A pinned desk keeps its agents too.
-    const pinnedDesks = new Set(desks.filter(pinned).map((desk) => desk.key));
+    const pinnedDesks = new Set(
+      presentedDesks.filter(pinned).map((desk) => desk.key),
+    );
     const keptAgent = (agent: { key: string; deskKey: string | null }) =>
       agent.key === selectedId ||
       (agent.deskKey !== null && pinnedDesks.has(agent.deskKey));
@@ -609,9 +633,12 @@ export function projectWorldOffice(
     );
     return {
       ...entry.room,
-      desks,
+      desks: presentedDesks,
       roomAgents: shownAgents,
-      omittedDeskCount: Math.max(0, entry.source.coverage.tabs - desks.length),
+      omittedDeskCount: Math.max(
+        0,
+        entry.source.coverage.tabs - presentedDesks.length,
+      ),
       ...(folds || expanded
         ? { deskFold: expanded ? ("expanded" as const) : ("folded" as const) }
         : {}),
@@ -623,6 +650,7 @@ export function projectWorldOffice(
       ),
       observedDeskCount: entry.source.coverage.tabs,
       observedAgentCount: entry.source.coverage.agents,
+      deskRenderLimit,
     };
   });
   const roomByKey = new Map(rooms.map((room) => [room.key, room]));

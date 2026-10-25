@@ -40,8 +40,9 @@ export function boundedDesks(
   selected: (desk: OfficeDesk) => boolean,
   pinned: (desk: OfficeDesk) => boolean,
   protectActiveAndRecent = false,
-) {
-  if (desks.length <= limit) return [...desks];
+  attention: (desk: OfficeDesk) => boolean = () => false,
+): OfficeDesk[] {
+  if (desks.length <= limit && !protectActiveAndRecent) return [...desks];
   const need = new Map<string, number>();
   for (const agent of agents) {
     if (!agent.deskKey) continue;
@@ -50,31 +51,29 @@ export function boundedDesks(
   }
   if (!protectActiveAndRecent) {
     const newestStart = desks.length - NEWEST_DESKS_KEPT;
-    const admitted = new Set(
-      desks
-        .map((desk, index) => ({
-          desk,
-          index,
-          rank: selected(desk)
-            ? -3
-            : pinned(desk)
-              ? -2
-              : index >= newestStart
-                ? -1
-                : (need.get(desk.key) ?? DESK_STATUS_RANK.idle),
-        }))
-        .sort(
-          (left, right) => left.rank - right.rank || right.index - left.index,
-        )
-        .slice(
-          0,
-          Math.max(
-            limit,
-            desks.filter((desk) => selected(desk) || pinned(desk)).length,
-          ),
-        )
-        .map(({ desk }) => desk),
+    const ranked = desks
+      .map((desk, index) => ({
+        desk,
+        index,
+        rank: selected(desk)
+          ? -3
+          : pinned(desk)
+            ? -2
+            : index >= newestStart
+              ? -1
+              : (need.get(desk.key) ?? UNNAMED_DESK_RANK),
+      }))
+      .sort(
+        (left, right) =>
+          left.rank - right.rank ||
+          right.index - left.index ||
+          left.desk.key.localeCompare(right.desk.key),
+      );
+    const retained = Math.max(
+      limit,
+      desks.filter((desk) => selected(desk) || pinned(desk)).length,
     );
+    const admitted = new Set(ranked.slice(0, retained).map(({ desk }) => desk));
     return desks.filter((desk) => admitted.has(desk));
   }
   const newest = new Set(
@@ -91,23 +90,38 @@ export function boundedDesks(
     return (
       selected(desk) ||
       pinned(desk) ||
+      attention(desk) ||
       newest.has(desk.key) ||
       status === DESK_STATUS_RANK.blocked ||
       status === DESK_STATUS_RANK.working
     );
   };
-  const protectedDesks = desks.filter(protectedDesk);
-  const candidates = desks.filter((desk) => !protectedDesk(desk));
+  const protectedDesks = desks.filter(protectedDesk).sort((left, right) => {
+    const rank = (desk: OfficeDesk) => {
+      const status = need.get(desk.key);
+      return selected(desk)
+        ? -4
+        : pinned(desk)
+          ? -3
+          : attention(desk) || status === DESK_STATUS_RANK.blocked
+            ? -2
+            : status === DESK_STATUS_RANK.working
+              ? -1
+              : 0;
+    };
+    return rank(left) - rank(right) || left.key.localeCompare(right.key);
+  });
+  const candidates = desks
+    .filter((desk) => !protectedDesk(desk))
+    .sort((left, right) => {
+      const statusOrder =
+        (need.get(left.key) ?? UNNAMED_DESK_RANK) -
+        (need.get(right.key) ?? UNNAMED_DESK_RANK);
+      return statusOrder || left.key.localeCompare(right.key);
+    });
   const admitted = new Set(
     protectedDesks.concat(
-      candidates
-        .sort((left, right) => {
-          const statusOrder =
-            (need.get(left.key) ?? UNNAMED_DESK_RANK) -
-            (need.get(right.key) ?? UNNAMED_DESK_RANK);
-          return statusOrder || left.key.localeCompare(right.key);
-        })
-        .slice(0, Math.max(0, limit - protectedDesks.length)),
+      candidates.slice(0, Math.max(0, limit - protectedDesks.length)),
     ),
   );
   return desks.filter((desk) => admitted.has(desk));

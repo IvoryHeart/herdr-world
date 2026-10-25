@@ -1,10 +1,10 @@
 # Fold and expand Town rooms
 
 A room normally folds toward 24 desks. Selected and pinned desks and the shared
-attention list remain visible beyond that target. **+N** counts only hidden desks;
-choose it to expand toward 127 desks, with the same exceptions. **Fold** restores
-the folded target. The following synthetic 100-tab room shows both controls at
-five viewports.
+attention list remain visible beyond that target. **+N** counts only currently
+hidden desks; each click reveals about 20 more, while **Fold** restores the
+24-desk target in one action. The following synthetic 100-tab room shows both
+controls at five viewports.
 
 | Viewport | Folded | Expanded |
 | --- | --- | --- |
