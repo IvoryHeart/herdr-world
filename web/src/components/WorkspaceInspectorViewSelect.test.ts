@@ -103,7 +103,7 @@ if (process.env.INSPECTOR_VIEW_DOM !== "1") {
         Array.from(
           document.querySelectorAll('[aria-label="Inspector views"] button'),
         ).map((button) => button.textContent?.trim()),
-      ).toEqual(["Terminal", "Files", "Chat", "Changes"]);
+      ).toEqual(["Chat", "Terminal", "Files", "Changes"]);
       for (let index = 0; index < 4; index++) {
         if (index > 0) await openViews();
         await act(async () =>

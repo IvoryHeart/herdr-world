@@ -27,9 +27,9 @@ export const INSPECTOR_TAB_ORDER: readonly InspectorView[] = [
 ];
 
 const MOBILE_VIEWS: readonly InspectorView[] = [
+  "history",
   "terminal",
   "files",
-  "history",
   "changes",
 ];
 

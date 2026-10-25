@@ -32,7 +32,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     idle agents in the lounge. Movement only represents state.
   - Each agent has one window: World's Inspector, with one top selector
     (**Chat**, **Terminal**, **Changes**, **Files**, then **Commits**).
-    On phones, a header dropdown shows Terminal, Files, Chat and Changes;
+    On phones, a header dropdown shows Chat, Terminal, Files and Changes;
     attention choices move into the window's ellipsis menu.
     Tapping an agent or its table, activating it (double-click,
     **Shift+Enter**), the needs-you list, **N** and **Next** open that window on

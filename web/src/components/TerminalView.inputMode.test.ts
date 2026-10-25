@@ -1494,7 +1494,7 @@ async function registerDomTests() {
       await back();
       expect(filesOpen).toBe(false);
       expect(open).toBe(initiallyOpen); // Back closes the page, not its background dock.
-      expect(toolbar.hidden).toBe(!initiallyOpen);
+      expect(toolbar.hidden).toBe(false); // Mode entry points remain available while the dock is closed.
       expect(shortcuts.hidden).toBe(shortcutsWereHidden);
       expect(editor.value).toBe("keep\nthis draft");
       expect([editor.selectionStart, editor.selectionEnd]).toEqual([2, 7]);
@@ -1505,7 +1505,7 @@ async function registerDomTests() {
       // More/Tabs in the terminal must NOT hide accessories.
       for (const entry of [".mobile-appbar-more", ".mobile-appbar-tabs"]) {
         await click(entry);
-        expect(toolbar.hidden).toBe(!initiallyOpen);
+        expect(toolbar.hidden).toBe(false); // Mode entry points remain available while the dock is closed.
         await back();
       }
     },

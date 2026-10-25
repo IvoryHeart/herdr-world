@@ -150,8 +150,8 @@ hosts stay usable.
    it to the front. Use **Back** to close the summary.
 4. Tap an agent or its table to open its window on **Chat**: World's Inspector,
    with **Chat**, **Terminal**, **Changes** and **Files** in its top selector.
-   On a phone, the anchored header dropdown switches between **Terminal**, **Files**,
-   **Chat** and **Changes**; the **⋯** menu contains attention settings.
+   On a phone, the anchored header dropdown switches between **Chat**, **Terminal**,
+   **Files** and **Changes**; the **⋯** menu contains attention settings.
    In Town it docks on the right at a readable width; drag its left edge to
    resize it (Town remembers the width), or drag its title to undock it. Chat shows the
    conversation's latest 200 entries, scrolls back inside the window, and

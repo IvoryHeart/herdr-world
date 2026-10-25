@@ -804,7 +804,7 @@ export function TerminalComposer({
         }}
       >
         <AttachmentChips scope={draftKey} />
-        <div className="terminal-composer-toolbar" hidden={!accessoriesOpen}>
+        <div className="terminal-composer-toolbar" hidden={!accessoriesVisible}>
           <button
             type="button"
             className="terminal-composer-attach"

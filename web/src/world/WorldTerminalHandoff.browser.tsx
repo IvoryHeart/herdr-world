@@ -2008,7 +2008,7 @@ async function run() {
       [...document.querySelectorAll('[aria-label="Inspector views"] button')]
         .map((button) => button.textContent?.trim())
         .slice(0, 4)
-        .join(",") === "Terminal,Files,Chat,Changes",
+        .join(",") === "Chat,Terminal,Files,Changes",
       "mobile view destinations changed order",
     );
     document
