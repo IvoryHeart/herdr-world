@@ -1,3 +1,4 @@
+import { useTerminalComposerDraftScopes } from "./useTerminalComposerDraftScopes";
 import {
   isNotificationTarget,
   type NotificationTarget,
@@ -193,7 +194,6 @@ import { orderTabsForDisplay, tabPinsFor } from "./tabPins";
 import { copyTextFromUserGesture } from "./terminalClipboard";
 import { terminalPasteRequest } from "./terminalPaste";
 import {
-  activateTerminalComposerDraftScope,
   readTerminalComposerDraft,
   subscribeTerminalComposerDraft,
   terminalComposerDraftKey,
@@ -1037,6 +1037,7 @@ export default function App({
     (state) => ({
       activeConnectionId: state.activeConnectionId,
       connections: state.connections,
+      catalogueReady: state.catalogueReady,
       connectionGeneration:
         state.serverRuntimeGeneration ?? state.connectionGeneration,
       serverRuntimeGeneration: state.serverRuntimeGeneration,
@@ -1059,16 +1060,7 @@ export default function App({
   );
   const connectionClient = useConnectionClient();
   const { mobile, preferences: layoutPreferences } = useLayoutPreferences();
-  useEffect(() => {
-    activateTerminalComposerDraftScope(
-      s.activeConnectionId,
-      s.connectionGeneration,
-      s.connections.map((connection) => ({
-        connectionId: connection.id,
-        connectionGeneration: connection.generation,
-      })),
-    );
-  }, [operations, s.activeConnectionId, s.connectionGeneration, s.connections]);
+  useTerminalComposerDraftScopes(s);
   const [sidebarWidth, setSidebarWidth] = useState(loadSidebarWidth);
   const [mobileView, setMobileView] = useState<MobileView>("session");
   const [assistantOpen, setAssistantOpen] = useState(false);

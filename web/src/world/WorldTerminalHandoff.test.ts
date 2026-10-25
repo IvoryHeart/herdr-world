@@ -1,3 +1,4 @@
+import { captureResumeViewports } from "./testing/resumeVisualCapture";
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -22,6 +23,7 @@ test.skipIf(!chrome)(
     const dir = await mkdtemp(join(tmpdir(), "world-terminal-handoff-"));
     const assets = new Map<string, Blob>();
     const captureDir = Bun.env.WORLD_WINDOW_CAPTURE_DIR;
+    const resumeCaptureDir = Bun.env.WORLD_RESUME_CAPTURE_DIR;
     const result = Promise.withResolvers<unknown>();
     const publicDir = join(import.meta.dir, "..", "..", "public");
     const pageRequested = Promise.withResolvers<void>();
@@ -56,6 +58,22 @@ test.skipIf(!chrome)(
         if (path === "/result" && request.method === "POST") {
           result.resolve(await request.json());
           return new Response("ok");
+        }
+        if (
+          path === "/capture/resume-disconnected" ||
+          path === "/capture/resume-recovery"
+        ) {
+          if (resumeCaptureDir) {
+            const [port] = (
+              await readFile(join(dir, "profile", "DevToolsActivePort"), "utf8")
+            ).split("\n");
+            await captureResumeViewports(
+              port!,
+              resumeCaptureDir,
+              path.endsWith("disconnected") ? "disconnected" : "recovery",
+            );
+          }
+          return new Response(null, { status: 204 });
         }
         if (path === "/capture/desktop" || path === "/capture/mobile") {
           if (captureDir) {
@@ -123,7 +141,7 @@ test.skipIf(!chrome)(
           if (await file.exists()) return new Response(file);
         }
         return new Response(
-          '<head><link rel="stylesheet" href="/WorldTerminalHandoff.browser.css"></head><body><script type="module" src="/WorldTerminalHandoff.browser.js"></script></body>',
+          '<head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/WorldTerminalHandoff.browser.css"></head><body><script type="module" src="/WorldTerminalHandoff.browser.js"></script></body>',
           { headers: { "Content-Type": "text/html" } },
         );
       },
@@ -195,7 +213,9 @@ test.skipIf(!chrome)(
         [
           chrome!,
           "--headless=new",
-          ...(captureDir ? ["--remote-debugging-port=0"] : []),
+          ...(captureDir || resumeCaptureDir
+            ? ["--remote-debugging-port=0"]
+            : []),
           "--window-size=1440,1000",
           "--enable-webgl",
           ...(await chromeRenderingFlags(chrome!)),
@@ -204,7 +224,7 @@ test.skipIf(!chrome)(
           "--no-first-run",
           "--no-default-browser-check",
           `--user-data-dir=${join(dir, "profile")}`,
-          `${server.url.href}town`,
+          `${server.url.href}town${resumeCaptureDir ? "?resume-gallery" : ""}`,
         ],
         { stdout: "ignore", stderr: Bun.file(browserLog) },
       );
@@ -217,7 +237,7 @@ test.skipIf(!chrome)(
           );
         }),
         "World terminal handoff",
-        120_000,
+        resumeCaptureDir ? 160_000 : 120_000,
       );
       if (Array.isArray(observed) && observed.length)
         console.info("World handoff failure detail", JSON.stringify(observed));

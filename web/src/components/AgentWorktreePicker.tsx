@@ -1,4 +1,11 @@
-import { useId, useRef, type ReactNode } from "react";
+import {
+  ResourceConnectionClientContext,
+  connectionClientScopeGeneration,
+  connectionClientScopeKey,
+  type ConnectionClientScope,
+} from "../useConnectionClient";
+import { resourcePresentationClient } from "../resourcePresentationClient";
+import { useId, useRef, useMemo, useContext, type ReactNode } from "react";
 import {
   Activity,
   FileText,
@@ -152,10 +159,53 @@ export function AgentWorktreeGate({
   children: ReactNode;
   retainPresentation?: boolean;
 }) {
-  const admitted = useRef(false);
-  if (view?.target) admitted.current = true;
-  if (!view || view.target || (retainPresentation && admitted.current))
-    return <>{children}</>;
+  const client = useContext(ResourceConnectionClientContext);
+  const owner = JSON.stringify([
+    client?.connectionId,
+    client && connectionClientScopeGeneration(client),
+    view?.observation?.subject,
+  ]);
+  const admitted = useRef<{
+    owner: string;
+    identity: string;
+    scope: ConnectionClientScope | null;
+  } | null>(null);
+  const identity = client ? connectionClientScopeKey(client) : "";
+  if (
+    (!view || view.target) &&
+    (admitted.current?.owner !== owner ||
+      admitted.current?.identity !== identity)
+  ) {
+    admitted.current = {
+      owner,
+      identity,
+      scope: client
+        ? {
+            connectionId: client.connectionId,
+            generation: client.generation,
+            serverRuntimeGeneration: client.serverRuntimeGeneration,
+            agentWorktree: client.agentWorktree,
+          }
+        : null,
+    };
+  }
+  const scope =
+    admitted.current?.owner === owner ? admitted.current.scope : client;
+  const presentationClient = useMemo(
+    () =>
+      client && scope ? resourcePresentationClient(client, scope) : client,
+    [client, scope],
+  );
+  if (
+    !view ||
+    view.target ||
+    (retainPresentation && admitted.current?.owner === owner)
+  )
+    return (
+      <ResourceConnectionClientContext.Provider value={presentationClient}>
+        {children}
+      </ResourceConnectionClientContext.Provider>
+    );
   return (
     <div className="workspace-inspector-unavailable" role="status">
       <strong>

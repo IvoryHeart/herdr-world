@@ -105,6 +105,7 @@ import {
   insertIntoTerminalComposerDraft,
   terminalComposerCloseWarning,
   terminalComposerDraftKey,
+  terminalComposerScopeGeneration,
   terminalComposerDraftPaneIds,
   terminalComposerRequest,
 } from "../terminalComposer";
@@ -795,7 +796,7 @@ export function TerminalView({
     const state = store.get();
     const key = terminalComposerDraftKey(
       state.activeConnectionId,
-      state.connectionGeneration,
+      terminalComposerScopeGeneration(state),
       destinationPaneId ?? "",
     );
     // Desktop terminal output stays Direct; the shared editor owns its mode.
@@ -3592,13 +3593,15 @@ export function TerminalView({
 
   const composerDraftKey = terminalComposerDraftKey(
     s.activeConnectionId,
-    s.connectionGeneration,
+    terminalComposerScopeGeneration(s),
     pane.pane_id,
   );
   const composerDraftWarning = terminalComposerCloseWarning(
-    terminalComposerDraftPaneIds(s.activeConnectionId, s.connectionGeneration, [
-      pane.pane_id,
-    ]).length,
+    terminalComposerDraftPaneIds(
+      s.activeConnectionId,
+      terminalComposerScopeGeneration(s),
+      [pane.pane_id],
+    ).length,
   );
 
   const terminalComposer = (

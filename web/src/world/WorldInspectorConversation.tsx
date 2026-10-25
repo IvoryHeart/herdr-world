@@ -505,7 +505,8 @@ function InspectorResources({
   const presentationStale =
     status !== "connected" ||
     !catalogueReady ||
-    !baseConnectionClient.isCurrent();
+    !baseConnectionClient.isCurrent() ||
+    Boolean(worktree.view?.selected && !worktree.view.target);
   const content = (
     <div
       tabIndex={

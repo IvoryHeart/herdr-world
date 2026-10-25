@@ -115,7 +115,12 @@ The browser never talks directly to Herdr sockets or a remote World bridge.
 
 A transient browser transport outage retires clients and pending operations,
 while retaining exact-owner Inspector membership, renderer buffers and validated
-split geometry. A fresh catalogue may retire a removed owner or replaced runtime;
+split geometry. The [resource presentation client](../web/src/resourcePresentationClient.ts)
+keeps cache identity as data while Files/Changes/Commits wait for current
+worktree admission; it never substitutes the retained target into RPC or HTTP
+operations. Message drafts use the admitted runtime generation, and incomplete
+catalogues cannot prune another Inspector's memory scope.
+A fresh catalogue may retire a removed owner or replaced runtime;
 resource absence needs a newly completed qualified focused list. The
 [terminal renderer](../web/src/terminalRenderer.ts) owns xterm and endpoint
 presentation independently of client-bound subscriptions, input handlers, resize

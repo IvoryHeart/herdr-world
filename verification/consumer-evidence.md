@@ -211,7 +211,11 @@ Inspector and split-renderer identities, and retiring only a replaced host.
 one listener set after reconnect, input suppression, three no-frame failures
 and explicit local retry at both phone widths. `WorldInspectorWorktree.test.ts`
 preserves cached previews through an outage while still fencing same-path
-worktree replacement. Layout, endpoint-presentation and recovery unit tests
+worktree replacement. `WorldInspectorResourceResume.test.ts` mounts the real
+Inspector, Files/Changes children and gate, retaining three file rows through
+null worktree binding and delayed same-target readmission, while rejecting
+late old-binding responses after replacement. These runners are explicitly
+mapped to Q06, Q07, Q08, Q16 and Q43 in `coverage.json`. Layout, endpoint-presentation and recovery unit tests
 cover exact geometry owners, stale parser completion and bounded retry budgets.
 These direct browser and consumer checks are needed for DOM lifetime and event
 timing; the existing ownership models and their mandatory consumers remain

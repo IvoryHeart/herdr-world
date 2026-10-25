@@ -1,5 +1,6 @@
 import { createContext, useContext, useMemo } from "react";
 import { bridge, type ConnectionClient } from "./api";
+import { resourcePresentationScope } from "./resourcePresentationClient";
 import { OperationalContext, useStoreSelector } from "./store";
 
 export const ResourceConnectionClientContext =
@@ -55,12 +56,13 @@ export function connectionClientScopeKey(
   client: ConnectionClientScope,
   ...parts: unknown[]
 ): string {
+  const scope = resourcePresentationScope(client);
   return JSON.stringify([
-    client.connectionId,
-    connectionClientScopeGeneration(client),
+    scope.connectionId,
+    connectionClientScopeGeneration(scope),
     ...parts,
-    ...(client.agentWorktree !== undefined
-      ? [{ agentWorktree: client.agentWorktree }]
+    ...(scope.agentWorktree !== undefined
+      ? [{ agentWorktree: scope.agentWorktree }]
       : []),
   ]);
 }
