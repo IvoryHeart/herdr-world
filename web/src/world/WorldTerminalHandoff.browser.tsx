@@ -3983,58 +3983,67 @@ async function run() {
     document.querySelector<HTMLElement>(
       ".workspace-inspector-slot .workspace-inspector",
     );
+  const attentionChoicesFor = async (inspector: Element) => {
+    const trigger =
+      inspector.querySelector<HTMLButtonElement>('[aria-label^="Interest:"]') ??
+      inspector.querySelector<HTMLButtonElement>(
+        '[aria-label="More actions for Inspector window"]',
+      );
+    if (!trigger) throw new Error("Inspector has no attention control");
+    trigger.click();
+    await until(
+      () =>
+        document.querySelector(
+          ".interest-choices, [aria-label='Window actions']",
+        ),
+      "Inspector attention choices",
+    );
+    const choices = [
+      ...document.querySelectorAll<HTMLButtonElement>(
+        ".interest-choice, [aria-label='Window actions'] [role='menuitemradio']",
+      ),
+    ];
+    return {
+      trigger,
+      choice: (label: string) =>
+        choices.find((button) => button.textContent?.startsWith(label))!,
+    };
+  };
   await until(
-    () => spacesInspector()?.querySelector('[aria-label="Interest: Watching"]'),
-    "Spaces Inspector Interest control",
+    () =>
+      spacesInspector()?.querySelector(
+        '[aria-label^="Interest:"], [aria-label="More actions for Inspector window"]',
+      ),
+    "Spaces Inspector attention control",
   );
-  spacesInspector()!
-    .querySelector<HTMLButtonElement>('[aria-label="Interest: Watching"]')!
-    .click();
+  (await attentionChoicesFor(spacesInspector()!)).choice("Muted").click();
   await until(
-    () => document.querySelector(".interest-choices"),
-    "Spaces Interest choices",
-  );
-  [...document.querySelectorAll<HTMLButtonElement>(".interest-choice")]
-    .find((button) => button.textContent?.startsWith("Muted"))!
-    .click();
-  await until(
-    () => spacesInspector()?.querySelector('[aria-label="Interest: Muted"]'),
-    "Spaces saves Muted",
-  );
-  check(
-    boardDocument.layout.interest?.[
-      interestKey("local", "reviewer-terminal")
-    ] === "muted",
+    () =>
+      boardDocument.layout.interest?.[
+        interestKey("local", "reviewer-terminal")
+      ] === "muted",
     "Spaces Interest saves the owning terminal",
   );
+  const worldAttention = await attentionChoicesFor(
+    persistentReviewerInspector!,
+  );
   check(
-    Boolean(
-      persistentReviewerInspector?.querySelector(
-        '[aria-label="Interest: Muted"]',
-      ),
-    ),
+    worldAttention.choice("Muted").getAttribute("aria-checked") === "true" ||
+      worldAttention.choice("Muted").getAttribute("aria-pressed") === "true",
     "World Inspector shares Spaces Interest",
   );
+  worldAttention.trigger.click();
   failInterestPatch = true;
-  spacesInspector()!
-    .querySelector<HTMLButtonElement>('[aria-label="Interest: Muted"]')!
-    .click();
-  await until(
-    () => document.querySelector(".interest-choices"),
-    "Spaces Interest retry choices",
-  );
-  [...document.querySelectorAll<HTMLButtonElement>(".interest-choice")]
-    .find((button) => button.textContent?.startsWith("Focused"))!
-    .click();
+  (await attentionChoicesFor(spacesInspector()!)).choice("Focused").click();
   await until(
     () => store.get().notice?.message === "Agent interest could not be saved",
     "Interest save failure notice",
   );
   check(
     store.get().notice?.detail === "Synthetic Interest save failure" &&
-      Boolean(
-        spacesInspector()?.querySelector('[aria-label="Interest: Muted"]'),
-      ),
+      boardDocument.layout.interest?.[
+        interestKey("local", "reviewer-terminal")
+      ] === "muted",
     "failed Interest save explains the error and keeps the saved policy",
   );
   failInterestPatch = false;

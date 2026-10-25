@@ -31,7 +31,6 @@ const MOBILE_VIEWS: readonly InspectorView[] = [
   "files",
   "history",
   "changes",
-  "commits",
 ];
 
 /** Mobile's primary view switcher; attention belongs to the window menu. */

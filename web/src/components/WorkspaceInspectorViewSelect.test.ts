@@ -52,7 +52,13 @@ if (process.env.INSPECTOR_VIEW_DOM !== "1") {
     const root = createRoot(host);
     const change = mock(() => {});
     const attention = mock(() => {});
-    const views = ["terminal", "files", "history", "changes"] as const;
+    const views = [
+      "terminal",
+      "files",
+      "history",
+      "changes",
+      "commits",
+    ] as const;
     const render = async (historyAvailable: boolean) =>
       act(async () =>
         root.render(
@@ -98,7 +104,7 @@ if (process.env.INSPECTOR_VIEW_DOM !== "1") {
           document.querySelectorAll('[aria-label="Inspector views"] button'),
         ).map((button) => button.textContent?.trim()),
       ).toEqual(["Terminal", "Files", "Chat", "Changes"]);
-      for (let index = 0; index < views.length; index++) {
+      for (let index = 0; index < 4; index++) {
         if (index > 0) await openViews();
         await act(async () =>
           document
