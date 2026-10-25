@@ -21,8 +21,9 @@ them. Active pod work is tracked by GitHub issues and batch milestones; these
 checkboxes describe proposal dependencies, not a competing todo system.
 Pod leads integrate related issue-backed items as commits on
 one batch branch. Use typecheck and focused tests per item, one complete gate
-at batch close, and one commit-by-commit review from the pod's pair. No per-item
-pushes or full gates. Reconcile existing accepted work instead of rebuilding it.
+at batch close, and one commit-by-commit review under the current repository
+review policy and assigned reviewers. No per-item pushes or full gates. Reconcile
+existing accepted work instead of rebuilding it.
 
 ## 2. Current-SoR and skill-contract prerequisites
 
