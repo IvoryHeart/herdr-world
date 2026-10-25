@@ -45,6 +45,10 @@ type World = {
   /** null: the rules endpoint fails. */
   rules: string[] | null;
   retried: boolean;
+  /** Workflow runs on the head: id, run number and latest attempt. */
+  runs: { id: number; run_number: number; run_attempt: number }[];
+  /** Job ID → the run and attempt it belongs to. */
+  jobs: Record<number, { run_id: number; run_attempt: number }>;
   /** History pages never end. */
   endless: boolean;
 };
@@ -217,8 +221,16 @@ const fakeGitHub: Run = (argv) => {
     });
   if (path.includes("actions/runs?head_sha="))
     return json({
-      workflow_runs: world.retried ? [{ id: 41, run_attempt: 2 }] : [],
+      workflow_runs: [
+        ...world.runs,
+        ...(world.retried
+          ? [{ id: 41, run_attempt: 2, workflow_id: 9, run_number: 5 }]
+          : []),
+      ].map((entry) => ({ workflow_id: 9, ...entry })),
     });
+  const job = /actions\/jobs\/(\d+)$/u.exec(path);
+  if (job && world.jobs[Number(job[1])])
+    return json(world.jobs[Number(job[1])]);
   return { code: 1, stdout: "", stderr: `unexpected ${argv.join(" ")}` };
 };
 
@@ -284,6 +296,8 @@ beforeEach(() => {
     reviews: trio(fixed),
     rules: ["Delivery checks"],
     retried: false,
+    runs: [],
+    jobs: {},
     endless: false,
   };
   publish(fixed);
@@ -332,9 +346,50 @@ describe("pass", () => {
           "https://github.com/example-org/widgets/actions/runs/2/job/102",
       },
     ];
+    world.runs = [
+      { id: 1, run_number: 1, run_attempt: 1 },
+      { id: 2, run_number: 2, run_attempt: 1 },
+    ];
+    world.jobs = {
+      101: { run_id: 1, run_attempt: 1 },
+      102: { run_id: 2, run_attempt: 1 },
+    };
     const { text } = await cli(["pass"]);
     expect(text).toMatch(/#7\tNEEDS_JUDGMENT/u);
     expect(text).toContain("Delivery checks: 1 failed attempt retained");
+  });
+
+  test("a newer run's failure beats an older run's pass queued later (higher job ID)", async () => {
+    world.checks = [
+      {
+        name: "Delivery checks",
+        status: "COMPLETED",
+        conclusion: "SUCCESS",
+        detailsUrl:
+          "https://github.com/example-org/widgets/actions/runs/1/job/202",
+      },
+      {
+        name: "Delivery checks",
+        status: "COMPLETED",
+        conclusion: "FAILURE",
+        detailsUrl:
+          "https://github.com/example-org/widgets/actions/runs/2/job/201",
+      },
+    ];
+    world.runs = [
+      { id: 1, run_number: 1, run_attempt: 1 },
+      { id: 2, run_number: 2, run_attempt: 1 },
+    ];
+    world.jobs = {
+      202: { run_id: 1, run_attempt: 1 },
+      201: { run_id: 2, run_attempt: 1 },
+    };
+    expect((await cli(["pass"])).text).toMatch(/#7\tNOT_READY/u);
+    // Without the jobs' executions, which run is newest is unknown.
+    world.jobs = {};
+    const unknown = await cli(["pass"]);
+    expect(unknown.text).toMatch(/#7\tNOT_READY/u);
+    expect(unknown.text).toContain("no way to tell the newest");
   });
 
   test("an old finding beyond the PR card's review window still blocks", async () => {

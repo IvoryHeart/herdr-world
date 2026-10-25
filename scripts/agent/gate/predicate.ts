@@ -55,6 +55,16 @@ export type CheckAttempt = {
   name: string;
   conclusion: string;
   completedAt: number;
+  jobId?: number;
+};
+
+/** Which workflow execution an Actions job belongs to. */
+export type Execution = {
+  workflowId: number;
+  /** Increments with each run of the workflow. */
+  runNumber: number;
+  /** Increments with each rerun of that run. */
+  attempt: number;
 };
 
 export type GateInput = {
@@ -70,6 +80,8 @@ export type GateInput = {
   /** Check names the base branch requires; null when unknown. */
   requiredChecks: string[] | null;
   attempts: CheckAttempt[];
+  /** Execution of each job behind a repeated check, by job ID. */
+  executions: Record<string, Execution>;
   /** Copy rule result per reviewed commit. */
   copies: Record<string, CopyResult>;
   hold: { reason: string; at: number } | null;
@@ -150,7 +162,7 @@ export function evaluate(
         ),
     ...worldRules(item, now),
     ...requiredChecks(item, input.requiredChecks),
-    ...reruns(item, input.attempts, config, notes),
+    ...reruns(item, input.attempts, input.executions, config, notes),
     ...findings(input, item, config, now, notes),
     input.hold
       ? condition("hold", "unmet", `Held: ${input.hold.reason}`)
@@ -245,19 +257,23 @@ function requiredChecks(
     : [condition("required", "met", `${required.length} required reported`)];
 }
 
-/** An Actions job's ID, from its details URL; IDs grow as jobs are queued. */
+/** An Actions job's ID, from its details URL. */
 export function jobId(check: PullRequestCheck) {
   const match = /\/actions\/runs\/\d+\/job\/(\d+)/u.exec(check.url ?? "");
   return match ? Number(match[1]) : null;
 }
 
 /**
- * GitHub lists every run of a check on the commit. The newest execution
- * decides, by job ID: runs can finish out of order. When several runs share
- * a name and one has no job ID, which is newest is unknown; the worst of
- * them stands and the name is reported as unordered.
+ * GitHub lists every run of a check on the commit. Which is authoritative
+ * follows the documented workflow order, not job IDs or finishing times:
+ * within one workflow, the higher run number and then the higher attempt is
+ * newer. Repeated runs that aren't all known executions of one workflow are
+ * unordered: the worst of them stands and nothing counts as superseded.
  */
-export function latestChecks(checks: PullRequestCheck[]) {
+export function latestChecks(
+  checks: PullRequestCheck[],
+  executions: Record<string, Execution>,
+) {
   const groups = new Map<string, PullRequestCheck[]>();
   for (const check of checks)
     groups.set(check.name, [...(groups.get(check.name) ?? []), check]);
@@ -265,14 +281,27 @@ export function latestChecks(checks: PullRequestCheck[]) {
   const superseded: PullRequestCheck[] = [];
   const unordered: string[] = [];
   const worst = { fail: 3, pending: 2, pass: 1, skipped: 0 } as const;
+  const execution = (check: PullRequestCheck) => {
+    const id = jobId(check);
+    return id === null ? undefined : executions[String(id)];
+  };
   for (const [name, runs] of groups) {
     if (runs.length === 1) {
       latest.push(runs[0]!);
       continue;
     }
-    const ordered = runs.every((check) => jobId(check) !== null);
+    const known = runs.map(execution);
+    const ordered =
+      known.every((entry) => entry !== undefined) &&
+      new Set(known.map((entry) => entry!.workflowId)).size === 1 &&
+      new Set(known.map((entry) => `${entry!.runNumber}/${entry!.attempt}`))
+        .size === runs.length;
     const sorted = ordered
-      ? runs.toSorted((a, b) => jobId(b)! - jobId(a)!)
+      ? runs.toSorted((a, b) => {
+          const x = execution(a)!;
+          const y = execution(b)!;
+          return y.runNumber - x.runNumber || y.attempt - x.attempt;
+        })
       : runs.toSorted((a, b) => worst[b.state] - worst[a.state]);
     if (!ordered) unordered.push(name);
     latest.push(sorted[0]!);
@@ -285,26 +314,35 @@ export function latestChecks(checks: PullRequestCheck[]) {
 function reruns(
   item: WorkItem,
   attempts: CheckAttempt[],
+  executions: Record<string, Execution>,
   config: GateConfig,
   notes: string[],
 ): Condition[] {
   const failed = new Map<string, number>();
-  const { latest, superseded, unordered } = latestChecks(item.pr?.checks ?? []);
-  const failures = [
-    ...attempts
-      .filter(
-        (attempt) =>
-          !["success", "skipped", "neutral"].includes(
-            attempt.conclusion.toLowerCase(),
-          ),
+  const { latest, superseded, unordered } = latestChecks(
+    item.pr?.checks ?? [],
+    executions,
+  );
+  // One failed job counts once, whether the Actions attempts list or the
+  // commit's superseded check runs reported it.
+  const seen = new Set<string>();
+  const count = (name: string, job: number | null | undefined) => {
+    if (job != null) {
+      if (seen.has(String(job))) return;
+      seen.add(String(job));
+    }
+    failed.set(name, (failed.get(name) ?? 0) + 1);
+  };
+  for (const attempt of attempts)
+    if (
+      !["success", "skipped", "neutral"].includes(
+        attempt.conclusion.toLowerCase(),
       )
-      .map((attempt) => attempt.name),
-    // A whole-workflow rerun leaves the earlier run's checks on the commit.
-    ...superseded
-      .filter((check) => check.state === "fail")
-      .map((check) => check.name),
-  ];
-  for (const name of failures) failed.set(name, (failed.get(name) ?? 0) + 1);
+    )
+      count(attempt.name, attempt.jobId);
+  // A rerun leaves the earlier execution's checks on the commit.
+  for (const check of superseded)
+    if (check.state === "fail") count(check.name, jobId(check));
   const result: Condition[] = unordered.length
     ? [
         condition(

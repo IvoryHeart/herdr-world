@@ -150,9 +150,11 @@ bun run agent:gate -- replay <dir>        # re-run fixture files; --pass ID re-r
 A verdict is `READY`, `NOT_READY`, `WAITING`, `UNKNOWN`, `NEEDS_JUDGMENT`,
 `MERGED` or `CLOSED`, and the worst condition decides. The PR card's own rules
 decide draft, checks, mergeable and screenshots. Each check is judged by its
-newest execution, ordered by Actions job ID rather than finishing time; repeated
-runs that can't be ordered are `UNKNOWN`. The PR list's check summary never
-overrides a newer failing or running check. The gate adds:
+newest execution: within one workflow, the higher run number and then the
+higher attempt, never the job ID or finishing time. Repeated runs that aren't
+all known executions of one workflow are `UNKNOWN`, and the worst of them
+stands. The PR list's check summary never overrides a newer failing or running
+check. The gate adds:
 
 - **Required checks.** The base branch's required checks come from GitHub's
   rules, from classic branch protection when it is readable, and from

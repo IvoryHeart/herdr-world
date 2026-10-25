@@ -26,8 +26,10 @@ import {
 } from "./git";
 import {
   fullOutcomes,
+  jobId,
   latestChecks,
   type CheckAttempt,
+  type Execution,
   type CopyResult,
   type GateConfig,
   type GateInput,
@@ -107,41 +109,97 @@ export function listPullRequests(run: Run, repo: string, numbers: number[]) {
   });
 }
 
-/** Earlier attempts of each workflow run on `head`; the latest is in the rollup. */
+type WorkflowRun = {
+  id: number;
+  workflowId: number;
+  runNumber: number;
+  latestAttempt: number;
+};
+
+/** The Actions workflow runs on `head`. */
+export function workflowRuns(run: Run, repo: string, head: string) {
+  return list(
+    restJson(run, `repos/${repo}/actions/runs?head_sha=${head}&per_page=100`)
+      .workflow_runs,
+  )
+    .map(
+      (entry): WorkflowRun => ({
+        id: Number(entry.id),
+        workflowId: Number(entry.workflow_id),
+        runNumber: Number(entry.run_number),
+        latestAttempt: Number(entry.run_attempt),
+      }),
+    )
+    .filter((entry) => Number.isSafeInteger(entry.id));
+}
+
+/** Earlier attempts of each workflow run; the latest is in the rollup. */
 export function earlierAttempts(
   run: Run,
   repo: string,
-  head: string,
+  runs: WorkflowRun[],
 ): CheckAttempt[] {
-  const runs = list(
-    restJson(run, `repos/${repo}/actions/runs?head_sha=${head}&per_page=100`)
-      .workflow_runs,
-  );
   const attempts: CheckAttempt[] = [];
   for (const entry of runs) {
-    const runId = Number(entry.id);
-    const latest = Number(entry.run_attempt);
-    if (!Number.isSafeInteger(runId) || !(latest > 1)) continue;
-    for (let attempt = 1; attempt < latest; attempt++) {
+    if (!(entry.latestAttempt > 1)) continue;
+    for (let attempt = 1; attempt < entry.latestAttempt; attempt++) {
       const jobs = list(
         restJson(
           run,
-          `repos/${repo}/actions/runs/${runId}/attempts/${attempt}/jobs?per_page=100`,
+          `repos/${repo}/actions/runs/${entry.id}/attempts/${attempt}/jobs?per_page=100`,
         ).jobs,
       );
       for (const job of jobs)
         if (typeof job.name === "string")
           attempts.push({
-            runId,
+            runId: entry.id,
             attempt,
             name: job.name,
             conclusion:
               typeof job.conclusion === "string" ? job.conclusion : "unknown",
             completedAt: Date.parse(String(job.completed_at)) || 0,
+            ...(Number.isSafeInteger(job.id)
+              ? { jobId: job.id as number }
+              : {}),
           });
     }
   }
   return attempts;
+}
+
+/**
+ * The workflow execution behind each job of a check that ran more than once,
+ * by job ID. A job GitHub won't describe, or whose run isn't among the
+ * head's runs, stays unknown.
+ */
+export function executionsOf(
+  run: Run,
+  repo: string,
+  checks: PullRequestCheck[],
+  runs: WorkflowRun[],
+) {
+  const byRun = new Map(runs.map((entry) => [entry.id, entry]));
+  const names = new Map<string, number>();
+  for (const check of checks)
+    names.set(check.name, (names.get(check.name) ?? 0) + 1);
+  const executions: Record<string, Execution> = {};
+  for (const check of checks) {
+    const id = jobId(check);
+    if (id === null || names.get(check.name)! < 2) continue;
+    // A job GitHub won't describe stays unknown, which fails closed.
+    const result = run(["gh", "api", `repos/${repo}/actions/jobs/${id}`]);
+    if (result.code !== 0) continue;
+    const job = record(JSON.parse(result.stdout));
+    const owner = byRun.get(Number(job.run_id));
+    const attempt = Number(job.run_attempt);
+    if (owner && Number.isSafeInteger(attempt))
+      executions[String(id)] = {
+        workflowId: owner.workflowId,
+        runNumber: owner.runNumber,
+        attempt,
+      };
+  }
+  return executions;
 }
 
 export function observe(options: {
@@ -172,8 +230,6 @@ export function observe(options: {
       const detail = details.get(item.key);
       if (!detail || !item.headSha) return;
       item.pr = detail;
-      // The list's summary is older than the detail; the worse one stands.
-      item.checks = worse(item.checks ?? "none", summary(detail.checks));
       item.prObservation = {
         source: "github",
         state: "fresh",
@@ -226,6 +282,7 @@ export function observe(options: {
       hold: null,
       waived: [],
       outcomes: {},
+      executions: {},
       overlap: null,
       readAt: now,
     };
@@ -233,6 +290,13 @@ export function observe(options: {
       return state === "OPEN" && item ? { ...base, item } : base;
     const head = item.headSha;
     const branch = item.base ?? "main";
+    const runs = workflowRuns(run, config.repo, head);
+    const executions = executionsOf(run, config.repo, item.pr.checks, runs);
+    // The list's summary is older than the detail; the worse one stands.
+    item.checks = worse(
+      item.checks ?? "none",
+      summary(item.pr.checks, executions),
+    );
     if (!inventories.has(branch))
       inventories.set(branch, requiredInventory(run, config, branch));
     const required = inventories.get(branch)!;
@@ -257,7 +321,8 @@ export function observe(options: {
       historyComplete: evidence.complete,
       outcomes: fullOutcomes(number, posts),
       requiredChecks: required && [...new Set([...required, ...flagged])],
-      attempts: earlierAttempts(run, config.repo, head),
+      attempts: earlierAttempts(run, config.repo, runs),
+      executions,
       copies: copies(mirror, remote, head, history),
       overlap: overlap(mirror, head),
     };
@@ -275,8 +340,11 @@ function worse(a: WorkChecks, b: WorkChecks) {
   return RANK[a] >= RANK[b] ? a : b;
 }
 
-function summary(all: PullRequestCheck[]): WorkChecks {
-  const checks = latestChecks(all).latest;
+function summary(
+  all: PullRequestCheck[],
+  executions: Record<string, Execution>,
+): WorkChecks {
+  const checks = latestChecks(all, executions).latest;
   if (!checks.length) return "none";
   if (checks.some((check) => check.state === "fail")) return "fail";
   if (checks.some((check) => check.state === "pending")) return "pending";

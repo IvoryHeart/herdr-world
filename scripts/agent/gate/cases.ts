@@ -7,6 +7,7 @@ import {
   latestChecks,
   type CheckAttempt,
   type CopyResult,
+  type Execution,
   type GateConfig,
   type GateInput,
   type VerdictState,
@@ -72,6 +73,7 @@ export function input(options: {
   historyComplete?: boolean;
   waived?: string[];
   truncated?: boolean;
+  executions?: Record<string, Execution>;
 }): GateInput {
   const commits = (options.commits ?? [SHA.reviewed, options.head]).map(
     (oid, index) => ({
@@ -86,7 +88,8 @@ export function input(options: {
     at: NOW - 60_000 * (options.posts.length - index),
   }));
   const checks = options.checks ?? GREEN;
-  const latest = latestChecks(checks).latest;
+  const executions = options.executions ?? {};
+  const latest = latestChecks(checks, executions).latest;
   const state = latest.some((check) => check.state === "fail")
     ? "fail"
     : latest.some((check) => check.state === "pending")
@@ -143,6 +146,7 @@ export function input(options: {
         ? ["Delivery checks"]
         : options.requiredChecks,
     attempts: options.attempts ?? [],
+    executions,
     copies: options.copies ?? {},
     hold: options.hold ?? null,
     waived: options.waived ?? [],
@@ -160,9 +164,17 @@ export type Case = {
   expect: { state: VerdictState; conditions?: Record<string, string> };
 };
 
-/** An Actions job details URL; job IDs grow in the order jobs are queued. */
+/** An Actions job details URL. */
 const job = (id: number) =>
   `https://github.com/example-org/widgets/actions/runs/${id}/job/${id}`;
+/** Job ID → its run number and attempt in one workflow. */
+const runs = (entries: Record<number, [number, number]>) =>
+  Object.fromEntries(
+    Object.entries(entries).map(([id, [runNumber, attempt]]) => [
+      id,
+      { workflowId: 9, runNumber, attempt },
+    ]),
+  );
 
 const allConfirm = (head: string) =>
   TRIO.map((reviewer) => confirm(reviewer, head));
@@ -332,41 +344,18 @@ export const CASES: Case[] = [
     expect: { state: "UNKNOWN", conditions: { required: "unknown" } },
   },
   {
-    name: "A4h a whole-workflow rerun: the newest run decides, the old failure is an attempt",
+    name: "A4h a later run supersedes a failed one: newest decides, failure retained",
     now: NOW,
     input: input({
       head: SHA.fixed,
       posts: allConfirm(SHA.fixed),
       checks: [
-        {
-          name: "Delivery checks",
-          state: "fail",
-          required: true,
-          url: job(1),
-          completedAt: NOW - 900_000,
-        },
-        {
-          name: "Delivery checks",
-          state: "pass",
-          required: true,
-          url: job(3),
-          completedAt: NOW - 300_000,
-        },
-        {
-          name: "Browser tests",
-          state: "fail",
-          required: false,
-          url: job(2),
-          completedAt: NOW - 900_000,
-        },
-        {
-          name: "Browser tests",
-          state: "pass",
-          required: false,
-          url: job(4),
-          completedAt: NOW - 300_000,
-        },
+        { name: "Delivery checks", state: "fail", required: true, url: job(1) },
+        { name: "Delivery checks", state: "pass", required: true, url: job(3) },
+        { name: "Browser tests", state: "fail", required: false, url: job(2) },
+        { name: "Browser tests", state: "pass", required: false, url: job(4) },
       ],
+      executions: runs({ 1: [1, 1], 2: [1, 1], 3: [2, 1], 4: [2, 1] }),
     }),
     expect: {
       state: "NEEDS_JUDGMENT",
@@ -385,15 +374,8 @@ export const CASES: Case[] = [
           state: "pass",
           required: true,
           url: job(10),
-          completedAt: NOW - 300_000,
         },
-        {
-          name: "Browser tests",
-          state: "fail",
-          required: false,
-          url: job(11),
-          completedAt: NOW - 900_000,
-        },
+        { name: "Browser tests", state: "fail", required: false, url: job(11) },
         {
           name: "Browser tests",
           state: "pending",
@@ -401,11 +383,13 @@ export const CASES: Case[] = [
           url: job(12),
         },
       ],
+      executions: runs({ 11: [1, 1], 12: [1, 2] }),
     }),
     expect: { state: "WAITING", conditions: { checks: "waiting" } },
   },
   {
-    name: "A4j a newer run that failed beats an older run that finished later",
+    // An older run's dependent job can be queued after a newer rerun's job.
+    name: "A4j a newer execution's failure beats an older run's later-queued pass",
     now: NOW,
     input: input({
       head: SHA.fixed,
@@ -421,17 +405,18 @@ export const CASES: Case[] = [
           name: "Browser tests",
           state: "pass",
           required: false,
-          url: job(11),
+          url: job(20),
           completedAt: NOW - 1000,
         },
         {
           name: "Browser tests",
           state: "fail",
           required: false,
-          url: job(12),
+          url: job(15),
           completedAt: NOW - 2000,
         },
       ],
+      executions: runs({ 20: [1, 1], 15: [2, 1] }),
     }),
     expect: { state: "NOT_READY", conditions: { checks: "unmet" } },
   },
@@ -452,21 +437,16 @@ export const CASES: Case[] = [
           name: "Browser tests",
           state: "pending",
           required: false,
-          url: job(11),
+          url: job(30),
         },
-        {
-          name: "Browser tests",
-          state: "pass",
-          required: false,
-          url: job(12),
-          completedAt: NOW - 2000,
-        },
+        { name: "Browser tests", state: "pass", required: false, url: job(12) },
       ],
+      executions: runs({ 30: [1, 1], 12: [1, 2] }),
     }),
     expect: { state: "READY", conditions: { checks: "met" } },
   },
   {
-    name: "A4l duplicate runs without a job ID are unordered: worst stands, UNKNOWN",
+    name: "A4l repeated runs without a known execution are unordered: worst stands, UNKNOWN",
     now: NOW,
     input: input({
       head: SHA.fixed,
@@ -478,16 +458,59 @@ export const CASES: Case[] = [
           required: true,
           url: job(10),
         },
-        {
-          name: "Browser tests",
-          state: "pass",
-          required: false,
-          completedAt: NOW - 1000,
-        },
+        { name: "Browser tests", state: "fail", required: false, url: job(11) },
         { name: "Browser tests", state: "pass", required: false, url: job(12) },
       ],
+      executions: runs({ 12: [2, 1] }),
+    }),
+    expect: {
+      state: "NOT_READY",
+      conditions: { checks: "unmet", "checks-order": "unknown" },
+    },
+  },
+  {
+    name: "A4m repeated runs from different workflows are unordered",
+    now: NOW,
+    input: input({
+      head: SHA.fixed,
+      posts: allConfirm(SHA.fixed),
+      checks: [
+        {
+          name: "Delivery checks",
+          state: "pass",
+          required: true,
+          url: job(10),
+        },
+        { name: "Browser tests", state: "pass", required: false, url: job(11) },
+        { name: "Browser tests", state: "pass", required: false, url: job(12) },
+      ],
+      executions: {
+        11: { workflowId: 9, runNumber: 1, attempt: 1 },
+        12: { workflowId: 8, runNumber: 7, attempt: 1 },
+      },
     }),
     expect: { state: "UNKNOWN", conditions: { "checks-order": "unknown" } },
+  },
+  {
+    name: "A4n a failed attempt reported twice counts once",
+    now: NOW,
+    input: input({
+      head: SHA.fixed,
+      posts: allConfirm(SHA.fixed),
+      checks: [
+        {
+          name: "Delivery checks",
+          state: "pass",
+          required: true,
+          url: job(10),
+        },
+        { name: "Browser tests", state: "fail", required: false, url: job(11) },
+        { name: "Browser tests", state: "pass", required: false, url: job(12) },
+      ],
+      executions: runs({ 11: [1, 1], 12: [1, 2] }),
+      attempts: [{ ...attempt("Browser tests"), jobId: 11 }],
+    }),
+    expect: { state: "READY" },
   },
   {
     name: "A4f an unknown required-check inventory is UNKNOWN",
