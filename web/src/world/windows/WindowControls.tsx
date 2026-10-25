@@ -83,6 +83,27 @@ export function WindowBackButton({
     </button>
   );
 }
+/** The same desk-pin action as the menu, exposed in desktop Inspector bars. */
+export function WindowPinButton({
+  pin,
+}: {
+  pin: NonNullable<ManagedWindowControls["pin"]>;
+}) {
+  const label = pin.pinned ? "Unpin desk in Town" : "Pin desk in Town";
+  return (
+    <button
+      type="button"
+      className="interest-button workspace-inspector-pin"
+      aria-label={label}
+      title={label}
+      aria-pressed={pin.pinned}
+      onClick={() => pin.onPin(!pin.pinned)}
+    >
+      <Pin size={15} aria-hidden="true" />
+    </button>
+  );
+}
+
 const choices: { target: SnapTarget; label: string }[] = [
   { target: "left", label: "Left half" },
   { target: "right", label: "Right half" },
@@ -116,7 +137,21 @@ export function WindowControls({
   label?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const pinItems: MenuItem[] = controls.pin
+    ? [
+        {
+          key: "pin",
+          label: controls.pin.pinned
+            ? "Unpin desk in Town"
+            : "Pin desk in Town",
+          checked: controls.pin.pinned,
+          toggle: true,
+          run: () => controls.pin?.onPin(!controls.pin.pinned),
+        },
+      ]
+    : [];
   const items: MenuItem[] = [
+    ...(controls.compact ? pinItems : []),
     ...(controls.views ?? []).map((view, index) => ({
       key: `view:${view.id}`,
       label: view.label,
@@ -178,19 +213,7 @@ export function WindowControls({
           })),
           { label: "Float window", run: controls.onFloat },
         ]),
-    ...(controls.pin
-      ? [
-          {
-            key: "pin",
-            label: controls.pin.pinned
-              ? "Unpin desk in Town"
-              : "Pin desk in Town",
-            checked: controls.pin.pinned,
-            toggle: true,
-            run: () => controls.pin?.onPin(!controls.pin.pinned),
-          },
-        ]
-      : []),
+    ...(!controls.compact ? pinItems : []),
   ];
   const host = useRef<HTMLDivElement>(null);
   const menu = useRef<HTMLDivElement>(null);
@@ -206,7 +229,10 @@ export function WindowControls({
     (
       items?.querySelector<HTMLButtonElement>(
         '[role="menuitemradio"][aria-checked="true"]',
-      ) ?? items?.querySelector<HTMLButtonElement>('[role^="menuitem"]')
+      ) ??
+      items?.querySelector<HTMLButtonElement>(
+        '[role^="menuitem"]:not(.world-window-pin)',
+      )
     )?.focus();
   }, [open]);
   const scale = open ? measuredFixedPositionScale() : 1;

@@ -1,5 +1,6 @@
 import {
   WorkspaceInspectorViewSelect,
+  WorkspaceInspectorSecondaryControls,
   INSPECTOR_TAB_LABELS,
   INSPECTOR_TAB_ORDER,
 } from "./WorkspaceInspectorViewSelect";
@@ -19,7 +20,6 @@ import {
   FileDiff,
   FolderTree,
   GitFork,
-  GitGraph,
   MessagesSquare,
   Maximize2,
   Minimize2,
@@ -629,9 +629,6 @@ export function WorkspaceInspectorHost({
               : null}
           </div>
         )}
-        {agentContext && interestChoice && !(mobile && windowControls) ? (
-          <InterestButton {...interestChoice} />
-        ) : null}
         {mobile && windowControls ? (
           <WorkspaceInspectorViewSelect
             value={state.view}
@@ -641,7 +638,7 @@ export function WorkspaceInspectorHost({
           />
         ) : null}
         {/* One selector in the window's top bar, Chat first: Chat,
-            Terminal, Changes, Files (and Commits). */}
+            Terminal, Files, Changes (then Pin and Commits). */}
         <div className="workspace-inspector-tabs" role="tablist">
           {availableViews.includes("history") ? (
             <button
@@ -684,6 +681,23 @@ export function WorkspaceInspectorHost({
               <span className="workspace-inspector-tab-label">Terminal</span>
             </button>
           ) : null}
+          {filesAvailable ? (
+            <button
+              ref={filesTabRef}
+              type="button"
+              role="tab"
+              aria-label="Files"
+              title="Files"
+              aria-selected={state.view === "files"}
+              tabIndex={state.view === "files" ? 0 : -1}
+              className={state.view === "files" ? "is-active" : ""}
+              onClick={() => onViewChange("files")}
+              onKeyDown={handleTabKeyDown}
+            >
+              <FolderTree size={14} aria-hidden="true" />
+              <span className="workspace-inspector-tab-label">Files</span>
+            </button>
+          ) : null}
           {changesAvailable ? (
             <button
               ref={changesTabRef}
@@ -704,41 +718,22 @@ export function WorkspaceInspectorHost({
               ) : null}
             </button>
           ) : null}
-          {filesAvailable ? (
-            <button
-              ref={filesTabRef}
-              type="button"
-              role="tab"
-              aria-label="Files"
-              title="Files"
-              aria-selected={state.view === "files"}
-              tabIndex={state.view === "files" ? 0 : -1}
-              className={state.view === "files" ? "is-active" : ""}
-              onClick={() => onViewChange("files")}
-              onKeyDown={handleTabKeyDown}
-            >
-              <FolderTree size={14} aria-hidden="true" />
-              <span className="workspace-inspector-tab-label">Files</span>
-            </button>
-          ) : null}
-          {availableViews.includes("commits") ? (
-            <button
-              ref={commitsTabRef}
-              type="button"
-              role="tab"
-              aria-label="Commits"
-              title="Commits"
-              aria-selected={state.view === "commits"}
-              tabIndex={state.view === "commits" ? 0 : -1}
-              className={state.view === "commits" ? "is-active" : ""}
-              onClick={() => onViewChange("commits")}
-              onKeyDown={handleTabKeyDown}
-            >
-              <GitGraph size={14} aria-hidden="true" />
-              <span className="workspace-inspector-tab-label">Commits</span>
-            </button>
-          ) : null}
         </div>
+        <WorkspaceInspectorSecondaryControls
+          mobile={mobile}
+          pin={windowControls?.pin}
+          commitsAvailable={availableViews.includes("commits")}
+          hideInactiveCommits={viewsInMenu}
+          view={state.view}
+          commitsRef={commitsTabRef}
+          onViewChange={onViewChange}
+          onKeyDown={handleTabKeyDown}
+        />
+        {agentContext &&
+        interestChoice &&
+        !(windowControls && (mobile || viewsInMenu)) ? (
+          <InterestButton {...interestChoice} />
+        ) : null}
         {/* In the narrowest window only the active view's tab shows; the
             others are one tap away here. */}
         <Popover open={viewsMenuOpen} onOpenChange={setViewsMenuOpen}>
@@ -788,7 +783,8 @@ export function WorkspaceInspectorHost({
                 ? {
                     ...windowControls,
                     narrow: !windowControls.compact,
-                    attention: mobile ? interestChoice : undefined,
+                    attention:
+                      mobile || viewsInMenu ? interestChoice : undefined,
                     views: mobile
                       ? undefined
                       : INSPECTOR_TAB_ORDER.filter(

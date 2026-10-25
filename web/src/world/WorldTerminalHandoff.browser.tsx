@@ -2066,6 +2066,12 @@ async function run() {
     () => document.querySelector('[aria-label="Window actions"]'),
     "mobile attention menu",
   );
+  check(
+    document
+      .querySelector('[aria-label="Window actions"] [role^="menuitem"]')
+      ?.textContent?.trim() === "Pin desk in Town",
+    "mobile desk pin is not first in the ellipsis menu",
+  );
   const attentionChoices = [
     ...document.querySelectorAll<HTMLButtonElement>(
       '[aria-label="Window actions"] [role="menuitemradio"]',

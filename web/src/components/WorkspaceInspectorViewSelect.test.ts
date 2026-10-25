@@ -40,11 +40,10 @@ if (process.env.INSPECTOR_VIEW_DOM !== "1") {
     value: window.getComputedStyle.bind(window),
     configurable: true,
   });
-  const { act, createElement } = await import("react");
+  const { act, createElement, createRef } = await import("react");
   const { createRoot } = await import("react-dom/client");
-  const { WorkspaceInspectorViewSelect } = await import(
-    "./WorkspaceInspectorViewSelect"
-  );
+  const { WorkspaceInspectorViewSelect, WorkspaceInspectorSecondaryControls } =
+    await import("./WorkspaceInspectorViewSelect");
   const { WindowControls } = await import("../world/windows/WindowControls");
   test("view dropdown preserves admission and attention menu preserves its owner callback", async () => {
     const host = document.createElement("div");
@@ -52,6 +51,10 @@ if (process.env.INSPECTOR_VIEW_DOM !== "1") {
     const root = createRoot(host);
     const change = mock(() => {});
     const attention = mock(() => {});
+    let pinned = false;
+    const onPin = mock((next: boolean) => {
+      pinned = next;
+    });
     const views = [
       "terminal",
       "files",
@@ -71,6 +74,15 @@ if (process.env.INSPECTOR_VIEW_DOM !== "1") {
               historyAvailable,
               onChange: change,
             }),
+            createElement(WorkspaceInspectorSecondaryControls, {
+              mobile: false,
+              pin: { pinned, onPin },
+              commitsAvailable: true,
+              view: "history",
+              commitsRef: createRef<HTMLButtonElement>(),
+              onViewChange: change,
+              onKeyDown() {},
+            }),
             createElement(WindowControls, {
               label: "Inspector window",
               controls: {
@@ -82,6 +94,7 @@ if (process.env.INSPECTOR_VIEW_DOM !== "1") {
                 onFloat() {},
                 onSnap() {},
                 attention: { current: "watching", onInterest: attention },
+                pin: { pinned, onPin },
               },
             }),
           ),
@@ -122,6 +135,9 @@ if (process.env.INSPECTOR_VIEW_DOM !== "1") {
       expect(menuButton).not.toBeNull();
       await act(async () => menuButton.click());
       const menu = document.querySelector('[aria-label="Window actions"]')!;
+      expect(
+        menu.querySelector('[role^="menuitem"]')?.textContent?.trim(),
+      ).toBe("Pin desk in Town");
       const choices = Array.from(
         menu.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]'),
       );
@@ -133,7 +149,23 @@ if (process.env.INSPECTOR_VIEW_DOM !== "1") {
       await act(async () => choices[1]!.click());
       expect(attention).toHaveBeenLastCalledWith("muted");
       expect(change.mock.calls.length).toBe(calls);
+      const pinButton = host.querySelector<HTMLButtonElement>(
+        ".workspace-inspector-pin",
+      )!;
+      expect(pinButton.getAttribute("aria-pressed")).toBe("false");
+      expect(
+        pinButton.compareDocumentPosition(
+          host.querySelector('[role="tab"][aria-label="Commits"]')!,
+        ) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).not.toBe(0);
+      await act(async () => pinButton.click());
+      expect(onPin).toHaveBeenLastCalledWith(true);
       await render(false);
+      expect(
+        host
+          .querySelector(".workspace-inspector-pin")
+          ?.getAttribute("aria-pressed"),
+      ).toBe("true");
       await openViews();
       const unavailableChat = document.querySelector<HTMLButtonElement>(
         '[aria-label="Inspector views"] [data-view="history"]',

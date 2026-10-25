@@ -31,7 +31,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     until you open their terminal or mark that completion reviewed, then join
     idle agents in the lounge. Movement only represents state.
   - Each agent has one window: World's Inspector, with one top selector
-    (**Chat**, **Terminal**, **Changes**, **Files**, then **Commits**).
+    (**Chat**, **Terminal**, **Files**, **Changes**, then the desk pin and secondary controls such as **Commits**).
     On phones, a header dropdown shows Chat, Terminal, Files and Changes;
     attention choices move into the window's ellipsis menu.
     Tapping an agent or its table, activating it (double-click,
@@ -137,7 +137,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     **M** on a focused table offers the same as **Group with…** and **Leave
     the team**, and the table's accessible name lists its teammates. A
     pinned table joins a team only in its own room, and keeps its place.
-  - **Pin a desk** from its agent window's **⋯** menu (**Pin desk in Town**),
+  - **Pin a desk** from the first item in its mobile agent window's **⋯** menu
+    (**Pin desk in Town**), or the visible desktop pin after the four primary views,
     on a phone too. A
     pinned table wears a pin and keeps its place: tab reorders, a room growing
     or Town's own placement leave it, and it cannot be dragged until you unpin

@@ -1,4 +1,8 @@
-import { useState } from "react";
+import {
+  WindowPinButton,
+  type ManagedWindowControls,
+} from "../world/windows/WindowControls";
+import { useState, type Ref, type KeyboardEvent } from "react";
 import {
   SquareTerminal,
   FolderTree,
@@ -21,8 +25,8 @@ export const INSPECTOR_TAB_LABELS: Partial<Record<InspectorView, string>> = {
 export const INSPECTOR_TAB_ORDER: readonly InspectorView[] = [
   "history",
   "terminal",
-  "changes",
   "files",
+  "changes",
   "commits",
 ];
 
@@ -103,5 +107,55 @@ export function WorkspaceInspectorViewSelect({
         </div>
       </PopoverContent>
     </Popover>
+  );
+}
+
+/** Keep secondary controls after the four primary views, with Pin first. */
+export function WorkspaceInspectorSecondaryControls({
+  mobile,
+  pin,
+  commitsAvailable,
+  hideInactiveCommits = false,
+  view,
+  commitsRef,
+  onViewChange,
+  onKeyDown,
+}: {
+  mobile: boolean;
+  pin?: ManagedWindowControls["pin"];
+  commitsAvailable: boolean;
+  hideInactiveCommits?: boolean;
+  view: InspectorView;
+  commitsRef: Ref<HTMLButtonElement>;
+  onViewChange(view: InspectorView): void;
+  onKeyDown(event: KeyboardEvent<HTMLButtonElement>): void;
+}) {
+  return (
+    <>
+      {!mobile && pin ? <WindowPinButton pin={pin} /> : null}
+      {commitsAvailable && (!hideInactiveCommits || view === "commits") ? (
+        <div
+          className="workspace-inspector-tabs"
+          role="tablist"
+          aria-label="Additional Inspector views"
+        >
+          <button
+            ref={commitsRef}
+            type="button"
+            role="tab"
+            aria-label="Commits"
+            title="Commits"
+            aria-selected={view === "commits"}
+            tabIndex={view === "commits" ? 0 : -1}
+            className={view === "commits" ? "is-active" : ""}
+            onClick={() => onViewChange("commits")}
+            onKeyDown={onKeyDown}
+          >
+            <GitGraph size={14} aria-hidden="true" />
+            <span className="workspace-inspector-tab-label">Commits</span>
+          </button>
+        </div>
+      ) : null}
+    </>
   );
 }

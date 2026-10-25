@@ -271,8 +271,10 @@ hosts stay usable.
    lists the tables to join, and **Leave the team** takes it out. A table's
    name for screen readers says who its team is.
 10. To keep a table where it is, open one of its agents (its window) and choose
-   **Pin desk in Town** from the window's **⋯** menu, on a phone too. The
-   table wears a pin, stays put
+   **Pin desk in Town** at the top of the phone window's **⋯** menu. On desktop,
+   the pin button is visible after **Chat**, **Terminal**, **Files**, **Changes**,
+   before secondary controls such as Commits. It is also available in **⋯**.
+   The table wears a pin, stays put
    when tabs are reordered or the room grows, and its agents stay at it rather
    than taking breaks in the lounge; they still go to reception when they need
    you or finish, and come straight back once seen. Choose **Unpin desk in
