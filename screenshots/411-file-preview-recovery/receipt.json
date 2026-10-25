@@ -1,0 +1,166 @@
+{
+  "source": "24bf581c9a107b26101ab7121afd7ae800373fb9",
+  "scope": "production FilePreviewContent in synthetic component frame; no live runtime/native-device claim",
+  "receipts": [
+    {
+      "name": "phone",
+      "width": 390,
+      "height": 844,
+      "notice": "This file is no longer available to preview. Refresh the worktree or choose another file.Retry previewFilesClose preview",
+      "overflow": false,
+      "controls": [
+        {
+          "label": "Retry file preview",
+          "visible": true,
+          "hit": true
+        },
+        {
+          "label": "Files",
+          "visible": true,
+          "hit": true
+        },
+        {
+          "label": "Close file preview",
+          "visible": true,
+          "hit": true
+        }
+      ],
+      "recovered": {
+        "ok": true,
+        "draft": "Unsaved example draft is retained",
+        "counts": {
+          "back": 1,
+          "close": 1
+        }
+      }
+    },
+    {
+      "name": "mac-laptop",
+      "width": 1512,
+      "height": 982,
+      "notice": "This file is no longer available to preview. Refresh the worktree or choose another file.Retry previewFilesClose preview",
+      "overflow": false,
+      "controls": [
+        {
+          "label": "Retry file preview",
+          "visible": true,
+          "hit": true
+        },
+        {
+          "label": "Files",
+          "visible": true,
+          "hit": true
+        },
+        {
+          "label": "Close file preview",
+          "visible": true,
+          "hit": true
+        }
+      ],
+      "recovered": {
+        "ok": true,
+        "draft": "Unsaved example draft is retained",
+        "counts": {
+          "back": 2,
+          "close": 2
+        }
+      }
+    },
+    {
+      "name": "half-linux",
+      "width": 1280,
+      "height": 1440,
+      "notice": "This file is no longer available to preview. Refresh the worktree or choose another file.Retry previewFilesClose preview",
+      "overflow": false,
+      "controls": [
+        {
+          "label": "Retry file preview",
+          "visible": true,
+          "hit": true
+        },
+        {
+          "label": "Files",
+          "visible": true,
+          "hit": true
+        },
+        {
+          "label": "Close file preview",
+          "visible": true,
+          "hit": true
+        }
+      ],
+      "recovered": {
+        "ok": true,
+        "draft": "Unsaved example draft is retained",
+        "counts": {
+          "back": 3,
+          "close": 3
+        }
+      }
+    },
+    {
+      "name": "wide-linux",
+      "width": 2560,
+      "height": 1440,
+      "notice": "This file is no longer available to preview. Refresh the worktree or choose another file.Retry previewFilesClose preview",
+      "overflow": false,
+      "controls": [
+        {
+          "label": "Retry file preview",
+          "visible": true,
+          "hit": true
+        },
+        {
+          "label": "Files",
+          "visible": true,
+          "hit": true
+        },
+        {
+          "label": "Close file preview",
+          "visible": true,
+          "hit": true
+        }
+      ],
+      "recovered": {
+        "ok": true,
+        "draft": "Unsaved example draft is retained",
+        "counts": {
+          "back": 4,
+          "close": 4
+        }
+      }
+    },
+    {
+      "name": "portrait",
+      "width": 1440,
+      "height": 2560,
+      "notice": "This file is no longer available to preview. Refresh the worktree or choose another file.Retry previewFilesClose preview",
+      "overflow": false,
+      "controls": [
+        {
+          "label": "Retry file preview",
+          "visible": true,
+          "hit": true
+        },
+        {
+          "label": "Files",
+          "visible": true,
+          "hit": true
+        },
+        {
+          "label": "Close file preview",
+          "visible": true,
+          "hit": true
+        }
+      ],
+      "recovered": {
+        "ok": true,
+        "draft": "Unsaved example draft is retained",
+        "counts": {
+          "back": 5,
+          "close": 5
+        }
+      }
+    }
+  ]
+}
