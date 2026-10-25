@@ -51,7 +51,7 @@ export const GITHUB_SIGNED_OUT =
 const GITHUB_FAILED =
   "GitHub did not answer. World keeps the last pull requests and tries again shortly.";
 
-const PR_FIELDS = `
+export const PR_FIELDS = `
   number title url isDraft state updatedAt mergedAt headRefName headRefOid baseRefName reviewDecision mergeable
   repository { nameWithOwner }
   headRepository { nameWithOwner }
