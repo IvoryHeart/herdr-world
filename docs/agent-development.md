@@ -149,8 +149,10 @@ bun run agent:gate -- replay <dir>        # re-run fixture files; --pass ID re-r
 
 A verdict is `READY`, `NOT_READY`, `WAITING`, `UNKNOWN`, `NEEDS_JUDGMENT`,
 `MERGED` or `CLOSED`, and the worst condition decides. The PR card's own rules
-decide draft, checks, mergeable and screenshots. The PR list's check summary
-never overrides a newer failing or running check in the detail. The gate adds:
+decide draft, checks, mergeable and screenshots. Each check is judged by its
+newest execution, ordered by Actions job ID rather than finishing time; repeated
+runs that can't be ordered are `UNKNOWN`. The PR list's check summary never
+overrides a newer failing or running check. The gate adds:
 
 - **Required checks.** The base branch's required checks come from GitHub's
   rules, from classic branch protection when it is readable, and from
@@ -165,9 +167,9 @@ never overrides a newer failing or running check in the detail. The gate adds:
   history, not the PR card's recent window.
   - Any other named reviewer who ever reported findings must confirm on a head
     that still counts.
-  - An unattributed RESULT that isn't a clear confirmation blocks until its
-    post is attributed, or someone records `waive` for its source ID, which
-    `explain` shows.
+  - An unattributed RESULT that isn't a clear confirmation, judged on its full
+    text, blocks until its post is attributed or someone records `waive` for
+    its source ID, which `explain` shows.
   - Incomplete history is `UNKNOWN`.
 - **The copy rule for claims on an earlier head.** A claim carries over only
   when every later commit merges a commit already on main and replaying that

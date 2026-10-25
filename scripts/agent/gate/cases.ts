@@ -3,6 +3,7 @@ import { PULL_REQUEST_DETAIL_MAX_AGE_MS } from "../../../shared/pullRequestFresh
 import type { WorkItem } from "../../../shared/worldSources";
 import { reviewerResults } from "../../../server/src/sources/pullRequestDetail";
 import {
+  fullOutcomes,
   latestChecks,
   type CheckAttempt,
   type CopyResult,
@@ -145,6 +146,7 @@ export function input(options: {
     copies: options.copies ?? {},
     hold: options.hold ?? null,
     waived: options.waived ?? [],
+    outcomes: fullOutcomes(NUMBER, posts),
     overlap: options.overlap ?? [],
     readAt: NOW,
   };
@@ -157,6 +159,10 @@ export type Case = {
   input: GateInput;
   expect: { state: VerdictState; conditions?: Record<string, string> };
 };
+
+/** An Actions job details URL; job IDs grow in the order jobs are queued. */
+const job = (id: number) =>
+  `https://github.com/example-org/widgets/actions/runs/${id}/job/${id}`;
 
 const allConfirm = (head: string) =>
   TRIO.map((reviewer) => confirm(reviewer, head));
@@ -336,24 +342,28 @@ export const CASES: Case[] = [
           name: "Delivery checks",
           state: "fail",
           required: true,
+          url: job(1),
           completedAt: NOW - 900_000,
         },
         {
           name: "Delivery checks",
           state: "pass",
           required: true,
+          url: job(3),
           completedAt: NOW - 300_000,
         },
         {
           name: "Browser tests",
           state: "fail",
           required: false,
+          url: job(2),
           completedAt: NOW - 900_000,
         },
         {
           name: "Browser tests",
           state: "pass",
           required: false,
+          url: job(4),
           completedAt: NOW - 300_000,
         },
       ],
@@ -374,18 +384,110 @@ export const CASES: Case[] = [
           name: "Delivery checks",
           state: "pass",
           required: true,
+          url: job(10),
           completedAt: NOW - 300_000,
         },
         {
           name: "Browser tests",
           state: "fail",
           required: false,
+          url: job(11),
           completedAt: NOW - 900_000,
         },
-        { name: "Browser tests", state: "pending", required: false },
+        {
+          name: "Browser tests",
+          state: "pending",
+          required: false,
+          url: job(12),
+        },
       ],
     }),
     expect: { state: "WAITING", conditions: { checks: "waiting" } },
+  },
+  {
+    name: "A4j a newer run that failed beats an older run that finished later",
+    now: NOW,
+    input: input({
+      head: SHA.fixed,
+      posts: allConfirm(SHA.fixed),
+      checks: [
+        {
+          name: "Delivery checks",
+          state: "pass",
+          required: true,
+          url: job(10),
+        },
+        {
+          name: "Browser tests",
+          state: "pass",
+          required: false,
+          url: job(11),
+          completedAt: NOW - 1000,
+        },
+        {
+          name: "Browser tests",
+          state: "fail",
+          required: false,
+          url: job(12),
+          completedAt: NOW - 2000,
+        },
+      ],
+    }),
+    expect: { state: "NOT_READY", conditions: { checks: "unmet" } },
+  },
+  {
+    name: "A4k an older run still pending does not hide a newer green run",
+    now: NOW,
+    input: input({
+      head: SHA.fixed,
+      posts: allConfirm(SHA.fixed),
+      checks: [
+        {
+          name: "Delivery checks",
+          state: "pass",
+          required: true,
+          url: job(10),
+        },
+        {
+          name: "Browser tests",
+          state: "pending",
+          required: false,
+          url: job(11),
+        },
+        {
+          name: "Browser tests",
+          state: "pass",
+          required: false,
+          url: job(12),
+          completedAt: NOW - 2000,
+        },
+      ],
+    }),
+    expect: { state: "READY", conditions: { checks: "met" } },
+  },
+  {
+    name: "A4l duplicate runs without a job ID are unordered: worst stands, UNKNOWN",
+    now: NOW,
+    input: input({
+      head: SHA.fixed,
+      posts: allConfirm(SHA.fixed),
+      checks: [
+        {
+          name: "Delivery checks",
+          state: "pass",
+          required: true,
+          url: job(10),
+        },
+        {
+          name: "Browser tests",
+          state: "pass",
+          required: false,
+          completedAt: NOW - 1000,
+        },
+        { name: "Browser tests", state: "pass", required: false, url: job(12) },
+      ],
+    }),
+    expect: { state: "UNKNOWN", conditions: { "checks-order": "unknown" } },
   },
   {
     name: "A4f an unknown required-check inventory is UNKNOWN",
@@ -525,6 +627,25 @@ export const CASES: Case[] = [
       waived: ["post-1"],
     }),
     expect: { state: "READY" },
+  },
+  {
+    name: "A9e an unattributed finding past the display cut still blocks",
+    now: NOW,
+    input: input({
+      head: SHA.fixed,
+      posts: [
+        {
+          reviewer: null,
+          commit: SHA.fixed,
+          result: `confirmed; ${"reviewed checks and expected behavior, ".repeat(6)}1 new P2`,
+        },
+        ...allConfirm(SHA.fixed),
+      ],
+    }),
+    expect: {
+      state: "NEEDS_JUDGMENT",
+      conditions: { unattributed: "judgment" },
+    },
   },
   {
     name: "A10 a reviewer outside the set closes findings only on a head that counts",

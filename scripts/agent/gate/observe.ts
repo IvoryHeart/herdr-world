@@ -25,6 +25,7 @@ import {
   overlap,
 } from "./git";
 import {
+  fullOutcomes,
   latestChecks,
   type CheckAttempt,
   type CopyResult,
@@ -224,6 +225,7 @@ export function observe(options: {
       copies: {},
       hold: null,
       waived: [],
+      outcomes: {},
       overlap: null,
       readAt: now,
     };
@@ -253,6 +255,7 @@ export function observe(options: {
       item,
       history,
       historyComplete: evidence.complete,
+      outcomes: fullOutcomes(number, posts),
       requiredChecks: required && [...new Set([...required, ...flagged])],
       attempts: earlierAttempts(run, config.repo, head),
       copies: copies(mirror, remote, head, history),

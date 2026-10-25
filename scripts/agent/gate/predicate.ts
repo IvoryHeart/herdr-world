@@ -6,7 +6,10 @@ import {
 } from "../../../shared/pullRequests";
 import { freshPullRequestDetail } from "../../../shared/pullRequestFreshness";
 import type { WorkItem } from "../../../shared/worldSources";
-import { resultOutcome } from "../../../server/src/sources/pullRequestDetail";
+import {
+  resultLine,
+  resultOutcome,
+} from "../../../server/src/sources/pullRequestDetail";
 
 /**
  * READY for the owner's merge, computed from facts and never from a model's
@@ -72,6 +75,8 @@ export type GateInput = {
   hold: { reason: string; at: number } | null;
   /** Unattributed RESULT posts someone explicitly resolved, by source. */
   waived: string[];
+  /** Each post's outcome from its full RESULT text, by source; absent is unknown. */
+  outcomes: Record<string, PullRequestReviewer["outcome"]>;
   /** Files changed both by the PR and on main since its merge base. */
   overlap: string[] | null;
   readAt: number;
@@ -160,6 +165,26 @@ export function evaluate(
   return { number, head, state: verdictState(conditions), conditions, notes };
 }
 
+/**
+ * Each post's RESULT outcome from its complete text, keyed like the shared
+ * parser's source IDs. The parser's display line is truncated, so judging
+ * that line could drop a finding written past the cut.
+ */
+export function fullOutcomes(
+  number: number,
+  posts: Record<string, unknown>[],
+): Record<string, PullRequestReviewer["outcome"]> {
+  const outcomes: Record<string, PullRequestReviewer["outcome"]> = {};
+  for (const post of posts) {
+    if (typeof post.body !== "string") continue;
+    const line = resultLine(post.body, number);
+    const id =
+      typeof post.id === "string" && post.id ? post.id : String(post.url ?? "");
+    if (line !== null && id) outcomes[id] = resultOutcome(line);
+  }
+  return outcomes;
+}
+
 /** The worst condition decides; behind main is never one of them. */
 export function verdictState(conditions: Condition[]): VerdictState {
   const has = (state: ConditionState) =>
@@ -220,26 +245,40 @@ function requiredChecks(
     : [condition("required", "met", `${required.length} required reported`)];
 }
 
+/** An Actions job's ID, from its details URL; IDs grow as jobs are queued. */
+export function jobId(check: PullRequestCheck) {
+  const match = /\/actions\/runs\/\d+\/job\/(\d+)/u.exec(check.url ?? "");
+  return match ? Number(match[1]) : null;
+}
+
 /**
- * GitHub lists every run of a check on the commit. The newest decides; a
- * running one is newest. The rest are superseded attempts.
+ * GitHub lists every run of a check on the commit. The newest execution
+ * decides, by job ID: runs can finish out of order. When several runs share
+ * a name and one has no job ID, which is newest is unknown; the worst of
+ * them stands and the name is reported as unordered.
  */
 export function latestChecks(checks: PullRequestCheck[]) {
-  const latest = new Map<string, PullRequestCheck>();
+  const groups = new Map<string, PullRequestCheck[]>();
+  for (const check of checks)
+    groups.set(check.name, [...(groups.get(check.name) ?? []), check]);
+  const latest: PullRequestCheck[] = [];
   const superseded: PullRequestCheck[] = [];
-  const rank = (check: PullRequestCheck) =>
-    check.state === "pending"
-      ? Number.POSITIVE_INFINITY
-      : (check.completedAt ?? 0);
-  for (const check of checks) {
-    const known = latest.get(check.name);
-    if (!known) latest.set(check.name, check);
-    else if (rank(check) > rank(known)) {
-      superseded.push(known);
-      latest.set(check.name, check);
-    } else superseded.push(check);
+  const unordered: string[] = [];
+  const worst = { fail: 3, pending: 2, pass: 1, skipped: 0 } as const;
+  for (const [name, runs] of groups) {
+    if (runs.length === 1) {
+      latest.push(runs[0]!);
+      continue;
+    }
+    const ordered = runs.every((check) => jobId(check) !== null);
+    const sorted = ordered
+      ? runs.toSorted((a, b) => jobId(b)! - jobId(a)!)
+      : runs.toSorted((a, b) => worst[b.state] - worst[a.state]);
+    if (!ordered) unordered.push(name);
+    latest.push(sorted[0]!);
+    if (ordered) superseded.push(...sorted.slice(1));
   }
-  return { latest: [...latest.values()], superseded };
+  return { latest, superseded, unordered };
 }
 
 /** A green rerun keeps its failed attempts on record; only known flakes pass. */
@@ -250,7 +289,7 @@ function reruns(
   notes: string[],
 ): Condition[] {
   const failed = new Map<string, number>();
-  const { latest, superseded } = latestChecks(item.pr?.checks ?? []);
+  const { latest, superseded, unordered } = latestChecks(item.pr?.checks ?? []);
   const failures = [
     ...attempts
       .filter(
@@ -266,7 +305,15 @@ function reruns(
       .map((check) => check.name),
   ];
   for (const name of failures) failed.set(name, (failed.get(name) ?? 0) + 1);
-  const result: Condition[] = [];
+  const result: Condition[] = unordered.length
+    ? [
+        condition(
+          "checks-order",
+          "unknown",
+          `Several runs of ${unordered.join(", ")} and no way to tell the newest`,
+        ),
+      ]
+    : [];
   for (const check of latest) {
     const count = failed.get(check.name);
     if (!count || check.state !== "pass") continue;
@@ -338,7 +385,8 @@ function findings(
       waived++;
       continue;
     }
-    if (resultOutcome(entry.line) !== "confirmed")
+    // Judged on the full RESULT text: the display line is truncated.
+    if (input.outcomes[entry.sourceId ?? entry.url] !== "confirmed")
       result.push(
         condition(
           "unattributed",

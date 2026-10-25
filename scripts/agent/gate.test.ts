@@ -39,6 +39,7 @@ type World = {
     status: string;
     conclusion: string | null;
     completedAt?: string;
+    detailsUrl?: string;
   }[];
   reviews: { reviewer: string | null; commit: string; result: string }[];
   /** null: the rules endpoint fails. */
@@ -319,12 +320,16 @@ describe("pass", () => {
         status: "COMPLETED",
         conclusion: "FAILURE",
         completedAt: iso(-900_000),
+        detailsUrl:
+          "https://github.com/example-org/widgets/actions/runs/1/job/101",
       },
       {
         name: "Delivery checks",
         status: "COMPLETED",
         conclusion: "SUCCESS",
         completedAt: iso(-300_000),
+        detailsUrl:
+          "https://github.com/example-org/widgets/actions/runs/2/job/102",
       },
     ];
     const { text } = await cli(["pass"]);
