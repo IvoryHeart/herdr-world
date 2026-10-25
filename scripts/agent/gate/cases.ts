@@ -545,7 +545,10 @@ export const CASES: Case[] = [
         { ...attempt("Delivery checks"), jobId: 102 },
       ],
     }),
-    expect: { state: "NEEDS_JUDGMENT", conditions: { rerun: "judgment" } },
+    expect: {
+      state: "NEEDS_JUDGMENT",
+      conditions: { rerun: "judgment", aggregate: "judgment" },
+    },
   },
   {
     name: "A4q a named aggregate that failed alone needs judgment",
@@ -556,7 +559,7 @@ export const CASES: Case[] = [
       posts: allConfirm(SHA.fixed),
       attempts: [{ ...attempt("Delivery checks"), jobId: 102 }],
     }),
-    expect: { state: "NEEDS_JUDGMENT", conditions: { rerun: "judgment" } },
+    expect: { state: "NEEDS_JUDGMENT", conditions: { aggregate: "judgment" } },
   },
   {
     name: "A4r an aggregate is never inferred: unnamed, it needs judgment",
@@ -584,7 +587,10 @@ export const CASES: Case[] = [
         { ...attempt("Browser tests"), attempt: 2, jobId: 103 },
       ],
     }),
-    expect: { state: "NEEDS_JUDGMENT", conditions: { rerun: "judgment" } },
+    expect: {
+      state: "NEEDS_JUDGMENT",
+      conditions: { rerun: "judgment", aggregate: "judgment" },
+    },
   },
   {
     name: "A4t a flake in a different run attempt does not excuse the aggregate",
@@ -598,7 +604,123 @@ export const CASES: Case[] = [
         { ...attempt("Delivery checks"), runId: 12, jobId: 102 },
       ],
     }),
-    expect: { state: "NEEDS_JUDGMENT", conditions: { rerun: "judgment" } },
+    expect: { state: "NEEDS_JUDGMENT", conditions: { aggregate: "judgment" } },
+  },
+  {
+    // rev2 and rev-astra: a flake that was skipped, not recovered, can't excuse.
+    name: "A4u a flake skipped rather than recovered does not excuse the aggregate",
+    now: NOW,
+    config: aggregates,
+    input: input({
+      head: SHA.fixed,
+      posts: allConfirm(SHA.fixed),
+      checks: [
+        { name: "Delivery checks", state: "pass", required: true },
+        { name: "Browser tests", state: "skipped", required: false },
+      ],
+      attempts: [
+        { ...attempt("Browser tests"), jobId: 101 },
+        { ...attempt("Delivery checks"), jobId: 102 },
+      ],
+    }),
+    expect: {
+      state: "NEEDS_JUDGMENT",
+      conditions: { aggregate: "judgment" },
+    },
+  },
+  {
+    // Only the aggregate rule can block: the non-flake peer has no green run.
+    name: "A4v a non-flake peer that never went green keeps the aggregate judged",
+    now: NOW,
+    config: aggregates,
+    input: input({
+      head: SHA.fixed,
+      posts: allConfirm(SHA.fixed),
+      attempts: [
+        { ...attempt("Lint"), jobId: 101 },
+        { ...attempt("Delivery checks"), jobId: 102 },
+      ],
+    }),
+    expect: {
+      state: "NEEDS_JUDGMENT",
+      conditions: { aggregate: "judgment" },
+    },
+  },
+  {
+    name: "A4w superseded check runs from one attempt excuse the aggregate",
+    now: NOW,
+    config: aggregates,
+    input: input({
+      head: SHA.fixed,
+      posts: allConfirm(SHA.fixed),
+      checks: [
+        { name: "Delivery checks", state: "fail", required: true, url: job(1) },
+        { name: "Delivery checks", state: "pass", required: true, url: job(3) },
+        { name: "Browser tests", state: "fail", required: false, url: job(2) },
+        { name: "Browser tests", state: "pass", required: false, url: job(4) },
+      ],
+      executions: runs({ 1: [1, 1], 2: [1, 1], 3: [1, 2], 4: [1, 2] }),
+    }),
+    expect: { state: "READY" },
+  },
+  {
+    name: "A4x superseded runs from different attempts do not excuse the aggregate",
+    now: NOW,
+    config: aggregates,
+    input: input({
+      head: SHA.fixed,
+      posts: allConfirm(SHA.fixed),
+      checks: [
+        { name: "Delivery checks", state: "fail", required: true, url: job(1) },
+        { name: "Delivery checks", state: "pass", required: true, url: job(3) },
+        { name: "Browser tests", state: "fail", required: false, url: job(2) },
+        { name: "Browser tests", state: "pass", required: false, url: job(4) },
+      ],
+      executions: runs({ 1: [1, 1], 2: [2, 1], 3: [3, 1], 4: [3, 1] }),
+    }),
+    expect: {
+      state: "NEEDS_JUDGMENT",
+      conditions: { aggregate: "judgment" },
+    },
+  },
+  {
+    // An unplaced earlier run can't be ordered, so it never reaches the
+    // aggregate rule: the worst run stands.
+    name: "A4y an aggregate run with no known execution fails closed",
+    now: NOW,
+    config: aggregates,
+    input: input({
+      head: SHA.fixed,
+      posts: allConfirm(SHA.fixed),
+      checks: [
+        { name: "Delivery checks", state: "fail", required: true, url: job(1) },
+        { name: "Delivery checks", state: "pass", required: true, url: job(3) },
+      ],
+      executions: runs({ 3: [1, 2] }),
+    }),
+    expect: {
+      state: "NOT_READY",
+      conditions: { checks: "unmet", "checks-order": "unknown" },
+    },
+  },
+  {
+    // The loader refuses this config; a fixture bypassing it still can't let
+    // the flake rule excuse an aggregate.
+    name: "A4z an aggregate also listed as a flake is still judged as an aggregate",
+    now: NOW,
+    config: { ...aggregates, flakes: ["Browser tests", "Delivery checks"] },
+    input: input({
+      head: SHA.fixed,
+      posts: allConfirm(SHA.fixed),
+      attempts: [
+        { ...attempt("Lint"), jobId: 101 },
+        { ...attempt("Delivery checks"), jobId: 102 },
+      ],
+    }),
+    expect: {
+      state: "NEEDS_JUDGMENT",
+      conditions: { aggregate: "judgment" },
+    },
   },
   {
     name: "A4f an unknown required-check inventory is UNKNOWN",

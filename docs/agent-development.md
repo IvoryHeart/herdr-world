@@ -182,11 +182,12 @@ check. The gate adds:
   READY; any other rerun needs judgment.
 - **Aggregate checks.** Name roll-up jobs that only summarise other jobs in
   `aggregateChecks`; they are never inferred. A named aggregate's failed
-  attempt is excused only when every other check that failed in that same
-  run attempt is a listed flake within its budget. If it failed alone, beside
-  any other failure, or in an attempt the gate can't place, it needs
-  judgment. Never list an aggregate as a flake: that would excuse a rerun of
-  anything it summarises.
+  attempt is excused only when every other check that failed in that same run
+  attempt is a listed flake within its budget whose newest run passed; a
+  skipped or missing recovery doesn't count. If the aggregate failed alone,
+  beside any other failure, or in an attempt the gate can't place, it needs
+  judgment. A named aggregate is never treated as a flake, and the config is
+  refused if a check appears in both lists.
 - **Holds.** A hold lasts across heads until it is released.
 
 `merge-line` and `check-claim` read the PR again before answering, so a hold,

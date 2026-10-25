@@ -374,8 +374,14 @@ function reruns(
   const excusable = (name: string) =>
     config.flakes.includes(name) &&
     (failed.get(name) ?? 0) <= config.rerunBudget;
-  // An aggregate's failed attempt is excused only by listed flakes failing
-  // in that same attempt; alone, beside anything else, or unplaced, it isn't.
+  const latestState = new Map(latest.map((check) => [check.name, check.state]));
+  // A flake supports an aggregate only once its newest run actually passed:
+  // skipped, running, failed or missing is no recovery.
+  const recovered = (name: string) =>
+    excusable(name) && latestState.get(name) === "pass";
+  // An aggregate's failed attempt is excused only by recovered listed flakes
+  // failing in that same attempt; alone, beside anything else, or unplaced,
+  // it isn't.
   const aggregateExcused = (name: string) =>
     failures
       .filter((failure) => failure.name === name)
@@ -385,7 +391,7 @@ function reruns(
           (other) => other.attempt === failure.attempt && other.name !== name,
         );
         return (
-          others.length > 0 && others.every((other) => excusable(other.name))
+          others.length > 0 && others.every((other) => recovered(other.name))
         );
       });
   const result: Condition[] = unordered.length
@@ -401,23 +407,31 @@ function reruns(
     const count = failed.get(check.name);
     if (!count || check.state !== "pass") continue;
     const retained = `${check.name}: ${count} failed attempt${count === 1 ? "" : "s"} retained`;
-    if (excusable(check.name)) notes.push(retained);
-    else if (
-      config.aggregateChecks?.includes(check.name) &&
-      aggregateExcused(check.name)
-    )
-      notes.push(`${retained}; each failed only with listed flakes`);
+    // A named aggregate is judged only by the aggregate rule, never as a flake.
+    if (config.aggregateChecks?.includes(check.name)) {
+      if (aggregateExcused(check.name))
+        notes.push(
+          `${retained}; each failed only with recovered listed flakes`,
+        );
+      else
+        result.push(
+          condition(
+            "aggregate",
+            "judgment",
+            `${retained}; green only after a rerun of an aggregate that failed beside more than recovered listed flakes`,
+            check.url,
+          ),
+        );
+    } else if (excusable(check.name)) notes.push(retained);
     else
       result.push(
         condition(
           "rerun",
           "judgment",
           `${retained}; green only after a rerun ${
-            config.aggregateChecks?.includes(check.name)
-              ? "of an aggregate that failed beside more than listed flakes"
-              : config.flakes.includes(check.name)
-                ? "over budget"
-                : "of a check not on the flake list"
+            config.flakes.includes(check.name)
+              ? "over budget"
+              : "of a check not on the flake list"
           }`,
           check.url,
         ),

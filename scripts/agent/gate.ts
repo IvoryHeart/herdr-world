@@ -120,6 +120,14 @@ export function loadConfig(path: string): GateConfig {
   const value = JSON.parse(readFileSync(path, "utf8")) as Partial<GateConfig>;
   if (typeof value.repo !== "string" || !/^[\w.-]+\/[\w.-]+$/u.test(value.repo))
     throw new Error("Gate config needs repo as owner/name");
+  // A check listed as both would be excused by the looser flake rule.
+  const both = (value.aggregateChecks ?? []).filter((name) =>
+    (value.flakes ?? []).includes(name),
+  );
+  if (both.length)
+    throw new Error(
+      `Gate config lists ${both.join(", ")} as both a flake and an aggregate; an aggregate must never be a flake`,
+    );
   return {
     repo: value.repo,
     reviewers: value.reviewers ?? {},

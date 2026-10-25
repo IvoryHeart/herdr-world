@@ -641,6 +641,21 @@ describe("store", () => {
     }
   });
 
+  test("a check listed as both a flake and an aggregate is refused", async () => {
+    writeFileSync(
+      configPath,
+      JSON.stringify({
+        ...config,
+        remote,
+        flakes: ["Delivery checks"],
+        aggregateChecks: ["Delivery checks"],
+      }),
+    );
+    await expect(cli(["pass"])).rejects.toThrow(
+      "Delivery checks as both a flake and an aggregate",
+    );
+  });
+
   test("hold needs a reason", async () => {
     await expect(cli(["hold", "7"])).rejects.toThrow("hold needs --reason");
   });
