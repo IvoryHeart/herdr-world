@@ -3059,7 +3059,9 @@ async function run() {
 
 run()
   .catch((error: unknown) => {
-    failures.push(error instanceof Error ? error.message : String(error));
+    failures.push(
+      error instanceof Error ? (error.stack ?? error.message) : String(error),
+    );
   })
   .finally(() => {
     if (mode === "test")
