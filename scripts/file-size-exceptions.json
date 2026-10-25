@@ -13,7 +13,7 @@
     "server/src/workspace/git-diff.ts": 1363,
     "server/src/world/snapshot.ts": 1077,
     "site/styles.css": 2354,
-    "web/src/App.tsx": 5153,
+    "web/src/App.tsx": 5129,
     "web/src/api.ts": 1455,
     "web/src/components/AssistantPanel.css": 1410,
     "web/src/components/AssistantPanel.tsx": 2800,
@@ -28,7 +28,7 @@
     "web/src/components/TerminalView.tsx": 4295,
     "web/src/components/WorkspaceInspectorHost.tsx": 1369,
     "web/src/components/WorkspaceTree.tsx": 1311,
-    "web/src/store.ts": 3006,
+    "web/src/store.ts": 3000,
     "web/src/styles/layout/app.css": 1083,
     "web/src/world/DeskView.tsx": 1217,
     "web/src/world/TownView.tsx": 1471,
@@ -36,7 +36,7 @@
     "web/src/world/herdrOfficeProjection.ts": 1303,
     "web/src/world/town/town.css": 1383,
     "web/src/world/town/townRenderer.ts": 1674,
-    "web/src/world/useWorldInspectorController.ts": 1142,
+    "web/src/world/useWorldInspectorController.ts": 1140,
     "web/src/world/worldObject.ts": 1216
   },
   "unratcheted": {

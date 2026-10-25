@@ -1,6 +1,8 @@
+import { NoticeDetail, ToastMark } from "./components/NoticeContent";
 import { useTerminalComposerDraftScopes } from "./useTerminalComposerDraftScopes";
 import {
   isNotificationTarget,
+  taskNotificationView,
   type NotificationTarget,
 } from "./taskNotifications";
 import { preferencesStorageKey } from "./workspaceResource";
@@ -43,18 +45,14 @@ import {
 import { SHORTCUT_NUMBERS } from "./shortcutBindings";
 import { activeTerminalInput } from "./activeTerminalInput";
 import {
-  CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  CircleAlert,
   Command,
   Compass,
   FileDiff,
   FolderTree,
   GitBranch,
   History,
-  Info,
-  LoaderCircle,
   MessageSquareText,
   Minimize2,
   MoreHorizontal,
@@ -353,43 +351,6 @@ function TerminalView(props: TerminalViewProps) {
     <Suspense fallback={<TerminalLoadingFallback />}>
       <LazyTerminalView {...props} />
     </Suspense>
-  );
-}
-
-function NoticeDetail({ notice }: { notice: Notice }) {
-  if (!notice.detail) return null;
-  if (notice.detailMode === "output") {
-    return (
-      <div className="toast-output">
-        {notice.detailTitle ? (
-          <div className="toast-output-title">{notice.detailTitle}</div>
-        ) : null}
-        <pre>{notice.detail}</pre>
-      </div>
-    );
-  }
-  return <p>{notice.detail}</p>;
-}
-
-function ToastMark({
-  kind,
-  loading = false,
-}: {
-  kind: Notice["kind"];
-  loading?: boolean;
-}) {
-  const Mark = loading
-    ? LoaderCircle
-    : kind === "success"
-      ? CheckCircle2
-      : kind === "error"
-        ? CircleAlert
-        : Info;
-
-  return (
-    <span className="toast-mark" aria-hidden="true">
-      <Mark size={16} strokeWidth={2.1} />
-    </span>
   );
 }
 
@@ -2635,11 +2596,34 @@ export default function App({
         );
         return;
       }
-      if (!inspectorStateRef.current?.open) activateTerminalSurface();
-      setSidebarHidden(false);
-      void store.focusTaskNotificationTarget(target);
+      // Retire the old Chat before native focus changes, so its terminal's
+      // close callback cannot restore the tab we are leaving.
+      updateInspectorState((current) =>
+        current ? { ...current, open: false } : current,
+      );
+      void store.focusTaskNotificationTarget(target).then((pane) => {
+        if (!pane || !connectionClient.isCurrent()) return;
+        if (
+          target.connectionId === connectionClient.connectionId &&
+          taskNotificationView(pane) === "history"
+        ) {
+          openInspector("history", pane.workspace_id, {
+            originPaneId: pane.pane_id,
+          });
+        } else {
+          activateTerminalSurface();
+        }
+        setSidebarHidden(false);
+      });
     },
-    [activateTerminalSurface, operationalShortcutsEnabled, mobile],
+    [
+      activateTerminalSurface,
+      operationalShortcutsEnabled,
+      mobile,
+      connectionClient,
+      openInspector,
+      updateInspectorState,
+    ],
   );
   const handleNoticeAction = useCallback(
     (notice: Notice) => {

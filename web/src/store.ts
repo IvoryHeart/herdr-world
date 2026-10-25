@@ -1565,7 +1565,9 @@ export const store = {
         navigationRevision,
       });
       if (!admitted) unavailable();
-      return admitted;
+      // Return the qualified pane already read above so presentation can choose
+      // Chat without consulting a different host's colliding pane ID.
+      return admitted ? pane : false;
     } catch {
       unavailable();
       return;

@@ -1,4 +1,5 @@
 import { useCreationProgress } from "../creationRequests";
+import { taskNotificationView } from "../taskNotifications";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { type WorkspaceSurfaceSelection } from "../App";
 import { worldLocalStorage } from "../browserStorage";
@@ -463,11 +464,11 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
     target: { type: "pane" | "tab"; id: string };
   } | null>(null);
   notificationHandlerRef.current = (target) => {
-    void store.focusTaskNotificationTarget(target).then((admitted) => {
-      if (!admitted) return;
+    void store.focusTaskNotificationTarget(target).then((pane) => {
+      if (!pane) return;
       void workspaceSurfaceSelectionHandlerRef.current({
         ...target,
-        view: "terminal",
+        view: taskNotificationView(pane),
       });
     });
   };

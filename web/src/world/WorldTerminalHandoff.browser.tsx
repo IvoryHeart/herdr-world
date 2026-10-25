@@ -31,6 +31,7 @@ import {
   updateShortcut,
 } from "../shortcutPreferences";
 import { __storeTesting, store } from "../store";
+import { TASK_NOTIFICATION_ACTIVATE_EVENT } from "../taskNotifications";
 import { worldLocalStorage } from "../browserStorage";
 import {
   readOfficePreferences,
@@ -1545,7 +1546,7 @@ async function run() {
     "notification target omitted from aggregate",
   );
   window.dispatchEvent(
-    new CustomEvent("herdr-world:visual-notification", {
+    new CustomEvent(TASK_NOTIFICATION_ACTIVATE_EVENT, {
       detail: {
         connectionId: "local",
         runtimeGeneration: 7,
@@ -1556,8 +1557,21 @@ async function run() {
     }),
   );
   await until(
-    () => inspectorPane() === "reviewer-pane",
+    () =>
+      store.get().selectedPaneId === "reviewer-pane" &&
+      Boolean(
+        document.querySelector(
+          '.world-managed-window.is-active .workspace-inspector[data-view="history"]',
+        ),
+      ),
     "notification reveals operational pane omitted from overview",
+  );
+  await until(
+    () =>
+      document.querySelector(
+        '.world-managed-window.is-active .workspace-inspector[data-view="history"]',
+      ),
+    "notification prefers available Chat",
   );
   document
     .querySelector<HTMLButtonElement>(
@@ -1567,6 +1581,87 @@ async function run() {
   await until(
     () => !document.querySelector(".workspace-inspector"),
     "notification Inspector cleanup",
+  );
+  window.dispatchEvent(
+    new CustomEvent(TASK_NOTIFICATION_ACTIVATE_EVENT, {
+      detail: {
+        connectionId: "local",
+        runtimeGeneration: 7,
+        workspaceId: "studio",
+        paneId: "builder-pane",
+      },
+    }),
+  );
+  await until(
+    () =>
+      inspectorPane() === "builder-pane" &&
+      document.querySelector(
+        '.world-managed-window.is-active .workspace-inspector[data-view="terminal"]',
+      ),
+    "notification falls back for unsupported Chat harness",
+  );
+  document
+    .querySelector<HTMLButtonElement>(
+      '.world-managed-window.is-active button[aria-label="Close Inspector window"]',
+    )!
+    .click();
+  await until(
+    () => !document.querySelector(".workspace-inspector"),
+    "fallback notification cleanup",
+  );
+
+  history.pushState({}, "", "/spaces");
+  window.dispatchEvent(new PopStateEvent("popstate"));
+  await until(
+    () => document.querySelector('.world-control-plane[data-active="false"]'),
+    "notification Spaces route",
+  );
+  window.dispatchEvent(
+    new CustomEvent(TASK_NOTIFICATION_ACTIVATE_EVENT, {
+      detail: {
+        connectionId: "local",
+        runtimeGeneration: 7,
+        workspaceId: "studio",
+        paneId: "reviewer-pane",
+        agentSessionId: "reviewer-session",
+      },
+    }),
+  );
+  await until(
+    () =>
+      [
+        ...document.querySelectorAll(
+          '.workspace-inspector[data-view="history"]',
+        ),
+      ].some(
+        (element) =>
+          !element.closest(".world-control-plane") &&
+          element.getClientRects().length > 0,
+      ),
+    "Spaces notification prefers Chat",
+  );
+  window.dispatchEvent(
+    new CustomEvent(TASK_NOTIFICATION_ACTIVATE_EVENT, {
+      detail: {
+        connectionId: "local",
+        runtimeGeneration: 7,
+        workspaceId: "studio",
+        paneId: "builder-pane",
+      },
+    }),
+  );
+  await until(
+    () =>
+      ![...document.querySelectorAll(".workspace-inspector")].some(
+        (element) => element.getClientRects().length > 0,
+      ) && store.get().selectedPaneId === "builder-pane",
+    "Spaces terminal fallback closes the prior Chat",
+  );
+  history.pushState({}, "", "/town");
+  window.dispatchEvent(new PopStateEvent("popstate"));
+  await until(
+    () => Boolean(agentTarget("Builder")),
+    "notification return to Town",
   );
   omitNextWorldTopology = true;
   await worldRuntimeStore.refresh();

@@ -1287,7 +1287,11 @@ describe("independent qualified operational sessions", () => {
       held.resolve({});
       const before = structuredClone(store.get().sessionsByConnectionId.alpha);
       const target = taskNotificationTarget("beta", 1, pane("beta", "done"));
-      await store.focusTaskNotificationTarget(target);
+      expect(await store.focusTaskNotificationTarget(target)).toMatchObject({
+        pane_id: target.paneId,
+        workspace_id: target.workspaceId,
+        agent: "beta",
+      });
       expect(
         calls.some(
           (call) => call.host === "beta" && call.method === "pane.get",
