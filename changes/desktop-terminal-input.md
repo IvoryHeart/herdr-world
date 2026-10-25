@@ -9,3 +9,9 @@
 
 - Restore side-by-side Composer / Direct mode controls for terminal input,
   keeping command suggestions separate and preserving the draft in Direct mode.
+
+- Use adjacent keyboard / terminal icons for Composer / Direct and keep special
+  keys visible in both modes, with the draft field shown only in Composer.
+
+- Put mobile Inspector view switching in its header dropdown and move Watching,
+  Muted and Focused to the window's ellipsis menu.

@@ -139,6 +139,7 @@ async function run() {
   try {
     if (window.innerWidth < 640) {
       rememberTerminalInputMode("composer");
+      localStorage.setItem("terminalComposerShortcutsOpen.v1", "false");
       render(true);
       await boundary();
       const draftKey = terminalComposerDraftKey(
@@ -157,12 +158,45 @@ async function run() {
       check(editor && direct, "Direct controls missing");
       const modeGroup = host.querySelector('[aria-label="Input mode"]');
       check(modeGroup, "Input mode selector missing");
+      const composerMode = modeGroup.querySelector<HTMLButtonElement>(
+        '[aria-label="Composer"]',
+      );
       check(
-        modeGroup.textContent?.includes("Composer") &&
-          modeGroup.textContent.includes("Direct"),
-        "Composer and Direct are not side-by-side labelled modes",
+        composerMode?.querySelector("svg.lucide-keyboard"),
+        "Composer is not a keyboard icon",
+      );
+      check(
+        direct.querySelector("svg.lucide-square-terminal"),
+        "Direct is not a terminal icon",
+      );
+      const keys = host.querySelector<HTMLElement>(
+        '[aria-label="Terminal shortcuts"]',
+      );
+      check(
+        keys && !keys.hidden && keys.getBoundingClientRect().height > 0,
+        "Special keys are hidden in Composer mode",
       );
       check(modeGroup.contains(direct), "Direct is outside the mode selector");
+      const orderedControls = [
+        '[aria-label="Add a file"]',
+        '[aria-label="Commands"]',
+        '[aria-label="Composer"]',
+        '[aria-label="Type directly into the terminal"]',
+        '[aria-label="Insert draft into the terminal"]',
+        '[aria-label="Send draft to the terminal"]',
+        '[aria-label="Close terminal input"]',
+      ].map((selector) => host.querySelector<HTMLElement>(selector));
+      check(orderedControls.every(Boolean), "Toolbar control missing");
+      for (let i = 1; i < orderedControls.length; i++) {
+        const previous = orderedControls[i - 1]!.getBoundingClientRect();
+        const current = orderedControls[i]!.getBoundingClientRect();
+        check(
+          current.left >= previous.right &&
+            Math.abs(current.top - previous.top) < 12,
+          "Toolbar is not ordered attachment, commands, modes, Insert, Send, Close",
+        );
+      }
+
       await click(editor);
       await boundary();
       check(
@@ -178,6 +212,10 @@ async function run() {
       check(
         document.activeElement?.classList.contains("xterm-helper-textarea"),
         `Direct did not focus terminal: ${document.activeElement?.className}`,
+      );
+      check(
+        !keys.hidden && keys.getBoundingClientRect().height > 0,
+        "Special keys hidden in Direct mode",
       );
       const start = sent.length;
       await input("Input.insertText", { text: "direct probe" });
@@ -227,9 +265,7 @@ async function run() {
         !editor.getBoundingClientRect().height,
         "Direct still shows Message editor",
       );
-      const composer = Array.from(modeGroup.querySelectorAll("button")).find(
-        (button) => button.textContent === "Composer",
-      );
+      const composer = composerMode;
       check(composer, "Composer mode missing");
       await click(composer);
       check(

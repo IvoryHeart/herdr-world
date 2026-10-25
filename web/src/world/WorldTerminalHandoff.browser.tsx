@@ -1990,11 +1990,40 @@ async function run() {
   // On a phone, the Chat view shows one composer, Chat's own: no terminal
   // key bar and no terminal composer (those belong to the Terminal view).
   const shown = (element: Element) => element.getClientRects().length > 0;
-  document
-    .querySelector<HTMLButtonElement>(
-      '.mobile-nav[aria-label="Workspace view switcher"] button[aria-label="Show agent message history"]',
-    )
-    ?.click();
+  const chooseMobileView = async (
+    view: "terminal" | "files" | "history" | "changes",
+  ) => {
+    mobileInspector
+      .querySelector<HTMLButtonElement>('[aria-label^="Inspector view:"]')!
+      .click();
+    await until(
+      () => document.querySelector('[aria-label="Inspector views"]'),
+      "anchored Inspector views",
+    );
+    check(
+      !mobileInspector.querySelector("select"),
+      "mobile views opened a native combo box",
+    );
+    check(
+      [...document.querySelectorAll('[aria-label="Inspector views"] button')]
+        .map((button) => button.textContent?.trim())
+        .slice(0, 4)
+        .join(",") === "Terminal,Files,Chat,Changes",
+      "mobile view destinations changed order",
+    );
+    document
+      .querySelector<HTMLButtonElement>(
+        `[aria-label="Inspector views"] [data-view="${view}"]`,
+      )!
+      .click();
+    await until(
+      () => mobileInspector.getAttribute("data-view") === view,
+      `mobile view ${view}`,
+    );
+  };
+  await chooseMobileView("files");
+  await chooseMobileView("changes");
+  await chooseMobileView("history");
   await until(
     () => mobileInspector.getAttribute("data-view") === "history",
     "phone window Chat view",
@@ -2017,11 +2046,7 @@ async function run() {
     ].filter(shown).length <= 1,
     "the phone Chat view shows more than one composer",
   );
-  document
-    .querySelector<HTMLButtonElement>(
-      '.mobile-nav[aria-label="Workspace view switcher"] button[aria-label="Show terminal session"]',
-    )
-    ?.click();
+  await chooseMobileView("terminal");
   await until(
     () => mobileInspector.getAttribute("data-view") === "terminal",
     "phone window back on Terminal",
@@ -2030,6 +2055,31 @@ async function run() {
   const mobileHeader = mobileInspector.querySelector<HTMLElement>(
     ".workspace-inspector-head",
   )!;
+  check(
+    !mobileHeader.querySelector('[aria-label^="Interest:"]'),
+    "attention remained in the mobile header",
+  );
+  mobileHeader
+    .querySelector<HTMLButtonElement>('[aria-haspopup="menu"]')!
+    .click();
+  await until(
+    () => document.querySelector('[aria-label="Window actions"]'),
+    "mobile attention menu",
+  );
+  const attentionChoices = [
+    ...document.querySelectorAll<HTMLButtonElement>(
+      '[aria-label="Window actions"] [role="menuitemradio"]',
+    ),
+  ];
+  check(
+    attentionChoices
+      .map((button) => button.querySelector("span")?.textContent)
+      .join(",") === "Watching,Muted,Focused",
+    "mobile ellipsis does not contain attention choices separately from views",
+  );
+  attentionChoices
+    .find((button) => button.getAttribute("aria-checked") === "true")!
+    .click();
   // On a phone the window looks like the terminal: its own bar (name,
   // status and ⋯) is the only bar, and the app's topbar slides away.
   check(

@@ -7,10 +7,7 @@ import {
   takeTerminalComposerRequest,
   terminalComposerRequestKey,
 } from "../world/terminalComposerRequest";
-import {
-  readTerminalComposerShortcutsOpen,
-  type TerminalInputMode,
-} from "./TerminalComposer";
+import type { TerminalInputMode } from "./TerminalComposer";
 import {
   filesFromTerminalDrop,
   isNativeFileDrag,
@@ -484,9 +481,7 @@ export function TerminalView({
     TerminalTouchSelection["handles"]
   >([]);
   const [mobileKeysOpen, setMobileKeysOpen] = useState(false);
-  const [composerShortcutsOpen, setComposerShortcutsOpen] = useState(
-    readTerminalComposerShortcutsOpen,
-  );
+  const [composerShortcutsOpen, setComposerShortcutsOpen] = useState(false);
   const [localComposerOpen, setLocalComposerOpen] = useState(false);
   const [closePaneRequested, setClosePaneRequested] = useState(false);
   const [localAgentHistoryOpen, setLocalAgentHistoryOpen] = useState(false);

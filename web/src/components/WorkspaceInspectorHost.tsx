@@ -1,3 +1,8 @@
+import {
+  WorkspaceInspectorViewSelect,
+  INSPECTOR_TAB_LABELS,
+  INSPECTOR_TAB_ORDER,
+} from "./WorkspaceInspectorViewSelect";
 import { WorkspaceInspectorLocation } from "./WorkspaceInspectorLocation";
 import { AgentWorktreeGate } from "./AgentWorktreePicker";
 import type { AgentWorktreeView } from "../useAgentWorktree";
@@ -85,7 +90,8 @@ import { FilePreviewTabs } from "./FilePreviewTabs";
 import { workspaceInspectorLayout } from "./workspaceInspectorLayout";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { changedCount, checkoutLabel } from "./inspectorCheckout";
-import { AgentInterestButton } from "./AgentInterestButton";
+import { useAgentInterestChoice } from "./AgentInterestButton";
+import { InterestButton } from "./InterestButton";
 import { InspectorSplitResizer } from "./InspectorSplitResizer";
 import { paneAgentTitle } from "../agentName";
 import "./WorkspaceInspectorHost.css";
@@ -102,23 +108,6 @@ const GitCommitHistory = lazyWithReload("git-commit-history", () =>
 );
 
 const INSPECTOR_RESOURCE_HORIZONTAL_PADDING = 16;
-
-const INSPECTOR_TAB_LABELS: Partial<Record<InspectorView, string>> = {
-  history: "Chat",
-  terminal: "Terminal",
-  changes: "Changes",
-  files: "Files",
-  commits: "Commits",
-};
-
-/** The Inspector's views as its top selector shows them, Chat first. */
-const INSPECTOR_TAB_ORDER: readonly InspectorView[] = [
-  "history",
-  "terminal",
-  "changes",
-  "files",
-  "commits",
-];
 
 export function WorkspaceInspectorHost({
   state,
@@ -278,6 +267,10 @@ export function WorkspaceInspectorHost({
   const [barNeeds, setBarNeeds] = useState(360);
   const headRef = useRef<HTMLElement | null>(null);
   const { mobile } = useLayoutPreferences();
+  const interestChoice = useAgentInterestChoice(
+    connectionClient.connectionId,
+    historyPane,
+  );
   const [fileDiffState, setFileDiffState] = useState<{
     resourceKey: string;
     entries: GitDiffEntry[];
@@ -636,10 +629,15 @@ export function WorkspaceInspectorHost({
               : null}
           </div>
         )}
-        {agentContext ? (
-          <AgentInterestButton
-            connectionId={connectionClient.connectionId}
-            pane={historyPane}
+        {agentContext && interestChoice && !(mobile && windowControls) ? (
+          <InterestButton {...interestChoice} />
+        ) : null}
+        {mobile && windowControls ? (
+          <WorkspaceInspectorViewSelect
+            value={state.view}
+            availableViews={availableViews}
+            historyAvailable={historyAvailable}
+            onChange={onViewChange}
           />
         ) : null}
         {/* One selector in the window's top bar, Chat first: Chat,
@@ -782,25 +780,27 @@ export function WorkspaceInspectorHost({
         </Popover>
         {windowControls ? (
           <WindowControls
-            // A phone shows the window like its terminal: the views move
-            // into ⋯ beside the agents it can switch to.
+            // Mobile views live in the header dropdown; attention joins ⋯.
             controls={
               // A crowded or narrow window's views join ⋯ too, so it keeps
               // one menu rather than two.
-              viewsInMenu
+              viewsInMenu || mobile
                 ? {
                     ...windowControls,
                     narrow: !windowControls.compact,
-                    views: INSPECTOR_TAB_ORDER.filter(
-                      (view) =>
-                        availableViews.includes(view) &&
-                        (view !== "history" || historyAvailable),
-                    ).map((view) => ({
-                      id: view,
-                      label: INSPECTOR_TAB_LABELS[view] ?? view,
-                      checked: state.view === view,
-                      onSelect: () => onViewChange(view),
-                    })),
+                    attention: mobile ? interestChoice : undefined,
+                    views: mobile
+                      ? undefined
+                      : INSPECTOR_TAB_ORDER.filter(
+                          (view) =>
+                            availableViews.includes(view) &&
+                            (view !== "history" || historyAvailable),
+                        ).map((view) => ({
+                          id: view,
+                          label: INSPECTOR_TAB_LABELS[view] ?? view,
+                          checked: state.view === view,
+                          onSelect: () => onViewChange(view),
+                        })),
                   }
                 : windowControls
             }

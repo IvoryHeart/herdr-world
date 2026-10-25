@@ -264,3 +264,11 @@
   color: var(--muted);
   font-size: 12px;
 }
+
+.terminal-composer[data-surface="terminal"] .terminal-composer-mode {
+  margin-inline: auto;
+}
+.terminal-composer[data-surface="terminal"] .terminal-composer-submit-actions,
+.terminal-composer[data-surface="terminal"] .terminal-composer-close {
+  margin-left: 0;
+}

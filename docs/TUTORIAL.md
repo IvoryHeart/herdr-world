@@ -150,6 +150,8 @@ hosts stay usable.
    it to the front. Use **Back** to close the summary.
 4. Tap an agent or its table to open its window on **Chat**: World's Inspector,
    with **Chat**, **Terminal**, **Changes** and **Files** in its top selector.
+   On a phone, the anchored header dropdown switches between **Terminal**, **Files**,
+   **Chat** and **Changes**; the **⋯** menu contains attention settings.
    In Town it docks on the right at a readable width; drag its left edge to
    resize it (Town remembers the width), or drag its title to undock it. Chat shows the
    conversation's latest 200 entries, scrolls back inside the window, and
@@ -218,7 +220,8 @@ hosts stay usable.
    terminal window's menu has **Colour**, and
    in Spaces the tab's menu (right-click or long-press) offers the same palette
    and **Default colour**.
-   In the agent's window, the button beside its name sets its interest:
+   In the agent's window, the button beside its name sets its interest (on a
+   phone, use **⋯ → Attention**):
    **Muted** stops its chimes, **Focused** lets only focused agents chime, and
    **Watching** is the default. Its questions and results still arrive in
    reception.
@@ -723,13 +726,15 @@ Use its HTTPS URL: `127.0.0.1` on a phone means the phone, not the work computer
 1. Open Herdr World in the mobile browser and select your practice project and
    agent pane. Authenticate first if your deployment requires login.
 2. Tap **Message** below the terminal to raise the keyboard and compose; use
-   the side-by-side **Composer / Direct** selector to choose draft editing or
-   typing straight into the terminal. Direct saves and hides the draft; Composer
+   the side-by-side **keyboard (Composer) / terminal (Direct)** icons to choose
+   draft editing or typing straight into the terminal. Direct saves and hides the draft; Composer
    restores it. Both modes stay available while a long draft is expanded.
    **/ Commands** opens command suggestions for the draft;
    it does not turn on Direct. The input stays below the output.
-   Tabs and More live in the shared top app bar. Use the shortcut rows for arrow
-   keys, Ctrl and other actions that are awkward on a touch keyboard.
+   The toolbar places attachment and Commands on the left, input-mode icons in
+   the middle, and Insert, Send and Close on the right.
+   Tabs and More live in the shared top app bar. Special-key rows stay visible
+   in both modes for arrows, Ctrl and other actions awkward on a touch keyboard.
 3. Open Changes to review the README diff. Mobile uses a unified diff layout;
    long-press a file to open its actions menu. To open a link printed in a
    terminal, long-press it and choose **Open link** (on a computer,

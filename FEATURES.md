@@ -32,6 +32,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     idle agents in the lounge. Movement only represents state.
   - Each agent has one window: World's Inspector, with one top selector
     (**Chat**, **Terminal**, **Changes**, **Files**, then **Commits**).
+    On phones, a header dropdown shows Terminal, Files, Chat and Changes;
+    attention choices move into the window's ellipsis menu.
     Tapping an agent or its table, activating it (double-click,
     **Shift+Enter**), the needs-you list, **N** and **Next** open that window on
     **Chat**: the conversation's latest 200 entries, which scroll inside the
@@ -222,7 +224,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     tab that spawned it (before its workspace's colour), and keeps following it
     when moved. A chosen colour always wins.
 - **Agent interest.** The button beside an agent's name in its Inspector
-  header in Town, Board and Spaces sets **Watching** (the default), **Muted**
+  header in Town, Board and Spaces (or **⋯ → Attention** in mobile windows)
+  sets **Watching** (the default), **Muted**
   or **Focused** for that agent, saved by the World service for its terminal on
   every device. Chimes
   read it: a muted agent never chimes, and while a focused agent is reachable
@@ -600,8 +603,9 @@ commit a search selection. Press K in the recent switcher to convert it to searc
 - On desktop, click terminal output to use physical arrow keys and Ctrl
   combinations, including after opening an agent's Message or switching views.
   The phone-only Composer does not disable desktop input or discard its draft.
-  On phones, side-by-side Composer / Direct controls stay accessible while
-  editing an expanded draft; Direct hides and saves it, and Composer restores it.
+  On phones, side-by-side keyboard (Composer) / terminal (Direct) icons stay
+  accessible while editing an expanded draft; Direct hides and saves it, and
+  Composer restores it. Special keys remain visible in both modes.
   The separate `/ Commands` control inserts command suggestions into the draft.
 - Scroll history by wheel, trackpad, touch, or half-page
   `Alt/Option+Page Up`/`Page Down`. Full page keys go to terminal apps (such as

@@ -1686,6 +1686,7 @@
         "shared/herdrIdentity.test.ts",
         "server/src/http/herdr-info.test.ts",
         "web/src/components/ConnectionHerdrInfo.test.ts",
+        "web/src/components/WorkspaceInspectorViewSelect.test.ts",
         "web/src/uiScale.test.ts",
         "server/src/sources/pullRequestDetail.test.ts",
         "server/src/sources/pullRequestReviews.test.ts",
