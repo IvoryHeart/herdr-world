@@ -151,7 +151,6 @@ export function createOfficeProjector(
   let previousPreferredRoom: string | null = null;
   let previousExpanded: ReadonlySet<string> = NO_EXPANDED_ROOMS;
   let previousPinned: ReadonlySet<string> = NO_PINNED_TABS;
-  let previousProtected: ReadonlySet<string> = NO_PINNED_TABS;
   let previousDeskLimits: ReadonlyMap<string, number> = NO_DESK_LIMITS;
   const intern = <T extends { key: string }>(next: T[], prior: T[]) => {
     const byKey = new Map(prior.map((item) => [item.key, item]));
@@ -170,13 +169,12 @@ export function createOfficeProjector(
     selectedId: string | null,
     pinnedTabs: ReadonlySet<string> = NO_PINNED_TABS,
     expandedRooms: ReadonlySet<string> = NO_EXPANDED_ROOMS,
-    protectedDesks: ReadonlySet<string> = NO_PINNED_TABS,
     preferredRoomKey: string | null = null,
     expandedDeskLimits: ReadonlyMap<string, number> = NO_DESK_LIMITS,
   ): HerdrOfficeProjection => {
     let next: HerdrOfficeProjection | null = null;
     const inputs = previous && projectionInputs.get(previous);
-    // Cache fold targets and legacy priority inputs. Town admission itself
+    // Cache fold targets and Office pin priorities. Town admission itself
     // remains a native-order prefix regardless of activity or selection.
     const sameAdmission =
       preferredRoomKey === previousPreferredRoom &&
@@ -185,9 +183,7 @@ export function createOfficeProjector(
       expandedDeskLimits.size === previousDeskLimits.size &&
       [...expandedDeskLimits].every(
         ([key, limit]) => previousDeskLimits.get(key) === limit,
-      ) &&
-      protectedDesks.size === previousProtected.size &&
-      [...protectedDesks].every((key) => previousProtected.has(key));
+      );
     if (
       previous &&
       inputs &&
@@ -317,7 +313,6 @@ export function createOfficeProjector(
         bounds,
         pinnedTabs,
         expandedRooms,
-        protectedDesks,
         preferredRoomKey,
         expandedDeskLimits,
       );
@@ -333,7 +328,6 @@ export function createOfficeProjector(
     previousPreferredRoom = preferredRoomKey;
     previousExpanded = expandedRooms;
     previousPinned = pinnedTabs;
-    previousProtected = new Set(protectedDesks);
     previousDeskLimits = new Map(expandedDeskLimits);
     previous = next;
     return next;
@@ -356,8 +350,6 @@ export function projectWorldOffice(
   pinnedTabs: ReadonlySet<string> = NO_PINNED_TABS,
   /** Rooms the user expanded past `foldedDesksPerRoom` (room keys). */
   expandedRooms: ReadonlySet<string> = NO_EXPANDED_ROOMS,
-  /** Legacy attention input; Town admission now follows tab order only. */
-  _protectedDesks: ReadonlySet<string> = NO_PINNED_TABS,
   /** A validated qualified room requested by camera navigation. */
   preferredRoomKey: string | null = null,
   /** Current incremental expansion target for each expanded room. */

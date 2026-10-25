@@ -24,26 +24,17 @@ describe("Pixel Office projection", () => {
     const project = createOfficeProjector(TOWN_PRESENTATION_BOUNDS);
     const pins = new Set<string>();
     const expanded = new Set<string>();
-    const attention = new Set<string>();
     const selected = world.leaves.find(
       (leaf) => leaf.connectionId === "host-0",
     )!.id;
-    const baseline = project(world, 1, selected, pins, expanded, attention);
+    const baseline = project(world, 1, selected, pins, expanded);
     const preferred = baseline.roomRoster.find(
       (room) => room.workspaceRef.connectionId === "host-8",
     )!;
     expect(baseline.rooms.some((room) => room.key === preferred.key)).toBe(
       false,
     );
-    const shown = project(
-      world,
-      2,
-      selected,
-      pins,
-      expanded,
-      attention,
-      preferred.key,
-    );
+    const shown = project(world, 2, selected, pins, expanded, preferred.key);
     expect(shown.rooms.some((room) => room.key === preferred.key)).toBe(true);
     expect(shown.rooms).toHaveLength(128);
     expect(new Set(shown.rooms.map((room) => room.key)).size).toBe(128);
@@ -52,8 +43,7 @@ describe("Pixel Office projection", () => {
         ?.presented,
     ).toBe(true);
     expect(
-      project(world, 3, selected, pins, expanded, attention, preferred.key)
-        .rooms,
+      project(world, 3, selected, pins, expanded, preferred.key).rooms,
     ).toBe(shown.rooms);
     const alternate = world.spaces.find(
       (space) => space.connectionId === "host-7",
@@ -64,7 +54,6 @@ describe("Pixel Office projection", () => {
       alternate.id,
       pins,
       expanded,
-      attention,
       preferred.key,
     );
     expect(reselection.rooms.some((room) => room.key === preferred.key)).toBe(
@@ -76,28 +65,14 @@ describe("Pixel Office projection", () => {
       ),
     ).toBe(true);
     expect(new Set(reselection.rooms.map((room) => room.key)).size).toBe(128);
-    const cleared = project(
-      world,
-      5,
-      selected,
-      pins,
-      expanded,
-      attention,
-      null,
-    );
+    const cleared = project(world, 5, selected, pins, expanded, null);
     expect(cleared.rooms.some((room) => room.key === preferred.key)).toBe(
       false,
     );
     expect(
-      project(
-        world,
-        5,
-        selected,
-        pins,
-        expanded,
-        attention,
-        "unverified-room",
-      ).rooms.map((room) => room.key),
+      project(world, 5, selected, pins, expanded, "unverified-room").rooms.map(
+        (room) => room.key,
+      ),
     ).toEqual(cleared.rooms.map((room) => room.key));
     const removedWorld = buildWorldObject(sources.slice(0, -1), "host-0");
     const removed = project(
@@ -106,7 +81,6 @@ describe("Pixel Office projection", () => {
       selected,
       pins,
       expanded,
-      attention,
       preferred.key,
     );
     expect(removed.rooms.some((room) => room.key === preferred.key)).toBe(
@@ -274,7 +248,7 @@ describe("Pixel Office projection", () => {
       );
     }
   });
-  test("Town prefixes keep native order regardless of attention changes, with complete cached rosters", async () => {
+  test("Town prefixes preserve native order and reuse complete cached rosters", async () => {
     const tabs = Array.from({ length: 160 }, (_, index) =>
       tab(`ordered-${index}`, index + 1),
     );
@@ -288,17 +262,16 @@ describe("Pixel Office projection", () => {
     await prepareWorldOffice(world);
     const project = createOfficeProjector(TOWN_PRESENTATION_BOUNDS);
     const baseline = project(world, 1, null);
-    const attention = new Set(baseline.deskRoster.map(({ desk }) => desk.key));
     const expanded = new Set([baseline.rooms[0]!.key]);
     for (const rooms of [new Set<string>(), expanded]) {
-      const shown = project(world, 2, null, new Set(), rooms, attention);
+      const shown = project(world, 2, null, new Set(), rooms);
       const count = rooms.size ? 44 : 24;
       expect(shown.rooms[0]!.desks.map((d) => d.tabRef.nativeId)).toEqual(
         tabs.slice(0, count).map((t) => t.tab_id),
       );
       expect(shown.rooms[0]!.omittedDeskCount).toBe(160 - count);
       expect(shown.roster).toHaveLength(160);
-      const updated = project(world, 3, null, new Set(), rooms, new Set());
+      const updated = project(world, 3, null, new Set(), rooms);
       expect(updated.rooms[0]!.desks).toEqual(shown.rooms[0]!.desks);
       for (const shape of Object.values(TOWN_SHAPES))
         expect(
@@ -332,7 +305,6 @@ describe("Pixel Office projection", () => {
         TOWN_PRESENTATION_BOUNDS,
         new Set(),
         expanded,
-        new Set(),
         null,
         new Map([[folded.key, limit]]),
       ).rooms[0]!;

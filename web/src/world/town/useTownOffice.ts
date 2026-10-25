@@ -14,7 +14,7 @@ export function useTownOffice(world: WorldObject, selectedId: string | null) {
     [],
   );
   const deskPins = useDeskPins();
-  // Only which tabs are pinned matters to admission, not their cells.
+  // Preserve the pin-key identity across cell changes; pins do not promote tabs.
   const pinnedTabKeys = Object.keys(deskPins).sort().join("\n");
   const pinnedTabs = useMemo(
     () => new Set(pinnedTabKeys ? pinnedTabKeys.split("\n") : []),
@@ -73,7 +73,6 @@ export function useTownOffice(world: WorldObject, selectedId: string | null) {
         selectedId,
         pinnedTabs,
         expandedRooms,
-        undefined,
         roomFocus?.roomKey ?? null,
         expandedDeskLimits,
       ),

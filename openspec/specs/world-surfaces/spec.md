@@ -1350,10 +1350,10 @@ a pinned desk SHALL NOT go to the lounge: it SHALL leave its seat only for
 reception, when blocked or done and not yet checked, and SHALL return to its
 seat once checked or answered. A pin SHALL follow its tab to another workspace
 and SHALL be dropped when its tab closes. When a room has more desks than Town
-presents, its pinned desks and the selected desk, with their agents, SHALL
-still be presented, even past the current target, and other desks SHALL be
-omitted instead. Layout SHALL extend for every admitted pinned or selected
-desk, even beyond the current incremental expansion target.
+presents, admission SHALL remain the native tab-order prefix. A pin or selection
+SHALL NOT promote a hidden tab across the fold boundary. A saved pin cell SHALL
+apply only while its tab is admitted; expanding SHALL reveal the next tabs in
+order, including any hidden pinned or selected tab.
 
 #### Scenario: A pinned agent finishes and is seen
 
@@ -1363,10 +1363,10 @@ desk, even beyond the current incremental expansion target.
 
 #### Scenario: A pinned desk in a crowded room
 
-- **WHEN** a room's tabs exceed Town's desk bound and more of its tabs are
-  pinned than the bound, with another desk selected
-- **THEN** every pinned desk, the selected desk and their agents stay
-  presented, and only unpinned desks are omitted
+- **WHEN** a pinned or selected tab lies outside a crowded room's visible prefix
+- **THEN** it remains hidden without displacing an earlier tab, and successive
+  expansions reveal it in native tab order
+- **AND** refolding restores the first 24 tabs without pin or selection promotion
 
 #### Scenario: A room reflows around a pinned desk
 
