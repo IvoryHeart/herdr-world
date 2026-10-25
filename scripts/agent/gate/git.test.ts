@@ -71,7 +71,10 @@ beforeAll(() => {
 
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 
+/** Each scenario starts clean on the reviewed commit, whatever came before. */
 function onPr(steps: () => string) {
+  Bun.spawnSync(["git", "merge", "--abort"], { cwd: work, stderr: "pipe" });
+  sh("reset", "--quiet", "--hard");
   sh("checkout", "--quiet", "-B", "scratch", reviewed);
   return steps();
 }
@@ -110,14 +113,24 @@ describe("copy rule", () => {
       return sha;
     })();
     const head = onPr(() => {
-      Bun.spawnSync(["git", "merge", "--no-edit", conflicting], {
-        cwd: work,
-        stdout: "pipe",
-        stderr: "pipe",
-      });
+      // Conflicts make this merge exit non-zero; the resolution follows.
+      const merge = Bun.spawnSync(
+        [
+          "git",
+          "-c",
+          "user.name=Example",
+          "-c",
+          "user.email=dev@example.com",
+          "merge",
+          "--no-edit",
+          conflicting,
+        ],
+        { cwd: work, stdout: "pipe", stderr: "pipe" },
+      );
+      expect(merge.stdout.toString()).toContain("CONFLICT");
       writeFileSync(join(work, "a.txt"), lines(10, [1, "resolved"]));
       sh("add", "a.txt");
-      sh("commit", "--quiet", "--no-edit");
+      sh("commit", "--quiet", "-m", "merge main");
       return sh("rev-parse", "HEAD");
     });
     expect(copyRule(gitDir(), reviewed, head).kind).toBe("conflict");
@@ -129,7 +142,7 @@ describe("copy rule", () => {
       sh("merge", "--quiet", "--no-edit", "--no-commit", mainB);
       writeFileSync(join(work, "a.txt"), lines(10, [5, "slipped in"]));
       sh("add", "a.txt");
-      sh("commit", "--quiet", "--no-edit");
+      sh("commit", "--quiet", "-m", "merge main");
       return sh("rev-parse", "HEAD");
     });
     expect(copyRule(gitDir(), reviewed, head)).toMatchObject({

@@ -43,14 +43,12 @@ describe("acceptance cases", () => {
       NOW,
     );
     expect(overlap.notes.join("\n")).toContain("Overlaps main");
-    const older = evaluate(
-      CASES.find((entry) => entry.name.startsWith("A9b"))!.input,
+    const waived = evaluate(
+      CASES.find((entry) => entry.name.startsWith("A9d"))!.input,
       config,
       NOW,
     );
-    expect(older.notes).toContain(
-      "1 older unattributed RESULT post was not counted",
-    );
+    expect(waived.notes).toContain("1 unattributed RESULT post waived");
   });
 });
 

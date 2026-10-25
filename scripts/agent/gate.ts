@@ -1,3 +1,4 @@
+import type { Database } from "bun:sqlite";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { shortSha } from "../../shared/pullRequests";
@@ -17,10 +18,13 @@ import {
   latestPass,
   latestVerdict,
   openStore,
+  passConfig,
   passInputs,
   recordPass,
   transitions,
+  verdictDigest,
   verdictsAt,
+  waivedSources,
 } from "./gate/store";
 
 /**
@@ -33,12 +37,13 @@ const USAGE = `Usage: bun run agent:gate -- <command> [options]
 
   pass [--pr N]...          Read GitHub and git, record verdicts, print one line per PR
   explain N                 The latest receipt for #N, with evidence and who decides
-  merge-line N              The owner's merge command, only for a fresh READY (exit 2 otherwise)
-  check-claim N SHA         Check a crew "READY #N" claim against the current head (exit 2 unless READY)
+  merge-line N              Re-read #N; print the owner's merge command only if READY (exit 2 otherwise)
+  check-claim N SHA         Re-read #N; check a crew "READY #N" claim against its head (exit 2 unless READY)
   hold N --reason TEXT      Hold #N across heads until released
   release N                 Release a hold
+  waive N SOURCE --reason   Resolve an unattributed RESULT post by its source ID (see explain)
   diff [--since PASS]       Verdict changes since a pass (default: the latest pass's changes)
-  replay DIR | --pass ID    Re-run the predicate on fixture files or a recorded pass
+  replay DIR | --pass ID    Re-run fixture files, or a recorded pass with its own config
 
 Options: --db PATH, --config PATH, --json, --actor NAME`;
 
@@ -120,7 +125,6 @@ export function loadConfig(path: string): GateConfig {
     reviewers: value.reviewers ?? {},
     flakes: value.flakes ?? [],
     rerunBudget: value.rerunBudget ?? 1,
-    freshMinutes: value.freshMinutes ?? 10,
     ...(value.requiredChecks ? { requiredChecks: value.requiredChecks } : {}),
     ...(value.remote ? { remote: value.remote } : {}),
   };
@@ -128,17 +132,18 @@ export function loadConfig(path: string): GateConfig {
 
 function line(verdict: Verdict) {
   const head = verdict.head ? shortSha(verdict.head) : "-------";
-  const blocking = verdict.conditions
+  return `#${verdict.number}\t${verdict.state}\t${head}\t${verdict.conditions
     .filter((entry) => entry.state !== "met")
-    .map((entry) => `${entry.state}: ${entry.detail}`);
-  return `#${verdict.number}\t${verdict.state}\t${head}\t${blocking.join(" | ")}`;
+    .map((entry) => `${entry.state}: ${entry.detail}`)
+    .join(" | ")}`;
 }
 
 /** Who can move each kind of blocker. */
 function decider(id: string, state: string) {
   if (id === "hold") return "owner or FirstMate (release)";
-  if (state === "judgment" || id === "reviewers" || id === "unattributed")
-    return "FirstMate / clerk";
+  if (id === "unattributed")
+    return "the post's author (attribute) or FirstMate (waive)";
+  if (state === "judgment" || id === "reviewers") return "FirstMate / clerk";
   if (id.startsWith("review:"))
     return `${id.slice(7)} (confirm) or the author (fix)`;
   return "the author";
@@ -146,14 +151,40 @@ function decider(id: string, state: string) {
 
 const out = (text: string) => console.log(text);
 
+type Context = { config: GateConfig; run: Run; mirror: string; now: number };
+
+/** Read, judge and record in one transaction; nothing is kept if a read fails. */
+function runPass(db: Database, context: Context, numbers: number[]) {
+  const started = Date.now();
+  const { config, run, mirror, now } = context;
+  const inputs = observe({ run, config, numbers, mirror, now }).map(
+    (input) => ({
+      ...input,
+      hold: activeHold(db, input.number),
+      waived: waivedSources(db, input.number),
+    }),
+  );
+  const verdicts = inputs.map((input) => evaluate(input, config, now));
+  // Elapsed wall time on the caller's clock, so tests can fix `now`.
+  const finishedAt = now + (Date.now() - started);
+  const passId = recordPass(db, {
+    trigger: numbers.length ? `pr ${numbers.join(",")}` : "open",
+    config,
+    startedAt: now,
+    finishedAt,
+    inputs,
+    verdicts,
+  });
+  return { passId, verdicts };
+}
+
 export async function main(
   argv: string[],
   now = Date.now(),
   run: Run = runProcess,
 ): Promise<number> {
   const options = parseOptions(argv);
-  const needsDir = !options.db || !options.config;
-  const dir = needsDir ? gateDir() : "";
+  const dir = !options.db || !options.config ? gateDir() : "";
   const dbPath = options.db ?? join(dir, "gate.sqlite");
   const configPath = options.config ?? join(dir, "config.json");
   const { command, args } = options;
@@ -161,28 +192,15 @@ export async function main(
   if (command === "replay") return replay(options, dbPath, configPath);
 
   const db = openStore(dbPath);
+  const context = (): Context => ({
+    config: loadConfig(configPath),
+    run,
+    mirror: join(dirname(resolve(dbPath)), "mirror.git"),
+    now,
+  });
   try {
     if (command === "pass") {
-      const started = Date.now();
-      const config = loadConfig(configPath);
-      const inputs = observe({
-        run,
-        config,
-        numbers: options.prs,
-        mirror: join(dirname(resolve(dbPath)), "mirror.git"),
-        now,
-      }).map((input) => ({ ...input, hold: activeHold(db, input.number) }));
-      // Elapsed wall time on the caller's clock, so tests can fix `now`.
-      const finishedAt = now + (Date.now() - started);
-      const verdicts = inputs.map((input) => evaluate(input, config, now));
-      const passId = recordPass(db, {
-        trigger: options.prs.length ? `pr ${options.prs.join(",")}` : "open",
-        configHash: configHash(config),
-        startedAt: now,
-        finishedAt,
-        inputs,
-        verdicts,
-      });
+      const { passId, verdicts } = runPass(db, context(), options.prs);
       if (options.json)
         out(JSON.stringify({ pass: passId, verdicts }, null, 2));
       else {
@@ -192,108 +210,61 @@ export async function main(
       return 0;
     }
 
-    if (command === "explain") {
-      const pr = number(args[0], "explain");
-      const verdict = latestVerdict(db, pr);
-      if (!verdict) throw new Error(`No verdict for #${pr}; run pass first`);
-      const input = latestInput(db, pr);
-      if (options.json) {
-        out(JSON.stringify({ verdict, input }, null, 2));
-        return 0;
-      }
-      const age = Math.round((now - verdict.lastSeenAt) / 60_000);
-      out(
-        `#${pr} ${verdict.state} at ${verdict.head ?? "no head"} (pass ${verdict.passId}, last seen ${age} min ago)`,
-      );
-      for (const entry of verdict.conditions)
-        out(
-          `  ${entry.state.padEnd(8)} ${entry.id}: ${entry.detail}${entry.url ? ` <${entry.url}>` : ""}`,
-        );
-      for (const note of verdict.notes) out(`  note     ${note}`);
-      for (const claim of input?.item?.pr?.reviewers ?? [])
-        out(
-          `  claim    ${claim.reviewer ?? "unattributed"} ${claim.outcome} at ${claim.commit ? shortSha(claim.commit) : "unknown head"}: ${claim.line}`,
-        );
-      for (const attempt of input?.attempts ?? [])
-        out(
-          `  attempt  ${attempt.name} #${attempt.attempt}: ${attempt.conclusion}`,
-        );
-      const blocking = verdict.conditions.filter(
-        (entry) => entry.state !== "met",
-      );
-      if (blocking.length) {
-        out("Escalation packet:");
-        for (const entry of blocking)
-          out(
-            `  - ${entry.detail} → ${decider(entry.id, entry.state)}${entry.url ? ` <${entry.url}>` : ""}`,
-          );
-      }
-      return 0;
-    }
+    if (command === "explain") return explain(db, options, now);
 
-    if (command === "merge-line") {
-      const pr = number(args[0], "merge-line");
-      const config = loadConfig(configPath);
-      const verdict = latestVerdict(db, pr);
-      const reasons: string[] = [];
-      if (!verdict) reasons.push("no verdict; run pass first");
-      else {
-        if (verdict.state !== "READY")
-          reasons.push(
-            `${verdict.state}: ${verdict.conditions
-              .filter((entry) => entry.state !== "met")
-              .map((entry) => entry.detail)
-              .join("; ")}`,
-          );
-        if (now - verdict.lastSeenAt > config.freshMinutes * 60_000)
-          reasons.push(
-            `verdict older than ${config.freshMinutes} min; run pass again`,
-          );
-      }
-      if (reasons.length || !verdict?.head) {
-        console.error(`No merge line for #${pr}: ${reasons.join("; ")}`);
-        return 2;
-      }
-      // GitHub refuses the merge if the head moved after this verdict.
-      out(
-        `gh pr merge ${pr} --repo ${config.repo} --merge --match-head-commit ${verdict.head}`,
-      );
-      return 0;
-    }
-
-    if (command === "check-claim") {
-      const pr = number(args[0], "check-claim");
-      const sha = (args[1] ?? "").toLowerCase();
-      if (!/^[0-9a-f]{7,40}$/u.test(sha))
-        throw new Error("check-claim needs a commit SHA");
-      const verdict = latestVerdict(db, pr);
-      if (!verdict?.head) {
-        out(`#${pr} UNKNOWN: no verdict with a head; run pass first`);
-        return 2;
-      }
-      if (!verdict.head.startsWith(sha)) {
-        out(
-          `#${pr} STALE: claim names ${sha.slice(0, 7)}, head is ${shortSha(verdict.head)}`,
-        );
-        return 2;
-      }
-      out(line(verdict));
-      return verdict.state === "READY" ? 0 : 2;
-    }
-
-    if (command === "hold" || command === "release") {
+    if (command === "merge-line" || command === "check-claim") {
       const pr = number(args[0], command);
-      if (command === "hold" && !options.reason)
-        throw new Error("hold needs --reason");
+      const sha = (args[1] ?? "").toLowerCase();
+      if (command === "check-claim" && !/^[0-9a-f]{7,40}$/u.test(sha))
+        throw new Error("check-claim needs a commit SHA");
+      const settings = context();
+      // Judge the current head every time: holds, new findings, merges and
+      // pushes since the last pass all count.
+      const verdict = runPass(db, settings, [pr]).verdicts[0]!;
+      if (command === "check-claim") {
+        if (verdict.head && !verdict.head.startsWith(sha)) {
+          out(
+            `#${pr} STALE: claim names ${sha.slice(0, 7)}, head is ${shortSha(verdict.head)}`,
+          );
+          return 2;
+        }
+        out(line(verdict));
+        return verdict.state === "READY" ? 0 : 2;
+      }
+      if (verdict.state !== "READY" || !verdict.head) {
+        console.error(`No merge line for #${pr}: ${line(verdict)}`);
+        return 2;
+      }
+      // GitHub refuses the merge if the head moves after this verdict.
+      out(
+        `gh pr merge ${pr} --repo ${settings.config.repo} --merge --match-head-commit ${verdict.head}`,
+      );
+      return 0;
+    }
+
+    if (command === "hold" || command === "release" || command === "waive") {
+      const pr = number(args[0], command);
+      const sourceId = command === "waive" ? args[1] : undefined;
+      if (command === "waive" && !sourceId)
+        throw new Error(
+          "waive needs the RESULT post's source ID (see explain)",
+        );
+      if (command !== "release" && !options.reason)
+        throw new Error(`${command} needs --reason`);
       addDecision(db, {
         pr,
         kind: command,
+        ...(sourceId ? { sourceId } : {}),
         reason: options.reason ?? "released",
         actor: options.actor,
         createdAt: now,
       });
       out(
-        `#${pr} ${command === "hold" ? `held: ${options.reason}` : "released"}; takes effect on the next pass`,
+        command === "hold"
+          ? `#${pr} held: ${options.reason}`
+          : command === "waive"
+            ? `#${pr} waived ${sourceId}: ${options.reason}`
+            : `#${pr} released`,
       );
       return 0;
     }
@@ -315,6 +286,43 @@ export async function main(
   }
 }
 
+function explain(db: Database, options: Options, now: number) {
+  const pr = number(options.args[0], "explain");
+  const verdict = latestVerdict(db, pr);
+  if (!verdict) throw new Error(`No verdict for #${pr}; run pass first`);
+  const input = latestInput(db, pr);
+  if (options.json) {
+    out(JSON.stringify({ verdict, input }, null, 2));
+    return 0;
+  }
+  const age = Math.round((now - verdict.lastSeenAt) / 60_000);
+  out(
+    `#${pr} ${verdict.state} at ${verdict.head ?? "no head"} (pass ${verdict.passId}, last seen ${age} min ago)`,
+  );
+  for (const entry of verdict.conditions)
+    out(
+      `  ${entry.state.padEnd(8)} ${entry.id}: ${entry.detail}${entry.url ? ` <${entry.url}>` : ""}`,
+    );
+  for (const note of verdict.notes) out(`  note     ${note}`);
+  for (const claim of input?.item?.pr?.reviewers ?? [])
+    out(
+      `  claim    ${claim.reviewer ?? "unattributed"} ${claim.outcome} at ${claim.commit ? shortSha(claim.commit) : "unknown head"}: ${claim.line}${claim.reviewer ? "" : ` [${claim.sourceId ?? claim.url}]`}`,
+    );
+  for (const attempt of input?.attempts ?? [])
+    out(
+      `  attempt  ${attempt.name} #${attempt.attempt}: ${attempt.conclusion}`,
+    );
+  const blocking = verdict.conditions.filter((entry) => entry.state !== "met");
+  if (blocking.length) {
+    out("Escalation packet:");
+    for (const entry of blocking)
+      out(
+        `  - ${entry.detail} → ${decider(entry.id, entry.state)}${entry.url ? ` <${entry.url}>` : ""}`,
+      );
+  }
+  return 0;
+}
+
 type Fixture = {
   name?: string;
   now: number;
@@ -328,7 +336,15 @@ function replay(options: Options, dbPath: string, configPath: string) {
   if (options.pass !== undefined) {
     const db = openStore(dbPath);
     try {
-      const config = loadConfig(configPath);
+      const config = passConfig(db, options.pass);
+      if (!config) throw new Error(`No pass ${options.pass}`);
+      if (
+        existsSync(configPath) &&
+        configHash(loadConfig(configPath)) !== configHash(config)
+      )
+        out(
+          `note: config.json changed since pass ${options.pass}; replaying with the pass's own config`,
+        );
       const recorded = new Map(
         verdictsAt(db, options.pass).map((entry) => [entry.number, entry]),
       );
@@ -336,11 +352,16 @@ function replay(options: Options, dbPath: string, configPath: string) {
       for (const input of passInputs(db, options.pass)) {
         const verdict = evaluate(input, config, input.readAt);
         const before = recorded.get(input.number);
-        if (before?.state !== verdict.state) changed++;
-        out(`${before?.state ?? "-"} → ${line(verdict)}`);
+        const same =
+          before !== undefined &&
+          verdictDigest(before) === verdictDigest(verdict);
+        if (!same) changed++;
+        out(
+          `${same ? "same" : `was ${before?.state ?? "-"}`}\t${line(verdict)}`,
+        );
       }
       out(`${changed} verdict(s) differ from pass ${options.pass}`);
-      return 0;
+      return changed ? 1 : 0;
     } finally {
       db.close();
     }

@@ -169,17 +169,7 @@ export function parseDetail(
   const allFiles = Number(files.totalCount) <= paths.length;
   const ui = paths.some(uiPath);
   const compare = record(record(pr.headRef).compare);
-  const posts: Post[] = [
-    ...nodes(pr.reviews).map((node) => ({
-      ...node,
-      at: time(node.submittedAt),
-      commit: record(node.commit).oid,
-    })),
-    ...nodes(pr.comments).map((node) => ({
-      ...node,
-      at: time(node.createdAt),
-    })),
-  ];
+  const posts = postsOf(pr);
   const own = posts.filter((post) => record(post.author).login === author);
   return {
     baseRef: item.base ?? "main",
@@ -190,7 +180,7 @@ export function parseDetail(
     checksTruncated: Number(contexts.totalCount) > checks.length,
     reviewers: reviewerResults(
       item.number!,
-      posts.filter((post) => TRUSTED.has(post.authorAssociation as string)),
+      trustedPosts(posts),
       commits,
       head ?? "",
     ),
@@ -199,6 +189,25 @@ export function parseDetail(
       countImages(pr.body) +
       own.reduce((sum, post) => sum + countImages(post.body), 0),
   };
+}
+
+/** Formal reviews and comments as dated posts; reviews carry their commit. */
+export function postsOf(pr: Record<string, unknown>): Post[] {
+  return [
+    ...nodes(pr.reviews).map((node) => ({
+      ...node,
+      at: time(node.submittedAt),
+      commit: record(node.commit).oid,
+    })),
+    ...nodes(pr.comments).map((node) => ({
+      ...node,
+      at: time(node.createdAt),
+    })),
+  ];
+}
+
+export function trustedPosts(posts: Post[]) {
+  return posts.filter((post) => TRUSTED.has(post.authorAssociation as string));
 }
 
 /** The web app or site, not its tests. */
@@ -247,7 +256,7 @@ function statusState(state: unknown): PullRequestCheckState {
   return "fail";
 }
 
-type Post = Record<string, unknown> & { at: number; commit?: unknown };
+export type Post = Record<string, unknown> & { at: number; commit?: unknown };
 
 /**
  * Latest explicit sender claim per reviewer, plus source-keyed unattributed
@@ -318,7 +327,11 @@ function unquoted(body: string) {
     .join("\n");
 }
 
-/** Explicit sender claims only, never a login or a mention in an author reply. */
+/**
+ * Explicit sender claims only, never a login or a mention in an author reply.
+ * Named seats (`rev-opus`) count only on a `Reviewer:` line: as a header they
+ * would read git words such as `rev-parse:` as reviewers.
+ */
 export function reviewerOf(body: string) {
   const text = unquoted(body).replace(/[*_]/gu, "");
   const claims = new Set<string>();
@@ -328,7 +341,7 @@ export function reviewerOf(body: string) {
     claims.add(match[1]!.toLowerCase());
   }
   const header =
-    /^[\s[*_#]*(rev(?:\d+|-[a-z][a-z0-9]*))[*_]*(?:\s*\([^\n()]{1,80}\))?\s*(?:—|–|:|->|-\s|(?:(?:combined|refreshed|fix|final)\s+)?(?:review|confirmation)\b)/iu.exec(
+    /^[\s[*_#]*(rev\d+)[*_]*(?:\s*\([^\n()]{1,80}\))?\s*(?:—|–|:|->|-\s|(?:(?:combined|refreshed|fix|final)\s+)?(?:review|confirmation)\b)/iu.exec(
       text,
     )?.[1];
   if (header) claims.add(header.toLowerCase());

@@ -110,7 +110,8 @@ RESULT #7: 2/2 resolved, 0 new
 ```
 
 Use the actual PR number and exact reviewed SHA. Reviewer names are numbered
-(`rev2`) or named seats (`rev-opus`, `rev-astra`). The name is a sender claim,
+(`rev2`) or named seats (`rev-opus`, `rev-astra`). A named seat counts only on
+the `Reviewer:` line. The name is a sender claim,
 not a verified identity; the shared GitHub account cannot distinguish crew
 reviewers. Legacy headers such as `rev2 — Review of <SHA>` and
 `rev1 refreshed confirmation at <SHA>` remain readable. Conflicting reviewer
@@ -138,20 +139,36 @@ writes to GitHub, prompts an agent or merges.
 ```bash
 bun run agent:gate -- pass                # read open PRs, record and print verdicts
 bun run agent:gate -- explain 7           # receipt with evidence and an escalation packet
-bun run agent:gate -- merge-line 7        # head-pinned merge command, only when READY
-bun run agent:gate -- check-claim 7 <sha> # check a crew "READY #7" message
+bun run agent:gate -- merge-line 7        # re-read #7; head-pinned merge command only when READY
+bun run agent:gate -- check-claim 7 <sha> # re-read #7; check a crew "READY #7" message
 bun run agent:gate -- hold 7 --reason "owner repro"   # until `release 7`
+bun run agent:gate -- waive 7 <source> --reason "…"   # resolve one unattributed RESULT post
 bun run agent:gate -- diff                # verdict changes in the latest pass
 bun run agent:gate -- replay <dir>        # re-run fixture files; --pass ID re-runs a recorded pass
 ```
 
 A verdict is `READY`, `NOT_READY`, `WAITING`, `UNKNOWN`, `NEEDS_JUDGMENT`,
 `MERGED` or `CLOSED`, and the worst condition decides. The PR card's own rules
-decide draft, checks, mergeable and screenshots. The gate adds:
+decide draft, checks, mergeable and screenshots. The PR list's check summary
+never overrides a newer failing or running check in the detail. The gate adds:
 
+- **Required checks.** The base branch's required checks come from GitHub's
+  rules, from classic branch protection when it is readable, and from
+  `requiredChecks` in the config. A required check that never ran is
+  `UNKNOWN`. So is an unknown inventory: the rules are unreadable or require
+  nothing, and the config sets no `requiredChecks`. Set `"requiredChecks": []`
+  to declare that none are required.
 - **Required reviewers.** Each one's latest claim must confirm a head that
-  still counts, and no reviewer may have findings open. Reviewers are set per PR
-  number, else per `pod:<name>` label, else a default list.
+  still counts. Reviewers are set per PR number, else per `pod:<name>` label,
+  else a default list.
+- **Every other finding.** The gate reads the PR's full review and comment
+  history, not the PR card's recent window.
+  - Any other named reviewer who ever reported findings must confirm on a head
+    that still counts.
+  - An unattributed RESULT that isn't a clear confirmation blocks until its
+    post is attributed, or someone records `waive` for its source ID, which
+    `explain` shows.
+  - Incomplete history is `UNKNOWN`.
 - **The copy rule for claims on an earlier head.** A claim carries over only
   when every later commit merges a commit already on main and replaying that
   merge reproduces its tree. Any other commit, including a resolved conflict,
@@ -161,19 +178,24 @@ decide draft, checks, mergeable and screenshots. The gate adds:
   READY; any other rerun needs judgment.
 - **Holds.** A hold lasts across heads until it is released.
 
+`merge-line` and `check-claim` read the PR again before answering, so a hold,
+a new finding, a push or a merge since the last pass always counts.
 `merge-line` prints `gh pr merge N --merge --match-head-commit <sha>` only for
-a READY verdict from a pass newer than `freshMinutes`, so GitHub refuses the
-merge if the head moved since. It exits with status 2 otherwise, and never
-prints `--admin`.
+a READY verdict, so GitHub refuses the merge if the head moves afterwards. It
+exits with status 2 otherwise, and never prints `--admin`. `replay --pass`
+re-judges a recorded pass with the config it ran with, notes when
+`config.json` has changed since, and exits 1 if any verdict differs in state,
+head, conditions or notes.
 
 Configuration and state stay untracked in the primary checkout's
 `.agents/crew-gate/`, which every worktree shares:
 
 - `config.json` holds the repository, reviewers, flakes, rerun budget and
-  freshness window. Start from
+  optional required checks. Start from
   [`config.example.json`](../scripts/agent/gate/config.example.json).
-- `gate.sqlite` keeps every pass's inputs, reviewer claims, check attempts,
-  decisions and verdict transitions. Comment text is reduced to RESULT lines.
+- `gate.sqlite` keeps every pass's inputs and config, reviewer claims, check
+  attempts, decisions and verdict transitions. Comment text is reduced to
+  RESULT lines.
 - `mirror.git` is a bare mirror of main and pull request heads, so the gate
   never fetches into a checkout.
 

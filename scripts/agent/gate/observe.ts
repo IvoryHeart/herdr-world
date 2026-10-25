@@ -1,5 +1,9 @@
 import { PULL_REQUEST_DETAIL_MAX_AGE_MS } from "../../../shared/pullRequestFreshness";
-import type { WorkItem } from "../../../shared/worldSources";
+import type {
+  PullRequestCheck,
+  PullRequestReviewer,
+} from "../../../shared/pullRequests";
+import type { WorkChecks } from "../../../shared/worldSources";
 import {
   PR_FIELDS,
   parseGitHubResponse,
@@ -9,6 +13,9 @@ import {
   DETAIL_BATCH,
   detailQuery,
   parseDetails,
+  postsOf,
+  reviewerResults,
+  trustedPosts,
 } from "../../../server/src/sources/pullRequestDetail";
 import {
   copyRule,
@@ -17,11 +24,12 @@ import {
   fetchPulls,
   overlap,
 } from "./git";
-import type {
-  CheckAttempt,
-  CopyResult,
-  GateConfig,
-  GateInput,
+import {
+  latestChecks,
+  type CheckAttempt,
+  type CopyResult,
+  type GateConfig,
+  type GateInput,
 } from "./predicate";
 
 /**
@@ -154,13 +162,17 @@ export function observe(options: {
   );
   const open = nodes.filter((node) => node.state === "OPEN");
   const items = parseGitHubResponse({ data: { authored: { nodes: open } } });
+  const commitsOf = new Map<number, { oid: string; at: number }[]>();
   for (let start = 0; start < items.length; start += DETAIL_BATCH) {
     const chunk = items.slice(start, start + DETAIL_BATCH);
-    const details = parseDetails(chunk, graphql(run, detailQuery(chunk)));
-    for (const item of chunk) {
+    const data = graphql(run, detailQuery(chunk));
+    const details = parseDetails(chunk, data);
+    chunk.forEach((item, index) => {
       const detail = details.get(item.key);
-      if (!detail || !item.headSha) continue;
+      if (!detail || !item.headSha) return;
       item.pr = detail;
+      // The list's summary is older than the detail; the worse one stands.
+      item.checks = worse(item.checks ?? "none", summary(detail.checks));
       item.prObservation = {
         source: "github",
         state: "fresh",
@@ -168,7 +180,18 @@ export function observe(options: {
         readAt: now,
         expiresAt: now + PULL_REQUEST_DETAIL_MAX_AGE_MS,
       };
-    }
+      const pr = record(record(data[`p${index}`]).pullRequest);
+      commitsOf.set(
+        item.number!,
+        list(record(pr.commits).nodes).map((node) => {
+          const commit = record(node.commit);
+          return {
+            oid: typeof commit.oid === "string" ? commit.oid : "",
+            at: Date.parse(String(commit.committedDate)) || 0,
+          };
+        }),
+      );
+    });
   }
   const remote = config.remote ?? `https://github.com/${config.repo}.git`;
   if (items.length) {
@@ -179,6 +202,7 @@ export function observe(options: {
       items.map((item) => item.number!),
     );
   }
+  const inventories = new Map<string, string[] | null>();
   const byNumber = new Map(items.map((item) => [item.number!, item]));
   return nodes.map((node): GateInput => {
     const number = Number(node.number);
@@ -189,35 +213,186 @@ export function observe(options: {
           ? "OPEN"
           : "CLOSED";
     const item = byNumber.get(number);
-    const base = {
+    const base: GateInput = {
       number,
       state,
       labels: labels.get(number) ?? [],
+      history: [],
+      historyComplete: false,
+      requiredChecks: null,
       attempts: [],
       copies: {},
       hold: null,
+      waived: [],
       overlap: null,
       readAt: now,
-    } satisfies GateInput;
-    if (!item?.headSha)
+    };
+    if (!item?.headSha || !item.pr)
       return state === "OPEN" && item ? { ...base, item } : base;
+    const head = item.headSha;
+    const branch = item.base ?? "main";
+    if (!inventories.has(branch))
+      inventories.set(branch, requiredInventory(run, config, branch));
+    const required = inventories.get(branch)!;
+    const flagged = item.pr.checks
+      .filter((check) => check.required)
+      .map((check) => check.name);
+    const evidence = reviewHistory(run, config.repo, number);
+    const commits = commitsOf.get(number) ?? [];
+    const posts = trustedPosts(evidence.posts);
+    // Full history, not the PR card's bounded window, decides findings.
+    item.pr = {
+      ...item.pr,
+      reviewers: reviewerResults(number, posts, commits, head),
+    };
+    const history = posts
+      .toSorted((a, b) => a.at - b.at)
+      .flatMap((post) => reviewerResults(number, [post], commits, head));
     return {
       ...base,
       item,
-      attempts: earlierAttempts(run, config.repo, item.headSha),
-      copies: copies(mirror, remote, item),
-      overlap: overlap(mirror, item.headSha),
+      history,
+      historyComplete: evidence.complete,
+      requiredChecks: required && [...new Set([...required, ...flagged])],
+      attempts: earlierAttempts(run, config.repo, head),
+      copies: copies(mirror, remote, head, history),
+      overlap: overlap(mirror, head),
     };
   });
 }
 
-function copies(mirror: string, remote: string, item: WorkItem) {
+const RANK: Record<WorkChecks, number> = {
+  pass: 0,
+  none: 1,
+  pending: 2,
+  fail: 3,
+};
+
+function worse(a: WorkChecks, b: WorkChecks) {
+  return RANK[a] >= RANK[b] ? a : b;
+}
+
+function summary(all: PullRequestCheck[]): WorkChecks {
+  const checks = latestChecks(all).latest;
+  if (!checks.length) return "none";
+  if (checks.some((check) => check.state === "fail")) return "fail";
+  if (checks.some((check) => check.state === "pending")) return "pending";
+  return "pass";
+}
+
+/**
+ * The base branch's required checks from GitHub's rules, plus classic branch
+ * protection when readable and the configured names. Unknown (null) when the
+ * rules can't be read or name nothing and the config doesn't settle it.
+ */
+export function requiredInventory(
+  run: Run,
+  config: GateConfig,
+  branch: string,
+): string[] | null {
+  const names = new Set(config.requiredChecks ?? []);
+  const rules = run([
+    "gh",
+    "api",
+    `repos/${config.repo}/rules/branches/${branch}`,
+  ]);
+  let found = false;
+  if (rules.code === 0)
+    for (const rule of list(JSON.parse(rules.stdout))) {
+      if (rule.type !== "required_status_checks") continue;
+      for (const entry of list(record(rule.parameters).required_status_checks))
+        if (typeof entry.context === "string") {
+          names.add(entry.context);
+          found = true;
+        }
+    }
+  const protection = run([
+    "gh",
+    "api",
+    `repos/${config.repo}/branches/${branch}/protection/required_status_checks`,
+  ]);
+  if (protection.code === 0) {
+    const value = record(JSON.parse(protection.stdout));
+    const contexts = Array.isArray(value.contexts) ? value.contexts : [];
+    for (const context of [
+      ...contexts,
+      ...list(value.checks).map((entry) => entry.context),
+    ])
+      if (typeof context === "string") {
+        names.add(context);
+        found = true;
+      }
+  }
+  if (config.requiredChecks === undefined && (rules.code !== 0 || !found))
+    return null;
+  return [...names];
+}
+
+const HISTORY_PAGE = 100;
+const HISTORY_PAGES = 10;
+
+/** Every review and comment, a hundred at a time, up to a thousand of each. */
+export function reviewHistory(run: Run, repo: string, number: number) {
+  const [owner, name] = repo.split("/");
+  const fields = {
+    reviews:
+      "id author { login } authorAssociation body url submittedAt commit { oid }",
+    comments: "id author { login } authorAssociation body url createdAt",
+  };
+  const result: Record<"reviews" | "comments", Record<string, unknown>[]> = {
+    reviews: [],
+    comments: [],
+  };
+  let complete = true;
+  for (const kind of ["reviews", "comments"] as const) {
+    let after: string | null = null;
+    for (let page = 0; ; page++) {
+      if (page === HISTORY_PAGES) {
+        complete = false;
+        break;
+      }
+      const data = graphql(
+        run,
+        `query { repository(owner: ${JSON.stringify(owner)}, name: ${JSON.stringify(name)}) { pullRequest(number: ${number}) {
+  ${kind}(first: ${HISTORY_PAGE}${after ? `, after: ${JSON.stringify(after)}` : ""}) { pageInfo { hasNextPage endCursor } nodes { ${fields[kind]} } }
+} } }`,
+      );
+      const connection = record(
+        record(record(data.repository).pullRequest)[kind],
+      );
+      if (!Array.isArray(connection.nodes))
+        throw new Error(`GitHub returned no ${kind} for #${number}`);
+      result[kind].push(...list(connection.nodes));
+      const info = record(connection.pageInfo);
+      if (info.hasNextPage !== true) break;
+      if (typeof info.endCursor !== "string" || !info.endCursor) {
+        complete = false;
+        break;
+      }
+      after = info.endCursor;
+    }
+  }
+  return {
+    posts: postsOf({
+      reviews: { nodes: result.reviews },
+      comments: { nodes: result.comments },
+    }),
+    complete,
+  };
+}
+
+function copies(
+  mirror: string,
+  remote: string,
+  head: string,
+  claims: PullRequestReviewer[],
+) {
   const result: Record<string, CopyResult> = {};
-  for (const reviewer of item.pr?.reviewers ?? []) {
-    const commit = reviewer.commit;
-    if (!commit || commit === item.headSha || result[commit]) continue;
+  for (const claim of claims) {
+    const commit = claim.commit;
+    if (!commit || commit === head || result[commit]) continue;
     result[commit] = fetchCommit(mirror, remote, commit)
-      ? copyRule(mirror, commit, item.headSha!)
+      ? copyRule(mirror, commit, head)
       : { kind: "unknown", detail: `${commit.slice(0, 7)} not available` };
   }
   return result;

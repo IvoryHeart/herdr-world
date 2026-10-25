@@ -6,6 +6,5 @@
     "prs": {}
   },
   "flakes": ["Browser tests"],
-  "rerunBudget": 1,
-  "freshMinutes": 10
+  "rerunBudget": 1
 }

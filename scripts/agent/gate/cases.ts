@@ -2,12 +2,13 @@ import type { PullRequestCheck } from "../../../shared/pullRequests";
 import { PULL_REQUEST_DETAIL_MAX_AGE_MS } from "../../../shared/pullRequestFreshness";
 import type { WorkItem } from "../../../shared/worldSources";
 import { reviewerResults } from "../../../server/src/sources/pullRequestDetail";
-import type {
-  CheckAttempt,
-  CopyResult,
-  GateConfig,
-  GateInput,
-  VerdictState,
+import {
+  latestChecks,
+  type CheckAttempt,
+  type CopyResult,
+  type GateConfig,
+  type GateInput,
+  type VerdictState,
 } from "./predicate";
 
 /**
@@ -31,7 +32,6 @@ export const config: GateConfig = {
   reviewers: { default: TRIO },
   flakes: ["Browser tests"],
   rerunBudget: 1,
-  freshMinutes: 10,
 };
 
 export type Post = { reviewer: string | null; commit: string; result: string };
@@ -67,6 +67,10 @@ export function input(options: {
   labels?: string[];
   state?: GateInput["state"];
   overlap?: string[];
+  requiredChecks?: string[] | null;
+  historyComplete?: boolean;
+  waived?: string[];
+  truncated?: boolean;
 }): GateInput {
   const commits = (options.commits ?? [SHA.reviewed, options.head]).map(
     (oid, index) => ({
@@ -81,9 +85,10 @@ export function input(options: {
     at: NOW - 60_000 * (options.posts.length - index),
   }));
   const checks = options.checks ?? GREEN;
-  const state = checks.some((check) => check.state === "fail")
+  const latest = latestChecks(checks).latest;
+  const state = latest.some((check) => check.state === "fail")
     ? "fail"
-    : checks.some((check) => check.state === "pending")
+    : latest.some((check) => check.state === "pending")
       ? "pending"
       : "pass";
   const item: WorkItem = {
@@ -109,7 +114,7 @@ export function input(options: {
       baseRef: "main",
       behindBy: 3,
       checks,
-      checksTruncated: false,
+      checksTruncated: options.truncated ?? false,
       reviewers: reviewerResults(NUMBER, posts, commits, options.head),
       uiChange: false,
       images: 0,
@@ -128,9 +133,18 @@ export function input(options: {
     state: options.state ?? "OPEN",
     labels: options.labels ?? ["pod:town"],
     item,
+    history: posts.flatMap((post) =>
+      reviewerResults(NUMBER, [post], commits, options.head),
+    ),
+    historyComplete: options.historyComplete ?? true,
+    requiredChecks:
+      options.requiredChecks === undefined
+        ? ["Delivery checks"]
+        : options.requiredChecks,
     attempts: options.attempts ?? [],
     copies: options.copies ?? {},
     hold: options.hold ?? null,
+    waived: options.waived ?? [],
     overlap: options.overlap ?? [],
     readAt: NOW,
   };
@@ -304,9 +318,94 @@ export const CASES: Case[] = [
   {
     name: "A4e a missing required check is UNKNOWN, never failed or READY",
     now: NOW,
-    config: { ...config, requiredChecks: ["Delivery checks", "Security scan"] },
-    input: input({ head: SHA.fixed, posts: allConfirm(SHA.fixed) }),
+    input: input({
+      head: SHA.fixed,
+      posts: allConfirm(SHA.fixed),
+      requiredChecks: ["Delivery checks", "Security scan"],
+    }),
     expect: { state: "UNKNOWN", conditions: { required: "unknown" } },
+  },
+  {
+    name: "A4h a whole-workflow rerun: the newest run decides, the old failure is an attempt",
+    now: NOW,
+    input: input({
+      head: SHA.fixed,
+      posts: allConfirm(SHA.fixed),
+      checks: [
+        {
+          name: "Delivery checks",
+          state: "fail",
+          required: true,
+          completedAt: NOW - 900_000,
+        },
+        {
+          name: "Delivery checks",
+          state: "pass",
+          required: true,
+          completedAt: NOW - 300_000,
+        },
+        {
+          name: "Browser tests",
+          state: "fail",
+          required: false,
+          completedAt: NOW - 900_000,
+        },
+        {
+          name: "Browser tests",
+          state: "pass",
+          required: false,
+          completedAt: NOW - 300_000,
+        },
+      ],
+    }),
+    expect: {
+      state: "NEEDS_JUDGMENT",
+      conditions: { checks: "met", rerun: "judgment" },
+    },
+  },
+  {
+    name: "A4i a running rerun after a failure is WAITING, not failed",
+    now: NOW,
+    input: input({
+      head: SHA.fixed,
+      posts: allConfirm(SHA.fixed),
+      checks: [
+        {
+          name: "Delivery checks",
+          state: "pass",
+          required: true,
+          completedAt: NOW - 300_000,
+        },
+        {
+          name: "Browser tests",
+          state: "fail",
+          required: false,
+          completedAt: NOW - 900_000,
+        },
+        { name: "Browser tests", state: "pending", required: false },
+      ],
+    }),
+    expect: { state: "WAITING", conditions: { checks: "waiting" } },
+  },
+  {
+    name: "A4f an unknown required-check inventory is UNKNOWN",
+    now: NOW,
+    input: input({
+      head: SHA.fixed,
+      posts: allConfirm(SHA.fixed),
+      requiredChecks: null,
+    }),
+    expect: { state: "UNKNOWN", conditions: { required: "unknown" } },
+  },
+  {
+    name: "A4g more checks than were read is UNKNOWN",
+    now: NOW,
+    input: input({
+      head: SHA.fixed,
+      posts: allConfirm(SHA.fixed),
+      truncated: true,
+    }),
+    expect: { state: "UNKNOWN", conditions: { "checks-read": "unknown" } },
   },
   {
     name: "A5 a merged pull request is MERGED, never READY",
@@ -385,7 +484,7 @@ export const CASES: Case[] = [
     expect: { state: "UNKNOWN", conditions: { reviewers: "unknown" } },
   },
   {
-    name: "A9 an unattributed RESULT newer than the trio needs inspection",
+    name: "A9 an unattributed finding after the trio needs judgment",
     now: NOW,
     input: input({
       head: SHA.fixed,
@@ -394,7 +493,81 @@ export const CASES: Case[] = [
         { reviewer: null, commit: SHA.fixed, result: "1 new P2" },
       ],
     }),
-    expect: { state: "UNKNOWN", conditions: { unattributed: "unknown" } },
+    expect: {
+      state: "NEEDS_JUDGMENT",
+      conditions: { unattributed: "judgment" },
+    },
+  },
+  {
+    name: "A9c an older unattributed finding still blocks",
+    now: NOW,
+    input: input({
+      head: SHA.fixed,
+      posts: [
+        { reviewer: null, commit: SHA.reviewed, result: "1 new P2" },
+        ...allConfirm(SHA.fixed),
+      ],
+    }),
+    expect: {
+      state: "NEEDS_JUDGMENT",
+      conditions: { unattributed: "judgment" },
+    },
+  },
+  {
+    name: "A9d a waived unattributed finding no longer blocks",
+    now: NOW,
+    input: input({
+      head: SHA.fixed,
+      posts: [
+        { reviewer: null, commit: SHA.reviewed, result: "1 new P2" },
+        ...allConfirm(SHA.fixed),
+      ],
+      waived: ["post-1"],
+    }),
+    expect: { state: "READY" },
+  },
+  {
+    name: "A10 a reviewer outside the set closes findings only on a head that counts",
+    now: NOW,
+    input: input({
+      head: SHA.fixed,
+      posts: [
+        {
+          reviewer: "rev5",
+          commit: SHA.reviewed,
+          result: "0/1 resolved, 1 new",
+        },
+        confirm("rev5", SHA.reviewed),
+        ...allConfirm(SHA.fixed),
+      ],
+      copies: {
+        [SHA.reviewed]: {
+          kind: "outdated",
+          detail: "bbbbbbb is not a merge of main",
+        },
+      },
+    }),
+    expect: { state: "NOT_READY", conditions: { "review:rev5": "unmet" } },
+  },
+  {
+    name: "A10b a clean extra reviewer at an old head is not an obligation",
+    now: NOW,
+    input: input({
+      head: SHA.fixed,
+      posts: [confirm("rev5", SHA.reviewed), ...allConfirm(SHA.fixed)],
+      copies: { [SHA.reviewed]: { kind: "outdated" } },
+    }),
+    expect: { state: "READY" },
+  },
+  {
+    name: "A11 incomplete review history is UNKNOWN",
+    now: NOW,
+    input: input({
+      head: SHA.fixed,
+      posts: allConfirm(SHA.fixed),
+      historyComplete: false,
+    }),
+    expect: { state: "UNKNOWN", conditions: { history: "unknown" } },
   },
   {
     name: "A9b older unattributed RESULT evidence is never counted",

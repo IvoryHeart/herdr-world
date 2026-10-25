@@ -28,10 +28,17 @@ describe("explicit reviewer evidence", () => {
     expect(reviewerOf("**Reviewer:** **rev2**")).toBe("rev2");
   });
 
-  test("named reviewer seats claim the sender like numbered ones", () => {
+  test("named reviewer seats claim the sender only on a Reviewer line", () => {
     expect(reviewerOf("Reviewer: rev-opus")).toBe("rev-opus");
     expect(reviewerOf("**Reviewer:** `rev-Astra`")).toBe("rev-astra");
-    expect(reviewerOf(`rev-opus — confirmation at ${HEAD}`)).toBe("rev-opus");
+    expect(reviewerOf(`rev-opus — confirmation at ${HEAD}`)).toBeNull();
+    // Git words at the start of a post are not reviewer claims.
+    expect(
+      reviewerOf(
+        "rev-parse: HEAD points at the fix\nRESULT #7: 0/0 resolved, 0 new",
+      ),
+    ).toBeNull();
+    expect(reviewerOf("rev-list -> shows two commits")).toBeNull();
     expect(reviewerOf("Reviewer: rev-")).toBeNull();
     expect(reviewerOf("Reviewer: rev-opus\nReviewer: rev2")).toBeNull();
   });

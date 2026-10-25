@@ -1,10 +1,12 @@
 import {
   pullRequestReadiness,
   shortSha,
+  type PullRequestCheck,
   type PullRequestReviewer,
 } from "../../../shared/pullRequests";
 import { freshPullRequestDetail } from "../../../shared/pullRequestFreshness";
 import type { WorkItem } from "../../../shared/worldSources";
+import { resultOutcome } from "../../../server/src/sources/pullRequestDetail";
 
 /**
  * READY for the owner's merge, computed from facts and never from a model's
@@ -28,10 +30,11 @@ export type GateConfig = {
   flakes: string[];
   /** Failed attempts of an allowlisted check that a green rerun may cover. */
   rerunBudget: number;
-  /** Check names branch protection requires; a missing one is unknown. */
+  /**
+   * Required checks added to those GitHub's rules report. Set it, even to an
+   * empty list, when the rules can't be read or require nothing.
+   */
   requiredChecks?: string[];
-  /** How old a verdict may be for `merge-line`. */
-  freshMinutes: number;
   /** Git remote for the private mirror; defaults to the GitHub HTTPS URL. */
   remote?: string;
 };
@@ -55,12 +58,20 @@ export type GateInput = {
   number: number;
   state: "OPEN" | "MERGED" | "CLOSED";
   labels: string[];
-  /** Open pull requests: World's item, read in detail. */
+  /** Open pull requests: World's item, its reviewers read from full history. */
   item?: WorkItem;
+  /** Every reviewer claim on the PR, one per post, oldest first. */
+  history: PullRequestReviewer[];
+  /** False when GitHub had more reviews or comments than the gate read. */
+  historyComplete: boolean;
+  /** Check names the base branch requires; null when unknown. */
+  requiredChecks: string[] | null;
   attempts: CheckAttempt[];
   /** Copy rule result per reviewed commit. */
   copies: Record<string, CopyResult>;
   hold: { reason: string; at: number } | null;
+  /** Unattributed RESULT posts someone explicitly resolved, by source. */
+  waived: string[];
   /** Files changed both by the PR and on main since its merge base. */
   overlap: string[] | null;
   readAt: number;
@@ -133,7 +144,7 @@ export function evaluate(
           `Merges into ${item.base ?? "an unknown branch"}`,
         ),
     ...worldRules(item, now),
-    ...requiredChecks(item, config),
+    ...requiredChecks(item, input.requiredChecks),
     ...reruns(item, input.attempts, config, notes),
     ...findings(input, item, config, now, notes),
     input.hold
@@ -161,7 +172,7 @@ export function verdictState(conditions: Condition[]): VerdictState {
 }
 
 function worldRules(item: WorkItem, now: number): Condition[] {
-  return pullRequestReadiness(item, now)
+  const rules = pullRequestReadiness(item, now)
     .filter((rule) => rule.id !== "findings")
     .map((rule) => {
       if (rule.state === "pass") return condition(rule.id, "met", rule.detail);
@@ -172,13 +183,32 @@ function worldRules(item: WorkItem, now: number): Condition[] {
         return condition(rule.id, "waiting", rule.detail);
       return condition(rule.id, "unknown", rule.detail);
     });
+  if (item.pr?.checksTruncated)
+    rules.push(
+      condition(
+        "checks-read",
+        "unknown",
+        "GitHub listed more checks than were read",
+      ),
+    );
+  return rules;
 }
 
-function requiredChecks(item: WorkItem, config: GateConfig): Condition[] {
+/** A required check that never ran can't flag itself; the inventory names it. */
+function requiredChecks(
+  item: WorkItem,
+  required: string[] | null,
+): Condition[] {
+  if (required === null)
+    return [
+      condition(
+        "required",
+        "unknown",
+        "Required checks unknown: GitHub's rules were unreadable or empty; set requiredChecks",
+      ),
+    ];
   const names = new Set(item.pr?.checks.map((check) => check.name));
-  const missing = (config.requiredChecks ?? []).filter(
-    (name) => !names.has(name),
-  );
+  const missing = required.filter((name) => !names.has(name));
   return missing.length
     ? [
         condition(
@@ -187,7 +217,29 @@ function requiredChecks(item: WorkItem, config: GateConfig): Condition[] {
           `Required but not reported: ${missing.join(", ")}`,
         ),
       ]
-    : [];
+    : [condition("required", "met", `${required.length} required reported`)];
+}
+
+/**
+ * GitHub lists every run of a check on the commit. The newest decides; a
+ * running one is newest. The rest are superseded attempts.
+ */
+export function latestChecks(checks: PullRequestCheck[]) {
+  const latest = new Map<string, PullRequestCheck>();
+  const superseded: PullRequestCheck[] = [];
+  const rank = (check: PullRequestCheck) =>
+    check.state === "pending"
+      ? Number.POSITIVE_INFINITY
+      : (check.completedAt ?? 0);
+  for (const check of checks) {
+    const known = latest.get(check.name);
+    if (!known) latest.set(check.name, check);
+    else if (rank(check) > rank(known)) {
+      superseded.push(known);
+      latest.set(check.name, check);
+    } else superseded.push(check);
+  }
+  return { latest: [...latest.values()], superseded };
 }
 
 /** A green rerun keeps its failed attempts on record; only known flakes pass. */
@@ -198,15 +250,24 @@ function reruns(
   notes: string[],
 ): Condition[] {
   const failed = new Map<string, number>();
-  for (const attempt of attempts)
-    if (
-      !["success", "skipped", "neutral"].includes(
-        attempt.conclusion.toLowerCase(),
+  const { latest, superseded } = latestChecks(item.pr?.checks ?? []);
+  const failures = [
+    ...attempts
+      .filter(
+        (attempt) =>
+          !["success", "skipped", "neutral"].includes(
+            attempt.conclusion.toLowerCase(),
+          ),
       )
-    )
-      failed.set(attempt.name, (failed.get(attempt.name) ?? 0) + 1);
+      .map((attempt) => attempt.name),
+    // A whole-workflow rerun leaves the earlier run's checks on the commit.
+    ...superseded
+      .filter((check) => check.state === "fail")
+      .map((check) => check.name),
+  ];
+  for (const name of failures) failed.set(name, (failed.get(name) ?? 0) + 1);
   const result: Condition[] = [];
-  for (const check of item.pr?.checks ?? []) {
+  for (const check of latest) {
     const count = failed.get(check.name);
     if (!count || check.state !== "pass") continue;
     const retained = `${check.name}: ${count} failed attempt${count === 1 ? "" : "s"} retained`;
@@ -240,63 +301,56 @@ function findings(
   const { names: required, why } = requiredReviewers(input, config);
   const result: Condition[] = [];
   if (!required) result.push(condition("reviewers", "unknown", why));
+  if (!input.historyComplete)
+    result.push(
+      condition(
+        "history",
+        "unknown",
+        "More reviews or comments than the gate read; older findings may be missed",
+      ),
+    );
   const head = item.headSha!;
-  const latestRequired = Math.max(
-    0,
-    ...reviewers
-      .filter((entry) => entry.reviewer && required?.includes(entry.reviewer))
-      .map((entry) => entry.at),
-  );
   for (const name of required ?? []) {
     const entry = reviewers.find((candidate) => candidate.reviewer === name);
-    if (!entry) {
+    if (!entry)
       result.push(
         condition(`review:${name}`, "unmet", `No RESULT from ${name}`),
       );
-      continue;
-    }
-    result.push(requiredClaim(entry, input.copies, head, notes));
+    else result.push(counting(entry, input.copies, head, notes));
   }
-  let uncounted = 0;
+  // Anyone else who ever reported findings must close them on a head that counts.
+  const raised = new Set(
+    input.history
+      .filter((entry) => entry.reviewer && entry.outcome === "open")
+      .map((entry) => entry.reviewer!),
+  );
   for (const entry of reviewers) {
-    if (entry.reviewer && required?.includes(entry.reviewer)) continue;
-    if (!entry.reviewer) {
-      // An unattributed post newer than the required claims may carry findings.
-      if (entry.at > latestRequired)
-        result.push(
-          condition(
-            "unattributed",
-            "unknown",
-            "An unattributed RESULT is newer than the required reviewers' claims; inspect it",
-            entry.url,
-          ),
-        );
-      else uncounted++;
+    if (!entry.reviewer || required?.includes(entry.reviewer)) continue;
+    if (entry.outcome === "confirmed" && !raised.has(entry.reviewer)) continue;
+    result.push(counting(entry, input.copies, head, notes));
+  }
+  // Unattributed evidence never counts as a confirmation, and an unowned
+  // finding blocks until someone attributes the post or explicitly waives it.
+  let waived = 0;
+  for (const entry of reviewers) {
+    if (entry.reviewer) continue;
+    if (input.waived.includes(entry.sourceId ?? entry.url)) {
+      waived++;
       continue;
     }
-    // Findings stay open until the reviewer who raised them confirms.
-    if (entry.outcome === "open")
+    if (resultOutcome(entry.line) !== "confirmed")
       result.push(
         condition(
-          `review:${entry.reviewer}`,
-          "unmet",
-          `${entry.reviewer}: ${entry.line}`,
-          entry.url,
-        ),
-      );
-    else if (entry.outcome === "unknown")
-      result.push(
-        condition(
-          `review:${entry.reviewer}`,
-          "unknown",
-          `Can't read ${entry.reviewer}'s result`,
+          "unattributed",
+          "judgment",
+          `Unattributed RESULT "${entry.line}" may report findings; attribute the post or waive ${entry.sourceId ?? entry.url}`,
           entry.url,
         ),
       );
   }
-  if (uncounted)
+  if (waived)
     notes.push(
-      `${uncounted} older unattributed RESULT post${uncounted === 1 ? " was" : "s were"} not counted`,
+      `${waived} unattributed RESULT post${waived === 1 ? "" : "s"} waived`,
     );
   return result;
 }
@@ -330,7 +384,8 @@ export function requiredReviewers(
   };
 }
 
-function requiredClaim(
+/** The reviewer's latest claim must confirm, on a head that counts for `head`. */
+function counting(
   entry: PullRequestReviewer,
   copies: Record<string, CopyResult>,
   head: string,
@@ -358,6 +413,7 @@ function requiredClaim(
     );
   const copy = copies[entry.commit] ?? { kind: "unknown" as const };
   const at = `${name}: claim at ${shortSha(entry.commit)}`;
+  const detail = copy.detail ? ` (${copy.detail})` : "";
   switch (copy.kind) {
     case "same":
     case "clean-merge":
@@ -374,21 +430,21 @@ function requiredClaim(
       return condition(
         id,
         "unmet",
-        `${at} outdated for ${shortSha(head)}${copy.detail ? ` (${copy.detail})` : ""}`,
+        `${at} outdated for ${shortSha(head)}${detail}`,
         entry.url,
       );
     case "conflict":
       return condition(
         id,
         "unmet",
-        `${at}: the main merge since needs ${name}'s confirmation${copy.detail ? ` (${copy.detail})` : ""}`,
+        `${at}: the main merge since needs ${name}'s confirmation${detail}`,
         entry.url,
       );
     default:
       return condition(
         id,
         "unknown",
-        `${at}: can't tell whether it counts for ${shortSha(head)}${copy.detail ? ` (${copy.detail})` : ""}`,
+        `${at}: can't tell whether it counts for ${shortSha(head)}${detail}`,
         entry.url,
       );
   }

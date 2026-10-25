@@ -1,7 +1,7 @@
 import { Database } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import type { GateInput, Verdict, VerdictState } from "./predicate";
+import type { GateConfig, GateInput, Verdict, VerdictState } from "./predicate";
 
 /**
  * The gate's local record: one transaction per pass, so a crash leaves the
@@ -23,7 +23,9 @@ export type StoredVerdict = Verdict & {
 export type Decision = {
   id: number;
   pr: number;
-  kind: "hold" | "release";
+  kind: "hold" | "release" | "waive";
+  /** The unattributed RESULT post a waiver resolves. */
+  sourceId?: string;
   reason: string;
   actor: string;
   createdAt: number;
@@ -40,7 +42,8 @@ export function openStore(path: string) {
       finished_at INTEGER NOT NULL,
       trigger TEXT NOT NULL,
       parser_version INTEGER NOT NULL,
-      config_hash TEXT NOT NULL
+      config_hash TEXT NOT NULL,
+      config_json TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS observation (
       id INTEGER PRIMARY KEY,
@@ -78,7 +81,8 @@ export function openStore(path: string) {
     CREATE TABLE IF NOT EXISTS decision (
       id INTEGER PRIMARY KEY,
       pr INTEGER NOT NULL,
-      kind TEXT NOT NULL CHECK (kind IN ('hold', 'release')),
+      kind TEXT NOT NULL CHECK (kind IN ('hold', 'release', 'waive')),
+      source_id TEXT,
       reason TEXT NOT NULL,
       actor TEXT NOT NULL,
       created_at INTEGER NOT NULL
@@ -106,12 +110,16 @@ const hash = (value: unknown) =>
 
 export const configHash = hash;
 
+/** What makes two verdicts the same: head, state, conditions and notes. */
+export const verdictDigest = (verdict: Verdict) =>
+  hash([verdict.head, verdict.state, verdict.conditions, verdict.notes]);
+
 /** Everything one pass learned, written atomically. */
 export function recordPass(
   db: Database,
   pass: {
     trigger: string;
-    configHash: string;
+    config: GateConfig;
     startedAt: number;
     finishedAt: number;
     inputs: GateInput[];
@@ -121,14 +129,15 @@ export function recordPass(
   return db.transaction(() => {
     const row = db
       .query(
-        "INSERT INTO pass (started_at, finished_at, trigger, parser_version, config_hash) VALUES (?, ?, ?, ?, ?) RETURNING id",
+        "INSERT INTO pass (started_at, finished_at, trigger, parser_version, config_hash, config_json) VALUES (?, ?, ?, ?, ?, ?) RETURNING id",
       )
       .get(
         pass.startedAt,
         pass.finishedAt,
         pass.trigger,
         PARSER_VERSION,
-        pass.configHash,
+        configHash(pass.config),
+        JSON.stringify(pass.config),
       ) as {
       id: number;
     };
@@ -173,12 +182,7 @@ export function recordPass(
         );
     }
     for (const verdict of pass.verdicts) {
-      const digest = hash([
-        verdict.head,
-        verdict.state,
-        verdict.conditions,
-        verdict.notes,
-      ]);
+      const digest = verdictDigest(verdict);
       const latest = db
         .query(
           "SELECT id, digest FROM verdict WHERE pr = ? ORDER BY id DESC LIMIT 1",
@@ -248,6 +252,14 @@ export function transitions(db: Database, since: number): StoredVerdict[] {
   ).map(toVerdict);
 }
 
+/** The config a pass evaluated with, so replay judges it the same way. */
+export function passConfig(db: Database, passId: number): GateConfig | null {
+  const row = db
+    .query("SELECT config_json FROM pass WHERE id = ?")
+    .get(passId) as { config_json: string } | null;
+  return row ? JSON.parse(row.config_json) : null;
+}
+
 export function latestPass(db: Database) {
   return db.query("SELECT * FROM pass ORDER BY id DESC LIMIT 1").get() as {
     id: number;
@@ -286,10 +298,11 @@ export function verdictsAt(db: Database, passId: number): StoredVerdict[] {
 
 export function addDecision(db: Database, decision: Omit<Decision, "id">) {
   db.query(
-    "INSERT INTO decision (pr, kind, reason, actor, created_at) VALUES (?, ?, ?, ?, ?)",
+    "INSERT INTO decision (pr, kind, source_id, reason, actor, created_at) VALUES (?, ?, ?, ?, ?, ?)",
   ).run(
     decision.pr,
     decision.kind,
+    decision.sourceId ?? null,
     decision.reason,
     decision.actor,
     decision.createdAt,
@@ -300,10 +313,21 @@ export function addDecision(db: Database, decision: Omit<Decision, "id">) {
 export function activeHold(db: Database, pr: number) {
   const row = db
     .query(
-      "SELECT kind, reason, created_at FROM decision WHERE pr = ? ORDER BY id DESC LIMIT 1",
+      "SELECT kind, reason, created_at FROM decision WHERE pr = ? AND kind IN ('hold', 'release') ORDER BY id DESC LIMIT 1",
     )
     .get(pr) as { kind: string; reason: string; created_at: number } | null;
   return row?.kind === "hold"
     ? { reason: row.reason, at: row.created_at }
     : null;
+}
+
+/** Unattributed RESULT posts explicitly resolved for this PR. */
+export function waivedSources(db: Database, pr: number): string[] {
+  return (
+    db
+      .query(
+        "SELECT source_id FROM decision WHERE pr = ? AND kind = 'waive' AND source_id IS NOT NULL",
+      )
+      .all(pr) as { source_id: string }[]
+  ).map((row) => row.source_id);
 }
