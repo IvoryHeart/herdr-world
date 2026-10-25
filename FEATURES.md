@@ -996,8 +996,10 @@ load asynchronously; editing the name takes precedence over a late suggestion.
   inspection has the metadata limits described above.
 - Enable local browser alerts and background Web Push in **Menu → Behavior &
   automation → Task notifications**. See [push setup and troubleshooting](docs/DEPLOYMENT.md#web-push-notifications).
-  **Open agent** opens the notified agent's Chat when supported, otherwise its
-  Terminal, after checking the notification's owning runtime and agent session.
+  **Open agent** follows **Agents open** (Chat by default when supported,
+  otherwise Terminal), after checking the notification's owning runtime and
+  agent session. In Spaces it enters that owning host; a refused notification
+  leaves the current Inspector open.
 - **Chimes.** While a World page is open, World plays its own chime for a
   change that needs you: a sound for who (the Town master, the crew, or the
   agent's profile) and a pattern for why (needs you: two rising notes;

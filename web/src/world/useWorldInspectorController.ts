@@ -1,5 +1,4 @@
 import { useCreationProgress } from "../creationRequests";
-import { taskNotificationView } from "../taskNotifications";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { type WorkspaceSurfaceSelection } from "../App";
 import { worldLocalStorage } from "../browserStorage";
@@ -466,10 +465,7 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
   notificationHandlerRef.current = (target) => {
     void store.focusTaskNotificationTarget(target).then((pane) => {
       if (!pane) return;
-      void workspaceSurfaceSelectionHandlerRef.current({
-        ...target,
-        view: taskNotificationView(pane),
-      });
+      void workspaceSurfaceSelectionHandlerRef.current(target, defaultOpenView);
     });
   };
   useEffect(() => {
@@ -621,31 +617,31 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
     return applySelection(nodeId, opens, true, world, signal);
   };
   const workspaceSurfaceSelectionHandlerRef = useRef<
-    (selection: WorkspaceSurfaceSelection) => Promise<boolean>
+    (
+      selection: WorkspaceSurfaceSelection,
+      preferred?: typeof defaultOpenView,
+    ) => Promise<boolean>
   >(() => Promise.resolve(false));
-  workspaceSurfaceSelectionHandlerRef.current = (surfaceSelection) => {
-    if (surfaceSelection.signal?.aborted) return Promise.resolve(false);
-    const node = worldNodeForWorkspaceSurfaceSelection(
-      aggregateWorld,
-      surfaceSelection,
-    );
+  workspaceSurfaceSelectionHandlerRef.current = (request, preferred) => {
+    if (request.signal?.aborted) return Promise.resolve(false);
+    const node = worldNodeForWorkspaceSurfaceSelection(aggregateWorld, request);
     if (node)
       return applySelection(
         node.id,
-        surfaceSelection.view ?? null,
+        request.view ?? preferred?.(node) ?? null,
         true,
         aggregateWorld,
-        surfaceSelection.signal,
-        surfaceSelection.agentSessionId,
+        request.signal,
+        request.agentSessionId,
       );
     if (
       runtime.connections.find(
-        ({ connectionId }) => connectionId === surfaceSelection.connectionId,
-      )?.generation !== surfaceSelection.runtimeGeneration
+        ({ connectionId }) => connectionId === request.connectionId,
+      )?.generation !== request.runtimeGeneration
     ) {
       return Promise.resolve(false);
     }
-    const priority = snapshotPriorityForSurface(surfaceSelection);
+    const priority = snapshotPriorityForSurface(request);
     setPendingSurfacePriority(priority);
     return worldRuntimeStore
       .ensurePriorities([
@@ -653,23 +649,23 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
         ...inspectorConversations.map(snapshotPriorityForConversation),
       ])
       .then(() => {
-        if (surfaceSelection.signal?.aborted) return false;
+        if (request.signal?.aborted) return false;
         const refreshedWorld = buildWorldObject(
           worldRuntimeStore.get().connections,
           connectionSelection.activeConnectionId,
         );
         const refreshedNode = worldNodeForWorkspaceSurfaceSelection(
           refreshedWorld,
-          surfaceSelection,
+          request,
         );
         return refreshedNode
           ? applySelection(
               refreshedNode.id,
-              surfaceSelection.view ?? null,
+              request.view ?? preferred?.(refreshedNode) ?? null,
               true,
               refreshedWorld,
-              surfaceSelection.signal,
-              surfaceSelection.agentSessionId,
+              request.signal,
+              request.agentSessionId,
             )
           : false;
       })

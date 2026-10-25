@@ -178,6 +178,7 @@ const panes: Pane[] = [
   },
 ];
 let notificationSessionId = "reviewer-session";
+let replaceNotificationSessionAfterRead = false;
 let replaceNotificationSessionOnSnapshot = false;
 let omitNextOperationalTabPanes: string | null = null;
 let focusedPaneId = panes[0].pane_id;
@@ -330,8 +331,14 @@ let client: ConnectionClient = {
       boardDocument.revision += 1;
       return { document: structuredClone(boardDocument) };
     }
-    if (method === "agent_session.get" && !params.agent)
-      return { session: { value: notificationSessionId } };
+    if (method === "agent_session.get" && !params.agent) {
+      const value = notificationSessionId;
+      if (replaceNotificationSessionAfterRead) {
+        notificationSessionId = "replacement-session";
+        replaceNotificationSessionAfterRead = false;
+      }
+      return { session: { value } };
+    }
     if (method === "world.snapshot") {
       if (
         siblingObservationGate &&
@@ -1582,6 +1589,42 @@ async function run() {
     () => !document.querySelector(".workspace-inspector"),
     "notification Inspector cleanup",
   );
+  const notificationPreferences = readOfficePreferences(worldLocalStorage);
+  writeOfficePreferences(worldLocalStorage, {
+    ...notificationPreferences,
+    townOpens: "terminal",
+  });
+  window.dispatchEvent(new Event(WORLD_OFFICE_PREFERENCES_CHANGED_EVENT));
+  window.dispatchEvent(
+    new CustomEvent(TASK_NOTIFICATION_ACTIVATE_EVENT, {
+      detail: {
+        connectionId: "local",
+        runtimeGeneration: 7,
+        workspaceId: "studio",
+        paneId: "reviewer-pane",
+        agentSessionId: "reviewer-session",
+      },
+    }),
+  );
+  await until(
+    () =>
+      inspectorPane() === "reviewer-pane" &&
+      document.querySelector(
+        '.world-managed-window.is-active .workspace-inspector[data-view="terminal"]',
+      ),
+    "notification follows Agents open Terminal preference",
+  );
+  document
+    .querySelector<HTMLButtonElement>(
+      '.world-managed-window.is-active button[aria-label="Close Inspector window"]',
+    )!
+    .click();
+  await until(
+    () => !document.querySelector(".workspace-inspector"),
+    "notification preference cleanup",
+  );
+  writeOfficePreferences(worldLocalStorage, notificationPreferences);
+  window.dispatchEvent(new Event(WORLD_OFFICE_PREFERENCES_CHANGED_EVENT));
   window.dispatchEvent(
     new CustomEvent(TASK_NOTIFICATION_ACTIVATE_EVENT, {
       detail: {
@@ -1640,6 +1683,62 @@ async function run() {
       ),
     "Spaces notification prefers Chat",
   );
+  const notificationChat = [
+    ...document.querySelectorAll<HTMLElement>(
+      '.workspace-inspector[data-view="history"]',
+    ),
+  ].find(
+    (element) =>
+      !element.closest(".world-control-plane") &&
+      element.getClientRects().length > 0,
+  )!;
+  store.clearNotice();
+  window.dispatchEvent(
+    new CustomEvent(TASK_NOTIFICATION_ACTIVATE_EVENT, {
+      detail: {
+        connectionId: "local",
+        runtimeGeneration: 6,
+        workspaceId: "studio",
+        paneId: "builder-pane",
+      },
+    }),
+  );
+  await until(
+    () => store.get().notice?.message === "Notification target is unavailable",
+    "Spaces stale-runtime notification refused",
+  );
+  check(
+    notificationChat.isConnected &&
+      notificationChat.getClientRects().length > 0,
+    "immediate notification refusal preserves the open Chat",
+  );
+  store.clearNotice();
+  replaceNotificationSessionAfterRead = true;
+  window.dispatchEvent(
+    new CustomEvent(TASK_NOTIFICATION_ACTIVATE_EVENT, {
+      detail: {
+        connectionId: "local",
+        runtimeGeneration: 7,
+        workspaceId: "studio",
+        paneId: "builder-pane",
+        agentSessionId: "reviewer-session",
+      },
+    }),
+  );
+  await until(
+    () =>
+      !replaceNotificationSessionAfterRead &&
+      store.get().notice?.message === "Notification target is unavailable",
+    "Spaces async session turnover notification refused",
+  );
+  check(
+    notificationChat.isConnected &&
+      notificationChat.getClientRects().length > 0,
+    "async admission refusal restores the same Chat",
+  );
+  notificationSessionId = "reviewer-session";
+  store.clearNotice();
+
   window.dispatchEvent(
     new CustomEvent(TASK_NOTIFICATION_ACTIVATE_EVENT, {
       detail: {

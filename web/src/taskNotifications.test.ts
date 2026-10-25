@@ -27,13 +27,17 @@ test.each([
   "kimi code",
   "grok build",
   "muse-code",
-])("notification Open agent prefers Chat for supported %s", (agent) => {
-  expect(taskNotificationView({ agent })).toBe("history");
-});
+])(
+  "notification Open agent follows the Chat/Terminal preference for %s",
+  (agent) => {
+    expect(taskNotificationView({ agent }, "chat")).toBe("history");
+    expect(taskNotificationView({ agent }, "terminal")).toBe("terminal");
+  },
+);
 test.each([undefined, "", " ", "gemini", "unknown-harness"])(
   "notification Open agent falls back to Terminal for %s",
   (agent) => {
-    expect(taskNotificationView({ agent })).toBe("terminal");
+    expect(taskNotificationView({ agent }, "chat")).toBe("terminal");
   },
 );
 

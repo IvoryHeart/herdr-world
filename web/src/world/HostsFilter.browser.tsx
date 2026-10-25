@@ -1884,6 +1884,59 @@ async function operationalScenario(unmount: () => void) {
     );
     return;
   }
+  if (operation === "spaces-notifications") {
+    check(
+      store.get().activeConnectionId === "alpha",
+      "Spaces notification starts on Alpha",
+    );
+    const before = dispatches.length;
+    window.dispatchEvent(
+      new CustomEvent(TASK_NOTIFICATION_ACTIVATE_EVENT, {
+        detail: {
+          connectionId: "beta",
+          runtimeGeneration: 7,
+          workspaceId: "shared",
+          paneId: "shared",
+        },
+      }),
+    );
+    await waitFor(
+      () =>
+        store.get().activeConnectionId === "beta" &&
+        [
+          ...document.querySelectorAll(
+            '.workspace-inspector[data-view="history"]',
+          ),
+        ].some((element) => element.getBoundingClientRect().width > 0) &&
+        dispatches
+          .slice(before)
+          .some(
+            (call) =>
+              call.connectionId === "beta" &&
+              call.method === "agent_conversation.latest",
+          ),
+      "Spaces sibling-host notification opens Beta Chat using Beta client",
+    );
+    check(
+      !dispatches
+        .slice(before)
+        .some(
+          (call) =>
+            call.connectionId === "alpha" &&
+            call.method === "agent_conversation.latest",
+        ),
+      "Beta notification never opens Alpha's colliding Chat",
+    );
+    check(
+      store
+        .get()
+        .sessionsByConnectionId.alpha?.panes.some(
+          (pane) => pane.pane_id === "shared",
+        ) === true,
+      "Spaces notification retains Alpha's session",
+    );
+    return;
+  }
   if (operation === "notifications") {
     writeHostsFilter(["alpha"]);
     // Board renders topology changes at low priority, a few frames later:
@@ -2180,7 +2233,7 @@ async function run() {
   // its terminal, as Agents open set to Terminal does.
   writeOfficePreferences(worldLocalStorage, {
     ...DEFAULT_OFFICE_PREFERENCES,
-    townOpens: "terminal",
+    townOpens: operation === "spaces-notifications" ? "chat" : "terminal",
   });
   if (coldMaster)
     writeOfficePreferences(worldLocalStorage, {

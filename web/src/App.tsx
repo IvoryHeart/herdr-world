@@ -1,8 +1,8 @@
 import { NoticeDetail, ToastMark } from "./components/NoticeContent";
+import { useTaskNotificationTarget } from "./useTaskNotificationTarget";
 import { useTerminalComposerDraftScopes } from "./useTerminalComposerDraftScopes";
 import {
   isNotificationTarget,
-  taskNotificationView,
   type NotificationTarget,
 } from "./taskNotifications";
 import { preferencesStorageKey } from "./workspaceResource";
@@ -2580,6 +2580,17 @@ export default function App({
     },
     [connectionClient, openFileExplorerFile],
   );
+  const openPaneNotification = useTaskNotificationTarget({
+    client: connectionClient,
+    inspector: inspectorStateRef,
+    setInspector: commitInspectorState,
+    openChat: (pane) =>
+      openInspector("history", pane.workspace_id, {
+        originPaneId: pane.pane_id,
+      }),
+    openTerminal: activateTerminalSurface,
+    onOpened: () => setSidebarHidden(false),
+  });
   const openNotificationTarget = useCallback(
     (target: NotificationTarget) => {
       if (isRangerTaskNotificationTarget(target)) {
@@ -2596,34 +2607,9 @@ export default function App({
         );
         return;
       }
-      // Retire the old Chat before native focus changes, so its terminal's
-      // close callback cannot restore the tab we are leaving.
-      updateInspectorState((current) =>
-        current ? { ...current, open: false } : current,
-      );
-      void store.focusTaskNotificationTarget(target).then((pane) => {
-        if (!pane || !connectionClient.isCurrent()) return;
-        if (
-          target.connectionId === connectionClient.connectionId &&
-          taskNotificationView(pane) === "history"
-        ) {
-          openInspector("history", pane.workspace_id, {
-            originPaneId: pane.pane_id,
-          });
-        } else {
-          activateTerminalSurface();
-        }
-        setSidebarHidden(false);
-      });
+      void openPaneNotification(target);
     },
-    [
-      activateTerminalSurface,
-      operationalShortcutsEnabled,
-      mobile,
-      connectionClient,
-      openInspector,
-      updateInspectorState,
-    ],
+    [operationalShortcutsEnabled, mobile, openPaneNotification],
   );
   const handleNoticeAction = useCallback(
     (notice: Notice) => {

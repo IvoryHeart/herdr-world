@@ -1302,6 +1302,59 @@ describe("independent qualified operational sessions", () => {
       expect(store.get().sessionsByConnectionId.alpha).toEqual(before);
     });
   });
+  test("Spaces notification enters only its admitted host after prechecks", async () => {
+    await withIndependentClients(async (calls, held) => {
+      held.resolve({});
+      const original = bridge.setActiveConnection;
+      bridge.setActiveConnection = (() =>
+        10) as typeof bridge.setActiveConnection;
+      let retired = 0;
+      try {
+        const target = taskNotificationTarget("beta", 1, pane("beta", "done"));
+        expect(
+          await store.focusTaskNotificationTarget(target, {
+            activateConnection: true,
+            beforeFocus: () => {
+              retired++;
+              expect(
+                calls.some(
+                  (call) => call.host === "beta" && call.method === "pane.get",
+                ),
+              ).toBe(true);
+              expect(
+                calls.some((call) => call.method === "workspace.focus"),
+              ).toBe(false);
+            },
+          }),
+        ).toMatchObject({ pane_id: target.paneId, agent: "beta" });
+        expect(retired).toBe(1);
+        expect(store.get().activeConnectionId).toBe("beta");
+      } finally {
+        bridge.setActiveConnection = original;
+      }
+    });
+  });
+  test("refused notification prechecks leave the current presentation and Spaces owner alone", async () => {
+    await withIndependentClients(async (_calls, held) => {
+      held.resolve({});
+      let retired = false;
+      const result = await store.focusTaskNotificationTarget(
+        {
+          ...taskNotificationTarget("beta", 1, pane("beta", "done")),
+          agentSessionId: "retired-session",
+        },
+        {
+          activateConnection: true,
+          beforeFocus: () => {
+            retired = true;
+          },
+        },
+      );
+      expect(result).toBeUndefined();
+      expect(retired).toBe(false);
+      expect(store.get().activeConnectionId).toBe("alpha");
+    });
+  });
   test("a queued notification cannot focus a replacement session after its original lookup was admitted", async () => {
     await withIndependentClients(async (calls, held) => {
       const connection = bridge.connection;

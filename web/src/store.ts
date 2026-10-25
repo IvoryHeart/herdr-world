@@ -1,4 +1,8 @@
 import {
+  focusTaskNotification,
+  type NotificationFocusOptions,
+} from "./store/notificationFocus";
+import {
   emptyServerSessionState,
   nextRecentPaneIds,
   SERVER_SESSION_KEYS,
@@ -1511,67 +1515,29 @@ export const store = {
     });
   },
 
-  async focusTaskNotificationTarget(target: TaskNotificationTarget) {
-    const unavailable = () =>
-      store.notify({
-        kind: "error",
-        message: "Notification target is unavailable",
-        detail: "The owning runtime, workspace, pane or agent session changed.",
-      });
-    if (!taskNotificationTargetIsCurrent(state, target)) {
-      unavailable();
-      return;
-    }
-    const lease = captureConnectionLease(target.connectionId);
-    const navigationRevision = leaseSnapshot(lease).browserNavigation.revision;
-    if (
-      !lease ||
-      lease.client.serverRuntimeGeneration !== target.runtimeGeneration
-    ) {
-      unavailable();
-      return;
-    }
-    try {
-      const result = await lease.client.call("pane.get", {
-        pane_id: target.paneId,
-      });
-      const pane = result?.pane as Pane | undefined;
-      if (
-        !leaseIsCurrent(lease) ||
-        !pane ||
-        pane.pane_id !== target.paneId ||
-        pane.workspace_id !== target.workspaceId
-      ) {
-        unavailable();
-        return;
-      }
-      if (target.agentSessionId) {
-        const session = await lease.client.call("agent_session.get", {
-          pane_id: target.paneId,
-        });
-        const identity =
-          session?.session?.value ?? session?.agent_session?.value;
-        if (!leaseIsCurrent(lease) || identity !== target.agentSessionId) {
-          unavailable();
-          return;
-        }
-      }
-      const admitted = await store.focusQualifiedTarget({
-        connectionId: target.connectionId,
-        runtimeGeneration: target.runtimeGeneration,
-        workspaceId: target.workspaceId,
-        paneId: target.paneId,
-        agentSessionId: target.agentSessionId,
-        navigationRevision,
-      });
-      if (!admitted) unavailable();
-      // Return the qualified pane already read above so presentation can choose
-      // Chat without consulting a different host's colliding pane ID.
-      return admitted ? pane : false;
-    } catch {
-      unavailable();
-      return;
-    }
+  async focusTaskNotificationTarget(
+    target: TaskNotificationTarget,
+    options: NotificationFocusOptions = {},
+  ) {
+    return focusTaskNotification(target, options, {
+      targetIsCurrent: () => taskNotificationTargetIsCurrent(state, target),
+      captureLease: () => captureConnectionLease(target.connectionId),
+      navigationRevision: (lease) =>
+        leaseSnapshot(lease).browserNavigation.revision,
+      isCurrent: leaseIsCurrent,
+      focus: store.focusQualifiedTarget,
+      activate: (id) => {
+        selectConnectionNow(id, false);
+        return state.activeConnectionId === id;
+      },
+      unavailable: () =>
+        store.notify({
+          kind: "error",
+          message: "Notification target is unavailable",
+          detail:
+            "The owning runtime, workspace, pane or agent session changed.",
+        }),
+    });
   },
 
   async activateQualifiedSpacesTarget(target: QualifiedFocusTarget) {

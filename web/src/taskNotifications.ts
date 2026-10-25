@@ -31,8 +31,10 @@ export type NotificationTarget =
 /** Chat uses the legacy Inspector view name, history. Unsupported harnesses stay on Terminal. */
 export function taskNotificationView(
   pane: Pick<Pane, "agent">,
+  opens: "chat" | "terminal",
 ): "history" | "terminal" {
-  return SESSION_AGENTS.has(normalizeAgentName(pane.agent ?? ""))
+  return opens === "chat" &&
+    SESSION_AGENTS.has(normalizeAgentName(pane.agent ?? ""))
     ? "history"
     : "terminal";
 }
