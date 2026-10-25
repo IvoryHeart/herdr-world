@@ -141,7 +141,11 @@ pages full-observation matches beyond renderer bounds.
 
 Repository workflow lives in [AGENTS.md](../AGENTS.md) and
 [agent development](agent-development.md). The optional visible-team recipe is
-under [`.hwf/workflows/`](../.hwf/workflows/). The report-only readiness gate,
+under [`.hwf/workflows/`](../.hwf/workflows/). Per-PR contributor token accounting
+uses [the usage guide](agent-usage-audit.md), [CLI](../scripts/agent/pr-usage.ts),
+[parsers](../scripts/agent/usage-records.ts), [attribution](../scripts/agent/usage-attribution.ts),
+[reconciliation](../scripts/agent/usage-reconcile.ts) and [local ledger](../scripts/agent/usage-store.ts);
+focused tests are beside these modules. The report-only readiness gate,
 [`agent:gate`](../scripts/agent/gate/), reuses World's PR detail parser and
 readiness rules. Use synthetic data in tracked evidence.
 The optional [Quint adoption spike](quint-adoption-spike.md) inventories formal
