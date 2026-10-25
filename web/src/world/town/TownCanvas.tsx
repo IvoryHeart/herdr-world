@@ -2079,7 +2079,7 @@ const TownWorldLayer = memo(function TownWorldLayer({
                   ) : null}
                   {room.deskFold && foldCell && roomActions.onToggleFold ? (
                     <button
-                      className="town-fold-tile"
+                      className="town-new-seat town-fold-tile"
                       type="button"
                       aria-expanded={room.deskFold === "expanded"}
                       aria-label={
@@ -2095,6 +2095,10 @@ const TownWorldLayer = memo(function TownWorldLayer({
                       style={{
                         left: (foldCell.x - placed.x + 1) * T,
                         top: (foldCell.y - placed.y) * T + 4,
+                        display: "flex",
+                        width: 72,
+                        justifyContent: "center",
+                        gap: 3,
                       }}
                       onClick={() => roomActions.onToggleFold?.(room.key)}
                     >

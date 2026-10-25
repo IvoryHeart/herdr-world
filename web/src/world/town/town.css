@@ -223,8 +223,7 @@
   outline-offset: 2px;
 }
 
-.town-world .town-new-seat,
-.town-world .town-fold-tile {
+.town-world .town-new-seat {
   position: absolute;
   display: grid;
   place-items: center;
@@ -241,25 +240,8 @@
   visibility: hidden;
 }
 
-.town-world .town-fold-tile {
-  display: flex;
-  width: 72px;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  padding: 0 3px;
-  font:
-    700 10px "Silkscreen",
-    "Pixelify Sans",
-    ui-monospace,
-    monospace;
-  color: rgba(255, 255, 255, 0.85);
-}
-
 .town-new-seat:hover:not(:disabled),
-.town-new-seat:focus-visible,
-.town-fold-tile:hover:not(:disabled),
-.town-fold-tile:focus-visible {
+.town-new-seat:focus-visible {
   background: rgba(255, 209, 102, 0.18);
   border-color: #ffd166;
   color: #ffd166;
@@ -289,9 +271,7 @@
 }
 
 .town-world[data-level="desk"] .town-new-seat,
-.town-world[data-level="room"] .town-new-seat,
-.town-world[data-level="desk"] .town-fold-tile,
-.town-world[data-level="room"] .town-fold-tile {
+.town-world[data-level="room"] .town-new-seat {
   opacity: 1;
   pointer-events: auto;
   visibility: visible;
