@@ -13,6 +13,7 @@ import { officePresentationKey } from "./officeSelection";
 import { townModelFromProjection } from "./town/townModel";
 import { layoutTown, TOWN_SHAPES } from "./town/townLayout";
 import { tabCardKey } from "../../../shared/terminalColor";
+import { boundedDesks } from "./officeDesks";
 
 describe("Pixel Office projection", () => {
   test("preferred room admission preserves selected desks, distinct slots and unchanged-input cache", async () => {
@@ -305,8 +306,8 @@ describe("Pixel Office projection", () => {
       expect([...protectedDesks].filter((key) => !visible.has(key))).toEqual(
         [],
       );
-      expect(room.desks).toHaveLength(130);
-      expect(room.omittedDeskCount).toBe(30);
+      expect(room.desks).toHaveLength(133);
+      expect(room.omittedDeskCount).toBe(27);
       for (const shape of Object.values(TOWN_SHAPES)) {
         const { layout } = layoutTown(
           townModelFromProjection(shown).input,
@@ -997,8 +998,8 @@ describe("Pixel Office projection", () => {
       real.roomAgents.filter(({ placement }) => placement === "seated").length,
     ).toBe(24);
 
-    // Past 24, a folded room keeps the desk that needs the user, the working
-    // one and the newest tabs; the oldest idle desks wait for Expand.
+    // Past 24, blocked/working and newest desks stay; idle desks are folded by
+    // stable identity when the room exceeds the target.
     const folded = TOWN_PRESENTATION_BOUNDS.foldedDesksPerRoom;
     const many = (tabs: Tab[]) => [
       pane(tabs[0]!.tab_id, "blocked", "asks"),
@@ -1013,7 +1014,6 @@ describe("Pixel Office projection", () => {
     expect(visible.slice(0, 2)).toEqual(["tab-0", "tab-1"]);
     for (const newest of ["tab-37", "tab-38", "tab-39"])
       expect(visible).toContain(newest);
-    expect(visible).not.toContain("tab-2");
     const open = shown(40, many, true);
     expect(open.deskFold).toBe("expanded");
     expect(open.desks.length).toBe(40);
@@ -1047,9 +1047,8 @@ describe("Pixel Office projection", () => {
     expect(crowded.omittedDeskCount).toBe(13);
     expect(ids.slice(0, 2)).toEqual(["tab-0", "tab-1"]);
     expect(ids).toContain(`tab-${limit + 12}`);
-    expect(ids).not.toContain("tab-2");
-    expect(ids).not.toContain("tab-14");
     expect(ids).toContain("tab-15");
+    expect(ids).toContain("tab-16");
 
     // Even when every older desk is busy, the newest tabs keep a desk: here
     // 127 working tabs and three new idle ones.
@@ -1064,7 +1063,74 @@ describe("Pixel Office projection", () => {
     const kept = busy.desks.map((desk) => desk.tabRef.nativeId);
     for (const index of [limit, limit + 1, limit + 2])
       expect(kept).toContain(`tab-${index}`);
-    expect(busy.omittedDeskCount).toBe(3);
+    expect(busy.desks).toHaveLength(limit + 3);
+    expect(busy.omittedDeskCount).toBe(0);
+  });
+
+  test("Town fold selection protects active, attention, pinned and recent desks deterministically", () => {
+    const tabs = Array.from({ length: 26 }, (_, index) =>
+      tab(`fold-${String(index).padStart(2, "0")}`, index + 1),
+    );
+    const panes = tabs.map((entry, index) =>
+      pane(
+        entry.tab_id,
+        index === 0
+          ? "blocked"
+          : index < 3
+            ? "working"
+            : index === 3
+              ? "done"
+              : "idle",
+        `agent-${index}`,
+      ),
+    );
+    const office = projectWorldOffice(
+      buildWorldObject([connection("local", tabs, panes)], "local"),
+      1,
+    );
+    const desks = office.deskRoster.map(({ desk }) => desk);
+    const agents = office.roster.map(({ agent }) => ({
+      deskKey: agent.deskKey,
+      semanticStatus: agent.semanticStatus,
+    }));
+    const select = (candidate: (typeof desks)[number]) =>
+      candidate.key === desks[7]!.key;
+    const pin = (candidate: (typeof desks)[number]) =>
+      candidate.key === desks[6]!.key || candidate.key === desks[8]!.key;
+    const choose = (input: typeof desks) =>
+      boundedDesks(input, agents, 24, select, pin, true)
+        .map(({ key }) => key)
+        .sort();
+
+    const first = choose(desks);
+    expect(choose([...desks].reverse())).toEqual(first);
+    for (const index of [0, 1, 2, 6, 7, 8, 23, 24, 25])
+      expect(first).toContain(desks[index]!.key);
+    expect(first).toContain(desks[3]!.key);
+    expect(first).toHaveLength(24);
+    const statusByDesk = new Map(
+      agents.map(({ deskKey, semanticStatus }) => [deskKey, semanticStatus]),
+    );
+    const omitted = desks.filter(({ key }) => !first.includes(key));
+    expect(omitted).toHaveLength(2);
+    expect(omitted.every(({ key }) => statusByDesk.get(key) === "idle")).toBe(
+      true,
+    );
+
+    const activeAgents = desks.map((desk) => ({
+      deskKey: desk.key,
+      semanticStatus: "working" as const,
+    }));
+    expect(
+      boundedDesks(
+        desks,
+        activeAgents,
+        24,
+        () => false,
+        () => false,
+        true,
+      ),
+    ).toHaveLength(26);
   });
 
   test("keeps mixed-status shared tabs truthful beyond the eight-desk scene bound", () => {

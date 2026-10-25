@@ -1152,8 +1152,9 @@ from Herdr's tab list order within each workspace, which Herdr keeps when a tab
 moves (a tab's number is not its position). Desk slot i of a room SHALL be the
 room's i-th drawn tab, in reading order, so a reorder in Herdr, Spaces or Town
 moves desks. A room's capacity SHALL step through a
-bounded set of grid sizes that always leaves at least one free desk spot: a room
-grows square until it reaches its shape's width (four desks on a phone, six on
+bounded set of grid sizes that always leaves at least one free desk spot, or two
+adjacent action spots while Fold is available: a room grows square until it
+reaches its shape's width (four desks on a phone, six on
 portrait and mid-width screens, eight on wide screens) and then extends
 downward, and its building grows around it. A folded room SHALL use a default
 bound of 24 desks, and an expanded room a default bound of 127; Fold SHALL
@@ -1166,11 +1167,15 @@ desk of a verified, qualified asking agent with an open question SHALL remain
 visible past either bound. Admission SHALL consume desk keys from that shared
 attention source after its finished/seen overlay, without independently inferring
 attention from projection status or matching question actors by label. A room
-with more tabs than it draws SHALL keep these protected desks, then the three
-newest tabs, then working or unknown agents, then finished ones, hiding idle and
-empty desks first. No protected desk SHALL contribute to the hidden count. Town
-SHALL count every hidden desk on the room, and SHALL offer Expand on its plaque
-while it is folded. Zooming into a room taller or wider than the usable view, from its
+with more tabs than it draws SHALL always keep selected and pinned desks,
+working desks, desks represented by the shared needs-you items, and the three
+newest tabs, even when their number exceeds the fold target. Among other desks,
+Town SHALL keep unknown agents before done, idle and unnamed desks, with stable
+desk identity breaking ties. No protected desk SHALL contribute to the hidden
+count. Town SHALL count every hidden desk on the room and place its **» +N**
+Expand/Fold tile at the room's bottom-right beside the same-height new-seat tile.
+The control SHALL use two adjacent reserved cells so it does not overlap desks.
+Zooming into a room taller or wider than the usable view, from its
 card or with Zoom in, SHALL open at its first desks. While a
 scene is live, a topology change SHALL NOT reorder rooms or move a desk to
 another room: a tab Herdr adds last SHALL take the first free spot of its room

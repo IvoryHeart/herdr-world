@@ -566,6 +566,7 @@ export function projectWorldOffice(
         entry.source.id === selectedSpaceId &&
         desk.tabRef.nativeId === selectedLeaf?.tabId,
       (desk) => pinned(desk) || protectedDesks.has(desk.key),
+      bounds === TOWN_PRESENTATION_BOUNDS,
     ).map((desk) => {
       const devices = boundedWithPriority(
         projectPaneDevices(entry.source.children, desk),

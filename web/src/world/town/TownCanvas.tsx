@@ -35,7 +35,7 @@ import { DEVTOOLS, NO_TRACE, type ViewTrace } from "../devtools/flag";
 import { traceGesture } from "../devtools/trace";
 import { EllipsisVertical } from "lucide-react";
 import { useMobileControls } from "../../components/MobileControls";
-import { Plus } from "lucide-react";
+import { ChevronsLeft, ChevronsRight, Plus } from "lucide-react";
 import {
   type HerdrOfficeProjection,
   type OfficeAgent,
@@ -1897,7 +1897,10 @@ const TownWorldLayer = memo(function TownWorldLayer({
               const c = townRoomCounts(model, room);
               const label = room.accessibleLabel ?? room.displayLabel;
               const total = Math.max(1, c.agents);
-              const freeCell = placed.cells.find((cell) => !cell.deskKey);
+              const seatCell =
+                placed.foldActionCells?.[0] ??
+                placed.cells.find((cell) => !cell.deskKey);
+              const foldCell = placed.foldActionCells?.[1];
               const overflow =
                 room.omittedDeskCount + placed.overflowDeskKeys.length;
               const reason = roomActions.createSeatReason(room.key);
@@ -2036,7 +2039,6 @@ const TownWorldLayer = memo(function TownWorldLayer({
                     label={label}
                     width={placed.w * T}
                     counts={c}
-                    overflow={overflow}
                     color={
                       roomColor && {
                         defaultHex: townCarpetFor(room.key),
@@ -2045,7 +2047,7 @@ const TownWorldLayer = memo(function TownWorldLayer({
                     }
                     actions={roomActions}
                   />
-                  {roomActions.showCreateSeat(room.key) && freeCell ? (
+                  {roomActions.showCreateSeat(room.key) && seatCell ? (
                     <>
                       <button
                         className="world-new-seat-canvas-action town-new-seat"
@@ -2054,8 +2056,8 @@ const TownWorldLayer = memo(function TownWorldLayer({
                         title={reason ?? `New agent or terminal in ${label}`}
                         disabled={!roomActions.canCreateSeat(room.key)}
                         style={{
-                          left: (freeCell.x - placed.x + 1) * T,
-                          top: (freeCell.y - placed.y) * T + 4,
+                          left: (seatCell.x - placed.x + 1) * T,
+                          top: (seatCell.y - placed.y) * T + 4,
                         }}
                         onClick={() => roomActions.onNewAgent(room.key)}
                       >
@@ -2066,14 +2068,48 @@ const TownWorldLayer = memo(function TownWorldLayer({
                           className="world-creation-reason town-creation-reason"
                           role="status"
                           style={{
-                            left: (freeCell.x - placed.x + 1) * T,
-                            top: (freeCell.y - placed.y) * T + 60,
+                            left: (seatCell.x - placed.x + 1) * T,
+                            top: (seatCell.y - placed.y) * T + 60,
                           }}
                         >
                           {reason}
                         </span>
                       ) : null}
                     </>
+                  ) : null}
+                  {room.deskFold && foldCell && roomActions.onToggleFold ? (
+                    <button
+                      className="town-fold-tile"
+                      type="button"
+                      aria-expanded={room.deskFold === "expanded"}
+                      aria-label={
+                        room.deskFold === "folded"
+                          ? `Show ${overflow} hidden ${overflow === 1 ? "desk" : "desks"} in ${label}`
+                          : `Fold ${label} to its protected desks`
+                      }
+                      title={
+                        room.deskFold === "folded"
+                          ? `Show ${overflow} hidden ${overflow === 1 ? "desk" : "desks"}`
+                          : "Fold idle, finished and unnamed desks"
+                      }
+                      style={{
+                        left: (foldCell.x - placed.x + 1) * T,
+                        top: (foldCell.y - placed.y) * T + 4,
+                      }}
+                      onClick={() => roomActions.onToggleFold?.(room.key)}
+                    >
+                      {room.deskFold === "folded" ? (
+                        <>
+                          <ChevronsRight size={16} aria-hidden="true" />
+                          <span>+{overflow}</span>
+                        </>
+                      ) : (
+                        <>
+                          <ChevronsLeft size={16} aria-hidden="true" />
+                          <span>Fold</span>
+                        </>
+                      )}
+                    </button>
                   ) : null}
                 </div>
               );

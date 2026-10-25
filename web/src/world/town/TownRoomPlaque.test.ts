@@ -112,7 +112,6 @@ test.each([
           label: "Studio",
           width: 176,
           counts,
-          overflow: 0,
           color: null,
           actions,
         }),
