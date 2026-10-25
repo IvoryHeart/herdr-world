@@ -8,3 +8,5 @@
 - Keep cached Files and Changes content while the same worktree is being
   readmitted after reconnect, and preserve other Inspectors' Message drafts
   until a fresh catalogue confirms their runtime was replaced or removed.
+  Keep the stale Inspector notice above the phone Message editor so retained
+  drafts remain visible.

@@ -66,6 +66,8 @@ record the transport teardown analysis and scope. Current L1 ownership lives in
 [the frontend guide](foundation-guide.md#browser-ownership),
 [terminal renderer](../web/src/terminalRenderer.ts) and
 [resource presentation cache identity](../web/src/resourcePresentationClient.ts).
+The [Inspector status row](../web/src/components/WorkspaceInspectorStatus.tsx)
+keeps stale notices clear of the retained Message editor.
 The [real resource-child regression](../web/src/world/WorldInspectorResourceResume.test.ts)
 covers disconnect, delayed worktree readmission and replacement; the
 [World browser regression](../web/src/world/WorldTerminalHandoff.test.ts) covers

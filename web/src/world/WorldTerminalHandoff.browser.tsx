@@ -2165,6 +2165,34 @@ async function run() {
     "value",
   )!.set!.call(inspectorEditor, "Unsent mobile draft");
   inspectorEditor.dispatchEvent(new InputEvent("input", { bubbles: true }));
+  const beforePhoneDisconnect = store.get();
+  const phoneClientCurrent = client.isCurrent;
+  client.isCurrent = () => false;
+  flushSync(() =>
+    __storeTesting.replaceState({
+      ...store.get(),
+      status: "disconnected",
+      catalogueReady: false,
+    }),
+  );
+  await settle();
+  const phoneStale = mobileInspector
+    .closest(".workspace-inspector-slot")!
+    .querySelector<HTMLElement>(".world-inspector-stale")!;
+  const staleBounds = phoneStale.getBoundingClientRect();
+  const draftBounds = inspectorEditor.getBoundingClientRect();
+  check(
+    inspectorEditor.value === "Unsent mobile draft" &&
+      draftBounds.height > 0 &&
+      staleBounds.height > 0 &&
+      staleBounds.top >= mobileHeader.getBoundingClientRect().bottom &&
+      (staleBounds.bottom <= draftBounds.top ||
+        staleBounds.top >= draftBounds.bottom),
+    "phone stale indicator covers the retained Message draft",
+  );
+  client.isCurrent = phoneClientCurrent;
+  flushSync(() => __storeTesting.replaceState(beforePhoneDisconnect));
+  await settle();
   const uploadInput = mobileInspector.querySelector<HTMLInputElement>(
     '.terminal-composer input[type="file"]',
   )!;
@@ -5679,10 +5707,7 @@ async function run() {
       Object.getOwnPropertyDescriptor(
         HTMLTextAreaElement.prototype,
         "value",
-      )!.set!.call(
-        editor,
-        "Unsent synthetic Message — retained through reconnect",
-      );
+      )!.set!.call(editor, "Unsent synthetic Message");
       editor.dispatchEvent(new InputEvent("input", { bubbles: true }));
     });
     client.isCurrent = () => false;

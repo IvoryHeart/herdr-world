@@ -1,8 +1,12 @@
 {
   "browser": "Chrome/153.0.8010.52",
   "deviceScaleFactor": 1,
-  "scene": "Synthetic production World tree; Studio, Reviewer terminal and unsent Message",
+  "scene": "Synthetic production World tree; Studio and Reviewer terminal; phone shows Unsent synthetic Message",
   "capturedDate": "2026-10-25",
+  "capturedAt": {
+    "disconnected": "2026-10-25T18:34:49.924Z",
+    "recovery": "2026-10-25T18:34:53.938Z"
+  },
   "captures": [
     {
       "name": "phone",
@@ -11,7 +15,7 @@
       "height": 844,
       "state": "disconnected",
       "filename": "disconnected-phone.png",
-      "sha256": "7a3daee7c5027711aa4ff6bfcb849de627be93863cb11f88a31a2921807c875e"
+      "sha256": "401723c87dd9d21114c292994a08edc729611382752e36992dd666913ee17709"
     },
     {
       "name": "mac-laptop",
@@ -20,7 +24,7 @@
       "height": 982,
       "state": "disconnected",
       "filename": "disconnected-mac-laptop.png",
-      "sha256": "e3a2641b0d12bb7b1ea614e4011d60ced23a7732ca3b22dfe311a52760c18801"
+      "sha256": "5890c0f012ae85e07bb8b4c441df382e5f46b947d14a08ddce6c52ff7d205174"
     },
     {
       "name": "linux-half",
@@ -29,7 +33,7 @@
       "height": 1440,
       "state": "disconnected",
       "filename": "disconnected-linux-half.png",
-      "sha256": "6279fdac77c0e970730c044690fccb6037a89442836522faab900f51d853cf95"
+      "sha256": "5874f0b4cba13bf92cb02738b3451eea231b12eb6e4cb0ff9aee3a7aa5b07b9b"
     },
     {
       "name": "linux-wide",
@@ -38,7 +42,7 @@
       "height": 1440,
       "state": "disconnected",
       "filename": "disconnected-linux-wide.png",
-      "sha256": "bf30bd97b19f264a8d0baeff0527adbca78fc029283bec87e6fe2bea659eb97d"
+      "sha256": "4a983e0642b716bc76be08b3ab664477d5defdd8e29ba2c70af2367f7f4dba72"
     },
     {
       "name": "portrait",
@@ -47,7 +51,7 @@
       "height": 2560,
       "state": "disconnected",
       "filename": "disconnected-portrait.png",
-      "sha256": "f2404427d86091a13591832079fcd3c32d0c47a648c179b22563a3dea109b8ec"
+      "sha256": "feb9079cbec0fd25fb4b7fd97c29c1ed90f5b00b802a0a186b4004bd6fd4d70b"
     },
     {
       "name": "phone",
@@ -56,7 +60,7 @@
       "height": 844,
       "state": "recovery",
       "filename": "recovery-phone.png",
-      "sha256": "fac72263a22911b349c1681c67526449f9436e437d90d36e689a407ee039e49c"
+      "sha256": "0d3eafb772c4d387afeb04c7b48bc53b067e097c320061eb1e2be9fafaf36f71"
     },
     {
       "name": "mac-laptop",
@@ -65,7 +69,7 @@
       "height": 982,
       "state": "recovery",
       "filename": "recovery-mac-laptop.png",
-      "sha256": "b4f03d7757ae0f9f6b83312262e928bbcad28c01203c1c790416f8c2911f0dae"
+      "sha256": "7408a5321c7aad9ca351c021f311330a83a19f03726301dcefe220450a5119a5"
     },
     {
       "name": "linux-half",
@@ -74,7 +78,7 @@
       "height": 1440,
       "state": "recovery",
       "filename": "recovery-linux-half.png",
-      "sha256": "eddfac212bc48098f8b5439f95c3eb403d8644e42bf11ca2e3981d9e8e2e4290"
+      "sha256": "3227bd875cf79d17de0f0a8d05bde1b3de690f1b36f9c2856ea0102e29eb3760"
     },
     {
       "name": "linux-wide",
@@ -83,7 +87,7 @@
       "height": 1440,
       "state": "recovery",
       "filename": "recovery-linux-wide.png",
-      "sha256": "e48462554828366e1fe40b3cebd141b4d2d2277b7b23549d06682639670ef4e0"
+      "sha256": "f6e5814ae26f832c641b34210ca7db9eb51b70c92b14d87dc6eee8e284aee66e"
     },
     {
       "name": "portrait",
@@ -92,7 +96,7 @@
       "height": 2560,
       "state": "recovery",
       "filename": "recovery-portrait.png",
-      "sha256": "ea9a7fea5c5c73a3061b48e905bdddb3652cb61b9f36a566d469f486aa9eba39"
+      "sha256": "88c58d0090c256ab16b17883575fa8a9b07dd54cdd7d490da2848749e690c3f4"
     }
   ]
 }

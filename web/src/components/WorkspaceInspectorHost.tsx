@@ -5,6 +5,7 @@ import {
   INSPECTOR_TAB_ORDER,
 } from "./WorkspaceInspectorViewSelect";
 import { WorkspaceInspectorLocation } from "./WorkspaceInspectorLocation";
+import { WorkspaceInspectorStatus } from "./WorkspaceInspectorStatus";
 import { AgentWorktreeGate } from "./AgentWorktreePicker";
 import type { AgentWorktreeView } from "../useAgentWorktree";
 import { useEffectCallback } from "../useEffectCallback";
@@ -929,14 +930,12 @@ export function WorkspaceInspectorHost({
         )}
       </header>
 
-      {!workspace ? (
-        <div className="workspace-inspector-unavailable">
-          <strong>Checkout unavailable</strong>
-          <span>
-            The workspace used to route this Inspector is no longer open.
-          </span>
-        </div>
-      ) : (
+      <WorkspaceInspectorStatus
+        stale={presentationStale}
+        available={!!workspace}
+      />
+
+      {workspace ? (
         <div
           className="workspace-inspector-body"
           ref={(element) =>
@@ -1340,7 +1339,7 @@ export function WorkspaceInspectorHost({
             </div>
           ) : null}
         </div>
-      )}
+      ) : null}
     </aside>
   );
 }

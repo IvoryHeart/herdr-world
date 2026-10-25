@@ -528,11 +528,6 @@ function InspectorResources({
           className="workspace-inspector-slot"
           data-stale={presentationStale || undefined}
         >
-          {presentationStale ? (
-            <div className="world-inspector-stale" role="status">
-              Disconnected · Showing last observation
-            </div>
-          ) : null}
           <Suspense fallback={null}>
             <WorkspaceInspectorHost
               state={inspectorState}

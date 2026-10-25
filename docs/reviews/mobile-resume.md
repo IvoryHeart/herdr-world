@@ -5,21 +5,25 @@ with Chrome 153.0.8010.52 at device scale factor 1. The Mac/Linux names below
 identify viewport contexts; all captures use the same isolated Chromium
 fixture. They are not native macOS, phone, or OS background/discard evidence.
 
-The real World shell and Inspector show the fixture's synthetic Studio workspace,
-Reviewer terminal and an unsent synthetic Message. The disconnected state retains
-last output, disables operations and shows both stale indicators. The recovery
+The real World shell and Inspector show the fixture's synthetic Studio workspace
+and Reviewer terminal. Phone captures also show the retained draft text,
+"Unsent synthetic Message", in the mobile Message editor; wider contexts show
+the terminal in desktop layout. The disconnected state retains last output,
+disables operations and shows both stale indicators. The recovery
 state follows three acknowledged attaches without frames and shows **Retry
 terminal** and explicit **Reload app**. No real hosts, credentials, sessions or
 repository content are used. Screenshots are unedited viewport captures.
 
 ## Phone — 390 × 844
 
-Disconnected synthetic Reviewer Inspector and retained terminal — **390 × 844**.
+Disconnected synthetic Reviewer Inspector, retained terminal and visible unsent
+Message draft — **390 × 844**. The Inspector stale notice sits above the editor.
 
 ![Disconnected Reviewer Inspector, 390 × 844](mobile-resume/disconnected-phone.png)
 
-Synthetic Reviewer terminal after its no-frame budget is exhausted — **390 × 844**.
-Retry terminal and Reload app remain distinct actions.
+Synthetic Reviewer terminal after its no-frame budget is exhausted, with the
+unsent Message draft visible below — **390 × 844**. Retry terminal and Reload
+app remain distinct actions.
 
 ![Local terminal recovery controls, 390 × 844](mobile-resume/recovery-phone.png)
 
