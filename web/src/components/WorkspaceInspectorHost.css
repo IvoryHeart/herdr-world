@@ -662,12 +662,3 @@
   width: 40px;
   height: 40px;
 }
-
-.workspace-inspector-pin {
-  min-width: 32px;
-  min-height: 32px;
-}
-.workspace-inspector-pin[aria-pressed="true"] {
-  color: var(--accent);
-  background: var(--accent-soft);
-}

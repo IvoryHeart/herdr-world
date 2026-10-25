@@ -1,7 +1,3 @@
-import {
-  WindowPinButton,
-  type ManagedWindowControls,
-} from "../world/windows/WindowControls";
 import { useState, type Ref, type KeyboardEvent } from "react";
 import {
   SquareTerminal,
@@ -110,10 +106,8 @@ export function WorkspaceInspectorViewSelect({
   );
 }
 
-/** Keep secondary controls after the four primary views, with Pin first. */
+/** Keep secondary controls after the four primary views. */
 export function WorkspaceInspectorSecondaryControls({
-  mobile,
-  pin,
   commitsAvailable,
   hideInactiveCommits = false,
   view,
@@ -121,8 +115,6 @@ export function WorkspaceInspectorSecondaryControls({
   onViewChange,
   onKeyDown,
 }: {
-  mobile: boolean;
-  pin?: ManagedWindowControls["pin"];
   commitsAvailable: boolean;
   hideInactiveCommits?: boolean;
   view: InspectorView;
@@ -132,7 +124,6 @@ export function WorkspaceInspectorSecondaryControls({
 }) {
   return (
     <>
-      {!mobile && pin ? <WindowPinButton pin={pin} /> : null}
       {commitsAvailable && (!hideInactiveCommits || view === "commits") ? (
         <div
           className="workspace-inspector-tabs"

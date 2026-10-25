@@ -75,8 +75,6 @@ if (process.env.INSPECTOR_VIEW_DOM !== "1") {
               onChange: change,
             }),
             createElement(WorkspaceInspectorSecondaryControls, {
-              mobile: false,
-              pin: { pinned, onPin },
               commitsAvailable: true,
               view: "history",
               commitsRef: createRef<HTMLButtonElement>(),
@@ -149,23 +147,14 @@ if (process.env.INSPECTOR_VIEW_DOM !== "1") {
       await act(async () => choices[1]!.click());
       expect(attention).toHaveBeenLastCalledWith("muted");
       expect(change.mock.calls.length).toBe(calls);
-      const pinButton = host.querySelector<HTMLButtonElement>(
-        ".workspace-inspector-pin",
+      expect(host.querySelector(".workspace-inspector-pin")).toBeNull();
+      await act(async () => menuButton.click());
+      const pinItem = document.querySelector<HTMLButtonElement>(
+        '[aria-label="Window actions"] .world-window-pin',
       )!;
-      expect(pinButton.getAttribute("aria-pressed")).toBe("false");
-      expect(
-        pinButton.compareDocumentPosition(
-          host.querySelector('[role="tab"][aria-label="Commits"]')!,
-        ) & Node.DOCUMENT_POSITION_FOLLOWING,
-      ).not.toBe(0);
-      await act(async () => pinButton.click());
+      await act(async () => pinItem.click());
       expect(onPin).toHaveBeenLastCalledWith(true);
       await render(false);
-      expect(
-        host
-          .querySelector(".workspace-inspector-pin")
-          ?.getAttribute("aria-pressed"),
-      ).toBe("true");
       await openViews();
       const unavailableChat = document.querySelector<HTMLButtonElement>(
         '[aria-label="Inspector views"] [data-view="history"]',

@@ -16,5 +16,5 @@
 - Put mobile Inspector view switching in its header dropdown and move Watching,
   Muted and Focused to the window's ellipsis menu.
 
-- Put the desk pin first in mobile window menus and expose it after Chat,
-  Terminal, Files and Changes in desktop Inspector headers.
+- Put the desk pin first in mobile window menus and keep it in the desktop
+  window menu. Order primary Inspector views Chat, Terminal, Files, Changes.

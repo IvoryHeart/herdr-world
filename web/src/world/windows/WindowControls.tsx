@@ -83,27 +83,6 @@ export function WindowBackButton({
     </button>
   );
 }
-/** The same desk-pin action as the menu, exposed in desktop Inspector bars. */
-export function WindowPinButton({
-  pin,
-}: {
-  pin: NonNullable<ManagedWindowControls["pin"]>;
-}) {
-  const label = pin.pinned ? "Unpin desk in Town" : "Pin desk in Town";
-  return (
-    <button
-      type="button"
-      className="interest-button workspace-inspector-pin"
-      aria-label={label}
-      title={label}
-      aria-pressed={pin.pinned}
-      onClick={() => pin.onPin(!pin.pinned)}
-    >
-      <Pin size={15} aria-hidden="true" />
-    </button>
-  );
-}
-
 const choices: { target: SnapTarget; label: string }[] = [
   { target: "left", label: "Left half" },
   { target: "right", label: "Right half" },

@@ -638,7 +638,7 @@ export function WorkspaceInspectorHost({
           />
         ) : null}
         {/* One selector in the window's top bar, Chat first: Chat,
-            Terminal, Files, Changes (then Pin and Commits). */}
+            Terminal, Files, Changes (then Commits). */}
         <div className="workspace-inspector-tabs" role="tablist">
           {availableViews.includes("history") ? (
             <button
@@ -720,8 +720,6 @@ export function WorkspaceInspectorHost({
           ) : null}
         </div>
         <WorkspaceInspectorSecondaryControls
-          mobile={mobile}
-          pin={windowControls?.pin}
           commitsAvailable={availableViews.includes("commits")}
           hideInactiveCommits={viewsInMenu}
           view={state.view}
