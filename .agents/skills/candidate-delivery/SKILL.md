@@ -17,13 +17,14 @@ the whole repository for a scoped change.
 
 Commit with the existing read-only pre-commit format/lint guard when committing
 is part of the requested handoff. For PR delivery, push
-the complete candidate once and let the pre-push hook run the full
-`bun run check` for code. A Markdown-only follow-up may use
-`bun run check:docs` when this worktree has a successful full gate on an ancestor. CI
-runs the applicable gate on the PR head, and reuses exact-head full results for
-description edits. Do not run a separate final full check
+the complete candidate once and let the pre-push hook run
+`bun run check:changed` for code (gate or configuration changes select the full
+gate). A Markdown-only follow-up may use
+`bun run check:docs` when this worktree has a successful code gate on an ancestor. CI
+runs the applicable gate on the PR head, and reuses successful full results on
+the exact PR, base and head for description edits and label changes. Do not run a separate final full check
 immediately before that push. For an explicitly local-only handoff, run one
-explicit full check instead. If a later repair changes code, begin a new
+explicit `bun run check:delivery` instead. If a later repair changes code, begin a new
 candidate cycle.
 
 In Codex, when a command returns a running session, call `write_stdin` on that

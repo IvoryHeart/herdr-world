@@ -106,6 +106,12 @@ and these redirects are included in [0.2.6](./releases/v0.2.6.md).
 **Hosts** starts at **All hosts**. Choose a host set to reduce the overview;
 use **Manage connections** to add or reconnect a local or SSH profile. Filtering
 changes what you see and does not disconnect hosts or retarget open terminals.
+If a host disconnects, its cached building and agents remain visible as stale
+history. Town's building and reception and Board's host label show
+**Disconnected · Reconnect**; their old agents cannot open live Chat or terminals.
+Transient SSH failures retry with backoff. Tap **Reconnect** to restart that
+host's connection, or use **Manage connections** to inspect its error. Other
+hosts stay usable.
 
 ### Explore Town: find work that needs you
 
@@ -121,7 +127,15 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    **ALL** shows the whole town. Drag the background to pan, or use arrow keys
    when the scene has focus. Tap a room to zoom in. Large towns may initially
    show roofs; zoom in to see room summaries and desks. Phones stack buildings
-   vertically.
+   vertically. Room nameplates fit their rooms: long names end in an ellipsis;
+   hover the name for its full text. The colour, active/total agent count and
+   blocked badge stay visible. Active means working or waiting on you; plain
+   terminals are excluded from the total. Hover the count for the working/waiting
+   breakdown. Hover or focus a plate to reveal Rename and Close below it;
+   on a touch screen, tap the plate first. The dashed **+** seat inside a room
+   opens its launcher with that room selected. Choose **Terminal** for a plain
+   tab, a profile, or an agent kind. If the requested room is no longer
+   available, choose a current room in the launcher before creating anything.
 3. Look at reception for blocked agents waiting for input, oldest first. Finished
    agents also wait there until you open their terminal or mark that completion
    reviewed, then join idle agents in the lounge. These locations visualize
@@ -136,10 +150,15 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    it to the front. Use **Back** to close the summary.
 4. Tap an agent or its table to open its window on **Chat**: World's Inspector,
    with **Chat**, **Terminal**, **Changes** and **Files** in its top selector.
+   On a phone, the anchored header dropdown switches between **Chat**, **Terminal**,
+   **Files** and **Changes**; the **⋯** menu contains attention settings.
    In Town it docks on the right at a readable width; drag its left edge to
    resize it (Town remembers the width), or drag its title to undock it. Chat shows the
    conversation's latest 200 entries, scrolls back inside the window, and
-   offers **Jump to latest**; the composer stays at the bottom. The **NEEDS YOU** list provides another route to waiting
+   offers **Jump to latest**; the composer stays at the bottom. Enter adds a line;
+   the paper-plane button, **Ctrl+Enter** or **Cmd+Enter** sends. The paperclip
+   attaches files; type **/** or use **⋮ → Browse commands** for command suggestions.
+   The **NEEDS YOU** list provides another route to waiting
    agents and becomes a bottom tray on phones; it hides when no agent is
    blocked. The Town master's chat (**Menu → Town master**, `firstmate` by
    default) opens docked once per visit on wide screens. Hover an agent for a
@@ -148,30 +167,46 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    question when one can be identified, and refreshes when the conversation
    changes. Opening
    an agent brings it back to its desk from reception or the lounge until its
-   status changes. To open terminals instead, set **Menu → Town opens** to
-   **Terminal**; that tap also brings the agent back and, like the chat, does
+   status changes. To open terminals instead, set **Menu → Agents open** to
+   **Terminal** (Board and Desk follow it too); that tap also brings the agent back and, like the chat, does
    not mark its work reviewed.
    Zoom into a room: an agent with a quest (its own todo list, plan, Codex goal
    or `/loop`) shows a swallowtail pennant beside its seat, with a progress
    bar when the quest has steps; tap the pennant to see **Quest** and its
-   title. Open its chat to read the quest log above the conversation: each
-   objective as pending, active, done or blocked.
+   title. Open its chat to see a slim quest title and progress row in the conversation.
+   Expand it to read each objective as pending, active, done or blocked; the
+   row scrolls with the messages.
+   While you scroll back in Chat, **Jump to latest** counts new agent messages;
+   reach the bottom to clear the count.
+   Chat's Now circle has the status word on hover: blue for working, yellow
+   for needs you, green for done and grey for idle.
 5. Read the question before using an answer button: it sends the offered key to
    that live pane. When no supported choices appear, use **Open chat** to reply
    in the agent's window, or **Open terminal** in the card's header (or the
    window's **Terminal** view). The window's **Chat** composer sends with
-   Herdr's agent prompt. As in the terminal composer, Enter starts a new line;
-   **Send** or `Ctrl+Enter` (`Cmd+Enter` on a Mac) sends.
+   Herdr's agent prompt. Enter sends; Shift+Enter starts a new line. **Send**
+   or `Ctrl+Enter` (`Cmd+Enter` on a Mac) also sends. Use **/ Commands** for
+   the harness's palette or type any slash command; its receipt stays
+   **sent, not checked** until its text appears in the transcript.
    A Codex conversation inferred from its shared daemon is read-only: Chat
    offers no composer or answer buttons. In Codex's Terminal, run `/title` and
    add **Thread ID**, or use **Details → Link Codex session** to preview and
    confirm the intended thread. Ambiguous panes or threads stay unbound.
-6. Use the paperclip in the window's **Chat** composer to attach files. Each
+6. Use **+ Add file** in the window's **Chat** composer to attach files. Each
    file shows a chip while it uploads, then done or failed; retry a failed one
    (or pick it again) or remove it. **Send** waits for uploads. Uploads go to
    the selected pane's host; review the message and attached paths before
-   sending. The window's **Files** and **Changes** views hold its files and
-   changes; **Open terminal** is for direct work.
+   sending. The window's **Files** and **Changes** use the same agent worktree,
+   rather than its launch checkout. Open the location line for **Worktree**
+   (a bottom sheet on phones):
+   the source mark explains the evidence, and radio choices switch both views.
+   If choices are ambiguous or stale, use **Choose a worktree** and **Refresh**;
+   resource access waits for a current selection. **Open terminal** is for
+   direct work.
+   A known PR named in an agent's **READY** or **opened** announcement, or its
+   current work claim, gets a PR card in Chat. Open **Details** for CI and
+   reviews. **Ask the author to fix** sends a `↳ #N` message when this
+   conversation owns the PR's claim; your unsent draft is kept.
    The swatch beside a room's name colours that workspace (its carpet here,
    its card in Board and a dot in the Spaces sidebar), and the swatch on a
    building's reception board colours the host (its roof, Board zone and
@@ -185,7 +220,8 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    terminal window's menu has **Colour**, and
    in Spaces the tab's menu (right-click or long-press) offers the same palette
    and **Default colour**.
-   In the agent's window, the button beside its name sets its interest:
+   In the agent's window, the button beside its name sets its interest (on a
+   phone, use **⋯ → Attention**):
    **Muted** stops its chimes, **Focused** lets only focused agents chime, and
    **Watching** is the default. Its questions and results still arrive in
    reception.
@@ -213,11 +249,15 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    the room's free spot to put it last of the tables shown. A room grows as
    tabs open, up to eight tables wide on a wide screen, six on a portrait or
    half-width screen and four on a phone, then row by row. A folded room normally
-   shows up to 24 tables. Selected and pinned tables, blocked agents, unreviewed
-   finishes and verified agents with open questions stay visible beyond that
-   count. Press **+N** on its plaque to expand it to a normal limit of 127 tables;
-   the same tables stay visible beyond that limit. **+N** counts only hidden tables.
-   **Fold** remains available after tabs close; press it to shrink the room back.
+   shows the first 24 tabs in the same order as Spaces. Use the room's bottom-right
+   **» +N** tile beside the dashed **+** seat to reveal the next 20 tables per
+   click until the whole room is shown. **+N** counts currently hidden tabs;
+   agent activity and pins do not pull later tabs ahead of that boundary.
+   A red **!** at the tile's top-left means hidden desks need you; a green **✓**
+   at the top-right means hidden work is finished and not reviewed. Revealing
+   those desks or resolving their attention clears the icons. After the first
+   expansion, the adjacent **« Fold** action returns straight to the first 24,
+   even while more desks remain hidden. The plaque counts all agents in the room.
    Rooms sit in columns that suit your screen
    (one on a phone), and a growing room pushes down only the rooms below it,
    once you let go of the town. Town moves the tab in Herdr, so Spaces
@@ -235,8 +275,9 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    lists the tables to join, and **Leave the team** takes it out. A table's
    name for screen readers says who its team is.
 10. To keep a table where it is, open one of its agents (its window) and choose
-   **Pin desk in Town** from the window's **⋯** menu, on a phone too. The
-   table wears a pin, stays put
+   **Pin desk in Town** at the top of the phone window's **⋯** menu. On desktop,
+   choose the same action from the window’s **⋯** menu.
+   The table wears a pin, stays put
    when tabs are reordered or the room grows, and its agents stay at it rather
    than taking breaks in the lounge; they still go to reception when they need
    you or finish, and come straight back once seen. Choose **Unpin desk in
@@ -262,6 +303,18 @@ and open its terminal or Inspector without losing its workspace context.
 
 ![Town at phone width](./images/herdr-world-mobile-town.png)
 
+### Return after backgrounding
+
+If a phone backgrounds World or the browser loses its connection, open
+Inspectors, terminal output, split positions and unsent Message drafts stay in
+this page. A disconnected indicator marks the last observation; controls wait
+for a fresh connection to the same host and runtime. Input is never replayed.
+
+If a terminal says **Terminal is not receiving output**, choose **Retry terminal**
+to retry that terminal while keeping the page open. **Reload app** is a separate,
+explicit action. World never reloads automatically because terminal frames stop.
+A browser or OS that discards the whole page can still lose its in-memory state.
+
 ### Start a new agent from a profile
 
 <a id="new-agent"></a>
@@ -282,14 +335,20 @@ a starting brief and a look in Town. World starts it in a new tab for you.
    dress the character and watch it walk, turn and sit in the preview, and
    pick its **Chime** (or keep the class default). **What a
    launch runs** shows the exact Herdr command. Press **Save**.
-3. Open **New agent**: **Actions → New agent**, **New agent** on a
-   room's plaque (on a phone, tap the room first), or the robot beside **+** in
-   Spaces' tab bar. Choose the room, optionally type a task, and tap a profile,
-   or tap a kind under **Quick start** for a plain agent.
+3. Open **New agent**: **Actions → New agent**, the dashed **+** seat inside
+   a Town room (zoom into the room first), or the robot beside **+** in Spaces'
+   tab bar. The seat preselects its room. Choose **Terminal**, the first choice,
+   for a plain shell tab; to start an agent, optionally type a task and tap a
+   profile or a kind under **Quick start**.
 4. If a harness is logged out on that host, the launcher says so: **Log in**
    opens a small tab and shows the harness's own login command
    (`claude auth login`, `codex login --device-auth`). **Copy** it, **Open its
    tab**, run it and finish the login there, then **Check again**.
+   Failed, incomplete or unsupported checks show **unknown**, never “not
+   installed” or “logged out”. You can still try a supported harness; use
+   **Check again** to retry or **Edit profiles** to review its configuration.
+   The check's source and completion time are shown separately from profile
+   settings. Windows readiness checks are unsupported.
 5. World creates the tab, starts the agent, waits until it is ready and sends
    the brief, then opens its terminal. The tab takes the profile's colour and
    the agent wears the profile's look in Town. If the agent stops on a question
@@ -358,7 +417,9 @@ on your phone and desktop.
    placement, tidying and settling leave it until you **Unpin** it (you can
    still drag it). On a phone, tap the pin in the card's terminal header.
 4. Tap a workspace, tab or pane row to open its Inspector with Terminal, Files,
-   Changes and Chat; a line joins each Inspector window to its card. Double-click a tab to open its terminal.
+   Changes and Chat; a line joins each Inspector window to its card. Tapping or
+   double-clicking an agent's tab opens its Chat, as in Town; a plain shell, or an
+   agent without Chat, opens its terminal.
 5. Double-click (or double-tap) empty board to pin a note and type; double-click
    a note to edit it. Tap a note for its bar: colour, **Edit**, **String to…**, **Delete** (or press Delete).
 6. Drag a card's red dot onto a pane row, a tab or a workspace to string a note
@@ -394,7 +455,14 @@ on your phone and desktop.
    for one of your open pull requests, tap the badge to open the same card.
    Your own open pull requests get a fuller card: CI dots, each rev agent's
    result and **Ready ✓** when your merge rules hold. **Details** shows each
-   rule, the failing checks and the reviewers' comments. **Merge…**,
+   rule, the failing checks and the reviewers' formal reviews or comments.
+   **Unknown reviewer** means the RESULT post has no clear reviewer claim;
+   use **View RESULT source** to inspect it. It does not confirm readiness.
+   The card also shows **GitHub details fresh**, **stale · cached evidence**
+   or **unavailable**, with its own read time. A refreshed list does not renew
+   cached detail. Choose **Refresh Sources** to retry; stale or unavailable
+   findings/screenshots remain unknown and must be refreshed before Merge.
+   **Merge…**,
    **Close…** and **Mark ready…** ask first and say exactly what happens;
    while GitHub still requires a review, use **Open on GitHub** or **Copy
    merge command** and merge it yourself.
@@ -548,7 +616,9 @@ The link replaces the pane's existing session association for all viewers.
 > Follow missing-metadata integration hints. For Codex 0.157 and later, run
 > `/title` in Codex and add Thread ID so History knows which conversation a pane
 > shows. SSH reads Herdr-reported paths and
-> Codex and Pi ID lookups remotely; other local ID/directory fallbacks may miss remote
+> Claude, Codex and Pi ID lookups remotely. Claude requires its Herdr-reported UUID
+> to match one transcript in that host's `~/.claude/projects/`;
+> other local ID/directory fallbacks may miss remote
 > transcripts. See [session inspection](../FEATURES.md#agent-awareness-and-session-inspection).
 
 ### 2.3 Read the file, then the diff
@@ -658,15 +728,32 @@ in this connection. See [update controls](../FEATURES.md#automatic-branch-update
 
 ### 3.2 Continue from your phone
 
+On a computer, click inside terminal output to send physical arrow keys and
+Ctrl combinations directly to that terminal. Opening Message does not disable
+desktop terminal input; unsent Message drafts remain separate.
+
+To check a host, open **Manage connections** and use **Check version again** on
+its card. The running Herdr version and protocol are specific to that host;
+after one minute, check again before relying on compatibility. A failed check
+stays unknown: reconnect the host and retry. The installed binary is not inferred
+from its server. The connection card explains why upgrade is unavailable and
+does not run an update command.
+
 First complete chapter 4's [Tailscale + Serve](#tailscale) setup and access checks.
 Use its HTTPS URL: `127.0.0.1` on a phone means the phone, not the work computer.
 
 1. Open Herdr World in the mobile browser and select your practice project and
    agent pane. Authenticate first if your deployment requires login.
 2. Tap **Message** below the terminal to raise the keyboard and compose; use
-   **Direct** to type straight into the terminal. The input stays below the output.
-   Tabs and More live in the shared top app bar. Use the shortcut rows for arrow
-   keys, Ctrl and other actions that are awkward on a touch keyboard.
+   the side-by-side **keyboard (Composer) / terminal (Direct)** icons to choose
+   draft editing or typing straight into the terminal. Direct saves and hides the draft; Composer
+   restores it. Both modes stay available while a long draft is expanded.
+   **/ Commands** opens command suggestions for the draft;
+   it does not turn on Direct. The input stays below the output.
+   The toolbar places attachment and Commands on the left, input-mode icons in
+   the middle, and Insert, Send and Close on the right.
+   Tabs and More live in the shared top app bar. Special-key rows stay visible
+   in both modes for arrows, Ctrl and other actions awkward on a touch keyboard.
 3. Open Changes to review the README diff. Mobile uses a unified diff layout;
    long-press a file to open its actions menu. To open a link printed in a
    terminal, long-press it and choose **Open link** (on a computer,

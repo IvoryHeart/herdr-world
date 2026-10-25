@@ -2,9 +2,22 @@ import { appendFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 
 type Step = { name: string; conclusion: string | null };
-type Job = { name: string; conclusion: string | null; steps: Step[] };
+type Job = {
+  id: number;
+  run_id: number;
+  run_attempt: number;
+  name: string;
+  conclusion: string | null;
+  steps: Step[];
+};
+type TestedSource = {
+  checkoutSha: string;
+  commitSha: string;
+  parents: string[];
+};
 type Run = {
   id: number;
+  run_attempt: number;
   head_sha: string;
   pull_requests: Array<{
     number: number;
@@ -23,6 +36,7 @@ export async function canReuseFullCheck(
   jobName: string,
   fullStepName: string,
   jobsForRun: (runId: number) => Promise<Job[]>,
+  testedSourceForJob: (jobId: number) => Promise<TestedSource | undefined>,
 ): Promise<boolean> {
   for (const run of [...runs].sort((left, right) => right.id - left.id)) {
     if (
@@ -38,6 +52,8 @@ export async function canReuseFullCheck(
       continue;
     const job = (await jobsForRun(run.id)).find(({ name }) => name === jobName);
     if (!job) continue;
+    if (job.run_id !== run.id || job.run_attempt !== run.run_attempt)
+      return false;
     const fullStep = job.steps.find(({ name }) => name === fullStepName);
     const reuseStep = job.steps.find(
       ({ name }) => name === "Determine validation scope",
@@ -47,9 +63,40 @@ export async function canReuseFullCheck(
       reuseStep?.conclusion === "success"
     )
       continue;
-    return job.conclusion === "success" && fullStep?.conclusion === "success";
+    if (job.conclusion !== "success" || fullStep?.conclusion !== "success")
+      return false;
+    // Run PR associations can change after a base update. The completed job's
+    // checkout log and the immutable merge commit's parents bind its source.
+    const source = await testedSourceForJob(job.id);
+    return (
+      source !== undefined &&
+      source.checkoutSha === source.commitSha &&
+      source.parents.length === 2 &&
+      source.parents[0] === baseSha &&
+      source.parents[1] === headSha
+    );
   }
   return false;
+}
+
+/** Read only the checkout action's full commit output; ambiguous logs fail closed. */
+export function checkoutCommitFromLog(log: string): string | undefined {
+  const lines = log
+    .split("\n")
+    .map((line) => line.replace(/^\d{4}-\d\d-\d\dT[\d:.]+Z ?/, "").trim());
+  const commits = new Set<string>();
+  let checkout = false;
+  for (let index = 0; index < lines.length - 1; index++) {
+    if (lines[index].startsWith("##[group]Run "))
+      checkout = lines[index].startsWith("##[group]Run actions/checkout@");
+    if (
+      checkout &&
+      /^\[command\].*\bgit log -1 --format=%H$/.test(lines[index]) &&
+      /^[0-9a-f]{40}$/.test(lines[index + 1])
+    )
+      commits.add(lines[index + 1]);
+  }
+  return commits.size === 1 ? [...commits][0] : undefined;
 }
 
 /**
@@ -99,7 +146,7 @@ export function isDocsOnlyChange(
   return changed.length > 0 && changed.every(isDocumentationPath);
 }
 
-async function githubJson<T>(path: string, token: string): Promise<T> {
+async function githubResponse(path: string, token: string): Promise<Response> {
   const response = await fetch(`https://api.github.com${path}`, {
     headers: {
       Accept: "application/vnd.github+json",
@@ -108,7 +155,29 @@ async function githubJson<T>(path: string, token: string): Promise<T> {
     },
   });
   if (!response.ok) throw new Error(`GitHub API returned ${response.status}`);
-  return (await response.json()) as T;
+  return response;
+}
+
+async function githubJson<T>(path: string, token: string): Promise<T> {
+  return (await (await githubResponse(path, token)).json()) as T;
+}
+
+/** Code events validate; metadata events may reuse exact-revision proof. */
+export async function selectValidationMode(
+  action: string | undefined,
+  docsOnly: boolean,
+  reuse: () => Promise<boolean>,
+): Promise<"docs" | "reuse" | "full"> {
+  if (docsOnly) return "docs";
+  if (action !== "edited" && action !== "labeled") return "full";
+  try {
+    return (await reuse()) ? "reuse" : "full";
+  } catch (error) {
+    console.error(
+      `Cannot reuse validation: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return "full";
+  }
 }
 
 if (import.meta.main) {
@@ -136,19 +205,19 @@ if (import.meta.main) {
 
   let mode = "full";
   try {
-    if (isDocsOnlyChange(baseSha, headSha)) {
-      mode = "docs";
-    } else if (process.env.PR_ACTION === "edited") {
-      const query = new URLSearchParams({
-        head_sha: headSha,
-        event: "pull_request",
-        per_page: "100",
-      });
-      const { workflow_runs: runs } = await githubJson<{
-        workflow_runs: Run[];
-      }>(`/repos/${repo}/actions/workflows/ci.yml/runs?${query}`, token);
-      if (
-        await canReuseFullCheck(
+    mode = await selectValidationMode(
+      process.env.PR_ACTION,
+      isDocsOnlyChange(baseSha, headSha),
+      async () => {
+        const query = new URLSearchParams({
+          head_sha: headSha,
+          event: "pull_request",
+          per_page: "100",
+        });
+        const { workflow_runs: runs } = await githubJson<{
+          workflow_runs: Run[];
+        }>(`/repos/${repo}/actions/workflows/ci.yml/runs?${query}`, token);
+        return canReuseFullCheck(
           runs,
           currentRunId,
           prNumber,
@@ -163,10 +232,28 @@ if (import.meta.main) {
                 token,
               )
             ).jobs,
-        )
-      )
-        mode = "reuse";
-    }
+          async (jobId) => {
+            const log = await (
+              await githubResponse(
+                `/repos/${repo}/actions/jobs/${jobId}/logs`,
+                token,
+              )
+            ).text();
+            const commit = checkoutCommitFromLog(log);
+            if (!commit) return undefined;
+            const data = await githubJson<{
+              sha: string;
+              parents: Array<{ sha: string }>;
+            }>(`/repos/${repo}/git/commits/${commit}`, token);
+            return {
+              checkoutSha: commit,
+              commitSha: data.sha,
+              parents: data.parents.map(({ sha }) => sha),
+            };
+          },
+        );
+      },
+    );
   } catch (error) {
     console.error(
       `Cannot shorten validation: ${error instanceof Error ? error.message : String(error)}`,

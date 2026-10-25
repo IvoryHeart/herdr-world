@@ -1,4 +1,11 @@
-import { Copy, LogIn, Play, RefreshCw, Settings2 } from "lucide-react";
+import {
+  Copy,
+  LogIn,
+  Play,
+  RefreshCw,
+  Settings2,
+  Terminal,
+} from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   agentNameFor,
@@ -19,14 +26,16 @@ import {
   type RetainedOutcome,
   type LauncherCatalog,
 } from "./agentProfiles";
+import { HarnessReadinessSummary } from "./HarnessReadinessSummary";
 import { ProfileSprite } from "./ProfileSprite";
 import type { WorldObject } from "./worldObject";
+import { store } from "../store";
 import "./agentProfiles.css";
 
 /**
- * New agent: pick a room, optionally say what to do, then tap a profile or a
- * kind. The service creates the tab, starts the harness, waits until it is
- * ready and sends the first prompt (agent/launch.ts).
+ * Pick a room and a plain Terminal, profile or agent kind. Agent choices
+ * create the tab, start the harness, wait until it is ready and send the first
+ * prompt (agent/launch.ts); Terminal uses the shared qualified creation action.
  */
 export function AgentLauncherDialog({
   world,
@@ -53,18 +62,33 @@ export function AgentLauncherDialog({
   const preferred = initial.profileId
     ? profiles.find((p) => p.id === initial.profileId)
     : undefined;
-  const [roomId, setRoomId] = useState<string>(() => {
+  const [selection, setSelection] = useState<{
+    id: string;
+    generation: number;
+  } | null>(() => {
+    const explicit =
+      initial.connectionId !== undefined ||
+      initial.workspaceId !== undefined ||
+      initial.generation !== undefined;
     const exact = rooms.find(
       (space) =>
         space.connectionId === initial.connectionId &&
-        space.nativeId === initial.workspaceId,
+        space.nativeId === initial.workspaceId &&
+        space.generation === initial.generation,
     );
     const home = preferred?.home_room
       ? rooms.find((space) => space.label === preferred.home_room)
       : undefined;
-    return (exact ?? home ?? rooms[0])?.id ?? "";
+    const chosen = explicit ? exact : (home ?? rooms[0]);
+    return chosen ? { id: chosen.id, generation: chosen.generation } : null;
   });
-  const room = rooms.find((space) => space.id === roomId) ?? null;
+  const room = selection
+    ? (rooms.find(
+        (space) =>
+          space.id === selection.id &&
+          space.generation === selection.generation,
+      ) ?? null)
+    : null;
   const target: LaunchTarget | null = room && {
     connectionId: room.connectionId,
     generation: room.generation,
@@ -83,10 +107,10 @@ export function AgentLauncherDialog({
   const generation = room?.generation;
   const workspaceId = room?.nativeId;
   useEffect(() => {
-    if (!connectionId || generation === undefined || !workspaceId) return;
-    let current = true;
     setCatalog(null);
     setCatalogError(null);
+    if (!connectionId || generation === undefined || !workspaceId) return;
+    let current = true;
     launcherCatalog({ connectionId, generation, workspaceId })
       .then((next) => current && setCatalog(next))
       .catch(
@@ -147,6 +171,28 @@ export function AgentLauncherDialog({
     }
   };
 
+  const createTerminal = async () => {
+    if (!target || busy) return;
+    setBusy("Terminal");
+    setOutcome(null);
+    setError(null);
+    try {
+      await store.createQualifiedTab(
+        {
+          connectionId: target.connectionId,
+          runtimeGeneration: target.generation,
+        },
+        target.workspaceId,
+        { numberedLabel: true },
+      );
+      onClose();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const logIn = async (kind: string) => {
     if (!target) return;
     setOutcome(null);
@@ -196,12 +242,32 @@ export function AgentLauncherDialog({
           </p>
         ) : (
           <>
+            {!room ? (
+              <p className="agent-launcher-note" role="status">
+                The requested room is unavailable. Choose a current room to
+                continue.
+              </p>
+            ) : null}
             <label className="agent-field">
               <span>Room</span>
               <select
-                value={roomId}
-                onChange={(event) => setRoomId(event.target.value)}
+                value={room?.id ?? ""}
+                onChange={(event) => {
+                  const chosen = rooms.find(
+                    (space) => space.id === event.target.value,
+                  );
+                  setSelection(
+                    chosen
+                      ? { id: chosen.id, generation: chosen.generation }
+                      : null,
+                  );
+                }}
               >
+                {!room ? (
+                  <option value="" disabled>
+                    Choose a current room
+                  </option>
+                ) : null}
                 {rooms.map((space) => (
                   <option key={space.id} value={space.id}>
                     {space.label} · {space.hostLabel}
@@ -210,7 +276,7 @@ export function AgentLauncherDialog({
               </select>
             </label>
             <label className="agent-field">
-              <span>Task (optional)</span>
+              <span>Agent task (optional)</span>
               <textarea
                 value={task}
                 rows={2}
@@ -231,6 +297,18 @@ export function AgentLauncherDialog({
                 </button>
               </p>
             ))}
+            <button
+              type="button"
+              className="agent-launcher-card"
+              disabled={!target || Boolean(busy)}
+              onClick={() => void createTerminal()}
+            >
+              <Terminal size={24} aria-hidden="true" />
+              <span>
+                <b>Terminal</b>
+                <small>A plain shell in this room</small>
+              </span>
+            </button>
             <div className="agent-launcher-section-head">
               <h3>From a profile</h3>
               <button type="button" onClick={onEditProfiles}>
@@ -245,7 +323,9 @@ export function AgentLauncherDialog({
                     key={profile.id}
                     type="button"
                     className="agent-launcher-card"
-                    disabled={Boolean(busy) || !catalog || note?.blocked}
+                    disabled={
+                      !target || Boolean(busy) || !catalog || note?.blocked
+                    }
                     title={note?.text ?? `Start ${profile.name} here`}
                     aria-label={`Start ${profile.name}`}
                     onClick={() => void launch({ profile })}
@@ -273,8 +353,9 @@ export function AgentLauncherDialog({
                 <RefreshCw size={13} aria-hidden="true" /> Check again
               </button>
             </div>
+            {catalog ? <HarnessReadinessSummary catalog={catalog} /> : null}
             <div className="agent-launcher-kinds">
-              {!catalog && !catalogError ? (
+              {target && !catalog && !catalogError ? (
                 <span className="agent-launcher-note">
                   Asking the host which agents it supports…
                 </span>
@@ -286,7 +367,7 @@ export function AgentLauncherDialog({
                     key={kind}
                     type="button"
                     className="agent-launcher-kind"
-                    disabled={Boolean(busy) || note?.blocked}
+                    disabled={!target || Boolean(busy) || note?.blocked}
                     title={note?.text ?? `Start ${harnessLabel(kind)} here`}
                     onClick={() => void launch({ kind })}
                   >

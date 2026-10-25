@@ -98,6 +98,130 @@ the site build for tutorial changes.
 New foundation modules need an owner and focused evidence in the guide. Leave
 machine- and user-specific data untracked and use synthetic examples in tests.
 
+### Post review results
+
+Put an explicit sender claim and reviewed commit before the RESULT line in
+each formal GitHub review or confirmation comment:
+
+```text
+Reviewer: rev2
+Reviewed commit: cccccccccccccccccccccccccccccccccccccccc
+RESULT #7: 2/2 resolved, 0 new
+```
+
+Use the actual PR number and exact reviewed SHA. Reviewer names are numbered
+(`rev2`) or named seats (`rev-opus`, `rev-astra`). A named seat counts only on
+the `Reviewer:` line. The name is a sender claim,
+not a verified identity; the shared GitHub account cannot distinguish crew
+reviewers. Legacy headers such as `rev2 — Review of <SHA>` and
+`rev1 refreshed confirmation at <SHA>` remain readable. Conflicting reviewer
+claims, quoted replies and fenced examples cannot establish a reviewer.
+
+World uses formal review commit metadata or an explicitly named full SHA or
+unique prefix; conflicting claims and ambiguous prefixes stay unknown. It
+never derives the reviewed head from timestamps. A historical RED/GREEN SHA
+mentioned in findings or comparison prose does not claim the reviewed head and
+cannot contradict formal review metadata or the canonical header.
+RESULT-only evidence remains
+separately linked as unknown attribution; a later named review does not claim
+an earlier anonymous post. Correct the original post to attribute it. Positive
+open-finding counts take precedence over clear or unknown wording, and an
+unrecognised remainder cannot make a resolved fraction confirm readiness.
+PR actions remain in the browser's confirmation flow, outside the World CLI,
+skills and MCP.
+
+### Check readiness with agent:gate
+
+`agent:gate` computes whether a pull request is ready for the owner's merge
+from GitHub and git, never from an agent's claim. It is report-only. It never
+writes to GitHub, prompts an agent or merges.
+
+```bash
+bun run agent:gate -- pass                # read open PRs, record and print verdicts
+bun run agent:gate -- explain 7           # receipt with evidence and an escalation packet
+bun run agent:gate -- merge-line 7        # re-read #7; head-pinned merge command only when READY
+bun run agent:gate -- check-claim 7 <sha> # re-read #7; check a crew "READY #7" message
+bun run agent:gate -- hold 7 --reason "owner repro"   # until `release 7`
+bun run agent:gate -- waive 7 <source> --reason "…"   # resolve one unattributed RESULT post
+bun run agent:gate -- diff                # verdict changes in the latest pass
+bun run agent:gate -- replay <dir>        # re-run fixture files; --pass ID re-runs a recorded pass
+```
+
+A verdict is `READY`, `NOT_READY`, `WAITING`, `UNKNOWN`, `NEEDS_JUDGMENT`,
+`MERGED` or `CLOSED`, and the worst condition decides. The PR card's own rules
+decide draft, checks, mergeable and screenshots. Each check is judged by its
+newest execution: within one workflow, the higher run number and then the
+higher attempt, never the job ID or finishing time. Repeated runs that aren't
+all known executions of one workflow are `UNKNOWN`, and the worst of them
+stands. The PR list's check summary never overrides a newer failing or running
+check. The gate adds:
+
+- **Required checks.** The base branch's required checks come from GitHub's
+  rules, from classic branch protection when it is readable, and from
+  `requiredChecks` in the config. A required check that never ran is
+  `UNKNOWN`. So is an unknown inventory: the rules are unreadable or require
+  nothing, and the config sets no `requiredChecks`. Set `"requiredChecks": []`
+  to declare that none are required.
+- **Required reviewers.** Each one's latest claim must confirm a head that
+  still counts. Reviewers are set per PR number, else per `pod:<name>` label,
+  else a default list.
+- **Every other finding.** The gate reads the PR's full review and comment
+  history, not the PR card's recent window.
+  - Any other named reviewer who ever reported findings must confirm on a head
+    that still counts.
+  - An unattributed RESULT that isn't a clear confirmation, judged on its full
+    text, blocks until its post is attributed or someone records `waive` for
+    its source ID, which `explain` shows.
+  - Incomplete history is `UNKNOWN`.
+- **The copy rule for claims on an earlier head.** A claim carries over only
+  when every later commit merges a commit already on main and replaying that
+  merge reproduces its tree. Any other commit, including a resolved conflict,
+  needs confirmation again. Being behind main never matters.
+- **CI attempts.** A check that went green on a rerun keeps its failed
+  attempts on record. Only a configured flake within its rerun budget stays
+  READY; any other rerun needs judgment.
+- **Holds.** A hold lasts across heads until it is released.
+
+`merge-line` and `check-claim` read the PR again before answering, so a hold,
+a new finding, a push or a merge since the last pass always counts.
+`merge-line` prints `gh pr merge N --merge --match-head-commit <sha>` only for
+a READY verdict, so GitHub refuses the merge if the head moves afterwards. It
+exits with status 2 otherwise, and never prints `--admin`. `replay --pass`
+re-judges a recorded pass with the config it ran with, notes when
+`config.json` has changed since, and exits 1 if any verdict differs in state,
+head, conditions or notes.
+
+Configuration and state stay untracked in the primary checkout's
+`.agents/crew-gate/`, which every worktree shares:
+
+- `config.json` holds the repository, reviewers, flakes, rerun budget and
+  optional required checks. Start from
+  [`config.example.json`](../scripts/agent/gate/config.example.json).
+- `gate.sqlite` keeps every pass's inputs and config, reviewer claims, check
+  attempts, decisions and verdict transitions. Comment text is reduced to
+  RESULT lines.
+- `mirror.git` is a bare mirror of main and pull request heads, so the gate
+  never fetches into a checkout.
+
+Source: [`scripts/agent/gate.ts`](../scripts/agent/gate.ts) and
+[`scripts/agent/gate/`](../scripts/agent/gate/). The predicate is pure, and its
+acceptance cases live in `cases.ts`.
+
+## Limit merge conflict churn
+
+Before parallel changes, identify shared implementation files and keep one writer
+for overlapping edits. Recent recurring integration surfaces include the service
+entry point, Town canvas, Chat and the file-size exception ledger. A source split
+and a feature touching the same code should land in an agreed order; otherwise
+the feature must deliberately follow the split's new module boundaries.
+
+Use changelog fragments rather than editing the assembled `CHANGELOG.md`. Bring
+an older branch forward once before final verification, inspect the conflicting
+paths and preserve both behaviors. Do not repeatedly merge main solely to chase
+an unrelated red CI run: first identify the failed leaf job and whether main
+shares it. Branch age increases exposure, but overlapping changes cause the
+conflict; a very old branch can still merge cleanly when its files are separate.
+
 ## Run an optional visible team
 
 For HWF operating guidance, use the repo-local
@@ -218,15 +342,26 @@ data. Prepare the PR body with available verification and agent execution using 
 [PR template](../.github/pull_request_template.md) before creating the PR; use
 `unknown` for values not yet available. Include the changelog fragment under
 `changes/` (or the `Changelog: none — <reason>` line) before the first push; the
-PR number need not be added to it or linked from the PR body. Keep later usage accounting in the workflow output and final handoff
-instead of editing the PR body solely for totals, because an edit starts another
-CI run. Reuse earlier results only when their relevant inputs are unchanged.
+PR number need not be added to it or linked from the PR body. Keep usage accounting
+in one marked PR comment, created when READY and edited
+in place at merge. Do not edit the PR body solely for totals, because an edit
+starts another CI run. Reuse earlier results only when their relevant inputs are
+unchanged.
 Open a ready PR and stop before merge.
 
-`agent:usage` remains available for [optional Codex usage audits](agent-usage-audit.md).
-Do not make agent-run token accounting a routine pre-PR step. The measurement
-follow-up owns durable task/session/PR-linked usage collection; local rollout
-records are interim evidence.
+`agent:usage` records [per-PR usage](agent-usage-audit.md) from local Codex and
+Claude Code sessions. Register builder/fixer assignment windows locally, then run
+`bun run agent:usage comment N --post` when the PR is READY and again at merge.
+This accounting is routine at those milestones, but is not a pre-PR gate. Full
+rows stay in the ignored `.agents/crew-gate/usage.sqlite` in the primary checkout;
+the one `<!-- crew-usage -->` comment contains aggregate role/model totals and
+measurement caveats. Session IDs, paths and other private identifiers never belong
+in the comment or PR body. Preserve unattributed usage and label coordinator
+heuristics as estimates. Run `bun run agent:usage roster-check --pr N` to compare
+recorded models and efforts against the shared config roster. The public comment
+includes model-only drift notes; unknown effort remains unknown. Quarantined
+Claude records retain valid usage and contribute a partial-measurement caveat.
+The original bounded Codex audit and `--tooling` remain available for investigation.
 
 ## Revisit the process
 
@@ -236,8 +371,9 @@ per six-minute gate from the Codex rollout; formatter writes per candidate from
 check wall time from the pre-push hook and CI run metadata; and review
 outcomes from the PR timeline. A durable workflow artifact must join these
 records to the task, session, PR and candidate head before the worktree is removed.
-Add ingestion or upload for the local hook report in that measurement follow-up;
-the ignored TSV alone is insufficient. `agent:usage --tooling` cannot count a check
+The PR usage ledger records tokens and attribution; ingestion of the local hook
+report into durable gate measurements remains a separate follow-up. The ignored
+TSV alone is insufficient. `agent:usage --tooling` cannot count a check
 executed inside the pre-push hook as a literal agent command. The first targets
 are at most two blocking waits per six-minute gate and one formatter write per
 candidate. Keep measurements in workflow artifacts and the process review; do
@@ -255,3 +391,24 @@ The [UI scale browser test timing analysis](ui-scale-test-performance.md) record
 the current slow-case measurements and a proposed test-design experiment.
 The [World handoff browser test timing analysis](world-handoff-test-performance.md)
 records its deadline shortcut, measured saving and scroll-race diagnosis.
+
+### Accepted proposal boundary for a future OpenSpec documentation lane
+
+[Issue #360](https://github.com/IvoryHeart/herdr-world/issues/360) records a
+proposal-only policy decision. **There is no classifier or CI behavior change:**
+`scripts/ci-reuse-full-check.ts` still excludes all `openspec/` paths from its
+documentation lane. Implementing a future exception needs separate authorization.
+
+That future exception may admit only the exact files
+`openspec/changes/<lowercase-kebab-slug>/proposal.md` and
+`openspec/changes/<lowercase-kebab-slug>/design.md`, alongside the existing eligible
+ordinary documentation. It must not admit a whole change directory or nested
+paths. Tasks, current or delta specs, archives, configuration and metadata,
+verification/Quint, adapters, consumers and code retain full required checks.
+Existing protected workflow policy and packaged notices remain protected too.
+
+Mixed or ambiguous diffs fail closed to the full gate, including case and path
+ambiguity. Retain `--no-renames` when collecting changed paths: moving a protected
+specification into a proposal path must still expose the protected deletion and
+select full verification. This accepted boundary does not authorize bypassing
+contract or behavioral verification for a planning file that accompanies code.

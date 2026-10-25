@@ -50,7 +50,12 @@ export default function WorldTerminalPortalList({
   };
 }) {
   const snapshot = useStoreSelector((state) => state);
+  const admitted = useRef(new Set<string>());
   const [parking, setParking] = useState<HTMLDivElement | null>(null);
+  const presentedKeys = new Set(presentations.map(worldInspectorWindowId));
+  for (const key of admitted.current) {
+    if (!presentedKeys.has(key)) admitted.current.delete(key);
+  }
   return (
     <>
       <div
@@ -63,12 +68,13 @@ export default function WorldTerminalPortalList({
           (connection) => connection.id === presentation.connectionId,
         );
         const session = connectionSnapshot(snapshot, presentation.connectionId);
+        const key = worldInspectorWindowId(presentation);
         if (
           (!presentation.portal && !presentation.endpointReadiness) ||
           !presentation.tabId ||
-          snapshot.status !== "connected" ||
-          owner?.state !== "ready" ||
-          presentation.runtimeGeneration !== owner.generation
+          (snapshot.catalogueReady &&
+            presentation.runtimeGeneration !== owner?.generation) ||
+          session.serverRuntimeGeneration !== presentation.runtimeGeneration
         ) {
           return null;
         }
@@ -79,7 +85,14 @@ export default function WorldTerminalPortalList({
             candidate.workspace_id === presentation.workspaceId &&
             candidate.tab_id === presentation.tabId,
         );
-        return pane ? (
+        if (
+          pane &&
+          snapshot.status === "connected" &&
+          snapshot.catalogueReady &&
+          owner?.state === "ready"
+        )
+          admitted.current.add(key);
+        return pane && admitted.current.has(key) ? (
           <WorldTerminalPortalOwner
             key={worldInspectorWindowId(presentation)}
             portal={presentation.portal}

@@ -24,7 +24,6 @@ type TabIdentity = {
 function tabIdentityKey(identity: TabIdentity) {
   return JSON.stringify([
     identity.connectionId,
-    identity.connectionGeneration,
     identity.runtimeGeneration,
     identity.workspaceId,
     identity.tabId,
@@ -191,7 +190,11 @@ export function useVisibleTabLayoutState(
   const candidate =
     activeLayout ??
     (observed?.key === identityKey ? observed.layout : null) ??
-    tabLayoutFor(identity.connectionId, identity.connectionGeneration, tabId);
+    tabLayoutFor(
+      identity.connectionId,
+      identity.runtimeGeneration ?? identity.connectionGeneration,
+      tabId,
+    );
   const provisional = provisionalTabLayout(candidate, snapshot.panes, tabId);
   const layout = tabLayoutMatchesSnapshot(provisional, identity, snapshot)
     ? provisional
@@ -243,7 +246,8 @@ export function useVisibleTabLayoutState(
         }
         rememberTabLayout(
           requestIdentity.connectionId,
-          requestIdentity.connectionGeneration,
+          requestIdentity.runtimeGeneration ??
+            requestIdentity.connectionGeneration,
           next,
         );
         setObserved({ key: tabIdentityKey(requestIdentity), layout: next });

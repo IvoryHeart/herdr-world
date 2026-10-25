@@ -384,7 +384,7 @@ export function focusIndexOf(
 export function DeskView(props: {
   world: WorldObject;
   aggregate?: WorldObject;
-  onOpenTerminal(id: string): Promise<void>;
+  onOpen(id: string): Promise<void>;
   reading?: string | null;
   onPreview?: ((id: string) => Promise<void>) | null;
   onCloseReading?: () => void;
@@ -402,7 +402,7 @@ export function DeskBoard({
   world,
   aggregate,
   client,
-  onOpenTerminal,
+  onOpen,
   reading = null,
   onPreview = null,
   onCloseReading,
@@ -410,7 +410,7 @@ export function DeskBoard({
   world: WorldObject;
   aggregate?: WorldObject;
   client: DeskClients;
-  onOpenTerminal(id: string): Promise<void>;
+  onOpen(id: string): Promise<void>;
   /** The agent shown in the docked reading pane, on wide screens. */
   reading?: string | null;
   onPreview?: ((id: string) => Promise<void>) | null;
@@ -546,9 +546,9 @@ export function DeskBoard({
     cancelPreview();
     setError(null);
     recordOpen(leaf);
-    void onOpenTerminal(leaf.id).catch((reason: unknown) =>
+    void onOpen(leaf.id).catch((reason: unknown) =>
       setError(
-        reason instanceof Error ? reason.message : "Could not open terminal",
+        reason instanceof Error ? reason.message : "Could not open this agent",
       ),
     );
   };

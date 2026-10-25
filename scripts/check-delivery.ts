@@ -90,9 +90,10 @@ const STATIC = [
   "notices:check",
   "changelog:check",
   "check:size",
-  "format:check",
-  "lint",
-  "typecheck",
+  "check:commit",
+  // `build` below generates and validates production assets. Avoid the extra
+  // web build in server's pretypecheck while checking all three TS projects.
+  "typecheck:quick",
   "typecheck:bun",
   "build",
   "build:site",

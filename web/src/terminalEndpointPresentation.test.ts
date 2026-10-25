@@ -474,3 +474,34 @@ describe("endpoint history selection repaints", () => {
     expect(shown).toEqual([]);
   });
 });
+
+test("transport retirement keeps the last frame and fences queued parser/replay work", () => {
+  const writes: string[] = [];
+  let parsed = () => {};
+  const presentation = new TerminalEndpointPresentation(
+    () => false,
+    (text, done) => {
+      writes.push(text);
+      parsed = done;
+    },
+  );
+  presentation.update("retained", false);
+  parsed();
+  const retained = presentation.displayedFrame;
+  presentation.update("old pending", true);
+  const oldParsed = parsed;
+  let replayed = false;
+  presentation.beginSelection(() => {
+    replayed = true;
+  });
+  presentation.reset(true, true);
+  oldParsed();
+  expect(presentation.displayedFrame).toBe(retained);
+  expect(presentation.mouseReporting).toBeUndefined();
+  expect(replayed).toBe(false);
+  presentation.update("fresh", false);
+  parsed();
+  expect(presentation.displayedFrame?.text).toBe("fresh");
+  presentation.reset(true);
+  expect(presentation.displayedFrame).toBeNull();
+});

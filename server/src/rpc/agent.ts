@@ -21,6 +21,7 @@ export function handleAgentRpc(
       method === "agent_session.get" ||
       method === "agent_turn.get" ||
       method === "agent_checkout.get" ||
+      method === "agent_worktree.get" ||
       method === "agent_session.link_preview" ||
       method === "agent_session.link"
     )
@@ -125,6 +126,17 @@ async function dispatchAgentRpc(
       sendReply({ id, result }, "agent-turn-get");
     } catch (e) {
       sendError("agent-turn-get-error", e);
+    }
+    return;
+  }
+  if (method === "agent_worktree.get") {
+    try {
+      const result = await connection.agentWorktree.get(params?.subject, {
+        refresh: params?.refresh === true,
+      });
+      sendReply({ id, result }, "agent-worktree-get");
+    } catch (error) {
+      sendError("agent-worktree-get-error", error);
     }
     return;
   }

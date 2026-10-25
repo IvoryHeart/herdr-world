@@ -1,3 +1,4 @@
+import { isSlashCommand } from "../../../shared/conversationInput";
 import { existsSync, type FSWatcher, watch } from "node:fs";
 import { basename, join } from "node:path";
 import {
@@ -250,9 +251,8 @@ export function createHerdrConversationSource(args: {
         `Chat cannot read ${agent} conversations yet.`,
       );
     const reported = isRecord(info.agent_session) ? info.agent_session : null;
-    // The Grok and Antigravity readers, and Claude and Kimi ID lookups, only
-    // open files on this machine. A remote pane must never show a local
-    // transcript, so these are refused rather than read.
+    // A remote pane must never use local-only readers or ID discovery.
+    // Claude UUIDs are supported only by an adapter with host-local lookup.
     if (
       args.files.remote &&
       (agent === "grok" ||
@@ -260,7 +260,8 @@ export function createHerdrConversationSource(args: {
         (reported &&
           reported.kind !== "path" &&
           agent !== "pi" &&
-          agent !== "codex"))
+          agent !== "codex" &&
+          !(agent === "claude" && args.files.findClaudeSessionById)))
     )
       return unavailable(
         base,
@@ -791,16 +792,9 @@ export function createHerdrConversationSource(args: {
           reason: "unavailable",
           message: "Chat cannot send on a Windows host yet.",
         };
-      // A command can switch the session by design and is not recorded as
-      // something the user said, so Chat could never settle it.
-      // A pasted path such as /var/log/… is a message, not a command word.
-      if (/^\/[A-Za-z][\w:-]*(\s|$)/.test(text.trimStart()))
-        return {
-          status: "refused",
-          reason: "command",
-          message:
-            "Chat does not send commands such as /compact, because it cannot check where they went. Nothing was sent; use the Terminal tab.",
-        };
+      // All slash commands use the same qualified admission, with unchecked
+      // receipts because changing sessions can be their intended effect.
+      const command = isSlashCommand(text);
       if (deliveries.full(pane_id))
         return {
           status: "refused",
@@ -921,6 +915,8 @@ export function createHerdrConversationSource(args: {
       const sentAgent = normalizeAgentName(stringValue(sent.agent));
       const landed = paneBinding(sentAgent, sent, args.context, verified);
       const delivery = deliveries.record(pane_id, {
+        ...(command ? { kind: "command" as const } : {}),
+        queued: stringValue(info?.agent_status) === "working",
         text,
         fingerprint: bound.fingerprint,
         expected:

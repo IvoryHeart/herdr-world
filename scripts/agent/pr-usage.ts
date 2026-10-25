@@ -442,52 +442,60 @@ async function readSessionLogs(options: Options) {
 
 if (import.meta.main) {
   try {
-    const options = parseOptions(process.argv.slice(2));
-    const logs = await readSessionLogs(options);
-    const summary = summarizeUsage(logs, options.from, options.until);
-    const tooling = options.tooling
-      ? summarizeTooling(logs, options.from, options.until)
-      : null;
-    if (summary.responses === 0) {
-      throw new Error("No per-response usage records in the selected interval");
-    }
-    if (options.json) {
-      console.log(
-        JSON.stringify(
-          {
-            pr: options.pr ?? null,
-            ...summary,
-            ...(tooling ? { tooling } : {}),
-          },
-          null,
-          2,
-        ),
-      );
+    const args = process.argv.slice(2).filter((arg) => arg != "--");
+    if (["pr", "comment", "assign", "roster-check"].includes(args[0] ?? "")) {
+      const { prUsageMain } = await import("./usage-cli");
+      process.exitCode = await prUsageMain(args);
     } else {
-      const label = options.pr ? `PR #${options.pr}` : "Codex usage";
-      console.log(
-        `${label}: ${summary.responses} model responses across ${options.sessions.length} session(s)`,
-      );
-      console.log(
-        `Boundary: ${options.from ?? "session start"} to ${options.until ?? "latest recorded response"} (end exclusive)`,
-      );
-      console.log(`Recorded: ${summary.first} to ${summary.last}`);
-      console.log(
-        `Input ${summary.input} (cached ${summary.cachedInput}, uncached ${summary.uncachedInput}); output ${summary.output} (reasoning ${summary.reasoningOutput}, included in output); total ${summary.total}.`,
-      );
-      console.log(
-        "These are recorded tokens, not billed cost. The caller defines which sessions and interval belong to the PR.",
-      );
-      if (tooling) {
+      const options = parseOptions(args);
+      const logs = await readSessionLogs(options);
+      const summary = summarizeUsage(logs, options.from, options.until);
+      const tooling = options.tooling
+        ? summarizeTooling(logs, options.from, options.until)
+        : null;
+      if (summary.responses === 0) {
+        throw new Error(
+          "No per-response usage records in the selected interval",
+        );
+      }
+      if (options.json) {
         console.log(
-          `Tools: ${tooling.outerCalls} outer calls, ${tooling.execWrappers} exec wrappers (${tooling.singleNestedExecWrappers} with one nested call), ${tooling.nestedCalls} nested calls.`,
+          JSON.stringify(
+            {
+              pr: options.pr ?? null,
+              ...summary,
+              ...(tooling ? { tooling } : {}),
+            },
+            null,
+            2,
+          ),
+        );
+      } else {
+        const label = options.pr ? `PR #${options.pr}` : "Codex usage";
+        console.log(
+          `${label}: ${summary.responses} model responses across ${options.sessions.length} session(s)`,
         );
         console.log(
-          `Recognized commands: ${tooling.testCommands} tests, ${tooling.quickTypechecks} quick typechecks, ${tooling.fullChecks} full checks, ${tooling.githubCommands} GitHub commands.`,
+          `Boundary: ${options.from ?? "session start"} to ${options.until ?? "latest recorded response"} (end exclusive)`,
+        );
+        console.log(`Recorded: ${summary.first} to ${summary.last}`);
+        console.log(
+          `Input ${summary.input} (cached ${summary.cachedInput}, uncached ${summary.uncachedInput}); output ${summary.output} (reasoning ${summary.reasoningOutput}, included in output); total ${summary.total}.`,
         );
         console.log(
-          `Tool output: ${tooling.outputChars} characters; ${tooling.largeOutputs} results at least 10000 characters. Command counts are best effort for literal exec_command arguments.`,
+          "These are recorded tokens, not billed cost. The caller defines which sessions and interval belong to the PR.",
         );
+        if (tooling) {
+          console.log(
+            `Tools: ${tooling.outerCalls} outer calls, ${tooling.execWrappers} exec wrappers (${tooling.singleNestedExecWrappers} with one nested call), ${tooling.nestedCalls} nested calls.`,
+          );
+          console.log(
+            `Recognized commands: ${tooling.testCommands} tests, ${tooling.quickTypechecks} quick typechecks, ${tooling.fullChecks} full checks, ${tooling.githubCommands} GitHub commands.`,
+          );
+          console.log(
+            `Tool output: ${tooling.outputChars} characters; ${tooling.largeOutputs} results at least 10000 characters. Command counts are best effort for literal exec_command arguments.`,
+          );
+        }
       }
     }
   } catch (error) {

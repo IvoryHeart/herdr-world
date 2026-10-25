@@ -1165,6 +1165,9 @@ describe("connection profile service", () => {
         ),
       ),
     ).toBeFalse();
+    expect(
+      service.willRetry("remote", new Error("unclassified failure")),
+    ).toBeFalse();
     const first = created.get("remote")![0];
     first.context.reportError(permanent, { reconnecting: false });
     service.runtimeFailed("remote", permanent);
@@ -1430,4 +1433,152 @@ describe("connection profile service", () => {
     expect(manager.status("alpha").label).toBe("ALPHA");
     expect(readFileSync(store.path, "utf8")).toBe(before);
   });
+});
+
+test("default transient recovery survives more than six failures and leaves a sibling alone", async () => {
+  const store = await persistedStore({
+    version: 2,
+    default_connection_id: "remote",
+    profiles: [ssh("remote", true), local("sibling", true)],
+  });
+  const bootstrap = loadConnectionProfileBootstrap({
+    store,
+    startupProfile: legacy,
+    explicitStartupOverride: false,
+  });
+  const manager = new ConnectionManager<FakeRuntime>("remote");
+  const created = new Map<string, FakeRuntime[]>();
+  const base = runtimeFactory(created);
+  const timers: Array<{
+    callback: () => void;
+    delayMs: number;
+    cancelled: boolean;
+  }> = [];
+  let attempts = 0;
+  const transient = new SshTunnelError(
+    "synthetic timeout",
+    true,
+    "unreachable",
+    255,
+  );
+  const service = new ConnectionProfileService({
+    manager,
+    store,
+    bootstrap,
+    createRuntime: (profile) => (context) => {
+      const runtime = base(profile)(context);
+      if (profile.id === "remote")
+        runtime.startTransport = async () => {
+          if (++attempts <= 8) throw transient;
+        };
+      return runtime;
+    },
+    retry: {
+      baseDelayMs: 10,
+      maxDelayMs: 40,
+      random: () => 0,
+      schedule: (callback, delayMs) => {
+        const timer = { callback, delayMs, cancelled: false };
+        timers.push(timer);
+        return {
+          cancel: () => {
+            timer.cancelled = true;
+          },
+        };
+      },
+    },
+  });
+  try {
+    await service.startConfigured();
+    const sibling = manager.readyRuntimeLease("sibling")!;
+    for (let index = 0; index < 8; index++) {
+      expect(timers[index]).toBeDefined();
+      timers[index]!.callback();
+      await waitUntil(
+        () =>
+          timers.length > index + 1 ||
+          manager.status("remote").state === "ready" ||
+          manager.status("remote").state === "error",
+      );
+    }
+    await waitUntil(() => manager.status("remote").state === "ready");
+    expect(attempts).toBe(9);
+    expect(timers.slice(0, 8).map((x) => x.delayMs)).toEqual([
+      5, 10, 20, 20, 20, 20, 20, 20,
+    ]);
+    expect(sibling.isCurrent()).toBe(true);
+    expect(manager.currentRuntime("sibling")).toBe(sibling.runtime);
+    expect(created.get("sibling")).toHaveLength(1);
+    expect(
+      created
+        .get("remote")!
+        .slice(0, 8)
+        .every((x) => x.stops === 1),
+    ).toBe(true);
+  } finally {
+    service.stopSupervision();
+    await manager.stopAll();
+  }
+});
+
+test("removal cancels default transient recovery and a late timer cannot revive the profile", async () => {
+  const store = await persistedStore({
+    version: 2,
+    default_connection_id: "sibling",
+    profiles: [local("sibling", true), ssh("remote", true)],
+  });
+  const bootstrap = loadConnectionProfileBootstrap({
+    store,
+    startupProfile: legacy,
+    explicitStartupOverride: false,
+  });
+  const manager = new ConnectionManager<FakeRuntime>("sibling");
+  const created = new Map<string, FakeRuntime[]>();
+  const base = runtimeFactory(created);
+  const timers: Array<{ callback: () => void; cancelled: boolean }> = [];
+  const transient = new SshTunnelError(
+    "synthetic timeout",
+    true,
+    "unreachable",
+    255,
+  );
+  const service = new ConnectionProfileService({
+    manager,
+    store,
+    bootstrap,
+    createRuntime: (profile) => (context) => {
+      const runtime = base(profile)(context);
+      if (profile.id === "remote")
+        runtime.startTransport = async () => {
+          throw transient;
+        };
+      return runtime;
+    },
+    retry: {
+      schedule: (callback) => {
+        const timer = { callback, cancelled: false };
+        timers.push(timer);
+        return {
+          cancel: () => {
+            timer.cancelled = true;
+          },
+        };
+      },
+    },
+  });
+  try {
+    await service.startConfigured();
+    const healthy = manager.readyRuntimeLease("sibling")!;
+    expect(timers).toHaveLength(1);
+    await service.remove("remote");
+    expect(timers[0]!.cancelled).toBe(true);
+    timers[0]!.callback();
+    await Bun.sleep(1);
+    expect(manager.has("remote")).toBe(false);
+    expect(created.get("remote")).toHaveLength(1);
+    expect(healthy.isCurrent()).toBe(true);
+  } finally {
+    service.stopSupervision();
+    await manager.stopAll();
+  }
 });

@@ -32,6 +32,9 @@ const unavailableObservability = {
 test.skipIf(!chrome).each([
   [1440, 900, "typical", 0],
   [390, 900, "typical", 0],
+  // Stable cached/healthy hosts: cold signs and cull/remount use committed refs.
+  [390, 844, "recovery", 0],
+  [1440, 900, "recovery", 0],
   [1440, 900, "max", 0],
   // Extended rooms (100, 50 and 24 desks) on a phone, half-width, wide and
   // portrait screens: the town's shape follows the container.
@@ -41,7 +44,18 @@ test.skipIf(!chrome).each([
   [1080, 1920, "extended", 0],
   // Regress fixed-delay zoom-out retries on a slow software renderer.
   [1080, 1920, "extended", 300],
-  // Every one of 130 protected desks keeps its browser target past both bounds.
+  // Ordinary idle desks expand in repeated 20-desk steps until fully visible.
+  [390, 844, "incremental", 0],
+  [1440, 900, "plates", 0],
+  [390, 844, "plates", 0],
+  // The 26-tab fixture proves a native-order prefix and hidden-attention corners.
+  [390, 844, "fold", 0],
+  [960, 1080, "fold", 0],
+  [1440, 900, "fold", 0],
+  [1080, 1920, "fold", 0],
+  [2560, 1440, "fold", 0],
+  [390, 844, "fold-protected", 0],
+  // A dense busy room still folds to 24, marking hidden attention on its tile.
   [390, 844, "protected", 0],
   // Request a room beyond admission while renderer initialization is held.
   [390, 844, "navigation", 0],

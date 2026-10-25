@@ -201,3 +201,25 @@ describe("Board model", () => {
     ]);
   });
 });
+
+test("failed cached Board panes keep history without live status or action admission", () => {
+  const board = projectBoard(
+    fixtureWorld([
+      fixtureHost(
+        "failed",
+        [{ label: "Room", tabs: [{ label: "Agent", panes: [["working"]] }] }],
+        { stale: true },
+      ),
+      fixtureHost("healthy", [
+        { label: "Room", tabs: [{ label: "Agent", panes: [["working"]] }] },
+      ]),
+    ]),
+  );
+  expect(board.hosts[0]!.stale).toBe(true);
+  expect(board.tabs[0]!.actionable).toBe(false);
+  expect(board.tabs[0]!.status).toBe("unknown");
+  expect(board.tabs[0]!.panes[0]!.status).toBe("unknown");
+  expect(board.tabs[0]!.panes[0]!.leaf.status).toBe("working");
+  expect(board.tabs[1]!.actionable).toBe(true);
+  expect(board.tabs[1]!.status).toBe("working");
+});

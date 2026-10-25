@@ -4,6 +4,7 @@ import {
   planMainGate,
   redShaMarker,
   redShaOf,
+  readJobLog,
 } from "./main-gate";
 
 const sha = "0123456789abcdef0123456789abcdef01234567";
@@ -14,6 +15,39 @@ const base = {
   owner: "example-owner",
   revertBranchExists: false,
 } as const;
+
+test("failed-job logs reach classification without terminal-output filtering", async () => {
+  const log =
+    "\u001b[31merror: browser startup timed out after 35000ms\u001b[0m";
+  const request = async (url: string, options: RequestInit) => {
+    expect(String(url)).toBe(
+      "https://api.github.com/repos/example/repo/actions/jobs/42/logs",
+    );
+    expect(options?.headers).toMatchObject({
+      Authorization: "Bearer synthetic-token",
+    });
+    return new Response(log);
+  };
+  expect(await readJobLog("example/repo", 42, "synthetic-token", request)).toBe(
+    log,
+  );
+  expect(
+    onlyInfraFlakes([
+      {
+        name: "World browser tests",
+        log: [
+          "##[group]Run tests",
+          log,
+          "##[error]Process completed with exit code 1",
+        ].join("\n"),
+      },
+    ]),
+  ).toBe(true);
+  const denied = async () => new Response("unavailable", { status: 403 });
+  await expect(
+    readJobLog("example/repo", 42, "synthetic-token", denied),
+  ).rejects.toThrow("403");
+});
 
 test("the first red main commit opens an issue naming its PR and prepares a revert", () => {
   const plan = planMainGate({

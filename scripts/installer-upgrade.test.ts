@@ -6,7 +6,9 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -22,9 +24,14 @@ import {
   legacyBaselineStagingLock,
   baselineBuild,
   command,
+  createInstallerFixtureRoot,
 } from "./installer-upgrade";
 
-const legacyCleanupError = (version = "0.2.6") =>
+const legacyCleanupError = (
+  version = "0.2.6",
+  cwd = "C:\\fixture\\upgrade",
+  printedRoot = cwd,
+) =>
   new InstallerCommandError(
     [
       "powershell.exe",
@@ -38,16 +45,180 @@ const legacyCleanupError = (version = "0.2.6") =>
     1,
     `Installed Herdr World plugin binary ${version}\r\n`,
     [
-      "Remove-Item : Cannot remove item C:\\fixture\\upgrade\\server\\.plugin-install-example.tmp\\herdr-world-windows-arm64\\herdr-world.exe: The process cannot",
+      `Remove-Item : Cannot remove item ${printedRoot}\\server\\.plugin-install-example.tmp\\herdr-world-windows-arm64\\herdr-world.exe: The process cannot`,
       "access the file 'herdr-world.exe' because it is being used by another process.",
-      "At C:\\fixture\\upgrade\\scripts\\install-plugin.ps1:112 char:3",
+      `At ${printedRoot}\\scripts\\install-plugin.ps1:112 char:3`,
       "+   Remove-Item -LiteralPath $staging -Recurse -Force",
       "+   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
       "    + CategoryInfo          : WriteError: (herdr-world.exe:FileInfo) [Remove-Item], IOException",
       "    + FullyQualifiedErrorId : RemoveFileSystemItemIOError,Microsoft.PowerShell.Commands.RemoveItemCommand",
     ].join("\r\n"),
-    "C:\\fixture\\upgrade",
+    cwd,
   );
+
+test("installer fixtures canonicalize an aliased parent before forming command paths", () => {
+  const directory = realpathSync.native(
+    mkdtempSync(join(tmpdir(), "installer paths ")),
+  );
+  try {
+    const physical = join(directory, "physical");
+    const alias = join(directory, "alias");
+    mkdirSync(physical);
+    symlinkSync(physical, alias, "junction");
+    const root = createInstallerFixtureRoot(alias);
+    const canonical = realpathSync.native(root);
+    expect(root).toBe(canonical);
+    const upgrade = join(root, "upgrade");
+    mkdirSync(upgrade);
+    const printedRoot = realpathSync.native(upgrade);
+    expect(
+      legacyBaselineStagingLock(
+        legacyCleanupError("0.2.6", upgrade, printedRoot),
+        "v0.2.6",
+        "win32",
+      ),
+    ).toBe(true);
+    expect(
+      legacyBaselineStagingLock(
+        legacyCleanupError("0.2.6", join(directory, "different"), printedRoot),
+        "v0.2.6",
+        "win32",
+      ),
+    ).toBe(false);
+    expect(
+      legacyBaselineStagingLock(
+        legacyCleanupError("0.2.6", upgrade, printedRoot),
+        "v0.2.7",
+        "win32",
+      ),
+    ).toBe(false);
+    expect(
+      legacyBaselineStagingLock(
+        legacyCleanupError("0.2.6", upgrade, printedRoot),
+        "v0.2.6",
+        "linux",
+      ),
+    ).toBe(false);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("installer command failures show only requested and canonical cwd diagnostics, including missing directories", () => {
+  const directory = realpathSync.native(
+    mkdtempSync(join(tmpdir(), "installer diagnostics ")),
+  );
+  const previous = process.env.HERDR_WORLD_INSTALLER_DIAGNOSTIC_SECRET;
+  process.env.HERDR_WORLD_INSTALLER_DIAGNOSTIC_SECRET = "private-fixture-value";
+  try {
+    const physical = join(directory, "physical");
+    const alias = join(directory, "alias");
+    mkdirSync(physical);
+    symlinkSync(physical, alias, "junction");
+    const failure = legacyCleanupError("0.2.6", alias);
+    expect(failure.message).toContain(
+      JSON.stringify({
+        requested: alias,
+        canonical: realpathSync.native(alias),
+      }),
+    );
+    expect(failure.message).not.toContain("private-fixture-value");
+    const missing = join(directory, "missing");
+    const unavailable = legacyCleanupError("0.2.6", missing);
+    expect(unavailable).toBeInstanceOf(InstallerCommandError);
+    expect(unavailable.message).toContain(
+      JSON.stringify({ requested: missing, canonical: null }),
+    );
+  } finally {
+    if (previous === undefined)
+      delete process.env.HERDR_WORLD_INSTALLER_DIAGNOSTIC_SECRET;
+    else process.env.HERDR_WORLD_INSTALLER_DIAGNOSTIC_SECRET = previous;
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test.skipIf(process.platform !== "win32")(
+  "Windows fixture paths agree with PowerShell through supported case and short-path aliases",
+  () => {
+    const directory = realpathSync.native(
+      mkdtempSync(join(tmpdir(), "installer native paths ")),
+    );
+    try {
+      const parent = join(directory, "Long fixture parent");
+      mkdirSync(parent);
+      const powershell = join(
+        process.env.SystemRoot!,
+        "System32/WindowsPowerShell/v1.0/powershell.exe",
+      );
+      const run = (script: string, cwd = directory) =>
+        Bun.spawnSync(
+          [
+            powershell,
+            "-NoProfile",
+            "-NonInteractive",
+            "-EncodedCommand",
+            Buffer.from(script, "utf16le").toString("base64"),
+          ],
+          {
+            cwd,
+            env: { ...process.env, INSTALLER_FIXTURE_PARENT: parent },
+            stdout: "pipe",
+            stderr: "pipe",
+          },
+        );
+      const variants = new Map<string, string>([["canonical", parent]]);
+      const differentCase = parent.toUpperCase();
+      if (differentCase !== parent && existsSync(differentCase))
+        variants.set("case", differentCase);
+      const short = run(
+        "try { [Console]::Out.Write((New-Object -ComObject Scripting.FileSystemObject).GetFolder($env:INSTALLER_FIXTURE_PARENT).ShortPath) } catch { }",
+      );
+      expect(short.exitCode).toBe(0);
+      const shortParent = short.stdout.toString().trim();
+      if (
+        /~\d/.test(shortParent) &&
+        shortParent !== parent &&
+        existsSync(shortParent)
+      )
+        variants.set("short", shortParent);
+      console.info(
+        `Windows fixture path coverage: ${[...variants.keys()].join(", ")}`,
+      );
+      for (const candidate of variants.values()) {
+        const root = createInstallerFixtureRoot(candidate);
+        const upgrade = join(root, "upgrade");
+        mkdirSync(upgrade);
+        const printed = run(
+          "[Console]::Out.Write((Get-Item -LiteralPath .).FullName)",
+          upgrade,
+        );
+        expect(printed.exitCode).toBe(0);
+        const printedRoot = printed.stdout.toString().trim();
+        expect(
+          legacyBaselineStagingLock(
+            legacyCleanupError("0.2.6", upgrade, printedRoot),
+            "v0.2.6",
+            "win32",
+          ),
+        ).toBe(true);
+        expect(
+          legacyBaselineStagingLock(
+            legacyCleanupError(
+              "0.2.6",
+              join(directory, "different"),
+              printedRoot,
+            ),
+            "v0.2.6",
+            "win32",
+          ),
+        ).toBe(false);
+      }
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  },
+  45_000,
+);
 
 test("only Windows v0.2.6-and-older baseline post-success staging locks are tolerated", () => {
   for (const version of ["0.0.1", "0.1.99", "0.2.0", "0.2.6"])
@@ -292,6 +463,21 @@ test("installer upgrades run native released artifacts on every supported platfo
   expect(
     job.steps.find((step: any) => step.name?.startsWith("Verify fresh"))?.run,
   ).toBe("bun scripts/installer-upgrade.ts verify");
+  const focusedAt = job.steps.findIndex(
+    (step: any) =>
+      step.run === "bun run test ./scripts/installer-upgrade.test.ts",
+  );
+  expect(focusedAt).toBeGreaterThan(
+    job.steps.findIndex(
+      (step: any) => step.run === "bun install --frozen-lockfile",
+    ),
+  );
+  expect(job.steps[focusedAt].if).toBe("runner.os == 'Windows'");
+  expect(focusedAt).toBeLessThan(
+    job.steps.findIndex((step: any) =>
+      step.name?.startsWith("Build the proposed"),
+    ),
+  );
   for (const step of job.steps)
     expect(step["continue-on-error"]).toBeUndefined();
   expect(job["continue-on-error"]).toBeUndefined();

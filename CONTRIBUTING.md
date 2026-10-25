@@ -56,8 +56,20 @@ only if its local report proves a passed code gate on an ancestor and every
 change since then is ordinary Markdown documentation. Behavioral contracts,
 OpenSpec, tooling and agent/contributor policy receive the code gate even when
 only Markdown changes. CI runs documentation
-checks for ordinary Markdown-only PR diffs, and reuses an exact-head successful full
-result for PR-description edits; missing proof falls back to the full check.
+checks for ordinary Markdown-only PR diffs, and reuses a successful full result
+on the exact PR, base and head for description edits and label changes. These
+metadata events queue behind active CI instead of cancelling it; missing proof
+falls back to full validation. One scope decision feeds every platform job,
+and Delivery checks includes both macOS lifecycle results. See the
+[pipeline ownership guide](docs/ci-pipelines.md) for the job boundaries and
+failure diagnosis.
+
+`check:commit` names the hook's format/lint guard. Release workflows use
+`check:source` for the guard, asset-building type check and tests; `precommit`
+remains its compatibility alias. `check` delegates static validation to the same
+lane used by local delivery, then runs tests. That lane checks source types and
+builds production assets once, instead of building the web app during both type
+checking and compilation.
 
 A push that only merges `origin/main` into the already-pushed branch runs
 `bun run check:static` (the static lane alone): both sides were tested and CI runs

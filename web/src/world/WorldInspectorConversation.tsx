@@ -1,3 +1,4 @@
+import { useAgentWorktree } from "../useAgentWorktree";
 import type { ManagedWindowControls } from "./windows/WindowControls";
 import {
   Suspense,
@@ -33,6 +34,7 @@ import {
 import type { FileExplorerEntry, GitDiffEntry } from "../types";
 import {
   connectionClientScopeKey,
+  ResourceConnectionClientContext,
   useConnectionClient,
 } from "../useConnectionClient";
 import { useReviewAnnotationDraft } from "../useReviewAnnotationDraft";
@@ -137,7 +139,7 @@ function InspectorResources({
   windowMaximized?: boolean;
   onTerminalPortalChange(element: HTMLDivElement | null): void;
 }) {
-  const connectionClient = useConnectionClient();
+  const baseConnectionClient = useConnectionClient();
   const portalOwnerRef = useRef<HTMLDivElement | null>(null);
   if (!portalOwnerRef.current) {
     portalOwnerRef.current = document.createElement("div");
@@ -158,13 +160,15 @@ function InspectorResources({
     [portalOwner],
   );
   const runtimeKey = connectionClientScopeKey(
-    connectionClient,
+    baseConnectionClient,
     "world-inspector",
   );
-  const { workspaces, panes } = useStoreSelector(
+  const { workspaces, panes, status, catalogueReady } = useStoreSelector(
     (snapshot) => ({
       workspaces: snapshot.workspaces,
       panes: snapshot.panes,
+      status: snapshot.status,
+      catalogueReady: snapshot.catalogueReady,
     }),
     shallowEqual,
   );
@@ -179,19 +183,34 @@ function InspectorResources({
           candidate.tab_id === conversation.tabId,
       )
     : undefined;
+  const worktree = useAgentWorktree(baseConnectionClient, {
+    enabled: conversation.context.kind === "agent",
+    active: ["files", "changes", "commits"].includes(conversation.view),
+    paneId: conversation.paneId,
+    terminalId: historyPane?.terminal_id,
+    sessionFingerprint: conversation.agentSessionFingerprint,
+    foregroundCwd: historyPane?.foreground_cwd,
+  });
+  const connectionClient = worktree.client;
   const scope = useMemo(
     () =>
       workspace
-        ? resourceScopeForWorkspace(conversation.connectionId, workspace)
+        ? worktree.view?.selected
+          ? {
+              kind: "worktree" as const,
+              connectionId: conversation.connectionId,
+              workspaceId: workspace.workspace_id,
+              repoKey: worktree.view.selected.gitCommonDir,
+              checkoutKey: JSON.stringify([
+                worktree.view.selected.gitCommonDir,
+                worktree.view.selected.canonicalRoot,
+              ]),
+              checkoutPath: worktree.view.selected.canonicalRoot,
+            }
+          : resourceScopeForWorkspace(conversation.connectionId, workspace)
         : null,
-    [conversation.connectionId, workspace],
+    [conversation.connectionId, workspace, worktree.view?.selected],
   );
-  const [changesScope, setChangesScope] = useState<"agent" | "workspace">(
-    conversation.context.kind === "agent" ? "agent" : "workspace",
-  );
-  useEffect(() => {
-    if (conversation.context.kind !== "agent") setChangesScope("workspace");
-  }, [conversation.context.kind]);
   const [fileSelection, setFileSelection] =
     useState<ActiveFilePreviewSelection>(emptyFile);
   const [diffSelection, setDiffSelection] =
@@ -203,15 +222,25 @@ function InspectorResources({
     },
     [],
   );
-  const scopeKey = scope ? resourceStateKey(scope) : null;
-  const scopeKeyRef = useRef(scopeKey);
+  const resourceClientKey = connectionClientScopeKey(connectionClient);
+  const retainedResourceClientKey = useRef(resourceClientKey);
+  // An absent binding during transport recovery cannot replace the displayed resource.
+  if (connectionClient.agentWorktree !== null)
+    retainedResourceClientKey.current = resourceClientKey;
+  const resourceKey = JSON.stringify([
+    scope ? resourceStateKey(scope) : null,
+    retainedResourceClientKey.current,
+    conversation.resourceIdentity,
+  ]);
+  const resourceBinding = useMemo(() => Symbol(resourceKey), [resourceKey]);
+  const resourceBindingRef = useRef(resourceBinding);
   useLayoutEffect(() => {
-    if (scopeKeyRef.current === scopeKey) return;
-    scopeKeyRef.current = scopeKey;
+    if (resourceBindingRef.current === resourceBinding) return;
+    resourceBindingRef.current = resourceBinding;
     previewRequestRef.current += 1;
     setFileSelection(emptyFile());
     setDiffSelection(emptyDiff());
-  }, [scopeKey]);
+  }, [resourceBinding]);
   const terminalPortalChangeRef = useRef(onTerminalPortalChange);
   const focusRef = useRef(onFocus);
   terminalPortalChangeRef.current = onTerminalPortalChange;
@@ -256,7 +285,12 @@ function InspectorResources({
 
   const loadFile = useCallback(
     (entry: FileExplorerEntry, fragment?: string) => {
-      if (!workspace) return;
+      if (
+        !workspace ||
+        !connectionClient.isCurrent() ||
+        resourceBindingRef.current !== resourceBinding
+      )
+        return;
       const requestId = previewRequestRef.current + 1;
       previewRequestRef.current = requestId;
       setFileSelection({
@@ -301,7 +335,7 @@ function InspectorResources({
           });
         });
     },
-    [connectionClient, workspace],
+    [connectionClient, workspace, resourceBinding],
   );
 
   useEffect(() => {
@@ -468,6 +502,11 @@ function InspectorResources({
     openAnnotation(annotation);
   };
 
+  const presentationStale =
+    status !== "connected" ||
+    !catalogueReady ||
+    !baseConnectionClient.isCurrent() ||
+    Boolean(worktree.view?.selected && !worktree.view.target);
   const content = (
     <div
       tabIndex={
@@ -484,104 +523,112 @@ function InspectorResources({
             }`
       }
     >
-      <div className="workspace-inspector-slot">
-        <Suspense fallback={null}>
-          <WorkspaceInspectorHost
-            state={inspectorState}
-            visible={Boolean(target)}
-            workspace={workspace}
-            historyPane={historyPane}
-            historySessionFingerprint={conversation.agentSessionFingerprint}
-            fileSelection={fileSelection}
-            previewRequestRef={previewRequestRef}
-            diffSelection={diffSelection}
-            connectionClient={connectionClient}
-            onFileSelectionChange={setFileSelection}
-            onDiffSelectionChange={setDiffSelection}
-            onOpenDiffFile={(entry) => entry && openFile(entry.path)}
-            annotations={readAnnotationDraft(scope)}
-            onCreateAnnotation={createAnnotation}
-            onReanchorFileAnnotations={(path, text) =>
-              updateAnnotationDraft(scope, (current) =>
-                reanchorFileReviewAnnotations(current, path, text),
-              )
-            }
-            onReanchorDiffAnnotations={(
-              path: string,
-              kind: GitDiffEntry["kind"],
-              patch: string,
-            ) =>
-              updateAnnotationDraft(scope, (current) =>
-                reanchorDiffReviewAnnotations(current, path, kind, patch),
-              )
-            }
-            onEditAnnotation={(id) => {
-              const annotation = readAnnotationDraft(scope).find(
-                (candidate) => candidate.id === id,
-              );
-              if (annotation) openAnnotation(annotation);
-            }}
-            onSelectFileTab={openFile}
-            onOpenDocument={openFile}
-            onRefreshFile={() => {
-              if (fileSelection.entry) {
-                loadFile(fileSelection.entry, fileSelection.fragment);
+      <ResourceConnectionClientContext.Provider value={connectionClient}>
+        <div
+          className="workspace-inspector-slot"
+          data-stale={presentationStale || undefined}
+        >
+          <Suspense fallback={null}>
+            <WorkspaceInspectorHost
+              state={inspectorState}
+              visible={Boolean(target)}
+              workspace={workspace}
+              historyPane={historyPane}
+              historySessionFingerprint={conversation.agentSessionFingerprint}
+              fileSelection={fileSelection}
+              previewRequestRef={previewRequestRef}
+              diffSelection={diffSelection}
+              connectionClient={connectionClient}
+              onFileSelectionChange={(selection) => {
+                if (
+                  connectionClient.isCurrent() &&
+                  resourceBindingRef.current === resourceBinding
+                )
+                  setFileSelection(selection);
+              }}
+              onDiffSelectionChange={(selection) => {
+                if (
+                  connectionClient.isCurrent() &&
+                  resourceBindingRef.current === resourceBinding
+                )
+                  setDiffSelection(selection);
+              }}
+              onOpenDiffFile={(entry) => entry && openFile(entry.path)}
+              annotations={readAnnotationDraft(scope)}
+              onCreateAnnotation={createAnnotation}
+              onReanchorFileAnnotations={(path, text) =>
+                updateAnnotationDraft(scope, (current) =>
+                  reanchorFileReviewAnnotations(current, path, text),
+                )
               }
-            }}
-            onTerminalPortalChange={
-              terminalActive ? setTerminalPortal : undefined
-            }
-            onViewChange={changeView}
-            onDockChange={changeDock}
-            onExpandedChange={changeExpanded}
-            windowControls={windowControls}
-            terminalColor={terminalColor}
-            agentSettings={
-              conversation.context.kind === "agent" ? (
-                <AgentProfileLink
-                  connectionId={conversation.connectionId}
-                  terminalId={conversation.terminalId}
-                />
-              ) : undefined
-            }
-            onWindowMaximize={onWindowMaximize}
-            windowMaximized={windowMaximized}
-            onDockOut={floating ? undefined : onDockOut}
-            onDockIn={floating ? onDockIn : undefined}
-            controlMode={floating ? "floating" : "docked"}
-            windowMovable={!floating && !embedded}
-            onClose={onClose}
-            onBack={() => {
-              if (conversation.view === "files") {
-                previewRequestRef.current += 1;
-                setFileSelection(emptyFile());
-                writeResourceFileSelection(worldLocalStorage, scope, null);
-              } else {
-                setDiffSelection(emptyDiff());
+              onReanchorDiffAnnotations={(
+                path: string,
+                kind: GitDiffEntry["kind"],
+                patch: string,
+              ) =>
+                updateAnnotationDraft(scope, (current) =>
+                  reanchorDiffReviewAnnotations(current, path, kind, patch),
+                )
               }
-            }}
-            context={
-              townSkin && conversation.context.kind === "agent"
-                ? {
-                    ...conversation.context,
-                    portrait: townPortrait(conversation.nodeId),
-                  }
-                : conversation.context
-            }
-            agentCheckout={
-              conversation.view === "changes" &&
-              conversation.context.kind === "agent" &&
-              changesScope === "agent"
-                ? {
-                    paneId: conversation.paneId,
-                    sessionFingerprint: conversation.agentSessionFingerprint,
-                    onWorkspaceChanges: () => setChangesScope("workspace"),
-                  }
-                : undefined
-            }
-          />
-        </Suspense>
-      </div>
+              onEditAnnotation={(id) => {
+                const annotation = readAnnotationDraft(scope).find(
+                  (candidate) => candidate.id === id,
+                );
+                if (annotation) openAnnotation(annotation);
+              }}
+              onSelectFileTab={openFile}
+              onOpenDocument={openFile}
+              onRefreshFile={() => {
+                if (fileSelection.entry) {
+                  loadFile(fileSelection.entry, fileSelection.fragment);
+                }
+              }}
+              onTerminalPortalChange={
+                terminalActive ? setTerminalPortal : undefined
+              }
+              onViewChange={changeView}
+              onDockChange={changeDock}
+              onExpandedChange={changeExpanded}
+              windowControls={windowControls}
+              terminalColor={terminalColor}
+              agentSettings={
+                conversation.context.kind === "agent" ? (
+                  <AgentProfileLink
+                    connectionId={conversation.connectionId}
+                    terminalId={conversation.terminalId}
+                  />
+                ) : undefined
+              }
+              onWindowMaximize={onWindowMaximize}
+              windowMaximized={windowMaximized}
+              onDockOut={floating ? undefined : onDockOut}
+              onDockIn={floating ? onDockIn : undefined}
+              controlMode={floating ? "floating" : "docked"}
+              windowMovable={!floating && !embedded}
+              onClose={onClose}
+              onBack={() => {
+                if (conversation.view === "files") {
+                  previewRequestRef.current += 1;
+                  setFileSelection(emptyFile());
+                  writeResourceFileSelection(worldLocalStorage, scope, null);
+                } else {
+                  setDiffSelection(emptyDiff());
+                }
+              }}
+              context={
+                townSkin && conversation.context.kind === "agent"
+                  ? {
+                      ...conversation.context,
+                      portrait: townPortrait(conversation.nodeId),
+                    }
+                  : conversation.context
+              }
+              agentWorktree={worktree.view}
+              presentationStale={presentationStale}
+            />
+          </Suspense>
+        </div>
+      </ResourceConnectionClientContext.Provider>
     </div>
   );
 

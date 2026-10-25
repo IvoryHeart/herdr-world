@@ -436,26 +436,23 @@ async function run() {
         '.town-view-shell .world-semantic-target[data-kind="agent"]',
       )!
       .click();
-    // A tap opens the agent's one window on Chat. On a phone the window
-    // looks like the terminal: its views sit under ⋯ with the agents.
-    const windowMenu = () =>
+    // A phone's anchored header control switches views; ⋯ holds attention.
+    const viewTrigger = () =>
       document.querySelector<HTMLButtonElement>(
-        '.workspace-inspector button[aria-label="More actions for Inspector window"]',
+        '.workspace-inspector button[aria-label^="Inspector view:"]',
       );
     await until(
       () =>
         document.querySelector('.workspace-inspector[data-view="history"]') &&
-        windowMenu(),
+        viewTrigger(),
       "Town agent window on Chat",
     );
-    windowMenu()!.click();
+    viewTrigger()!.click();
     const terminalItem = () =>
-      [
-        ...document.querySelectorAll<HTMLButtonElement>(
-          '[role="menu"][aria-label="Window actions"] [role="menuitemradio"]',
-        ),
-      ].find((item) => item.textContent === "Terminal");
-    await until(terminalItem, "Terminal in the window's ⋯ menu");
+      document.querySelector<HTMLButtonElement>(
+        '[aria-label="Inspector views"] [data-view="terminal"]',
+      );
+    await until(terminalItem, "Terminal in the anchored view selector");
     terminalItem()!.click();
     await until(
       () =>
@@ -525,10 +522,42 @@ async function run() {
     !alpha.attached.has("b-1-terminal"),
     "Second room was eagerly attached",
   );
+  const chooseTerminal = async (
+    connectionId: string,
+    workspaceId: string,
+    repeat = false,
+  ) => {
+    await until(
+      () => document.querySelector(".agent-launcher-card"),
+      "room launcher Terminal choice",
+    );
+    const expected = buildWorldObject(
+      worldRuntimeStore.get().connections,
+      "alpha",
+    ).spaces.find(
+      (space) =>
+        space.connectionId === connectionId && space.nativeId === workspaceId,
+    );
+    check(
+      document.querySelector<HTMLSelectElement>(".agent-launcher select")
+        ?.value === expected?.id,
+      "Room launcher changed the seat's qualified destination",
+    );
+    const terminal = document.querySelector<HTMLButtonElement>(
+      ".agent-launcher-card",
+    )!;
+    check(
+      terminal.textContent?.includes("Terminal"),
+      "The first room launcher choice must be Terminal",
+    );
+    terminal.click();
+    if (repeat) terminal.click();
+  };
   const gate = Promise.withResolvers<void>();
   heldMutation = gate.promise;
   fullRoom.click();
   fullRoom.click();
+  await chooseTerminal("alpha", "b", true);
   await until(
     () => calls.some((call) => call.method === "tab.create"),
     "second-room prepared dispatch",
@@ -570,6 +599,7 @@ async function run() {
   );
   check(!betaRoom.disabled, "Cold inactive host was not preparable");
   betaRoom.click();
+  await chooseTerminal("beta", "a");
   await createdInspector(2);
   check(
     store.get().activeConnectionId === "alpha",

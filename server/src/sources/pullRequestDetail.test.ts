@@ -148,6 +148,36 @@ const detailNode = (fields: Record<string, unknown> = {}) => ({
 });
 
 describe("pull request detail", () => {
+  test("formal RESULT-only reviews keep GitHub IDs, source links and commit metadata", () => {
+    const detail = parseDetail(
+      item(7),
+      detailNode({
+        reviews: {
+          nodes: [
+            post("RESULT #7: 0/0 resolved, 0 new", {
+              id: "formal-review-1",
+              submittedAt: "2026-01-01T12:30:00Z",
+              commit: { oid: HEAD },
+              url: "https://github.com/example-org/widgets/pull/7#pullrequestreview-1",
+            }),
+          ],
+        },
+        comments: { nodes: [] },
+      }),
+    );
+    expect(detail.reviewers).toMatchObject([
+      {
+        reviewer: null,
+        sourceId: "formal-review-1",
+        outcome: "unknown",
+        commit: HEAD,
+        commitsSince: 0,
+        url: "https://github.com/example-org/widgets/pull/7#pullrequestreview-1",
+      },
+    ]);
+    expect(detailQuery([item(7)])).toContain("nodes { id author");
+  });
+
   test("reads checks, reviewer results, files and images from GitHub's answer", () => {
     const detail = parseDetail(item(7), detailNode());
     expect(detail.behindBy).toBe(4);

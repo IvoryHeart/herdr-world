@@ -1,6 +1,12 @@
 import { sshCommandArgv } from "../bridge/ssh-command";
 import { AGENT_KIND } from "../../../shared/agentProfile";
 import type { HerdrCall } from "./launch";
+import {
+  harnessAuthMethod,
+  unknownHarnessReadiness,
+  type HarnessReadiness,
+} from "../../../shared/harnessReadiness";
+export type { HarnessReadiness } from "../../../shared/harnessReadiness";
 
 /**
  * Is a harness installed on a host, and is it logged in? Each harness answers
@@ -18,7 +24,7 @@ export type HarnessSpec = {
   paths: string[];
   /**
    * Its status command (arguments after the binary) and how to read it:
-   * `json` reads `loggedIn` and `authMethod`; `exit` treats exit 0 as in.
+   * `json` reads `loggedIn`; `exit` requires a recognized message and exit.
    */
   status?: { args: string[]; read: "json" | "exit" };
   /** Its login command (arguments after the binary). */
@@ -51,21 +57,11 @@ export const HARNESS_SPECS: Record<string, HarnessSpec> = {
 export const harnessSpec = (kind: string): HarnessSpec =>
   HARNESS_SPECS[kind] ?? { binary: kind, paths: [`$HOME/.local/bin/${kind}`] };
 
-export type HarnessReadiness = {
-  kind: string;
-  installed: boolean;
-  /** null when the harness has no status command World can read. */
-  logged_in: boolean | null;
-  method?: string;
-  can_log_in: boolean;
-};
-
 type Run = (
   argv: string[],
   timeoutMs: number,
 ) => Promise<{ code: number; stdout: string; stderr: string }>;
 
-const WORD = /^[A-Za-z0-9._-]{1,32}$/;
 // Arguments are table constants; quote them anyway.
 const q = (value: string) => `'${value.replace(/'/g, "'\\''")}'`;
 const path = (value: string) =>
@@ -80,62 +76,123 @@ const resolveExecutable = (spec: HarnessSpec) => [
   ...spec.paths.map((p) => `[ -z "$b" ] && [ -x ${path(p)} ] && b=${path(p)}`),
 ];
 
-/** One POSIX script that probes every kind and marks each section. */
+/** One bounded POSIX probe. A section end distinguishes absence from truncation. */
 export function readinessScript(kinds: string[]) {
   return kinds
     .map((kind) => {
       const spec = harnessSpec(kind);
       const status = spec.status
-        ? `out=$("$b" ${spec.status.args.map(q).join(" ")} 2>&1 </dev/null); code=$?; printf '%s\\n' "$out" | head -c 4000; echo "@@exit $code";`
+        ? `out=$("$b" ${spec.status.args.map(q).join(" ")} 2>&1 </dev/null); code=$?; if [ "$(printf '%s' "$out" | wc -c)" -gt 4000 ]; then echo '@@truncated'; else printf '%s\\n' "$out"; fi; printf '\\n@@exit %s\\n' "$code";`
         : "";
       return [
         `echo "@@kind ${kind}"`,
         ...resolveExecutable(spec),
         `if [ -z "$b" ]; then echo "@@missing"; else echo "@@found"; ${status} fi`,
+        `echo "@@end"`,
       ].join("\n");
     })
     .concat("exit 0")
     .join("\n");
 }
 
-/** Read the script's output; only the listed fields survive. */
-export function readReadiness(kinds: string[], output: string) {
-  const sections = new Map<string, string>();
-  for (const part of output.split("@@kind ").slice(1)) {
+/** Read only complete, unambiguous records; status errors are not sign-out. */
+export function readReadiness(
+  kinds: string[],
+  output: string,
+  observedAt = Date.now(),
+): HarnessReadiness[] {
+  if (output.length > 200_000)
+    return kinds.map((kind) =>
+      unknownHarnessReadiness(kind, "malformed-output", observedAt),
+    );
+  const sections = new Map<string, string[]>();
+  for (const part of output
+    .replace(/\r\n/g, "\n")
+    .split(/^@@kind /m)
+    .slice(1)) {
     const newline = part.indexOf("\n");
-    sections.set(part.slice(0, newline).trim(), part.slice(newline + 1));
+    if (newline < 0) continue;
+    const kind = part.slice(0, newline);
+    sections.set(kind, [
+      ...(sections.get(kind) ?? []),
+      part.slice(newline + 1).replace(/\n+$/, ""),
+    ]);
   }
-  return kinds.map((kind): HarnessReadiness => {
-    const spec = harnessSpec(kind);
-    const body = sections.get(kind) ?? "";
-    const installed = body.startsWith("@@found");
-    const result: HarnessReadiness = {
+  return kinds.map((kind) => {
+    const records = sections.get(kind);
+    const result = unknownHarnessReadiness(
       kind,
-      installed,
-      logged_in: null,
-      can_log_in: installed && Boolean(spec.login),
-    };
-    if (!installed || !spec.status) return result;
-    const exit = /@@exit (\d+)\s*$/.exec(body);
-    const text = body.slice("@@found".length, exit?.index);
+      records ? "malformed-output" : "missing-section",
+      observedAt,
+    );
+    if (records?.length !== 1) return result;
+    const body = records[0]!;
+    if (body === "@@missing\n@@end") {
+      result.installed = false;
+      result.probe.state = "ok";
+      result.probe.reason = "complete";
+      return result;
+    }
+    if (!body.startsWith("@@found\n") || !body.endsWith("\n@@end"))
+      return result;
+    const spec = harnessSpec(kind);
+    result.installed = true;
+    result.can_log_in = Boolean(spec.login);
+    result.probe.reason = spec.status
+      ? "unreadable-status"
+      : "auth-unsupported";
+    if (!spec.status) return result;
+    const status = /^@@found\n([\s\S]*)\n@@exit (\d{1,3})\n@@end$/.exec(body);
+    if (!status) return result;
+    const text = status[1]!.trim();
+    const code = Number(status[2]);
     if (spec.status.read === "json") {
       try {
-        const json = JSON.parse(text.slice(text.indexOf("{"))) as Record<
-          string,
-          unknown
-        >;
-        if (typeof json.loggedIn === "boolean")
+        const json: unknown = JSON.parse(text);
+        if (
+          json &&
+          typeof json === "object" &&
+          "loggedIn" in json &&
+          typeof json.loggedIn === "boolean" &&
+          code === (json.loggedIn ? 0 : 1)
+        ) {
           result.logged_in = json.loggedIn;
-        if (typeof json.authMethod === "string" && WORD.test(json.authMethod))
-          result.method = json.authMethod;
+          const method =
+            "authMethod" in json
+              ? harnessAuthMethod(json.authMethod)
+              : undefined;
+          if (result.logged_in && method) result.method = method;
+        }
       } catch {
-        // Unreadable: unknown.
+        /* Unreadable status remains unknown. */
       }
-    } else if (exit) {
-      result.logged_in = exit[1] === "0";
-      const method = /logged in using (\S+)/i.exec(text)?.[1];
-      if (result.logged_in && method && WORD.test(method))
+    } else if (code === 1 && text === "Not logged in") result.logged_in = false;
+    else if (
+      code === 0 &&
+      /^Logged in using API key(?: - [^\r\n]+)?$/.test(text)
+    ) {
+      result.logged_in = true;
+      result.method = "API-key";
+    } else if (code === 0) {
+      const methods: Record<string, string> = {
+        ChatGPT: "ChatGPT",
+        "access token": "access-token",
+        "personal access token": "personal-access-token",
+        "workload identity": "workload-identity",
+        "Amazon Bedrock API key": "bedrock-api-key",
+        "Amazon Bedrock AWS access keys": "bedrock-access-keys",
+      };
+      const method = Object.entries(methods).find(
+        ([label]) => text === `Logged in using ${label}`,
+      )?.[1];
+      if (method) {
+        result.logged_in = true;
         result.method = method;
+      }
+    }
+    if (result.logged_in !== null) {
+      result.probe.state = "ok";
+      result.probe.reason = "complete";
     }
     return result;
   });
@@ -148,16 +205,34 @@ export async function harnessReadiness(options: {
   run: Run;
   shQuote: (value: string) => string;
 }): Promise<HarnessReadiness[]> {
-  const kinds = options.kinds.filter((k) => AGENT_KIND.test(k)).slice(0, 40);
-  // World's probe is POSIX. Without it nothing is known, so a Windows host
-  // reports nothing and every kind its Herdr supports stays available.
-  if (options.windows) return [];
+  const kinds = [
+    ...new Set(options.kinds.filter((k) => AGENT_KIND.test(k))),
+  ].slice(0, 40);
+  const unknown = (
+    reason: "windows-unsupported" | "probe-failed" | "timeout",
+  ) => {
+    const observedAt = Date.now();
+    return kinds.map((kind) =>
+      unknownHarnessReadiness(kind, reason, observedAt),
+    );
+  };
+  if (options.windows) return unknown("windows-unsupported");
   const script = readinessScript(kinds);
   const argv = options.host
     ? sshCommandArgv(options.host, `sh -c ${options.shQuote(script)}`)
     : ["sh", "-c", script];
-  const result = await options.run(argv, 20_000);
-  return readReadiness(kinds, result.stdout);
+  try {
+    const result = await options.run(argv, 20_000);
+    return result.code === 0
+      ? readReadiness(kinds, result.stdout)
+      : unknown("probe-failed");
+  } catch (error) {
+    return unknown(
+      error instanceof Error && / timed out after \d+ms$/.test(error.message)
+        ? "timeout"
+        : "probe-failed",
+    );
+  }
 }
 
 /**

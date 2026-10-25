@@ -1,3 +1,6 @@
+import type { BridgeControlMsg } from "./bridgeControl";
+export type { BridgeControlMsg } from "./bridgeControl";
+import type { ConnectionClient } from "./connectionClient";
 import { isValidPopupPayload } from "./popupPayload";
 import {
   isAssistantSnapshot,
@@ -252,24 +255,6 @@ export interface TerminalClosedPush {
   reason?: string;
 }
 
-export interface BridgeControlMsg {
-  type:
-    | "pause_connection"
-    | "world_invalidated"
-    | "world_watchlist_changed"
-    | "world_board_changed"
-    | "world_ledger_changed"
-    | "world_profiles_changed"
-    | "agent_conversation_changed";
-  reason?: string;
-  pane_id?: string;
-  connection_id?: string;
-  connection_generation?: number;
-  revision?: number;
-  /** world_ledger_changed: a question was asked or answered. */
-  asks?: boolean;
-}
-
 type Pending = {
   resolve: (v: any) => void;
   reject: (e: Error) => void;
@@ -302,18 +287,7 @@ export class UncertainRequestError extends Error {
   }
 }
 
-export interface ConnectionClient {
-  readonly connectionId: string;
-  readonly generation: number;
-  readonly serverRuntimeGeneration: number | null;
-  call(
-    method: string,
-    params?: Record<string, unknown>,
-    timeoutMs?: number | null,
-  ): Promise<any>;
-  isCurrent(): boolean;
-  acceptsServerGeneration(value: unknown): boolean;
-}
+export type { ConnectionClient } from "./connectionClient";
 
 const STARTUP_DEFAULT_CONNECTION_ID = "startup-default";
 const RPC_TIMEOUT_MS = 30000;

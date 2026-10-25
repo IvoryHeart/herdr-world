@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import type { BridgeControlMsg } from "../api";
 import { WorldSnapshotService } from "../../../server/src/world/snapshot";
 import { parseWorldSnapshotResult, WorldRuntimeStore } from "./runtimeStore";
 
@@ -605,4 +606,132 @@ describe("World aggregate runtime store", () => {
       "second",
     );
   });
+});
+
+test("a reported failed owner is immediately stale and cannot be revived by a pending snapshot", async () => {
+  let control: ((value: BridgeControlMsg) => void) | undefined;
+  let second = false;
+  const entered = Promise.withResolvers<void>();
+  const pendingReply = Promise.withResolvers<ReturnType<typeof result>>();
+  const response = result("cached-a");
+  response.connections.push({
+    ...response.connections[0]!,
+    connection_id: "host-b",
+  });
+  const runtime = new WorldRuntimeStore(
+    {
+      call: async () => {
+        if (second) {
+          entered.resolve();
+          return pendingReply.promise;
+        }
+        return response;
+      },
+      connection: () => ({ isCurrent: () => true }),
+      onControl: (listener) => {
+        control = listener;
+        return () => {};
+      },
+      onStatus: () => () => {},
+    },
+    async () => {},
+  );
+  runtime.start();
+  try {
+    await runtime.refresh();
+    const healthy = runtime.get().connections[1];
+    second = true;
+    const pending = runtime.refresh();
+    await entered.promise;
+    control!({
+      type: "world_invalidated",
+      connection_id: "host-a",
+      connection_generation: 2,
+      connection_state: "error",
+    } as BridgeControlMsg);
+    expect(runtime.get().connections[0]).toMatchObject({
+      connectionId: "host-a",
+      generation: 2,
+      state: "error",
+      stale: true,
+      actionable: false,
+    });
+    expect(runtime.get().connections[1]).toBe(healthy);
+    pendingReply.resolve(response);
+    await pending;
+    expect(runtime.get().connections[0]).toMatchObject({
+      generation: 2,
+      state: "error",
+      stale: true,
+      actionable: false,
+    });
+    expect(runtime.get().connections[1]?.actionable).toBe(true);
+    control!({
+      type: "world_invalidated",
+      connection_id: "host-a",
+      connection_generation: 1,
+      connection_state: "ready",
+    } as BridgeControlMsg);
+    expect(runtime.get().connections[0]?.stale).toBe(true);
+  } finally {
+    runtime.stop();
+  }
+});
+
+test("lifecycle ready cannot promote cached topology before a matching fresh snapshot", async () => {
+  let control: ((value: BridgeControlMsg) => void) | undefined;
+  let response = result("cached");
+  const runtime = new WorldRuntimeStore(
+    {
+      call: async () => response,
+      connection: () => ({ isCurrent: () => true }),
+      onControl: (listener) => {
+        control = listener;
+        return () => {};
+      },
+      onStatus: () => () => {},
+    },
+    async () => {},
+  );
+  runtime.start();
+  try {
+    await runtime.refresh();
+    control!({
+      type: "world_invalidated",
+      connection_id: "host-a",
+      connection_generation: 2,
+      connection_state: "error",
+    });
+    control!({
+      type: "world_invalidated",
+      connection_id: "host-a",
+      connection_generation: 3,
+      connection_state: "ready",
+    });
+    expect(runtime.get().connections[0]).toMatchObject({
+      generation: 3,
+      stale: true,
+      actionable: false,
+      snapshotGeneration: 1,
+    });
+    await runtime.refresh();
+    expect(runtime.get().connections[0]?.actionable).toBe(false);
+    response = result("fresh", 3);
+    await runtime.refresh();
+    expect(runtime.get().connections[0]).toMatchObject({
+      generation: 3,
+      stale: false,
+      actionable: true,
+      snapshotGeneration: 3,
+    });
+    control!({
+      type: "world_invalidated",
+      connection_id: "host-a",
+      connection_generation: 2,
+      connection_state: "error",
+    });
+    expect(runtime.get().connections[0]?.actionable).toBe(true);
+  } finally {
+    runtime.stop();
+  }
 });

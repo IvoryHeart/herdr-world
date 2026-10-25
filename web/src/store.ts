@@ -1,531 +1,155 @@
-import { subscribeLocalStorage } from "./browserStorage";
 import {
-  type NotificationTarget,
-  type RangerTaskNotificationTarget,
-} from "./taskNotifications";
-import { type AssistantTaskNotification } from "../../shared/assistant";
+  emptyServerSessionState,
+  nextRecentPaneIds,
+  SERVER_SESSION_KEYS,
+  serverSessionFromState,
+  connectionSnapshot,
+  retireConnectionSessionObservations,
+  jsonDeepEqual,
+  activateConnectionState,
+  type CatalogSessionReconciliation,
+  mergeConnectionCatalog,
+  reconcileConnectionCatalogSessions,
+  serverSessionEqual,
+  connectionEventIsActive,
+  numberedCreatedTabRename,
+} from "./store/sessions";
 import {
-  createContext,
-  useContext,
-  useMemo,
-  useRef,
-  useSyncExternalStore,
-} from "react";
-import { withAgentActivity } from "./agentOrder";
-import { clearTerminalComposerDrafts } from "./terminalComposer";
+  type State,
+  type ServerSessionState,
+  type StoreConnectionLease,
+  type BridgeStatus,
+  type Notice,
+  type QualifiedRuntimeTarget,
+  type WorkspaceSourceTarget,
+  type QualifiedFocusTarget,
+  type TaskNotificationTarget,
+  type WorktreeRemovedTarget,
+  type PopupInfo,
+} from "./store/types";
+import { worldLocalStorage, subscribeLocalStorage } from "./browserStorage";
 import {
-  forgetClosedTabPins,
-  paneCloseBlockReason,
-  tabCloseBlockReason,
-  tabPinsFor,
-} from "./tabPins";
-import { moveTabInList } from "./tabReorder";
-import {
-  bridge,
-  UncertainRequestError,
-  type ConnectionClient,
-  type ConnectionStatus,
-  type ConnectionSummary,
-  type HerdrEventMsg,
-  type PopupStatePush,
-  parseConnectionSummary,
-} from "./api";
-import {
-  type BrowserNavigation,
-  browserPaneInDirection,
-  emptyBrowserNavigation,
-  projectBrowserLayout,
-  projectBrowserNavigation,
-  selectBrowserTarget,
-} from "./browserNavigation";
-import { worldLocalStorage, worldSessionStorage } from "./browserStorage";
-import {
-  copyStartupProfileStorage,
   STARTUP_DEFAULT_CONNECTION_ID,
+  copyStartupProfileStorage,
 } from "./connectionStorage";
 import {
-  type EndpointAvailability,
-  type EndpointAdvertisement,
-  endpointMethodReason,
-  parseEndpointAdvertisement,
-  parseEndpointAvailability,
-} from "./endpointAvailability";
+  storedTaskNotificationsEnabled,
+  storedTaskNotificationPreferences,
+  notificationPermission,
+  TASK_NOTIFICATIONS_KEY,
+  taskCompletionTracker,
+  notifyHerdrTask,
+  notifyRangerTask,
+  taskNotificationTargetIsCurrent,
+  TASK_NOTIFICATION_PREFERENCES_KEY,
+} from "./store/notifications";
 import {
-  type GitFileAction,
-  type GitRepoAction,
-  type GitWorkingCounts,
-  gitFileActionLabel,
-  gitFileActionSuccessMessage,
-  gitRepoActionSuccessMessage,
-} from "./gitActions";
-import { publishLastStepCompletion } from "./lastStepCompletionStore";
+  storedAutomaticUpdateChecksEnabled,
+  storedPendingRestartVersion,
+  startPolling,
+  reloadWhenUpdatedServerIsReady,
+  consumePendingHerdrUpgrade,
+  handlePreferenceStorageChange,
+  redirectToLogin,
+  stopPolling,
+  checkForUpdate,
+  AUTOMATIC_UPDATE_CHECKS_KEY,
+  applyAutomaticUpdateChecksEnabled,
+  storePendingRestartVersion,
+  startUpdatePolling,
+  updateTimer,
+} from "./store/updates";
+import {
+  bridge,
+  type ConnectionSummary,
+  parseConnectionSummary,
+  type ConnectionClient,
+  UncertainRequestError,
+  type ConnectionStatus,
+  type PopupStatePush,
+  type HerdrEventMsg,
+} from "./api";
+import {
+  scheduleRefresh,
+  refreshNow,
+  clearPendingFocusWorkspace,
+  settlePendingFocusWorkspace,
+  focusActionChains,
+  queuedConnectionKeys,
+  stampPendingFocusWorkspace,
+  enqueueFocusAction,
+  refreshingConnectionKeys,
+} from "./store/refresh";
+import { disposeTerminalConnection } from "./terminalConnection";
 import { isReconnectRetryableError } from "./reconnectRetry";
 import {
-  clearTabLayouts,
-  forgetTabLayoutsExcept,
-  provisionalTabLayout,
-  rememberTabLayout,
-  tabLayoutFor,
-} from "./tabLayout";
-import {
-  prepareTaskNotifications,
-  showTaskNotification,
-} from "./taskNotifications";
-import {
-  announceChange,
-  burstDetail,
-  resetChimeBursts,
-} from "./chimes/chimeCenter";
-import {
-  type HerdrTaskNotification,
-  parseHerdrTaskNotification,
-} from "./herdrTaskNotification";
-import { syncTaskPush, type TaskNotificationPreferences } from "./taskPush";
-import { disposeTerminalConnection } from "./terminalConnection";
-import {
-  coordinateCreation,
-  retainCreationSource,
-  creationPendingReason,
-  creationFailureMessage,
-  useCreationProgress,
-  type CreationSource,
-} from "./creationRequests";
-import {
   clearTerminalRelayViewports,
-  forgetTerminalRelayViewportsExcept,
   terminalRelayViewportForTab,
 } from "./terminalResize";
-import type { GitDiffEntry, Pane, PaneLayout, Tab, Workspace } from "./types";
+import { retainTabLayoutOwners } from "./tabLayout";
+import { parseHerdrTaskNotification } from "./herdrTaskNotification";
+import { publishLastStepCompletion } from "./lastStepCompletionStore";
+import {
+  parseEndpointAdvertisement,
+  endpointMethodReason,
+} from "./endpointAvailability";
+import {
+  navigateBrowser,
+  prepareQualifiedCreation,
+  assertCreationSourceCurrent,
+  browserSelectionIsCurrent,
+  adoptBrowserTarget,
+} from "./store/creation";
+import { creationFailureMessage, coordinateCreation } from "./creationRequests";
+import {
+  assertQualifiedLeaseCurrent,
+  qualifiedLeaseIsCurrent,
+  notifyPinnedTabClose,
+  qualifiedRuntimeTargetIsCurrent,
+  qualifiedAction,
+  swapPanePositions,
+  movePaneTo,
+  type PaneSide,
+} from "./store/operations";
+import {
+  tabCloseBlockReason,
+  tabPinsFor,
+  paneCloseBlockReason,
+} from "./tabPins";
+import { clearTerminalComposerDrafts } from "./terminalComposer";
+import { moveTabInList } from "./tabReorder";
+import {
+  type Pane,
+  type GitDiffEntry,
+  type Workspace,
+  type PaneLayout,
+} from "./types";
+import {
+  type GitFileAction,
+  gitFileActionLabel,
+  gitFileActionSuccessMessage,
+  type GitRepoAction,
+  type GitWorkingCounts,
+  gitRepoActionSuccessMessage,
+} from "./gitActions";
+import {
+  type WorktreeHookRunResult,
+  summarizeDirectHookResult,
+  WORKTREE_REMOVED_EVENT,
+  type WorktreeRemovalCleanup,
+  worktreeRemovalCompletionNotice,
+} from "./store/worktree";
+import { prepareTaskNotifications } from "./taskNotifications";
+import { syncTaskPush, type TaskNotificationPreferences } from "./taskPush";
+import {
+  projectBrowserLayout,
+  browserPaneInDirection,
+} from "./browserNavigation";
+import { resetChimeBursts } from "./chimes/chimeCenter";
 
-export interface ServerSessionState {
-  /** ConnectionManager generation that owns every server resource below. */
-  serverRuntimeGeneration: number | null;
-  navigationMode: "browser-local" | "shared";
-  tabMoveSupported: boolean;
-  endpointAvailability: EndpointAvailability;
-  /** Current browser attachment attempts; runtime advertisements are not ownership. */
-  terminalAttachments: Record<
-    string,
-    {
-      attempt: number;
-      ready: boolean;
-      advertisement?: EndpointAdvertisement | null;
-    }
-  >;
-  browserNavigation: BrowserNavigation;
-  workspaces: Workspace[];
-  tabs: Tab[];
-  panes: Pane[];
-  layout: PaneLayout | null;
-  selectedPaneId: string | null;
-  recentPaneIds: string[];
-  /** A plugin's session-modal floating pane (e.g. Herdr Float), if open. */
-  popup: PopupInfo | null;
-  error: string | null;
-  pendingFocusWorkspaceId: string | null;
-  pendingFocusWorkspaceSeq: number;
-  pendingFocusWorkspaceSettledAt: number | null;
-  terminalAttachEpoch: number;
-  lastRefresh: number;
-  /** Start time of the latest successfully observed focused topology list. */
-  lastTopologyObservationStartedAt: number;
-}
-
-export type PopupInfo = NonNullable<PopupStatePush["popup"]>;
-
-export type WorkspaceSourceTarget = Omit<TaskNotificationTarget, "paneId"> & {
-  paneId?: string;
-};
-
-export interface State extends ServerSessionState {
-  status: ConnectionStatus;
-  connectionPaused: boolean;
-  bridgeStatus: BridgeStatus | null;
-  connections: ConnectionSummary[];
-  /** A validated catalogue has been admitted on the current transport. */
-  catalogueReady: boolean;
-  defaultConnectionId: string;
-  activeConnectionId: string;
-  connectionGeneration: number;
-  sessionsByConnectionId: Record<string, ServerSessionState>;
-  notice: Notice | null;
-  taskNotificationsEnabled: boolean;
-  taskNotificationPreferences: TaskNotificationPreferences;
-  taskNotificationTransport: "local" | "push";
-  taskNotificationBusy: boolean;
-  taskNotificationPermission: NotificationPermission | "unsupported";
-  automaticUpdateChecksEnabled: boolean;
-  updateInfo: UpdateInfo | null;
-  updateInstalling: boolean;
-  herdrUpgrading: boolean;
-  pendingRestartVersion: string | null;
-  dismissedUpdateVersion: string | null;
-}
-
-export interface Notice {
-  kind: "info" | "success" | "error";
-  message: string;
-  detail?: string;
-  detailMode?: "text" | "output";
-  detailTitle?: string;
-  loading?: boolean;
-  autoDismissMs?: number;
-  actionLabel?: string;
-  actionConnectionId?: string;
-  actionRuntimeGeneration?: number;
-  actionWorkspaceId?: string;
-  actionPaneId?: string;
-  actionAgentSessionId?: string;
-  actionRangerTaskId?: string;
-  actionRangerRunId?: string;
-  actionClipboardText?: string;
-  id?: number;
-}
-
-export interface UpdateInfo {
-  current_version: string;
-  latest_version?: string;
-  update_available: boolean;
-  can_auto_update: boolean;
-  reason?: string;
-  platform: string;
-  source_url?: string;
-  metadata_url?: string;
-}
-
-export interface BridgeStatus {
-  clients: number;
-  terminals: Array<{
-    terminal_id: string;
-    viewers: number;
-  }>;
-}
-
-type WorktreeHookEvent =
-  | "worktree.created"
-  | "worktree.opened"
-  | "worktree.before_remove"
-  | "worktree.removed";
-
-type WorktreeHookRunResult = {
-  event: WorktreeHookEvent;
-  status: "skipped" | "succeeded" | "failed";
-  exit_code?: number;
-  stdout?: string;
-  stderr?: string;
-  error?: string;
-};
-
-type WorktreeRemovalCleanup = {
-  terminated_processes?: number;
-  recovered_stale_checkout?: boolean;
-  preserved_path?: string;
-  warning?: string;
-};
-
-const TASK_NOTIFICATIONS_KEY = "taskNotificationsEnabled";
-const TASK_NOTIFICATION_PREFERENCES_KEY = "taskNotificationPreferences";
-const AUTOMATIC_UPDATE_CHECKS_KEY = "automaticUpdateChecksEnabled";
-const PENDING_UPDATE_RELOAD_KEY = "pendingUpdateReloadVersion";
-// Set when a World update reloads the page, so the new release then upgrades
-// Herdr as its own visible step.
-const PENDING_HERDR_UPGRADE_KEY = "pendingHerdrUpgrade";
 let herdrUpgradePollMs = 1000;
 // A verified download, a live handoff and a plugin rebuild.
 const HERDR_UPGRADE_TIMEOUT_MS = 15 * 60_000;
-export const DEFAULT_NOTICE_AUTO_DISMISS_MS = 15 * 1000;
-const TASK_COMPLETED_TOAST_DISMISS_MS = DEFAULT_NOTICE_AUTO_DISMISS_MS;
-const UPDATE_RESTART_VERIFY_TIMEOUT_MS = 90 * 1000;
-const UPDATE_RESTART_VERIFY_INTERVAL_MS = 750;
-const RECENT_PANE_LIMIT = 12;
-
-export interface StoreConnectionLease {
-  connectionId: string;
-  generation: number;
-  client: ConnectionClient;
-}
-
-export function emptyServerSessionState(
-  serverRuntimeGeneration: number | null = null,
-): ServerSessionState {
-  return {
-    serverRuntimeGeneration,
-    navigationMode: "shared",
-    tabMoveSupported: false,
-    endpointAvailability: {},
-    terminalAttachments: {},
-    browserNavigation: emptyBrowserNavigation(),
-    workspaces: [],
-    tabs: [],
-    panes: [],
-    layout: null,
-    selectedPaneId: null,
-    recentPaneIds: [],
-    popup: null,
-    error: null,
-    pendingFocusWorkspaceId: null,
-    pendingFocusWorkspaceSeq: 0,
-    pendingFocusWorkspaceSettledAt: null,
-    terminalAttachEpoch: 0,
-    lastRefresh: 0,
-    lastTopologyObservationStartedAt: 0,
-  };
-}
-
-export const TASK_NOTIFICATION_ACTIVATE_EVENT =
-  "herdr-world:task-notification-activate";
-export const WORKTREE_REMOVED_EVENT = "herdr-world:worktree-removed";
-
-export interface WorktreeRemovedTarget {
-  connectionId: string;
-  generation: number;
-  workspace: Workspace;
-}
-
-export function noticeAutoDismissDelay(notice: Notice): number | null {
-  if (notice.loading) return null;
-  return notice.autoDismissMs ?? DEFAULT_NOTICE_AUTO_DISMISS_MS;
-}
-
-export interface TaskNotificationTarget {
-  agentSessionId?: string;
-  connectionId: string;
-  runtimeGeneration: number;
-  workspaceId: string;
-  paneId: string;
-}
-
-export interface QualifiedFocusTarget {
-  /** Browser-local intent captured before asynchronous notification admission. */
-  navigationRevision?: number;
-  agentSessionId?: string;
-  connectionId: string;
-  runtimeGeneration: number;
-  workspaceId: string;
-  paneId: string | null;
-}
-
-export interface QualifiedRuntimeTarget {
-  connectionId: string;
-  runtimeGeneration: number;
-}
-
-type ClickableNotification = Pick<Notification, "close" | "onclick">;
-
-export function isTaskNotificationTarget(
-  value: unknown,
-): value is TaskNotificationTarget {
-  if (!value || typeof value !== "object") return false;
-  const target = value as Partial<TaskNotificationTarget>;
-  return (
-    typeof target.connectionId === "string" &&
-    target.connectionId.length > 0 &&
-    typeof target.runtimeGeneration === "number" &&
-    Number.isSafeInteger(target.runtimeGeneration) &&
-    target.runtimeGeneration >= 0 &&
-    typeof target.workspaceId === "string" &&
-    target.workspaceId.length > 0 &&
-    typeof target.paneId === "string" &&
-    target.paneId.length > 0 &&
-    (target.agentSessionId === undefined ||
-      (typeof target.agentSessionId === "string" &&
-        target.agentSessionId.length > 0))
-  );
-}
-
-/** Connect a system notification click to the in-app pane navigation path. */
-export function bindTaskNotificationActivation(
-  notification: ClickableNotification,
-  target: TaskNotificationTarget,
-  activate: (target: TaskNotificationTarget) => void = (nextTarget) => {
-    window.dispatchEvent(
-      new CustomEvent<TaskNotificationTarget>(
-        TASK_NOTIFICATION_ACTIVATE_EVENT,
-        {
-          detail: nextTarget,
-        },
-      ),
-    );
-  },
-  focusWindow: () => void = () => window.focus(),
-) {
-  notification.onclick = () => {
-    try {
-      notification.close();
-    } catch {
-      // Notification cleanup must not block navigation.
-    }
-    try {
-      focusWindow();
-    } catch {
-      // Browsers may deny focus even for a notification click.
-    }
-    activate(target);
-  };
-}
-
-function notificationPermission(): NotificationPermission | "unsupported" {
-  if (typeof window === "undefined" || !("Notification" in window)) {
-    return "unsupported";
-  }
-  return Notification.permission;
-}
-
-function storedTaskNotificationsEnabled() {
-  return (
-    typeof localStorage !== "undefined" &&
-    worldLocalStorage.getItem(TASK_NOTIFICATIONS_KEY) === "true"
-  );
-}
-
-function storedTaskNotificationPreferences(): TaskNotificationPreferences {
-  try {
-    const stored = JSON.parse(
-      worldLocalStorage.getItem(TASK_NOTIFICATION_PREFERENCES_KEY) ?? "{}",
-    );
-    return {
-      completed: stored.completed !== false,
-      blocked: stored.blocked !== false,
-    };
-  } catch {
-    return { completed: true, blocked: true };
-  }
-}
-
-export function automaticUpdateChecksEnabledFromStorage(
-  storage: Pick<Storage, "getItem"> | undefined,
-): boolean {
-  try {
-    return storage?.getItem(AUTOMATIC_UPDATE_CHECKS_KEY) !== "false";
-  } catch {
-    return true;
-  }
-}
-
-function storedAutomaticUpdateChecksEnabled(): boolean {
-  return automaticUpdateChecksEnabledFromStorage(
-    typeof localStorage === "undefined" ? undefined : worldLocalStorage,
-  );
-}
-
-function storedPendingRestartVersion(): string | null {
-  if (typeof sessionStorage === "undefined") return null;
-  try {
-    return worldSessionStorage.getItem(PENDING_UPDATE_RELOAD_KEY);
-  } catch {
-    return null;
-  }
-}
-
-function markPendingHerdrUpgrade() {
-  try {
-    worldSessionStorage.setItem(PENDING_HERDR_UPGRADE_KEY, "1");
-  } catch {
-    // Without storage the upgrade stays available from the menu.
-  }
-}
-
-function consumePendingHerdrUpgrade(): boolean {
-  if (typeof sessionStorage === "undefined") return false;
-  try {
-    const pending = worldSessionStorage.getItem(PENDING_HERDR_UPGRADE_KEY);
-    worldSessionStorage.removeItem(PENDING_HERDR_UPGRADE_KEY);
-    return pending === "1";
-  } catch {
-    return false;
-  }
-}
-
-/** The Herdr status payload's upgrade offer, from /api/herdr/status. */
-export interface HerdrStatusUpgrade {
-  state:
-    | "missing"
-    | "current"
-    | "newer"
-    | "outdated"
-    | "package-managed"
-    | "unknown";
-  version?: string;
-  command?: string;
-  /** Harness integrations and `ivoryheart.herdr-world` still to update. */
-  pending?: string[];
-  server_outdated?: boolean;
-}
-
-const WORLD_PLUGIN_ID = "ivoryheart.herdr-world";
-
-function statusUpgrade(status: unknown): HerdrStatusUpgrade | null {
-  if (!status || typeof status !== "object") return null;
-  const upgrade = (status as { upgrade?: unknown }).upgrade;
-  return upgrade && typeof upgrade === "object"
-    ? (upgrade as HerdrStatusUpgrade)
-    : null;
-}
-
-/**
- * Whether Herdr World should offer its Herdr step: Herdr or its running
- * server is behind the verified release, or this World release still has
- * harness integrations or its plugin to bring up to date.
- */
-export function herdrUpgradeOffered(status: unknown): boolean {
-  const upgrade = statusUpgrade(status);
-  return (
-    upgrade?.state === "outdated" ||
-    upgrade?.server_outdated === true ||
-    (upgrade?.pending?.length ?? 0) > 0
-  );
-}
-
-/** The menu entry for the Herdr step, given a status that offers it. */
-export function herdrUpgradeMenuEntry(status: {
-  version?: string;
-  verified_version?: string;
-  upgrade?: HerdrStatusUpgrade;
-}): { label: string; description: string } {
-  const upgrade = status.upgrade;
-  if (upgrade?.state === "outdated" || upgrade?.server_outdated) {
-    const from =
-      upgrade.state === "outdated" ? upgrade.version : status.version;
-    return {
-      label: `Upgrade Herdr to ${status.verified_version}`,
-      description: `Herdr ${from} is installed or running; this release verified ${status.verified_version}`,
-    };
-  }
-  const names = (upgrade?.pending ?? []).map((item) =>
-    item === WORLD_PLUGIN_ID
-      ? "Herdr World plugin"
-      : `${item} harness integration`,
-  );
-  return {
-    label: "Update Herdr integrations",
-    description: `For this release: ${names.join(", ")}`,
-  };
-}
-
-function storePendingRestartVersion(version: string | null) {
-  if (typeof sessionStorage === "undefined") return;
-  try {
-    if (version) {
-      worldSessionStorage.setItem(PENDING_UPDATE_RELOAD_KEY, version);
-    } else {
-      worldSessionStorage.removeItem(PENDING_UPDATE_RELOAD_KEY);
-    }
-  } catch {
-    // Storage may be unavailable in private or restricted browser contexts.
-  }
-}
-
-export function healthMatchesUpdateVersion(
-  health: unknown,
-  expectedVersion: string,
-): boolean {
-  return (
-    typeof health === "object" &&
-    health !== null &&
-    "version" in health &&
-    (health as { version?: unknown }).version === expectedVersion
-  );
-}
 
 const initialSession = emptyServerSessionState();
 const initial: State = {
@@ -560,199 +184,11 @@ const initial: State = {
   dismissedUpdateVersion: null,
 };
 
-const SERVER_SESSION_KEYS: Array<keyof ServerSessionState> = [
-  "serverRuntimeGeneration",
-  "navigationMode",
-  "tabMoveSupported",
-  "endpointAvailability",
-  "terminalAttachments",
-  "browserNavigation",
-  "workspaces",
-  "tabs",
-  "panes",
-  "layout",
-  "selectedPaneId",
-  "recentPaneIds",
-  "error",
-  "pendingFocusWorkspaceId",
-  "pendingFocusWorkspaceSeq",
-  "pendingFocusWorkspaceSettledAt",
-  "terminalAttachEpoch",
-  "lastRefresh",
-  "lastTopologyObservationStartedAt",
-];
-
-function serverSessionFromState(snapshot: State): ServerSessionState {
-  return {
-    serverRuntimeGeneration: snapshot.serverRuntimeGeneration,
-    navigationMode: snapshot.navigationMode,
-    tabMoveSupported: snapshot.tabMoveSupported,
-    endpointAvailability: snapshot.endpointAvailability,
-    terminalAttachments: snapshot.terminalAttachments,
-    browserNavigation: snapshot.browserNavigation,
-    workspaces: snapshot.workspaces,
-    tabs: snapshot.tabs,
-    panes: snapshot.panes,
-    layout: snapshot.layout,
-    selectedPaneId: snapshot.selectedPaneId,
-    recentPaneIds: snapshot.recentPaneIds,
-    popup: snapshot.popup,
-    error: snapshot.error,
-    pendingFocusWorkspaceId: snapshot.pendingFocusWorkspaceId,
-    pendingFocusWorkspaceSeq: snapshot.pendingFocusWorkspaceSeq,
-    pendingFocusWorkspaceSettledAt: snapshot.pendingFocusWorkspaceSettledAt,
-    terminalAttachEpoch: snapshot.terminalAttachEpoch,
-    lastRefresh: snapshot.lastRefresh,
-    lastTopologyObservationStartedAt: snapshot.lastTopologyObservationStartedAt,
-  };
-}
-
-/** Pure state transition used by the store and deterministic partition tests. */
-export function activateConnectionState(
-  snapshot: State,
-  connectionId: string,
-  generation: number,
-): State {
-  if (connectionId === snapshot.activeConnectionId) {
-    return { ...snapshot, connectionGeneration: generation };
-  }
-  const outgoingIsCataloged = snapshot.connections.some(
-    (connection) => connection.id === snapshot.activeConnectionId,
-  );
-  const oldSession = {
-    ...serverSessionFromState(snapshot),
-  };
-  const runtimeGeneration =
-    snapshot.connections.find((connection) => connection.id === connectionId)
-      ?.generation ?? null;
-  const cached = snapshot.sessionsByConnectionId[connectionId];
-  const restored =
-    cached?.serverRuntimeGeneration === runtimeGeneration &&
-    runtimeGeneration !== null
-      ? cached
-      : emptyServerSessionState(runtimeGeneration);
-  const newSession = {
-    ...restored,
-    // A restored pending focus outlived its action, so treat it as settled:
-    // the next fresh observation decides whether it still applies. Reuse the
-    // snapshot timestamp as a stable non-null token; wall-clock time is unused.
-    pendingFocusWorkspaceSettledAt: restored.pendingFocusWorkspaceId
-      ? (restored.pendingFocusWorkspaceSettledAt ?? restored.lastRefresh)
-      : restored.pendingFocusWorkspaceSettledAt,
-  };
-  return {
-    ...snapshot,
-    ...newSession,
-    activeConnectionId: connectionId,
-    connectionGeneration: generation,
-    sessionsByConnectionId: {
-      ...snapshot.sessionsByConnectionId,
-      ...(outgoingIsCataloged
-        ? { [snapshot.activeConnectionId]: oldSession }
-        : {}),
-      [connectionId]: newSession,
-    },
-    notice: null,
-  };
-}
-
-export interface CatalogSessionReconciliation {
-  sessionsByConnectionId: Record<string, ServerSessionState>;
-  activeSession: ServerSessionState | null;
-  invalidatedConnectionIds: string[];
-  activeRuntimeChanged: boolean;
-}
-
-/**
- * Bind cached server resources to ConnectionManager generations. This is the
- * production catalog transition and a pure deterministic regression seam.
- */
-export function reconcileConnectionCatalogSessions(
-  snapshot: State,
-  connections: ConnectionSummary[],
-): CatalogSessionReconciliation {
-  const previousById = new Map(
-    snapshot.connections.map((connection) => [connection.id, connection]),
-  );
-  const sessionsByConnectionId: Record<string, ServerSessionState> = {};
-  const invalidatedConnectionIds: string[] = [];
-  let activeSession: ServerSessionState | null = null;
-  let activeRuntimeChanged = false;
-
-  for (const connection of connections) {
-    const cached =
-      connection.id === snapshot.activeConnectionId
-        ? serverSessionFromState(snapshot)
-        : snapshot.sessionsByConnectionId[connection.id];
-    const previous = previousById.get(connection.id);
-    const initialActiveTag =
-      snapshot.connections.length === 0 &&
-      connection.id === snapshot.activeConnectionId &&
-      !!cached &&
-      (cached.serverRuntimeGeneration === null ||
-        cached.serverRuntimeGeneration === connection.generation);
-    const catalogGenerationChanged =
-      previous !== undefined && previous.generation !== connection.generation;
-    const cachedGenerationMismatch =
-      !!cached &&
-      cached.serverRuntimeGeneration !== null &&
-      cached.serverRuntimeGeneration !== connection.generation;
-    const newCatalogEntry = previous === undefined && !initialActiveTag;
-    const invalidated =
-      !cached ||
-      catalogGenerationChanged ||
-      cachedGenerationMismatch ||
-      newCatalogEntry;
-    const nextSession = invalidated
-      ? {
-          ...emptyServerSessionState(connection.generation),
-          terminalAttachEpoch: (cached?.terminalAttachEpoch ?? 0) + 1,
-        }
-      : {
-          ...cached,
-          serverRuntimeGeneration: connection.generation,
-        };
-    sessionsByConnectionId[connection.id] = nextSession;
-    if (invalidated) invalidatedConnectionIds.push(connection.id);
-    if (connection.id === snapshot.activeConnectionId) {
-      activeSession = nextSession;
-      activeRuntimeChanged = invalidated && !initialActiveTag;
-    }
-  }
-
-  return {
-    sessionsByConnectionId,
-    activeSession,
-    invalidatedConnectionIds,
-    activeRuntimeChanged,
-  };
-}
-
 let state = initial;
 const listeners = new Set<() => void>();
 let noticeSeq = 0;
-let updateReloadVerification: {
-  version: string;
-  promise: Promise<void>;
-} | null = null;
 function emit() {
   listeners.forEach((l) => l());
-}
-
-export function nextRecentPaneIds(
-  selectedPaneId: string | null | undefined,
-  recentPaneIds: string[],
-  panes: Array<Pick<Pane, "pane_id">>,
-) {
-  const livePaneIds = new Set(panes.map((pane) => pane.pane_id));
-  const pruned = recentPaneIds.filter((paneId) => livePaneIds.has(paneId));
-  if (!selectedPaneId || !livePaneIds.has(selectedPaneId)) {
-    return pruned.slice(0, RECENT_PANE_LIMIT);
-  }
-  return [
-    selectedPaneId,
-    ...pruned.filter((paneId) => paneId !== selectedPaneId),
-  ].slice(0, RECENT_PANE_LIMIT);
 }
 
 function set(patch: Partial<State>) {
@@ -819,59 +255,8 @@ function captureConnectionLease(
   };
 }
 
-export function isStoreConnectionLeaseCurrent(
-  snapshot: Pick<State, "activeConnectionId" | "connectionGeneration">,
-  lease: Pick<StoreConnectionLease, "connectionId" | "generation">,
-): boolean {
-  return (
-    snapshot.activeConnectionId === lease.connectionId &&
-    snapshot.connectionGeneration === lease.generation
-  );
-}
-
 function leaseIsCurrent(lease: StoreConnectionLease): boolean {
   return !state.connectionPaused && lease.client.isCurrent();
-}
-
-export interface OperationalContext {
-  connectionId: string;
-  runtimeGeneration: number;
-}
-export const OperationalContext = createContext<OperationalContext | null>(
-  null,
-);
-const connectionSnapshots = new WeakMap<State, Map<string, State>>();
-
-/** Read a partition without changing Spaces focus or another partition. */
-export function connectionSnapshot(
-  snapshot: State,
-  connectionId: string,
-): State {
-  const cached = connectionSnapshots.get(snapshot) ?? new Map<string, State>();
-  connectionSnapshots.set(snapshot, cached);
-  const existing = cached.get(connectionId);
-  if (existing) return existing;
-  if (snapshot.activeConnectionId === connectionId) {
-    const projected = {
-      ...snapshot,
-      connectionGeneration:
-        snapshot.serverRuntimeGeneration ?? snapshot.connectionGeneration,
-    };
-    cached.set(connectionId, projected);
-    return projected;
-  }
-  const session =
-    snapshot.sessionsByConnectionId[connectionId] ??
-    emptyServerSessionState(null);
-  const projected = {
-    ...snapshot,
-    ...session,
-    activeConnectionId: connectionId,
-    connectionGeneration:
-      session.serverRuntimeGeneration ?? snapshot.connectionGeneration,
-  };
-  cached.set(connectionId, projected);
-  return projected;
 }
 
 function leaseSnapshot(lease: StoreConnectionLease): State {
@@ -909,216 +294,15 @@ function setForConnection(
   return true;
 }
 
-export function connectionEventIsActive(
-  snapshot: Pick<State, "activeConnectionId" | "connections">,
-  connectionId: string,
-  connectionGeneration?: number,
-  requireGeneration = bridge.hello?.capabilities
-    ?.connection_runtime_generation === true,
-): boolean {
-  if (snapshot.activeConnectionId !== connectionId) return false;
-  const expected = snapshot.connections.find(
-    (connection) => connection.id === connectionId,
-  )?.generation;
-  if (!requireGeneration) return true;
-  return expected !== undefined && expected === connectionGeneration;
-}
-
 function wait(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms));
 }
-
-function redirectToLogin() {
-  const loginUrl = new URL("/login", window.location.origin);
-  window.location.replace(loginUrl.href);
-}
-
-/**
- * Keep the old frontend alive until the supervisor starts the updated process
- * and it serves the expected version. The session marker survives a manual
- * reload during the restart window and is cleared before the automatic reload.
- */
-function reloadWhenUpdatedServerIsReady(
-  expectedVersion: string,
-): Promise<void> {
-  if (typeof window === "undefined") return Promise.resolve();
-  if (updateReloadVerification?.version === expectedVersion) {
-    return updateReloadVerification.promise;
-  }
-
-  const promise = (async () => {
-    const deadline = Date.now() + UPDATE_RESTART_VERIFY_TIMEOUT_MS;
-    while (Date.now() < deadline) {
-      try {
-        const response = await fetch(`/api/health?t=${Date.now()}`, {
-          credentials: "same-origin",
-          cache: "no-store",
-        });
-        if (response.status === 401) {
-          storePendingRestartVersion(null);
-          set({ pendingRestartVersion: null });
-          redirectToLogin();
-          return;
-        }
-        if (response.ok) {
-          const health = await response.json().catch(() => null);
-          if (healthMatchesUpdateVersion(health, expectedVersion)) {
-            storePendingRestartVersion(null);
-            markPendingHerdrUpgrade();
-            set({
-              pendingRestartVersion: null,
-              notice: {
-                kind: "success",
-                message: `Herdr World ${expectedVersion} is running`,
-                detail:
-                  "Reloading the application to use the updated frontend.",
-                loading: true,
-              },
-            });
-            window.location.reload();
-            return;
-          }
-        }
-      } catch {
-        // The bridge is expected to be briefly unavailable during replacement.
-      }
-      await wait(UPDATE_RESTART_VERIFY_INTERVAL_MS);
-    }
-
-    storePendingRestartVersion(null);
-    set({
-      pendingRestartVersion: null,
-      notice: {
-        kind: "error",
-        message: "Updated server did not become ready",
-        detail: `Could not verify Herdr World ${expectedVersion}. Reload the page after checking the server process.`,
-      },
-    });
-  })().finally(() => {
-    if (updateReloadVerification?.promise === promise) {
-      updateReloadVerification = null;
-    }
-  });
-  updateReloadVerification = { version: expectedVersion, promise };
-  return promise;
-}
-
-export function terminalNavigationLoading(s: State): boolean {
-  return (
-    s.status === "connected" &&
-    !s.connectionPaused &&
-    !s.error &&
-    (!!s.pendingFocusWorkspaceId ||
-      (!s.layout && s.panes.some((pane) => pane.pane_id === s.selectedPaneId)))
-  );
-}
-
-function pickActiveTabId(s: State): string | undefined {
-  const focusedWs = s.workspaces.find((w) => w.focused);
-  if (focusedWs?.active_tab_id) return focusedWs.active_tab_id;
-  const focusedTab = s.tabs.find((t) => t.focused);
-  return focusedTab?.tab_id ?? s.tabs[0]?.tab_id;
-}
-
-interface NumberedTabRename {
-  tabId: string;
-  label: string;
-}
-
-/** Builds a stable GUI label from Herdr's authoritative created-tab number. */
-export function numberedCreatedTabRename(
-  result: unknown,
-): NumberedTabRename | null {
-  if (!result || typeof result !== "object") return null;
-  const response = result as { type?: unknown; tab?: unknown };
-  if (response.type !== "tab_created" || !response.tab) return null;
-  if (typeof response.tab !== "object") return null;
-
-  const { tab_id: tabId, number } = response.tab as {
-    tab_id?: unknown;
-    number?: unknown;
-  };
-  if (
-    typeof tabId !== "string" ||
-    !tabId ||
-    typeof number !== "number" ||
-    !Number.isInteger(number) ||
-    number < 1
-  ) {
-    return null;
-  }
-  return { tabId, label: `Tab ${number}` };
-}
-
-const refreshTimers = new Map<string, ReturnType<typeof setTimeout>>();
-const refreshingConnectionKeys = new Set<string>();
-const refreshCompletions = new Map<
-  string,
-  { promise: Promise<void>; resolve(): void }
->();
-const queuedConnectionKeys = new Set<string>();
 let initialized = false;
 let catalogRequestSeq = 0;
 let appliedCatalogRequestSeq = 0;
 let catalogReadyForConnection = false;
 let terminalReattachPending = false;
 let connectionRecoveryIntent: "resume" | "reconnect" | null = null;
-const focusActionChains = new Map<string, Promise<unknown>>();
-type PaneStatusTracker = {
-  ready: boolean;
-  byId: Map<string, { status: string; identity: string }>;
-};
-
-export class TaskCompletionTracker {
-  private readonly byConnection = new Map<string, PaneStatusTracker>();
-
-  clear(): void {
-    this.byConnection.clear();
-  }
-
-  reset(connectionId: string): void {
-    this.byConnection.delete(connectionId);
-  }
-
-  update(connectionId: string, panes: Pane[]): Pane[] {
-    const tracker = this.byConnection.get(connectionId) ?? {
-      ready: false,
-      byId: new Map<string, { status: string; identity: string }>(),
-    };
-    this.byConnection.set(connectionId, tracker);
-    const livePaneIds = new Set<string>();
-    const completed: Pane[] = [];
-    for (const pane of panes) {
-      livePaneIds.add(pane.pane_id);
-      const nextStatus = pane.agent_status;
-      const previous = tracker.byId.get(pane.pane_id);
-      const identity = JSON.stringify([
-        pane.workspace_id,
-        pane.tab_id,
-        pane.agent,
-        pane.agent_session?.value,
-      ]);
-      if (
-        tracker.ready &&
-        previous?.identity === identity &&
-        previous.status === "working" &&
-        (nextStatus === "done" ||
-          nextStatus === "idle" ||
-          nextStatus === "blocked")
-      ) {
-        completed.push(pane);
-      }
-      tracker.byId.set(pane.pane_id, { status: nextStatus, identity });
-    }
-    for (const paneId of tracker.byId.keys()) {
-      if (!livePaneIds.has(paneId)) tracker.byId.delete(paneId);
-    }
-    tracker.ready = true;
-    return completed;
-  }
-}
-
-const taskCompletionTracker = new TaskCompletionTracker();
 let taskNotificationPreferenceVersion = 0;
 
 function reportTaskNotificationFailure(error: unknown, version: number) {
@@ -1135,743 +319,6 @@ function reportTaskNotificationFailure(error: unknown, version: number) {
     },
   });
   worldLocalStorage.setItem(TASK_NOTIFICATIONS_KEY, "false");
-}
-
-function taskNotificationBody(
-  pane: Pane,
-  workspaces: Workspace[],
-  tabs: Tab[],
-) {
-  const workspace = workspaces.find(
-    (w) => w.workspace_id === pane.workspace_id,
-  );
-  const tab = tabs.find((t) => t.tab_id === pane.tab_id);
-  const parts = [
-    pane.agent ?? "Agent",
-    workspace?.label ? `workspace ${workspace.label}` : null,
-    tab?.label ? `tab ${tab.label}` : null,
-  ].filter((part): part is string => !!part);
-  return parts.join(" · ");
-}
-
-function maybeShowBrowserTaskNotification(
-  title: string,
-  body: string,
-  tag: string,
-  scope: Pick<
-    TaskNotificationTarget,
-    "connectionId" | "runtimeGeneration"
-  > | null,
-  target: NotificationTarget | null,
-  /** World plays its own chime on this page, so the OS stays quiet. */
-  silent = false,
-) {
-  if (
-    !state.taskNotificationsEnabled ||
-    state.taskNotificationBusy ||
-    state.taskNotificationTransport === "push"
-  )
-    return;
-  const version = taskNotificationPreferenceVersion;
-  if (notificationPermission() !== "granted") return;
-  void showTaskNotification(
-    title,
-    { body, tag, ...(silent ? { silent: true } : {}) },
-    target,
-    () =>
-      state.taskNotificationsEnabled &&
-      version === taskNotificationPreferenceVersion &&
-      (scope === null || taskNotificationTargetIsCurrent(state, scope)),
-  ).catch((error) => reportTaskNotificationFailure(error, version));
-}
-
-export function taskNotificationTarget(
-  connectionId: string,
-  runtimeGeneration: number,
-  pane: Pick<Pane, "workspace_id" | "pane_id">,
-): TaskNotificationTarget {
-  const metadata = pane as typeof pane & {
-    agent_session?: { value?: unknown };
-  };
-  const session = metadata.agent_session?.value;
-  return {
-    ...(typeof session === "string" && session
-      ? { agentSessionId: session }
-      : {}),
-    connectionId,
-    runtimeGeneration,
-    workspaceId: pane.workspace_id,
-    paneId: pane.pane_id,
-  };
-}
-
-export function taskNotificationTargetIsCurrent(
-  snapshot: Pick<State, "connections">,
-  target: Pick<TaskNotificationTarget, "connectionId" | "runtimeGeneration">,
-): boolean {
-  return snapshot.connections.some(
-    (connection) =>
-      connection.id === target.connectionId &&
-      connection.state === "ready" &&
-      connection.generation === target.runtimeGeneration,
-  );
-}
-
-export function taskNotificationTag(target: TaskNotificationTarget): string {
-  return JSON.stringify([
-    "herdr-world-task",
-    target.connectionId,
-    target.runtimeGeneration,
-    target.paneId,
-  ]);
-}
-
-export function taskNotificationTargetFromNotice(
-  notice: Pick<
-    Notice,
-    | "actionConnectionId"
-    | "actionRuntimeGeneration"
-    | "actionWorkspaceId"
-    | "actionPaneId"
-    | "actionAgentSessionId"
-  >,
-): TaskNotificationTarget | null {
-  const target = {
-    connectionId: notice.actionConnectionId,
-    runtimeGeneration: notice.actionRuntimeGeneration,
-    workspaceId: notice.actionWorkspaceId,
-    paneId: notice.actionPaneId,
-    ...(notice.actionAgentSessionId
-      ? { agentSessionId: notice.actionAgentSessionId }
-      : {}),
-  };
-  return isTaskNotificationTarget(target) ? target : null;
-}
-
-function notifyTaskCompleted(
-  pane: Pane,
-  workspaces: Workspace[],
-  tabs: Tab[],
-  connectionId = state.activeConnectionId,
-) {
-  const blocked = pane.agent_status === "blocked";
-  const notify =
-    state.taskNotificationsEnabled &&
-    state.taskNotificationPreferences[blocked ? "blocked" : "completed"];
-  const runtimeGeneration = connectionSnapshot(
-    state,
-    connectionId,
-  ).serverRuntimeGeneration;
-  if (runtimeGeneration === null) return;
-  const body = taskNotificationBody(pane, workspaces, tabs);
-  const announcement = announceChange({
-    kind: blocked ? "blocked" : "completed",
-    connectionId,
-    terminalId: pane.terminal_id || null,
-    agent: pane.display_agent ?? pane.agent ?? null,
-    detail: null,
-  });
-  // A chime always comes with its toast; the OS notification keeps its switch.
-  if (!notify && !announcement.chimed) return;
-  const title = announcement.message;
-  const target = taskNotificationTarget(connectionId, runtimeGeneration, pane);
-  const sessionKnown = !pane.agent || Boolean(target.agentSessionId);
-  const detail = sessionKnown
-    ? body
-    : `${body} · Original agent session identity is unavailable; this notification cannot navigate to a replacement.`;
-  set({
-    notice: {
-      kind: blocked ? "info" : "success",
-      message: announcement.message,
-      detail: burstDetail(announcement, detail),
-      ...(sessionKnown
-        ? {
-            actionLabel: pane.agent ? "Open agent" : "Open workspace",
-            actionConnectionId: connectionId,
-            actionRuntimeGeneration: runtimeGeneration,
-            actionWorkspaceId: pane.workspace_id,
-            actionPaneId: pane.pane_id,
-            actionAgentSessionId: target.agentSessionId,
-          }
-        : {}),
-      autoDismissMs: TASK_COMPLETED_TOAST_DISMISS_MS,
-    },
-  });
-  if (notify)
-    maybeShowBrowserTaskNotification(
-      title,
-      burstDetail(announcement, detail),
-      taskNotificationTag(target),
-      target,
-      sessionKnown ? target : null,
-      announcement.silent,
-    );
-}
-
-/** True when the bridge relays Herdr's notification decisions. */
-export function herdrTaskNotificationsActive(hello = bridge.hello): boolean {
-  return hello?.capabilities?.herdr_task_notifications === true;
-}
-
-function documentIsVisible() {
-  return (
-    typeof document === "undefined" || document.visibilityState === "visible"
-  );
-}
-
-function notifyHerdrTask(
-  connectionId: string,
-  notification: HerdrTaskNotification,
-) {
-  // A message for the owner follows the completed switch, as before.
-  const notify =
-    state.taskNotificationsEnabled &&
-    state.taskNotificationPreferences[
-      notification.kind === "message" ? "completed" : notification.kind
-    ];
-  const snapshot = connectionSnapshot(state, connectionId);
-  const runtimeGeneration = snapshot.serverRuntimeGeneration;
-  if (runtimeGeneration === null) return;
-  const { workspaceId, paneId } = notification;
-  // Someone looking at the pane already sees it; Herdr stays the policy owner.
-  if (
-    paneId &&
-    connectionId === state.activeConnectionId &&
-    paneId === activePaneIdForTaskNotifications(state) &&
-    documentIsVisible()
-  )
-    return;
-  const scope = { connectionId, runtimeGeneration };
-  const target =
-    workspaceId && paneId && !notification.sessionIdentityUnavailable
-      ? taskNotificationTarget(connectionId, runtimeGeneration, {
-          workspace_id: workspaceId,
-          pane_id: paneId,
-          ...(notification.agentSessionId
-            ? { agent_session: { value: notification.agentSessionId } }
-            : {}),
-        })
-      : null;
-  // The reason line carries a message's title; Herdr's body follows it.
-  const message = notification.kind === "message";
-  const text = notification.body ?? (message ? "" : notification.title);
-  const detail = notification.sessionIdentityUnavailable
-    ? `${text} · Original agent session identity is unavailable; this notification cannot navigate to a replacement.`
-    : text;
-  const pane = paneId
-    ? snapshot.panes.find((candidate) => candidate.pane_id === paneId)
-    : undefined;
-  const announcement = announceChange({
-    kind: notification.kind,
-    connectionId,
-    terminalId: pane?.terminal_id || null,
-    agent: notification.agentKnown ? notification.agent : null,
-    // Without a pane, Herdr's title is all that says what it is.
-    detail: message || !paneId ? notification.title : null,
-  });
-  // A chime always comes with its toast; the OS notification keeps its switch.
-  if (!notify && !announcement.chimed) return;
-  const blocked = notification.kind === "blocked";
-  set({
-    notice: {
-      kind: blocked ? "info" : "success",
-      message: announcement.message,
-      detail: burstDetail(announcement, detail),
-      ...(target
-        ? {
-            actionLabel: "Open agent",
-            actionConnectionId: connectionId,
-            actionRuntimeGeneration: runtimeGeneration,
-            actionWorkspaceId: target.workspaceId,
-            actionPaneId: target.paneId,
-            actionAgentSessionId: target.agentSessionId,
-          }
-        : {}),
-      autoDismissMs: TASK_COMPLETED_TOAST_DISMISS_MS,
-    },
-  });
-  if (notify)
-    maybeShowBrowserTaskNotification(
-      announcement.message,
-      burstDetail(announcement, detail),
-      target
-        ? taskNotificationTag(target)
-        : JSON.stringify([
-            "herdr-world-task",
-            connectionId,
-            runtimeGeneration,
-            notification.title,
-          ]),
-      scope,
-      target,
-      announcement.silent,
-    );
-}
-
-function notifyRangerTask(notification: AssistantTaskNotification) {
-  const kind = notification.status === "succeeded" ? "completed" : "blocked";
-  if (
-    !state.taskNotificationsEnabled ||
-    !state.taskNotificationPreferences[kind]
-  )
-    return;
-  const target: RangerTaskNotificationTarget = {
-    type: "ranger_task",
-    taskId: notification.task_id,
-    runId: notification.run_id,
-  };
-  set({
-    notice: {
-      kind:
-        notification.status === "failed"
-          ? "error"
-          : notification.status === "succeeded"
-            ? "success"
-            : "info",
-      message: notification.title,
-      detail: notification.body,
-      actionLabel: "Open Ranger task",
-      actionRangerTaskId: target.taskId,
-      actionRangerRunId: target.runId,
-      autoDismissMs: TASK_COMPLETED_TOAST_DISMISS_MS,
-    },
-  });
-  maybeShowBrowserTaskNotification(
-    notification.title,
-    notification.body,
-    JSON.stringify(["roamgate-ranger-task", target.taskId, target.runId]),
-    null,
-    target,
-  );
-}
-
-function activePaneIdForTaskNotifications(snapshot: State) {
-  const layoutPaneIds = new Set(
-    snapshot.layout?.panes.map((pane) => pane.pane_id) ?? [],
-  );
-  if (snapshot.selectedPaneId && layoutPaneIds.has(snapshot.selectedPaneId)) {
-    return snapshot.selectedPaneId;
-  }
-  return (
-    snapshot.layout?.focused_pane_id ??
-    snapshot.panes.find((pane) => pane.focused)?.pane_id ??
-    null
-  );
-}
-
-function trackTaskCompletions(connectionId: string, panes: Pane[]) {
-  return taskCompletionTracker.update(connectionId, panes);
-}
-
-function notifyCompletedTasks(
-  lease: StoreConnectionLease,
-  completed: Pane[],
-  workspaces: Workspace[],
-  tabs: Tab[],
-) {
-  if (!leaseIsCurrent(lease)) return;
-  // The bridge relays Herdr's own notifications instead; see notifyHerdrTask.
-  if (herdrTaskNotificationsActive()) return;
-  const activePaneId = activePaneIdForTaskNotifications(state);
-  for (const pane of completed) {
-    if (!leaseIsCurrent(lease)) return;
-    if (
-      lease.connectionId === state.activeConnectionId &&
-      pane.pane_id === activePaneId
-    )
-      continue;
-    notifyTaskCompleted(pane, workspaces, tabs, lease.connectionId);
-  }
-}
-
-function enqueueFocusAction<T>(
-  fn: () => Promise<T>,
-  connectionId = state.activeConnectionId,
-): Promise<T> {
-  const chain = focusActionChains.get(connectionId) ?? Promise.resolve();
-  const task = chain.then(fn, fn);
-  const settled = task.catch(() => undefined);
-  focusActionChains.set(connectionId, settled);
-  void settled.then(() => {
-    if (focusActionChains.get(connectionId) === settled)
-      focusActionChains.delete(connectionId);
-  });
-  return task;
-}
-
-/**
- * Structural equality for JSON-shaped values. Fails open (reports unequal)
- * when a value cannot be serialized, so callers fall back to publishing.
- */
-function jsonDeepEqual(a: unknown, b: unknown): boolean {
-  if (a === b) return true;
-  try {
-    return JSON.stringify(a) === JSON.stringify(b);
-  } catch {
-    return false;
-  }
-}
-
-function serverSessionEqual(
-  a: ServerSessionState,
-  b: ServerSessionState,
-): boolean {
-  for (const key of SERVER_SESSION_KEYS) {
-    if (a[key] === b[key]) continue;
-    if (!jsonDeepEqual(a[key], b[key])) return false;
-  }
-  return true;
-}
-
-const REFRESH_SLICE_KEYS = [
-  "workspaces",
-  "tabs",
-  "panes",
-  "layout",
-  "browserNavigation",
-  "endpointAvailability",
-] as const;
-const REFRESH_SCALAR_KEYS = [
-  "serverRuntimeGeneration",
-  "navigationMode",
-  "tabMoveSupported",
-  "error",
-  "pendingFocusWorkspaceId",
-  "pendingFocusWorkspaceSettledAt",
-  "selectedPaneId",
-] as const;
-
-/**
- * Reuse the previous reference for every refresh slice whose content is
- * unchanged so memoized consumers stay valid, and return null when nothing
- * changed at all so the caller can skip broadcasting a no-op state. Scalars
- * are only adopted when their value actually moved.
- */
-export function stabilizeRefreshPatch(
-  snapshot: State,
-  next: Partial<State>,
-): Partial<State> | null {
-  const patch: Partial<State> = {};
-  let changed = false;
-  const adoptSlice = <K extends (typeof REFRESH_SLICE_KEYS)[number]>(
-    key: K,
-  ) => {
-    if (!(key in next)) return;
-    const incoming = next[key] as State[K];
-    const current = snapshot[key];
-    if (incoming === current || jsonDeepEqual(incoming, current)) {
-      patch[key] = current;
-    } else {
-      patch[key] = incoming;
-      changed = true;
-    }
-  };
-  for (const key of REFRESH_SLICE_KEYS) adoptSlice(key);
-  const adoptScalar = <K extends (typeof REFRESH_SCALAR_KEYS)[number]>(
-    key: K,
-  ) => {
-    if (!(key in next)) return;
-    if (next[key] === snapshot[key]) return;
-    patch[key] = next[key] as State[K];
-    changed = true;
-  };
-  for (const key of REFRESH_SCALAR_KEYS) adoptScalar(key);
-  // A first/reconnect observation establishes hydration even when cached
-  // topology is identical. Subsequent unchanged observations stay silent.
-  if (!changed && snapshot.lastRefresh) return null;
-  patch.lastRefresh = next.lastRefresh ?? Date.now();
-  return patch;
-}
-
-let nextPendingFocusWorkspaceSeq = 1;
-
-/**
- * Marks a workspace focus as in flight and returns the sequence token that
- * identifies this attempt. The pending flag suppresses focus-follower
- * effects until a fresh refresh observes the workspace focused (or the focus
- * is declared lost after the action settled).
- */
-function stampPendingFocusWorkspace(workspaceId: string): number {
-  const seq = nextPendingFocusWorkspaceSeq++;
-  set({
-    pendingFocusWorkspaceId: workspaceId,
-    pendingFocusWorkspaceSeq: seq,
-    pendingFocusWorkspaceSettledAt: null,
-  });
-  return seq;
-}
-
-/** Clears an in-flight focus marker identified by its sequence token. */
-function clearPendingFocusWorkspace(seq: number): void {
-  if (state.pendingFocusWorkspaceSeq !== seq) return;
-  set({
-    pendingFocusWorkspaceId: null,
-    pendingFocusWorkspaceSettledAt: null,
-  });
-}
-
-/** Records that the action behind an in-flight focus has completed. */
-function settlePendingFocusWorkspace(seq: number): void {
-  if (
-    !state.pendingFocusWorkspaceId ||
-    state.pendingFocusWorkspaceSeq !== seq ||
-    state.pendingFocusWorkspaceSettledAt !== null
-  ) {
-    return;
-  }
-  set({ pendingFocusWorkspaceSettledAt: Date.now() });
-}
-
-async function refreshNow(
-  lease = captureConnectionLease(),
-  waitForRunning = false,
-) {
-  if (
-    leaseSnapshot(lease).connectionPaused ||
-    leaseSnapshot(lease).status !== "connected" ||
-    !leaseIsCurrent(lease)
-  ) {
-    return;
-  }
-  const refreshKey = `${lease.connectionId}:${lease.generation}`;
-  if (refreshingConnectionKeys.has(refreshKey)) {
-    queuedConnectionKeys.add(refreshKey);
-    return waitForRunning
-      ? refreshCompletions.get(refreshKey)?.promise
-      : undefined;
-  }
-  let resolve!: () => void;
-  const promise = new Promise<void>((done) => {
-    resolve = done;
-  });
-  const completion = { promise, resolve };
-  refreshCompletions.set(refreshKey, completion);
-  refreshingConnectionKeys.add(refreshKey);
-  const observationStartedAt = performance.now();
-  // Snapshot the pending-focus marker when the fetch actually starts. Only a
-  // refresh that began after the focus action settled may declare the focus
-  // lost, and only while the marker still belongs to that same attempt.
-  const navigationAtEntry = leaseSnapshot(lease).browserNavigation;
-  const endpointAvailabilityAtEntry = leaseSnapshot(lease).endpointAvailability;
-  const pendingFocusAtEntry = {
-    seq: leaseSnapshot(lease).pendingFocusWorkspaceSeq,
-    settledAt: leaseSnapshot(lease).pendingFocusWorkspaceSettledAt,
-  };
-  try {
-    const [wsRes, tabRes, paneRes, agentRes] = await Promise.all([
-      lease.client.call("workspace.list"),
-      lease.client.call("tab.list"),
-      lease.client.call("pane.list"),
-      // Older servers may omit agent metadata; ordinary navigation still works.
-      lease.client.call("agent.list").catch(() => null),
-    ]);
-    if (!leaseIsCurrent(lease)) return;
-    const workspaces: Workspace[] = wsRes?.workspaces ?? [];
-    const tabs: Tab[] = tabRes?.tabs ?? [];
-    const panes = withAgentActivity(paneRes?.panes ?? [], agentRes);
-    forgetTerminalRelayViewportsExcept(
-      lease.connectionId,
-      lease.generation,
-      new Set(tabs.map((tab) => tab.tab_id)),
-    );
-    forgetTabLayoutsExcept(
-      lease.connectionId,
-      lease.generation,
-      new Set(tabs.map((tab) => tab.tab_id)),
-    );
-    const completedPanes = trackTaskCompletions(lease.connectionId, panes);
-
-    const navigationMode =
-      wsRes?.navigation_mode === "browser-local" ? "browser-local" : "shared";
-    forgetClosedTabPins(
-      lease.connectionId,
-      new Set(tabs.map((tab) => tab.tab_id)),
-    );
-    const next: Partial<State> = {
-      serverRuntimeGeneration: lease.generation,
-      navigationMode,
-      tabMoveSupported: wsRes?.tab_move_supported === true,
-      endpointAvailability: parseEndpointAvailability(
-        wsRes?.endpoint_availability,
-      ),
-      workspaces,
-      tabs,
-      panes,
-      error: null,
-      lastRefresh: Date.now(),
-    };
-    if (navigationMode === "browser-local") {
-      Object.assign(
-        next,
-        projectBrowserNavigation(
-          leaseSnapshot(lease).browserNavigation,
-          workspaces,
-          tabs,
-          panes,
-        ),
-      );
-    }
-    const pendingFocusAtObservation = {
-      seq: leaseSnapshot(lease).pendingFocusWorkspaceSeq,
-      settledAt: leaseSnapshot(lease).pendingFocusWorkspaceSettledAt,
-    };
-    if (
-      leaseSnapshot(lease).pendingFocusWorkspaceId &&
-      workspaces.some(
-        (w) =>
-          w.workspace_id === leaseSnapshot(lease).pendingFocusWorkspaceId &&
-          w.focused,
-      )
-    ) {
-      next.pendingFocusWorkspaceId = null;
-      next.pendingFocusWorkspaceSettledAt = null;
-    } else if (
-      leaseSnapshot(lease).pendingFocusWorkspaceId &&
-      leaseSnapshot(lease).pendingFocusWorkspaceSeq ===
-        pendingFocusAtEntry.seq &&
-      pendingFocusAtEntry.settledAt !== null &&
-      leaseSnapshot(lease).pendingFocusWorkspaceSettledAt ===
-        pendingFocusAtEntry.settledAt
-    ) {
-      // The focus action settled before this refresh started, yet a fresh
-      // observation still does not show the workspace focused: the focus was
-      // pre-empted or the workspace vanished, so release follower effects.
-      next.pendingFocusWorkspaceId = null;
-      next.pendingFocusWorkspaceSettledAt = null;
-    }
-
-    // Keep selection valid globally. Layout-scoped validation runs after the
-    // active tab layout is fetched below, because a pane can exist while no
-    // longer belonging to the visible terminal.
-    if (
-      navigationMode === "shared" &&
-      leaseSnapshot(lease).selectedPaneId &&
-      !panes.some((p) => p.pane_id === leaseSnapshot(lease).selectedPaneId)
-    ) {
-      next.selectedPaneId = null;
-    }
-
-    // Fetch layout for the active tab (needs a pane_id in that tab).
-    const merged = { ...leaseSnapshot(lease), ...next } as State;
-    const activeTabId = pickActiveTabId(merged);
-    const aPane =
-      panes.find((p) => p.tab_id === activeTabId && p.focused) ??
-      panes.find((p) => p.tab_id === activeTabId);
-    if (aPane) {
-      try {
-        const lr = await lease.client.call("pane.layout", {
-          pane_id: aPane.pane_id,
-        });
-        if (!leaseIsCurrent(lease)) return;
-        const observedLayout = (lr?.layout ?? null) as PaneLayout | null;
-        // Panes can move or close between pane.list and pane.layout. Never
-        // substitute shared layout focus for a missing browser-selected pane.
-        const staleLayout =
-          navigationMode === "browser-local" &&
-          observedLayout &&
-          (observedLayout.tab_id !== activeTabId ||
-            observedLayout.workspace_id !== aPane.workspace_id ||
-            (next.selectedPaneId &&
-              !observedLayout.panes.some(
-                (pane) => pane.pane_id === next.selectedPaneId,
-              )));
-        const layout = staleLayout ? null : observedLayout;
-        if (staleLayout) queuedConnectionKeys.add(refreshKey);
-        rememberTabLayout(lease.connectionId, lease.generation, layout);
-        next.layout =
-          navigationMode === "browser-local"
-            ? projectBrowserLayout(layout, next.selectedPaneId ?? null)
-            : layout;
-        if (
-          navigationMode === "shared" &&
-          layout &&
-          leaseSnapshot(lease).selectedPaneId &&
-          !layout.panes.some(
-            (p) => p.pane_id === leaseSnapshot(lease).selectedPaneId,
-          )
-        ) {
-          next.selectedPaneId = null;
-        }
-      } catch (error) {
-        next.layout = null;
-        next.error = error instanceof Error ? error.message : String(error);
-      }
-    } else {
-      next.layout = null;
-    }
-
-    // Never publish a layout fetched for an older browser navigation target.
-    if (navigationAtEntry !== leaseSnapshot(lease).browserNavigation) {
-      queuedConnectionKeys.add(refreshKey);
-      return;
-    }
-
-    // Layout fetching can overlap another focus attempt or its settlement.
-    // Drop only a stale marker clear, preserving the useful snapshot data.
-    if (
-      next.pendingFocusWorkspaceId === null &&
-      (leaseSnapshot(lease).pendingFocusWorkspaceSeq !==
-        pendingFocusAtObservation.seq ||
-        leaseSnapshot(lease).pendingFocusWorkspaceSettledAt !==
-          pendingFocusAtObservation.settledAt)
-    ) {
-      delete next.pendingFocusWorkspaceId;
-      delete next.pendingFocusWorkspaceSettledAt;
-    }
-    // Close/reattach can replace advertisements while either RPC is pending.
-    // Keep that newer slice without discarding useful topology/layout updates.
-    if (
-      endpointAvailabilityAtEntry !== leaseSnapshot(lease).endpointAvailability
-    ) {
-      delete next.endpointAvailability;
-      queuedConnectionKeys.add(refreshKey);
-    }
-    const patch = stabilizeRefreshPatch(leaseSnapshot(lease), next);
-    if (
-      !setForConnection(lease, {
-        ...(patch ?? {}),
-        lastTopologyObservationStartedAt: observationStartedAt,
-      })
-    ) {
-      return;
-    }
-    notifyCompletedTasks(lease, completedPanes, workspaces, tabs);
-  } catch (error) {
-    setForConnection(lease, { error: (error as Error).message });
-  } finally {
-    refreshingConnectionKeys.delete(refreshKey);
-    refreshCompletions.delete(refreshKey);
-    completion.resolve();
-    if (queuedConnectionKeys.delete(refreshKey) && leaseIsCurrent(lease)) {
-      void refreshNow(lease);
-    }
-  }
-}
-
-/** Observe after a focus change, including when an older observation is running. */
-async function refreshAfterCurrent(lease: StoreConnectionLease) {
-  const key = `${lease.connectionId}:${lease.generation}`;
-  const pending = refreshCompletions.get(key)?.promise;
-  if (pending) await pending;
-  if (!leaseIsCurrent(lease)) return;
-  // The old observation may have started its queued successor in finally.
-  const successor = refreshCompletions.get(key)?.promise;
-  if (successor) await successor;
-  else await refreshNow(lease);
-}
-
-function scheduleRefresh(lease = captureConnectionLease()) {
-  if (state.connectionPaused || !leaseIsCurrent(lease)) return;
-  const key = `${lease.connectionId}:${lease.generation}`;
-  const previous = refreshTimers.get(key);
-  if (previous) clearTimeout(previous);
-  refreshTimers.set(
-    key,
-    setTimeout(() => {
-      refreshTimers.delete(key);
-      if (leaseIsCurrent(lease)) void refreshNow(lease);
-    }, 80),
-  );
 }
 
 async function refreshBridgeStatus() {
@@ -1900,160 +347,6 @@ async function refreshBridgeStatus() {
   } catch {
     // Keep the last good count; status polling should never interrupt the UI.
   }
-}
-
-let metadataTimer: ReturnType<typeof setInterval> | null = null;
-let updateTimer: ReturnType<typeof setInterval> | null = null;
-
-// Push events and post-action refreshes carry live updates; the metadata poll
-// is only a backstop, so it can run slowly and skip ticks while hidden.
-const METADATA_POLL_MS = 5000;
-
-function startMetadataPolling() {
-  if (metadataTimer) return;
-  metadataTimer = setInterval(() => {
-    if (
-      typeof document !== "undefined" &&
-      document.visibilityState === "hidden"
-    ) {
-      return;
-    }
-    if (state.status === "connected") {
-      if (catalogReadyForConnection) scheduleRefresh();
-      void refreshBridgeStatus();
-    }
-  }, METADATA_POLL_MS);
-}
-
-async function checkForUpdate(showErrors = false) {
-  if (!showErrors && !state.automaticUpdateChecksEnabled) return;
-  if (state.connectionPaused) {
-    if (showErrors) {
-      set({
-        notice: {
-          kind: "info",
-          message: "Connection is paused",
-          detail: "Resume the connection before checking for updates.",
-        },
-      });
-    }
-    return;
-  }
-  try {
-    const r = await fetch("/api/update/check", {
-      credentials: "same-origin",
-      headers: { "x-herdr-world-update": "1" },
-    });
-    if (!r.ok) {
-      if (showErrors) {
-        const body = await r.json().catch(() => null);
-        set({
-          notice: {
-            kind: "error",
-            message: "Update check failed",
-            detail: body?.error ?? r.statusText,
-          },
-        });
-      }
-      return;
-    }
-    const info = (await r.json()) as UpdateInfo;
-    if (!showErrors && !state.automaticUpdateChecksEnabled) return;
-    if (
-      info.update_available &&
-      info.latest_version &&
-      (showErrors || state.dismissedUpdateVersion !== info.latest_version)
-    ) {
-      set({ updateInfo: info });
-    } else if (!info.update_available) {
-      set({
-        updateInfo: null,
-        notice: showErrors
-          ? {
-              kind: "success",
-              message: "Herdr World is up to date",
-              detail: info.latest_version
-                ? `Current version: ${info.current_version}`
-                : undefined,
-            }
-          : state.notice,
-      });
-    }
-  } catch (e) {
-    if (showErrors) {
-      set({
-        notice: {
-          kind: "error",
-          message: "Update check failed",
-          detail: (e as Error).message,
-        },
-      });
-    }
-  }
-}
-
-function startUpdatePolling(): Promise<void> {
-  if (updateTimer || !state.automaticUpdateChecksEnabled) {
-    return Promise.resolve();
-  }
-  const initialCheck = checkForUpdate(false);
-  updateTimer = setInterval(
-    () => {
-      void checkForUpdate(false);
-    },
-    30 * 60 * 1000,
-  );
-  return initialCheck;
-}
-
-function applyAutomaticUpdateChecksEnabled(enabled: boolean) {
-  if (!enabled && updateTimer) {
-    clearInterval(updateTimer);
-    updateTimer = null;
-  }
-  set({
-    automaticUpdateChecksEnabled: enabled,
-    updateInfo: enabled ? state.updateInfo : null,
-  });
-  if (enabled && !state.connectionPaused) void startUpdatePolling();
-}
-
-function handlePreferenceStorageChange(key: string | null) {
-  if (
-    key === TASK_NOTIFICATIONS_KEY ||
-    key === TASK_NOTIFICATION_PREFERENCES_KEY ||
-    key === null
-  ) {
-    set({
-      taskNotificationsEnabled: storedTaskNotificationsEnabled(),
-      taskNotificationPreferences: storedTaskNotificationPreferences(),
-    });
-    void store.restoreTaskNotifications();
-  }
-  if (key === AUTOMATIC_UPDATE_CHECKS_KEY || key === null) {
-    const enabled = storedAutomaticUpdateChecksEnabled();
-    if (enabled !== state.automaticUpdateChecksEnabled)
-      applyAutomaticUpdateChecksEnabled(enabled);
-  }
-}
-
-function stopPolling() {
-  for (const timer of refreshTimers.values()) clearTimeout(timer);
-  refreshTimers.clear();
-  if (metadataTimer) {
-    clearInterval(metadataTimer);
-    metadataTimer = null;
-  }
-  if (updateTimer) {
-    clearInterval(updateTimer);
-    updateTimer = null;
-  }
-  queuedConnectionKeys.clear();
-}
-
-function startPolling() {
-  startMetadataPolling();
-  startUpdatePolling();
 }
 
 function selectConnectionNow(connectionId: string, refresh = true): boolean {
@@ -2129,54 +422,6 @@ function resetActiveConnectionLease(
   }
 }
 
-export function mergeConnectionCatalog(
-  previous: ConnectionSummary[],
-  values: unknown[],
-): ConnectionSummary[] {
-  return values
-    .map(parseConnectionSummary)
-    .filter(
-      (connection): connection is ConnectionSummary => connection !== null,
-    )
-    .map((connection) => {
-      const prior = previous.find((item) => item.id === connection.id);
-      if (!prior) return connection;
-      if (
-        connection.type !== undefined &&
-        prior.type !== undefined &&
-        connection.type !== prior.type
-      ) {
-        return {
-          ...prior,
-          ...connection,
-          control_socket_path: connection.control_socket_path,
-          client_socket_path: connection.client_socket_path,
-          ssh_destination: connection.ssh_destination,
-          remote_control_socket_path: connection.remote_control_socket_path,
-          remote_client_socket_path: connection.remote_client_socket_path,
-        };
-      }
-      return {
-        ...prior,
-        ...connection,
-        type: connection.type ?? prior.type,
-        read_only: connection.read_only ?? prior.read_only,
-        auto_connect: connection.auto_connect ?? prior.auto_connect,
-        control_socket_path:
-          connection.control_socket_path ?? prior.control_socket_path,
-        client_socket_path:
-          connection.client_socket_path ?? prior.client_socket_path,
-        ssh_destination: connection.ssh_destination ?? prior.ssh_destination,
-        remote_control_socket_path:
-          connection.remote_control_socket_path ??
-          prior.remote_control_socket_path,
-        remote_client_socket_path:
-          connection.remote_client_socket_path ??
-          prior.remote_client_socket_path,
-      };
-    });
-}
-
 function applyConnectionCatalog(
   result: unknown,
   requestSeq: number,
@@ -2223,6 +468,7 @@ function applyConnectionCatalog(
   const nextActive = connections.find(
     (connection) => connection.id === state.activeConnectionId,
   );
+  retainTabLayoutOwners(connections);
   const reconciliation = reconcileConnectionCatalogSessions(state, connections);
   for (const previous of state.connections) {
     const next = connections.find((candidate) => candidate.id === previous.id);
@@ -2473,162 +719,6 @@ async function action<T>(
   return outcome.value;
 }
 
-function qualifiedRuntimeTargetIsCurrent(
-  target: QualifiedRuntimeTarget,
-): boolean {
-  const connection = state.connections.find(
-    (candidate) => candidate.id === target.connectionId,
-  );
-  return (
-    !state.connectionPaused &&
-    state.status === "connected" &&
-    connection?.state === "ready" &&
-    connection.generation === target.runtimeGeneration
-  );
-}
-
-function qualifiedLeaseIsCurrent(
-  target: QualifiedRuntimeTarget,
-  lease: StoreConnectionLease,
-): boolean {
-  return (
-    lease.connectionId === target.connectionId &&
-    lease.client.connectionId === target.connectionId &&
-    lease.client.acceptsServerGeneration(target.runtimeGeneration) &&
-    leaseIsCurrent(lease) &&
-    qualifiedRuntimeTargetIsCurrent(target)
-  );
-}
-
-function assertQualifiedLeaseCurrent(
-  target: QualifiedRuntimeTarget,
-  lease?: StoreConnectionLease,
-) {
-  const current = lease
-    ? qualifiedLeaseIsCurrent(target, lease)
-    : qualifiedRuntimeTargetIsCurrent(target);
-  if (!current) {
-    throw new Error(
-      "The selected host changed before the Office action completed",
-    );
-  }
-}
-
-async function qualifiedAction<T>(
-  target: QualifiedRuntimeTarget,
-  fn: (lease: StoreConnectionLease) => Promise<T>,
-): Promise<T> {
-  assertQualifiedLeaseCurrent(target);
-  const lease = captureConnectionLease(target.connectionId);
-  assertQualifiedLeaseCurrent(target, lease);
-  const result = await fn(lease);
-  assertQualifiedLeaseCurrent(target, lease);
-  scheduleRefresh(lease);
-  return result;
-}
-
-function hookEventLabel(event: WorktreeHookEvent): string {
-  switch (event) {
-    case "worktree.before_remove":
-      return "Worktree teardown hook";
-    case "worktree.opened":
-      return "Worktree opened hook";
-    case "worktree.removed":
-      return "Worktree removed hook";
-    case "worktree.created":
-      return "Worktree setup hook";
-  }
-}
-
-function hookOutput(
-  result: Pick<WorktreeHookRunResult, "stdout" | "stderr" | "error">,
-) {
-  return [result.stderr, result.stdout, result.error]
-    .filter(
-      (value): value is string =>
-        typeof value === "string" && value.trim().length > 0,
-    )
-    .join("\n")
-    .trim();
-}
-
-export function summarizeDirectHookResult(
-  result: WorktreeHookRunResult,
-): Notice | null {
-  if (result.status === "skipped") return null;
-  const output = hookOutput(result);
-  const exitSuffix =
-    typeof result.exit_code === "number" ? ` (exit ${result.exit_code})` : "";
-  return {
-    kind: result.status === "succeeded" ? "success" : "error",
-    message:
-      result.status === "succeeded"
-        ? `${hookEventLabel(result.event)} completed`
-        : `${hookEventLabel(result.event)} failed${exitSuffix}`,
-    detail: output ? output.slice(0, 1400) : undefined,
-    detailMode: output ? "output" : undefined,
-    detailTitle: output ? `${hookEventLabel(result.event)} output` : undefined,
-    ...(result.status === "succeeded"
-      ? { autoDismissMs: DEFAULT_NOTICE_AUTO_DISMISS_MS }
-      : {}),
-  };
-}
-
-export function worktreeRemovalCompletionNotice(
-  cleanup: WorktreeRemovalCleanup | undefined,
-  removedHookNotice: Notice | null,
-): Notice | null {
-  if (!cleanup?.recovered_stale_checkout && !cleanup?.warning) {
-    return removedHookNotice;
-  }
-
-  const stopped = Number(cleanup.terminated_processes ?? 0);
-  const recoveryDetails = [
-    stopped > 0
-      ? `Stopped ${stopped} process${stopped === 1 ? "" : "es"} still using the checkout.`
-      : "",
-    cleanup.preserved_path
-      ? `Stale files were preserved at ${cleanup.preserved_path}.`
-      : cleanup.recovered_stale_checkout
-        ? "The checkout was already absent; stale Herdr state was reconciled."
-        : "",
-    cleanup.warning ?? "",
-  ].filter(Boolean);
-
-  if (removedHookNotice) {
-    const cleanupWarning = Boolean(cleanup.warning);
-    return {
-      ...removedHookNotice,
-      kind: cleanupWarning ? "error" : removedHookNotice.kind,
-      message:
-        cleanupWarning && removedHookNotice.kind !== "error"
-          ? "Worktree removed with cleanup warning"
-          : removedHookNotice.message,
-      detail: [
-        cleanupWarning && removedHookNotice.kind !== "error"
-          ? removedHookNotice.message
-          : "",
-        removedHookNotice.detail,
-        ...recoveryDetails,
-      ]
-        .filter(Boolean)
-        .join("\n"),
-      detailTitle:
-        removedHookNotice.detail || cleanupWarning
-          ? "Worktree removal details"
-          : undefined,
-    };
-  }
-
-  return {
-    kind: cleanup.warning ? "error" : "success",
-    message: cleanup.warning
-      ? "Worktree removed with cleanup warning"
-      : "Worktree removed",
-    detail: recoveryDetails.join("\n"),
-  };
-}
-
 function handleBridgeStatus(s: ConnectionStatus) {
   if (s === "disconnected") {
     set({ tabMoveSupported: false, endpointAvailability: {} });
@@ -2636,7 +726,6 @@ function handleBridgeStatus(s: ConnectionStatus) {
     terminalReattachPending = true;
     bridge.setConnectionRuntimeGenerations([]);
     clearTerminalRelayViewports();
-    clearTabLayouts();
     focusActionChains.clear();
     queuedConnectionKeys.clear();
   }
@@ -2742,453 +831,7 @@ function handleHerdrEvent(event: HerdrEventMsg) {
   }
 }
 
-function browserSelectionIsCurrent(
-  navigation: BrowserNavigation,
-  lease?: StoreConnectionLease,
-) {
-  const current = lease
-    ? leaseSnapshot(lease).browserNavigation
-    : state.browserNavigation;
-  const workspaceId = navigation.workspaceId;
-  const tabId = workspaceId ? navigation.tabIds[workspaceId] : undefined;
-  return (
-    current.revision === navigation.revision &&
-    current.workspaceId === workspaceId &&
-    (!workspaceId || current.tabIds[workspaceId] === tabId) &&
-    (!tabId || current.paneIds[tabId] === navigation.paneIds[tabId])
-  );
-}
-
-export function endpointCreationReason(
-  snapshot: Pick<
-    State,
-    | "navigationMode"
-    | "workspaces"
-    | "browserNavigation"
-    | "panes"
-    | "endpointAvailability"
-    | "terminalAttachments"
-    | "activeConnectionId"
-    | "serverRuntimeGeneration"
-  >,
-  method: "tab.create" | "workspace.create",
-  workspaceId = snapshot.browserNavigation.workspaceId,
-  sourcePaneId?: string,
-): string | null {
-  const pending = creationPendingReason(
-    {
-      connectionId: snapshot.activeConnectionId,
-      runtimeGeneration: snapshot.serverRuntimeGeneration,
-    },
-    method === "tab.create" ? "tab" : "workspace",
-    workspaceId,
-  );
-  if (pending) return pending;
-  if (snapshot.navigationMode === "shared") return null;
-  // Empty bootstrap deliberately uses the validated control API, not an endpoint.
-  if (method === "workspace.create" && snapshot.workspaces.length === 0)
-    return null;
-  const source = browserCreationSource(
-    workspaceId ?? null,
-    snapshot,
-    sourcePaneId,
-  );
-  const pane = snapshot.panes.find((pane) => pane.pane_id === source?.pane_id);
-  const advertisement = pane
-    ? (snapshot.terminalAttachments[pane.terminal_id]?.advertisement ??
-      snapshot.endpointAvailability[pane.terminal_id])
-    : null;
-  if (advertisement) {
-    const reason =
-      endpointMethodReason(
-        snapshot.navigationMode,
-        advertisement,
-        "pane.focus",
-      ) ?? endpointMethodReason(snapshot.navigationMode, advertisement, method);
-    if (reason) return reason;
-  }
-  if (!source)
-    return "No current source terminal is available in this workspace.";
-  const attachment = snapshot.terminalAttachments[source.terminal_id];
-  return attachment && !attachment.ready
-    ? "Endpoint availability is loading. Preparing the source terminal."
-    : null;
-}
-
-export function useEndpointCreationReason(
-  method: "tab.create" | "workspace.create",
-  workspaceId?: string,
-) {
-  useCreationProgress();
-  return useStoreSelector((snapshot) =>
-    endpointCreationReason(snapshot, method, workspaceId),
-  );
-}
-
-function browserCreationSource(
-  workspaceId: string | null,
-  snapshot: Pick<State, "browserNavigation" | "panes"> = state,
-  sourcePaneId?: string,
-) {
-  const tabId = workspaceId
-    ? snapshot.browserNavigation.tabIds[workspaceId]
-    : undefined;
-  const paneId = tabId ? snapshot.browserNavigation.paneIds[tabId] : undefined;
-  const preferred = sourcePaneId
-    ? snapshot.panes.find(
-        (pane) =>
-          pane.pane_id === sourcePaneId && pane.workspace_id === workspaceId,
-      )
-    : undefined;
-  if (sourcePaneId && !preferred) return null;
-  const pane =
-    preferred ??
-    snapshot.panes.find(
-      (pane) =>
-        pane.pane_id === paneId &&
-        pane.workspace_id === workspaceId &&
-        pane.tab_id === tabId,
-    ) ??
-    snapshot.panes.find((pane) => pane.workspace_id === workspaceId);
-  return pane
-    ? {
-        workspace_id: pane.workspace_id,
-        tab_id: pane.tab_id,
-        pane_id: pane.pane_id,
-        terminal_id: pane.terminal_id,
-      }
-    : null;
-}
-
-async function prepareQualifiedCreation(
-  target: QualifiedRuntimeTarget,
-  lease: StoreConnectionLease,
-  method: "tab.create" | "workspace.create",
-  sourceWorkspaceId?: string,
-  sourcePaneId?: string,
-) {
-  let snapshot = leaseSnapshot(lease);
-  if (
-    snapshot.serverRuntimeGeneration !== target.runtimeGeneration ||
-    !snapshot.lastRefresh ||
-    snapshot.error
-  ) {
-    await refreshAfterCurrent(lease);
-    assertQualifiedLeaseCurrent(target, lease);
-    snapshot = leaseSnapshot(lease);
-    if (
-      snapshot.serverRuntimeGeneration !== target.runtimeGeneration ||
-      !snapshot.lastRefresh ||
-      snapshot.error
-    )
-      throw new Error(
-        snapshot.error ??
-          "The destination host's navigation mode is not available yet.",
-      );
-  }
-  if (snapshot.navigationMode === "shared")
-    return { browserLocal: false, source: null, release: () => {} };
-  if (method === "workspace.create" && snapshot.workspaces.length === 0)
-    return { browserLocal: true, source: null, release: () => {} };
-  const workspaceId =
-    sourceWorkspaceId ??
-    snapshot.browserNavigation.workspaceId ??
-    snapshot.workspaces[0]?.workspace_id ??
-    null;
-  const nativeSource = browserCreationSource(
-    workspaceId,
-    snapshot,
-    sourcePaneId,
-  );
-  if (!nativeSource)
-    throw new Error(
-      "No current source terminal is available in the destination workspace.",
-    );
-  const source: CreationSource = { ...nativeSource, ...target };
-  const advertisement = snapshot.endpointAvailability[source.terminal_id];
-  if (advertisement) {
-    const reason =
-      endpointMethodReason("browser-local", advertisement, "pane.focus") ??
-      endpointMethodReason("browser-local", advertisement, method);
-    if (reason) throw new Error(reason);
-  }
-  const release = retainCreationSource(source);
-  let attachmentAttempt: number | undefined;
-  try {
-    await new Promise<void>((resolve, reject) => {
-      let unsubscribe = () => {};
-      const timer = setTimeout(
-        () =>
-          finish(
-            new Error(
-              "Source terminal preparation timed out; nothing was created.",
-            ),
-          ),
-        20_000,
-      );
-      function finish(error?: Error) {
-        clearTimeout(timer);
-        unsubscribe();
-        if (error) reject(error);
-        else resolve();
-      }
-      function check() {
-        if (!qualifiedLeaseIsCurrent(target, lease))
-          return finish(
-            new Error(
-              "The destination host changed during terminal preparation.",
-            ),
-          );
-        const current = leaseSnapshot(lease);
-        if (
-          !current.panes.some(
-            (pane) =>
-              pane.pane_id === source.pane_id &&
-              pane.terminal_id === source.terminal_id &&
-              pane.tab_id === source.tab_id &&
-              pane.workspace_id === source.workspace_id,
-          )
-        )
-          return finish(
-            new Error("The source terminal moved or closed before creation."),
-          );
-        const attachment = current.terminalAttachments[source.terminal_id];
-        if (!attachment?.ready) return;
-        const reason =
-          endpointMethodReason(
-            "browser-local",
-            attachment.advertisement,
-            "pane.focus",
-          ) ??
-          endpointMethodReason(
-            "browser-local",
-            attachment.advertisement,
-            method,
-          );
-        if (!reason) attachmentAttempt = attachment.attempt;
-        finish(reason ? new Error(reason) : undefined);
-      }
-      unsubscribe = store.subscribe(check);
-      check();
-    });
-    assertQualifiedLeaseCurrent(target, lease);
-    return {
-      browserLocal: true,
-      source: nativeSource,
-      release,
-      attachmentAttempt,
-    };
-  } catch (error) {
-    release();
-    throw error;
-  }
-}
-
-function assertCreationSourceCurrent(
-  target: QualifiedRuntimeTarget,
-  lease: StoreConnectionLease,
-  prepared: Awaited<ReturnType<typeof prepareQualifiedCreation>>,
-) {
-  assertQualifiedLeaseCurrent(target, lease);
-  if (!prepared.source) return;
-  const source = prepared.source;
-  const snapshot = leaseSnapshot(lease);
-  const attachment = snapshot.terminalAttachments[source.terminal_id];
-  if (
-    !attachment?.ready ||
-    attachment.attempt !== prepared.attachmentAttempt ||
-    !snapshot.panes.some(
-      (pane) =>
-        pane.pane_id === source.pane_id &&
-        pane.tab_id === source.tab_id &&
-        pane.workspace_id === source.workspace_id &&
-        pane.terminal_id === source.terminal_id,
-    )
-  )
-    throw new Error(
-      "The prepared source changed before dispatch; nothing was created.",
-    );
-}
-
-function navigateBrowser(
-  workspaceId: string,
-  tabId?: string,
-  paneId?: string,
-  lease = captureConnectionLease(),
-) {
-  const navigation = selectBrowserTarget(
-    leaseSnapshot(lease).browserNavigation,
-    workspaceId,
-    tabId,
-    paneId,
-  );
-  const projected = projectBrowserNavigation(
-    navigation,
-    leaseSnapshot(lease).workspaces,
-    leaseSnapshot(lease).tabs,
-    leaseSnapshot(lease).panes,
-  );
-  const activeTabId = projected.browserNavigation.tabIds[workspaceId];
-  const nextLayout =
-    leaseSnapshot(lease).layout?.tab_id === activeTabId
-      ? leaseSnapshot(lease).layout
-      : provisionalTabLayout(
-          tabLayoutFor(
-            leaseSnapshot(lease).activeConnectionId,
-            leaseSnapshot(lease).connectionGeneration,
-            activeTabId,
-          ),
-          leaseSnapshot(lease).panes,
-          activeTabId,
-        );
-  setForConnection(lease, {
-    ...projected,
-    layout: projectBrowserLayout(nextLayout, projected.selectedPaneId),
-    pendingFocusWorkspaceId: null,
-    pendingFocusWorkspaceSettledAt: null,
-    error: null,
-  });
-  return refreshNow(lease);
-}
-
-/** Adopt an explicit RPC result without requiring it in an older list snapshot. */
-function adoptBrowserTarget(lease: StoreConnectionLease, result: unknown) {
-  if (
-    !leaseIsCurrent(lease) ||
-    leaseSnapshot(lease).navigationMode !== "browser-local" ||
-    !result ||
-    typeof result !== "object"
-  )
-    return;
-  const target = result as {
-    root_pane?: Partial<Pane>;
-    pane?: Partial<Pane>;
-    tab?: Partial<Tab>;
-    workspace?: Partial<Workspace>;
-  };
-  const pane = target.root_pane ?? target.pane;
-  const tabId = pane?.tab_id ?? target.tab?.tab_id;
-  const workspaceId =
-    pane?.workspace_id ??
-    target.tab?.workspace_id ??
-    target.workspace?.workspace_id;
-  if (typeof workspaceId !== "string") return;
-  setForConnection(lease, {
-    browserNavigation: selectBrowserTarget(
-      leaseSnapshot(lease).browserNavigation,
-      workspaceId,
-      typeof tabId === "string" ? tabId : undefined,
-      typeof pane?.pane_id === "string" ? pane.pane_id : undefined,
-    ),
-  });
-}
-
 let terminalAttachmentAttempt = 0;
-function notifyPinnedTabClose(reason: string) {
-  set({
-    notice: {
-      kind: "info",
-      message: "Tab is pinned",
-      detail: reason,
-      autoDismissMs: 4000,
-    },
-  });
-}
-
-function swapPanePositions(
-  params:
-    | { pane_id: string; direction: "left" | "right" | "up" | "down" }
-    | { source_pane_id: string; target_pane_id: string },
-  client?: ConnectionClient,
-) {
-  return action(
-    async (lease) => {
-      if (!leaseIsCurrent(lease))
-        throw new Error("Pane move owner is no longer available");
-      const result = await lease.client.call("pane.swap", params);
-      const swap = result?.swap ?? result;
-      const layout = swap?.layout as PaneLayout | undefined;
-      // Swapping preserves pane IDs, so keep any newer user selection.
-      rememberTabLayout(lease.connectionId, lease.generation, layout ?? null);
-      const snapshot = leaseSnapshot(lease);
-      if (layout && snapshot.layout?.tab_id === layout.tab_id)
-        setForConnection(lease, {
-          layout:
-            snapshot.navigationMode === "browser-local"
-              ? projectBrowserLayout(layout, snapshot.selectedPaneId)
-              : layout,
-        });
-      await refreshNow(lease);
-      return result;
-    },
-    { client },
-  );
-}
-
-export type PaneSide = "left" | "right" | "up" | "down";
-
-function movePaneTo(
-  paneId: string,
-  destination:
-    | { type: "new_tab"; workspace_id: string }
-    | {
-        type: "tab";
-        tab_id: string;
-        split: "right" | "down";
-        target_pane_id: string;
-      },
-  swapWithPaneId?: string,
-  client?: ConnectionClient,
-) {
-  if (client && !client.isCurrent()) return Promise.resolve(undefined);
-  const snapshot = client
-    ? connectionSnapshot(state, client.connectionId)
-    : state;
-  const navigation = snapshot.browserNavigation;
-  return action(
-    async (lease) => {
-      const result = await lease.client.call("pane.move", {
-        pane_id: paneId,
-        destination,
-        focus: snapshot.navigationMode !== "browser-local",
-      });
-      const moved = result?.move_result ?? result;
-      // A move can reissue the pane ID, so follow the one Herdr reports.
-      const movedPaneId =
-        typeof moved?.pane?.pane_id === "string" ? moved.pane.pane_id : paneId;
-      if (leaseIsCurrent(lease) && browserSelectionIsCurrent(navigation, lease))
-        adoptBrowserTarget(lease, { pane: moved?.pane });
-      if (swapWithPaneId && leaseIsCurrent(lease)) {
-        try {
-          await lease.client.call("pane.swap", {
-            source_pane_id: movedPaneId,
-            target_pane_id: swapWithPaneId,
-          });
-        } catch (error) {
-          // The move already landed, so report only the side that failed.
-          if (leaseIsCurrent(lease))
-            setForConnection(lease, {
-              notice: {
-                kind: "error",
-                message: "Pane moved to the other side",
-                detail: (error as Error).message,
-              },
-            });
-        }
-      }
-      return result;
-    },
-    {
-      client,
-      refresh: "immediate",
-      failureNotice: (error) => ({
-        kind: "error",
-        message: "Pane move failed",
-        detail: error.message,
-      }),
-    },
-  );
-}
 
 export const store = {
   beginTerminalAttachment(client: ConnectionClient, terminalId: string) {
@@ -3335,20 +978,11 @@ export const store = {
             false,
           );
         }
-        state = {
-          ...state,
-          sessionsByConnectionId: Object.fromEntries(
-            Object.entries(state.sessionsByConnectionId).map(
-              ([id, session]) => [id, { ...session, endpointAvailability: {} }],
-            ),
-          ),
-        };
-        set({ endpointAvailability: {}, catalogueReady: false });
+        set(retireConnectionSessionObservations(state));
         catalogReadyForConnection = false;
         terminalReattachPending = true;
         bridge.setConnectionRuntimeGenerations([]);
         clearTerminalRelayViewports();
-        clearTabLayouts();
 
         queuedConnectionKeys.clear();
       }
@@ -5272,466 +2906,93 @@ export const __storeTesting = {
     );
   },
 };
+export {
+  state,
+  set,
+  captureConnectionLease,
+  leaseIsCurrent,
+  leaseSnapshot,
+  setForConnection,
+  wait,
+  catalogReadyForConnection,
+  taskNotificationPreferenceVersion,
+  reportTaskNotificationFailure,
+  refreshBridgeStatus,
+  action,
+};
 
-export function useStore(): State {
-  return useSyncExternalStore(store.subscribe, store.get);
-}
+export {
+  type ServerSessionState,
+  type PopupInfo,
+  type WorkspaceSourceTarget,
+  type State,
+  type Notice,
+  type UpdateInfo,
+  type BridgeStatus,
+  type StoreConnectionLease,
+  type WorktreeRemovedTarget,
+  type TaskNotificationTarget,
+  type QualifiedFocusTarget,
+  type QualifiedRuntimeTarget,
+} from "./store/types";
 
-/** Shallowly compares own enumerable values; pair with useStoreSelector. */
-export function shallowEqual<T>(a: T, b: T): boolean {
-  if (Object.is(a, b)) return true;
-  if (
-    typeof a !== "object" ||
-    a === null ||
-    typeof b !== "object" ||
-    b === null
-  ) {
-    return false;
-  }
-  const aKeys = Object.keys(a);
-  const bKeys = Object.keys(b);
-  if (aKeys.length !== bKeys.length) return false;
-  for (const key of aKeys) {
-    if (!Object.prototype.hasOwnProperty.call(b, key)) return false;
-    if (
-      !Object.is(
-        (a as Record<string, unknown>)[key],
-        (b as Record<string, unknown>)[key],
-      )
-    ) {
-      return false;
-    }
-  }
-  return true;
-}
+export {
+  DEFAULT_NOTICE_AUTO_DISMISS_MS,
+  TASK_NOTIFICATION_ACTIVATE_EVENT,
+  noticeAutoDismissDelay,
+  isTaskNotificationTarget,
+  bindTaskNotificationActivation,
+  TaskCompletionTracker,
+  taskNotificationTarget,
+  taskNotificationTargetIsCurrent,
+  taskNotificationTag,
+  taskNotificationTargetFromNotice,
+  herdrTaskNotificationsActive,
+} from "./store/notifications";
 
-/**
- * Subscribe to a derived slice of the store. The selector result is cached
- * and reused while `isEqual` reports equality, so inline selectors are safe
- * as long as they keep stable semantics; object-returning selectors should
- * pass a shallow equality to avoid re-rendering on every emit.
- */
-export function useStoreSelector<T>(
-  selector: (state: State) => T,
-  isEqual: (a: T, b: T) => boolean = Object.is,
-): T {
-  const context = useContext(OperationalContext);
-  const cacheRef = useRef<{
-    state: State;
-    selector: (state: State) => T;
-    value: T;
-  } | null>(null);
+export {
+  emptyServerSessionState,
+  activateConnectionState,
+  type CatalogSessionReconciliation,
+  reconcileConnectionCatalogSessions,
+  nextRecentPaneIds,
+  isStoreConnectionLeaseCurrent,
+  connectionSnapshot,
+  connectionEventIsActive,
+  terminalNavigationLoading,
+  numberedCreatedTabRename,
+  stabilizeRefreshPatch,
+  mergeConnectionCatalog,
+} from "./store/sessions";
 
-  const getSnapshot = () => {
-    const source = store.get();
-    const snapshot = context
-      ? connectionSnapshot(source, context.connectionId)
-      : source;
-    const cache = cacheRef.current;
-    if (cache && cache.state === snapshot && cache.selector === selector) {
-      return cache.value;
-    }
-    const value = selector(snapshot);
-    if (cache && isEqual(cache.value, value)) {
-      cacheRef.current = { state: snapshot, selector, value: cache.value };
-      return cache.value;
-    }
-    cacheRef.current = { state: snapshot, selector, value };
-    return value;
-  };
+export {
+  WORKTREE_REMOVED_EVENT,
+  summarizeDirectHookResult,
+  worktreeRemovalCompletionNotice,
+} from "./store/worktree";
 
-  return useSyncExternalStore(store.subscribe, getSnapshot);
-}
+export {
+  automaticUpdateChecksEnabledFromStorage,
+  type HerdrStatusUpgrade,
+  herdrUpgradeOffered,
+  herdrUpgradeMenuEntry,
+  healthMatchesUpdateVersion,
+} from "./store/updates";
 
-/** Commands captured by a component's owning runtime, never by sibling focus. */
-export function operationalStore(context: OperationalContext) {
-  const client = bridge.connection(
-    context.connectionId,
-    context.runtimeGeneration,
-  );
-  const lease = {
-    connectionId: context.connectionId,
-    generation: context.runtimeGeneration,
-    client,
-  };
-  const request = async (method: string, params: Record<string, unknown>) => {
-    assertQualifiedLeaseCurrent(context, lease);
-    const result = await client.call(method, params);
-    assertQualifiedLeaseCurrent(context, lease);
-    scheduleRefresh(lease);
-    return result;
-  };
-  const call = (method: string, params: Record<string, unknown>) =>
-    action(() => request(method, params), {
-      client,
-      refresh: "none",
-      failureNotice: (error) => ({
-        kind: "error",
-        message: "Command failed",
-        detail: error.message,
-      }),
-    });
-  const worktreeResult = async <T>(
-    pending: Promise<T | undefined>,
-  ): Promise<T> => {
-    const result = await pending;
-    assertQualifiedLeaseCurrent(context, lease);
-    if (result === undefined)
-      throw new Error(
-        "Worktree operation returned no admitted result. Its outcome may be uncertain; it was not replayed.",
-      );
-    return result;
-  };
-  return {
-    get: () => connectionSnapshot(state, context.connectionId),
-    subscribe: store.subscribe,
-    movePaneToNewTab: (paneId: string) =>
-      store.movePaneToNewTab(paneId, client),
-    movePaneToTab: (paneId: string, tabId: string) =>
-      store.movePaneToTab(paneId, tabId, client),
-    movePaneBeside: (source: string, target: string, side: PaneSide) =>
-      store.movePaneBeside(source, target, side, client),
-    moveTab: (tabId: string, insertIndex: number) =>
-      store.moveTab(tabId, insertIndex, client),
-    movePane: (paneId: string, direction: "left" | "right" | "up" | "down") =>
-      swapPanePositions({ pane_id: paneId, direction }, client),
-    swapPanes: (sourcePaneId: string, targetPaneId: string) => {
-      const snapshot = leaseSnapshot(lease);
-      const source = snapshot.panes.find(
-        (pane) => pane.pane_id === sourcePaneId,
-      );
-      const target = snapshot.panes.find(
-        (pane) => pane.pane_id === targetPaneId,
-      );
-      if (
-        !source ||
-        !target ||
-        source.tab_id !== target.tab_id ||
-        source.workspace_id !== target.workspace_id ||
-        sourcePaneId === targetPaneId
-      )
-        return Promise.resolve();
-      return swapPanePositions(
-        { source_pane_id: sourcePaneId, target_pane_id: targetPaneId },
-        client,
-      );
-    },
-    guardTabClose: (tabId: string) => {
-      const reason = tabCloseBlockReason(
-        tabId,
-        tabPinsFor(context.connectionId),
-      );
-      if (reason) notifyPinnedTabClose(reason);
-      return !reason;
-    },
-    guardPaneClose: (paneId: string) => {
-      const reason = paneCloseBlockReason(
-        paneId,
-        leaseSnapshot(lease).panes,
-        tabPinsFor(context.connectionId),
-      );
-      if (reason) notifyPinnedTabClose(reason);
-      return !reason;
-    },
-    notify: store.notify,
-    clearNotice: store.clearNotice,
-    setTerminalEndpoint: store.setTerminalEndpoint,
-    beginTerminalAttachment: store.beginTerminalAttachment,
-    completeTerminalAttachment: store.completeTerminalAttachment,
-    revokeTerminalAttachment: store.revokeTerminalAttachment,
-    refresh: () => refreshNow(lease),
-    terminalScrollReason: (terminalId: string, mouseReporting = false) =>
-      mouseReporting
-        ? null
-        : endpointMethodReason(
-            leaseSnapshot(lease).navigationMode,
-            leaseSnapshot(lease).endpointAvailability[terminalId],
-            "pane.scroll",
-          ),
-    focusPane: (paneId: string) => {
-      if (!leaseIsCurrent(lease)) return Promise.resolve(false);
-      const pane = leaseSnapshot(lease).panes.find(
-        (pane) => pane.pane_id === paneId,
-      );
-      return pane
-        ? store.focusQualifiedTarget({
-            ...context,
-            workspaceId: pane.workspace_id,
-            paneId,
-          })
-        : Promise.resolve(false);
-    },
-    focusPaneDirection: (
-      paneId: string,
-      direction: "left" | "right" | "up" | "down",
-    ) => {
-      assertQualifiedLeaseCurrent(context, lease);
-      const target = browserPaneInDirection(
-        leaseSnapshot(lease).layout,
-        paneId,
-        direction,
-      );
-      if (leaseSnapshot(lease).navigationMode === "browser-local")
-        return target
-          ? store.focusQualifiedTarget({
-              ...context,
-              workspaceId:
-                leaseSnapshot(lease).panes.find(
-                  (pane) => pane.pane_id === target,
-                )?.workspace_id ?? "",
-              paneId: target,
-            })
-          : Promise.resolve(false);
-      return call("pane.focus_direction", { pane_id: paneId, direction });
-    },
-    resizePane: (
-      paneId: string,
-      direction: "left" | "right" | "up" | "down",
-      amount: number,
-    ) => call("pane.resize", { pane_id: paneId, direction, amount }),
-    splitPane: async (paneId: string, direction: "right" | "down") => {
-      const navigation = leaseSnapshot(lease).browserNavigation;
-      const result = await call("pane.split", {
-        target_pane_id: paneId,
-        direction,
-        focus: leaseSnapshot(lease).navigationMode !== "browser-local",
-      });
-      assertQualifiedLeaseCurrent(context, lease);
-      if (browserSelectionIsCurrent(navigation, lease)) {
-        adoptBrowserTarget(lease, result);
-        if (typeof result?.pane?.pane_id === "string")
-          setForConnection(lease, { selectedPaneId: result.pane.pane_id });
-      }
-      return result;
-    },
-    zoomPane: (paneId: string) => call("pane.zoom", { pane_id: paneId }),
-    closePane: (paneId: string) => {
-      const reason = paneCloseBlockReason(
-        paneId,
-        leaseSnapshot(lease).panes,
-        tabPinsFor(context.connectionId),
-      );
-      if (reason) {
-        notifyPinnedTabClose(reason);
-        return Promise.resolve();
-      }
-      return call("pane.close", { pane_id: paneId });
-    },
-    closePopup: () => call("popup.close", {}),
-    togglePluginPopup: (
-      pluginId: string,
-      actionId: string,
-      context: Record<string, unknown> = {},
-    ) =>
-      action(
-        async () => {
-          assertQualifiedLeaseCurrent(
-            {
-              connectionId: lease.connectionId,
-              runtimeGeneration: lease.generation,
-            },
-            lease,
-          );
-          try {
-            await request("popup.close", {});
-            return;
-          } catch (error) {
-            if (!String(error).includes("popup_not_open")) throw error;
-          }
-          assertQualifiedLeaseCurrent(
-            {
-              connectionId: lease.connectionId,
-              runtimeGeneration: lease.generation,
-            },
-            lease,
-          );
-          if (typeof context.workspace_id === "string")
-            await request("workspace.focus", {
-              workspace_id: context.workspace_id,
-            });
-          return request("plugin.action.invoke", {
-            plugin_id: pluginId,
-            action_id: actionId,
-            context,
-          });
-        },
-        {
-          client,
-          refresh: "none",
-          failureNotice: (error) => ({
-            kind: "error",
-            message: "Plugin action failed",
-            detail: error.message,
-          }),
-        },
-      ),
-    focusWorkspace: (workspaceId: string) =>
-      leaseIsCurrent(lease)
-        ? store.focusQualifiedTarget({ ...context, workspaceId, paneId: null })
-        : Promise.resolve(false),
-    focusTab: (tabId: string) => {
-      if (!leaseIsCurrent(lease)) return Promise.resolve(false);
-      const snapshot = leaseSnapshot(lease);
-      const tab = snapshot.tabs.find((tab) => tab.tab_id === tabId);
-      if (!tab) return Promise.resolve(false);
-      if (snapshot.navigationMode === "browser-local")
-        return navigateBrowser(tab.workspace_id, tabId, undefined, lease).then(
-          async () => {
-            const current = leaseSnapshot(lease);
-            if (
-              leaseIsCurrent(lease) &&
-              !current.panes.some(
-                (pane) =>
-                  pane.tab_id === tabId &&
-                  pane.pane_id === current.selectedPaneId,
-              )
-            )
-              await refreshAfterCurrent(lease);
-            return leaseIsCurrent(lease);
-          },
-        );
-      if (tab.focused && snapshot.layout?.tab_id === tabId) {
-        const pane =
-          snapshot.panes.find(
-            (pane) => pane.tab_id === tabId && pane.focused,
-          ) ??
-          snapshot.panes.find(
-            (pane) =>
-              pane.tab_id === tabId &&
-              pane.pane_id === snapshot.layout?.focused_pane_id,
-          );
-        // Restore current native/layout focus without rebuilding the tab.
-        if (pane)
-          return store.focusQualifiedTarget({
-            ...context,
-            workspaceId: tab.workspace_id,
-            paneId: pane.pane_id,
-          });
-      }
-      return enqueueFocusAction(async () => {
-        if (!leaseIsCurrent(lease)) return false;
-        await lease.client.call("workspace.focus", {
-          workspace_id: tab.workspace_id,
-        });
-        if (!leaseIsCurrent(lease)) return false;
-        await lease.client.call("tab.focus", { tab_id: tabId });
-        if (!leaseIsCurrent(lease)) return false;
-        // Observe the destination layout before replacing the selection;
-        // restoring the current tab must not transiently remove its pane.
-        await refreshAfterCurrent(lease);
-        const layout = leaseSnapshot(lease).layout;
-        if (leaseIsCurrent(lease) && layout?.tab_id === tabId)
-          setForConnection(lease, { selectedPaneId: layout.focused_pane_id });
-        return leaseIsCurrent(lease);
-      }, lease.connectionId);
-    },
-    createTab: (
-      workspaceId: string,
-      options: { numberedLabel?: boolean; label?: string } = {},
-    ) => {
-      assertQualifiedLeaseCurrent(context, lease);
-      return store.createQualifiedTab(context, workspaceId, options);
-    },
-    renameWorkspace: (workspaceId: string, label: string) =>
-      call("workspace.rename", { workspace_id: workspaceId, label }),
-    closeWorkspace: (workspaceId: string) =>
-      call("workspace.close", { workspace_id: workspaceId }),
-    closeWorkspaceOrThrow: (workspaceId: string) =>
-      request("workspace.close", { workspace_id: workspaceId }),
-    moveWorkspace: (workspaceId: string, insertIndex: number) =>
-      call("workspace.move", {
-        workspace_id: workspaceId,
-        insert_index: insertIndex,
-      }),
-    renameTab: (tabId: string, label: string) =>
-      call("tab.rename", { tab_id: tabId, label }),
-    closeTab: (tabId: string) => {
-      const reason = tabCloseBlockReason(
-        tabId,
-        tabPinsFor(context.connectionId),
-      );
-      if (reason) {
-        notifyPinnedTabClose(reason);
-        return Promise.resolve();
-      }
-      return call("tab.close", { tab_id: tabId });
-    },
-    gitPullWorkspace: (workspaceId: string) =>
-      store.gitPullWorkspace(workspaceId, client),
-    createWorktree: async (workspaceId: string, branch: string) => {
-      assertQualifiedLeaseCurrent(context, lease);
-      return worktreeResult(store.createWorktree(workspaceId, branch, client));
-    },
-    openWorktree: async (workspaceId: string, target: string, focus = true) => {
-      assertQualifiedLeaseCurrent(context, lease);
-      return worktreeResult(
-        store.openWorktree(workspaceId, target, focus, client),
-      );
-    },
-    openWorktreeFromCwd: async (cwd: string, target: string, focus = true) => {
-      assertQualifiedLeaseCurrent(context, lease);
-      return worktreeResult(
-        store.openWorktreeFromCwd(cwd, target, focus, client),
-      );
-    },
-    removeWorktree: async (
-      workspaceId: string,
-      force = false,
-      workspaceHint?: Workspace,
-    ) => {
-      assertQualifiedLeaseCurrent(context, lease);
-      return worktreeResult(
-        store.removeWorktree(workspaceId, force, workspaceHint, client),
-      );
-    },
-    setRepoWorktreeHooksEnabled: (key: string, enabled: boolean) =>
-      call("settings.update_repo", {
-        key,
-        settings: { worktree_hooks_enabled: enabled },
-      }),
-    setWorkspaceAutoSyncEnabled: (workspaceId: string, enabled: boolean) =>
-      call("settings.workspace_auto_sync.update", {
-        workspace_id: workspaceId,
-        enabled,
-      }),
-    setWorkspaceAutoSyncConfigEnabled: (key: string, enabled: boolean) =>
-      call("settings.workspace_auto_sync.update_key", { key, enabled }),
-    createWorkspace: (label?: string, cwd?: string) => {
-      if (!leaseIsCurrent(lease)) return Promise.resolve(false);
-      return store.createQualifiedWorkspace(context, label, cwd);
-    },
-    runGitFileAction: (...args: Parameters<typeof store.runGitFileAction>) =>
-      store.runGitFileAction(args[0], args[1], args[2], client),
-    runGitFileActionBatch: (
-      ...args: Parameters<typeof store.runGitFileActionBatch>
-    ) => store.runGitFileActionBatch(args[0], args[1], args[2], client),
-    runGitRepoAction: (...args: Parameters<typeof store.runGitRepoAction>) =>
-      store.runGitRepoAction(args[0], args[1], args[2], client),
-  };
-}
+export {
+  OperationalContext,
+  useStore,
+  shallowEqual,
+  useStoreSelector,
+  useOperationalStore,
+} from "./store/react";
 
-export function useOperationalStore() {
-  const context = useContext(OperationalContext);
-  const owner = useStoreSelector(
-    (snapshot) => ({
-      connectionId: snapshot.activeConnectionId,
-      runtimeGeneration: snapshot.serverRuntimeGeneration,
-    }),
-    shallowEqual,
-  );
-  const status = useStoreSelector((snapshot) => snapshot.status);
-  const attachEpoch = useStoreSelector(
-    (snapshot) => snapshot.terminalAttachEpoch,
-  );
-  const connectionId = context?.connectionId ?? owner.connectionId;
-  const runtimeGeneration =
-    context?.runtimeGeneration ?? owner.runtimeGeneration;
-  return useMemo(() => {
-    void status;
-    void attachEpoch;
-    return operationalStore({
-      connectionId,
-      runtimeGeneration: runtimeGeneration ?? -1,
-    });
-  }, [connectionId, runtimeGeneration, status, attachEpoch]);
-}
+export {
+  endpointCreationReason,
+  useEndpointCreationReason,
+} from "./store/creation";
+
+export {
+  type PaneSide,
+  operationalStore,
+} from "./store/operations";

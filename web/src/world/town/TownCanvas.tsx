@@ -1,3 +1,6 @@
+import { TownBuildingSign } from "./TownBuildingSign";
+import { TownBuildingSigns } from "./townBuildingSigns";
+import { ConnectionRecoveryBanner } from "../ConnectionRecoveryBanner";
 import {
   Fragment,
   memo,
@@ -32,16 +35,9 @@ import { DEVTOOLS, NO_TRACE, type ViewTrace } from "../devtools/flag";
 import { traceGesture } from "../devtools/trace";
 import { EllipsisVertical } from "lucide-react";
 import { useMobileControls } from "../../components/MobileControls";
+import { ChevronsLeft, ChevronsRight, Plus } from "lucide-react";
 import {
-  Bot,
-  ChevronsDown,
-  ChevronsUp,
-  Pencil,
-  Plus,
-  Trash2,
-} from "lucide-react";
-import {
-  TOWN_PRESENTATION_BOUNDS,
+  TOWN_DESK_EXPANSION_STEP,
   type HerdrOfficeProjection,
   type OfficeAgent,
 } from "../herdrOfficeProjection";
@@ -116,6 +112,13 @@ import {
   type TownDeskBadge,
 } from "./townBadges";
 import { DeskWorkBadge } from "./DeskWorkBadge";
+import { TownRoomPlaque } from "./TownRoomPlaque";
+import { TownFoldIndicators } from "./TownFoldIndicators";
+import {
+  NO_FOLDED_ACTIVITY,
+  townFoldedActivityLabel,
+  type TownFoldedActivity,
+} from "./townFoldedActivity";
 import "./town.css";
 import {
   markAway,
@@ -138,8 +141,7 @@ export type TownRoomActions = {
   showCreateSeat(roomKey: string): boolean;
   canCreateSeat(roomKey: string): boolean;
   createSeatReason(roomKey: string): string | null;
-  onCreateSeat(roomKey: string): void;
-  /** Open the launcher for this room: a new agent from a profile or a kind. */
+  /** Open this room's launcher: Terminal, a profile or an agent kind. */
   onNewAgent(roomKey: string): void;
   showCreateRoom(roomKey: string | null): boolean;
   canCreateRoom(roomKey: string | null): boolean;
@@ -172,8 +174,8 @@ export type TownRoomActions = {
   ): Promise<TownMoveResult>;
   /** An agent dragged onto another desk; resolves how the move ended. */
   onDropAgent(agentKey: string, deskKey: string): Promise<TownMoveResult>;
-  /** Grow a folded room to show all its desks, or fold it back. */
-  onToggleFold?(roomKey: string): void;
+  /** Reveal the next group of desks, or fold the room back to 24. */
+  onToggleFold?(roomKey: string, nextLimit?: number): void;
   /** A desk dragged onto another desk: join its team (townTeams.ts). */
   onGroupDesk(deskKey: string, targetDeskKey: string): Promise<TownMoveResult>;
   /** A grouped desk dropped on its own room's floor: leave its team. */
@@ -203,6 +205,7 @@ function ago(since: number, now: number) {
 
 export function TownCanvas({
   projection,
+  foldedActivity = NO_FOLDED_ACTIVITY,
   selectedKey,
   completionSeenKeys,
   summonedKeys = NO_KEYS,
@@ -248,6 +251,8 @@ export function TownCanvas({
   /** Screen pixels covered by panels on wide screens (rail, chat dock). */
   chrome?: { left: number; right: number };
   projection: HerdrOfficeProjection;
+  /** Hidden call/Ask state from the same complete attention source as the rail. */
+  foldedActivity?: ReadonlyMap<string, TownFoldedActivity>;
   selectedKey: string | null;
   completionSeenKeys: ReadonlySet<string>;
   /** Agents the user opened, who walk back to their desks. */
@@ -536,8 +541,12 @@ export function TownCanvas({
   };
 
   const levelRef = useRef<TownLevel>("overview");
-  const signs = useRef(new Map<string, HTMLElement>());
-  const signsFor = useRef<TownLayout | null>(null);
+  const [signs] = useState(
+    () =>
+      new TownBuildingSigns(() =>
+        rendererRef.current?.invalidate("building-sign"),
+      ),
+  );
   const lastCamera = useRef("");
   const hoverEntry = useCallback(
     (key: string | null, rect?: DOMRect) =>
@@ -574,23 +583,7 @@ export function TownCanvas({
       }
       const renderer = rendererRef.current;
       if (renderer) {
-        if (signsFor.current !== latest.current.layout) {
-          signsFor.current = latest.current.layout;
-          signs.current = new Map(
-            [
-              ...layer.querySelectorAll<HTMLElement>("[data-building-sign]"),
-            ].map((sign) => [sign.dataset.buildingSign!, sign]),
-          );
-        }
-        for (const [hostKey, sign] of signs.current) {
-          const opacity = String(
-            Math.round(renderer.roofAlpha(hostKey) * 100) / 100,
-          );
-          if (sign.style.opacity !== opacity) {
-            sign.style.opacity = opacity;
-            sign.style.visibility = opacity === "0" ? "hidden" : "visible";
-          }
-        }
+        signs.update((hostKey) => renderer.roofAlpha(hostKey));
         if (level !== "overview")
           for (const pennant of pennants.current) markAway(pennant, renderer);
       }
@@ -1476,10 +1469,12 @@ export function TownCanvas({
       >
         <TownTeamsLayer teams={teams} />
         <TownWorldLayer
+          foldedActivity={foldedActivity}
           teams={teams}
           model={model}
           layout={layout}
           visible={visible}
+          signs={signs}
           onHoverEntry={hoverEntry}
           selectedKey={selectedKey}
           blockedSince={blockedSince.current}
@@ -1730,6 +1725,7 @@ const TownTeamsLayer = memo(function TownTeamsLayer({
 });
 const TownWorldLayer = memo(function TownWorldLayer({
   model,
+  foldedActivity,
   layout,
   teams,
   selectedKey,
@@ -1746,8 +1742,11 @@ const TownWorldLayer = memo(function TownWorldLayer({
   quests,
   renderer,
   pennants,
+  signs,
 }: {
+  signs: TownBuildingSigns;
   model: TownModel;
+  foldedActivity: ReadonlyMap<string, TownFoldedActivity>;
   layout: TownLayout;
   teams: TownTeams;
   visible: TownVisible;
@@ -1826,27 +1825,34 @@ const TownWorldLayer = memo(function TownWorldLayer({
           { rooms: 0, desks: 0, working: 0 },
         );
         return (
-          <div key={building.hostKey} className="town-building-layer">
-            <div
-              className="town-building-sign"
-              data-building-sign={building.hostKey}
-              style={{
-                left: (building.x + building.w / 2) * T,
-                top: (building.y + building.h * 0.38) * T,
-              }}
+          <div
+            key={building.hostKey}
+            className="town-building-layer"
+            data-stale={host?.stale || undefined}
+          >
+            <TownBuildingSign
+              hostKey={building.hostKey}
+              signs={signs}
+              left={(building.x + building.w / 2) * T}
+              top={(building.y + building.h * 0.38) * T}
             >
               <strong>{host?.displayLabel ?? building.hostKey}</strong>
-              <span>
-                {host?.stale
-                  ? "Offline · last known state"
-                  : `${counts.rooms} rooms · ${counts.desks} desks · ${counts.working} working`}
-              </span>
+              {host?.stale ? (
+                <ConnectionRecoveryBanner
+                  connectionId={host.connectionId}
+                  label={host.displayLabel}
+                  state={host.runtimeState}
+                />
+              ) : (
+                <span>{`${counts.rooms} rooms · ${counts.desks} desks · ${counts.working} working`}</span>
+              )}
               {queue.length ? (
                 <em aria-label={`${queue.length} need you`}>!{queue.length}</em>
               ) : null}
-            </div>
+            </TownBuildingSign>
             <div
               className={`town-reception${queue.length ? " town-reception-busy" : ""}`}
+              data-stale={host?.stale || undefined}
               style={{
                 left: building.doorX * T,
                 top: (building.y + building.h + TOWN_FACADE) * T + 6,
@@ -1867,6 +1873,13 @@ const TownWorldLayer = memo(function TownWorldLayer({
                 </span>
                 {queue.length ? <b>{queue.length}</b> : null}
               </div>
+              {host?.stale ? (
+                <ConnectionRecoveryBanner
+                  connectionId={host.connectionId}
+                  label={host.displayLabel}
+                  state={host.runtimeState}
+                />
+              ) : null}
               {visitors.length ? (
                 <div className="town-reception-queue">
                   {shown.map((agent) => (
@@ -1897,9 +1910,21 @@ const TownWorldLayer = memo(function TownWorldLayer({
               const c = townRoomCounts(model, room);
               const label = room.accessibleLabel ?? room.displayLabel;
               const total = Math.max(1, c.agents);
-              const freeCell = placed.cells.find((cell) => !cell.deskKey);
+              const seatCell =
+                placed.foldActionCells?.[0] ??
+                placed.cells.find((cell) => !cell.deskKey);
+              const foldCell = placed.foldActionCells?.[1];
               const overflow =
                 room.omittedDeskCount + placed.overflowDeskKeys.length;
+              const revealCount = Math.min(TOWN_DESK_EXPANSION_STEP, overflow);
+              const activity = foldedActivity.get(room.key);
+              const activityLabel = townFoldedActivityLabel(activity);
+              const partiallyExpanded =
+                room.deskFold === "expanded" && overflow > 0;
+              const revealDescription =
+                overflow > TOWN_DESK_EXPANSION_STEP
+                  ? `Show up to ${revealCount} more hidden ${revealCount === 1 ? "desk" : "desks"}`
+                  : `Show the remaining ${overflow} hidden ${overflow === 1 ? "desk" : "desks"}`;
               const reason = roomActions.createSeatReason(room.key);
               const roomColor = roomActions.placeColor("room", room.key);
               return (
@@ -2031,98 +2056,33 @@ const TownWorldLayer = memo(function TownWorldLayer({
                         );
                       })
                     : null}
-                  <div className="town-room-plaque">
-                    <span className="town-room-plaque-name">
-                      {label} <small>{c.desks}</small>
-                    </span>
-                    {c.blocked ? (
-                      <span className="town-room-plaque-badge">
-                        !{c.blocked}
-                      </span>
-                    ) : null}
-                    {room.deskFold && roomActions.onToggleFold ? (
-                      <button
-                        className="world-room-overlay-action town-plaque-action town-plaque-agent"
-                        type="button"
-                        aria-expanded={room.deskFold === "expanded"}
-                        aria-label={
-                          room.deskFold === "folded"
-                            ? `Expand room ${label} toward ${Math.min(room.observedDeskCount, TOWN_PRESENTATION_BOUNDS.desksPerRoom)} desks`
-                            : `Fold room ${label} to its busiest desks`
-                        }
-                        title={
-                          room.deskFold === "folded"
-                            ? `Expand toward ${Math.min(room.observedDeskCount, TOWN_PRESENTATION_BOUNDS.desksPerRoom)} desks; protected desks stay visible`
-                            : "Show only the busiest desks"
-                        }
-                        onClick={() => roomActions.onToggleFold?.(room.key)}
-                      >
-                        {room.deskFold === "folded" ? (
-                          <ChevronsDown size={12} aria-hidden="true" />
-                        ) : (
-                          <ChevronsUp size={12} aria-hidden="true" />
-                        )}
-                        <span>
-                          {room.deskFold === "folded" ? `+${overflow}` : "Fold"}
-                        </span>
-                      </button>
-                    ) : null}
-                    {roomColor ? (
-                      <ColorSwatchButton
-                        className="town-plaque-action town-place-color"
-                        label={`Colour of room ${label}`}
-                        defaultHex={townCarpetFor(room.key)}
-                        {...roomColor}
-                      />
-                    ) : null}
-                    <button
-                      className="world-room-overlay-action town-plaque-action town-plaque-agent"
-                      type="button"
-                      aria-label={`New agent in ${label}`}
-                      title={
-                        roomActions.createSeatReason(room.key) ??
-                        `Start a new agent in ${label}`
+                  <TownRoomPlaque
+                    room={room}
+                    label={label}
+                    width={placed.w * T}
+                    counts={c}
+                    color={
+                      roomColor && {
+                        defaultHex: townCarpetFor(room.key),
+                        ...roomColor,
                       }
-                      disabled={!roomActions.canCreateSeat(room.key)}
-                      onClick={() => roomActions.onNewAgent(room.key)}
-                    >
-                      <Bot size={12} aria-hidden="true" />
-                      <span>New agent</span>
-                    </button>
-                    <button
-                      className="world-room-overlay-action world-room-overlay-action-rename town-plaque-action"
-                      type="button"
-                      aria-label={`Rename room ${label}`}
-                      title={`Rename ${label}`}
-                      disabled={!roomActions.canRenameRoom(room.key)}
-                      onClick={() => roomActions.onRenameRoom(room.key)}
-                    >
-                      <Pencil size={11} aria-hidden="true" />
-                    </button>
-                    <button
-                      className="world-room-overlay-action world-room-overlay-action-danger town-plaque-action"
-                      type="button"
-                      aria-label={`Close room ${label}`}
-                      title={`Close ${label}`}
-                      disabled={!roomActions.canCloseRoom(room.key)}
-                      onClick={() => roomActions.onCloseRoom(room.key)}
-                    >
-                      <Trash2 size={11} aria-hidden="true" />
-                    </button>
-                  </div>
-                  {roomActions.showCreateSeat(room.key) && freeCell ? (
+                    }
+                    actions={roomActions}
+                  />
+                  {roomActions.showCreateSeat(room.key) && seatCell ? (
                     <>
                       <button
                         className="world-new-seat-canvas-action town-new-seat"
                         type="button"
-                        aria-label={`New seat in ${label}`}
-                        title={reason ?? `Start a new seat in ${label}`}
+                        aria-label={`New agent or terminal in ${label}`}
+                        title={reason ?? `New agent or terminal in ${label}`}
                         disabled={!roomActions.canCreateSeat(room.key)}
                         style={{
-                          left: (freeCell.x - placed.x + 1) * T,
-                          top: (freeCell.y - placed.y) * T + 4,
+                          left: (seatCell.x - placed.x + 1) * T,
+                          top: (seatCell.y - placed.y) * T + 4,
+                          ...(partiallyExpanded ? { width: 40 } : {}),
                         }}
-                        onClick={() => roomActions.onCreateSeat(room.key)}
+                        onClick={() => roomActions.onNewAgent(room.key)}
                       >
                         <Plus size={18} aria-hidden="true" />
                       </button>
@@ -2131,14 +2091,85 @@ const TownWorldLayer = memo(function TownWorldLayer({
                           className="world-creation-reason town-creation-reason"
                           role="status"
                           style={{
-                            left: (freeCell.x - placed.x + 1) * T,
-                            top: (freeCell.y - placed.y) * T + 60,
+                            left: (seatCell.x - placed.x + 1) * T,
+                            top: (seatCell.y - placed.y) * T + 60,
                           }}
                         >
                           {reason}
                         </span>
                       ) : null}
                     </>
+                  ) : null}
+                  {room.deskFold &&
+                  foldCell &&
+                  roomActions.onToggleFold &&
+                  (room.deskFold === "expanded" || overflow > 0) ? (
+                    <button
+                      className="town-new-seat town-fold-tile"
+                      type="button"
+                      aria-expanded={room.deskFold === "expanded"}
+                      aria-label={
+                        overflow > 0
+                          ? `${revealDescription} in ${label}${activityLabel ? `. ${activityLabel}` : ""}`
+                          : `Fold ${label} back to 24 desks`
+                      }
+                      title={
+                        overflow > 0
+                          ? `${revealDescription}${activityLabel ? `. ${activityLabel}` : ""}`
+                          : "Fold this room back to 24 desks"
+                      }
+                      style={{
+                        left:
+                          partiallyExpanded && seatCell
+                            ? (seatCell.x - placed.x + 1) * T + 44
+                            : (foldCell.x - placed.x + 1) * T,
+                        top: (foldCell.y - placed.y) * T + 4,
+                        display: "flex",
+                        width: partiallyExpanded ? 64 : 72,
+                        justifyContent: "center",
+                        gap: 3,
+                      }}
+                      onClick={() =>
+                        roomActions.onToggleFold?.(
+                          room.key,
+                          overflow > 0
+                            ? Math.min(
+                                room.observedDeskCount,
+                                room.desks.length + TOWN_DESK_EXPANSION_STEP,
+                              )
+                            : undefined,
+                        )
+                      }
+                    >
+                      {overflow > 0 ? (
+                        <>
+                          <ChevronsRight size={16} aria-hidden="true" />
+                          <span>+{overflow}</span>
+                        </>
+                      ) : (
+                        <>
+                          <ChevronsLeft size={16} aria-hidden="true" />
+                          <span>Fold</span>
+                        </>
+                      )}
+                      <TownFoldIndicators activity={activity} />
+                    </button>
+                  ) : null}
+                  {partiallyExpanded && seatCell && roomActions.onToggleFold ? (
+                    <button
+                      className="town-new-seat town-fold-reset"
+                      type="button"
+                      aria-label={`Fold ${label} back to 24 desks`}
+                      title="Fold this room back to 24 desks"
+                      style={{
+                        left: (seatCell.x - placed.x + 1) * T + 112,
+                        top: (seatCell.y - placed.y) * T + 4,
+                        width: 40,
+                      }}
+                      onClick={() => roomActions.onToggleFold?.(room.key)}
+                    >
+                      <ChevronsLeft size={18} aria-hidden="true" />
+                    </button>
                   ) : null}
                 </div>
               );
@@ -2401,6 +2432,7 @@ function ReceptionEntry({
       type="button"
       className={`town-reception-entry${agent.semanticStatus === "done" ? " town-reception-done" : ""}`}
       data-agent-key={agent.key}
+      disabled={agent.stale || !agent.canOpenInSpaces}
       aria-label={
         agent.semanticStatus === "done"
           ? `${agent.displayLabel}, finished`

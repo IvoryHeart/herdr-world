@@ -216,6 +216,26 @@ export function createAgentSessionHandlers(args: {
         turn,
       };
     },
+    readWorktreeMetadata: async (paneId: string, expected: string) => {
+      if ((await paneSessionFingerprint(args.herdrCall, paneId)) !== expected)
+        return null;
+      const resolved = await resolveAgentSession(
+        { pane_id: paneId },
+        args.herdrCall,
+        args.files,
+        resolverContext,
+      );
+      if (
+        !resolved.file ||
+        !resolved.session ||
+        taskSummarySessionFingerprint(resolved.session) !== expected
+      )
+        return null;
+      const projection = await cache.get(resolved);
+      if ((await paneSessionFingerprint(args.herdrCall, paneId)) !== expected)
+        return null;
+      return projection.worktree;
+    },
     readSummary: (params: Record<string, unknown>) =>
       readAgentSessionSummary(
         params,
@@ -407,7 +427,9 @@ export async function downloadAgentSessionFile(
     headers: {
       "content-type": isDb
         ? "application/vnd.sqlite3"
-        : "application/x-ndjson; charset=utf-8",
+        : resolved.file.path.endsWith(".jsonl.zst")
+          ? "application/zstd"
+          : "application/x-ndjson; charset=utf-8",
       "content-length": String(resolved.file.size ?? 0),
       "content-disposition": contentDispositionFilename(resolved.file.path),
       "x-agent-session-path": encodeURIComponent(resolved.file.path),

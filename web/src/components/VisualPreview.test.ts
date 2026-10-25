@@ -38,8 +38,13 @@ for (const fixture of [
           const asset = assets.get(path);
           if (asset) return new Response(asset);
           if (path === "/") {
+            // Exercise Chat as on LAN HTTP, without optional secure-context APIs.
+            const limitedApis =
+              fixture === "AgentChat"
+                ? '<script>Object.defineProperty(crypto,"randomUUID",{value:undefined});Object.defineProperty(crypto,"subtle",{value:undefined});Object.defineProperty(navigator,"clipboard",{value:undefined});</script>'
+                : "";
             return new Response(
-              `<head><link rel="stylesheet" href="/${fixture}.browser.css"></head><body><script src="/${fixture}.browser.js"></script></body>`,
+              `<head><link rel="stylesheet" href="/${fixture}.browser.css"></head><body>${limitedApis}<script src="/${fixture}.browser.js"></script></body>`,
               { headers: { "Content-Type": "text/html" } },
             );
           }
@@ -87,7 +92,7 @@ for (const fixture of [
             "--no-first-run",
             "--no-default-browser-check",
             `--user-data-dir=${join(dir, "profile")}`,
-            server.url.href,
+            `${server.url.href}${fixture === "AgentChat" ? "?limited-apis" : ""}`,
           ],
           { stdout: "ignore", stderr: Bun.file(errorOutput) },
         );

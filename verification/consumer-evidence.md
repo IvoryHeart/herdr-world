@@ -12,11 +12,11 @@ This reconciles the remaining baseline entries without treating a component mode
 | Q05 RPC/HTTP routing | Qualified manager leases supply dispatch authority. Protocol and HTTP tests check malformed/stale generations, explicit rejection, legacy omission and cancellation of stale streams. The session-link routing fixture combines the real manager, RPC dispatcher, runtime handlers and filesystem lookup with a synthetic external transport; identical pane IDs stay isolated, and replacement during confirmation or immediately before transport dispatch cannot report a link. Models: runtime-leases, runtime-control. | No model substitutes for endpoint parsing or HTTP stream cancellation; legacy compatibility is scoped separately from explicit admission. |
 | Q07 Terminal input/reconnect | Real Bridge replay covers transport retirement and late-socket replies; creation replay covers uncertain dispatched mutation without retry. API and terminal recovery tests supply input-specific consumers. Models: chunk-assembly, creation-flow. | Creation is not a model of terminal bytes or resume clocks; uncertain input, compressed frames and browser lifecycle remain direct/browser tests. |
 | Q15 Focused operational contexts | Captured owner/generation and colliding native IDs are exercised through real store/Bridge replay. Store and concurrent-context tests verify inactive-host operations and context isolation. Models: creation-flow, browser-preparation. | React context binding and all operation kinds remain actual consumer tests; generic readiness is insufficient to select an operational target. |
-| Q16 Resource caches | Runtime currency remains the cache admission identity. File Explorer regressions independently reject retired prefetches and in-flight previews while preserving healthy contexts. Models: browser-preparation, runtime-leases. | Browser focus generation, transport epoch and runtime generation remain different tokens; the model is not a proof of every resource-cache callback. |
+| Q16 Resource caches | Runtime currency remains the cache admission identity. File Explorer regressions independently reject retired prefetches and in-flight previews while preserving healthy contexts. Models: browser-preparation, runtime-leases. Selected agent-worktree identities/revisions now separate RPC/HTTP roots and caches; stale-occupant and real linked-Git tests cover the adapter. Actual Inspector tests reject delayed old-binding previews and callbacks across same-path root replacement while retaining path preferences. | Browser focus generation, transport epoch and runtime generation remain different tokens; the model is not a proof of every resource-cache callback. |
 | Q18 Watchlists | Runtime retirement and observation epochs establish producer boundaries; real watchlist tests enforce exact identities, bounded/idempotent admission and old-revision/reconnect behavior. Models: runtime-leases, browser-refresh. | Watchlist revision is independent of observation epoch; its real store mutation/revision tests are mandatory consumers. |
 | Q19 Presentation capacity | Real allocation is compared with the independent exhaustive finite allocator across 5,103 configurations and six asymmetric host orders. Tree/graph tests retain ancestor reservations and projection capacity. Models: space-admission. | Finite three-host allocation does not prove arbitrary tree/graph projections or all capacity domains; projection integration remains necessary. |
 | Q20 Shared entity identity | Real object preparation and allocation preserve qualified host identity; object/tree tests check dense cancellation, colliding IDs and ancestry projection. Models: browser-preparation, space-admission. | Model preparation uses small synthetic topology; dense cardinalities, labels and layout require implementation/browser tests. |
-| Q25 History/task/checkout reports | Captured runtime authority applies to checkout report reads. Real history/task parsers and checkout tests check transcript order and exact live session identity. Codex protocol/inference/cache fixtures directly exercise complete bounded discovery, visible-pane uniqueness, recent unloaded competitors, freshness, evidence changes, title precedence, contradictory reports, batched final snapshots, unavailable backoff, connection/generation isolation and refusal of inferred message/answer authority. Models: runtime-leases. | Session identity is a distinct consumer guard; parsing external formats and evaluating inference evidence use direct protocol/fixture tests, not a manager guarantee. Unseen clients can make a daemon guess wrong. A guess never proves client identity, cannot send or answer, and cannot persist a link. |
+| Q25 History/task/checkout reports | Captured runtime authority applies to checkout report reads. Real history/task parsers and checkout tests check transcript order and exact live session identity. Codex protocol/inference/cache fixtures directly exercise complete bounded discovery, visible-pane uniqueness, recent unloaded competitors, freshness, evidence changes, title precedence, contradictory reports, batched final snapshots, unavailable backoff, connection/generation isolation and refusal of inferred message/answer authority. Compressed Codex fixtures cover local/SSH representation changes, plain-file precedence, duplicate rejection, bounded decoded prefixes, malformed data and original exports through History/Chat handlers. Claude SSH fixtures exercise production POSIX discovery/stat/read payloads on a disposable filesystem with synthetic Herdr read/send/receipt and stale-session guards, refusing duplicate or malformed results and isolating connection targets. This is adapter evidence, not native SSH/Claude acceptance. Models: runtime-leases. | Session identity is a distinct consumer guard; parsing external formats and evaluating inference evidence use direct protocol/fixture tests, not a manager guarantee. Unseen clients can make a daemon guess wrong. A guess never proves client identity, cannot send or answer, and cannot persist a link. |
 | Q32 File search and annotation drafts | Runtime-qualified late-result admission is the shared rule; real File Explorer tests exercise retired prefetch/preview and annotation tests retain durable checkout identity and stale anchors. Models: browser-preparation, runtime-leases. | Draft persistence intentionally uses durable checkout identity rather than transient generation; glob expansion and anchor reconstruction remain pure/fixture tests. |
 | Q37 Whole-service startup/shutdown | Manager shutdown prevents new starts and drains retained owners. Startup/shutdown tests verify listener availability, one shared drain and forced exit deadline. Models: runtime-control, runtime-drain. | Actual listener/process/service-manager lifecycle and forced-exit policy are integration/platform evidence; models do not prove OS termination. |
 
@@ -25,7 +25,7 @@ This reconciles the remaining baseline entries without treating a component mode
 | Area | Selected evidence and reason | Limits |
 | --- | --- | --- |
 | Q08 Terminal composition/touch/clipboard | Real xterm/browser composition, touch and clipboard transitions are the executable subject; synthetic abstract key transitions would omit the shipped core duplication that the regression reproduces. | IME/browser/clipboard behavior depends on platform events; supported browser scenarios are exercised, not every device keyboard. |
-| Q09 Terminal composer and shortcuts | Pure command resolution/catalogue tests and qualified composer draft tests directly cover aliases, key normalization and owner identity. | No abstract shell semantics or automatic command execution is claimed; terminal dispatch authority is covered separately. |
+| Q09 Terminal composer and shortcuts | Pure command resolution/catalogue and qualified draft tests cover aliases, key normalization and owner identity. The real Chat wrapper DOM consumer activates production connection/runtime scopes, covers managed and legacy epochs, retirement, IME-safe Ctrl/Cmd+Enter send, multiline Enter, overflow command browsing, isolated drafts and transactional refusal restoration. The maintained AgentChat browser consumer covers qualified sends, attachment retries, pasted screenshots and sending their paths with secure-context-only APIs absent; source race tests cover native queued admission and unchecked slash-command receipts. | No abstract shell semantics or automatic command execution is claimed; terminal dispatch authority is covered separately. |
 | Q10 Aggregate observation | Real snapshot tests exercise retirement during construction, expired catalogue scheduling, failed-host stale topology and healthy sibling publication with bounded synthetic transports. | Snapshot integration is the selected consumer evidence for manager authority; no exhaustive claim over arbitrary host topology or transport schedules. |
 | Q11 Observation scheduling | Real controlled scheduling tests exercise 32 hosts, three stalled priority owners, slot release, repeated invalidation rotation, overlapping priorities and cached hosts without refetch. | These are explicit adversarial scheduling scenarios, not a liveness proof. Eventual progress assumes completed transport turns; stalled-owner deadlines and capacity remain implementation tests. |
 | Q22 Tab/pane layout, pins and reorder | Direct pure layout/pin/reorder tests plus queued visible-layout retirement tests cover owner-keyed state; Q21 adds bounded window reducer exploration. | All tab cardinalities and asynchronous native layout responses are not exhausted; captured generation checks retain their implementation regressions. |
@@ -70,3 +70,154 @@ permanent audit retention, or future Groups CLI/roster behavior.
 Evidence statuses describe concrete decisions; independent acceptance is recorded separately. Review 5516249164 accepts every Q01–Q43 bounded mapping and alternative. Mandatory consumers and excluded claims remain binding. Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); owner-approved PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding. Review must inspect the intended requirement, model/reducer domain, adapter fidelity, actual consumer tests and excluded claims. Q21 has its separate bounded exhaustive contract. Q26–Q28 retain their separately accepted Ranger storage/permission assumptions.
 
 No temporal progress proof has been added. Successful reachability witnesses show that a tested path occurs; they do not establish eventual completion for all schedules. Scheduler/deadline regressions are bounded implementation evidence with their stated transport/storage assumptions. Additional fairness assumptions need an explicit requirement and review before introducing temporal properties.
+
+### Reviewer RESULT evidence (Q43, #369)
+
+A crew reviewer name is an explicit sender claim, never a verified principal
+from a shared GitHub login. Unknown RESULT posts remain separately source-keyed
+and linked; an older or later named clear cannot erase that evidence. Reviewed
+heads require formal commit metadata or a unique explicit SHA. Ambiguous or
+conflicting claims and stale heads cannot establish current-head readiness.
+Open findings take precedence over unknown evidence, and unknown attribution
+cannot establish clear.
+
+Direct fixtures in `server/src/sources/pullRequestReviews.test.ts` and
+`pullRequestDetail.test.ts` exercise canonical and current legacy posts,
+quoted/author replies, shared-login refusal, distinct unknown sources, explicit
+correction, latest named results, SHA ambiguity/conflicts and typed open counts.
+Canonical and formal-current records also carry historical RED/comparison SHAs;
+those references cannot supply or contradict an actual reviewed-head claim.
+`shared/pullRequests.test.ts` covers readiness precedence; browser decoder and
+static review rendering tests cover retention and useful unknown source links.
+These are bounded pure parsing/projection rules, so a state model would repeat
+the implementation boundary. Existing PR action tests retain browser-only,
+confirmed exact-head admission. Real GitHub pagination/completeness and live
+browser interaction remain excluded from this local fixture evidence; the
+closing batch gate, site build and consumer/CI checks remain required.
+
+
+### Harness readiness (Q01, Q43)
+
+Only a complete executable lookup may confirm absence; only recognized native
+status may confirm sign-out. Failed/partial/unsupported observations stay
+unknown, and a retired connection generation cannot publish or retarget a
+probe. These properties come from the qualified runtime and readiness contract,
+not from treating every CLI exit as authentication evidence.
+
+`harness-readiness.test.ts` uses synthetic processes/records for the parsing and
+failure boundary. `launcher-probe.test.ts` exercises captured host, discovery
+and process retirement plus actual RPC replies through the qualified publisher.
+`shared/harnessReadiness.test.ts`, `agentProfiles.test.ts` and the readiness
+summary's static-markup tests exercise safe wire normalization and presentation.
+The existing runtime-leases model covers authority; finite parser/consumer
+fixtures are the direct alternative for external status formats. This does not
+prove every CLI version, native account/SSH outcome, or viewport interaction;
+platform/browser checks and the batch's complete gate remain required.
+
+
+### Failed-host cache and SSH recovery (Q02, Q03, Q43)
+
+A lifecycle report may retire only its exact connection/generation; cached data
+must stay stale and non-actionable during discovery and after an older response.
+A later ready status is insufficient to restore actions without a fresh admitted
+snapshot. Direct invalidation/runtime-store, Board projection/defer and Town
+open/motion tests exercise these presentation and consumer boundaries. Existing
+runtime authority models remain unchanged; native availability is not inferred.
+
+Profile-service controlled timers exercise default recovery through eight
+classified transient failures followed by success, with bounded exponential
+jitter, stable healthy siblings, explicit finite retry policy and stop/remove/
+replacement/cleanup cancellation. Continuing default retry does not establish
+infinite progress or model OS/network failure. Static markup/injected recovery
+verbs check explicit truthful controls; real viewport and SSH outcomes remain
+closing browser/platform acceptance. See coverage.json for the required tests.
+
+`ssh-preflight-recovery.test.ts` exercises the actual remote HOME discovery,
+subprocess error boundary and profile scheduler together. Synthetic local child
+processes return eight exit-255 timeouts before success; forwarding and socket
+readiness are simulated. Permanent authentication/host-key failures, non-255
+exits, invalid HOME output and arbitrary timeout-looking errors cannot acquire
+retry. Disconnect/removal fence queued callbacks and in-flight results without
+replacing a healthy sibling lease. `process-utils.test.ts` checks structured exit
+facts and unchanged messages without serializing captured output. These direct
+fixtures extend the existing classification consumer mapping, not its model or
+generic-error allowlist, and do not establish live SSH availability, version skew
+or an owner's viewport outcome. The closing batch retains full-gate acceptance.
+
+### Native plugin fixture lifecycle (Q36)
+
+The native compatibility fixture awaits the existing bounded, yielding cleanup
+after its body settles. Persistent and nonretryable cleanup failures remain
+fatal; a dual failure retains the original body and cleanup errors, rather than
+letting a finally exception hide an assertion. Direct portable lifecycle tests
+and controlled transient/persistent filesystem denial exercise this test-harness
+boundary. Existing Windows held-file tests and the HTTP/HTTPS compiled fixtures
+supply separate native evidence. No installer policy, model, production launcher
+or release authority changed. Local filesystem fixtures do not identify the
+lock holder in an earlier Windows run or establish that run's body succeeded.
+
+### Committed Town building signs (Q39, Q43)
+
+Sign refs register only committed DOM nodes and request a renderer frame. Their
+registration identity prevents a retiring ref from removing a newer node for the
+same host. Pure lifecycle and isolated React DOM tests cover cold commit,
+status-only ref stability, culling/remount, late cleanup and suspended renders
+that never commit. Roof opacity continues to come from the normal renderer.
+The maintained Town browser suite includes phone/wide cold-mount and camera-cull
+cases that require visible failed/healthy building signs and receptions without
+changing topology or overriding CSS. These browser cases require closing-batch
+execution; DOM fixtures alone do not establish pixels, camera/GPU behavior or the
+unchanged 200 ms responsiveness budget.
+
+### PR detail freshness (Q43, #372)
+
+Successful list reads do not renew detail authority. Exact head/list-stamp
+matching, a bounded original read/expiry time and complete detail coverage are
+required; expired, failed, partial and deferred detail cannot pass findings or
+screenshot readiness or admit a merge. Cached links remain qualified display
+evidence. Source reconfiguration isolates cache writers, and a generation or
+expiry change during the live native pre-merge check prevents dispatch.
+
+Injected clock/process regressions in `pullRequestFreshness.test.ts` exercise
+expiry plus failure, unchanged cache reuse, changed head, null/missing sections,
+partial batches, recovery, 10/20 bounds and unread-tail ordering, disable/window
+reconfiguration cache races, source failure and pre-merge expiry/retirement.
+Shared wire/readiness and browser decoder/static card fixtures independently
+check malformed qualification and stale-versus-current presentation. Existing
+isolated mounted-card expiry tests advance the observing clock and invoke its
+scheduled deadline without another source snapshot: readiness and fresh detail
+presentation retire, an open merge sheet closes, read provenance stays unchanged,
+and unmount cancels the deadline. These are actual React consumer checks; the
+service retains its independent expiry and native admission checks. Existing
+native review/head action tests remain mandatory. This bounded cache/projection
+boundary is directly exercised with controlled clock/deferred responses rather
+than a new model that duplicates those external-format rules. It proves no
+complete GitHub history, network liveness, or operation rollback after native
+dispatch; full behavioral verification and browser/CI acceptance still apply.
+
+
+### Mobile transport presentation (Q06, Q07, Q08, Q16, Q43)
+
+A transport epoch retires operational authority without retiring a same-runtime
+presentation. Fresh catalogue admission governs owner removal and generation
+replacement; a newly completed qualified focused list governs resource absence.
+No terminal input or uncertain mutation is replayed, and the no-frame watchdog
+has no automatic navigation action.
+
+`WorldTerminalHandoff.test.ts` exercises the production React tree through
+incomplete catalogue, unavailable owner and reconnect sequences, retaining
+Inspector and split-renderer identities, and retiring only a replaced host.
+`mobileTerminal.test.ts` checks last-frame retention, retired push callbacks,
+one listener set after reconnect, input suppression, three no-frame failures
+and explicit local retry at both phone widths. `WorldInspectorWorktree.test.ts`
+preserves cached previews through an outage while still fencing same-path
+worktree replacement. `WorldInspectorResourceResume.test.ts` mounts the real
+Inspector, Files/Changes children and gate, retaining three file rows through
+null worktree binding and delayed same-target readmission, while rejecting
+late old-binding responses after replacement. These runners are explicitly
+mapped to Q06, Q07, Q08, Q16 and Q43 in `coverage.json`. Layout, endpoint-presentation and recovery unit tests
+cover exact geometry owners, stale parser completion and bounded retry budgets.
+These direct browser and consumer checks are needed for DOM lifetime and event
+timing; the existing ownership models and their mandatory consumers remain
+binding. Real OS page discard, every mobile scheduler and cross-reload UI
+restoration remain outside this evidence.

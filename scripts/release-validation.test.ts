@@ -32,8 +32,8 @@ function readWorkflow(name: string): Workflow {
 
 test.each([
   ["ci.yml", "validation", "bun run check", true],
-  ["release.yml", "validate", "bun run precommit", true],
-  ["prepare-release.yml", "prepare", "bun run precommit", false],
+  ["release.yml", "validate", "bun run check:source", true],
+  ["prepare-release.yml", "prepare", "bun run check:source", false],
 ] as const)(
   "%s uses conservative file concurrency and preserves its World coverage",
   (name, jobName, command, separateWorld) => {

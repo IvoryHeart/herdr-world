@@ -363,12 +363,14 @@ export function ConfigMenu({
                     <MessageSquare size={15} />
                   </span>
                   <span className="config-item-copy">
-                    <strong>Town opens</strong>
-                    <span>What tapping an agent or its desk opens</span>
+                    <strong>Agents open</strong>
+                    <span>
+                      What opening an agent shows: its Chat, or its terminal
+                    </span>
                   </span>
                   <select
                     className="config-preference-select"
-                    aria-label="Town opens"
+                    aria-label="Agents open"
                     value={officePreferences.townOpens}
                     onChange={(event) =>
                       updateOfficePreferences({

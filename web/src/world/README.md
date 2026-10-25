@@ -37,7 +37,7 @@ Office view (`herdrOfficeProjection.ts`, `officeRoomActions.ts`,
 | Camera and zoom levels | [townCamera.ts](town/townCamera.ts) owns pan, zoom about a point, flights and the town/overview/room/desk thresholds. | [Camera tests](town/townCamera.test.ts) |
 | Agent locations and movement | [townActors.ts](town/townActors.ts) seats, queues and walks agents (presentation only) with per-building pathfinding. | [Actor tests](town/townActors.test.ts) |
 | Pixi drawing and art | [townRenderer.ts](town/townRenderer.ts) owns renderer lifetime and per-frame updates; [townPaint.ts](town/townPaint.ts) bakes ground, interiors, façades and roofs; [townSprites.ts](town/townSprites.ts) holds the generated pixel art. See [world asset provenance](../../../docs/world-assets.md). | [Town browser test](town/TownCanvas.test.ts) |
-| Room cards, receptions, targets and room actions | The DOM world layer in [TownCanvas.tsx](town/TownCanvas.tsx) follows the camera; [townTargets.ts](town/townTargets.ts) builds accessible targets and [townHitTest.ts](town/townHitTest.ts) maps pointer hits to keys. Styles live in [town.css](town/town.css). | [Town browser test](town/TownCanvas.test.ts) |
+| Room cards, receptions, targets and room actions | The DOM world layer in [TownCanvas.tsx](town/TownCanvas.tsx) follows the camera; [townTargets.ts](town/townTargets.ts) builds accessible targets and [townHitTest.ts](town/townHitTest.ts) maps pointer hits to keys. Room plates use [TownRoomPlaque.tsx](town/TownRoomPlaque.tsx) and [their styles](town/townRoomPlaque.css) to fit the projected room width; only names truncate, the fixed active/total agent count reuses the room's `working + blocked` and `agents` counts (excluding plain terminals and asks), and management actions reveal below on hover, focus or touch. The dashed seat opens the room-qualified launcher (Terminal first). Other scene styles live in [town.css](town/town.css). | [Town browser test](town/TownCanvas.test.ts) |
 | New agent and agent profiles | [agentProfiles.ts](agentProfiles.ts) holds the profiles store, launcher calls and the events that open [AgentLauncherDialog.tsx](AgentLauncherDialog.tsx) and [ProfileEditor.tsx](ProfileEditor.tsx), which [WorldControlPlane.tsx](WorldControlPlane.tsx) mounts for every view; [ProfileSprite.tsx](ProfileSprite.tsx) draws a profile's look with Town's sprites, and `townRenderer` dresses agents launched from a profile. | [Browser helper tests](agentProfiles.test.ts) |
 | Town settings or the Town board's cost line | [officePreferences.ts](officePreferences.ts) (shared Inspector opening, Town calm motion), [officeObservability.ts](officeObservability.ts) and [OfficeObservabilityDialog.tsx](OfficeObservabilityDialog.tsx) (the optional Prometheus cost metrics). | [Preference tests](officePreferences.test.ts), [metrics tests](officeObservability.test.ts) |
 
@@ -50,9 +50,14 @@ room contributions and groups room links by host.
 Finish/seen overlays change only the affected room totals. Ask, metrics and clock
 updates reuse that topology. Asking identities resolve through the snapshot's
 generation-qualified pane and agent indexes, without scanning the roster. The
-canvas reuses semantic admission when its attention desks are already visible;
-otherwise its separate presentation cache admits the protected desks. These
-paths retain the fixed production input-latency budgets in the browser tests.
+canvas uses the same native-order tab prefix as Spaces: 24 tabs folded, then
+20 more per expansion. Attention never changes this admission.
+[townFoldedActivity.ts](town/townFoldedActivity.ts) maps shared rail calls and
+qualified asking identities onto hidden desks; [TownFoldIndicators.tsx](town/TownFoldIndicators.tsx)
+shows red needs-you and green unreviewed-completion corner icons without extra
+counts. It reads prepared identity indexes and visible desk sets, avoiding a
+second projection or a full-roster scan on Ask changes. The fixed production
+input-latency budgets remain binding in the browser tests.
 
 The renderer draws through the shared World frame scheduler: state frames for
 camera, roof and walking changes, motion frames for ambient animation, which
