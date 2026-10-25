@@ -31,7 +31,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     until you open their terminal or mark that completion reviewed, then join
     idle agents in the lounge. Movement only represents state.
   - Each agent has one window: World's Inspector, with one top selector
-    (**Chat**, **Terminal**, **Changes**, **Files**, then **Commits**).
+    (**Chat**, **Terminal**, **Files**, **Changes**, then secondary controls such as **Commits**).
+    On phones, a header dropdown shows Chat, Terminal, Files and Changes;
+    attention choices move into the window's ellipsis menu.
     Tapping an agent or its table, activating it (double-click,
     **Shift+Enter**), the needs-you list, **N** and **Next** open that window on
     **Chat**: the conversation's latest 200 entries, which scroll inside the
@@ -135,8 +137,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     **M** on a focused table offers the same as **Group with…** and **Leave
     the team**, and the table's accessible name lists its teammates. A
     pinned table joins a team only in its own room, and keeps its place.
-  - **Pin a desk** from its agent window's **⋯** menu (**Pin desk in Town**),
-    on a phone too. A
+  - **Pin a desk** from the first item in its mobile agent window's **⋯** menu
+    (**Pin desk in Town**), or from the desktop window’s **⋯** menu. A
     pinned table wears a pin and keeps its place: tab reorders, a room growing
     or Town's own placement leave it, and it cannot be dragged until you unpin
     it (other tables fill the free places in tab order). In a room with more
@@ -156,6 +158,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     use the shared aggregate. Reception and lounge positions only show status;
     only an explicit move changes Herdr's layout, always within one host.
   See the [Town exercise](./docs/TUTORIAL.md#town).
+- **Per-host Herdr identity.** **Manage connections → Check version again**
+  reads the selected card's running server version and protocol. Compatibility
+  expires after one minute; failed or disconnected checks remain unknown.
+  The installed binary is separate and unknown. Upgrade is explicitly unavailable
+  until its target and safe handoff are verified; no remote update runs.
 - **New agent and agent profiles.** **New agent** starts an agent in a new
   tab of a room you choose, from a profile (one tap) or from any agent kind the
   host's Herdr supports. It is in the Actions menu of Town and Board, on each
@@ -217,7 +224,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     tab that spawned it (before its workspace's colour), and keeps following it
     when moved. A chosen colour always wins.
 - **Agent interest.** The button beside an agent's name in its Inspector
-  header in Town, Board and Spaces sets **Watching** (the default), **Muted**
+  header in Town, Board and Spaces (or **⋯ → Attention** in mobile windows)
+  sets **Watching** (the default), **Muted**
   or **Focused** for that agent, saved by the World service for its terminal on
   every device. Chimes
   read it: a muted agent never chimes, and while a focused agent is reachable
@@ -592,6 +600,13 @@ commit a search selection. Press K in the recent switcher to convert it to searc
 - Display Herdr's server-rendered terminal at browser rows/columns, with splits.
 - Send normal input, modified Enter, macOS line-editing shortcuts, multiline
   paste, IME composition, and rapid CJK punctuation.
+- On desktop, click terminal output to use physical arrow keys and Ctrl
+  combinations, including after opening an agent's Message or switching views.
+  The phone-only Composer does not disable desktop input or discard its draft.
+  On phones, side-by-side keyboard (Composer) / terminal (Direct) icons stay
+  accessible while editing an expanded draft; Direct hides and saves it, and
+  Composer restores it. Special keys remain visible in both modes.
+  The separate `/ Commands` control inserts command suggestions into the draft.
 - Scroll history by wheel, trackpad, touch, or half-page
   `Alt/Option+Page Up`/`Page Down`. Full page keys go to terminal apps (such as
   nano) or Herdr history when the shell owns them; mobile buttons route the same

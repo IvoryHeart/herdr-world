@@ -1,4 +1,3 @@
-import { worldLocalStorage } from "../browserStorage";
 import {
   shortcutMatches,
   shortcutTitle,
@@ -15,7 +14,6 @@ import {
 } from "lucide-react";
 import { type CSSProperties, useEffect, useId, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { subscribeLocalStorage } from "../browserStorage";
 import {
   type MobileTerminalShortcut,
   mobileTerminalShortcutOption,
@@ -74,16 +72,6 @@ export type ComposerUpload = (
   onProgress?: UploadProgress,
 ) => Promise<string>;
 
-const SHORTCUTS_OPEN_STORAGE_KEY = "terminalComposerShortcutsOpen.v1";
-let unsavedShortcutsOpen: boolean | undefined;
-
-export function readTerminalComposerShortcutsOpen(): boolean {
-  return (
-    unsavedShortcutsOpen ??
-    worldLocalStorage.getItem(SHORTCUTS_OPEN_STORAGE_KEY) !== "false"
-  );
-}
-
 /**
  * Bottom-docked mobile terminal composer. A plain textarea owns all editing
  * (IME, dictation, selection, autocorrect, multiline paste) and text only
@@ -91,14 +79,8 @@ export function readTerminalComposerShortcutsOpen(): boolean {
  * sidesteps the xterm helper-textarea races described in the IME recovery
  * code. Drafts are write-through to the in-memory store so pane switches and
  * virtual-keyboard resizes never lose text.
- *
- * The configurable mobile shortcut keys live at the top of the dock so the
- * composer is the single mobile input control surface. Direct mode reuses
- * xterm's input channel; the native editor stays mounted to preserve its caret.
- *
- * Files arrive through clipboard paste, drop, or the file picker, upload once, and
- * land at the draft caret in Composer. Direct captures a guarded terminal
- * insertion at the initiating gesture, without changing the draft or sending Enter.
+ * Composer / Direct select draft editing or xterm input. The mounted editor
+ * preserves its draft and caret while hidden in Direct mode.
  */
 export function TerminalComposer({
   draftKey,
@@ -170,20 +152,6 @@ export function TerminalComposer({
   const [expanded, setExpanded] = useState(false);
   const [toolPointerPending, setToolPointerPending] = useState(false);
   const composerRef = useRef<HTMLDivElement | null>(null);
-  const [shortcutsOpen, setShortcutsOpen] = useState(
-    readTerminalComposerShortcutsOpen,
-  );
-  useEffect(
-    () =>
-      subscribeLocalStorage((key) => {
-        if (key !== null && key !== SHORTCUTS_OPEN_STORAGE_KEY) return;
-        unsavedShortcutsOpen = undefined;
-        setShortcutsOpen(
-          worldLocalStorage.getItem(SHORTCUTS_OPEN_STORAGE_KEY) !== "false",
-        );
-      }),
-    [],
-  );
   const [pickerMode, setPickerMode] = useState<"browse" | "inline" | null>(
     null,
   );
@@ -406,9 +374,6 @@ export function TerminalComposer({
           : null;
       setPickerMode(nextPickerMode);
       setActiveCommand(0);
-      onShortcutsVisibleChange?.(
-        shortcutsOpen && !(nextPickerMode !== null && commands.length > 0),
-      );
     }
     writeTerminalComposerDraft(draftKey, textarea.value);
     writeTerminalComposerSelection(
@@ -688,7 +653,6 @@ export function TerminalComposer({
     setPickerMode(null);
     setReplacement(null);
     setActiveCommand(0);
-    onShortcutsVisibleChange?.(shortcutsOpen);
   };
 
   const commandEditorFocused = () =>
@@ -708,7 +672,6 @@ export function TerminalComposer({
       setPickerMode("browse");
       setActiveCommand(0);
       setReplacement(null);
-      onShortcutsVisibleChange?.(false);
     });
     focusPickerWithoutKeyboard();
   };
@@ -806,8 +769,8 @@ export function TerminalComposer({
     shortcutRows.some((row) => row.some((shortcut) => shortcut !== null));
   const shortcutColumns = Math.max(1, ...shortcutRows.map((row) => row.length));
   useEffect(() => {
-    onShortcutsVisibleChange?.(shortcutsOpen && !pickerOpen);
-  }, [onShortcutsVisibleChange, pickerOpen, shortcutsOpen]);
+    onShortcutsVisibleChange?.(hasShortcuts && accessoriesOpen);
+  }, [onShortcutsVisibleChange, hasShortcuts, accessoriesOpen]);
   const activateMessage = (remember: boolean) => {
     if (composingRef.current) return;
     flushSync(() => onModeChange("composer", remember));
@@ -841,7 +804,7 @@ export function TerminalComposer({
         }}
       >
         <AttachmentChips scope={draftKey} />
-        <div className="terminal-composer-toolbar" hidden={!accessoriesOpen}>
+        <div className="terminal-composer-toolbar" hidden={!accessoriesVisible}>
           <button
             type="button"
             className="terminal-composer-attach"
@@ -874,43 +837,6 @@ export function TerminalComposer({
           >
             <Paperclip size={15} aria-hidden="true" />
           </button>
-          {hasShortcuts ? (
-            <button
-              type="button"
-              className="terminal-composer-shortcuts-toggle"
-              aria-label={
-                shortcutsOpen && !pickerOpen
-                  ? "Hide terminal shortcuts"
-                  : "Show terminal shortcuts"
-              }
-              title={
-                shortcutsOpen && !pickerOpen
-                  ? "Hide terminal shortcuts"
-                  : "Show terminal shortcuts"
-              }
-              aria-expanded={accessoriesOpen && shortcutsOpen && !pickerOpen}
-              aria-controls={`${pickerId}-shortcuts`}
-              onMouseDown={keepTextareaFocus}
-              onClick={() => {
-                const open = pickerOpen || !shortcutsOpen;
-                dismissCommands();
-                setShortcutsOpen(open);
-                onShortcutsVisibleChange?.(open);
-                try {
-                  worldLocalStorage.setItem(
-                    SHORTCUTS_OPEN_STORAGE_KEY,
-                    String(open),
-                  );
-                  unsavedShortcutsOpen = undefined;
-                } catch {
-                  // Keep the choice across mounts when storage is unavailable.
-                  unsavedShortcutsOpen = open;
-                }
-              }}
-            >
-              <Keyboard size={17} aria-hidden="true" />
-            </button>
-          ) : null}
           <button
             type="button"
             className="terminal-composer-commands-toggle"
@@ -930,12 +856,56 @@ export function TerminalComposer({
             onMouseDown={keepTextareaFocus}
             onClick={browseCommands}
           >
-            {surface === "chat" ? (
-              <span aria-hidden="true">/</span>
-            ) : (
-              <SquareTerminal size={17} aria-hidden="true" />
-            )}
+            <span aria-hidden="true">/</span>
           </button>
+          <div
+            className="terminal-composer-mode"
+            role="group"
+            aria-label="Input mode"
+            hidden={surface === "chat"}
+          >
+            <button
+              type="button"
+              aria-label="Composer"
+              title="Composer"
+              hidden={surface === "chat"}
+              aria-pressed={mode === "composer"}
+              disabled={composing}
+              onMouseDown={keepTextareaFocus}
+              onClick={() => {
+                if (composingRef.current) return;
+                activateMessage(true);
+                textareaRef.current?.focus({ preventScroll: true });
+              }}
+            >
+              <Keyboard size={19} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className="terminal-mobile-direct"
+              hidden={surface === "chat"}
+              aria-label="Type directly into the terminal"
+              title="Type directly into the terminal"
+              aria-pressed={mode === "direct"}
+              data-input-active={directInputActive || undefined}
+              disabled={directDisabled || composing}
+              onMouseDown={keepTextareaFocus}
+              onClick={() => {
+                if (composingRef.current || directDisabled) return;
+                flushSync(() => {
+                  dismissCommands();
+                  setEditorFocused(false);
+                  setToolPointerPending(false);
+                  setExpanded(false);
+                  onModeChange("direct", true);
+                });
+                textareaRef.current?.blur?.();
+                onFocusDirect();
+              }}
+            >
+              <SquareTerminal size={19} aria-hidden="true" />
+            </button>
+          </div>
           {surface === "chat" ? (
             <ChatComposerTools
               buttonRef={commandsButtonRef}
@@ -1033,7 +1003,7 @@ export function TerminalComposer({
           <div
             className="terminal-composer-shortcuts"
             id={`${pickerId}-shortcuts`}
-            hidden={!accessoriesOpen || !shortcutsOpen || pickerOpen}
+            hidden={!accessoriesOpen}
             style={
               {
                 "--mobile-shortcut-columns": shortcutColumns,
@@ -1105,7 +1075,16 @@ export function TerminalComposer({
             }}
           />
         ) : null}
-        <div className="terminal-mobile-input-bar">
+        <div
+          className="terminal-composer-direct"
+          hidden={surface === "chat" || mode !== "direct"}
+        >
+          Typing goes directly to the terminal. Your Composer draft is saved.
+        </div>
+        <div
+          className="terminal-mobile-input-bar"
+          hidden={surface !== "chat" && mode === "direct"}
+        >
           <textarea
             ref={textareaRef}
             className="terminal-composer-input terminal-mobile-message"
@@ -1237,30 +1216,6 @@ export function TerminalComposer({
               commandKeyDown(e);
             }}
           />
-          <button
-            type="button"
-            className="terminal-mobile-direct"
-            hidden={surface === "chat"}
-            aria-label="Type directly into the terminal"
-            title="Type directly into the terminal"
-            aria-pressed={directInputActive ?? (open && mode === "direct")}
-            disabled={directDisabled || composing}
-            onMouseDown={keepTextareaFocus}
-            onClick={() => {
-              if (composingRef.current || directDisabled) return;
-              flushSync(() => {
-                dismissCommands();
-                setEditorFocused(false);
-                setToolPointerPending(false);
-                setExpanded(false);
-                onModeChange("direct", true);
-              });
-              textareaRef.current?.blur?.();
-              onFocusDirect();
-            }}
-          >
-            <SquareTerminal size={19} aria-hidden="true" />
-          </button>
         </div>
         <input
           ref={fileInputRef}

@@ -657,3 +657,8 @@
   justify-self: start;
   min-height: 28px;
 }
+
+.workspace-inspector-view-select {
+  width: 40px;
+  height: 40px;
+}
