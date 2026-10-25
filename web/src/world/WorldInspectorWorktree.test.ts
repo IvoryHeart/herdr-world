@@ -2,7 +2,7 @@ import { expect, mock, test } from "bun:test";
 import { Window } from "happy-dom";
 import { act, createElement, type ComponentProps } from "react";
 import type { AgentWorktreeObservation } from "../../../shared/agentWorktree";
-import type { ConnectionClient } from "../api";
+import type { ConnectionClient, ConnectionStatus } from "../api";
 import type { FilePreview, Pane, Workspace } from "../types";
 
 if (process.env.INSPECTOR_WORKTREE_DOM_TEST !== "1") {
@@ -66,7 +66,8 @@ if (process.env.INSPECTOR_WORKTREE_DOM_TEST !== "1") {
       ...realStore.store.get(),
       workspaces: [workspace],
       panes: [pane],
-      status: "connected" as const,
+      status: "connected" as ConnectionStatus,
+      catalogueReady: true,
     };
     mock.module("../store", () => ({
       ...realStore,
@@ -117,11 +118,12 @@ if (process.env.INSPECTOR_WORKTREE_DOM_TEST !== "1") {
       binary: false,
       truncated: false,
     });
+    let online = true;
     const base: ConnectionClient = {
       connectionId: "alpha",
       generation: 1,
       serverRuntimeGeneration: 7,
-      isCurrent: () => true,
+      isCurrent: () => online,
       acceptsServerGeneration: (value) => value === 7,
       async call(method) {
         if (method === "agent_worktree.get") return observation();
@@ -208,6 +210,21 @@ if (process.env.INSPECTOR_WORKTREE_DOM_TEST !== "1") {
       expect(shown.fileSelection.preview?.text).not.toBe("OLD ROOT CONTENT");
       await act(async () => shown.onSelectFileTab("same.txt"));
       expect(shown.fileSelection.preview?.text).toBe("NEW ROOT CONTENT");
+      const offlinePreview = shown.fileSelection.preview;
+      const offlineScope = shown.state.scope;
+      online = false;
+      snapshot.status = "disconnected";
+      snapshot.catalogueReady = false;
+      await act(async () => root.render(createElement(View, { ...props })));
+      expect(shown.presentationStale).toBe(true);
+      expect(shown.fileSelection.preview).toBe(offlinePreview);
+      expect(shown.state.scope).toEqual(offlineScope);
+      online = true;
+      snapshot.status = "connected";
+      snapshot.catalogueReady = true;
+      await act(async () => root.render(createElement(View, { ...props })));
+      expect(shown.presentationStale).toBe(false);
+      expect(shown.fileSelection.preview).toBe(offlinePreview);
       const retained = shown;
       await act(async () =>
         shown.onDiffSelectionChange?.({

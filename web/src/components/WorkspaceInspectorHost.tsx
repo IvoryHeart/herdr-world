@@ -152,6 +152,7 @@ export function WorkspaceInspectorHost({
   agentCheckout,
   historySessionFingerprint,
   agentWorktree,
+  presentationStale = false,
 }: {
   agentWorktree?: AgentWorktreeView;
   state: WorkspaceInspectorState;
@@ -164,6 +165,7 @@ export function WorkspaceInspectorHost({
   previewRequestRef: React.MutableRefObject<number>;
   diffSelection: ActiveDiffSelection;
   connectionClient: ConnectionClient;
+  presentationStale?: boolean;
   onFileSelectionChange: Parameters<
     typeof FileExplorerPanel
   >[0]["onPreviewChange"];
@@ -194,7 +196,6 @@ export function WorkspaceInspectorHost({
   windowControls?: ManagedWindowControls;
   /** The terminal's colour: the icon's background, chosen from its settings. */
   terminalColor?: ManagedWindowControls["color"];
-  /** More of the agent's settings, below the colour in the icon's popover. */
   agentSettings?: ReactNode;
   onWindowMaximize?: () => void;
   windowMaximized?: boolean;
@@ -216,8 +217,7 @@ export function WorkspaceInspectorHost({
   useLayoutEffect(() => {
     setFileTabs(readResourceFileTabs(worldLocalStorage, state.scope));
   }, [fileSelection.entry?.path, state.scope]);
-  // A scope can first open on Changes or Chat. Restore its active file when
-  // entering Files, without requiring another explorer selection.
+  // Restore the active file when entering Files from another view.
   const restoreFileOnViewEntry = useEffectCallback(() => {
     if (state.view === "files" && !fileSelection.entry && fileTabs.activePath)
       onSelectFileTab(fileTabs.activePath);
@@ -929,9 +929,6 @@ export function WorkspaceInspectorHost({
         )}
       </header>
 
-      {/* PR status lives in the repository popover in the bar, so Changes
-          and Commits start with their own content. */}
-
       {!workspace ? (
         <div className="workspace-inspector-unavailable">
           <strong>Checkout unavailable</strong>
@@ -940,7 +937,12 @@ export function WorkspaceInspectorHost({
           </span>
         </div>
       ) : (
-        <div className="workspace-inspector-body">
+        <div
+          className="workspace-inspector-body"
+          ref={(element) =>
+            element?.toggleAttribute("inert", presentationStale)
+          }
+        >
           <div
             className={`workspace-inspector-resource inspector-files-resource ${
               state.view === "files" ? "" : "is-hidden"
@@ -949,6 +951,7 @@ export function WorkspaceInspectorHost({
           >
             <AgentWorktreeGate
               view={agentWorktree}
+              retainPresentation={presentationStale}
               onChoose={() => setLocationOpen(true)}
             >
               <div
@@ -1123,6 +1126,7 @@ export function WorkspaceInspectorHost({
           >
             <AgentWorktreeGate
               view={agentWorktree}
+              retainPresentation={presentationStale}
               onChoose={() => setLocationOpen(true)}
             >
               <div
@@ -1238,6 +1242,7 @@ export function WorkspaceInspectorHost({
           >
             <AgentWorktreeGate
               view={agentWorktree}
+              retainPresentation={presentationStale}
               onChoose={() => setLocationOpen(true)}
             >
               {state.view === "commits" ||

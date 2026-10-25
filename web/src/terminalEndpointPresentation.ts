@@ -188,7 +188,7 @@ export class TerminalEndpointPresentation {
     }
   }
 
-  reset(discardIncremental = false): void {
+  reset(discardIncremental = false, retainDisplay = false): void {
     // Invalidate presentation/replay, not the outstanding parser operation.
     this.generation++;
     this.deferredSelection = null;
@@ -196,7 +196,7 @@ export class TerminalEndpointPresentation {
     this.appliedMouseReporting = undefined;
     this.pendingFrame = null;
     if (discardIncremental) this.incremental = "";
-    this.displayedFrame = null;
+    if (!retainDisplay) this.displayedFrame = null;
     this.selectionHistory?.reset();
     this.selectionDrag = false;
   }

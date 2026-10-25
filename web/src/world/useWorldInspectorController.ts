@@ -73,9 +73,6 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
     connectionSelection,
     operationalSnapshot,
     hostsFilter,
-    hasSelectedConnection,
-    selectedWorldConnection,
-    selectedWorldObservationActionable,
     aggregateWorld,
     world,
     presentedWorld,
@@ -698,8 +695,12 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
   };
 
   useEffect(() => {
-    // A failed or timed-out aggregate observation cannot prove a tab closed.
-    // The focused connection lease still retires windows on host/generation change.
+    // Only a fresh catalogue and qualified focused list can prove removal.
+    if (
+      !operationalSnapshot.catalogueReady ||
+      operationalSnapshot.status !== "connected"
+    )
+      return;
     let changed = false;
     const retained = inspectorConversations.flatMap((conversation) => {
       const current = worldNodeForInspectorConversation(
@@ -713,9 +714,9 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
       const owner = operationalSnapshot.connections.find(
         (connection) => connection.id === conversation.connectionId,
       );
-      // The World projection is bounded and can omit an open tab. Only the
-      // focused Herdr list can confirm that its tab or workspace is gone.
+      // Only the focused list can prove removal from the bounded projection.
       const focusedListIsCurrent =
+        owner?.state === "ready" &&
         focusedTopology.status === "connected" &&
         focusedTopology.lastTopologyObservationStartedAt >
           (conversation.focusedListAdmissionAt ?? 0) &&
@@ -732,7 +733,6 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
           );
       if (
         owner?.generation !== conversation.runtimeGeneration ||
-        owner.state !== "ready" ||
         (focusedListIsCurrent && !stillOpen)
       ) {
         changed = true;
@@ -812,13 +812,10 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
     intentRequestRef,
     operationalSnapshot,
     aggregateWorld,
-    hasSelectedConnection,
     inspectorConversations,
     onDockedInspectorIdChange,
     onInspectorConversationsChange,
     onInspectorTerminalPortal,
-    selectedWorldObservationActionable,
-    selectedWorldConnection,
     selection,
     world,
   ]);

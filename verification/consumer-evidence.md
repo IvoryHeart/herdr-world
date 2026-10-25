@@ -194,3 +194,26 @@ boundary is directly exercised with controlled clock/deferred responses rather
 than a new model that duplicates those external-format rules. It proves no
 complete GitHub history, network liveness, or operation rollback after native
 dispatch; full behavioral verification and browser/CI acceptance still apply.
+
+
+### Mobile transport presentation (Q06, Q07, Q08, Q16, Q43)
+
+A transport epoch retires operational authority without retiring a same-runtime
+presentation. Fresh catalogue admission governs owner removal and generation
+replacement; a newly completed qualified focused list governs resource absence.
+No terminal input or uncertain mutation is replayed, and the no-frame watchdog
+has no automatic navigation action.
+
+`WorldTerminalHandoff.test.ts` exercises the production React tree through
+incomplete catalogue, unavailable owner and reconnect sequences, retaining
+Inspector and split-renderer identities, and retiring only a replaced host.
+`mobileTerminal.test.ts` checks last-frame retention, retired push callbacks,
+one listener set after reconnect, input suppression, three no-frame failures
+and explicit local retry at both phone widths. `WorldInspectorWorktree.test.ts`
+preserves cached previews through an outage while still fencing same-path
+worktree replacement. Layout, endpoint-presentation and recovery unit tests
+cover exact geometry owners, stale parser completion and bounded retry budgets.
+These direct browser and consumer checks are needed for DOM lifetime and event
+timing; the existing ownership models and their mandatory consumers remain
+binding. Real OS page discard, every mobile scheduler and cross-reload UI
+restoration remain outside this evidence.

@@ -310,7 +310,8 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
             );
         }}
       />
-      {connectionSelection.connections.length === 0 ? (
+      {connectionSelection.connections.length === 0 &&
+      inspectorConversations.length === 0 ? (
         <WorldConnectionRequired status={connectionSelection.status} />
       ) : (
         <div

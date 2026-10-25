@@ -1691,3 +1691,18 @@ test("observation reconciliation preserves concurrently admitted and explicitly 
   ]);
   expect(reconcileObservedInspectors([old, added], [old], [])).toEqual([added]);
 });
+
+test("presentation retention follows exact catalogue owners regardless of host readiness", () => {
+  const alpha = { ...inspectorConversation(1), connectionId: "alpha" };
+  const beta = { ...inspectorConversation(2), connectionId: "beta" };
+  const owners = [
+    { connectionId: "alpha", runtimeGeneration: 4, state: "failed" },
+    { connectionId: "beta", runtimeGeneration: 4, state: "ready" },
+  ];
+  const retained = retainWorldInspectorConversations([alpha, beta], owners);
+  expect(retained[0]).toBe(alpha);
+  expect(retained[1]).toBe(beta);
+  expect(retainWorldInspectorConversations(retained, owners.slice(1))).toEqual([
+    beta,
+  ]);
+});

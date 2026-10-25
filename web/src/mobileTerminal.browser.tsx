@@ -1,4 +1,5 @@
 import { Terminal } from "@xterm/xterm";
+import { TerminalAttachFrameWatchdog } from "./terminalResize";
 import {
   terminalSelectedText,
   TERMINAL_LONG_PRESS_MS,
@@ -28,6 +29,16 @@ import "./styles/tokens.css";
 import "./styles/base.css";
 import "./styles/layout/app.css";
 
+let captureWatchdog = false;
+const watchdogTimeouts: (() => void)[] = [];
+const originalArm = TerminalAttachFrameWatchdog.prototype.arm;
+TerminalAttachFrameWatchdog.prototype.arm = function (attempt, ms, timeout) {
+  if (!captureWatchdog) return originalArm.call(this, attempt, ms, timeout);
+  watchdogTimeouts.push(() => {
+    if (this.isCurrent(attempt)) timeout();
+  });
+  return true;
+};
 let holdParser = false;
 const parserCallbacks: (() => void)[] = [];
 const originalWrite = Terminal.prototype.write;
@@ -148,7 +159,7 @@ const frame = (text: string, mouse: boolean | null = true) => {
   for (const listener of listeners)
     listener({
       connection_id: client.connectionId,
-      connection_generation: store.get().connectionGeneration,
+      connection_generation: store.get().serverRuntimeGeneration ?? undefined,
       terminal_id: store.get().panes[0].terminal_id,
       bytes,
       full: true,
@@ -311,6 +322,134 @@ const api = {
   },
   async ready() {
     await settle();
+    frame("\x1b[2J\x1b[Hretained through browser disconnect", false);
+    await settle();
+    const retainedXterm = document.querySelector(".xterm");
+    const retainedTextarea = textarea();
+    const retiredListeners = [...listeners];
+    const oldClient = client;
+    const inputsBeforeDisconnect = inputCalls().length;
+    client = { ...oldClient, generation: 2, isCurrent: () => false };
+    oldClient.isCurrent = () => false;
+    flushSync(() =>
+      __storeTesting.replaceState({
+        ...store.get(),
+        status: "disconnected",
+        catalogueReady: false,
+        connectionGeneration: 2,
+        endpointAvailability: {},
+      }),
+    );
+    await settle();
+    check(
+      document.querySelector(".xterm") === retainedXterm,
+      "transport disconnect retains the same xterm renderer",
+    );
+    check(
+      displayedText().includes("retained through browser disconnect"),
+      "transport disconnect retains the last terminal frame",
+    );
+    key();
+    check(
+      inputCalls().length === inputsBeforeDisconnect,
+      "offline terminal cannot dispatch input",
+    );
+    client = { ...client, generation: 3, isCurrent: () => true };
+    flushSync(() =>
+      __storeTesting.replaceState({
+        ...store.get(),
+        status: "connected",
+        catalogueReady: true,
+        connectionGeneration: 3,
+        terminalAttachEpoch: store.get().terminalAttachEpoch + 1,
+      }),
+    );
+    await settle();
+    check(
+      textarea() === retainedTextarea,
+      "reconnect retains the same input element",
+    );
+    check(
+      listeners.size === 1 && closedListeners.size === 1,
+      "reconnect installs one set of transport listeners",
+    );
+    for (const listener of retiredListeners)
+      listener({
+        connection_id: client.connectionId,
+        connection_generation: 1,
+        terminal_id: pane.terminal_id,
+        bytes: btoa("retired frame"),
+        full: true,
+        width: cols,
+        height: rows,
+        mouse_reporting: false,
+      });
+    await settle();
+    check(
+      !displayedText().includes("retired frame"),
+      "retired push callback stays inert",
+    );
+    frame("\x1b[2J\x1b[Hfresh resumed frame", false);
+    await settle();
+    check(
+      displayedText().includes("fresh resumed frame"),
+      "fresh client resumes output",
+    );
+    check(
+      inputCalls().length === inputsBeforeDisconnect,
+      "reconnect never replays input",
+    );
+    const recoveryUrl = location.href;
+    document.dispatchEvent(new Event("visibilitychange"));
+    captureWatchdog = true;
+    for (const listener of closedListeners)
+      listener({
+        connection_id: client.connectionId,
+        connection_generation: 1,
+        terminal_id: pane.terminal_id,
+        reason: "terminal_configuration_changed",
+      });
+    for (let failure = 0; failure < 3; failure++) {
+      await settle();
+      const timeout = watchdogTimeouts.shift();
+      check(!!timeout, `no-frame watchdog attempt ${failure + 1} is armed`);
+      timeout?.();
+    }
+    await settle();
+    check(
+      location.href === recoveryUrl && textarea() === retainedTextarea,
+      "three no-frame failures keep the app and renderer running",
+    );
+    check(
+      document
+        .querySelector('[role="alert"]')
+        ?.textContent?.includes("Terminal is not receiving output") === true,
+      "exhausted attach budget shows local recovery",
+    );
+    const retry = [
+      ...document.querySelectorAll<HTMLButtonElement>("button"),
+    ].find((button) => button.textContent === "Retry terminal");
+    const reload = [
+      ...document.querySelectorAll<HTMLButtonElement>("button"),
+    ].find((button) => button.textContent === "Reload app");
+    check(
+      !!retry && !!reload,
+      "recovery offers Retry terminal and explicit Reload app",
+    );
+    retry?.click();
+    await settle();
+    check(
+      watchdogTimeouts.length === 1,
+      "local retry starts a fresh attach budget",
+    );
+    frame("\x1b[2J\x1b[Hrecovered locally", false);
+    await settle();
+    check(
+      !document.querySelector('[role="alert"]'),
+      "fresh frame clears recovery error",
+    );
+    captureWatchdog = false;
+    watchdogTimeouts.length = 0;
     const attachesBefore = calls.filter(
       (call) => call.method === "terminal.attach",
     ).length;

@@ -163,10 +163,12 @@ function InspectorResources({
     baseConnectionClient,
     "world-inspector",
   );
-  const { workspaces, panes } = useStoreSelector(
+  const { workspaces, panes, status, catalogueReady } = useStoreSelector(
     (snapshot) => ({
       workspaces: snapshot.workspaces,
       panes: snapshot.panes,
+      status: snapshot.status,
+      catalogueReady: snapshot.catalogueReady,
     }),
     shallowEqual,
   );
@@ -193,7 +195,7 @@ function InspectorResources({
   const scope = useMemo(
     () =>
       workspace
-        ? worktree.view?.target && worktree.view.selected
+        ? worktree.view?.selected
           ? {
               kind: "worktree" as const,
               connectionId: conversation.connectionId,
@@ -207,12 +209,7 @@ function InspectorResources({
             }
           : resourceScopeForWorkspace(conversation.connectionId, workspace)
         : null,
-    [
-      conversation.connectionId,
-      workspace,
-      worktree.view?.selected,
-      worktree.view?.target,
-    ],
+    [conversation.connectionId, workspace, worktree.view?.selected],
   );
   const [fileSelection, setFileSelection] =
     useState<ActiveFilePreviewSelection>(emptyFile);
@@ -225,9 +222,15 @@ function InspectorResources({
     },
     [],
   );
+  const resourceClientKey = connectionClientScopeKey(connectionClient);
+  const retainedResourceClientKey = useRef(resourceClientKey);
+  // An absent binding during transport recovery cannot replace the displayed resource.
+  if (connectionClient.agentWorktree !== null)
+    retainedResourceClientKey.current = resourceClientKey;
   const resourceKey = JSON.stringify([
     scope ? resourceStateKey(scope) : null,
-    connectionClientScopeKey(connectionClient),
+    retainedResourceClientKey.current,
+    conversation.resourceIdentity,
   ]);
   const resourceBinding = useMemo(() => Symbol(resourceKey), [resourceKey]);
   const resourceBindingRef = useRef(resourceBinding);
@@ -499,6 +502,10 @@ function InspectorResources({
     openAnnotation(annotation);
   };
 
+  const presentationStale =
+    status !== "connected" ||
+    !catalogueReady ||
+    !baseConnectionClient.isCurrent();
   const content = (
     <div
       tabIndex={
@@ -516,7 +523,15 @@ function InspectorResources({
       }
     >
       <ResourceConnectionClientContext.Provider value={connectionClient}>
-        <div className="workspace-inspector-slot">
+        <div
+          className="workspace-inspector-slot"
+          data-stale={presentationStale || undefined}
+        >
+          {presentationStale ? (
+            <div className="world-inspector-stale" role="status">
+              Disconnected · Showing last observation
+            </div>
+          ) : null}
           <Suspense fallback={null}>
             <WorkspaceInspectorHost
               state={inspectorState}
@@ -613,6 +628,7 @@ function InspectorResources({
                   : conversation.context
               }
               agentWorktree={worktree.view}
+              presentationStale={presentationStale}
             />
           </Suspense>
         </div>

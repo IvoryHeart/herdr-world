@@ -1,4 +1,4 @@
-import { useId, type ReactNode } from "react";
+import { useId, useRef, type ReactNode } from "react";
 import {
   Activity,
   FileText,
@@ -143,14 +143,19 @@ export function AgentWorktreePicker({ view }: { view: AgentWorktreeView }) {
 
 export function AgentWorktreeGate({
   view,
+  retainPresentation = false,
   onChoose,
   children,
 }: {
   view?: AgentWorktreeView;
   onChoose(): void;
   children: ReactNode;
+  retainPresentation?: boolean;
 }) {
-  if (!view || view.target) return <>{children}</>;
+  const admitted = useRef(false);
+  if (view?.target) admitted.current = true;
+  if (!view || view.target || (retainPresentation && admitted.current))
+    return <>{children}</>;
   return (
     <div className="workspace-inspector-unavailable" role="status">
       <strong>

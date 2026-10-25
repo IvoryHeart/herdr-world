@@ -254,7 +254,9 @@
       "existingTests": [
         "web/src/api.test.ts",
         "web/src/terminalRecovery.test.ts",
-        "web/src/reconnectRetry.test.ts"
+        "web/src/reconnectRetry.test.ts",
+        "web/src/world/WorldTerminalHandoff.test.ts",
+        "web/src/mobileTerminal.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/145",
       "technique": "qualified-operation",
@@ -295,7 +297,8 @@
         "web/src/terminalTouchSelection.test.ts",
         "web/src/terminalClipboard.test.ts",
         "server/src/bridge/frame-to-ansi.test.ts",
-        "web/src/endpointFrame.test.ts"
+        "web/src/endpointFrame.test.ts",
+        "web/src/mobileTerminal.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
       "technique": "alternative",

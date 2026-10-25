@@ -33,7 +33,7 @@ import {
 } from "./inspectorTerminalHandoff";
 import { CREATED_PANE_ADMISSION_TIMEOUT_MS } from "./officeRoomActions";
 import { worldRuntimeStore } from "./runtimeStore";
-import { worldObjectId } from "./worldObject";
+import { buildWorldObject, worldObjectId } from "./worldObject";
 import WorldFoundationApp from "./WorldFoundationApp";
 import { worldInspectorWindowId } from "./worldTerminalPresentation";
 import type { BoardDocument, BoardOp } from "./board/boardDocument";
@@ -170,6 +170,8 @@ let focusedTabId = tabs[0]!.tab_id;
 const rememberedTabPanes = new Map<string, string>();
 let worldRevision = 1;
 let runtimeGeneration = 7;
+let includeSecondHost = false;
+let secondHostGeneration = 3;
 let rejectNextWorldSnapshot = false;
 let ambiguousAgentWorktrees = false;
 let staleNextWorldSnapshot = false;
@@ -292,7 +294,7 @@ function currentWorldCoverage() {
   };
 }
 
-const client: ConnectionClient = {
+let client: ConnectionClient = {
   connectionId: "local",
   generation: 1,
   serverRuntimeGeneration: 7,
@@ -331,7 +333,7 @@ const client: ConnectionClient = {
       staleNextWorldSnapshot = false;
       const omitTopology = omitNextWorldTopology;
       omitNextWorldTopology = false;
-      return {
+      const observation = {
         revision: worldRevision,
         observed_at: Date.now(),
         connections: [
@@ -355,6 +357,16 @@ const client: ConnectionClient = {
           },
         ],
       };
+      if (includeSecondHost)
+        observation.connections.push({
+          ...observation.connections[0]!,
+          connection_id: "beta",
+          label: "Beta",
+          is_default: false,
+          generation: secondHostGeneration,
+          snapshot_generation: secondHostGeneration,
+        });
+      return observation;
     }
     if (method === "pane.get") {
       const paneId = String(params.pane_id ?? "");
@@ -698,6 +710,7 @@ async function run() {
   __storeTesting.replaceState({
     ...store.get(),
     status: "connected",
+    catalogueReady: true,
     activeConnectionId: client.connectionId,
     defaultConnectionId: client.connectionId,
     connectionGeneration: client.generation,
@@ -4188,6 +4201,104 @@ async function run() {
     () => splitBuilderWindow.querySelectorAll(".pane-layout-cell").length === 2,
     "both panes in one floating Builder Inspector",
   );
+  await until(
+    () => splitBuilderWindow.querySelectorAll(".xterm").length === 2,
+    "both split renderers before disconnect",
+  );
+  const retainedWindows = [
+    ...document.querySelectorAll(".world-managed-window .workspace-inspector"),
+  ];
+  const retainedRenderers = [...splitBuilderWindow.querySelectorAll(".xterm")];
+  const retainedCells = [
+    ...splitBuilderWindow.querySelectorAll<HTMLElement>(".pane-layout-cell"),
+  ];
+  const retainedRects = retainedCells.map((cell) => cell.getAttribute("style"));
+  const beforeOutage = store.get();
+  const outageUrl = location.href;
+  const inputsBeforeOutage = calls.filter((call) =>
+    ["terminal.input", "pane.send_input"].includes(call.method),
+  ).length;
+  client.isCurrent = () => false;
+  flushSync(() =>
+    __storeTesting.replaceState({
+      ...store.get(),
+      status: "disconnected",
+      catalogueReady: false,
+      connectionGeneration: 2,
+      lastTopologyObservationStartedAt: 0,
+      endpointAvailability: {},
+      connections: [],
+    }),
+  );
+  await settle();
+  check(
+    retainedWindows.every((window) => window.isConnected),
+    "browser outage closed a retained Inspector",
+  );
+  check(
+    retainedRenderers.length === 2 &&
+      retainedRenderers.every((renderer) => renderer.isConnected),
+    "browser outage replaced a split terminal renderer",
+  );
+  check(
+    retainedCells.every(
+      (cell, index) =>
+        cell.isConnected && cell.getAttribute("style") === retainedRects[index],
+    ),
+    "browser outage changed split geometry",
+  );
+  check(
+    !!splitBuilderWindow.querySelector('[data-stale="true"]'),
+    "offline Inspector lacks a stale indicator",
+  );
+  flushSync(() =>
+    __storeTesting.replaceState({ ...store.get(), status: "connected" }),
+  );
+  await settle();
+  check(
+    retainedWindows.every((window) => window.isConnected),
+    "socket-open before catalogue closed an Inspector",
+  );
+  flushSync(() =>
+    __storeTesting.replaceState({
+      ...store.get(),
+      catalogueReady: true,
+      connections: beforeOutage.connections.map((owner) => ({
+        ...owner,
+        state: "error",
+      })),
+    }),
+  );
+  await settle();
+  check(
+    retainedRenderers.every((renderer) => renderer.isConnected),
+    "same-generation unavailable owner destroyed its renderer",
+  );
+  const retiredClient = client;
+  client = { ...retiredClient, generation: 3, isCurrent: () => true };
+  flushSync(() =>
+    __storeTesting.replaceState({
+      ...store.get(),
+      connections: beforeOutage.connections,
+      terminalAttachEpoch: beforeOutage.terminalAttachEpoch + 1,
+    }),
+  );
+  await settle();
+  check(
+    retainedRenderers.every((renderer) => renderer.isConnected),
+    "same-runtime reconnect replaced a renderer",
+  );
+  check(
+    retainedWindows.every((window) => window.isConnected),
+    "same-runtime reconnect replaced an Inspector",
+  );
+  check(location.href === outageUrl, "browser outage navigated the app");
+  check(
+    calls.filter((call) =>
+      ["terminal.input", "pane.send_input"].includes(call.method),
+    ).length === inputsBeforeOutage,
+    "reconnect replayed terminal input",
+  );
   check(
     !worldRuntimeStore
       .get()
@@ -5285,6 +5396,128 @@ async function run() {
         .length === 1,
     "opening the readable sibling replaced or duplicated its tab window",
   );
+
+  // Two real World Inspector owners may use the same native resource IDs.
+  includeSecondHost = true;
+  const alphaClient = client;
+  let betaClient: ConnectionClient = {
+    ...alphaClient,
+    connectionId: "beta",
+    serverRuntimeGeneration: secondHostGeneration,
+    acceptsServerGeneration: (value) => value === secondHostGeneration,
+    call: async (method, params) => {
+      const result = await alphaClient.call(method, params);
+      return method === "agent_worktree.get" ? undefined : result;
+    },
+  };
+  bridge.connection = (connectionId) =>
+    connectionId === "beta" ? betaClient : client;
+  const alphaOwners = store.get().connections;
+  __storeTesting.applyCatalog(
+    [
+      ...alphaOwners,
+      {
+        id: "beta",
+        label: "Beta",
+        source: "test",
+        is_default: false,
+        state: "ready",
+        generation: secondHostGeneration,
+      },
+    ],
+    "local",
+  );
+  await worldRuntimeStore.refresh();
+  const betaNode = buildWorldObject(
+    worldRuntimeStore.get().connections,
+    "local",
+  ).leaves.find(
+    (node) =>
+      node.connectionId === "beta" && node.nativeId === reuseAgent.pane_id,
+  )!;
+  const betaTarget = () =>
+    [
+      ...document.querySelectorAll<HTMLElement>("[data-world-node-anchor]"),
+    ].find(
+      (element) =>
+        element.getAttribute("data-world-node-anchor") === betaNode.id,
+    );
+  await until(betaTarget, "second host's qualified Board target");
+  betaTarget()!.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+  await until(
+    () =>
+      document.querySelectorAll(".world-managed-window .workspace-inspector")
+        .length === 2,
+    "same-ID resources on two independent host Inspectors",
+  );
+  const betaWindow = [
+    ...document.querySelectorAll<HTMLElement>(".world-managed-window"),
+  ].find(
+    (window) =>
+      window !== reuseWindow && window.querySelector(".workspace-inspector"),
+  )!;
+  betaWindow
+    .querySelector<HTMLButtonElement>('[role="tab"][aria-label="Terminal"]')!
+    .click();
+  await until(
+    () => betaWindow.querySelector(".xterm"),
+    "second host terminal renderer",
+  );
+  const betaRenderer = betaWindow.querySelector(".xterm");
+  client.isCurrent = () => false;
+  betaClient.isCurrent = () => false;
+  flushSync(() =>
+    __storeTesting.replaceState({
+      ...store.get(),
+      status: "disconnected",
+      catalogueReady: false,
+      lastTopologyObservationStartedAt: 0,
+    }),
+  );
+  await settle();
+  check(
+    reuseWindow.isConnected &&
+      betaWindow.isConnected &&
+      betaRenderer?.isConnected === true,
+    "transport disconnect retired one of two independent host presentations",
+  );
+  client = { ...client, generation: 4, isCurrent: () => true };
+  betaClient = { ...betaClient, generation: 4, isCurrent: () => true };
+  flushSync(() =>
+    __storeTesting.replaceState({
+      ...store.get(),
+      status: "connected",
+      catalogueReady: true,
+      terminalAttachEpoch: store.get().terminalAttachEpoch + 1,
+    }),
+  );
+  await settle();
+  check(
+    reuseWindow.isConnected && betaRenderer?.isConnected === true,
+    "same-runtime reconnect replaced a cross-host presentation",
+  );
+  secondHostGeneration += 1;
+  __storeTesting.applyCatalog(
+    store.get().connections.map((owner) =>
+      owner.id === "beta"
+        ? {
+            ...owner,
+            generation: secondHostGeneration,
+          }
+        : owner,
+    ),
+    "local",
+  );
+  worldRevision += 1;
+  await worldRuntimeStore.refresh();
+  await until(() => !betaWindow.isConnected, "only the replaced host retires");
+  check(
+    reuseWindow.isConnected,
+    "replacing Beta also retired Alpha's Inspector",
+  );
+  includeSecondHost = false;
+  __storeTesting.applyCatalog(alphaOwners, "local");
+  await worldRuntimeStore.refresh();
 
   runtimeGeneration += 1;
   worldRevision += 1;
