@@ -39,8 +39,11 @@ the preceding valid response. Observations after damage stay ineligible for
 estimates until the next valid prompt, including observations in the same
 millisecond. Explicit gap evidence clips or removes affected cached estimates
 even during global ingestion; unrelated windows and measured token observations
-remain intact. Child damage enters the incomplete-session count without turning
-child prompts into parent assignments. Codex accounting validation remains strict.
+remain intact. Log order and the originating prompt preserve response ownership
+when a recovery prompt shares the preceding response's timestamp; replaying that
+gap does not truncate the recovered estimate. Child damage enters the
+incomplete-session count without turning child prompts into parent assignments.
+Codex accounting validation remains strict.
 Unrelated damaged sessions do not affect the public comment. An unreadable
 explicitly requested session fails the refresh. The tool never edits a harness log.
 

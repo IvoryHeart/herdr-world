@@ -77,6 +77,18 @@ export function clipEstimates(
       for (const gap of session.gaps ?? []) {
         const from = Date.parse(gap.from),
           until = gap.until ? Date.parse(gap.until) : Infinity;
+        const matchesPrompt = (at?: string, prs?: number[]) =>
+          at !== undefined &&
+          start === Date.parse(at) &&
+          prs?.length === 1 &&
+          prs[0] === window.pr;
+        // Log order establishes which side of a gap a tied prompt belongs to.
+        // The recovery window must survive later replays of this same gap.
+        if (matchesPrompt(gap.resumedFrom, gap.resumedPrs)) continue;
+        if (matchesPrompt(gap.priorFrom, gap.priorPrs)) {
+          end = Math.min(end, from);
+          continue;
+        }
         if (until <= from || start >= until || end <= from) continue;
         if (start >= from) return [];
         end = Math.min(end, from);
@@ -106,6 +118,11 @@ export function attribute(events: UsageEvent[], windows: Window[]): Row[] {
         w.session === event.session &&
         w.seat === event.seat &&
         !(w.source === "estimate" && event.estimateBlocked) &&
+        (w.source !== "estimate" ||
+          event.estimateFrom === undefined ||
+          (Date.parse(w.from) === Date.parse(event.estimateFrom) &&
+            event.estimatePrs?.length === 1 &&
+            event.estimatePrs[0] === w.pr)) &&
         at >= Date.parse(w.from) &&
         at < Date.parse(w.until),
     );

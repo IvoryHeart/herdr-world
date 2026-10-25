@@ -37,9 +37,18 @@ export type UsageEvent = Tokens & {
   replaces?: string[];
   dedicatedFrom?: string;
   estimateBlocked?: boolean;
+  estimateFrom?: string;
+  estimatePrs?: number[];
 };
 export type Turn = { at: string; text: string };
-export type UsageGap = { from: string; until?: string };
+export type UsageGap = {
+  from: string;
+  until?: string;
+  priorFrom?: string;
+  priorPrs?: number[];
+  resumedFrom?: string;
+  resumedPrs?: number[];
+};
 export type ParsedSession = {
   events: UsageEvent[];
   turns: Turn[];
@@ -228,6 +237,11 @@ export async function resolveLogs(
               resolved,
               await readFile(childPath, "utf8"),
             );
+            // Child prompts do not establish the parent seat's assignment.
+            for (const event of childParsed.events) {
+              delete event.estimateFrom;
+              delete event.estimatePrs;
+            }
             parsed.events.push(...childParsed.events);
             parsed.incompleteRecords += childParsed.incompleteRecords;
           }

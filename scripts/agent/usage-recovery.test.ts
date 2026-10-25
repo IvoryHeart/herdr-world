@@ -171,6 +171,7 @@ test("semantic damage in a Claude child preserves the parent and sibling observa
     await Bun.write(
       join(root, seat.session, "subagents", "agent-example.jsonl"),
       encode(
+        user(start, "Delegate #8"),
         assistant(before, "child-before"),
         {
           type: "assistant",
@@ -184,6 +185,12 @@ test("semantic damage in a Claude child preserves the parent and sibling observa
     expect(loaded?.parsed.events).toHaveLength(3);
     expect(loaded?.parsed.incompleteRecords).toBe(1);
     expect(loaded?.parsed.gaps).toEqual([]);
+    const rows = attribute(
+      loaded!.parsed.events,
+      inferredWindows(seat, loaded!.parsed.turns, 7, [], now),
+    );
+    expect(rows.find((r) => r.pr === 7)?.responses).toBe(2);
+    expect(rows.find((r) => r.pr === null)?.responses).toBe(1);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -231,6 +238,99 @@ test("PR relevance remains available when a damaged session later becomes unread
       ),
     ).toBe(1);
     expect(retained[0]?.claimedPrs).toEqual([7]);
+  } finally {
+    store.close();
+  }
+});
+
+test("same-millisecond recovery preserves the preceding owner and resumes the requested PR", () => {
+  for (const target of [7, 8]) {
+    const parsed = parseSession(
+      seat,
+      encode(
+        user(start),
+        assistant(before, "before"),
+        "{broken}",
+        assistant(before, "unknown"),
+        user(before, `Coordinate #${target}`),
+        assistant("2026-10-25T10:01:00.002Z", "resumed"),
+      ),
+    );
+    expect(Date.parse(parsed.gaps[0]!.until!)).toBeGreaterThanOrEqual(
+      Date.parse(parsed.gaps[0]!.from),
+    );
+    const windows = [
+      ...inferredWindows(seat, parsed.turns, 7, [], now),
+      ...(target === 8 ? inferredWindows(seat, parsed.turns, 8, [], now) : []),
+    ];
+    const rows = attribute(parsed.events, windows);
+    expect(
+      rows.filter((r) => r.pr === 7).reduce((n, r) => n + r.responses, 0),
+    ).toBe(target === 7 ? 2 : 1);
+    expect(
+      rows.filter((r) => r.pr === null).reduce((n, r) => n + r.responses, 0),
+    ).toBe(1);
+    if (target === 8) expect(rows.find((r) => r.pr === 8)?.responses).toBe(1);
+  }
+});
+
+test("global gap replay preserves a cached same-millisecond recovery window", () => {
+  const store = new UsageStore(":memory:");
+  try {
+    const first = parseSession(
+      seat,
+      encode(user(start), assistant(before, "before"), "{broken"),
+    );
+    store.refresh(
+      7,
+      [{ seat, events: first.events, gaps: first.gaps }],
+      inferredWindows(seat, first.turns, 7, [], now),
+      0,
+    );
+    const parsed = parseSession(
+      seat,
+      encode(
+        user(start),
+        assistant(before, "before"),
+        "{broken}",
+        assistant(before, "unknown"),
+        user(before, "Coordinate #8"),
+        assistant(after, "resumed"),
+      ),
+    );
+    const loaded = [{ seat, events: parsed.events, gaps: parsed.gaps }];
+    store.refresh(null, loaded, [], 0);
+    store.refresh(
+      8,
+      loaded,
+      inferredWindows(seat, parsed.turns, 8, [], now),
+      1,
+    );
+    store.refresh(null, loaded, [], 0);
+    const shortened = parseSession(
+      seat,
+      encode(
+        assistant(before, "before"),
+        assistant(before, "unknown"),
+        assistant(after, "resumed"),
+      ),
+    );
+    store.refresh(null, [{ seat, events: shortened.events }], [], 0);
+    expect(store.windows(7)[0]?.until).toBe("2026-10-25T10:01:00.001Z");
+    expect(store.windows(8)[0]?.until).toBe(now);
+    expect(
+      store
+        .rows()
+        .filter((r) => r.pr === 7)
+        .reduce((n, r) => n + r.responses, 0),
+    ).toBe(1);
+    expect(store.rows().find((r) => r.pr === 8)?.responses).toBe(1);
+    expect(
+      store
+        .rows()
+        .filter((r) => r.pr === null)
+        .reduce((n, r) => n + r.responses, 0),
+    ).toBe(1);
   } finally {
     store.close();
   }

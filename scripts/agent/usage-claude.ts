@@ -29,6 +29,7 @@ export function parseClaudeSession(seat: Seat, lines: string): ParsedSession {
   let lastKnown: string | undefined, openGap: UsageGap | undefined;
   let model = "unknown",
     effort = "unknown";
+  let estimateFrom: string | undefined, estimatePrs: number[] | undefined;
   const remember = (at: string) => {
     if (!lastKnown || at > lastKnown) lastKnown = at;
   };
@@ -36,10 +37,16 @@ export function parseClaudeSession(seat: Seat, lines: string): ParsedSession {
     incompleteRecords++;
     estimateBlocked = true;
     if (!openGap && lastKnown) {
-      openGap = { from: new Date(Date.parse(lastKnown) + 1).toISOString() };
+      openGap = {
+        from: new Date(Date.parse(lastKnown) + 1).toISOString(),
+        priorFrom: estimateFrom,
+        priorPrs: estimatePrs,
+      };
       gaps.push(openGap);
       turns.push({ at: openGap.from, text: "" });
     }
+    estimateFrom = undefined;
+    estimatePrs = undefined;
   };
   for (const record of decodeRecords(lines, "claude")) {
     if (record === null) {
@@ -58,7 +65,8 @@ export function parseClaudeSession(seat: Seat, lines: string): ParsedSession {
     const message = record.message;
     if (record.type === "user" && !record.isMeta) {
       const text = textContent(message?.content);
-      for (const pr of prMentions(text)) claimedPrs.add(pr);
+      const prs = prMentions(text);
+      for (const pr of prs) claimedPrs.add(pr);
       try {
         if (
           !message ||
@@ -77,9 +85,17 @@ export function parseClaudeSession(seat: Seat, lines: string): ParsedSession {
           throw new Error("Invalid Claude prompt text");
         const at = isoTimestamp(record.timestamp);
         if (text) {
-          if (openGap) openGap.until = at;
+          if (openGap) {
+            openGap.until = new Date(
+              Math.max(Date.parse(openGap.from), Date.parse(at)),
+            ).toISOString();
+            openGap.resumedFrom = at;
+            openGap.resumedPrs = prs;
+          }
           openGap = undefined;
           estimateBlocked = false;
+          estimateFrom = at;
+          estimatePrs = prs;
           turns.push({ at, text });
         }
         remember(at);
@@ -118,6 +134,7 @@ export function parseClaudeSession(seat: Seat, lines: string): ParsedSession {
           output: count(usage.output_tokens),
           responses: 1,
           estimateBlocked,
+          ...(estimateFrom !== undefined ? { estimateFrom, estimatePrs } : {}),
         };
         if (typeof event.model !== "string" || typeof event.effort !== "string")
           throw new Error("Invalid Claude usage metadata");
@@ -133,6 +150,8 @@ export function parseClaudeSession(seat: Seat, lines: string): ParsedSession {
           if (event.at < previous.at) {
             previous.at = event.at;
             previous.estimateBlocked = event.estimateBlocked;
+            previous.estimateFrom = event.estimateFrom;
+            previous.estimatePrs = event.estimatePrs;
           }
           if (event.model !== "unknown") previous.model = event.model;
         } else events.set(event.id, event);
@@ -152,7 +171,7 @@ export function parseClaudeSession(seat: Seat, lines: string): ParsedSession {
   }
   return {
     events: reconcileEvents([...events.values()]),
-    turns: turns.sort((a, b) => a.at.localeCompare(b.at)),
+    turns,
     incompleteRecords,
     gaps,
     claimedPrs: [...claimedPrs],
