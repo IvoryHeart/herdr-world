@@ -930,11 +930,7 @@ export function TerminalComposer({
             onMouseDown={keepTextareaFocus}
             onClick={browseCommands}
           >
-            {surface === "chat" ? (
-              <span aria-hidden="true">/</span>
-            ) : (
-              <SquareTerminal size={17} aria-hidden="true" />
-            )}
+            <span aria-hidden="true">/</span>
           </button>
           {surface === "chat" ? (
             <ChatComposerTools

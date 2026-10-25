@@ -66,14 +66,6 @@
     order: 3;
   }
 
-  .terminal-composer[data-expanded] > .terminal-mobile-input-bar {
-    padding-right: 0;
-  }
-
-  .terminal-composer[data-expanded] .terminal-mobile-direct {
-    display: none;
-  }
-
   .terminal-composer-submit-actions {
     display: flex;
     flex: 1 1 auto;

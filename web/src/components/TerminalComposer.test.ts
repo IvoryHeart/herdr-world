@@ -1,5 +1,5 @@
 import { expect, mock, spyOn, test } from "bun:test";
-import { Keyboard, SquareTerminal } from "lucide-react";
+import { Keyboard } from "lucide-react";
 import * as React from "react";
 import * as ReactDOM from "react-dom";
 import * as drafts from "../terminalComposer";
@@ -309,7 +309,7 @@ test.each(["claude", "grok-build", "agy"])(
       expect(shortcutPanel().props.hidden).toBe(false);
       expect(writeStorage).not.toHaveBeenCalled();
       expect(commands().props["aria-label"]).toBe("Commands");
-      expect((commands().props.children as Element).type).toBe(SquareTerminal);
+      expect((commands().props.children as Element).props.children).toBe("/");
       const textarea = nodes.get(
         "terminal-composer-input terminal-mobile-message",
       )!;

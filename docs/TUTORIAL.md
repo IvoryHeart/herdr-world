@@ -723,7 +723,10 @@ Use its HTTPS URL: `127.0.0.1` on a phone means the phone, not the work computer
 1. Open Herdr World in the mobile browser and select your practice project and
    agent pane. Authenticate first if your deployment requires login.
 2. Tap **Message** below the terminal to raise the keyboard and compose; use
-   **Direct** to type straight into the terminal. The input stays below the output.
+   **Direct** (the terminal icon at the right of Message) to type straight into
+   the terminal. Direct stays available while a long draft is expanded and keeps
+   that draft intact. **/ Commands** opens command suggestions for the draft;
+   it does not turn on Direct. The input stays below the output.
    Tabs and More live in the shared top app bar. Use the shortcut rows for arrow
    keys, Ctrl and other actions that are awkward on a touch keyboard.
 3. Open Changes to review the README diff. Mobile uses a unified diff layout;

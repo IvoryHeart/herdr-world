@@ -137,6 +137,86 @@ async function run() {
       ),
     );
   try {
+    if (window.innerWidth < 640) {
+      rememberTerminalInputMode("composer");
+      render(true);
+      await boundary();
+      const draftKey = terminalComposerDraftKey(
+        client.connectionId,
+        1,
+        "pane-a",
+      );
+      writeTerminalComposerDraft(draftKey, "preserved draft\nsecond line");
+      await boundary();
+      const editor = host.querySelector<HTMLTextAreaElement>(
+        ".terminal-composer-input",
+      );
+      const direct = host.querySelector<HTMLButtonElement>(
+        ".terminal-mobile-direct",
+      );
+      check(editor && direct, "Direct controls missing");
+      await click(editor);
+      await boundary();
+      check(
+        host.querySelector(".terminal-composer[data-expanded]"),
+        "Long draft did not expand composer",
+      );
+      check(
+        getComputedStyle(direct).display !== "none" &&
+          direct.getBoundingClientRect().width > 0,
+        "Expanded Message draft hides Direct terminal control",
+      );
+      await click(direct);
+      check(
+        document.activeElement?.classList.contains("xterm-helper-textarea"),
+        `Direct did not focus terminal: ${document.activeElement?.className}`,
+      );
+      const start = sent.length;
+      await input("Input.insertText", { text: "direct probe" });
+      check(
+        sent
+          .slice(start)
+          .map((entry) => entry.data)
+          .join("") === "direct probe",
+        "Direct typing did not reach terminal",
+      );
+      check(
+        readTerminalComposerDraft(draftKey) === "preserved draft\nsecond line",
+        "Direct typing changed Message draft",
+      );
+      for (const [key, code, virtualKey, modifiers, expected] of [
+        ["c", "KeyC", 67, 2, "\x03"],
+        ["r", "KeyR", 82, 2, "\x12"],
+        ["l", "KeyL", 76, 2, "\x0c"],
+        ["ArrowUp", "ArrowUp", 38, 0, "\x1b[A"],
+        ["ArrowDown", "ArrowDown", 40, 0, "\x1b[B"],
+        ["ArrowLeft", "ArrowLeft", 37, 0, "\x1b[D"],
+        ["ArrowRight", "ArrowRight", 39, 0, "\x1b[C"],
+        ["Escape", "Escape", 27, 0, "\x1b"],
+      ] as const) {
+        const before = sent.length;
+        for (const type of ["keyDown", "keyUp"])
+          await input("Input.dispatchKeyEvent", {
+            type,
+            key,
+            code,
+            windowsVirtualKeyCode: virtualKey,
+            modifiers,
+          });
+        check(
+          sent
+            .slice(before)
+            .map((entry) => entry.data)
+            .join("") === expected,
+          `Direct ${key} did not reach terminal`,
+        );
+      }
+      check(
+        readTerminalComposerDraft(draftKey) === "preserved draft\nsecond line",
+        "Direct keys changed draft",
+      );
+      return;
+    }
     for (const open of [false, true]) {
       rememberTerminalInputMode("composer");
       render(open);

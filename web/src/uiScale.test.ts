@@ -37,6 +37,7 @@ test.skipIf(!chrome).concurrent.each([
   [740, 1, "configuration", 360, 100],
   [1300, 1, "terminalLoading", 800, 100],
   [1512, 1, "terminalKeyboard", 982, 100],
+  [390, 1, "terminalKeyboard", 844, 100],
   [1300, 1, "terminalLinks", 800, 100],
   [500, 1.25, "terminalLinks", 800, 100],
   [390, 1, "terminalLinks", 800, 100],
