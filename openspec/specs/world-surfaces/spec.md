@@ -3072,6 +3072,10 @@ NOT fall back to this machine's files. History and Chat SHALL read the resolved
 file through the captured connection's file adapter. A readable reported session
 MAY use Chat Send under the existing session and native admission checks;
 remote discovery SHALL NOT grant authority to a guessed session.
+The projects root SHALL be canonicalised on the selected host, including a
+symlinked root. The returned transcript path SHALL match the requested UUID and
+one immediate project beneath that canonical root before stat/read admission;
+stat metadata SHALL NOT redirect the validated path.
 
 A manual Codex session link SHALL require a full session UUID, readable metadata
 from the selected runtime, a preview and explicit confirmation. The one-shot

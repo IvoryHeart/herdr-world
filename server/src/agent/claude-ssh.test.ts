@@ -1,7 +1,16 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { appendFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import {
+  appendFile,
+  mkdir,
+  mkdtemp,
+  realpath,
+  rename,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { runBinaryProcessWithTimeout } from "../workspace/process";
 import { createHerdrConversationSource } from "./herdr-conversation";
 import { createAgentSessionFileAccess } from "./session-file-access";
@@ -12,6 +21,22 @@ const sessionId = "019a0000-1111-7222-8333-444455556666";
 const otherId = "019a0000-1111-7222-8333-444455559999";
 const roots: string[] = [];
 const quote = (text: string) => `'${text.replaceAll("'", "'\\''")}'`;
+
+function isolatedPayload(shell: string, projects: string) {
+  const ordinary =
+    shell.startsWith("\nset -eu\npath=") ||
+    shell.startsWith("set -eu\ncat ") ||
+    shell === "date +%s%N";
+  if (ordinary) {
+    if (/\$(?:HOME\b|\{HOME\b)/.test(shell))
+      throw new Error("Unexpected home access in a fixture file operation.");
+    return shell;
+  }
+  const anchor = 'root="$HOME/.claude/projects"';
+  if (shell.split(anchor).length !== 2)
+    throw new Error("Expected exactly one fixture home substitution.");
+  return shell.replace(anchor, `root=${quote(projects)}`);
+}
 
 afterEach(async () => {
   await Promise.all(
@@ -51,6 +76,7 @@ async function fixture(host = "claude-fixture.example") {
       entry("assistant", "a1", "u1", "It describes a synthetic project."),
   );
   const commands: string[][] = [];
+  let discoveredPath: string | null = null;
   const files = createAgentSessionFileAccess({
     sshHost: host,
     shQuote: quote,
@@ -68,19 +94,28 @@ async function fixture(host = "claude-fixture.example") {
       const shell = command
         .slice("bash -lc '".length, -1)
         .replaceAll("'\\''", "'");
-      return runBinaryProcessWithTimeout(
+      const result = await runBinaryProcessWithTimeout(
         [
           "bash",
           "--noprofile",
           "--norc",
           "-c",
-          shell.replace(
-            'root="$HOME/.claude/projects"',
-            `root=${quote(projects)}`,
-          ),
+          isolatedPayload(shell, projects),
         ],
         timeout,
       );
+      if (
+        discoveredPath !== null &&
+        shell.includes("find ") &&
+        result.code === 0
+      ) {
+        const records = result.stdout.toString("utf8").split("\0");
+        const last = records.length - 2;
+        expect([path, await realpath(path)]).toContain(records[last]!);
+        records[last] = discoveredPath;
+        result.stdout = Buffer.from(records.join("\0"));
+      }
+      return result;
     },
   });
   let currentId = sessionId;
@@ -121,6 +156,7 @@ async function fixture(host = "claude-fixture.example") {
     },
   });
   return {
+    root,
     projects,
     directory,
     path,
@@ -128,6 +164,9 @@ async function fixture(host = "claude-fixture.example") {
     chat,
     commands,
     prompts,
+    discoverPath(value: string) {
+      discoveredPath = value;
+    },
     switchSession() {
       currentId = otherId;
     },
@@ -200,7 +239,7 @@ describe.skipIf(process.platform === "win32" || !Bun.which("bash"))(
         await mkdir(nested, { recursive: true });
         await writeFile(join(nested, `${sessionId}.jsonl`), "{}\n");
         expect((await f.files.findClaudeSessionById!(sessionId))?.path).toBe(
-          f.path,
+          await realpath(f.path),
         );
         const second = join(f.projects, "another-project");
         await mkdir(second);
@@ -210,6 +249,60 @@ describe.skipIf(process.platform === "win32" || !Bun.which("bash"))(
         );
       } finally {
         f.chat.dispose();
+      }
+    });
+
+    test("follows a symlinked projects root on the selected host", async () => {
+      const f = await fixture();
+      try {
+        const relocated = join(f.root, "relocated-projects\n");
+        await rename(f.projects, relocated);
+        await symlink(relocated, f.projects);
+        expect((await f.files.findClaudeSessionById!(sessionId))?.path).toBe(
+          await realpath(f.path),
+        );
+        expect((await f.chat.read({ pane_id: "w7:p2" })).status).toBe("ok");
+      } finally {
+        f.chat.dispose();
+      }
+    });
+
+    test("adapter and conversation refuse mismatched UUIDs and out-of-scope paths before stat/read", async () => {
+      for (const variant of ["other-id", "outside-root", "nested"]) {
+        const f = await fixture();
+        try {
+          const bad =
+            variant === "other-id"
+              ? join(f.directory, `${otherId}.jsonl`)
+              : variant === "outside-root"
+                ? join(f.root, "outside", `${sessionId}.jsonl`)
+                : join(f.projects, "nested", "extra", `${sessionId}.jsonl`);
+          await mkdir(dirname(bad), { recursive: true });
+          await writeFile(
+            bad,
+            entry(
+              "user",
+              "unrelated",
+              null,
+              "Another conversation.",
+            ).replaceAll(sessionId, otherId),
+          );
+          f.discoverPath(bad);
+          await expect(
+            f.files.findClaudeSessionById!(sessionId),
+          ).rejects.toThrow("Invalid Claude session lookup path");
+          await expect(f.chat.read({ pane_id: "w7:p2" })).rejects.toThrow(
+            "Invalid Claude session lookup path",
+          );
+          expect(
+            f.commands.some((argv) =>
+              /(?:cat |\npath=)/.test(argv[argv.length - 1]!),
+            ),
+          ).toBe(false);
+          expect(f.prompts).toEqual([]);
+        } finally {
+          f.chat.dispose();
+        }
       }
     });
 
@@ -283,6 +376,18 @@ test("Claude UUID validation rejects shell syntax before starting SSH", async ()
   expect(calls).toBe(0);
 });
 
+test("fixture home substitution refuses changed or duplicated anchors before execution", () => {
+  for (const shell of [
+    'root="${HOME}/.claude/projects"\nfind "$root"',
+    'root=~/.claude/projects\nfind "$root"',
+    'root="$HOME/.claude/projects"\nroot="$HOME/.claude/projects"',
+  ]) {
+    expect(() => isolatedPayload(shell, "/fixture/projects")).toThrow(
+      "exactly one fixture home substitution",
+    );
+  }
+});
+
 test("SSH lookup failures propagate instead of returning partial matches", async () => {
   const files = createAgentSessionFileAccess({
     sshHost: "host.example",
@@ -298,6 +403,33 @@ test("SSH lookup failures propagate instead of returning partial matches", async
   await expect(files.findClaudeSessionById!(sessionId)).rejects.toThrow(
     "permission denied",
   );
+});
+
+test("remote stat metadata cannot replace the validated session path", async () => {
+  let calls = 0;
+  const root = "/remote/projects";
+  const wanted = `${root}/example/${sessionId}.jsonl`;
+  const wrong = `${root}/example/${otherId}.jsonl`;
+  const files = createAgentSessionFileAccess({
+    sshHost: "host.example",
+    shQuote: quote,
+    async runBinaryProcessWithTimeout() {
+      calls++;
+      return {
+        code: 0,
+        stderr: "",
+        stdout: Buffer.from(
+          calls === 1
+            ? `${root}\0${wanted}\0`
+            : `1\t1784872800\t${Buffer.from(wrong).toString("base64")}\t1:2\tchange\n`,
+        ),
+      };
+    },
+  });
+  await expect(files.findClaudeSessionById!(sessionId)).rejects.toThrow(
+    "Invalid Claude session lookup path",
+  );
+  expect(calls).toBe(2);
 });
 
 test("malformed lookup output is refused before reading a transcript", async () => {

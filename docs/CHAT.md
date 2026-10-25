@@ -12,6 +12,9 @@ through the captured connection's SSH file adapter. Missing files, duplicate UUI
 matches and SSH errors never use a local transcript. A readable, reported session
 can use the same session-checked Send as a local conversation; missing integration
 metadata still shows the integration instructions.
+The projects root is resolved on that host, including when it is a symlink.
+Discovered paths must name the requested UUID directly inside one project under
+that root; stat metadata cannot redirect the read to a different transcript.
 
 - Reads only the conversation read model described below. It never reads the
   terminal screen and never shows terminal output.
