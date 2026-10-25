@@ -194,6 +194,7 @@ export function executionsOf(
     const attempt = Number(job.run_attempt);
     if (owner && Number.isSafeInteger(attempt))
       executions[String(id)] = {
+        runId: owner.id,
         workflowId: owner.workflowId,
         runNumber: owner.runNumber,
         attempt,
