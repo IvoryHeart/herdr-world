@@ -18,10 +18,12 @@ export function ConnectionHerdrInfo({
   const transportGeneration = useStoreSelector(
     (state) => state.connectionGeneration,
   );
-  const client = useMemo(
-    () => bridge.connection(connection.id, connection.generation),
-    [connection.id, connection.generation, transport, transportGeneration],
-  );
+  const client = useMemo(() => {
+    // A reconnect retires the browser lease even if the host ID is unchanged.
+    void transport;
+    void transportGeneration;
+    return bridge.connection(connection.id, connection.generation);
+  }, [connection.id, connection.generation, transport, transportGeneration]);
   const owner = JSON.stringify([
     client.connectionId,
     client.generation,
