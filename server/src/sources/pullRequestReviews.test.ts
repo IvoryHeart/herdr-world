@@ -28,6 +28,14 @@ describe("explicit reviewer evidence", () => {
     expect(reviewerOf("**Reviewer:** **rev2**")).toBe("rev2");
   });
 
+  test("named reviewer seats claim the sender like numbered ones", () => {
+    expect(reviewerOf("Reviewer: rev-opus")).toBe("rev-opus");
+    expect(reviewerOf("**Reviewer:** `rev-Astra`")).toBe("rev-astra");
+    expect(reviewerOf(`rev-opus — confirmation at ${HEAD}`)).toBe("rev-opus");
+    expect(reviewerOf("Reviewer: rev-")).toBeNull();
+    expect(reviewerOf("Reviewer: rev-opus\nReviewer: rev2")).toBeNull();
+  });
+
   test("canonical formal review claims its reviewer and uses GitHub's commit", () => {
     expect(
       reviewerResults(

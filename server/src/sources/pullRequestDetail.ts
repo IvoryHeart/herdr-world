@@ -323,12 +323,12 @@ export function reviewerOf(body: string) {
   const text = unquoted(body).replace(/[*_]/gu, "");
   const claims = new Set<string>();
   for (const match of text.matchAll(
-    /^\s*(?:#{1,6}\s+)?[*_]*Reviewer[*_]*\s*:\s*[*_`]*(rev\d+)[*_`]*\s*$/gimu,
+    /^\s*(?:#{1,6}\s+)?[*_]*Reviewer[*_]*\s*:\s*[*_`]*(rev(?:\d+|-[a-z][a-z0-9]*))[*_`]*\s*$/gimu,
   )) {
     claims.add(match[1]!.toLowerCase());
   }
   const header =
-    /^[\s[*_#]*(rev\d+)[*_]*(?:\s*\([^\n()]{1,80}\))?\s*(?:—|–|:|->|-\s|(?:(?:combined|refreshed|fix|final)\s+)?(?:review|confirmation)\b)/iu.exec(
+    /^[\s[*_#]*(rev(?:\d+|-[a-z][a-z0-9]*))[*_]*(?:\s*\([^\n()]{1,80}\))?\s*(?:—|–|:|->|-\s|(?:(?:combined|refreshed|fix|final)\s+)?(?:review|confirmation)\b)/iu.exec(
       text,
     )?.[1];
   if (header) claims.add(header.toLowerCase());

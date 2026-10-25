@@ -1,0 +1,11 @@
+{
+  "repo": "example-org/widgets",
+  "reviewers": {
+    "default": ["rev2", "rev-astra", "rev-opus"],
+    "pods": {},
+    "prs": {}
+  },
+  "flakes": ["Browser tests"],
+  "rerunBudget": 1,
+  "freshMinutes": 10
+}
