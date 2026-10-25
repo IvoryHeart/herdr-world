@@ -1739,6 +1739,48 @@ async function run() {
         .length;
     const orbitDeskTotal = perRoom.get(roomId) ?? 0;
     check(expand() !== null, `the ${roomId} room offers no Expand`);
+    if (scale === "incremental") {
+      expand()?.click();
+      await waitFor(
+        () =>
+          orbitDeskCount() === 44 &&
+          host.querySelector(
+            '.world-semantic-targets-overlay[aria-busy="false"]',
+          ) !== null,
+        "the first expansion did not reveal 20 additional desks",
+      );
+      const reset =
+        roomElement?.querySelector<HTMLButtonElement>(".town-fold-reset");
+      check(!!reset, "a partly expanded room must offer Fold immediately");
+      const controls = [
+        roomElement?.querySelector<HTMLElement>(
+          ".world-new-seat-canvas-action",
+        ),
+        expand(),
+        reset,
+      ].filter((control): control is HTMLElement => !!control);
+      const boxes = controls.map((control) => control.getBoundingClientRect());
+      check(
+        boxes.length === 3 &&
+          boxes.every((box) => box.width >= 40 && box.height >= 40),
+        "partial expansion keeps three 40px action targets",
+      );
+      check(
+        boxes.every(
+          (box, index) => index === 0 || box.left >= boxes[index - 1]!.right,
+        ),
+        "partial expansion action targets overlap",
+      );
+      reset?.click();
+      await waitFor(
+        () =>
+          orbitDeskCount() === 24 &&
+          host.querySelector(
+            '.world-semantic-targets-overlay[aria-busy="false"]',
+          ) !== null,
+        "one Fold click after the first expansion did not restore 24 desks",
+      );
+    }
     let expansionSteps = 0;
     while (orbitDeskCount() < orbitDeskTotal) {
       const before = orbitDeskCount();

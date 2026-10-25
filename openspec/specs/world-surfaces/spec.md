@@ -1161,7 +1161,9 @@ bound of 24 desks. Each Expand action SHALL raise the room's target by about 20
 desks, up to all observed desks; Fold SHALL restore the 24-desk target in one
 action and allow the room to shrink, while retaining pinned cells and its
 building column. There SHALL be no hard expanded desk ceiling: repeated Expand
-actions SHALL eventually reveal every observed desk.
+actions SHALL eventually reveal every observed desk. While partially expanded,
+the room SHALL offer Fold alongside Expand, with separate non-overlapping targets
+of at least 40 CSS pixels, so one Fold click can restore the folded target at any step.
 Ordinary tab closures SHALL keep the live size step. An expanded room SHALL
 retain its Fold control after closures, including at or below 24 desks, until
 the user folds it. Selected desks SHALL rank with pinned desks, followed by

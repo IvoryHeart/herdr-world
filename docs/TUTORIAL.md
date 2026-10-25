@@ -250,8 +250,9 @@ hosts stay usable.
    working desks and the three newest desks stay visible beyond that target.
    Use the room's bottom-right **» +N** tile beside the dashed **+** seat to
    reveal about 20 more tables per click until the whole room is shown. **+N**
-   counts only currently hidden tables. The same tile folds the room straight
-   back to 24 tables and remains available after tabs close.
+   counts only currently hidden tables. After the first expansion, the adjacent
+   **« Fold** action returns straight to the 24-table target, even while more
+   desks remain hidden. Fold remains available after tabs close.
    Rooms sit in columns that suit your screen
    (one on a phone), and a growing room pushes down only the rooms below it,
    once you let go of the town. Town moves the tab in Herdr, so Spaces

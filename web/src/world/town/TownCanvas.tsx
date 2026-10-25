@@ -1905,8 +1905,10 @@ const TownWorldLayer = memo(function TownWorldLayer({
               const overflow =
                 room.omittedDeskCount + placed.overflowDeskKeys.length;
               const revealCount = Math.min(TOWN_DESK_EXPANSION_STEP, overflow);
+              const partiallyExpanded =
+                room.deskFold === "expanded" && overflow > 0;
               const revealDescription =
-                overflow > 20
+                overflow > TOWN_DESK_EXPANSION_STEP
                   ? `Show up to ${revealCount} more hidden ${revealCount === 1 ? "desk" : "desks"}`
                   : `Show the remaining ${overflow} hidden ${overflow === 1 ? "desk" : "desks"}`;
               const reason = roomActions.createSeatReason(room.key);
@@ -2064,6 +2066,7 @@ const TownWorldLayer = memo(function TownWorldLayer({
                         style={{
                           left: (seatCell.x - placed.x + 1) * T,
                           top: (seatCell.y - placed.y) * T + 4,
+                          ...(partiallyExpanded ? { width: 40 } : {}),
                         }}
                         onClick={() => roomActions.onNewAgent(room.key)}
                       >
@@ -2102,10 +2105,13 @@ const TownWorldLayer = memo(function TownWorldLayer({
                           : "Fold this room back to 24 desks"
                       }
                       style={{
-                        left: (foldCell.x - placed.x + 1) * T,
+                        left:
+                          partiallyExpanded && seatCell
+                            ? (seatCell.x - placed.x + 1) * T + 44
+                            : (foldCell.x - placed.x + 1) * T,
                         top: (foldCell.y - placed.y) * T + 4,
                         display: "flex",
-                        width: 72,
+                        width: partiallyExpanded ? 64 : 72,
                         justifyContent: "center",
                         gap: 3,
                       }}
@@ -2132,6 +2138,22 @@ const TownWorldLayer = memo(function TownWorldLayer({
                           <span>Fold</span>
                         </>
                       )}
+                    </button>
+                  ) : null}
+                  {partiallyExpanded && seatCell && roomActions.onToggleFold ? (
+                    <button
+                      className="town-new-seat town-fold-reset"
+                      type="button"
+                      aria-label={`Fold ${label} back to 24 desks`}
+                      title="Fold this room back to 24 desks"
+                      style={{
+                        left: (seatCell.x - placed.x + 1) * T + 112,
+                        top: (seatCell.y - placed.y) * T + 4,
+                        width: 40,
+                      }}
+                      onClick={() => roomActions.onToggleFold?.(room.key)}
+                    >
+                      <ChevronsLeft size={18} aria-hidden="true" />
                     </button>
                   ) : null}
                 </div>

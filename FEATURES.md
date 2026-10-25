@@ -118,7 +118,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     desks, and desks that need you stay visible beyond that count.
     The room's bottom-right **» +N** tile sits beside its dashed **+** seat
     and counts only hidden tables. Each click reveals about 20 more until all
-    tables are shown; one **Fold** click restores the 24-table target. The
+    tables are shown; **Fold** is available alongside **+N** after the first
+    expansion, and one click restores the 24-table target. The
     control remains available after tabs close. A growing room moves
     only the rooms below it, and never
     while you hold the town. Town asks Herdr to move the tab and
