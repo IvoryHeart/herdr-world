@@ -61,13 +61,17 @@ export function reconcileEvents(events: UsageEvent[]): UsageEvent[] {
     const key = JSON.stringify([event.family, event.session, event.id]);
     const previous = merged.get(key);
     if (previous) {
-      for (const field of [
-        "input",
-        "cacheRead",
-        "cacheWrite",
-        "output",
-      ] as const)
-        event[field] = Math.max(previous[field], event[field]);
+      // Claude chunks are partial. Codex records are validated complete values;
+      // replacing them also corrects older input/cache-write classifications.
+      if (event.family === "claude") {
+        for (const field of [
+          "input",
+          "cacheRead",
+          "cacheWrite",
+          "output",
+        ] as const)
+          event[field] = Math.max(previous[field], event[field]);
+      }
       event.at = previous.at < event.at ? previous.at : event.at;
       event.replaces = [
         ...new Set([...(previous.replaces ?? []), ...(event.replaces ?? [])]),

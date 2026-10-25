@@ -317,3 +317,48 @@ test("only unavailable sessions linked to the requested PR affect its measuremen
     ]),
   ).toThrow("--until");
 });
+
+test("complete Codex records correct legacy cache-write classification without inflating totals", () => {
+  const store = new UsageStore(":memory:");
+  const seat = {
+    seat: "builder",
+    family: "codex" as const,
+    session: "synthetic",
+  };
+  const event = {
+    ...seat,
+    id: "response",
+    model: "gpt-6.1-sol",
+    effort: "xhigh",
+    at: "2026-10-25T10:00:00.000Z",
+    input: 20,
+    cacheRead: 80,
+    cacheWrite: 0,
+    output: 10,
+    responses: 1,
+  };
+  try {
+    store.refresh(7, [{ seat, events: [event] }], [], 0);
+    store.refresh(
+      7,
+      [{ seat, events: [{ ...event, input: 15, cacheWrite: 5 }] }],
+      [],
+      0,
+    );
+    expect(store.rows()[0]).toMatchObject({
+      input: 15,
+      cacheWrite: 5,
+      responses: 1,
+    });
+    expect(
+      store
+        .rows()
+        .reduce(
+          (n, r) => n + r.input + r.cacheRead + r.cacheWrite + r.output,
+          0,
+        ),
+    ).toBe(110);
+  } finally {
+    store.close();
+  }
+});
