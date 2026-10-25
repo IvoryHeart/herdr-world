@@ -76,11 +76,14 @@ private and retain it before pruning worktrees or deleting harness logs.
 
 Codex uses per-response `token_usage_record` entries, including recorded compaction
 calls, with model/effort from rollout context. `token_count.info.last_token_usage`
-snapshots are deduplicated by cumulative usage and reconciled with dedicated
-records through their thread usage counter. Older records without that counter
-require a unique exact timestamp/usage match to identify a mirror; unmatched
-historical snapshots remain measured. A later dedicated record replaces its
-already stored fallback representation, so cold and incremental imports agree.
+snapshots are deduplicated by cumulative usage. The first dedicated record in a
+log establishes precedence for its remaining suffix: later snapshots are mirrors,
+even when their cumulative counters drift. Earlier snapshot-only history remains
+measured. The same boundary retires covered fallback entries in an existing ledger,
+so cold and incremental imports agree. Prefix snapshots that identify a later
+response by counter or a unique exact timestamp/usage match are replaced while
+preserving their earliest usage timestamp. A response-only refresh retains that
+timestamp, so changing representation cannot move usage to another PR window.
 Incomplete Codex accounting is a measurement gap, never a recorded zero.
 Claude assistant chunks are deduplicated by `message.id`, taking the maximum of
 each usage field and retaining `message.model`. Companion transcripts under

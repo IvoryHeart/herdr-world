@@ -362,3 +362,164 @@ test("complete Codex records correct legacy cache-write classification without i
     store.close();
   }
 });
+
+test("dedicated precedence retires drifting mirrors while retaining an older snapshot-only prefix", () => {
+  const seat = {
+    seat: "builder",
+    family: "codex" as const,
+    session: "synthetic",
+  };
+  const usage = {
+    input_tokens: 100,
+    cached_input_tokens: 80,
+    output_tokens: 10,
+    reasoning_output_tokens: 0,
+    total_tokens: 110,
+  };
+  const snapshot = (timestamp: string, total: object) => ({
+    type: "event_msg",
+    timestamp,
+    payload: {
+      type: "token_count",
+      info: { last_token_usage: usage, total_token_usage: total },
+    },
+  });
+  const prefix = snapshot("2026-10-25T09:00:00.000Z", usage);
+  const records: object[] = [prefix];
+  const mirrors: object[] = [prefix];
+  for (let index = 0; index < 20; index++) {
+    const cumulative = {
+      ...usage,
+      input_tokens: 100 * (index + 2),
+      cached_input_tokens: 80 * (index + 2),
+      output_tokens: 10 * (index + 2),
+      total_tokens: 110 * (index + 2),
+    };
+    const timestamp = new Date(
+      Date.parse("2026-10-25T10:00:00.000Z") + index * 60_000,
+    ).toISOString();
+    const mirror = snapshot(
+      new Date(Date.parse(timestamp) + 1000).toISOString(),
+      cumulative,
+    );
+    const drifted = {
+      ...cumulative,
+      input_tokens: cumulative.input_tokens + 100,
+      cached_input_tokens: cumulative.cached_input_tokens + 80,
+      output_tokens: cumulative.output_tokens + 10,
+      total_tokens: cumulative.total_tokens + 110,
+    };
+    records.push(
+      {
+        type: "token_usage_record",
+        timestamp,
+        payload: {
+          response_id: `response-${index}`,
+          usage,
+          thread_token_usage: drifted,
+        },
+      },
+      mirror,
+    );
+    mirrors.push(mirror);
+  }
+  const encode = (values: object[]) =>
+    values.map((v) => JSON.stringify(v)).join("\n");
+  const cold = parseSession(seat, encode(records)).events;
+  expect(cold).toHaveLength(21);
+  expect(cold.filter((e) => e.id.startsWith("count:"))).toHaveLength(1);
+  const store = new UsageStore(":memory:");
+  try {
+    store.refresh(
+      7,
+      [{ seat, events: parseSession(seat, encode(mirrors)).events }],
+      [],
+      0,
+    );
+    store.refresh(7, [{ seat, events: cold }], [], 0);
+    expect(store.rows().reduce((n, r) => n + r.responses, 0)).toBe(21);
+    expect(
+      store
+        .rows()
+        .reduce(
+          (n, r) => n + r.input + r.cacheRead + r.cacheWrite + r.output,
+          0,
+        ),
+    ).toBe(2310);
+  } finally {
+    store.close();
+  }
+});
+
+test("snapshot alias replacement preserves its first timestamp across adjacent PR windows", () => {
+  const seat = {
+    seat: "builder",
+    family: "codex" as const,
+    session: "synthetic",
+  };
+  const at = "2026-10-25T10:00:00.000Z",
+    edge = "2026-10-25T10:00:30.000Z",
+    later = "2026-10-25T10:01:00.000Z";
+  const usage = {
+    input_tokens: 100,
+    cached_input_tokens: 80,
+    output_tokens: 10,
+    reasoning_output_tokens: 0,
+    total_tokens: 110,
+  };
+  const snapshot = JSON.stringify({
+    type: "event_msg",
+    timestamp: at,
+    payload: {
+      type: "token_count",
+      info: { last_token_usage: usage, total_token_usage: usage },
+    },
+  });
+  const response = JSON.stringify({
+    type: "token_usage_record",
+    timestamp: later,
+    payload: { response_id: "response", usage, thread_token_usage: usage },
+  });
+  const cold = parseSession(seat, `${snapshot}\n${response}`).events;
+  expect(cold[0]?.at).toBe(at);
+  const store = new UsageStore(":memory:");
+  const first = {
+    pr: 7,
+    ...seat,
+    role: "builder" as const,
+    from: at,
+    until: edge,
+    source: "assignment" as const,
+  };
+  const second = {
+    ...first,
+    pr: 8,
+    from: edge,
+    until: "2026-10-25T10:02:00.000Z",
+  };
+  try {
+    store.refresh(
+      7,
+      [{ seat, events: parseSession(seat, snapshot).events }],
+      [first],
+      0,
+    );
+    store.refresh(8, [], [second], 0);
+    store.refresh(
+      7,
+      [{ seat, events: parseSession(seat, response).events }],
+      [first],
+      0,
+    );
+    store.refresh(
+      7,
+      [{ seat, events: parseSession(seat, response).events }],
+      [first],
+      0,
+    );
+    expect(store.rows()).toHaveLength(1);
+    expect(store.rows()[0]).toMatchObject({ pr: 7, responses: 1 });
+  } finally {
+    store.close();
+  }
+});

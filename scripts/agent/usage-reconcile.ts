@@ -58,6 +58,8 @@ export function reconcileEvents(events: UsageEvent[]): UsageEvent[] {
   const merged = new Map<string, UsageEvent>();
   for (const raw of events) {
     const event = { ...raw, id: normalizeSnapshot(raw.id) };
+    if (event.family === "codex" && !event.id.startsWith("count:"))
+      event.dedicatedFrom = event.dedicatedFrom ?? event.at;
     const key = JSON.stringify([event.family, event.session, event.id]);
     const previous = merged.get(key);
     if (previous) {
@@ -77,6 +79,16 @@ export function reconcileEvents(events: UsageEvent[]): UsageEvent[] {
         ...new Set([...(previous.replaces ?? []), ...(event.replaces ?? [])]),
       ];
       event.snapshot = event.snapshot ?? previous.snapshot;
+      const priorBoundary =
+        previous.dedicatedFrom ??
+        (previous.family === "codex" && !previous.id.startsWith("count:")
+          ? previous.at
+          : undefined);
+      if (
+        priorBoundary &&
+        (!event.dedicatedFrom || priorBoundary < event.dedicatedFrom)
+      )
+        event.dedicatedFrom = priorBoundary;
       if (event.model === "unknown") event.model = previous.model;
       if (event.effort === "unknown") event.effort = previous.effort;
     }
@@ -117,13 +129,33 @@ export function reconcileEvents(events: UsageEvent[]): UsageEvent[] {
         aliases.add(matches[0]!.id);
     }
     response.replaces = [...aliases];
-    for (const alias of aliases)
+    for (const alias of aliases) {
+      const key = JSON.stringify([
+        response.family,
+        response.session,
+        normalizeSnapshot(alias),
+      ]);
+      const snapshot = merged.get(key);
+      if (snapshot && snapshot.at < response.at) response.at = snapshot.at;
+      if (snapshot && response.model === "unknown")
+        response.model = snapshot.model;
+      if (snapshot && response.effort === "unknown")
+        response.effort = snapshot.effort;
+      merged.delete(key);
+    }
+  }
+  const boundaries = new Map<string, string>();
+  for (const response of responses) {
+    const boundary = response.dedicatedFrom!;
+    const previous = boundaries.get(response.session);
+    if (!previous || boundary < previous)
+      boundaries.set(response.session, boundary);
+  }
+  for (const snapshot of snapshots) {
+    const boundary = boundaries.get(snapshot.session);
+    if (boundary && snapshot.at >= boundary)
       merged.delete(
-        JSON.stringify([
-          response.family,
-          response.session,
-          normalizeSnapshot(alias),
-        ]),
+        JSON.stringify([snapshot.family, snapshot.session, snapshot.id]),
       );
   }
   return [...merged.values()];

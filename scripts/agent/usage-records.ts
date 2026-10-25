@@ -27,6 +27,7 @@ export type UsageEvent = Tokens & {
   at: string;
   snapshot?: string;
   replaces?: string[];
+  dedicatedFrom?: string;
 };
 export type Turn = { at: string; text: string };
 export type ParsedSession = { events: UsageEvent[]; turns: Turn[] };
@@ -87,12 +88,21 @@ export function parseSession(seat: Seat, lines: string): ParsedSession {
   }
   const events = new Map<string, UsageEvent>();
   const turns: Turn[] = [];
+  const firstDedicatedIndex = records.findIndex(
+    (r) => r.type === "token_usage_record",
+  );
+  const dedicatedFrom =
+    firstDedicatedIndex >= 0
+      ? records[firstDedicatedIndex]!.timestamp
+      : undefined;
+  if (dedicatedFrom && !Number.isFinite(Date.parse(dedicatedFrom)))
+    throw new Error("Invalid usage timestamp");
   const userEvents = records.some(
     (r) => r.type === "event_msg" && r.payload?.type === "user_message",
   );
   let model = "unknown";
   let effort = "unknown";
-  for (const record of records) {
+  for (const [recordIndex, record] of records.entries()) {
     const payload = record.payload ?? {};
     if (record.type === "turn_context" || record.type === "session_meta") {
       model = payload.model ?? model;
@@ -132,6 +142,7 @@ export function parseSession(seat: Seat, lines: string): ParsedSession {
       if (events.has(id)) throw new Error("Duplicate Codex response usage");
     } else {
       if (
+        (firstDedicatedIndex >= 0 && recordIndex >= firstDedicatedIndex) ||
         record.type !== "event_msg" ||
         payload.type !== "token_count" ||
         !payload.info?.last_token_usage
@@ -174,6 +185,9 @@ export function parseSession(seat: Seat, lines: string): ParsedSession {
       cacheWrite: codex?.write ?? number(usage.cache_creation_input_tokens),
       output,
       responses: 1,
+      ...(record.type === "token_usage_record"
+        ? { dedicatedFrom: new Date(dedicatedFrom!).toISOString() }
+        : {}),
       ...(record.type === "token_usage_record" && payload.thread_token_usage
         ? { snapshot: snapshotId(payload.thread_token_usage) }
         : {}),
