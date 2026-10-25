@@ -350,8 +350,11 @@ test("a verified Ask keeps its folded desk during a cached-generation reconnect 
   const pins = new Set<string>();
   const expanded = new Set<string>();
   const baseline = project(world, 1, null, pins, expanded);
+  const visibleDesks = new Set(
+    baseline.rooms.flatMap((room) => room.desks.map((desk) => desk.key)),
+  );
   const agent = baseline.roster.find(
-    ({ agent }) => agent.currentPaneRef.nativeId === "alpha:t0:p",
+    ({ agent }) => agent.deskKey && !visibleDesks.has(agent.deskKey),
   )!.agent;
   expect(
     baseline.rooms[0]!.desks.some((desk) => desk.key === agent.deskKey),
