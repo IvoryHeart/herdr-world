@@ -234,50 +234,6 @@ test("an explicit Fold shrinks an expanded room while ordinary tab closures pres
   }
 });
 
-test("foldable rooms reserve adjacent bottom-right action tiles", () => {
-  for (const shape of Object.values(TOWN_SHAPES)) {
-    const input = town({ a: [26] });
-    input.rooms[0]!.deskFold = "folded";
-    const result = layoutTown(input, shape).layout;
-    const room = result.buildings[0]!.rooms[0]!;
-    const [seat, fold] = room.foldActionCells!;
-    expect(seat.deskKey).toBeNull();
-    expect(fold.deskKey).toBeNull();
-    expect(seat.row).toBe(fold.row);
-    expect(fold.col).toBe(seat.col + 1);
-    expect(fold.row).toBe(room.rows - 1);
-    expect(fold.col).toBe(room.cols - 1);
-    expect(result.deskCells.size).toBe(26);
-  }
-});
-
-test("saved pins cannot occupy either reserved fold action cell", () => {
-  for (const shape of Object.values(TOWN_SHAPES)) {
-    for (const actionIndex of [0, 1]) {
-      const input = town({ a: [26] });
-      input.rooms[0]!.deskFold = "folded";
-      const initial = layoutTown(input, shape).layout;
-      const initialRoom = initial.buildings[0]!.rooms[0]!;
-      const reserved = initialRoom.foldActionCells![actionIndex]!;
-      const pinnedKey = input.rooms[0]!.deskKeys[0]!;
-      const result = layoutTown(
-        input,
-        shape,
-        new Map(),
-        new Map([[pinnedKey, { col: reserved.col, row: reserved.row }]]),
-      ).layout;
-      const room = result.buildings[0]!.rooms[0]!;
-      const [seat, fold] = room.foldActionCells!;
-      expect([seat.deskKey, fold.deskKey]).toEqual([null, null]);
-      expect(cellOf(result, pinnedKey)).toMatchObject({
-        col: reserved.col,
-        row: reserved.row,
-      });
-      expect(result.deskCells.size).toBe(26);
-    }
-  }
-});
-
 test("Fold preserves a protected pin's cell beyond the expanded target", () => {
   for (const shape of Object.values(TOWN_SHAPES)) {
     const expanded = town({ a: [260] });

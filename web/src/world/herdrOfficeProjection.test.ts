@@ -24,17 +24,26 @@ describe("Pixel Office projection", () => {
     const project = createOfficeProjector(TOWN_PRESENTATION_BOUNDS);
     const pins = new Set<string>();
     const expanded = new Set<string>();
+    const attention = new Set<string>();
     const selected = world.leaves.find(
       (leaf) => leaf.connectionId === "host-0",
     )!.id;
-    const baseline = project(world, 1, selected, pins, expanded);
+    const baseline = project(world, 1, selected, pins, expanded, attention);
     const preferred = baseline.roomRoster.find(
       (room) => room.workspaceRef.connectionId === "host-8",
     )!;
     expect(baseline.rooms.some((room) => room.key === preferred.key)).toBe(
       false,
     );
-    const shown = project(world, 2, selected, pins, expanded, preferred.key);
+    const shown = project(
+      world,
+      2,
+      selected,
+      pins,
+      expanded,
+      attention,
+      preferred.key,
+    );
     expect(shown.rooms.some((room) => room.key === preferred.key)).toBe(true);
     expect(shown.rooms).toHaveLength(128);
     expect(new Set(shown.rooms.map((room) => room.key)).size).toBe(128);
@@ -43,7 +52,8 @@ describe("Pixel Office projection", () => {
         ?.presented,
     ).toBe(true);
     expect(
-      project(world, 3, selected, pins, expanded, preferred.key).rooms,
+      project(world, 3, selected, pins, expanded, attention, preferred.key)
+        .rooms,
     ).toBe(shown.rooms);
     const alternate = world.spaces.find(
       (space) => space.connectionId === "host-7",
@@ -54,6 +64,7 @@ describe("Pixel Office projection", () => {
       alternate.id,
       pins,
       expanded,
+      attention,
       preferred.key,
     );
     expect(reselection.rooms.some((room) => room.key === preferred.key)).toBe(
@@ -65,14 +76,28 @@ describe("Pixel Office projection", () => {
       ),
     ).toBe(true);
     expect(new Set(reselection.rooms.map((room) => room.key)).size).toBe(128);
-    const cleared = project(world, 5, selected, pins, expanded, null);
+    const cleared = project(
+      world,
+      5,
+      selected,
+      pins,
+      expanded,
+      attention,
+      null,
+    );
     expect(cleared.rooms.some((room) => room.key === preferred.key)).toBe(
       false,
     );
     expect(
-      project(world, 5, selected, pins, expanded, "unverified-room").rooms.map(
-        (room) => room.key,
-      ),
+      project(
+        world,
+        5,
+        selected,
+        pins,
+        expanded,
+        attention,
+        "unverified-room",
+      ).rooms.map((room) => room.key),
     ).toEqual(cleared.rooms.map((room) => room.key));
     const removedWorld = buildWorldObject(sources.slice(0, -1), "host-0");
     const removed = project(
@@ -81,6 +106,7 @@ describe("Pixel Office projection", () => {
       selected,
       pins,
       expanded,
+      attention,
       preferred.key,
     );
     expect(removed.rooms.some((room) => room.key === preferred.key)).toBe(
@@ -248,42 +274,9 @@ describe("Pixel Office projection", () => {
       );
     }
   });
-  test("Town prefixes preserve native order and reuse complete cached rosters", async () => {
+  test("attention desks survive both fold bounds and protection removal invalidates the cache", async () => {
     const tabs = Array.from({ length: 160 }, (_, index) =>
-      tab(`ordered-${index}`, index + 1),
-    );
-    const world = buildWorldObject([
-      connection(
-        "alpha",
-        tabs,
-        tabs.map((entry) => pane(entry.tab_id, "blocked", "Synthetic")),
-      ),
-    ]);
-    await prepareWorldOffice(world);
-    const project = createOfficeProjector(TOWN_PRESENTATION_BOUNDS);
-    const baseline = project(world, 1, null);
-    const expanded = new Set([baseline.rooms[0]!.key]);
-    for (const rooms of [new Set<string>(), expanded]) {
-      const shown = project(world, 2, null, new Set(), rooms);
-      const count = rooms.size ? 44 : 24;
-      expect(shown.rooms[0]!.desks.map((d) => d.tabRef.nativeId)).toEqual(
-        tabs.slice(0, count).map((t) => t.tab_id),
-      );
-      expect(shown.rooms[0]!.omittedDeskCount).toBe(160 - count);
-      expect(shown.roster).toHaveLength(160);
-      const updated = project(world, 3, null, new Set(), rooms);
-      expect(updated.rooms[0]!.desks).toEqual(shown.rooms[0]!.desks);
-      for (const shape of Object.values(TOWN_SHAPES))
-        expect(
-          layoutTown(townModelFromProjection(shown).input, shape).layout
-            .deskCells.size,
-        ).toBe(count);
-    }
-  });
-
-  test("each Town expand reveals about 20 more desks and one Fold restores 24", async () => {
-    const tabs = Array.from({ length: 160 }, (_, index) =>
-      tab(`step-${index}`, index + 1),
+      tab(`attention-${index}`, index + 1),
     );
     const world = buildWorldObject([
       connection(
@@ -293,33 +286,61 @@ describe("Pixel Office projection", () => {
       ),
     ]);
     await prepareWorldOffice(world);
-    const folded = projectWorldOffice(world, 1, null, TOWN_PRESENTATION_BOUNDS)
-      .rooms[0]!;
-    expect(folded.desks).toHaveLength(24);
-    const expanded = new Set([folded.key]);
-    for (const limit of [44, 64, 84, 104, 124, 144, 160]) {
-      const room = projectWorldOffice(
-        world,
-        limit,
-        null,
-        TOWN_PRESENTATION_BOUNDS,
-        new Set(),
-        expanded,
-        null,
-        new Map([[folded.key, limit]]),
-      ).rooms[0]!;
-      expect(room.deskRenderLimit).toBe(limit);
-      expect(room.desks).toHaveLength(limit);
-      expect(room.omittedDeskCount).toBe(160 - limit);
-    }
-    const refolded = projectWorldOffice(
+    const baseline = projectWorldOffice(
       world,
-      200,
+      1,
       null,
       TOWN_PRESENTATION_BOUNDS,
-    ).rooms[0]!;
-    expect(refolded.desks).toHaveLength(24);
-    expect(refolded.omittedDeskCount).toBe(136);
+    );
+    const protectedDesks = new Set(
+      baseline.deskRoster.slice(0, 130).map(({ desk }) => desk.key),
+    );
+    const expanded = new Set([baseline.rooms[0]!.key]);
+    const pins = new Set<string>();
+    const project = createOfficeProjector(TOWN_PRESENTATION_BOUNDS);
+    for (const rooms of [new Set<string>(), expanded]) {
+      const shown = project(world, 2, null, pins, rooms, protectedDesks);
+      const room = shown.rooms[0]!;
+      const visible = new Set(room.desks.map(({ key }) => key));
+      expect([...protectedDesks].filter((key) => !visible.has(key))).toEqual(
+        [],
+      );
+      expect(room.desks).toHaveLength(130);
+      expect(room.omittedDeskCount).toBe(30);
+      for (const shape of Object.values(TOWN_SHAPES)) {
+        const { layout } = layoutTown(
+          townModelFromProjection(shown).input,
+          shape,
+        );
+        expect(
+          [...protectedDesks].filter((key) => !layout.deskCells.has(key)),
+        ).toEqual([]);
+        expect(
+          layout.buildings[0]!.rooms[0]!.cells.some(
+            (cell) => cell.deskKey === null,
+          ),
+        ).toBe(true);
+      }
+
+      const cached = project(
+        world,
+        3,
+        null,
+        pins,
+        rooms,
+        new Set(protectedDesks),
+      );
+      expect(cached.rooms).toBe(shown.rooms);
+      expect(cached.presentationBounds).toBe(shown.presentationBounds);
+    }
+    project(world, 3, null, pins, expanded, protectedDesks);
+    protectedDesks.clear();
+    const released = project(world, 4, null, pins, expanded, protectedDesks);
+    expect(released.rooms[0]!.desks).toHaveLength(127);
+    expect(released.rooms[0]!.omittedDeskCount).toBe(33);
+    const removed = project(world, 4, null, pins, new Set(), protectedDesks);
+    expect(removed.rooms[0]!.desks).toHaveLength(24);
+    expect(removed.rooms[0]!.omittedDeskCount).toBe(136);
   });
   test("a pinned desk past the room's bound is admitted with its agents", async () => {
     const tabs = Array.from(
@@ -940,39 +961,110 @@ describe("Pixel Office projection", () => {
       }
   });
 
-  test("Town folding and expansion show contiguous prefixes even when later tabs are busy or new", () => {
-    for (const count of [24, 26, 40, 57]) {
+  test("Town folds a room past 24 desks to its busiest, and an expanded room shows the rest", () => {
+    const shown = (
+      count: number,
+      panes: (tabs: Tab[]) => Pane[],
+      expand = false,
+    ) => {
       const tabs = Array.from({ length: count }, (_, index) =>
         tab(`tab-${index}`, index + 1),
       );
       const world = buildWorldObject(
-        [
-          connection(
-            "local",
-            tabs,
-            tabs.map((entry, index) =>
-              pane(entry.tab_id, index < 24 ? "idle" : "working", `a${index}`),
-            ),
-          ),
-        ],
+        [connection("local", tabs, panes(tabs))],
         "local",
       );
-      const project = createOfficeProjector(TOWN_PRESENTATION_BOUNDS);
-      const first = project(world, 1, null);
-      const room = first.rooms[0]!;
-      expect(room.desks.map((d) => d.tabRef.nativeId)).toEqual(
-        tabs.slice(0, 24).map((t) => t.tab_id),
-      );
-      expect(room.omittedDeskCount).toBe(Math.max(0, count - 24));
-      expect(room.deskFold).toBe(count > 24 ? "folded" : undefined);
-      const expanded = project(world, 2, null, new Set(), new Set([room.key]))
-        .rooms[0]!;
-      expect(expanded.desks.map((d) => d.tabRef.nativeId)).toEqual(
-        tabs.slice(0, 44).map((t) => t.tab_id),
-      );
-      expect(expanded.omittedDeskCount).toBe(Math.max(0, count - 44));
-      expect(project(world, 3, null).rooms[0]!.desks).toEqual(room.desks);
-    }
+      const project = (expanded?: ReadonlySet<string>) =>
+        projectWorldOffice(
+          world,
+          1,
+          null,
+          TOWN_PRESENTATION_BOUNDS,
+          new Set(),
+          expanded,
+        );
+      const room = project().rooms[0]!;
+      return expand ? project(new Set([room.key])).rooms[0]! : room;
+    };
+    // A 24-tab room with an agent at every desk shows them all, seated.
+    const real = shown(24, (tabs) =>
+      tabs.map((entry, index) => pane(entry.tab_id, "working", `a${index}`)),
+    );
+    expect(real.desks.length).toBe(24);
+    expect(real.omittedDeskCount).toBe(0);
+    expect(real.deskFold).toBeUndefined();
+    expect(
+      real.roomAgents.filter(({ placement }) => placement === "seated").length,
+    ).toBe(24);
+
+    // Past 24, a folded room keeps the desk that needs the user, the working
+    // one and the newest tabs; the oldest idle desks wait for Expand.
+    const folded = TOWN_PRESENTATION_BOUNDS.foldedDesksPerRoom;
+    const many = (tabs: Tab[]) => [
+      pane(tabs[0]!.tab_id, "blocked", "asks"),
+      pane(tabs[1]!.tab_id, "working", "busy"),
+      ...tabs.slice(2).map((entry) => pane(entry.tab_id, "idle", "rests")),
+    ];
+    const room = shown(40, many);
+    const visible = room.desks.map((desk) => desk.tabRef.nativeId);
+    expect(room.deskFold).toBe("folded");
+    expect(visible.length).toBe(folded);
+    expect(room.omittedDeskCount).toBe(40 - folded);
+    expect(visible.slice(0, 2)).toEqual(["tab-0", "tab-1"]);
+    for (const newest of ["tab-37", "tab-38", "tab-39"])
+      expect(visible).toContain(newest);
+    expect(visible).not.toContain("tab-2");
+    const open = shown(40, many, true);
+    expect(open.deskFold).toBe("expanded");
+    expect(open.desks.length).toBe(40);
+    expect(open.omittedDeskCount).toBe(0);
+
+    // The cached projector admits desks again when a room expands or folds.
+    const tabs = Array.from({ length: 40 }, (_, index) =>
+      tab(`tab-${index}`, index + 1),
+    );
+    const world = buildWorldObject(
+      [connection("local", tabs, many(tabs))],
+      "local",
+    );
+    const projector = createOfficeProjector(TOWN_PRESENTATION_BOUNDS);
+    const first = projector(world, 1, null).rooms[0]!;
+    expect(first.desks.length).toBe(folded);
+    const expanded = new Set([first.key]);
+    expect(
+      projector(world, 2, null, new Set(), expanded).rooms[0]!.desks.length,
+    ).toBe(40);
+    expect(
+      projector(world, 3, null, new Set(), new Set()).rooms[0]!.desks.length,
+    ).toBe(folded);
+
+    // Expanded past its bound: the old desk that needs the user and the
+    // working one stay, the newest tab stays, and the oldest idle desks give way.
+    const limit = TOWN_PRESENTATION_BOUNDS.desksPerRoom;
+    const crowded = shown(limit + 13, many, true);
+    const ids = crowded.desks.map((desk) => desk.tabRef.nativeId);
+    expect(ids.length).toBe(limit);
+    expect(crowded.omittedDeskCount).toBe(13);
+    expect(ids.slice(0, 2)).toEqual(["tab-0", "tab-1"]);
+    expect(ids).toContain(`tab-${limit + 12}`);
+    expect(ids).not.toContain("tab-2");
+    expect(ids).not.toContain("tab-14");
+    expect(ids).toContain("tab-15");
+
+    // Even when every older desk is busy, the newest tabs keep a desk: here
+    // 127 working tabs and three new idle ones.
+    const busy = shown(
+      limit + 3,
+      (tabs) =>
+        tabs.map((entry, index) =>
+          pane(entry.tab_id, index < limit ? "working" : "idle", `a${index}`),
+        ),
+      true,
+    );
+    const kept = busy.desks.map((desk) => desk.tabRef.nativeId);
+    for (const index of [limit, limit + 1, limit + 2])
+      expect(kept).toContain(`tab-${index}`);
+    expect(busy.omittedDeskCount).toBe(3);
   });
 
   test("keeps mixed-status shared tabs truthful beyond the eight-desk scene bound", () => {

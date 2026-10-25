@@ -10,8 +10,8 @@
 export const TOWN_TILE = 16;
 
 /**
- * The initial layout capacity. Town reveals native-order desk prefixes in
- * steps while layout grows to reserve action cells for each target.
+ * The usual expanded presentation target. Admission can exceed it for protected
+ * desks; layout extends downward for every admitted desk and one free cell.
  */
 export const TOWN_DEFAULT_RENDERED_DESKS = 8 * 16 - 1;
 
@@ -138,8 +138,6 @@ export type TownRoom = {
   cols: number;
   rows: number;
   cells: TownCell[];
-  /** Two adjacent bottom-right cells reserved for the seat and fold controls. */
-  foldActionCells?: readonly [TownCell, TownCell];
   /** Desks beyond the rendered capacity, reachable through the chooser. */
   overflowDeskKeys: string[];
 };
@@ -249,7 +247,6 @@ function placeRoomDesks(
   previous: RoomMemory | undefined,
   maxCols: number,
   pins: TownPinnedCells | undefined,
-  reserveFoldActions: boolean,
 ): { memory: RoomMemory; overflow: string[]; cols: number; rows: number } {
   const fixed = new Map<string, { col: number; row: number }>();
   if (pins?.size)
@@ -259,34 +256,18 @@ function placeRoomDesks(
       if (cell && cell.col < maxCols) fixed.set(key, cell);
     }
   const needed = Math.max(
-    deskKeys.length + (reserveFoldActions ? 2 : 1),
-    ...[...fixed.values()].map(
-      ({ col, row }) => row * maxCols + col + (reserveFoldActions ? 3 : 1),
-    ),
+    deskKeys.length,
+    ...[...fixed.values()].map(({ row }) => (row + 1) * maxCols - 1),
   );
   const tiers = townRoomTiers(maxCols, needed, previous?.tier ?? 0);
-  let tier = townTierFor(
-    deskKeys.length + (reserveFoldActions ? 1 : 0),
-    previous?.tier ?? 0,
-    tiers,
-  );
+  let tier = townTierFor(deskKeys.length, previous?.tier ?? 0, tiers);
   const outside = (tier: number) =>
     [...fixed.values()].some(
       ({ col, row }) => col >= tiers[tier]![0] || row >= tiers[tier]![1],
     );
-  while (
-    tier < tiers.length - 1 &&
-    (outside(tier) ||
-      (reserveFoldActions &&
-        [...fixed.values()].some(
-          ({ col, row }) =>
-            row * tiers[tier]![0] + col >=
-            tiers[tier]![0] * tiers[tier]![1] - 2,
-        )))
-  )
-    tier += 1;
+  while (tier < tiers.length - 1 && outside(tier)) tier += 1;
   const [cols, rows] = tiers[tier]!;
-  const capacity = cols * rows - (reserveFoldActions ? 2 : 1);
+  const capacity = cols * rows - 1;
   const cells = new Map<string, { col: number; row: number }>();
   const taken = new Set<number>();
   for (const [key, { col, row }] of fixed) {
@@ -323,7 +304,6 @@ function mulberry32(seed: number) {
 
 type DraftBuilding = Omit<TownBuilding, "x" | "y" | "roadY" | "rooms"> & {
   rooms: (Omit<TownRoom, "x" | "y" | "cells"> & {
-    deskFold?: "folded" | "expanded";
     rx: number;
     ry: number;
     placement: Map<string, { col: number; row: number }>;
@@ -352,14 +332,12 @@ function draftBuilding(
       folded ? { ...previous, tier: 0 } : previous,
       shape.deskColumns,
       pins,
-      !!room.deskFold,
     );
     roomMemory.deskFold = room.deskFold;
     nextMemory.set(room.key, roomMemory);
     return {
       key: room.key,
       hostKey,
-      deskFold: room.deskFold,
       cols,
       rows,
       w: cols * CELL + 1,
@@ -605,9 +583,6 @@ export function layoutTown(
             deskKey: byCoordinate.get(`${col},${row}`) ?? null,
             seats: seatsOf.get(byCoordinate.get(`${col},${row}`) ?? "") ?? 4,
           });
-      const foldActionCells = room.deskFold
-        ? ([cells[cells.length - 2]!, cells[cells.length - 1]!] as const)
-        : undefined;
       return {
         key: room.key,
         hostKey: room.hostKey,
@@ -618,7 +593,6 @@ export function layoutTown(
         cols: room.cols,
         rows: room.rows,
         cells,
-        foldActionCells,
         overflowDeskKeys: room.overflowDeskKeys,
       };
     });
