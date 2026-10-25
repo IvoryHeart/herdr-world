@@ -1,3 +1,5 @@
+import { publicModel } from "./usage-public";
+import { rosterNotes, type Roster } from "./usage-roster";
 import type { Seat, Tokens, Turn, UsageEvent } from "./usage-records";
 
 export type Role = "builder" | "fixer" | "coordinator" | `reviewer:${string}`;
@@ -243,21 +245,6 @@ export function renderTable(pr: number, rows: Row[]): string {
 }
 
 // Public output deliberately has no free-form fields sourced from local seats/logs.
-function publicModel(model: string, family: string) {
-  if (
-    family === "codex" &&
-    /^gpt-[0-9]+(?:\.[0-9]+)?(?:-(?:sol|astra|luna|codex|mini|nano|pro|turbo|preview|latest))*$/.test(
-      model,
-    )
-  )
-    return model;
-  if (
-    family === "claude" &&
-    /^claude-(?:opus|sonnet|haiku)(?:-[0-9]+)+(?:-thinking)?$/.test(model)
-  )
-    return model;
-  return "unknown";
-}
 function publicRole(role: Row["role"]) {
   if (/^reviewer:rev(?:[0-9]+|-(?:astra|opus|sol|luna))$/.test(role))
     return role;
@@ -272,6 +259,7 @@ export function renderComment(
   pr: number,
   rows: Row[],
   missingSessions = 0,
+  roster?: Roster,
 ): string {
   const selected = rows.filter((r) => r.pr === pr);
   const groups = new Map<string, Tokens>();
@@ -296,6 +284,7 @@ export function renderComment(
       .map(([key, t]) => `| ${key} | ${cells(t)} |`),
     `| **PR total** | | ${cells(total)} |`,
     "",
+    ...(roster ? rosterNotes(rows, roster, pr) : []),
     "Unattributed usage remains in the private local ledger and is excluded from this PR total.",
     "",
     "Recorded tokens are not billed cost. Input excludes cache reads/writes; reasoning is included in output. Claude streamed chunks use per-message field maxima and include child transcripts. Codex snapshot mirrors are reconciled with dedicated response records.",

@@ -523,3 +523,40 @@ test("snapshot alias replacement preserves its first timestamp across adjacent P
     store.close();
   }
 });
+
+test("global roster ingestion preserves existing PR windows and missing-log status", () => {
+  const store = new UsageStore(":memory:");
+  const seat = {
+    seat: "builder",
+    family: "claude" as const,
+    session: "synthetic",
+  };
+  const from = "2026-10-25T10:00:00.000Z",
+    until = "2026-10-25T11:00:00.000Z";
+  const event = {
+    ...seat,
+    id: "response",
+    model: "claude-opus-5-5",
+    effort: "unknown",
+    at: from,
+    input: 10,
+    cacheRead: 0,
+    cacheWrite: 0,
+    output: 5,
+    responses: 1,
+  };
+  try {
+    store.refresh(
+      7,
+      [{ seat, events: [event] }],
+      [{ ...seat, pr: 7, role: "builder", from, until, source: "assignment" }],
+      1,
+    );
+    store.refresh(null, [{ seat, events: [event] }], [], 0);
+    expect(store.rows()[0]).toMatchObject({ pr: 7, responses: 1 });
+    expect(store.windows(7)).toHaveLength(1);
+    expect(store.missing(7)).toBe(1);
+  } finally {
+    store.close();
+  }
+});

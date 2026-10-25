@@ -30,7 +30,11 @@ export type UsageEvent = Tokens & {
   dedicatedFrom?: string;
 };
 export type Turn = { at: string; text: string };
-export type ParsedSession = { events: UsageEvent[]; turns: Turn[] };
+export type ParsedSession = {
+  events: UsageEvent[];
+  turns: Turn[];
+  incompleteRecords: number;
+};
 type RecordValue = Record<string, any>;
 
 export function discoverSeats(value: any): Seat[] {
@@ -75,15 +79,28 @@ function textContent(value: unknown): string {
 export function parseSession(seat: Seat, lines: string): ParsedSession {
   const records: RecordValue[] = [];
   const pieces = lines.split("\n");
+  let incompleteRecords = 0;
+  let precedingTimestamp: string | undefined;
   for (let index = 0; index < pieces.length; index++) {
     const line = pieces[index]!;
     if (!line.trim()) continue;
     try {
-      records.push(JSON.parse(line));
+      const record = JSON.parse(line);
+      if (!record || typeof record !== "object" || Array.isArray(record))
+        throw new Error("Invalid JSONL object");
+      records.push(record);
+      if (Number.isFinite(Date.parse(record.timestamp)))
+        precedingTimestamp = new Date(record.timestamp).toISOString();
     } catch {
       // A running harness may not have finished its final JSONL line yet.
-      if (index !== pieces.length - 1)
+      if (index === pieces.length - 1) continue;
+      if (seat.family !== "claude")
         throw new Error("Malformed session JSONL record");
+      incompleteRecords++;
+      // Unknown content could be a new prompt. End the preceding estimate at
+      // the last known timestamp rather than attributing across a damaged gap.
+      if (precedingTimestamp)
+        records.push({ type: "usage_gap", timestamp: precedingTimestamp });
     }
   }
   const events = new Map<string, UsageEvent>();
@@ -103,6 +120,10 @@ export function parseSession(seat: Seat, lines: string): ParsedSession {
   let model = "unknown";
   let effort = "unknown";
   for (const [recordIndex, record] of records.entries()) {
+    if (record.type === "usage_gap") {
+      turns.push({ at: record.timestamp, text: "" });
+      continue;
+    }
     const payload = record.payload ?? {};
     if (record.type === "turn_context" || record.type === "session_meta") {
       model = payload.model ?? model;
@@ -208,6 +229,7 @@ export function parseSession(seat: Seat, lines: string): ParsedSession {
   return {
     events: reconcileEvents([...events.values()]),
     turns: turns.sort((a, b) => a.at.localeCompare(b.at)),
+    incompleteRecords,
   };
 }
 
@@ -276,10 +298,12 @@ export async function resolveLogs(
           })) {
             const childPath = await realpath(child);
             consumed.push(childPath);
-            parsed.events.push(
-              ...parseSession(resolved, await readFile(childPath, "utf8"))
-                .events,
+            const childParsed = parseSession(
+              resolved,
+              await readFile(childPath, "utf8"),
             );
+            parsed.events.push(...childParsed.events);
+            parsed.incompleteRecords += childParsed.incompleteRecords;
           }
         parsed.events = reconcileEvents(parsed.events);
       }

@@ -92,7 +92,7 @@ export class UsageStore {
     })();
   }
   refresh(
-    pr: number,
+    pr: number | null,
     sessions: { seat: Seat; events: UsageEvent[] }[],
     windows: Window[],
     missing: number,
@@ -100,7 +100,7 @@ export class UsageStore {
   ) {
     this.db
       .transaction(() => {
-        const retained = this.windows(pr).filter(
+        const retained = (pr === null ? [] : this.windows(pr)).filter(
           (w) =>
             w.source !== "review" ||
             !validReviews ||
@@ -127,7 +127,8 @@ export class UsageStore {
               .run(id, key, JSON.stringify(merged));
           }
         }
-        this.db.query("DELETE FROM usage_windows WHERE pr = ?").run(pr);
+        if (pr !== null)
+          this.db.query("DELETE FROM usage_windows WHERE pr = ?").run(pr);
         const mergedWindows = new Map(
           [...retained, ...windows].map((w) => [
             JSON.stringify([w.pr, w.session, w.seat, w.role, w.from, w.source]),
@@ -147,9 +148,10 @@ export class UsageStore {
           this.db
             .query("INSERT INTO usage_rows VALUES (?)")
             .run(JSON.stringify(row));
-        this.db
-          .query("INSERT OR REPLACE INTO usage_status VALUES (?, ?)")
-          .run(pr, missing);
+        if (pr !== null)
+          this.db
+            .query("INSERT OR REPLACE INTO usage_status VALUES (?, ?)")
+            .run(pr, missing);
       })
       .immediate();
   }

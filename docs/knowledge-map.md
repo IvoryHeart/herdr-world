@@ -144,7 +144,8 @@ Repository workflow lives in [AGENTS.md](../AGENTS.md) and
 under [`.hwf/workflows/`](../.hwf/workflows/). Per-PR contributor token accounting
 uses [the usage guide](agent-usage-audit.md), [CLI](../scripts/agent/pr-usage.ts),
 [parsers](../scripts/agent/usage-records.ts), [attribution](../scripts/agent/usage-attribution.ts),
-[reconciliation](../scripts/agent/usage-reconcile.ts) and [local ledger](../scripts/agent/usage-store.ts);
+[reconciliation](../scripts/agent/usage-reconcile.ts), [roster checks](../scripts/agent/usage-roster.ts)
+and [local ledger](../scripts/agent/usage-store.ts);
 focused tests are beside these modules. The report-only readiness gate,
 [`agent:gate`](../scripts/agent/gate/), reuses World's PR detail parser and
 readiness rules. Use synthetic data in tracked evidence.

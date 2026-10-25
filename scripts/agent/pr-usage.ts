@@ -443,7 +443,7 @@ async function readSessionLogs(options: Options) {
 if (import.meta.main) {
   try {
     const args = process.argv.slice(2).filter((arg) => arg != "--");
-    if (["pr", "comment", "assign"].includes(args[0] ?? "")) {
+    if (["pr", "comment", "assign", "roster-check"].includes(args[0] ?? "")) {
       const { prUsageMain } = await import("./usage-cli");
       await prUsageMain(args);
     } else {

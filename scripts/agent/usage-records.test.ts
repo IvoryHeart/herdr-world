@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseSession, discoverSeats, resolveLogs } from "./usage-records";
+import { attribute, inferredWindows } from "./usage-attribution";
 
 const session = {
   session: "00000000-0000-4000-8000-000000000001",
@@ -166,7 +167,7 @@ test("session lookup supports Claude IDs, explicit paths, missing logs and rejec
   }
 });
 
-test("live partial final JSONL lines are deferred but corrupt complete records fail", () => {
+test("live partial final lines are deferred and malformed Claude records are quarantined", () => {
   const chunk = JSON.stringify({
     type: "assistant",
     timestamp: at,
@@ -177,9 +178,59 @@ test("live partial final JSONL lines are deferred but corrupt complete records f
     },
   });
   expect(parseSession(session, `${chunk}\n{partial`).events).toHaveLength(1);
-  expect(() => parseSession(session, `${chunk}\n{broken}\n`)).toThrow(
-    "Malformed",
+  expect(parseSession(session, `${chunk}\n{broken}\n`)).toMatchObject({
+    incompleteRecords: 1,
+  });
+  expect(() =>
+    parseSession({ ...session, family: "codex" }, `${chunk}\n{broken}\n`),
+  ).toThrow("Malformed");
+});
+
+test("a damaged coordinator log retains valid usage while a gap stops the preceding estimate", () => {
+  const seat = { ...session, seat: "firstmate" };
+  const user = (timestamp: string) =>
+    JSON.stringify({
+      type: "user",
+      timestamp,
+      message: { content: "Please coordinate #7" },
+    });
+  const assistant = (timestamp: string, id: string) =>
+    JSON.stringify({
+      type: "assistant",
+      timestamp,
+      message: { id, model: "claude-opus-5-5", usage: { output_tokens: 5 } },
+    });
+  const parsed = parseSession(
+    seat,
+    [
+      user(at),
+      assistant("2026-10-25T10:01:00.000Z", "before"),
+      "{corrupt complete record}",
+      assistant("2026-10-25T10:02:00.000Z", "after"),
+      user("2026-10-25T10:03:00.000Z"),
+      assistant("2026-10-25T10:04:00.000Z", "recovered"),
+    ].join("\n"),
   );
+  expect(parsed.events).toHaveLength(3);
+  expect(parsed.incompleteRecords).toBe(1);
+  expect(parsed.turns).toContainEqual({
+    at: "2026-10-25T10:01:00.000Z",
+    text: "",
+  });
+  const windows = inferredWindows(
+    seat,
+    parsed.turns,
+    7,
+    [],
+    "2026-10-25T10:05:00.000Z",
+  );
+  const rows = attribute(parsed.events, windows);
+  expect(
+    rows.filter((r) => r.pr === 7).reduce((n, r) => n + r.responses, 0),
+  ).toBe(1);
+  expect(
+    rows.filter((r) => r.pr === null).reduce((n, r) => n + r.responses, 0),
+  ).toBe(2);
 });
 
 test("Claude session discovery includes child transcripts under the parent seat", async () => {
@@ -198,7 +249,7 @@ test("Claude session discovery includes child transcripts under the parent seat"
     await Bun.write(join(root, `${session.session}.jsonl`), message("main", 2));
     await Bun.write(
       join(root, session.session, "subagents", "agent-example.jsonl"),
-      `${message("child", 3)}\n${message("child", 5)}`,
+      `${message("child", 3)}\n{broken child record}\n${message("child", 5)}`,
     );
     const [result] = await resolveLogs([session], {
       codex: root,
@@ -210,6 +261,7 @@ test("Claude session discovery includes child transcripts under the parent seat"
       ["main", 2, session.session],
       ["child", 5, session.session],
     ]);
+    expect(result?.parsed.incompleteRecords).toBe(1);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
