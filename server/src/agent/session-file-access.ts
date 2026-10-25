@@ -35,6 +35,8 @@ export type AgentSessionFileAccess = {
   readPrefix(path: string, byteLimit: number): Promise<Uint8Array>;
   readDownloadBody(path: string): Promise<BodyInit>;
   findPiSessionById(id: string): Promise<SessionFile | null>;
+  /** Optional host-local discovery for a Herdr-reported Claude UUID. */
+  findClaudeSessionById?(id: string): Promise<SessionFile | null>;
   findCodexSessionById(id: string): Promise<SessionFile | null>;
   /** Complete interactive-thread evidence for one directory. */
   listCodexThreads?(cwd: string): Promise<CodexDaemonThread[] | null>;
@@ -262,6 +264,53 @@ printf '%s\\t%s\\t%s\\t%s\\t%s\\n' "$size" "$mtime" "$path64" "$identity" "$chan
     listCodexThreadBatch: (cwds) =>
       listCodexDaemonThreadBatch(cwds, { sshHost: host }),
     statFile,
+    async findClaudeSessionById(id) {
+      if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id))
+        throw new Error("Expected a complete Claude session ID.");
+      const output = await runRemote(`
+set -eu
+root="$HOME/.claude/projects"
+[ -d "$root" ] || exit 0
+# A marker preserves trailing newlines in the physical directory name.
+root="$(cd -P "$root" && printf '%s.' "$PWD")"
+root="\${root%.}"
+printf '%s\\0' "$root"
+find "$root" -mindepth 2 -maxdepth 2 -type f -name ${args.shQuote(`${id}.jsonl`)} -print0
+`);
+      if (!output.length) return null;
+      if (output[output.length - 1] !== 0)
+        throw new Error("Invalid Claude session lookup response.");
+      const records = output.toString("utf8").split("\0");
+      records.pop();
+      const root = records.shift();
+      if (
+        !root?.startsWith("/") ||
+        (root !== "/" && root.endsWith("/")) ||
+        root.split("/").some((part) => part === "." || part === "..")
+      )
+        throw new Error("Invalid Claude session lookup root.");
+      const paths = records;
+      if (paths.length > 1)
+        throw new Error("Multiple transcripts match this Claude session ID.");
+      if (!paths.length) return null;
+      const path = paths[0];
+      const prefix = root === "/" ? root : `${root}/`;
+      const [project, name, ...nested] = path?.startsWith(prefix)
+        ? path.slice(prefix.length).split("/")
+        : [];
+      if (
+        !project ||
+        project === "." ||
+        project === ".." ||
+        name !== `${id}.jsonl` ||
+        nested.length
+      )
+        throw new Error("Invalid Claude session lookup path.");
+      const file = await statFile(path!);
+      if (file && file.path !== path)
+        throw new Error("Invalid Claude session lookup path.");
+      return file;
+    },
     async clockOffset() {
       const before = Date.now();
       const output = (await runRemote("date +%s%N")).toString().trim();

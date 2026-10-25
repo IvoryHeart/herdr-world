@@ -6,6 +6,16 @@ view that you open on purpose.
 
 ## What Chat does
 
+On Unix SSH hosts, Claude Code sessions reported by Herdr as UUIDs are resolved
+in that host's `~/.claude/projects/<project>/<UUID>.jsonl`. The transcript is read
+through the captured connection's SSH file adapter. Missing files, duplicate UUID
+matches and SSH errors never use a local transcript. A readable, reported session
+can use the same session-checked Send as a local conversation; missing integration
+metadata still shows the integration instructions.
+The projects root is resolved on that host, including when it is a symlink.
+Discovered paths must name the requested UUID directly inside one project under
+that root; stat metadata cannot redirect the read to a different transcript.
+
 - Reads only the conversation read model described below. It never reads the
   terminal screen and never shows terminal output.
 - Sends with Herdr's `agent prompt`, and only to a conversation that Herdr ties
@@ -377,7 +387,7 @@ the read's own reason if that fails.
 | `no_agent` | Herdr sees no agent in the pane. |
 | `unsupported_harness` | Herdr detects the agent, but World has no transcript reader for it. |
 | `unsupported_platform` | The connection is a Windows SSH host. |
-| `remote_lookup` | The agent is on an SSH host and World can only read its transcripts on this machine: always for Grok Build and Antigravity, and for Claude Code and Kimi when Herdr reported an ID rather than a path. |
+| `remote_lookup` | The agent is on an SSH host and its reader or ID lookup is local-only: always for Grok Build and Antigravity, and for Kimi when Herdr reported an ID rather than a path. |
 | `no_session` | Herdr has no session for the pane; the reply names the integration command. |
 | `codex_unlinked` | Codex runs threads in a shared service, so Herdr cannot tell which thread the pane shows ([#250](https://github.com/IvoryHeart/herdr-world/issues/250)). Add Thread ID to Codex's `/title`, or link the session in the panel. |
 | `ambiguous` | More than one Codex transcript matches the pane's title. |

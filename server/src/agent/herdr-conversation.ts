@@ -251,9 +251,8 @@ export function createHerdrConversationSource(args: {
         `Chat cannot read ${agent} conversations yet.`,
       );
     const reported = isRecord(info.agent_session) ? info.agent_session : null;
-    // The Grok and Antigravity readers, and Claude and Kimi ID lookups, only
-    // open files on this machine. A remote pane must never show a local
-    // transcript, so these are refused rather than read.
+    // A remote pane must never use local-only readers or ID discovery.
+    // Claude UUIDs are supported only by an adapter with host-local lookup.
     if (
       args.files.remote &&
       (agent === "grok" ||
@@ -261,7 +260,8 @@ export function createHerdrConversationSource(args: {
         (reported &&
           reported.kind !== "path" &&
           agent !== "pi" &&
-          agent !== "codex"))
+          agent !== "codex" &&
+          !(agent === "claude" && args.files.findClaudeSessionById)))
     )
       return unavailable(
         base,

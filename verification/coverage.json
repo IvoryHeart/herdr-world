@@ -940,6 +940,7 @@
         "server/src/agent/worktree-session.test.ts",
         "server/src/workspace/agent-worktree-files.test.ts",
         "server/src/agent/session-history.test.ts",
+        "server/src/agent/claude-ssh.test.ts",
         "server/src/agent/conversation-matrix.test.ts",
         "server/src/agent/conversation-watch.test.ts",
         "server/src/agent/conversation-send-race.test.ts",
@@ -963,7 +964,7 @@
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/182",
       "technique": "alternative",
-      "assessment": "direct report/session parsing/publication, Python-free remote Codex lookup, and one-shot preview/confirmation fixtures; runtime admission delegated to qualified-operation",
+      "assessment": "direct report/session parsing/publication, Python-free remote Codex lookup, Claude host-local UUID read/send fixtures, and one-shot preview/confirmation fixtures; runtime admission delegated to qualified-operation",
       "status": "shared-model",
       "remaining": "The external runtime cannot atomically compare the foreground process and report a link; preview/confirmation tests do not claim to close that final RPC race. Session identity is a distinct consumer guard; parsing all external formats is direct fixture evidence, not a manager guarantee.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
@@ -978,6 +979,7 @@
           "server/src/agent/worktree-session.test.ts",
           "server/src/workspace/agent-worktree-files.test.ts",
           "server/src/agent/session-history.test.ts",
+          "server/src/agent/claude-ssh.test.ts",
           "server/src/agent/codex-session-link.test.ts",
           "server/src/connections/session-link-routing.test.ts",
           "server/src/agent/codex-session.test.ts",
@@ -992,7 +994,7 @@
         "checks": ["bun run check", "bun run verification:check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
       },
-      "evidenceDecision": "Captured runtime authority applies to checkout report reads. Real history/task parsers and checkout tests check transcript order and exact live session identity. Direct Codex protocol and inference fixtures check bounded complete discovery, title precedence, contradictory reports, two-sided uniqueness, freshness, changing evidence, connection isolation and refusal of guessed message/answer input; inferred evidence never establishes client identity.",
+      "evidenceDecision": "Captured runtime authority applies to checkout report reads. Real history/task parsers and checkout tests check transcript order and exact live session identity. Direct Codex protocol and inference fixtures check bounded complete discovery, title precedence, contradictory reports, two-sided uniqueness, freshness, changing evidence, connection isolation and refusal of guessed message/answer input; inferred evidence never establishes client identity. Claude SSH fixtures execute the production POSIX lookup/stat/read payloads against a disposable filesystem with a synthetic Herdr source, checking remote read/send/receipt, duplicate and malformed IDs, missing files, stale-session refusal and connection isolation; native SSH/Claude acceptance is not claimed.",
       "promotion": {
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
