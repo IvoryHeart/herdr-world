@@ -604,7 +604,9 @@ The link replaces the pane's existing session association for all viewers.
 > Follow missing-metadata integration hints. For Codex 0.157 and later, run
 > `/title` in Codex and add Thread ID so History knows which conversation a pane
 > shows. SSH reads Herdr-reported paths and
-> Codex and Pi ID lookups remotely; other local ID/directory fallbacks may miss remote
+> Claude, Codex and Pi ID lookups remotely. Claude requires its Herdr-reported UUID
+> to match one transcript in that host's `~/.claude/projects/`;
+> other local ID/directory fallbacks may miss remote
 > transcripts. See [session inspection](../FEATURES.md#agent-awareness-and-session-inspection).
 
 ### 2.3 Read the file, then the diff

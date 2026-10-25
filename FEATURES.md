@@ -763,7 +763,9 @@ Codex 0.157 and later run conversations in a shared background service, so
 Herdr's hook cannot say which pane shows which one. Run `/title` in Codex and
 add Thread ID: History then reads the conversation from the pane's title, and
 shows nothing rather than guess when the title does not identify exactly one.
-With `--ssh-host`, Herdr-reported paths and Pi and Codex ID lookups read remotely. Other
+With `--ssh-host`, Herdr-reported paths and Claude, Pi and Codex ID lookups read remotely.
+Claude requires a unique session UUID match in that host's `~/.claude/projects/`;
+missing or ambiguous transcripts never fall back to this machine's files. Other
 ID/directory fallbacks (including Grok Build and Antigravity CLI discovery) remain local and need
 locally accessible transcripts.
 

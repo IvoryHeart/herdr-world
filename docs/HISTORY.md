@@ -114,6 +114,11 @@ an explicit link below. Local and Unix SSH discovery use only their captured
 runtime; a failed remote lookup never searches this machine's daemon or files.
 Older Codex versions without `proxy` retain title and explicit-link support.
 
+For Claude Code on Unix SSH hosts, the Herdr-reported session UUID is looked up
+in the selected host's `~/.claude/projects/`. Exactly one top-level project
+transcript must match. The existing SSH adapter reads its contents for both
+History and Chat; lookup errors or ambiguous matches never search local files.
+
 Chat presents conversations with paired tool calls/results and the same minimap
 as Ranger. Timeline retains individual records and filters. Both use the bounded
 History window; Chat loads older pages as you scroll back, while the minimap

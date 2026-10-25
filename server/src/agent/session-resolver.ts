@@ -365,6 +365,9 @@ async function sessionFileFor(
   if (agent === "pi" && files.remote) {
     return files.findPiSessionById(session.value);
   }
+  if (agent === "claude" && files.remote) {
+    return files.findClaudeSessionById?.(session.value) ?? null;
+  }
   if (agent === "codex") return findCodexSession(session.value, files, context);
   let path: string | null = null;
   if (agent === "claude")

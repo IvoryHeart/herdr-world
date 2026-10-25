@@ -3065,6 +3065,14 @@ Chat SHALL pair tool calls with their results and offer a conversation minimap
 without implying older records have been fetched. Switching presentation SHALL
 retain the selected runtime and pane lease.
 
+On Unix SSH connections, a Herdr-reported Claude session UUID SHALL resolve
+against that host's `~/.claude/projects/<project>/<UUID>.jsonl`. Exactly one
+project transcript SHALL match; duplicate matches and lookup/read errors SHALL
+NOT fall back to this machine's files. History and Chat SHALL read the resolved
+file through the captured connection's file adapter. A readable reported session
+MAY use Chat Send under the existing session and native admission checks;
+remote discovery SHALL NOT grant authority to a guessed session.
+
 A manual Codex session link SHALL require a full session UUID, readable metadata
 from the selected runtime, a preview and explicit confirmation. The one-shot
 preview SHALL expire after five minutes and bind the pane terminal, foreground

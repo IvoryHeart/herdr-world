@@ -35,6 +35,8 @@ export type AgentSessionFileAccess = {
   readPrefix(path: string, byteLimit: number): Promise<Uint8Array>;
   readDownloadBody(path: string): Promise<BodyInit>;
   findPiSessionById(id: string): Promise<SessionFile | null>;
+  /** Optional host-local discovery for a Herdr-reported Claude UUID. */
+  findClaudeSessionById?(id: string): Promise<SessionFile | null>;
   findCodexSessionById(id: string): Promise<SessionFile | null>;
   /** Complete interactive-thread evidence for one directory. */
   listCodexThreads?(cwd: string): Promise<CodexDaemonThread[] | null>;
@@ -262,6 +264,26 @@ printf '%s\\t%s\\t%s\\t%s\\t%s\\n' "$size" "$mtime" "$path64" "$identity" "$chan
     listCodexThreadBatch: (cwds) =>
       listCodexDaemonThreadBatch(cwds, { sshHost: host }),
     statFile,
+    async findClaudeSessionById(id) {
+      if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id))
+        throw new Error("Expected a complete Claude session ID.");
+      const output = await runRemote(`
+set -eu
+root="$HOME/.claude/projects"
+[ -d "$root" ] || exit 0
+find "$root" -mindepth 2 -maxdepth 2 -type f -name ${args.shQuote(`${id}.jsonl`)} -print0
+`);
+      if (!output.length) return null;
+      if (output[output.length - 1] !== 0)
+        throw new Error("Invalid Claude session lookup response.");
+      const paths = output.toString("utf8").split("\0").filter(Boolean);
+      if (paths.length > 1)
+        throw new Error("Multiple transcripts match this Claude session ID.");
+      const path = paths[0];
+      if (!path?.startsWith("/"))
+        throw new Error("Invalid Claude session lookup path.");
+      return statFile(path);
+    },
     async clockOffset() {
       const before = Date.now();
       const output = (await runRemote("date +%s%N")).toString().trim();
