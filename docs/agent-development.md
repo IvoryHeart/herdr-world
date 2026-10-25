@@ -300,24 +300,3 @@ The [UI scale browser test timing analysis](ui-scale-test-performance.md) record
 the current slow-case measurements and a proposed test-design experiment.
 The [World handoff browser test timing analysis](world-handoff-test-performance.md)
 records its deadline shortcut, measured saving and scroll-race diagnosis.
-
-### Accepted proposal boundary for a future OpenSpec documentation lane
-
-[Issue #360](https://github.com/IvoryHeart/herdr-world/issues/360) records a
-proposal-only policy decision. **There is no classifier or CI behavior change:**
-`scripts/ci-reuse-full-check.ts` still excludes all `openspec/` paths from its
-documentation lane. Implementing a future exception needs separate authorization.
-
-That future exception may admit only the exact files
-`openspec/changes/<lowercase-kebab-slug>/proposal.md` and
-`openspec/changes/<lowercase-kebab-slug>/design.md`, alongside the existing eligible
-ordinary documentation. It must not admit a whole change directory or nested
-paths. Tasks, current or delta specs, archives, configuration and metadata,
-verification/Quint, adapters, consumers and code retain full required checks.
-Existing protected workflow policy and packaged notices remain protected too.
-
-Mixed or ambiguous diffs fail closed to the full gate, including case and path
-ambiguity. Retain `--no-renames` when collecting changed paths: moving a protected
-specification into a proposal path must still expose the protected deletion and
-select full verification. This accepted boundary does not authorize bypassing
-contract or behavioral verification for a planning file that accompanies code.

@@ -356,21 +356,6 @@
   margin-top: 2px;
 }
 
-.connection-profile-version {
-  min-width: 0;
-  padding: 8px;
-  border: 1px solid var(--border-soft);
-  border-radius: 6px;
-  color: var(--text);
-  font-size: 12px;
-  line-height: 1.4;
-  overflow-wrap: anywhere;
-}
-
-.connection-profile-version p {
-  margin: 0 0 6px;
-}
-
 .connection-profile-actions {
   display: flex;
   flex-wrap: wrap;

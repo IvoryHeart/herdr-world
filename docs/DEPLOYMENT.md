@@ -35,24 +35,6 @@ World also retains the verified legacy codecs for protocols 14-20. Protocol 21
 and future protocols are rejected; use a World release explicitly supporting
 the server rather than downgrading a running Herdr server.
 
-In **Manage connections**, each host has its own running Herdr version and
-protocol check. **Check version again** reads that exact connected host; the
-result expires after one minute. Disconnected, unreadable or malformed results
-stay **unknown**. A timeout does not mean Herdr is too old. An unavailable or
-expired identity cannot establish compatibility, and a running server's version
-does not identify the installed executable.
-
-This connection view explicitly leaves upgrades **unavailable**: it has not
-verified the installed binary, a strictly newer compatible update target or safe
-handoff/supervision. It offers no remote update command and performs no update.
-An exact socket or session scope alone does not establish update safety. Herdr
-0.9.5's [native updater](https://github.com/herdrdev/herdr/blob/v0.9.5/src/update.rs)
-has no pinned-target/dry-run command and stable/preview selection is not a
-strictly-newer guarantee. Existing local installation controls
-below retain their separate verified-target and supervision checks. Never use the
-local updater as a fallback for a remote host or downgrade a newer running server.
-See the [synthetic reference views](images/herdr-compatibility.md) at five sizes.
-
 Herdr 0.9.0 provides **Local navigation** per browser and connection. Older
 connections use **Shared navigation**. Pane topology, terminal sizes, and
 same-tab pane focus remain shared even with Local navigation. Workspace/tab

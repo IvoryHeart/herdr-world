@@ -18,12 +18,11 @@ export type InterestChoice = {
   quiet?: boolean;
 };
 
-export const INTEREST_CHOICES: { id: Interest; label: string; hint: string }[] =
-  [
-    { id: "watching", label: "Watching", hint: "Chimes as usual" },
-    { id: "muted", label: "Muted", hint: "No chimes; still in reception" },
-    { id: "focused", label: "Focused", hint: "Only focused agents chime" },
-  ];
+const CHOICES: { id: Interest; label: string; hint: string }[] = [
+  { id: "watching", label: "Watching", hint: "Chimes as usual" },
+  { id: "muted", label: "Muted", hint: "No chimes; still in reception" },
+  { id: "focused", label: "Focused", hint: "Only focused agents chime" },
+];
 
 const ICONS = { watching: Eye, muted: BellOff, focused: Crosshair };
 
@@ -36,7 +35,7 @@ export function InterestButton({
   const [open, setOpen] = useState(false);
   const Icon = ICONS[current];
   const held = quiet && current === "watching";
-  const label = `${INTEREST_CHOICES.find((choice) => choice.id === current)!.label}${
+  const label = `${CHOICES.find((choice) => choice.id === current)!.label}${
     held ? ", quiet while an agent is focused" : ""
   }`;
   return (
@@ -60,7 +59,7 @@ export function InterestButton({
         collisionPadding={8}
       >
         <div className="interest-choices" role="group" aria-label="Interest">
-          {INTEREST_CHOICES.map((choice) => {
+          {CHOICES.map((choice) => {
             const ChoiceIcon = ICONS[choice.id];
             return (
               <button

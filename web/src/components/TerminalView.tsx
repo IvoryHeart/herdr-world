@@ -7,7 +7,10 @@ import {
   takeTerminalComposerRequest,
   terminalComposerRequestKey,
 } from "../world/terminalComposerRequest";
-import type { TerminalInputMode } from "./TerminalComposer";
+import {
+  readTerminalComposerShortcutsOpen,
+  type TerminalInputMode,
+} from "./TerminalComposer";
 import {
   filesFromTerminalDrop,
   isNativeFileDrag,
@@ -481,7 +484,9 @@ export function TerminalView({
     TerminalTouchSelection["handles"]
   >([]);
   const [mobileKeysOpen, setMobileKeysOpen] = useState(false);
-  const [composerShortcutsOpen, setComposerShortcutsOpen] = useState(false);
+  const [composerShortcutsOpen, setComposerShortcutsOpen] = useState(
+    readTerminalComposerShortcutsOpen,
+  );
   const [localComposerOpen, setLocalComposerOpen] = useState(false);
   const [closePaneRequested, setClosePaneRequested] = useState(false);
   const [localAgentHistoryOpen, setLocalAgentHistoryOpen] = useState(false);
@@ -589,8 +594,7 @@ export function TerminalView({
   const composerModeRef = useRef(composerMode);
   composerModeRef.current = composerMode;
   const composerEditingRef = useRef(false);
-  composerEditingRef.current =
-    isMobileLayout() && composerOpen && composerMode === "composer";
+  composerEditingRef.current = composerOpen && composerMode === "composer";
   const pendingExplicitModeRef = useRef<TerminalInputMode | null>(null);
   const closeTerminalInput = useCallback((blurInput = true) => {
     inputActiveRef.current = false;
@@ -616,7 +620,7 @@ export function TerminalView({
     touchSelectionRef.current?.reset();
     setComposerMode("composer");
     composerModeRef.current = "composer";
-    composerEditingRef.current = isMobileLayout() && composerOpen;
+    composerEditingRef.current = composerOpen;
     closeTerminalInput();
   }, [
     closeTerminalInput,
@@ -634,13 +638,14 @@ export function TerminalView({
     termInstance,
   ]);
   useLayoutEffect(() => {
-    // Reset mobile input on split focus changes without invalidating its link.
+    // Selecting a split is not new link content: preserve its mouse-down link.
+    // Still end mobile input/selection and dismiss actions on focus changes.
     setFileLinkMenu(null);
     setWorkspaceDirectory(null);
     touchSelectionRef.current?.reset();
     setComposerMode("composer");
     composerModeRef.current = "composer";
-    composerEditingRef.current = isMobileLayout() && composerOpen;
+    composerEditingRef.current = composerOpen;
     closeTerminalInput();
   }, [closeTerminalInput, isActivePane, composerOpen]);
   const previousComposerOpenRef = useRef(false);
@@ -665,7 +670,7 @@ export function TerminalView({
     const mode = explicitMode ?? readTerminalInputMode();
     setComposerMode(mode);
     composerModeRef.current = mode;
-    composerEditingRef.current = isMobileLayout() && mode === "composer";
+    composerEditingRef.current = mode === "composer";
   }, [composerOpen, directDisabled, termInstance]);
   const setComposerOpen = useCallback(
     (open: boolean) => {
@@ -3672,7 +3677,7 @@ export function TerminalView({
         if (!composerOpen) pendingExplicitModeRef.current = mode;
         onActivateTerminalSurface?.();
         composerModeRef.current = mode;
-        composerEditingRef.current = isMobileLayout() && mode === "composer";
+        composerEditingRef.current = mode === "composer";
         closeTerminalInput();
         setComposerMode(mode);
         setComposerOpen(true);

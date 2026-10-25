@@ -122,7 +122,7 @@ async function fakeHerdr(
         const result =
           (await respond?.(request)) ??
           (request.method === "ping"
-            ? { version: `0.0.0+${id}`, protocol }
+            ? { version: `fake-${id}`, protocol }
             : request.method === "workspace.list"
               ? {
                   workspaces: [
@@ -587,7 +587,7 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
     );
     expect(await htmlPreview.text()).toBe("<h1>HTML marker</h1>");
     expect((await rpc("connections.test", { id: "beta" })).version).toBe(
-      "0.0.0+beta",
+      "fake-beta",
     );
     await rpc("connections.connect", { id: "beta" });
     const connectedCatalog = await rpc("connections.list");
@@ -845,14 +845,7 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
     expect(legacyHttp.headers.get("X-Herdr-Connection-Generation")).toBe(
       String(newAlphaGeneration),
     );
-    const observedHerdr = await legacyHttp.json();
-    expect(observedHerdr).toMatchObject({
-      version: "0.0.0+beta",
-      protocol: 14,
-      source: "running-server",
-      installedBinary: null,
-    });
-    expect(observedHerdr.expiresAt - observedHerdr.readAt).toBe(60_000);
+    expect(await legacyHttp.json()).toMatchObject({ version: "fake-beta" });
     expect(betaPingCalls()).toBe(beforeLegacyHttp + 1);
     const currentAlpha = await browserB.raw(
       "workspace.list",

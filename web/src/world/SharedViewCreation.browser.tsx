@@ -436,23 +436,26 @@ async function run() {
         '.town-view-shell .world-semantic-target[data-kind="agent"]',
       )!
       .click();
-    // A phone's anchored header control switches views; ⋯ holds attention.
-    const viewTrigger = () =>
+    // A tap opens the agent's one window on Chat. On a phone the window
+    // looks like the terminal: its views sit under ⋯ with the agents.
+    const windowMenu = () =>
       document.querySelector<HTMLButtonElement>(
-        '.workspace-inspector button[aria-label^="Inspector view:"]',
+        '.workspace-inspector button[aria-label="More actions for Inspector window"]',
       );
     await until(
       () =>
         document.querySelector('.workspace-inspector[data-view="history"]') &&
-        viewTrigger(),
+        windowMenu(),
       "Town agent window on Chat",
     );
-    viewTrigger()!.click();
+    windowMenu()!.click();
     const terminalItem = () =>
-      document.querySelector<HTMLButtonElement>(
-        '[aria-label="Inspector views"] [data-view="terminal"]',
-      );
-    await until(terminalItem, "Terminal in the anchored view selector");
+      [
+        ...document.querySelectorAll<HTMLButtonElement>(
+          '[role="menu"][aria-label="Window actions"] [role="menuitemradio"]',
+        ),
+      ].find((item) => item.textContent === "Terminal");
+    await until(terminalItem, "Terminal in the window's ⋯ menu");
     terminalItem()!.click();
     await until(
       () =>

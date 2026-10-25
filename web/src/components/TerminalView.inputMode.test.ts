@@ -1412,9 +1412,10 @@ async function registerDomTests() {
     expect(document.activeElement).toBe(editor);
     const tools = [
       ...container.querySelectorAll(".terminal-composer-toolbar > button"),
-    ].slice(0, 2);
+    ].slice(0, 3);
     expect(tools.map((button) => button.className)).toEqual([
       "terminal-composer-attach",
+      "terminal-composer-shortcuts-toggle",
       "terminal-composer-commands-toggle",
     ]);
     expectInputBlocked();
@@ -1494,7 +1495,7 @@ async function registerDomTests() {
       await back();
       expect(filesOpen).toBe(false);
       expect(open).toBe(initiallyOpen); // Back closes the page, not its background dock.
-      expect(toolbar.hidden).toBe(false); // Mode entry points remain available while the dock is closed.
+      expect(toolbar.hidden).toBe(!initiallyOpen);
       expect(shortcuts.hidden).toBe(shortcutsWereHidden);
       expect(editor.value).toBe("keep\nthis draft");
       expect([editor.selectionStart, editor.selectionEnd]).toEqual([2, 7]);
@@ -1505,13 +1506,13 @@ async function registerDomTests() {
       // More/Tabs in the terminal must NOT hide accessories.
       for (const entry of [".mobile-appbar-more", ".mobile-appbar-tabs"]) {
         await click(entry);
-        expect(toolbar.hidden).toBe(false); // Mode entry points remain available while the dock is closed.
+        expect(toolbar.hidden).toBe(!initiallyOpen);
         await back();
       }
     },
   );
 
-  test("secondary presentation hides its toolbar and keys without exposing stale command ARIA", async () => {
+  test("secondary presentation preserves hidden shortcuts and commands without exposing stale combobox ARIA", async () => {
     mobileShortcuts = [
       [
         {
@@ -1532,8 +1533,8 @@ async function registerDomTests() {
     const editor = container.querySelector<HTMLTextAreaElement>(
       ".terminal-composer-input",
     )!;
-    // Keys stay visible with commands while this surface is presented.
-    expect(shortcuts.hidden).toBe(false);
+    // Explicitly turn shortcuts off; presentation must not overwrite that choice.
+    if (!shortcuts.hidden) await click(".terminal-composer-shortcuts-toggle");
     await click(".terminal-composer-commands-toggle");
     expect(editor.getAttribute("aria-expanded")).toBe("true");
     expect(
@@ -1571,10 +1572,12 @@ async function registerDomTests() {
       container.querySelector(".terminal-composer-commands"),
     ).not.toBeNull();
     await click('[aria-label="Dismiss commands"]');
-    expect(shortcuts.hidden).toBe(false);
+    expect(shortcuts.hidden).toBe(true);
     expect(
-      container.querySelector(".terminal-composer-shortcuts-toggle"),
-    ).toBeNull();
+      container
+        .querySelector(".terminal-composer-shortcuts-toggle")
+        ?.getAttribute("aria-expanded"),
+    ).toBe("false");
     expectInputBlocked();
   });
 
@@ -2245,7 +2248,7 @@ async function registerDomTests() {
     expect(readTerminalComposerDraft(draftKey)).toBe("");
   });
 
-  test("Composer special keys stay visible across modes and commands without duplicate capsules", async () => {
+  test("closing Composer shortcuts or opening Commands reveals the upper-right shortcut capsule and coordinates focus", async () => {
     showMobileKeys = true;
     mobileShortcuts = [
       [
@@ -2261,41 +2264,105 @@ async function registerDomTests() {
     const editor = container.querySelector<HTMLTextAreaElement>(
       ".terminal-composer-input",
     )!;
-    const keys = container.querySelector<HTMLElement>(
+    const composerShortcuts = container.querySelector<HTMLElement>(
       ".terminal-composer-shortcuts",
     )!;
-    expect(keys.hidden).toBe(true);
+    // While the Composer dock is closed, the upper-right shortcut capsule is visible.
+    expect(composerShortcuts.hidden).toBe(true);
     expect(container.querySelector(".terminal-mobile-keys")).not.toBeNull();
+
+    // Opening the Composer dock with shortcuts open hides the upper-right capsule.
     await setOpen(true);
-    expect(keys.hidden).toBe(false);
+    expect(composerShortcuts.hidden).toBe(false);
     expect(container.querySelector(".terminal-mobile-keys")).toBeNull();
+
+    // Closing the Composer shortcut keyboard reveals the upper-right capsule.
+    await click(".terminal-composer-shortcuts-toggle");
+    expect(composerShortcuts.hidden).toBe(true);
+    const mobileKeys = container.querySelector<HTMLElement>(
+      ".terminal-mobile-keys",
+    );
+    expect(mobileKeys).not.toBeNull();
+    expect(mobileKeys?.classList.contains("is-open")).toBe(false);
+
+    // Focus multiline Composer draft and use upper-right capsule without losing focus or expanded state.
     await act(async () => {
       writeTerminalComposerDraft(draftKey, "line 1\nline 2");
       editor.focus();
     });
-    const before = calls.filter(
+    expect(document.activeElement).toBe(editor);
+    expect(
+      container
+        .querySelector(".terminal-composer")
+        ?.hasAttribute("data-expanded"),
+    ).toBe(true);
+
+    await click(".terminal-mobile-keys-toggle");
+    expect(
+      container
+        .querySelector(".terminal-mobile-keys")
+        ?.classList.contains("is-open"),
+    ).toBe(true);
+    expect(document.activeElement).toBe(editor);
+    expect(
+      container
+        .querySelector(".terminal-composer")
+        ?.hasAttribute("data-expanded"),
+    ).toBe(true);
+
+    const beforeEsc = calls.filter(
       (call) => call.method === "terminal.input",
     ).length;
     await click('[aria-label="Send Escape"]');
     expect(
       calls.filter((call) => call.method === "terminal.input"),
-    ).toHaveLength(before + 1);
+    ).toHaveLength(beforeEsc + 1);
     expect(document.activeElement).toBe(editor);
     expect(readTerminalComposerDraft(draftKey)).toBe("line 1\nline 2");
+
+    // Switching to Direct mode while Composer shortcuts are closed keeps the upper-right capsule interactive and preserves Direct focus.
     await click(".terminal-mobile-direct");
     expect(selectedMode()).toBe("direct");
-    expect(keys.hidden).toBe(false);
-    expect(container.querySelector(".terminal-mobile-keys")).toBeNull();
+    expect(document.activeElement).toBe(currentTerminal().textarea);
+    expect(
+      container
+        .querySelector(".terminal-composer")
+        ?.hasAttribute("data-expanded"),
+    ).toBe(false);
     await click('[aria-label="Send Escape"]');
     expect(
       calls.filter((call) => call.method === "terminal.input"),
-    ).toHaveLength(before + 2);
+    ).toHaveLength(beforeEsc + 2);
     expect(document.activeElement).toBe(currentTerminal().textarea);
-    await click(".terminal-composer-commands-toggle");
-    expect(keys.hidden).toBe(false);
+
+    // Re-opening Composer shortcuts hides the upper-right capsule and resets its open state.
+    await click(".terminal-composer-shortcuts-toggle");
+    expect(composerShortcuts.hidden).toBe(false);
     expect(container.querySelector(".terminal-mobile-keys")).toBeNull();
+
+    // Opening the command picker covers Composer shortcuts and reveals the upper-right capsule.
+    await click(".terminal-composer-commands-toggle");
+    expect(composerShortcuts.hidden).toBe(true);
+    expect(
+      container
+        .querySelector(".terminal-composer-shortcuts-toggle")
+        ?.getAttribute("aria-label"),
+    ).toBe("Show terminal shortcuts");
+    expect(container.querySelector(".terminal-mobile-keys")).not.toBeNull();
+    expect(
+      container
+        .querySelector(".terminal-mobile-keys")
+        ?.classList.contains("is-open"),
+    ).toBe(false);
+
+    // Closing the command picker restores Composer shortcuts and hides the upper-right capsule.
     await click('[aria-label="Dismiss commands"]');
-    expect(keys.hidden).toBe(false);
+    expect(composerShortcuts.hidden).toBe(false);
+    expect(
+      container
+        .querySelector(".terminal-composer-shortcuts-toggle")
+        ?.getAttribute("aria-label"),
+    ).toBe("Hide terminal shortcuts");
     expect(container.querySelector(".terminal-mobile-keys")).toBeNull();
   });
 

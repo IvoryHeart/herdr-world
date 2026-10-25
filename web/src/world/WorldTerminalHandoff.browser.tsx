@@ -1990,40 +1990,11 @@ async function run() {
   // On a phone, the Chat view shows one composer, Chat's own: no terminal
   // key bar and no terminal composer (those belong to the Terminal view).
   const shown = (element: Element) => element.getClientRects().length > 0;
-  const chooseMobileView = async (
-    view: "terminal" | "files" | "history" | "changes",
-  ) => {
-    mobileInspector
-      .querySelector<HTMLButtonElement>('[aria-label^="Inspector view:"]')!
-      .click();
-    await until(
-      () => document.querySelector('[aria-label="Inspector views"]'),
-      "anchored Inspector views",
-    );
-    check(
-      !mobileInspector.querySelector("select"),
-      "mobile views opened a native combo box",
-    );
-    check(
-      [...document.querySelectorAll('[aria-label="Inspector views"] button')]
-        .map((button) => button.textContent?.trim())
-        .slice(0, 4)
-        .join(",") === "Chat,Terminal,Files,Changes",
-      "mobile view destinations changed order",
-    );
-    document
-      .querySelector<HTMLButtonElement>(
-        `[aria-label="Inspector views"] [data-view="${view}"]`,
-      )!
-      .click();
-    await until(
-      () => mobileInspector.getAttribute("data-view") === view,
-      `mobile view ${view}`,
-    );
-  };
-  await chooseMobileView("files");
-  await chooseMobileView("changes");
-  await chooseMobileView("history");
+  document
+    .querySelector<HTMLButtonElement>(
+      '.mobile-nav[aria-label="Workspace view switcher"] button[aria-label="Show agent message history"]',
+    )
+    ?.click();
   await until(
     () => mobileInspector.getAttribute("data-view") === "history",
     "phone window Chat view",
@@ -2046,7 +2017,11 @@ async function run() {
     ].filter(shown).length <= 1,
     "the phone Chat view shows more than one composer",
   );
-  await chooseMobileView("terminal");
+  document
+    .querySelector<HTMLButtonElement>(
+      '.mobile-nav[aria-label="Workspace view switcher"] button[aria-label="Show terminal session"]',
+    )
+    ?.click();
   await until(
     () => mobileInspector.getAttribute("data-view") === "terminal",
     "phone window back on Terminal",
@@ -2055,37 +2030,6 @@ async function run() {
   const mobileHeader = mobileInspector.querySelector<HTMLElement>(
     ".workspace-inspector-head",
   )!;
-  check(
-    !mobileHeader.querySelector('[aria-label^="Interest:"]'),
-    "attention remained in the mobile header",
-  );
-  mobileHeader
-    .querySelector<HTMLButtonElement>('[aria-haspopup="menu"]')!
-    .click();
-  await until(
-    () => document.querySelector('[aria-label="Window actions"]'),
-    "mobile attention menu",
-  );
-  check(
-    document
-      .querySelector('[aria-label="Window actions"] [role^="menuitem"]')
-      ?.textContent?.trim() === "Pin desk in Town",
-    "mobile desk pin is not first in the ellipsis menu",
-  );
-  const attentionChoices = [
-    ...document.querySelectorAll<HTMLButtonElement>(
-      '[aria-label="Window actions"] [role="menuitemradio"]',
-    ),
-  ];
-  check(
-    attentionChoices
-      .map((button) => button.querySelector("span")?.textContent)
-      .join(",") === "Watching,Muted,Focused",
-    "mobile ellipsis does not contain attention choices separately from views",
-  );
-  attentionChoices
-    .find((button) => button.getAttribute("aria-checked") === "true")!
-    .click();
   // On a phone the window looks like the terminal: its own bar (name,
   // status and ⋯) is the only bar, and the app's topbar slides away.
   check(
@@ -3989,67 +3933,58 @@ async function run() {
     document.querySelector<HTMLElement>(
       ".workspace-inspector-slot .workspace-inspector",
     );
-  const attentionChoicesFor = async (inspector: Element) => {
-    const trigger =
-      inspector.querySelector<HTMLButtonElement>('[aria-label^="Interest:"]') ??
-      inspector.querySelector<HTMLButtonElement>(
-        '[aria-label="More actions for Inspector window"]',
-      );
-    if (!trigger) throw new Error("Inspector has no attention control");
-    trigger.click();
-    await until(
-      () =>
-        document.querySelector(
-          ".interest-choices, [aria-label='Window actions']",
-        ),
-      "Inspector attention choices",
-    );
-    const choices = [
-      ...document.querySelectorAll<HTMLButtonElement>(
-        ".interest-choice, [aria-label='Window actions'] [role='menuitemradio']",
-      ),
-    ];
-    return {
-      trigger,
-      choice: (label: string) =>
-        choices.find((button) => button.textContent?.startsWith(label))!,
-    };
-  };
   await until(
-    () =>
-      spacesInspector()?.querySelector(
-        '[aria-label^="Interest:"], [aria-label="More actions for Inspector window"]',
-      ),
-    "Spaces Inspector attention control",
+    () => spacesInspector()?.querySelector('[aria-label="Interest: Watching"]'),
+    "Spaces Inspector Interest control",
   );
-  (await attentionChoicesFor(spacesInspector()!)).choice("Muted").click();
+  spacesInspector()!
+    .querySelector<HTMLButtonElement>('[aria-label="Interest: Watching"]')!
+    .click();
   await until(
-    () =>
-      boardDocument.layout.interest?.[
-        interestKey("local", "reviewer-terminal")
-      ] === "muted",
-    "Spaces Interest saves the owning terminal",
+    () => document.querySelector(".interest-choices"),
+    "Spaces Interest choices",
   );
-  const worldAttention = await attentionChoicesFor(
-    persistentReviewerInspector!,
+  [...document.querySelectorAll<HTMLButtonElement>(".interest-choice")]
+    .find((button) => button.textContent?.startsWith("Muted"))!
+    .click();
+  await until(
+    () => spacesInspector()?.querySelector('[aria-label="Interest: Muted"]'),
+    "Spaces saves Muted",
   );
   check(
-    worldAttention.choice("Muted").getAttribute("aria-checked") === "true" ||
-      worldAttention.choice("Muted").getAttribute("aria-pressed") === "true",
+    boardDocument.layout.interest?.[
+      interestKey("local", "reviewer-terminal")
+    ] === "muted",
+    "Spaces Interest saves the owning terminal",
+  );
+  check(
+    Boolean(
+      persistentReviewerInspector?.querySelector(
+        '[aria-label="Interest: Muted"]',
+      ),
+    ),
     "World Inspector shares Spaces Interest",
   );
-  worldAttention.trigger.click();
   failInterestPatch = true;
-  (await attentionChoicesFor(spacesInspector()!)).choice("Focused").click();
+  spacesInspector()!
+    .querySelector<HTMLButtonElement>('[aria-label="Interest: Muted"]')!
+    .click();
+  await until(
+    () => document.querySelector(".interest-choices"),
+    "Spaces Interest retry choices",
+  );
+  [...document.querySelectorAll<HTMLButtonElement>(".interest-choice")]
+    .find((button) => button.textContent?.startsWith("Focused"))!
+    .click();
   await until(
     () => store.get().notice?.message === "Agent interest could not be saved",
     "Interest save failure notice",
   );
   check(
     store.get().notice?.detail === "Synthetic Interest save failure" &&
-      boardDocument.layout.interest?.[
-        interestKey("local", "reviewer-terminal")
-      ] === "muted",
+      Boolean(
+        spacesInspector()?.querySelector('[aria-label="Interest: Muted"]'),
+      ),
     "failed Interest save explains the error and keeps the saved policy",
   );
   failInterestPatch = false;

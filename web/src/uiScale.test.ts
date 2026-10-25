@@ -25,19 +25,12 @@ test.skipIf(!chrome).concurrent.each([
   [390, 1, "taskPush", 800, 100],
   [1300, 1, "connectionProfiles", 800, 100],
   [390, 1, "connectionProfiles", 800, 100],
-  [390, 1, "connectionProfiles", 844, 100],
-  [1512, 1, "connectionProfiles", 982, 100],
-  [1280, 1, "connectionProfiles", 1440, 100],
-  [2560, 1, "connectionProfiles", 1440, 100],
-  [1440, 1, "connectionProfiles", 2560, 100],
   [1300, 1, "configuration", 800, 100],
   [390, 1.25, "configuration", 800, 100],
   [320, 1.5, "configuration", 800, 100],
   [320, 1.5, "configuration", 800, 150],
   [740, 1, "configuration", 360, 100],
   [1300, 1, "terminalLoading", 800, 100],
-  [1512, 1, "terminalKeyboard", 982, 100],
-  [390, 1, "terminalKeyboard", 844, 100],
   [1300, 1, "terminalLinks", 800, 100],
   [500, 1.25, "terminalLinks", 800, 100],
   [390, 1, "terminalLinks", 800, 100],
@@ -70,24 +63,6 @@ test.skipIf(!chrome).concurrent.each([
         const path = new URL(request.url).pathname;
         if (path === "/result" && request.method === "POST") {
           resolve(await request.json());
-          return new Response("ok");
-        }
-        if (
-          path === "/capture/connection-version" &&
-          request.method === "POST"
-        ) {
-          if (Bun.env.WORLD_CONNECTION_CAPTURE_DIR) {
-            const image = await cdp("Page.captureScreenshot", {
-              format: "webp",
-            });
-            await Bun.write(
-              join(
-                Bun.env.WORLD_CONNECTION_CAPTURE_DIR,
-                `${width}x${height}.webp`,
-              ),
-              Buffer.from(image.data, "base64"),
-            );
-          }
           return new Response("ok");
         }
         if (path === "/input" && request.method === "POST") {

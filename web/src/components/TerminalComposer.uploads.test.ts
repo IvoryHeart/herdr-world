@@ -390,6 +390,11 @@ async function registerDomTests() {
         }) as unknown as Event,
       );
       shortcut.click();
+      container
+        .querySelector<HTMLButtonElement>(
+          ".terminal-composer-shortcuts-toggle",
+        )!
+        .click();
     });
     expect(document.activeElement).toBe(dock);
     await act(async () => h.uploads[0].resolve("/A.png"));
@@ -444,7 +449,7 @@ async function registerDomTests() {
     expect(h.sent).toEqual([]);
   });
 
-  test("legacy other-tab shortcut visibility changes cannot hide keys or disturb the active draft", async () => {
+  test("other-tab shortcut visibility changes preserve the active draft and caret", async () => {
     const key = "herdr-world:foundation-v2:terminalComposerShortcutsOpen.v1";
     browser.localStorage.removeItem(key);
     const h = await mount("left SELECT right", 5, 11, true);
@@ -467,7 +472,7 @@ async function registerDomTests() {
     };
     expect(panel().hidden).toBe(false);
     await change("false");
-    expect(panel().hidden).toBe(false);
+    expect(panel().hidden).toBe(true);
     expect(h.textarea()).toBe(editor);
     expect(document.activeElement).toBe(editor);
     expect([editor.selectionStart, editor.selectionEnd]).toEqual([5, 11]);

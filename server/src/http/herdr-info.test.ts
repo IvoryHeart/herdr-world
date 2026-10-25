@@ -5,20 +5,12 @@ describe("Herdr server information", () => {
   test("returns only the connected server identity", async () => {
     const { handleHerdrInfo } = createHerdrInfoHandler({
       ping: async () => ({ version: "0.7.4", protocol: 16 }),
-      now: () => 1000,
     });
 
     const response = await handleHerdrInfo();
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({
-      version: "0.7.4",
-      protocol: 16,
-      source: "running-server",
-      readAt: 1000,
-      expiresAt: 61000,
-      installedBinary: null,
-    });
+    expect(await response.json()).toEqual({ version: "0.7.4", protocol: 16 });
   });
 
   test("does not hide connection or malformed-response failures", async () => {

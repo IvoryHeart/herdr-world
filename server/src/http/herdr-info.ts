@@ -1,5 +1,3 @@
-import { observeHerdrIdentity } from "../../../shared/herdrIdentity";
-
 type HerdrIdentity = {
   version: string;
   protocol: number;
@@ -7,19 +5,24 @@ type HerdrIdentity = {
 
 export function createHerdrInfoHandler({
   ping,
-  now = Date.now,
 }: {
   ping: () => Promise<HerdrIdentity>;
-  now?: () => number;
 }) {
   async function handleHerdrInfo() {
     try {
       const info = await ping();
-      const observation = observeHerdrIdentity(info, now());
-      if (!observation) {
+      if (
+        typeof info.version !== "string" ||
+        !info.version.trim() ||
+        !Number.isInteger(info.protocol) ||
+        info.protocol < 1
+      ) {
         throw new Error("Herdr returned invalid server information");
       }
-      return Response.json(observation);
+      return Response.json({
+        version: info.version,
+        protocol: info.protocol,
+      });
     } catch (error) {
       return Response.json(
         { error: error instanceof Error ? error.message : String(error) },

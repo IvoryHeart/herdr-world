@@ -150,8 +150,6 @@ hosts stay usable.
    it to the front. Use **Back** to close the summary.
 4. Tap an agent or its table to open its window on **Chat**: World's Inspector,
    with **Chat**, **Terminal**, **Changes** and **Files** in its top selector.
-   On a phone, the anchored header dropdown switches between **Chat**, **Terminal**,
-   **Files** and **Changes**; the **⋯** menu contains attention settings.
    In Town it docks on the right at a readable width; drag its left edge to
    resize it (Town remembers the width), or drag its title to undock it. Chat shows the
    conversation's latest 200 entries, scrolls back inside the window, and
@@ -220,8 +218,7 @@ hosts stay usable.
    terminal window's menu has **Colour**, and
    in Spaces the tab's menu (right-click or long-press) offers the same palette
    and **Default colour**.
-   In the agent's window, the button beside its name sets its interest (on a
-   phone, use **⋯ → Attention**):
+   In the agent's window, the button beside its name sets its interest:
    **Muted** stops its chimes, **Focused** lets only focused agents chime, and
    **Watching** is the default. Its questions and results still arrive in
    reception.
@@ -271,9 +268,8 @@ hosts stay usable.
    lists the tables to join, and **Leave the team** takes it out. A table's
    name for screen readers says who its team is.
 10. To keep a table where it is, open one of its agents (its window) and choose
-   **Pin desk in Town** at the top of the phone window's **⋯** menu. On desktop,
-   choose the same action from the window’s **⋯** menu.
-   The table wears a pin, stays put
+   **Pin desk in Town** from the window's **⋯** menu, on a phone too. The
+   table wears a pin, stays put
    when tabs are reordered or the room grows, and its agents stay at it rather
    than taking breaks in the lounge; they still go to reception when they need
    you or finish, and come straight back once seen. Choose **Unpin desk in
@@ -710,32 +706,15 @@ in this connection. See [update controls](../FEATURES.md#automatic-branch-update
 
 ### 3.2 Continue from your phone
 
-On a computer, click inside terminal output to send physical arrow keys and
-Ctrl combinations directly to that terminal. Opening Message does not disable
-desktop terminal input; unsent Message drafts remain separate.
-
-To check a host, open **Manage connections** and use **Check version again** on
-its card. The running Herdr version and protocol are specific to that host;
-after one minute, check again before relying on compatibility. A failed check
-stays unknown: reconnect the host and retry. The installed binary is not inferred
-from its server. The connection card explains why upgrade is unavailable and
-does not run an update command.
-
 First complete chapter 4's [Tailscale + Serve](#tailscale) setup and access checks.
 Use its HTTPS URL: `127.0.0.1` on a phone means the phone, not the work computer.
 
 1. Open Herdr World in the mobile browser and select your practice project and
    agent pane. Authenticate first if your deployment requires login.
 2. Tap **Message** below the terminal to raise the keyboard and compose; use
-   the side-by-side **keyboard (Composer) / terminal (Direct)** icons to choose
-   draft editing or typing straight into the terminal. Direct saves and hides the draft; Composer
-   restores it. Both modes stay available while a long draft is expanded.
-   **/ Commands** opens command suggestions for the draft;
-   it does not turn on Direct. The input stays below the output.
-   The toolbar places attachment and Commands on the left, input-mode icons in
-   the middle, and Insert, Send and Close on the right.
-   Tabs and More live in the shared top app bar. Special-key rows stay visible
-   in both modes for arrows, Ctrl and other actions awkward on a touch keyboard.
+   **Direct** to type straight into the terminal. The input stays below the output.
+   Tabs and More live in the shared top app bar. Use the shortcut rows for arrow
+   keys, Ctrl and other actions that are awkward on a touch keyboard.
 3. Open Changes to review the README diff. Mobile uses a unified diff layout;
    long-press a file to open its actions menu. To open a link printed in a
    terminal, long-press it and choose **Open link** (on a computer,

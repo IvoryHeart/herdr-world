@@ -276,13 +276,6 @@ let readingWheelReports: string[] = [];
 const keyboard =
   'html[data-layout="mobile"] button[aria-label="Type directly into the terminal"], html:not([data-layout="mobile"]) button[aria-label="Open terminal input"]';
 
-const keyboardInputActive = () => {
-  const control = document.querySelector(keyboard);
-  return control?.classList.contains("terminal-mobile-direct")
-    ? control.hasAttribute("data-input-active")
-    : control?.getAttribute("aria-pressed") === "true";
-};
-
 const point = (selector: string) => {
   const rect = document.querySelector(selector)!.getBoundingClientRect();
   return {
@@ -1206,13 +1199,14 @@ const api = {
       "hybrid fine-mouse physical keyboard input works",
     );
     check(
-      keyboardInputActive(),
+      document.querySelector(keyboard)?.getAttribute("aria-pressed") === "true",
       "mouse input authorization activates the keyboard indicator",
     );
     textarea().blur();
     await settle();
     check(
-      !keyboardInputActive() && textarea().readOnly,
+      document.querySelector(keyboard)?.getAttribute("aria-pressed") ===
+        "false" && textarea().readOnly,
       "blur clears the input indicator and authorization",
     );
     textarea().focus();
@@ -1222,7 +1216,8 @@ const api = {
     check(
       document.activeElement === textarea() &&
         inputCalls().length > 0 &&
-        keyboardInputActive(),
+        document.querySelector(keyboard)?.getAttribute("aria-pressed") ===
+          "true",
       "restored fine-mouse focus synchronizes input and its indicator",
     );
     check(
