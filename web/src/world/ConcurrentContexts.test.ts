@@ -253,8 +253,20 @@ test.skipIf(!chrome).each([1440, 390])(
       console.info(
         `Dense input by phase at ${width}px: ${JSON.stringify(Object.fromEntries(["projection", "render", "refresh", "noisy-output"].map((phase) => [phase, observed.stressReceipts.filter((receipt) => receipt.phase === phase).map((receipt, index) => receipt.receivedAt - sentInputs.filter((input) => input.phase === phase)[index]!.dueAt)])))}; stages: ${JSON.stringify(observed.measurements)}`,
       );
+      const worstDelay = inputDelays[inputDelays.length - 1]!;
+      const senderLateness = Math.max(
+        ...sentInputs.map((input) => input.sentAt - input.dueAt),
+      );
+      const sentAtMax = Math.max(
+        ...observed.stressReceipts.map(
+          (receipt, index) => receipt.receivedAt - sentInputs[index]!.sentAt,
+        ),
+      );
+      console.info(
+        `Budget check at ${width}px: worstDelay=${worstDelay}ms senderLateness=${senderLateness}ms sentAtMax=${sentAtMax}ms`,
+      );
       // Engineering acceptance budget for this fixed synthetic workload, not a spec SLA.
-      expect(inputDelays[inputDelays.length - 1]).toBeLessThan(200);
+      expect(worstDelay).toBeLessThan(200);
       console.info(
         `Synthetic mounted terminals at ${width}px: ${JSON.stringify({ ...observed.measurements, inputDuringDenseMaxMs: inputDelays[inputDelays.length - 1], inputDuringDenseP95Ms: inputDelays[Math.ceil(inputDelays.length * 0.95) - 1], inputSenderMaxLatenessMs: Math.max(...sentInputs.map((input) => input.sentAt - input.dueAt)) })}`,
       );
