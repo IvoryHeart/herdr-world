@@ -1,19 +1,11 @@
-export const MINIMUM_HERDR_PROTOCOL = 14;
-export const MAXIMUM_HERDR_PROTOCOL = 22;
+import { isSupportedHerdrProtocol } from "../../../shared/herdrIdentity";
+export {
+  MINIMUM_HERDR_PROTOCOL,
+  MAXIMUM_HERDR_PROTOCOL,
+  isSupportedHerdrProtocol,
+} from "../../../shared/herdrIdentity";
 
 export class HerdrCompatibilityError extends Error {}
-
-// Retain legacy codecs (14-20); tagged Herdr 0.9.0 and 0.9.4 both use 22.
-// Protocol 21 and future versions must never be echoed through either codec.
-export function isSupportedHerdrProtocol(
-  protocol: unknown,
-): protocol is number {
-  return (
-    typeof protocol === "number" &&
-    Number.isSafeInteger(protocol) &&
-    ((protocol >= MINIMUM_HERDR_PROTOCOL && protocol <= 20) || protocol === 22)
-  );
-}
 
 // Private terminal protocol 22 is distinct from stable endpoint generation 1.
 export function isTerminalHelloProtocol(protocol: number): boolean {

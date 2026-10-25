@@ -1,4 +1,8 @@
 import {
+  INTEREST_CHOICES,
+  type InterestChoice,
+} from "../../components/InterestButton";
+import {
   ChevronLeft,
   Maximize2,
   Minimize2,
@@ -45,6 +49,8 @@ export type ManagedWindowControls = {
     checked: boolean;
     onSelect(): void;
   }[];
+  /** Mobile Inspector attention settings, independent of the selected view. */
+  attention?: InterestChoice | null;
   /** Other agents and terminals this window can switch to. */
   switchTo?: readonly {
     id: string;
@@ -110,7 +116,21 @@ export function WindowControls({
   label?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const pinItems: MenuItem[] = controls.pin
+    ? [
+        {
+          key: "pin",
+          label: controls.pin.pinned
+            ? "Unpin desk in Town"
+            : "Pin desk in Town",
+          checked: controls.pin.pinned,
+          toggle: true,
+          run: () => controls.pin?.onPin(!controls.pin.pinned),
+        },
+      ]
+    : [];
   const items: MenuItem[] = [
+    ...(controls.compact ? pinItems : []),
     ...(controls.views ?? []).map((view, index) => ({
       key: `view:${view.id}`,
       label: view.label,
@@ -118,6 +138,19 @@ export function WindowControls({
       section: index === 0 ? "View" : undefined,
       run: view.onSelect,
     })),
+    ...(controls.attention
+      ? INTEREST_CHOICES.map((choice, index) => ({
+          key: `attention:${choice.id}`,
+          label: choice.label,
+          detail:
+            controls.attention?.quiet && choice.id === "watching"
+              ? "Quiet while an agent is focused"
+              : choice.hint,
+          checked: controls.attention?.current === choice.id,
+          section: index === 0 ? "Attention" : undefined,
+          run: () => controls.attention?.onInterest(choice.id),
+        }))
+      : []),
     ...(controls.switchTo ?? []).map((target, index) => ({
       key: `switch:${target.id}`,
       label: target.label,
@@ -130,7 +163,9 @@ export function WindowControls({
           {
             label: controls.maximized ? "Restore" : "Maximize",
             section:
-              controls.views?.length || controls.switchTo?.length
+              controls.views?.length ||
+              controls.switchTo?.length ||
+              controls.attention
                 ? "Window"
                 : undefined,
             run: controls.onMaximize,
@@ -141,7 +176,9 @@ export function WindowControls({
       label: "Minimize",
       section: controls.narrow
         ? undefined
-        : controls.views?.length || controls.switchTo?.length
+        : controls.views?.length ||
+            controls.switchTo?.length ||
+            controls.attention
           ? "Window"
           : undefined,
       run: controls.onMinimize,
@@ -155,19 +192,7 @@ export function WindowControls({
           })),
           { label: "Float window", run: controls.onFloat },
         ]),
-    ...(controls.pin
-      ? [
-          {
-            key: "pin",
-            label: controls.pin.pinned
-              ? "Unpin desk in Town"
-              : "Pin desk in Town",
-            checked: controls.pin.pinned,
-            toggle: true,
-            run: () => controls.pin?.onPin(!controls.pin.pinned),
-          },
-        ]
-      : []),
+    ...(!controls.compact ? pinItems : []),
   ];
   const host = useRef<HTMLDivElement>(null);
   const menu = useRef<HTMLDivElement>(null);
@@ -183,7 +208,10 @@ export function WindowControls({
     (
       items?.querySelector<HTMLButtonElement>(
         '[role="menuitemradio"][aria-checked="true"]',
-      ) ?? items?.querySelector<HTMLButtonElement>('[role^="menuitem"]')
+      ) ??
+      items?.querySelector<HTMLButtonElement>(
+        '[role^="menuitem"]:not(.world-window-pin)',
+      )
     )?.focus();
   }, [open]);
   const scale = open ? measuredFixedPositionScale() : 1;

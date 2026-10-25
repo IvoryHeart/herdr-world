@@ -1,5 +1,4 @@
 import { expect, mock, spyOn, test } from "bun:test";
-import { Keyboard, SquareTerminal } from "lucide-react";
 import * as React from "react";
 import * as ReactDOM from "react-dom";
 import * as drafts from "../terminalComposer";
@@ -298,8 +297,6 @@ test.each(["claude", "grok-build", "agy"])(
     const commands = () =>
       find("className", "terminal-composer-commands-toggle");
     const editor = () => find("aria-label", "Terminal input draft");
-    const shortcutToggle = () =>
-      find("className", "terminal-composer-shortcuts-toggle");
     const shortcutPanel = () =>
       find("className", "terminal-composer-shortcuts");
     const picker = () => find("className", "terminal-composer-commands");
@@ -309,7 +306,7 @@ test.each(["claude", "grok-build", "agy"])(
       expect(shortcutPanel().props.hidden).toBe(false);
       expect(writeStorage).not.toHaveBeenCalled();
       expect(commands().props["aria-label"]).toBe("Commands");
-      expect((commands().props.children as Element).type).toBe(SquareTerminal);
+      expect((commands().props.children as Element).props.children).toBe("/");
       const textarea = nodes.get(
         "terminal-composer-input terminal-mobile-message",
       )!;
@@ -457,25 +454,14 @@ test.each(["claude", "grok-build", "agy"])(
         } else invoke(direct(), "onClick");
       };
       textarea.setSelectionRange(2, 5);
-      // Hiding both shortcut rows preserves the draft, caret, and native focus.
-      expect(shortcutPanel().props.hidden).toBe(true);
-      expect((shortcutToggle().props.children as React.ReactElement).type).toBe(
-        Keyboard,
-      );
-      expect(shortcutToggle().props["aria-controls"]).toBe(
-        shortcutPanel().props.id,
-      );
-      const togglePointer = { preventDefault: mock(() => {}) };
-      invoke(shortcutToggle(), "onMouseDown", togglePointer);
-      expect(togglePointer.preventDefault).toHaveBeenCalledTimes(1);
-      invoke(shortcutToggle(), "onClick");
+      // Special keys remain visible with commands, editing and both input modes.
       expect(shortcutPanel().props.hidden).toBe(false);
-      expect(elements.some((element) => element.props.role === "option")).toBe(
-        false,
-      );
-      invoke(shortcutToggle(), "onClick");
-      expect(shortcutToggle().props["aria-expanded"]).toBe(false);
-      expect(shortcutPanel().props.hidden).toBe(true);
+      expect(
+        elements.some(
+          (element) =>
+            element.props.className === "terminal-composer-shortcuts-toggle",
+        ),
+      ).toBe(false);
       expect(activeElement).toBe(textarea);
       expect(draft).toBe("new upload or edit");
       expect(textarea.selectionStart).toBe(2);
@@ -488,9 +474,6 @@ test.each(["claude", "grok-build", "agy"])(
       expect(editor().props.hidden).toBeUndefined();
       expect(activeElement).toBe(directInput);
       expect(draft).toBe("new upload or edit");
-      expect(shortcutPanel().props.hidden).toBe(true);
-      invoke(shortcutToggle(), "onClick");
-      expect(shortcutToggle().props["aria-expanded"]).toBe(true);
       expect(shortcutPanel().props.hidden).toBe(false);
       expect(activeElement).toBe(directInput);
       expect(elements.some((element) => element.props.role === "option")).toBe(
@@ -606,35 +589,14 @@ test.each(["claude", "grok-build", "agy"])(
       expect(onSubmit).toHaveBeenLastCalledWith("new upload or edit", true);
       expect(draft).toBe("");
 
-      // Closing/reopening the composer creates new hooks but retains the choice.
-      invoke(shortcutToggle(), "onClick");
-      expect(savedValues.get(shortcutsStorageKey)).toBe("false");
-      const writesAfterHide = writeStorage.mock.calls.length;
-      remount();
-      expect(shortcutToggle().props["aria-expanded"]).toBe(false);
-      expect(shortcutPanel().props.hidden).toBe(true);
-      expect(writeStorage).toHaveBeenCalledTimes(writesAfterHide);
-      invoke(shortcutToggle(), "onClick");
-      expect(savedValues.get(shortcutsStorageKey)).toBe("true");
-      remount();
-      expect(shortcutToggle().props["aria-expanded"]).toBe(true);
-      expect(shortcutPanel().props.hidden).toBe(false);
-
-      // A rejected write keeps the page's selection over the stale stored value.
-      storageWriteFails = true;
-      invoke(shortcutToggle(), "onClick");
-      expect(savedValues.get(shortcutsStorageKey)).toBe("true");
-      remount();
-      expect(shortcutToggle().props["aria-expanded"]).toBe(false);
-      expect(shortcutPanel().props.hidden).toBe(true);
-      storageWriteFails = false;
-      invoke(shortcutToggle(), "onClick");
-      remount();
-      expect(shortcutPanel().props.hidden).toBe(false);
-
-      savedValues.set(shortcutsStorageKey, "invalid");
-      remount();
-      expect(shortcutPanel().props.hidden).toBe(false);
+      // Legacy shortcut preferences never hide the always-visible special keys.
+      for (const stored of ["false", "true", "invalid"]) {
+        savedValues.set(shortcutsStorageKey, stored);
+        storageWriteFails = true;
+        remount();
+        expect(shortcutPanel().props.hidden).toBe(false);
+        expect(writeStorage).not.toHaveBeenCalled();
+      }
     } finally {
       for (const effect of effects) effect.cleanup?.();
       for (const spy of spies.reverse()) spy.mockRestore();

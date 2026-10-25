@@ -66,14 +66,6 @@
     order: 3;
   }
 
-  .terminal-composer[data-expanded] > .terminal-mobile-input-bar {
-    padding-right: 0;
-  }
-
-  .terminal-composer[data-expanded] .terminal-mobile-direct {
-    display: none;
-  }
-
   .terminal-composer-submit-actions {
     display: flex;
     flex: 1 1 auto;
@@ -244,4 +236,47 @@
 
 .town-composer .terminal-mobile-direct {
   display: inline-flex;
+}
+
+.terminal-composer-mode {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--panel-2);
+}
+.terminal-composer-mode button {
+  min-width: max(44px, calc(44px / var(--ui-scale, 1)));
+  min-height: max(44px, calc(44px / var(--ui-scale, 1)));
+  padding: 0 10px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+}
+.terminal-composer-mode button[aria-pressed="true"] {
+  color: var(--text-strong);
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.terminal-composer-direct {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.terminal-composer[data-surface="terminal"] .terminal-composer-mode {
+  margin-inline: auto;
+}
+.terminal-composer[data-surface="terminal"] .terminal-composer-submit-actions,
+.terminal-composer[data-surface="terminal"] .terminal-composer-close {
+  margin-left: 0;
+}
+
+/* Keep the explicit mode entry points available after closing the dock. */
+.terminal-composer[data-surface="terminal"]:not([data-open])
+  > .terminal-composer-toolbar
+  > :not(.terminal-composer-mode) {
+  display: none;
 }

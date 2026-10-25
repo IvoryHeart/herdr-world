@@ -336,7 +336,8 @@
         "web/src/components/TerminalComposer.chat.test.ts",
         "web/src/components/VisualPreview.test.ts",
         "web/src/components/TerminalComposer.uploads.test.ts",
-        "web/src/components/TerminalView.inputMode.test.ts"
+        "web/src/components/TerminalView.inputMode.test.ts",
+        "web/src/uiScale.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
       "technique": "alternative",
@@ -356,7 +357,8 @@
           "web/src/components/TerminalComposer.chat.test.ts",
           "web/src/components/VisualPreview.test.ts",
           "web/src/components/TerminalComposer.uploads.test.ts",
-          "web/src/components/TerminalView.inputMode.test.ts"
+          "web/src/components/TerminalView.inputMode.test.ts",
+          "web/src/uiScale.test.ts"
         ],
         "checks": ["bun run check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
@@ -1681,6 +1683,11 @@
       "requirement": "openspec/specs/world-surfaces/spec.md",
       "properties": "Deterministic geometry/counts; renderer lifetime; bounded metric/cache work",
       "existingTests": [
+        "shared/herdrIdentity.test.ts",
+        "server/src/http/herdr-info.test.ts",
+        "web/src/components/ConnectionHerdrInfo.test.ts",
+        "web/src/components/WorkspaceInspectorViewSelect.test.ts",
+        "web/src/uiScale.test.ts",
         "server/src/sources/pullRequestDetail.test.ts",
         "server/src/sources/pullRequestReviews.test.ts",
         "shared/pullRequests.test.ts",
