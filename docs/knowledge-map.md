@@ -141,7 +141,11 @@ pages full-observation matches beyond renderer bounds.
 
 Repository workflow lives in [AGENTS.md](../AGENTS.md) and
 [agent development](agent-development.md). The optional visible-team recipe is
-under [`.hwf/workflows/`](../.hwf/workflows/). Use synthetic data in tracked evidence.
+under [`.hwf/workflows/`](../.hwf/workflows/). Per-PR contributor token accounting
+uses [the usage guide](agent-usage-audit.md), [CLI](../scripts/agent/pr-usage.ts),
+[parsers](../scripts/agent/usage-records.ts), [attribution](../scripts/agent/usage-attribution.ts)
+and [local ledger](../scripts/agent/usage-store.ts); focused tests are beside each module.
+Use synthetic data in tracked evidence.
 The optional [Quint adoption spike](quint-adoption-spike.md) inventories formal
 modeling candidates and records bounded model/replay experiments; it is not a CI gate.
 The [Quint adoption proposal](../openspec/changes/archive/2026-10-14-adopt-quint-behavioral-verification/proposal.md)

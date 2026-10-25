@@ -263,15 +263,23 @@ data. Prepare the PR body with available verification and agent execution using 
 [PR template](../.github/pull_request_template.md) before creating the PR; use
 `unknown` for values not yet available. Include the changelog fragment under
 `changes/` (or the `Changelog: none — <reason>` line) before the first push; the
-PR number need not be added to it or linked from the PR body. Keep later usage accounting in the workflow output and final handoff
-instead of editing the PR body solely for totals, because an edit starts another
-CI run. Reuse earlier results only when their relevant inputs are unchanged.
+PR number need not be added to it or linked from the PR body. Keep usage accounting
+in one marked PR comment, created when READY and edited
+in place at merge. Do not edit the PR body solely for totals, because an edit
+starts another CI run. Reuse earlier results only when their relevant inputs are
+unchanged.
 Open a ready PR and stop before merge.
 
-`agent:usage` remains available for [optional Codex usage audits](agent-usage-audit.md).
-Do not make agent-run token accounting a routine pre-PR step. The measurement
-follow-up owns durable task/session/PR-linked usage collection; local rollout
-records are interim evidence.
+`agent:usage` records [per-PR usage](agent-usage-audit.md) from local Codex and
+Claude Code sessions. Register builder/fixer assignment windows locally, then run
+`bun run agent:usage comment N --post` when the PR is READY and again at merge.
+This accounting is routine at those milestones, but is not a pre-PR gate. Full
+rows stay in the ignored `.agents/crew-gate/usage.sqlite` in the primary checkout;
+the one `<!-- crew-usage -->` comment contains aggregate role/model totals and
+measurement caveats. Session IDs, paths and other private identifiers never belong
+in the comment or PR body. Preserve unattributed usage and label coordinator
+heuristics as estimates. The original bounded Codex audit and `--tooling` remain
+available for investigation.
 
 ## Revisit the process
 
@@ -281,8 +289,9 @@ per six-minute gate from the Codex rollout; formatter writes per candidate from
 check wall time from the pre-push hook and CI run metadata; and review
 outcomes from the PR timeline. A durable workflow artifact must join these
 records to the task, session, PR and candidate head before the worktree is removed.
-Add ingestion or upload for the local hook report in that measurement follow-up;
-the ignored TSV alone is insufficient. `agent:usage --tooling` cannot count a check
+The PR usage ledger records tokens and attribution; ingestion of the local hook
+report into durable gate measurements remains a separate follow-up. The ignored
+TSV alone is insufficient. `agent:usage --tooling` cannot count a check
 executed inside the pre-push hook as a literal agent command. The first targets
 are at most two blocking waits per six-minute gate and one formatter write per
 candidate. Keep measurements in workflow artifacts and the process review; do
