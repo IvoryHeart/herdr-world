@@ -203,6 +203,9 @@ hosts stay usable.
    If choices are ambiguous or stale, use **Choose a worktree** and **Refresh**;
    resource access waits for a current selection. **Open terminal** is for
    direct work.
+   If a retained file becomes unavailable, its preview shows a notice instead
+   of closing the window. Choose a current worktree or another file, then
+   **Retry preview** if needed; Chat and its draft remain open.
    A known PR named in an agent's **READY** or **opened** announcement, or its
    current work claim, gets a PR card in Chat. Open **Details** for CI and
    reviews. **Ask the author to fix** sends a `↳ #N` message when this
