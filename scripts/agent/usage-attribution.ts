@@ -1,4 +1,6 @@
-import type { Seat, Tokens, Turn, UsageEvent } from "./usage-records";
+import { publicModel } from "./usage-public";
+import { rosterNotes, type Roster } from "./usage-roster";
+import type { Seat, Tokens, Turn, UsageEvent, UsageGap } from "./usage-records";
 
 export type Role = "builder" | "fixer" | "coordinator" | `reviewer:${string}`;
 export type Window = {
@@ -57,6 +59,49 @@ export function validateWindow(window: Window) {
     throw new Error("Invalid attribution window");
 }
 
+/** New gap evidence invalidates only the estimated windows it intersects. */
+export function clipEstimates(
+  windows: Window[],
+  sessions: { seat: Seat; gaps?: UsageGap[] }[],
+): Window[] {
+  return windows.flatMap((window) => {
+    if (window.source !== "estimate") return [window];
+    const start = Date.parse(window.from);
+    let end = Date.parse(window.until);
+    for (const session of sessions) {
+      if (
+        session.seat.session !== window.session ||
+        session.seat.seat !== window.seat
+      )
+        continue;
+      for (const gap of session.gaps ?? []) {
+        const from = Date.parse(gap.from),
+          until = gap.until ? Date.parse(gap.until) : Infinity;
+        const matchesPrompt = (at?: string, prs?: number[]) =>
+          at !== undefined &&
+          start === Date.parse(at) &&
+          prs?.length === 1 &&
+          prs[0] === window.pr;
+        // Log order establishes which side of a gap a tied prompt belongs to.
+        // The recovery window must survive later replays of this same gap.
+        if (matchesPrompt(gap.resumedFrom, gap.resumedPrs)) continue;
+        if (matchesPrompt(gap.priorFrom, gap.priorPrs)) {
+          end = Math.min(end, from);
+          continue;
+        }
+        if (until <= from || start >= until || end <= from) continue;
+        if (start >= from) return [];
+        end = Math.min(end, from);
+      }
+    }
+    return end === Date.parse(window.until)
+      ? [window]
+      : end > start
+        ? [{ ...window, until: new Date(end).toISOString() }]
+        : [];
+  });
+}
+
 /** Each response has exactly one owner, or remains explicitly unattributed. */
 export function attribute(events: UsageEvent[], windows: Window[]): Row[] {
   windows.forEach(validateWindow);
@@ -72,6 +117,12 @@ export function attribute(events: UsageEvent[], windows: Window[]): Row[] {
       (w) =>
         w.session === event.session &&
         w.seat === event.seat &&
+        !(w.source === "estimate" && event.estimateBlocked) &&
+        (w.source !== "estimate" ||
+          event.estimateFrom === undefined ||
+          (Date.parse(w.from) === Date.parse(event.estimateFrom) &&
+            event.estimatePrs?.length === 1 &&
+            event.estimatePrs[0] === w.pr)) &&
         at >= Date.parse(w.from) &&
         at < Date.parse(w.until),
     );
@@ -243,21 +294,6 @@ export function renderTable(pr: number, rows: Row[]): string {
 }
 
 // Public output deliberately has no free-form fields sourced from local seats/logs.
-function publicModel(model: string, family: string) {
-  if (
-    family === "codex" &&
-    /^gpt-[0-9]+(?:\.[0-9]+)?(?:-(?:sol|astra|luna|codex|mini|nano|pro|turbo|preview|latest))*$/.test(
-      model,
-    )
-  )
-    return model;
-  if (
-    family === "claude" &&
-    /^claude-(?:opus|sonnet|haiku)(?:-[0-9]+)+(?:-thinking)?$/.test(model)
-  )
-    return model;
-  return "unknown";
-}
 function publicRole(role: Row["role"]) {
   if (/^reviewer:rev(?:[0-9]+|-(?:astra|opus|sol|luna))$/.test(role))
     return role;
@@ -272,6 +308,7 @@ export function renderComment(
   pr: number,
   rows: Row[],
   missingSessions = 0,
+  roster?: Roster,
 ): string {
   const selected = rows.filter((r) => r.pr === pr);
   const groups = new Map<string, Tokens>();
@@ -296,6 +333,7 @@ export function renderComment(
       .map(([key, t]) => `| ${key} | ${cells(t)} |`),
     `| **PR total** | | ${cells(total)} |`,
     "",
+    ...(roster ? rosterNotes(rows, roster, pr) : []),
     "Unattributed usage remains in the private local ledger and is excluded from this PR total.",
     "",
     "Recorded tokens are not billed cost. Input excludes cache reads/writes; reasoning is included in output. Claude streamed chunks use per-message field maxima and include child transcripts. Codex snapshot mirrors are reconciled with dedicated response records.",

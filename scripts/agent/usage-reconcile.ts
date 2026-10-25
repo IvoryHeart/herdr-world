@@ -63,6 +63,21 @@ export function reconcileEvents(events: UsageEvent[]): UsageEvent[] {
     const key = JSON.stringify([event.family, event.session, event.id]);
     const previous = merged.get(key);
     if (previous) {
+      if (
+        (previous.at < event.at && previous.estimateBlocked !== undefined) ||
+        event.estimateBlocked === undefined ||
+        (previous.at === event.at &&
+          event.estimateFrom === undefined &&
+          !event.estimateBlocked)
+      )
+        event.estimateBlocked = previous.estimateBlocked;
+      if (
+        (previous.at <= event.at && previous.estimateFrom !== undefined) ||
+        event.estimateFrom === undefined
+      ) {
+        event.estimateFrom = previous.estimateFrom;
+        event.estimatePrs = previous.estimatePrs;
+      }
       // Claude chunks are partial. Codex records are validated complete values;
       // replacing them also corrects older input/cache-write classifications.
       if (event.family === "claude") {

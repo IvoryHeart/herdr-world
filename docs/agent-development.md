@@ -357,8 +357,11 @@ rows stay in the ignored `.agents/crew-gate/usage.sqlite` in the primary checkou
 the one `<!-- crew-usage -->` comment contains aggregate role/model totals and
 measurement caveats. Session IDs, paths and other private identifiers never belong
 in the comment or PR body. Preserve unattributed usage and label coordinator
-heuristics as estimates. The original bounded Codex audit and `--tooling` remain
-available for investigation.
+heuristics as estimates. Run `bun run agent:usage roster-check --pr N` to compare
+recorded models and efforts against the shared config roster. The public comment
+includes model-only drift notes; unknown effort remains unknown. Quarantined
+Claude records retain valid usage and contribute a partial-measurement caveat.
+The original bounded Codex audit and `--tooling` remain available for investigation.
 
 ## Revisit the process
 

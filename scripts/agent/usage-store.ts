@@ -1,8 +1,13 @@
 import { Database } from "bun:sqlite";
 import { mkdirSync, chmodSync } from "node:fs";
 import { dirname } from "node:path";
-import { attribute, type Row, type Window } from "./usage-attribution";
-import type { Seat, UsageEvent } from "./usage-records";
+import {
+  attribute,
+  clipEstimates,
+  type Row,
+  type Window,
+} from "./usage-attribution";
+import type { Seat, UsageEvent, UsageGap } from "./usage-records";
 import { reconcileEvents } from "./usage-reconcile";
 
 export type Assignment = {
@@ -13,6 +18,7 @@ export type Assignment = {
   from: string;
   until: string;
 };
+type RegisteredSeat = Seat & { claimedPrs?: number[] };
 
 /** Own tables only: coordlab's gate database and schema remain independent. */
 export class UsageStore {
@@ -40,7 +46,26 @@ export class UsageStore {
     ).map((r) => JSON.parse(r.payload) as T);
   }
   sessions() {
-    return this.values<Seat>("usage_sessions");
+    return this.values<RegisteredSeat>("usage_sessions");
+  }
+  private rememberSeat(seat: Seat, claimedPrs: number[] = []) {
+    const key = `${seat.family}:${seat.session}`;
+    const prior = this.db
+      .query("SELECT payload FROM usage_sessions WHERE key = ?")
+      .get(key) as { payload: string } | null;
+    const previous: RegisteredSeat | undefined = prior
+      ? JSON.parse(prior.payload)
+      : undefined;
+    const known = [
+      ...new Set([
+        ...(previous?.claimedPrs ?? []),
+        ...((seat as RegisteredSeat).claimedPrs ?? []),
+        ...claimedPrs,
+      ]),
+    ];
+    this.db
+      .query("INSERT OR REPLACE INTO usage_sessions VALUES (?, ?)")
+      .run(key, JSON.stringify({ ...previous, ...seat, claimedPrs: known }));
   }
   assignments() {
     return this.values<Assignment>("usage_assignments");
@@ -75,9 +100,7 @@ export class UsageStore {
   }
   assign(assignment: Assignment, seat: Seat) {
     this.db.transaction(() => {
-      this.db
-        .query("INSERT OR REPLACE INTO usage_sessions VALUES (?, ?)")
-        .run(`${seat.family}:${seat.session}`, JSON.stringify(seat));
+      this.rememberSeat(seat);
       this.db
         .query("INSERT OR REPLACE INTO usage_assignments VALUES (?, ?)")
         .run(
@@ -92,25 +115,34 @@ export class UsageStore {
     })();
   }
   refresh(
-    pr: number,
-    sessions: { seat: Seat; events: UsageEvent[] }[],
+    pr: number | null,
+    sessions: {
+      seat: Seat;
+      events: UsageEvent[];
+      gaps?: UsageGap[];
+      claimedPrs?: number[];
+    }[],
     windows: Window[],
     missing: number,
     validReviews?: Set<string>,
   ) {
     this.db
       .transaction(() => {
-        const retained = this.windows(pr).filter(
-          (w) =>
-            w.source !== "review" ||
-            !validReviews ||
-            validReviews.has(JSON.stringify([w.seat, w.until])),
+        const established = clipEstimates(
+          this.values<Window>("usage_windows"),
+          sessions,
         );
-        for (const { seat, events } of sessions) {
+        const retained = established
+          .filter((w) => w.pr === pr)
+          .filter(
+            (w) =>
+              w.source !== "review" ||
+              !validReviews ||
+              validReviews.has(JSON.stringify([w.seat, w.until])),
+          );
+        for (const { seat, events, claimedPrs } of sessions) {
           const key = `${seat.family}:${seat.session}`;
-          this.db
-            .query("INSERT OR REPLACE INTO usage_sessions VALUES (?, ?)")
-            .run(key, JSON.stringify(seat));
+          this.rememberSeat(seat, claimedPrs);
           const previous = (
             this.db
               .query("SELECT payload FROM usage_events WHERE session_key = ?")
@@ -127,9 +159,13 @@ export class UsageStore {
               .run(id, key, JSON.stringify(merged));
           }
         }
-        this.db.query("DELETE FROM usage_windows WHERE pr = ?").run(pr);
+        this.db.exec("DELETE FROM usage_windows");
         const mergedWindows = new Map(
-          [...retained, ...windows].map((w) => [
+          [
+            ...established.filter((w) => w.pr !== pr),
+            ...retained,
+            ...clipEstimates(windows, sessions),
+          ].map((w) => [
             JSON.stringify([w.pr, w.session, w.seat, w.role, w.from, w.source]),
             w,
           ]),
@@ -137,7 +173,7 @@ export class UsageStore {
         for (const window of mergedWindows.values())
           this.db
             .query("INSERT INTO usage_windows VALUES (?, ?)")
-            .run(pr, JSON.stringify(window));
+            .run(window.pr, JSON.stringify(window));
         const rows = attribute(
           this.values<UsageEvent>("usage_events"),
           this.values<Window>("usage_windows"),
@@ -147,9 +183,10 @@ export class UsageStore {
           this.db
             .query("INSERT INTO usage_rows VALUES (?)")
             .run(JSON.stringify(row));
-        this.db
-          .query("INSERT OR REPLACE INTO usage_status VALUES (?, ?)")
-          .run(pr, missing);
+        if (pr !== null)
+          this.db
+            .query("INSERT OR REPLACE INTO usage_status VALUES (?, ?)")
+            .run(pr, missing);
       })
       .immediate();
   }

@@ -15,12 +15,13 @@ import {
   type Family,
   type Seat,
 } from "./usage-records";
-import { postComment, prMetadata, run } from "./usage-github";
+import { postComment, prMetadata, run, type Runner } from "./usage-github";
 import { UsageStore, type Assignment } from "./usage-store";
+import { assessRoster, readRoster, renderRosterTable } from "./usage-roster";
 
 type Options = {
   command: string;
-  pr: number;
+  pr: number | null;
   sessions: string[];
   seat?: string;
   family?: Family;
@@ -31,19 +32,22 @@ type Options = {
   post: boolean;
   roots: Record<Family, string>;
   store?: string;
+  config?: string;
 };
 export function parsePrOptions(args: string[]): Options {
   const [command, rawPr] = args;
+  const rosterMode = command === "roster-check";
   if (
-    !["pr", "comment", "assign"].includes(command ?? "") ||
-    !/^[1-9]\d*$/.test(rawPr ?? "")
-  )
+    (!rosterMode && !["pr", "comment", "assign"].includes(command ?? "")) ||
+    (!rosterMode && !/^[1-9]\d*$/.test(rawPr ?? ""))
+  ) {
     throw new Error(
-      "Usage: agent:usage pr|comment|assign N [--session ID|PATH] [--seat NAME] [--family codex|claude] [--from ISO --until ISO] [--json|--post]",
+      "Usage: agent:usage pr|comment|assign N [options], or roster-check [--pr N] [--config PATH] [--json]",
     );
+  }
   const options: Options = {
     command: command!,
-    pr: Number(rawPr),
+    pr: rosterMode ? null : Number(rawPr),
     sessions: [],
     json: false,
     post: false,
@@ -55,7 +59,7 @@ export function parsePrOptions(args: string[]): Options {
       claude: join(homedir(), ".claude", "projects"),
     },
   };
-  for (let index = 2; index < args.length; index++) {
+  for (let index = rosterMode ? 1 : 2; index < args.length; index++) {
     const flag = args[index]!;
     if (flag === "--") continue;
     if (flag === "--json") {
@@ -77,12 +81,20 @@ export function parsePrOptions(args: string[]): Options {
         "--sessions-dir",
         "--claude-dir",
         "--store",
+        "--config",
+        "--pr",
       ].includes(flag)
     )
       throw new Error(`Unknown argument: ${flag}`);
     const value = args[++index];
     if (!value || value.startsWith("--"))
       throw new Error(`Missing value for ${flag}`);
+    if (flag === "--pr") {
+      if (!rosterMode || !/^[1-9]\d*$/.test(value))
+        throw new Error("--pr requires a PR number on roster-check");
+      options.pr = Number(value);
+    }
+    if (flag === "--config") options.config = resolve(value);
     if (flag === "--session") options.sessions.push(value);
     if (flag === "--seat") options.seat = value;
     if (flag === "--family") {
@@ -105,7 +117,8 @@ export function parsePrOptions(args: string[]): Options {
     if (flag === "--claude-dir") options.roots.claude = resolve(value);
     if (flag === "--store") options.store = resolve(value);
   }
-  if (!Number.isSafeInteger(options.pr)) throw new Error("Invalid PR number");
+  if (options.pr !== null && !Number.isSafeInteger(options.pr))
+    throw new Error("Invalid PR number");
   if (options.post && options.command !== "comment")
     throw new Error("--post is only valid for comment");
   if (
@@ -125,9 +138,9 @@ export function parsePrOptions(args: string[]): Options {
   return options;
 }
 
-async function defaultStore() {
+async function defaultStore(runner: Runner = run) {
   const common = (
-    await run([
+    await runner([
       "git",
       "rev-parse",
       "--path-format=absolute",
@@ -164,29 +177,47 @@ export function prMissingCount(
   unavailable: Seat[],
   windows: Window[],
   assignments: Assignment[],
+  claims: { seat: Seat; prs: number[] }[] = [],
 ) {
   const relevant = [...windows, ...assignments].filter((w) => w.pr === pr);
   return new Set(
     unavailable
-      .filter((s) =>
-        relevant.some((w) => w.session === s.session && w.seat === s.seat),
+      .filter(
+        (s) =>
+          relevant.some((w) => w.session === s.session && w.seat === s.seat) ||
+          claims.some(
+            (claim) =>
+              claim.seat.session === s.session &&
+              claim.seat.seat === s.seat &&
+              claim.prs.includes(pr),
+          ),
       )
       .map((s) => `${s.family}:${s.session}`),
   ).size;
 }
-export async function prUsageMain(args: string[]) {
+type UsageIO = {
+  run?: Runner;
+  log?: (message: string) => void;
+  warn?: (message: string) => void;
+};
+export async function prUsageMain(
+  args: string[],
+  io: UsageIO = {},
+): Promise<number> {
+  const runner = io.run ?? run,
+    output = io.log ?? console.log,
+    warn = io.warn ?? console.error;
   const options = parsePrOptions(args);
-  const store = new UsageStore(options.store ?? (await defaultStore()));
+  const defaultPath = await defaultStore(runner);
+  const store = new UsageStore(options.store ?? defaultPath);
   try {
     let discovered: Seat[] = [];
     try {
       discovered = discoverSeats(
-        JSON.parse(await run(["herdr", "agent", "list"])),
+        JSON.parse(await runner(["herdr", "agent", "list"])),
       );
     } catch {
-      console.error(
-        "Herdr discovery unavailable; using registered sessions only.",
-      );
+      warn("Herdr discovery unavailable; using registered sessions only.");
     }
     let seats = uniqueSeats([...store.sessions(), ...discovered]);
     for (const session of options.sessions) {
@@ -214,49 +245,29 @@ export async function prUsageMain(args: string[]) {
           "Assignment must select one session; pass --session explicitly",
         );
       const seat = matching[0]!;
-      validateWindow({
-        pr: options.pr,
+      const assignment = {
+        pr: options.pr!,
         seat: seat.seat,
         session: seat.session,
         role: options.role!,
         from: options.from!,
         until: options.until!,
-        source: "assignment",
-      });
-      store.assign(
-        {
-          pr: options.pr,
-          seat: seat.seat,
-          session: seat.session,
-          role: options.role!,
-          from: options.from!,
-          until: options.until!,
-        },
-        seat,
-      );
-      console.log(
+      };
+      validateWindow({ ...assignment, source: "assignment" });
+      store.assign(assignment, seat);
+      output(
         `Registered ${options.role} assignment for PR #${options.pr}; detailed boundaries remain local.`,
       );
-      return;
+      return 0;
     }
     if (!seats.length)
       throw new Error(
         "No sessions discovered; pass --session, --seat and --family",
       );
-    const repo = (
-      await run([
-        "gh",
-        "repo",
-        "view",
-        "--json",
-        "nameWithOwner",
-        "--jq",
-        ".nameWithOwner",
-      ])
-    ).trim();
-    const metadata = await prMetadata(repo, options.pr);
-    const now = new Date().toISOString();
-    const windows: Window[] = [];
+    const roster = await readRoster(
+      options.config ?? join(dirname(defaultPath), "config.json"),
+      options.config === undefined,
+    );
     const unavailable: Seat[] = [];
     const loaded = await resolveLogs(seats, options.roots, (seat) => {
       unavailable.push(seat);
@@ -268,77 +279,136 @@ export async function prUsageMain(args: string[]) {
           "An explicitly requested session could not be read; local accounting was not refreshed",
         );
     });
-    for (const result of loaded) {
+    unavailable.push(
+      ...loaded
+        .filter((r) => r.parsed.incompleteRecords > 0)
+        .map((r) => r.seat),
+    );
+    const sessions = loaded.map((r) => ({
+      seat: r.seat,
+      events: r.parsed.events,
+      gaps: r.parsed.gaps,
+      claimedPrs: r.parsed.claimedPrs,
+    }));
+    if (options.command === "roster-check" && options.pr === null) {
+      store.refresh(null, sessions, [], 0);
+      const report = assessRoster(store.rows(), roster);
+      output(
+        options.json
+          ? JSON.stringify(
+              {
+                scope: "retained session history",
+                incompleteSessions: unavailable.length,
+                ...report,
+                clean: report.clean && unavailable.length === 0,
+              },
+              null,
+              2,
+            )
+          : renderRosterTable(report, undefined, unavailable.length),
+      );
+      return report.clean && unavailable.length === 0 ? 0 : 2;
+    }
+    const pr = options.pr!;
+    const repo = (
+      await runner([
+        "gh",
+        "repo",
+        "view",
+        "--json",
+        "nameWithOwner",
+        "--jq",
+        ".nameWithOwner",
+      ])
+    ).trim();
+    const metadata = await prMetadata(repo, pr, runner);
+    const now = new Date().toISOString();
+    const windows: Window[] = [];
+    for (const result of loaded)
       windows.push(
         ...inferredWindows(
           result.seat,
           result.parsed.turns,
-          options.pr,
+          pr,
           metadata.reviews,
           metadata.mergedAt ?? now,
         ),
       );
-    }
-    for (const assignment of store
-      .assignments()
-      .filter((a) => a.pr === options.pr)) {
-      const until = assignment.until;
-      if (until && until > assignment.from)
-        windows.push({ ...assignment, until, source: "assignment" });
+    for (const assignment of store.assignments().filter((a) => a.pr === pr)) {
+      if (assignment.until && assignment.until > assignment.from)
+        windows.push({ ...assignment, source: "assignment" });
       else
-        console.error(
+        warn(
           "An assignment has no usable last-push boundary; register --until to attribute its usage.",
         );
     }
     const validReviews = new Set(
       metadata.reviews.flatMap((r) => {
-        const seat = canonicalReviewer(r.body, options.pr);
+        const seat = canonicalReviewer(r.body, pr);
         return seat
           ? [JSON.stringify([seat, new Date(r.submittedAt).toISOString()])]
           : [];
       }),
     );
     const retainedWindows = store
-      .windows(options.pr)
+      .windows(pr)
       .filter(
         (w) =>
           w.source !== "review" ||
           validReviews.has(JSON.stringify([w.seat, w.until])),
       );
     const missing = prMissingCount(
-      options.pr,
+      pr,
       unavailable,
       [...retainedWindows, ...windows],
       store.assignments(),
+      [
+        ...store
+          .sessions()
+          .map((seat) => ({ seat, prs: seat.claimedPrs ?? [] })),
+        ...loaded.map((r) => ({ seat: r.seat, prs: r.parsed.claimedPrs })),
+      ],
     );
-    store.refresh(
-      options.pr,
-      loaded.map((r) => ({ seat: r.seat, events: r.parsed.events })),
-      windows,
-      missing,
-      validReviews,
-    );
+    store.refresh(pr, sessions, windows, missing, validReviews);
     const rows = store.rows();
-    if (options.command === "comment") {
-      const comment = renderComment(options.pr, rows, missing);
+    if (options.command === "roster-check") {
+      const report = assessRoster(rows, roster, pr);
+      output(
+        options.json
+          ? JSON.stringify(
+              {
+                pr,
+                incompleteSessions: missing,
+                ...report,
+                clean: report.clean && missing === 0,
+              },
+              null,
+              2,
+            )
+          : renderRosterTable(report, pr, missing),
+      );
+      return report.clean && missing === 0 ? 0 : 2;
+    } else if (options.command === "comment") {
+      const comment = renderComment(pr, rows, missing, roster);
       if (options.post)
-        console.log(
-          `Usage comment ${await store.publish(() => postComment(repo, options.pr, renderComment(options.pr, store.rows(), store.missing(options.pr))))} for PR #${options.pr}.`,
+        output(
+          `Usage comment ${await store.publish(() => postComment(repo, pr, renderComment(pr, store.rows(), store.missing(pr), roster), runner))} for PR #${pr}.`,
         );
-      else console.log(comment);
-    } else if (options.json) {
-      console.log(
+      else output(comment);
+    } else if (options.json)
+      output(
         JSON.stringify(
           {
-            pr: options.pr,
+            pr,
             missingSessions: missing,
-            rows: rows.filter((r) => r.pr === options.pr || r.pr === null),
+            rows: rows.filter((r) => r.pr === pr || r.pr === null),
           },
           null,
           2,
         ),
       );
-    } else console.log(renderTable(options.pr, rows));
+    else output(renderTable(pr, rows));
+    return 0;
   } finally {
     store.close();
   }
