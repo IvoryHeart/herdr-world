@@ -328,6 +328,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   identity. Focus and filters cannot retarget them. Global creation confirms one
   destination; room creation inherits its room. Notifications outside the filter
   open a labelled Inspector with an explicit Reveal in Hosts action.
+- Open Inspectors, terminal buffers, split geometry and same-runtime Message
+  drafts survive browser transport disconnects, including mobile backgrounding.
+  Last observations show a disconnected indicator and stay non-actionable until
+  fresh admission. Terminal recovery offers **Retry terminal** and an explicit
+  **Reload app**; a no-frame watchdog never reloads the page automatically.
 - Search covers observed entities beyond renderer limits and pages matching results.
   Counts distinguish observations, rendering omissions and unavailable coverage.
 - Use **Arrange windows** in the shared shell to show the active terminal alone,

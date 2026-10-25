@@ -303,6 +303,18 @@ and open its terminal or Inspector without losing its workspace context.
 
 ![Town at phone width](./images/herdr-world-mobile-town.png)
 
+### Return after backgrounding
+
+If a phone backgrounds World or the browser loses its connection, open
+Inspectors, terminal output, split positions and unsent Message drafts stay in
+this page. A disconnected indicator marks the last observation; controls wait
+for a fresh connection to the same host and runtime. Input is never replayed.
+
+If a terminal says **Terminal is not receiving output**, choose **Retry terminal**
+to retry that terminal while keeping the page open. **Reload app** is a separate,
+explicit action. World never reloads automatically because terminal frames stop.
+A browser or OS that discards the whole page can still lose its in-memory state.
+
 ### Start a new agent from a profile
 
 <a id="new-agent"></a>

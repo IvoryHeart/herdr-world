@@ -5,8 +5,8 @@ import { prepareTerminalPasteText } from "./terminalPaste";
  *
  * Drafts live only in memory: terminal input can contain secrets, so they
  * must never reach localStorage. Keys are scoped by connection identity
- * (including the reconnect generation) and pane ID, so a reconnect or a pane
- * switch never mixes drafts or sends text to the wrong pane.
+ * (including the admitted runtime generation) and pane ID. Transport epochs
+ * retire operations, while same-runtime drafts remain in this document.
  */
 const drafts = new Map<string, string>();
 const selections = new Map<string, { start: number; end: number }>();
@@ -55,6 +55,13 @@ export function terminalComposerDraftKeyIsActive(key: string): boolean {
     (activeDraftScopePrefixes === null ||
       [...activeDraftScopePrefixes].some((prefix) => key.startsWith(prefix)))
   );
+}
+
+export function terminalComposerScopeGeneration(snapshot: {
+  serverRuntimeGeneration?: number | null;
+  connectionGeneration: number;
+}): number {
+  return snapshot.serverRuntimeGeneration ?? snapshot.connectionGeneration;
 }
 
 export function terminalComposerDraftKey(

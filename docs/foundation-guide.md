@@ -113,6 +113,24 @@ The browser never talks directly to Herdr sockets or a remote World bridge.
 | Alerts and background delivery | [taskNotifications](../web/src/taskNotifications.ts), [taskPush](../web/src/taskPush.ts) and the [service worker](../web/public/task-notifications-sw.js) render local or pushed task notices and route qualified targets back to the app. | [Task tests](../web/src/taskNotifications.test.ts), [push browser tests](../web/src/taskPush.browser.tsx) |
 | Visual presentations | [TownView](../web/src/world/TownView.tsx) with [TownCanvas](../web/src/world/town/TownCanvas.tsx), [BoardView](../web/src/world/BoardView.tsx) with its [model](../web/src/world/board/boardModel.ts), [DeskView](../web/src/world/DeskView.tsx) and [world.css](../web/src/world/world.css) own view-specific presentation. Use the [component routes](../web/src/world/README.md) to pick the owner for a concrete task. | [Town tests](../web/src/world/town/TownCanvas.test.ts), [Board tests](../web/src/world/BoardView.test.ts), [Desk tests](../web/src/world/DeskView.test.ts) |
 
+A transient browser transport outage retires clients and pending operations,
+while retaining exact-owner Inspector membership, renderer buffers and validated
+split geometry. The [resource presentation client](../web/src/resourcePresentationClient.ts)
+keeps cache identity as data while Files/Changes/Commits wait for current
+worktree admission; it never substitutes the retained target into RPC or HTTP
+operations. Message drafts use the admitted runtime generation, and incomplete
+catalogues cannot prune another Inspector's memory scope.
+A fresh catalogue may retire a removed owner or replaced runtime;
+resource absence needs a newly completed qualified focused list. The
+[terminal renderer](../web/src/terminalRenderer.ts) owns xterm and endpoint
+presentation independently of client-bound subscriptions, input handlers, resize
+synchronization and attach attempts. Rebinding captures each new client; late
+callbacks cannot use a newer client's authority. Bounded no-frame retries end in
+local recovery controls and never navigate automatically. This preserves the
+Q06/Q07/Q08 authority contracts; browser regressions cover renderer identity and
+event timing beyond the maintained ownership models. This memory retention does
+not restore a page discarded by the browser or OS.
+
 `web/src/components/` contains reusable and feature-specific dialogs, menus and
 panes. `web/src/world/` contains the World shell and visual projections. Root
 `web/src/` modules hold the transport, focused state, terminal helpers and

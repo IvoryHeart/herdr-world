@@ -102,6 +102,7 @@ export function upsertWorldInspectorConversation(
   } as const;
 }
 
+/** Reconcile against a fresh catalogue, including same-generation unavailable owners. */
 export function retainWorldInspectorConversations(
   current: readonly WorldInspectorConversation[],
   lease:

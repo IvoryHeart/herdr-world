@@ -463,3 +463,24 @@ export {
   jsonDeepEqual,
   serverSessionEqual,
 };
+
+/** Retire observation admission, retaining same-runtime topology for display. */
+export function retireConnectionSessionObservations(
+  snapshot: State,
+): Partial<State> {
+  return {
+    sessionsByConnectionId: Object.fromEntries(
+      Object.entries(snapshot.sessionsByConnectionId).map(([id, session]) => [
+        id,
+        {
+          ...session,
+          endpointAvailability: {},
+          lastTopologyObservationStartedAt: 0,
+        },
+      ]),
+    ),
+    endpointAvailability: {},
+    catalogueReady: false,
+    lastTopologyObservationStartedAt: 0,
+  };
+}

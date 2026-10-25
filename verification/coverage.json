@@ -213,7 +213,9 @@
       "properties": "Colliding IDs remain isolated; detach/reuse cannot cross owners; retired frames ignored",
       "existingTests": [
         "server/src/bridge/terminal-bridge.test.ts",
-        "server/src/bridge/endpoint-terminal-session.test.ts"
+        "server/src/bridge/endpoint-terminal-session.test.ts",
+        "web/src/world/WorldTerminalHandoff.test.ts",
+        "web/src/mobileTerminal.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/175",
       "technique": "terminal-ownership",
@@ -254,7 +256,9 @@
       "existingTests": [
         "web/src/api.test.ts",
         "web/src/terminalRecovery.test.ts",
-        "web/src/reconnectRetry.test.ts"
+        "web/src/reconnectRetry.test.ts",
+        "web/src/world/WorldTerminalHandoff.test.ts",
+        "web/src/mobileTerminal.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/145",
       "technique": "qualified-operation",
@@ -295,7 +299,8 @@
         "web/src/terminalTouchSelection.test.ts",
         "web/src/terminalClipboard.test.ts",
         "server/src/bridge/frame-to-ansi.test.ts",
-        "web/src/endpointFrame.test.ts"
+        "web/src/endpointFrame.test.ts",
+        "web/src/mobileTerminal.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
       "technique": "alternative",
@@ -583,7 +588,8 @@
         "web/src/world/WorldInspectorWorktree.test.ts",
         "web/src/components/AgentWorktreePicker.test.ts",
         "web/src/workspaceResource.test.ts",
-        "web/src/components/FileExplorerDialog.test.ts"
+        "web/src/components/FileExplorerDialog.test.ts",
+        "web/src/world/WorldInspectorResourceResume.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/145",
       "technique": "qualified-operation",
@@ -1727,7 +1733,8 @@
         "web/src/world/useTerminalColors.test.ts",
         "web/src/world/town/townTeamActions.test.ts",
         "web/src/world/town/townDrag.test.ts",
-        "web/src/world/town/TownCanvas.test.ts"
+        "web/src/world/town/TownCanvas.test.ts",
+        "web/src/world/WorldTerminalHandoff.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
       "technique": "alternative",

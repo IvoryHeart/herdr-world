@@ -41,6 +41,17 @@ export function forgetTabLayoutsExcept(
   }
 }
 
+/** Retire geometry only when a current catalogue proves its owner is gone. */
+export function retainTabLayoutOwners(
+  owners: readonly { id: string; generation: number }[],
+) {
+  const prefixes = owners.map((owner) => `${owner.id}\0${owner.generation}\0`);
+  for (const key of layoutByTab.keys()) {
+    if (!prefixes.some((prefix) => key.startsWith(prefix)))
+      layoutByTab.delete(key);
+  }
+}
+
 export function clearTabLayouts() {
   layoutByTab.clear();
 }
@@ -62,6 +73,7 @@ export function provisionalTabLayout(
   if (cached?.tab_id === tabId) {
     const cachedPaneIds = new Set(cached.panes.map((pane) => pane.pane_id));
     if (
+      cached.workspace_id === tabPanes[0].workspace_id &&
       cachedPaneIds.size === tabPanes.length &&
       tabPanes.every((pane) => cachedPaneIds.has(pane.pane_id))
     ) {

@@ -16,6 +16,7 @@ import {
   terminalComposerCloseWarning,
   terminalComposerDraftCount,
   terminalComposerDraftKey,
+  terminalComposerScopeGeneration,
   terminalComposerDraftPaneIds,
   terminalComposerInsertAtCaret,
   terminalComposerRequest,
@@ -334,4 +335,29 @@ describe("terminal composer caret insertion", () => {
       caret: 16,
     });
   });
+});
+
+test("composer keys follow the runtime across transport epochs, then retire its replacement", () => {
+  const snapshot = { serverRuntimeGeneration: 7, connectionGeneration: 1 };
+  const key = terminalComposerDraftKey(
+    "resume-owner",
+    terminalComposerScopeGeneration(snapshot),
+    "pane",
+  );
+  activateTerminalComposerDraftScope("resume-owner", 7);
+  writeTerminalComposerDraft(key, "Unsent message");
+  for (const connectionGeneration of [2, 3]) {
+    const generation = terminalComposerScopeGeneration({
+      ...snapshot,
+      connectionGeneration,
+    });
+    activateTerminalComposerDraftScope("resume-owner", generation);
+    expect(
+      readTerminalComposerDraft(
+        terminalComposerDraftKey("resume-owner", generation, "pane"),
+      ),
+    ).toBe("Unsent message");
+  }
+  activateTerminalComposerDraftScope("resume-owner", 8);
+  expect(readTerminalComposerDraft(key)).toBe("");
 });

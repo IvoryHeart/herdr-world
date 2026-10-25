@@ -201,3 +201,14 @@
   color: var(--muted);
   font-size: 13px;
 }
+
+.world-inspector-stale {
+  flex: 0 0 auto;
+  margin: 8px;
+  padding: 8px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  pointer-events: none;
+}

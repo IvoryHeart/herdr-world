@@ -1,3 +1,12 @@
+const resumeGallery = new URLSearchParams(location.search).has(
+  "resume-gallery",
+);
+import { TerminalAttachFrameWatchdog } from "../terminalResize";
+import { requestTerminalComposer } from "./terminalComposerRequest";
+import {
+  readTerminalComposerDraft,
+  terminalComposerDraftKey,
+} from "../terminalComposer";
 import { subscribeCreations } from "../creationRequests";
 const creationPhases: string[] = [];
 subscribeCreations((event) =>
@@ -6,7 +15,12 @@ subscribeCreations((event) =>
 window.__HERDR_WORLD_RENDERER_DEBUG__ = true;
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
-import { bridge, type ConnectionClient, type TerminalPush } from "../api";
+import {
+  bridge,
+  type ConnectionClient,
+  type TerminalPush,
+  type TerminalClosedPush,
+} from "../api";
 import {
   initializeLayoutPreferences,
   updateLayoutPreferences,
@@ -33,7 +47,7 @@ import {
 } from "./inspectorTerminalHandoff";
 import { CREATED_PANE_ADMISSION_TIMEOUT_MS } from "./officeRoomActions";
 import { worldRuntimeStore } from "./runtimeStore";
-import { worldObjectId } from "./worldObject";
+import { buildWorldObject, worldObjectId } from "./worldObject";
 import WorldFoundationApp from "./WorldFoundationApp";
 import { worldInspectorWindowId } from "./worldTerminalPresentation";
 import type { BoardDocument, BoardOp } from "./board/boardDocument";
@@ -170,6 +184,8 @@ let focusedTabId = tabs[0]!.tab_id;
 const rememberedTabPanes = new Map<string, string>();
 let worldRevision = 1;
 let runtimeGeneration = 7;
+let includeSecondHost = false;
+let secondHostGeneration = 3;
 let rejectNextWorldSnapshot = false;
 let ambiguousAgentWorktrees = false;
 let staleNextWorldSnapshot = false;
@@ -194,6 +210,8 @@ let agents: Record<string, unknown>[] = [
   },
 ];
 const terminalListeners = new Set<(push: TerminalPush) => void>();
+const terminalClosedListeners = new Set<(push: TerminalClosedPush) => void>();
+let suppressFrameFor: string | null = null;
 
 function currentPanes() {
   return panes.map((pane) => ({
@@ -292,7 +310,7 @@ function currentWorldCoverage() {
   };
 }
 
-const client: ConnectionClient = {
+let client: ConnectionClient = {
   connectionId: "local",
   generation: 1,
   serverRuntimeGeneration: 7,
@@ -331,7 +349,7 @@ const client: ConnectionClient = {
       staleNextWorldSnapshot = false;
       const omitTopology = omitNextWorldTopology;
       omitNextWorldTopology = false;
-      return {
+      const observation = {
         revision: worldRevision,
         observed_at: Date.now(),
         connections: [
@@ -355,6 +373,16 @@ const client: ConnectionClient = {
           },
         ],
       };
+      if (includeSecondHost)
+        observation.connections.push({
+          ...observation.connections[0]!,
+          connection_id: "beta",
+          label: "Beta",
+          is_default: false,
+          generation: secondHostGeneration,
+          snapshot_generation: secondHostGeneration,
+        });
+      return observation;
     }
     if (method === "pane.get") {
       const paneId = String(params.pane_id ?? "");
@@ -560,6 +588,7 @@ const client: ConnectionClient = {
     }
     if (method === "terminal.attach") {
       const terminalId = String(params.terminal_id ?? "");
+      if (terminalId === suppressFrameFor) return {};
       if (terminalId === "builder-terminal") {
         await initialTerminalAttach.promise;
       }
@@ -693,11 +722,15 @@ async function run() {
     return () => terminalListeners.delete(listener);
   };
   bridge.onTerminalClipboard = () => () => {};
-  bridge.onTerminalClosed = () => () => {};
+  bridge.onTerminalClosed = (listener) => {
+    terminalClosedListeners.add(listener);
+    return () => terminalClosedListeners.delete(listener);
+  };
   await worldRuntimeStore.refresh();
   __storeTesting.replaceState({
     ...store.get(),
     status: "connected",
+    catalogueReady: true,
     activeConnectionId: client.connectionId,
     defaultConnectionId: client.connectionId,
     connectionGeneration: client.generation,
@@ -2132,6 +2165,34 @@ async function run() {
     "value",
   )!.set!.call(inspectorEditor, "Unsent mobile draft");
   inspectorEditor.dispatchEvent(new InputEvent("input", { bubbles: true }));
+  const beforePhoneDisconnect = store.get();
+  const phoneClientCurrent = client.isCurrent;
+  client.isCurrent = () => false;
+  flushSync(() =>
+    __storeTesting.replaceState({
+      ...store.get(),
+      status: "disconnected",
+      catalogueReady: false,
+    }),
+  );
+  await settle();
+  const phoneStale = mobileInspector
+    .closest(".workspace-inspector-slot")!
+    .querySelector<HTMLElement>(".world-inspector-stale")!;
+  const staleBounds = phoneStale.getBoundingClientRect();
+  const draftBounds = inspectorEditor.getBoundingClientRect();
+  check(
+    inspectorEditor.value === "Unsent mobile draft" &&
+      draftBounds.height > 0 &&
+      staleBounds.height > 0 &&
+      staleBounds.top >= mobileHeader.getBoundingClientRect().bottom &&
+      (staleBounds.bottom <= draftBounds.top ||
+        staleBounds.top >= draftBounds.bottom),
+    "phone stale indicator covers the retained Message draft",
+  );
+  client.isCurrent = phoneClientCurrent;
+  flushSync(() => __storeTesting.replaceState(beforePhoneDisconnect));
+  await settle();
   const uploadInput = mobileInspector.querySelector<HTMLInputElement>(
     '.terminal-composer input[type="file"]',
   )!;
@@ -4188,6 +4249,154 @@ async function run() {
     () => splitBuilderWindow.querySelectorAll(".pane-layout-cell").length === 2,
     "both panes in one floating Builder Inspector",
   );
+  await until(
+    () => splitBuilderWindow.querySelectorAll(".xterm").length === 2,
+    "both split renderers before disconnect",
+  );
+  const retainedWindows = [
+    ...document.querySelectorAll(".world-managed-window .workspace-inspector"),
+  ];
+  const retainedRenderers = [...splitBuilderWindow.querySelectorAll(".xterm")];
+  const retainedCells = [
+    ...splitBuilderWindow.querySelectorAll<HTMLElement>(".pane-layout-cell"),
+  ];
+  const retainedRects = retainedCells.map((cell) => cell.getAttribute("style"));
+  requestTerminalComposer({
+    connectionId: "local",
+    generation: runtimeGeneration,
+    paneId: "builder-pane",
+  });
+  await until(
+    () =>
+      splitBuilderWindow.querySelector(
+        '[data-pane-id="builder-pane"] .terminal-composer-input',
+      ),
+    "Message editor before resume",
+  );
+  const resumeEditor = splitBuilderWindow.querySelector<HTMLTextAreaElement>(
+    '[data-pane-id="builder-pane"] .terminal-composer-input',
+  )!;
+  flushSync(() => {
+    Object.getOwnPropertyDescriptor(
+      HTMLTextAreaElement.prototype,
+      "value",
+    )!.set!.call(resumeEditor, "Unsent resume draft");
+    resumeEditor.dispatchEvent(new InputEvent("input", { bubbles: true }));
+  });
+  const resumeDraftKey = terminalComposerDraftKey(
+    "local",
+    runtimeGeneration,
+    "builder-pane",
+  );
+  check(
+    readTerminalComposerDraft(resumeDraftKey) === "Unsent resume draft",
+    "Message editor wrote its admitted runtime draft",
+  );
+  const beforeOutage = store.get();
+  const outageUrl = location.href;
+  const inputsBeforeOutage = calls.filter((call) =>
+    ["terminal.input", "pane.send_input"].includes(call.method),
+  ).length;
+  client.isCurrent = () => false;
+  flushSync(() =>
+    __storeTesting.replaceState({
+      ...store.get(),
+      status: "disconnected",
+      catalogueReady: false,
+      connectionGeneration: 2,
+      lastTopologyObservationStartedAt: 0,
+      endpointAvailability: {},
+      connections: [],
+    }),
+  );
+  await settle();
+  check(
+    resumeEditor.value === "Unsent resume draft" &&
+      readTerminalComposerDraft(resumeDraftKey) === resumeEditor.value,
+    "transport disconnect lost the unsent Message draft",
+  );
+  check(
+    resumeEditor.closest(".workspace-inspector-body")?.hasAttribute("inert") ===
+      true,
+    "offline Message cannot dispatch",
+  );
+  check(
+    retainedWindows.every((window) => window.isConnected),
+    "browser outage closed a retained Inspector",
+  );
+  check(
+    retainedRenderers.length === 2 &&
+      retainedRenderers.every((renderer) => renderer.isConnected),
+    "browser outage replaced a split terminal renderer",
+  );
+  check(
+    retainedCells.every(
+      (cell, index) =>
+        cell.isConnected && cell.getAttribute("style") === retainedRects[index],
+    ),
+    "browser outage changed split geometry",
+  );
+  check(
+    !!splitBuilderWindow.querySelector('[data-stale="true"]'),
+    "offline Inspector lacks a stale indicator",
+  );
+  flushSync(() =>
+    __storeTesting.replaceState({ ...store.get(), status: "connected" }),
+  );
+  await settle();
+  check(
+    retainedWindows.every((window) => window.isConnected),
+    "socket-open before catalogue closed an Inspector",
+  );
+  flushSync(() =>
+    __storeTesting.replaceState({
+      ...store.get(),
+      catalogueReady: true,
+      connections: beforeOutage.connections.map((owner) => ({
+        ...owner,
+        state: "error",
+      })),
+    }),
+  );
+  await settle();
+  check(
+    retainedRenderers.every((renderer) => renderer.isConnected),
+    "same-generation unavailable owner destroyed its renderer",
+  );
+  const retiredClient = client;
+  client = { ...retiredClient, generation: 3, isCurrent: () => true };
+  flushSync(() =>
+    __storeTesting.replaceState({
+      ...store.get(),
+      connections: beforeOutage.connections,
+      terminalAttachEpoch: beforeOutage.terminalAttachEpoch + 1,
+    }),
+  );
+  await settle();
+  check(
+    retainedRenderers.every((renderer) => renderer.isConnected),
+    "same-runtime reconnect replaced a renderer",
+  );
+  check(
+    retainedWindows.every((window) => window.isConnected),
+    "same-runtime reconnect replaced an Inspector",
+  );
+  check(
+    resumeEditor.value === "Unsent resume draft",
+    "same-runtime reconnect lost its Message draft",
+  );
+  splitBuilderWindow
+    .querySelector<HTMLButtonElement>(
+      'button[aria-label="Close terminal input"]',
+    )
+    ?.click();
+  check(location.href === outageUrl, "browser outage navigated the app");
+  check(
+    calls.filter((call) =>
+      ["terminal.input", "pane.send_input"].includes(call.method),
+    ).length === inputsBeforeOutage,
+    "reconnect replayed terminal input",
+  );
   check(
     !worldRuntimeStore
       .get()
@@ -5286,6 +5495,135 @@ async function run() {
     "opening the readable sibling replaced or duplicated its tab window",
   );
 
+  // Two real World Inspector owners may use the same native resource IDs.
+  includeSecondHost = true;
+  const alphaClient = client;
+  let betaClient: ConnectionClient = {
+    ...alphaClient,
+    connectionId: "beta",
+    serverRuntimeGeneration: secondHostGeneration,
+    acceptsServerGeneration: (value) => value === secondHostGeneration,
+    call: async (method, params) => {
+      const result = await alphaClient.call(method, params);
+      return method === "agent_worktree.get" ? undefined : result;
+    },
+  };
+  bridge.connection = (connectionId) =>
+    connectionId === "beta" ? betaClient : client;
+  const alphaOwners = store.get().connections;
+  __storeTesting.applyCatalog(
+    [
+      ...alphaOwners,
+      {
+        id: "beta",
+        label: "Beta",
+        source: "test",
+        is_default: false,
+        state: "ready",
+        generation: secondHostGeneration,
+      },
+    ],
+    "local",
+  );
+  await worldRuntimeStore.refresh();
+  const betaNode = buildWorldObject(
+    worldRuntimeStore.get().connections,
+    "local",
+  ).leaves.find(
+    (node) =>
+      node.connectionId === "beta" && node.nativeId === reuseAgent.pane_id,
+  )!;
+  const betaTarget = () =>
+    [
+      ...document.querySelectorAll<HTMLElement>("[data-world-node-anchor]"),
+    ].find(
+      (element) =>
+        element.getAttribute("data-world-node-anchor") === betaNode.id,
+    );
+  await until(betaTarget, "second host's qualified Board target");
+  betaTarget()!.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+  await until(
+    () =>
+      document.querySelectorAll(".world-managed-window .workspace-inspector")
+        .length === 2,
+    "same-ID resources on two independent host Inspectors",
+  );
+  const betaWindow = [
+    ...document.querySelectorAll<HTMLElement>(".world-managed-window"),
+  ].find(
+    (window) =>
+      window !== reuseWindow && window.querySelector(".workspace-inspector"),
+  )!;
+  betaWindow
+    .querySelector<HTMLButtonElement>('[role="tab"][aria-label="Terminal"]')!
+    .click();
+  await until(
+    () => betaWindow.querySelector(".xterm"),
+    "second host terminal renderer",
+  );
+  const betaRenderer = betaWindow.querySelector(".xterm");
+  const twoHostOwners = store.get().connections;
+  client.isCurrent = () => false;
+  betaClient.isCurrent = () => false;
+  flushSync(() =>
+    __storeTesting.replaceState({
+      ...store.get(),
+      status: "disconnected",
+      catalogueReady: false,
+      connections: [],
+      lastTopologyObservationStartedAt: 0,
+    }),
+  );
+  await settle();
+  check(
+    reuseWindow.isConnected &&
+      betaWindow.isConnected &&
+      betaRenderer?.isConnected === true,
+    "transport disconnect retired one of two independent host presentations",
+  );
+  client = { ...client, generation: 4, isCurrent: () => true };
+  betaClient = { ...betaClient, generation: 4, isCurrent: () => true };
+  flushSync(() =>
+    __storeTesting.replaceState({
+      ...store.get(),
+      status: "connected",
+      catalogueReady: true,
+      connections: twoHostOwners,
+      terminalAttachEpoch: store.get().terminalAttachEpoch + 1,
+    }),
+  );
+  await settle();
+  check(
+    reuseWindow.isConnected && betaRenderer?.isConnected === true,
+    "same-runtime reconnect replaced a cross-host presentation",
+  );
+  check(
+    readTerminalComposerDraft(resumeDraftKey) === "Unsent resume draft",
+    "another host's draft was retired by an incomplete catalogue",
+  );
+  secondHostGeneration += 1;
+  __storeTesting.applyCatalog(
+    store.get().connections.map((owner) =>
+      owner.id === "beta"
+        ? {
+            ...owner,
+            generation: secondHostGeneration,
+          }
+        : owner,
+    ),
+    "local",
+  );
+  worldRevision += 1;
+  await worldRuntimeStore.refresh();
+  await until(() => !betaWindow.isConnected, "only the replaced host retires");
+  check(
+    reuseWindow.isConnected,
+    "replacing Beta also retired Alpha's Inspector",
+  );
+  includeSecondHost = false;
+  __storeTesting.applyCatalog(alphaOwners, "local");
+  await worldRuntimeStore.refresh();
+
   runtimeGeneration += 1;
   worldRevision += 1;
   __storeTesting.applyCatalog(
@@ -5302,12 +5640,136 @@ async function run() {
       !document.querySelector('[role="dialog"][aria-label$=" Inspector"]'),
     "retired Inspector cleanup",
   );
+  check(
+    readTerminalComposerDraft(resumeDraftKey) === "",
+    "runtime replacement did not retire the old Message draft",
+  );
   await new Promise((resolve) => window.setTimeout(resolve, 500));
   check(
     !document.querySelector(".world-selection-panel"),
     "retiring an open Inspector left its stale identity profile selected",
   );
 
+  if (resumeGallery) {
+    // A separate scene follows functional assertions, so viewport changes cannot
+    // change the identities/geometry used by the disconnect regression above.
+    runtimeGeneration += 1;
+    client = {
+      ...client,
+      generation: client.generation + 1,
+      serverRuntimeGeneration: runtimeGeneration,
+      isCurrent: () => true,
+      acceptsServerGeneration: (generation) => generation === runtimeGeneration,
+    };
+    __storeTesting.applyCatalog(
+      store.get().connections.map((owner) => ({
+        ...owner,
+        generation: runtimeGeneration,
+      })),
+      "local",
+    );
+    await worldRuntimeStore.refresh();
+    updateLayoutPreferences({ mode: "auto" });
+    await until(() => boardTarget("Reviewer"), "synthetic gallery target");
+    boardTarget("Reviewer")!.dispatchEvent(
+      new MouseEvent("dblclick", { bubbles: true }),
+    );
+    await until(
+      () =>
+        document.querySelector(
+          ".world-managed-window.is-active .workspace-inspector",
+        ),
+      "gallery Inspector",
+    );
+    const galleryWindow = document.querySelector<HTMLElement>(
+      ".world-managed-window.is-active",
+    )!;
+    galleryWindow
+      .querySelector<HTMLButtonElement>('[role="tab"][aria-label="Terminal"]')!
+      .click();
+    await until(
+      () => galleryWindow.querySelector(".xterm"),
+      "gallery terminal",
+    );
+    requestTerminalComposer({
+      connectionId: "local",
+      generation: runtimeGeneration,
+      paneId: "reviewer-pane",
+    });
+    await until(
+      () => galleryWindow.querySelector(".terminal-composer-input"),
+      "gallery Message draft",
+    );
+    const editor = galleryWindow.querySelector<HTMLTextAreaElement>(
+      ".terminal-composer-input",
+    )!;
+    flushSync(() => {
+      Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        "value",
+      )!.set!.call(editor, "Unsent synthetic Message");
+      editor.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    });
+    client.isCurrent = () => false;
+    flushSync(() =>
+      __storeTesting.replaceState({
+        ...store.get(),
+        status: "disconnected",
+        catalogueReady: false,
+      }),
+    );
+    await settle();
+    if (!(await fetch("/capture/resume-disconnected")).ok)
+      throw new Error("Disconnected gallery capture failed");
+    client = {
+      ...client,
+      generation: client.generation + 1,
+      isCurrent: () => true,
+    };
+    flushSync(() =>
+      __storeTesting.replaceState({
+        ...store.get(),
+        status: "connected",
+        catalogueReady: true,
+        terminalAttachEpoch: store.get().terminalAttachEpoch + 1,
+      }),
+    );
+    await settle();
+    const arm = TerminalAttachFrameWatchdog.prototype.arm;
+    try {
+      suppressFrameFor = "reviewer-terminal";
+      TerminalAttachFrameWatchdog.prototype.arm = function (
+        attempt,
+        _ms,
+        timeout,
+      ) {
+        return arm.call(this, attempt, 1, timeout);
+      };
+      for (const listener of terminalClosedListeners)
+        listener({
+          connection_id: "local",
+          connection_generation: runtimeGeneration,
+          terminal_id: "reviewer-terminal",
+          reason: "terminal_configuration_changed",
+        });
+      await until(
+        () =>
+          galleryWindow
+            .querySelector('[role="alert"]')
+            ?.textContent?.includes("Retry terminal"),
+        "gallery no-frame recovery controls",
+      );
+      if (!(await fetch("/capture/resume-recovery")).ok)
+        throw new Error("Recovery gallery capture failed");
+    } finally {
+      suppressFrameFor = null;
+      TerminalAttachFrameWatchdog.prototype.arm = arm;
+    }
+    galleryWindow
+      .querySelector<HTMLButtonElement>('[role="alert"] button')
+      ?.click();
+    await settle();
+  }
   root.unmount();
 }
 

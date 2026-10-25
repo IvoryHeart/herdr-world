@@ -272,7 +272,11 @@ async function registerDomTests() {
   mock.module("../terminalLinkProvider", () => ({
     registerTerminalLinkProvider: disposable,
   }));
-  mock.module("@xterm/addon-clipboard", () => ({ ClipboardAddon: class {} }));
+  mock.module("@xterm/addon-clipboard", () => ({
+    ClipboardAddon: class {
+      dispose = noop;
+    },
+  }));
   mock.module("@xterm/addon-unicode-graphemes", () => ({
     UnicodeGraphemesAddon: class {},
   }));

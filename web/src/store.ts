@@ -4,6 +4,7 @@ import {
   SERVER_SESSION_KEYS,
   serverSessionFromState,
   connectionSnapshot,
+  retireConnectionSessionObservations,
   jsonDeepEqual,
   activateConnectionState,
   type CatalogSessionReconciliation,
@@ -85,7 +86,7 @@ import {
   clearTerminalRelayViewports,
   terminalRelayViewportForTab,
 } from "./terminalResize";
-import { clearTabLayouts } from "./tabLayout";
+import { retainTabLayoutOwners } from "./tabLayout";
 import { parseHerdrTaskNotification } from "./herdrTaskNotification";
 import { publishLastStepCompletion } from "./lastStepCompletionStore";
 import {
@@ -467,6 +468,7 @@ function applyConnectionCatalog(
   const nextActive = connections.find(
     (connection) => connection.id === state.activeConnectionId,
   );
+  retainTabLayoutOwners(connections);
   const reconciliation = reconcileConnectionCatalogSessions(state, connections);
   for (const previous of state.connections) {
     const next = connections.find((candidate) => candidate.id === previous.id);
@@ -724,7 +726,6 @@ function handleBridgeStatus(s: ConnectionStatus) {
     terminalReattachPending = true;
     bridge.setConnectionRuntimeGenerations([]);
     clearTerminalRelayViewports();
-    clearTabLayouts();
     focusActionChains.clear();
     queuedConnectionKeys.clear();
   }
@@ -977,20 +978,11 @@ export const store = {
             false,
           );
         }
-        state = {
-          ...state,
-          sessionsByConnectionId: Object.fromEntries(
-            Object.entries(state.sessionsByConnectionId).map(
-              ([id, session]) => [id, { ...session, endpointAvailability: {} }],
-            ),
-          ),
-        };
-        set({ endpointAvailability: {}, catalogueReady: false });
+        set(retireConnectionSessionObservations(state));
         catalogReadyForConnection = false;
         terminalReattachPending = true;
         bridge.setConnectionRuntimeGenerations([]);
         clearTerminalRelayViewports();
-        clearTabLayouts();
 
         queuedConnectionKeys.clear();
       }
