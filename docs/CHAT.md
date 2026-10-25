@@ -176,7 +176,10 @@ prompt adapter. A viewed tree is never an ownership claim.
 
 An unreadable transcript does not suppress a usable live or reported worktree.
 When the selected binding changes, retained files reload through the new binding
-and replies from the previous binding are discarded.
+and replies from the previous binding are discarded. If a retained preview
+becomes unavailable, only that preview shows a recoverable notice; Chat and the
+rest of the window stay open. Choose a current worktree or another file, or use
+**Retry preview** after refreshing its worktree.
 
 ## Read model
 

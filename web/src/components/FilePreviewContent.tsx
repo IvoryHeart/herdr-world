@@ -1,3 +1,7 @@
+import {
+  FilePreviewBoundary,
+  type FilePreviewContentProps,
+} from "./FilePreviewBoundary";
 import { shortcutMatches } from "../shortcutPreferences";
 import {
   audioMimeForPath,
@@ -12,7 +16,6 @@ import {
   useRef,
   useState,
   type MutableRefObject,
-  type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
 import type { EditorView as CodeMirrorEditorView } from "@codemirror/view";
@@ -22,12 +25,7 @@ import {
   FileAnnotationDrag,
   type FileAnnotationRequest,
 } from "./fileAnnotationDrag";
-import type {
-  FileLineReviewAnnotation,
-  NewReviewAnnotation,
-  ReviewAnnotation,
-} from "../annotations";
-import type { FileExplorerEntry, FilePreview } from "../types";
+import type { FileLineReviewAnnotation } from "../annotations";
 import { copyTextFromUserGesture } from "../terminalClipboard";
 import { useConnectionClient } from "../useConnectionClient";
 import {
@@ -61,20 +59,10 @@ import { CreateWorkspaceDialog } from "./CreateWorkspaceDialog";
 import { useViewTheme, type AppTheme } from "../themeScope";
 import "./FilePreviewContent.css";
 
-export type ActiveFilePreviewSelection = {
-  entry: FileExplorerEntry | null;
-  preview: FilePreview | null;
-  loading: boolean;
-  error: string | null;
-  fragment?: string;
-  line?: number;
-  snippet?: string;
-};
-
-export type FilePreviewSelectionMeta = {
-  userInitiated?: boolean;
-  deletedEntry?: Pick<FileExplorerEntry, "path" | "type">;
-};
+export type {
+  ActiveFilePreviewSelection,
+  FilePreviewSelectionMeta,
+} from "./FilePreviewBoundary";
 
 const PDF_INLINE_PREVIEW_MAX_BYTES = 25 * 1024 * 1024;
 
@@ -163,7 +151,30 @@ function isPdfPath(path: string) {
   return path.toLowerCase().endsWith(".pdf");
 }
 
-export function FilePreviewContent({
+export function FilePreviewContent(props: FilePreviewContentProps) {
+  const client = useConnectionClient();
+  const resetKey = JSON.stringify([
+    client.connectionId,
+    client.generation,
+    client.serverRuntimeGeneration,
+    client.agentWorktree,
+    props.entry?.path,
+    props.preview?.path,
+    props.preview?.resource_revision,
+  ]);
+  return (
+    <FilePreviewBoundary
+      resetKey={resetKey}
+      onRefresh={props.onRefresh}
+      onClosePreview={props.onClosePreview}
+      backAction={props.backAction}
+    >
+      <FilePreviewBody {...props} />
+    </FilePreviewBoundary>
+  );
+}
+
+function FilePreviewBody({
   entry,
   preview,
   loading,
@@ -181,25 +192,7 @@ export function FilePreviewContent({
   onClosePreview,
   onCreateAnnotation,
   onReanchorAnnotations,
-}: {
-  entry: FileExplorerEntry | null;
-  preview: FilePreview | null;
-  loading: boolean;
-  error: string | null;
-  fragment?: string;
-  line?: number;
-  snippet?: string;
-  changesContent?: ReactNode;
-  changesKey?: string;
-  backAction?: { label: string; onClick: () => void };
-  annotations?: readonly ReviewAnnotation[];
-  onOpenChanges?: () => void;
-  onOpenFile?: (path: string, fragment?: string) => void;
-  onRefresh?: () => void;
-  onClosePreview?: () => void;
-  onCreateAnnotation?: (annotation: NewReviewAnnotation) => void;
-  onReanchorAnnotations?: (path: string, text: string) => void;
-}) {
+}: FilePreviewContentProps) {
   const connectionClient = useConnectionClient();
   const workspaces = useStoreSelector((state) => state.workspaces);
   const previewSectionRef = useRef<HTMLElement | null>(null);

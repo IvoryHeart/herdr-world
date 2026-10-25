@@ -23,7 +23,7 @@
     "web/src/components/DiffContentView.tsx": 1875,
     "web/src/components/DiffViewerPanel.tsx": 2288,
     "web/src/components/FileExplorerDialog.tsx": 2460,
-    "web/src/components/FilePreviewContent.tsx": 1244,
+    "web/src/components/FilePreviewContent.tsx": 1237,
     "web/src/components/TerminalComposer.tsx": 1230,
     "web/src/components/TerminalView.tsx": 4295,
     "web/src/components/WorkspaceInspectorHost.tsx": 1369,
