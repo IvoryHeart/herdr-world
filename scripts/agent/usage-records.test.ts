@@ -214,7 +214,7 @@ test("a damaged coordinator log retains valid usage while a gap stops the preced
   expect(parsed.events).toHaveLength(3);
   expect(parsed.incompleteRecords).toBe(1);
   expect(parsed.turns).toContainEqual({
-    at: "2026-10-25T10:01:00.000Z",
+    at: "2026-10-25T10:01:00.001Z",
     text: "",
   });
   const windows = inferredWindows(
@@ -227,10 +227,10 @@ test("a damaged coordinator log retains valid usage while a gap stops the preced
   const rows = attribute(parsed.events, windows);
   expect(
     rows.filter((r) => r.pr === 7).reduce((n, r) => n + r.responses, 0),
-  ).toBe(1);
+  ).toBe(2);
   expect(
     rows.filter((r) => r.pr === null).reduce((n, r) => n + r.responses, 0),
-  ).toBe(2);
+  ).toBe(1);
 });
 
 test("Claude session discovery includes child transcripts under the parent seat", async () => {

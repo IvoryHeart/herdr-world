@@ -30,15 +30,19 @@ accepts a session ID or absolute JSONL path; an undiscovered session also needs
 `--seat` and `--family codex|claude`. Discovery and prior registrations are combined,
 so rotated/closed seats remain measurable while their logs remain available.
 Unreadable or incomplete logs count as gaps when an assignment or established
-window links their session to this PR. Malformed complete Claude JSONL records
-are quarantined individually: valid usage remains measurable, and a gap ends a
-new coordinator estimate at the preceding known timestamp. Estimation resumes
-at the next valid prompt. Malformed child records affect the measurement caveat
-without turning child prompts into parent assignments. The incomplete-session
-count covers these partial reads. Codex accounting validation remains strict;
-missing required counts are never invented. Unrelated historical sessions do not
-affect the public comment. An unreadable explicitly requested session fails the
-refresh. The tool never edits a harness log.
+window links their session to this PR, or a readable prompt claims the PR without
+establishing a usable window. These PR mentions remain in the local ledger for
+later unavailable reads. Malformed complete Claude JSONL records and invalid
+consumed prompt/usage fields are quarantined individually. A gap ends a new
+coordinator estimate one millisecond after the last known timestamp, retaining
+the preceding valid response. Observations after damage stay ineligible for
+estimates until the next valid prompt, including observations in the same
+millisecond. Explicit gap evidence clips or removes affected cached estimates
+even during global ingestion; unrelated windows and measured token observations
+remain intact. Child damage enters the incomplete-session count without turning
+child prompts into parent assignments. Codex accounting validation remains strict.
+Unrelated damaged sessions do not affect the public comment. An unreadable
+explicitly requested session fails the refresh. The tool never edits a harness log.
 
 Register each builder/fixer assignment with its actual assignment timestamp. Use
 separate windows for separate tasks in a shared session:
@@ -142,14 +146,18 @@ include historical differences; it does not claim to read live harness settings.
 `--pr` refreshes that PR's attribution and checks only its attributed windows.
 The local report includes seat, expected and recorded model/effort, response count
 and window. Use `--config` to select another local shared-config file; `--store`
-continues to select a local ledger. The command preserves other PR windows.
+continues to select a local ledger. The command preserves unrelated PR windows; newly observed gaps invalidate
+affected estimates across the shared ledger.
 
 Comparison is exact. Missing recorded effort is `unknown` when an effort was
 expected, while an omitted expected effort compares the model alone. Missing
 roster entries are `unconfigured`. Exit 0 means measured responses match; exit 2
 flags drift, unknown/unconfigured observations, no measured responses, or an
-incomplete applicable session. Configuration/read errors use exit 1. The command
+incomplete applicable session. Invalid configuration or explicitly requested unreadable input uses exit 1. The command
 reports evidence and leaves model selection or restarting seats to the operator.
+Human and JSON reports both show the applicable incomplete-session count; a
+partial measurement cannot report a clean result merely because measured models
+match. Empty scopes explicitly report that no responses were measured.
 
 PR comments include a drift note when attributed responses differ from their
 roster. Notes publish model names only, including effort-only drift under that

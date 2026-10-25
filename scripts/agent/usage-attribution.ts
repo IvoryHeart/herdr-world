@@ -1,6 +1,6 @@
 import { publicModel } from "./usage-public";
 import { rosterNotes, type Roster } from "./usage-roster";
-import type { Seat, Tokens, Turn, UsageEvent } from "./usage-records";
+import type { Seat, Tokens, Turn, UsageEvent, UsageGap } from "./usage-records";
 
 export type Role = "builder" | "fixer" | "coordinator" | `reviewer:${string}`;
 export type Window = {
@@ -59,6 +59,37 @@ export function validateWindow(window: Window) {
     throw new Error("Invalid attribution window");
 }
 
+/** New gap evidence invalidates only the estimated windows it intersects. */
+export function clipEstimates(
+  windows: Window[],
+  sessions: { seat: Seat; gaps?: UsageGap[] }[],
+): Window[] {
+  return windows.flatMap((window) => {
+    if (window.source !== "estimate") return [window];
+    const start = Date.parse(window.from);
+    let end = Date.parse(window.until);
+    for (const session of sessions) {
+      if (
+        session.seat.session !== window.session ||
+        session.seat.seat !== window.seat
+      )
+        continue;
+      for (const gap of session.gaps ?? []) {
+        const from = Date.parse(gap.from),
+          until = gap.until ? Date.parse(gap.until) : Infinity;
+        if (until <= from || start >= until || end <= from) continue;
+        if (start >= from) return [];
+        end = Math.min(end, from);
+      }
+    }
+    return end === Date.parse(window.until)
+      ? [window]
+      : end > start
+        ? [{ ...window, until: new Date(end).toISOString() }]
+        : [];
+  });
+}
+
 /** Each response has exactly one owner, or remains explicitly unattributed. */
 export function attribute(events: UsageEvent[], windows: Window[]): Row[] {
   windows.forEach(validateWindow);
@@ -74,6 +105,7 @@ export function attribute(events: UsageEvent[], windows: Window[]): Row[] {
       (w) =>
         w.session === event.session &&
         w.seat === event.seat &&
+        !(w.source === "estimate" && event.estimateBlocked) &&
         at >= Date.parse(w.from) &&
         at < Date.parse(w.until),
     );

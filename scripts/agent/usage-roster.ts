@@ -134,9 +134,11 @@ export function rosterNotes(rows: Row[], roster: Roster, pr: number): string[] {
 export function renderRosterTable(
   report: ReturnType<typeof assessRoster>,
   pr?: number,
+  incompleteSessions = 0,
 ) {
   return [
     `Recorded roster check (${pr ? `PR #${pr}` : "retained session history"}); this reports recorded responses, not live harness settings.`,
+    `Measurement: ${incompleteSessions ? "partial" : "complete"}; incomplete sessions: ${incompleteSessions}.`,
     "status\tseat\texpected model/effort\trecorded model/effort\tresponses\twindow [from, until)",
     ...report.checks.map((c) =>
       [
@@ -151,5 +153,8 @@ export function renderRosterTable(
       ].join("\t"),
     ),
     `Responses: ${report.checkedResponses}; drift: ${report.driftResponses}; unknown: ${report.unknownResponses}; unconfigured: ${report.unconfiguredResponses}.`,
+    ...(report.checkedResponses === 0
+      ? ["No recorded responses in the selected scope."]
+      : []),
   ].join("\n");
 }

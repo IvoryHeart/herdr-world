@@ -15,7 +15,7 @@ import {
   type Family,
   type Seat,
 } from "./usage-records";
-import { postComment, prMetadata, run } from "./usage-github";
+import { postComment, prMetadata, run, type Runner } from "./usage-github";
 import { UsageStore, type Assignment } from "./usage-store";
 import { assessRoster, readRoster, renderRosterTable } from "./usage-roster";
 
@@ -138,9 +138,9 @@ export function parsePrOptions(args: string[]): Options {
   return options;
 }
 
-async function defaultStore() {
+async function defaultStore(runner: Runner = run) {
   const common = (
-    await run([
+    await runner([
       "git",
       "rev-parse",
       "--path-format=absolute",
@@ -177,30 +177,47 @@ export function prMissingCount(
   unavailable: Seat[],
   windows: Window[],
   assignments: Assignment[],
+  claims: { seat: Seat; prs: number[] }[] = [],
 ) {
   const relevant = [...windows, ...assignments].filter((w) => w.pr === pr);
   return new Set(
     unavailable
-      .filter((s) =>
-        relevant.some((w) => w.session === s.session && w.seat === s.seat),
+      .filter(
+        (s) =>
+          relevant.some((w) => w.session === s.session && w.seat === s.seat) ||
+          claims.some(
+            (claim) =>
+              claim.seat.session === s.session &&
+              claim.seat.seat === s.seat &&
+              claim.prs.includes(pr),
+          ),
       )
       .map((s) => `${s.family}:${s.session}`),
   ).size;
 }
-export async function prUsageMain(args: string[]) {
+type UsageIO = {
+  run?: Runner;
+  log?: (message: string) => void;
+  warn?: (message: string) => void;
+};
+export async function prUsageMain(
+  args: string[],
+  io: UsageIO = {},
+): Promise<number> {
+  const runner = io.run ?? run,
+    output = io.log ?? console.log,
+    warn = io.warn ?? console.error;
   const options = parsePrOptions(args);
-  const defaultPath = await defaultStore();
+  const defaultPath = await defaultStore(runner);
   const store = new UsageStore(options.store ?? defaultPath);
   try {
     let discovered: Seat[] = [];
     try {
       discovered = discoverSeats(
-        JSON.parse(await run(["herdr", "agent", "list"])),
+        JSON.parse(await runner(["herdr", "agent", "list"])),
       );
     } catch {
-      console.error(
-        "Herdr discovery unavailable; using registered sessions only.",
-      );
+      warn("Herdr discovery unavailable; using registered sessions only.");
     }
     let seats = uniqueSeats([...store.sessions(), ...discovered]);
     for (const session of options.sessions) {
@@ -238,10 +255,10 @@ export async function prUsageMain(args: string[]) {
       };
       validateWindow({ ...assignment, source: "assignment" });
       store.assign(assignment, seat);
-      console.log(
+      output(
         `Registered ${options.role} assignment for PR #${options.pr}; detailed boundaries remain local.`,
       );
-      return;
+      return 0;
     }
     if (!seats.length)
       throw new Error(
@@ -270,29 +287,31 @@ export async function prUsageMain(args: string[]) {
     const sessions = loaded.map((r) => ({
       seat: r.seat,
       events: r.parsed.events,
+      gaps: r.parsed.gaps,
+      claimedPrs: r.parsed.claimedPrs,
     }));
     if (options.command === "roster-check" && options.pr === null) {
       store.refresh(null, sessions, [], 0);
       const report = assessRoster(store.rows(), roster);
-      console.log(
+      output(
         options.json
           ? JSON.stringify(
               {
                 scope: "retained session history",
                 incompleteSessions: unavailable.length,
                 ...report,
+                clean: report.clean && unavailable.length === 0,
               },
               null,
               2,
             )
-          : renderRosterTable(report),
+          : renderRosterTable(report, undefined, unavailable.length),
       );
-      if (!report.clean || unavailable.length) process.exitCode = 2;
-      return;
+      return report.clean && unavailable.length === 0 ? 0 : 2;
     }
     const pr = options.pr!;
     const repo = (
-      await run([
+      await runner([
         "gh",
         "repo",
         "view",
@@ -302,7 +321,7 @@ export async function prUsageMain(args: string[]) {
         ".nameWithOwner",
       ])
     ).trim();
-    const metadata = await prMetadata(repo, pr);
+    const metadata = await prMetadata(repo, pr, runner);
     const now = new Date().toISOString();
     const windows: Window[] = [];
     for (const result of loaded)
@@ -319,7 +338,7 @@ export async function prUsageMain(args: string[]) {
       if (assignment.until && assignment.until > assignment.from)
         windows.push({ ...assignment, source: "assignment" });
       else
-        console.error(
+        warn(
           "An assignment has no usable last-push boundary; register --until to attribute its usage.",
         );
     }
@@ -343,30 +362,41 @@ export async function prUsageMain(args: string[]) {
       unavailable,
       [...retainedWindows, ...windows],
       store.assignments(),
+      [
+        ...store
+          .sessions()
+          .map((seat) => ({ seat, prs: seat.claimedPrs ?? [] })),
+        ...loaded.map((r) => ({ seat: r.seat, prs: r.parsed.claimedPrs })),
+      ],
     );
     store.refresh(pr, sessions, windows, missing, validReviews);
     const rows = store.rows();
     if (options.command === "roster-check") {
       const report = assessRoster(rows, roster, pr);
-      console.log(
+      output(
         options.json
           ? JSON.stringify(
-              { pr, incompleteSessions: missing, ...report },
+              {
+                pr,
+                incompleteSessions: missing,
+                ...report,
+                clean: report.clean && missing === 0,
+              },
               null,
               2,
             )
-          : renderRosterTable(report, pr),
+          : renderRosterTable(report, pr, missing),
       );
-      if (!report.clean || missing) process.exitCode = 2;
+      return report.clean && missing === 0 ? 0 : 2;
     } else if (options.command === "comment") {
       const comment = renderComment(pr, rows, missing, roster);
       if (options.post)
-        console.log(
-          `Usage comment ${await store.publish(() => postComment(repo, pr, renderComment(pr, store.rows(), store.missing(pr), roster)))} for PR #${pr}.`,
+        output(
+          `Usage comment ${await store.publish(() => postComment(repo, pr, renderComment(pr, store.rows(), store.missing(pr), roster), runner))} for PR #${pr}.`,
         );
-      else console.log(comment);
+      else output(comment);
     } else if (options.json)
-      console.log(
+      output(
         JSON.stringify(
           {
             pr,
@@ -377,7 +407,8 @@ export async function prUsageMain(args: string[]) {
           2,
         ),
       );
-    else console.log(renderTable(pr, rows));
+    else output(renderTable(pr, rows));
+    return 0;
   } finally {
     store.close();
   }

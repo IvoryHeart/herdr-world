@@ -445,7 +445,7 @@ if (import.meta.main) {
     const args = process.argv.slice(2).filter((arg) => arg != "--");
     if (["pr", "comment", "assign", "roster-check"].includes(args[0] ?? "")) {
       const { prUsageMain } = await import("./usage-cli");
-      await prUsageMain(args);
+      process.exitCode = await prUsageMain(args);
     } else {
       const options = parseOptions(args);
       const logs = await readSessionLogs(options);
