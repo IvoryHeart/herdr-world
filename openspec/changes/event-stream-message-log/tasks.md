@@ -30,9 +30,9 @@ existing accepted work instead of rebuilding it.
 - [x] 2.0a Rank verified current Herdr, Claude/Codex and GitHub correctness,
   freshness, health and coverage gaps as issue-backed Platform/Integrations
   work; reuse existing issues and accepted fixes before proposing new work.
-  Current gap issues: #359 (compressed rollouts), #372 (PR detail freshness),
-  #369 (RESULT parsing), #371 (readiness health), #373 (skill provenance),
-  #338 (worktree, existing Chat batch), #370 (issue scope/completeness).
+  Reconciled at main bba20a2c: #338, #359, #369, #371 and #372 are closed.
+  Remaining scope/skill gaps are #370 and #373. Keep their live GitHub issues
+  authoritative rather than treating this dated audit as an implementation list.
   #284 retains the known upstream conditional-input limitation.
 - [ ] 2.0b Verify supported harness versions and native registry/binding modes
   using isolated synthetic fixtures; distinguish observed behavior from
@@ -44,20 +44,21 @@ existing accepted work instead of rebuilding it.
   profile/seat spec's per-harness table and full eval identity. Agent-config UI
   stays held until this contract/evidence is owner-reviewed.
 
-### Worktree read-model batch — coordinate with Chat
+### Delivered worktree resolver — capture integration with Chat
 
-- [ ] 2.1 Reconcile the separately authorized Inspector resolver with the
-  qualified subject/candidate/observation envelope; verify foreground, own
-  session, reported-checkout and inferred-branch evidence remain distinguishable.
-- [ ] 2.2 Share one revalidated target across Files and Changes; test detached
-  HEAD, outside-Git cwd, ambiguous candidates, explicit alternate selection,
-  session turnover, stale hosts and target-host path canonicalization.
-- [ ] 2.3 Expose accepted observation/revision changes for later capture without
-  a ledger dependency; verify that changing Inspector's target does not change
-  the observed agent work claim or native selection.
-- [ ] 2.4 Update affected current contracts, consumer mappings and usage docs;
-  run the complete batch gate and capture required Inspector browser evidence
-  without changing existing latency budgets.
+#338 shipped the shared resolver and Files/Changes binding (55e0b81f); the
+current world-surfaces requirement owns that behavior. This phase adds only
+the event-capture interface.
+
+- [ ] 2.1 Connect accepted resolver observation revisions to worktree-observed
+  capture while preserving source provenance and the current contract's ranking.
+- [ ] 2.2 Capture accepted binding-changed revisions per Inspector/view context;
+  verify separate selections do not overwrite the observed agent work claim.
+- [ ] 2.3 Verify duplicate revisions, refused/retired results, source outages and
+  capture replay; replay must not reselect a root or authorize file/Git work.
+- [ ] 2.4 Preserve delivered resolver acceptance and latency limits, map the new
+  capture interface to verification/consumer evidence and update affected docs;
+  run the complete integration batch gate instead of rebuilding #338.
 
 ## 3. Capture and replay batch — Platform
 
@@ -87,10 +88,14 @@ existing accepted work instead of rebuilding it.
   payload conflicts, concurrent admission, per-recipient/global/payload limits,
   atomic fan-out rejection, dedup budget/retired namespaces, crash recovery and
   pending retention after quota reduction without expiry or hidden overflow.
+  Add explicit producer registration and bounded durable UI/CLI journals;
+  verify registration-response loss, CLI restart/retry, concurrent writers,
+  missing journal/ledger replacement and no replacement-key retry.
 - [ ] 4.2 Add conditional recipient/shift bindings and monotonic evidence
   reduction; verify handover holds, changed targets, lost outcomes, refusal,
   ambiguous transcript matches, old/replayed matching turns, missing causal
-  boundaries, concurrent identical inputs and no automatic uncertain resend.
+  boundaries, concurrent identical inputs, non-atomic post-check turnover,
+  positive wrong-target outcomes and no automatic uncertain/misdelivered resend.
 - [ ] 4.3 Add UI/CLI intent admission using shared service contracts; verify
   sender claim versus authentication and keep ask answers on their own verb.
 - [ ] 4.4 Update relevant contracts, CLI/user documentation and verification
@@ -118,9 +123,13 @@ existing accepted work instead of rebuilding it.
 - [ ] 6.1 Feed Town, Board, Chat and Inspector from shared qualified read models;
   verify equivalent attention/thread/receipt states, stale rendering and
   unchanged viewer seen/reviewed authority across surfaces.
-- [ ] 6.2 Move accepted Chat sends to one message-intent path with no duplicate
-  legacy send; verify asks still use their answer verb and explicit failures
-  preserve recoverable evidence.
+- [ ] 6.2 Migrate Chat sends using the design's explicit mapping: pending stays
+  pending/unconfirmed; matched retains words/order evidence below Read;
+  uncertain is unknown; unverified retains its unconfirmed reason; misdelivered
+  is wrong-target. Preserve independent stronger receipts and command semantics.
+  Import stable legacy IDs without enqueueing/replaying sends. Verify repeated
+  imports, post-check turnover, acknowledgement without resend, and asks staying
+  on their separate answer verb. Do not claim the ledger resolves #284.
 - [ ] 6.3 Add cursor-based coordinator inbox/digest consumption referencing
   explicit threads; verify replay does not duplicate a digest or grant owner
   authority to a peer message.
