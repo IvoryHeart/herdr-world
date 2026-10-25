@@ -4,26 +4,12 @@ import {
   type HerdrOfficeProjection,
   TOWN_PRESENTATION_BOUNDS,
 } from "../herdrOfficeProjection";
-import { townAttentionDesks } from "./townAttention";
-import type { TownCall } from "./TownRail";
-import type { WorldAsk } from "../worldAsks";
-import { withTownFinished } from "./townFinished";
 import { useDeskPins } from "../useDeskPins";
 import type { WorldObject } from "../worldObject";
-import { officeReadModel } from "../officeReadModel";
 
-/**
- * The Office projection Town shows: pinned desks admitted first, and rooms
- * past TOWN_PRESENTATION_BOUNDS.foldedDesksPerRoom folded to their busiest
- * desks until the user expands them into a longer room.
- */
+/** Town reveals the first 24 native-order tabs, then 20 more per expansion. */
 export function useTownOffice(world: WorldObject, selectedId: string | null) {
   const projectOffice = useMemo(
-    () => createOfficeProjector(TOWN_PRESENTATION_BOUNDS),
-    [],
-  );
-  // Separate caches avoid alternating semantic and protected presentation inputs.
-  const projectPresentation = useMemo(
     () => createOfficeProjector(TOWN_PRESENTATION_BOUNDS),
     [],
   );
@@ -101,28 +87,6 @@ export function useTownOffice(world: WorldObject, selectedId: string | null) {
       roomFocus?.roomKey,
     ],
   );
-  const present = useCallback(
-    (protectedDesks: ReadonlySet<string>) =>
-      projectPresentation(
-        world,
-        Date.now(),
-        selectedId,
-        pinnedTabs,
-        expandedRooms,
-        protectedDesks,
-        roomFocus?.roomKey ?? null,
-        expandedDeskLimits,
-      ),
-    [
-      world,
-      selectedId,
-      pinnedTabs,
-      expandedRooms,
-      expandedDeskLimits,
-      projectPresentation,
-      roomFocus?.roomKey,
-    ],
-  );
   const focusRoom = useCallback(
     (roomKey: string) => {
       const room = observedOffice.roomRoster.find(
@@ -142,35 +106,7 @@ export function useTownOffice(world: WorldObject, selectedId: string | null) {
     office: observedOffice,
     deskPins,
     toggleRoomFold,
-    present,
     roomFocus,
     focusRoom,
   };
-}
-
-/** Admit attention from the full semantic roster, then apply its same finish overlay. */
-export function useTownPresentation(
-  present: (desks: ReadonlySet<string>) => HerdrOfficeProjection,
-  office: HerdrOfficeProjection,
-  calls: readonly TownCall[],
-  asks: readonly WorldAsk[],
-  finished: ReadonlySet<string>,
-  seen: ReadonlySet<string>,
-) {
-  const desks = useMemo(
-    () =>
-      townAttentionDesks(calls, asks, office.roster, (connection, pane) =>
-        officeReadModel(office).agentForPane(connection, pane),
-      ),
-    [calls, asks, office],
-  );
-  return useMemo(() => {
-    // The semantic projection already has the same focus/pins/fold admission.
-    // Attention needs another admission only when one of its desks is omitted.
-    const shown = new Set(
-      office.rooms.flatMap((room) => room.desks.map((desk) => desk.key)),
-    );
-    if ([...desks].every((key) => shown.has(key))) return office;
-    return withTownFinished(present(desks), finished, seen);
-  }, [office, present, desks, finished, seen]);
 }

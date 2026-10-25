@@ -113,6 +113,12 @@ import {
 } from "./townBadges";
 import { DeskWorkBadge } from "./DeskWorkBadge";
 import { TownRoomPlaque } from "./TownRoomPlaque";
+import { TownFoldIndicators } from "./TownFoldIndicators";
+import {
+  NO_FOLDED_ACTIVITY,
+  townFoldedActivityLabel,
+  type TownFoldedActivity,
+} from "./townFoldedActivity";
 import "./town.css";
 import {
   markAway,
@@ -199,6 +205,7 @@ function ago(since: number, now: number) {
 
 export function TownCanvas({
   projection,
+  foldedActivity = NO_FOLDED_ACTIVITY,
   selectedKey,
   completionSeenKeys,
   summonedKeys = NO_KEYS,
@@ -244,6 +251,8 @@ export function TownCanvas({
   /** Screen pixels covered by panels on wide screens (rail, chat dock). */
   chrome?: { left: number; right: number };
   projection: HerdrOfficeProjection;
+  /** Hidden call/Ask state from the same complete attention source as the rail. */
+  foldedActivity?: ReadonlyMap<string, TownFoldedActivity>;
   selectedKey: string | null;
   completionSeenKeys: ReadonlySet<string>;
   /** Agents the user opened, who walk back to their desks. */
@@ -1460,6 +1469,7 @@ export function TownCanvas({
       >
         <TownTeamsLayer teams={teams} />
         <TownWorldLayer
+          foldedActivity={foldedActivity}
           teams={teams}
           model={model}
           layout={layout}
@@ -1715,6 +1725,7 @@ const TownTeamsLayer = memo(function TownTeamsLayer({
 });
 const TownWorldLayer = memo(function TownWorldLayer({
   model,
+  foldedActivity,
   layout,
   teams,
   selectedKey,
@@ -1735,6 +1746,7 @@ const TownWorldLayer = memo(function TownWorldLayer({
 }: {
   signs: TownBuildingSigns;
   model: TownModel;
+  foldedActivity: ReadonlyMap<string, TownFoldedActivity>;
   layout: TownLayout;
   teams: TownTeams;
   visible: TownVisible;
@@ -1905,6 +1917,8 @@ const TownWorldLayer = memo(function TownWorldLayer({
               const overflow =
                 room.omittedDeskCount + placed.overflowDeskKeys.length;
               const revealCount = Math.min(TOWN_DESK_EXPANSION_STEP, overflow);
+              const activity = foldedActivity.get(room.key);
+              const activityLabel = townFoldedActivityLabel(activity);
               const partiallyExpanded =
                 room.deskFold === "expanded" && overflow > 0;
               const revealDescription =
@@ -2096,12 +2110,12 @@ const TownWorldLayer = memo(function TownWorldLayer({
                       aria-expanded={room.deskFold === "expanded"}
                       aria-label={
                         overflow > 0
-                          ? `${revealDescription} in ${label}`
+                          ? `${revealDescription} in ${label}${activityLabel ? `. ${activityLabel}` : ""}`
                           : `Fold ${label} back to 24 desks`
                       }
                       title={
                         overflow > 0
-                          ? revealDescription
+                          ? `${revealDescription}${activityLabel ? `. ${activityLabel}` : ""}`
                           : "Fold this room back to 24 desks"
                       }
                       style={{
@@ -2138,6 +2152,7 @@ const TownWorldLayer = memo(function TownWorldLayer({
                           <span>Fold</span>
                         </>
                       )}
+                      <TownFoldIndicators activity={activity} />
                     </button>
                   ) : null}
                   {partiallyExpanded && seatCell && roomActions.onToggleFold ? (

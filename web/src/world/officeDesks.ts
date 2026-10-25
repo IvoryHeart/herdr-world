@@ -22,14 +22,7 @@ export function priorityCandidates(
     : top;
 }
 
-/**
- * A room's desks within its bound, in tab order. The optional Town policy
- * keeps selected, pinned, active, attention and newest desks even when that
- * means exceeding the fold target. Other Town desks are kept by status, with
- * unnamed, idle and finished desks folded first. Identity breaks ties so a
- * stable snapshot always produces the same fold set; other callers retain the
- * default bounded selection.
- */
+/** Town draws a contiguous native-order prefix. Other views retain bounded priorities. */
 export function boundedDesks(
   desks: readonly OfficeDesk[],
   agents: readonly {
@@ -39,91 +32,40 @@ export function boundedDesks(
   limit: number,
   selected: (desk: OfficeDesk) => boolean,
   pinned: (desk: OfficeDesk) => boolean,
-  protectActiveAndRecent = false,
-  attention: (desk: OfficeDesk) => boolean = () => false,
+  preserveTabOrder = false,
 ): OfficeDesk[] {
-  if (desks.length <= limit && !protectActiveAndRecent) return [...desks];
+  if (preserveTabOrder) return desks.slice(0, limit);
+  if (desks.length <= limit) return [...desks];
   const need = new Map<string, number>();
   for (const agent of agents) {
     if (!agent.deskKey) continue;
     const rank = DESK_STATUS_RANK[agent.semanticStatus];
     need.set(agent.deskKey, Math.min(need.get(agent.deskKey) ?? 9, rank));
   }
-  if (!protectActiveAndRecent) {
-    const newestStart = desks.length - NEWEST_DESKS_KEPT;
-    const ranked = desks
-      .map((desk, index) => ({
-        desk,
-        index,
-        rank: selected(desk)
-          ? -3
-          : pinned(desk)
-            ? -2
-            : index >= newestStart
-              ? -1
-              : (need.get(desk.key) ?? UNNAMED_DESK_RANK),
-      }))
-      .sort(
-        (left, right) =>
-          left.rank - right.rank ||
-          right.index - left.index ||
-          left.desk.key.localeCompare(right.desk.key),
-      );
-    const retained = Math.max(
-      limit,
-      desks.filter((desk) => selected(desk) || pinned(desk)).length,
-    );
-    const admitted = new Set(ranked.slice(0, retained).map(({ desk }) => desk));
-    return desks.filter((desk) => admitted.has(desk));
-  }
-  const newest = new Set(
-    [...desks]
-      .sort(
-        (left, right) =>
-          right.order - left.order || left.key.localeCompare(right.key),
-      )
-      .slice(0, NEWEST_DESKS_KEPT)
-      .map((desk) => desk.key),
-  );
-  const protectedDesk = (desk: OfficeDesk) => {
-    const status = need.get(desk.key);
-    return (
-      selected(desk) ||
-      pinned(desk) ||
-      attention(desk) ||
-      newest.has(desk.key) ||
-      status === DESK_STATUS_RANK.blocked ||
-      status === DESK_STATUS_RANK.working
-    );
-  };
-  const protectedDesks = desks.filter(protectedDesk).sort((left, right) => {
-    const rank = (desk: OfficeDesk) => {
-      const status = need.get(desk.key);
-      return selected(desk)
-        ? -4
+  const newestStart = desks.length - NEWEST_DESKS_KEPT;
+  const ranked = desks
+    .map((desk, index) => ({
+      desk,
+      index,
+      rank: selected(desk)
+        ? -3
         : pinned(desk)
-          ? -3
-          : attention(desk) || status === DESK_STATUS_RANK.blocked
-            ? -2
-            : status === DESK_STATUS_RANK.working
-              ? -1
-              : 0;
-    };
-    return rank(left) - rank(right) || left.key.localeCompare(right.key);
-  });
-  const candidates = desks
-    .filter((desk) => !protectedDesk(desk))
-    .sort((left, right) => {
-      const statusOrder =
-        (need.get(left.key) ?? UNNAMED_DESK_RANK) -
-        (need.get(right.key) ?? UNNAMED_DESK_RANK);
-      return statusOrder || left.key.localeCompare(right.key);
-    });
-  const admitted = new Set(
-    protectedDesks.concat(
-      candidates.slice(0, Math.max(0, limit - protectedDesks.length)),
-    ),
+          ? -2
+          : index >= newestStart
+            ? -1
+            : (need.get(desk.key) ?? UNNAMED_DESK_RANK),
+    }))
+    .sort(
+      (left, right) =>
+        left.rank - right.rank ||
+        right.index - left.index ||
+        left.desk.key.localeCompare(right.desk.key),
+    );
+  const retained = Math.max(
+    limit,
+    desks.filter((desk) => selected(desk) || pinned(desk)).length,
   );
+  const admitted = new Set(ranked.slice(0, retained).map(({ desk }) => desk));
   return desks.filter((desk) => admitted.has(desk));
 }
 

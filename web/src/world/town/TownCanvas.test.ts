@@ -48,14 +48,14 @@ test.skipIf(!chrome).each([
   [390, 844, "incremental", 0],
   [1440, 900, "plates", 0],
   [390, 844, "plates", 0],
-  // Stable 26-desk fold fixture proves protected admission and both room tiles.
+  // The 26-tab fixture proves a native-order prefix and hidden-attention corners.
   [390, 844, "fold", 0],
   [960, 1080, "fold", 0],
   [1440, 900, "fold", 0],
   [1080, 1920, "fold", 0],
   [2560, 1440, "fold", 0],
   [390, 844, "fold-protected", 0],
-  // Every one of 130 protected desks keeps its browser target past both bounds.
+  // A dense busy room still folds to 24, marking hidden attention on its tile.
   [390, 844, "protected", 0],
   // Request a room beyond admission while renderer initialization is held.
   [390, 844, "navigation", 0],

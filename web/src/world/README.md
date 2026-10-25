@@ -50,9 +50,14 @@ room contributions and groups room links by host.
 Finish/seen overlays change only the affected room totals. Ask, metrics and clock
 updates reuse that topology. Asking identities resolve through the snapshot's
 generation-qualified pane and agent indexes, without scanning the roster. The
-canvas reuses semantic admission when its attention desks are already visible;
-otherwise its separate presentation cache admits the protected desks. These
-paths retain the fixed production input-latency budgets in the browser tests.
+canvas uses the same native-order tab prefix as Spaces: 24 tabs folded, then
+20 more per expansion. Attention never changes this admission.
+[townFoldedActivity.ts](town/townFoldedActivity.ts) maps shared rail calls and
+qualified asking identities onto hidden desks; [TownFoldIndicators.tsx](town/TownFoldIndicators.tsx)
+shows red needs-you and green unreviewed-completion corner icons without extra
+counts. It reads prepared identity indexes and visible desk sets, avoiding a
+second projection or a full-roster scan on Ask changes. The fixed production
+input-latency budgets remain binding in the browser tests.
 
 The renderer draws through the shared World frame scheduler: state frames for
 camera, roof and walking changes, motion frames for ambient animation, which

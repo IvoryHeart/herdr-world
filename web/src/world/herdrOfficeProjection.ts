@@ -71,8 +71,8 @@ export type OfficePresentationBounds = {
 export const TOWN_DESK_EXPANSION_STEP = 20;
 
 /**
- * Town rooms expand by roughly 20 desks per action; protected desks can exceed
- * the current target. Layout grows for every admitted desk; other bounds match Office.
+ * Town rooms reveal a native-order prefix, expanding by 20 desks per action.
+ * Layout grows for every admitted desk; other bounds match Office.
  */
 export const TOWN_PRESENTATION_BOUNDS: OfficePresentationBounds = Object.freeze(
   {
@@ -176,8 +176,8 @@ export function createOfficeProjector(
   ): HerdrOfficeProjection => {
     let next: HerdrOfficeProjection | null = null;
     const inputs = previous && projectionInputs.get(previous);
-    // Pinned desks are admitted first, and expanding or folding a room changes
-    // its bound; changes to attention desks also require fresh admission.
+    // Cache fold targets and legacy priority inputs. Town admission itself
+    // remains a native-order prefix regardless of activity or selection.
     const sameAdmission =
       preferredRoomKey === previousPreferredRoom &&
       pinnedTabs === previousPinned &&
@@ -345,8 +345,8 @@ const NO_DESK_LIMITS: ReadonlyMap<string, number> = new Map();
 
 /**
  * `pinnedTabs` holds the tab card keys of Town's pinned desks (useDeskPins.ts):
- * past a room's desk bound they are admitted right after the selected desk,
- * so a pinned desk never drops out of its room.
+ * Office reserves bounded capacity for them. Town instead keeps a contiguous
+ * prefix; its pin cells apply only while those tabs are admitted.
  */
 export function projectWorldOffice(
   world: WorldObject,
@@ -356,8 +356,8 @@ export function projectWorldOffice(
   pinnedTabs: ReadonlySet<string> = NO_PINNED_TABS,
   /** Rooms the user expanded past `foldedDesksPerRoom` (room keys). */
   expandedRooms: ReadonlySet<string> = NO_EXPANDED_ROOMS,
-  /** Qualified desk keys supplied by Town's complete attention read model. */
-  protectedDesks: ReadonlySet<string> = NO_PINNED_TABS,
+  /** Legacy attention input; Town admission now follows tab order only. */
+  _protectedDesks: ReadonlySet<string> = NO_PINNED_TABS,
   /** A validated qualified room requested by camera navigation. */
   preferredRoomKey: string | null = null,
   /** Current incremental expansion target for each expanded room. */
@@ -455,7 +455,6 @@ export function projectWorldOffice(
         desk.tabRef.nativeId === selectedLeaf?.tabId,
       pinned,
       bounds === TOWN_PRESENTATION_BOUNDS,
-      (desk) => protectedDesks.has(desk.key),
     );
     const presentedDesks = desks.map((desk) => {
       const devices = boundedWithPriority(

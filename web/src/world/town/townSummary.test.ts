@@ -13,6 +13,7 @@ import { buildWorldObject, worldObjectForHosts } from "../worldObject";
 import { officeReadModel } from "../officeReadModel";
 import { withTownFinished } from "./townFinished";
 import { townAttentionDesks } from "./townAttention";
+import { townFoldedActivity } from "./townFoldedActivity";
 import { townCalls, type TownCall } from "./TownRail";
 import type { WorldAsk } from "../worldAsks";
 import { townSummary, townSummaryAge } from "./townSummary";
@@ -331,7 +332,7 @@ test("bounded prepared totals retain exact finish and seen deltas on observed ag
   expect(base.coverage.status.idle).toBe(18);
 });
 
-test("a verified Ask keeps its folded desk during a cached-generation reconnect and releases it on removal", async () => {
+test("a verified Ask marks its hidden desk during a cached-generation reconnect without changing tab order", async () => {
   const { connection } = office({ alpha: Array<string>(30).fill("idle") });
   const world = buildWorldObject(
     [
@@ -382,10 +383,21 @@ test("a verified Ask keeps its folded desk during a cached-generation reconnect 
   );
   expect([...indexed]).toEqual([...legacy]);
   expect([...indexed]).toEqual([agent.deskKey!]);
-  const protectedOffice = project(world, 2, null, pins, expanded, indexed);
+  const protectedOffice = project(world, 2, null, pins, expanded);
   expect(
     protectedOffice.rooms[0]!.desks.some((desk) => desk.key === agent.deskKey),
-  ).toBe(true);
+  ).toBe(false);
+  protectedOffice.roster = new Proxy(protectedOffice.roster, {
+    get(target, key, receiver) {
+      if (key === Symbol.iterator)
+        throw Error("hidden Ask indicator scanned the roster");
+      return Reflect.get(target, key, receiver);
+    },
+  });
+  expect(
+    townFoldedActivity(protectedOffice, [], [ask]).get(agent.roomKey),
+  ).toEqual({ needsYou: true, done: false });
+  expect(townFoldedActivity(protectedOffice, [], []).size).toBe(0);
   expect(
     officeReadModel(protectedOffice).agentForPane(
       "studio",
@@ -396,6 +408,7 @@ test("a verified Ask keeps its folded desk during a cached-generation reconnect 
     ...ask,
     actor: { ...ask.actor, terminal_id: "another-terminal" },
   };
+  expect(townFoldedActivity(protectedOffice, [], [mismatched]).size).toBe(0);
   expect([
     ...townAttentionDesks(
       [],

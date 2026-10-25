@@ -9,10 +9,7 @@ import { buildWorldObject, type WorldObject } from "../worldObject";
 import TownView from "../TownView";
 import { AgentLauncherDialog } from "../AgentLauncherDialog";
 import { WORLD_AGENT_LAUNCH_EVENT, type LaunchTarget } from "../agentProfiles";
-import { projectWorldOffice } from "../herdrOfficeProjection";
 import type { WorldAsk } from "../worldAsks";
-import { townCalls, unseenTownCompletions } from "./TownRail";
-import { townAttentionDesks } from "./townAttention";
 import { checkTownRoomPlates } from "./townRoomPlates.browser";
 import { checkTownRoomFold } from "./townRoomFold.browser";
 import type { BoardDocument, BoardOp } from "../board/boardDocument";
@@ -30,10 +27,7 @@ import {
   type BridgeControlMsg,
   type ConnectionClient,
 } from "../../api";
-import {
-  officeCompletionIdentity,
-  readCompletionSeen,
-} from "../completionSeenState";
+import { readCompletionSeen } from "../completionSeenState";
 import { worldSourcesStore } from "../worldSources";
 import "../world.css";
 import {
@@ -229,7 +223,13 @@ function topology(seed: number): Topology {
       const foldStatuses =
         scale === "fold" && host === HOSTS[0] && roomIndex === 0
           ? Array.from({ length: deskCount }, (_, index) =>
-              index === 0 ? "blocked" : index < 3 ? "working" : "idle",
+              index === 0 || index === 24
+                ? "blocked"
+                : index === 25
+                  ? "done"
+                  : index < 3
+                    ? "working"
+                    : "idle",
             )
           : scale === "fold-protected" && host === HOSTS[0]
             ? Array.from({ length: deskCount }, () => "working")
@@ -1268,8 +1268,8 @@ async function run() {
     if (card) {
       const room = card.closest<HTMLElement>(".town-room");
       check(
-        room?.querySelector(".town-fold-tile") === null,
-        "a folded room with no hidden desks rendered an inert +0 tile",
+        room?.querySelector(".town-fold-tile") !== null,
+        "a 26-tab working room must still offer its two hidden tabs",
       );
       const beforeFrames = rendered.frames;
       card.click();
@@ -1288,8 +1288,8 @@ async function run() {
             ),
           ].filter((target) =>
             target.dataset.targetKey?.includes("all-protected-room"),
-          ).length === 26,
-        "the all-protected room did not keep its 26 working desks visible",
+          ).length === 24,
+        "a working room must still fold to the first 24 tabs",
       );
     }
     root.unmount();
@@ -1331,10 +1331,10 @@ async function run() {
     );
     check(
       Array.from(
-        { length: 130 },
+        { length: 24 },
         (_, index) => `local-orbit-tab-${index}`,
       ).every((key) => visible.has(key)),
-      "protected desks lost their browser targets",
+      "the folded prefix lost one of its first 24 tab targets",
     );
     const orbit = [...visible].filter((key) =>
       key.startsWith("local-orbit-tab-"),
@@ -1343,8 +1343,16 @@ async function run() {
       '.town-fold-tile[aria-label^="Show "]',
     );
     check(
-      expand?.textContent?.trim() === `+${160 - orbit}`,
+      expand?.querySelector("span")?.textContent === `+${160 - orbit}`,
       `protected room plaque ${expand?.textContent?.trim()} disagrees with ${orbit} visible desks of 160`,
+    );
+    check(
+      orbit === 24,
+      "attention must not promote later tabs into the native-order prefix",
+    );
+    check(
+      !!expand?.querySelector(".town-fold-needs"),
+      "hidden attention needs the red fold indicator",
     );
     const remainingDesks = 160 - orbit;
     const expectedReveal =
@@ -1356,8 +1364,8 @@ async function run() {
         ? "Show up to 20 more hidden desks"
         : `Show the remaining ${remainingDesks} hidden ${remainingDesks === 1 ? "desk" : "desks"}`;
     check(
-      expand?.getAttribute("aria-label") === expectedReveal &&
-        expand.title === expectedTitle,
+      expand?.getAttribute("aria-label")?.startsWith(expectedReveal) === true &&
+        expand.title.startsWith(expectedTitle),
       "fold tile needs an accurate hidden-desk accessibility label",
     );
     check(
@@ -1620,97 +1628,16 @@ async function run() {
   );
   const waitingEntries = host.querySelectorAll(".town-reception-entry").length;
   check(waitingEntries > 0, "blocked agents did not appear at reception");
-  // A room past 24 desks shows its busiest until expanded into a longer room.
+  // Folding shows a contiguous prefix in the same native order as Spaces.
   const perRoom = new Map<string, number>();
   for (const entry of base.connections.flatMap((c) => c.snapshot?.tabs ?? []))
     perRoom.set(entry.workspace_id, (perRoom.get(entry.workspace_id) ?? 0) + 1);
-  const expectedOffice = projectWorldOffice(
-    worldFor(base.connections),
-    Date.now(),
-  );
-  const seen = readCompletionSeen(worldLocalStorage);
-  const expectedCalls = townCalls(
-    expectedOffice.roster,
-    new Map(),
-    unseenTownCompletions(
-      expectedOffice.roster,
-      new Set(
-        expectedOffice.roster
-          .filter(({ agent }) => seen.has(officeCompletionIdentity(agent)))
-          .map(({ agent }) => agent.key),
-      ),
-    ),
-    (key) => expectedOffice.roster.find(({ agent }) => agent.key === key),
-  );
-  const protectedDesks = townAttentionDesks(
-    expectedCalls,
-    ledger.asks,
-    expectedOffice.roster,
-  );
-  const protectedByRoom = new Map<string, Set<string>>();
-  const activeDeskKeys = new Set(
-    expectedOffice.roster
-      .filter(
-        ({ agent }) =>
-          agent.deskKey !== null &&
-          (agent.semanticStatus === "working" ||
-            agent.semanticStatus === "blocked"),
-      )
-      .map(({ agent }) => agent.deskKey!),
-  );
-  const desksByRoom = new Map<string, typeof expectedOffice.deskRoster>();
-  for (const entry of expectedOffice.deskRoster) {
-    const list = desksByRoom.get(entry.desk.roomKey) ?? [];
-    list.push(entry);
-    desksByRoom.set(entry.desk.roomKey, list);
-    if (
-      protectedDesks.has(entry.desk.key) ||
-      activeDeskKeys.has(entry.desk.key)
-    ) {
-      const set = protectedByRoom.get(entry.desk.roomKey) ?? new Set<string>();
-      set.add(entry.desk.key);
-      protectedByRoom.set(entry.desk.roomKey, set);
-    }
-  }
-  for (const entries of desksByRoom.values())
-    for (const { desk } of [...entries]
-      .sort(
-        (left, right) =>
-          right.desk.order - left.desk.order ||
-          left.desk.key.localeCompare(right.desk.key),
-      )
-      .slice(0, 3)) {
-      const set = protectedByRoom.get(desk.roomKey) ?? new Set<string>();
-      set.add(desk.key);
-      protectedByRoom.set(desk.roomKey, set);
-    }
-  const protectedCounts = new Map<string, number>();
-  for (const [roomKey, keys] of protectedByRoom) {
-    const id = expectedOffice.rooms.find(({ key }) => key === roomKey)!
-      .workspaceRef.nativeId;
-    protectedCounts.set(id, keys.size);
-  }
   const drawn = (expanded: string | null) =>
     [...perRoom].reduce(
       (sum, [id, count]) =>
-        sum +
-        Math.max(
-          id === expanded ? count : Math.min(count, 24),
-          protectedCounts.get(id) ?? 0,
-        ),
+        sum + (id === expanded ? count : Math.min(count, 24)),
       0,
     );
-  const visibleDeskKeys = new Set(
-    [
-      ...host.querySelectorAll<HTMLElement>(
-        '.world-semantic-target[data-kind="desk"]',
-      ),
-    ].map((target) => target.dataset.targetKey),
-  );
-  check(
-    [...protectedDesks].every((key) => visibleDeskKeys.has(key)),
-    "fold hid a desk from the shared call/ask attention source",
-  );
   check(
     diagnostics.desks === drawn(null),
     `a folded town drew ${diagnostics.desks} of ${drawn(null)} desks`,
@@ -1831,7 +1758,7 @@ async function run() {
       fold?.click();
       await waitFor(
         () =>
-          orbitDeskCount() === Math.max(24, protectedCounts.get(roomId) ?? 0) &&
+          orbitDeskCount() === 24 &&
           host.querySelector(
             '.world-semantic-targets-overlay[aria-busy="false"]',
           ) !== null,
@@ -2928,7 +2855,8 @@ async function run() {
       JSON.parse(target.dataset.targetKey!)[2].startsWith("local-orbit-tab-"),
     ).length;
     check(
-      foldedPlaque()!.textContent?.trim() === `+${100 - orbitDesks}`,
+      foldedPlaque()!.querySelector("span")?.textContent ===
+        `+${100 - orbitDesks}`,
       `fold plaque ${foldedPlaque()!.textContent?.trim()} disagrees with ${orbitDesks} visible desks of 100`,
     );
 

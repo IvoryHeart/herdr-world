@@ -114,13 +114,15 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     tabs open: wide screens show three columns of rooms up to eight tables
     wide, portrait and half-width screens two columns up to six, and phones
     one column up to four, growing downward. A folded room normally shows up to
-    24 tables. Selected and pinned tables, working desks, the three newest
-    desks, and desks that need you stay visible beyond that count.
-    The room's bottom-right **» +N** tile sits beside its dashed **+** seat
-    and counts only hidden tables. Each click reveals about 20 more until all
-    tables are shown; **Fold** is available alongside **+N** after the first
-    expansion, and one click restores the 24-table target. The
-    control remains available after tabs close. A growing room moves
+    24 tables: the first tabs in the same order as Spaces, without promoting
+    later working, pinned or recent tabs into that prefix. The bottom-right
+    **» +N** tile sits beside the dashed **+** seat and counts hidden tables.
+    Each click appends the next 20 tables until all are shown; **Fold** is
+    available after the first expansion and returns to the first 24 in one click.
+    A red **!** in the tile's top-left marks hidden desks that need you; a green
+    **✓** in its top-right marks hidden unreviewed completions. These icons clear
+    as desks are revealed or their attention is resolved. Plaques count all
+    agents, including hidden desks. A growing room moves
     only the rooms below it, and never
     while you hold the town. Town asks Herdr to move the tab and
     shows the new order when Herdr reports it; agents stay with their table.

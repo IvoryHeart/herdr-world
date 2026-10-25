@@ -10,8 +10,8 @@
 export const TOWN_TILE = 16;
 
 /**
- * The usual expanded presentation target. Protected desks can exceed it;
- * Town reveals further desks in steps while layout reserves action cells.
+ * The initial layout capacity. Town reveals native-order desk prefixes in
+ * steps while layout grows to reserve action cells for each target.
  */
 export const TOWN_DEFAULT_RENDERED_DESKS = 8 * 16 - 1;
 

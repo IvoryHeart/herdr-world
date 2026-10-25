@@ -42,6 +42,35 @@ export async function checkTownRoomFold(
     "the 26-desk room did not settle into its folded set",
   );
   const foldedKeys = deskTargets();
+  const readingOrder = () =>
+    [
+      ...host.querySelectorAll<HTMLElement>(
+        '.world-semantic-target[data-kind="desk"]',
+      ),
+    ]
+      .filter((target) => target.dataset.targetKey?.includes("fold-room-tab-"))
+      .sort(
+        (a, b) =>
+          a.getBoundingClientRect().top - b.getBoundingClientRect().top ||
+          a.getBoundingClientRect().left - b.getBoundingClientRect().left,
+      )
+      .map((target) => JSON.parse(target.dataset.targetKey!)[2] as string);
+  check(
+    readingOrder().every(
+      (key, index) => key === `local-fold-room-tab-${index}`,
+    ),
+    "the folded desk positions must follow Spaces tab order",
+  );
+  const nativeTabs = new Set(
+    foldedKeys.map((key) => JSON.parse(key)[2] as string),
+  );
+  check(
+    Array.from(
+      { length: 24 },
+      (_, index) => `local-fold-room-tab-${index}`,
+    ).every((key) => nativeTabs.has(key)),
+    "folding must show exactly the first 24 Spaces tabs, not a status-selected subset",
+  );
   const fold = room.querySelector<HTMLButtonElement>(".town-fold-tile");
   const seat = room.querySelector<HTMLButtonElement>(".town-new-seat");
   check(!!fold && !!seat, "fold and new-seat tiles are both present");
@@ -55,6 +84,11 @@ export async function checkTownRoomFold(
     `the plate count matches all 26 source agents (${room.querySelector(".town-room-plaque-count")?.textContent})`,
   );
   if (!fold || !seat) return;
+  check(
+    !!fold.querySelector(".town-fold-needs") &&
+      !!fold.querySelector(".town-fold-done"),
+    "the hidden blocked and unreviewed desks need red and green corner indicators",
+  );
   const foldBox = fold.getBoundingClientRect();
   const seatBox = seat.getBoundingClientRect();
   check(
@@ -76,6 +110,16 @@ export async function checkTownRoomFold(
     "expanded state is exposed",
   );
   const allKeys = deskTargets();
+  check(
+    readingOrder().every(
+      (key, index) => key === `local-fold-room-tab-${index}`,
+    ),
+    "expansion must append later tabs without reordering existing desks",
+  );
+  check(
+    !fold.querySelector(".town-fold-indicators"),
+    "revealing all desks must clear the hidden attention indicators",
+  );
 
   const foldedBefore = renderer.frames;
   fold.click();
@@ -86,6 +130,11 @@ export async function checkTownRoomFold(
   check(
     deskTargets().join("\n") === foldedKeys.join("\n"),
     "folding the same snapshot restores the identical stable set",
+  );
+  check(
+    !!fold.querySelector(".town-fold-needs") &&
+      !!fold.querySelector(".town-fold-done"),
+    "folding again must restore the hidden attention indicators",
   );
   check(
     allKeys.includes(foldedKeys[0]!),

@@ -246,13 +246,15 @@ hosts stay usable.
    the room's free spot to put it last of the tables shown. A room grows as
    tabs open, up to eight tables wide on a wide screen, six on a portrait or
    half-width screen and four on a phone, then row by row. A folded room normally
-   shows up to 24 tables. Selected and pinned tables, desks that need you,
-   working desks and the three newest desks stay visible beyond that target.
-   Use the room's bottom-right **» +N** tile beside the dashed **+** seat to
-   reveal about 20 more tables per click until the whole room is shown. **+N**
-   counts only currently hidden tables. After the first expansion, the adjacent
-   **« Fold** action returns straight to the 24-table target, even while more
-   desks remain hidden. Fold remains available after tabs close.
+   shows the first 24 tabs in the same order as Spaces. Use the room's bottom-right
+   **» +N** tile beside the dashed **+** seat to reveal the next 20 tables per
+   click until the whole room is shown. **+N** counts currently hidden tabs;
+   agent activity and pins do not pull later tabs ahead of that boundary.
+   A red **!** at the tile's top-left means hidden desks need you; a green **✓**
+   at the top-right means hidden work is finished and not reviewed. Revealing
+   those desks or resolving their attention clears the icons. After the first
+   expansion, the adjacent **« Fold** action returns straight to the first 24,
+   even while more desks remain hidden. The plaque counts all agents in the room.
    Rooms sit in columns that suit your screen
    (one on a phone), and a growing room pushes down only the rooms below it,
    once you let go of the town. Town moves the tab in Herdr, so Spaces

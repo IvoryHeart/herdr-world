@@ -34,7 +34,8 @@ import {
 } from "../store";
 import { WORLD_OBSERVABILITY_UPDATED_EVENT } from "../workspaceResource";
 import { useTownSummary } from "./town/TownSummaryPanel";
-import { useTownOffice, useTownPresentation } from "./town/useTownOffice";
+import { useTownOffice } from "./town/useTownOffice";
+import { townFoldedActivity } from "./town/townFoldedActivity";
 import { TownCanvas } from "./town/TownCanvas";
 import type { TownQuestMark } from "./town/townQuestPennant";
 import { townDeskColorTarget, townRoomColorKey } from "./town/townModel";
@@ -171,7 +172,6 @@ export default function TownView({
     office: observedOffice,
     deskPins,
     toggleRoomFold,
-    present,
     roomFocus,
     focusRoom,
   } = useTownOffice(world, selectedId);
@@ -560,13 +560,9 @@ export default function TownView({
     openAgent: (key) => openChat(key),
     showRoom: focusRoom,
   });
-  const presentedOffice = useTownPresentation(
-    present,
-    office,
-    calls,
-    townSummary.summary.asks,
-    townFinished.finished,
-    completionSeenKeys,
+  const foldedActivity = useMemo(
+    () => townFoldedActivity(office, calls, townSummary.summary.asks),
+    [office, calls, townSummary.summary.asks],
   );
   const whereOfAgent = (key: string) => townLocation(agentByKey.get(key));
   // Colours and team walls read the same World, so they agree on each relation.
@@ -1255,7 +1251,8 @@ export default function TownView({
         <div className="town-stage">
           <TownCanvas
             trace={trace}
-            projection={presentedOffice}
+            projection={office}
+            foldedActivity={foldedActivity}
             relations={relations}
             terminalColors={terminalColors}
             deskPins={deskPins}

@@ -1156,8 +1156,8 @@ bounded set of grid sizes that always leaves at least one free desk spot, or two
 adjacent action spots while Fold is available: a room grows square until it
 reaches its shape's width (four desks on a phone, six on
 portrait and mid-width screens, eight on wide screens) and then extends
-downward, and its building grows around it. A folded room SHALL use a default
-bound of 24 desks. Each Expand action SHALL raise the room's target by about 20
+downward, and its building grows around it. A folded room SHALL use a native-order
+prefix of 24 desks. Each Expand action SHALL raise the room's target by about 20
 desks, up to all observed desks; Fold SHALL restore the 24-desk target in one
 action and allow the room to shrink, while retaining pinned cells and its
 building column. There SHALL be no hard expanded desk ceiling: repeated Expand
@@ -1166,20 +1166,22 @@ the room SHALL offer Fold alongside Expand, with separate non-overlapping target
 of at least 40 CSS pixels, so one Fold click can restore the folded target at any step.
 Ordinary tab closures SHALL keep the live size step. An expanded room SHALL
 retain its Fold control after closures, including at or below 24 desks, until
-the user folds it. Selected desks SHALL rank with pinned desks, followed by
-desks represented by the shared Town call list (blocked agents and unreviewed
-finishes) or a verified, qualified asking agent with an open question, working
-desks, and the three newest tabs. Admission SHALL consume desk keys from that
-shared attention source after its finished/seen overlay, without independently
-inferring attention from projection status or matching question actors by
-label. This priority order SHALL fill the 24-desk folded target and each
-incremental expanded target; stable desk identity SHALL break ties, with
-unknown agents before done, idle and unnamed desks. In a folded room, selected,
-pinned, needs-you, working and newest desks SHALL remain visible even when they
-exceed the folded target. Town SHALL count every currently hidden desk on the room and place its
-**» +N** Expand/Fold tile at the room's bottom-right beside the same-height
-new-seat tile. The control SHALL use two adjacent reserved cells so it does not
-overlap desks.
+the user folds it. A folded room SHALL show exactly the first 24 observed tabs
+(or all tabs when fewer exist) in the same native tab order as Spaces. Each
+expansion SHALL append the next native-order prefix of up to 20 tabs. Activity,
+selection, pins and recent tabs SHALL NOT promote later tabs across this boundary.
+Changing agent status SHALL NOT change which tabs are shown. Existing pins MAY
+retain the cells of admitted desks, but SHALL NOT admit hidden tabs.
+Town SHALL count every currently hidden desk on its bottom-right **» +N** tile,
+beside the same-height new-seat tile, using two reserved cells without overlap.
+The tile SHALL show a red exclamation at its top-left when hidden desks have
+blocked calls or open questions from verified, qualified asking identities, and
+a green tick at its top-right when hidden desks have unreviewed completions.
+These indicators SHALL use the shared rail calls after the finished/seen overlay
+and the indexed qualified Ask source, not raw done status or actor labels. They
+SHALL have accessible descriptions and no extra visible numbers, and SHALL clear
+when those desks are revealed or their attention items are removed or reviewed.
+The room plaque SHALL continue to count agents across all tabs, including hidden ones.
 Zooming into a room taller or wider than the usable view, from its
 card or with Zoom in, SHALL open at its first desks. While a
 scene is live, a topology change SHALL NOT reorder rooms or move a desk to

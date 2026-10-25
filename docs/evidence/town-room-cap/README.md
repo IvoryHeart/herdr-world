@@ -1,17 +1,24 @@
 # Fold and expand Town rooms
 
-A room normally folds toward 24 desks. Selected, pinned, working, recent and
-needs-you desks remain visible beyond that target. **+N** counts only currently
-hidden desks; each click reveals about 20 more. **Fold** is available after the
-first expansion, including while more desks remain hidden, and restores the
-24-desk target in one action.
+A folded room shows the first 24 tabs in the same native order as Spaces.
+**+N** counts only hidden desks; each click appends the next 20 tabs. **Fold**
+is available after the first expansion, including while more desks remain
+hidden, and restores the first 24 in one action. Status, pins and selection
+never pull later tabs across that boundary.
+
+A red **!** in the tile's top-left marks hidden desks that need you. A green
+**✓** in its top-right marks hidden unreviewed completions. These icons use
+shared rail calls and qualified Ask identities, carry accessible descriptions,
+and disappear as desks are revealed or the attention is resolved. They add no
+visible counts to the existing **+N** hidden-tab count.
 
 These fresh synthetic captures accompany the implementation in this commit.
 They replace the retired header-control captures. The maintained
 `TownCanvas.browser.tsx` fixture (`mode=preview&scale=fold`) supplies a 26-desk
 room: the folded state shows 24 desks and **» +2** beside the dashed new-seat
-**+**; the expanded state shows all 26 and **« Fold**. The plaque stays **4/26**
-in both states: 4 active agents, 26 total agent reports.
+**+**, with red **!** and green **✓** corners for tabs 25 and 26; the expanded
+state shows all 26 and **« Fold**, with both hidden-attention icons cleared. The plaque stays **5/26**
+in both states: 5 active agents, 26 total agent reports.
 
 Each image is a full viewport capture at the owner's exact dimensions. The
 synthetic question was answered through its normal UI to clear the phone tray,
