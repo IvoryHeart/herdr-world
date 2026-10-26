@@ -1,17 +1,6 @@
 import { boardObservation } from "./board/boardObservation";
 import { ConnectionRecoveryBanner } from "./ConnectionRecoveryBanner";
-import {
-  ChevronDown,
-  ChevronUp,
-  EllipsisVertical,
-  GitPullRequest,
-  Maximize2,
-  Minus,
-  Pin,
-  Plus,
-  Sparkles,
-  Trash2,
-} from "lucide-react";
+import { ChevronDown, ChevronUp, Pin, Plus, Trash2 } from "lucide-react";
 import {
   type CSSProperties,
   lazy,
@@ -109,6 +98,7 @@ import {
 import { createFrameLoop, type FrameLoop } from "./board/boardScheduler";
 import { BoardZoneColor } from "./board/BoardZoneColor";
 import { WorkLens } from "./board/WorkLens";
+import { BoardControls } from "./board/BoardControls";
 import { DEVTOOLS, NO_TRACE } from "./devtools/flag";
 import { TraceOverlay } from "./devtools/TraceOverlay";
 import { openTrace, rememberTrace, traceGesture } from "./devtools/trace";
@@ -570,7 +560,6 @@ export default function BoardView({
   }, [pinnedKeys]);
   useEffect(() => () => publishBoardCardPins(null), []);
   const [query, setQuery] = useState("");
-  const [menuOpen, setMenuOpen] = useState(false);
   const [workOpen, setWorkOpen] = useState(false);
   const workButtonRef = useRef<HTMLButtonElement | null>(null);
   /** The pane chooser: to pick a pane, or to finish a string to one. */
@@ -3728,7 +3717,7 @@ export default function BoardView({
             }
           />
         ) : null}
-        {trayOpen && detached.length ? (
+        {trayOpen ? (
           <div
             className="board-chooser board-tray"
             role="dialog"
@@ -3745,8 +3734,9 @@ export default function BoardView({
               </button>
             </div>
             <p className="board-tray-hint">
-              These strings' targets have closed. Re-attach a note to another
-              card, or discard the string; the notes stay on the board.
+              {detached.length
+                ? "These strings' targets have closed. Re-attach a note to another card, or discard the string; the notes stay on the board."
+                : "All strings have a home."}
             </p>
             {detached.map((string) => {
               const noteEnd = [string.from, string.to].find(
@@ -3918,110 +3908,32 @@ export default function BoardView({
             ))}
           </div>
         ) : null}
-        <div
-          className="board-controls"
-          role="group"
-          aria-label="Board controls"
-        >
-          <button
-            type="button"
-            aria-label="Zoom out"
-            onClick={() => {
-              const r = boardRef.current!.getBoundingClientRect();
-              zoomAt(
-                r.left + r.width / 2,
-                r.top + r.height / 2,
-                cam.current.s / 1.25,
-              );
-            }}
-          >
-            <Minus size={16} aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            aria-label="Fit everything"
-            onClick={() => fit(false)}
-          >
-            <Maximize2 size={15} aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            aria-label="Zoom in"
-            onClick={() => {
-              const r = boardRef.current!.getBoundingClientRect();
-              zoomAt(
-                r.left + r.width / 2,
-                r.top + r.height / 2,
-                cam.current.s * 1.25,
-              );
-            }}
-          >
-            <Plus size={16} aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            aria-label={
-              selectedWorkspace()
-                ? "Tidy this workspace's tabs"
-                : "Tidy the board"
-            }
-            onClick={runTidy}
-          >
-            <Sparkles size={15} aria-hidden="true" />
-          </button>
-          {detached.length ? (
-            <button
-              type="button"
-              className="board-tray-button"
-              aria-label={`Needs a home: ${detached.length} string${detached.length === 1 ? "" : "s"}`}
-              onClick={() => setTrayOpen(!trayOpen)}
-            >
-              {detached.length}
-            </button>
-          ) : null}
-          <button
-            ref={workButtonRef}
-            type="button"
-            aria-label="Work: pull requests and tickets"
-            aria-pressed={workOpen}
-            onClick={() => setWorkOpen(!workOpen)}
-          >
-            <GitPullRequest size={15} aria-hidden="true" />
-          </button>
-          <div className="board-menu-wrap">
-            <button
-              type="button"
-              aria-label="Board settings"
-              aria-haspopup="menu"
-              aria-expanded={menuOpen}
-              onClick={() => setMenuOpen(!menuOpen)}
-            >
-              <EllipsisVertical size={16} aria-hidden="true" />
-            </button>
-            {menuOpen ? (
-              <div className="board-menu" role="menu">
-                <button
-                  type="button"
-                  role="menuitemcheckbox"
-                  aria-checked={pulses}
-                  onClick={togglePulses}
-                >
-                  Status pulses <span className="board-switch" />
-                </button>
-                {DEVTOOLS ? (
-                  <button
-                    type="button"
-                    role="menuitemcheckbox"
-                    aria-checked={tracing}
-                    onClick={() => setTrace(!tracing)}
-                  >
-                    Event trace <span className="board-switch" />
-                  </button>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
-        </div>
+        <BoardControls
+          workRef={workButtonRef}
+          workOpen={workOpen}
+          onWork={() => setWorkOpen(!workOpen)}
+          count={detached.length}
+          onHome={() => setTrayOpen(!trayOpen)}
+          onZoom={(factor) => {
+            const rect = boardRef.current!.getBoundingClientRect();
+            zoomAt(
+              rect.left + rect.width / 2,
+              rect.top + rect.height / 2,
+              cam.current.s * factor,
+            );
+          }}
+          onFit={() => fit(false)}
+          onTidy={runTidy}
+          tidyLabel={
+            selectedWorkspace()
+              ? "Tidy this workspace's tabs"
+              : "Tidy the board"
+          }
+          pulses={pulses}
+          onPulses={togglePulses}
+          tracing={tracing}
+          onTrace={DEVTOOLS ? () => setTrace(!tracing) : undefined}
+        />
         {workOpen ? (
           <WorkLens
             world={world}
