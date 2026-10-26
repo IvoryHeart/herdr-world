@@ -16,6 +16,12 @@ check from your phone.** No Git, SSH, or networking knowledge is needed to start
 > **This static Pages tutorial does not run Herdr or keep terminals alive.**
 > You still need the Herdr World process.
 
+> **New in 0.2.7:** [chat with an agent](#chat) in its one window,
+> [start agents from profiles](#new-agent), [hear who needs you](#chimes),
+> [let agents arrange World](#agent-cli), and follow pull requests in
+> [Board's Work lens](#board). See the
+> [0.2.7 release notes](./releases/v0.2.7.md).
+
 ## 1. Start here: see your own work locally
 
 <a id="start"></a>
@@ -176,11 +182,8 @@ hosts stay usable.
    On a phone, the anchored header dropdown switches between **Chat**, **Terminal**,
    **Files** and **Changes**; the **⋯** menu contains attention settings.
    In Town it docks on the right at a readable width; drag its left edge to
-   resize it (Town remembers the width), or drag its title to undock it. Chat shows the
-   conversation's latest 200 entries, scrolls back inside the window, and
-   offers **Jump to latest**; the composer stays at the bottom. Enter adds a line;
-   the paper-plane button, **Ctrl+Enter** or **Cmd+Enter** sends. The paperclip
-   attaches files; type **/** or use **⋮ → Browse commands** for command suggestions.
+   resize it (Town remembers the width), or drag its title to undock it.
+   [Chat with an agent](#chat) explains reading, replying and answering there.
    The **NEEDS YOU** list provides another route to waiting
    agents and becomes a bottom tray on phones; it hides when no agent is
    blocked. The Town master's chat (**Menu → Town master**, `firstmate` by
@@ -196,30 +199,12 @@ hosts stay usable.
    Zoom into a room: an agent with a quest (its own todo list, plan, Codex goal
    or `/loop`) shows a swallowtail pennant beside its seat, with a progress
    bar when the quest has steps; tap the pennant to see **Quest** and its
-   title. Open its chat to see a slim quest title and progress row in the conversation.
-   Expand it to read each objective as pending, active, done or blocked; the
-   row scrolls with the messages.
-   While you scroll back in Chat, **Jump to latest** counts new agent messages;
-   reach the bottom to clear the count.
-   Chat's Now circle has the status word on hover: blue for working, yellow
-   for needs you, green for done and grey for idle.
+   title.
 5. Read the question before using an answer button: it sends the offered key to
    that live pane. When no supported choices appear, use **Open chat** to reply
    in the agent's window, or **Open terminal** in the card's header (or the
-   window's **Terminal** view). The window's **Chat** composer sends with
-   Herdr's agent prompt. Enter sends; Shift+Enter starts a new line. **Send**
-   or `Ctrl+Enter` (`Cmd+Enter` on a Mac) also sends. Use **/ Commands** for
-   the harness's palette or type any slash command; its receipt stays
-   **sent, not checked** until its text appears in the transcript.
-   A Codex conversation inferred from its shared daemon is read-only: Chat
-   offers no composer or answer buttons. In Codex's Terminal, run `/title` and
-   add **Thread ID**, or use **Details → Link Codex session** to preview and
-   confirm the intended thread. Ambiguous panes or threads stay unbound.
-6. Use **+ Add file** in the window's **Chat** composer to attach files. Each
-   file shows a chip while it uploads, then done or failed; retry a failed one
-   (or pick it again) or remove it. **Send** waits for uploads. Uploads go to
-   the selected pane's host; review the message and attached paths before
-   sending. The window's **Files** and **Changes** use the same agent worktree,
+   window's **Terminal** view).
+6. The window's **Files** and **Changes** use the same agent worktree,
    rather than its launch checkout. Open the location line for **Worktree**
    (a bottom sheet on phones):
    the source mark explains the evidence, and radio choices switch both views.
@@ -229,10 +214,6 @@ hosts stay usable.
    If a retained file becomes unavailable, its preview shows a notice instead
    of closing the window. Choose a current worktree or another file, then
    **Retry preview** if needed; Chat and its draft remain open.
-   A known PR named in an agent's **READY** or **opened** announcement, or its
-   current work claim, gets a PR card in Chat. Open **Details** for CI and
-   reviews. **Ask the author to fix** sends a `↳ #N` message when this
-   conversation owns the PR's claim; your unsent draft is kept.
    The swatch beside a room's name colours that workspace (its carpet here,
    its card in Board and a dot in the Spaces sidebar), and the swatch on a
    building's reception board colours the host (its roof, Board zone and
@@ -328,6 +309,62 @@ and open its terminal or Inspector without losing its workspace context.
 ![Town with four disposable workspace rooms and live terminal tables](./images/herdr-world-desktop-town.png)
 
 ![Town at phone width](./images/herdr-world-mobile-town.png)
+
+### Chat with an agent
+
+<a id="chat"></a>
+
+Chat shows an agent's conversation from its own transcript, never terminal
+text. It works for any agent you open from Town, Board or Desk.
+
+1. Read from the bottom. Chat shows the latest 200 entries; scroll up (or press
+   **Load earlier messages**) to load older pages while keeping your place.
+   While you read back, **Jump to latest** counts new agent messages.
+   **Menu → Appearance → Chat text** sets the text size.
+2. Check what the agent is doing now. The Now bar shows its status circle
+   (hover for the word: blue working, yellow needs you, green done, grey
+   idle), the task from its terminal title, and the tool call running now
+   with its own timer. **Stop**, or Esc pressed twice, interrupts Claude
+   Code, Codex or Pi; Chat never stops an agent by itself.
+3. Open a tool row to see what the call did: the edit's diff, a test run's
+   pass or fail with its first failure, or the end of its output. An agent
+   with a quest shows one slim title and progress row in the conversation;
+   expand it to read each objective as pending, active, done or blocked.
+4. Reply in the composer at the bottom. Enter adds a line; the paper-plane
+   button, **Ctrl+Enter** or **Cmd+Enter** sends with Herdr's agent prompt.
+   The paperclip (**Add a file**) uploads files to the pane's host and adds
+   their paths: each file shows a chip while it uploads, then done or failed
+   with Retry and Remove, and Send waits for uploads. Review the message and
+   attached paths before sending. Type **/**, or use
+   **⋮ → Browse commands**, for the harness's commands. Drafts are kept per
+   conversation.
+5. Read the receipt under your message. It stays **not yet seen** (or **sent,
+   not checked** for a slash command) until the transcript has the same words,
+   and is then matched by its words, never "delivered". A red notice names
+   another session if there is evidence the message went there, and pauses
+   Send. Claude Code's `!` and `#` modes still need the Terminal.
+6. Answer the agent's own prompts. When Claude Code shows a permission box or
+   a question form, or Codex an approval menu, Chat shows the full request and
+   each option on an ask card. Pick one (or press its number with the card
+   focused): Chat checks the prompt, session and state have not changed,
+   presses that key in the agent's pane and shows what it sent. It says **You
+   answered** only once Herdr shows the agent moved on. Herdr cannot hold a
+   prompt between that check and the key, so read the card first. Options that
+   open a text box, and unsupported menus, offer the Terminal instead.
+7. A known pull request named in an agent's **READY** or **opened**
+   announcement, or its current work claim, gets a PR card. Open **Details**
+   for CI and reviews. **Ask the author to fix** sends a `↳ #N` message when
+   this conversation owns the PR's claim; your unsent draft is kept.
+
+A Codex conversation inferred from its shared daemon is read-only: Chat offers
+no composer or answer buttons. In Codex's Terminal, run `/title` and add
+**Thread ID**, or use **Details → Link Codex session** to preview and confirm
+the intended thread. Ambiguous panes or threads stay unbound. If Chat cannot
+read a conversation, it says why and offers the matching action. The
+[Chat guide](./CHAT.md) covers each harness.
+
+**You are done when:** you sent an agent a message from Chat and its receipt
+shows it in the transcript.
 
 ### Return after backgrounding
 
@@ -530,6 +567,8 @@ not reports of completed agent work.
 
 ### Let agents arrange World
 
+<a id="agent-cli"></a>
+
 Agents can use World too. Tell an agent to run `herdr-world --skill`: it learns
 to colour and pin its card, group with the agent that started it, report a
 task result, or ask you a question (`herdr-world ask "Ship it?" --options
@@ -553,8 +592,8 @@ confirm the destination host. Creation needs a ready host and prepares the sourc
 terminal before opening the result in the current view.
 
 In **Desk**, start with **Needs you** for blocked agents, **To review** for
-finished turns and **In flight** for running work. Open a card to inspect the
-terminal, files, changes or history. Read the result and verify the diff before
+finished turns and **In flight** for running work. Open a card to read its Chat or
+inspect the terminal, files or changes. Read the result and verify the diff before
 using **Mark reviewed**; the mark is saved in this browser and does not commit
 files or certify success. **Agents** lists all agents in your Hosts filter;
 **Reviewed** lets you reopen a marked turn.
@@ -642,7 +681,8 @@ user and agent messages, with one line for each run of tool calls, and updates
 while the agent works. If Chat cannot read the conversation it says why and
 offers the fix it names, or **Open Terminal**. A message you send shows as
 not yet seen until the transcript has the same words; if it went to another session, a red
-notice names it. Send commands such as `/compact` from the Terminal. Choose **Details** for the Session Inspector:
+notice names it. Slash commands such as `/compact` work from Chat too (see
+[Chat with an agent](#chat)). Choose **Details** for the Session Inspector:
 Chat and Timeline, ATIF (a normalized trajectory), and raw transcript; original
 export preserves the source record. Use the [shortcut reference](../FEATURES.md#keyboard-shortcuts)
 for Chat, Files, and Changes on your platform. In Details, switch **Chat / Timeline**
@@ -661,7 +701,7 @@ The link replaces the pane's existing session association for all viewers.
 > transcripts; Codex, Claude and Pi are checked against real ones. See the
 > [harness matrix](./CHAT.md#harness-matrix).
 > Follow missing-metadata integration hints. For Codex 0.157 and later, run
-> `/title` in Codex and add Thread ID so History knows which conversation a pane
+> `/title` in Codex and add Thread ID so Chat knows which conversation a pane
 > shows. SSH reads Herdr-reported paths and
 > Claude, Codex and Pi ID lookups remotely. Claude requires its Herdr-reported UUID
 > to match one transcript in that host's `~/.claude/projects/`;

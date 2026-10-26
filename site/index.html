@@ -269,9 +269,10 @@
             desks; agents waiting for your input gather at reception.</p>
         </div>
         <div class="town-next">
-          <p>Select an agent to read its latest messages, answer a question or
-            send a reply. Open its terminal, files, changes or history when you
-            need the full context. Zoom from the whole town to a single desk.</p>
+          <p>Select an agent to open its window on Chat: read its latest
+            messages, answer a question or send a reply. Switch to its terminal,
+            files or changes when you need the full context. Zoom from the whole
+            town to a single desk.</p>
           <a class="button button-secondary" href="./tutorial/#town">Explore Town &rarr;</a>
         </div>
       </section>
@@ -293,6 +294,24 @@
         </div>
       </section>
 
+      <section class="section shell" aria-labelledby="chat-guide-title">
+        <div class="section-heading">
+          <div>
+            <p class="kicker">Meet Chat</p>
+            <h2 id="chat-guide-title">Talk to an agent, not its terminal.</h2>
+          </div>
+          <p>Chat reads the conversation from the agent's own transcript. See
+            what it is doing now, what each tool call changed, and its quest.</p>
+        </div>
+        <div class="town-next">
+          <p>Reply with attachments and slash commands, answer permission
+            prompts and Claude Code questions from checked options, or stop a
+            turn. Start new agents from profiles, and let chimes tell you who
+            needs you and why.</p>
+          <a class="button button-secondary" href="./tutorial/#chat">Explore Chat &rarr;</a>
+        </div>
+      </section>
+
       <section class="section shell install-section" id="install">
         <div class="install-card reveal" data-spotlight>
           <div class="install-copy">
@@ -302,7 +321,9 @@
               Choose one installer, then run <code>herdr-world</code> and open the
               URL it prints. Homebrew covers macOS and Linux; npm also covers
               Windows with Node.js 22.14+. The standalone script works on macOS
-              and Linux. Herdr is installed separately.
+              and Linux. The standalone script, and Homebrew on first launch,
+              install Herdr if it is missing; with npm, run
+              <code>herdr-world herdr upgrade --install</code>.
             </p>
             <div class="install-actions">
               <a
@@ -614,7 +635,7 @@
                 data-alt="Board Inspector showing a recorded Pi review"
                 data-label="History"
                 data-title="Review what the agent actually did."
-                data-copy="Read the selected agent's session record beside its workspace context, then return to the same live terminal."
+                data-copy="Open Details in the agent's Chat to read its session record beside its workspace context, then return to the same live terminal."
               >
                 <span>06</span> History
               </button>
@@ -809,8 +830,8 @@
             </svg>
             <h3>Session intelligence</h3>
             <p>
-              Messages, metadata, search, raw transcripts, and ATIF export for
-              supported agents.
+              Chat with tool-call evidence and checked prompt answers, plus
+              raw transcripts and ATIF export for supported agents.
             </p>
           </article>
           <article class="detail-card reveal reveal-delay">

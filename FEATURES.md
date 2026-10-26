@@ -741,8 +741,9 @@ See [resource ownership](docs/ARCHITECTURE.md#workspace-resource-ownership).
   terminal, and hides context the harness injects as user turns. It sends with
   Herdr's agent prompt only to a session Herdr ties to the pane (a reported
   session or a Codex title thread), not to one World guessed from the folder.
-  **+ Add file** attaches files, which upload to the pane's host and add their
-  paths to the message.
+  The paperclip (**Add a file**) attaches files, which upload to the pane's
+  host and add their paths to the message. Enter adds a line; the paper-plane
+  button, Ctrl+Enter or Cmd+Enter sends.
   A sent message shows as not yet seen until its session's transcript has
   the same words, and then as matched by its words, never as delivered.
   When there is evidence it went to another session, a red notice names both
