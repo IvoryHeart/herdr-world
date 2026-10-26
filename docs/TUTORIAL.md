@@ -574,6 +574,13 @@ use [Keyboard Shortcuts](../FEATURES.md#keyboard-shortcuts) or interface menus.
 
 **You are done when:** you can switch panes and know where typing will go.
 
+Paste into the focused terminal with `Ctrl+V` (`⌘V` on macOS), including when
+World is opened at a plain-HTTP LAN address. On Windows/Linux, `Ctrl+Shift+V`
+also uses native plain-text paste when the browser supports it. Other custom
+paste shortcuts need clipboard access over HTTPS or localhost. If World shows
+paste guidance, use the native gesture, drag and drop files, or open the HTTPS
+address; changing site permissions cannot enable a missing Clipboard API.
+
 > Browsers may reserve `Cmd+T`, `Cmd+W`, or `Cmd+D`; use menus or the shortcut
 > editor. PWAs are often more reliable. Do not substitute Ctrl for every Cmd.
 
