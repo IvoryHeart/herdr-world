@@ -51,6 +51,28 @@ describe("test clock", () => {
     expect(seen).toEqual([true]);
   });
 
+  test.each([false, true])(
+    "a frame callback can cancel a later callback in the same frame (continuation: %s)",
+    async (continuation) => {
+      const { target, clock } = clockOnObject();
+      const seen: string[] = [];
+      target.requestAnimationFrame(async () => {
+        seen.push("dispose");
+        if (continuation) await Promise.resolve();
+        target.cancelAnimationFrame(cancelled);
+        target.requestAnimationFrame(() => seen.push("next frame"));
+      });
+      const cancelled = target.requestAnimationFrame(() =>
+        seen.push("disposed callback"),
+      );
+      target.requestAnimationFrame(() => seen.push("still mounted"));
+      await clock.advance(16);
+      expect(seen).toEqual(["dispose", "still mounted"]);
+      await clock.advance(16);
+      expect(seen).toEqual(["dispose", "still mounted", "next frame"]);
+    },
+  );
+
   test("a callback that throws is reported, and the clock keeps going", async () => {
     const reported: unknown[] = [];
     const original = globalThis.reportError;

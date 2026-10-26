@@ -208,10 +208,12 @@ export function installTestClock(
   const frameStep = async () => {
     now += FRAME_MS;
     await runTimers();
-    const callbacks = [...frames.values()];
-    frames.clear();
+    const callbacks = [...frames];
     // A microtask checkpoint after each frame callback, as in a browser.
-    for (const callback of callbacks) {
+    for (const [id, callback] of callbacks) {
+      // An earlier callback can dispose a terminal and cancel its later
+      // callback in this frame. Newly requested callbacks wait for the next.
+      if (!frames.delete(id)) continue;
       call(() => callback(now));
       await turn();
     }

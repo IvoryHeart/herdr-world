@@ -237,7 +237,10 @@ async function refreshNow(
                 (pane) => pane.pane_id === next.selectedPaneId,
               )));
         const layout = staleLayout ? null : observedLayout;
-        if (staleLayout) queuedConnectionKeys.add(refreshKey);
+        // A runtime may keep returning the old tab while topology catches up.
+        // Yield through the normal per-lease debounce instead of spinning
+        // through immediately resolved RPCs and synchronous store renders.
+        if (staleLayout) scheduleRefresh(lease);
         rememberTabLayout(lease.connectionId, lease.generation, layout);
         next.layout =
           navigationMode === "browser-local"
