@@ -257,6 +257,10 @@ test("command paths require a boundary after the worktree name", () => {
   const cases = [
     [`preview --directory ${repo.merged}6/.pages-dist`, "remove"],
     [`preview --directory ${repo.merged}-other`, "remove"],
+    ...["a", "_", ".", "+", "@", "~"].map((suffix) => [
+      `preview --directory ${repo.merged}${suffix}other`,
+      "remove",
+    ]),
     [`preview --directory ${repo.merged}`, "keep"],
     [`preview --directory ${repo.merged}/.pages-dist`, "keep"],
     [`preview --directory ${join(repo.merged, ".pages-dist")}`, "keep"],
@@ -265,6 +269,15 @@ test("command paths require a boundary after the worktree name", () => {
     [`preview --directory "${repo.merged}"`, "keep"],
     [`preview --directory '${repo.merged}'`, "keep"],
     [`preview ${repo.merged}=directory`, "keep"],
+    [`docker run --volume ${repo.merged}:/work example`, "keep"],
+    [
+      `docker run --mount type=bind,source=${repo.merged},target=/work example`,
+      "keep",
+    ],
+    ...[";", "&&", "|", "&", ")", "`", "]"].map((suffix) => [
+      `preview ${repo.merged}${suffix}`,
+      "keep",
+    ]),
     // An earlier sibling reference must not hide a later genuine reference.
     [`preview ${repo.merged}6 --directory ${repo.merged}`, "keep"],
   ];

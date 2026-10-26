@@ -263,13 +263,9 @@ function commandUses(command, directory) {
   let index = command.indexOf(directory);
   while (index !== -1) {
     const next = command[index + directory.length];
-    if (
-      next === undefined ||
-      next === sep ||
-      next === "/" ||
-      /[\s"'=]/.test(next)
-    )
-      return true;
+    // Reject clear sibling-name continuations; ambiguous punctuation may be
+    // Docker or shell syntax, so conservatively retain the checkout.
+    if (next === undefined || !/[\w.+@~-]/.test(next)) return true;
     index = command.indexOf(directory, index + 1);
   }
   return false;
