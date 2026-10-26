@@ -27,7 +27,7 @@ import {
   type ClipboardSelectionType,
 } from "@xterm/addon-clipboard";
 import { FitAddon } from "@xterm/addon-fit";
-import { type IBufferRange, type ITheme, Terminal } from "@xterm/xterm";
+import { type ITheme, Terminal } from "@xterm/xterm";
 import { installTerminalCompositionRepair } from "../terminalComposition";
 import {
   Columns2,
@@ -150,6 +150,8 @@ import {
 } from "../terminalKeys";
 import {
   registerTerminalLinkProvider,
+  nextTerminalOscHover,
+  type TerminalOscLinkHover,
   type TerminalResolvedLink,
   type TerminalTouchLink,
 } from "../terminalLinkProvider";
@@ -1189,13 +1191,9 @@ export function TerminalView({
     };
     let latestLinkFrame: string | undefined;
     let latestEndpointText: string | undefined;
-    let oscHover: {
-      text: string;
-      state: string | null;
-      range: IBufferRange;
-      ready: boolean;
-    } | null = null;
-    let oscRefreshRange: IBufferRange | null = null;
+    let oscHover: TerminalOscLinkHover | null = null;
+    let verifiedOscHover: TerminalOscLinkHover | null = null;
+    let oscRefreshRange: TerminalOscLinkHover["range"] | null = null;
     const linkState = () => {
       const presentation = endpointPresentationRef.current;
       if (
@@ -1229,7 +1227,13 @@ export function TerminalView({
       // Opt in only to route local file URIs below; all other schemes stay inert.
       allowNonHttpProtocols: true,
       hover(_event, text, range) {
-        oscHover = { text, state: linkState(), range, ready: false };
+        oscHover = nextTerminalOscHover(
+          verifiedOscHover,
+          text,
+          range,
+          linkState(),
+        );
+        if (oscHover.ready) return;
         // Native hover can reuse an inactive line cache. A new range object
         // after a full refresh proves xterm actually reread the OSC8 target.
         if (!oscRefreshRange) {
@@ -1279,6 +1283,7 @@ export function TerminalView({
           oscHover.state === linkState()
         ) {
           oscHover.ready = true;
+          verifiedOscHover = oscHover;
           oscRefreshRange = null;
         }
       });

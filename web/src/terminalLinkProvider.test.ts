@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import type { ILink, ILinkProvider, Terminal } from "@xterm/xterm";
-import { registerTerminalLinkProvider } from "./terminalLinkProvider";
+import {
+  nextTerminalOscHover,
+  registerTerminalLinkProvider,
+} from "./terminalLinkProvider";
 import { TerminalFileResolutionCache } from "./terminalFileLinks";
 import {
   getShortcutSnapshot,
@@ -61,6 +64,59 @@ function fixture(rows: string[], cols: number, wrapped: number[] = []) {
 
 // These exercise the actual provider registered with xterm, including async
 // resolution and the one-based, inclusive ranges used for mouse activation.
+describe("verified native OSC8 hover", () => {
+  const range = { start: { x: 2, y: 3 }, end: { x: 12, y: 3 } };
+  const previous = {
+    text: "https://example.com/target",
+    state: "frame-a",
+    range,
+    ready: true,
+  };
+  test("same verified target at the same cells survives a new hover-range object", () => {
+    expect(
+      nextTerminalOscHover(
+        previous,
+        previous.text,
+        { start: { ...range.start }, end: { ...range.end } },
+        previous.state,
+      ).ready,
+    ).toBe(true);
+  });
+  test.each([
+    "unverified",
+    "state",
+    "retired",
+    "uri",
+    "start-column",
+    "start-row",
+    "end-column",
+    "end-row",
+  ])("does not reuse native link authority after %s changes", (change) => {
+    const current = { start: { ...range.start }, end: { ...range.end } };
+    if (change === "start-column") current.start.x++;
+    if (change === "start-row") current.start.y++;
+    if (change === "end-column") current.end.x++;
+    if (change === "end-row") current.end.y++;
+    expect(
+      nextTerminalOscHover(
+        change === "unverified" ? { ...previous, ready: false } : previous,
+        change === "uri" ? "https://example.org/new" : previous.text,
+        current,
+        change === "retired"
+          ? null
+          : change === "state"
+            ? "frame-b"
+            : previous.state,
+      ).ready,
+    ).toBe(false);
+  });
+  test("first hover has no prevalidated target", () => {
+    expect(
+      nextTerminalOscHover(null, previous.text, range, previous.state).ready,
+    ).toBe(false);
+  });
+});
+
 describe("terminal link provider", () => {
   test("suppresses a late filesystem reply after a newer row lookup", async () => {
     const f = fixture(["docs/a.md", "docs/b.md"], 30);
@@ -881,6 +937,114 @@ describe("endpoint terminal link provider", () => {
 });
 
 describe("terminal touch link lookup", () => {
+  test("a URL ignores an unrelated inferred path row above it while retaining its own row guard", async () => {
+    const url = "https://example.com/docs";
+    const f = fixture(["Working 1", `see ${url} now`], 60);
+    Object.assign(f.term.buffer.active, { viewportY: 0 });
+    const provider = registerTerminalLinkProvider(
+      f.term,
+      () => {},
+      undefined,
+      () => true,
+      {
+        state: () => 1,
+        resolve: async () => null,
+      },
+    );
+    const found = await provider.resolveTouch(1, 8, () => true);
+    expect(found).toMatchObject({ kind: "url", value: url });
+    expect(found?.displayed?.()).toBe(true);
+    f.lines[0]!.text = "Working 2";
+    expect(found?.displayed?.()).toBe(true);
+    f.lines[1]!.text = "replacement output";
+    expect(found?.displayed?.()).toBe(false);
+  });
+
+  test("an adjacent hard-row update during touch resolution cannot withdraw an unchanged URL", async () => {
+    const url = "https://example.com/docs";
+    const f = fixture(["Working 1", `see ${url} now`], 60);
+    Object.assign(f.term.buffer.active, { viewportY: 0 });
+    let complete!: (value: null) => void;
+    const provider = registerTerminalLinkProvider(
+      f.term,
+      () => {},
+      undefined,
+      () => true,
+      {
+        state: () => 1,
+        resolve: () =>
+          new Promise((done) => {
+            complete = done;
+          }),
+      },
+    );
+    const pending = provider.resolveTouch(1, 8, () => true);
+    f.lines[0]!.text = "Working 2";
+    complete(null);
+    const target = await pending;
+    expect(target).toMatchObject({ kind: "url", value: url });
+    expect(target?.displayed?.()).toBe(true);
+  });
+
+  test("desktop URL activation ignores unrelated hard rows but still rejects a changed URL", async () => {
+    const url = "https://example.com/docs";
+    const f = fixture(["Working 1", `see ${url} now`], 60);
+    Object.assign(f.term.buffer.active, { viewportY: 0 });
+    registerTerminalLinkProvider(
+      f.term,
+      () => {},
+      undefined,
+      () => true,
+      { state: () => 1, resolve: async () => null },
+    );
+    const priorWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+    const priorPreset = getShortcutSnapshot().preferences.active;
+    const opened: string[] = [];
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: Object.assign(new EventTarget(), {
+        open: (value: string) => opened.push(value),
+      }),
+    });
+    try {
+      selectShortcutPreset("windows");
+      const link = (await f.links(2)).find((link) => link.text === url)!;
+      const event = {
+        preventDefault() {},
+        ctrlKey: true,
+        metaKey: false,
+        altKey: false,
+        shiftKey: false,
+      } as MouseEvent;
+      f.lines[0]!.text = "Working 2";
+      link.activate(event, url);
+      expect(opened).toEqual([url]);
+      f.lines[1]!.text = "replacement output";
+      link.activate(event, url);
+      expect(opened).toEqual([url]);
+    } finally {
+      selectShortcutPreset(priorPreset);
+      if (priorWindow) Object.defineProperty(globalThis, "window", priorWindow);
+      else Reflect.deleteProperty(globalThis, "window");
+    }
+  });
+
+  test("an inferred file path still depends on all hard rows forming its target", async () => {
+    const f = fixture(["/tmp/long/", "guide.md"], 30);
+    Object.assign(f.term.buffer.active, { viewportY: 0 });
+    const provider = registerTerminalLinkProvider(
+      f.term,
+      () => {},
+      async () => new Map([["/tmp/long/guide.md", "/tmp/long/guide.md"]]),
+      () => true,
+      { state: () => 1, resolve: async () => null },
+    );
+    const target = await provider.resolveTouch(1, 2, () => true);
+    expect(target).toMatchObject({ kind: "file", value: "/tmp/long/guide.md" });
+    expect(target?.displayed?.()).toBe(true);
+    f.lines[0]!.text = "/tmp/other/";
+    expect(target?.displayed?.()).toBe(false);
+  });
   test("uses the original cell without retiring a pending hover", async () => {
     const f = fixture(["docs/a.md", "docs/b.md"], 30);
     Object.assign(f.term.buffer.active, { viewportY: 0 });

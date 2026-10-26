@@ -1,3 +1,4 @@
+import { TerminalLinkInspector } from "./testing/TerminalLinkInspector";
 import { Terminal, type ILink, type ILinkProvider } from "@xterm/xterm";
 import { createRoot } from "react-dom/client";
 import type { WorkspacePathInfo } from "../../shared/workspacePath";
@@ -13,6 +14,10 @@ import {
 import { TerminalView } from "./components/TerminalView";
 import type { TerminalResolvedLink } from "./terminalLinkProvider";
 import { TERMINAL_LONG_PRESS_MS } from "./terminalTouchSelection";
+import {
+  INSPECTOR_TERMINAL_FILE_EVENT,
+  type InspectorTerminalFileRequest,
+} from "./world/inspectorTerminalHandoff";
 import { requestTerminalComposer } from "./world/terminalComposerRequest";
 import "./styles/tokens.css";
 import "./styles/base.css";
@@ -143,6 +148,7 @@ const pane = {
 __storeTesting.replaceState({
   ...store.get(),
   status: "connected",
+  catalogueReady: true,
   activeConnectionId: client.connectionId,
   connectionGeneration: 1,
   serverRuntimeGeneration: 1,
@@ -154,6 +160,28 @@ __storeTesting.replaceState({
       is_default: true,
       state: "ready",
       generation: 1,
+    },
+  ],
+  workspaces: [
+    {
+      workspace_id: "workspace",
+      number: 1,
+      label: "Example workspace",
+      focused: true,
+      pane_count: 1,
+      tab_count: 1,
+      agent_status: "idle",
+    },
+  ],
+  tabs: [
+    {
+      tab_id: "tab",
+      workspace_id: "workspace",
+      number: 1,
+      label: "Example tab",
+      focused: true,
+      pane_count: 1,
+      agent_status: "idle",
     },
   ],
   panes: [pane],
@@ -186,16 +214,36 @@ host.style.cssText =
   "position:fixed;left:53px;right:17px;top:37px;bottom:40px;display:flex";
 document.body.append(host);
 const root = createRoot(host);
+const surface = new URLSearchParams(location.search).get("surface");
+if (surface)
+  window.addEventListener(INSPECTOR_TERMINAL_FILE_EVENT, (event) => {
+    const request = (event as CustomEvent<InspectorTerminalFileRequest>).detail;
+    if (
+      request.connectionId === client.connectionId &&
+      request.paneId === pane.pane_id
+    ) {
+      event.preventDefault();
+      previews.push(request.path);
+    }
+  });
 const render = (uiScale: number) =>
   flushSync(() =>
     root.render(
-      <TerminalView
-        paneId="pane"
-        terminalTheme={{ background: "#171922", foreground: "#dddddd" }}
-        terminalFontScale={uiScale}
-        showMobileKeys={false}
-        onOpenWorkspaceFile={(request) => previews.push(request.path)}
-      />,
+      surface === "town" || surface === "board" ? (
+        <TerminalLinkInspector
+          surface={surface}
+          pane={pane}
+          fontScale={uiScale}
+        />
+      ) : (
+        <TerminalView
+          paneId="pane"
+          terminalTheme={{ background: "#171922", foreground: "#dddddd" }}
+          terminalFontScale={uiScale}
+          showMobileKeys={false}
+          onOpenWorkspaceFile={(request) => previews.push(request.path)}
+        />
+      ),
     ),
   );
 let frameNumber = 0;
@@ -373,6 +421,8 @@ async function runTouch() {
     await frame(["", `界e\u0301 ${url}`]);
     await press(1, 10);
     await until(() => !!action("Open link"), "touch web action");
+    if (scale === 100)
+      await fetch("/capture/terminal-links", { method: "POST" });
     check(trusted, true, "trusted touch starts selection");
     check(
       document.querySelectorAll(".terminal-selection-handle").length,
@@ -432,12 +482,7 @@ async function runTouch() {
   {
     target = null;
     const url = "https://example.com/docs";
-    const rows = (tick: number) => [
-      "",
-      `see ${url} now`,
-      "",
-      ` working ${tick}`,
-    ];
+    const rows = (tick: number) => [`working ${tick}`, `see ${url} now`];
     await frame(rows(0));
     await press(1, 8);
     for (let tick = 1; tick <= 4; tick++) {
@@ -825,6 +870,30 @@ async function run() {
       calls.some((c) => c.method === "terminal.attach"),
   );
   term = terminals[terminals.length - 1]!;
+  {
+    target = null;
+    const url = "https://x.test/a";
+    await frame(["working 0", `see ${url} now`]);
+    const link = (await links(2)).find((link) => link.text === url) as
+      | (ILink & { target: { displayed?: () => boolean } })
+      | undefined;
+    check(
+      link?.target.displayed?.(),
+      true,
+      "URL starts current beside a hard status row",
+    );
+    pushFrame(["working 1", `see ${url} now`], "adjacent-status-repaint");
+    await settle();
+    check(
+      link?.target.displayed?.(),
+      true,
+      "adjacent status repaint keeps the URL current",
+    );
+    if (!mobile) {
+      await hover(1, 8);
+      await fetch("/capture/terminal-links", { method: "POST" });
+    }
+  }
   if (mobile) {
     await runTouch();
     return;
@@ -966,24 +1035,58 @@ async function run() {
       : destination;
     target = null;
     await frame(["", label]);
-    flushSync(() =>
-      __storeTesting.replaceState({
-        ...store.get(),
-        layout: {
-          ...store.get().layout!,
+    // A World Inspector keeps its own tab while Spaces selects another tab.
+    // Keep both observations valid instead of inventing a missing split pane.
+    if (surface) {
+      flushSync(() =>
+        __storeTesting.replaceState({
+          ...store.get(),
+          tabs: [
+            ...store.get().tabs.filter((tab) => tab.tab_id !== "other-tab"),
+            {
+              tab_id: "other-tab",
+              workspace_id: "workspace",
+              number: 2,
+              label: "Other tab",
+              focused: false,
+              pane_count: 1,
+              agent_status: "idle",
+            },
+          ],
           panes: [
             ...store
               .get()
-              .layout!.panes.filter((p) => p.pane_id !== "other-pane"),
+              .panes.filter((pane) => pane.pane_id !== "other-pane"),
             {
+              ...pane,
               pane_id: "other-pane",
+              terminal_id: "other-terminal",
+              tab_id: "other-tab",
               focused: false,
-              rect: { x: 0, y: 0, width: 80, height: 24 },
             },
           ],
-        },
-      }),
-    );
+        }),
+      );
+    } else {
+      flushSync(() =>
+        __storeTesting.replaceState({
+          ...store.get(),
+          layout: {
+            ...store.get().layout!,
+            panes: [
+              ...store
+                .get()
+                .layout!.panes.filter((p) => p.pane_id !== "other-pane"),
+              {
+                pane_id: "other-pane",
+                focused: false,
+                rect: { x: 0, y: 0, width: 80, height: 24 },
+              },
+            ],
+          },
+        }),
+      );
+    }
     flushSync(() => store.selectPane("other-pane"));
     await settle();
     await hover(1, 2);

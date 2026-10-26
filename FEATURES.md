@@ -668,7 +668,11 @@ commit a search selection. Press K in the recent switcher to convert it to searc
   **File actions**. This works in every view's terminals, while an agent keeps
   repainting its status line and while the Composer is open. A URL found in the
   text stays offered while its row shows the same text; a labelled OSC 8 link
-  is withdrawn when a new frame arrives.
+  is withdrawn when a new frame arrives. These actions work in Town and Board
+  managed Inspectors as well as Spaces, including with Composer open. Progress
+  on adjacent hard rows does not expire an unchanged URL. Repeated window
+  activation preserves a freshly verified OSC 8 target only at the same cells
+  and frame.
 
 ## Workspace Inspector
 

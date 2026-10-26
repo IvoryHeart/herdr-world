@@ -1,4 +1,4 @@
-import type { IBufferLine, ILink, Terminal } from "@xterm/xterm";
+import type { IBufferLine, IBufferRange, ILink, Terminal } from "@xterm/xterm";
 import { terminalLinkModifierMatches } from "./shortcutPreferences";
 import {
   findTerminalHttpLinks,
@@ -11,6 +11,36 @@ import {
   type TerminalFileLinkCandidate,
   type TextRange,
 } from "./terminalFileLinks";
+
+export type TerminalOscLinkHover = {
+  text: string;
+  state: string | null;
+  range: IBufferRange;
+  ready: boolean;
+};
+
+/** Reuse only a freshly verified native target at the same cells and frame. */
+export function nextTerminalOscHover(
+  previous: TerminalOscLinkHover | null,
+  text: string,
+  range: IBufferRange,
+  state: string | null,
+): TerminalOscLinkHover {
+  return {
+    text,
+    state,
+    range,
+    ready:
+      !!previous?.ready &&
+      state !== null &&
+      previous.state === state &&
+      previous.text === text &&
+      previous.range.start.x === range.start.x &&
+      previous.range.start.y === range.start.y &&
+      previous.range.end.x === range.end.x &&
+      previous.range.end.y === range.end.y,
+  };
+}
 
 const MAX_CONTEXT_CELLS = 16_384;
 const MAX_INFERRED_JOINS = 8;
@@ -181,19 +211,31 @@ export function registerTerminalLinkProvider(
       return;
     }
     const snapshot = JSON.stringify(context);
+    // File candidates may join hard rows heuristically. A URL depends only on
+    // its real soft-wrapped row, never an adjacent status/progress line.
+    const urlSnapshot = JSON.stringify(
+      readLinkContext(term, bufferLineNumber, false),
+    );
     const { text, cells, segments } = context;
     // TUI timers repaint the frame without touching this row. Links detected
     // from the row's text stay valid while that same text is still displayed.
-    const isStillDisplayed = () =>
+    const sameViewport = () =>
       !disposed &&
       term.buffer.active === activeBuffer &&
       term.cols === columnCount &&
       term.rows === rowCount &&
       activeBuffer.viewportY === viewport &&
-      inferContinuations() === infer &&
+      inferContinuations() === infer;
+    const isStillDisplayed = () =>
+      sameViewport() &&
       JSON.stringify(readLinkContext(term, bufferLineNumber, infer)) ===
         snapshot;
+    const urlStillDisplayed = () =>
+      sameViewport() &&
+      JSON.stringify(readLinkContext(term, bufferLineNumber, false)) ===
+        urlSnapshot;
     const textCurrent = () => requestCurrent() && isStillDisplayed();
+    const urlTextCurrent = () => requestCurrent() && urlStillDisplayed();
     const isCurrent = () => textCurrent() && upstream?.state() === state;
     // Inactive row caches survive repaint. Reject their actions and ask
     // xterm to reread now that this stale link is active again.
@@ -205,6 +247,7 @@ export function registerTerminalLinkProvider(
     };
     const hover = hoverWhile(isCurrent);
     const textHover = hoverWhile(textCurrent);
+    const urlHover = hoverWhile(urlTextCurrent);
     const rangeFor = (span: TextRange) => {
       const start = cells[span.start]?.start;
       const end = cells[span.end - 1]?.end;
@@ -228,16 +271,16 @@ export function registerTerminalLinkProvider(
         if (!range || (infer && range.end.x >= columnCount - 1)) continue;
         links.push({
           range,
-          hover: textHover,
+          hover: urlHover,
           text: match.url,
           target: {
             kind: "url",
             value: match.url,
-            displayed: isStillDisplayed,
+            displayed: urlStillDisplayed,
           },
           activate(event, raw) {
             event.preventDefault();
-            if (!isStillDisplayed() || !terminalLinkModifierMatches(event))
+            if (!urlStillDisplayed() || !terminalLinkModifierMatches(event))
               return;
             const url = sanitizeTerminalHttpUrl(raw);
             if (url) {
@@ -314,12 +357,13 @@ export function registerTerminalLinkProvider(
         if (touch) callback(undefined);
         return;
       }
-      if (!textCurrent()) {
+      if (!textCurrent() && !urlTextCurrent()) {
         callback(undefined);
         return;
       }
       const accepted: TextRange[] = [];
       for (const candidate of candidates) {
+        if (!textCurrent()) break;
         // Resolved paths come back with "/" separators; match that for
         // unresolved Windows drive paths too.
         const path = needsResolution(candidate)
@@ -408,7 +452,12 @@ export function registerTerminalLinkProvider(
           (link.range.end.y > bufferLineNumber ||
             link.range.end.x >= press.col + 1);
         for (let attempt = 0; attempt < 3; attempt++) {
-          if (disposed || !press.current() || !isStillDisplayed()) break;
+          if (
+            disposed ||
+            !press.current() ||
+            (!isStillDisplayed() && !urlStillDisplayed())
+          )
+            break;
           let link: TerminalResolvedLink | null;
           try {
             link = await upstream.resolve(row, press.col, true);
@@ -418,7 +467,12 @@ export function registerTerminalLinkProvider(
             if (/link frame changed/i.test(String(error))) continue;
             break;
           }
-          if (disposed || !press.current() || !isStillDisplayed()) break;
+          if (
+            disposed ||
+            !press.current() ||
+            (!isStillDisplayed() && !urlStillDisplayed())
+          )
+            break;
           if (link && "uri" in link) {
             const uri = link.uri ?? "";
             const path = terminalFileUriPath(uri);
@@ -461,7 +515,7 @@ export function registerTerminalLinkProvider(
                 target: {
                   kind: "url",
                   value: link.url,
-                  displayed: isStillDisplayed,
+                  displayed: urlStillDisplayed,
                 },
                 range: {
                   start: { x: press.col + 1, y: bufferLineNumber },
@@ -480,7 +534,7 @@ export function registerTerminalLinkProvider(
                 (candidate.range.start.y === bufferLineNumber &&
                   completeUrlColumns.has(candidate.range.start.x - 1))),
           );
-          callback(local && isStillDisplayed() ? [local] : undefined);
+          callback(local && local.target.displayed?.() ? [local] : undefined);
           return;
         }
         callback(undefined);
@@ -498,7 +552,10 @@ export function registerTerminalLinkProvider(
             (link.range.start.y === bufferLineNumber &&
               completeUrlColumns.has(link.range.start.x - 1)),
         );
-        callback(textCurrent() && stable.length ? stable : undefined);
+        const current = stable.filter((link) =>
+          link.target.kind === "url" ? urlTextCurrent() : textCurrent(),
+        );
+        callback(current.length ? current : undefined);
       };
       const resolve = async () => {
         const resolved: TerminalResolvedLink[] = [];
