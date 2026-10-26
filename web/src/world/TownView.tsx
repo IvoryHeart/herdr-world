@@ -172,6 +172,7 @@ export default function TownView({
     office: observedOffice,
     deskPins,
     toggleRoomFold,
+    foldRevision,
     roomFocus,
     focusRoom,
   } = useTownOffice(world, selectedId);
@@ -1256,6 +1257,7 @@ export default function TownView({
             relations={relations}
             terminalColors={terminalColors}
             deskPins={deskPins}
+            foldRevision={foldRevision}
             selectedKey={peek?.key ?? selectedKey}
             completionSeenKeys={completionSeenKeys}
             summonedKeys={summonedKeys}

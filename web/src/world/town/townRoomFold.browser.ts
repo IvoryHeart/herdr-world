@@ -1,3 +1,22 @@
+/** Include pointerup: programmatic click alone misses the reflow interaction guard. */
+export const tapTownControl = (button: HTMLButtonElement) => {
+  const box = button.getBoundingClientRect();
+  for (const type of ["pointerdown", "pointerup"])
+    button.dispatchEvent(
+      new PointerEvent(type, {
+        bubbles: true,
+        pointerId: 77,
+        pointerType: "touch",
+        isPrimary: true,
+        button: 0,
+        buttons: type === "pointerdown" ? 1 : 0,
+        clientX: box.left + box.width / 2,
+        clientY: box.top + box.height / 2,
+      }),
+    );
+  button.click();
+};
+
 /** Interactions and paired-tile geometry for the synthetic 26-desk room. */
 export async function checkTownRoomFold(
   host: HTMLElement,
@@ -100,7 +119,7 @@ export async function checkTownRoomFold(
   );
 
   const expandedBefore = renderer.frames;
-  fold.click();
+  tapTownControl(fold);
   await waitFor(
     () => renderer.frames > expandedBefore && deskTargets().length === 26,
     "the fold tile did not reveal both hidden desks",
@@ -122,7 +141,7 @@ export async function checkTownRoomFold(
   );
 
   const foldedBefore = renderer.frames;
-  fold.click();
+  tapTownControl(fold);
   await waitFor(
     () => renderer.frames > foldedBefore && deskTargets().length === 24,
     "the fold tile did not fold the room again",

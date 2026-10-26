@@ -43,7 +43,11 @@ export function useTownOffice(world: WorldObject, selectedId: string | null) {
   const [expandedDeskLimits, setExpandedDeskLimits] = useState<
     ReadonlyMap<string, number>
   >(() => new Map());
+  // Explicit layout requests commit with their admission state. TownCanvas
+  // uses this revision to distinguish a requested reflow from background work.
+  const [foldRevision, setFoldRevision] = useState(0);
   const toggleRoomFold = useCallback((roomKey: string, nextLimit?: number) => {
+    setFoldRevision((revision) => revision + 1);
     if (nextLimit !== undefined) {
       setExpandedRooms((current) => new Set(current).add(roomKey));
       setExpandedDeskLimits((current) => {
@@ -105,6 +109,7 @@ export function useTownOffice(world: WorldObject, selectedId: string | null) {
     office: observedOffice,
     deskPins,
     toggleRoomFold,
+    foldRevision,
     roomFocus,
     focusRoom,
   };
