@@ -38,6 +38,7 @@ test.skipIf(!chrome).each([
   [1440, 900, "max", 0],
   // Extended rooms (100, 50 and 24 desks) on a phone, half-width, wide and
   // portrait screens: the town's shape follows the container.
+  // Exercise the edge hold below with 300ms animation callbacks.
   [390, 844, "extended", 0],
   [960, 1080, "extended", 0],
   [1440, 900, "extended", 0],
@@ -111,7 +112,7 @@ test.skipIf(!chrome).each([
           "--no-first-run",
           "--no-default-browser-check",
           `--user-data-dir=${join(dir, "profile")}`,
-          `${server.url.href}?mode=test&scale=${scale}&flightFrameDelay=${flightFrameDelay}`,
+          `${server.url.href}?mode=test&scale=${scale}&flightFrameDelay=${flightFrameDelay}&edgeFrameDelay=${width === 390 && height === 844 && scale === "extended" ? 300 : 0}`,
         ],
         { stdout: "ignore", stderr: Bun.file(browserLog) },
       );
