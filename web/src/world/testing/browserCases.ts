@@ -7,6 +7,7 @@ export const hostFilterCases = [
       "pending-inspector-delayed",
     ].map((operation) => ({ width, operation, view: "spaces" })),
     { width, operation: "spaces-navigator", view: "spaces" },
+    { width, operation: "spaces-notifications", view: "spaces" },
     { width, operation: "bare-navigator", view: "town" },
   ]),
   ...[1440, 390].flatMap((width) =>
@@ -140,6 +141,7 @@ export function hostFilterGroup({
       "navigator",
       "bare-navigator",
       "spaces-navigator",
+      "spaces-notifications",
       "shortcut",
       "focus-tab",
     ].includes(operation)

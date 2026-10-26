@@ -1287,7 +1287,11 @@ describe("independent qualified operational sessions", () => {
       held.resolve({});
       const before = structuredClone(store.get().sessionsByConnectionId.alpha);
       const target = taskNotificationTarget("beta", 1, pane("beta", "done"));
-      await store.focusTaskNotificationTarget(target);
+      expect(await store.focusTaskNotificationTarget(target)).toMatchObject({
+        pane_id: target.paneId,
+        workspace_id: target.workspaceId,
+        agent: "beta",
+      });
       expect(
         calls.some(
           (call) => call.host === "beta" && call.method === "pane.get",
@@ -1296,6 +1300,223 @@ describe("independent qualified operational sessions", () => {
       expect(calls.some((call) => call.host === "alpha")).toBe(false);
       expect(store.get().activeConnectionId).toBe("alpha");
       expect(store.get().sessionsByConnectionId.alpha).toEqual(before);
+    });
+  });
+  test("Spaces notification enters only its admitted host after prechecks", async () => {
+    await withIndependentClients(async (calls, held) => {
+      held.resolve({});
+      const original = bridge.setActiveConnection;
+      bridge.setActiveConnection = (() =>
+        10) as typeof bridge.setActiveConnection;
+      let retired = 0;
+      try {
+        const target = taskNotificationTarget("beta", 1, pane("beta", "done"));
+        expect(
+          await store.focusTaskNotificationTarget(target, {
+            activateConnection: true,
+            beforeFocus: () => {
+              retired++;
+              expect(
+                calls.some(
+                  (call) => call.host === "beta" && call.method === "pane.get",
+                ),
+              ).toBe(true);
+              expect(
+                calls.some((call) => call.method === "workspace.focus"),
+              ).toBe(false);
+            },
+          }),
+        ).toMatchObject({ pane_id: target.paneId, agent: "beta" });
+        expect(retired).toBe(1);
+        expect(store.get().activeConnectionId).toBe("beta");
+      } finally {
+        bridge.setActiveConnection = original;
+      }
+    });
+  });
+  test("refused notification prechecks leave the current presentation and Spaces owner alone", async () => {
+    await withIndependentClients(async (_calls, held) => {
+      held.resolve({});
+      let retired = false;
+      const result = await store.focusTaskNotificationTarget(
+        {
+          ...taskNotificationTarget("beta", 1, pane("beta", "done")),
+          agentSessionId: "retired-session",
+        },
+        {
+          activateConnection: true,
+          beforeFocus: () => {
+            retired = true;
+          },
+        },
+      );
+      expect(result).toBeUndefined();
+      expect(retired).toBe(false);
+      expect(store.get().activeConnectionId).toBe("alpha");
+    });
+  });
+  test.each(["resolve", "reject"] as const)(
+    "an older delayed Beta notification cannot leave a newer admitted Gamma host (%s)",
+    async (completion) => {
+      await withIndependentClients(async (calls, held) => {
+        held.resolve({});
+        const state = store.get();
+        __storeTesting.replaceState({
+          ...state,
+          connections: [
+            ...state.connections,
+            {
+              id: "gamma",
+              label: "Gamma",
+              source: "test",
+              is_default: false,
+              state: "ready",
+              generation: 1,
+            },
+          ],
+          sessionsByConnectionId: {
+            ...state.sessionsByConnectionId,
+            gamma: session("gamma"),
+          },
+        });
+        const connection = bridge.connection;
+        const activate = bridge.setActiveConnection;
+        const betaStarted = Promise.withResolvers<void>();
+        const betaLookup = Promise.withResolvers<void>();
+        bridge.setActiveConnection = (() =>
+          10) as typeof bridge.setActiveConnection;
+        bridge.connection = ((id, generation) => {
+          const client = connection(id, generation);
+          return {
+            ...client,
+            call: async (method: string, params?: Record<string, unknown>) => {
+              if (id === "beta" && method === "pane.get") {
+                betaStarted.resolve();
+                await betaLookup.promise;
+              }
+              return client.call(method, params);
+            },
+          };
+        }) as typeof bridge.connection;
+        let request = 1;
+        let obsoleteRetired = false;
+        try {
+          const beta = store.focusTaskNotificationTarget(
+            taskNotificationTarget("beta", 1, pane("beta", "idle")),
+            {
+              activateConnection: true,
+              isCurrent: () => request === 1,
+              beforeFocus: () => {
+                obsoleteRetired = true;
+              },
+            },
+          );
+          await betaStarted.promise;
+          request = 2;
+          expect(
+            await store.focusTaskNotificationTarget(
+              taskNotificationTarget("gamma", 1, pane("gamma", "idle")),
+              {
+                activateConnection: true,
+                isCurrent: () => request === 2,
+              },
+            ),
+          ).toMatchObject({ agent: "gamma" });
+          expect(store.get().activeConnectionId).toBe("gamma");
+          if (completion === "reject")
+            betaLookup.reject(new Error("Superseded lookup failed"));
+          else betaLookup.resolve();
+          expect(await beta).toBe(false);
+          expect(store.get().activeConnectionId).toBe("gamma");
+          expect(obsoleteRetired).toBe(false);
+          expect(store.get().notice).toBeNull();
+          expect(
+            calls.some(
+              (call) =>
+                call.host === "beta" && call.method === "workspace.focus",
+            ),
+          ).toBe(false);
+        } finally {
+          betaLookup.resolve();
+          bridge.setActiveConnection = activate;
+        }
+      });
+    },
+  );
+  test("a superseded notification already queued behind native focus does not dispatch", async () => {
+    await withIndependentClients(async (calls, held) => {
+      const connection = bridge.connection;
+      const alphaStarted = Promise.withResolvers<void>();
+      bridge.connection = ((id, generation) => {
+        const client = connection(id, generation);
+        return {
+          ...client,
+          call: async (method: string, params?: Record<string, unknown>) => {
+            if (id === "alpha" && method === "workspace.focus")
+              alphaStarted.resolve();
+            return client.call(method, params);
+          },
+        };
+      }) as typeof bridge.connection;
+      const first = store.focusQualifiedTarget({
+        connectionId: "alpha",
+        runtimeGeneration: 1,
+        workspaceId: "same-workspace",
+        paneId: null,
+      });
+      await alphaStarted.promise;
+      const beforeFocus = Promise.withResolvers<void>();
+      let current = true;
+      const obsolete = store.focusTaskNotificationTarget(
+        taskNotificationTarget("beta", 1, pane("beta", "idle")),
+        {
+          isCurrent: () => current,
+          beforeFocus: () => beforeFocus.resolve(),
+          activateConnection: true,
+        },
+      );
+      await beforeFocus.promise;
+      current = false;
+      held.resolve({});
+      await first;
+      expect(await obsolete).toBe(false);
+      expect(
+        calls.some(
+          (call) => call.host === "beta" && call.method === "workspace.focus",
+        ),
+      ).toBe(false);
+      expect(store.get().activeConnectionId).toBe("alpha");
+    });
+  });
+  test("supersession after native focus succeeds still prevents host activation", async () => {
+    await withIndependentClients(async (_calls, held) => {
+      held.resolve({});
+      const focus = store.focusQualifiedTarget;
+      const activate = bridge.setActiveConnection;
+      bridge.setActiveConnection = (() =>
+        10) as typeof bridge.setActiveConnection;
+      let current = true;
+      store.focusQualifiedTarget = async (target) => {
+        const admitted = await focus(target);
+        current = false;
+        return admitted;
+      };
+      try {
+        expect(
+          await store.focusTaskNotificationTarget(
+            taskNotificationTarget("beta", 1, pane("beta", "idle")),
+            {
+              activateConnection: true,
+              isCurrent: () => current,
+            },
+          ),
+        ).toBe(false);
+        expect(store.get().activeConnectionId).toBe("alpha");
+        expect(store.get().notice).toBeNull();
+      } finally {
+        store.focusQualifiedTarget = focus;
+        bridge.setActiveConnection = activate;
+      }
     });
   });
   test("a queued notification cannot focus a replacement session after its original lookup was admitted", async () => {

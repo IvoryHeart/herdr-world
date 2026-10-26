@@ -776,8 +776,11 @@ Herdr World service URL, not this tutorial's Pages URL.
 ![Mobile Spaces terminal with touch shortcut controls](./images/herdr-world-mobile-spaces.png)
 
 **PWA is not offline access or background keep-alive.** Host sleep, stopped
-Herdr World, or a disconnected VPN interrupts access. Completion notifications can
-return to a pane, but browser permissions and OS restrictions make them unsuitable
+Herdr World, or a disconnected VPN interrupts access. A completion notification's
+**Open agent** follows **Agents open**: Chat by default when supported, or
+Terminal when selected or when Chat is unavailable, after checking its original
+runtime and agent session. In Spaces it opens the notified agent's owning host;
+a refused notification leaves the current Inspector open. Browser permissions and OS restrictions make notifications unsuitable
 as reliable alerts.
 
 ### 3.3 Multiple browsers are not separate permission roles

@@ -1,3 +1,5 @@
+import { NoticeDetail, ToastMark } from "./components/NoticeContent";
+import { useTaskNotificationTarget } from "./useTaskNotificationTarget";
 import { useTerminalComposerDraftScopes } from "./useTerminalComposerDraftScopes";
 import {
   isNotificationTarget,
@@ -43,18 +45,14 @@ import {
 import { SHORTCUT_NUMBERS } from "./shortcutBindings";
 import { activeTerminalInput } from "./activeTerminalInput";
 import {
-  CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  CircleAlert,
   Command,
   Compass,
   FileDiff,
   FolderTree,
   GitBranch,
   History,
-  Info,
-  LoaderCircle,
   MessageSquareText,
   Minimize2,
   MoreHorizontal,
@@ -353,43 +351,6 @@ function TerminalView(props: TerminalViewProps) {
     <Suspense fallback={<TerminalLoadingFallback />}>
       <LazyTerminalView {...props} />
     </Suspense>
-  );
-}
-
-function NoticeDetail({ notice }: { notice: Notice }) {
-  if (!notice.detail) return null;
-  if (notice.detailMode === "output") {
-    return (
-      <div className="toast-output">
-        {notice.detailTitle ? (
-          <div className="toast-output-title">{notice.detailTitle}</div>
-        ) : null}
-        <pre>{notice.detail}</pre>
-      </div>
-    );
-  }
-  return <p>{notice.detail}</p>;
-}
-
-function ToastMark({
-  kind,
-  loading = false,
-}: {
-  kind: Notice["kind"];
-  loading?: boolean;
-}) {
-  const Mark = loading
-    ? LoaderCircle
-    : kind === "success"
-      ? CheckCircle2
-      : kind === "error"
-        ? CircleAlert
-        : Info;
-
-  return (
-    <span className="toast-mark" aria-hidden="true">
-      <Mark size={16} strokeWidth={2.1} />
-    </span>
   );
 }
 
@@ -2619,6 +2580,17 @@ export default function App({
     },
     [connectionClient, openFileExplorerFile],
   );
+  const openPaneNotification = useTaskNotificationTarget({
+    client: connectionClient,
+    inspector: inspectorStateRef,
+    setInspector: commitInspectorState,
+    openChat: (pane) =>
+      openInspector("history", pane.workspace_id, {
+        originPaneId: pane.pane_id,
+      }),
+    openTerminal: activateTerminalSurface,
+    onOpened: () => setSidebarHidden(false),
+  });
   const openNotificationTarget = useCallback(
     (target: NotificationTarget) => {
       if (isRangerTaskNotificationTarget(target)) {
@@ -2635,11 +2607,9 @@ export default function App({
         );
         return;
       }
-      if (!inspectorStateRef.current?.open) activateTerminalSurface();
-      setSidebarHidden(false);
-      void store.focusTaskNotificationTarget(target);
+      void openPaneNotification(target);
     },
-    [activateTerminalSurface, operationalShortcutsEnabled, mobile],
+    [operationalShortcutsEnabled, mobile, openPaneNotification],
   );
   const handleNoticeAction = useCallback(
     (notice: Notice) => {

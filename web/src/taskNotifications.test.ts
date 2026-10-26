@@ -6,6 +6,7 @@ import {
   prepareTaskNotifications,
   showTaskNotification,
   TASK_NOTIFICATION_ACTIVATE_EVENT,
+  taskNotificationView,
 } from "./taskNotifications";
 import { __storeTesting, emptyServerSessionState, store } from "./store";
 import { bridge, type ConnectionClient } from "./api";
@@ -17,6 +18,28 @@ const target = {
   workspaceId: "w1",
   paneId: "p1",
 };
+
+test.each([
+  "codex",
+  "claude-code",
+  "Pi-Coding-Agent",
+  "antigravity cli",
+  "kimi code",
+  "grok build",
+  "muse-code",
+])(
+  "notification Open agent follows the Chat/Terminal preference for %s",
+  (agent) => {
+    expect(taskNotificationView({ agent }, "chat")).toBe("history");
+    expect(taskNotificationView({ agent }, "terminal")).toBe("terminal");
+  },
+);
+test.each([undefined, "", " ", "gemini", "unknown-harness"])(
+  "notification Open agent falls back to Terminal for %s",
+  (agent) => {
+    expect(taskNotificationView({ agent }, "chat")).toBe("terminal");
+  },
+);
 
 async function withBrowser(
   overrides: Record<string, unknown>,
