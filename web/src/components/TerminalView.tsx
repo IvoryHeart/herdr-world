@@ -1954,9 +1954,14 @@ export function TerminalView({
         return false;
       }
       if (e.type === "keydown" && shortcutMatches(e, "terminal.paste")) {
-        // Native paste events carry clipboard payloads even on insecure LAN URLs.
-        // Ctrl+Shift+V is also native plain-text paste on Windows/Linux browsers.
-        if (isNativeTerminalPasteShortcut(e, applePlatform)) return false;
+        // Preserve async image reads for Ctrl+Shift+V on secure origins; its
+        // native plain-text fallback works when HTTP LAN clipboard reads do not.
+        if (
+          isNativeTerminalPasteShortcut(e, applePlatform) &&
+          (!e.shiftKey ||
+            (!navigator.clipboard?.read && !navigator.clipboard?.readText))
+        )
+          return false;
         e.preventDefault();
         e.stopPropagation();
         pasteFromBrowserClipboard().catch((err) => {

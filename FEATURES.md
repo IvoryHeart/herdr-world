@@ -630,10 +630,13 @@ commit a search selection. Press K in the recent switcher to convert it to searc
 - Paste clipboard images to upload to the Herdr host and insert their paths,
   including through `--ssh-host`.
 - Native `Ctrl+V` (`⌘V` on macOS) pastes text or files even on plain-HTTP LAN
-  addresses. On Windows and Linux, a configured `Ctrl+Shift+V` also uses the
-  browser's native plain-text paste where supported. Other custom paste
-  shortcuts need clipboard access over HTTPS or localhost; when unavailable,
-  World explains how to use native paste, drag and drop, or a secure address.
+  addresses. On plain-HTTP addresses, a configured `Ctrl+Shift+V` on Windows
+  and Linux also uses the browser's native plain-text paste where supported;
+  use `Ctrl+V` or drag and drop for images.
+  Over HTTPS or localhost it keeps async clipboard reads, including images.
+  Other custom paste shortcuts need clipboard access over HTTPS or localhost;
+  when unavailable, World explains how to use native paste, drag and drop, or
+  a secure address.
 - Every composer that attaches files (the phone Composer, Spaces, the Town peek
   and Inspector Chat) shows a chip per file: uploading with byte progress, then
   done or failed. A failed file can be retried, by **Retry** or by picking it

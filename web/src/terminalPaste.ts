@@ -1,7 +1,7 @@
 // Quick pastes should finish before the loading overlay becomes visible.
 const PASTE_LOADING_DELAY_MS = 200;
 
-/** Leave browser paste gestures uncancelled, including plain-text paste on PCs. */
+/** Recognize browser paste gestures, including plain-text paste on PCs. */
 export function isNativeTerminalPasteShortcut(
   event: Pick<
     KeyboardEvent,
