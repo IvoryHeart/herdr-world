@@ -5,9 +5,39 @@
 </p>
 
 A **visual control plane** for [Herdr](https://herdr.dev). Connect local and SSH
-hosts, see their agents together in Town, Board or Desk, and use independently
-qualified terminals, files, changes and agent history on desktop or mobile.
-**Requires a running Herdr server.**
+hosts, see their agents together in Town, Board or Desk, and chat with them,
+start them from profiles, and use independently qualified terminals, files and
+changes on desktop or mobile. **Requires a running Herdr server.**
+
+## What's new in 0.2.7
+
+- **Chat with each agent.** Opening an agent opens its one window on **Chat**:
+  the conversation from its transcript, tool calls with their diffs and test
+  results, its current task and quest, and a composer with attachments and
+  slash commands. Answer supported permission prompts and Claude Code
+  questions, or **Stop** the agent. See the [Chat guide](./docs/CHAT.md).
+- **Start agents from profiles.** **Actions → New agent** launches Claude Code,
+  Codex or another supported harness from a profile (role, model, permissions,
+  starting brief and Town look) after checking it is installed and logged in.
+- **Hear who needs you.** Chimes say who needs you and why; set each agent to
+  **Watching**, **Muted** or **Focused**.
+- **Teams and agent tools.** Agents started by other agents are grouped with
+  them. The `herdr-world` CLI lets agents pin and colour their cards, report
+  results and ask you questions.
+- **Work beside agents.** Your GitHub pull requests and Jira tickets appear in
+  Board's **Work** lens and on Town desks, with confirmed merge, close and mark
+  ready actions.
+- **A clearer Town.** Rooms follow Spaces' tab order and grow with their tabs;
+  pin desks, colour hosts, workspaces and terminals, and open **Summary** for
+  everything needing you. Every view opens in Zen.
+- **Herdr setup.** The published 0.2.7 standalone installer installs or upgrades
+  Herdr to the verified release; set `HERDR_WORLD_SKIP_HERDR=1` to leave yours
+  untouched. Homebrew reuses existing Herdr and installs it on first launch only
+  if missing. World updates refresh Herdr's harness integrations and plugin. See
+  [Herdr installation and upgrades](./docs/DEPLOYMENT.md#herdr-installation-and-upgrades).
+
+Read the [0.2.7 release notes](./docs/releases/v0.2.7.md) for upgrade steps and
+known limits.
 
 ## Choose your layout
 
@@ -16,7 +46,7 @@ qualified terminals, files, changes and agent history on desktop or mobile.
 - **Board** puts workspace and tab cards beside your notes. Arrange cards, string
   a note to an exact pane and explicitly send it when ready.
 - **Desk** groups agents into Needs you, To review and In flight, with a reading
-  pane for terminal, files, changes and history.
+  pane for Chat, terminal, files and changes.
 - **Spaces** focuses one workspace's terminal panes and repository tools.
 
 Town, Board and Desk share the **Hosts** filter. Open terminals and Inspectors
@@ -30,47 +60,42 @@ Office, Tree and Graph have been retired: old `/office` addresses open Town, and
 
 ## Screenshots
 
-The Town and desktop Board captures show the layouts introduced in 0.2.5–0.2.6
-with four disposable workspaces. Mobile Board focuses on one workspace, two
-terminal tabs and a strung
-planning note. These scenes use real shell panes and synthetic notes. Empty
-attention counts reflect those scenes; no agent activity is fabricated. Click a screenshot to open it at full resolution.
+These captures show 0.2.7 with four disposable workspaces on a throwaway Herdr
+session. Three real Claude Code agents ran small tasks there: one added a
+first-run section to the demo README, one is waiting on you and one has
+finished. The notes and terminal commands are synthetic. Click a screenshot to
+open it at full resolution.
 
 ### Desktop
 
-| Town: buildings, rooms and team tables | Board: workspace cards, tabs and notes |
+| Town: buildings, rooms and reception | Board: workspace cards, tabs and a strung note |
 | --- | --- |
-| [![Town with four workspace rooms and live terminal tables](./docs/images/herdr-world-desktop-town.png)](./docs/images/herdr-world-desktop-town.png) | [![Board with four workspace cards, terminal tabs and planning notes](./docs/images/herdr-world-desktop-board.png)](./docs/images/herdr-world-desktop-board.png) |
+| [![Town with four workspace rooms, one agent waiting at reception and one finished](./docs/images/herdr-world-desktop-town.png)](./docs/images/herdr-world-desktop-town.png) | [![Board with four workspace cards, terminal tabs and a note strung to an agent](./docs/images/herdr-world-desktop-board.png)](./docs/images/herdr-world-desktop-board.png) |
 
-[![Spaces with a focused workspace and live terminal](./docs/images/herdr-world-desktop-spaces.png)](./docs/images/herdr-world-desktop-spaces.png)
+[![Spaces with the workspace list and a live terminal](./docs/images/herdr-world-desktop-spaces.png)](./docs/images/herdr-world-desktop-spaces.png)
 
-The shared Inspector keeps Terminal, Files, Changes and agent Chat alongside
-its captured workspace, whether opened from Town, Board or Desk. See the
+Each agent has one window with Chat, Terminal, Files and Changes, whether
+opened from Town, Board or Desk. See [Chat](./docs/CHAT.md) and the
 [tutorial's review exercise](./docs/TUTORIAL.md#daily) for the complete flow.
-The Files, Changes and History captures below show the Inspector over Board;
-the History view is now **Details** inside [Chat](./docs/CHAT.md).
-They use a restored demo project, a sample working-tree diff and a genuine
-recorded Pi review.
 
-| Files | Changes | Agent History |
+| Chat | Files | Changes |
 | --- | --- | --- |
-| [![Board Inspector previewing the demo guide](./docs/images/herdr-world-desktop-files.png)](./docs/images/herdr-world-desktop-files.png) | [![Board Inspector showing the sample tag-filter diff](./docs/images/herdr-world-desktop-changes.png)](./docs/images/herdr-world-desktop-changes.png) | [![Board Inspector showing a recorded Pi review](./docs/images/herdr-world-desktop-history.png)](./docs/images/herdr-world-desktop-history.png) |
+| [![Town with an agent window docked on Chat, showing its report on a README change](./docs/images/herdr-world-desktop-chat.png)](./docs/images/herdr-world-desktop-chat.png) | [![Board Inspector previewing the demo guide](./docs/images/herdr-world-desktop-files.png)](./docs/images/herdr-world-desktop-files.png) | [![Board Inspector showing the README section the agent added](./docs/images/herdr-world-desktop-changes.png)](./docs/images/herdr-world-desktop-changes.png) |
 
 ### Mobile
 
-[![Board close-up with a workspace, terminal tabs and a strung planning note](./docs/images/herdr-world-mobile-board.png)](./docs/images/herdr-world-mobile-board.png)
-
-| Town | Spaces |
-| --- | --- |
-| [![Town at phone width](./docs/images/herdr-world-mobile-town.png)](./docs/images/herdr-world-mobile-town.png) | [![Spaces terminal and touch controls](./docs/images/herdr-world-mobile-spaces.png)](./docs/images/herdr-world-mobile-spaces.png) |
+| Town | Chat | Board | Spaces |
+| --- | --- | --- | --- |
+| [![Town at phone width with the Needs you tray](./docs/images/herdr-world-mobile-town.png)](./docs/images/herdr-world-mobile-town.png) | [![An agent's Chat on a phone](./docs/images/herdr-world-mobile-chat.png)](./docs/images/herdr-world-mobile-chat.png) | [![Board close-up of a note strung to an agent](./docs/images/herdr-world-mobile-board.png)](./docs/images/herdr-world-mobile-board.png) | [![Spaces terminal and touch controls](./docs/images/herdr-world-mobile-spaces.png)](./docs/images/herdr-world-mobile-spaces.png) |
 
 ## Quick start
 
-1. Herdr World runs on [Herdr](https://herdr.dev). The standalone installer and
-   Homebrew reuse an existing Herdr. The standalone installer installs it only if
-   missing; Homebrew does so on first World launch. With npm or a Windows archive,
-   run `herdr-world herdr upgrade --install` once if needed. `herdr-world herdr setup`
-   starts Herdr as a user service.
+1. Herdr World runs on [Herdr](https://herdr.dev). Homebrew reuses existing Herdr
+   and installs it on first World launch only if missing. The published 0.2.7
+   standalone installer installs or upgrades Herdr to the verified release; set
+   `HERDR_WORLD_SKIP_HERDR=1` to leave yours untouched. With npm or a Windows
+   archive, run `herdr-world herdr upgrade --install` once if needed.
+   `herdr-world herdr setup` starts Herdr as a user service.
 2. On Linux or macOS, install Herdr World with the standalone installer:
 
    ```bash
@@ -120,6 +145,8 @@ The process must stay running and reachable. **PWA mode is not offline access.**
   ([Markdown](./docs/TUTORIAL.md)): [Town](./docs/TUTORIAL.md#town),
   [Board](./docs/TUTORIAL.md#board), [Desk](./docs/TUTORIAL.md#desk), terminal/file review, mobile,
   and private remote access.
+- [Chat](./docs/CHAT.md): reading and replying to agents, answering their
+  prompts, and which harnesses Chat supports.
 - [Features and shortcuts](./FEATURES.md), including the
   [agent CLI](./FEATURES.md#agent-cli-herdr-world---skill): run
   `herdr-world --skill` to teach an agent to change World.

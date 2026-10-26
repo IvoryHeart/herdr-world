@@ -67,6 +67,12 @@ terminal context still apply; do not treat clipboard delivery as pane isolation.
 
 On Linux or macOS:
 
+The published 0.2.7 standalone script installs or upgrades Herdr to its verified
+release and refreshes harness integrations and the plugin. To leave your Herdr
+untouched, add `HERDR_WORLD_SKIP_HERDR=1` before `sh` in the command below.
+Homebrew already installs Herdr only when missing; the matching standalone fix
+is merged in source for a future release.
+
 ```bash
 curl -fsSL \
   https://github.com/IvoryHeart/herdr-world/releases/latest/download/install-herdr-world.sh \
@@ -187,6 +193,12 @@ continues to use the same World profiles, settings, token, and browser namespace
 
 ## Herdr installation and upgrades
 
+**Published 0.2.7:** the downloaded standalone installer runs
+`herdr-world herdr upgrade --install`, including upgrades of an older unmanaged
+Herdr and integration/plugin refresh. Set `HERDR_WORLD_SKIP_HERDR=1` to skip that
+step. Homebrew already uses missing-only setup. The source installer behavior
+described below is merged but has not shipped in a standalone release yet.
+
 Each Herdr World release verifies one Herdr release (currently 0.9.5) and pins its
 SHA-256 checksums. Missing-only bootstrap installs the runtime without configuring
 harness integrations or the plugin. Run `herdr-world herdr upgrade` to refresh
@@ -208,7 +220,7 @@ lands there, so `herdr` and `herdr update` find it afterwards.
 
 When it runs:
 
-- **Standalone installer** (`install-herdr-world.sh`): after installing World it runs
+- **Standalone installer in source** (`install-herdr-world.sh`): after installing World it runs
   a read-only Herdr status check, then uses the Unix `--install --only-if-missing`
   operation when the selected World binary supports it. Pinned older releases
   use the same checksum/version-verified compatibility bootstrap as Homebrew,
