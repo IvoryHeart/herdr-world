@@ -1400,6 +1400,9 @@
       "requirement": "openspec/specs/distribution-boundaries/spec.md",
       "properties": "Single installation owner; validation precedes replacement; failure preserves runnable installation",
       "existingTests": [
+        "web/src/updateNotifications.test.ts",
+        "web/src/store.test.ts",
+        "web/src/uiScale.test.ts",
         "server/src/cli/index.test.ts",
         "server/src/cli/doctor.test.ts",
         "server/src/cli/connections.test.ts",

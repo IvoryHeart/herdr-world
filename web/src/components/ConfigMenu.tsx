@@ -245,7 +245,9 @@ export function ConfigMenu({
         >
           <MenuIcon className="menu-button-icon" size={18} aria-hidden="true" />
           <span className="menu-button-label">Menu</span>
-          {updateAvailable ? <span className="menu-update-dot" /> : null}
+          {updateAvailable ? (
+            <span className="menu-update-dot" aria-hidden="true" />
+          ) : null}
         </button>
         {open ? (
           <div
@@ -570,28 +572,46 @@ export function ConfigMenu({
                 <ConfigMenuItem
                   icon={<Download size={15} />}
                   label={
-                    canInstallUpdate
+                    updateAvailable
                       ? s.updateInstalling
                         ? "Updating..."
-                        : `Update to ${updateVersion}`
-                      : updateAvailable
-                        ? `Version ${updateVersion} available`
-                        : "Check for updates"
+                        : `Upgrade to ${updateVersion}`
+                      : "Check for updates"
                   }
                   description={
                     canInstallUpdate
                       ? "Install and restart"
                       : updateAvailable
-                        ? "Automatic install unavailable"
+                        ? undefined
                         : "Check the release server"
                   }
                   primary={canInstallUpdate}
-                  disabled={s.updateInstalling}
+                  disabled={
+                    s.updateInstalling || (updateAvailable && !canInstallUpdate)
+                  }
                   onClick={() => {
                     setOpen(false);
                     void store.updateOrCheck();
                   }}
                 />
+                {updateAvailable ? (
+                  <ConfigMenuItem
+                    icon={<RefreshCw size={15} />}
+                    label="Check for updates"
+                    description="Refresh release availability"
+                    disabled={s.updateInstalling}
+                    onClick={() => {
+                      setOpen(false);
+                      void store.checkForUpdate();
+                    }}
+                  />
+                ) : null}
+                {updateAvailable && !canInstallUpdate ? (
+                  <p className="config-update-reason" role="note">
+                    {s.updateInfo?.reason ??
+                      "Automatic installation is unavailable. Use this installation's update channel."}
+                  </p>
+                ) : null}
               </div>
               <div className="config-section">
                 <div className="config-title">Runtime</div>

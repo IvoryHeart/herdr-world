@@ -21,6 +21,11 @@ test.skipIf(!chrome).concurrent.each([
   [500, 1.25, "uiScale", 800, 100],
   [1300, 1, "paneJump", 800, 100],
   [390, 1, "paneJump", 800, 100],
+  [390, 1, "updateNotification", 844, 100],
+  [1512, 1, "updateNotification", 982, 100],
+  [1280, 1, "updateNotification", 1440, 100],
+  [2560, 1, "updateNotification", 1440, 100],
+  [1440, 1, "updateNotification", 2560, 100],
   [1300, 1, "taskPush", 800, 100],
   [390, 1, "taskPush", 800, 100],
   [1300, 1, "connectionProfiles", 800, 100],
@@ -81,6 +86,22 @@ test.skipIf(!chrome).concurrent.each([
       port: 0,
       async fetch(request) {
         const path = new URL(request.url).pathname;
+        if (
+          path === "/capture/update-notification" &&
+          request.method === "POST"
+        ) {
+          if (Bun.env.WORLD_UPDATE_CAPTURE_DIR) {
+            const shot = await cdp("Page.captureScreenshot", { format: "png" });
+            await Bun.write(
+              join(
+                Bun.env.WORLD_UPDATE_CAPTURE_DIR,
+                `${new URL(request.url).searchParams.get("state") === "blocked" ? "blocked-" : ""}${width}x${height}.png`,
+              ),
+              Buffer.from(shot.data, "base64"),
+            );
+          }
+          return new Response("ok");
+        }
         if (path === "/result" && request.method === "POST") {
           resolve(await request.json());
           return new Response("ok");
@@ -121,6 +142,13 @@ test.skipIf(!chrome).concurrent.each([
           await cdp(method, params);
           return new Response("ok");
         }
+        if (
+          fixture === "updateNotification" &&
+          path === "/herdr-world-logo.svg"
+        )
+          return new Response(
+            Bun.file(join(import.meta.dir, "../public/herdr-world-logo.svg")),
+          );
         const asset = assets.get(path);
         if (asset) {
           await heldChunks.get(path)?.promise;

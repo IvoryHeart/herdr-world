@@ -1,3 +1,4 @@
+import { UpdateToast } from "./components/UpdateToast";
 import { NoticeDetail, ToastMark } from "./components/NoticeContent";
 import { useTaskNotificationTarget } from "./useTaskNotificationTarget";
 import { useTerminalComposerDraftScopes } from "./useTerminalComposerDraftScopes";
@@ -1014,6 +1015,7 @@ export default function App({
       status: state.status,
       tabs: state.tabs,
       updateInfo: state.updateInfo,
+      dismissedUpdateVersion: state.dismissedUpdateVersion,
       updateInstalling: state.updateInstalling,
       workspaces: state.workspaces,
     }),
@@ -3341,7 +3343,10 @@ export default function App({
         }
         const current = operations.get();
         const canDismissUpdate =
-          current.updateInfo?.update_available && !current.updateInstalling;
+          current.updateInfo?.update_available &&
+          current.dismissedUpdateVersion !==
+            current.updateInfo.latest_version &&
+          !current.updateInstalling;
         if (current.notice || canDismissUpdate) {
           e.preventDefault();
           e.stopPropagation();
@@ -4667,60 +4672,15 @@ export default function App({
       {s.updateInfo?.update_available || s.notice
         ? createPortal(
             <div className="toast-viewport" aria-live="polite">
-              {s.updateInfo?.update_available ? (
-                <Toast
-                  className={`toast toast-info ${
-                    s.updateInstalling ? "toast-loading" : ""
-                  }`}
-                  role="status"
-                  onDismiss={() => store.dismissUpdate()}
-                  notificationKey={s.updateInfo.latest_version}
-                  dismissDisabled={s.updateInstalling}
-                >
-                  <ToastMark kind="info" loading={s.updateInstalling} />
-                  <div className="toast-content">
-                    <strong>
-                      Herdr World {s.updateInfo.latest_version} is available
-                    </strong>
-                    <p>
-                      Current {s.updateInfo.current_version}
-                      {s.updateInfo.can_auto_update
-                        ? " · ready to update and restart"
-                        : s.updateInfo.reason
-                          ? ` · ${s.updateInfo.reason}`
-                          : ""}
-                    </p>
-                    <div className="toast-actions">
-                      {s.updateInfo.can_auto_update ? (
-                        <button
-                          type="button"
-                          className="toast-action primary"
-                          onClick={() => store.installUpdate()}
-                          disabled={s.updateInstalling}
-                        >
-                          {s.updateInstalling
-                            ? "Updating..."
-                            : "Update & restart"}
-                        </button>
-                      ) : null}
-                      <button
-                        type="button"
-                        className="toast-action"
-                        onClick={() => store.dismissUpdate()}
-                        disabled={s.updateInstalling}
-                      >
-                        Dismiss
-                      </button>
-                    </div>
-                  </div>
-                  <CloseButton
-                    variant="toast"
-                    label="Dismiss update notification"
-                    onClick={() => store.dismissUpdate()}
-                    disabled={s.updateInstalling}
-                  />
-                </Toast>
-              ) : null}
+              <UpdateToast
+                info={s.updateInfo}
+                dismissedVersion={s.dismissedUpdateVersion}
+                installing={s.updateInstalling}
+                onDismiss={() => store.dismissUpdate()}
+                onInstall={() => {
+                  void store.installUpdate();
+                }}
+              />
               {s.notice ? (
                 <Toast
                   className={`toast toast-${s.notice.kind} ${

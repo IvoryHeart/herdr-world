@@ -57,6 +57,8 @@ import {
   redirectToLogin,
   stopPolling,
   checkForUpdate,
+  retireUpdateChecks,
+  dismissUpdate,
   AUTOMATIC_UPDATE_CHECKS_KEY,
   applyAutomaticUpdateChecksEnabled,
   storePendingRestartVersion,
@@ -2367,12 +2369,7 @@ export const store = {
     return checkForUpdate(true);
   },
 
-  dismissUpdate() {
-    set({
-      dismissedUpdateVersion: state.updateInfo?.latest_version ?? null,
-      updateInfo: null,
-    });
-  },
+  dismissUpdate,
 
   /**
    * Bring Herdr, the harness integrations and the Herdr World plugin up to
@@ -2464,6 +2461,7 @@ export const store = {
     }
     const latestVersion = state.updateInfo?.latest_version;
     if (!latestVersion || state.updateInstalling) return;
+    retireUpdateChecks();
     set({ updateInstalling: true });
     try {
       const r = await fetch("/api/update/install", {

@@ -1,3 +1,4 @@
+import { createUpdateNotificationHistory } from "../updateNotifications";
 import { worldLocalStorage, worldSessionStorage } from "../browserStorage";
 import {
   set,
@@ -19,6 +20,18 @@ import {
   storedTaskNotificationsEnabled,
   storedTaskNotificationPreferences,
 } from "./notifications";
+
+const updateNotifications = createUpdateNotificationHistory(worldLocalStorage);
+let updateCheckEpoch = 0;
+
+/** Installation invalidates every check admitted against the old process. */
+export function retireUpdateChecks() {
+  updateCheckEpoch++;
+}
+
+export function dismissUpdate() {
+  set({ dismissedUpdateVersion: state.updateInfo?.latest_version ?? null });
+}
 
 const AUTOMATIC_UPDATE_CHECKS_KEY = "automaticUpdateChecksEnabled";
 const PENDING_UPDATE_RELOAD_KEY = "pendingUpdateReloadVersion";
@@ -279,14 +292,23 @@ async function checkForUpdate(showErrors = false) {
     }
     return;
   }
+  if (state.updateInstalling) return;
+  const epoch = updateCheckEpoch;
+  const current = () =>
+    epoch === updateCheckEpoch &&
+    !state.updateInstalling &&
+    !state.connectionPaused &&
+    (showErrors || state.automaticUpdateChecksEnabled);
   try {
     const r = await fetch("/api/update/check", {
       credentials: "same-origin",
       headers: { "x-herdr-world-update": "1" },
     });
+    if (!current()) return;
     if (!r.ok) {
       if (showErrors) {
         const body = await r.json().catch(() => null);
+        if (!current()) return;
         set({
           notice: {
             kind: "error",
@@ -298,13 +320,33 @@ async function checkForUpdate(showErrors = false) {
       return;
     }
     const info = (await r.json()) as UpdateInfo;
-    if (!showErrors && !state.automaticUpdateChecksEnabled) return;
-    if (
-      info.update_available &&
-      info.latest_version &&
-      (showErrors || state.dismissedUpdateVersion !== info.latest_version)
-    ) {
-      set({ updateInfo: info });
+    if (!current()) return;
+    if (info.update_available && info.latest_version) {
+      const firstNotification = await updateNotifications.claim(
+        info.latest_version,
+      );
+      if (!current()) return;
+      const notificationStillOpen =
+        state.updateInfo?.latest_version === info.latest_version &&
+        state.dismissedUpdateVersion !== info.latest_version;
+      set({
+        updateInfo: info,
+        dismissedUpdateVersion:
+          firstNotification || notificationStillOpen
+            ? null
+            : info.latest_version,
+        notice:
+          showErrors && !firstNotification && !notificationStillOpen
+            ? {
+                kind: "info",
+                message: "Update check complete",
+                detail: info.can_auto_update
+                  ? `Herdr World ${info.latest_version} remains available. Open Menu → Upgrade to ${info.latest_version}.`
+                  : `Herdr World ${info.latest_version} remains available. ${info.reason ?? "Use its installation channel to upgrade."}`,
+                autoDismissMs: 5000,
+              }
+            : state.notice,
+      });
     } else if (!info.update_available) {
       set({
         updateInfo: null,
@@ -320,7 +362,7 @@ async function checkForUpdate(showErrors = false) {
       });
     }
   } catch (e) {
-    if (showErrors) {
+    if (showErrors && current()) {
       set({
         notice: {
           kind: "error",
@@ -353,7 +395,6 @@ function applyAutomaticUpdateChecksEnabled(enabled: boolean) {
   }
   set({
     automaticUpdateChecksEnabled: enabled,
-    updateInfo: enabled ? state.updateInfo : null,
   });
   if (enabled && !state.connectionPaused) void startUpdatePolling();
 }

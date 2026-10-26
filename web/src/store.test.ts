@@ -501,6 +501,151 @@ describe("automatic update check preference", () => {
   });
 });
 
+describe("available update notification lifetime", () => {
+  test("notifies once per version while dismissal, reload and failure keep the offer", async () => {
+    const previous = store.get();
+    const originalFetch = globalThis.fetch;
+    const storage = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+    const values = new Map<string, string>();
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (key: string) => values.get(key) ?? null,
+        setItem: (key: string, value: string) => values.set(key, value),
+      },
+    });
+    let latest = "1.2.3-notification-test";
+    let available = true;
+    let installFails = true;
+    globalThis.fetch = (async (url: string) =>
+      url === "/api/update/install"
+        ? Response.json(
+            installFails
+              ? { error: "Synthetic install failure" }
+              : { installed: true, installed_version: latest },
+            { status: installFails ? 500 : 200 },
+          )
+        : Response.json({
+            current_version: "1.0.0",
+            latest_version: latest,
+            update_available: available,
+            can_auto_update: true,
+            platform: "linux-x64",
+          })) as typeof fetch;
+    try {
+      __storeTesting.replaceState({
+        ...previous,
+        connectionPaused: false,
+        updateInfo: null,
+        dismissedUpdateVersion: null,
+        updateInstalling: false,
+      });
+      await store.checkForUpdate();
+      expect(store.get().updateInfo?.latest_version).toBe(latest);
+      expect(store.get().dismissedUpdateVersion).toBeNull();
+      await store.checkForUpdate();
+      expect(store.get().dismissedUpdateVersion).toBeNull();
+      store.dismissUpdate();
+      expect(store.get().updateInfo?.latest_version).toBe(latest);
+      expect(store.get().dismissedUpdateVersion).toBe(latest);
+      await store.checkForUpdate();
+      expect(store.get().dismissedUpdateVersion).toBe(latest);
+      // A fresh store reads the same browser-origin notification history.
+      __storeTesting.replaceState({
+        ...store.get(),
+        updateInfo: null,
+        dismissedUpdateVersion: null,
+      });
+      await store.checkForUpdate();
+      expect(store.get().updateInfo?.latest_version).toBe(latest);
+      expect(store.get().dismissedUpdateVersion).toBe(latest);
+      expect(store.get().notice?.message).toBe("Update check complete");
+      expect(store.get().notice?.detail).toContain(latest);
+      store.setAutomaticUpdateChecksEnabled(false);
+      expect(store.get().updateInfo?.latest_version).toBe(latest);
+      await store.installUpdate();
+      expect(store.get().notice?.message).toBe("Update install failed");
+      expect(store.get().updateInfo?.update_available).toBe(true);
+      latest = "1.2.4-notification-test";
+      await store.checkForUpdate();
+      expect(store.get().dismissedUpdateVersion).toBeNull();
+      installFails = false;
+      await store.installUpdate();
+      expect(store.get().updateInfo).toBeNull();
+      available = false;
+      await store.checkForUpdate();
+      expect(store.get().updateInfo).toBeNull();
+    } finally {
+      __storeTesting.replaceState(previous);
+      globalThis.fetch = originalFetch;
+      if (storage) Object.defineProperty(globalThis, "localStorage", storage);
+      else delete (globalThis as { localStorage?: Storage }).localStorage;
+    }
+  });
+});
+
+describe("update checks across installation", () => {
+  test.each([false, true])(
+    "retires a held pre-install reply (error=%s)",
+    async (errorReply) => {
+      const previous = store.get();
+      const originalFetch = globalThis.fetch;
+      const held = Promise.withResolvers<Response>();
+      const offer = {
+        current_version: "1.0.0",
+        latest_version: "2.0.0-held-test",
+        update_available: true,
+        can_auto_update: true,
+        platform: "linux-x64",
+      };
+      let hold = true;
+      globalThis.fetch = (async (url: string) =>
+        url === "/api/update/install"
+          ? Response.json({
+              installed: true,
+              installed_version: offer.latest_version,
+            })
+          : hold
+            ? held.promise
+            : Response.json({
+                ...offer,
+                latest_version: "3.0.0-held-test",
+              })) as typeof fetch;
+      try {
+        __storeTesting.replaceState({
+          ...previous,
+          connectionPaused: false,
+          updateInstalling: false,
+          updateInfo: offer,
+          notice: null,
+        });
+        const checking = store.checkForUpdate();
+        await store.installUpdate();
+        expect(store.get().updateInfo).toBeNull();
+        held.resolve(
+          errorReply
+            ? Response.json(
+                { error: "Obsolete check failure" },
+                { status: 500 },
+              )
+            : Response.json(offer),
+        );
+        await checking;
+        expect(store.get().updateInfo).toBeNull();
+        expect(store.get().notice?.message).toBe(
+          `Herdr World ${offer.latest_version} installed`,
+        );
+        hold = false;
+        await store.checkForUpdate();
+        expect(store.get().updateInfo?.latest_version).toBe("3.0.0-held-test");
+      } finally {
+        __storeTesting.replaceState(previous);
+        globalThis.fetch = originalFetch;
+      }
+    },
+  );
+});
+
 describe("task notification activation", () => {
   test("notification creation and notice activation retain the original agent session", () => {
     const source = {
