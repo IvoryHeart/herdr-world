@@ -1,19 +1,14 @@
 import { store } from "../../store";
 import type { LaunchTarget } from "../agentProfiles";
-import { prepareTownRoomCard } from "./townRoomCard.browser";
 
 /** Geometry and input checks against the real Town scene's synthetic dense rooms. */
 export async function checkTownRoomPlates(
   host: HTMLElement,
   check: (condition: boolean, message: string) => void,
-  waitFor: (
-    condition: () => boolean,
-    message: string | (() => string),
-  ) => Promise<void>,
+  waitFor: (condition: () => boolean, message: string) => Promise<void>,
   target: Pick<LaunchTarget, "connectionId" | "generation" | "workspaceId">,
 ) {
   const renderer = window.__HERDR_TOWN_RENDERER__!;
-  await prepareTownRoomCard(host, renderer, waitFor);
   const before = renderer.frames;
   host.querySelector<HTMLButtonElement>(".town-room-card")!.click();
   await waitFor(
