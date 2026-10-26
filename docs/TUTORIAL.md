@@ -569,10 +569,10 @@ to the intended workspace or pane. Read the target before using **Send**.
 
 ![Board close-up of a note strung to an agent](./images/herdr-world-mobile-board.png)
 
-The Town and Board screenshots use real shell panes in disposable projects.
-The phone Board close-up focuses one workspace, its tabs and a strung note.
-Their empty agent counts are intentional; the notes are sample planning text,
-not reports of completed agent work.
+The Town and Board screenshots show disposable projects where real Claude Code
+agents ran small tasks: one is waiting on you and one has finished. The note
+strung to an agent is sample planning text, not a report of completed agent
+work.
 
 ### Let agents arrange World
 
