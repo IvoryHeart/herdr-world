@@ -206,6 +206,7 @@ function ago(since: number, now: number) {
 export function TownCanvas({
   projection,
   foldedActivity = NO_FOLDED_ACTIVITY,
+  foldRevision = 0,
   selectedKey,
   completionSeenKeys,
   summonedKeys = NO_KEYS,
@@ -253,6 +254,8 @@ export function TownCanvas({
   projection: HerdrOfficeProjection;
   /** Hidden call/Ask state from the same complete attention source as the rail. */
   foldedActivity?: ReadonlyMap<string, TownFoldedActivity>;
+  /** Explicit Fold/Expand admission revision, committed with its projection. */
+  foldRevision?: number;
   selectedKey: string | null;
   completionSeenKeys: ReadonlySet<string>;
   /** Agents the user opened, who walk back to their desks. */
@@ -361,13 +364,19 @@ export function TownCanvas({
   }, [model.input, shape, pinnedCells]);
   // While the user presses, scrolls or zooms, a reflow that would move rooms
   // or buildings waits until they pause (then the camera follows the room in
-  // view). A held layout must still name only desks the model has.
+  // view). Explicit Fold/Expand applies immediately; its admission and revision
+  // arrive in the same render. A held layout must still name only valid desks.
   const inputAt = useRef(0);
   const pressing = useRef(false);
   const shownLayout = useRef<TownLayout | null>(null);
+  const appliedFoldRevision = useRef(foldRevision);
+  useEffect(() => {
+    appliedFoldRevision.current = foldRevision;
+  }, [foldRevision]);
   const [, wakeReflow] = useState(0);
   const held = shownLayout.current;
   const holding =
+    foldRevision === appliedFoldRevision.current &&
     held !== null &&
     held !== placed &&
     townShapeKey(held.shape) === townShapeKey(placed.shape) &&

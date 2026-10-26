@@ -51,7 +51,10 @@ Finish/seen overlays change only the affected room totals. Ask, metrics and cloc
 updates reuse that topology. Asking identities resolve through the snapshot's
 generation-qualified pane and agent indexes, without scanning the roster. The
 canvas uses the same native-order tab prefix as Spaces: 24 tabs folded, then
-20 more per expansion. Attention never changes this admission.
+20 more per expansion. Attention never changes this admission. Explicit fold
+requests carry a local revision alongside their admission state, so TownCanvas
+applies that requested layout immediately; background topology changes retain
+the interaction quiet-period guard.
 [townFoldedActivity.ts](town/townFoldedActivity.ts) maps shared rail calls and
 qualified asking identities onto hidden desks; [TownFoldIndicators.tsx](town/TownFoldIndicators.tsx)
 shows red needs-you and green unreviewed-completion corner icons without extra

@@ -1201,9 +1201,17 @@ SHALL share one street. Rooms SHALL fill their building's columns in workspace
 order, and while a scene is live each room SHALL keep its column, so a room
 that grows moves only the rooms below it in that column. The lounge SHALL stay
 above the rooms, and the lobby and reception below them. A reflow that would move rooms
-or buildings SHALL wait while the user presses, scrolls or zooms and until a
-short pause after, and the camera SHALL then follow the room in view so it
-stays where it was.
+or buildings due to background topology changes SHALL wait while the user
+presses, scrolls or zooms and until a short pause after, and the camera SHALL
+then follow the room in view so it stays where it was. An explicit Fold or
+Expand request SHALL apply its admitted desks and layout immediately, without
+waiting for that ambient quiet period.
+
+#### Scenario: A user expands while the reflow guard is active
+
+- **WHEN** the user taps Expand or Fold during the interaction quiet period
+- **THEN** the requested room layout updates without waiting for that period
+- **AND** a subsequent background topology change still waits for a pause
 
 #### Scenario: A tab is created while the user watches
 
