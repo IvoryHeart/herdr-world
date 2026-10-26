@@ -94,8 +94,9 @@ npm install --global @ivoryheart/herdr-world
 Choose one channel. Homebrew uses the published platform archive; npm installs a
 small launcher and the matching platform binary. npm needs Node.js 22.14.0 or newer
 and optional dependencies enabled. `brew install` and `brew upgrade` install and
-upgrade Herdr too (Homebrew's bottle, or the verified prebuilt binary on Intel
-Macs); npm leaves Herdr to you (see [Herdr installation and upgrades](#herdr-installation-and-upgrades)).
+upgrade the separate Homebrew `herdr` dependency too. Intel Macs may build that
+dependency from source when Homebrew has no bottle. npm leaves Herdr to you
+(see [Herdr installation and upgrades](#herdr-installation-and-upgrades)).
 Neither starts Herdr. For an existing installation, stop the old World process
 before upgrading the channel.
 
@@ -215,12 +216,15 @@ When it runs:
 - **Menu**: **Runtime → Upgrade Herdr** appears when Herdr or its running server is
   older than the verified release. **Runtime → Update Herdr integrations** appears
   when only harness integrations or the plugin are behind.
-- **Homebrew**: on Apple Silicon and Linux the Formula depends on Homebrew's `herdr`
-  bottle, so Homebrew decides that version. Homebrew has no Intel Mac bottle, so on
-  Intel Macs the Formula installs Herdr's own prebuilt `herdr-macos-x86_64` binary
-  for the verified release (pinned by the same checksum), not a source build. If
-  Homebrew's `herdr` is already installed there, `brew link` reports the conflict;
-  uninstall one of them.
+- **Homebrew**: every platform uses the separate `herdr` formula, reusing an
+  existing installation instead of linking a second `herdr` from the World keg.
+  Homebrew decides its version and uses a bottle where available; Intel Macs may
+  build Herdr from source. Update that runtime with
+  `brew update && brew upgrade herdr`, and World with
+  `brew upgrade IvoryHeart/tap/herdr-world`. World never replaces the
+  dependency's executable itself. If stale Homebrew metadata or an older installed
+  runtime leaves Herdr below World's verified minimum, World installation stops
+  before copying its files. Run `brew update && brew upgrade herdr`, then retry.
 - **npm and Windows archives**: run `herdr-world herdr upgrade --install` once
   yourself, or use the menu.
 

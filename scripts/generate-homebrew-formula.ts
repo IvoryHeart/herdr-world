@@ -1,10 +1,7 @@
 #!/usr/bin/env bun
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import {
-  herdrReleaseUrl,
-  VERIFIED_HERDR_SHA256,
-} from "../server/src/herdr/release";
+import { VERIFIED_HERDR_VERSION } from "../server/src/herdr/release";
 import { readReleaseArchive } from "./release-archive";
 import { isReleaseCandidate, RELEASE_VERSION_RE } from "./release-version";
 
@@ -23,25 +20,18 @@ export function renderHomebrewFormula(
   homepage "https://herdr.world/"
   version "${version}"
 
-  # Herdr World runs on Herdr. Where Homebrew bottles Herdr, depend on it;
-  # Homebrew has no Intel Mac bottle, so there the Formula installs the
-  # prebuilt Herdr release this World verified instead of building from source.
+  # Herdr retains its own Homebrew owner, including on Intel Macs where
+  # Homebrew may build it from source instead of pouring a bottle.
+  depends_on "herdr"
+
   on_macos do
     on_arm do${source("darwin-arm64")}
-      depends_on "herdr"
     end
     on_intel do${source("darwin-x64")}
-
-      resource "herdr" do
-        url "${herdrReleaseUrl("macos-x86_64")}"
-        sha256 "${VERIFIED_HERDR_SHA256["macos-x86_64"]}"
-      end
     end
   end
 
   on_linux do
-    depends_on "herdr"
-
     on_arm do${source("linux-arm64")}
     end
     on_intel do${source("linux-x64")}
@@ -51,24 +41,24 @@ export function renderHomebrewFormula(
   conflicts_with "${conflict}", because: "both Formulae provide the herdr-world command"
 
   def install
+    herdr_output = Utils.safe_popen_read(Formula["herdr"].opt_bin/"herdr", "--version")
+    herdr_version = herdr_output[/^herdr ([0-9]+[.][0-9]+[.][0-9]+)/, 1]
+    if herdr_version.nil? || Version.new(herdr_version) < Version.new("${VERIFIED_HERDR_VERSION}")
+      odie "Herdr ${VERIFIED_HERDR_VERSION} or newer is required; run brew update && brew upgrade herdr, then retry."
+    end
     libexec.install "herdr-world", "VERSION",
       "LICENSE", "THIRD_PARTY_NOTICES.md",
       "DEPENDENCY_NOTICES.md", "DEPENDENCY_LICENSES.md",
       "UPSTREAM.md", "LICENSES"
     bin.install_symlink libexec/"herdr-world"
-    install_prebuilt_herdr if OS.mac? && Hardware::CPU.intel?
-  end
-
-  def install_prebuilt_herdr
-    resource("herdr").stage do
-      (libexec/"herdr").install "herdr-macos-x86_64" => "herdr"
-    end
-    chmod 0755, libexec/"herdr/herdr"
-    bin.install_symlink libexec/"herdr/herdr"
   end
 
   test do
     assert_match "herdr-world ${version}", shell_output("#{bin}/herdr-world --version")
+    herdr_output = shell_output("#{Formula["herdr"].opt_bin}/herdr --version")
+    assert_match /^herdr /, herdr_output
+    assert_operator Version.new(herdr_output[/[0-9]+[.][0-9]+[.][0-9]+/]), :>=,
+                    Version.new("${VERIFIED_HERDR_VERSION}")
   end
 end
 `;

@@ -144,8 +144,11 @@ Each release pins the Herdr it installs and upgrades to
    the upgrade step reinstalls the Codex, Claude and Pi harness integrations after every
    Herdr upgrade.
 
-The Homebrew Formula's Intel Mac Herdr resource reads the same table, so it moves
-with the bump. Users receive the new Herdr with the World release that declares it.
+Standalone installers and World updates read that table. Homebrew retains its
+separate `herdr` dependency on every platform; the generated formula tests its
+executable against the verified version as a minimum. Confirm Homebrew can supply
+that version when bumping the pin. Intel Macs may build the dependency from source
+when no bottle is available.
 
 ## Publishing a candidate or stable release
 

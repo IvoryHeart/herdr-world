@@ -1420,6 +1420,7 @@
         "scripts/plugin-native-fixture.test.ts",
         "server/src/config/plugin-command.test.ts",
         "scripts/installer-upgrade.test.ts",
+        "scripts/generate-homebrew-formula.test.ts",
         "server/src/herdr/release.test.ts",
         "server/src/herdr/upgrade.test.ts",
         "server/src/herdr/cli.test.ts",

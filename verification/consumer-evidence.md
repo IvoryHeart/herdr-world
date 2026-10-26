@@ -242,6 +242,26 @@ timing; the existing ownership models and their mandatory consumers remain
 binding. Real OS page discard, every mobile scheduler and cross-reload UI
 restoration remain outside this evidence.
 
+### Homebrew dependency ownership (Q36)
+
+The generated World formula depends on the separate Homebrew `herdr` formula on
+every platform. It installs only World's executable into its keg, so an existing
+Herdr command retains its owner and the shipped `brew upgrade herdr` guidance
+names that owner. Intel Macs may build the dependency from source when no bottle
+is available.
+
+`scripts/generate-homebrew-formula.test.ts` evaluates the Ruby declaration and
+acceptance block: Herdr must be an unconditional dependency, its executable must
+be probed, missing or older-than-verified runtimes fail, and newer runtimes pass.
+Installation probes the owned runtime before writing World files and rejects
+an older version with the owning package's upgrade command. The archive-stage
+check permits only the World executable link. The tap's native
+ownership workflow installs/tests on Apple Silicon and Intel, then reinstalls
+World with Herdr already present and compares the runtime link and bytes before
+and after. Native results belong to that tap CI head; Linux generator checks do
+not establish native Homebrew installation acceptance. No abstract model claims
+to prove Homebrew dependency resolution or operating-system package behavior.
+
 ### World update notification lifetime (Q36)
 
 Browser-origin/profile notification history is separate from the current update
