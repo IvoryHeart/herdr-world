@@ -320,12 +320,13 @@ text. It works for any agent you open from Town, Board or Desk.
 1. Read from the bottom. Chat shows the latest 200 entries; scroll up (or press
    **Load earlier messages**) to load older pages while keeping your place.
    While you read back, **Jump to latest** counts new agent messages.
-   **Menu → Appearance → Chat text** sets the text size.
+   **Menu → Configuration → Appearance → Chat text** sets the text size.
 2. Check what the agent is doing now. The Now bar shows its status circle
    (hover for the word: blue working, yellow needs you, green done, grey
-   idle), the task from its terminal title, and the tool call running now
-   with its own timer. **Stop**, or Esc pressed twice, interrupts Claude
-   Code, Codex or Pi; Chat never stops an agent by itself.
+   idle), the task from its terminal title and how long it has been at it.
+   The tool call running now sits at the end of the conversation with its
+   own timer. **Stop**, or Esc pressed twice, interrupts Claude Code, Codex
+   or Pi; Chat never stops an agent by itself.
 3. Open a tool row to see what the call did: the edit's diff, a test run's
    pass or fail with its first failure, or the end of its output. An agent
    with a quest shows one slim title and progress row in the conversation;
