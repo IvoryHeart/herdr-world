@@ -234,6 +234,7 @@ export class TownActors {
     instant: boolean,
     summoned: ReadonlySet<string> = this.summoned,
   ) {
+    const previousWorld = this.world;
     this.world = world;
     this.summoned = summoned;
     const { model } = world;
@@ -266,6 +267,20 @@ export class TownActors {
         };
         this.actors.set(agent.key, actor);
         fresh.add(agent.key);
+      }
+      if (actor.spot) {
+        // Lounge slots belong to a building, not to absolute world tiles.
+        // Preserve the slot through reflow, then resolve its current position.
+        const previousSpots = previousWorld?.buildings.get(actor.hostKey)
+          ?.lounge.spots;
+        const index =
+          previousSpots?.findIndex(
+            (spot) => spotKey(spot) === spotKey(actor.spot!),
+          ) ?? -1;
+        actor.spot =
+          actor.hostKey === agent.hostKey && index >= 0
+            ? (building.lounge.spots[index] ?? null)
+            : null;
       }
       actor.hostKey = agent.hostKey;
       if (agent.semanticStatus === "blocked" && actor.blockedSince === 0)
@@ -422,6 +437,10 @@ export class TownActors {
       return;
     }
     const begin = () => {
+      // A snapshot may move reception while this actor is standing up.
+      // Resolve the destination when walking starts, not before the tween.
+      const target = this.destination(actor);
+      if (!target) return;
       const navigation = this.world!.navigation.get(actor.hostKey)!;
       const path = navigation.path(
         Math.floor(actor.x / T),

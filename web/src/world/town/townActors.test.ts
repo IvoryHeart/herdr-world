@@ -12,6 +12,7 @@ function world(
   order?: number[],
   /** Pinned desks, as desk indexes. */
   pinned: number[] = [],
+  precedingHost = false,
 ) {
   const deskKeys = Array.from(
     { length: deskCount },
@@ -19,8 +20,21 @@ function world(
   );
   const { layout } = layoutTown(
     {
-      hosts: [{ key: "host", displayOrder: 0 }],
+      hosts: [
+        ...(precedingHost ? [{ key: "earlier", displayOrder: 0 }] : []),
+        { key: "host", displayOrder: precedingHost ? 1 : 0 },
+      ],
       rooms: [
+        ...(precedingHost
+          ? [
+              {
+                key: "earlier-room",
+                hostKey: "earlier",
+                order: 0,
+                deskKeys: ["earlier-desk"],
+              },
+            ]
+          : []),
         {
           key: "room",
           hostKey: "host",
@@ -299,4 +313,50 @@ test("stale agents freeze without keeping an animation loop alive and resume on 
   moving.model.agents.get("a")!.stale = false;
   expect(actors.step(1 / 30)).toBe(true);
   expect([actor.x, actor.y]).not.toEqual(position);
+});
+
+test("reception walkers leaving their seats use the latest snapshot layout", () => {
+  const actors = new TownActors();
+  actors.sync(world({ a: "working", b: "working" }).actorWorld, false);
+  actors.sync(world({ a: "blocked", b: "done" }).actorWorld, false);
+  actors.step(0.1);
+  expect(actors.actors.get("a")!.tween?.next).toBe("stand");
+  const updated = world({ a: "blocked", b: "done" }, 20);
+  actors.sync(updated.actorWorld, false);
+  settle(actors);
+  for (const actor of actors.actors.values()) {
+    const spot =
+      updated.actorWorld.buildings.get("host")!.queue[actor.queueSlot!]!;
+    expect([actor.x, actor.y]).toEqual([
+      spot.x * TOWN_TILE + 8,
+      spot.y * TOWN_TILE + 13,
+    ]);
+    expect(actor.mode).toBe("stand");
+  }
+});
+
+test("lounge agents retain distinct current-building spots after a snapshot relocates it", () => {
+  const actors = new TownActors();
+  actors.sync(world({ a: "idle", b: "idle", c: "working" }).actorWorld, true);
+  const updated = world(
+    { a: "idle", b: "idle", c: "idle" },
+    4,
+    undefined,
+    [],
+    true,
+  );
+  actors.sync(updated.actorWorld, false);
+  settle(actors);
+  const spots = updated.actorWorld.buildings.get("host")!.lounge.spots;
+  const occupied = new Set<string>();
+  for (const actor of actors.actors.values()) {
+    expect(actor.spot).not.toBeNull();
+    expect(spots).toContainEqual(actor.spot!);
+    expect([actor.x, actor.y]).toEqual([
+      actor.spot!.x * TOWN_TILE + 8,
+      actor.spot!.y * TOWN_TILE + 13,
+    ]);
+    occupied.add(`${actor.x},${actor.y}`);
+  }
+  expect(occupied.size).toBe(3);
 });
