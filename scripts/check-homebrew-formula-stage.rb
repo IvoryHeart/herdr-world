@@ -20,7 +20,7 @@ class StageBin
     self
   end
   def write(content)
-    raise "missing conditional bootstrap" unless content.include?("herdr status") && content.include?("--no-integrations --no-plugin")
+    raise "missing conditional bootstrap" unless content.include?("herdr status") && content.include?('ln "$staging/herdr" "$install_dir/"')
   end
   def chmod(_mode); end
 end

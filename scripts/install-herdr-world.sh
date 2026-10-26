@@ -228,7 +228,7 @@ if [ "$skip_herdr" != "1" ]; then
   if herdr_status="$("$target" herdr status)"; then
     case "$herdr_status" in
     'Herdr is not installed.'*)
-      if ! "$target" herdr upgrade --install --no-integrations --no-plugin; then
+      if ! "$target" herdr upgrade --install --only-if-missing --no-integrations --no-plugin; then
         printf 'Herdr World installer: Herdr installation failed; run `%s herdr upgrade --install` to retry.\n' "$target" >&2
       fi
       ;;

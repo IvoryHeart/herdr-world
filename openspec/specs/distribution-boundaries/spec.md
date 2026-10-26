@@ -28,8 +28,13 @@ release that World version verified, in Herdr's own default location.
   location retains its version and installation owner
 - **AND** only a missing Herdr is installed from the release World verified, in
   Herdr's own default location, without starting a Herdr server
+- **AND** a runtime appearing after lookup or during download is preserved;
+  publication never replaces an existing filesystem entry
 - **AND** Homebrew does not require a separate Herdr formula, bundle Herdr in its
   keg, or bootstrap for metadata/management commands or remote/custom endpoints
+- **AND** failure of the optional runtime check or install warns with retry and
+  opt-out guidance while World starts so remote profiles and in-app setup remain
+  available
 
 #### Scenario: Explicit update brings Herdr forward
 - **WHEN** an explicit World update or Herdr upgrade runs with an older Herdr

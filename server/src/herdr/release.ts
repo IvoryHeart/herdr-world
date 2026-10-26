@@ -4,6 +4,7 @@ import {
   copyFileSync,
   existsSync,
   mkdirSync,
+  linkSync,
   mkdtempSync,
   readdirSync,
   renameSync,
@@ -214,6 +215,8 @@ export interface InstallHerdrDeps extends HerdrLocationEnv {
   /** Test-only overrides; production installs always use the verified table. */
   expectedSha256?: string;
   expectedInstallerSha256?: string;
+  /** Recheck all discovery paths before publishing a missing Unix runtime. */
+  findExistingBinary?: () => string | null;
 }
 
 async function defaultDownload(
@@ -375,16 +378,30 @@ export async function installVerifiedHerdr(
 
   const installDir = dirname(binaryPath);
   mkdirSync(installDir, { recursive: true });
-  // Stage beside the target so the final rename stays on one filesystem.
-  const staged = join(installDir, `.herdr.new-${process.pid}`);
+  // A unique sibling staging directory supports concurrent missing installers.
+  const staging = mkdtempSync(join(installDir, ".herdr.new-"));
+  const staged = join(staging, "herdr");
   try {
     await downloadVerifiedPackage(target, staged, deps);
     chmodSync(staged, 0o755);
     assertVerifiedVersion(staged, deps);
-    renameSync(staged, binaryPath);
+    const discovered = deps.findExistingBinary?.();
+    if (discovered)
+      return {
+        binaryPath: discovered,
+        version: VERIFIED_HERDR_VERSION,
+        installed: false,
+      };
+    try {
+      // link is atomic and never replaces an entry, including a dangling symlink.
+      linkSync(staged, binaryPath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      return { binaryPath, version: VERIFIED_HERDR_VERSION, installed: false };
+    }
     return { binaryPath, version: VERIFIED_HERDR_VERSION, installed: true };
   } finally {
-    rmSync(staged, { force: true });
+    rmSync(staging, { recursive: true, force: true });
   }
 }
 

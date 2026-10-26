@@ -5,3 +5,8 @@
   World launch, outside its keg, including on Intel Macs without a source build.
 - The standalone installer now installs Herdr only when missing and leaves existing
   versions and installation owners unchanged. Explicit upgrades remain available.
+- A failed Homebrew runtime check or download warns and still starts World, keeping
+  SSH profiles and in-app setup available. Fresh standalone installs leave harness
+  integrations and the plugin to an explicit `herdr-world herdr upgrade`.
+- Preserve Herdr even if another installation appears during automatic setup:
+  missing-only bootstrap never upgrades or overwrites an intervening runtime.

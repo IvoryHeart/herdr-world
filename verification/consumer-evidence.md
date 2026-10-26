@@ -247,14 +247,25 @@ restoration remain outside this evidence.
 The generated World formula has no mandatory Herdr dependency. It installs only
 World and a launcher into its keg. Normal local startup uses the compiled
 runtime's read-only status lookup to preserve any existing Herdr, regardless of
-version or installation owner. A missing runtime uses the compiled binary's
-checksum-verified installer with integrations/plugin refresh disabled. Metadata,
-management and remote/custom-endpoint invocations do not bootstrap.
+version or installation owner. A missing runtime uses a generated Unix bootstrap with the verified release's
+pinned SHA-256 and version. It rechecks discovery after download and publishes by
+an atomic hard link that cannot replace an existing file, symlink or directory.
+This compatibility path supports the immutable 0.2.7 binary without calling its
+upgrade command. The standalone installer uses the new Unix CLI
+`--install --only-if-missing` operation; explicit upgrades remain unchanged. Metadata,
+management and remote/custom-endpoint invocations do not bootstrap. A failed
+check or installation warns with retry/opt-out guidance and still starts World,
+so remote profiles and in-app setup remain available.
 
 `scripts/generate-homebrew-formula.test.ts` executes the generated Ruby install
 method and emitted shell launcher. Its process matrix covers older/current/newer
 and externally managed runtimes, missing installation, detection/install failure,
-metadata/management calls, remote configuration and opt-out. The standalone
+metadata/management calls, remote configuration and opt-out. Controlled schedules
+publish older/newer runtimes after status, during download and after the final
+lookup; atomic publication preserves them. Checksums and version failures warn
+and still start World. `server/src/herdr/missing-install.test.ts` independently
+exercises the real CLI/upgrader, concurrent installers, PATH discovery and late
+file/symlink publication. The standalone
 installer regressions independently cover missing-only behavior and owner/version
 preservation. These direct process alternatives test the actual shell/Ruby paths;
 an abstract model would not establish PATH detection or package ownership.

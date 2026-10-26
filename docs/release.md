@@ -147,6 +147,8 @@ Each release pins the Herdr it installs and upgrades to
 Standalone installers and World updates read that table. Homebrew generates a
 launcher with no mandatory `herdr` dependency: normal local startup reuses an
 existing runtime or installs the verified prebuilt release only when missing.
+The compatibility bootstrap embeds the current verified Herdr checksums and uses
+atomic no-replace publication; it does not call older World's upgrade command.
 Metadata/management commands and remote/custom endpoints do not bootstrap. The
 native smoke check exercises missing installation and preservation across World
 reinstallation on Apple Silicon and Intel; it must not compile a core dependency.

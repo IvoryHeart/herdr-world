@@ -1423,6 +1423,7 @@
         "scripts/generate-homebrew-formula.test.ts",
         "scripts/install-herdr-world.test.ts",
         "server/src/herdr/release.test.ts",
+        "server/src/herdr/missing-install.test.ts",
         "server/src/herdr/upgrade.test.ts",
         "server/src/herdr/cli.test.ts",
         "server/src/herdr/supervision.test.ts"

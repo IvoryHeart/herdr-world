@@ -2,6 +2,8 @@
 set -eu
 world=@HERDR_WORLD_BINARY@
 
+@HERDR_BOOTSTRAP@
+
 # Metadata and management commands keep their existing behavior. Only listener
 # startup needs the local runtime; remote/custom endpoints keep their own owner.
 bootstrap=0
@@ -17,12 +19,12 @@ done
 if [ -n "${HERDR_SSH_HOST:-}${HERDR_SOCKET_PATH:-}${HERDR_CLIENT_SOCKET_PATH:-}${HERDR_SESSION:-}" ]; then
   bootstrap=0
 fi
+warn_bootstrap() {
+  printf '%s\n' 'Herdr World: Herdr check or installation failed; starting World anyway. Retry with `herdr-world herdr upgrade --install`, or set HERDR_WORLD_SKIP_HERDR=1 to skip automatic setup.' >&2
+}
 if [ "$bootstrap" = 1 ] && [ "${HERDR_WORLD_SKIP_HERDR:-}" != 1 ]; then
-  status="$("$world" herdr status)"
-  case "$status" in
-    'Herdr is not installed.'*)
-      "$world" herdr upgrade --install --no-integrations --no-plugin
-      ;;
-  esac
+  if ! install_missing_herdr; then
+    warn_bootstrap
+  fi
 fi
 exec "$world" "$@"

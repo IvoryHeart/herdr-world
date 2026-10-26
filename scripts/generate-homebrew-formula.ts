@@ -1,20 +1,36 @@
 #!/usr/bin/env bun
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import {
+  VERIFIED_HERDR_VERSION,
+  VERIFIED_HERDR_SHA256,
+} from "../server/src/herdr/release";
 import { readReleaseArchive } from "./release-archive";
 import { isReleaseCandidate, RELEASE_VERSION_RE } from "./release-version";
 
 export function renderHomebrewFormula(
   version: string,
   digests: Record<string, string>,
+  herdr: { version: string; digests: Record<string, string> } = {
+    version: VERIFIED_HERDR_VERSION,
+    digests: VERIFIED_HERDR_SHA256,
+  },
 ) {
   const source = (platform: string) => `
       url "https://github.com/IvoryHeart/herdr-world/releases/download/v${version}/herdr-world-v${version}-${platform}.tar.xz"
       sha256 "${digests[platform]}"`;
+  let bootstrap = readFileSync(
+    new URL("./homebrew-herdr-bootstrap.sh", import.meta.url),
+    "utf8",
+  ).replaceAll("@HERDR_VERSION@", herdr.version);
+  for (const [target, digest] of Object.entries(herdr.digests)) {
+    bootstrap = bootstrap.replaceAll(`@HERDR_SHA_${target}@`, digest);
+  }
   const launcher = readFileSync(
     new URL("./homebrew-launcher.sh", import.meta.url),
     "utf8",
   )
+    .replace("@HERDR_BOOTSTRAP@", bootstrap.trimEnd())
     .replace(
       "@HERDR_WORLD_BINARY@",
       '#{(libexec/"herdr-world").to_s.shellescape}',
@@ -63,6 +79,8 @@ ${launcher}
       World reuses your existing Herdr. On first launch, if Herdr is missing,
       it installs the verified prebuilt release in ~/.local/bin, outside Homebrew.
       Existing Herdr installations are not upgraded. Add ~/.local/bin to PATH.
+      If automatic setup fails, World still starts. Retry with
+      herdr-world herdr upgrade --install, or set HERDR_WORLD_SKIP_HERDR=1.
       Run herdr-world herdr setup to start Herdr as a user service.
     EOS
   end

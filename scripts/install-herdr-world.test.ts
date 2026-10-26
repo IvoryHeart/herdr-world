@@ -285,7 +285,7 @@ describe("release installer", () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout.toString()).toContain("Installed Herdr 0.9.5.");
     expect(readFileSync(fixture.herdrStepLog, "utf8")).toBe(
-      "herdr upgrade --install --no-integrations --no-plugin\n",
+      "herdr upgrade --install --only-if-missing --no-integrations --no-plugin\n",
     );
   });
 

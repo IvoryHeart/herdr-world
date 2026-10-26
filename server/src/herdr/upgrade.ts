@@ -92,6 +92,8 @@ export interface HerdrUpgradeDeps
   worldVersion: string;
   /** Install Herdr when none is found (installers and first run). */
   installMissing?: boolean;
+  /** Unix automatic bootstrap: never upgrade or refresh an existing runtime. */
+  onlyIfMissing?: boolean;
   integrations?: boolean;
   plugin?: boolean;
   /** Local Herdr server of World's default connection; absent for SSH. */
@@ -572,6 +574,10 @@ export async function upgradeHerdr(
     integrations: [],
     plugin: { target: WORLD_PLUGIN_ID, action: "skipped" },
   };
+  if (deps.onlyIfMissing && before.state !== "missing") {
+    report.binaryPath = before.binaryPath;
+    return report;
+  }
   let binaryPath: string;
   let changed = false;
   if (before.state === "missing") {
@@ -579,10 +585,26 @@ export async function upgradeHerdr(
       report.server = { outcome: "skipped", detail: "Herdr is not installed" };
       return report;
     }
-    const installed = await installVerifiedHerdr(deps);
+    if (deps.onlyIfMissing && (deps.platform ?? process.platform) === "win32") {
+      throw new Error(
+        "Missing-only bootstrap is a Unix installer operation; use herdr setup on Windows.",
+      );
+    }
+    const installed = await installVerifiedHerdr({
+      ...deps,
+      findExistingBinary: deps.onlyIfMissing
+        ? () => findHerdrBinary(deps)
+        : undefined,
+    });
     binaryPath = installed.binaryPath;
-    report.binary = "installed";
-    changed = true;
+    report.binary = installed.installed ? "installed" : "unchanged";
+    changed = installed.installed;
+    if (deps.onlyIfMissing) {
+      report.binaryPath = binaryPath;
+      report.version = installed.installed ? VERIFIED_HERDR_VERSION : undefined;
+      if (!installed.installed) report.before = planHerdrUpgrade(deps);
+      return report;
+    }
   } else {
     binaryPath = before.binaryPath;
     if (before.state === "outdated") {
