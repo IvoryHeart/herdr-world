@@ -30,17 +30,6 @@ class StageBin
   end
 end
 
-# Herdr is a separate Homebrew dependency; the World keg must not export it.
-module OS
-  def self.mac? = false
-end
-
-module Hardware
-  module CPU
-    def self.intel? = false
-  end
-end
-
 class Formula
   def self.[](name)
     raise "unexpected dependency" unless name == "herdr"
@@ -62,6 +51,7 @@ formula = File.expand_path(formula_arg)
 archive = File.expand_path(archive_arg)
 load formula
 formula_class = Object.const_get(class_name)
+# Herdr is a separate Homebrew dependency; the World keg must not export it.
 raise "Herdr must keep its separate Homebrew owner" unless formula_class.dependencies == ["herdr"]
 Dir.mktmpdir("herdr-world-homebrew-stage-") do |stage|
   system("tar", "-xJf", archive, "-C", stage, "--strip-components=1", exception: true)

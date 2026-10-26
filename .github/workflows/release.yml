@@ -328,6 +328,16 @@ jobs:
           fi
           export HOMEBREW_NO_AUTO_UPDATE=1
           export HOMEBREW_NO_INSTALL_CLEANUP=1
+          brew update
+          brew info --json=v2 herdr > "$RUNNER_TEMP/herdr-core.json"
+          ruby -rjson -rrubygems/version - "$RUNNER_TEMP/herdr-core.json" "formula/$formula" <<'RUBY'
+          info = JSON.parse(File.read(ARGV[0])).fetch("formulae").first
+          available = Gem::Version.new(info.fetch("versions").fetch("stable"))
+          minimum = File.read(ARGV[1])[/Version\.new\("([0-9]+\.[0-9]+\.[0-9]+)"\)/, 1]
+          abort "Missing formula runtime floor" unless minimum
+          abort "Stale core Herdr #{available}; need #{minimum}" if available < Gem::Version.new(minimum)
+          puts "Selected current core Herdr #{available}, minimum #{minimum}"
+          RUBY
           tap="herdrworld/release-smoke"
           brew tap-new --no-git "$tap"
           install -m 0644 "./formula/$formula" "$(brew --repository "$tap")/Formula/$formula"
