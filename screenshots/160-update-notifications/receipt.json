@@ -1,0 +1,32 @@
+{
+  "source": "e52d741ecf892333698e2f2853a81ba6bacff864",
+  "cases": [
+    {
+      "file": "1280x1440.png",
+      "width": 1280,
+      "height": 1440
+    },
+    {
+      "file": "1440x2560.png",
+      "width": 1440,
+      "height": 2560
+    },
+    {
+      "file": "1512x982.png",
+      "width": 1512,
+      "height": 982
+    },
+    {
+      "file": "2560x1440.png",
+      "width": 2560,
+      "height": 1440
+    },
+    {
+      "file": "390x844.png",
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "browserCases": "five maintained real App/Menu/Toast cases PASS",
+  "scope": "Chromium/Linux synthetic update replies and DOM interactions; no live runtime or native installer/device claim"
+}
