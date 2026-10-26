@@ -42,6 +42,12 @@ test.skipIf(!chrome).concurrent.each([
   [500, 1.25, "terminalLinks", 800, 100],
   [390, 1, "terminalLinks", 800, 100],
   [320, 1.5, "terminalLinks", 800, 100],
+  [1512, 1, "terminalLinksTown", 982, 100],
+  [1280, 1, "terminalLinksTown", 1440, 100],
+  [390, 1, "terminalLinksTown", 844, 100],
+  [2560, 1, "terminalLinksBoard", 1440, 100],
+  [1440, 1, "terminalLinksBoard", 2560, 100],
+  [390, 1, "terminalLinksBoard", 844, 100],
   [1300, 1, "terminalLinkProvider", 800, 100],
   [1300, 1, "diffViewer", 800, 100],
   [390, 1, "diffViewer", 800, 100],
@@ -49,6 +55,13 @@ test.skipIf(!chrome).concurrent.each([
 ])(
   "browser interactions preserve layout and input (width %d, DPR %d, %s, height %d, UI %d%%)",
   async (width, deviceScale, fixture, height, scale) => {
+    const surface =
+      fixture === "terminalLinksTown"
+        ? "town"
+        : fixture === "terminalLinksBoard"
+          ? "board"
+          : null;
+    const entry = surface ? "terminalLinks" : fixture;
     const menuOnly =
       fixture === "configuration" && (height < 800 || scale > 100);
     const viewportSmoke =
@@ -90,6 +103,19 @@ test.skipIf(!chrome).concurrent.each([
           }
           return new Response("ok");
         }
+        if (path === "/capture/terminal-links" && request.method === "POST") {
+          const directory = Bun.env.WORLD_TERMINAL_LINK_CAPTURE_DIR;
+          if (directory && surface) {
+            const image = await cdp("Page.captureScreenshot", {
+              format: "png",
+            });
+            await Bun.write(
+              join(directory, `${surface}-${width}x${height}.png`),
+              Buffer.from(image.data, "base64"),
+            );
+          }
+          return new Response("ok");
+        }
         if (path === "/input" && request.method === "POST") {
           const { method, params } = await request.json();
           await cdp(method, params);
@@ -102,7 +128,7 @@ test.skipIf(!chrome).concurrent.each([
         }
         if (path === "/")
           return new Response(
-            `<head><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/${fixture}.browser.css"></head><body><script type="module" src="/${fixture}.browser.js"></script></body>`,
+            `<head><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/${entry}.browser.css"></head><body><script type="module" src="/${entry}.browser.js"></script></body>`,
             { headers: { "Content-Type": "text/html" } },
           );
         return new Response("Not found", { status: 404 });
@@ -116,7 +142,7 @@ test.skipIf(!chrome).concurrent.each([
         entrypoints: [
           join(
             import.meta.dir,
-            `${fixture}.browser.${fixture === "terminalLinkProvider" ? "ts" : "tsx"}`,
+            `${entry}.browser.${fixture === "terminalLinkProvider" ? "ts" : "tsx"}`,
           ),
         ],
         outdir: dir,
@@ -261,10 +287,10 @@ test.skipIf(!chrome).concurrent.each([
         width,
         height,
         deviceScaleFactor: deviceScale,
-        mobile: fixture === "terminalLinks" && width < 400,
+        mobile: entry === "terminalLinks" && width < 400,
       });
       if (
-        (fixture === "terminalLinks" && width < 400) ||
+        (entry === "terminalLinks" && width < 400) ||
         (fixture === "configuration" && width <= 768)
       )
         await cdp("Emulation.setTouchEmulationEnabled", {
@@ -272,6 +298,7 @@ test.skipIf(!chrome).concurrent.each([
           maxTouchPoints: 5,
         });
       const url = new URL(server.url);
+      if (surface) url.searchParams.set("surface", surface);
       if (menuOnly) {
         url.searchParams.set("menuOnly", "1");
         url.searchParams.set("scale", String(scale));
@@ -394,7 +421,7 @@ test.skipIf(!chrome).concurrent.each([
       const deadline = new Promise<never>((_, reject) => {
         const timer = setTimeout(
           () => reject(new Error("Browser regression checks timed out")),
-          fixture === "terminalLinks" && width < 400 ? 40000 : 30000,
+          entry === "terminalLinks" && width < 400 ? 40000 : 30000,
         );
         timers.add(timer);
       });
