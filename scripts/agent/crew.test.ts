@@ -101,17 +101,30 @@ describe("plan", () => {
     ]);
   });
 
-  test("findings on the head go to the author, once, with their URLs", () => {
-    const actions = planned(
+  test("findings wait for the whole trio, then go to the author once", () => {
+    const early = planned(
       town({ head: SHA.reviewed, posts: [open(SHA.reviewed)] }),
     );
-    const fix = actions.find((a) => a.kind === "fix")!;
-    expect(fix.target).toBe("towncx");
-    expect(fix.text).toStartWith("[crew -> towncx] ACT #7 fix @aaaaaaa:");
-    expect(fix.text).toContain("rev2 https://github.com/");
-    expect(
-      actions.filter((a) => a.kind === "review").map((a) => a.target),
-    ).toEqual(["rev-astra", "rev-opus"]);
+    expect(early.map((a) => [a.kind, a.target])).toEqual([
+      ["review", "rev-astra"],
+      ["review", "rev-opus"],
+    ]);
+    const actions = planned(
+      town({
+        head: SHA.reviewed,
+        posts: [
+          open(SHA.reviewed),
+          confirm("rev-astra", SHA.reviewed),
+          confirm("rev-opus", SHA.reviewed),
+        ],
+      }),
+    );
+    expect(actions).toHaveLength(1);
+    expect(actions[0]!.target).toBe("towncx");
+    expect(actions[0]!.text).toStartWith(
+      "[crew -> towncx] ACT #7 fix @aaaaaaa:",
+    );
+    expect(actions[0]!.text).toContain("rev2 https://github.com/");
   });
 
   test("a new head after findings asks that reviewer to confirm the delta", () => {
@@ -152,15 +165,24 @@ describe("plan", () => {
     const lost = planned(
       town({
         head: SHA.reviewed,
-        posts: [open(SHA.reviewed)],
+        posts: [
+          open(SHA.reviewed),
+          confirm("rev-astra", SHA.reviewed),
+          confirm("rev-opus", SHA.reviewed),
+        ],
         item: { branch: "feature/x" },
       }),
-      { ...SETTINGS, roster: { rev2: ROSTER.rev2 } },
     );
     const judgment = lost.find((a) => a.kind === "judgment")!;
     expect(judgment.target).toBe("owner");
     expect(judgment.text).toContain("no author seat for feature/x");
-    expect(judgment.text).toContain("rev-astra has no roster model");
+    const unrostered = planned(town({ head: SHA.reviewed, posts: [] }), {
+      ...SETTINGS,
+      roster: { rev2: ROSTER.rev2 },
+    });
+    expect(unrostered.find((a) => a.kind === "judgment")!.text).toContain(
+      "rev-astra has no roster model",
+    );
   });
 
   test("the same verdict plans the same keys", () => {
@@ -270,7 +292,14 @@ describe("delivery", () => {
   });
 
   test("waits while the author is working or focused, then prompts", () => {
-    const value = town({ head: SHA.reviewed, posts: [open(SHA.reviewed)] });
+    const value = town({
+      head: SHA.reviewed,
+      posts: [
+        open(SHA.reviewed),
+        confirm("rev-astra", SHA.reviewed),
+        confirm("rev-opus", SHA.reviewed),
+      ],
+    });
     live = live.map((seat) =>
       seat.name === "towncx" ? { ...seat, status: "working" } : seat,
     );

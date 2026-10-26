@@ -154,7 +154,9 @@ export function plan(
       judgments.push(`can't read ${name}'s RESULT: ${claim.url}`);
     else runs.push({ name, since: claim.commit });
   }
-  if (fixes.length)
+  // One fix pass: the author hears once every required reviewer has posted
+  // on this head, not after the first.
+  if (fixes.length && !runs.length)
     toAuthor(
       "fix",
       `ACT #${pr} fix @${at}: findings from ${fixes.join(", ")}. Fix every finding in one pass, reply on the PR with one line per finding naming its fixing commit, and push. Reviewers rerun by themselves once CI is green; no need to tell anyone.`,
