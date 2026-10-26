@@ -7,7 +7,11 @@
  * agent. The prompt is sent once and never retried.
  */
 
-import { readPaneRecipient, matchesRecipient } from "./board-recipient";
+import {
+  readPaneRecipient,
+  matchesRecipient,
+  decodeRecipient,
+} from "./board-recipient";
 import type { BoardDocument } from "./board-store";
 
 export type HerdrCall = (
@@ -92,16 +96,33 @@ export async function sendNote(
       "That pane is no longer the one this note is strung to.",
     );
   const intended = matchesRecipient(request.recipient, before.token);
-  if (!intended && !matchesRecipient(request.confirm_recipient, before.token))
+  const expectedToken = request.confirm_recipient ?? request.recipient;
+  if (!matchesRecipient(expectedToken, before.token)) {
+    const expected = decodeRecipient(expectedToken);
+    const observed = decodeRecipient(before.token);
+    const sessionMissing =
+      expected?.session &&
+      observed &&
+      !observed.session &&
+      expected.agent === observed.agent &&
+      expected.group !== undefined &&
+      expected.group === observed.group;
+    const recipientDescription =
+      request.confirm_recipient !== undefined
+        ? "you confirmed"
+        : "this note was strung to";
     return {
       status: "refused",
-      reason: request.recipient ? "replaced" : "unbound",
-      message: request.recipient
-        ? `${before.label} is now in that pane, not the agent this note was strung to. Nothing was sent.`
-        : `Board has not confirmed which agent this note is for. Nothing was sent.`,
+      reason: expectedToken ? "replaced" : "unbound",
+      message: sessionMissing
+        ? `Herdr no longer reports the session ${recipientDescription}. Nothing was sent. Send to ${before.label} anyway?`
+        : expectedToken
+          ? `${before.label} is now in that pane, not the agent ${recipientDescription}. Nothing was sent.`
+          : `Board has not confirmed which agent this note is for. Nothing was sent.`,
       recipient: before.token,
       agent: before.label,
     };
+  }
   if (!request.isCurrent())
     return refuse(
       "stale",

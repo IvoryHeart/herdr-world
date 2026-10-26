@@ -160,6 +160,9 @@ describe("Send goes only to the agent the note was strung to (#228)", () => {
     expect(await sendNote(h.call, await request())).toMatchObject({
       status: "refused",
       reason: "replaced",
+      message: expect.stringContaining(
+        "Herdr no longer reports the session this note was strung to.",
+      ),
     });
     expect(prompts(h.calls)).toBe(0);
   });
@@ -171,7 +174,62 @@ describe("Send goes only to the agent the note was strung to (#228)", () => {
         h.call,
         await request({ confirm_recipient: await tokenOf(AGENT_B) }),
       ),
-    ).toMatchObject({ status: "refused", reason: "replaced" });
+    ).toMatchObject({
+      status: "refused",
+      reason: "replaced",
+      message: expect.stringContaining(
+        "Herdr no longer reports the session you confirmed.",
+      ),
+    });
+    expect(prompts(h.calls)).toBe(0);
+  });
+
+  test.each([
+    ["session-bound", AGENT_A],
+    ["group-only", { group: AGENT_A.group }],
+  ] as const)(
+    "a confirmation for B cannot fall back to the %s original A when A returns",
+    async (_kind, originalA) => {
+      const recipient = await tokenOf(originalA);
+      const offered = await sendNote(
+        herdr({ occupant: AGENT_B }).call,
+        await request({ recipient }),
+      );
+      if (offered.status !== "refused" || !("recipient" in offered))
+        throw new Error("The replacement must require confirmation first");
+      const returned = herdr({ occupant: originalA });
+      expect(
+        await sendNote(
+          returned.call,
+          await request({ recipient, confirm_recipient: offered.recipient }),
+        ),
+      ).toMatchObject({
+        status: "refused",
+        reason: "replaced",
+        message: expect.stringContaining("not the agent you confirmed"),
+      });
+      expect(prompts(returned.calls)).toBe(0);
+    },
+  );
+
+  test("a group-only saved recipient cannot bypass a lost confirmed session", async () => {
+    const withoutSession = { group: AGENT_B.group };
+    const h = herdr({ occupant: withoutSession });
+    expect(
+      await sendNote(
+        h.call,
+        await request({
+          recipient: await tokenOf(withoutSession),
+          confirm_recipient: await tokenOf(AGENT_B),
+        }),
+      ),
+    ).toMatchObject({
+      status: "refused",
+      reason: "replaced",
+      message: expect.stringContaining(
+        "Herdr no longer reports the session you confirmed.",
+      ),
+    });
     expect(prompts(h.calls)).toBe(0);
   });
 

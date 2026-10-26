@@ -436,6 +436,9 @@ on your phone and desktop.
    even in the same terminal, nothing is sent: World names the new agent and
    offers **Send to** it instead. If Herdr stops reporting the captured session,
    World asks again rather than assuming the same pane still holds that agent.
+   A missing-session message means World cannot verify continuity, rather than
+   knowing that a replacement occurred. If you choose **Send to B** and A returns
+   before submission, World refuses; it does not send to A instead.
    The agent can change between the check and the prompt submission. If World
    detects that change afterwards, it reports uncertain delivery; inspect the
    pane before trying again. Nothing is sent without your action.

@@ -274,7 +274,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     even in the same terminal, nothing is sent: World names the new agent and
     sends to it only if you choose **Send to** it. World also asks again if
     Herdr stops reporting a previously captured session, even when the pane
-    and terminal stay the same. Recipient checks cannot reserve the agent
+    and terminal stay the same, without claiming a known replacement. An
+    explicit **Send to** choice selects the recipient for that attempt; it
+    cannot fall back to the original agent if that agent returns.
+    Recipient checks cannot reserve the agent
     across the prompt submission: a change detected afterwards is reported as
     possibly delivered to another agent. Check the pane before sending again.
     A note offers **Start an agent** in a chosen workspace: World starts the
