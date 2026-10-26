@@ -10,3 +10,6 @@
   integrations and the plugin to an explicit `herdr-world herdr upgrade`.
 - Preserve Herdr even if another installation appears during automatic setup:
   missing-only bootstrap never upgrades or overwrites an intervening runtime.
+- Keep safe standalone runtime setup when selecting an older World release that
+  lacks the missing-only CLI option. Report broken Herdr links before downloading
+  and preserve the blocking entry for its owner to repair.

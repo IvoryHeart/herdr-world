@@ -251,8 +251,13 @@ version or installation owner. A missing runtime uses a generated Unix bootstrap
 pinned SHA-256 and version. It rechecks discovery after download and publishes by
 an atomic hard link that cannot replace an existing file, symlink or directory.
 This compatibility path supports the immutable 0.2.7 binary without calling its
-upgrade command. The standalone installer uses the new Unix CLI
-`--install --only-if-missing` operation; explicit upgrades remain unchanged. Metadata,
+upgrade command. The standalone installer probes CLI capabilities: it uses the Unix
+`--install --only-if-missing` operation when supported and the same compatibility
+bootstrap for pinned older binaries. Its self-contained generated block is checked
+against the canonical shell and verified metadata. A strict 0.2.7 fixture rejects
+the new flag and must still end with an executable Herdr. Explicit installations
+and bootstrap diagnose a blocking non-executable entry without modifying it or
+repeatedly downloading. Explicit upgrades retain their behavior. Metadata,
 management and remote/custom-endpoint invocations do not bootstrap. A failed
 check or installation warns with retry/opt-out guidance and still starts World,
 so remote profiles and in-app setup remain available.
@@ -263,7 +268,8 @@ and externally managed runtimes, missing installation, detection/install failure
 metadata/management calls, remote configuration and opt-out. Controlled schedules
 publish older/newer runtimes after status, during download and after the final
 lookup; atomic publication preserves them. Checksums and version failures warn
-and still start World. `server/src/herdr/missing-install.test.ts` independently
+and still start World. The checksum test tampers with a version-valid payload,
+and disabling checksum admission independently fails that regression. `server/src/herdr/missing-install.test.ts` independently
 exercises the real CLI/upgrader, concurrent installers, PATH discovery and late
 file/symlink publication. The standalone
 installer regressions independently cover missing-only behavior and owner/version

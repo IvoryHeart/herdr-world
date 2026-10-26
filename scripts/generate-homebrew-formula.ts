@@ -2,30 +2,21 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import {
-  VERIFIED_HERDR_VERSION,
-  VERIFIED_HERDR_SHA256,
-} from "../server/src/herdr/release";
+  renderHerdrBootstrap,
+  type HerdrBootstrapRelease,
+} from "./herdr-bootstrap";
 import { readReleaseArchive } from "./release-archive";
 import { isReleaseCandidate, RELEASE_VERSION_RE } from "./release-version";
 
 export function renderHomebrewFormula(
   version: string,
   digests: Record<string, string>,
-  herdr: { version: string; digests: Record<string, string> } = {
-    version: VERIFIED_HERDR_VERSION,
-    digests: VERIFIED_HERDR_SHA256,
-  },
+  herdr?: HerdrBootstrapRelease,
 ) {
   const source = (platform: string) => `
       url "https://github.com/IvoryHeart/herdr-world/releases/download/v${version}/herdr-world-v${version}-${platform}.tar.xz"
       sha256 "${digests[platform]}"`;
-  let bootstrap = readFileSync(
-    new URL("./homebrew-herdr-bootstrap.sh", import.meta.url),
-    "utf8",
-  ).replaceAll("@HERDR_VERSION@", herdr.version);
-  for (const [target, digest] of Object.entries(herdr.digests)) {
-    bootstrap = bootstrap.replaceAll(`@HERDR_SHA_${target}@`, digest);
-  }
+  const bootstrap = renderHerdrBootstrap(herdr);
   const launcher = readFileSync(
     new URL("./homebrew-launcher.sh", import.meta.url),
     "utf8",

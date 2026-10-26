@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import {
   existsSync,
   lstatSync,
+  symlinkSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -141,6 +142,7 @@ exit "\${FIXTURE_EXIT:-0}"
     writeFileSync(
       join(fakeBin, "curl"),
       `#!/bin/sh
+echo download >> "$FIXTURE_DOWNLOAD_LOG"
 [ "\${FIXTURE_INSTALL_EXIT:-0}" = 0 ] || exit "$FIXTURE_INSTALL_EXIT"
 while [ "$#" -gt 0 ]; do
   if [ "$1" = -o ]; then destination="$2"; shift 2; else shift; fi
@@ -149,7 +151,7 @@ if [ -n "\${FIXTURE_RACE_VERSION:-}" ]; then
   printf 'herdr %s\\n' "$FIXTURE_RACE_VERSION" > "$HERDR_INSTALL_DIR/herdr"
 fi
 cp "$FIXTURE_PAYLOAD" "$destination"
-if [ "\${FIXTURE_CORRUPT_DOWNLOAD:-}" = 1 ]; then echo corrupted >> "$destination"; fi
+if [ "\${FIXTURE_CORRUPT_DOWNLOAD:-}" = 1 ]; then echo '# corrupted' >> "$destination"; fi
 `,
       { mode: 0o755 },
     );
@@ -161,6 +163,14 @@ if [ "\${FIXTURE_CORRUPT_DOWNLOAD:-}" = 1 ]; then echo corrupted >> "$destinatio
       writeFileSync(log, "");
       rmSync(join(directory, "counter"), { force: true });
       rmSync(join(directory, "runtime"), { recursive: true, force: true });
+      writeFileSync(join(directory, "downloads"), "");
+      if (extra.FIXTURE_PREEXIST_DANGLING === "1") {
+        mkdirSync(join(directory, "runtime"));
+        symlinkSync(
+          join(directory, "absent"),
+          join(directory, "runtime", "herdr"),
+        );
+      }
       const result = Bun.spawnSync(
         [join(directory, "bin", "herdr-world"), ...args],
         {
@@ -171,6 +181,7 @@ if [ "\${FIXTURE_CORRUPT_DOWNLOAD:-}" = 1 ]; then echo corrupted >> "$destinatio
             HERDR_INSTALL_DIR: join(directory, "runtime"),
             FIXTURE_PAYLOAD: payloadFile,
             FIXTURE_COUNTER: join(directory, "counter"),
+            FIXTURE_DOWNLOAD_LOG: join(directory, "downloads"),
             HERDR_WORLD_SKIP_HERDR: "",
             HERDR_SSH_HOST: "",
             HERDR_SOCKET_PATH: "",
@@ -254,6 +265,15 @@ if [ "\${FIXTURE_CORRUPT_DOWNLOAD:-}" = 1 ]; then echo corrupted >> "$destinatio
       );
       expect(existsSync(join(directory, "runtime", "herdr"))).toBe(false);
     }
+    const dangling = execute("missing", [], { FIXTURE_PREEXIST_DANGLING: "1" });
+    expect(dangling.exitCode).toBe(0);
+    expect(dangling.stderr.toString()).toContain(
+      join(directory, "runtime", "herdr"),
+    );
+    expect(readFileSync(join(directory, "downloads"), "utf8")).toBe("");
+    expect(
+      lstatSync(join(directory, "runtime", "herdr")).isSymbolicLink(),
+    ).toBe(true);
     for (const phase of ["1", "2"]) {
       const raced = execute("missing", [], { FIXTURE_LATE_STATUS: phase });
       expect(raced.exitCode).toBe(0);

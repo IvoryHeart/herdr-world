@@ -210,8 +210,10 @@ When it runs:
 
 - **Standalone installer** (`install-herdr-world.sh`): after installing World it runs
   a read-only Herdr status check, then uses the Unix `--install --only-if-missing`
-  operation to install the verified runtime only if missing. A runtime appearing
-  during download is preserved by atomic publication.
+  operation when the selected World binary supports it. Pinned older releases
+  use the same checksum/version-verified compatibility bootstrap as Homebrew,
+  without passing unsupported options or calling an unrestricted upgrade.
+  A runtime appearing during download is preserved by atomic publication.
   Existing versions and installation owners are preserved. Set
   `HERDR_WORLD_SKIP_HERDR=1` to install only World. A Herdr problem prints a warning
   and leaves World installed. Fresh installs leave harness integrations and the
@@ -236,6 +238,8 @@ When it runs:
   A failed check or download prints a warning and World still starts, so SSH
   profiles and in-app setup remain available; retry with
   `herdr-world herdr upgrade --install`.
+  A broken symlink or another non-executable entry at Herdr's default path is left
+  intact and reported before downloading; repair that entry before retrying.
   Set `HERDR_WORLD_SKIP_HERDR=1` to skip the automatic check. An incompatible existing
   runtime needs an explicit upgrade through its owner (`brew upgrade herdr` for a
   Homebrew runtime, `herdr update` for Herdr's own installation).

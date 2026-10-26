@@ -221,19 +221,70 @@ case ":${PATH:-}:" in
   ;;
 esac
 
-# Install Herdr only when absent. Existing runtimes keep their version and owner;
-# an explicit `herdr-world herdr upgrade` remains the update action.
+# Generated from the shared Unix bootstrap and verified runtime metadata.
+# Regenerate with: bun scripts/herdr-bootstrap.ts
+# BEGIN generated Herdr compatibility bootstrap
+# A published World binary may predate missing-only CLI support. Keep this Unix
+# compatibility path independent of its upgrade command, with atomic publication.
+install_missing_herdr() (
+  status="$("$world" herdr status)" || return 1
+  case "$status" in 'Herdr is not installed.'*) ;; *) return 0 ;; esac
+  install_dir="${HERDR_INSTALL_DIR:-$HOME/.local/bin}"
+  if [ -e "$install_dir/herdr" ] || [ -L "$install_dir/herdr" ]; then
+    if [ -f "$install_dir/herdr" ] && [ -x "$install_dir/herdr" ]; then return 0; fi
+    printf 'Herdr installation blocked by non-executable entry: %s; repair it before retrying.\n' "$install_dir/herdr" >&2
+    return 1
+  fi
+  case "$(uname -s):$(uname -m)" in
+    Linux:x86_64|Linux:amd64) target=linux-x86_64; expected=14d9e8bc8b4a9e0118d77c32266f76d461f09b40342eb23752960bd89f59929d ;;
+    Linux:aarch64|Linux:arm64) target=linux-aarch64; expected=17d7536f2da50859523680ef279dffcac8e4a235f4e46fe8da6c2ec44141897c ;;
+    Darwin:x86_64|Darwin:amd64) target=macos-x86_64; expected=5fb0a908ec7f6745e3e245738b06bfad56c46391c391ab3c0955fbead01f1369 ;;
+    Darwin:arm64|Darwin:aarch64) target=macos-aarch64; expected=fb77c2232a05a8035421382c894392f4174e4e38a18e48af3dd0290157c3a7e2 ;;
+    *) return 1 ;;
+  esac
+  mkdir -p "$install_dir" || return 1
+  staging="$(mktemp -d "$install_dir/.herdr.XXXXXXXX")" || return 1
+  trap 'rm -rf "$staging"' 0
+  trap 'exit 1' HUP INT TERM
+  curl -fsSL --proto '=https' --proto-redir '=https' --max-time 120 -o "$staging/herdr" "https://github.com/herdrdev/herdr/releases/download/v0.9.5/herdr-$target" || return 1
+  if command -v shasum >/dev/null 2>&1; then
+    actual="$(shasum -a 256 "$staging/herdr" | awk '{print $1}')"
+  else
+    actual="$(sha256sum "$staging/herdr" | awk '{print $1}')"
+  fi
+  [ "$actual" = "$expected" ] || return 1
+  chmod 755 "$staging/herdr" || return 1
+  version="$("$staging/herdr" --version)" || return 1
+  [ "$version" = 'herdr 0.9.5' ] || return 1
+  # Recheck every discovery path after download; publication below still refuses
+  # an entry created at the destination after this check, including symlinks.
+  status="$("$world" herdr status)" || return 1
+  case "$status" in 'Herdr is not installed.'*) ;; *) return 0 ;; esac
+  if ln "$staging/herdr" "$install_dir/" 2>/dev/null; then
+    printf '%s\n' 'Installed Herdr 0.9.5.'
+  elif [ ! -f "$install_dir/herdr" ] || [ ! -x "$install_dir/herdr" ]; then
+    printf 'Herdr installation blocked by non-executable entry: %s; repair it before retrying.\n' "$install_dir/herdr" >&2
+    return 1
+  fi
+)
+# END generated Herdr compatibility bootstrap
+
+# Install Herdr only when absent, without relying on new options in an older
+# selected World release. Never fall back to its unrestricted upgrade command.
 if [ "$skip_herdr" != "1" ]; then
   printf 'Checking Herdr...\n'
-  if herdr_status="$("$target" herdr status)"; then
-    case "$herdr_status" in
-    'Herdr is not installed.'*)
-      if ! "$target" herdr upgrade --install --only-if-missing --no-integrations --no-plugin; then
-        printf 'Herdr World installer: Herdr installation failed; run `%s herdr upgrade --install` to retry.\n' "$target" >&2
-      fi
-      ;;
-    esac
-  else
-    printf 'Herdr World installer: could not detect Herdr; existing installations were left untouched. Run `%s herdr status` to check.\n' "$target" >&2
-  fi
+  herdr_help="$("$target" herdr --help 2>/dev/null)" || herdr_help=""
+  case "$herdr_help" in
+  *--only-if-missing*)
+    if ! "$target" herdr upgrade --install --only-if-missing --no-integrations --no-plugin; then
+      printf 'Herdr World installer: Herdr installation failed; run `%s herdr upgrade --install` to retry.\n' "$target" >&2
+    fi
+    ;;
+  *)
+    world="$target"
+    if ! install_missing_herdr; then
+      printf 'Herdr World installer: Herdr installation failed; run `%s herdr upgrade --install` to retry.\n' "$target" >&2
+    fi
+    ;;
+  esac
 fi

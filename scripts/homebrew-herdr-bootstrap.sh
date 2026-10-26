@@ -3,6 +3,12 @@
 install_missing_herdr() (
   status="$("$world" herdr status)" || return 1
   case "$status" in 'Herdr is not installed.'*) ;; *) return 0 ;; esac
+  install_dir="${HERDR_INSTALL_DIR:-$HOME/.local/bin}"
+  if [ -e "$install_dir/herdr" ] || [ -L "$install_dir/herdr" ]; then
+    if [ -f "$install_dir/herdr" ] && [ -x "$install_dir/herdr" ]; then return 0; fi
+    printf 'Herdr installation blocked by non-executable entry: %s; repair it before retrying.\n' "$install_dir/herdr" >&2
+    return 1
+  fi
   case "$(uname -s):$(uname -m)" in
     Linux:x86_64|Linux:amd64) target=linux-x86_64; expected=@HERDR_SHA_linux-x86_64@ ;;
     Linux:aarch64|Linux:arm64) target=linux-aarch64; expected=@HERDR_SHA_linux-aarch64@ ;;
@@ -10,7 +16,6 @@ install_missing_herdr() (
     Darwin:arm64|Darwin:aarch64) target=macos-aarch64; expected=@HERDR_SHA_macos-aarch64@ ;;
     *) return 1 ;;
   esac
-  install_dir="${HERDR_INSTALL_DIR:-$HOME/.local/bin}"
   mkdir -p "$install_dir" || return 1
   staging="$(mktemp -d "$install_dir/.herdr.XXXXXXXX")" || return 1
   trap 'rm -rf "$staging"' 0
@@ -31,7 +36,8 @@ install_missing_herdr() (
   case "$status" in 'Herdr is not installed.'*) ;; *) return 0 ;; esac
   if ln "$staging/herdr" "$install_dir/" 2>/dev/null; then
     printf '%s\n' 'Installed Herdr @HERDR_VERSION@.'
-  elif [ ! -e "$install_dir/herdr" ] && [ ! -L "$install_dir/herdr" ]; then
+  elif [ ! -f "$install_dir/herdr" ] || [ ! -x "$install_dir/herdr" ]; then
+    printf 'Herdr installation blocked by non-executable entry: %s; repair it before retrying.\n' "$install_dir/herdr" >&2
     return 1
   fi
 )

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import {
   chmodSync,
+  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -12,6 +13,11 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { renderStandaloneBootstrap } from "./herdr-bootstrap";
+import {
+  VERIFIED_HERDR_VERSION,
+  VERIFIED_HERDR_SHA256,
+} from "../server/src/herdr/release";
 
 const temporaryRoots: string[] = [];
 
@@ -33,7 +39,7 @@ function currentReleasePlatform(): string {
   );
 }
 
-function createInstallerFixture(checksumName?: string) {
+function createInstallerFixture(checksumName?: string, version = "9.8.7") {
   const root = mkdtempSync(join(tmpdir(), "herdr-world-installer-test-"));
   temporaryRoots.push(root);
   const assets = join(root, "assets");
@@ -51,13 +57,19 @@ function createInstallerFixture(checksumName?: string) {
   writeFileSync(
     binary,
     `#!/bin/sh
-[ "\${1:-}" = "--version" ] && { echo "${product} 9.8.7"; exit 0; }
+[ "\${1:-}" = "--version" ] && { echo "${product} ${version}"; exit 0; }
+if [ "$*" = "herdr --help" ]; then
+  if [ "${version}" = 0.2.7 ]; then echo 'herdr upgrade --install'; else echo 'herdr upgrade --install --only-if-missing'; fi
+  exit 0
+fi
 if [ "$*" = "herdr status" ]; then
   if [ "\${HERDR_FIXTURE_STATE:-missing}" = missing ]; then echo 'Herdr is not installed.';
   else echo 'Herdr is installed but not running: /fixture/external/herdr'; fi
   exit 0
 fi
 if [ "\${1:-}" = "herdr" ]; then
+  if [ "${version}" = 0.2.7 ]; then echo 'unknown herdr upgrade option' >&2; exit 2; fi
+  if [ "\${HERDR_FIXTURE_STATE:-missing}" != missing ]; then exit 0; fi
   echo "$*" >> "$HERDR_STEP_LOG"
   echo "Installed Herdr 0.9.5."
   exit "\${HERDR_STEP_CODE:-0}"
@@ -66,7 +78,10 @@ exit 1
 `,
     { mode: 0o755 },
   );
-  writeFileSync(join(packagePath, "VERSION"), `${product} 9.8.7 ${platform}\n`);
+  writeFileSync(
+    join(packagePath, "VERSION"),
+    `${product} ${version} ${platform}\n`,
+  );
 
   const archive = join(assets, archiveName);
   const packaged = Bun.spawnSync(
@@ -87,6 +102,35 @@ exit 1
     `${digest}  ${checksumName ?? archiveName}\n`,
   );
 
+  const versionedArchive = `${product}-v${version}-${platform}.tar.xz`;
+  copyFileSync(archive, join(assets, versionedArchive));
+  writeFileSync(
+    join(assets, `${versionedArchive}.sha256`),
+    `${digest}  ${versionedArchive}\n`,
+  );
+  const payload = `#!/bin/sh\necho 'herdr ${VERIFIED_HERDR_VERSION}'\n`;
+  for (const target of Object.keys(VERIFIED_HERDR_SHA256))
+    writeFileSync(join(assets, `herdr-${target}`), payload);
+  const runtimeDigest = createHash("sha256").update(payload).digest("hex");
+  const installerScript = join(root, "install-herdr-world.sh");
+  writeFileSync(
+    installerScript,
+    renderStandaloneBootstrap(
+      readFileSync(
+        new URL("./install-herdr-world.sh", import.meta.url),
+        "utf8",
+      ),
+      {
+        version: VERIFIED_HERDR_VERSION,
+        digests: Object.fromEntries(
+          Object.keys(VERIFIED_HERDR_SHA256).map((target) => [
+            target,
+            runtimeDigest,
+          ]),
+        ),
+      },
+    ),
+  );
   const fakeCurl = join(fakeBin, "curl");
   writeFileSync(
     fakeCurl,
@@ -101,6 +145,9 @@ while [ "$#" -gt 0 ]; do
     *) url="$1"; shift ;;
   esac
 done
+case "\${url##*/}" in
+  herdr-linux-*|herdr-macos-*) echo 'compatibility download' >> "$HERDR_STEP_LOG" ;;
+esac
 cp "$FIXTURE_DIR/\${url##*/}" "$out"
 `,
     { mode: 0o755 },
@@ -114,6 +161,9 @@ cp "$FIXTURE_DIR/\${url##*/}" "$out"
     installDir,
     product,
     herdrStepLog: join(root, "herdr-step.log"),
+    installerScript,
+    binary,
+    runtimeDir: join(root, "runtime"),
   };
 }
 
@@ -122,30 +172,37 @@ function runInstaller(
   releaseBaseUrl = "http://127.0.0.1/releases",
   environment: Record<string, string | undefined> = {},
 ) {
-  return Bun.spawnSync(
-    ["sh", join(import.meta.dir, `install-${fixture.product}.sh`)],
-    {
-      env: {
-        ...process.env,
-        PATH: `${fixture.fakeBin}:${process.env.PATH ?? ""}`,
-        FIXTURE_DIR: fixture.assets,
-        HERDR_WORLD_RELEASE_BASE_URL: releaseBaseUrl,
-        HERDR_WORLD_INSTALL_DIR: fixture.installDir,
-        HERDR_WORLD_VERSION: "",
-        HERDR_WORLD_SKIP_HERDR: undefined,
-        HERDR_STEP_LOG: fixture.herdrStepLog,
-        ...environment,
-      },
-      stdout: "pipe",
-      stderr: "pipe",
+  return Bun.spawnSync(["sh", fixture.installerScript], {
+    env: {
+      ...process.env,
+      HOME: fixture.root,
+      HERDR_INSTALL_DIR: fixture.runtimeDir,
+      PATH: `${fixture.fakeBin}:${process.env.PATH ?? ""}`,
+      FIXTURE_DIR: fixture.assets,
+      HERDR_WORLD_RELEASE_BASE_URL: releaseBaseUrl,
+      HERDR_WORLD_INSTALL_DIR: fixture.installDir,
+      HERDR_WORLD_VERSION: "",
+      HERDR_WORLD_SKIP_HERDR: undefined,
+      HERDR_STEP_LOG: fixture.herdrStepLog,
+      ...environment,
     },
-  );
+    stdout: "pipe",
+    stderr: "pipe",
+  });
 }
 
 afterEach(() => {
   for (const root of temporaryRoots.splice(0)) {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("standalone compatibility code stays identical to the canonical verified bootstrap", () => {
+  const source = readFileSync(
+    new URL("./install-herdr-world.sh", import.meta.url),
+    "utf8",
+  );
+  expect(renderStandaloneBootstrap(source)).toBe(source);
 });
 
 describe("release installer", () => {
@@ -286,6 +343,34 @@ describe("release installer", () => {
     expect(result.stdout.toString()).toContain("Installed Herdr 0.9.5.");
     expect(readFileSync(fixture.herdrStepLog, "utf8")).toBe(
       "herdr upgrade --install --only-if-missing --no-integrations --no-plugin\n",
+    );
+  });
+
+  test("pinned 0.2.7 rejects new flags but installs missing Herdr through the safe fallback", () => {
+    const fixture = createInstallerFixture(undefined, "0.2.7");
+    const rejection = Bun.spawnSync(
+      [fixture.binary, "herdr", "upgrade", "--install", "--only-if-missing"],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    expect(rejection.exitCode).not.toBe(0);
+    expect(rejection.stderr.toString()).toContain(
+      "unknown herdr upgrade option",
+    );
+    const result = runInstaller(fixture, undefined, {
+      HERDR_WORLD_VERSION: "0.2.7",
+    });
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr.toString()).toBe("");
+    expect(readFileSync(fixture.herdrStepLog, "utf8")).toBe(
+      "compatibility download\n",
+    );
+    const runtime = Bun.spawnSync(
+      [join(fixture.runtimeDir, "herdr"), "--version"],
+      { stdout: "pipe" },
+    );
+    expect(runtime.exitCode).toBe(0);
+    expect(runtime.stdout.toString().trim()).toBe(
+      `herdr ${VERIFIED_HERDR_VERSION}`,
     );
   });
 

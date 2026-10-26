@@ -1,5 +1,9 @@
 import { createHash } from "node:crypto";
 import {
+  accessSync,
+  constants,
+  lstatSync,
+  statSync,
   chmodSync,
   copyFileSync,
   existsSync,
@@ -368,9 +372,23 @@ export async function installVerifiedHerdr(
 ): Promise<{ binaryPath: string; version: string; installed: boolean }> {
   const target = verifiedTarget(deps);
   const binaryPath = herdrDefaultBinaryPath(deps);
-  if (existsSync(binaryPath)) {
-    return { binaryPath, version: VERIFIED_HERDR_VERSION, installed: false };
-  }
+  const reuse = (path: string) => {
+    try {
+      if (!statSync(path).isFile()) throw new Error("not a file");
+      if (!target.startsWith("windows")) accessSync(path, constants.X_OK);
+    } catch {
+      throw new Error(
+        `Herdr installation blocked by non-executable entry: ${path}; repair it before retrying.`,
+      );
+    }
+    return {
+      binaryPath: path,
+      version: VERIFIED_HERDR_VERSION,
+      installed: false,
+    };
+  };
+  if (lstatSync(binaryPath, { throwIfNoEntry: false }))
+    return reuse(binaryPath);
   if (target.startsWith("windows")) {
     await runVerifiedWindowsInstaller(deps);
     return { binaryPath, version: VERIFIED_HERDR_VERSION, installed: true };
@@ -386,18 +404,13 @@ export async function installVerifiedHerdr(
     chmodSync(staged, 0o755);
     assertVerifiedVersion(staged, deps);
     const discovered = deps.findExistingBinary?.();
-    if (discovered)
-      return {
-        binaryPath: discovered,
-        version: VERIFIED_HERDR_VERSION,
-        installed: false,
-      };
+    if (discovered) return reuse(discovered);
     try {
       // link is atomic and never replaces an entry, including a dangling symlink.
       linkSync(staged, binaryPath);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-      return { binaryPath, version: VERIFIED_HERDR_VERSION, installed: false };
+      return reuse(binaryPath);
     }
     return { binaryPath, version: VERIFIED_HERDR_VERSION, installed: true };
   } finally {

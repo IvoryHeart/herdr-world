@@ -60,7 +60,7 @@ test.each(["0.8.2", "999.0.0"])(
     try {
       expect(findHerdrBinary(f.deps)).toBeNull();
       const previous = `herdr ${version}\n`;
-      writeFileSync(f.binary, previous);
+      writeFileSync(f.binary, previous, { mode: 0o755 });
       const report = await upgradeHerdr({
         ...f.deps,
         download: async () => {
@@ -86,7 +86,7 @@ test.each(["0.8.2", "999.0.0"])(
       const report = await upgradeHerdr({
         ...f.deps,
         download: async (_url, path) => {
-          writeFileSync(f.binary, previous);
+          writeFileSync(f.binary, previous, { mode: 0o755 });
           writeFileSync(path, f.payload);
         },
       });
@@ -105,7 +105,7 @@ test("a runtime appearing on another PATH entry prevents default publication", a
     const report = await upgradeHerdr({
       ...f.deps,
       download: async (_url, path) => {
-        writeFileSync(external, "herdr 999.0.0\n");
+        writeFileSync(external, "herdr 999.0.0\n", { mode: 0o755 });
         writeFileSync(path, f.payload);
       },
     });
@@ -122,17 +122,19 @@ test.each(["file", "symlink", "directory"])(
   async (kind) => {
     const f = fixture();
     try {
-      const result = await installVerifiedHerdr({
+      const operation = installVerifiedHerdr({
         ...f.deps,
         findExistingBinary: () => {
-          if (kind === "file") writeFileSync(f.binary, "herdr 999.0.0\n");
+          if (kind === "file")
+            writeFileSync(f.binary, "herdr 999.0.0\n", { mode: 0o755 });
           else if (kind === "symlink")
             symlinkSync(join(f.root, "not-created"), f.binary);
           else mkdirSync(f.binary);
           return null;
         },
       });
-      expect(result.installed).toBe(false);
+      if (kind === "file") expect((await operation).installed).toBe(false);
+      else await expect(operation).rejects.toThrow(f.binary);
       if (kind === "file")
         expect(readFileSync(f.binary, "utf8")).toBe("herdr 999.0.0\n");
       else if (kind === "symlink")
@@ -194,3 +196,29 @@ test("CLI missing-only flag reaches the protected operation without integration 
     f.clean();
   }
 });
+
+test.each([false, true])(
+  "pre-existing dangling entry is reported before download (missing-only=%s)",
+  async (onlyIfMissing) => {
+    const f = fixture();
+    try {
+      const blockedTarget = join(f.root, "absent");
+      symlinkSync(blockedTarget, f.binary);
+      let downloads = 0;
+      const deps = {
+        ...f.deps,
+        onlyIfMissing,
+        download: async () => {
+          downloads++;
+        },
+      };
+      await expect(
+        onlyIfMissing ? upgradeHerdr(deps) : installVerifiedHerdr(deps),
+      ).rejects.toThrow(f.binary);
+      expect(downloads).toBe(0);
+      expect(readlinkSync(f.binary)).toBe(blockedTarget);
+    } finally {
+      f.clean();
+    }
+  },
+);

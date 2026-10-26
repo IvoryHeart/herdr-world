@@ -144,6 +144,11 @@ Each release pins the Herdr it installs and upgrades to
    the upgrade step reinstalls the Codex, Claude and Pi harness integrations after every
    Herdr upgrade.
 
+After changing the verified Herdr table, run `bun scripts/herdr-bootstrap.ts` to
+refresh the standalone installer's checked-in compatibility block. Its parity
+regression ensures the self-contained download script and Homebrew use the same
+canonical shell and verified metadata.
+
 Standalone installers and World updates read that table. Homebrew generates a
 launcher with no mandatory `herdr` dependency: normal local startup reuses an
 existing runtime or installs the verified prebuilt release only when missing.
