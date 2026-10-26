@@ -5,9 +5,11 @@ assets plus version, lineage and licence material. They do not contain Herdr, a 
 Roamgate application or the retired Rust bridge. Instead the executable pins one
 verified Herdr release (`server/src/herdr/release.ts`: version, per-platform package
 checksums and the checksum of Herdr's Windows `install.ps1`). The standalone
-installer and World updates install or upgrade Herdr from that release in Herdr's
-own location. The Homebrew Formula depends on Homebrew's `herdr` where it is
-bottled and installs the verified prebuilt Herdr on Intel Macs. See
+installer installs Herdr only when absent; explicit World updates retain their
+separate Herdr upgrade step. The Homebrew Formula has no mandatory Herdr formula
+dependency and never exports a second Herdr executable. Its launcher reuses an
+existing Herdr, or installs the verified prebuilt release on first normal startup
+when missing, outside the keg. This avoids source builds on Intel Macs. See
 [Herdr installation and upgrades](DEPLOYMENT.md#herdr-installation-and-upgrades).
 
 The web build is limited to 180 files and 13.25 MiB total embedded assets,

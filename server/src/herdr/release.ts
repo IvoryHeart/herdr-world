@@ -1,9 +1,14 @@
 import { createHash } from "node:crypto";
 import {
+  accessSync,
+  constants,
+  lstatSync,
+  statSync,
   chmodSync,
   copyFileSync,
   existsSync,
   mkdirSync,
+  linkSync,
   mkdtempSync,
   readdirSync,
   renameSync,
@@ -214,6 +219,8 @@ export interface InstallHerdrDeps extends HerdrLocationEnv {
   /** Test-only overrides; production installs always use the verified table. */
   expectedSha256?: string;
   expectedInstallerSha256?: string;
+  /** Recheck all discovery paths before publishing a missing Unix runtime. */
+  findExistingBinary?: () => string | null;
 }
 
 async function defaultDownload(
@@ -356,6 +363,21 @@ async function runVerifiedWindowsInstaller(
   }
 }
 
+/** Validate a discovered entry before treating it as an installed runtime. */
+export function assertHerdrBinaryRunnable(
+  path: string,
+  platform: string = process.platform,
+) {
+  try {
+    if (!statSync(path).isFile()) throw new Error("not a file");
+    if (platform !== "win32") accessSync(path, constants.X_OK);
+  } catch {
+    throw new Error(
+      `Herdr installation blocked by non-executable entry: ${path}; repair it before retrying.`,
+    );
+  }
+}
+
 /**
  * Install the verified Herdr release into Herdr's default location and return
  * the binary path. Idempotent: an existing binary there is kept.
@@ -365,9 +387,16 @@ export async function installVerifiedHerdr(
 ): Promise<{ binaryPath: string; version: string; installed: boolean }> {
   const target = verifiedTarget(deps);
   const binaryPath = herdrDefaultBinaryPath(deps);
-  if (existsSync(binaryPath)) {
-    return { binaryPath, version: VERIFIED_HERDR_VERSION, installed: false };
-  }
+  const reuse = (path: string) => {
+    assertHerdrBinaryRunnable(path, deps.platform);
+    return {
+      binaryPath: path,
+      version: VERIFIED_HERDR_VERSION,
+      installed: false,
+    };
+  };
+  if (lstatSync(binaryPath, { throwIfNoEntry: false }))
+    return reuse(binaryPath);
   if (target.startsWith("windows")) {
     await runVerifiedWindowsInstaller(deps);
     return { binaryPath, version: VERIFIED_HERDR_VERSION, installed: true };
@@ -375,16 +404,25 @@ export async function installVerifiedHerdr(
 
   const installDir = dirname(binaryPath);
   mkdirSync(installDir, { recursive: true });
-  // Stage beside the target so the final rename stays on one filesystem.
-  const staged = join(installDir, `.herdr.new-${process.pid}`);
+  // A unique sibling staging directory supports concurrent missing installers.
+  const staging = mkdtempSync(join(installDir, ".herdr.new-"));
+  const staged = join(staging, "herdr");
   try {
     await downloadVerifiedPackage(target, staged, deps);
     chmodSync(staged, 0o755);
     assertVerifiedVersion(staged, deps);
-    renameSync(staged, binaryPath);
+    const discovered = deps.findExistingBinary?.();
+    if (discovered) return reuse(discovered);
+    try {
+      // link is atomic and never replaces an entry, including a dangling symlink.
+      linkSync(staged, binaryPath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      return reuse(binaryPath);
+    }
     return { binaryPath, version: VERIFIED_HERDR_VERSION, installed: true };
   } finally {
-    rmSync(staged, { force: true });
+    rmSync(staging, { recursive: true, force: true });
   }
 }
 

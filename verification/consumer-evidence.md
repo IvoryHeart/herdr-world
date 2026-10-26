@@ -242,6 +242,56 @@ timing; the existing ownership models and their mandatory consumers remain
 binding. Real OS page discard, every mobile scheduler and cross-reload UI
 restoration remain outside this evidence.
 
+### Missing-only Herdr installation (Q36)
+
+The generated World formula has no mandatory Herdr dependency. It installs only
+World and a launcher into its keg. Normal local startup uses the compiled
+runtime's read-only status lookup to preserve any existing Herdr, regardless of
+version or installation owner. A missing runtime uses a generated Unix bootstrap with the verified release's
+pinned SHA-256 and version. It rechecks discovery after download and publishes by
+an atomic hard link that cannot replace an existing file, symlink or directory.
+This compatibility path supports the immutable 0.2.7 binary without calling its
+upgrade command. The standalone installer probes CLI capabilities: it uses the Unix
+`--install --only-if-missing` operation when supported and the same compatibility
+bootstrap for pinned older binaries. Its self-contained generated block is checked
+against the canonical shell and verified metadata. A strict 0.2.7 fixture rejects
+the new flag and must still end with an executable Herdr. Explicit installations
+and bootstrap diagnose a blocking non-executable entry without modifying it or
+repeatedly downloading. Discovery's installed label alone is not admission:
+`assertHerdrBinaryRunnable` validates the selected CLI path, and the shared shell
+presence check validates the exact selected path from status before early success.
+The standalone presence check runs before capability selection, so a reachable
+server without a discoverable binary also prevents a second installation. Explicit
+upgrades retain their behavior. Metadata,
+management and remote/custom-endpoint invocations do not bootstrap. A failed
+check or installation warns with retry/opt-out guidance and still starts World,
+so remote profiles and in-app setup remain available.
+
+`scripts/generate-homebrew-formula.test.ts` executes the generated Ruby install
+method and emitted shell launcher. Its process matrix covers older/current/newer
+and externally managed runtimes, missing installation, detection/install failure,
+metadata/management calls, remote configuration and opt-out. Controlled schedules
+publish older/newer runtimes after status, during download and after the final
+lookup; atomic publication preserves them. Checksums and version failures warn
+and still start World. The checksum test tampers with a version-valid payload,
+and disabling checksum admission independently fails that regression. `server/src/herdr/missing-install.test.ts` independently
+exercises the real CLI/upgrader, concurrent installers, PATH discovery and late
+file/symlink publication. The standalone
+installer regressions independently cover missing-only behavior and owner/version
+preservation. These direct process alternatives test the actual shell/Ruby paths;
+an abstract model would not establish PATH detection or package ownership.
+`scripts/herdr-bootstrap-discovery.test.ts` runs the real discovery and CLI status
+producer for default, PATH and explicit candidates (directory, non-executable and
+executable controls), and for a running server with no binary. It requires warnings,
+no downloads, preserved entries and World startup for blocked paths. The standalone
+regression separately records that running status skips the new CLI operation.
+The archive-stage check validates the launcher and World inputs. The tap and
+Release native CI use `scripts/check-homebrew-runtime.rb` to launch a temporary
+World listener, install and execute a missing real Herdr, then reinstall World and
+confirm that the existing external runtime's digest stays unchanged. Herdr's server
+is never started by bootstrap. Native acceptance belongs to the exact CI head;
+Linux harness results alone do not prove native Homebrew installation acceptance.
+
 ### World update notification lifetime (Q36)
 
 Browser-origin/profile notification history is separate from the current update

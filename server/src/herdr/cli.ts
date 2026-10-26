@@ -23,12 +23,15 @@ function herdrHelp(): string {
 Usage:
   herdr-world herdr setup
   herdr-world herdr status
-  herdr-world herdr upgrade [--install] [--no-integrations] [--no-plugin] [--json]
+  herdr-world herdr upgrade [--install] [--only-if-missing] [--no-integrations] [--no-plugin] [--json]
 
 Setup installs the Herdr World-verified Herdr ${VERIFIED_HERDR_VERSION} release
 when no herdr binary is found, then installs and starts a user service running
 \`herdr server\` (systemd user service on Linux, launchd LaunchAgent on macOS,
 per-user Task Scheduler task on Windows). Status prints the detected state.
+
+Unix installers use --install --only-if-missing to preserve any existing Herdr,
+including one appearing during download, without integrations or service changes.
 
 Upgrade brings an older Herdr up to ${VERIFIED_HERDR_VERSION}: it verifies the
 release checksum and version, keeps the replaced binary as herdr.previous
@@ -39,7 +42,7 @@ prove nothing supervises it (a daemonized Linux server); otherwise it says that
 a restart is needed. It never downgrades
 a newer Herdr or server, or replaces a package- or version-managed install.
 
-Every run also brings this release's harness integrations and plugin up to
+A normal upgrade also brings this release's harness integrations and plugin up to
 date: \`herdr integration install\` for the codex, claude and pi harnesses found
 on PATH when their integration is missing or outdated (and after every Herdr
 upgrade), and the Herdr World plugin, if installed from GitHub, reinstalled at
@@ -54,7 +57,7 @@ export interface HerdrCommandDeps {
   upgrade?: (
     options: Pick<
       HerdrUpgradeDeps,
-      "installMissing" | "integrations" | "plugin"
+      "installMissing" | "onlyIfMissing" | "integrations" | "plugin"
     >,
   ) => Promise<HerdrUpgradeReport>;
   serviceStatus?: () => { installed: boolean; active: boolean };
@@ -63,6 +66,7 @@ export interface HerdrCommandDeps {
 }
 
 const UPGRADE_FLAGS = [
+  "--only-if-missing",
   "--install",
   "--no-integrations",
   "--no-plugin",
@@ -180,11 +184,18 @@ export async function runHerdrCommand(
           }));
       const report = await upgrade({
         installMissing: flags.includes("--install"),
+        ...(flags.includes("--only-if-missing") ? { onlyIfMissing: true } : {}),
         integrations: !flags.includes("--no-integrations"),
         plugin: !flags.includes("--no-plugin"),
       });
       if (flags.includes("--json")) log(JSON.stringify(report));
-      else for (const line of describeHerdrUpgrade(report)) log(line);
+      else if (
+        flags.includes("--only-if-missing") &&
+        report.binary === "unchanged" &&
+        report.binaryPath
+      ) {
+        log("Existing Herdr installation was left unchanged.");
+      } else for (const line of describeHerdrUpgrade(report)) log(line);
       return failedHerdrSteps(report).length ? 1 : 0;
     }
 

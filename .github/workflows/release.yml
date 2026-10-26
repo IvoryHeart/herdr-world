@@ -311,6 +311,9 @@ jobs:
         runner: [macos-15, macos-15-intel]
     runs-on: ${{ matrix.runner }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: homebrew-formula
@@ -328,12 +331,18 @@ jobs:
           fi
           export HOMEBREW_NO_AUTO_UPDATE=1
           export HOMEBREW_NO_INSTALL_CLEANUP=1
+          brew update
           tap="herdrworld/release-smoke"
           brew tap-new --no-git "$tap"
           install -m 0644 "./formula/$formula" "$(brew --repository "$tap")/Formula/$formula"
           brew install --formula "$tap/$package"
           test "$("$(brew --prefix "$tap/$package")/bin/herdr-world" --version)" = "herdr-world $version"
           brew test "$tap/$package"
+          world="$(brew --prefix "$tap/$package")/bin/herdr-world"
+          fixture_home="$RUNNER_TEMP/herdr-world-runtime"
+          ruby scripts/check-homebrew-runtime.rb "$world" "$fixture_home"
+          brew reinstall --formula "$tap/$package"
+          ruby scripts/check-homebrew-runtime.rb "$world" "$fixture_home"
 
   deploy-pages:
     name: Request stable Pages deployment

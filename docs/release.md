@@ -144,8 +144,20 @@ Each release pins the Herdr it installs and upgrades to
    the upgrade step reinstalls the Codex, Claude and Pi harness integrations after every
    Herdr upgrade.
 
-The Homebrew Formula's Intel Mac Herdr resource reads the same table, so it moves
-with the bump. Users receive the new Herdr with the World release that declares it.
+After changing the verified Herdr table, run `bun scripts/herdr-bootstrap.ts` to
+refresh the standalone installer's checked-in compatibility block. Its parity
+regression ensures the self-contained download script and Homebrew use the same
+canonical shell and verified metadata.
+
+Standalone installers and World updates read that table. Homebrew generates a
+launcher with no mandatory `herdr` dependency: normal local startup reuses an
+existing runtime or installs the verified prebuilt release only when missing.
+The compatibility bootstrap embeds the current verified Herdr checksums and uses
+atomic no-replace publication; it does not call older World's upgrade command.
+Metadata/management commands and remote/custom endpoints do not bootstrap. The
+native smoke check exercises missing installation and preservation across World
+reinstallation on Apple Silicon and Intel; it must not compile a core dependency.
+Run the generated Ruby formula/launcher regressions when changing this policy.
 
 ## Publishing a candidate or stable release
 

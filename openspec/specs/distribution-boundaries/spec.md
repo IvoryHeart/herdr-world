@@ -21,14 +21,34 @@ release that World version verified, in Herdr's own default location.
   inventory and licence/copyright texts, asset notices and documentation, without a bundled Herdr
   runtime, a second Roamgate executable or the retired Rust compatibility bridge
 
-#### Scenario: Herdr follows Herdr World
-- **WHEN** a World installer or update runs where Herdr is missing or older than the release that
-  World verified
-- **THEN** World installs or upgrades Herdr from that checksum-verified release in Herdr's default
-  location and keeps a replaced binary for rollback
-- **AND** it never downgrades a newer Herdr or Herdr server, replaces a package- or version-managed
-  Herdr, or stops a running Herdr server; it hands a running server off live only when it can confirm
-  that no service manager runs that server, and otherwise reports that a restart is needed
+#### Scenario: Installation reuses existing Herdr
+- **WHEN** the standalone World installer runs, or the Homebrew launcher starts
+  the normal local World listener
+- **THEN** an existing Herdr discovered through its explicit binary, PATH or default
+  location retains its version and installation owner
+- **AND** only a missing Herdr is installed from the release World verified, in
+  Herdr's own default location, without starting a Herdr server
+- **AND** a reachable Herdr server is reused without installing a second copy when
+  its executable cannot be discovered
+- **AND** an installed discovery result is admitted only after the selected entry
+  is validated as a regular executable file; blocked entries are preserved and
+  reported while World remains available
+- **AND** a runtime appearing after lookup or during download is preserved;
+  publication never replaces an existing filesystem entry
+- **AND** Homebrew does not require a separate Herdr formula, bundle Herdr in its
+  keg, or bootstrap for metadata/management commands or remote/custom endpoints
+- **AND** failure of the optional runtime check or install warns with retry and
+  opt-out guidance while World starts so remote profiles and in-app setup remain
+  available
+
+#### Scenario: Explicit update brings Herdr forward
+- **WHEN** an explicit World update or Herdr upgrade runs with an older Herdr
+- **THEN** World upgrades Herdr from the checksum-verified release and keeps a
+  replaced binary for rollback
+- **AND** it never downgrades a newer Herdr or Herdr server, replaces a package- or
+  version-managed Herdr, or stops a running Herdr server; it hands a running server
+  off live only when it can confirm that no service manager runs that server, and
+  otherwise reports that a restart is needed
 
 ### Requirement: Reviewed release identity
 Release preparation SHALL use a branch and reviewed PR. Final artifacts SHALL be built
