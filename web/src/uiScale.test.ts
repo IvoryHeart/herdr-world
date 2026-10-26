@@ -93,7 +93,10 @@ test.skipIf(!chrome).concurrent.each([
           if (Bun.env.WORLD_UPDATE_CAPTURE_DIR) {
             const shot = await cdp("Page.captureScreenshot", { format: "png" });
             await Bun.write(
-              join(Bun.env.WORLD_UPDATE_CAPTURE_DIR, `${width}x${height}.png`),
+              join(
+                Bun.env.WORLD_UPDATE_CAPTURE_DIR,
+                `${new URL(request.url).searchParams.get("state") === "blocked" ? "blocked-" : ""}${width}x${height}.png`,
+              ),
               Buffer.from(shot.data, "base64"),
             );
           }

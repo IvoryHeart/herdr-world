@@ -559,6 +559,8 @@ describe("available update notification lifetime", () => {
       await store.checkForUpdate();
       expect(store.get().updateInfo?.latest_version).toBe(latest);
       expect(store.get().dismissedUpdateVersion).toBe(latest);
+      expect(store.get().notice?.message).toBe("Update check complete");
+      expect(store.get().notice?.detail).toContain(latest);
       store.setAutomaticUpdateChecksEnabled(false);
       expect(store.get().updateInfo?.latest_version).toBe(latest);
       await store.installUpdate();
@@ -580,6 +582,68 @@ describe("available update notification lifetime", () => {
       else delete (globalThis as { localStorage?: Storage }).localStorage;
     }
   });
+});
+
+describe("update checks across installation", () => {
+  test.each([false, true])(
+    "retires a held pre-install reply (error=%s)",
+    async (errorReply) => {
+      const previous = store.get();
+      const originalFetch = globalThis.fetch;
+      const held = Promise.withResolvers<Response>();
+      const offer = {
+        current_version: "1.0.0",
+        latest_version: "2.0.0-held-test",
+        update_available: true,
+        can_auto_update: true,
+        platform: "linux-x64",
+      };
+      let hold = true;
+      globalThis.fetch = (async (url: string) =>
+        url === "/api/update/install"
+          ? Response.json({
+              installed: true,
+              installed_version: offer.latest_version,
+            })
+          : hold
+            ? held.promise
+            : Response.json({
+                ...offer,
+                latest_version: "3.0.0-held-test",
+              })) as typeof fetch;
+      try {
+        __storeTesting.replaceState({
+          ...previous,
+          connectionPaused: false,
+          updateInstalling: false,
+          updateInfo: offer,
+          notice: null,
+        });
+        const checking = store.checkForUpdate();
+        await store.installUpdate();
+        expect(store.get().updateInfo).toBeNull();
+        held.resolve(
+          errorReply
+            ? Response.json(
+                { error: "Obsolete check failure" },
+                { status: 500 },
+              )
+            : Response.json(offer),
+        );
+        await checking;
+        expect(store.get().updateInfo).toBeNull();
+        expect(store.get().notice?.message).toBe(
+          `Herdr World ${offer.latest_version} installed`,
+        );
+        hold = false;
+        await store.checkForUpdate();
+        expect(store.get().updateInfo?.latest_version).toBe("3.0.0-held-test");
+      } finally {
+        __storeTesting.replaceState(previous);
+        globalThis.fetch = originalFetch;
+      }
+    },
+  );
 });
 
 describe("task notification activation", () => {

@@ -98,11 +98,17 @@ installation keeps this action available for retry. The dot clears after a
 successful upgrade or a check confirms no update remains. Existing installation
 channel and restart checks still apply.
 
-Notification history needs writable browser storage to survive reloads. When
-storage is blocked, repeats are suppressed only while the page stays open.
+Notification history uses an atomic IndexedDB claim so concurrent windows cannot
+both announce the same release. Existing browser notification markers remain
+honored. If persistent storage is blocked, cross-window deduplication is unavailable
+and only page-lifetime suppression is guaranteed; a slow claim fails closed rather
+than racing another window.
 Clearing site storage resets this history; other World origins and browser
 profiles keep independent history. Disabling automatic checks stops future checks,
-without hiding an already discovered upgrade.
+without hiding an already discovered upgrade. Manual **Check for updates**
+answers with a brief completion message without repeating the release notification.
+It remains available even if the Upgrade entry is disabled; the menu visibly
+explains the installation-channel restriction on phones and desktops.
 
 ### Choose a view for the task
 

@@ -254,3 +254,10 @@ including accessible attention, visible Upgrade, a blocked channel and the
 existing explicit install request header. These bounded UI/storage transitions
 use direct tests rather than an OS update model. Fake update replies do not prove
 native replacement/restart; existing server/native platform checks remain binding.
+The review-repair browser cases add an actual IndexedDB read/write interleaving
+and two independent same-origin contexts with exactly one winner, plus actual
+menu rechecks with polling disabled and rendered mobile channel guidance. Held
+pre-install replies (both available metadata and HTTP errors) cannot replace a
+successful-install state; later checks remain admitted. Persistent-storage denial
+retains only best-effort legacy markers and page-lifetime deduplication, while a
+slow persistent claim fails closed instead of racing a fallback.

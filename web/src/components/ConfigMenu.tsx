@@ -582,8 +582,7 @@ export function ConfigMenu({
                     canInstallUpdate
                       ? "Install and restart"
                       : updateAvailable
-                        ? (s.updateInfo?.reason ??
-                          "Automatic install unavailable")
+                        ? undefined
                         : "Check the release server"
                   }
                   primary={canInstallUpdate}
@@ -595,6 +594,24 @@ export function ConfigMenu({
                     void store.updateOrCheck();
                   }}
                 />
+                {updateAvailable ? (
+                  <ConfigMenuItem
+                    icon={<RefreshCw size={15} />}
+                    label="Check for updates"
+                    description="Refresh release availability"
+                    disabled={s.updateInstalling}
+                    onClick={() => {
+                      setOpen(false);
+                      void store.checkForUpdate();
+                    }}
+                  />
+                ) : null}
+                {updateAvailable && !canInstallUpdate ? (
+                  <p className="config-update-reason" role="note">
+                    {s.updateInfo?.reason ??
+                      "Automatic installation is unavailable. Use this installation's update channel."}
+                  </p>
+                ) : null}
               </div>
               <div className="config-section">
                 <div className="config-title">Runtime</div>
