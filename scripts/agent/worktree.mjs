@@ -259,6 +259,22 @@ function inside(path, directory) {
   return path === directory || path.startsWith(directory + sep);
 }
 
+function commandUses(command, directory) {
+  let index = command.indexOf(directory);
+  while (index !== -1) {
+    const next = command[index + directory.length];
+    if (
+      next === undefined ||
+      next === sep ||
+      next === "/" ||
+      /[\s"'=]/.test(next)
+    )
+      return true;
+    index = command.indexOf(directory, index + 1);
+  }
+  return false;
+}
+
 /**
  * "use" when a process runs from, opens or names the worktree (or the listing
  * was unavailable); "cwd" when processes only sit in it, like an idle shell.
@@ -272,7 +288,7 @@ function liveness(use, paths) {
     use.unknown ||
     use.uses.some(within) ||
     use.commands.some((command) =>
-      paths.some((directory) => command.includes(directory)),
+      paths.some((directory) => commandUses(command, directory)),
     )
   )
     return "use";

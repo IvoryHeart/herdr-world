@@ -43,8 +43,9 @@ space fail halfway and leave debris. These rules keep each worktree small:
     server's `--directory`, or the working directory of anything but a shell,
     like a dev server) is not touched.
     Filesystem paths must be inside that checkout; `/`, ancestor directories
-    and sibling directories do not count. If process inspection is unavailable,
-    pruning conservatively keeps worktrees.
+    and sibling directories do not count. Command-line paths require a boundary
+    after the checkout name, so a similarly prefixed sibling name does not count.
+    If process inspection is unavailable, pruning conservatively keeps worktrees.
   - **Kept with work:** ignored files other than regenerable build output
     (evidence under `.agents/`, `.env*`, keys, notes) keep the worktree; the
     decision names them.

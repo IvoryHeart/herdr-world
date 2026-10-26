@@ -252,6 +252,38 @@ test("root, ancestor and sibling process paths do not keep a worktree", () => {
   });
 });
 
+test("command paths require a boundary after the worktree name", () => {
+  const repo = fixture();
+  const cases = [
+    [`preview --directory ${repo.merged}6/.pages-dist`, "remove"],
+    [`preview --directory ${repo.merged}-other`, "remove"],
+    [`preview --directory ${repo.merged}`, "keep"],
+    [`preview --directory ${repo.merged}/.pages-dist`, "keep"],
+    [`preview --directory ${join(repo.merged, ".pages-dist")}`, "keep"],
+    [`preview --directory ${repo.merged} --flag`, "keep"],
+    [`preview --directory ${repo.merged}\t--flag`, "keep"],
+    [`preview --directory "${repo.merged}"`, "keep"],
+    [`preview --directory '${repo.merged}'`, "keep"],
+    [`preview ${repo.merged}=directory`, "keep"],
+    // An earlier sibling reference must not hide a later genuine reference.
+    [`preview ${repo.merged}6 --directory ${repo.merged}`, "keep"],
+  ];
+  for (const [command, action] of cases) {
+    const actions = pruneWorktrees({
+      cwd: repo.primary,
+      dryRun: true,
+      live: { ...idle, commands: [command] },
+    });
+    expect(actions.find((item) => item.path === repo.merged)).toMatchObject({
+      action,
+      reason:
+        action === "keep"
+          ? "merged into origin/main; a running process uses it"
+          : "merged into origin/main",
+    });
+  }
+});
+
 test("unknown process inspection keeps worktrees", () => {
   const repo = fixture();
   const actions = pruneWorktrees({
