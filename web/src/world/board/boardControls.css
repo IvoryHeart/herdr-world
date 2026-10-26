@@ -1,0 +1,89 @@
+.board-controls-space {
+  --board-control-size: 36px;
+  --board-control-phone: 0;
+  position: absolute;
+  left: max(12px, env(safe-area-inset-left, 0px));
+  right: max(12px, env(safe-area-inset-right, 0px));
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+  display: flex;
+  justify-content: flex-end;
+  pointer-events: none;
+}
+.board-controls-space > .board-controls {
+  position: relative;
+  right: auto;
+  bottom: auto;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  pointer-events: auto;
+}
+.board-controls-space .board-control {
+  box-sizing: border-box;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: var(--board-control-size);
+  height: var(--board-control-size);
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  gap: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+}
+.board-controls-space .board-control-work,
+.board-controls-space .board-control-home {
+  width: auto;
+  padding: 0 10px;
+}
+.board-controls-space .board-control-work {
+  margin-right: 6px;
+  font-weight: 650;
+}
+.board-controls-space .board-control-work[aria-pressed="true"] {
+  background: var(--board-accent);
+  color: var(--board-ground);
+}
+.board-controls-space .board-controls .board-control-home {
+  min-width: var(--board-control-size);
+  padding: 0 10px;
+  border: 1.5px solid var(--board-yarn);
+  background: color-mix(in srgb, var(--board-accent) 10%, transparent);
+  color: var(--board-yarn);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+}
+.board-controls-space .board-menu {
+  max-width: calc(100vw - 24px);
+}
+.board-controls-space .board-menu .board-control {
+  width: 100%;
+  margin: 0;
+  justify-content: flex-start;
+  padding: 0 10px;
+}
+.board-controls-space > .board-controls-measure {
+  position: fixed;
+  top: -10000px;
+  left: -10000px;
+  right: auto;
+  bottom: auto;
+  width: max-content;
+  visibility: hidden;
+  pointer-events: none;
+}
+@media (max-width: 720px) {
+  .board-controls-space {
+    --board-control-size: 44px;
+    --board-control-phone: 1;
+  }
+  .board-controls-space .board-menu button {
+    min-height: 44px;
+  }
+}
