@@ -27,9 +27,11 @@ hosts, usernames, paths, sessions, and repository contents out of public assets.
    private details that the page-text privacy scan cannot see: Claude Code's
    status line (start it with a `--settings` status line of your own) and its
    remote-control session link. Do not photograph an agent's Terminal view. If
-   World runs with a separate `HOME`, the harness transcripts it reads must
-   physically live under that `HOME`; World rejects symlinks that resolve
-   elsewhere.
+   World runs with a separate `HOME`, give it the agents' transcripts there. In
+   the 0.2.7 capture, a symlink to one project folder inside a real
+   `.claude/projects` folder was not found, while moving that project folder
+   into the capture `HOME` worked; symlinking the whole `.claude/projects`
+   folder also resolves.
 5. For mobile capture, use a reachable private World URL and the
    [remote-access guidance](DEPLOYMENT.md#private-remote-access). Do not photograph
    login tokens, URLs containing credentials, or certificate/private-key content.
