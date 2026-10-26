@@ -152,6 +152,13 @@ Consumers continue to import from `web/src/store.ts`. Internal slices read
 that module's live bindings only when their functions run; module initialization
 must not read or call back into the mutable store.
 
+When focused topology and a pane layout disagree, refresh drops that layout and
+retries through the existing 80 ms per-connection, per-generation debounce. Repeated
+stale replies therefore yield to browser work while retaining the selected pane.
+Explicit refresh requests still run promptly, and a deferred retry keeps its
+captured host and runtime lease across focus changes; retirement cancels its work.
+The [refresh regression](../web/src/store/refresh.test.ts) covers these boundaries.
+
 ## Follow a request across the boundary
 
 1. **Capture an owner.** The [connection selector](../web/src/components/ConnectionSwitcher.tsx)

@@ -203,10 +203,11 @@ advances and waits ride on it. The clock also owns `scheduler.postTask`, which
 World's model preparation yields through, and reports a callback that throws
 without stopping. [HostsFilter.browser.tsx](HostsFilter.browser.tsx) runs this way
 through [testing/installHostsFilterClock.ts](testing/installHostsFilterClock.ts).
-Its ten suites take about 32 s locally, down from roughly 330 s on CI.
-`spaces-navigator` still runs on real time, listed there with its issue (#238):
-on test time `WorldControlPlane` re-renders without end. The latency-budget suites
-above stay on real time, because real time is what they measure.
+All Hosts filter cases, including the desktop and phone Spaces navigator, use
+test time and fail on uncaught browser errors. Frame cancellation remains effective
+until each callback runs, including when an earlier callback disposes a terminal.
+The latency-budget suites above stay on real time, because real time is what they
+measure.
 
 When a fixture models a healthy terminal with a real `TerminalView`, emit a
 qualified full `TerminalPush` for each successful `terminal.attach`, using its

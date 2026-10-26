@@ -864,6 +864,7 @@
       "existingTests": [
         "web/src/world/inspectorTerminalHandoff.test.ts",
         "web/src/browserNavigation.test.ts",
+        "web/src/store/refresh.test.ts",
         "web/src/world/WorldTerminalHandoff.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/175",

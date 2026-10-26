@@ -45,6 +45,11 @@ import "../styles/base.css";
 import "./world.css";
 
 const failures: string[] = [];
+window.addEventListener("error", (event) => {
+  failures.push(
+    `Uncaught browser error: ${event.error?.stack ?? event.message}`,
+  );
+});
 const check = (value: boolean, message: string) => {
   if (!value) failures.push(message);
 };
@@ -2698,7 +2703,7 @@ async function run() {
       if (method === "pane.layout")
         return {
           layout:
-            params.tab_id === "second"
+            params.tab_id === "second" || params.pane_id === "second"
               ? {
                   ...layout,
                   tab_id: "second",
