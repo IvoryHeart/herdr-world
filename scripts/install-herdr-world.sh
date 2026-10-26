@@ -221,14 +221,19 @@ case ":${PATH:-}:" in
   ;;
 esac
 
-# Herdr World runs on Herdr. The release just installed knows which Herdr it
-# verified: install it when missing, or upgrade an older one, then refresh the
-# harness integrations and the Herdr World plugin. A Herdr problem does not undo
-# the herdr-world installation.
+# Install Herdr only when absent. Existing runtimes keep their version and owner;
+# an explicit `herdr-world herdr upgrade` remains the update action.
 if [ "$skip_herdr" != "1" ]; then
   printf 'Checking Herdr...\n'
-  if ! "$target" herdr upgrade --install; then
-    printf 'Herdr World installer: Herdr was not fully installed or upgraded; run `%s herdr upgrade --install` to retry.\n' \
-      "$target" >&2
+  if herdr_status="$("$target" herdr status)"; then
+    case "$herdr_status" in
+    'Herdr is not installed.'*)
+      if ! "$target" herdr upgrade --install --no-integrations --no-plugin; then
+        printf 'Herdr World installer: Herdr installation failed; run `%s herdr upgrade --install` to retry.\n' "$target" >&2
+      fi
+      ;;
+    esac
+  else
+    printf 'Herdr World installer: could not detect Herdr; existing installations were left untouched. Run `%s herdr status` to check.\n' "$target" >&2
   fi
 fi

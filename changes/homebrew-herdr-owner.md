@@ -1,6 +1,7 @@
 ### Fixed
 
-- Keep Herdr in its own Homebrew formula on every platform, reusing an existing
-  installation and directing upgrades to its actual owner. World no longer
-  exports a second Herdr command from its Intel Mac keg; Intel Macs may build
-  the Herdr dependency from source when a bottle is unavailable.
+- Reuse existing Herdr installations instead of requiring a second Homebrew-owned
+  runtime. Homebrew installs a missing verified prebuilt Herdr on first normal
+  World launch, outside its keg, including on Intel Macs without a source build.
+- The standalone installer now installs Herdr only when missing and leaves existing
+  versions and installation owners unchanged. Explicit upgrades remain available.

@@ -1,9 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { VERIFIED_HERDR_VERSION } from "../server/src/herdr/release";
-import { renderHomebrewFormula } from "./generate-homebrew-formula";
+import { readFileSync } from "node:fs";
 
 type Step = {
   name?: string;
@@ -134,54 +130,16 @@ function homebrewInstallScript(): string {
   return script;
 }
 
-test("Release refreshes and admits core metadata before installing Homebrew packages", () => {
+test("Release checks missing and existing external Herdr through the installed launcher", () => {
   const script = homebrewInstallScript();
-  const refresh = script.search(/^\s*brew update(?:\s|$)/m);
-  const metadata = script.indexOf("brew info --json=v2 herdr");
-  const preflight = script.indexOf("ruby -rjson -rrubygems/version");
-  const install = script.indexOf("brew install --formula");
-  expect(script.indexOf("set -euo pipefail")).toBeLessThan(preflight);
-  expect(refresh).toBeGreaterThan(-1);
-  expect(metadata).toBeGreaterThan(refresh);
-  expect(preflight).toBeGreaterThan(metadata);
-  expect(install).toBeGreaterThan(preflight);
-});
-
-test("Release core metadata preflight rejects stale versions and accepts the verified minimum", () => {
-  const match = homebrewInstallScript().match(/<<'RUBY'\n([\s\S]*?)\nRUBY\b/);
-  if (!match) throw new Error("Missing executable core metadata preflight");
-  const directory = mkdtempSync(join(tmpdir(), "herdr-world-core-floor-"));
-  try {
-    const metadata = join(directory, "core.json");
-    const formula = join(directory, "herdr-world.rb");
-    writeFileSync(
-      formula,
-      renderHomebrewFormula("0.2.7", {
-        "darwin-arm64": "a".repeat(64),
-        "darwin-x64": "b".repeat(64),
-        "linux-arm64": "c".repeat(64),
-        "linux-x64": "d".repeat(64),
-      }),
-    );
-    const check = (version: string) => {
-      writeFileSync(
-        metadata,
-        JSON.stringify({ formulae: [{ versions: { stable: version } }] }),
-      );
-      return Bun.spawnSync([
-        "ruby",
-        "-rjson",
-        "-rrubygems/version",
-        "-e",
-        match[1]!,
-        metadata,
-        formula,
-      ]);
-    };
-    expect(check("0.8.2").exitCode).not.toBe(0);
-    expect(check(VERIFIED_HERDR_VERSION).exitCode).toBe(0);
-    expect(check("999.0.0").exitCode).toBe(0);
-  } finally {
-    rmSync(directory, { recursive: true, force: true });
-  }
+  expect(script.indexOf("brew update")).toBeLessThan(
+    script.indexOf("brew install --formula"),
+  );
+  expect(script).not.toContain("brew info --json=v2 herdr");
+  const before = script.indexOf("ruby scripts/check-homebrew-runtime.rb");
+  const reinstall = script.indexOf("brew reinstall --formula");
+  const after = script.lastIndexOf("ruby scripts/check-homebrew-runtime.rb");
+  expect(before).toBeGreaterThan(script.indexOf("brew install --formula"));
+  expect(reinstall).toBeGreaterThan(before);
+  expect(after).toBeGreaterThan(reinstall);
 });

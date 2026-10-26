@@ -144,11 +144,13 @@ Each release pins the Herdr it installs and upgrades to
    the upgrade step reinstalls the Codex, Claude and Pi harness integrations after every
    Herdr upgrade.
 
-Standalone installers and World updates read that table. Homebrew retains its
-separate `herdr` dependency on every platform; the generated formula tests its
-executable against the verified version as a minimum. Confirm Homebrew can supply
-that version when bumping the pin. Intel Macs may build the dependency from source
-when no bottle is available.
+Standalone installers and World updates read that table. Homebrew generates a
+launcher with no mandatory `herdr` dependency: normal local startup reuses an
+existing runtime or installs the verified prebuilt release only when missing.
+Metadata/management commands and remote/custom endpoints do not bootstrap. The
+native smoke check exercises missing installation and preservation across World
+reinstallation on Apple Silicon and Intel; it must not compile a core dependency.
+Run the generated Ruby formula/launcher regressions when changing this policy.
 
 ## Publishing a candidate or stable release
 

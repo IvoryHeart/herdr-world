@@ -1,17 +1,7 @@
 # Check Formula#install against the archive root Homebrew uses as buildpath.
 require "tmpdir"
 require "pathname"
-require "rubygems/version"
-Version = Gem::Version
-
-# Archive staging checks World files, with a synthetic admitted dependency.
-module Utils
-  def self.safe_popen_read(binary, option)
-    raise "unexpected dependency probe" unless binary.to_s == "/fixture/herdr/bin/herdr" && option == "--version"
-    "herdr 999.0.0\n"
-  end
-end
-
+require "shellwords"
 class StageLibrary
   def install(*paths)
     paths.each do |path|
@@ -20,22 +10,22 @@ class StageLibrary
   end
 
   def /(path)
-    path
+    Pathname.new(path)
   end
 end
 
 class StageBin
-  def install_symlink(path)
-    raise "unexpected link: #{path}" unless path == "herdr-world"
+  def /(path)
+    raise "unexpected command: #{path}" unless path == "herdr-world"
+    self
   end
+  def write(content)
+    raise "missing conditional bootstrap" unless content.include?("herdr status") && content.include?("--no-integrations --no-plugin")
+  end
+  def chmod(_mode); end
 end
 
 class Formula
-  def self.[](name)
-    raise "unexpected dependency" unless name == "herdr"
-    Struct.new(:opt_bin).new(Pathname.new("/fixture/herdr/bin"))
-  end
-  def odie(message) = raise(message)
   def self.inherited(child) = child.instance_variable_set(:@dependencies, [])
   def self.depends_on(name) = @dependencies << name
   def self.dependencies = @dependencies
@@ -51,8 +41,8 @@ formula = File.expand_path(formula_arg)
 archive = File.expand_path(archive_arg)
 load formula
 formula_class = Object.const_get(class_name)
-# Herdr is a separate Homebrew dependency; the World keg must not export it.
-raise "Herdr must keep its separate Homebrew owner" unless formula_class.dependencies == ["herdr"]
+# Herdr keeps its existing owner; World must not force a Homebrew installation.
+raise "Herdr must not be a mandatory dependency" unless formula_class.dependencies.empty?
 Dir.mktmpdir("herdr-world-homebrew-stage-") do |stage|
   system("tar", "-xJf", archive, "-C", stage, "--strip-components=1", exception: true)
   Dir.chdir(stage) { formula_class.new.install }

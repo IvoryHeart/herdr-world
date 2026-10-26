@@ -242,25 +242,28 @@ timing; the existing ownership models and their mandatory consumers remain
 binding. Real OS page discard, every mobile scheduler and cross-reload UI
 restoration remain outside this evidence.
 
-### Homebrew dependency ownership (Q36)
+### Missing-only Herdr installation (Q36)
 
-The generated World formula depends on the separate Homebrew `herdr` formula on
-every platform. It installs only World's executable into its keg, so an existing
-Herdr command retains its owner and the shipped `brew upgrade herdr` guidance
-names that owner. Intel Macs may build the dependency from source when no bottle
-is available.
+The generated World formula has no mandatory Herdr dependency. It installs only
+World and a launcher into its keg. Normal local startup uses the compiled
+runtime's read-only status lookup to preserve any existing Herdr, regardless of
+version or installation owner. A missing runtime uses the compiled binary's
+checksum-verified installer with integrations/plugin refresh disabled. Metadata,
+management and remote/custom-endpoint invocations do not bootstrap.
 
-`scripts/generate-homebrew-formula.test.ts` evaluates the Ruby declaration and
-acceptance block: Herdr must be an unconditional dependency, its executable must
-be probed, missing or older-than-verified runtimes fail, and newer runtimes pass.
-Installation probes the owned runtime before writing World files and rejects
-an older version with the owning package's upgrade command. The archive-stage
-check permits only the World executable link. The tap's native
-ownership workflow installs/tests on Apple Silicon and Intel, then reinstalls
-World with Herdr already present and compares the runtime link and bytes before
-and after. Native results belong to that tap CI head; Linux generator checks do
-not establish native Homebrew installation acceptance. No abstract model claims
-to prove Homebrew dependency resolution or operating-system package behavior.
+`scripts/generate-homebrew-formula.test.ts` executes the generated Ruby install
+method and emitted shell launcher. Its process matrix covers older/current/newer
+and externally managed runtimes, missing installation, detection/install failure,
+metadata/management calls, remote configuration and opt-out. The standalone
+installer regressions independently cover missing-only behavior and owner/version
+preservation. These direct process alternatives test the actual shell/Ruby paths;
+an abstract model would not establish PATH detection or package ownership.
+The archive-stage check validates the launcher and World inputs. The tap and
+Release native CI use `scripts/check-homebrew-runtime.rb` to launch a temporary
+World listener, install and execute a missing real Herdr, then reinstall World and
+confirm that the existing external runtime's digest stays unchanged. Herdr's server
+is never started by bootstrap. Native acceptance belongs to the exact CI head;
+Linux harness results alone do not prove native Homebrew installation acceptance.
 
 ### World update notification lifetime (Q36)
 

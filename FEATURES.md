@@ -176,6 +176,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     use the shared aggregate. Reception and lounge positions only show status;
     only an explicit move changes Herdr's layout, always within one host.
   See the [Town exercise](./docs/TUTORIAL.md#town).
+- **Reuse existing Herdr.** The standalone installer and Homebrew launcher keep
+  the runtime's existing version and owner. Only a missing Herdr is installed;
+  Homebrew does this on first normal local World launch, without a forced Herdr
+  formula or Intel source build. Explicit runtime upgrades remain available.
 - **Per-host Herdr identity.** **Manage connections → Check version again**
   reads the selected card's running server version and protocol. Compatibility
   expires after one minute; failed or disconnected checks remain unknown.

@@ -52,6 +52,11 @@ function createInstallerFixture(checksumName?: string) {
     binary,
     `#!/bin/sh
 [ "\${1:-}" = "--version" ] && { echo "${product} 9.8.7"; exit 0; }
+if [ "$*" = "herdr status" ]; then
+  if [ "\${HERDR_FIXTURE_STATE:-missing}" = missing ]; then echo 'Herdr is not installed.';
+  else echo 'Herdr is installed but not running: /fixture/external/herdr'; fi
+  exit 0
+fi
 if [ "\${1:-}" = "herdr" ]; then
   echo "$*" >> "$HERDR_STEP_LOG"
   echo "Installed Herdr 0.9.5."
@@ -274,15 +279,27 @@ describe("release installer", () => {
     );
   });
 
-  test("installs or upgrades Herdr with the release it just installed", () => {
+  test("installs the verified Herdr only when missing", () => {
     const fixture = createInstallerFixture();
     const result = runInstaller(fixture);
     expect(result.exitCode).toBe(0);
     expect(result.stdout.toString()).toContain("Installed Herdr 0.9.5.");
     expect(readFileSync(fixture.herdrStepLog, "utf8")).toBe(
-      "herdr upgrade --install\n",
+      "herdr upgrade --install --no-integrations --no-plugin\n",
     );
   });
+
+  test.each(["older", "current", "newer", "package-managed"])(
+    "reuses an existing %s Herdr",
+    (state) => {
+      const fixture = createInstallerFixture();
+      const result = runInstaller(fixture, undefined, {
+        HERDR_FIXTURE_STATE: state,
+      });
+      expect(result.exitCode).toBe(0);
+      expect(existsSync(fixture.herdrStepLog)).toBe(false);
+    },
+  );
 
   test("HERDR_WORLD_SKIP_HERDR=1 leaves Herdr alone", () => {
     const fixture = createInstallerFixture();
@@ -299,9 +316,7 @@ describe("release installer", () => {
     const result = runInstaller(fixture, undefined, { HERDR_STEP_CODE: "1" });
     expect(result.exitCode).toBe(0);
     expect(existsSync(join(fixture.installDir, "herdr-world"))).toBe(true);
-    expect(result.stderr.toString()).toContain(
-      "Herdr was not fully installed or upgraded",
-    );
+    expect(result.stderr.toString()).toContain("Herdr installation failed");
     expect(result.stderr.toString()).toContain("herdr upgrade --install");
   });
 });

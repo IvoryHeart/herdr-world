@@ -1,7 +1,6 @@
 #!/usr/bin/env bun
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { VERIFIED_HERDR_VERSION } from "../server/src/herdr/release";
 import { readReleaseArchive } from "./release-archive";
 import { isReleaseCandidate, RELEASE_VERSION_RE } from "./release-version";
 
@@ -12,6 +11,18 @@ export function renderHomebrewFormula(
   const source = (platform: string) => `
       url "https://github.com/IvoryHeart/herdr-world/releases/download/v${version}/herdr-world-v${version}-${platform}.tar.xz"
       sha256 "${digests[platform]}"`;
+  const launcher = readFileSync(
+    new URL("./homebrew-launcher.sh", import.meta.url),
+    "utf8",
+  )
+    .replace(
+      "@HERDR_WORLD_BINARY@",
+      '#{(libexec/"herdr-world").to_s.shellescape}',
+    )
+    .trimEnd()
+    .split("\n")
+    .map((line) => (line ? `      ${line}` : ""))
+    .join("\n");
   const candidate = isReleaseCandidate(version);
   const formulaClass = candidate ? "HerdrWorldRc" : "HerdrWorld";
   const conflict = candidate ? "herdr-world" : "herdr-world-rc";
@@ -19,10 +30,6 @@ export function renderHomebrewFormula(
   desc "Visual IDE for AI agents with office, mindmaps and boards"
   homepage "https://herdr.world/"
   version "${version}"
-
-  # Herdr retains its own Homebrew owner, including on Intel Macs where
-  # Homebrew may build it from source instead of pouring a bottle.
-  depends_on "herdr"
 
   on_macos do
     on_arm do${source("darwin-arm64")}
@@ -41,24 +48,28 @@ export function renderHomebrewFormula(
   conflicts_with "${conflict}", because: "both Formulae provide the herdr-world command"
 
   def install
-    herdr_output = Utils.safe_popen_read(Formula["herdr"].opt_bin/"herdr", "--version")
-    herdr_version = herdr_output[/^herdr ([0-9]+[.][0-9]+[.][0-9]+)/, 1]
-    if herdr_version.nil? || Version.new(herdr_version) < Version.new("${VERIFIED_HERDR_VERSION}")
-      odie "Herdr ${VERIFIED_HERDR_VERSION} or newer is required; run brew update && brew upgrade herdr, then retry."
-    end
     libexec.install "herdr-world", "VERSION",
       "LICENSE", "THIRD_PARTY_NOTICES.md",
       "DEPENDENCY_NOTICES.md", "DEPENDENCY_LICENSES.md",
       "UPSTREAM.md", "LICENSES"
-    bin.install_symlink libexec/"herdr-world"
+    (bin/"herdr-world").write <<~SH
+${launcher}
+    SH
+    (bin/"herdr-world").chmod 0755
+  end
+
+  def caveats
+    <<~EOS
+      World reuses your existing Herdr. On first launch, if Herdr is missing,
+      it installs the verified prebuilt release in ~/.local/bin, outside Homebrew.
+      Existing Herdr installations are not upgraded. Add ~/.local/bin to PATH.
+      Run herdr-world herdr setup to start Herdr as a user service.
+    EOS
   end
 
   test do
     assert_match "herdr-world ${version}", shell_output("#{bin}/herdr-world --version")
-    herdr_output = shell_output("#{Formula["herdr"].opt_bin}/herdr --version")
-    assert_match /^herdr /, herdr_output
-    assert_operator Version.new(herdr_output[/[0-9]+[.][0-9]+[.][0-9]+/]), :>=,
-                    Version.new("${VERIFIED_HERDR_VERSION}")
+    assert_match "Herdr", shell_output("#{bin}/herdr-world herdr status")
   end
 end
 `;
