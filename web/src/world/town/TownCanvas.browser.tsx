@@ -1,3 +1,4 @@
+import { prepareTownRoomCard } from "./townRoomCard.browser";
 import { checkTownBuildingSigns } from "./townBuildingSigns.browser";
 window.__HERDR_WORLD_RENDERER_DEBUG__ = true;
 import { TERMINAL_COMPOSER_REQUEST_EVENT } from "../terminalComposerRequest";
@@ -2266,33 +2267,7 @@ async function run() {
     );
   }
 
-  // Card activation requires a settled overview. Earlier expansion/agent
-  // interactions need not leave the camera there, and cards remount after
-  // the renderer changes level. Use the real controls; do not restart flights.
-  const beforeOverview = diagnostics.frames;
-  await waitFor(
-    () => diagnostics.frames > beforeOverview && !diagnostics.flying,
-    "pre-card camera flight did not finish",
-  );
-  for (let step = 0; step < 6 && diagnostics.level !== "overview"; step += 1) {
-    const before = diagnostics.frames;
-    const zoomOut = host.querySelector<HTMLButtonElement>(
-      '[aria-label="Zoom out"]',
-    );
-    if (!zoomOut) throw new Error("room-card setup has no Zoom out control");
-    zoomOut.click();
-    await waitFor(
-      () => diagnostics.frames > before && !diagnostics.flying,
-      "room-card setup zoom-out flight did not finish",
-    );
-  }
-  await waitFor(
-    () =>
-      diagnostics.level === "overview" &&
-      host.querySelector(".town-room-card") !== null,
-    () =>
-      `room-card setup never reached a mounted overview card (level ${diagnostics.level}, zoom ${diagnostics.zoom.toFixed(2)})`,
-  );
+  await prepareTownRoomCard(host, diagnostics, waitFor);
   // Room card activation still has to zoom into the room from that overview.
   const zoomBefore = diagnostics.zoom;
   host.querySelector<HTMLButtonElement>(".town-room-card")!.click();
