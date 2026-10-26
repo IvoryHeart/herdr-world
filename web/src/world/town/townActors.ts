@@ -268,6 +268,26 @@ export class TownActors {
         this.actors.set(agent.key, actor);
         fresh.add(agent.key);
       }
+      const previousBuilding = previousWorld?.buildings.get(actor.hostKey);
+      if (
+        previousBuilding &&
+        !fresh.has(actor.key) &&
+        actor.hostKey === agent.hostKey
+      ) {
+        // Reflow moves the building and its occupants together. Keeping old
+        // world coordinates can put a walker outside the new navigation grid.
+        const dx = (building.x - previousBuilding.x) * T;
+        const dy = (building.y - previousBuilding.y) * T;
+        actor.x += dx;
+        actor.y += dy;
+        if (dx || dy) actor.path = actor.path.map(([x, y]) => [x + dx, y + dy]);
+        if (actor.tween) {
+          actor.tween.x0 += dx;
+          actor.tween.y0 += dy;
+          actor.tween.x += dx;
+          actor.tween.y += dy;
+        }
+      }
       if (actor.spot) {
         // Lounge slots belong to a building, not to absolute world tiles.
         // Preserve the slot through reflow, then resolve its current position.
@@ -281,6 +301,8 @@ export class TownActors {
           actor.hostKey === agent.hostKey && index >= 0
             ? (building.lounge.spots[index] ?? null)
             : null;
+        if (actor.spot && actor.goal?.kind === "lounge")
+          actor.goal = { kind: "lounge", spot: actor.spot };
       }
       actor.hostKey = agent.hostKey;
       if (agent.semanticStatus === "blocked" && actor.blockedSince === 0)
