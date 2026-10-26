@@ -1,0 +1,37 @@
+{
+  "source": "ede372b8837d9213bd25b41bd96e65e9126337a1",
+  "cases": [
+    {
+      "file": "board-1440x2560.png",
+      "width": 1440,
+      "height": 2560
+    },
+    {
+      "file": "board-2560x1440.png",
+      "width": 2560,
+      "height": 1440
+    },
+    {
+      "file": "board-390x844.png",
+      "width": 390,
+      "height": 844
+    },
+    {
+      "file": "town-1280x1440.png",
+      "width": 1280,
+      "height": 1440
+    },
+    {
+      "file": "town-1512x982.png",
+      "width": 1512,
+      "height": 982
+    },
+    {
+      "file": "town-390x844.png",
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "browserCases": "11 maintained Spaces/Town/Board and provider cases PASS",
+  "scope": "Chromium/Linux synthetic managed WindowFrame + WorldTerminalPortalList + TerminalView; no live host or native-device claim"
+}
