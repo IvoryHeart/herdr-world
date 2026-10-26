@@ -12,6 +12,7 @@ function world(
   order?: number[],
   /** Pinned desks, as desk indexes. */
   pinned: number[] = [],
+  precedingHost = false,
 ) {
   const deskKeys = Array.from(
     { length: deskCount },
@@ -19,8 +20,21 @@ function world(
   );
   const { layout } = layoutTown(
     {
-      hosts: [{ key: "host", displayOrder: 0 }],
+      hosts: [
+        ...(precedingHost ? [{ key: "earlier", displayOrder: 0 }] : []),
+        { key: "host", displayOrder: precedingHost ? 1 : 0 },
+      ],
       rooms: [
+        ...(precedingHost
+          ? [
+              {
+                key: "earlier-room",
+                hostKey: "earlier",
+                order: 0,
+                deskKeys: ["earlier-desk"],
+              },
+            ]
+          : []),
         {
           key: "room",
           hostKey: "host",
@@ -300,3 +314,140 @@ test("stale agents freeze without keeping an animation loop alive and resume on 
   expect(actors.step(1 / 30)).toBe(true);
   expect([actor.x, actor.y]).not.toEqual(position);
 });
+
+test("reception walkers leaving their seats use the latest snapshot layout", () => {
+  const actors = new TownActors();
+  actors.sync(world({ a: "working", b: "working" }).actorWorld, false);
+  actors.sync(world({ a: "blocked", b: "done" }).actorWorld, false);
+  actors.step(0.1);
+  expect(actors.actors.get("a")!.tween?.next).toBe("stand");
+  const updated = world({ a: "blocked", b: "done" }, 20);
+  actors.sync(updated.actorWorld, false);
+  settle(actors);
+  for (const actor of actors.actors.values()) {
+    const spot =
+      updated.actorWorld.buildings.get("host")!.queue[actor.queueSlot!]!;
+    expect([actor.x, actor.y]).toEqual([
+      spot.x * TOWN_TILE + 8,
+      spot.y * TOWN_TILE + 13,
+    ]);
+    expect(actor.mode).toBe("stand");
+  }
+});
+
+test("lounge agents retain distinct current-building spots after a snapshot relocates it", () => {
+  const actors = new TownActors();
+  actors.sync(world({ a: "idle", b: "idle", c: "working" }).actorWorld, true);
+  const updated = world(
+    { a: "idle", b: "idle", c: "idle" },
+    4,
+    undefined,
+    [],
+    true,
+  );
+  actors.sync(updated.actorWorld, false);
+  // Resting occupants move with the building, rather than walking across town.
+  for (const key of ["a", "b"]) {
+    const actor = actors.actors.get(key)!;
+    expect(actor.mode).toBe("stand");
+    expect([actor.x, actor.y]).toEqual([
+      actor.spot!.x * TOWN_TILE + 8,
+      actor.spot!.y * TOWN_TILE + 13,
+    ]);
+  }
+  settle(actors);
+  const spots = updated.actorWorld.buildings.get("host")!.lounge.spots;
+  const occupied = new Set<string>();
+  for (const actor of actors.actors.values()) {
+    expect(actor.spot).not.toBeNull();
+    expect(spots).toContainEqual(actor.spot!);
+    expect([actor.x, actor.y]).toEqual([
+      actor.spot!.x * TOWN_TILE + 8,
+      actor.spot!.y * TOWN_TILE + 13,
+    ]);
+    occupied.add(`${actor.x},${actor.y}`);
+  }
+  expect(occupied.size).toBe(3);
+});
+
+for (const [status, elapsed] of [
+  ["blocked", 0.1],
+  ["idle", 0.1],
+  ["blocked", 0.5],
+  ["idle", 0.5],
+] as const) {
+  test(`${status} agent moves with its building after ${elapsed} seconds`, () => {
+    const actors = new TownActors();
+    actors.sync(world({ a: "working" }).actorWorld, false);
+    const before = world({ a: status });
+    actors.sync(before.actorWorld, false);
+    actors.step(0.1);
+    if (elapsed > 0.1) for (let i = 0; i < 12; i += 1) actors.step(1 / 30);
+    const actor = actors.actors.get("a")!;
+    expect(actor.mode).toBe(elapsed === 0.1 ? "tween" : "walk");
+    const position = [actor.x, actor.y];
+    const exit = actor.tween && [actor.tween.x, actor.tween.y];
+    const path = actor.path.map(([x, y]) => [x, y]);
+    const updated = world({ a: status }, 4, undefined, [], true);
+    const oldBuilding = before.actorWorld.buildings.get("host")!;
+    const building = updated.actorWorld.buildings.get("host")!;
+    const dx = (building.x - oldBuilding.x) * TOWN_TILE;
+    const dy = (building.y - oldBuilding.y) * TOWN_TILE;
+    expect(Math.abs(dx) + Math.abs(dy)).toBeGreaterThan(0);
+    actors.sync(updated.actorWorld, false);
+    expect([actor.x, actor.y]).toEqual([position[0]! + dx, position[1]! + dy]);
+    if (exit)
+      expect([actor.tween!.x, actor.tween!.y]).toEqual([
+        exit[0]! + dx,
+        exit[1]! + dy,
+      ]);
+    else expect(actor.path).toEqual(path.map(([x, y]) => [x! + dx, y! + dy]));
+    for (let i = 0; i < 2000 && actors.busy; i += 1) {
+      actors.step(1 / 30);
+      expect(actor.x).toBeGreaterThanOrEqual(building.x * TOWN_TILE);
+      expect(actor.x).toBeLessThan((building.x + building.w) * TOWN_TILE);
+      expect(actor.y).toBeGreaterThanOrEqual(building.y * TOWN_TILE);
+      expect(actor.y).toBeLessThan((building.y + building.h) * TOWN_TILE);
+    }
+    expect(actors.busy).toBe(false);
+    const spot =
+      status === "blocked" ? building.queue[actor.queueSlot!]! : actor.spot!;
+    expect([actor.x, actor.y]).toEqual([
+      spot.x * TOWN_TILE + 8,
+      spot.y * TOWN_TILE + 13,
+    ]);
+  });
+}
+
+for (const count of [24, 4]) {
+  test(`a reception walker stays on the current floor after 80 desks shrink to ${count}`, () => {
+    const actors = new TownActors();
+    actors.sync(world({ a: "working" }, 80).actorWorld, false);
+    const large = world({ a: "blocked" }, 80);
+    const small = world({ a: "blocked" }, count);
+    const building = small.actorWorld.buildings.get("host")!;
+    const bottom = (building.y + building.h) * TOWN_TILE;
+    actors.sync(large.actorWorld, false);
+    for (let i = 0; i < 2000 && actors.actors.get("a")!.y < bottom + 70; i += 1)
+      actors.step(1 / 30);
+    const actor = actors.actors.get("a")!;
+    expect(actor.mode).toBe("walk");
+    expect(actor.y).toBeGreaterThan(bottom);
+    expect(large.layout.buildings[0]!.x).toBe(building.x);
+    expect(large.layout.buildings[0]!.y).toBe(building.y);
+    actors.sync(small.actorWorld, false);
+    for (let i = 0; i < 60; i += 1) {
+      expect(actor.x).toBeGreaterThanOrEqual(building.x * TOWN_TILE);
+      expect(actor.x).toBeLessThan((building.x + building.w) * TOWN_TILE);
+      expect(actor.y).toBeGreaterThanOrEqual(building.y * TOWN_TILE);
+      expect(actor.y).toBeLessThan(bottom);
+      actors.step(1 / 30);
+    }
+    settle(actors);
+    const spot = building.queue[actor.queueSlot!]!;
+    expect([actor.x, actor.y]).toEqual([
+      spot.x * TOWN_TILE + 8,
+      spot.y * TOWN_TILE + 13,
+    ]);
+  });
+}
