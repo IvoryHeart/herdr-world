@@ -88,6 +88,22 @@ working before configuring remote access.
 
 *Find the project and active pane. Screenshot menu positions can differ by release.*
 
+### Find an available World upgrade
+
+An available World release shows a notification once per version in this browser
+profile at this World address. Repeated checks and page or service restarts keep
+that history. Dismissing the notification leaves the red attention dot on **Menu**.
+Open **Menu → Help & updates → Upgrade to <version>** when you are ready; a failed
+installation keeps this action available for retry. The dot clears after a
+successful upgrade or a check confirms no update remains. Existing installation
+channel and restart checks still apply.
+
+Notification history needs writable browser storage to survive reloads. When
+storage is blocked, repeats are suppressed only while the page stays open.
+Clearing site storage resets this history; other World origins and browser
+profiles keep independent history. Disabling automatic checks stops future checks,
+without hiding an already discovered upgrade.
+
 ### Choose a view for the task
 
 Use the view switcher to move between these views without restarting work:

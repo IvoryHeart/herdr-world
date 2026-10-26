@@ -1,3 +1,4 @@
+import { createUpdateNotificationHistory } from "../updateNotifications";
 import { worldLocalStorage, worldSessionStorage } from "../browserStorage";
 import {
   set,
@@ -19,6 +20,8 @@ import {
   storedTaskNotificationsEnabled,
   storedTaskNotificationPreferences,
 } from "./notifications";
+
+const updateNotifications = createUpdateNotificationHistory(worldLocalStorage);
 
 const AUTOMATIC_UPDATE_CHECKS_KEY = "automaticUpdateChecksEnabled";
 const PENDING_UPDATE_RELOAD_KEY = "pendingUpdateReloadVersion";
@@ -299,12 +302,18 @@ async function checkForUpdate(showErrors = false) {
     }
     const info = (await r.json()) as UpdateInfo;
     if (!showErrors && !state.automaticUpdateChecksEnabled) return;
-    if (
-      info.update_available &&
-      info.latest_version &&
-      (showErrors || state.dismissedUpdateVersion !== info.latest_version)
-    ) {
-      set({ updateInfo: info });
+    if (info.update_available && info.latest_version) {
+      const firstNotification = updateNotifications.claim(info.latest_version);
+      const notificationStillOpen =
+        state.updateInfo?.latest_version === info.latest_version &&
+        state.dismissedUpdateVersion !== info.latest_version;
+      set({
+        updateInfo: info,
+        dismissedUpdateVersion:
+          firstNotification || notificationStillOpen
+            ? null
+            : info.latest_version,
+      });
     } else if (!info.update_available) {
       set({
         updateInfo: null,
@@ -353,7 +362,6 @@ function applyAutomaticUpdateChecksEnabled(enabled: boolean) {
   }
   set({
     automaticUpdateChecksEnabled: enabled,
-    updateInfo: enabled ? state.updateInfo : null,
   });
   if (enabled && !state.connectionPaused) void startUpdatePolling();
 }

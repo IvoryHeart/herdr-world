@@ -3,6 +3,16 @@
 A Web/PWA client for a running [Herdr](https://herdr.dev) server.
 [Install it](./docs/DEPLOYMENT.md) or follow the [tutorial](./docs/TUTORIAL.md).
 
+## World update notifications
+
+- An available release notifies once per version in each browser profile and World
+  origin, with persistent browser storage across reloads and service restarts.
+- Dismissing the notification keeps the red **Menu** attention dot and explicit
+  **Upgrade to <version>** action. Failed upgrades keep a reachable retry;
+  successful upgrades or a current-version check clear attention.
+- Existing installation-channel, confirmation-header and restart safety checks
+  remain in force. Restricted storage deduplicates only for the open page.
+
 ## Visual control plane
 
 Town, Board, Desk and Spaces are World's views. Office, Tree and Graph have been

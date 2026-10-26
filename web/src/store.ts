@@ -2370,7 +2370,6 @@ export const store = {
   dismissUpdate() {
     set({
       dismissedUpdateVersion: state.updateInfo?.latest_version ?? null,
-      updateInfo: null,
     });
   },
 
