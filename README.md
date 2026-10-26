@@ -30,9 +30,9 @@ changes on desktop or mobile. **Requires a running Herdr server.**
 - **A clearer Town.** Rooms follow Spaces' tab order and grow with their tabs;
   pin desks, colour hosts, workspaces and terminals, and open **Summary** for
   everything needing you. Every view opens in Zen.
-- **Herdr comes with World.** The standalone installer (and Homebrew, on first
-  launch) installs Herdr when it is missing; World updates refresh Herdr's
-  harness integrations and plugin. See
+- **Herdr comes with World.** The standalone installer and Homebrew set Herdr
+  up for you (set `HERDR_WORLD_SKIP_HERDR=1` to leave Herdr alone), and World
+  updates refresh Herdr's harness integrations and plugin. See
   [Herdr installation and upgrades](./docs/DEPLOYMENT.md#herdr-installation-and-upgrades).
 
 Read the [0.2.7 release notes](./docs/releases/v0.2.7.md) for upgrade steps and

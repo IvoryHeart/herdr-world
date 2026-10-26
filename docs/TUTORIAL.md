@@ -339,9 +339,12 @@ text. It works for any agent you open from Town, Board or Desk.
    attached paths before sending. Type **/**, or use
    **⋮ → Browse commands**, for the harness's commands. Drafts are kept per
    conversation.
-5. Read the receipt under your message. It stays **not yet seen** (or **sent,
-   not checked** for a slash command) until the transcript has the same words,
-   and is then matched by its words, never "delivered". A red notice names
+5. Read the receipt under your message. It says **Sent, not seen in the
+   transcript** (**Queued · sent to <agent>** while a busy agent holds it, or
+   **sent, not checked** for a slash command) until the transcript has it.
+   Then it says **Sent from Chat; matched by its words**, or **matched by
+   order** when the harness rewrote the text (for example a pasted image
+   placeholder). Chat never claims "delivered". A red notice names
    another session if there is evidence the message went there, and pauses
    Send. Claude Code's `!` and `#` modes still need the Terminal.
 6. Answer the agent's own prompts. When Claude Code shows a permission box or
