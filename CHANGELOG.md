@@ -9,6 +9,8 @@ prepared.
 
 ## [Unreleased]
 
+## [0.2.7] - 2026-10-26
+
 ### Added
 
 - Add a Chat tab to the Inspector, replacing History. Chat shows an agent's
@@ -20,6 +22,172 @@ prepared.
   (`agent_conversation.get`, `.latest`, `.send`, `.watch`), and
   `bun scripts/chat-conformance.ts` checks the readers against this machine's
   real transcripts.
+- Installing or updating Herdr World now installs or upgrades Herdr to the release
+  that World version verified, in Herdr's default location, and installs the Herdr
+  integrations for the Codex, Claude and Pi harnesses present on the machine. The
+  standalone installer and `herdr-world update` run the new
+  `herdr-world herdr upgrade`. In the browser, a World update follows up with a
+  visible Herdr step, and **Runtime → Upgrade Herdr** (or **Update Herdr
+  integrations**) appears whenever something is behind. The upgrade verifies
+  checksums and versions before replacing anything, keeps the old binary for
+  rollback, and never downgrades. It hands a running server's panes to the new
+  version only when it can prove nothing supervises that server (Linux);
+  otherwise it says that a restart is needed. A GitHub-installed Herdr World plugin is pinned to the
+  matching release tag. Windows uses Herdr's own installer and moves a Herdr that
+  older World releases installed to Herdr's default location. The Homebrew Formula
+  installs Herdr too, using the verified prebuilt binary on Intel Macs. Set
+  `HERDR_WORLD_SKIP_HERDR=1` to install World alone.
+- Choose Watching, Muted or Focused for each agent from the button beside its
+  name in the Inspector. Chimes follow it: a muted agent stays silent but still
+  reaches reception, and while a focused agent is reachable only focused agents and the
+  Town master's needs-you chime. World keeps the choice for the agent's
+  terminal on every device and drops it once the terminal closes, including
+  closes missed while disconnected, retrying if settings change during the
+  listing. The control works in Town, Board and
+  Spaces, and reports a failed save so it can be retried.
+- Agent profiles: name, home room, role, colour, harness and model, Codex
+  reasoning effort, permission mode, skills, tools, a starting brief and a
+  Town look (skin, hair, outfit including a dress, colours and an accessory)
+  with a live preview. Reviewer, Builder, Designer and FirstMate are editable
+  starters. Open them from Menu → Agent profiles, the Actions menu, the launcher
+  or Board.
+- **New agent** (in the Actions menu, on each Town room's plaque including on
+  phones, beside **+** in Spaces, and in Board's New tab dialog) starts an
+  agent in a new tab from a profile in one tap, or any agent kind the host's
+  Herdr supports. A profile becomes the
+  harness's own configuration at launch (a Claude Code subagent definition, or
+  Codex options and developer instructions), the tab takes its colour and the
+  agent wears its look in Town.
+- The launcher shows whether each harness is installed and logged in, using the
+  harness's own status command, and **Log in** opens a small tab and shows the
+  harness's own login command to run there. World never sees or stores
+  credentials.
+- Show each agent's quest: read without a model from its own todo list
+  (Claude Code `TodoWrite` and tasks, Codex `update_plan`, Kimi
+  `SetTodoList`), approved plan, Codex goal or `/loop`. Chat shows a foldable
+  quest log above the conversation, Town shows a progress flag over a seated
+  agent, and Board shows a progress chip on the agent's card. The new
+  `agent_quest.list` RPC returns quests for many panes at once.
+- The agent-settings popover (click an agent window's icon) links to the
+  agent's profile: **Edit profile** for the profile it was launched from, or
+  **Profiles…** to open the editor.
+- Group agents that know each other. An agent stamped as spawned by another
+  (`herdr-world stamp CHILD PARENT`, or Board's Start an agent from a note
+  strung to a pane) is joined to it automatically: a wall and connector in
+  Town, a string in Board, and its parent's colour unless it has its own. Rest
+  a dragged Town table on another table until it snaps, or drop a Board tab on
+  another tab (or use **Group…**), to group them; Town also seats the tab
+  beside its teammate in Herdr; **M** on a focused Town table offers
+  **Group with…** and **Leave the team** too. World keeps the groups and the
+  last spawn claims it saw, shown stale while their host is offline, and drops
+  them once their agents have closed.
+- Chat shows compact pull request cards beneath an agent's known PR announcement
+  or current work claim. Open the details to inspect CI and reviews; **Ask the
+  author to fix** sends a `↳ #N` message when this conversation owns the claim.
+- Chat's Now status uses a small state circle, with its status word available
+  to screen readers and on hover; reduced motion keeps the working dot still.
+- Chat now uses the full shared Compose editor, attachments and harness command
+  palette, opened by typing `/` or from the **⋮** controls menu. A paperclip
+  attaches files. The paper-plane button, Ctrl+Enter or Cmd+Enter sends;
+  the enabled Send button has a yellow background. Enter adds a line, with
+  drafts kept per conversation. Slash commands have honest unchecked receipts, and native
+  working-state sends show queued bubbles until their transcript receipt.
+- The current quest takes one slim title/progress row inside the conversation;
+  expand it for objectives without adding a fixed toolbar.
+- While reading back in Chat, the existing catch-up button counts new agent
+  messages and clears at the bottom. Own messages and queued bubbles do not count.
+- **Chat text** in Configuration sets Chat's text size. It follows the
+  terminal font size until set on its own, and Chat's text is a step larger
+  than before (13px).
+- Chat loads earlier messages as you scroll back past the latest 200, a page
+  at a time, keeping your place; **Load earlier messages** does the same.
+- **Chimes.** World plays its own chime for a change that needs you: a sound
+  for who (the Town master, the crew or the agent's profile) and a pattern for
+  why (needs you, for you, finished), with a toast that says both. **Menu →
+  Sounds** sets this device's chimes, the shared sounds and patterns, and the
+  Town master, whose needs-you chime breaks Focus. Profiles get a **Chime**.
+  Bursts share one chime; World's notifications go silent while it chimes.
+  Queued sounds follow current settings, intentional silence stays silent
+  during OS fallback, and device mute silences push while World is open.
+  First-install notification control works without reloading; unknown senders
+  keep the crew sound through the server relay.
+- Show per-host running Herdr version, protocol, compatibility and expiring
+  check time in Manage connections, with an explicit retry. Keep installed-binary
+  identity separate and unverified upgrades explicitly unavailable.
+- Chat answers an agent's own permission prompt. For Claude Code's permission
+  box and Codex's approval menu, Chat shows the complete request, the question
+  and each option; picking one (or its number, with the card focused) presses
+  that key in the agent's pane after checking the prompt, session and state
+  have not changed, and Chat shows what it sent. It says "You answered" only
+  when Herdr shows the agent moved on, and otherwise why it cannot confirm.
+  Herdr cannot hold a prompt between the check and the key, and the card says
+  so. Any other prompt offers the Terminal instead of a guess.
+- Chat answers Claude Code's own questions as well as its permission prompts.
+  A question form's choices (with the description under each), each tab of a
+  multi-question form and its review, and plan approval appear on the ask
+  card, and a digit picks one. Options that open a text box, and unnumbered
+  menus, stay in the Terminal. The same checks, receipts and known issue
+  (#284) apply as for permission prompts.
+- Chat shows what an agent is doing now: a Now bar with its status, the task
+  from its terminal title and the time since it changed, and the tool call
+  running now with its command and its own timer. Stop, or Esc pressed twice,
+  interrupts Claude Code, Codex or Pi; Chat never stops an agent by itself.
+- Chat's tool rows show what each call did: a plain label ("Run reconnect
+  tests", "Edit reconnect.ts"), how long it took, and a pass or fail badge for
+  a test run. A run whose tests failed reads as failed, and a call cut off
+  without a result reads as interrupted. Opening a row shows the edit's diff,
+  a green or red test strip with the first failing test, or the end of its
+  output, with credentials redacted.
+- Workspaces and hosts have their own colours, saved with terminal colours.
+  Pick a workspace's colour from the swatch beside its room's name in Town, its
+  card in Board or its menu in the Spaces sidebar: it colours the Town carpet,
+  the Board card and a dot in Spaces, and the workspace's tabs without a
+  colour of their own. Pick a host's colour on its Town reception board, its
+  Board zone label or its Spaces header: it colours the building's roof, the
+  Board zone and the header, and is not passed on to tabs.
+- Pin a desk in Town from the agent window's **⋯ → Pin desk in Town** menu
+  on desktop or phone, or a card on Board with **Pin** in its selected bar.
+  A pinned desk or card shows a pin and keeps its place through reorders, room
+  growth, Tidy and settling. Town applies a saved pin only while its tab is
+  admitted by the room's native-order visible prefix; expand to reveal a hidden
+  pinned desk. Agents at a pinned
+  desk never go to the lounge: they visit reception only when they need you or
+  finish, and walk straight back once seen. Pins are saved on the World
+  service, so every device sees them.
+- Town summary: the Town board's **Summary** button (on a phone, its counts
+  chip) opens a window listing who needs you, unreviewed finishes and when
+  each was last active, every host and room with its counts, and spend per
+  model. Open questions use the reception tray's answer cards; the sign,
+  chip, tray and window share one needs-you count of blocked agents plus
+  open questions.
+- Agents can change World themselves with the `herdr-world` CLI;
+  `herdr-world --skill` prints the agent guide. Agents colour, pin, move and
+  group Board cards, reorder Town desks (`--herdr`, through Herdr's tab
+  order), stamp their own spawn (`spawned-by`), report task results
+  (`result`) and ask the owner questions (`ask … --wait`), which appear first
+  in Town's **Needs you** list for an answer. World checks that a caller runs
+  in the pane it names, records every change with its actor and time
+  (`history`), and can undo World-side changes (`undo`). JSON output when
+  piped and stable exit codes.
+- Your open pull requests get a card in Work with CI on the head, each rev
+  agent's latest result and your merge rules (not a draft, findings confirmed,
+  CI green, mergeable, screenshots for UI changes), each ✓, ✗ or unknown.
+- Merge (a merge commit pinned to the head you saw), close and mark ready from
+  the card, each behind a sheet that says exactly what happens; GitHub's
+  answer shows on the card. World never bypasses branch protection: while a
+  review is required it offers Open on GitHub and the merge command instead.
+- Tap a pull request's badge on a Town desk to open the same card.
+- Cards say **Ready to merge** when every rule holds, and **Stalled** when CI
+  failed on the head and its agent is idle.
+- Show GitHub pull requests and Jira tickets beside your agents, built in and
+  on by default. Board's new **Work** lens lays pull requests out from review
+  through fixing, green and ready to merge to merged, and tickets by status;
+  each card names the agents working on it. Town desks show the badge of their
+  agent's pull request or ticket (`#123 ✓`). GitHub uses the service user's
+  `gh` sign-in; Jira Cloud takes a site, email and API token in **Settings →
+  Sources**, where each source can be switched off. The token stays in private
+  service storage, never reaches the browser and is removed when the site or
+  email changes.
 
 ### Changed
 
@@ -72,6 +240,127 @@ prepared.
   repository comparison branches. Keep World's qualified terminals, mobile app
   bar and managed-window tabs. Update the optional Herdr setup target to 0.9.5
   with verified release checksums; terminal protocol remains 22.
+- Each agent has one window. Tapping an agent or its table in Town (or
+  activating it, the needs-you list, **N** and **Next**) opens its Inspector on
+  **Chat**, the existing Chat view with the full conversation, **Jump to
+  latest** and its composer, instead of a separate peek chat window; a hover
+  card stays as a preview. Town's Inspector docks right by default (**Inspector
+  opening** now defaults to Snap right) and keeps the dock each window was left
+  with. The top selector puts Chat first and follows the window's own width:
+  labelled, then icons, then the active view with the others under ⋯. The Town
+  master's chat (**Menu → Town master**, `firstmate` by default) opens docked
+  on wide screens. On a phone the Chat view no longer shows the terminal key
+  bar.
+- Rework the website film around today's World: Town is the hero (rooms and
+  nameplated desks, reception with ✓ and ?, the lounge), an agent's peek and its
+  chat, docked beside Town, answer it, Board shows the same terminals as cards and
+  strings, and the phone scene replies in Chat. The film paints Town with the
+  app's own Town code instead of the retired Office's Claw-Empire sprites, adds a
+  text version and spoken captions, and with reduced motion cuts instead of moving
+  the camera. Full screen turns a phone to landscape where it can, and fills the
+  window on iPhone. New poster image.
+- The film page now plays a video recorded from the live film (WebM VP9 with an
+  MP4 fallback and WebVTT captions, about 7 MiB, never autoplaying), so phones no
+  longer wait for the canvas to draw. "Watch it drawn live" keeps the interactive
+  film. `bun run film:render` records it, and the Pages deploy renders it.
+- The pull request card recognises named reviewer seats such as `rev-opus` and
+  `rev-astra` on a RESULT post's `Reviewer:` line, as well as numbered ones
+  like `rev2`.
+- An agent window's header no longer has a separate colour swatch: the agent's
+  icon sits on its terminal colour, and clicking it opens the agent's settings,
+  starting with the colour. This saves space in the bar.
+- An agent window's header names the agent `<name>-<harness>` (for example
+  `otter-claude`), shortened in the middle past 14 characters with the full
+  name in its tooltip, and shows its state as a badge on the agent's icon (a
+  tick when done, a spinner while working, **!** when it needs you, a grey dot
+  when idle) instead of a word, which stays in the tooltip.
+- Opening an agent works the same in Town, Board and Desk: it opens the agent's
+  Chat when Chat can read its harness, and its terminal otherwise; a plain shell
+  opens its terminal. **Menu → Agents open** (formerly **Town opens**) chooses
+  Terminal instead for every view.
+- Town's hover card no longer has an **Inspector** button: **Open chat** and
+  **Open terminal** open the agent's window, whose Files and Changes views
+  hold the rest.
+- In Chat's composer, Enter starts a new line, as in the terminal composer;
+  **Send** or `Ctrl+Enter` (`Cmd+Enter` on a Mac) sends.
+- Local checks from parallel worktrees share one machine-wide queue: one World
+  browser lane and one behavioral verification at a time, at most two static or
+  unit lanes, with a "waiting for" message naming the holder. A pre-push that only
+  merges `origin/main` runs static checks only (`bun run check:static`); CI stays
+  the full gate.
+- `HERDR_WORLD_TEST_GPU=1` renders WebGL in local World browser suites on the GPU
+  (hardware ANGLE over Vulkan), cutting their CPU use, with an automatic fallback
+  to SwiftShader. CI keeps SwiftShader.
+- A `herdr notification show` with no sound is now a message for you rather
+  than a finished task; with `--sound done` it is still a finish.
+- Store Teams and Pods in one persistent Group model. Existing magnetic groups
+  migrate automatically; Pod membership uses stable agent addresses, with explicit
+  role transfers and bounded recent edit attribution.
+- Local development uses less disk.
+  - Behavioral verification's checker is downloaded once per user and shared by
+    every worktree, and each worktree keeps only its newest verification runs.
+  - Test runs, including a direct `bun test`, remove their temporary and test
+    Chrome directories (and any Chrome still using them) however they end.
+  - `bun run agent:worktree -- prune` removes merged, clean agent worktrees, or
+    only their build output while an agent still works in them.
+  - Heavy checks refuse to start below 3 GB of free space.
+- Give every window one bar: identity, the view selector and **⋯**,
+  maximize and close share a single row at every width. Minimize, snap and
+  float move into **⋯**; the location line under the name opens branch and PR
+  status, replacing the repository row and the PR card above Changes and
+  Commits. In Town the window takes the Town prototype's dark look, in light
+  and dark themes alike, with **‹ Back**,
+  and on a phone it fills the screen like the terminal, with the views and the
+  other agents and terminals under **⋯**. Pixelify Sans and JetBrains Mono now
+  ship with World instead of falling back to system fonts.
+- Town's docked agent window now opens 520px wide (at most half the screen)
+  instead of taking half of a large screen, so Town stays in view and Chat
+  lines stay readable. Drag its left edge to resize it; Town remembers the
+  width. **Right half** in the window menu still takes half.
+- Picking up a Town table or agent now feels physical: it lifts off, follows
+  the pointer on a spring and leans into the motion, and a carried agent kicks
+  its legs. Every confirmed move, in a room or to another room, lands with a
+  bounce and a puff of dust; a refused move shakes and springs back. Calm and
+  reduced motion keep the carry under the pointer and end with a short fade.
+- Town rooms extend to fit: a room grows to its screen's width (eight tables
+  on wide screens, six on portrait and half-width ones, four on phones) and
+  then adds rows as more tables are revealed. Repeated expansion can show
+  every observed tab without a fixed expanded ceiling. Desks keep their native
+  tab order rather than promoting the newest or busiest agents.
+- Town lays out buildings for its container: one column of rooms on phones,
+  two on portrait and half-width screens, three on wide ones. A growing room
+  moves only the rooms below it, waits while you hold, scroll or zoom the
+  town, and keeps the room you are looking at in place. Zooming into a very
+  large room, from its card or with Zoom in, opens at its first tables, and a
+  table or agent held near the edge of the view scrolls the town toward rooms
+  out of sight.
+- Town's quest marker is now a swallowtail pennant beside a seated agent,
+  in the quest's status colour and the same size at every zoom, so it no
+  longer looks like a pin. Hover or tap it to see **Quest**, the title and
+  its progress. A Loop or goal quest, which has no steps, used to show only
+  a tiny gold square.
+- Town room plates show active/total agents: working or waiting on you, out of
+  all reported agents. Hover the count for the working/waiting breakdown;
+  plain terminals and open asks do not add to this agent count.
+- Keep folded Town desks in the same tab order as Spaces: show the first 24,
+  with red needs-you and green unreviewed-completion icons on the bottom-right
+  **» +N** tile for hidden desks. Selection, pins, activity and open questions
+  do not promote later tabs across the fold boundary.
+- Reveal up to 20 more desks per Expand click until the whole room is shown,
+  with a separate Fold action available immediately after the first expansion.
+- Open Town in Zen mode, full-bleed, with its own Zen choice. Zen now works on
+  phones too, hiding the top bar and bottom navigation on Town, Board and Desk.
+  While Zen is on, a view picker (beside Exit Zen on desktop, a corner button on
+  phones) switches between Town, Board, Desk and Spaces.
+- Board's **Work** lens now shows every pull request you opened that was
+  merged in the last 7 days, not just the latest 20, grouped by the day it
+  merged with today open; Done tickets group by the day they were resolved.
+  Change the window, from 1 to 90 days, in **Settings → Sources**.
+- Every World view now opens in Zen by default, not just Town: Board, Desk and
+  Spaces show the floating view picker instead of the bars, on desktop and on
+  phones. On a phone this includes Spaces' list, while an open terminal keeps
+  its own bar with Back. One Zen choice covers all views, and **Zen mode** in
+  the settings menu still turns it off.
 
 ### Fixed
 
@@ -88,8 +377,11 @@ prepared.
   session's transcript has the same words after the send, and then marks it
   matched by its words, never delivered. A red notice names the other
   session, and pauses Send, only on evidence of a switch after the send, and
-  Chat says when it can no longer check, or cannot tell. Chat refuses
-  commands it cannot check (slash commands, and Claude Code's `!` and `#`).
+  Chat says when it can no longer check, or cannot tell. Slash commands use the
+  same session-qualified prompt, with a **sent, not checked** receipt until the
+  literal command appears in that session's transcript; this confirms text was
+  seen, not that the command had its intended effect. Claude Code's `!` and `#`
+  terminal input modes still require Terminal.
 
 - History and Chat no longer show Codex repository instructions and environment
   blocks, Claude Code local-command caveats, task notifications, compaction
@@ -102,6 +394,180 @@ prepared.
 
 - Successful uploads from the desktop Message editor stay in its draft without
   reporting an input failure; uploads from desktop terminal output still use Direct.
+- Notify once per available World release version and keep the menu attention dot
+  and Upgrade action after dismissal, including a retry after failed upgrades.
+- Preserve native Ctrl+Shift+V terminal text paste on plain-HTTP LAN addresses
+  in Windows/Linux browsers, while keeping async image paste over HTTPS or
+  localhost. Use Ctrl+V or drag and drop for images on plain HTTP. Custom paste
+  shortcuts now explain the native paste, drag-and-drop and HTTPS alternatives
+  when clipboard reads are unavailable.
+- Keep terminal URL links usable in Town and Board Inspectors when adjacent
+  progress rows repaint. Preserve a freshly verified OSC 8 target across repeated
+  hover callbacks during desktop window activation, while changed targets and
+  frames still require validation. Desktop modifier-click and phone Open link
+  remain available with Composer open.
+- Board Send asks again if a previously captured agent session disappears,
+  even when the pane, terminal and foreground process group stay the same.
+  Session loss during submission is reported as uncertain delivery instead
+  of success; inspect the pane before sending again.
+- An explicit Board **Send to** confirmation targets only the chosen agent,
+  even if the original recipient returns before submission. Missing-session
+  guidance distinguishes unavailable identity from a known replacement.
+- Let native plugin compatibility checks wait for transient filesystem locks,
+  while keeping persistent cleanup failures and original assertion errors visible.
+- Notification 'Open agent' follows **Agents open**: Chat by default when
+  supported, or Terminal when selected or when Chat is unavailable. Spaces opens
+  the notified agent on its owning host and keeps the current Inspector if the
+  notification is refused. Newer notification destinations stay selected when
+  older lookups finish. Refused successors restore the original Inspector even
+  when an older notification had already closed it, without replacing a newer
+  user-selected Inspector.
+- Chat and History can read Claude Code conversations on Unix SSH hosts when
+  Herdr reports the session UUID. Lookup uses the selected host's transcript
+  files, refuses ambiguous matches and never falls back to a local conversation.
+  Readable, bound conversations support the existing session-checked Chat Send.
+- Symlinked remote projects roots are resolved on their host. Discovered paths
+  and stat results must retain the requested session and project-root binding.
+- Files panel no longer crashes when an agent worktree file reference becomes
+  stale. The affected preview offers recovery while Chat and the rest of the
+  window stay open.
+- Agents go by the name Herdr gives them (`firstmate`, `rev1`) instead of
+  their harness (`claude`, `codex`) in Town (hover, nameplates, reception, call rail and
+  pane labels), in window and Inspector titles, in Spaces agent rows, the
+  command palette and the terminal's message prompt. Titles put the name
+  first: `firstmate · claude`. Agents without a Herdr name keep showing their
+  harness.
+- Starting Claude or Codex from Board, or any new agent, no longer leaves a
+  plain shell: World waits for the new tab's shell before starting the agent,
+  gives the agent a name Herdr accepts, and reports at once when the harness
+  exits or stops on a question (#219).
+- Make Board's Work control a labelled leading pill, with phone-sized tap
+  targets and single-row overflow. Keep Needs a home as a distinct note action,
+  including an empty tray reachable from the menu when its count is zero.
+- Restored Chat typing, Send and attachment uploads in the full app while
+  keeping drafts isolated by host, runtime and conversation.
+- Agent Files and Changes now share an evidenced worktree target rather than
+  silently using the launch checkout. The location popover shows sources and
+  alternate worktrees; stale or ambiguous evidence requires a current choice.
+  Unreadable transcript evidence does not hide a usable live worktree, replaced
+  bindings retire pending previews, and agent windows omit unrelated launch-tree
+  Changes counts.
+- Files and Changes refresh their worktree evidence when Herdr reports a changed
+  foreground directory; the chooser clarifies that viewing a tree does not move
+  the agent's terminal.
+- Chat's overflow menu follows the shared Back/Escape layer stack so closing it
+  preserves the underlying window and the unsent draft.
+- Repeated scrolling while an earlier Chat page is loading keeps one request
+  in flight, including when new messages move the recent-history window.
+- A docked Chat window restored on page load, for an agent on a host the page
+  had not opened yet, no longer stays blank until the agent is clicked, even
+  when the connection comes up after the window mounts.
+- Chat no longer runs off the right edge on phones: a long path, command,
+  link or title wraps or scrolls inside its own bubble, and wide tables
+  scroll instead of squeezing every cell to one letter a line.
+- A message sent from Chat with an attachment is no longer left as "Sent; not
+  yet seen" when Claude Code records the image as `[Image #N]`.
+- A message sent from Chat over several lines no longer stays "Sent; not yet
+  seen" or shows twice with its `pasted_content` tags: Chat reads Claude
+  Code's paste wrapper and shows the words marked **Pasted**. When the harness
+  rewrites a send, only a compatible later turn can match it by order; an
+  unrelated prompt from another client leaves the send waiting.
+- A sent message waiting for a busy agent sits at its send time as
+  "Delivered · waiting for <agent>", never below replies written since.
+- A loop the agent scheduled once (`ScheduleWakeup`) no longer shows as in
+  progress after its wake-up has run and no further one was scheduled.
+- An agent's window header shows the name given with `herdr agent rename`
+  instead of the harness name, as Board and Desk do.
+- Chat's message bubbles keep to about 75 characters a line in wide windows.
+- Chat in an agent's window no longer runs past the window: the conversation
+  scrolls inside it and the composer stays at the bottom, docked or floating,
+  on phones and on large screens. Reopening, docking or undocking the window
+  keeps the conversation instead of showing it empty.
+- Chat stays responsive on long, busy transcripts. It now shows History's
+  window (bubbles and collapsed tool cards that load their text when opened)
+  and reads only what changed on each update, instead of rereading and
+  redrawing the whole conversation.
+- The Town master setting finds an agent by its Herdr name (`herdr agent
+  rename`), not only by the label Town shows.
+- Keep Codex Chat and History readable after Codex compresses older session
+  rollouts, including SSH and archived sessions. Original transcript downloads
+  preserve the compressed file.
+- Read Codex conversations from a shared daemon when exactly one pane and one
+  loaded thread match their directory and recent activity. Inferred conversations
+  stay read-only; conflicting reports and ambiguous matches show no conversation.
+- Keep desktop terminal arrow keys and Ctrl combinations working when the
+  phone-only Message composer remains open in the background. Preserve drafts
+  and the phone's explicit Direct input control.
+
+- Keep the phone's Direct terminal button visible while editing an expanded
+  Message draft, and distinguish `/ Commands` from Direct terminal typing.
+
+- Restore side-by-side Composer / Direct mode controls for terminal input,
+  keeping command suggestions separate and preserving the draft in Direct mode.
+
+- Use adjacent keyboard / terminal icons for Composer / Direct and keep special
+  keys visible in both modes, with the draft field shown only in Composer.
+
+- Put mobile Inspector view switching in its header dropdown and move Watching,
+  Muted and Focused to the window's ellipsis menu.
+
+- Put the desk pin first in mobile window menus and keep it in the desktop
+  window menu. Order primary Inspector views Chat, Terminal, Files, Changes.
+- Keep failed or unsupported harness readiness checks unknown instead of
+  reporting the harness missing or logged out. Show safe check details and
+  retry guidance while keeping supported harnesses available.
+- Keep Inspectors, terminal output, split layouts and unsent Message drafts through
+  mobile backgrounding and browser network interruptions. Reconnect to the same
+  runtime without replaying input; terminal recovery now offers local retry and
+  explicit app reload instead of automatically reloading the page.
+
+- Keep cached Files and Changes content while the same worktree is being
+  readmitted after reconnect, and preserve other Inspectors' Message drafts
+  until a fresh catalogue confirms their runtime was replaced or removed.
+  Keep the stale Inspector notice above the phone Message editor so retained
+  drafts remain visible.
+- Retire cached PR-detail readiness and open merge sheets at the original expiry
+  deadline, including idle cards that have not received another source poll.
+
+- Label cached pull request detail with its own freshness and read time after
+  failed or expired reads, retain useful evidence links, and require fresh
+  head-qualified detail before World dispatches a merge.
+- Keep formal review and comment RESULT evidence visible on pull request cards,
+  including source links for unknown reviewers, and reject ambiguous reviewer or
+  commit claims and contradictory finding counts when computing readiness.
+  Historical evidence SHAs no longer contradict the declared reviewed head.
+- Keep Spaces responsive when a host repeatedly returns a stale tab layout,
+  while retrying for the selected pane on its original host.
+- Mark failed-host Town buildings, receptions, agents and Board cards stale,
+  keep live actions disabled, and offer an explicit Reconnect control.
+- Continue automatic recovery from transient SSH tunnel failures with capped
+  backoff, including initial remote HOME discovery, instead of leaving a
+  reachable host permanently failed after six tries.
+- Show Town building signs when their DOM first mounts or returns after camera
+  culling, including the failed-host Reconnect control at roof level.
+- Keep Board card resize observers attached during status refreshes to avoid
+  redundant layout and drawing work while typing in a terminal.
+- Phones show the Town board again: a compact chip under the search bar
+  counts agents working, needing you and done, and opens the full board with
+  spend.
+- Apply Town Fold and Expand immediately after a tap instead of waiting for the background layout quiet period.
+- Town room nameplates stay within their rooms, truncate only long names, and
+  reveal Rename and Close below on hover, focus or touch. The dashed **+** seat
+  opens that room's agent launcher, with Terminal first for a plain shell tab.
+  A removed room or replaced host runtime requires a fresh room choice instead
+  of silently sending creation to another host.
+- Town Summary room and host counts follow the observed agent roster when raw
+  coverage includes additional agents.
+- Keep Town responsive during dense status refreshes by reusing prepared room
+  totals and qualified attention lookups for Summary and desk admission.
+- Windows: installing or upgrading the Herdr plugin no longer reports a failure
+  when the installer cannot yet delete its temporary copy of the new binary
+  (for example while an antivirus scan holds it). The folder is removed by a
+  later install; a real install failure is still reported as one.
+- Let `agent:worktree -- prune` remove eligible worktrees when unrelated processes
+  use the filesystem root, ancestor directories or similarly prefixed sibling
+  paths, while retaining worktrees referenced by Docker mounts or shell commands
+  and when process inspection is unavailable.
 
 ## [0.2.6] - 2026-10-21
 
