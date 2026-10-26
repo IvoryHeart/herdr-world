@@ -26,9 +26,16 @@ export async function checkTownRoomFold(
   expectedTotal: number,
 ) {
   const renderer = window.__HERDR_TOWN_RENDERER__!;
-  const card = [
-    ...host.querySelectorAll<HTMLButtonElement>(".town-room-card"),
-  ].find((candidate) => candidate.textContent?.includes("fold-room"));
+  const foldRoomCard = () =>
+    [...host.querySelectorAll<HTMLButtonElement>(".town-room-card")].find(
+      (candidate) => candidate.textContent?.includes("fold-room"),
+    );
+  // Renderer readiness and completed target admission can precede this DOM commit.
+  await waitFor(
+    () => foldRoomCard() !== undefined,
+    "the synthetic fold room overview card never mounted",
+  );
+  const card = foldRoomCard();
   check(!!card, "the synthetic fold room has an overview card");
   if (!card) return;
   const room = card.closest<HTMLElement>(".town-room");
