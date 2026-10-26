@@ -554,7 +554,7 @@
                 tabindex="0"
                 data-showcase-tab
                 data-image="./assets/herdr-world-desktop-town.png"
-                data-alt="Town showing four demo workspace rooms and terminal desks"
+                data-alt="Town with four demo workspace rooms, one agent waiting at reception and one finished"
                 data-label="Town"
                 data-title="Explore the town, then open the exact pane."
                 data-copy="Find agents waiting at reception, read their latest messages and open the exact terminal, files or changes."
@@ -589,7 +589,7 @@
                 data-alt="Spaces with a focused workspace and live terminal"
                 data-label="Spaces"
                 data-title="Focus on one workspace."
-                data-copy="Work in live terminal panes, browse files, review changes and read agent history on the workspace’s owning host."
+                data-copy="Work in live terminal panes, browse files, review changes and chat with agents on the workspace’s owning host."
               >
                 <span>03</span> Spaces
               </button>
@@ -602,7 +602,7 @@
                 tabindex="-1"
                 data-showcase-tab
                 data-image="./assets/herdr-world-desktop-files.png"
-                data-alt="Board Inspector previewing the Lantern Notes demo guide"
+                data-alt="Board Inspector previewing the Lantern Notes demo guide with its Mermaid diagram"
                 data-label="Files"
                 data-title="Inspect the repository without leaving the agent."
                 data-copy="Browse the selected workspace and keep its terminal, changes, and agent identity in one movable Inspector."
@@ -618,28 +618,28 @@
                 tabindex="-1"
                 data-showcase-tab
                 data-image="./assets/herdr-world-desktop-changes.png"
-                data-alt="Board Inspector showing the sample tag-filter working-tree diff"
+                data-alt="Board Inspector showing the README section an agent added"
                 data-label="Changes"
                 data-title="Review changes in their workspace context."
-                data-copy="See changed files and inspect a diff beside the selected workspace. This capture shows a sample tag-filter diff in the demo project."
+                data-copy="See changed files and inspect a diff beside the selected workspace. This capture shows the first-run section a Claude Code agent added to the demo README."
               >
                 <span>05</span> Changes
               </button>
               <button
                 type="button"
                 role="tab"
-                id="tab-history"
+                id="tab-chat"
                 aria-controls="showcase-panel"
                 aria-selected="false"
                 tabindex="-1"
                 data-showcase-tab
-                data-image="./assets/herdr-world-desktop-history.png"
-                data-alt="Board Inspector showing a recorded Pi review"
-                data-label="History"
-                data-title="Review what the agent actually did."
-                data-copy="Open Details in the agent's Chat to read its session record beside its workspace context, then return to the same live terminal."
+                data-image="./assets/herdr-world-desktop-chat.png"
+                data-alt="Town with an agent window docked on Chat, showing the agent's report on its README change"
+                data-label="Chat"
+                data-title="Read what the agent did and what it did not verify."
+                data-copy="Chat reads the agent's own transcript: its tool calls, the edit's diff and its report. Reply from the composer, or open Details for the full session record."
               >
-                <span>06</span> History
+                <span>06</span> Chat
               </button>
             </div>
 
@@ -805,10 +805,10 @@
             </figure>
             <figure class="phone phone-right">
               <div class="phone-speaker"></div>
-              <a href="./assets/herdr-world-mobile-spaces.png">
+              <a href="./assets/herdr-world-mobile-chat.png">
                 <img
-                  src="./assets/herdr-world-mobile-spaces.png"
-                  alt="Herdr.World Spaces terminal controls on mobile"
+                  src="./assets/herdr-world-mobile-chat.png"
+                  alt="An agent's Chat on a phone, with its answer and the composer"
                   width="390"
                   height="844"
                   loading="lazy"

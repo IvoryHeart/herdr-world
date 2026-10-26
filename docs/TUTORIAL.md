@@ -307,7 +307,7 @@ check the diff using chapter 2 before treating the work as complete.
 **You are done when:** you can find an agent on the expected host, read its peek,
 and open its terminal or Inspector without losing its workspace context.
 
-![Town with four disposable workspace rooms and live terminal tables](./images/herdr-world-desktop-town.png)
+![Town with four disposable workspace rooms, one agent waiting at reception and one finished](./images/herdr-world-desktop-town.png)
 
 ![Town at phone width](./images/herdr-world-mobile-town.png)
 
@@ -370,6 +370,10 @@ read a conversation, it says why and offers the matching action. The
 
 **You are done when:** you sent an agent a message from Chat and its receipt
 shows it in the transcript.
+
+![Town with an agent window docked on Chat, showing its report on a README change](./images/herdr-world-desktop-chat.png)
+
+![An agent's Chat on a phone](./images/herdr-world-mobile-chat.png)
 
 ### Return after backgrounding
 
@@ -561,9 +565,9 @@ there in a bug report.
 **You are done when:** you can find your workspace card, pin a note and string it
 to the intended workspace or pane. Read the target before using **Send**.
 
-![Board with four workspace cards, terminal tabs and planning notes](./images/herdr-world-desktop-board.png)
+![Board with four workspace cards, terminal tabs and a note strung to an agent](./images/herdr-world-desktop-board.png)
 
-![Board close-up of a workspace, terminal tabs and a strung planning note](./images/herdr-world-mobile-board.png)
+![Board close-up of a note strung to an agent](./images/herdr-world-mobile-board.png)
 
 The Town and Board screenshots use real shell panes in disposable projects.
 The phone Board close-up focuses one workspace, its tabs and a strung note.

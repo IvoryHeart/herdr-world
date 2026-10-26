@@ -9,3 +9,6 @@
 - Distinguish the published 0.2.7 standalone install/upgrade behavior and opt-out
   from Homebrew's missing-only setup and the unreleased source installer fix.
   Match Chat's Configuration path, transcript-tail tool call and receipt labels.
+- Recapture the README, tutorial and website screenshots for 0.2.7 with real
+  Claude Code agents in disposable workspaces, and add desktop and phone Chat
+  captures in place of the History capture.

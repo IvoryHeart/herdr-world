@@ -60,39 +60,33 @@ Office, Tree and Graph have been retired: old `/office` addresses open Town, and
 
 ## Screenshots
 
-The Town and desktop Board captures show the layouts introduced in 0.2.5–0.2.6
-with four disposable workspaces. Mobile Board focuses on one workspace, two
-terminal tabs and a strung
-planning note. These scenes use real shell panes and synthetic notes. Empty
-attention counts reflect those scenes; no agent activity is fabricated. Click a screenshot to open it at full resolution.
+These captures show 0.2.7 with four disposable workspaces on a throwaway Herdr
+session. Three real Claude Code agents ran small tasks there: one added a
+first-run section to the demo README, one is waiting on you and one has
+finished. The notes and terminal commands are synthetic. Click a screenshot to
+open it at full resolution.
 
 ### Desktop
 
-| Town: buildings, rooms and team tables | Board: workspace cards, tabs and notes |
+| Town: buildings, rooms and reception | Board: workspace cards, tabs and a strung note |
 | --- | --- |
-| [![Town with four workspace rooms and live terminal tables](./docs/images/herdr-world-desktop-town.png)](./docs/images/herdr-world-desktop-town.png) | [![Board with four workspace cards, terminal tabs and planning notes](./docs/images/herdr-world-desktop-board.png)](./docs/images/herdr-world-desktop-board.png) |
+| [![Town with four workspace rooms, one agent waiting at reception and one finished](./docs/images/herdr-world-desktop-town.png)](./docs/images/herdr-world-desktop-town.png) | [![Board with four workspace cards, terminal tabs and a note strung to an agent](./docs/images/herdr-world-desktop-board.png)](./docs/images/herdr-world-desktop-board.png) |
 
-[![Spaces with a focused workspace and live terminal](./docs/images/herdr-world-desktop-spaces.png)](./docs/images/herdr-world-desktop-spaces.png)
+[![Spaces with the workspace list and a live terminal](./docs/images/herdr-world-desktop-spaces.png)](./docs/images/herdr-world-desktop-spaces.png)
 
-The shared Inspector keeps Terminal, Files, Changes and agent Chat alongside
-its captured workspace, whether opened from Town, Board or Desk. See the
+Each agent has one window with Chat, Terminal, Files and Changes, whether
+opened from Town, Board or Desk. See [Chat](./docs/CHAT.md) and the
 [tutorial's review exercise](./docs/TUTORIAL.md#daily) for the complete flow.
-The Files, Changes and History captures below show the Inspector over Board;
-the History view is now **Details** inside [Chat](./docs/CHAT.md).
-They use a restored demo project, a sample working-tree diff and a genuine
-recorded Pi review.
 
-| Files | Changes | Agent History |
+| Chat | Files | Changes |
 | --- | --- | --- |
-| [![Board Inspector previewing the demo guide](./docs/images/herdr-world-desktop-files.png)](./docs/images/herdr-world-desktop-files.png) | [![Board Inspector showing the sample tag-filter diff](./docs/images/herdr-world-desktop-changes.png)](./docs/images/herdr-world-desktop-changes.png) | [![Board Inspector showing a recorded Pi review](./docs/images/herdr-world-desktop-history.png)](./docs/images/herdr-world-desktop-history.png) |
+| [![Town with an agent window docked on Chat, showing its report on a README change](./docs/images/herdr-world-desktop-chat.png)](./docs/images/herdr-world-desktop-chat.png) | [![Board Inspector previewing the demo guide](./docs/images/herdr-world-desktop-files.png)](./docs/images/herdr-world-desktop-files.png) | [![Board Inspector showing the README section the agent added](./docs/images/herdr-world-desktop-changes.png)](./docs/images/herdr-world-desktop-changes.png) |
 
 ### Mobile
 
-[![Board close-up with a workspace, terminal tabs and a strung planning note](./docs/images/herdr-world-mobile-board.png)](./docs/images/herdr-world-mobile-board.png)
-
-| Town | Spaces |
-| --- | --- |
-| [![Town at phone width](./docs/images/herdr-world-mobile-town.png)](./docs/images/herdr-world-mobile-town.png) | [![Spaces terminal and touch controls](./docs/images/herdr-world-mobile-spaces.png)](./docs/images/herdr-world-mobile-spaces.png) |
+| Town | Chat | Board | Spaces |
+| --- | --- | --- | --- |
+| [![Town at phone width with the Needs you tray](./docs/images/herdr-world-mobile-town.png)](./docs/images/herdr-world-mobile-town.png) | [![An agent's Chat on a phone](./docs/images/herdr-world-mobile-chat.png)](./docs/images/herdr-world-mobile-chat.png) | [![Board close-up of a note strung to an agent](./docs/images/herdr-world-mobile-board.png)](./docs/images/herdr-world-mobile-board.png) | [![Spaces terminal and touch controls](./docs/images/herdr-world-mobile-spaces.png)](./docs/images/herdr-world-mobile-spaces.png) |
 
 ## Quick start
 
