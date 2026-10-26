@@ -28,22 +28,41 @@ export function useTaskNotificationTarget(options: {
   const current = useRef(options);
   current.current = options;
   const sequence = useRef(0);
+  const retirement = useRef<{
+    request: number;
+    previous: WorkspaceInspectorState | null;
+    retired: WorkspaceInspectorState | null;
+  } | null>(null);
+  const restoreRetired = useCallback(() => {
+    const owned = retirement.current;
+    retirement.current = null;
+    if (owned && current.current.inspector.current === owned.retired)
+      current.current.setInspector(owned.previous);
+  }, []);
   const [pending, setPending] = useState<{
+    request: number;
     target: TaskNotificationTarget;
     pane: Pane;
   } | null>(null);
   useEffect(
     () => () => {
       sequence.current++;
+      retirement.current = null;
     },
     [],
   );
   useEffect(() => {
-    if (!pending) return;
-    const { target, pane } = pending;
+    if (!pending || pending.request !== sequence.current) return;
+    const { request, target, pane } = pending;
+    const clearPending = () =>
+      setPending((value) => (value?.request === request ? null : value));
+    const refuse = () => {
+      if (retirement.current?.request === request) restoreRetired();
+      clearPending();
+    };
     const { client, openChat, openTerminal, onOpened } = current.current;
     if (store.get().activeConnectionId !== target.connectionId) {
-      setPending(null);
+      refuse();
       return;
     }
     if (client.connectionId !== target.connectionId) return;
@@ -51,12 +70,12 @@ export function useTaskNotificationTarget(options: {
       !client.isCurrent() ||
       client.serverRuntimeGeneration !== target.runtimeGeneration
     ) {
-      setPending(null);
+      refuse();
       return;
     }
     const snapshot = store.getConnection(target.connectionId);
     if (snapshot.selectedPaneId !== target.paneId) {
-      setPending(null);
+      refuse();
       return;
     }
     if (
@@ -78,33 +97,46 @@ export function useTaskNotificationTarget(options: {
     )
       openChat(pane);
     else openTerminal();
+    if (retirement.current?.request === request) retirement.current = null;
     onOpened();
-    setPending(null);
+    clearPending();
   });
-  return useCallback(async (target: TaskNotificationTarget) => {
-    const request = ++sequence.current;
-    setPending(null);
-    let restore: (() => void) | undefined;
-    const pane = await store.focusTaskNotificationTarget(target, {
-      activateConnection: true,
-      isCurrent: () => request === sequence.current,
-      beforeFocus: () => {
-        if (request !== sequence.current) return;
-        const { inspector, setInspector } = current.current;
-        const previous = inspector.current;
-        const retired = previous ? { ...previous, open: false } : null;
-        restore = () => {
-          if (inspector.current === retired) setInspector(previous);
-        };
-        // Do not let the old Chat's terminal restore its tab during native focus.
-        setInspector(retired);
-      },
-    });
-    if (request !== sequence.current) return;
-    if (!pane) {
-      restore?.();
-      return;
-    }
-    setPending({ target, pane });
-  }, []);
+  return useCallback(
+    async (target: TaskNotificationTarget) => {
+      const request = ++sequence.current;
+      setPending(null);
+      const pane = await store.focusTaskNotificationTarget(target, {
+        activateConnection: true,
+        isCurrent: () => request === sequence.current,
+        beforeFocus: () => {
+          if (request !== sequence.current) return;
+          const { inspector, setInspector } = current.current;
+          if (
+            retirement.current &&
+            inspector.current === retirement.current.retired
+          ) {
+            // Transfer the original Inspector, never a predecessor's closed copy.
+            retirement.current.request = request;
+            return;
+          }
+          const previous = inspector.current;
+          const retired = previous ? { ...previous, open: false } : null;
+          retirement.current = { request, previous, retired };
+          // Do not let the old Chat's terminal restore its tab during native focus.
+          setInspector(retired);
+        },
+      });
+      if (request !== sequence.current) {
+        // A successor still in prechecks has not taken over this retirement.
+        if (retirement.current?.request === request) restoreRetired();
+        return;
+      }
+      if (!pane) {
+        restoreRetired();
+        return;
+      }
+      setPending({ request, target, pane });
+    },
+    [restoreRetired],
+  );
 }
