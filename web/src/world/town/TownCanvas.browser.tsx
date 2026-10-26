@@ -1,3 +1,4 @@
+import { prepareTownEdgeDrop } from "./townEdgeScroll.browser";
 import { prepareTownRoomCard } from "./townRoomCard.browser";
 import { checkTownBuildingSigns } from "./townBuildingSigns.browser";
 window.__HERDR_WORLD_RENDERER_DEBUG__ = true;
@@ -527,7 +528,7 @@ let latestText =
       return { type: "tab_list", tabs: [] };
     }
     if (method === "town.move_desk" || method === "town.move_pane") {
-      moves.push({ method, params: params ?? {} });
+      moves.push({ method, params: { ...params, connectionId } });
       return { status: "moved", tab_id: "moved-tab", workspace_id: "moved" };
     }
     if (method === "pane.send_input") {
@@ -2618,7 +2619,7 @@ async function run() {
     };
     let moved = false;
     const tried: string[] = [];
-    for (const room of rooms) {
+    for (const room of phone && scale === "extended" ? [] : rooms) {
       const ghost = () => host.querySelector<HTMLElement>(".town-drag-ghost");
       press("pointerdown", at(fromDesk));
       await waitFor(() => ghost() !== null, "holding a desk did not lift it");
@@ -2662,47 +2663,31 @@ async function run() {
       break;
     }
     if (!moved) {
-      // A phone stacks rooms in one column, so the other rooms are out of
-      // view: held at the bottom edge, the desk scrolls the town until
-      // another room is under it.
-      const ghost = () => host.querySelector<HTMLElement>(".town-drag-ghost");
-      const otherRoom = () => {
-        // Only a move to another room reads "Move … to <room>"; its own
-        // room offers "… place" or "Put … last".
-        const label = ghost()?.textContent ?? "";
-        return ghost()?.dataset.valid === "true" && /^Move .+ to /.test(label);
-      };
-      press("pointerdown", at(fromDesk));
-      await waitFor(() => ghost() !== null, "holding a desk did not lift it");
-      // Nudge at the edge, then step back out of it so the town is still
-      // when we look and drop.
-      // The town's own bottom edge (a tray may cover the window's), and
-      // up to about 30 s of scrolling: the 100-desk room is tall on a phone
-      // and a slow runner draws few frames.
-      const stage = canvasHost.getBoundingClientRect();
-      const x = stage.left + stage.width / 2;
-      const edge = [x, stage.bottom - 20] as const;
-      const still = [x, stage.bottom - 110] as const;
-      const until = performance.now() + 30_000;
-      while (!otherRoom() && performance.now() < until) {
-        press("pointermove", edge);
-        await new Promise((resolve) => setTimeout(resolve, 250));
-        press("pointermove", still);
-        await settle();
-      }
-      check(
-        otherRoom(),
-        "holding a desk at the edge never scrolled another room under it",
-      );
+      const target = await prepareTownEdgeDrop({
+        host,
+        canvasHost,
+        fromDesk,
+        press,
+        waitFor,
+        frameDelay: Number(params.get("edgeFrameDelay") ?? 0),
+        workspaceIdForName: (connectionId, name) =>
+          base.connections
+            .find((connection) => connection.connectionId === connectionId)
+            ?.snapshot?.workspaces.find((workspace) => workspace.label === name)
+            ?.workspace_id,
+      });
       const before = moves.length;
       const drawn = { ...drags() };
-      press("pointerup", still);
+      press("pointerup", target.point);
       await waitFor(
         () => moves.length === before + 1,
         "dropping a desk in a room scrolled into view did not move it",
       );
       check(
-        moves[before]!.method === "town.move_desk",
+        moves[before]!.method === "town.move_desk" &&
+          moves[before]!.params.connectionId === target.connection &&
+          moves[before]!.params.workspace_id === target.workspace &&
+          moves[before]!.params.tab_id === target.tab,
         `an edge-scrolled drop sent ${JSON.stringify(moves[before])}`,
       );
       await landed(drawn, "a desk moved to a room scrolled into view");
