@@ -6,6 +6,7 @@ import type {
 } from "./types";
 
 export type NotificationFocusOptions = {
+  isCurrent?(): boolean;
   beforeFocus?(): void;
   activateConnection?: boolean;
 };
@@ -24,6 +25,8 @@ export async function focusTaskNotification(
     unavailable(): void;
   },
 ) {
+  const current = () => options.isCurrent?.() !== false;
+  if (!current()) return false;
   if (!host.targetIsCurrent()) {
     host.unavailable();
     return;
@@ -41,6 +44,7 @@ export async function focusTaskNotification(
     const result = await lease.client.call("pane.get", {
       pane_id: target.paneId,
     });
+    if (!current()) return false;
     const pane = result?.pane as Pane | undefined;
     if (
       !host.isCurrent(lease) ||
@@ -55,13 +59,16 @@ export async function focusTaskNotification(
       const session = await lease.client.call("agent_session.get", {
         pane_id: target.paneId,
       });
+      if (!current()) return false;
       const identity = session?.session?.value ?? session?.agent_session?.value;
       if (!host.isCurrent(lease) || identity !== target.agentSessionId) {
         host.unavailable();
         return;
       }
     }
+    if (!current()) return false;
     options.beforeFocus?.();
+    if (!current()) return false;
     const admitted = await host.focus({
       connectionId: target.connectionId,
       runtimeGeneration: target.runtimeGeneration,
@@ -69,7 +76,9 @@ export async function focusTaskNotification(
       paneId: target.paneId,
       agentSessionId: target.agentSessionId,
       navigationRevision,
+      isCurrent: current,
     });
+    if (!current()) return false;
     if (!admitted) host.unavailable();
     else if (
       options.activateConnection &&
@@ -80,6 +89,7 @@ export async function focusTaskNotification(
     }
     return admitted ? pane : false;
   } catch {
+    if (!current()) return false;
     host.unavailable();
     return;
   }

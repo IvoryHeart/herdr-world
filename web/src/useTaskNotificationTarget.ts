@@ -87,6 +87,7 @@ export function useTaskNotificationTarget(options: {
     let restore: (() => void) | undefined;
     const pane = await store.focusTaskNotificationTarget(target, {
       activateConnection: true,
+      isCurrent: () => request === sequence.current,
       beforeFocus: () => {
         if (request !== sequence.current) return;
         const { inspector, setInspector } = current.current;

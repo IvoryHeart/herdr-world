@@ -137,6 +137,8 @@ export interface TaskNotificationTarget {
 }
 
 export interface QualifiedFocusTarget {
+  /** Browser-only request cancellation; never sent to Herdr. */
+  isCurrent?(): boolean;
   /** Browser-local intent captured before asynchronous notification admission. */
   navigationRevision?: number;
   agentSessionId?: string;

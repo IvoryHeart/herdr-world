@@ -54,10 +54,11 @@ function qualifiedRuntimeTargetIsCurrent(
 }
 
 function qualifiedLeaseIsCurrent(
-  target: QualifiedRuntimeTarget,
+  target: QualifiedRuntimeTarget & { isCurrent?(): boolean },
   lease: StoreConnectionLease,
 ): boolean {
   return (
+    target.isCurrent?.() !== false &&
     lease.connectionId === target.connectionId &&
     lease.client.connectionId === target.connectionId &&
     lease.client.acceptsServerGeneration(target.runtimeGeneration) &&

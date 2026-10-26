@@ -177,7 +177,15 @@ const session = () => ({
   selectedPaneId: "shared",
   layout,
 });
-let catalogue = ["alpha", "beta", "offline"];
+let catalogue =
+  operation === "spaces-notifications"
+    ? ["alpha", "beta", "gamma", "offline"]
+    : ["alpha", "beta", "offline"];
+let heldNotificationGet: {
+  host: string;
+  started(): void;
+  wait: Promise<void>;
+} | null = null;
 let offline = false;
 let dense = false;
 const densePanes: Pane[] = Array.from({ length: 40 }, (_, index) => ({
@@ -1935,6 +1943,89 @@ async function operationalScenario(unmount: () => void) {
         ) === true,
       "Spaces notification retains Alpha's session",
     );
+    const notifyHost = (connectionId: string) =>
+      window.dispatchEvent(
+        new CustomEvent(TASK_NOTIFICATION_ACTIVATE_EVENT, {
+          detail: {
+            connectionId,
+            runtimeGeneration: 7,
+            workspaceId: "shared",
+            paneId: "shared",
+          },
+        }),
+      );
+    notifyHost("alpha");
+    await waitFor(
+      () =>
+        store.get().activeConnectionId === "alpha" &&
+        dispatches.some(
+          (call) =>
+            call.connectionId === "alpha" &&
+            call.method === "agent_conversation.latest",
+        ),
+      "race starts from Alpha Chat",
+    );
+    const olderStarted = Promise.withResolvers<void>();
+    const olderRelease = Promise.withResolvers<void>();
+    const olderFinished = Promise.withResolvers<unknown>();
+    heldNotificationGet = {
+      host: "beta",
+      started: () => olderStarted.resolve(),
+      wait: olderRelease.promise,
+    };
+    const focus = store.focusTaskNotificationTarget;
+    store.focusTaskNotificationTarget = async (target, options) => {
+      const result = await focus(target, options);
+      if (target.connectionId === "beta") olderFinished.resolve(result);
+      return result;
+    };
+    try {
+      notifyHost("beta");
+      await olderStarted.promise;
+      notifyHost("gamma");
+      await waitFor(
+        () =>
+          store.get().activeConnectionId === "gamma" &&
+          dispatches.some(
+            (call) =>
+              call.connectionId === "gamma" &&
+              call.method === "agent_conversation.latest",
+          ),
+        "newer Gamma notification completes while Beta lookup is delayed",
+      );
+      const gammaChat = [
+        ...document.querySelectorAll<HTMLElement>(
+          '.workspace-inspector[data-view="history"]',
+        ),
+      ].find((element) => element.getBoundingClientRect().width > 0)!;
+      const mutations = dispatches.length;
+      olderRelease.resolve();
+      check(
+        (await olderFinished.promise) === false,
+        "superseded delayed Beta notification is refused",
+      );
+      await frame();
+      check(
+        store.get().activeConnectionId === "gamma" &&
+          gammaChat.isConnected &&
+          gammaChat.getBoundingClientRect().width > 0,
+        "obsolete Beta leaves the newer Gamma Chat visible",
+      );
+      check(
+        !dispatches
+          .slice(mutations)
+          .some(
+            (call) =>
+              call.connectionId === "beta" &&
+              ["workspace.focus", "tab.focus"].includes(call.method),
+          ),
+        "obsolete Beta dispatches no native focus after Gamma",
+      );
+    } finally {
+      olderRelease.resolve();
+      store.focusTaskNotificationTarget = focus;
+      heldNotificationGet = null;
+    }
     return;
   }
   if (operation === "notifications") {
@@ -2617,6 +2708,12 @@ async function run() {
               : layout,
         };
       if (method === "pane.get") {
+        if (heldNotificationGet?.host === id) {
+          const held = heldNotificationGet;
+          heldNotificationGet = null;
+          held.started();
+          await held.wait;
+        }
         const target = (dense ? densePanes : fixturePanes).find(
           (value) => value.pane_id === params.pane_id,
         );
@@ -2695,6 +2792,7 @@ async function run() {
     sessionsByConnectionId: {
       alpha: session(),
       beta: coldHost ? emptyServerSessionState(7) : session(),
+      ...(operation === "spaces-notifications" ? { gamma: session() } : {}),
     },
   });
   await worldRuntimeStore.refresh();
