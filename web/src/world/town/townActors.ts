@@ -318,10 +318,14 @@ export class TownActors {
         if (actor.spot) actor.spot = null;
         this.actors.delete(key);
       }
-    this.assignGoals(instant, fresh);
+    this.assignGoals(instant, fresh, world.layout !== previousWorld?.layout);
   }
 
-  private assignGoals(instantAll: boolean, fresh: ReadonlySet<string>) {
+  private assignGoals(
+    instantAll: boolean,
+    fresh: ReadonlySet<string>,
+    layoutChanged: boolean,
+  ) {
     const world = this.world;
     if (!world) return;
     const { model } = world;
@@ -394,7 +398,20 @@ export class TownActors {
       if (goal.kind !== "lounge" && actor.spot) actor.spot = null;
       if (goal.kind === "lounge") actor.spot = goal.spot;
       actor.queueSlot = goal.kind === "queue" ? goal.slot : null;
-      const instant = instantAll || fresh.has(actor.key);
+      // A shrink can remove the floor under an in-flight actor even when the
+      // building origin is unchanged. Settle invalid motion at its new goal;
+      // never use a straight fallback path through the removed floor.
+      const outside = (x: number, y: number) =>
+        x < building.x * T ||
+        x >= (building.x + building.w) * T ||
+        y < building.y * T ||
+        y >= (building.y + building.h) * T;
+      const invalidMotion =
+        layoutChanged &&
+        (outside(actor.x, actor.y) ||
+          (actor.tween !== null && outside(actor.tween.x, actor.tween.y)) ||
+          actor.path.some(([x, y]) => outside(x, y)));
+      const instant = instantAll || fresh.has(actor.key) || invalidMotion;
       if (sameGoal(actor.goal, goal) && !instant) {
         if (actor.mode === "seat" || actor.mode === "stand")
           this.travel(actor, true, true);
@@ -444,6 +461,7 @@ export class TownActors {
       return;
     }
     if (instant) {
+      this.afterTween.delete(actor.key);
       actor.path = [];
       actor.tween = null;
       if (target.seat) {

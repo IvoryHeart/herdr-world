@@ -370,14 +370,13 @@ test("lounge agents retain distinct current-building spots after a snapshot relo
   expect(occupied.size).toBe(3);
 });
 
-test.each([
+for (const [status, elapsed] of [
   ["blocked", 0.1],
   ["idle", 0.1],
   ["blocked", 0.5],
   ["idle", 0.5],
-] as const)(
-  "a %s agent moves with its building after %ss of travel",
-  (status, elapsed) => {
+] as const) {
+  test(`${status} agent moves with its building after ${elapsed} seconds`, () => {
     const actors = new TownActors();
     actors.sync(world({ a: "working" }).actorWorld, false);
     const before = world({ a: status });
@@ -417,5 +416,38 @@ test.each([
       spot.x * TOWN_TILE + 8,
       spot.y * TOWN_TILE + 13,
     ]);
-  },
-);
+  });
+}
+
+for (const count of [24, 4]) {
+  test(`a reception walker stays on the current floor after 80 desks shrink to ${count}`, () => {
+    const actors = new TownActors();
+    actors.sync(world({ a: "working" }, 80).actorWorld, false);
+    const large = world({ a: "blocked" }, 80);
+    const small = world({ a: "blocked" }, count);
+    const building = small.actorWorld.buildings.get("host")!;
+    const bottom = (building.y + building.h) * TOWN_TILE;
+    actors.sync(large.actorWorld, false);
+    for (let i = 0; i < 2000 && actors.actors.get("a")!.y < bottom + 70; i += 1)
+      actors.step(1 / 30);
+    const actor = actors.actors.get("a")!;
+    expect(actor.mode).toBe("walk");
+    expect(actor.y).toBeGreaterThan(bottom);
+    expect(large.layout.buildings[0]!.x).toBe(building.x);
+    expect(large.layout.buildings[0]!.y).toBe(building.y);
+    actors.sync(small.actorWorld, false);
+    for (let i = 0; i < 60; i += 1) {
+      expect(actor.x).toBeGreaterThanOrEqual(building.x * TOWN_TILE);
+      expect(actor.x).toBeLessThan((building.x + building.w) * TOWN_TILE);
+      expect(actor.y).toBeGreaterThanOrEqual(building.y * TOWN_TILE);
+      expect(actor.y).toBeLessThan(bottom);
+      actors.step(1 / 30);
+    }
+    settle(actors);
+    const spot = building.queue[actor.queueSlot!]!;
+    expect([actor.x, actor.y]).toEqual([
+      spot.x * TOWN_TILE + 8,
+      spot.y * TOWN_TILE + 13,
+    ]);
+  });
+}
