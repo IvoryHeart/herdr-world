@@ -100,7 +100,7 @@ function number(value: string | undefined, label: string) {
 }
 
 /** Every worktree of the clone shares one gate directory in the primary checkout. */
-function gateDir() {
+export function gateDir() {
   const result = runProcess([
     "git",
     "rev-parse",
@@ -162,10 +162,15 @@ function decider(id: string, state: string) {
 
 const out = (text: string) => console.log(text);
 
-type Context = { config: GateConfig; run: Run; mirror: string; now: number };
+export type Context = {
+  config: GateConfig;
+  run: Run;
+  mirror: string;
+  now: number;
+};
 
 /** Read, judge and record in one transaction; nothing is kept if a read fails. */
-function runPass(db: Database, context: Context, numbers: number[]) {
+export function runPass(db: Database, context: Context, numbers: number[]) {
   const started = Date.now();
   const { config, run, mirror, now } = context;
   const inputs = observe({ run, config, numbers, mirror, now }).map(
@@ -186,7 +191,7 @@ function runPass(db: Database, context: Context, numbers: number[]) {
     inputs,
     verdicts,
   });
-  return { passId, verdicts };
+  return { passId, verdicts, inputs };
 }
 
 export async function main(

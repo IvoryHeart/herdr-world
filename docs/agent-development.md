@@ -220,6 +220,67 @@ Source: [`scripts/agent/gate.ts`](../scripts/agent/gate.ts) and
 [`scripts/agent/gate/`](../scripts/agent/gate/). The predicate is pure, and its
 acceptance cases live in `cases.ts`.
 
+### Act on readiness with agent:crew
+
+`agent:crew` is the crew watcher. Agents coordinate through the state on GitHub,
+not by messaging each other. Each pass reads the open PRs through `agent:gate`,
+plans the next step for every PR in scope and takes each step once:
+
+| Gate state | Step | Who |
+|---|---|---|
+| A required reviewer's findings are open on the head | `ACT #N fix` prompt, with the review URLs | The author's seat |
+| A required check fails | `ACT #N ci` prompt | The author's seat |
+| GitHub reports a conflict, or screenshots are missing | `ACT #N conflict` or `ACT #N screenshots` prompt | The author's seat |
+| A required reviewer has no RESULT, or a newer head needs confirming, and checks are green | A fresh reviewer run | That reviewer's model |
+| READY | A Herdr notification | The owner |
+| A judgment condition, an unknown author or a reviewer run that posted nothing | A `NEEDS-OWNER` notification | The owner |
+
+- **Who the author is.** The branch names the author: `agent/<seat>-…`, or the
+  pod lead for `batch/<pod>-<n>`. Set an override per PR in `authors`.
+- **When a seat gets a prompt.** Only when Herdr reports it idle or done and
+  it isn't focused, because a prompt types into the seat's input box. Other
+  steps wait for a later pass. Seats listed in `neverPrompt` are never
+  prompted; the owner gets a notification instead.
+- **How reviewers run.** Each review or confirmation is a fresh `codex exec` or
+  `claude -p` session on the seat's roster model, in a detached checkout of
+  the exact head. It is briefed with references to the work item, posts one
+  review with the canonical header and exits. A confirmation reviews the delta
+  from that reviewer's last claimed commit. At most `maxRuns` run at once. A
+  failed run retries once; a run that finishes without a RESULT on the head
+  goes to the owner after 15 minutes.
+- **What stops a step.** A newer head, a merge or a resolved condition
+  supersedes any step still waiting, and stops a running reviewer.
+- **Where the owner reads it.** Every plan, prompt, run and notification is a
+  line in `.agents/crew-gate/feed.log`, so the owner can follow the crew
+  without any agent spending a turn on it.
+
+```bash
+bun run agent:crew -- pass --dry-run   # print the plan; change nothing
+bun run agent:crew -- watch            # a pass every 300 seconds (--interval)
+bun run agent:crew -- status           # open steps and recent reviewer runs, with token usage
+bun run agent:crew -- feed             # the last lines of the crew feed
+bun run agent:crew -- review --pr 7 --reviewer rev2 --head <sha>   # one fresh reviewer now
+```
+
+Settings go under `crew` in the gate's `config.json`:
+
+- `pods` limits the watcher to PRs labelled `pod:<name>`; empty means every PR.
+- `prs` adds PRs regardless of their labels.
+- `leads` maps each pod to its lead seat.
+- `authors` holds per-PR author overrides.
+- `neverPrompt` lists seats the watcher never prompts.
+- `maxRuns` (default 3) and `runTimeoutMinutes` (default 90) bound the
+  reviewer runs.
+- The gate config's `roster` gives each reviewer's model and effort.
+
+`crew.sqlite` records each step once under a key built from the PR, head, kind
+and target, so a repeated pass or a restart never prompts twice. Run logs are
+kept in `runs/`. The watcher never pushes, merges, approves or writes to
+GitHub; the fresh reviewers post their own reviews.
+
+Source: [`scripts/agent/crew.ts`](../scripts/agent/crew.ts) and
+[`scripts/agent/crew/`](../scripts/agent/crew/).
+
 ## Limit merge conflict churn
 
 Before parallel changes, identify shared implementation files and keep one writer

@@ -54,6 +54,7 @@
     "agent:usage": "bun scripts/agent/pr-usage.ts",
     "agent:await": "bun scripts/agent/await.ts",
     "agent:gate": "bun scripts/agent/gate.ts",
+    "agent:crew": "bun scripts/agent/crew.ts",
     "agent:stamp": "bun server/src/index.ts stamp",
     "notices:generate": "bun scripts/dependency-notices.ts",
     "notices:check": "bun scripts/dependency-notices.ts --check",
