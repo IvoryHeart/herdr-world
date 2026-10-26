@@ -156,9 +156,11 @@ import {
 import { sanitizeTerminalHttpUrl, terminalFileUriPath } from "../terminalLinks";
 import {
   createTerminalPasteRunner,
+  isNativeTerminalPasteShortcut,
   type TerminalPasteTextareaSnapshot,
   terminalPasteInputText,
   terminalPasteRequest,
+  terminalPasteUnavailableMessage,
 } from "../terminalPaste";
 import {
   TerminalRecoveryBudget,
@@ -1829,12 +1831,13 @@ export function TerminalView({
       const destinationPaneId = paneIdRef.current ?? null;
       try {
         await runPasteOperation(async () => {
-          if (!navigator.clipboard) {
-            throw new Error("browser clipboard API is unavailable");
+          const clipboard = navigator.clipboard;
+          if (!clipboard?.read && !clipboard?.readText) {
+            throw new Error(terminalPasteUnavailableMessage(applePlatform));
           }
-          if (navigator.clipboard.read) {
+          if (clipboard.read) {
             const items = await withTimeout(
-              navigator.clipboard.read(),
+              clipboard.read(),
               CLIPBOARD_READ_TIMEOUT_MS,
               "Clipboard read timed out",
             );
@@ -1871,7 +1874,7 @@ export function TerminalView({
             return;
           }
           const text = await withTimeout(
-            navigator.clipboard.readText(),
+            clipboard.readText(),
             CLIPBOARD_READ_TIMEOUT_MS,
             "Clipboard text read timed out",
           );
@@ -1951,14 +1954,14 @@ export function TerminalView({
         return false;
       }
       if (e.type === "keydown" && shortcutMatches(e, "terminal.paste")) {
-        // Native paste events carry clipboard payloads even on insecure LAN URLs.
-        // Keep the platform's native gesture; custom combinations use the API.
-        const nativePaste =
-          !e.altKey &&
-          !e.shiftKey &&
-          (e.key.toLowerCase() === "v" || e.code === "KeyV") &&
-          (applePlatform ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey);
-        if (nativePaste) return false;
+        // Preserve async image reads for Ctrl+Shift+V on secure origins; its
+        // native plain-text fallback works when HTTP LAN clipboard reads do not.
+        if (
+          isNativeTerminalPasteShortcut(e, applePlatform) &&
+          (!e.shiftKey ||
+            (!navigator.clipboard?.read && !navigator.clipboard?.readText))
+        )
+          return false;
         e.preventDefault();
         e.stopPropagation();
         pasteFromBrowserClipboard().catch((err) => {

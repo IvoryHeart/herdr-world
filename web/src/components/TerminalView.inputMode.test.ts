@@ -369,6 +369,9 @@ async function registerDomTests() {
   );
   const { normalizeTerminalFontScale } = await import("../appearance");
   const { activeTerminalInput } = await import("../activeTerminalInput");
+  const { selectShortcutPreset, updateShortcut } = await import(
+    "../shortcutPreferences"
+  );
   const {
     clearTerminalComposerDraft,
     readTerminalComposerDraft,
@@ -2039,6 +2042,255 @@ async function registerDomTests() {
   }
   const pathCalls = () =>
     calls.filter((call) => call.method === "pane.send_input");
+  async function withPastePlatform(
+    platform: "linux" | "windows" | "mac",
+    clipboard: unknown,
+    run: () => Promise<void>,
+  ) {
+    const platformDescriptor = Object.getOwnPropertyDescriptor(
+      navigator,
+      "platform",
+    );
+    const clipboardDescriptor = Object.getOwnPropertyDescriptor(
+      navigator,
+      "clipboard",
+    );
+    Object.defineProperty(navigator, "platform", {
+      configurable: true,
+      value:
+        platform === "mac"
+          ? "MacIntel"
+          : platform === "windows"
+            ? "Win32"
+            : "Linux x86_64",
+    });
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: clipboard,
+    });
+    selectShortcutPreset(platform);
+    try {
+      await run();
+    } finally {
+      if (platformDescriptor)
+        Object.defineProperty(navigator, "platform", platformDescriptor);
+      else Reflect.deleteProperty(navigator, "platform");
+      if (clipboardDescriptor)
+        Object.defineProperty(navigator, "clipboard", clipboardDescriptor);
+      else Reflect.deleteProperty(navigator, "clipboard");
+      selectShortcutPreset("auto");
+    }
+  }
+  test.each(["linux", "windows", "mac"] as const)(
+    "%s native paste shortcut keeps the browser event when Clipboard API is absent",
+    async (platform) => {
+      await withPastePlatform(platform, undefined, async () => {
+        const shifted = platform !== "mac";
+        if (platform === "windows")
+          updateShortcut("terminal.paste", ["Ctrl+Shift+V"]);
+        await mount(true);
+        await choose("direct");
+        const term = currentTerminal();
+        const event = new browser.KeyboardEvent("keydown", {
+          key: shifted ? "V" : "v",
+          code: "KeyV",
+          ctrlKey: platform !== "mac",
+          metaKey: platform === "mac",
+          shiftKey: shifted,
+          cancelable: true,
+        }) as unknown as KeyboardEvent;
+        await act(async () => expect(term.keyHandler(event)).toBe(false));
+        expect(event.defaultPrevented).toBe(false);
+        expect(pathCalls()).toHaveLength(0);
+        await act(async () => {
+          const paste = new browser.Event("paste", {
+            bubbles: true,
+            cancelable: true,
+          });
+          Object.defineProperty(paste, "clipboardData", {
+            value: {
+              items: [],
+              getData: (type: string) =>
+                type === "text/plain" ? "hello\nworld" : "",
+            },
+          });
+          term.textarea.dispatchEvent(paste as unknown as Event);
+        });
+        expect(pathCalls()).toEqual([
+          {
+            method: "pane.send_input",
+            params: { pane_id: "pane-a", text: "hello\rworld", keys: [] },
+          },
+        ]);
+        expect(document.body.textContent).not.toContain("Paste failed:");
+      });
+    },
+  );
+  test("Ctrl+Shift+V preserves plain-text paste when clipboard reads are absent", async () => {
+    await withPastePlatform("linux", {}, async () => {
+      await mount(true);
+      await choose("direct");
+      const event = new browser.KeyboardEvent("keydown", {
+        key: "V",
+        code: "KeyV",
+        ctrlKey: true,
+        shiftKey: true,
+        cancelable: true,
+      }) as unknown as KeyboardEvent;
+      await act(async () => {
+        currentTerminal().keyHandler(event);
+      });
+      expect(event.defaultPrevented).toBe(false);
+      await act(async () => {
+        const paste = new browser.Event("paste", {
+          bubbles: true,
+          cancelable: true,
+        });
+        Object.defineProperty(paste, "clipboardData", {
+          value: {
+            items: [],
+            getData: (type: string) =>
+              type === "text/plain" ? "plain text" : "",
+          },
+        });
+        currentTerminal().textarea.dispatchEvent(paste as unknown as Event);
+      });
+      expect(uploads).toHaveLength(0);
+      expect(pathCalls()).toEqual([
+        {
+          method: "pane.send_input",
+          params: {
+            pane_id: "pane-a",
+            text: "plain text",
+            keys: [],
+          },
+        },
+      ]);
+      expect(document.body.textContent).not.toContain("Paste failed:");
+    });
+  });
+  test.each(["linux", "windows"] as const)(
+    "%s Ctrl+Shift+V reads clipboard images when the async API is available",
+    async (platform) => {
+      const image = new Blob(["image"], { type: "image/png" });
+      const read = mock(async () => [
+        { types: ["image/png"], getType: async () => image },
+      ]);
+      await withPastePlatform(platform, { read }, async () => {
+        updateShortcut("terminal.paste", ["Ctrl+Shift+V"]);
+        await mount(true);
+        await choose("direct");
+        const event = new browser.KeyboardEvent("keydown", {
+          key: "V",
+          code: "KeyV",
+          ctrlKey: true,
+          shiftKey: true,
+          cancelable: true,
+        }) as unknown as KeyboardEvent;
+        await act(async () => {
+          currentTerminal().keyHandler(event);
+        });
+        expect(event.defaultPrevented).toBe(true);
+        expect(read).toHaveBeenCalledTimes(1);
+        expect(uploads).toHaveLength(1);
+        await act(async () => uploads[0]!.resolve("/tmp/clipboard-image.png"));
+        expect(pathCalls()).toEqual([
+          {
+            method: "pane.send_input",
+            params: {
+              pane_id: "pane-a",
+              text: "/tmp/clipboard-image.png ",
+              keys: [],
+            },
+          },
+        ]);
+      });
+    },
+  );
+  test.each(["linux", "windows"] as const)(
+    "%s Ctrl+Shift+V keeps the async text path when only readText is available",
+    async (platform) => {
+      const readText = mock(async () => "async text");
+      await withPastePlatform(platform, { readText }, async () => {
+        updateShortcut("terminal.paste", ["Ctrl+Shift+V"]);
+        await mount(true);
+        await choose("direct");
+        const event = new browser.KeyboardEvent("keydown", {
+          key: "V",
+          code: "KeyV",
+          ctrlKey: true,
+          shiftKey: true,
+          cancelable: true,
+        }) as unknown as KeyboardEvent;
+        await act(async () => {
+          currentTerminal().keyHandler(event);
+        });
+        expect(event.defaultPrevented).toBe(true);
+        expect(readText).toHaveBeenCalledTimes(1);
+        expect(pathCalls()).toEqual([
+          {
+            method: "pane.send_input",
+            params: { pane_id: "pane-a", text: "async text", keys: [] },
+          },
+        ]);
+      });
+    },
+  );
+  test.each(["linux", "mac"] as const)(
+    "%s custom shortcut gives native-paste guidance when clipboard reads are unavailable",
+    async (platform) => {
+      await withPastePlatform(platform, undefined, async () => {
+        updateShortcut("terminal.paste", ["Ctrl+Alt+V"]);
+        await mount(true);
+        await choose("direct");
+        const event = new browser.KeyboardEvent("keydown", {
+          key: "v",
+          code: "KeyV",
+          ctrlKey: true,
+          altKey: true,
+          cancelable: true,
+        }) as unknown as KeyboardEvent;
+        await act(async () => {
+          currentTerminal().keyHandler(event);
+        });
+        expect(event.defaultPrevented).toBe(true);
+        expect(document.body.textContent).toContain(
+          "This paste shortcut needs HTTPS or localhost.",
+        );
+        expect(document.body.textContent).toContain(
+          platform === "mac" ? "Use ⌘V" : "Use Ctrl+V",
+        );
+        expect(document.body.textContent).toContain("drag and drop files");
+        expect(pathCalls()).toHaveLength(0);
+      });
+    },
+  );
+  test("custom shortcut keeps the async text path when clipboard reads are available", async () => {
+    const readText = mock(async () => "async paste");
+    await withPastePlatform("linux", { readText }, async () => {
+      updateShortcut("terminal.paste", ["Ctrl+Alt+V"]);
+      await mount(true);
+      await choose("direct");
+      const event = new browser.KeyboardEvent("keydown", {
+        key: "v",
+        code: "KeyV",
+        ctrlKey: true,
+        altKey: true,
+        cancelable: true,
+      }) as unknown as KeyboardEvent;
+      await act(async () => {
+        currentTerminal().keyHandler(event);
+      });
+      expect(event.defaultPrevented).toBe(true);
+      expect(readText).toHaveBeenCalledTimes(1);
+      expect(pathCalls()).toEqual([
+        {
+          method: "pane.send_input",
+          params: { pane_id: "pane-a", text: "async paste", keys: [] },
+        },
+      ]);
+    });
+  });
   test("desktop file paste keeps its existing terminal destination without a mobile mode choice", async () => {
     mobileLayout = false;
     const media = browser.matchMedia;
