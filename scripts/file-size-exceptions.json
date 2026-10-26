@@ -25,7 +25,7 @@
     "web/src/components/FileExplorerDialog.tsx": 2460,
     "web/src/components/FilePreviewContent.tsx": 1237,
     "web/src/components/TerminalComposer.tsx": 1230,
-    "web/src/components/TerminalView.tsx": 4279,
+    "web/src/components/TerminalView.tsx": 4282,
     "web/src/components/WorkspaceInspectorHost.tsx": 1369,
     "web/src/components/WorkspaceTree.tsx": 1311,
     "web/src/store.ts": 2966,

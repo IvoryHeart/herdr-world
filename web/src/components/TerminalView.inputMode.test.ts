@@ -269,7 +269,9 @@ async function registerDomTests() {
   mock.module("./AnnotationComposerPopover", () => ({
     AnnotationComposerPopover: () => null,
   }));
+  const { nextTerminalOscHover } = await import("../terminalLinkProvider");
   mock.module("../terminalLinkProvider", () => ({
+    nextTerminalOscHover,
     registerTerminalLinkProvider: disposable,
   }));
   mock.module("@xterm/addon-clipboard", () => ({
