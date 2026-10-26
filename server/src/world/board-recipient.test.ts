@@ -3,7 +3,7 @@ import {
   decodeRecipient,
   encodeRecipient,
   recipientOps,
-  sameRecipient,
+  matchesRecipient,
   sessionOf,
 } from "./board-recipient";
 import type { BoardAnchor, BoardDocument, BoardOp } from "./board-store";
@@ -12,30 +12,39 @@ const token = (agent: string, session?: string, group?: number) =>
   encodeRecipient({ agent, session, group });
 
 describe("Which agent a Board string is for", () => {
-  test("the same session, or the same process group when either lacks one", () => {
+  test("a witnessed session must persist; a group-only witness may learn one", () => {
     expect(
-      sameRecipient(token("claude", "s1", 10), token("claude", "s1", 11)),
+      matchesRecipient(token("claude", "s1", 10), token("claude", "s1", 11)),
     ).toBe(true);
     expect(
-      sameRecipient(token("claude", undefined, 10), token("claude", "s1", 10)),
+      matchesRecipient(
+        token("claude", undefined, 10),
+        token("claude", "s1", 10),
+      ),
     ).toBe(true);
     expect(
-      sameRecipient(token("claude", "s1", 10), token("claude", "s2", 10)),
+      matchesRecipient(token("claude", "s1", 10), token("claude", "s2", 10)),
     ).toBe(false);
     expect(
-      sameRecipient(
+      matchesRecipient(
+        token("claude", "s1", 10),
+        token("claude", undefined, 10),
+      ),
+    ).toBe(false);
+    expect(
+      matchesRecipient(
         token("claude", undefined, 10),
         token("claude", undefined, 11),
       ),
     ).toBe(false);
     expect(
-      sameRecipient(token("claude", "s1", 10), token("codex", "s1", 10)),
+      matchesRecipient(token("claude", "s1", 10), token("codex", "s1", 10)),
     ).toBe(false);
   });
 
   test("nothing, a malformed token or one with no identity matches nothing", () => {
-    expect(sameRecipient(undefined, token("claude", "s1", 10))).toBe(false);
-    expect(sameRecipient("not json", "not json")).toBe(false);
+    expect(matchesRecipient(undefined, token("claude", "s1", 10))).toBe(false);
+    expect(matchesRecipient("not json", "not json")).toBe(false);
     expect(decodeRecipient(token("claude"))).toBeNull();
     expect(decodeRecipient(JSON.stringify(["claude", 7, null]))).toBeNull();
     expect(decodeRecipient("x".repeat(300))).toBeNull();

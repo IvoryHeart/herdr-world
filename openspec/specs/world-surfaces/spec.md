@@ -2232,12 +2232,18 @@ string whose agent could not be confirmed that way (no session shown, a
 replacement before the read, no answer) SHALL stay unbound. Only the service
 SHALL set a recipient, qualified by the anchor's connection, pane and terminal;
 a re-witnessed anchor (after Herdr restarts) SHALL drop it. At Send the service SHALL compare the pane's agent
-with the recipient: they are the same agent when their kinds match and their
-sessions match, or, when either has no session, their process groups match.
+with the expected recipient: their kinds SHALL match, and an expected session
+SHALL remain present and equal in the observation. Only a group-only expected
+recipient MAY match by process group and learn its first session that way.
+If the expected session disappears while the agent kind and process group
+still match, World SHALL report that Herdr no longer reports the session,
+not claim that a replacement is known, and SHALL ask for confirmation.
 Another agent in the same pane and terminal, or a string whose recipient was
 never recorded, SHALL be refused with that agent named, and the note SHALL go
 to it only when the user confirms that agent; the confirmed agent becomes the
-string's recipient. Herdr cannot hold a pane between a check and the prompt, so
+string's recipient. An explicit confirmation SHALL select the expected recipient
+for that attempt; a match with the saved recipient SHALL NOT override it.
+Herdr cannot hold a pane between a check and the prompt, so
 the service SHALL read the pane's agent again after the prompt and report a
 change as possibly delivered to another agent, never as sent. A note SHALL offer to
 start a new agent in a chosen workspace, which creates a tab, starts the agent
@@ -2261,6 +2267,21 @@ shown on the note when they are reported; World SHALL NOT invent them.
 
 - **WHEN** the pane's agent is replaced between the service's last check and the prompt
 - **THEN** World reports that the note may have reached another agent and does not report it as sent
+
+#### Scenario: A captured session becomes unavailable
+
+- **WHEN** Herdr stops reporting the session captured for a note or an explicit confirmation, while the pane, terminal, agent kind and process group stay the same
+- **THEN** Send submits no prompt, reports the missing session without claiming a known replacement, and asks the user to confirm the current recipient
+
+#### Scenario: The original agent returns before a replacement confirmation
+
+- **WHEN** a note was bound to A, World offers Send to B, and A returns before that confirmation is submitted
+- **THEN** confirmation of B is refused and no prompt is submitted, even if A still matches the saved recipient or its group-only evidence
+
+#### Scenario: A group-only recipient reports its first session
+
+- **WHEN** the expected recipient has only process-group evidence and the observed agent has the same kind and group plus its first session
+- **THEN** the observation matches and a successful Send records the newly reported session
 
 #### Scenario: String to a tab with two agents
 
