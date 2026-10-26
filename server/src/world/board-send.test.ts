@@ -155,6 +155,26 @@ describe("Send goes only to the agent the note was strung to (#228)", () => {
     expect(prompts(h.calls)).toBe(0);
   });
 
+  test("a witnessed session cannot disappear into a reused process group before Send", async () => {
+    const h = herdr({ occupant: { group: AGENT_A.group } });
+    expect(await sendNote(h.call, await request())).toMatchObject({
+      status: "refused",
+      reason: "replaced",
+    });
+    expect(prompts(h.calls)).toBe(0);
+  });
+
+  test("a confirmation cannot lose its session identity before Send", async () => {
+    const h = herdr({ occupant: { group: AGENT_B.group } });
+    expect(
+      await sendNote(
+        h.call,
+        await request({ confirm_recipient: await tokenOf(AGENT_B) }),
+      ),
+    ).toMatchObject({ status: "refused", reason: "replaced" });
+    expect(prompts(h.calls)).toBe(0);
+  });
+
   test("confirming the replacement sends to it and records it on the string", async () => {
     const h = herdr({ occupant: AGENT_B });
     const outcome = await sendNote(
@@ -208,6 +228,16 @@ describe("Send goes only to the agent the note was strung to (#228)", () => {
     expect(outcome).toMatchObject({ status: "failed" });
     expect(outcome.status === "failed" && outcome.message).toContain(
       "changed while the note was being sent",
+    );
+    expect(prompts(h.calls)).toBe(1);
+  });
+
+  test("session loss around prompt submission is uncertain, never reported as sent", async () => {
+    const h = herdr({ afterPrompt: { group: AGENT_A.group } });
+    const outcome = await sendNote(h.call, await request());
+    expect(outcome).toMatchObject({ status: "failed" });
+    expect(outcome.status === "failed" && outcome.message).toContain(
+      "may have reached another agent",
     );
     expect(prompts(h.calls)).toBe(1);
   });

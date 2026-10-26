@@ -7,7 +7,7 @@
  * agent. The prompt is sent once and never retried.
  */
 
-import { readPaneRecipient, sameRecipient } from "./board-recipient";
+import { readPaneRecipient, matchesRecipient } from "./board-recipient";
 import type { BoardDocument } from "./board-store";
 
 export type HerdrCall = (
@@ -91,8 +91,8 @@ export async function sendNote(
       "changed",
       "That pane is no longer the one this note is strung to.",
     );
-  const intended = sameRecipient(request.recipient, before.token);
-  if (!intended && !sameRecipient(request.confirm_recipient, before.token))
+  const intended = matchesRecipient(request.recipient, before.token);
+  if (!intended && !matchesRecipient(request.confirm_recipient, before.token))
     return {
       status: "refused",
       reason: request.recipient ? "replaced" : "unbound",
@@ -126,7 +126,11 @@ export async function sendNote(
     } catch {
       after = null;
     }
-    if (!after || "none" in after || !sameRecipient(after.token, before.token))
+    if (
+      !after ||
+      "none" in after ||
+      !matchesRecipient(before.token, after.token)
+    )
       return {
         status: "failed",
         message:
