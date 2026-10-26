@@ -321,8 +321,11 @@
               Choose one installer, then run <code>herdr-world</code> and open the
               URL it prints. Homebrew covers macOS and Linux; npm also covers
               Windows with Node.js 22.14+. The standalone script works on macOS
-              and Linux. The standalone script and Homebrew set up Herdr for
-              you; with npm, run <code>herdr-world herdr upgrade --install</code>.
+              and Linux. The published 0.2.7 script installs or upgrades Herdr to
+              the verified release; set <code>HERDR_WORLD_SKIP_HERDR=1</code> to
+              leave yours untouched. Homebrew reuses existing Herdr and installs
+              it on first launch only if missing. With npm, run
+              <code>herdr-world herdr upgrade --install</code>.
             </p>
             <div class="install-actions">
               <a

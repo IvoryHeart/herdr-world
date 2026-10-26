@@ -30,9 +30,10 @@ changes on desktop or mobile. **Requires a running Herdr server.**
 - **A clearer Town.** Rooms follow Spaces' tab order and grow with their tabs;
   pin desks, colour hosts, workspaces and terminals, and open **Summary** for
   everything needing you. Every view opens in Zen.
-- **Herdr comes with World.** The standalone installer and Homebrew set Herdr
-  up for you (set `HERDR_WORLD_SKIP_HERDR=1` to leave Herdr alone), and World
-  updates refresh Herdr's harness integrations and plugin. See
+- **Herdr setup.** The published 0.2.7 standalone installer installs or upgrades
+  Herdr to the verified release; set `HERDR_WORLD_SKIP_HERDR=1` to leave yours
+  untouched. Homebrew reuses existing Herdr and installs it on first launch only
+  if missing. World updates refresh Herdr's harness integrations and plugin. See
   [Herdr installation and upgrades](./docs/DEPLOYMENT.md#herdr-installation-and-upgrades).
 
 Read the [0.2.7 release notes](./docs/releases/v0.2.7.md) for upgrade steps and
@@ -95,11 +96,12 @@ recorded Pi review.
 
 ## Quick start
 
-1. Herdr World runs on [Herdr](https://herdr.dev). The standalone installer and
-   Homebrew reuse an existing Herdr. The standalone installer installs it only if
-   missing; Homebrew does so on first World launch. With npm or a Windows archive,
-   run `herdr-world herdr upgrade --install` once if needed. `herdr-world herdr setup`
-   starts Herdr as a user service.
+1. Herdr World runs on [Herdr](https://herdr.dev). Homebrew reuses existing Herdr
+   and installs it on first World launch only if missing. The published 0.2.7
+   standalone installer installs or upgrades Herdr to the verified release; set
+   `HERDR_WORLD_SKIP_HERDR=1` to leave yours untouched. With npm or a Windows
+   archive, run `herdr-world herdr upgrade --install` once if needed.
+   `herdr-world herdr setup` starts Herdr as a user service.
 2. On Linux or macOS, install Herdr World with the standalone installer:
 
    ```bash

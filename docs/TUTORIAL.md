@@ -55,12 +55,13 @@ older World or Roamgate installation.
 
 1. If Herdr is already installed, start it with a trusted project open. See
    [herdr.dev](https://herdr.dev) for setup. If it is not installed, do step 2
-   first: the standalone installer installs Herdr only when missing. Homebrew
-   reuses existing Herdr and installs a missing runtime on first normal World launch;
-   npm and Windows archives leave setup to you. Run `herdr-world herdr setup` to
-   install Herdr if needed and start its user service before step 3. Existing Herdr
-   versions are preserved by installation; explicit World updates retain a separate
-   Herdr upgrade step. See
+   first: the published 0.2.7 standalone installer installs or upgrades Herdr to
+   the verified release. Set `HERDR_WORLD_SKIP_HERDR=1` to leave your Herdr
+   untouched. Homebrew reuses existing Herdr and installs a missing runtime on
+   first normal World launch; npm and Windows archives leave setup to you.
+   Run `herdr-world herdr setup` to install Herdr if needed and start its user
+   service before step 3. Explicit World updates retain a separate Herdr upgrade
+   step. See
    [Herdr installation and upgrades](./DEPLOYMENT.md#herdr-installation-and-upgrades).
 2. [Install Herdr World](./DEPLOYMENT.md#install-a-release). Standalone needs no Bun;
    Windows supports npm (`npm install --global @ivoryheart/herdr-world`,
@@ -340,11 +341,11 @@ text. It works for any agent you open from Town, Board or Desk.
    **⋮ → Browse commands**, for the harness's commands. Drafts are kept per
    conversation.
 5. Read the receipt under your message. It says **Sent, not seen in the
-   transcript** (**Queued · sent to <agent>** while a busy agent holds it, or
+   transcript** (**Queued · sent to &lt;agent&gt;** while a busy agent holds it, or
    **sent, not checked** for a slash command) until the transcript has it.
-   Then it says **Sent from Chat; matched by its words**, or **matched by
-   order** when the harness rewrote the text (for example a pasted image
-   placeholder). Chat never claims "delivered". A red notice names
+   Then it says **Sent from Chat; matched by its words**, or **Sent from Chat;
+   matched by order** (an inference when the harness rewrites the text, such as
+   a paste or image placeholder). Chat never claims "delivered". A red notice names
    another session if there is evidence the message went there, and pauses
    Send. Claude Code's `!` and `#` modes still need the Terminal.
 6. Answer the agent's own prompts. When Claude Code shows a permission box or
