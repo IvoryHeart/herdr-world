@@ -196,6 +196,7 @@ export function processUse() {
   const cwds = new Set();
   const uses = new Set();
   const commands = [];
+  let unknown = false;
   if (process.platform === "linux") {
     for (const pid of readdirSync("/proc")) {
       if (!/^\d+$/.test(pid) || Number(pid) === process.pid) continue;
@@ -236,7 +237,7 @@ export function processUse() {
       }
     } catch {
       // Without lsof, treat every worktree as in use.
-      uses.add(sep);
+      unknown = true;
     }
   }
   try {
@@ -249,13 +250,25 @@ export function processUse() {
       if (match && Number(match[1]) !== process.pid) commands.push(match[2]);
     }
   } catch {
-    uses.add(sep);
+    unknown = true;
   }
-  return { cwds: [...cwds], uses: [...uses], commands };
+  return { cwds: [...cwds], uses: [...uses], commands, unknown };
 }
 
 function inside(path, directory) {
   return path === directory || path.startsWith(directory + sep);
+}
+
+function commandUses(command, directory) {
+  let index = command.indexOf(directory);
+  while (index !== -1) {
+    const next = command[index + directory.length];
+    // Reject clear sibling-name continuations; ambiguous punctuation may be
+    // Docker or shell syntax, so conservatively retain the checkout.
+    if (next === undefined || !/[\w.+@~-]/.test(next)) return true;
+    index = command.indexOf(directory, index + 1);
+  }
+  return false;
 }
 
 /**
@@ -268,10 +281,10 @@ function liveness(use, paths) {
       (directory) => inside(path, directory) || inside(real(path), directory),
     );
   if (
-    use.uses.includes(sep) ||
+    use.unknown ||
     use.uses.some(within) ||
     use.commands.some((command) =>
-      paths.some((directory) => command.includes(directory)),
+      paths.some((directory) => commandUses(command, directory)),
     )
   )
     return "use";
