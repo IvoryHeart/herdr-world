@@ -13,7 +13,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runHerdrCommand } from "./cli";
-import { findHerdrBinary } from "./bootstrap";
+import { findHerdrBinary, detectHerdrSetup } from "./bootstrap";
 import { installVerifiedHerdr, VERIFIED_HERDR_VERSION } from "./release";
 import { upgradeHerdr } from "./upgrade";
 
@@ -173,7 +173,7 @@ test("concurrent missing installers use isolated staging and exactly one publish
 test("CLI missing-only flag reaches the protected operation without integration changes", async () => {
   const f = fixture();
   try {
-    writeFileSync(f.binary, "herdr 0.8.2\n");
+    writeFileSync(f.binary, "herdr 0.8.2\n", { mode: 0o755 });
     const messages: string[] = [];
     const code = await runHerdrCommand(
       ["herdr", "upgrade", "--install", "--only-if-missing"],
@@ -217,6 +217,45 @@ test.each([false, true])(
       ).rejects.toThrow(f.binary);
       expect(downloads).toBe(0);
       expect(readlinkSync(f.binary)).toBe(blockedTarget);
+    } finally {
+      f.clean();
+    }
+  },
+);
+
+test.each(["directory", "non-executable"])(
+  "real discovery cannot bypass CLI validation for a %s",
+  async (kind) => {
+    const f = fixture();
+    try {
+      if (kind === "directory") mkdirSync(f.binary);
+      else writeFileSync(f.binary, "preserved", { mode: 0o644 });
+      const original = lstatSync(f.binary);
+      const discovery = await detectHerdrSetup({
+        ...f.deps,
+        ping: async () => {
+          throw new Error("not running");
+        },
+      });
+      expect(discovery).toEqual({ state: "installed", binaryPath: f.binary });
+      let downloads = 0;
+      await expect(
+        upgradeHerdr({
+          ...f.deps,
+          readVersion: () => "",
+          download: async () => {
+            downloads++;
+          },
+        }),
+      ).rejects.toThrow(
+        `Herdr installation blocked by non-executable entry: ${f.binary}`,
+      );
+      expect(downloads).toBe(0);
+      expect(lstatSync(f.binary).ino).toBe(original.ino);
+      expect(lstatSync(f.binary).mode).toBe(original.mode);
+      if (kind === "directory")
+        expect(lstatSync(f.binary).isDirectory()).toBe(true);
+      else expect(readFileSync(f.binary, "utf8")).toBe("preserved");
     } finally {
       f.clean();
     }

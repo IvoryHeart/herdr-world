@@ -213,7 +213,9 @@ When it runs:
   operation when the selected World binary supports it. Pinned older releases
   use the same checksum/version-verified compatibility bootstrap as Homebrew,
   without passing unsupported options or calling an unrestricted upgrade.
-  A runtime appearing during download is preserved by atomic publication.
+  A reachable Herdr server is reused even when its executable is not discoverable.
+  A selected local entry must be a regular executable file before installation
+  reports success. A runtime appearing during download is preserved by atomic publication.
   Existing versions and installation owners are preserved. Set
   `HERDR_WORLD_SKIP_HERDR=1` to install only World. A Herdr problem prints a warning
   and leaves World installed. Fresh installs leave harness integrations and the

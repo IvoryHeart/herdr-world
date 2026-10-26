@@ -363,6 +363,21 @@ async function runVerifiedWindowsInstaller(
   }
 }
 
+/** Validate a discovered entry before treating it as an installed runtime. */
+export function assertHerdrBinaryRunnable(
+  path: string,
+  platform: string = process.platform,
+) {
+  try {
+    if (!statSync(path).isFile()) throw new Error("not a file");
+    if (platform !== "win32") accessSync(path, constants.X_OK);
+  } catch {
+    throw new Error(
+      `Herdr installation blocked by non-executable entry: ${path}; repair it before retrying.`,
+    );
+  }
+}
+
 /**
  * Install the verified Herdr release into Herdr's default location and return
  * the binary path. Idempotent: an existing binary there is kept.
@@ -373,14 +388,7 @@ export async function installVerifiedHerdr(
   const target = verifiedTarget(deps);
   const binaryPath = herdrDefaultBinaryPath(deps);
   const reuse = (path: string) => {
-    try {
-      if (!statSync(path).isFile()) throw new Error("not a file");
-      if (!target.startsWith("windows")) accessSync(path, constants.X_OK);
-    } catch {
-      throw new Error(
-        `Herdr installation blocked by non-executable entry: ${path}; repair it before retrying.`,
-      );
-    }
+    assertHerdrBinaryRunnable(path, deps.platform);
     return {
       binaryPath: path,
       version: VERIFIED_HERDR_VERSION,

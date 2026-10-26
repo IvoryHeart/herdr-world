@@ -58,13 +58,15 @@ function createInstallerFixture(checksumName?: string, version = "9.8.7") {
     binary,
     `#!/bin/sh
 [ "\${1:-}" = "--version" ] && { echo "${product} ${version}"; exit 0; }
+if [ "\${1:-}" = herdr ] && [ -n "\${HERDR_CALL_LOG:-}" ]; then echo "$*" >> "$HERDR_CALL_LOG"; fi
 if [ "$*" = "herdr --help" ]; then
   if [ "${version}" = 0.2.7 ]; then echo 'herdr upgrade --install'; else echo 'herdr upgrade --install --only-if-missing'; fi
   exit 0
 fi
 if [ "$*" = "herdr status" ]; then
   if [ "\${HERDR_FIXTURE_STATE:-missing}" = missing ]; then echo 'Herdr is not installed.';
-  else echo 'Herdr is installed but not running: /fixture/external/herdr'; fi
+  elif [ "$HERDR_FIXTURE_STATE" = running ]; then echo 'Herdr is running (version 0.9.5, protocol 22).';
+  else echo "Herdr is installed but not running: $HERDR_INSTALL_DIR/herdr"; fi
   exit 0
 fi
 if [ "\${1:-}" = "herdr" ]; then
@@ -164,6 +166,7 @@ cp "$FIXTURE_DIR/\${url##*/}" "$out"
     installerScript,
     binary,
     runtimeDir: join(root, "runtime"),
+    calls: join(root, "calls"),
   };
 }
 
@@ -172,6 +175,15 @@ function runInstaller(
   releaseBaseUrl = "http://127.0.0.1/releases",
   environment: Record<string, string | undefined> = {},
 ) {
+  const state = environment.HERDR_FIXTURE_STATE ?? "missing";
+  if (state !== "missing" && state !== "running") {
+    mkdirSync(fixture.runtimeDir, { recursive: true });
+    writeFileSync(
+      join(fixture.runtimeDir, "herdr"),
+      "#!/bin/sh\necho herdr 0.9.5\n",
+      { mode: 0o755 },
+    );
+  }
   return Bun.spawnSync(["sh", fixture.installerScript], {
     env: {
       ...process.env,
@@ -184,6 +196,7 @@ function runInstaller(
       HERDR_WORLD_VERSION: "",
       HERDR_WORLD_SKIP_HERDR: undefined,
       HERDR_STEP_LOG: fixture.herdrStepLog,
+      HERDR_CALL_LOG: fixture.calls,
       ...environment,
     },
     stdout: "pipe",
@@ -372,6 +385,23 @@ describe("release installer", () => {
     expect(runtime.stdout.toString().trim()).toBe(
       `herdr ${VERIFIED_HERDR_VERSION}`,
     );
+  });
+
+  test("running but undiscoverable Herdr skips the new-CLI installation path", () => {
+    const fixture = createInstallerFixture();
+    expect(
+      Bun.spawnSync([fixture.binary, "herdr", "--help"], {
+        stdout: "pipe",
+      }).stdout.toString(),
+    ).toContain("--only-if-missing");
+    const result = runInstaller(fixture, undefined, {
+      HERDR_FIXTURE_STATE: "running",
+    });
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr.toString()).toBe("");
+    expect(readFileSync(fixture.calls, "utf8")).toBe("herdr status\n");
+    expect(existsSync(join(fixture.runtimeDir, "herdr"))).toBe(false);
+    expect(existsSync(fixture.herdrStepLog)).toBe(false);
   });
 
   test.each(["older", "current", "newer", "package-managed"])(

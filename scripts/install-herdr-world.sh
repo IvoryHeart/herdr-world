@@ -226,9 +226,31 @@ esac
 # BEGIN generated Herdr compatibility bootstrap
 # A published World binary may predate missing-only CLI support. Keep this Unix
 # compatibility path independent of its upgrade command, with atomic publication.
+# A status result is presence evidence only when its selected file is executable.
+# Keep the running-server state independent of binary discovery.
+check_herdr_presence() {
+  herdr_status="$("$world" herdr status)" || return 1
+  IFS= read -r herdr_status_line <<EOF || return 1
+$herdr_status
+EOF
+  case "$herdr_status_line" in
+    'Herdr is not installed.') herdr_missing=1 ;;
+    'Herdr is running ('*) herdr_missing=0 ;;
+    'Herdr is installed but not running: '*)
+      herdr_candidate="${herdr_status_line#Herdr is installed but not running: }"
+      if [ ! -f "$herdr_candidate" ] || [ ! -x "$herdr_candidate" ]; then
+        printf 'Herdr installation blocked by non-executable entry: %s; repair it before retrying.\n' "$herdr_candidate" >&2
+        return 1
+      fi
+      herdr_missing=0
+      ;;
+    *) return 1 ;;
+  esac
+}
+
 install_missing_herdr() (
-  status="$("$world" herdr status)" || return 1
-  case "$status" in 'Herdr is not installed.'*) ;; *) return 0 ;; esac
+  check_herdr_presence || return 1
+  [ "$herdr_missing" = 1 ] || return 0
   install_dir="${HERDR_INSTALL_DIR:-$HOME/.local/bin}"
   if [ -e "$install_dir/herdr" ] || [ -L "$install_dir/herdr" ]; then
     if [ -f "$install_dir/herdr" ] && [ -x "$install_dir/herdr" ]; then return 0; fi
@@ -258,8 +280,8 @@ install_missing_herdr() (
   [ "$version" = 'herdr 0.9.5' ] || return 1
   # Recheck every discovery path after download; publication below still refuses
   # an entry created at the destination after this check, including symlinks.
-  status="$("$world" herdr status)" || return 1
-  case "$status" in 'Herdr is not installed.'*) ;; *) return 0 ;; esac
+  check_herdr_presence || return 1
+  [ "$herdr_missing" = 1 ] || return 0
   if ln "$staging/herdr" "$install_dir/" 2>/dev/null; then
     printf '%s\n' 'Installed Herdr 0.9.5.'
   elif [ ! -f "$install_dir/herdr" ] || [ ! -x "$install_dir/herdr" ]; then
@@ -273,18 +295,22 @@ install_missing_herdr() (
 # selected World release. Never fall back to its unrestricted upgrade command.
 if [ "$skip_herdr" != "1" ]; then
   printf 'Checking Herdr...\n'
-  herdr_help="$("$target" herdr --help 2>/dev/null)" || herdr_help=""
-  case "$herdr_help" in
-  *--only-if-missing*)
-    if ! "$target" herdr upgrade --install --only-if-missing --no-integrations --no-plugin; then
-      printf 'Herdr World installer: Herdr installation failed; run `%s herdr upgrade --install` to retry.\n' "$target" >&2
-    fi
-    ;;
-  *)
-    world="$target"
-    if ! install_missing_herdr; then
-      printf 'Herdr World installer: Herdr installation failed; run `%s herdr upgrade --install` to retry.\n' "$target" >&2
-    fi
-    ;;
-  esac
+  world="$target"
+  if ! check_herdr_presence; then
+    printf 'Herdr World installer: could not use the detected Herdr; repair any reported entry, then run `%s herdr upgrade --install` to retry.\n' "$target" >&2
+  elif [ "$herdr_missing" = 1 ]; then
+    herdr_help="$("$target" herdr --help 2>/dev/null)" || herdr_help=""
+    case "$herdr_help" in
+    *--only-if-missing*)
+      if ! "$target" herdr upgrade --install --only-if-missing --no-integrations --no-plugin; then
+        printf 'Herdr World installer: Herdr installation failed; run `%s herdr upgrade --install` to retry.\n' "$target" >&2
+      fi
+      ;;
+    *)
+      if ! install_missing_herdr; then
+        printf 'Herdr World installer: Herdr installation failed; run `%s herdr upgrade --install` to retry.\n' "$target" >&2
+      fi
+      ;;
+    esac
+  fi
 fi

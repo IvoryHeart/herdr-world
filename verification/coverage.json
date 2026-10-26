@@ -1421,6 +1421,7 @@
         "server/src/config/plugin-command.test.ts",
         "scripts/installer-upgrade.test.ts",
         "scripts/generate-homebrew-formula.test.ts",
+        "scripts/herdr-bootstrap-discovery.test.ts",
         "scripts/install-herdr-world.test.ts",
         "server/src/herdr/release.test.ts",
         "server/src/herdr/missing-install.test.ts",

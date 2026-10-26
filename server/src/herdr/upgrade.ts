@@ -9,6 +9,7 @@ import { basename, delimiter, dirname, join } from "node:path";
 import { runProcessWithCodeTimeout } from "../utils/process-utils";
 import { findHerdrBinary, type HerdrBootstrapDeps } from "./bootstrap";
 import {
+  assertHerdrBinaryRunnable,
   compareHerdrVersions,
   type InstallHerdrDeps,
   installVerifiedHerdr,
@@ -575,6 +576,7 @@ export async function upgradeHerdr(
     plugin: { target: WORLD_PLUGIN_ID, action: "skipped" },
   };
   if (deps.onlyIfMissing && before.state !== "missing") {
+    assertHerdrBinaryRunnable(before.binaryPath, deps.platform);
     report.binaryPath = before.binaryPath;
     return report;
   }

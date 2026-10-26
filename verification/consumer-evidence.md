@@ -257,7 +257,12 @@ bootstrap for pinned older binaries. Its self-contained generated block is check
 against the canonical shell and verified metadata. A strict 0.2.7 fixture rejects
 the new flag and must still end with an executable Herdr. Explicit installations
 and bootstrap diagnose a blocking non-executable entry without modifying it or
-repeatedly downloading. Explicit upgrades retain their behavior. Metadata,
+repeatedly downloading. Discovery's installed label alone is not admission:
+`assertHerdrBinaryRunnable` validates the selected CLI path, and the shared shell
+presence check validates the exact selected path from status before early success.
+The standalone presence check runs before capability selection, so a reachable
+server without a discoverable binary also prevents a second installation. Explicit
+upgrades retain their behavior. Metadata,
 management and remote/custom-endpoint invocations do not bootstrap. A failed
 check or installation warns with retry/opt-out guidance and still starts World,
 so remote profiles and in-app setup remain available.
@@ -275,6 +280,11 @@ file/symlink publication. The standalone
 installer regressions independently cover missing-only behavior and owner/version
 preservation. These direct process alternatives test the actual shell/Ruby paths;
 an abstract model would not establish PATH detection or package ownership.
+`scripts/herdr-bootstrap-discovery.test.ts` runs the real discovery and CLI status
+producer for default, PATH and explicit candidates (directory, non-executable and
+executable controls), and for a running server with no binary. It requires warnings,
+no downloads, preserved entries and World startup for blocked paths. The standalone
+regression separately records that running status skips the new CLI operation.
 The archive-stage check validates the launcher and World inputs. The tap and
 Release native CI use `scripts/check-homebrew-runtime.rb` to launch a temporary
 World listener, install and execute a missing real Herdr, then reinstall World and

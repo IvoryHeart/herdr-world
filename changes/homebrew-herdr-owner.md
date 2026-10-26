@@ -13,3 +13,6 @@
 - Keep safe standalone runtime setup when selecting an older World release that
   lacks the missing-only CLI option. Report broken Herdr links before downloading
   and preserve the blocking entry for its owner to repair.
+- Validate the selected Herdr file before treating discovery as an installation;
+  preserve unusable entries with repair guidance. Reuse a reachable Herdr server
+  without installing a second copy when its executable is outside the installer's path.

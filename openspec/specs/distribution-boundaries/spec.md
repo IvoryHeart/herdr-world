@@ -28,6 +28,11 @@ release that World version verified, in Herdr's own default location.
   location retains its version and installation owner
 - **AND** only a missing Herdr is installed from the release World verified, in
   Herdr's own default location, without starting a Herdr server
+- **AND** a reachable Herdr server is reused without installing a second copy when
+  its executable cannot be discovered
+- **AND** an installed discovery result is admitted only after the selected entry
+  is validated as a regular executable file; blocked entries are preserved and
+  reported while World remains available
 - **AND** a runtime appearing after lookup or during download is preserved;
   publication never replaces an existing filesystem entry
 - **AND** Homebrew does not require a separate Herdr formula, bundle Herdr in its

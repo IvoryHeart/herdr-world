@@ -120,7 +120,8 @@ printf '%s\\n' "$*" >> "$FIXTURE_LOG"
 if [ "$*" = "herdr status" ]; then
   if [ "$FIXTURE_STATE" = error ]; then exit 7; fi
   if [ "$FIXTURE_STATE" = missing ]; then echo 'Herdr is not installed.';
-  else echo "Herdr is installed but not running: /fixture/external herdr/$FIXTURE_STATE"; fi
+  elif [ "$FIXTURE_STATE" = running ]; then echo 'Herdr is running (version 0.9.5, protocol 22).';
+  else echo "Herdr is installed but not running: $FIXTURE_EXISTING"; fi
   count=0
   [ ! -f "$FIXTURE_COUNTER" ] || count="$(cat "$FIXTURE_COUNTER")"
   count=$((count + 1)); echo "$count" > "$FIXTURE_COUNTER"
@@ -136,6 +137,9 @@ exit "\${FIXTURE_EXIT:-0}"
 `,
       { mode: 0o755 },
     );
+    const existing = join(directory, "existing runtime", "herdr");
+    mkdirSync(join(directory, "existing runtime"));
+    writeFileSync(existing, payload, { mode: 0o755 });
     const log = join(directory, "commands");
     const fakeBin = join(directory, "curl-bin");
     mkdirSync(fakeBin);
@@ -180,6 +184,7 @@ if [ "\${FIXTURE_CORRUPT_DOWNLOAD:-}" = 1 ]; then echo '# corrupted' >> "$destin
             PATH: `${fakeBin}:${process.env.PATH ?? ""}`,
             HERDR_INSTALL_DIR: join(directory, "runtime"),
             FIXTURE_PAYLOAD: payloadFile,
+            FIXTURE_EXISTING: existing,
             FIXTURE_COUNTER: join(directory, "counter"),
             FIXTURE_DOWNLOAD_LOG: join(directory, "downloads"),
             HERDR_WORLD_SKIP_HERDR: "",
