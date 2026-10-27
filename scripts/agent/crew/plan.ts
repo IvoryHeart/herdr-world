@@ -164,7 +164,12 @@ export function plan(
   const failing = verdict.conditions.find(
     (entry) => entry.id === "checks" && entry.state === "unmet",
   );
-  if (failing)
+  // A run still going may replace the failure, as when a new push or label
+  // cancels the run whose roll-up failed; the author hears once it settles.
+  const settled = !(input.item?.pr?.checks ?? []).some(
+    (check) => check.state === "pending",
+  );
+  if (failing && settled)
     toAuthor(
       "ci",
       `ACT #${pr} ci @${at}: ${failing.detail}. Rerun a listed flake once with gh run rerun <id> --failed; otherwise fix and push.`,

@@ -229,7 +229,7 @@ plans the next step for every PR in scope and takes each step once:
 | Gate state | Step | Who |
 |---|---|---|
 | Findings are open on the head and every required reviewer has posted on it | One `ACT #N fix` prompt with the review URLs, so the author fixes in one pass | The author's seat |
-| A required check fails | `ACT #N ci` prompt | The author's seat |
+| A required check fails and no check is still running | `ACT #N ci` prompt | The author's seat |
 | GitHub reports a conflict, or screenshots are missing | `ACT #N conflict` or `ACT #N screenshots` prompt | The author's seat |
 | A required reviewer has no RESULT, or a newer head needs confirming, and checks are green | A fresh reviewer run | That reviewer's model |
 | READY | A Herdr notification | The owner |

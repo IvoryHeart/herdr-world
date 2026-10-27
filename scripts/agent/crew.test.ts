@@ -158,6 +158,20 @@ describe("plan", () => {
     expect(actions.map((a) => [a.kind, a.target])).toEqual([["ci", "towncx"]]);
   });
 
+  test("red CI waits while another check is still running", () => {
+    const actions = planned(
+      town({
+        head: SHA.reviewed,
+        posts: [],
+        checks: [
+          { name: "Delivery checks", state: "fail", required: true },
+          { name: "Browser tests", state: "pending", required: false },
+        ],
+      }),
+    );
+    expect(actions).toEqual([]);
+  });
+
   test("drafts plan nothing; unknown authors and models go to the owner", () => {
     expect(
       planned(town({ head: SHA.reviewed, posts: [], item: { draft: true } })),
