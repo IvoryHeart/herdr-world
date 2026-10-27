@@ -156,3 +156,48 @@ export function parseUsage(stdout: string): Record<string, unknown> | null {
   }
   return usage;
 }
+
+/**
+ * The harness session a run's stream names: Claude's `system` init event
+ * carries `session_id`, Codex's `thread.started` carries `thread_id`.
+ */
+export function sessionOf(line: string): string | null {
+  try {
+    const event = JSON.parse(line) as Record<string, unknown>;
+    const id =
+      event.type === "thread.started"
+        ? event.thread_id
+        : event.type === "system"
+          ? event.session_id
+          : null;
+    return typeof id === "string" && id ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The last canonical RESULT line in a reviewer's output. */
+export function resultLine(text: string): string | null {
+  const found = text.match(/RESULT #\d+: \d+\/\d+ resolved, \d+ new/gu);
+  return found ? found[found.length - 1]! : null;
+}
+
+/**
+ * An interactive command that reopens a finished run's session as a chat,
+ * with the run's own model. The owner drives it, so it takes the
+ * harness's normal permissions.
+ */
+export function chatArgv(
+  harness: string,
+  session: string,
+  model: string | undefined,
+): string[] {
+  if (harness === "claude")
+    return [
+      "claude",
+      "--resume",
+      session,
+      ...(model ? ["--model", model] : []),
+    ];
+  return ["codex", "resume", session, ...(model ? ["-m", model] : [])];
+}

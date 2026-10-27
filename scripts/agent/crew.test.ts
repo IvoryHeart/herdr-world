@@ -2,15 +2,9 @@ import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  crewPass,
-  type Deps,
-  promptable,
-  rootPane,
-  type Seat,
-  seats,
-  shellLine,
-} from "./crew";
+import { crewPass, promptable, roundLabel, type Seat, seats } from "./crew";
+import { type Deps, herdrIds, type Place, shellLine } from "./crew/deps";
+import { openChat, runs } from "./crew/review";
 import {
   authorOf,
   type CrewSettings,
@@ -22,14 +16,21 @@ import {
   activeRuns,
   finishRun,
   getAction,
+  getRun,
   openCrewStore,
   openLock,
+  openRounds,
+  setRunResult,
+  setRunSession,
 } from "./crew/store";
 import {
+  chatArgv,
   describe as describeEvent,
   harnessArgv,
   parseUsage,
+  resultLine,
   reviewerPrompt,
+  sessionOf,
 } from "./crew/worker";
 import { config, confirm, input, NOW, SHA, type Post } from "./gate/cases";
 import type { Run } from "./gate/observe";
@@ -258,9 +259,10 @@ describe("delivery", () => {
   let dead: Set<number>;
   let killed: number[];
   let closed: string[];
-  let labels: string[];
+  let places: Place[];
   let panes: boolean;
   let refuse: Set<string>;
+  let opened: { argv: string[]; cwd: string; label: string }[];
   let onPrompt: (() => void) | null;
   let crew: ReturnType<typeof openCrewStore>;
   let lock: ReturnType<typeof openLock>;
@@ -270,9 +272,10 @@ describe("delivery", () => {
     spawned = [];
     killed = [];
     closed = [];
-    labels = [];
+    places = [];
     panes = false;
     refuse = new Set();
+    opened = [];
     onPrompt = null;
     dead = new Set();
     live = SEATS.map((name) => ({ name, status: "idle", focused: false }));
@@ -303,14 +306,22 @@ describe("delivery", () => {
   };
   const deps: Deps = {
     run,
-    spawn: (argv, _log, label) => {
+    spawn: (argv, _log, place) => {
       spawned.push(argv);
-      labels.push(label);
+      places.push(place);
       return panes
-        ? { pid: null, pane: `wP:p${spawned.length}` }
-        : { pid: 1000 + spawned.length, pane: null };
+        ? {
+            pid: null,
+            pane: `wP:p${spawned.length}`,
+            tab: place.tab ?? `wP:t${spawned.length}`,
+          }
+        : { pid: 1000 + spawned.length, pane: null, tab: null };
     },
-    closePane: (pane) => closed.push(pane),
+    closeTab: (tab) => closed.push(tab),
+    openTab: (argv, cwd, label) => {
+      opened.push({ argv, cwd, label });
+      return true;
+    },
     alive: (pid) => !dead.has(pid),
     kill: (pid) => killed.push(pid),
     out: () => {},
@@ -516,26 +527,76 @@ describe("delivery", () => {
     expect(killed).toEqual([1001, 1002]);
   });
 
-  test("shows each run in its own Herdr tab and closes it once settled", () => {
+  test("shows a round's reviewers as panes of one tab, kept after they finish", () => {
     panes = true;
-    const value = town({
-      head: SHA.reviewed,
-      posts: [
-        confirm("rev-astra", SHA.reviewed),
-        confirm("rev-opus", SHA.reviewed),
-      ],
-    });
+    const value = town({ head: SHA.reviewed, posts: [] });
     pass(value);
-    expect(labels).toEqual(["review #7 rev2"]);
-    const [active] = activeRuns(crew);
-    expect(active!.pane).toBe("wP:p1");
-    // The worker reports its own pid; until then the run is starting.
-    pass(value, NOW + 60_000);
-    expect(closed).toEqual([]);
-    finishRun(crew, active!.id, 0, null, NOW + 90_000);
+    const label = "#7 towncx-12-plates · r1";
+    expect(places).toEqual([
+      { tab: null, after: null, direction: "down", label, title: "rev2" },
+      {
+        tab: "wP:t1",
+        after: "wP:p1",
+        direction: "right",
+        label,
+        title: "rev-astra",
+      },
+      {
+        tab: "wP:t1",
+        after: "wP:p2",
+        direction: "down",
+        label,
+        title: "rev-opus",
+      },
+    ]);
+    for (const active of activeRuns(crew))
+      finishRun(crew, active.id, 0, null, NOW + 90_000);
     pass(value, NOW + 120_000);
-    expect(closed).toEqual(["wP:p1"]);
-    expect(getAction(crew, active!.actionKey)!.state).toBe("done");
+    expect(closed).toEqual([]);
+    expect(actionsIn(crew, ["running"])).toEqual([]);
+    expect(openRounds(crew)).toHaveLength(1);
+  });
+
+  test("a new head opens the next round's tab and keeps the stopped one", () => {
+    panes = true;
+    pass(town({ head: SHA.reviewed, posts: [] }));
+    pass(town({ head: SHA.fixed, posts: [] }), NOW + 60_000);
+    expect(closed).toEqual([]);
+    expect(places.slice(3).map((place) => [place.tab, place.label])).toEqual([
+      [null, "#7 towncx-12-plates · r2"],
+      ["wP:t4", "#7 towncx-12-plates · r2"],
+      ["wP:t4", "#7 towncx-12-plates · r2"],
+    ]);
+    expect(activeRuns(crew).map((entry) => entry.round)).toEqual([2, 2, 2]);
+  });
+
+  test("a PR that merges or closes takes all its round tabs with it", () => {
+    panes = true;
+    pass(town({ head: SHA.reviewed, posts: [] }));
+    pass(town({ head: SHA.fixed, posts: [] }), NOW + 60_000);
+    // A pass scoped to another PR leaves this pod alone.
+    passOver([], NOW + 90_000, { prs: [8] });
+    expect(closed).toEqual([]);
+    pass(town({ head: SHA.fixed, posts: [], state: "MERGED" }), NOW + 120_000);
+    expect(closed).toEqual(["wP:t1", "wP:t4"]);
+    expect(openRounds(crew)).toEqual([]);
+    expect(actionsIn(crew, ["pending", "running"])).toEqual([]);
+  });
+
+  test("a tab the owner closed is replaced by a new one for the round", () => {
+    panes = true;
+    const launch = deps.spawn;
+    let first = true;
+    deps.spawn = (argv, log, place) => {
+      // The owner closes r1's tab before the second reviewer starts.
+      if (!first && place.after)
+        return launch(argv, log, { ...place, tab: null, after: null });
+      first = false;
+      return launch(argv, log, place);
+    };
+    pass(town({ head: SHA.reviewed, posts: [] }));
+    deps.spawn = launch;
+    expect(openRounds(crew)[0]!.tab).toBe("wP:t3");
   });
 
   test("a pane run that never reports its pid counts as a failed start", () => {
@@ -549,8 +610,57 @@ describe("delivery", () => {
     });
     pass(value);
     pass(value, NOW + 4 * 60_000);
-    expect(closed).toEqual(["wP:p1"]);
+    expect(closed).toEqual([]);
     expect(spawned).toHaveLength(2);
+    expect(places[1]!.after).toBe("wP:p1");
+  });
+
+  test("lists runs and reopens one as a chat in its own checkout", () => {
+    pass(town({ head: SHA.reviewed, posts: [] }));
+    const [first] = activeRuns(crew);
+    setRunSession(crew, first!.id, "codex", "thread-1");
+    setRunResult(crew, first!.id, "RESULT #7: 0/0 resolved, 2 new");
+    finishRun(
+      crew,
+      first!.id,
+      0,
+      '{"input_tokens":120000,"output_tokens":4000}',
+      NOW + 1,
+    );
+    const lines: string[] = [];
+    runs(crew, { prs: [7], lines: 10 }, (text) => lines.push(text));
+    expect(lines.at(-1)).toBe(
+      `run ${first!.id}\t#7 r1 rev2 @${SHA.reviewed.slice(0, 7)} exit 0 · RESULT #7: 0/0 resolved, 2 new in 120k out 4k · bun run agent:crew -- open --run ${first!.id}`,
+    );
+    const settings = { ...SETTINGS };
+    openChat(
+      crew,
+      { prs: [7], reviewer: "rev2", run: undefined, round: 1 },
+      root,
+      settings,
+      deps,
+    );
+    expect(opened).toHaveLength(1);
+    expect(opened[0]!.argv).toEqual([
+      "codex",
+      "resume",
+      "thread-1",
+      "-m",
+      "gpt-6.1-sol",
+    ]);
+    expect(opened[0]!.label).toBe("#7 rev2 r1 · chat");
+    expect(opened[0]!.cwd).toContain(
+      `review-7-rev2-${SHA.reviewed.slice(0, 7)}-${first!.id}`,
+    );
+    // The removed checkout is recreated at the run's own path.
+    expect(
+      calls.some((argv) => argv.includes("worktree") && argv.includes("add")),
+    ).toBe(true);
+    const [other] = activeRuns(crew);
+    expect(() =>
+      openChat(crew, { prs: [], run: other!.id }, root, settings, deps),
+    ).toThrow("recorded no session");
+    expect(getRun(crew, first!.id)!.session).toBe("thread-1");
   });
 
   const trioPosted = (posts: Post[] = []) =>
@@ -1029,14 +1139,53 @@ describe("run display", () => {
     expect(shellLine(["echo", "it's a b"])).toBe("echo 'it'\\''s a b'");
   });
 
-  test("reads the new tab's pane", () => {
+  test("reads the new pane and its tab from Herdr", () => {
     expect(
-      rootPane(
+      herdrIds(
         JSON.stringify({
-          result: { root_pane: { pane_id: "wP:p9" }, tab: {} },
+          result: { root_pane: { pane_id: "wP:p9" }, tab: { tab_id: "wP:t2" } },
         }),
       ),
-    ).toBe("wP:p9");
-    expect(rootPane("nope")).toBeNull();
+    ).toEqual({ pane: "wP:p9", tab: "wP:t2" });
+    expect(
+      herdrIds(
+        JSON.stringify({
+          result: { pane: { pane_id: "wP:pA", tab_id: "wP:t2" } },
+        }),
+      ),
+    ).toEqual({ pane: "wP:pA", tab: "wP:t2" });
+    expect(herdrIds("nope")).toEqual({ pane: null, tab: null });
+  });
+
+  test("names a round tab after its PR and branch", () => {
+    expect(roundLabel(443, "agent/crew-watcher", 2)).toBe(
+      "#443 crew-watcher · r2",
+    );
+    expect(roundLabel(9, "batch/town-3", 1)).toBe("#9 town-3 · r1");
+    expect(roundLabel(9, undefined, 1)).toBe("#9 · r1");
+  });
+
+  test("reads a run's session, RESULT and chat command", () => {
+    expect(sessionOf('{"type":"thread.started","thread_id":"t-1"}')).toBe(
+      "t-1",
+    );
+    expect(
+      sessionOf('{"type":"system","subtype":"init","session_id":"s-1"}'),
+    ).toBe("s-1");
+    expect(sessionOf('{"type":"assistant","session_id":"s-1"}')).toBeNull();
+    expect(sessionOf("nope")).toBeNull();
+    expect(
+      resultLine(
+        "RESULT #7: x/y resolved, z new\nRESULT #7: 0/0 resolved, 2 new\nhttps://example.com",
+      ),
+    ).toBe("RESULT #7: 0/0 resolved, 2 new");
+    expect(resultLine("no result")).toBeNull();
+    expect(chatArgv("claude", "s-1", "claude-opus-5-5")).toEqual([
+      "claude",
+      "--resume",
+      "s-1",
+      "--model",
+      "claude-opus-5-5",
+    ]);
   });
 });

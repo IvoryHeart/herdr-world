@@ -39,6 +39,14 @@ export type StoredRun = {
   pid: number | null;
   /** The Herdr pane the run is shown in, when it has one. */
   pane: string | null;
+  /** Its round's tab: one per PR head, kept until the PR closes. */
+  tab: string | null;
+  round: number | null;
+  /** The harness and its session, for reopening the run as a chat. */
+  harness: string | null;
+  session: string | null;
+  /** The RESULT line the reviewer printed. */
+  result: string | null;
   log: string;
   startedAt: number;
   finishedAt: number | null;
@@ -87,8 +95,29 @@ export function openCrewStore(path: string, busyMs = 120_000) {
     .query<{ name: string }, []>("PRAGMA table_info(run)")
     .all()
     .map((column) => column.name);
-  if (!columns.includes("pane"))
-    db.exec("ALTER TABLE run ADD COLUMN pane TEXT");
+  for (const [name, type] of [
+    ["pane", "TEXT"],
+    ["tab", "TEXT"],
+    ["round", "INTEGER"],
+    ["harness", "TEXT"],
+    ["session", "TEXT"],
+    ["result", "TEXT"],
+  ])
+    if (!columns.includes(name))
+      db.exec(`ALTER TABLE run ADD COLUMN ${name} ${type}`);
+  // A pod's rounds: each head reviewed on a PR gets one Herdr tab, which
+  // stays until the PR merges or closes.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS round (
+      pr INTEGER NOT NULL,
+      round INTEGER NOT NULL,
+      head TEXT NOT NULL,
+      tab TEXT,
+      created_at INTEGER NOT NULL,
+      closed_at INTEGER,
+      PRIMARY KEY (pr, round)
+    );
+  `);
   return db;
 }
 
@@ -200,6 +229,11 @@ type RunRow = {
   head: string;
   pid: number | null;
   pane: string | null;
+  tab: string | null;
+  round: number | null;
+  harness: string | null;
+  session: string | null;
+  result: string | null;
   log: string;
   started_at: number;
   finished_at: number | null;
@@ -216,6 +250,11 @@ function run(row: RunRow): StoredRun {
     head: row.head,
     pid: row.pid,
     pane: row.pane,
+    tab: row.tab,
+    round: row.round,
+    harness: row.harness,
+    session: row.session,
+    result: row.result,
     log: row.log,
     startedAt: row.started_at,
     finishedAt: row.finished_at,
@@ -226,14 +265,16 @@ function run(row: RunRow): StoredRun {
 
 export function addRun(
   db: Database,
-  entry: Pick<StoredRun, "actionKey" | "reviewer" | "pr" | "head" | "log">,
+  entry: Pick<StoredRun, "actionKey" | "reviewer" | "pr" | "head" | "log"> & {
+    round?: number;
+  },
   now: number,
 ) {
   return Number(
     db
       .query(
-        `INSERT INTO run (action_key, reviewer, pr, head, log, started_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO run (action_key, reviewer, pr, head, log, round, started_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         entry.actionKey,
@@ -241,6 +282,7 @@ export function addRun(
         entry.pr,
         entry.head,
         entry.log,
+        entry.round ?? null,
         now,
       ).lastInsertRowid,
   );
@@ -250,8 +292,114 @@ export function setRunPid(db: Database, id: number, pid: number) {
   db.query("UPDATE run SET pid = ? WHERE id = ?").run(pid, id);
 }
 
-export function setRunPane(db: Database, id: number, pane: string) {
-  db.query("UPDATE run SET pane = ? WHERE id = ?").run(pane, id);
+export function setRunPane(
+  db: Database,
+  id: number,
+  pane: string,
+  tab: string | null = null,
+) {
+  db.query("UPDATE run SET pane = ?, tab = ? WHERE id = ?").run(pane, tab, id);
+}
+
+export function setRunSession(
+  db: Database,
+  id: number,
+  harness: string,
+  session: string | null,
+) {
+  db.query("UPDATE run SET harness = ?, session = ? WHERE id = ?").run(
+    harness,
+    session,
+    id,
+  );
+}
+
+export function setRunResult(db: Database, id: number, result: string) {
+  db.query("UPDATE run SET result = ? WHERE id = ?").run(result, id);
+}
+
+/** The panes a round's reviewers run in, oldest first. */
+export function roundPanes(db: Database, pr: number, round: number) {
+  return db
+    .query<{ pane: string }, [number, number]>(
+      `SELECT pane FROM run WHERE pr = ? AND round = ? AND pane IS NOT NULL
+       ORDER BY id`,
+    )
+    .all(pr, round)
+    .map((row) => row.pane);
+}
+
+export type Round = {
+  pr: number;
+  round: number;
+  head: string;
+  tab: string | null;
+};
+
+/** A PR head's open round, numbering a new one after the PR's last. */
+export function roundFor(db: Database, pr: number, head: string, now: number) {
+  const found = db
+    .query<Round, [number, string]>(
+      `SELECT pr, round, head, tab FROM round
+       WHERE pr = ? AND head = ? AND closed_at IS NULL`,
+    )
+    .get(pr, head);
+  if (found) return found;
+  const last = db
+    .query<{ round: number | null }, [number]>(
+      "SELECT MAX(round) AS round FROM round WHERE pr = ?",
+    )
+    .get(pr);
+  const round = (last?.round ?? 0) + 1;
+  db.query(
+    "INSERT INTO round (pr, round, head, created_at) VALUES (?, ?, ?, ?)",
+  ).run(pr, round, head, now);
+  return { pr, round, head, tab: null };
+}
+
+export function setRoundTab(
+  db: Database,
+  pr: number,
+  round: number,
+  tab: string,
+) {
+  db.query("UPDATE round SET tab = ? WHERE pr = ? AND round = ?").run(
+    tab,
+    pr,
+    round,
+  );
+}
+
+export function openRounds(db: Database) {
+  return db
+    .query<Round, []>(
+      "SELECT pr, round, head, tab FROM round WHERE closed_at IS NULL ORDER BY pr, round",
+    )
+    .all();
+}
+
+export function closeRound(
+  db: Database,
+  pr: number,
+  round: number,
+  now: number,
+) {
+  db.query("UPDATE round SET closed_at = ? WHERE pr = ? AND round = ?").run(
+    now,
+    pr,
+    round,
+  );
+}
+
+/** A PR's runs, or one reviewer's; newest first. */
+export function runsOf(db: Database, pr: number, reviewer?: string) {
+  return db
+    .query<RunRow, [number, string, string]>(
+      `SELECT * FROM run WHERE pr = ? AND (? = '' OR reviewer = ?)
+       ORDER BY id DESC`,
+    )
+    .all(pr, reviewer ?? "", reviewer ?? "")
+    .map(run);
 }
 
 export function finishRun(

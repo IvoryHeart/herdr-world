@@ -1,9 +1,11 @@
+import { readFileSync } from "node:fs";
 import { shortSha } from "../../../shared/pullRequests";
 import type { GateInput, Verdict } from "../gate/predicate";
 import { harnessFor } from "./worker";
 
 /**
- * What the crew watcher does about one pull request's verdict. Pure: the
+ * What the crew watcher does about one pull request's verdict, and its
+ * settings. Planning is pure: the
  * same verdict always plans the same actions under the same keys, so a pass
  * that runs twice, or after a crash, never acts twice.
  */
@@ -249,4 +251,17 @@ export function plan(
       }),
     );
   return actions;
+}
+
+/** The crew settings from the gate config: `crew`, over the shared roster. */
+export function loadSettings(path: string): CrewSettings {
+  const raw = JSON.parse(readFileSync(path, "utf8")) as {
+    crew?: Partial<CrewSettings>;
+    roster?: CrewSettings["roster"];
+  };
+  return {
+    ...SETTINGS_DEFAULTS,
+    ...raw.crew,
+    roster: { ...raw.roster, ...raw.crew?.roster },
+  };
 }

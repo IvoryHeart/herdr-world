@@ -243,14 +243,26 @@ plans the next step for every PR in scope and takes each step once:
   prompted; the owner gets a notification instead.
 - **How reviewers run.** Each review or confirmation is a fresh `codex exec` or
   `claude -p` session on the seat's roster model, in a detached checkout of
-  the exact head. It runs in its own Herdr tab, named like `review #7 rev2`,
-  which shows each command, tool call and message as one line. The watcher
-  closes the tab after it records the result. Without Herdr, the run is a
-  background process with the same lines in its log. It is briefed with references to the work item, posts one
+  the exact head. Without Herdr, the run is a background process that writes
+  the same lines to its log. Each reviewer is briefed with references to the work item, posts one
   review with the canonical header and exits. A confirmation reviews the delta
   from that reviewer's last claimed commit. At most `maxRuns` run at once. A
   failed run retries once; a run that finishes without a RESULT on the head
   goes to the owner after 15 minutes.
+- **Where reviewers show.** A PR is a pod, and each head it reviews is a
+  round. A round has its own Herdr tab, named like `#7 towncx-12-plates · r2`,
+  with one pane per reviewer, named after the reviewer. A pane shows each
+  command, tool call and message as one line, and ends with a footer: the
+  RESULT, or a note that a newer head stopped the run, plus a command to
+  reopen the run. The tabs stay until the PR merges or closes, so the owner can
+  read every round before merging. A tab the owner closes is reopened for that
+  round's next reviewer.
+- **Reopening a run.** Each run keeps its full event stream next to its log
+  (`<log>.jsonl`), plus its harness session. `open` resumes that session as an
+  interactive chat in a new Herdr tab, run from the reviewer's checkout,
+  which `open` recreates when it's gone. There you can read the whole review
+  and ask the reviewer about it, which uses tokens only when you type. When the PR
+  closes, the watcher also removes the checkouts that `open` recreated.
 - **What stops a step.** Only a newer head, a merge or a close supersedes a
   waiting step or stops a running reviewer. On the same head, a CI rerun, a
   hold or an unknown mergeable state only pauses steps; they resume when the
@@ -271,6 +283,8 @@ bun run agent:crew -- pass --dry-run   # print the plan; change nothing
 bun run agent:crew -- watch            # a pass every 300 seconds (--interval)
 bun run agent:crew -- status           # open steps and recent reviewer runs, with token usage
 bun run agent:crew -- feed             # the last lines of the crew feed
+bun run agent:crew -- runs --pr 7      # each run's round, RESULT, tokens and open command
+bun run agent:crew -- open --run 12    # reopen a run as a chat (or --pr 7 --reviewer rev2 --round 2)
 bun run agent:crew -- review --pr 7 --reviewer rev2 --head <sha>   # one fresh reviewer now
 ```
 

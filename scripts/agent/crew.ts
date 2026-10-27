@@ -1,52 +1,53 @@
 import type { Database } from "bun:sqlite";
-import {
-  appendFileSync,
-  closeSync,
-  existsSync,
-  openSync,
-  readFileSync,
-} from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { shortSha } from "../../shared/pullRequests";
 import { gateDir, loadConfig, runPass } from "./gate";
-import { runProcess, type Run } from "./gate/observe";
+import type { Run } from "./gate/observe";
 import type { GateInput, Verdict } from "./gate/predicate";
 import { openStore } from "./gate/store";
+import { type Deps, realDeps } from "./crew/deps";
 import {
   type Action,
   authorOf,
   digest,
   type CrewSettings,
   inScope,
+  loadSettings,
   plan,
-  SETTINGS_DEFAULTS,
 } from "./crew/plan";
+import {
+  checkoutOf,
+  openChat,
+  type Options,
+  review,
+  runs,
+} from "./crew/review";
 import {
   actionsIn,
   activeRuns,
   addAction,
   addRun,
+  closeRound,
   feed,
   finishRun,
   getAction,
-  getRun,
   holdLock,
   latestRun,
   openCrewStore,
   openLock,
+  openRounds,
   recentActions,
   recentRuns,
+  roundFor,
+  roundPanes,
+  runsOf,
   setAction,
+  setRoundTab,
   setRunPane,
   setRunPid,
   type StoredAction,
 } from "./crew/store";
-import {
-  describe,
-  harnessArgv,
-  parseUsage,
-  reviewerPrompt,
-} from "./crew/worker";
 
 /**
  * agent:crew, the crew watcher. Each pass reads GitHub through agent:gate,
@@ -63,6 +64,9 @@ const USAGE = `Usage: bun run agent:crew -- <command> [options]
   watch [--interval SECONDS]     A pass every interval (default 300) until stopped
   status                         Open actions and recent reviewer runs
   feed [--lines N]               The last lines of the crew feed (default 40)
+  runs [--pr N] [--lines N]      Reviewer runs: round, RESULT, tokens and how to reopen each
+  open --run ID | --pr N --reviewer NAME [--round K]
+                                 Reopen a reviewer's session as a chat in a new Herdr tab
   review --pr N --reviewer NAME --head SHA [--since SHA] [--author SEAT] [--run ID]
                                  Run one fresh reviewer now (the watcher starts these itself)
 
@@ -82,111 +86,14 @@ const START_MS = 3 * 60_000;
 
 export type Seat = { name: string; status: string; focused: boolean };
 
-export type Deps = {
-  run: Run;
-  /**
-   * Starts a reviewer run: in its own Herdr tab, so the owner can watch it,
-   * or else as a detached process group. A pane run reports its pid itself.
-   */
-  spawn: (
-    argv: string[],
-    log: string,
-    label: string,
-  ) => { pid: number | null; pane: string | null };
-  closePane: (pane: string) => void;
-  alive: (pid: number) => boolean;
-  /** Stops a run's whole process group. */
-  kill: (pid: number) => void;
-  out: (text: string) => void;
-};
-
-export const realDeps: Deps = {
-  run: runProcess,
-  spawn(argv, log, label) {
-    const tab = runProcess([
-      "herdr",
-      "tab",
-      "create",
-      ...(process.env.HERDR_WORKSPACE_ID
-        ? ["--workspace", process.env.HERDR_WORKSPACE_ID]
-        : []),
-      "--cwd",
-      process.cwd(),
-      "--label",
-      label,
-      "--no-focus",
-    ]);
-    const pane = tab.code === 0 ? rootPane(tab.stdout) : null;
-    if (pane) {
-      const ran = runProcess(["herdr", "pane", "run", pane, shellLine(argv)]);
-      if (ran.code === 0) return { pid: null, pane };
-      runProcess(["herdr", "pane", "close", pane]);
-    }
-    // The worker appends its own lines to the log; errors join them, appended.
-    const errors = openSync(log, "a");
-    const child = Bun.spawn(argv, {
-      stdio: ["ignore", "ignore", errors],
-      detached: true,
-    } as Parameters<typeof Bun.spawn>[1]);
-    closeSync(errors);
-    child.unref();
-    return { pid: child.pid, pane: null };
-  },
-  closePane(pane) {
-    runProcess(["herdr", "pane", "close", pane]);
-  },
-  alive(pid) {
-    try {
-      process.kill(pid, 0);
-      return true;
-    } catch {
-      return false;
-    }
-  },
-  kill(pid) {
-    for (const target of [-pid, pid])
-      try {
-        process.kill(target, "SIGTERM");
-        return;
-      } catch {
-        // Not a group leader, or already gone.
-      }
-  },
-  out: (text) => console.log(text),
-};
-
-/** The new tab's pane from `herdr tab create`. */
-export function rootPane(stdout: string): string | null {
-  try {
-    const value = JSON.parse(stdout) as {
-      result?: { root_pane?: { pane_id?: unknown } };
-    };
-    const id = value.result?.root_pane?.pane_id;
-    return typeof id === "string" ? id : null;
-  } catch {
-    return null;
-  }
-}
-
-/** A command line a POSIX shell runs as exactly these arguments. */
-export function shellLine(argv: string[]) {
-  return argv
-    .map((arg) =>
-      /^[\w@%+=:,./-]+$/u.test(arg) ? arg : `'${arg.replaceAll("'", "'\\''")}'`,
-    )
-    .join(" ");
-}
-
-export function loadSettings(path: string): CrewSettings {
-  const raw = JSON.parse(readFileSync(path, "utf8")) as {
-    crew?: Partial<CrewSettings>;
-    roster?: CrewSettings["roster"];
-  };
-  return {
-    ...SETTINGS_DEFAULTS,
-    ...raw.crew,
-    roster: { ...raw.roster, ...raw.crew?.roster },
-  };
+/** A round tab's name for a PR: its number and its branch's short name. */
+export function roundLabel(
+  pr: number,
+  branch: string | undefined,
+  round: number,
+) {
+  const name = branch?.split("/").slice(1).join("/") || branch;
+  return `#${pr}${name ? ` ${name}` : ""} · r${round}`;
 }
 
 /** Herdr's named agents; an empty list if Herdr can't be read. */
@@ -223,6 +130,9 @@ export function promptable(seat: Seat | undefined, settings: CrewSettings) {
   return null;
 }
 
+/** An in-scope PR's author seat and branch. */
+type Item = { author: string | null; branch: string | undefined };
+
 type PassContext = {
   /** One gate pass over the open PRs (or `prs`): verdicts and what they judged. */
   judge: () => { verdicts: Verdict[]; inputs: GateInput[] };
@@ -258,14 +168,14 @@ export function crewPass(context: PassContext) {
     ];
     const byNumber = new Map(inputs.map((input) => [input.number, input]));
     const planned: Action[] = [];
-    const authors = new Map<number, string | null>();
+    const authors = new Map<number, Item>();
     for (const verdict of verdicts) {
       const input = byNumber.get(verdict.number);
       if (!input || !inScope(input, settings)) continue;
-      authors.set(
-        verdict.number,
-        authorOf(verdict.number, input.item?.branch, settings, names),
-      );
+      authors.set(verdict.number, {
+        author: authorOf(verdict.number, input.item?.branch, settings, names),
+        branch: input.item?.branch,
+      });
       planned.push(...plan(verdict, input, settings, names));
     }
     if (dryRun) {
@@ -298,7 +208,7 @@ function act(
   planned: Action[],
   verdicts: Verdict[],
   live: Seat[],
-  authors: Map<number, string | null>,
+  authors: Map<number, Item>,
   say: (text: string) => void,
 ) {
   const { prs, now, deps } = context;
@@ -342,14 +252,40 @@ function act(
     if (heads.get(waiting.pr) === waiting.head) continue;
     if (waiting.state === "running") {
       const active = latestRun(crew, waiting.key);
-      if (active?.pid && active.finishedAt === null) {
-        deps.kill(active.pid);
+      // A pane run that hasn't reported its pid yet sees itself stopped
+      // when it starts, and exits.
+      if (active && active.finishedAt === null) {
+        if (active.pid) deps.kill(active.pid);
         finishRun(crew, active.id, -15, null, now);
       }
-      if (active?.pane) deps.closePane(active.pane);
     }
     setAction(crew, waiting.key, "superseded", now);
     say(`#${waiting.pr} superseded ${waiting.kind} ${waiting.target}`);
+  }
+
+  // A pod lasts as long as its PR: each round's tab stays, stopped runs
+  // included, for the owner to read until the PR merges or closes.
+  for (const round of openRounds(crew)) {
+    if (heads.has(round.pr)) continue;
+    if (prs.length && !observed.has(round.pr)) continue;
+    if (round.tab) deps.closeTab(round.tab);
+    // Checkouts a reopened chat recreated go with their round.
+    for (const entry of runsOf(crew, round.pr))
+      if (entry.round === round.round) {
+        const checkout = checkoutOf(context.dir, entry);
+        if (existsSync(checkout))
+          deps.run([
+            "git",
+            "-C",
+            dirname(dirname(context.dir)),
+            "worktree",
+            "remove",
+            "--force",
+            checkout,
+          ]);
+      }
+    closeRound(crew, round.pr, round.round, now);
+    say(`#${round.pr} closed round ${round.round}`);
   }
 
   settleRuns(crew, settings, now, deps, say);
@@ -387,8 +323,6 @@ function settleRuns(
   for (const running of actionsIn(crew, ["running"])) {
     const last = latestRun(crew, running.key);
     if (!last || last.finishedAt === null) continue;
-    // The pane stays until the run is settled, so its last lines can be read.
-    if (last.pane) deps.closePane(last.pane);
     if (last.exitCode === 0) {
       setAction(crew, running.key, "done", now);
       say(`#${running.pr} run ${running.target} finished (run ${last.id})`);
@@ -410,7 +344,7 @@ function deliver(
   crew: Database,
   settings: CrewSettings,
   live: Seat[],
-  authors: Map<number, string | null>,
+  authors: Map<number, Item>,
   deliverable: (entry: StoredAction) => boolean,
   record: (entry: Action) => void,
   context: PassContext,
@@ -475,6 +409,8 @@ function deliver(
       "runs",
       `${entry.pr}-${entry.target}-${shortSha(entry.head)}-${now}.log`,
     );
+    const round = roundFor(crew, entry.pr, entry.head, now);
+    const panes = roundPanes(crew, entry.pr, round.round);
     const id = addRun(
       crew,
       {
@@ -483,11 +419,13 @@ function deliver(
         pr: entry.pr,
         head: entry.head,
         log,
+        round: round.round,
       },
       now,
     );
     setAction(crew, entry.key, "running", now, `run ${id}`, true);
-    const author = authors.get(entry.pr);
+    const item = authors.get(entry.pr);
+    const author = item?.author;
     const argv = [
       ...context.worker,
       "review",
@@ -503,15 +441,20 @@ function deliver(
       ...(author ? ["--author", author] : []),
     ];
     Bun.write(log, "");
-    const started = deps.spawn(
-      argv,
-      log,
-      `review #${entry.pr} ${entry.target}`,
-    );
+    const label = roundLabel(entry.pr, item?.branch, round.round);
+    const started = deps.spawn(argv, log, {
+      tab: round.tab,
+      after: panes.at(-1) ?? null,
+      direction: panes.length % 2 ? "right" : "down",
+      label,
+      title: entry.target,
+    });
     if (started.pid !== null) setRunPid(crew, id, started.pid);
-    if (started.pane) setRunPane(crew, id, started.pane);
+    if (started.pane) setRunPane(crew, id, started.pane, started.tab);
+    if (started.tab && started.tab !== round.tab)
+      setRoundTab(crew, entry.pr, round.round, started.tab);
     say(
-      `#${entry.pr} started ${entry.target} ${entry.kind} (run ${id}${started.pane ? `, Herdr tab "review #${entry.pr} ${entry.target}"` : ""}, log ${log})`,
+      `#${entry.pr} started ${entry.target} ${entry.kind} (run ${id}${started.pane ? `, Herdr tab "${label}"` : ""}, log ${log})`,
     );
     slots--;
   }
@@ -564,19 +507,6 @@ function deliver(
   }
 }
 
-type Options = {
-  command: string;
-  prs: number[];
-  dryRun: boolean;
-  interval: number;
-  lines: number;
-  reviewer?: string;
-  head?: string;
-  since?: string;
-  author?: string;
-  run?: number;
-};
-
 export function parseOptions(argv: string[]): Options {
   const options: Options = {
     command: "",
@@ -607,138 +537,14 @@ export function parseOptions(argv: string[]): Options {
     else if (arg === "--since") options.since = value();
     else if (arg === "--author") options.author = value();
     else if (arg === "--run") options.run = count("--run");
+    else if (arg === "--round")
+      options.round = Number(value().replace(/^r/u, "")) || 0;
     else if (arg.startsWith("--") || options.command)
       throw new Error(`Unknown argument ${arg}\n\n${USAGE}`);
     else options.command = arg;
   }
   if (!options.command) throw new Error(USAGE);
   return options;
-}
-
-/** Runs one fresh reviewer in its own detached checkout, then removes it. */
-async function review(options: Options, dir: string, deps: Deps) {
-  const { reviewer, head } = options;
-  const pr = options.prs[0];
-  if (!pr || !reviewer || !head || !/^[0-9a-f]{40}$/u.test(head))
-    throw new Error("review needs --pr, --reviewer and a full 40-hex --head");
-  const configPath = join(dir, "config.json");
-  const config = loadConfig(configPath);
-  const settings = loadSettings(configPath);
-  const model = settings.roster[reviewer];
-  if (!model) throw new Error(`${reviewer} has no roster model`);
-  const crew = openCrewStore(join(dir, "crew.sqlite"));
-  const runId =
-    options.run ??
-    addRun(
-      crew,
-      {
-        actionKey: `manual:${pr}:${head}:${reviewer}`,
-        reviewer,
-        pr,
-        head,
-        log: "stdout",
-      },
-      Date.now(),
-    );
-  setRunPid(crew, runId, process.pid);
-  const logPath = getRun(crew, runId)?.log;
-  const show = (text: string) => {
-    deps.out(text);
-    if (logPath && logPath !== "stdout") appendFileSync(logPath, `${text}\n`);
-  };
-  const primary = dirname(dirname(dir));
-  const checkout = join(
-    primary,
-    ".agents",
-    "worktrees",
-    `review-${pr}-${reviewer}-${shortSha(head)}-${runId}`,
-  );
-  const git = (...args: string[]) => deps.run(["git", "-C", primary, ...args]);
-  const cleanup = () => {
-    if (existsSync(checkout)) git("worktree", "remove", "--force", checkout);
-  };
-  process.on("SIGTERM", () => {
-    cleanup();
-    process.exit(143);
-  });
-  let code = 1;
-  let usage: string | null = null;
-  try {
-    const fetched = git("fetch", "--quiet", "origin", `pull/${pr}/head`);
-    if (fetched.code !== 0) throw new Error(`fetch failed: ${fetched.stderr}`);
-    const added = git("worktree", "add", "--detach", checkout, head);
-    if (added.code !== 0) throw new Error(`worktree failed: ${added.stderr}`);
-    const view = deps.run([
-      "gh",
-      "pr",
-      "view",
-      String(pr),
-      "--repo",
-      config.repo,
-      "--json",
-      "title,url,headRefName",
-    ]);
-    const meta =
-      view.code === 0
-        ? (JSON.parse(view.stdout) as {
-            title: string;
-            url: string;
-            headRefName: string;
-          })
-        : {
-            title: "",
-            url: `https://github.com/${config.repo}/pull/${pr}`,
-            headRefName: "",
-          };
-    const prompt = reviewerPrompt({
-      repo: config.repo,
-      pr,
-      head,
-      reviewer,
-      ...(options.since ? { since: options.since } : {}),
-      title: meta.title,
-      url: meta.url,
-      branch: meta.headRefName,
-      author: options.author ?? null,
-    });
-    const lastMessage = join(checkout, ".crew-last-message.txt");
-    show(
-      `${reviewer} ${options.since ? "confirms" : "reviews"} #${pr} at ${shortSha(head)} (${model.model})`,
-    );
-    const child = Bun.spawn(harnessArgv(model, prompt, lastMessage), {
-      cwd: checkout,
-      stdin: "ignore",
-      stdout: "pipe",
-      stderr: "inherit",
-    });
-    // Show each event as it happens; keep the stream for the usage total.
-    let stdout = "";
-    let partial = "";
-    const decoder = new TextDecoder();
-    for await (const chunk of child.stdout) {
-      const text = decoder.decode(chunk, { stream: true });
-      stdout += text;
-      const lines = (partial + text).split("\n");
-      partial = lines.pop() ?? "";
-      for (const line of lines) {
-        const shown = describe(line);
-        if (shown) show(shown);
-      }
-    }
-    code = await child.exited;
-    const parsed = parseUsage(stdout);
-    usage = parsed ? JSON.stringify(parsed) : null;
-    if (existsSync(lastMessage)) show(readFileSync(lastMessage, "utf8").trim());
-    show(`exit ${code}; usage ${usage ?? "unknown"}`);
-  } catch (error) {
-    show(error instanceof Error ? error.message : String(error));
-    code = 1;
-  } finally {
-    cleanup();
-    finishRun(crew, runId, code, usage, Date.now());
-    crew.close();
-  }
-  return code;
 }
 
 function status(crew: Database, out: (text: string) => void, now: number) {
@@ -770,6 +576,18 @@ export async function main(argv: string[], deps: Deps = realDeps) {
       status(crew, deps.out, Date.now());
       return 0;
     }
+    if (options.command === "runs") {
+      runs(crew, options, deps.out);
+      return 0;
+    }
+    if (options.command === "open")
+      return openChat(
+        crew,
+        options,
+        dir,
+        loadSettings(join(dir, "config.json")),
+        deps,
+      );
     if (options.command === "feed") {
       const path = join(dir, "feed.log");
       const lines = existsSync(path)
