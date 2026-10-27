@@ -119,6 +119,10 @@ export function openCrewStore(path: string, busyMs = 120_000) {
       closed_at INTEGER,
       PRIMARY KEY (pr, round)
     );
+    CREATE TABLE IF NOT EXISTS check_seen (
+      url TEXT PRIMARY KEY,
+      first_seen INTEGER NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS chat (
       tab TEXT PRIMARY KEY,
       run_id INTEGER NOT NULL
@@ -319,6 +323,36 @@ export function setRunSession(
   db.query(
     "UPDATE run SET harness = ?, model = ?, session = ? WHERE id = ?",
   ).run(harness, model, session, id);
+}
+
+/**
+ * When the watcher first saw each of these checks running, recording any
+ * it sees for the first time now. A pass over every PR forgets the checks
+ * no longer running; a scoped pass leaves other PRs' checks alone.
+ */
+export function runningSince(
+  db: Database,
+  urls: string[],
+  now: number,
+  everyPr: boolean,
+) {
+  const since = new Map<string, number>();
+  if (everyPr)
+    db.query(
+      `DELETE FROM check_seen WHERE url NOT IN (${urls.map(() => "?").join(", ")})`,
+    ).run(...urls);
+  for (const url of urls) {
+    db.query(
+      "INSERT OR IGNORE INTO check_seen (url, first_seen) VALUES (?, ?)",
+    ).run(url, now);
+    const row = db
+      .query<{ first_seen: number }, [string]>(
+        "SELECT first_seen FROM check_seen WHERE url = ?",
+      )
+      .get(url);
+    since.set(url, row?.first_seen ?? now);
+  }
+  return since;
 }
 
 /** A chat tab `open` started for a run; it closes with the run's round. */

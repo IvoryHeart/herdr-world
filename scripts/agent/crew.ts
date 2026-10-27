@@ -43,6 +43,7 @@ import {
   roundFor,
   roundPanes,
   roundTabs,
+  runningSince,
   runsOf,
   setAction,
   setRoundTab,
@@ -177,6 +178,23 @@ export function crewPass(context: PassContext) {
       ...new Set([...Object.keys(settings.roster), ...live.map((s) => s.name)]),
     ];
     const byNumber = new Map(inputs.map((input) => [input.number, input]));
+    // How long each running check of an in-scope PR has been running, as
+    // far as this watcher has seen; a dry run records nothing.
+    const runningChecks = verdicts.flatMap((verdict) => {
+      const input = byNumber.get(verdict.number);
+      if (!input || !inScope(input, settings)) return [];
+      return (input.item?.pr?.checks ?? []).filter(
+        (check) => check.state === "pending" && check.url,
+      );
+    });
+    const since = dryRun
+      ? new Map<string, number>()
+      : runningSince(
+          crew,
+          runningChecks.map((check) => check.url!),
+          now,
+          context.prs.length === 0,
+        );
     const planned: Action[] = [];
     const authors = new Map<number, Item>();
     for (const verdict of verdicts) {
@@ -195,7 +213,14 @@ export function crewPass(context: PassContext) {
         branch: input.item?.branch,
         posted,
       });
-      planned.push(...plan(verdict, input, settings, names));
+      const running = (input.item?.pr?.checks ?? [])
+        .filter((check) => check.state === "pending" && check.url)
+        .map((check) => ({
+          name: check.name,
+          url: check.url!,
+          minutes: Math.floor((now - (since.get(check.url!) ?? now)) / 60_000),
+        }));
+      planned.push(...plan(verdict, input, settings, names, running));
     }
     if (dryRun) {
       deps.out(`plan: ${planned.length} action(s) for ${authors.size} PR(s)`);

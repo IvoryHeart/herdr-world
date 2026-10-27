@@ -284,6 +284,11 @@ plans the next step for every PR in scope and takes each step once:
   hold or an unknown mergeable state only pauses steps; they resume when the
   head is eligible again. A reviewer that has just posted finishes its run. A
   PR reopened on the same head is planned afresh.
+- **A check that never finishes.** GitHub sometimes loses a finished job's
+  status, and the check then shows as running for good, which holds every
+  review back. The watcher notes when it first sees each check running. One
+  still running after `stallMinutes` (default 30) goes to the author as a `ci`
+  step, with the `gh run rerun --job` command for it.
 - **When a step repeats.** A CI step is keyed by the failed jobs, so a rerun
   that fails again prompts the author again. Every owner notice is an action
   of its own: READY, NEEDS-OWNER, a seat that is missing or never prompted,
@@ -313,7 +318,8 @@ Settings go under `crew` in the gate's `config.json`:
 - `neverPrompt` lists seats the watcher never prompts.
 - `maxRuns` (default 3) bounds the reviewers working at once, and
   `runTimeoutMinutes` (default 90) is when one still working without posting
-  is reported to the owner.
+  is reported to the owner. `stallMinutes` (default 30) is when a check still
+  running counts as stuck.
 - The gate config's `roster` gives each reviewer's model and effort.
 
 `crew.sqlite` records each step once under a key built from the PR, head, kind,

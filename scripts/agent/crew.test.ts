@@ -929,6 +929,36 @@ describe("delivery", () => {
     expect(actionsIn(crew, ["running"])).toHaveLength(3);
   });
 
+  test("a check stuck running goes to the author to rerun, once", () => {
+    const stuck = town({
+      head: SHA.reviewed,
+      posts: [],
+      checks: [
+        { name: "Delivery checks", state: "pass", required: true },
+        {
+          name: "World browser tests (4/6)",
+          state: "pending",
+          required: false,
+          url: "https://github.com/example-org/widgets/actions/runs/1/job/22",
+        },
+      ],
+    });
+    pass(stuck);
+    pass(stuck, NOW + 29 * 60_000);
+    expect(prompts()).toEqual([]);
+    pass(stuck, NOW + 31 * 60_000);
+    pass(stuck, NOW + 40 * 60_000);
+    expect(prompts()).toHaveLength(1);
+    expect(prompts()[0]!.slice(3)).toEqual([
+      "towncx",
+      "[crew -> towncx] ACT #7 ci @" +
+        SHA.reviewed.slice(0, 7) +
+        ": World browser tests (4/6) has been running 31 minutes, longer than CI takes; GitHub may have lost its status. Rerun it: gh run rerun --job 22",
+    ]);
+    // No reviewer starts while a check is still running.
+    expect(spawned).toEqual([]);
+  });
+
   test("a reviewer past the limit is reported to the owner, not stopped", () => {
     pass(town({ head: SHA.reviewed, posts: [] }));
     const value = town({ head: SHA.reviewed, posts: [] });

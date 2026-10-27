@@ -25,6 +25,11 @@ export type CrewSettings = {
   maxRuns: number;
   /** A reviewer still working after this long, without posting, is the owner's call. */
   runTimeoutMinutes: number;
+  /**
+   * A check still running this long after the watcher first saw it is
+   * stuck, as when GitHub loses a finished job's status; the author reruns it.
+   */
+  stallMinutes: number;
   /** Seat → model; a reviewer runs fresh on its seat's model. */
   roster: Record<string, { model: string; effort?: string }>;
 };
@@ -60,6 +65,7 @@ export const SETTINGS_DEFAULTS: CrewSettings = {
   neverPrompt: [],
   maxRuns: 3,
   runTimeoutMinutes: 90,
+  stallMinutes: 30,
   roster: {},
 };
 
@@ -105,11 +111,15 @@ export function authorOf(
   return match ?? null;
 }
 
+/** A check the watcher has seen running for `minutes`. */
+export type RunningCheck = { name: string; url: string; minutes: number };
+
 export function plan(
   verdict: Verdict,
   input: GateInput,
   settings: CrewSettings,
   seats: string[],
+  running: RunningCheck[] = [],
 ): Action[] {
   const { number: pr, head } = verdict;
   if (!head || verdict.state === "MERGED" || verdict.state === "CLOSED")
@@ -202,6 +212,17 @@ export function plan(
       `ACT #${pr} ci @${at}: ${failing.detail}. Rerun a listed flake once with gh run rerun <id> --failed; otherwise fix and push.`,
       failedJobs || failing.detail,
     );
+  // A check that never finishes holds every review back; keyed by its job,
+  // so a rerun that sticks again is heard again.
+  for (const check of running) {
+    if (check.minutes < settings.stallMinutes) continue;
+    const job = /\/job\/(\d+)/u.exec(check.url)?.[1];
+    toAuthor(
+      "ci",
+      `ACT #${pr} ci @${at}: ${check.name} has been running ${check.minutes} minutes, longer than CI takes; GitHub may have lost its status. Rerun it: ${job ? `gh run rerun --job ${job}` : check.url}`,
+      check.url,
+    );
+  }
   if (state("mergeable") === "unmet")
     toAuthor(
       "conflict",
