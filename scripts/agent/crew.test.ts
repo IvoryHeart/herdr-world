@@ -39,13 +39,12 @@ import {
 } from "./crew/store";
 import {
   chatArgv,
-  describe as describeEvent,
-  finalMessage,
-  harnessArgv,
-  parseUsage,
-  resultLine,
+  claudeTranscript,
+  claudeUsage,
+  codexSessionOf,
+  codexUsage,
+  reviewerArgv,
   reviewerPrompt,
-  sessionOf,
 } from "./crew/worker";
 import { config, confirm, input, NOW, SHA, type Post } from "./gate/cases";
 import type { Run } from "./gate/observe";
@@ -365,6 +364,7 @@ describe("delivery", () => {
       opened.push({ line, cwd, label });
       return `wP:tC${opened.length}`;
     },
+    usage: (run) => `{"output_tokens":${run.id}}`,
     alive: (pid) => !dead.has(pid),
     kill: (pid) => killed.push(pid),
     out: () => {},
@@ -845,14 +845,37 @@ describe("delivery", () => {
     expect(spawned[2]).toContain("rev-opus");
   });
 
-  test("a reviewer that has posted finishes its run instead of being stopped", () => {
+  test("a review is done once its RESULT is on GitHub; its session stays open", () => {
     pass(town({ head: SHA.reviewed, posts: [] }));
+    const opus = activeRuns(crew).find(
+      (entry) => entry.reviewer === "rev-opus",
+    )!;
     pass(
       town({ head: SHA.reviewed, posts: [confirm("rev-opus", SHA.reviewed)] }),
       NOW + 60_000,
     );
     expect(killed).toEqual([]);
-    expect(actionsIn(crew, ["running"])).toHaveLength(3);
+    const done = getRun(crew, opus.id)!;
+    expect(done.exitCode).toBe(0);
+    expect(done.result).toBe("RESULT #7: 2/2 resolved, 0 new");
+    expect(done.usage).toBe(`{"output_tokens":${opus.id}}`);
+    expect(getAction(crew, opus.actionKey)!.state).toBe("done");
+    // Its slot is free and the process lives on as the owner's chat.
+    expect(activeRuns(crew)).toHaveLength(2);
+    expect(dead.has(opus.pid!)).toBe(false);
+  });
+
+  test("a reviewer past the limit is reported to the owner, not stopped", () => {
+    pass(town({ head: SHA.reviewed, posts: [] }));
+    const value = town({ head: SHA.reviewed, posts: [] });
+    pass(value, NOW + 91 * 60_000);
+    pass(value, NOW + 92 * 60_000);
+    expect(killed).toEqual([]);
+    expect(activeRuns(crew)).toHaveLength(3);
+    const overdue = notices().filter((argv) =>
+      argv.join(" ").includes("without posting"),
+    );
+    expect(overdue).toHaveLength(3);
   });
 
   test("a hold pauses waiting steps and its release resumes them", () => {
@@ -1185,78 +1208,69 @@ describe("worker", () => {
     expect(prompt).toContain("Never push, merge, approve");
   });
 
-  test("runs Claude models with claude -p and the rest with codex exec", () => {
-    expect(
-      harnessArgv(ROSTER["rev-opus"], "brief", "last.txt").slice(0, 5),
-    ).toEqual(["claude", "-p", "brief", "--model", "claude-opus-5-5"]);
-    const codex = harnessArgv(ROSTER.rev2, "brief", "last.txt");
-    expect(codex.slice(0, 4)).toEqual(["codex", "exec", "-m", "gpt-6.1-sol"]);
+  test("runs each reviewer interactively, with the brief as its first message", () => {
+    expect(reviewerArgv(ROSTER["rev-opus"], "brief", "s-1")).toEqual([
+      "claude",
+      "--model",
+      "claude-opus-5-5",
+      "--effort",
+      "high",
+      "--permission-mode",
+      "bypassPermissions",
+      "--session-id",
+      "s-1",
+      "brief",
+    ]);
+    const codex = reviewerArgv(ROSTER.rev2, "brief", null);
+    expect(codex.slice(0, 3)).toEqual(["codex", "-m", "gpt-6.1-sol"]);
     expect(codex).toContain('model_reasoning_effort="xhigh"');
+    expect(codex).not.toContain("exec");
     expect(codex.at(-1)).toBe("brief");
   });
 
-  test("reads usage from Claude's result or Codex's last turn", () => {
+  test("reads usage and sessions from the harnesses' own files", () => {
+    const message = (id: string, output: number) =>
+      JSON.stringify({
+        type: "assistant",
+        message: {
+          id,
+          usage: { input_tokens: 2, output_tokens: output, cache_creation: {} },
+        },
+      });
+    // Claude repeats a message per content block; each counts once.
     expect(
-      parseUsage(
-        JSON.stringify({ usage: { output_tokens: 5 }, total_cost_usd: 0.5 }),
+      claudeUsage(
+        [message("m1", 5), message("m1", 5), message("m2", 7), "{"].join("\n"),
       ),
-    ).toEqual({ output_tokens: 5, total_cost_usd: 0.5 });
-    expect(
-      parseUsage(
-        [
-          '{"type":"thread.started"}',
-          '{"type":"turn.completed","usage":{"input_tokens":10,"output_tokens":2}}',
-          "not json",
-        ].join("\n"),
-      ),
-    ).toEqual({ input_tokens: 10, output_tokens: 2 });
-    expect(parseUsage("")).toBeNull();
+    ).toEqual({ input_tokens: 4, output_tokens: 12 });
+    expect(claudeUsage("")).toBeNull();
+    const count = (output: number) =>
+      JSON.stringify({
+        type: "event_msg",
+        payload: {
+          type: "token_count",
+          info: {
+            total_token_usage: { input_tokens: 10, output_tokens: output },
+          },
+        },
+      });
+    expect(codexUsage([count(1), count(3)].join("\n"))).toEqual({
+      input_tokens: 10,
+      output_tokens: 3,
+    });
+    const meta = JSON.stringify({
+      type: "session_meta",
+      payload: { id: "c-1", cwd: "/x/review-7-rev2" },
+    });
+    expect(codexSessionOf(meta, "/x/review-7-rev2")).toBe("c-1");
+    expect(codexSessionOf(meta, "/x/other")).toBeNull();
+    expect(claudeTranscript("/x/.agents/review-7", "s-1", "/h")).toBe(
+      "/h/projects/-x--agents-review-7/s-1.jsonl",
+    );
   });
 });
 
 describe("run display", () => {
-  test("shows commands, tools and messages, one line each", () => {
-    expect(
-      describeEvent(
-        JSON.stringify({
-          type: "item.completed",
-          item: {
-            type: "command_execution",
-            command: "bun test x",
-            exit_code: 1,
-          },
-        }),
-      ),
-    ).toBe("$ bun test x  (exit 1)");
-    expect(
-      describeEvent(
-        JSON.stringify({
-          type: "item.completed",
-          item: { type: "agent_message", text: "RESULT #7:\n 0/0 resolved" },
-        }),
-      ),
-    ).toBe("» RESULT #7: 0/0 resolved");
-    expect(
-      describeEvent(
-        JSON.stringify({
-          type: "assistant",
-          message: {
-            content: [
-              { type: "tool_use", name: "Read", input: { file_path: "a.ts" } },
-              {
-                type: "tool_use",
-                name: "Bash",
-                input: { command: "gh pr view 7" },
-              },
-            ],
-          },
-        }),
-      ),
-    ).toBe("· Read a.ts\n$ gh pr view 7");
-    expect(describeEvent('{"type":"turn.started"}')).toBeNull();
-    expect(describeEvent("not json")).toBeNull();
-  });
-
   test("quotes a command line for the pane's shell", () => {
     expect(shellLine(["bun", "/x/crew.ts", "review", "--pr", "7"])).toBe(
       "bun /x/crew.ts review --pr 7",
@@ -1308,41 +1322,7 @@ describe("run display", () => {
     expect(roundLabel(9, undefined, 1)).toBe("#9 · r1");
   });
 
-  test("reads a run's session, RESULT and chat command", () => {
-    expect(sessionOf('{"type":"thread.started","thread_id":"t-1"}')).toBe(
-      "t-1",
-    );
-    expect(
-      sessionOf('{"type":"system","subtype":"init","session_id":"s-1"}'),
-    ).toBe("s-1");
-    expect(sessionOf('{"type":"assistant","session_id":"s-1"}')).toBeNull();
-    expect(sessionOf("nope")).toBeNull();
-    expect(
-      resultLine(
-        "RESULT #7: x/y resolved, z new\nRESULT #7: 0/0 resolved, 2 new\nhttps://example.com",
-        7,
-      ),
-    ).toBe("RESULT #7: 0/0 resolved, 2 new");
-    expect(resultLine("RESULT #8: 1/1 resolved, 0 new", 7)).toBeNull();
-    expect(resultLine("no result", 7)).toBeNull();
-    // Only the final message counts: tool output quotes other reviews.
-    const stream = [
-      JSON.stringify({
-        type: "user",
-        message: {
-          content: [
-            { type: "tool_result", content: "RESULT #7: 3/3 resolved, 0 new" },
-          ],
-        },
-      }),
-      JSON.stringify({ type: "result", subtype: "error_max_turns" }),
-    ].join("\n");
-    expect(resultLine(finalMessage(stream), 7)).toBeNull();
-    expect(
-      finalMessage(
-        `${stream}\n${JSON.stringify({ type: "result", result: "RESULT #7: 1/1 resolved, 0 new\nhttps://example.com/r" })}`,
-      ),
-    ).toBe("RESULT #7: 1/1 resolved, 0 new\nhttps://example.com/r");
+  test("reopens a run on its own harness and model", () => {
     expect(chatArgv("claude", "s-1", "claude-opus-5-5")).toEqual([
       "claude",
       "--resume",

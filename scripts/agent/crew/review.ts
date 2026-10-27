@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
-import { appendFileSync, existsSync, readFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { appendFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { shortSha } from "../../../shared/pullRequests";
 import { loadConfig } from "../gate";
@@ -17,20 +18,16 @@ import {
   roundClosed,
   runsOf,
   setRunPid,
-  setRunResult,
   setRunSession,
   type StoredRun,
 } from "./store";
 import {
   chatArgv,
-  describe,
-  finalMessage,
-  harnessArgv,
+  findCodexSession,
   harnessFor,
-  parseUsage,
-  resultLine,
+  readUsage,
+  reviewerArgv,
   reviewerPrompt,
-  sessionOf,
 } from "./worker";
 
 /**
@@ -119,7 +116,7 @@ export async function review(options: Options, dir: string, deps: Deps) {
   const harness = harnessFor(model.model) ?? "codex";
   setRunSession(crew, runId, harness, model.model, null);
   process.on("SIGTERM", () => {
-    show(`── stopped: a newer head or the owner ended this run`);
+    show(`── stopped: a newer head made this review stale`);
     show(`   reopen as a chat: ${reopen(runId)}`);
     cleanup();
     process.exit(143);
@@ -164,48 +161,42 @@ export async function review(options: Options, dir: string, deps: Deps) {
       branch: meta.headRefName,
       author: options.author ?? null,
     });
-    const lastMessage = join(checkout, ".crew-last-message.txt");
     show(
-      `${reviewer} ${options.since ? "confirms" : "reviews"} #${pr} at ${shortSha(head)} (${model.model})`,
+      `${reviewer} ${options.since ? "confirms" : "reviews"} #${pr} at ${shortSha(head)} (${model.model}); type here to steer it`,
     );
-    const child = Bun.spawn(harnessArgv(model, prompt, lastMessage), {
+    // The harness takes this pane's terminal: the owner watches it work,
+    // can type to it, and keeps it as a chat after it posts. The watcher
+    // marks the review done once its RESULT is on GitHub.
+    const session = harness === "claude" ? randomUUID() : null;
+    if (session) setRunSession(crew, runId, harness, model.model, session);
+    const started = Date.now();
+    // Ctrl-C in the pane is for the harness; this process waits for it.
+    process.on("SIGINT", () => {});
+    const child = Bun.spawn(reviewerArgv(model, prompt, session), {
       cwd: checkout,
-      stdin: "ignore",
-      stdout: "pipe",
-      stderr: "inherit",
+      stdio: ["inherit", "inherit", "inherit"],
     });
-    // Show each event as it happens. The whole stream is kept beside the
-    // log, and the session it names lets the owner reopen it as a chat.
-    let stdout = "";
-    let partial = "";
-    let session: string | null = null;
-    const decoder = new TextDecoder();
-    for await (const chunk of child.stdout) {
-      const text = decoder.decode(chunk, { stream: true });
-      stdout += text;
-      if (logged) appendFileSync(`${logged}.jsonl`, text);
-      const lines = (partial + text).split("\n");
-      partial = lines.pop() ?? "";
-      for (const line of lines) {
-        if (!session && (session = sessionOf(line)))
-          setRunSession(crew, runId, harness, model.model, session);
-        const shown = describe(line);
-        if (shown) show(shown);
-      }
-    }
+    // Codex names its session itself; find it once its rollout exists.
+    let named = harness !== "codex";
+    const finding = setInterval(() => {
+      if (named) return;
+      const found = findCodexSession(checkout, started - 5_000);
+      if (!found) return;
+      setRunSession(crew, runId, harness, model.model, found);
+      named = true;
+    }, 3_000);
     code = await child.exited;
-    const parsed = parseUsage(stdout);
-    usage = parsed ? JSON.stringify(parsed) : null;
-    // Codex writes its final message to a file; Claude ends its stream with it.
-    const written = existsSync(lastMessage)
-      ? readFileSync(lastMessage, "utf8").trim()
-      : "";
-    if (written) show(written);
-    const result = resultLine(written || finalMessage(stdout), pr);
-    if (result) setRunResult(crew, runId, result);
-    show(`── finished: ${result ?? "no RESULT"} · exit ${code}`);
-    show(`   usage ${usage ?? "unknown"}`);
-    if (session) show(`   reopen as a chat: ${reopen(runId)}`);
+    clearInterval(finding);
+    const run = getRun(crew, runId);
+    usage = readUsage({
+      harness,
+      session: run?.session ?? null,
+      cwd: checkout,
+    });
+    show(
+      `── session ended (exit ${code}) · ${run?.result ?? "no RESULT posted"}`,
+    );
+    if (run?.session) show(`   reopen as a chat: ${reopen(runId)}`);
   } catch (error) {
     show(error instanceof Error ? error.message : String(error));
     show(`── failed to start`);

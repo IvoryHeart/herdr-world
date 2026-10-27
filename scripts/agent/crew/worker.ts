@@ -1,7 +1,12 @@
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+
 /**
- * A reviewer run: one fresh harness session per review or confirmation,
- * briefed with references to the work item rather than a transcript, which
- * posts its RESULT on GitHub and exits.
+ * A reviewer run: one fresh, interactive harness session per review or
+ * confirmation in a Herdr pane, briefed with references to the work item
+ * rather than a transcript. It posts its RESULT on GitHub and stays open,
+ * so the owner can watch it work, steer it, and ask about it afterwards.
  */
 
 export type ReviewTask = {
@@ -41,7 +46,7 @@ Rules:
   RESULT #${pr}: x/y resolved, z new
   For a first review use 0/0 resolved and z = the number of findings. Use digits. Findings follow, one per line: P-level, file:line, the problem and the fix you expect.
 - Never push, merge, approve, use --admin, prompt or message another agent, or post session links.
-- Finish by printing only the RESULT line and the review URL.`;
+- Finish by printing only the RESULT line and the review URL. Then stay in this session: the owner may read your work here and ask you about it until the PR closes; answer, but take no further action unless asked.`;
 }
 
 /** Which harness runs a model: Claude models on Claude Code, GPT models on Codex. */
@@ -51,156 +56,179 @@ export function harnessFor(model: string): "claude" | "codex" | null {
   return null;
 }
 
-/** The harness command line for a seat's model; the planner refuses other models first. */
-export function harnessArgv(
+/**
+ * The interactive harness command for a seat's model, with the brief as its
+ * first message; the planner refuses other models first. Claude takes the
+ * session id it is given; Codex names its own, found from its session files.
+ */
+export function reviewerArgv(
   model: { model: string; effort?: string },
   prompt: string,
-  lastMessage: string,
+  session: string | null,
 ): string[] {
   if (harnessFor(model.model) === "claude")
     return [
       "claude",
-      "-p",
-      prompt,
       "--model",
       model.model,
       ...(model.effort ? ["--effort", model.effort] : []),
       "--permission-mode",
       "bypassPermissions",
-      "--output-format",
-      "stream-json",
-      "--verbose",
+      ...(session ? ["--session-id", session] : []),
+      prompt,
     ];
   return [
     "codex",
-    "exec",
     "-m",
     model.model,
     ...(model.effort ? ["-c", `model_reasoning_effort="${model.effort}"`] : []),
     "--dangerously-bypass-approvals-and-sandbox",
-    "--json",
-    "-o",
-    lastMessage,
     prompt,
   ];
 }
 
-const clip = (text: string, length: number) => {
-  const line = text.replace(/\s+/gu, " ").trim();
-  return line.length > length ? `${line.slice(0, length - 1)}…` : line;
-};
+const claudeHome = () =>
+  process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude");
+const codexSessions = () =>
+  join(process.env.CODEX_HOME ?? join(homedir(), ".codex"), "sessions");
 
-/**
- * One readable line for a harness event, or null for events not worth
- * showing: Codex `exec --json` items and Claude `stream-json` messages.
- */
-export function describe(line: string): string | null {
-  let event: Record<string, unknown>;
+/** Claude keeps a session's transcript under its working directory's name. */
+export function claudeTranscript(
+  cwd: string,
+  session: string,
+  home = claudeHome(),
+) {
+  return join(
+    home,
+    "projects",
+    cwd.replace(/[^A-Za-z0-9]/gu, "-"),
+    `${session}.jsonl`,
+  );
+}
+
+/** The session a Codex rollout's first line names, if it ran in `cwd`. */
+export function codexSessionOf(firstLine: string, cwd: string): string | null {
   try {
-    event = JSON.parse(line) as Record<string, unknown>;
+    const meta = JSON.parse(firstLine) as {
+      type?: unknown;
+      payload?: { id?: unknown; cwd?: unknown };
+    };
+    return meta.type === "session_meta" &&
+      meta.payload?.cwd === cwd &&
+      typeof meta.payload.id === "string"
+      ? meta.payload.id
+      : null;
   } catch {
     return null;
   }
-  const item = event.item as Record<string, unknown> | undefined;
-  if (item && event.type === "item.completed") {
-    if (item.type === "command_execution")
-      return `$ ${clip(String(item.command ?? ""), 160)}${typeof item.exit_code === "number" && item.exit_code !== 0 ? `  (exit ${item.exit_code})` : ""}`;
-    if (item.type === "agent_message")
-      return `» ${clip(String(item.text ?? ""), 400)}`;
-    if (item.type === "file_change") return "· edited files";
-    return null;
+}
+
+/** Codex's rollout files from the last two days' folders, newest first. */
+function recentRollouts(root = codexSessions()) {
+  const days: string[] = [];
+  const below = (dir: string) =>
+    existsSync(dir)
+      ? readdirSync(dir)
+          .filter((name) => /^\d+$/u.test(name))
+          .sort()
+          .reverse()
+      : [];
+  for (const year of below(root))
+    for (const month of below(join(root, year)))
+      for (const day of below(join(root, year, month))) {
+        if (days.length < 2) days.push(join(root, year, month, day));
+      }
+  return days.flatMap((dir) =>
+    readdirSync(dir)
+      .filter((name) => name.startsWith("rollout-") && name.endsWith(".jsonl"))
+      .map((name) => join(dir, name)),
+  );
+}
+
+/** The Codex session that started in `cwd` since `since`, once it exists. */
+export function findCodexSession(
+  cwd: string,
+  since: number,
+  root = codexSessions(),
+) {
+  for (const path of recentRollouts(root)) {
+    if (statSync(path).mtimeMs < since) continue;
+    const first = readFileSync(path, "utf8").split("\n", 1)[0] ?? "";
+    const session = codexSessionOf(first, cwd);
+    if (session) return session;
   }
-  if (event.type === "assistant") {
-    const content = (event.message as { content?: unknown[] } | undefined)
-      ?.content;
-    const lines: string[] = [];
-    for (const part of Array.isArray(content) ? content : []) {
-      const entry = part as Record<string, unknown>;
-      const input = (entry.input ?? {}) as Record<string, unknown>;
-      if (entry.type === "text" && String(entry.text ?? "").trim())
-        lines.push(`» ${clip(String(entry.text), 400)}`);
-      else if (entry.type === "tool_use")
-        lines.push(
-          entry.name === "Bash"
-            ? `$ ${clip(String(input.command ?? ""), 160)}`
-            : `· ${String(entry.name)} ${clip(String(input.file_path ?? input.pattern ?? input.path ?? ""), 120)}`.trimEnd(),
-        );
-    }
-    return lines.length ? lines.join("\n") : null;
-  }
-  if (event.type === "error")
-    return `! ${clip(String(event.message ?? "error"), 300)}`;
   return null;
 }
 
 /**
- * Token usage from a run's stdout: Claude's stream ends with a `result`
- * carrying `usage`; Codex's last `turn.completed` carries it.
+ * A Claude transcript's token usage: each assistant message once, though
+ * the transcript repeats a message for each of its content blocks.
  */
-export function parseUsage(stdout: string): Record<string, unknown> | null {
-  let usage: Record<string, unknown> | null = null;
-  for (const line of stdout.split("\n")) {
-    const text = line.trim();
-    if (!text.startsWith("{")) continue;
+export function claudeUsage(transcript: string): Record<string, number> | null {
+  const byMessage = new Map<string, Record<string, number>>();
+  for (const line of transcript.split("\n")) {
+    if (!line.includes('"usage"')) continue;
     try {
-      const value = JSON.parse(text) as Record<string, unknown>;
-      const found = value.usage;
-      if (found && typeof found === "object") {
-        usage = { ...(found as Record<string, unknown>) };
-        if (typeof value.total_cost_usd === "number")
-          usage.total_cost_usd = value.total_cost_usd;
-      }
+      const entry = JSON.parse(line) as {
+        message?: { id?: string; usage?: Record<string, unknown> };
+      };
+      const usage = entry.message?.usage;
+      if (!usage || !entry.message?.id) continue;
+      const numbers: Record<string, number> = {};
+      for (const [key, value] of Object.entries(usage))
+        if (typeof value === "number") numbers[key] = value;
+      byMessage.set(entry.message.id, numbers);
     } catch {
-      // A partial or non-JSON line carries no usage.
+      // A partial line carries no usage.
     }
   }
-  return usage;
+  if (!byMessage.size) return null;
+  const total: Record<string, number> = {};
+  for (const usage of byMessage.values())
+    for (const [key, value] of Object.entries(usage))
+      total[key] = (total[key] ?? 0) + value;
+  return total;
 }
 
-/**
- * The harness session a run's stream names: Claude's `system` init event
- * carries `session_id`, Codex's `thread.started` carries `thread_id`.
- */
-export function sessionOf(line: string): string | null {
-  try {
-    const event = JSON.parse(line) as Record<string, unknown>;
-    const id =
-      event.type === "thread.started"
-        ? event.thread_id
-        : event.type === "system"
-          ? event.session_id
-          : null;
-    return typeof id === "string" && id ? id : null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * The run's own canonical RESULT line for this PR, read from its final
- * message only: tool output quotes other rounds' and reviewers' lines.
- */
-export function resultLine(text: string, pr: number): string | null {
-  const found = text.match(
-    new RegExp(`RESULT #${pr}: \\d+/\\d+ resolved, \\d+ new`, "gu"),
-  );
-  return found ? found[found.length - 1]! : null;
-}
-
-/** Claude's final message: the `result` event that ends its stream. */
-export function finalMessage(stdout: string): string {
-  let text = "";
-  for (const line of stdout.split("\n")) {
-    if (!line.includes('"result"')) continue;
+/** A Codex rollout's token usage: its last running total. */
+export function codexUsage(rollout: string): Record<string, number> | null {
+  let total: Record<string, number> | null = null;
+  for (const line of rollout.split("\n")) {
+    if (!line.includes('"token_count"')) continue;
     try {
-      const event = JSON.parse(line) as { type?: unknown; result?: unknown };
-      if (event.type === "result" && typeof event.result === "string")
-        text = event.result;
+      const entry = JSON.parse(line) as {
+        payload?: {
+          type?: unknown;
+          info?: { total_token_usage?: Record<string, number> };
+        };
+      };
+      const usage = entry.payload?.info?.total_token_usage;
+      if (entry.payload?.type === "token_count" && usage) total = { ...usage };
     } catch {
-      // A partial or non-JSON line is not the final message.
+      // A partial line carries no usage.
     }
   }
-  return text;
+  return total;
+}
+
+/** A run's token usage so far, from its harness's own session files. */
+export function readUsage(run: {
+  harness: string | null;
+  session: string | null;
+  cwd: string;
+}): string | null {
+  if (!run.session) return null;
+  let usage: Record<string, number> | null = null;
+  if (run.harness === "claude") {
+    const path = claudeTranscript(run.cwd, run.session);
+    if (existsSync(path)) usage = claudeUsage(readFileSync(path, "utf8"));
+  } else {
+    const path = recentRollouts().find((file) =>
+      file.endsWith(`-${run.session}.jsonl`),
+    );
+    if (path) usage = codexUsage(readFileSync(path, "utf8"));
+  }
+  return usage ? JSON.stringify(usage) : null;
 }
 
 /**

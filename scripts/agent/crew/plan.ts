@@ -23,7 +23,7 @@ export type CrewSettings = {
   neverPrompt: string[];
   /** Reviewer runs at once. */
   maxRuns: number;
-  /** A reviewer run still going after this long is stopped. */
+  /** A reviewer still working after this long, without posting, is the owner's call. */
   runTimeoutMinutes: number;
   /** Seat → model; a reviewer runs fresh on its seat's model. */
   roster: Record<string, { model: string; effort?: string }>;

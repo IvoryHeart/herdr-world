@@ -241,29 +241,35 @@ plans the next step for every PR in scope and takes each step once:
   it isn't focused, because a prompt types into the seat's input box. Other
   steps wait for a later pass. Seats listed in `neverPrompt` are never
   prompted; the owner gets a notification instead.
-- **How reviewers run.** Each review or confirmation is a fresh `codex exec` or
-  `claude -p` session on the seat's roster model, in a detached checkout of
-  the exact head. Without Herdr, the run is a background process that writes
-  the same lines to its log. Each reviewer is briefed with references to the work item, posts one
-  review with the canonical header and exits. A confirmation reviews the delta
-  from that reviewer's last claimed commit. At most `maxRuns` run at once. A
-  failed run retries once; a run that finishes without a RESULT on the head
-  goes to the owner after 15 minutes.
+- **How reviewers run.** Each review or confirmation is a fresh, interactive
+  `claude` or `codex` session on the seat's roster model, in a detached
+  checkout of the exact head, with its brief as the first message. The brief
+  gives references to the work item. The owner watches it work in the
+  harness's own interface and can type to it at any time, as with any agent
+  in Herdr. It posts one review with the canonical header. The review is done
+  once that RESULT is on GitHub: the watcher then records the result and the
+  token usage (read from the harness's session files) and frees the slot. The
+  session stays open in its pane as a chat. A confirmation reviews the delta
+  from that reviewer's last claimed commit. At most `maxRuns` reviewers work
+  at once. One that is still working after `runTimeoutMinutes` without posting
+  is reported to the owner, not stopped. A session that ends without posting
+  is retried once; after that, or when it ends without a RESULT on the head,
+  it goes to the owner after 15 minutes.
 - **Where reviewers show.** A PR is a pod, and each head it reviews is a
   round. A round has its own Herdr tab, named like `#7 towncx-12-plates · r2`,
-  with one pane per reviewer, named after the reviewer. A pane shows each
-  command, tool call and message as one line, and ends with a footer: the
-  RESULT, or a note that a newer head stopped the run, plus a command to
-  reopen the run. The tabs stay until the PR merges or closes, so the owner can
-  read every round before merging. A tab the owner closes is reopened for that
-  round's next reviewer, and every tab a round used closes with it. If Herdr
-  or git can't finish that cleanup, the round stays open and the next pass
-  retries it.
-- **Reopening a run.** Each run keeps its full event stream next to its log
-  (`<log>.jsonl`), plus its harness, model and session, and the RESULT from its
-  final message. `open` resumes that session on the run's own model as an
-  interactive chat in a new Herdr tab, run from the reviewer's checkout, which
-  `open` recreates if it's gone. There you can read the whole review and ask the
+  with one pane per reviewer, named after the reviewer. Every reviewer stays
+  in its pane until the PR merges or closes, so the owner can read and
+  question every round before merging. Only a reviewer still working when a
+  newer head arrives is stopped, since its review is stale; its pane says so
+  and gives the command to reopen it. If you quit a session yourself, its pane
+  gives the same command. A tab the owner closes is reopened for that round's
+  next reviewer, and every tab a round used closes with it. If Herdr or git
+  can't finish that cleanup, the round stays open and the next pass retries
+  it.
+- **Reopening a run.** Each run records its harness, model, session and
+  RESULT. `open` resumes a session that has ended, on the run's own model, as
+  an interactive chat in a new Herdr tab. It runs from the reviewer's checkout,
+  which `open` recreates if it's gone. There you can read the whole review and ask the
   reviewer about it; it uses tokens only when you type. A chat tab closes with
   its round, and only then is its checkout removed. `open` waits for a running
   pass, so a merge can't land between opening a chat and recording it. A chat
@@ -301,8 +307,9 @@ Settings go under `crew` in the gate's `config.json`:
 - `leads` maps each pod to its lead seat.
 - `authors` holds per-PR author overrides.
 - `neverPrompt` lists seats the watcher never prompts.
-- `maxRuns` (default 3) and `runTimeoutMinutes` (default 90) bound the
-  reviewer runs.
+- `maxRuns` (default 3) bounds the reviewers working at once, and
+  `runTimeoutMinutes` (default 90) is when one still working without posting
+  is reported to the owner.
 - The gate config's `roster` gives each reviewer's model and effort.
 
 `crew.sqlite` records each step once under a key built from the PR, head, kind,

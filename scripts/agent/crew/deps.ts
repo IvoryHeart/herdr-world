@@ -1,5 +1,7 @@
 import { closeSync, openSync } from "node:fs";
 import { runProcess, type Run } from "../gate/observe";
+import type { StoredRun } from "./store";
+import { readUsage } from "./worker";
 
 /**
  * The crew's side effects on Herdr and processes, behind one seam so passes
@@ -33,6 +35,8 @@ export type Deps = {
   closeTab: (tab: string) => boolean;
   /** Runs a shell line in a new, focused Herdr tab; its id, or null if it can't. */
   openTab: (line: string, cwd: string, label: string) => string | null;
+  /** A run's token usage so far, read from its harness's session files. */
+  usage: (run: StoredRun, cwd: string) => string | null;
   alive: (pid: number) => boolean;
   /** Stops a run's whole process group. */
   kill: (pid: number) => void;
@@ -90,6 +94,8 @@ export const realDeps: Deps = {
       ? tab
       : null;
   },
+  usage: (run, cwd) =>
+    readUsage({ harness: run.harness, session: run.session, cwd }),
   alive(pid) {
     try {
       process.kill(pid, 0);

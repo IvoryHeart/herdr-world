@@ -48,6 +48,7 @@ import {
   setRoundTab,
   setRunPane,
   setRunPid,
+  setRunResult,
   type StoredAction,
 } from "./crew/store";
 
@@ -132,8 +133,15 @@ export function promptable(seat: Seat | undefined, settings: CrewSettings) {
   return null;
 }
 
-/** An in-scope PR's author seat and branch. */
-type Item = { author: string | null; branch: string | undefined };
+/**
+ * An in-scope PR's author seat and branch, and the RESULT line each
+ * reviewer has posted on its current head.
+ */
+type Item = {
+  author: string | null;
+  branch: string | undefined;
+  posted: Map<string, string>;
+};
 
 type PassContext = {
   /** One gate pass over the open PRs (or `prs`): verdicts and what they judged. */
@@ -174,9 +182,17 @@ export function crewPass(context: PassContext) {
     for (const verdict of verdicts) {
       const input = byNumber.get(verdict.number);
       if (!input || !inScope(input, settings)) continue;
+      const posted = new Map<string, string>();
+      for (const claim of input.item?.pr?.reviewers ?? [])
+        if (claim.reviewer && claim.commit === verdict.head)
+          posted.set(
+            claim.reviewer,
+            `RESULT #${verdict.number}: ${claim.line.trim()}`,
+          );
       authors.set(verdict.number, {
         author: authorOf(verdict.number, input.item?.branch, settings, names),
         branch: input.item?.branch,
+        posted,
       });
       planned.push(...plan(verdict, input, settings, names));
     }
@@ -296,7 +312,27 @@ function act(
     say(`#${round.pr} closed round ${round.round}`);
   }
 
-  settleRuns(crew, settings, now, deps, say);
+  // A review is done once its RESULT is on GitHub. The reviewer's session
+  // stays open in its pane as a chat for the owner until the PR closes.
+  for (const running of actionsIn(crew, ["running"])) {
+    const line = authors.get(running.pr)?.posted.get(running.target);
+    const run = latestRun(crew, running.key);
+    if (!line || heads.get(running.pr) !== running.head) continue;
+    if (!run || run.finishedAt !== null) continue;
+    setRunResult(crew, run.id, line);
+    finishRun(
+      crew,
+      run.id,
+      0,
+      deps.usage(run, checkoutOf(context.dir, run)),
+      now,
+    );
+    say(
+      `#${running.pr} ${running.target} posted ${line}; its session stays open as a chat`,
+    );
+  }
+
+  settleRuns(crew, settings, now, deps, record, say);
   // Deliver only what this pass planned from fresh reads, and the owner
   // notices that belong to it: a scoped pass leaves other PRs' queued work
   // alone, and a paused action waits.
@@ -329,18 +365,29 @@ function settleRuns(
   settings: CrewSettings,
   now: number,
   deps: Deps,
+  record: (entry: Action) => void,
   say: (text: string) => void,
 ) {
   for (const active of activeRuns(crew)) {
-    const overdue =
-      now - active.startedAt > settings.runTimeoutMinutes * 60_000;
-    if (active.pid !== null && deps.alive(active.pid) && !overdue) continue;
+    if (active.pid !== null && deps.alive(active.pid)) {
+      // A reviewer still working past the limit is the owner's to look at:
+      // it may be waiting on them, or they may be talking to it.
+      const action = getAction(crew, active.actionKey);
+      const minutes = Math.round((now - active.startedAt) / 60_000);
+      if (minutes > settings.runTimeoutMinutes && action?.state === "running")
+        record(
+          notice(
+            action,
+            "overdue",
+            `NEEDS-OWNER #${action.pr} at ${shortSha(action.head)}: ${action.target} has worked ${settings.runTimeoutMinutes}+ minutes without posting; look at its pane in the round's tab.`,
+          ),
+        );
+      continue;
+    }
     if (active.pid === null && now - active.startedAt < START_MS) continue;
-    // A dead process needs no stop; an overdue one, or one that reports
-    // its pid only now, does.
-    if (active.pid !== null && !overdue)
-      finishRun(crew, active.id, -1, null, now);
-    else stopRun(crew, active.id, active.pid === null ? -2 : -14, now, deps);
+    // A dead process needs no stop; one that reports its pid only now does.
+    if (active.pid !== null) finishRun(crew, active.id, -1, null, now);
+    else stopRun(crew, active.id, -2, now, deps);
   }
   for (const running of actionsIn(crew, ["running"])) {
     const last = latestRun(crew, running.key);
