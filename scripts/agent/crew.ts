@@ -523,12 +523,17 @@ function deliver(
     // A notice about a seat holds only while its step still waits for the
     // same reason; once the seat takes the prompt or the cause changes, drop it.
     const [parentKey, suffix] = entry.key.split("|");
-    if (suffix?.startsWith("waits-") || suffix === "unreachable") {
+    if (suffix?.startsWith("waits") || suffix === "unreachable") {
       const parent = getAction(crew, parentKey!);
+      const cause = parent?.detail ?? "";
+      // A bare `waits` suffix comes from stores written before notices
+      // carried their cause; it held only for a missing or never-prompted seat.
       const holds =
         parent?.state === "pending" &&
         (suffix === "unreachable" ||
-          suffix === `waits-${digest(parent.detail ?? "")}`);
+          suffix === `waits-${digest(cause)}` ||
+          (suffix === "waits" &&
+            (cause === "no live seat" || cause === "never prompted")));
       if (!holds) {
         setAction(crew, entry.key, "superseded", now);
         say(`#${entry.pr} dropped notice: its cause has cleared`);

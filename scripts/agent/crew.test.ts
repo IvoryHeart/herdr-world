@@ -857,6 +857,55 @@ describe("delivery", () => {
       actionsIn(crew, ["pending"]).filter((entry) => entry.target === "owner"),
     ).toEqual([]);
   });
+
+  test("a seat notice from an older store is dropped once its cause clears", () => {
+    const named = join(root, "legacy.json");
+    writeFileSync(
+      named,
+      JSON.stringify({
+        ...config,
+        roster: ROSTER,
+        crew: { ...SETTINGS, authors: { "7": "towncx" } },
+      }),
+    );
+    const at = (now: number) =>
+      crewPass({
+        judge: () => ({
+          verdicts: [evaluate(trioPosted(), config, NOW)],
+          inputs: [trioPosted()],
+        }),
+        crew,
+        lock,
+        configPath: named,
+        dir: root,
+        prs: [],
+        dryRun: false,
+        now,
+        deps,
+        worker: ["bun", "crew.ts"],
+      });
+    const seated = live;
+    live = live.filter((seat) => seat.name !== "towncx");
+    refuse.add("notification");
+    at(NOW);
+    // Rewrite the notice as an older watcher stored it: `<parent>|waits`.
+    const [fresh] = actionsIn(crew, ["pending"]).filter((entry) =>
+      entry.key.includes("|waits-"),
+    );
+    crew
+      .query("UPDATE action SET key = ? WHERE key = ?")
+      .run(fresh!.key.replace(/\|waits-.*$/u, "|waits"), fresh!.key);
+    refuse.clear();
+    live = seated;
+    at(NOW + 60_000);
+    expect(prompts()).toHaveLength(1);
+    expect(
+      notices().filter((argv) => argv.join(" ").includes("waits for towncx")),
+    ).toHaveLength(1);
+    expect(
+      actionsIn(crew, ["pending"]).filter((entry) => entry.target === "owner"),
+    ).toEqual([]);
+  });
 });
 
 describe("seats", () => {
