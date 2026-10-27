@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { shortSha } from "../../shared/pullRequests";
 import { gateDir, loadConfig, runPass } from "./gate";
 import type { Run } from "./gate/observe";
-import { type GateInput, latestChecks, type Verdict } from "./gate/predicate";
+import type { GateInput, Verdict } from "./gate/predicate";
 import { openStore } from "./gate/store";
 import { type Deps, realDeps } from "./crew/deps";
 import {
@@ -12,6 +12,7 @@ import {
   authorOf,
   digest,
   type CrewSettings,
+  currentChecks,
   inScope,
   loadSettings,
   plan,
@@ -179,14 +180,12 @@ export function crewPass(context: PassContext) {
     ];
     const byNumber = new Map(inputs.map((input) => [input.number, input]));
     // How long each running check of an in-scope PR has been running, as
-    // far as this watcher has seen. Only each check's latest execution
-    // counts, as for the gate: an older attempt a rerun replaced doesn't.
-    // A dry run reads the times without recording any.
+    // far as this watcher has seen. An older attempt a rerun replaced
+    // doesn't count. A dry run reads the times without recording any.
     const running = (input: GateInput) =>
-      latestChecks(
-        input.item?.pr?.checks ?? [],
-        input.executions,
-      ).latest.filter((check) => check.state === "pending" && check.url);
+      currentChecks(input).filter(
+        (check) => check.state === "pending" && check.url,
+      );
     const runningChecks = verdicts.flatMap((verdict) => {
       const input = byNumber.get(verdict.number);
       return input && inScope(input, settings) ? running(input) : [];

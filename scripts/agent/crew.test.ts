@@ -21,6 +21,7 @@ import { openChat, runs } from "./crew/review";
 import {
   authorOf,
   type CrewSettings,
+  digest,
   plan,
   SETTINGS_DEFAULTS,
 } from "./crew/plan";
@@ -1040,6 +1041,50 @@ describe("delivery", () => {
     expect(prompts()).toHaveLength(1);
     expect(prompts()[0]!.at(-1)).toContain("1 failing");
     expect(prompts()[0]!.at(-1)).not.toContain("has been running");
+  });
+
+  test("same-name checks the gate can't order all count until each settles", () => {
+    // Browser tests in two workflows: neither run replaced the other.
+    const two = (second: "pending" | "fail") =>
+      town({
+        head: SHA.reviewed,
+        posts: [],
+        checks: [
+          { name: "Delivery checks", state: "pass", required: true },
+          {
+            name: "Browser tests",
+            state: "fail",
+            required: false,
+            url: jobUrl(30),
+          },
+          {
+            name: "Browser tests",
+            state: second,
+            required: false,
+            url: jobUrl(12),
+          },
+        ],
+        executions: {
+          "30": { runId: 1001, workflowId: 9, runNumber: 1, attempt: 1 },
+          "12": { runId: 2001, workflowId: 7, runNumber: 1, attempt: 1 },
+        },
+      });
+    pass(two("pending"));
+    // The other run is still going: the author hears once it settles.
+    expect(prompts().filter((argv) => argv.at(-1)!.includes(" ci @"))).toEqual(
+      [],
+    );
+    pass(two("fail"), NOW + 60_000);
+    const ci = prompts().filter((argv) => argv.at(-1)!.includes(" ci @"));
+    expect(ci).toHaveLength(1);
+    expect(
+      getAction(
+        crew,
+        actionsIn(crew, ["sent"]).find((entry) => entry.kind === "ci")!.key,
+      )!.key,
+    ).toBe(
+      `7:${SHA.reviewed}:ci:towncx:${digest([jobUrl(12), jobUrl(30)].sort().join(" "))}`,
+    );
   });
 
   test("a stuck check on a PR with no author tells the owner once", () => {

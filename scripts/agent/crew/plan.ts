@@ -111,6 +111,17 @@ export function authorOf(
   return match ?? null;
 }
 
+/**
+ * A PR's checks without the attempts a later attempt of the same workflow
+ * provably replaced. Same-name checks the gate can't order all stay: none
+ * of them replaced another, so each can still pass, fail or run.
+ */
+export function currentChecks(input: GateInput) {
+  const checks = input.item?.pr?.checks ?? [];
+  const replaced = new Set(latestChecks(checks, input.executions).superseded);
+  return checks.filter((check) => !replaced.has(check));
+}
+
 /** A check the watcher has seen running for `minutes`. */
 export type RunningCheck = { name: string; url: string; minutes: number };
 
@@ -195,12 +206,9 @@ export function plan(
   const failing = verdict.conditions.find(
     (entry) => entry.id === "checks" && entry.state === "unmet",
   );
-  // Each check's latest attempt, as the gate counts it: an attempt a rerun
-  // replaced neither holds the author back nor names the failure.
-  const checks = latestChecks(
-    input.item?.pr?.checks ?? [],
-    input.executions,
-  ).latest;
+  // An attempt a rerun replaced neither holds the author back nor names
+  // the failure.
+  const checks = currentChecks(input);
   // A run still going may replace the failure, as when a new push or label
   // cancels the run whose roll-up failed; the author hears once it settles.
   const settled = !checks.some((check) => check.state === "pending");
