@@ -289,8 +289,10 @@ plans the next step for every PR in scope and takes each step once:
   runs the gate can't order, such as two workflows, all count: the gate keeps
   only the worst of them, but none has replaced another. The author gets a
   failure's `ci` step once no counted check is still running, so a failure in
-  one workflow waits while a same-name job in another is still running, and
-  the step names every counted failure.
+  one workflow waits while a same-name job in another is still running. The
+  step's message summarises the failures (the first three names, then an
+  ellipsis); its key covers every counted failed job, so a new failure among
+  them sends a new step.
 - **A check that never finishes.** GitHub sometimes loses a finished job's
   status, and the check then shows as running for good, which holds every
   review back. The watcher notes when it first sees each counted check
