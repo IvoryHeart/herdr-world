@@ -286,9 +286,12 @@ plans the next step for every PR in scope and takes each step once:
   PR reopened on the same head is planned afresh.
 - **A check that never finishes.** GitHub sometimes loses a finished job's
   status, and the check then shows as running for good, which holds every
-  review back. The watcher notes when it first sees each check running. One
-  still running after `stallMinutes` (default 30) goes to the author as a `ci`
-  step, with the `gh run rerun --job` command for it.
+  review back. The watcher notes when it first sees each check running,
+  counting only each check's latest attempt, as the gate does. One still
+  running after `stallMinutes` (default 30) goes to the author as a `ci` step,
+  with the `gh run rerun --job` command for it, or to the owner once if the PR
+  has no author seat. `pass --dry-run` shows these too, without recording
+  anything.
 - **When a step repeats.** A CI step is keyed by the failed jobs, so a rerun
   that fails again prompts the author again. Every owner notice is an action
   of its own: READY, NEEDS-OWNER, a seat that is missing or never prompted,

@@ -953,10 +953,102 @@ describe("delivery", () => {
       "towncx",
       "[crew -> towncx] ACT #7 ci @" +
         SHA.reviewed.slice(0, 7) +
-        ": World browser tests (4/6) has been running 31 minutes, longer than CI takes; GitHub may have lost its status. Rerun it: gh run rerun --job 22",
+        ": World browser tests (4/6) has been running over 30 minutes, longer than CI takes; GitHub may have lost its status. Rerun it: gh run rerun --job 22",
     ]);
     // No reviewer starts while a check is still running.
     expect(spawned).toEqual([]);
+  });
+
+  const jobUrl = (id: number) =>
+    `https://github.com/example-org/widgets/actions/runs/${id}/job/${id}`;
+  const stuckCheck = (item?: { branch: string }) =>
+    town({
+      head: SHA.reviewed,
+      posts: [],
+      checks: [
+        { name: "Delivery checks", state: "pass", required: true },
+        {
+          name: "Browser tests",
+          state: "pending",
+          required: false,
+          url: jobUrl(30),
+        },
+      ],
+      ...(item ? { item } : {}),
+    });
+
+  test("an old attempt a rerun replaced is never sent to be rerun", () => {
+    const replaced = town({
+      head: SHA.reviewed,
+      posts: [],
+      checks: [
+        { name: "Delivery checks", state: "pass", required: true },
+        {
+          name: "Browser tests",
+          state: "pending",
+          required: false,
+          url: jobUrl(30),
+        },
+        {
+          name: "Browser tests",
+          state: "pass",
+          required: false,
+          url: jobUrl(12),
+        },
+      ],
+      executions: {
+        "30": { runId: 1001, workflowId: 9, runNumber: 1, attempt: 1 },
+        "12": { runId: 1001, workflowId: 9, runNumber: 1, attempt: 2 },
+      },
+    });
+    pass(replaced);
+    pass(replaced, NOW + 31 * 60_000);
+    expect(prompts()).toEqual([]);
+    // The gate counts the newer green attempt, so reviewers start.
+    expect(spawned).toHaveLength(3);
+  });
+
+  test("a stuck check on a PR with no author tells the owner once", () => {
+    const orphan = stuckCheck({ branch: "agent/nobody-x" });
+    pass(orphan);
+    pass(orphan, NOW + 31 * 60_000);
+    pass(orphan, NOW + 40 * 60_000);
+    pass(orphan, NOW + 50 * 60_000);
+    const stuck = notices().filter((argv) =>
+      argv.join(" ").includes("Browser tests has been running over 30 minutes"),
+    );
+    expect(stuck).toHaveLength(1);
+  });
+
+  test("a dry run shows a stuck check the watcher has timed, and records nothing", () => {
+    const seen = () =>
+      crew
+        .query<{ n: number }, []>("SELECT COUNT(*) AS n FROM check_seen")
+        .get()!.n;
+    const dry = (now: number) =>
+      crewPass({
+        judge: () => ({
+          verdicts: [evaluate(stuckCheck(), config, NOW)],
+          inputs: [stuckCheck()],
+        }),
+        crew,
+        lock,
+        configPath,
+        dir,
+        prs: [],
+        dryRun: true,
+        now,
+        deps,
+        worker: ["bun", "crew.ts"],
+      });
+    expect(dry(NOW).filter((entry) => entry.kind === "ci")).toEqual([]);
+    expect(seen()).toBe(0);
+    pass(stuckCheck());
+    expect(seen()).toBe(1);
+    const planned = dry(NOW + 31 * 60_000);
+    expect(planned.filter((entry) => entry.kind === "ci")).toHaveLength(1);
+    expect(seen()).toBe(1);
+    expect(prompts()).toEqual([]);
   });
 
   test("a reviewer past the limit is reported to the owner, not stopped", () => {

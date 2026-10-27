@@ -219,7 +219,9 @@ export function plan(
     const job = /\/job\/(\d+)/u.exec(check.url)?.[1];
     toAuthor(
       "ci",
-      `ACT #${pr} ci @${at}: ${check.name} has been running ${check.minutes} minutes, longer than CI takes; GitHub may have lost its status. Rerun it: ${job ? `gh run rerun --job ${job}` : check.url}`,
+      // No minute count in the text: without an author it is an owner
+      // notice keyed by its text, which must stay the same every pass.
+      `ACT #${pr} ci @${at}: ${check.name} has been running over ${settings.stallMinutes} minutes, longer than CI takes; GitHub may have lost its status. Rerun it: ${job ? `gh run rerun --job ${job}` : check.url}`,
       check.url,
     );
   }

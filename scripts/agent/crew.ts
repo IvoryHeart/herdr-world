@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { shortSha } from "../../shared/pullRequests";
 import { gateDir, loadConfig, runPass } from "./gate";
 import type { Run } from "./gate/observe";
-import type { GateInput, Verdict } from "./gate/predicate";
+import { type GateInput, latestChecks, type Verdict } from "./gate/predicate";
 import { openStore } from "./gate/store";
 import { type Deps, realDeps } from "./crew/deps";
 import {
@@ -179,22 +179,24 @@ export function crewPass(context: PassContext) {
     ];
     const byNumber = new Map(inputs.map((input) => [input.number, input]));
     // How long each running check of an in-scope PR has been running, as
-    // far as this watcher has seen; a dry run records nothing.
+    // far as this watcher has seen. Only each check's latest execution
+    // counts, as for the gate: an older attempt a rerun replaced doesn't.
+    // A dry run reads the times without recording any.
+    const running = (input: GateInput) =>
+      latestChecks(
+        input.item?.pr?.checks ?? [],
+        input.executions,
+      ).latest.filter((check) => check.state === "pending" && check.url);
     const runningChecks = verdicts.flatMap((verdict) => {
       const input = byNumber.get(verdict.number);
-      if (!input || !inScope(input, settings)) return [];
-      return (input.item?.pr?.checks ?? []).filter(
-        (check) => check.state === "pending" && check.url,
-      );
+      return input && inScope(input, settings) ? running(input) : [];
     });
-    const since = dryRun
-      ? new Map<string, number>()
-      : runningSince(
-          crew,
-          runningChecks.map((check) => check.url!),
-          now,
-          context.prs.length === 0,
-        );
+    const since = runningSince(
+      crew,
+      runningChecks.map((check) => check.url!),
+      now,
+      { record: !dryRun, forget: !dryRun && context.prs.length === 0 },
+    );
     const planned: Action[] = [];
     const authors = new Map<number, Item>();
     for (const verdict of verdicts) {
@@ -213,14 +215,12 @@ export function crewPass(context: PassContext) {
         branch: input.item?.branch,
         posted,
       });
-      const running = (input.item?.pr?.checks ?? [])
-        .filter((check) => check.state === "pending" && check.url)
-        .map((check) => ({
-          name: check.name,
-          url: check.url!,
-          minutes: Math.floor((now - (since.get(check.url!) ?? now)) / 60_000),
-        }));
-      planned.push(...plan(verdict, input, settings, names, running));
+      const stalls = running(input).map((check) => ({
+        name: check.name,
+        url: check.url!,
+        minutes: Math.floor((now - (since.get(check.url!) ?? now)) / 60_000),
+      }));
+      planned.push(...plan(verdict, input, settings, names, stalls));
     }
     if (dryRun) {
       deps.out(`plan: ${planned.length} action(s) for ${authors.size} PR(s)`);

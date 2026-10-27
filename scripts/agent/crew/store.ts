@@ -326,25 +326,26 @@ export function setRunSession(
 }
 
 /**
- * When the watcher first saw each of these checks running, recording any
- * it sees for the first time now. A pass over every PR forgets the checks
- * no longer running; a scoped pass leaves other PRs' checks alone.
+ * When the watcher first saw each of these checks running. `record` notes
+ * any seen for the first time now; `forget` drops the checks no longer
+ * running, which only a pass over every PR may do. A dry run does neither.
  */
 export function runningSince(
   db: Database,
   urls: string[],
   now: number,
-  everyPr: boolean,
+  options: { record: boolean; forget: boolean },
 ) {
   const since = new Map<string, number>();
-  if (everyPr)
+  if (options.forget)
     db.query(
       `DELETE FROM check_seen WHERE url NOT IN (${urls.map(() => "?").join(", ")})`,
     ).run(...urls);
   for (const url of urls) {
-    db.query(
-      "INSERT OR IGNORE INTO check_seen (url, first_seen) VALUES (?, ?)",
-    ).run(url, now);
+    if (options.record)
+      db.query(
+        "INSERT OR IGNORE INTO check_seen (url, first_seen) VALUES (?, ?)",
+      ).run(url, now);
     const row = db
       .query<{ first_seen: number }, [string]>(
         "SELECT first_seen FROM check_seen WHERE url = ?",
