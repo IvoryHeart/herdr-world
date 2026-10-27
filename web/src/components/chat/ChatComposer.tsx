@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import type { ChatFocusIntent } from "../../chatFocus";
 import type { ConnectionClient } from "../../api";
 import type { Pane } from "../../types";
 import { connectionClientScopeGeneration } from "../../useConnectionClient";
@@ -33,6 +34,7 @@ export function ChatComposer({
   recipient,
   notice,
   active = true,
+  focusIntent,
   disabledReason,
   onSubmit,
   onError,
@@ -43,6 +45,7 @@ export function ChatComposer({
   recipient: string;
   notice: string;
   active?: boolean;
+  focusIntent: ChatFocusIntent | null;
   disabledReason?: string;
   onSubmit: (text: string) => Promise<void>;
   onError: (message: string) => void;
@@ -50,20 +53,21 @@ export function ChatComposer({
   const composerRef = useRef<HTMLDivElement>(null);
   const draftKey = chatComposerDraftKey(client, pane, fingerprint);
   useEffect(() => {
-    if (!active) return;
+    if (!active || !focusIntent) return;
     let cancelled = false;
     // Focus after React's effects so the shared editor's input-mode handoff
     // runs as an input event, not inside an effect's flush.
     queueMicrotask(() => {
-      if (!cancelled)
-        composerRef.current
-          ?.querySelector<HTMLTextAreaElement>("textarea")
-          ?.focus({ preventScroll: true });
+      if (!cancelled) {
+        const input =
+          composerRef.current?.querySelector<HTMLTextAreaElement>("textarea");
+        if (input) focusIntent.focus(input);
+      }
     });
     return () => {
       cancelled = true;
     };
-  }, [active, draftKey]);
+  }, [active, focusIntent]);
   return (
     <div className="agent-chat-composer" ref={composerRef}>
       <TerminalComposer

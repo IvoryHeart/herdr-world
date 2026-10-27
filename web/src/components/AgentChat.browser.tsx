@@ -3,6 +3,7 @@ import { bridge, type BridgeControlMsg } from "../api";
 import type { Pane } from "../types";
 import { AgentChat, type Conversation } from "./AgentChat";
 import { ChatComposer } from "./chat/ChatComposer";
+import { InspectorChat } from "./InspectorChat";
 import { useAgentHistoryWindow } from "./useAgentHistoryWindow";
 import { useConnectionClient } from "../useConnectionClient";
 import { activateTerminalComposerDraftScope } from "../terminalComposer";
@@ -209,6 +210,8 @@ async function run() {
   /** Replaces the snapshot answer for agent_history.get while set. */
   let historyAnswer: ((params: Record<string, unknown>) => unknown) | null =
     null;
+  let latestAnswer: ((params: Record<string, unknown>) => unknown) | null =
+    null;
   let answerAcknowledged = false;
   /** Answers agent_history.get for an older page (`before`) while set. */
   let olderAnswer: ((params: Record<string, unknown>) => unknown) | null = null;
@@ -246,7 +249,9 @@ async function run() {
         };
       }
       if (method === "agent_conversation.latest")
-        return { ...reply, messages: undefined };
+        return latestAnswer
+          ? latestAnswer(params)
+          : { ...reply, messages: undefined };
       // A transcript caught mid-write fails History's read too.
       if (
         method === "agent_history.get" &&
@@ -2390,10 +2395,101 @@ async function run() {
       "A transcript refresh must not take focus from another input",
     );
     otherInput.remove();
+    // An activation starts before its conversation is readable. The operator
+    // can move elsewhere, or open a newer Chat, before the response arrives.
+    {
+      reply = conversation([message("focus-reply", "assistant", "Ready")]);
+      const delayed = Promise.withResolvers<Conversation>();
+      latestAnswer = () => delayed.promise;
+      root.render(
+        <AgentChat
+          key="focus-slow"
+          pane={pane("idle")}
+          active
+          onClose={() => {}}
+        />,
+      );
+      await settle();
+      const elsewhere = document.createElement("input");
+      document.body.append(elsewhere);
+      elsewhere.focus();
+      delayed.resolve(reply);
+      await settle();
+      await settle();
+      check(
+        document.activeElement === elsewhere,
+        "A conversation loaded after focus moved elsewhere must not take it back",
+      );
+      elsewhere.remove();
+
+      latestAnswer = null;
+      const otherEditor = document.createElement("input");
+      document.body.append(otherEditor);
+      const renderSession = (fingerprint: string) =>
+        root.render(
+          <InspectorChat
+            pane={pane("idle")}
+            active
+            workSessionFingerprint={fingerprint}
+            onClose={() => {}}
+          />,
+        );
+      renderSession("session-a");
+      await settle();
+      await settle();
+      otherEditor.focus();
+      reply = { ...reply, session_fingerprint: "b".repeat(64) };
+      renderSession("session-b");
+      await settle();
+      await settle();
+      check(
+        document.activeElement === otherEditor,
+        "A session-keyed Inspector Chat remount must not renew its opening focus",
+      );
+      otherEditor.remove();
+
+      const older = Promise.withResolvers<Conversation>();
+      latestAnswer = (params) =>
+        params.pane_id === "slow-a"
+          ? older.promise
+          : { ...reply, pane_id: params.pane_id };
+      root.render(
+        <div>
+          <AgentChat
+            key="slow-a"
+            pane={{ ...pane("idle"), pane_id: "slow-a" }}
+            active
+            onClose={() => {}}
+          />
+          <AgentChat
+            key="fast-b"
+            pane={{ ...pane("idle"), pane_id: "fast-b" }}
+            active
+            onClose={() => {}}
+          />
+        </div>,
+      );
+      await settle();
+      await settle();
+      const newerEditor = container.querySelector("textarea");
+      check(
+        newerEditor !== null && document.activeElement === newerEditor,
+        "The newer Chat receives its explicit opening focus first",
+      );
+      older.resolve({ ...reply, pane_id: "slow-a" });
+      await settle();
+      await settle();
+      check(
+        document.activeElement === newerEditor,
+        "An older Chat that loads late must not take focus from the newer Chat",
+      );
+      latestAnswer = null;
+    }
     for (const width of [390, 320]) {
       container.style.width = `${width}px`;
       root.render(
         <ChatComposer
+          focusIntent={null}
           client={bridge.connection()}
           pane={pane("idle")}
           fingerprint="placeholder-fixture"

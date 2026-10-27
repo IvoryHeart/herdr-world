@@ -4,8 +4,11 @@ The Inspector's **Chat** tab shows an agent's conversation as messages and lets
 you reply. Chat replaces the History tab. The **Terminal** tab remains a separate
 view that you open on purpose.
 
-When a reply box is available, opening or returning to Chat focuses it so you
-can start typing immediately. Transcript updates do not move your focus.
+When a reply box is available, explicitly opening or returning to Chat focuses
+it so you can start typing immediately. Desk's J/K previews keep focus in the
+queue. Transcript, session and connection updates do not move your focus. If
+you move to another input or window while a conversation loads, its delayed
+reply box leaves focus where you put it.
 
 ## What Chat does
 

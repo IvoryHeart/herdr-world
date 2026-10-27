@@ -64,6 +64,7 @@ export function AgentChat({
   onClose,
   workSessionFingerprint,
   recipientLabel,
+  focusIntent,
 }: {
   pane: Pane;
   active: boolean;
@@ -72,7 +73,11 @@ export function AgentChat({
   onClose: () => void;
   workSessionFingerprint?: string;
   recipientLabel?: string;
+  focusIntent?: ChatFocusIntent | null;
 }) {
+  const localFocusIntent = useChatFocusIntent(
+    active && focusIntent === undefined,
+  );
   const connectionClient = useConnectionClient();
   const [conversation, setConversation] = useState<Conversation | null>(null);
   // Set when the newest read failed; the last good conversation stays shown.
@@ -728,6 +733,9 @@ export function AgentChat({
       {canSend ? (
         <ChatComposer
           active={active}
+          focusIntent={
+            focusIntent === undefined ? localFocusIntent : focusIntent
+          }
           client={connectionClient}
           pane={pane}
           fingerprint={conversation?.session_fingerprint ?? ""}
@@ -747,3 +755,4 @@ export function AgentChat({
     </div>
   );
 }
+import { type ChatFocusIntent, useChatFocusIntent } from "../chatFocus";

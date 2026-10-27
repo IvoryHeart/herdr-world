@@ -50,6 +50,22 @@ if (process.env.CHAT_COMPOSER_DOM_TEST !== "1") {
     const { ChatComposer, chatComposerDraftKey } = await import(
       "./chat/ChatComposer"
     );
+    const { useChatFocusIntent, requestChatInputFocus } = await import(
+      "../chatFocus"
+    );
+    let suppliedFocus: import("../chatFocus").ChatFocusIntent | undefined;
+    function OpenChatComposer(
+      props: Omit<
+        import("react").ComponentProps<typeof ChatComposer>,
+        "focusIntent"
+      >,
+    ) {
+      const focusIntent = useChatFocusIntent(
+        props.active ?? true,
+        suppliedFocus,
+      );
+      return createElement(ChatComposer, { ...props, focusIntent });
+    }
     const drafts = await import("../terminalComposer");
     // Exercise App admission before mounting the real Chat wrapper.
     {
@@ -131,15 +147,17 @@ if (process.env.CHAT_COMPOSER_DOM_TEST !== "1") {
     const sent: string[] = [];
     const errors: string[] = [];
     let pending = Promise.withResolvers<void>();
+    let fingerprint = "session-a";
+    let renderedClient = client;
     drafts.writeTerminalComposerDraft(terminalKey, "terminal draft");
     drafts.writeTerminalComposerDraft(chatKey, "");
     const render = (active = true, notice = "") =>
       act(async () =>
         root.render(
-          createElement(ChatComposer, {
-            client,
+          createElement(OpenChatComposer, {
+            client: renderedClient,
             pane,
-            fingerprint: "session-a",
+            fingerprint,
             recipient: "Mira-claude",
             active,
             notice,
@@ -155,12 +173,15 @@ if (process.env.CHAT_COMPOSER_DOM_TEST !== "1") {
     document.body.append(otherInput);
     try {
       otherInput.focus();
+      suppliedFocus = requestChatInputFocus();
       await render(false);
       expect(document.activeElement === otherInput).toBe(true);
       await render();
       expect(host.querySelector('[data-surface="chat"]')).not.toBeNull();
       const textarea = host.querySelector("textarea")!;
       expect(document.activeElement === textarea).toBe(true);
+      suppliedFocus = undefined;
+      await render();
       await act(async () => {
         otherInput.focus();
         drafts.writeTerminalComposerDraft(chatKey, "kept draft");
@@ -169,6 +190,16 @@ if (process.env.CHAT_COMPOSER_DOM_TEST !== "1") {
       expect(document.activeElement === otherInput).toBe(true);
       expect(host.querySelector("textarea")).toBe(textarea);
       expect(textarea.value).toBe("kept draft");
+      await act(async () => otherInput.focus());
+      fingerprint = "session-b";
+      await render();
+      expect(document.activeElement === otherInput).toBe(true);
+      renderedClient = { ...client, serverRuntimeGeneration: 8 };
+      await render();
+      expect(document.activeElement === otherInput).toBe(true);
+      fingerprint = "session-a";
+      renderedClient = client;
+      await render();
       await render(false);
       await render(false, "Hidden update");
       expect(document.activeElement === otherInput).toBe(true);

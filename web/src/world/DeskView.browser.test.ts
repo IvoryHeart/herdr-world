@@ -50,6 +50,24 @@ test.skipIf(!chrome)(
         entrypoints: [join(import.meta.dir, "DeskView.browser.tsx")],
         outdir: dir,
         target: "browser",
+        plugins: [
+          {
+            name: "raw-agent-icons",
+            setup(build) {
+              build.onResolve({ filter: /\?raw$/ }, (args) => ({
+                path: Bun.resolveSync(args.path.slice(0, -4), args.resolveDir),
+                namespace: "raw",
+              }));
+              build.onLoad(
+                { filter: /.*/, namespace: "raw" },
+                async (args) => ({
+                  contents: await readFile(args.path, "utf8"),
+                  loader: "text",
+                }),
+              );
+            },
+          },
+        ],
       });
       expect(build.success).toBe(true);
       for (const asset of build.outputs)

@@ -5,6 +5,8 @@ import "../styles/tokens.css";
 import "../styles/base.css";
 import { terminalFocusBlockedByOverlay } from "../terminalFocus";
 import { DeskBoard } from "./DeskView";
+import { InspectorChat } from "../components/InspectorChat";
+import { ResourceConnectionClientContext } from "../useConnectionClient";
 import type { WorldLeafObject, WorldObject } from "./worldObject";
 
 const failures: string[] = [];
@@ -51,6 +53,33 @@ const client = {
   isCurrent: () => true,
   acceptsServerGeneration: () => true,
   async call(method: string, params?: Record<string, unknown>) {
+    if (method === "agent_conversation.latest")
+      return {
+        conversation_version: 1,
+        pane_id: params?.pane_id,
+        agent: "codex",
+        agent_status: "done",
+        session_binding: "reported",
+        session_fingerprint: String(params?.pane_id).repeat(8),
+        status: "ok",
+        unavailable: null,
+        latest: null,
+      };
+    if (method === "agent_history.get")
+      return {
+        history_version: 2,
+        mode: "snapshot",
+        cursor: { epoch: "desk-chat", revision: 1 },
+        window_limit: 200,
+        agent: "codex",
+        pane_id: params?.pane_id,
+        workspace_id: "w1",
+        tab_id: "fixture",
+        updated_at: "2026-10-22T09:00:00Z",
+        path: "",
+        entries: [],
+      };
+    if (method === "agent_conversation.steps") return { steps: [] };
     if (method === "agent_turn.get") {
       const id = String(params?.pane_id).split(":")[1];
       return {
@@ -191,24 +220,39 @@ async function run() {
   // With the reading pane open, J previews the next agent and Esc closes it.
   const previewed: string[] = [];
   let closed = 0;
-  flushSync(() =>
+  const renderReading = (reading: string) =>
     root.render(
-      <DeskBoard
-        world={world}
-        client={client}
-        onOpen={async (id) => {
-          opened.push(id);
-        }}
-        reading="alpha"
-        onPreview={async (id) => {
-          previewed.push(id);
-        }}
-        onCloseReading={() => {
-          closed += 1;
-        }}
-      />,
-    ),
-  );
+      <>
+        <DeskBoard
+          world={world}
+          client={client}
+          onOpen={async (id) => {
+            opened.push(id);
+          }}
+          reading={reading}
+          onPreview={async (id) => {
+            previewed.push(id);
+            renderReading(id);
+          }}
+          onCloseReading={() => {
+            closed += 1;
+          }}
+        />
+        <ResourceConnectionClientContext.Provider value={client}>
+          <InspectorChat
+            pane={{
+              ...leaves.find((leaf) => leaf.id === reading)!.pane!,
+              terminal_id: `terminal-${reading}`,
+            }}
+            workSessionFingerprint={reading}
+            focusIntent={null}
+            active
+            onClose={() => {}}
+          />
+        </ResourceConnectionClientContext.Provider>
+      </>,
+    );
+  flushSync(() => renderReading("alpha"));
   await settle(200);
   check(
     !!document.querySelector(".desk.has-reading") &&
@@ -219,6 +263,10 @@ async function run() {
   await settle();
   // A streaming terminal in the reading pane must not take focus from here.
   check(
+    document.querySelector(".agent-chat textarea") !== null,
+    "The Desk preview regression mounts the real Inspector Chat input",
+  );
+  check(
     terminalFocusBlockedByOverlay(document.activeElement, document),
     "terminal autofocus is blocked while focus is in the Desk queue",
   );
@@ -227,6 +275,10 @@ async function run() {
   check(
     previewed.join(",") === "gamma",
     `J previewed the next agent (previewed: ${previewed.join(",")})`,
+  );
+  check(
+    document.activeElement === card("gamma"),
+    "Previewing a real Chat composer must keep keyboard focus on the Desk card",
   );
   // Rapid moves preview only where the operator stops.
   previewed.length = 0;

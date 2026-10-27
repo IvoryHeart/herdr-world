@@ -1,4 +1,5 @@
 import { useAgentWorktree } from "../useAgentWorktree";
+import { requestChatInputFocus } from "../chatFocus";
 import type { ManagedWindowControls } from "./windows/WindowControls";
 import {
   Suspense,
@@ -451,7 +452,10 @@ function InspectorResources({
 
   const changeView = (view: InspectorView) => {
     const next = { ...inspectorState, view };
-    onChange({ view });
+    onChange({
+      view,
+      chatFocusIntent: view === "history" ? requestChatInputFocus() : null,
+    });
     writeInspectorPreferences(worldLocalStorage, next);
   };
   const changeDock = (dock: InspectorDock) => {
@@ -535,6 +539,7 @@ function InspectorResources({
               workspace={workspace}
               historyPane={historyPane}
               historySessionFingerprint={conversation.agentSessionFingerprint}
+              chatFocusIntent={conversation.chatFocusIntent}
               fileSelection={fileSelection}
               previewRequestRef={previewRequestRef}
               diffSelection={diffSelection}

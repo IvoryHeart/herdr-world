@@ -4,6 +4,7 @@ import type {
   WorkspaceInspectorContext,
 } from "../workspaceResource";
 import type { WorldObjectNode } from "./worldObject";
+import type { ChatFocusIntent } from "../chatFocus";
 
 /** One independently navigable Inspector backed by the shared app runtime. */
 export type WorldInspectorConversation = {
@@ -27,6 +28,8 @@ export type WorldInspectorConversation = {
   size: number;
   /** A focused list must start after this admission before absence can retire it. */
   focusedListAdmissionAt?: number;
+  /** Local UI intent, never an observed session or persisted preference. */
+  chatFocusIntent?: ChatFocusIntent | null;
 };
 
 export type WorldFloatingTerminal = {
@@ -147,6 +150,9 @@ export function reconcileWorldInspectorConversation(
     dock: current.dock,
     expanded: current.expanded,
     size: current.size,
+    ...(current.chatFocusIntent !== undefined
+      ? { chatFocusIntent: current.chatFocusIntent }
+      : {}),
     ...(current.focusedListAdmissionAt !== undefined
       ? { focusedListAdmissionAt: current.focusedListAdmissionAt }
       : {}),
@@ -175,6 +181,7 @@ function inspectorConversationEqual(
     left.dock === right.dock &&
     left.expanded === right.expanded &&
     left.size === right.size &&
+    left.chatFocusIntent === right.chatFocusIntent &&
     left.focusedListAdmissionAt === right.focusedListAdmissionAt &&
     left.availableViews.length === right.availableViews.length &&
     left.availableViews.every(
