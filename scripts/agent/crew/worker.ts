@@ -72,8 +72,10 @@ export function reviewerArgv(
       "--model",
       model.model,
       ...(model.effort ? ["--effort", model.effort] : []),
+      // Auto mode, as the crew's Claude seats run: no bypass warning to
+      // accept, and its classifier vets risky commands.
       "--permission-mode",
-      "bypassPermissions",
+      "auto",
       ...(session ? ["--session-id", session] : []),
       prompt,
     ];

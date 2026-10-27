@@ -242,7 +242,8 @@ plans the next step for every PR in scope and takes each step once:
   steps wait for a later pass. Seats listed in `neverPrompt` are never
   prompted; the owner gets a notification instead.
 - **How reviewers run.** Each review or confirmation is a fresh, interactive
-  `claude` or `codex` session on the seat's roster model, in a detached
+  `claude` (in auto permission mode) or `codex` session on the seat's roster
+  model, in a detached
   checkout of the exact head, with its brief as the first message. The brief
   gives references to the work item. The owner watches it work in the
   harness's own interface and can type to it at any time, as with any agent

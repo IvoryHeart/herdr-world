@@ -1216,7 +1216,7 @@ describe("worker", () => {
       "--effort",
       "high",
       "--permission-mode",
-      "bypassPermissions",
+      "auto",
       "--session-id",
       "s-1",
       "brief",
