@@ -664,8 +664,20 @@ describe("delivery", () => {
     const [first] = activeRuns(crew);
     setRunSession(crew, first!.id, "codex", "gpt-6-old", "thread-1");
     finishRun(crew, first!.id, 0, null, NOW + 1);
+    dead.add(first!.pid!);
     return first!;
   };
+
+  test("open sends you to a session that is still open in its pane", () => {
+    pass(town({ head: SHA.reviewed, posts: [] }));
+    const [first] = activeRuns(crew);
+    setRunSession(crew, first!.id, "codex", "gpt-6-old", "thread-1");
+    finishRun(crew, first!.id, 0, null, NOW + 1);
+    expect(() =>
+      openChat(crew, { prs: [], run: first!.id }, dir, lock, deps),
+    ).toThrow("still open in its pane");
+    expect(opened).toEqual([]);
+  });
   const checkout = (id: number) =>
     join(
       root,
@@ -863,6 +875,58 @@ describe("delivery", () => {
     // Its slot is free and the process lives on as the owner's chat.
     expect(activeRuns(crew)).toHaveLength(2);
     expect(dead.has(opus.pid!)).toBe(false);
+  });
+
+  test("a RESULT posted before its session ended is still recorded", () => {
+    for (const code of [0, 130]) {
+      crew = openCrewStore(":memory:");
+      pass(town({ head: SHA.reviewed, posts: [] }));
+      const opus = activeRuns(crew).find(
+        (entry) => entry.reviewer === "rev-opus",
+      )!;
+      // The owner quits the session before the next pass sees the post.
+      finishRun(crew, opus.id, code, '{"output_tokens":9}', NOW + 1000);
+      pass(
+        town({
+          head: SHA.reviewed,
+          posts: [confirm("rev-opus", SHA.reviewed)],
+        }),
+        NOW + 60_000,
+      );
+      const run = getRun(crew, opus.id)!;
+      expect(run.result).toBe("RESULT #7: 2/2 resolved, 0 new");
+      expect([run.exitCode, run.usage]).toEqual([code, '{"output_tokens":9}']);
+      expect(getAction(crew, opus.actionKey)!.state).toBe("done");
+    }
+  });
+
+  test("a reviewer that posted just before a newer head keeps its session", () => {
+    pass(town({ head: SHA.reviewed, posts: [] }));
+    const opus = activeRuns(crew).find(
+      (entry) => entry.reviewer === "rev-opus",
+    )!;
+    pass(
+      town({ head: SHA.fixed, posts: [confirm("rev-opus", SHA.reviewed)] }),
+      NOW + 60_000,
+    );
+    expect(killed).not.toContain(opus.pid);
+    expect(getRun(crew, opus.id)!.result).toBe(
+      "RESULT #7: 2/2 resolved, 0 new",
+    );
+    expect(getAction(crew, opus.actionKey)!.state).toBe("done");
+  });
+
+  test("a post without a RESULT line leaves the reviewer working", () => {
+    pass(town({ head: SHA.reviewed, posts: [] }));
+    pass(
+      town({
+        head: SHA.reviewed,
+        posts: [{ reviewer: "rev-opus", commit: SHA.reviewed, result: "" }],
+      }),
+      NOW + 60_000,
+    );
+    expect(activeRuns(crew)).toHaveLength(3);
+    expect(actionsIn(crew, ["running"])).toHaveLength(3);
   });
 
   test("a reviewer past the limit is reported to the owner, not stopped", () => {

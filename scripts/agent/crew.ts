@@ -134,13 +134,13 @@ export function promptable(seat: Seat | undefined, settings: CrewSettings) {
 }
 
 /**
- * An in-scope PR's author seat and branch, and the RESULT line each
- * reviewer has posted on its current head.
+ * An in-scope PR's author seat and branch, and each reviewer's latest
+ * RESULT line with the commit it was posted on.
  */
 type Item = {
   author: string | null;
   branch: string | undefined;
-  posted: Map<string, string>;
+  posted: Map<string, { commit: string; line: string }>;
 };
 
 type PassContext = {
@@ -182,13 +182,14 @@ export function crewPass(context: PassContext) {
     for (const verdict of verdicts) {
       const input = byNumber.get(verdict.number);
       if (!input || !inScope(input, settings)) continue;
-      const posted = new Map<string, string>();
+      // A post with no RESULT line, such as a header-only note, isn't one.
+      const posted: Item["posted"] = new Map();
       for (const claim of input.item?.pr?.reviewers ?? [])
-        if (claim.reviewer && claim.commit === verdict.head)
-          posted.set(
-            claim.reviewer,
-            `RESULT #${verdict.number}: ${claim.line.trim()}`,
-          );
+        if (claim.reviewer && claim.commit && claim.line.trim())
+          posted.set(claim.reviewer, {
+            commit: claim.commit,
+            line: `RESULT #${verdict.number}: ${claim.line.trim()}`,
+          });
       authors.set(verdict.number, {
         author: authorOf(verdict.number, input.item?.branch, settings, names),
         branch: input.item?.branch,
@@ -265,6 +266,37 @@ function act(
       )
       .map((verdict) => [verdict.number, verdict.head]),
   );
+  // A review is done once its RESULT is on GitHub for the head it was
+  // given, whatever its session has done since: it may have posted just
+  // before a newer push, or ended before this pass saw the post. A session
+  // still open stays in its pane as a chat until the PR closes.
+  for (const entry of actionsIn(crew, [
+    "pending",
+    "running",
+    "failed",
+    "done",
+  ])) {
+    const claim = RUN_KINDS.has(entry.kind)
+      ? authors.get(entry.pr)?.posted.get(entry.target)
+      : undefined;
+    if (claim?.commit !== entry.head) continue;
+    const run = latestRun(crew, entry.key);
+    if (run && run.result === null) setRunResult(crew, run.id, claim.line);
+    if (run && run.finishedAt === null)
+      finishRun(
+        crew,
+        run.id,
+        0,
+        deps.usage(run, checkoutOf(context.dir, run)),
+        now,
+      );
+    if (entry.state === "done") continue;
+    setAction(crew, entry.key, "done", now);
+    say(
+      `#${entry.pr} ${entry.target} posted ${claim.line}; its session stays open as a chat`,
+    );
+  }
+
   for (const waiting of actionsIn(crew, ["pending", "running"])) {
     if (prs.length && !observed.has(waiting.pr)) continue;
     if (heads.get(waiting.pr) === waiting.head) continue;
@@ -310,26 +342,6 @@ function act(
     }
     closeRound(crew, round.pr, round.round, now);
     say(`#${round.pr} closed round ${round.round}`);
-  }
-
-  // A review is done once its RESULT is on GitHub. The reviewer's session
-  // stays open in its pane as a chat for the owner until the PR closes.
-  for (const running of actionsIn(crew, ["running"])) {
-    const line = authors.get(running.pr)?.posted.get(running.target);
-    const run = latestRun(crew, running.key);
-    if (!line || heads.get(running.pr) !== running.head) continue;
-    if (!run || run.finishedAt !== null) continue;
-    setRunResult(crew, run.id, line);
-    finishRun(
-      crew,
-      run.id,
-      0,
-      deps.usage(run, checkoutOf(context.dir, run)),
-      now,
-    );
-    say(
-      `#${running.pr} ${running.target} posted ${line}; its session stays open as a chat`,
-    );
   }
 
   settleRuns(crew, settings, now, deps, record, say);

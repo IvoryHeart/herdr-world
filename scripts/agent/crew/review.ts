@@ -263,6 +263,12 @@ export function openChat(
     );
   if (!found.session || !found.harness)
     throw new Error(`run ${found.id} recorded no session to reopen`);
+  // A reviewer whose session is still open is talked to in its own pane;
+  // a second copy would lose its checkout when the first one exits.
+  if (found.pid !== null && deps.alive(found.pid))
+    throw new Error(
+      `run ${found.id}'s session is still open in its pane, ${found.reviewer} in the PR's round ${found.round ?? "?"} tab; talk to it there`,
+    );
   const primary = dirname(dirname(dir));
   const checkout = checkoutOf(dir, found);
   const remove = [

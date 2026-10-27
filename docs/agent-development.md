@@ -253,9 +253,11 @@ plans the next step for every PR in scope and takes each step once:
   session stays open in its pane as a chat. A confirmation reviews the delta
   from that reviewer's last claimed commit. At most `maxRuns` reviewers work
   at once. One that is still working after `runTimeoutMinutes` without posting
-  is reported to the owner, not stopped. A session that ends without posting
-  is retried once; after that, or when it ends without a RESULT on the head,
-  it goes to the owner after 15 minutes.
+  is reported to the owner, not stopped. A session that crashes before
+  posting is retried once. One that is quit, or exits cleanly, without a
+  RESULT on the head goes to the owner after 15 minutes. A post without a
+  RESULT line doesn't count. A RESULT counts for the head it was given, even
+  if the session has ended or a newer head has arrived since.
 - **Where reviewers show.** A PR is a pod, and each head it reviews is a
   round. A round has its own Herdr tab, named like `#7 towncx-12-plates · r2`,
   with one pane per reviewer, named after the reviewer. Every reviewer stays
@@ -268,7 +270,8 @@ plans the next step for every PR in scope and takes each step once:
   can't finish that cleanup, the round stays open and the next pass retries
   it.
 - **Reopening a run.** Each run records its harness, model, session and
-  RESULT. `open` resumes a session that has ended, on the run's own model, as
+  RESULT. `open` resumes a session that has ended (one still open is in its
+  pane), on the run's own model, as
   an interactive chat in a new Herdr tab. It runs from the reviewer's checkout,
   which `open` recreates if it's gone. There you can read the whole review and ask the
   reviewer about it; it uses tokens only when you type. A chat tab closes with
