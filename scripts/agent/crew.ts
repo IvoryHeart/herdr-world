@@ -602,7 +602,14 @@ export async function main(argv: string[], deps: Deps = realDeps) {
       runs(crew, options, deps.out);
       return 0;
     }
-    if (options.command === "open") return openChat(crew, options, dir, deps);
+    if (options.command === "open") {
+      const lock = openLock(join(dir, "crew.lock"));
+      try {
+        return openChat(crew, options, dir, lock, deps);
+      } finally {
+        lock.close();
+      }
+    }
     if (options.command === "feed") {
       const path = join(dir, "feed.log");
       const lines = existsSync(path)

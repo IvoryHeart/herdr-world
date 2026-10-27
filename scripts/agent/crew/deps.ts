@@ -81,8 +81,7 @@ export const realDeps: Deps = {
     return { pid: child.pid, pane: null, tab };
   },
   closeTab(tab) {
-    const closed = runProcess(["herdr", "tab", "close", tab]);
-    return closed.code === 0 || closed.stdout.includes('"tab_not_found"');
+    return tabClosed(runProcess(["herdr", "tab", "close", tab]));
   },
   openTab(line, cwd, label) {
     const { pane, tab } = newTab(cwd, label, true);
@@ -110,6 +109,22 @@ export const realDeps: Deps = {
   },
   out: (text) => console.log(text),
 };
+
+/**
+ * Whether `herdr tab close` left the tab gone: it closed it, or Herdr
+ * reports (on stderr) that there is no such tab, as after the owner closed it.
+ */
+export function tabClosed(result: ReturnType<Run>) {
+  if (result.code === 0) return true;
+  for (const stream of [result.stderr, result.stdout])
+    try {
+      const value = JSON.parse(stream) as { error?: { code?: unknown } };
+      if (value.error?.code === "tab_not_found") return true;
+    } catch {
+      // Not Herdr's JSON error.
+    }
+  return false;
+}
 
 function newTab(cwd: string, label: string, focus: boolean) {
   const created = runProcess([

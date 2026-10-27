@@ -10,7 +10,13 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { crewPass, promptable, roundLabel, type Seat, seats } from "./crew";
-import { type Deps, herdrIds, type Place, shellLine } from "./crew/deps";
+import {
+  type Deps,
+  herdrIds,
+  type Place,
+  shellLine,
+  tabClosed,
+} from "./crew/deps";
 import { openChat, runs } from "./crew/review";
 import {
   authorOf,
@@ -671,7 +677,7 @@ describe("delivery", () => {
   test("a PR that closes takes reopened chats first, then their checkouts", () => {
     panes = true;
     const first = finishedWithSession();
-    openChat(crew, { prs: [], run: first.id }, dir, deps);
+    openChat(crew, { prs: [], run: first.id }, dir, lock, deps);
     expect(existsSync(checkout(first.id))).toBe(true);
     pass(
       town({ head: SHA.reviewed, posts: [], state: "CLOSED" }),
@@ -682,16 +688,38 @@ describe("delivery", () => {
     expect(events.indexOf("remove")).toBe(events.length - 1);
     expect(existsSync(checkout(first.id))).toBe(false);
     // Reopened after the PR closed, the chat removes its checkout on exit.
-    openChat(crew, { prs: [], run: first.id }, dir, deps);
+    openChat(crew, { prs: [], run: first.id }, dir, lock, deps);
     expect(opened[1]!.line).toEndWith(
       `; git -C ${root} worktree remove --force ${checkout(first.id)}`,
     );
+    // A second chat would lose its checkout when the first one exits.
+    expect(() =>
+      openChat(crew, { prs: [], run: first.id }, dir, lock, deps),
+    ).toThrow("may still be open");
+    expect(opened).toHaveLength(2);
+  });
+
+  test("open waits for a pass that holds the lock, so a merge can't slip between", () => {
+    const first = finishedWithSession();
+    const path = join(root, "open.lock");
+    const pass = openLock(path, 0);
+    const opener = openLock(path, 0);
+    pass.exec("BEGIN IMMEDIATE");
+    expect(() =>
+      openChat(crew, { prs: [], run: first.id }, dir, opener, deps),
+    ).toThrow();
+    expect(opened).toEqual([]);
+    pass.exec("ROLLBACK");
+    openChat(crew, { prs: [], run: first.id }, dir, opener, deps);
+    expect(opened).toHaveLength(1);
+    pass.close();
+    opener.close();
   });
 
   test("a round whose close fails stays open and is retried", () => {
     panes = true;
     const first = finishedWithSession();
-    openChat(crew, { prs: [], run: first.id }, dir, deps);
+    openChat(crew, { prs: [], run: first.id }, dir, lock, deps);
     closeFails = 1;
     pass(
       town({ head: SHA.reviewed, posts: [], state: "MERGED" }),
@@ -716,9 +744,9 @@ describe("delivery", () => {
   test("open stops when it can't recreate the checkout", () => {
     const first = finishedWithSession();
     addFails = true;
-    expect(() => openChat(crew, { prs: [], run: first.id }, dir, deps)).toThrow(
-      "couldn't recreate",
-    );
+    expect(() =>
+      openChat(crew, { prs: [], run: first.id }, dir, lock, deps),
+    ).toThrow("couldn't recreate");
     expect(opened).toEqual([]);
   });
 
@@ -749,14 +777,14 @@ describe("delivery", () => {
     expect(lines.at(-1)).toBe(
       `run ${first.id}\t#7 r1 rev2 @${SHA.reviewed.slice(0, 7)} exit 0 · RESULT #7: 0/0 resolved, 2 new in 120k out 4k · bun run agent:crew -- open --run ${first.id}`,
     );
-    openChat(crew, { prs: [7], reviewer: "rev2", round: 1 }, dir, deps);
+    openChat(crew, { prs: [7], reviewer: "rev2", round: 1 }, dir, lock, deps);
     // The roster now has rev2 on another model; the session keeps its own.
     expect(opened[0]!.line).toBe("codex resume thread-1 -m gpt-6-old");
     expect(opened[0]!.label).toBe("#7 rev2 r1 · chat");
     expect(opened[0]!.cwd).toBe(checkout(first.id));
     const [other] = activeRuns(crew);
     expect(() =>
-      openChat(crew, { prs: [], run: other!.id }, dir, deps),
+      openChat(crew, { prs: [], run: other!.id }, dir, lock, deps),
     ).toThrow("recorded no session");
   });
 
@@ -1252,6 +1280,24 @@ describe("run display", () => {
       ),
     ).toEqual({ pane: "wP:pA", tab: "wP:t2" });
     expect(herdrIds("nope")).toEqual({ pane: null, tab: null });
+  });
+
+  test("counts a tab Herdr no longer has as closed", () => {
+    const gone = JSON.stringify({
+      error: { code: "tab_not_found", message: "tab wP:t1 not found" },
+    });
+    expect(tabClosed({ code: 0, stdout: "", stderr: "" })).toBe(true);
+    expect(tabClosed({ code: 1, stdout: "", stderr: gone })).toBe(true);
+    expect(
+      tabClosed({
+        code: 1,
+        stdout: "",
+        stderr: JSON.stringify({ error: { code: "server_not_running" } }),
+      }),
+    ).toBe(false);
+    expect(tabClosed({ code: 1, stdout: "", stderr: "tab_not_found" })).toBe(
+      false,
+    );
   });
 
   test("names a round tab after its PR and branch", () => {

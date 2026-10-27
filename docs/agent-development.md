@@ -265,8 +265,10 @@ plans the next step for every PR in scope and takes each step once:
   interactive chat in a new Herdr tab, run from the reviewer's checkout, which
   `open` recreates if it's gone. There you can read the whole review and ask the
   reviewer about it; it uses tokens only when you type. A chat tab closes with
-  its round, and only then is its checkout removed. A chat opened after the PR
-  has closed removes its checkout when you exit it.
+  its round, and only then is its checkout removed. `open` waits for a running
+  pass, so a merge can't land between opening a chat and recording it. A chat
+  opened after the PR has closed removes its checkout when you exit it. Until
+  then, `open` refuses a second chat on that run.
 - **What stops a step.** Only a newer head, a merge or a close supersedes a
   waiting step or stops a running reviewer. On the same head, a CI rerun, a
   hold or an unknown mergeable state only pauses steps; they resume when the

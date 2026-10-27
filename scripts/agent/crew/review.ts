@@ -11,6 +11,7 @@ import {
   addRun,
   finishRun,
   getRun,
+  holdLock,
   openCrewStore,
   recentRuns,
   roundClosed,
@@ -255,6 +256,7 @@ export function openChat(
   crew: Database,
   options: Pick<Options, "prs" | "reviewer" | "round" | "run">,
   dir: string,
+  lock: Database,
   deps: Deps,
 ) {
   const found = options.run
@@ -272,45 +274,66 @@ export function openChat(
     throw new Error(`run ${found.id} recorded no session to reopen`);
   const primary = dirname(dirname(dir));
   const checkout = checkoutOf(dir, found);
-  if (!existsSync(checkout)) {
-    // The head is usually still in the object store; fetch it if not.
-    deps.run([
-      "git",
-      "-C",
-      primary,
-      "fetch",
-      "--quiet",
-      "origin",
-      `pull/${found.pr}/head`,
-    ]);
-    const added = deps.run([
-      "git",
-      "-C",
-      primary,
-      "worktree",
-      "add",
-      "--detach",
-      checkout,
-      found.head,
-    ]);
-    if (added.code !== 0)
-      throw new Error(`couldn't recreate ${checkout}: ${added.stderr.trim()}`);
-  }
-  // The run's own model: the roster may have moved the seat since.
-  let line = shellLine(chatArgv(found.harness, found.session, found.model));
-  const closed = roundClosed(crew, found.pr, found.round);
-  if (closed)
-    line += `; ${shellLine(["git", "-C", primary, "worktree", "remove", "--force", checkout])}`;
-  const label = `#${found.pr} ${found.reviewer} r${found.round ?? "?"} · chat`;
-  const tab = deps.openTab(line, checkout, label);
-  if (tab) {
-    addChat(crew, tab, found.id);
-    deps.out(
-      `opened "${label}"${closed ? "; exit the chat to remove its checkout" : ""}`,
-    );
-  } else
-    deps.out(
-      `Herdr couldn't open a tab; run:\n  cd ${shellLine([checkout])} && ${line}`,
-    );
-  return 0;
+  const remove = [
+    "git",
+    "-C",
+    primary,
+    "worktree",
+    "remove",
+    "--force",
+    checkout,
+  ];
+  // Under the pass lock: a pass can't close the round between this check
+  // and the chat being recorded, so either the round's cleanup closes the
+  // chat, or the chat cleans up after a closed round.
+  return holdLock(lock, () => {
+    const closed = roundClosed(crew, found.pr, found.round);
+    // After its round, a checkout that still exists belongs to a chat
+    // that will remove it on exit; a second chat there would lose it.
+    if (closed && existsSync(checkout))
+      throw new Error(
+        `a chat for run ${found.id} may still be open in ${checkout}; exit it first, or remove the checkout with: ${shellLine(remove)}`,
+      );
+    if (!existsSync(checkout)) {
+      // The head is usually still in the object store; fetch it if not.
+      deps.run([
+        "git",
+        "-C",
+        primary,
+        "fetch",
+        "--quiet",
+        "origin",
+        `pull/${found.pr}/head`,
+      ]);
+      const added = deps.run([
+        "git",
+        "-C",
+        primary,
+        "worktree",
+        "add",
+        "--detach",
+        checkout,
+        found.head,
+      ]);
+      if (added.code !== 0)
+        throw new Error(
+          `couldn't recreate ${checkout}: ${added.stderr.trim()}`,
+        );
+    }
+    // The run's own model: the roster may have moved the seat since.
+    let line = shellLine(chatArgv(found.harness!, found.session!, found.model));
+    if (closed) line += `; ${shellLine(remove)}`;
+    const label = `#${found.pr} ${found.reviewer} r${found.round ?? "?"} · chat`;
+    const tab = deps.openTab(line, checkout, label);
+    if (tab) {
+      addChat(crew, tab, found.id);
+      deps.out(
+        `opened "${label}"${closed ? "; exit the chat to remove its checkout" : ""}`,
+      );
+    } else
+      deps.out(
+        `Herdr couldn't open a tab; run:\n  cd ${shellLine([checkout])} && ${line}`,
+      );
+    return 0;
+  });
 }
