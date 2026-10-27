@@ -332,7 +332,8 @@ text. It works for any agent you open from Town, Board or Desk.
    pass or fail with its first failure, or the end of its output. An agent
    with a quest shows one slim title and progress row in the conversation;
    expand it to read each objective as pending, active, done or blocked.
-4. Reply in the composer at the bottom. Enter adds a line; the paper-plane
+4. Reply in the composer at the bottom; opening Chat focuses it for typing.
+   Enter adds a line; the paper-plane
    button, **Ctrl+Enter** or **Cmd+Enter** sends with Herdr's agent prompt.
    The paperclip (**Add a file**) uploads files to the pane's host and adds
    their paths: each file shows a chip while it uploads, then done or failed

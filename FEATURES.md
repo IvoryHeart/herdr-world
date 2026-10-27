@@ -52,7 +52,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     **Chat**: the conversation's latest 200 entries, which scroll inside the
     window, with **Jump to latest** when you have scrolled back (counting new
     agent messages until you reach the bottom) and the
-    composer always at the bottom. Reopening or redocking the window keeps the
+    composer always at the bottom. Opening or returning to Chat focuses its
+    message input when available. Reopening or redocking the window keeps the
     conversation. In Town it
     docks on the right by default (**Menu → Inspector opening**), 520px wide
     (at most half the screen) so Town stays in view and lines stay readable.

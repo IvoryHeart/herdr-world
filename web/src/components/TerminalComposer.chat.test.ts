@@ -133,15 +133,16 @@ if (process.env.CHAT_COMPOSER_DOM_TEST !== "1") {
     let pending = Promise.withResolvers<void>();
     drafts.writeTerminalComposerDraft(terminalKey, "terminal draft");
     drafts.writeTerminalComposerDraft(chatKey, "");
-    try {
-      await act(async () =>
+    const render = (active = true, notice = "") =>
+      act(async () =>
         root.render(
           createElement(ChatComposer, {
             client,
             pane,
             fingerprint: "session-a",
             recipient: "Mira-claude",
-            notice: "",
+            active,
+            notice,
             onSubmit: async (text: string) => {
               sent.push(text);
               await pending.promise;
@@ -150,8 +151,33 @@ if (process.env.CHAT_COMPOSER_DOM_TEST !== "1") {
           }),
         ),
       );
+    const otherInput = document.createElement("input");
+    document.body.append(otherInput);
+    try {
+      otherInput.focus();
+      await render(false);
+      expect(document.activeElement === otherInput).toBe(true);
+      await render();
       expect(host.querySelector('[data-surface="chat"]')).not.toBeNull();
       const textarea = host.querySelector("textarea")!;
+      expect(document.activeElement === textarea).toBe(true);
+      await act(async () => {
+        otherInput.focus();
+        drafts.writeTerminalComposerDraft(chatKey, "kept draft");
+      });
+      await render(true, "Transcript refreshed");
+      expect(document.activeElement === otherInput).toBe(true);
+      expect(host.querySelector("textarea")).toBe(textarea);
+      expect(textarea.value).toBe("kept draft");
+      await render(false);
+      await render(false, "Hidden update");
+      expect(document.activeElement === otherInput).toBe(true);
+      await render(true);
+      expect(document.activeElement === textarea).toBe(true);
+      expect(host.querySelector("textarea")).toBe(textarea);
+      expect(textarea.value).toBe("kept draft");
+      // Exercise command browsing from an unfocused editor as before.
+      await act(async () => otherInput.focus());
       const dispatch = (event: unknown) =>
         textarea.dispatchEvent(event as Event);
       expect(textarea.placeholder).toBe("Message Mira-claude…");
@@ -311,6 +337,7 @@ if (process.env.CHAT_COMPOSER_DOM_TEST !== "1") {
       expect(sent[sent.length - 1]).toBe("Mac send");
     } finally {
       await act(async () => root.unmount());
+      otherInput.remove();
       drafts.clearTerminalComposerDraft(chatKey);
       drafts.clearTerminalComposerDraft(terminalKey);
       for (const [key, descriptor] of originals) {

@@ -310,6 +310,10 @@ async function run() {
     await settle();
     check(reads() === 1, "Opening Chat must read the conversation once");
     check(
+      document.activeElement === container.querySelector("textarea"),
+      "Opening Chat must focus its message input once the conversation loads",
+    );
+    check(
       count("agent_conversation.watch") === 1,
       "Opening Chat must ask the service to watch the pane",
     );
@@ -2355,6 +2359,10 @@ async function run() {
       historyAnswer = null;
     }
 
+    const retainedEditor = container.querySelector("textarea");
+    const otherInput = document.createElement("input");
+    document.body.append(otherInput);
+    otherInput.focus();
     const unwatched = count("agent_conversation.unwatch");
     render("done", false);
     await settle();
@@ -2362,6 +2370,26 @@ async function run() {
       count("agent_conversation.unwatch") === unwatched + 1,
       "Hiding Chat must stop watching the pane",
     );
+    check(
+      document.activeElement === otherInput,
+      "A hidden Chat must leave focus in the other input",
+    );
+    render("done");
+    await settle();
+    check(
+      retainedEditor !== null &&
+        retainedEditor === container.querySelector("textarea") &&
+        document.activeElement === retainedEditor,
+      "Returning to Chat must focus the retained message input",
+    );
+    otherInput.focus();
+    push("p");
+    await settle();
+    check(
+      document.activeElement === otherInput,
+      "A transcript refresh must not take focus from another input",
+    );
+    otherInput.remove();
     for (const width of [390, 320]) {
       container.style.width = `${width}px`;
       root.render(

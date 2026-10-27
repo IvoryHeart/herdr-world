@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import type { ConnectionClient } from "../../api";
 import type { Pane } from "../../types";
 import { connectionClientScopeGeneration } from "../../useConnectionClient";
@@ -31,6 +32,7 @@ export function ChatComposer({
   fingerprint,
   recipient,
   notice,
+  active = true,
   disabledReason,
   onSubmit,
   onError,
@@ -40,15 +42,34 @@ export function ChatComposer({
   fingerprint: string;
   recipient: string;
   notice: string;
+  active?: boolean;
   disabledReason?: string;
   onSubmit: (text: string) => Promise<void>;
   onError: (message: string) => void;
 }) {
+  const composerRef = useRef<HTMLDivElement>(null);
+  const draftKey = chatComposerDraftKey(client, pane, fingerprint);
+  useEffect(() => {
+    if (!active) return;
+    let cancelled = false;
+    // Focus after React's effects so the shared editor's input-mode handoff
+    // runs as an input event, not inside an effect's flush.
+    queueMicrotask(() => {
+      if (!cancelled)
+        composerRef.current
+          ?.querySelector<HTMLTextAreaElement>("textarea")
+          ?.focus({ preventScroll: true });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [active, draftKey]);
   return (
-    <div className="agent-chat-composer">
+    <div className="agent-chat-composer" ref={composerRef}>
       <TerminalComposer
         surface="chat"
-        draftKey={chatComposerDraftKey(client, pane, fingerprint)}
+        open={active}
+        draftKey={draftKey}
         paneId={pane.pane_id}
         recipient={recipient}
         agent={pane.agent}

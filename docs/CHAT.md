@@ -4,6 +4,9 @@ The Inspector's **Chat** tab shows an agent's conversation as messages and lets
 you reply. Chat replaces the History tab. The **Terminal** tab remains a separate
 view that you open on purpose.
 
+When a reply box is available, opening or returning to Chat focuses it so you
+can start typing immediately. Transcript updates do not move your focus.
+
 ## What Chat does
 
 On Unix SSH hosts, Claude Code sessions reported by Herdr as UUIDs are resolved

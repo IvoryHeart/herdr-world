@@ -727,6 +727,7 @@ export function AgentChat({
       ) : null}
       {canSend ? (
         <ChatComposer
+          active={active}
           client={connectionClient}
           pane={pane}
           fingerprint={conversation?.session_fingerprint ?? ""}
