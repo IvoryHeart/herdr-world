@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { existsSync, readFileSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { shortSha } from "../../shared/pullRequests";
 import { gateDir, loadConfig, runPass } from "./gate";
@@ -22,15 +22,22 @@ import {
   feed,
   finishRun,
   getAction,
+  getRun,
   latestRun,
   openCrewStore,
   recentActions,
   recentRuns,
   setAction,
+  setRunPane,
   setRunPid,
   type StoredAction,
 } from "./crew/store";
-import { harnessArgv, parseUsage, reviewerPrompt } from "./crew/worker";
+import {
+  describe,
+  harnessArgv,
+  parseUsage,
+  reviewerPrompt,
+} from "./crew/worker";
 
 /**
  * agent:crew, the crew watcher. Each pass reads GitHub through agent:gate,
@@ -61,13 +68,23 @@ const STUCK_MS = 15 * 60_000;
 const RUN_ATTEMPTS = 2;
 /** Failed prompts to one seat before the owner hears about it. */
 const PROMPT_ATTEMPTS = 3;
+/** A run whose worker hasn't reported its pid by then never started. */
+const START_MS = 3 * 60_000;
 
 export type Seat = { name: string; status: string; focused: boolean };
 
 export type Deps = {
   run: Run;
-  /** Starts a detached process group; returns its pid. */
-  spawn: (argv: string[], log: string) => number;
+  /**
+   * Starts a reviewer run: in its own Herdr tab, so the owner can watch it,
+   * or else as a detached process group. A pane run reports its pid itself.
+   */
+  spawn: (
+    argv: string[],
+    log: string,
+    label: string,
+  ) => { pid: number | null; pane: string | null };
+  closePane: (pane: string) => void;
   alive: (pid: number) => boolean;
   /** Stops a run's whole process group. */
   kill: (pid: number) => void;
@@ -76,14 +93,36 @@ export type Deps = {
 
 export const realDeps: Deps = {
   run: runProcess,
-  spawn(argv, log) {
+  spawn(argv, log, label) {
+    const tab = runProcess([
+      "herdr",
+      "tab",
+      "create",
+      ...(process.env.HERDR_WORKSPACE_ID
+        ? ["--workspace", process.env.HERDR_WORKSPACE_ID]
+        : []),
+      "--cwd",
+      process.cwd(),
+      "--label",
+      label,
+      "--no-focus",
+    ]);
+    const pane = tab.code === 0 ? rootPane(tab.stdout) : null;
+    if (pane) {
+      const ran = runProcess(["herdr", "pane", "run", pane, shellLine(argv)]);
+      if (ran.code === 0) return { pid: null, pane };
+      runProcess(["herdr", "pane", "close", pane]);
+    }
     const file = Bun.file(log);
     const child = Bun.spawn(argv, {
       stdio: ["ignore", file, file],
       detached: true,
     } as Parameters<typeof Bun.spawn>[1]);
     child.unref();
-    return child.pid;
+    return { pid: child.pid, pane: null };
+  },
+  closePane(pane) {
+    runProcess(["herdr", "pane", "close", pane]);
   },
   alive(pid) {
     try {
@@ -102,6 +141,28 @@ export const realDeps: Deps = {
   },
   out: (text) => console.log(text),
 };
+
+/** The new tab's pane from `herdr tab create`. */
+export function rootPane(stdout: string): string | null {
+  try {
+    const value = JSON.parse(stdout) as {
+      result?: { root_pane?: { pane_id?: unknown } };
+    };
+    const id = value.result?.root_pane?.pane_id;
+    return typeof id === "string" ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+/** A command line a POSIX shell runs as exactly these arguments. */
+export function shellLine(argv: string[]) {
+  return argv
+    .map((arg) =>
+      /^[\w@%+=:,./-]+$/u.test(arg) ? arg : `'${arg.replaceAll("'", "'\\''")}'`,
+    )
+    .join(" ");
+}
 
 export function loadSettings(path: string): CrewSettings {
   const raw = JSON.parse(readFileSync(path, "utf8")) as {
@@ -231,6 +292,7 @@ export function crewPass(context: PassContext) {
         deps.kill(active.pid);
         finishRun(crew, active.id, -15, null, now);
       }
+      if (active?.pane) deps.closePane(active.pane);
     }
     setAction(crew, waiting.key, "superseded", now);
     say(`#${waiting.pr} superseded ${waiting.kind} ${waiting.target}`);
@@ -253,13 +315,21 @@ function settleRuns(
     const overdue =
       now - active.startedAt > settings.runTimeoutMinutes * 60_000;
     if (active.pid !== null && deps.alive(active.pid) && !overdue) continue;
-    if (active.pid === null && !overdue) continue;
+    if (active.pid === null && now - active.startedAt < START_MS) continue;
     if (active.pid !== null && overdue) deps.kill(active.pid);
-    finishRun(crew, active.id, overdue ? -14 : -1, null, now);
+    finishRun(
+      crew,
+      active.id,
+      active.pid === null ? -2 : overdue ? -14 : -1,
+      null,
+      now,
+    );
   }
   for (const running of actionsIn(crew, ["running"])) {
     const last = latestRun(crew, running.key);
     if (!last || last.finishedAt === null) continue;
+    // The pane stays until the run is settled, so its last lines can be read.
+    if (last.pane) deps.closePane(last.pane);
     if (last.exitCode === 0) {
       setAction(crew, running.key, "done", now);
       say(`#${running.pr} run ${running.target} finished (run ${last.id})`);
@@ -397,11 +467,16 @@ function deliver(
       ...(author ? ["--author", author] : []),
     ];
     Bun.write(log, "");
-    const pid = deps.spawn(argv, log);
-    setRunPid(crew, id, pid);
+    const started = deps.spawn(
+      argv,
+      log,
+      `review #${entry.pr} ${entry.target}`,
+    );
+    if (started.pid !== null) setRunPid(crew, id, started.pid);
+    if (started.pane) setRunPane(crew, id, started.pane);
     setAction(crew, entry.key, "running", now, `run ${id}`, true);
     say(
-      `#${entry.pr} started ${entry.target} ${entry.kind} (run ${id}, log ${log})`,
+      `#${entry.pr} started ${entry.target} ${entry.kind} (run ${id}${started.pane ? `, Herdr tab "review #${entry.pr} ${entry.target}"` : ""}, log ${log})`,
     );
     slots--;
   }
@@ -484,6 +559,11 @@ async function review(options: Options, dir: string, deps: Deps) {
       Date.now(),
     );
   setRunPid(crew, runId, process.pid);
+  const logPath = getRun(crew, runId)?.log;
+  const show = (text: string) => {
+    deps.out(text);
+    if (logPath && logPath !== "stdout") appendFileSync(logPath, `${text}\n`);
+  };
   const primary = dirname(dirname(dir));
   const checkout = join(
     primary,
@@ -540,22 +620,36 @@ async function review(options: Options, dir: string, deps: Deps) {
       author: options.author ?? null,
     });
     const lastMessage = join(checkout, ".crew-last-message.txt");
+    show(
+      `${reviewer} ${options.since ? "confirms" : "reviews"} #${pr} at ${shortSha(head)} (${model.model})`,
+    );
     const child = Bun.spawn(harnessArgv(model, prompt, lastMessage), {
       cwd: checkout,
+      stdin: "ignore",
       stdout: "pipe",
       stderr: "inherit",
     });
-    const stdout = await new Response(child.stdout).text();
+    // Show each event as it happens; keep the stream for the usage total.
+    let stdout = "";
+    let partial = "";
+    const decoder = new TextDecoder();
+    for await (const chunk of child.stdout) {
+      const text = decoder.decode(chunk, { stream: true });
+      stdout += text;
+      const lines = (partial + text).split("\n");
+      partial = lines.pop() ?? "";
+      for (const line of lines) {
+        const shown = describe(line);
+        if (shown) show(shown);
+      }
+    }
     code = await child.exited;
     const parsed = parseUsage(stdout);
     usage = parsed ? JSON.stringify(parsed) : null;
-    const last = existsSync(lastMessage)
-      ? readFileSync(lastMessage, "utf8")
-      : stdout.slice(-2000);
-    deps.out(last.trim());
-    deps.out(`usage: ${usage ?? "unknown"}`);
+    if (existsSync(lastMessage)) show(readFileSync(lastMessage, "utf8").trim());
+    show(`exit ${code}; usage ${usage ?? "unknown"}`);
   } catch (error) {
-    deps.out(error instanceof Error ? error.message : String(error));
+    show(error instanceof Error ? error.message : String(error));
     code = 1;
   } finally {
     cleanup();

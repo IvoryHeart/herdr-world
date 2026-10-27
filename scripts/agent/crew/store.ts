@@ -37,6 +37,8 @@ export type StoredRun = {
   pr: number;
   head: string;
   pid: number | null;
+  /** The Herdr pane the run is shown in, when it has one. */
+  pane: string | null;
   log: string;
   startedAt: number;
   finishedAt: number | null;
@@ -79,6 +81,13 @@ export function openCrewStore(path: string) {
       usage TEXT
     );
   `);
+  // Stores created before runs were shown in Herdr panes.
+  const columns = db
+    .query<{ name: string }, []>("PRAGMA table_info(run)")
+    .all()
+    .map((column) => column.name);
+  if (!columns.includes("pane"))
+    db.exec("ALTER TABLE run ADD COLUMN pane TEXT");
   return db;
 }
 
@@ -183,6 +192,7 @@ type RunRow = {
   pr: number;
   head: string;
   pid: number | null;
+  pane: string | null;
   log: string;
   started_at: number;
   finished_at: number | null;
@@ -198,6 +208,7 @@ function run(row: RunRow): StoredRun {
     pr: row.pr,
     head: row.head,
     pid: row.pid,
+    pane: row.pane,
     log: row.log,
     startedAt: row.started_at,
     finishedAt: row.finished_at,
@@ -230,6 +241,10 @@ export function addRun(
 
 export function setRunPid(db: Database, id: number, pid: number) {
   db.query("UPDATE run SET pid = ? WHERE id = ?").run(pid, id);
+}
+
+export function setRunPane(db: Database, id: number, pane: string) {
+  db.query("UPDATE run SET pane = ? WHERE id = ?").run(pane, id);
 }
 
 export function finishRun(

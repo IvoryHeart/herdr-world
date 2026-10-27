@@ -61,7 +61,8 @@ export function harnessArgv(
       "--permission-mode",
       "bypassPermissions",
       "--output-format",
-      "json",
+      "stream-json",
+      "--verbose",
     ];
   return [
     "codex",
@@ -77,9 +78,57 @@ export function harnessArgv(
   ];
 }
 
+const clip = (text: string, length: number) => {
+  const line = text.replace(/\s+/gu, " ").trim();
+  return line.length > length ? `${line.slice(0, length - 1)}…` : line;
+};
+
 /**
- * Token usage from a run's stdout: Claude prints one JSON result with
- * `usage`; Codex prints JSON lines, the last `turn.completed` carrying it.
+ * One readable line for a harness event, or null for events not worth
+ * showing: Codex `exec --json` items and Claude `stream-json` messages.
+ */
+export function describe(line: string): string | null {
+  let event: Record<string, unknown>;
+  try {
+    event = JSON.parse(line) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+  const item = event.item as Record<string, unknown> | undefined;
+  if (item && event.type === "item.completed") {
+    if (item.type === "command_execution")
+      return `$ ${clip(String(item.command ?? ""), 160)}${typeof item.exit_code === "number" && item.exit_code !== 0 ? `  (exit ${item.exit_code})` : ""}`;
+    if (item.type === "agent_message")
+      return `» ${clip(String(item.text ?? ""), 400)}`;
+    if (item.type === "file_change") return "· edited files";
+    return null;
+  }
+  if (event.type === "assistant") {
+    const content = (event.message as { content?: unknown[] } | undefined)
+      ?.content;
+    const lines: string[] = [];
+    for (const part of Array.isArray(content) ? content : []) {
+      const entry = part as Record<string, unknown>;
+      const input = (entry.input ?? {}) as Record<string, unknown>;
+      if (entry.type === "text" && String(entry.text ?? "").trim())
+        lines.push(`» ${clip(String(entry.text), 400)}`);
+      else if (entry.type === "tool_use")
+        lines.push(
+          entry.name === "Bash"
+            ? `$ ${clip(String(input.command ?? ""), 160)}`
+            : `· ${String(entry.name)} ${clip(String(input.file_path ?? input.pattern ?? input.path ?? ""), 120)}`.trimEnd(),
+        );
+    }
+    return lines.length ? lines.join("\n") : null;
+  }
+  if (event.type === "error")
+    return `! ${clip(String(event.message ?? "error"), 300)}`;
+  return null;
+}
+
+/**
+ * Token usage from a run's stdout: Claude's stream ends with a `result`
+ * carrying `usage`; Codex's last `turn.completed` carries it.
  */
 export function parseUsage(stdout: string): Record<string, unknown> | null {
   let usage: Record<string, unknown> | null = null;

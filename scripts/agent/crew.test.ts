@@ -2,7 +2,15 @@ import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { crewPass, type Deps, promptable, type Seat, seats } from "./crew";
+import {
+  crewPass,
+  type Deps,
+  promptable,
+  rootPane,
+  type Seat,
+  seats,
+  shellLine,
+} from "./crew";
 import {
   authorOf,
   type CrewSettings,
@@ -16,7 +24,12 @@ import {
   getAction,
   openCrewStore,
 } from "./crew/store";
-import { harnessArgv, parseUsage, reviewerPrompt } from "./crew/worker";
+import {
+  describe as describeEvent,
+  harnessArgv,
+  parseUsage,
+  reviewerPrompt,
+} from "./crew/worker";
 import { config, confirm, input, NOW, SHA, type Post } from "./gate/cases";
 import type { Run } from "./gate/observe";
 import { evaluate, type GateInput } from "./gate/predicate";
@@ -225,12 +238,18 @@ describe("delivery", () => {
   let live: Seat[];
   let dead: Set<number>;
   let killed: number[];
+  let closed: string[];
+  let labels: string[];
+  let panes: boolean;
   let crew: ReturnType<typeof openCrewStore>;
 
   beforeEach(() => {
     calls = [];
     spawned = [];
     killed = [];
+    closed = [];
+    labels = [];
+    panes = false;
     dead = new Set();
     live = SEATS.map((name) => ({ name, status: "idle", focused: false }));
     crew = openCrewStore(":memory:");
@@ -256,10 +275,14 @@ describe("delivery", () => {
   };
   const deps: Deps = {
     run,
-    spawn: (argv) => {
+    spawn: (argv, _log, label) => {
       spawned.push(argv);
-      return 1000 + spawned.length;
+      labels.push(label);
+      return panes
+        ? { pid: null, pane: `wP:p${spawned.length}` }
+        : { pid: 1000 + spawned.length, pane: null };
     },
+    closePane: (pane) => closed.push(pane),
     alive: (pid) => !dead.has(pid),
     kill: (pid) => killed.push(pid),
     out: () => {},
@@ -457,6 +480,43 @@ describe("delivery", () => {
     expect(actionsIn(crew, ["pending", "running"])).toEqual([]);
     expect(killed).toEqual([1001, 1002]);
   });
+
+  test("shows each run in its own Herdr tab and closes it once settled", () => {
+    panes = true;
+    const value = town({
+      head: SHA.reviewed,
+      posts: [
+        confirm("rev-astra", SHA.reviewed),
+        confirm("rev-opus", SHA.reviewed),
+      ],
+    });
+    pass(value);
+    expect(labels).toEqual(["review #7 rev2"]);
+    const [active] = activeRuns(crew);
+    expect(active!.pane).toBe("wP:p1");
+    // The worker reports its own pid; until then the run is starting.
+    pass(value, NOW + 60_000);
+    expect(closed).toEqual([]);
+    finishRun(crew, active!.id, 0, null, NOW + 90_000);
+    pass(value, NOW + 120_000);
+    expect(closed).toEqual(["wP:p1"]);
+    expect(getAction(crew, active!.actionKey)!.state).toBe("done");
+  });
+
+  test("a pane run that never reports its pid counts as a failed start", () => {
+    panes = true;
+    const value = town({
+      head: SHA.reviewed,
+      posts: [
+        confirm("rev-astra", SHA.reviewed),
+        confirm("rev-opus", SHA.reviewed),
+      ],
+    });
+    pass(value);
+    pass(value, NOW + 4 * 60_000);
+    expect(closed).toEqual(["wP:p1"]);
+    expect(spawned).toHaveLength(2);
+  });
 });
 
 describe("seats", () => {
@@ -527,5 +587,67 @@ describe("worker", () => {
       ),
     ).toEqual({ input_tokens: 10, output_tokens: 2 });
     expect(parseUsage("")).toBeNull();
+  });
+});
+
+describe("run display", () => {
+  test("shows commands, tools and messages, one line each", () => {
+    expect(
+      describeEvent(
+        JSON.stringify({
+          type: "item.completed",
+          item: {
+            type: "command_execution",
+            command: "bun test x",
+            exit_code: 1,
+          },
+        }),
+      ),
+    ).toBe("$ bun test x  (exit 1)");
+    expect(
+      describeEvent(
+        JSON.stringify({
+          type: "item.completed",
+          item: { type: "agent_message", text: "RESULT #7:\n 0/0 resolved" },
+        }),
+      ),
+    ).toBe("» RESULT #7: 0/0 resolved");
+    expect(
+      describeEvent(
+        JSON.stringify({
+          type: "assistant",
+          message: {
+            content: [
+              { type: "tool_use", name: "Read", input: { file_path: "a.ts" } },
+              {
+                type: "tool_use",
+                name: "Bash",
+                input: { command: "gh pr view 7" },
+              },
+            ],
+          },
+        }),
+      ),
+    ).toBe("· Read a.ts\n$ gh pr view 7");
+    expect(describeEvent('{"type":"turn.started"}')).toBeNull();
+    expect(describeEvent("not json")).toBeNull();
+  });
+
+  test("quotes a command line for the pane's shell", () => {
+    expect(shellLine(["bun", "/x/crew.ts", "review", "--pr", "7"])).toBe(
+      "bun /x/crew.ts review --pr 7",
+    );
+    expect(shellLine(["echo", "it's a b"])).toBe("echo 'it'\\''s a b'");
+  });
+
+  test("reads the new tab's pane", () => {
+    expect(
+      rootPane(
+        JSON.stringify({
+          result: { root_pane: { pane_id: "wP:p9" }, tab: {} },
+        }),
+      ),
+    ).toBe("wP:p9");
+    expect(rootPane("nope")).toBeNull();
   });
 });

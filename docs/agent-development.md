@@ -243,7 +243,10 @@ plans the next step for every PR in scope and takes each step once:
   prompted; the owner gets a notification instead.
 - **How reviewers run.** Each review or confirmation is a fresh `codex exec` or
   `claude -p` session on the seat's roster model, in a detached checkout of
-  the exact head. It is briefed with references to the work item, posts one
+  the exact head. It runs in its own Herdr tab, named like `review #7 rev2`,
+  which shows each command, tool call and message as one line. The watcher
+  closes the tab after it records the result. Without Herdr, the run is a
+  background process with the same lines in its log. It is briefed with references to the work item, posts one
   review with the canonical header and exits. A confirmation reviews the delta
   from that reviewer's last claimed commit. At most `maxRuns` run at once. A
   failed run retries once; a run that finishes without a RESULT on the head
