@@ -260,7 +260,8 @@ plans the next step for every PR in scope and takes each step once:
   that fails again prompts the author again. Every owner notice is an action
   of its own: READY, NEEDS-OWNER, a seat that is missing or never prompted,
   and a seat that keeps refusing prompts. Each is shown once, and one that
-  Herdr didn't show is retried on the next pass.
+  Herdr didn't show is retried on the next pass. A notice about a seat is
+  dropped once its cause clears, for example when the seat takes the prompt.
 - **Where the owner reads it.** Every plan, prompt, run and notification is a
   line in `.agents/crew-gate/feed.log`, so the owner can follow the crew
   without any agent spending a turn on it.
@@ -286,9 +287,10 @@ Settings go under `crew` in the gate's `config.json`:
 
 `crew.sqlite` records each step once under a key built from the PR, head, kind,
 target and, for CI and judgment steps, their cause. A repeated pass or a
-restart never prompts twice. Only one pass acts at a time. It holds
-`crew.lock`, which the OS releases if the process dies; a second watcher or an
-overlapping `pass` waits for it. Each step is committed as soon as it happens,
+restart never prompts twice. Only one pass reads and acts at a time. It holds
+`crew.lock` from its GitHub read to its last step, and the OS releases the lock
+if the process dies. A second watcher or an overlapping `pass` waits, then
+reads after the first has acted. Each step is committed as soon as it happens,
 so a crash never forgets a prompt that was already sent. A scoped `pass --pr`
 acts only on the PRs it read. Run logs are kept in `runs/`. The watcher never pushes, merges, approves or writes to
 GitHub; the fresh reviewers post their own reviews.

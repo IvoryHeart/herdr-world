@@ -784,6 +784,79 @@ describe("delivery", () => {
       actionsIn(crew, ["pending"]).filter((entry) => entry.target === "owner"),
     ).toEqual([]);
   });
+
+  test("a pass reads GitHub only while it holds the lock", () => {
+    const shared = openLock(join(root, "reads.lock"), 50);
+    const other = openLock(join(root, "reads.lock"), 0);
+    let blocked = false;
+    crewPass({
+      judge: () => {
+        try {
+          other.exec("BEGIN IMMEDIATE");
+          other.exec("ROLLBACK");
+        } catch {
+          blocked = true;
+        }
+        return { verdicts: [], inputs: [] };
+      },
+      crew,
+      lock: shared,
+      configPath,
+      dir: root,
+      prs: [],
+      dryRun: false,
+      now: NOW,
+      deps,
+      worker: ["bun", "crew.ts"],
+    });
+    expect(blocked).toBe(true);
+    shared.close();
+    other.close();
+  });
+
+  test("a seat notice is dropped once the seat takes the prompt", () => {
+    const named = join(root, "named.json");
+    writeFileSync(
+      named,
+      JSON.stringify({
+        ...config,
+        roster: ROSTER,
+        crew: { ...SETTINGS, authors: { "7": "towncx" } },
+      }),
+    );
+    const at = (now: number) =>
+      crewPass({
+        judge: () => ({
+          verdicts: [evaluate(trioPosted(), config, NOW)],
+          inputs: [trioPosted()],
+        }),
+        crew,
+        lock,
+        configPath: named,
+        dir: root,
+        prs: [],
+        dryRun: false,
+        now,
+        deps,
+        worker: ["bun", "crew.ts"],
+      });
+    const seated = live;
+    live = live.filter((seat) => seat.name !== "towncx");
+    refuse.add("notification");
+    at(NOW);
+    refuse.clear();
+    live = seated;
+    at(NOW + 60_000);
+    expect(prompts()).toHaveLength(1);
+    const waits = notices().filter((argv) =>
+      argv.join(" ").includes("waits for towncx"),
+    );
+    // Only the attempt Herdr refused; the stale notice never goes out.
+    expect(waits).toHaveLength(1);
+    expect(
+      actionsIn(crew, ["pending"]).filter((entry) => entry.target === "owner"),
+    ).toEqual([]);
+  });
 });
 
 describe("seats", () => {

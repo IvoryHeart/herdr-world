@@ -15,6 +15,7 @@ import { openStore } from "./gate/store";
 import {
   type Action,
   authorOf,
+  digest,
   type CrewSettings,
   inScope,
   plan,
@@ -245,36 +246,37 @@ export function crewPass(context: PassContext) {
   const say = (text: string) => {
     if (!dryRun) feed(feedPath, Math.max(now, Date.now()), text);
   };
-  const { verdicts, inputs } = context.judge();
-  const live = seats(deps.run);
-  const names = [
-    ...new Set([...Object.keys(settings.roster), ...live.map((s) => s.name)]),
-  ];
-  const byNumber = new Map(inputs.map((input) => [input.number, input]));
-  const planned: Action[] = [];
-  const authors = new Map<number, string | null>();
-  for (const verdict of verdicts) {
-    const input = byNumber.get(verdict.number);
-    if (!input || !inScope(input, settings)) continue;
-    authors.set(
-      verdict.number,
-      authorOf(verdict.number, input.item?.branch, settings, names),
-    );
-    planned.push(...plan(verdict, input, settings, names));
-  }
-  if (dryRun) {
-    deps.out(`plan: ${planned.length} action(s) for ${authors.size} PR(s)`);
-    for (const entry of planned) deps.out(`  ${entry.kind}\t${entry.text}`);
+  // One pass at a time reads and acts: a second process waits for the lock,
+  // then reads GitHub after the first has acted, so it never acts on older
+  // reads. Each step is committed as it happens, so a crash never forgets a
+  // prompt that was already sent. A dry run changes nothing and takes no lock.
+  const pass = () => {
+    const { verdicts, inputs } = context.judge();
+    const live = seats(deps.run);
+    const names = [
+      ...new Set([...Object.keys(settings.roster), ...live.map((s) => s.name)]),
+    ];
+    const byNumber = new Map(inputs.map((input) => [input.number, input]));
+    const planned: Action[] = [];
+    const authors = new Map<number, string | null>();
+    for (const verdict of verdicts) {
+      const input = byNumber.get(verdict.number);
+      if (!input || !inScope(input, settings)) continue;
+      authors.set(
+        verdict.number,
+        authorOf(verdict.number, input.item?.branch, settings, names),
+      );
+      planned.push(...plan(verdict, input, settings, names));
+    }
+    if (dryRun) {
+      deps.out(`plan: ${planned.length} action(s) for ${authors.size} PR(s)`);
+      for (const entry of planned) deps.out(`  ${entry.kind}\t${entry.text}`);
+      return planned;
+    }
+    act(crew, context, settings, planned, verdicts, live, authors, say);
     return planned;
-  }
-
-  // One pass at a time acts: a second process waits for the lock, then sees
-  // everything the first recorded. Each step is committed as it happens, so
-  // a crash never forgets a prompt that was already sent.
-  holdLock(context.lock, () =>
-    act(crew, context, settings, planned, verdicts, live, authors, say),
-  );
-  return planned;
+  };
+  return dryRun ? pass() : holdLock(context.lock, pass);
 }
 
 /** A notice to the owner that belongs to another action: `<parent>|<suffix>`. */
@@ -438,7 +440,7 @@ function deliver(
           record(
             notice(
               entry,
-              "waits",
+              `waits-${digest(why)}`,
               `#${entry.pr} waits for ${name} (${why}): ${entry.text}`,
             ),
           );
@@ -518,6 +520,21 @@ function deliver(
   // Herdr didn't show stays pending and is tried again next pass.
   for (const entry of pending()) {
     if (entry.target !== "owner") continue;
+    // A notice about a seat holds only while its step still waits for the
+    // same reason; once the seat takes the prompt or the cause changes, drop it.
+    const [parentKey, suffix] = entry.key.split("|");
+    if (suffix?.startsWith("waits-") || suffix === "unreachable") {
+      const parent = getAction(crew, parentKey!);
+      const holds =
+        parent?.state === "pending" &&
+        (suffix === "unreachable" ||
+          suffix === `waits-${digest(parent.detail ?? "")}`);
+      if (!holds) {
+        setAction(crew, entry.key, "superseded", now);
+        say(`#${entry.pr} dropped notice: its cause has cleared`);
+        continue;
+      }
+    }
     const result = deps.run([
       "herdr",
       "notification",
