@@ -1,5 +1,6 @@
 import { shortSha } from "../../../shared/pullRequests";
 import type { GateInput, Verdict } from "../gate/predicate";
+import { harnessFor } from "./worker";
 
 /**
  * What the crew watcher does about one pull request's verdict. Pure: the
@@ -60,6 +61,16 @@ export const SETTINGS_DEFAULTS: CrewSettings = {
   roster: {},
 };
 
+/** A short, stable digest (FNV-1a) that tells repeated causes apart in keys. */
+export function digest(text: string) {
+  let hash = 0x811c9dc5;
+  for (const char of text) {
+    hash ^= char.codePointAt(0)!;
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, "0");
+}
+
 export function inScope(input: GateInput, settings: CrewSettings) {
   if (settings.prs.includes(input.number)) return true;
   if (!settings.pods.length) return true;
@@ -110,15 +121,15 @@ export function plan(
     kind: ActionKind,
     target: string,
     text: string,
-    extra: Partial<Action> = {},
+    extra: { since?: string; key?: string } = {},
   ): Action => ({
-    key: `${pr}:${head}:${kind}:${target}`,
+    key: `${pr}:${head}:${kind}:${target}${extra.key ? `:${extra.key}` : ""}`,
     pr,
     head,
     kind,
     target,
     text,
-    ...extra,
+    ...(extra.since ? { since: extra.since } : {}),
   });
   if (verdict.state === "READY")
     return [
@@ -132,8 +143,16 @@ export function plan(
   const actions: Action[] = [];
   const judgments: string[] = [];
   const author = authorOf(pr, input.item?.branch, settings, seats);
-  const toAuthor = (kind: ActionKind, text: string) => {
-    if (author) actions.push(make(kind, author, `[crew -> ${author}] ${text}`));
+  const toAuthor = (kind: ActionKind, text: string, cause?: string) => {
+    if (author)
+      actions.push(
+        make(
+          kind,
+          author,
+          `[crew -> ${author}] ${text}`,
+          cause ? { key: digest(cause) } : {},
+        ),
+      );
     else
       judgments.push(
         `no author seat for ${input.item?.branch ?? "an unknown branch"}: ${text}`,
@@ -169,10 +188,17 @@ export function plan(
   const settled = !(input.item?.pr?.checks ?? []).some(
     (check) => check.state === "pending",
   );
+  // Keyed by the failed jobs, so a rerun that fails again tells the author.
+  const failedJobs = (input.item?.pr?.checks ?? [])
+    .filter((check) => check.state === "fail")
+    .map((check) => check.url ?? check.name)
+    .sort()
+    .join(" ");
   if (failing && settled)
     toAuthor(
       "ci",
       `ACT #${pr} ci @${at}: ${failing.detail}. Rerun a listed flake once with gh run rerun <id> --failed; otherwise fix and push.`,
+      failedJobs || failing.detail,
     );
   if (state("mergeable") === "unmet")
     toAuthor(
@@ -185,14 +211,20 @@ export function plan(
       `ACT #${pr} screenshots @${at}: add captures for the five owner viewports to the PR.`,
     );
 
-  // Reviewers look at a head CI passed and GitHub can merge: a red or
-  // conflicting head would only be reviewed again.
-  const reviewable =
-    state("checks") === "met" && state("mergeable") !== "unmet";
+  // Reviewers look at a head CI passed and GitHub knows it can merge: a
+  // red or conflicting head would only be reviewed again.
+  const reviewable = state("checks") === "met" && state("mergeable") === "met";
   if (reviewable)
     for (const run of runs) {
-      if (!settings.roster[run.name]) {
+      const model = settings.roster[run.name];
+      if (!model) {
         judgments.push(`${run.name} has no roster model to run on`);
+        continue;
+      }
+      if (!harnessFor(model.model)) {
+        judgments.push(
+          `${run.name}'s roster model ${model.model} is neither a Claude nor a Codex model`,
+        );
         continue;
       }
       actions.push(
@@ -209,13 +241,12 @@ export function plan(
 
   for (const entry of verdict.conditions)
     if (entry.state === "judgment") judgments.push(entry.detail);
-  if (judgments.length)
+  // One notice per distinct judgment, so a later one on the same head is heard.
+  for (const judgment of judgments)
     actions.push(
-      make(
-        "judgment",
-        "owner",
-        `NEEDS-OWNER #${pr} at ${at}: ${judgments.join("; ")}`,
-      ),
+      make("judgment", "owner", `NEEDS-OWNER #${pr} at ${at}: ${judgment}`, {
+        key: digest(judgment),
+      }),
     );
   return actions;
 }

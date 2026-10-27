@@ -133,11 +133,13 @@ export const realDeps: Deps = {
     }
   },
   kill(pid) {
-    try {
-      process.kill(-pid, "SIGTERM");
-    } catch {
-      // Already gone.
-    }
+    for (const target of [-pid, pid])
+      try {
+        process.kill(target, "SIGTERM");
+        return;
+      } catch {
+        // Not a group leader, or already gone.
+      }
   },
   out: (text) => console.log(text),
 };
@@ -225,11 +227,11 @@ type PassContext = {
 };
 
 export function crewPass(context: PassContext) {
-  const { crew, configPath, dir, prs, dryRun, now, deps } = context;
+  const { crew, configPath, dir, dryRun, now, deps } = context;
   const settings = loadSettings(configPath);
   const feedPath = join(dir, "feed.log");
   const say = (text: string) => {
-    if (!dryRun) feed(feedPath, now, text);
+    if (!dryRun) feed(feedPath, Math.max(now, Date.now()), text);
   };
   const { verdicts, inputs } = context.judge();
   const live = seats(deps.run);
@@ -254,6 +256,27 @@ export function crewPass(context: PassContext) {
     return planned;
   }
 
+  // One pass at a time acts: a second process waits here, then sees what the
+  // first recorded, so no action is delivered twice.
+  crew
+    .transaction(() =>
+      act(crew, context, settings, planned, verdicts, live, authors, say),
+    )
+    .immediate();
+  return planned;
+}
+
+function act(
+  crew: Database,
+  context: PassContext,
+  settings: CrewSettings,
+  planned: Action[],
+  verdicts: Verdict[],
+  live: Seat[],
+  authors: Map<number, string | null>,
+  say: (text: string) => void,
+) {
+  const { prs, now, deps } = context;
   // Record each action once; a repeat of a finished run means it is stuck.
   for (const entry of planned) {
     if (addAction(crew, entry, now)) {
@@ -279,13 +302,22 @@ export function crewPass(context: PassContext) {
     }
   }
 
-  // A newer head, a merge or a resolved condition makes waiting actions
-  // moot. A pass over every open PR also retires those of PRs no longer open.
-  const keys = new Set(planned.map((entry) => entry.key));
+  // Only a newer head, a merge or a close makes waiting actions moot. On the
+  // same head an action this pass didn't plan stays: a rerun, a hold or an
+  // unknown mergeable state is temporary, and a reviewer that has just
+  // posted is still finishing. A pass over every open PR also retires
+  // the actions of PRs no longer open.
   const observed = new Set(verdicts.map((verdict) => verdict.number));
+  const heads = new Map(
+    verdicts
+      .filter(
+        (verdict) => verdict.state !== "MERGED" && verdict.state !== "CLOSED",
+      )
+      .map((verdict) => [verdict.number, verdict.head]),
+  );
   for (const waiting of actionsIn(crew, ["pending", "running"])) {
     if (prs.length && !observed.has(waiting.pr)) continue;
-    if (keys.has(waiting.key) || waiting.key.endsWith(":stuck")) continue;
+    if (heads.get(waiting.pr) === waiting.head) continue;
     if (waiting.state === "running") {
       const active = latestRun(crew, waiting.key);
       if (active?.pid && active.finishedAt === null) {
@@ -299,8 +331,15 @@ export function crewPass(context: PassContext) {
   }
 
   settleRuns(crew, settings, now, deps, say);
-  deliver(crew, settings, live, authors, context, say);
-  return planned;
+  // Deliver only what this pass planned from fresh reads: a scoped pass
+  // leaves other PRs' queued work alone, and a paused action waits.
+  const keys = new Set(planned.map((entry) => entry.key));
+  for (const entry of planned)
+    if (entry.kind === "judgment") keys.add(entry.key);
+  for (const entry of actionsIn(crew, ["pending"]))
+    if (entry.key.endsWith(":stuck") && observed.has(entry.pr))
+      keys.add(entry.key);
+  deliver(crew, settings, live, authors, keys, context, say);
 }
 
 /** Turns finished, crashed or overdue reviewer runs into action states. */
@@ -352,13 +391,16 @@ function deliver(
   settings: CrewSettings,
   live: Seat[],
   authors: Map<number, string | null>,
+  keys: Set<string>,
   context: PassContext,
   say: (text: string) => void,
 ) {
   const { now, deps, dir } = context;
-  const pending = actionsIn(crew, ["pending"]);
+  const pending = actionsIn(crew, ["pending"]).filter((entry) =>
+    keys.has(entry.key),
+  );
   const notify = (entry: StoredAction, sound: "done" | "request") => {
-    deps.run([
+    const result = deps.run([
       "herdr",
       "notification",
       "show",
@@ -370,7 +412,15 @@ function deliver(
       "--sound",
       sound,
     ]);
-    setAction(crew, entry.key, "sent", now);
+    // A notification Herdr didn't show is tried again next pass.
+    if (result.code !== 0) {
+      const error = (result.stderr || result.stdout).trim().slice(0, 200);
+      setAction(crew, entry.key, "pending", now, error, true);
+      if (entry.detail !== error)
+        say(`#${entry.pr} notification failed: ${error}`);
+      return;
+    }
+    setAction(crew, entry.key, "sent", now, null, true);
     say(`#${entry.pr} told owner: ${entry.text}`);
   };
   for (const entry of pending)
@@ -416,7 +466,7 @@ function deliver(
         const error = (result.stderr || result.stdout).trim().slice(0, 200);
         setAction(crew, entry.key, "pending", now, error, true);
         say(`#${entry.pr} prompt to ${name} refused: ${error}`);
-        if (entry.attempts + 1 >= PROMPT_ATTEMPTS)
+        if (entry.attempts + 1 === PROMPT_ATTEMPTS)
           deps.run([
             "herdr",
             "notification",

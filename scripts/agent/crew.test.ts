@@ -212,6 +212,24 @@ describe("plan", () => {
     );
   });
 
+  test("reviewers wait until GitHub knows the head can merge", () => {
+    expect(
+      planned(
+        town({ head: SHA.reviewed, posts: [], item: { mergeable: "unknown" } }),
+      ),
+    ).toEqual([]);
+  });
+
+  test("a roster model no harness runs is the owner's call", () => {
+    const actions = planned(town({ head: SHA.reviewed, posts: [] }), {
+      ...SETTINGS,
+      roster: { ...ROSTER, rev2: { model: "gemini-3" } },
+    });
+    expect(actions.find((a) => a.kind === "judgment")!.text).toContain(
+      "rev2's roster model gemini-3 is neither a Claude nor a Codex model",
+    );
+  });
+
   test("the same verdict plans the same keys", () => {
     const value = town({ head: SHA.reviewed, posts: [open(SHA.reviewed)] });
     expect(planned(value).map((a) => a.key)).toEqual(
@@ -241,6 +259,8 @@ describe("delivery", () => {
   let closed: string[];
   let labels: string[];
   let panes: boolean;
+  let refuse: Set<string>;
+  let onPrompt: (() => void) | null;
   let crew: ReturnType<typeof openCrewStore>;
 
   beforeEach(() => {
@@ -250,6 +270,8 @@ describe("delivery", () => {
     closed = [];
     labels = [];
     panes = false;
+    refuse = new Set();
+    onPrompt = null;
     dead = new Set();
     live = SEATS.map((name) => ({ name, status: "idle", focused: false }));
     crew = openCrewStore(":memory:");
@@ -271,6 +293,9 @@ describe("delivery", () => {
         }),
         stderr: "",
       };
+    if (argv[2] === "prompt") onPrompt?.();
+    if (refuse.has(argv[1]!) || refuse.has(argv[2]!))
+      return { code: 1, stdout: "", stderr: "agent_blocked" };
     return { code: 0, stdout: "", stderr: "" };
   };
   const deps: Deps = {
@@ -287,21 +312,26 @@ describe("delivery", () => {
     kill: (pid) => killed.push(pid),
     out: () => {},
   };
-  const pass = (value: GateInput, now = NOW) =>
+  const passOver = (
+    values: GateInput[],
+    now = NOW,
+    options: { prs?: number[]; db?: typeof crew } = {},
+  ) =>
     crewPass({
       judge: () => ({
-        verdicts: [evaluate(value, config, NOW)],
-        inputs: [value],
+        verdicts: values.map((value) => evaluate(value, config, NOW)),
+        inputs: values,
       }),
-      crew,
+      crew: options.db ?? crew,
       configPath,
       dir: root,
-      prs: [],
+      prs: options.prs ?? [],
       dryRun: false,
       now,
       deps,
       worker: ["bun", "crew.ts"],
     });
+  const pass = (value: GateInput, now = NOW) => passOver([value], now);
   const prompts = () => calls.filter((argv) => argv[2] === "prompt");
   const notices = () => calls.filter((argv) => argv[1] === "notification");
 
@@ -516,6 +546,187 @@ describe("delivery", () => {
     pass(value, NOW + 4 * 60_000);
     expect(closed).toEqual(["wP:p1"]);
     expect(spawned).toHaveLength(2);
+  });
+
+  const trioPosted = (posts: Post[] = []) =>
+    town({
+      head: SHA.reviewed,
+      posts: [
+        open(SHA.reviewed),
+        confirm("rev-astra", SHA.reviewed),
+        confirm("rev-opus", SHA.reviewed),
+        ...posts,
+      ],
+    });
+  const pendingCheck = [
+    { name: "Delivery checks", state: "pending" as const, required: true },
+  ];
+
+  test("a rerun on the same head pauses reviewers; it never stops or strands them", () => {
+    const limited = join(root, "two.json");
+    writeFileSync(
+      limited,
+      JSON.stringify({
+        ...config,
+        roster: ROSTER,
+        crew: { ...SETTINGS, maxRuns: 2 },
+      }),
+    );
+    const at = (value: GateInput, now: number) =>
+      crewPass({
+        judge: () => ({
+          verdicts: [evaluate(value, config, NOW)],
+          inputs: [value],
+        }),
+        crew,
+        configPath: limited,
+        dir: root,
+        prs: [],
+        dryRun: false,
+        now,
+        deps,
+        worker: ["bun", "crew.ts"],
+      });
+    at(town({ head: SHA.reviewed, posts: [] }), NOW);
+    expect(spawned).toHaveLength(2);
+    // A label edit sends checks back to pending on the same head.
+    at(
+      town({ head: SHA.reviewed, posts: [], checks: pendingCheck }),
+      NOW + 60_000,
+    );
+    expect(killed).toEqual([]);
+    expect(actionsIn(crew, ["running"])).toHaveLength(2);
+    expect(spawned).toHaveLength(2);
+    // Green again: the third reviewer starts once a slot frees.
+    finishRun(crew, activeRuns(crew)[0]!.id, 0, null, NOW + 90_000);
+    at(town({ head: SHA.reviewed, posts: [] }), NOW + 120_000);
+    expect(spawned).toHaveLength(3);
+    expect(spawned[2]).toContain("rev-opus");
+  });
+
+  test("a reviewer that has posted finishes its run instead of being stopped", () => {
+    pass(town({ head: SHA.reviewed, posts: [] }));
+    pass(
+      town({ head: SHA.reviewed, posts: [confirm("rev-opus", SHA.reviewed)] }),
+      NOW + 60_000,
+    );
+    expect(killed).toEqual([]);
+    expect(actionsIn(crew, ["running"])).toHaveLength(3);
+  });
+
+  test("a hold pauses waiting steps and its release resumes them", () => {
+    live = live.map((seat) =>
+      seat.name === "towncx" ? { ...seat, status: "working" } : seat,
+    );
+    pass(trioPosted());
+    const held = { ...trioPosted(), hold: { reason: "owner repro", at: NOW } };
+    live = live.map((seat) =>
+      seat.name === "towncx" ? { ...seat, status: "idle" } : seat,
+    );
+    pass(held, NOW + 60_000);
+    expect(prompts()).toHaveLength(0);
+    pass(trioPosted(), NOW + 120_000);
+    expect(prompts()).toHaveLength(1);
+  });
+
+  test("a new CI failure on the same head prompts the author again", () => {
+    const red = (url: string) =>
+      town({
+        head: SHA.reviewed,
+        posts: [],
+        checks: [
+          { name: "Delivery checks", state: "fail", required: true, url },
+        ],
+      });
+    pass(red("https://example.com/job/1"));
+    pass(red("https://example.com/job/1"), NOW + 60_000);
+    pass(red("https://example.com/job/2"), NOW + 120_000);
+    expect(prompts()).toHaveLength(2);
+  });
+
+  test("a later judgment on the same head reaches the owner too", () => {
+    const value = trioPosted();
+    pass({ ...value, item: { ...value.item!, branch: "feature/x" } });
+    expect(notices()).toHaveLength(1);
+    // An unattributed post with findings is a new, different judgment.
+    pass(
+      town({
+        head: SHA.reviewed,
+        posts: [
+          open(SHA.reviewed),
+          confirm("rev-astra", SHA.reviewed),
+          confirm("rev-opus", SHA.reviewed),
+          { reviewer: null, commit: SHA.reviewed, result: "1 new" },
+        ],
+        item: { branch: "feature/x" },
+      }),
+      NOW + 120_000,
+    );
+    expect(notices().length).toBeGreaterThanOrEqual(2);
+    expect(notices().at(-1)!.join(" ")).toContain("Unattributed RESULT");
+  });
+
+  test("a refused prompt retries and tells the owner once", () => {
+    refuse.add("prompt");
+    for (let minute = 0; minute < 6; minute++)
+      pass(trioPosted(), NOW + minute * 60_000);
+    expect(prompts()).toHaveLength(6);
+    expect(
+      notices().filter((argv) => argv.join(" ").includes("can't reach towncx")),
+    ).toHaveLength(1);
+  });
+
+  test("a notification Herdr couldn't show is tried again", () => {
+    const ready = town({
+      head: SHA.reviewed,
+      posts: ["rev2", "rev-astra", "rev-opus"].map((name) =>
+        confirm(name, SHA.reviewed),
+      ),
+    });
+    refuse.add("notification");
+    pass(ready);
+    expect(actionsIn(crew, ["pending"])).toHaveLength(1);
+    refuse.clear();
+    pass(ready, NOW + 60_000);
+    pass(ready, NOW + 120_000);
+    expect(notices()).toHaveLength(2);
+    expect(actionsIn(crew, ["pending"])).toEqual([]);
+  });
+
+  test("a scoped pass leaves other PRs' queued steps alone", () => {
+    live = live.map((seat) =>
+      seat.name === "towncx" ? { ...seat, focused: true } : seat,
+    );
+    pass(trioPosted());
+    live = live.map((seat) =>
+      seat.name === "towncx" ? { ...seat, focused: false } : seat,
+    );
+    const other = { ...town({ head: SHA.other, posts: [] }), number: 8 };
+    passOver([other], NOW + 60_000, { prs: [8] });
+    expect(prompts()).toHaveLength(0);
+    pass(trioPosted(), NOW + 120_000);
+    expect(prompts()).toHaveLength(1);
+  });
+
+  test("a second process acting at the same time sends nothing twice", () => {
+    const file = join(root, "shared.sqlite");
+    const first = openCrewStore(file, 50);
+    const second = openCrewStore(file, 50);
+    let overlapped: unknown = null;
+    onPrompt = () => {
+      onPrompt = null;
+      try {
+        passOver([trioPosted()], NOW, { db: second });
+      } catch (error) {
+        overlapped = error;
+      }
+    };
+    passOver([trioPosted()], NOW, { db: first });
+    expect(String(overlapped)).toContain("locked");
+    passOver([trioPosted()], NOW + 60_000, { db: second });
+    expect(prompts()).toHaveLength(1);
+    first.close();
+    second.close();
   });
 });
 

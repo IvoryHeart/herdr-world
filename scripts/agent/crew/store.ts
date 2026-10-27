@@ -46,11 +46,12 @@ export type StoredRun = {
   usage: string | null;
 };
 
-export function openCrewStore(path: string) {
+/** `busyMs`: how long a pass waits for another process's pass to finish acting. */
+export function openCrewStore(path: string, busyMs = 120_000) {
   if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
   const db = new Database(path, { create: true, strict: true });
   db.exec("PRAGMA journal_mode = WAL");
-  db.exec("PRAGMA busy_timeout = 5000");
+  db.exec(`PRAGMA busy_timeout = ${Math.max(0, Math.floor(busyMs))}`);
   db.exec(`
     CREATE TABLE IF NOT EXISTS action (
       key TEXT PRIMARY KEY,

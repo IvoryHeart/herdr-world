@@ -44,13 +44,20 @@ Rules:
 - Finish by printing only the RESULT line and the review URL.`;
 }
 
-/** The harness command line for a seat's model; null for a model it can't run. */
+/** Which harness runs a model: Claude models on Claude Code, GPT models on Codex. */
+export function harnessFor(model: string): "claude" | "codex" | null {
+  if (model.startsWith("claude-")) return "claude";
+  if (model.startsWith("gpt-")) return "codex";
+  return null;
+}
+
+/** The harness command line for a seat's model; the planner refuses other models first. */
 export function harnessArgv(
   model: { model: string; effort?: string },
   prompt: string,
   lastMessage: string,
 ): string[] {
-  if (model.model.startsWith("claude-"))
+  if (harnessFor(model.model) === "claude")
     return [
       "claude",
       "-p",

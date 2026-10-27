@@ -231,9 +231,9 @@ plans the next step for every PR in scope and takes each step once:
 | Findings are open on the head and every required reviewer has posted on it | One `ACT #N fix` prompt with the review URLs, so the author fixes in one pass | The author's seat |
 | A required check fails and no check is still running | `ACT #N ci` prompt | The author's seat |
 | GitHub reports a conflict, or screenshots are missing | `ACT #N conflict` or `ACT #N screenshots` prompt | The author's seat |
-| A required reviewer has no RESULT, or a newer head needs confirming, and checks are green | A fresh reviewer run | That reviewer's model |
+| A required reviewer has no RESULT, or a newer head needs confirming; checks are green and GitHub reports the head mergeable | A fresh reviewer run | That reviewer's model |
 | READY | A Herdr notification | The owner |
-| A judgment condition, an unknown author or a reviewer run that posted nothing | A `NEEDS-OWNER` notification | The owner |
+| A judgment condition, an unknown author, an unsupported roster model or a reviewer run that posted nothing | One `NEEDS-OWNER` notification per distinct cause | The owner |
 
 - **Who the author is.** The branch names the author: `agent/<seat>-…`, or the
   pod lead for `batch/<pod>-<n>`. Set an override per PR in `authors`.
@@ -251,8 +251,14 @@ plans the next step for every PR in scope and takes each step once:
   from that reviewer's last claimed commit. At most `maxRuns` run at once. A
   failed run retries once; a run that finishes without a RESULT on the head
   goes to the owner after 15 minutes.
-- **What stops a step.** A newer head, a merge or a resolved condition
-  supersedes any step still waiting, and stops a running reviewer.
+- **What stops a step.** Only a newer head, a merge or a close supersedes a
+  waiting step or stops a running reviewer. On the same head, a CI rerun, a
+  hold or an unknown mergeable state only pauses steps; they resume when the
+  head is eligible again. A reviewer that has just posted finishes its run.
+- **When a step repeats.** A CI step is keyed by the failed jobs, so a rerun
+  that fails again prompts the author again. A notification Herdr didn't
+  show is retried on the next pass. A seat that keeps refusing prompts is
+  reported to the owner once.
 - **Where the owner reads it.** Every plan, prompt, run and notification is a
   line in `.agents/crew-gate/feed.log`, so the owner can follow the crew
   without any agent spending a turn on it.
@@ -276,9 +282,11 @@ Settings go under `crew` in the gate's `config.json`:
   reviewer runs.
 - The gate config's `roster` gives each reviewer's model and effort.
 
-`crew.sqlite` records each step once under a key built from the PR, head, kind
-and target, so a repeated pass or a restart never prompts twice. Run logs are
-kept in `runs/`. The watcher never pushes, merges, approves or writes to
+`crew.sqlite` records each step once under a key built from the PR, head, kind,
+target and, for CI and judgment steps, their cause. A repeated pass or a
+restart never prompts twice. Only one pass acts at a time: a second watcher or
+an overlapping `pass` waits for the first to record what it did, and a scoped
+`pass --pr` acts only on the PRs it read. Run logs are kept in `runs/`. The watcher never pushes, merges, approves or writes to
 GitHub; the fresh reviewers post their own reviews.
 
 Source: [`scripts/agent/crew.ts`](../scripts/agent/crew.ts) and
