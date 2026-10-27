@@ -176,10 +176,31 @@ export function sessionOf(line: string): string | null {
   }
 }
 
-/** The last canonical RESULT line in a reviewer's output. */
-export function resultLine(text: string): string | null {
-  const found = text.match(/RESULT #\d+: \d+\/\d+ resolved, \d+ new/gu);
+/**
+ * The run's own canonical RESULT line for this PR, read from its final
+ * message only: tool output quotes other rounds' and reviewers' lines.
+ */
+export function resultLine(text: string, pr: number): string | null {
+  const found = text.match(
+    new RegExp(`RESULT #${pr}: \\d+/\\d+ resolved, \\d+ new`, "gu"),
+  );
   return found ? found[found.length - 1]! : null;
+}
+
+/** Claude's final message: the `result` event that ends its stream. */
+export function finalMessage(stdout: string): string {
+  let text = "";
+  for (const line of stdout.split("\n")) {
+    if (!line.includes('"result"')) continue;
+    try {
+      const event = JSON.parse(line) as { type?: unknown; result?: unknown };
+      if (event.type === "result" && typeof event.result === "string")
+        text = event.result;
+    } catch {
+      // A partial or non-JSON line is not the final message.
+    }
+  }
+  return text;
 }
 
 /**
@@ -190,7 +211,7 @@ export function resultLine(text: string): string | null {
 export function chatArgv(
   harness: string,
   session: string,
-  model: string | undefined,
+  model: string | null,
 ): string[] {
   if (harness === "claude")
     return [

@@ -33,6 +33,7 @@ import {
   finishRun,
   getAction,
   holdLock,
+  getRun,
   latestRun,
   openCrewStore,
   openLock,
@@ -41,6 +42,7 @@ import {
   recentRuns,
   roundFor,
   roundPanes,
+  roundTabs,
   runsOf,
   setAction,
   setRoundTab,
@@ -252,12 +254,8 @@ function act(
     if (heads.get(waiting.pr) === waiting.head) continue;
     if (waiting.state === "running") {
       const active = latestRun(crew, waiting.key);
-      // A pane run that hasn't reported its pid yet sees itself stopped
-      // when it starts, and exits.
-      if (active && active.finishedAt === null) {
-        if (active.pid) deps.kill(active.pid);
-        finishRun(crew, active.id, -15, null, now);
-      }
+      if (active && active.finishedAt === null)
+        stopRun(crew, active.id, -15, now, deps);
     }
     setAction(crew, waiting.key, "superseded", now);
     say(`#${waiting.pr} superseded ${waiting.kind} ${waiting.target}`);
@@ -265,25 +263,35 @@ function act(
 
   // A pod lasts as long as its PR: each round's tab stays, stopped runs
   // included, for the owner to read until the PR merges or closes.
+  // Its tabs close first, chats reopened from its runs included, then the
+  // checkouts those chats recreated go. A step that fails keeps the round
+  // open, so the next pass tries again.
   for (const round of openRounds(crew)) {
     if (heads.has(round.pr)) continue;
     if (prs.length && !observed.has(round.pr)) continue;
-    if (round.tab) deps.closeTab(round.tab);
-    // Checkouts a reopened chat recreated go with their round.
-    for (const entry of runsOf(crew, round.pr))
-      if (entry.round === round.round) {
-        const checkout = checkoutOf(context.dir, entry);
-        if (existsSync(checkout))
-          deps.run([
-            "git",
-            "-C",
-            dirname(dirname(context.dir)),
-            "worktree",
-            "remove",
-            "--force",
-            checkout,
-          ]);
-      }
+    const tabs = new Set(roundTabs(crew, round.pr, round.round));
+    if (round.tab) tabs.add(round.tab);
+    let done = true;
+    for (const tab of tabs) done = deps.closeTab(tab) && done;
+    for (const entry of runsOf(crew, round.pr)) {
+      const checkout = checkoutOf(context.dir, entry);
+      if (!done || entry.round !== round.round || !existsSync(checkout))
+        continue;
+      const removed = deps.run([
+        "git",
+        "-C",
+        dirname(dirname(context.dir)),
+        "worktree",
+        "remove",
+        "--force",
+        checkout,
+      ]);
+      if (removed.code !== 0 && existsSync(checkout)) done = false;
+    }
+    if (!done) {
+      say(`#${round.pr} couldn't close round ${round.round} yet; retrying`);
+      continue;
+    }
     closeRound(crew, round.pr, round.round, now);
     say(`#${round.pr} closed round ${round.round}`);
   }
@@ -296,6 +304,23 @@ function act(
   const deliverable = (entry: StoredAction) =>
     keys.has(entry.key.split("|")[0]!);
   deliver(crew, settings, live, authors, deliverable, record, context, say);
+}
+
+/**
+ * Marks a run finished, then stops whatever pid it has reported by then.
+ * The worker reports its pid before it checks whether it was finished, so
+ * every interleaving either stops it here or has it see itself finished.
+ */
+function stopRun(
+  crew: Database,
+  id: number,
+  code: number,
+  now: number,
+  deps: Deps,
+) {
+  finishRun(crew, id, code, null, now);
+  const pid = getRun(crew, id)?.pid;
+  if (pid) deps.kill(pid);
 }
 
 /** Turns finished, crashed or overdue reviewer runs into action states. */
@@ -311,14 +336,11 @@ function settleRuns(
       now - active.startedAt > settings.runTimeoutMinutes * 60_000;
     if (active.pid !== null && deps.alive(active.pid) && !overdue) continue;
     if (active.pid === null && now - active.startedAt < START_MS) continue;
-    if (active.pid !== null && overdue) deps.kill(active.pid);
-    finishRun(
-      crew,
-      active.id,
-      active.pid === null ? -2 : overdue ? -14 : -1,
-      null,
-      now,
-    );
+    // A dead process needs no stop; an overdue one, or one that reports
+    // its pid only now, does.
+    if (active.pid !== null && !overdue)
+      finishRun(crew, active.id, -1, null, now);
+    else stopRun(crew, active.id, active.pid === null ? -2 : -14, now, deps);
   }
   for (const running of actionsIn(crew, ["running"])) {
     const last = latestRun(crew, running.key);
@@ -580,14 +602,7 @@ export async function main(argv: string[], deps: Deps = realDeps) {
       runs(crew, options, deps.out);
       return 0;
     }
-    if (options.command === "open")
-      return openChat(
-        crew,
-        options,
-        dir,
-        loadSettings(join(dir, "config.json")),
-        deps,
-      );
+    if (options.command === "open") return openChat(crew, options, dir, deps);
     if (options.command === "feed") {
       const path = join(dir, "feed.log");
       const lines = existsSync(path)

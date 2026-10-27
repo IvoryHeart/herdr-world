@@ -29,9 +29,10 @@ export type Deps = {
     log: string,
     place: Place,
   ) => { pid: number | null; pane: string | null; tab: string | null };
-  closeTab: (tab: string) => void;
-  /** Runs an interactive command in a new, focused Herdr tab; false if it can't. */
-  openTab: (argv: string[], cwd: string, label: string) => boolean;
+  /** True once the tab is gone, including one the owner already closed. */
+  closeTab: (tab: string) => boolean;
+  /** Runs a shell line in a new, focused Herdr tab; its id, or null if it can't. */
+  openTab: (line: string, cwd: string, label: string) => string | null;
   alive: (pid: number) => boolean;
   /** Stops a run's whole process group. */
   kill: (pid: number) => void;
@@ -80,14 +81,15 @@ export const realDeps: Deps = {
     return { pid: child.pid, pane: null, tab };
   },
   closeTab(tab) {
-    runProcess(["herdr", "tab", "close", tab]);
+    const closed = runProcess(["herdr", "tab", "close", tab]);
+    return closed.code === 0 || closed.stdout.includes('"tab_not_found"');
   },
-  openTab(argv, cwd, label) {
-    const { pane } = newTab(cwd, label, true);
-    return (
-      pane !== null &&
-      runProcess(["herdr", "pane", "run", pane, shellLine(argv)]).code === 0
-    );
+  openTab(line, cwd, label) {
+    const { pane, tab } = newTab(cwd, label, true);
+    return pane !== null &&
+      runProcess(["herdr", "pane", "run", pane, line]).code === 0
+      ? tab
+      : null;
   },
   alive(pid) {
     try {

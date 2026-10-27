@@ -5,13 +5,15 @@ import { shortSha } from "../../../shared/pullRequests";
 import { loadConfig } from "../gate";
 import type { Deps } from "./deps";
 import { shellLine } from "./deps";
-import { type CrewSettings, loadSettings } from "./plan";
+import { loadSettings } from "./plan";
 import {
+  addChat,
   addRun,
   finishRun,
   getRun,
   openCrewStore,
   recentRuns,
+  roundClosed,
   runsOf,
   setRunPid,
   setRunResult,
@@ -21,6 +23,7 @@ import {
 import {
   chatArgv,
   describe,
+  finalMessage,
   harnessArgv,
   harnessFor,
   parseUsage,
@@ -113,7 +116,7 @@ export async function review(options: Options, dir: string, deps: Deps) {
     return 143;
   }
   const harness = harnessFor(model.model) ?? "codex";
-  setRunSession(crew, runId, harness, null);
+  setRunSession(crew, runId, harness, model.model, null);
   process.on("SIGTERM", () => {
     show(`── stopped: a newer head or the owner ended this run`);
     show(`   reopen as a chat: ${reopen(runId)}`);
@@ -184,7 +187,7 @@ export async function review(options: Options, dir: string, deps: Deps) {
       partial = lines.pop() ?? "";
       for (const line of lines) {
         if (!session && (session = sessionOf(line)))
-          setRunSession(crew, runId, harness, session);
+          setRunSession(crew, runId, harness, model.model, session);
         const shown = describe(line);
         if (shown) show(shown);
       }
@@ -192,11 +195,12 @@ export async function review(options: Options, dir: string, deps: Deps) {
     code = await child.exited;
     const parsed = parseUsage(stdout);
     usage = parsed ? JSON.stringify(parsed) : null;
-    const last = existsSync(lastMessage)
+    // Codex writes its final message to a file; Claude ends its stream with it.
+    const written = existsSync(lastMessage)
       ? readFileSync(lastMessage, "utf8").trim()
       : "";
-    if (last) show(last);
-    const result = resultLine(last) ?? resultLine(stdout);
+    if (written) show(written);
+    const result = resultLine(written || finalMessage(stdout), pr);
     if (result) setRunResult(crew, runId, result);
     show(`── finished: ${result ?? "no RESULT"} · exit ${code}`);
     show(`   usage ${usage ?? "unknown"}`);
@@ -244,12 +248,13 @@ export function runs(
  * Reopens a run's harness session as an interactive chat in its own
  * checkout, recreated at the same path when the run has removed it, so the
  * harness finds the session and the reviewer can look at the code again.
+ * The chat tab closes with the run's round; once that round has closed,
+ * the chat removes its checkout itself when it exits.
  */
 export function openChat(
   crew: Database,
   options: Pick<Options, "prs" | "reviewer" | "round" | "run">,
   dir: string,
-  settings: CrewSettings,
   deps: Deps,
 ) {
   const found = options.run
@@ -265,9 +270,10 @@ export function openChat(
     );
   if (!found.session || !found.harness)
     throw new Error(`run ${found.id} recorded no session to reopen`);
+  const primary = dirname(dirname(dir));
   const checkout = checkoutOf(dir, found);
   if (!existsSync(checkout)) {
-    const primary = dirname(dirname(dir));
+    // The head is usually still in the object store; fetch it if not.
     deps.run([
       "git",
       "-C",
@@ -277,7 +283,7 @@ export function openChat(
       "origin",
       `pull/${found.pr}/head`,
     ]);
-    deps.run([
+    const added = deps.run([
       "git",
       "-C",
       primary,
@@ -287,17 +293,24 @@ export function openChat(
       checkout,
       found.head,
     ]);
+    if (added.code !== 0)
+      throw new Error(`couldn't recreate ${checkout}: ${added.stderr.trim()}`);
   }
-  const argv = chatArgv(
-    found.harness,
-    found.session,
-    settings.roster[found.reviewer]?.model,
-  );
+  // The run's own model: the roster may have moved the seat since.
+  let line = shellLine(chatArgv(found.harness, found.session, found.model));
+  const closed = roundClosed(crew, found.pr, found.round);
+  if (closed)
+    line += `; ${shellLine(["git", "-C", primary, "worktree", "remove", "--force", checkout])}`;
   const label = `#${found.pr} ${found.reviewer} r${found.round ?? "?"} · chat`;
-  if (!deps.openTab(argv, checkout, label))
+  const tab = deps.openTab(line, checkout, label);
+  if (tab) {
+    addChat(crew, tab, found.id);
     deps.out(
-      `Herdr couldn't open a tab; run:\n  cd ${shellLine([checkout])} && ${shellLine(argv)}`,
+      `opened "${label}"${closed ? "; exit the chat to remove its checkout" : ""}`,
     );
-  else deps.out(`opened "${label}"`);
+  } else
+    deps.out(
+      `Herdr couldn't open a tab; run:\n  cd ${shellLine([checkout])} && ${line}`,
+    );
   return 0;
 }

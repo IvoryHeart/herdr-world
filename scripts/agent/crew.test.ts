@@ -1,5 +1,12 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { crewPass, promptable, roundLabel, type Seat, seats } from "./crew";
@@ -20,12 +27,14 @@ import {
   openCrewStore,
   openLock,
   openRounds,
+  setRunPid,
   setRunResult,
   setRunSession,
 } from "./crew/store";
 import {
   chatArgv,
   describe as describeEvent,
+  finalMessage,
   harnessArgv,
   parseUsage,
   resultLine,
@@ -252,8 +261,15 @@ describe("delivery", () => {
     }),
   );
   afterAll(() => rmSync(root, { recursive: true, force: true }));
+  // The gate directory sits two levels below the primary checkout, whose
+  // .agents/worktrees holds the reviewers' checkouts.
+  const dir = join(root, "repo", "gate");
 
   let calls: string[][];
+  let events: string[];
+  let closeFails: number;
+  let removeFails: number;
+  let addFails: boolean;
   let spawned: string[][];
   let live: Seat[];
   let dead: Set<number>;
@@ -262,7 +278,7 @@ describe("delivery", () => {
   let places: Place[];
   let panes: boolean;
   let refuse: Set<string>;
-  let opened: { argv: string[]; cwd: string; label: string }[];
+  let opened: { line: string; cwd: string; label: string }[];
   let onPrompt: (() => void) | null;
   let crew: ReturnType<typeof openCrewStore>;
   let lock: ReturnType<typeof openLock>;
@@ -272,6 +288,10 @@ describe("delivery", () => {
     spawned = [];
     killed = [];
     closed = [];
+    events = [];
+    closeFails = 0;
+    removeFails = 0;
+    addFails = false;
     places = [];
     panes = false;
     refuse = new Set();
@@ -299,6 +319,18 @@ describe("delivery", () => {
         }),
         stderr: "",
       };
+    if (argv[0] === "git" && argv[3] === "worktree") {
+      const path = argv.at(-2) === "--detach" ? argv.at(-2) : argv.at(-1)!;
+      if (argv[4] === "add") {
+        if (addFails) return { code: 1, stdout: "", stderr: "fatal: no head" };
+        mkdirSync(argv[6]!, { recursive: true });
+      }
+      if (argv[4] === "remove") {
+        events.push("remove");
+        if (removeFails-- > 0) return { code: 1, stdout: "", stderr: "busy" };
+        rmSync(path!, { recursive: true, force: true });
+      }
+    }
     if (argv[2] === "prompt") onPrompt?.();
     if (refuse.has(argv[1]!) || refuse.has(argv[2]!))
       return { code: 1, stdout: "", stderr: "agent_blocked" };
@@ -317,10 +349,15 @@ describe("delivery", () => {
           }
         : { pid: 1000 + spawned.length, pane: null, tab: null };
     },
-    closeTab: (tab) => closed.push(tab),
-    openTab: (argv, cwd, label) => {
-      opened.push({ argv, cwd, label });
+    closeTab: (tab) => {
+      events.push(`close ${tab}`);
+      if (closeFails-- > 0) return false;
+      closed.push(tab);
       return true;
+    },
+    openTab: (line, cwd, label) => {
+      opened.push({ line, cwd, label });
+      return `wP:tC${opened.length}`;
     },
     alive: (pid) => !dead.has(pid),
     kill: (pid) => killed.push(pid),
@@ -339,7 +376,7 @@ describe("delivery", () => {
       crew: options.db ?? crew,
       lock: options.lock ?? lock,
       configPath,
-      dir: root,
+      dir,
       prs: options.prs ?? [],
       dryRun: false,
       now,
@@ -368,7 +405,7 @@ describe("delivery", () => {
       "prompt",
       "towncx",
     ]);
-    expect(readFileSync(join(root, "feed.log"), "utf8")).toContain(
+    expect(readFileSync(join(dir, "feed.log"), "utf8")).toContain(
       "prompted towncx: fix",
     );
   });
@@ -443,7 +480,7 @@ describe("delivery", () => {
       crew,
       lock,
       configPath: limited,
-      dir: root,
+      dir,
       prs: [],
       dryRun: false,
       now: NOW,
@@ -597,6 +634,92 @@ describe("delivery", () => {
     pass(town({ head: SHA.reviewed, posts: [] }));
     deps.spawn = launch;
     expect(openRounds(crew)[0]!.tab).toBe("wP:t3");
+    // Every tab the round used closes with the PR, not only its newest.
+    pass(
+      town({ head: SHA.reviewed, posts: [], state: "MERGED" }),
+      NOW + 60_000,
+    );
+    expect(closed.toSorted()).toEqual(["wP:t1", "wP:t2", "wP:t3"]);
+  });
+
+  test("a run superseded after it reported its pid is stopped by that pid", () => {
+    panes = true;
+    pass(town({ head: SHA.reviewed, posts: [] }));
+    const [reported, quiet] = activeRuns(crew);
+    setRunPid(crew, reported!.id, 4242);
+    pass(town({ head: SHA.fixed, posts: [] }), NOW + 60_000);
+    expect(killed).toEqual([4242]);
+    // One that hadn't reported is finished, so its worker exits on start.
+    expect(getRun(crew, quiet!.id)!.finishedAt).not.toBeNull();
+  });
+
+  const finishedWithSession = () => {
+    pass(town({ head: SHA.reviewed, posts: [] }));
+    const [first] = activeRuns(crew);
+    setRunSession(crew, first!.id, "codex", "gpt-6-old", "thread-1");
+    finishRun(crew, first!.id, 0, null, NOW + 1);
+    return first!;
+  };
+  const checkout = (id: number) =>
+    join(
+      root,
+      ".agents",
+      "worktrees",
+      `review-7-rev2-${SHA.reviewed.slice(0, 7)}-${id}`,
+    );
+
+  test("a PR that closes takes reopened chats first, then their checkouts", () => {
+    panes = true;
+    const first = finishedWithSession();
+    openChat(crew, { prs: [], run: first.id }, dir, deps);
+    expect(existsSync(checkout(first.id))).toBe(true);
+    pass(
+      town({ head: SHA.reviewed, posts: [], state: "CLOSED" }),
+      NOW + 60_000,
+    );
+    expect(closed).toContain("wP:tC1");
+    expect(events.at(-1)).toBe("remove");
+    expect(events.indexOf("remove")).toBe(events.length - 1);
+    expect(existsSync(checkout(first.id))).toBe(false);
+    // Reopened after the PR closed, the chat removes its checkout on exit.
+    openChat(crew, { prs: [], run: first.id }, dir, deps);
+    expect(opened[1]!.line).toEndWith(
+      `; git -C ${root} worktree remove --force ${checkout(first.id)}`,
+    );
+  });
+
+  test("a round whose close fails stays open and is retried", () => {
+    panes = true;
+    const first = finishedWithSession();
+    openChat(crew, { prs: [], run: first.id }, dir, deps);
+    closeFails = 1;
+    pass(
+      town({ head: SHA.reviewed, posts: [], state: "MERGED" }),
+      NOW + 60_000,
+    );
+    expect(openRounds(crew)).toHaveLength(1);
+    expect(events).not.toContain("remove");
+    removeFails = 1;
+    pass(
+      town({ head: SHA.reviewed, posts: [], state: "MERGED" }),
+      NOW + 120_000,
+    );
+    expect(openRounds(crew)).toHaveLength(1);
+    pass(
+      town({ head: SHA.reviewed, posts: [], state: "MERGED" }),
+      NOW + 180_000,
+    );
+    expect(openRounds(crew)).toEqual([]);
+    expect(existsSync(checkout(first.id))).toBe(false);
+  });
+
+  test("open stops when it can't recreate the checkout", () => {
+    const first = finishedWithSession();
+    addFails = true;
+    expect(() => openChat(crew, { prs: [], run: first.id }, dir, deps)).toThrow(
+      "couldn't recreate",
+    );
+    expect(opened).toEqual([]);
   });
 
   test("a pane run that never reports its pid counts as a failed start", () => {
@@ -615,52 +738,26 @@ describe("delivery", () => {
     expect(places[1]!.after).toBe("wP:p1");
   });
 
-  test("lists runs and reopens one as a chat in its own checkout", () => {
-    pass(town({ head: SHA.reviewed, posts: [] }));
-    const [first] = activeRuns(crew);
-    setRunSession(crew, first!.id, "codex", "thread-1");
-    setRunResult(crew, first!.id, "RESULT #7: 0/0 resolved, 2 new");
-    finishRun(
-      crew,
-      first!.id,
-      0,
-      '{"input_tokens":120000,"output_tokens":4000}',
-      NOW + 1,
-    );
+  test("lists runs and reopens one as a chat with the run's own model", () => {
+    const first = finishedWithSession();
+    setRunResult(crew, first.id, "RESULT #7: 0/0 resolved, 2 new");
+    crew
+      .query("UPDATE run SET usage = ? WHERE id = ?")
+      .run('{"input_tokens":120000,"output_tokens":4000}', first.id);
     const lines: string[] = [];
     runs(crew, { prs: [7], lines: 10 }, (text) => lines.push(text));
     expect(lines.at(-1)).toBe(
-      `run ${first!.id}\t#7 r1 rev2 @${SHA.reviewed.slice(0, 7)} exit 0 · RESULT #7: 0/0 resolved, 2 new in 120k out 4k · bun run agent:crew -- open --run ${first!.id}`,
+      `run ${first.id}\t#7 r1 rev2 @${SHA.reviewed.slice(0, 7)} exit 0 · RESULT #7: 0/0 resolved, 2 new in 120k out 4k · bun run agent:crew -- open --run ${first.id}`,
     );
-    const settings = { ...SETTINGS };
-    openChat(
-      crew,
-      { prs: [7], reviewer: "rev2", run: undefined, round: 1 },
-      root,
-      settings,
-      deps,
-    );
-    expect(opened).toHaveLength(1);
-    expect(opened[0]!.argv).toEqual([
-      "codex",
-      "resume",
-      "thread-1",
-      "-m",
-      "gpt-6.1-sol",
-    ]);
+    openChat(crew, { prs: [7], reviewer: "rev2", round: 1 }, dir, deps);
+    // The roster now has rev2 on another model; the session keeps its own.
+    expect(opened[0]!.line).toBe("codex resume thread-1 -m gpt-6-old");
     expect(opened[0]!.label).toBe("#7 rev2 r1 · chat");
-    expect(opened[0]!.cwd).toContain(
-      `review-7-rev2-${SHA.reviewed.slice(0, 7)}-${first!.id}`,
-    );
-    // The removed checkout is recreated at the run's own path.
-    expect(
-      calls.some((argv) => argv.includes("worktree") && argv.includes("add")),
-    ).toBe(true);
+    expect(opened[0]!.cwd).toBe(checkout(first.id));
     const [other] = activeRuns(crew);
     expect(() =>
-      openChat(crew, { prs: [], run: other!.id }, root, settings, deps),
+      openChat(crew, { prs: [], run: other!.id }, dir, deps),
     ).toThrow("recorded no session");
-    expect(getRun(crew, first!.id)!.session).toBe("thread-1");
   });
 
   const trioPosted = (posts: Post[] = []) =>
@@ -696,7 +793,7 @@ describe("delivery", () => {
         crew,
         lock,
         configPath: limited,
-        dir: root,
+        dir,
         prs: [],
         dryRun: false,
         now,
@@ -912,7 +1009,7 @@ describe("delivery", () => {
       crew,
       lock: shared,
       configPath,
-      dir: root,
+      dir,
       prs: [],
       dryRun: false,
       now: NOW,
@@ -943,7 +1040,7 @@ describe("delivery", () => {
         crew,
         lock,
         configPath: named,
-        dir: root,
+        dir,
         prs: [],
         dryRun: false,
         now,
@@ -987,7 +1084,7 @@ describe("delivery", () => {
         crew,
         lock,
         configPath: named,
-        dir: root,
+        dir,
         prs: [],
         dryRun: false,
         now,
@@ -1177,9 +1274,29 @@ describe("run display", () => {
     expect(
       resultLine(
         "RESULT #7: x/y resolved, z new\nRESULT #7: 0/0 resolved, 2 new\nhttps://example.com",
+        7,
       ),
     ).toBe("RESULT #7: 0/0 resolved, 2 new");
-    expect(resultLine("no result")).toBeNull();
+    expect(resultLine("RESULT #8: 1/1 resolved, 0 new", 7)).toBeNull();
+    expect(resultLine("no result", 7)).toBeNull();
+    // Only the final message counts: tool output quotes other reviews.
+    const stream = [
+      JSON.stringify({
+        type: "user",
+        message: {
+          content: [
+            { type: "tool_result", content: "RESULT #7: 3/3 resolved, 0 new" },
+          ],
+        },
+      }),
+      JSON.stringify({ type: "result", subtype: "error_max_turns" }),
+    ].join("\n");
+    expect(resultLine(finalMessage(stream), 7)).toBeNull();
+    expect(
+      finalMessage(
+        `${stream}\n${JSON.stringify({ type: "result", result: "RESULT #7: 1/1 resolved, 0 new\nhttps://example.com/r" })}`,
+      ),
+    ).toBe("RESULT #7: 1/1 resolved, 0 new\nhttps://example.com/r");
     expect(chatArgv("claude", "s-1", "claude-opus-5-5")).toEqual([
       "claude",
       "--resume",

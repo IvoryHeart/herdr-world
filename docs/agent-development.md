@@ -256,13 +256,17 @@ plans the next step for every PR in scope and takes each step once:
   RESULT, or a note that a newer head stopped the run, plus a command to
   reopen the run. The tabs stay until the PR merges or closes, so the owner can
   read every round before merging. A tab the owner closes is reopened for that
-  round's next reviewer.
+  round's next reviewer, and every tab a round used closes with it. If Herdr
+  or git can't finish that cleanup, the round stays open and the next pass
+  retries it.
 - **Reopening a run.** Each run keeps its full event stream next to its log
-  (`<log>.jsonl`), plus its harness session. `open` resumes that session as an
-  interactive chat in a new Herdr tab, run from the reviewer's checkout,
-  which `open` recreates when it's gone. There you can read the whole review
-  and ask the reviewer about it, which uses tokens only when you type. When the PR
-  closes, the watcher also removes the checkouts that `open` recreated.
+  (`<log>.jsonl`), plus its harness, model and session, and the RESULT from its
+  final message. `open` resumes that session on the run's own model as an
+  interactive chat in a new Herdr tab, run from the reviewer's checkout, which
+  `open` recreates if it's gone. There you can read the whole review and ask the
+  reviewer about it; it uses tokens only when you type. A chat tab closes with
+  its round, and only then is its checkout removed. A chat opened after the PR
+  has closed removes its checkout when you exit it.
 - **What stops a step.** Only a newer head, a merge or a close supersedes a
   waiting step or stops a running reviewer. On the same head, a CI rerun, a
   hold or an unknown mergeable state only pauses steps; they resume when the

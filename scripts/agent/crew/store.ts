@@ -42,8 +42,9 @@ export type StoredRun = {
   /** Its round's tab: one per PR head, kept until the PR closes. */
   tab: string | null;
   round: number | null;
-  /** The harness and its session, for reopening the run as a chat. */
+  /** The harness, model and session, for reopening the run as a chat. */
   harness: string | null;
+  model: string | null;
   session: string | null;
   /** The RESULT line the reviewer printed. */
   result: string | null;
@@ -100,6 +101,7 @@ export function openCrewStore(path: string, busyMs = 120_000) {
     ["tab", "TEXT"],
     ["round", "INTEGER"],
     ["harness", "TEXT"],
+    ["model", "TEXT"],
     ["session", "TEXT"],
     ["result", "TEXT"],
   ])
@@ -116,6 +118,10 @@ export function openCrewStore(path: string, busyMs = 120_000) {
       created_at INTEGER NOT NULL,
       closed_at INTEGER,
       PRIMARY KEY (pr, round)
+    );
+    CREATE TABLE IF NOT EXISTS chat (
+      tab TEXT PRIMARY KEY,
+      run_id INTEGER NOT NULL
     );
   `);
   return db;
@@ -232,6 +238,7 @@ type RunRow = {
   tab: string | null;
   round: number | null;
   harness: string | null;
+  model: string | null;
   session: string | null;
   result: string | null;
   log: string;
@@ -253,6 +260,7 @@ function run(row: RunRow): StoredRun {
     tab: row.tab,
     round: row.round,
     harness: row.harness,
+    model: row.model,
     session: row.session,
     result: row.result,
     log: row.log,
@@ -305,13 +313,45 @@ export function setRunSession(
   db: Database,
   id: number,
   harness: string,
+  model: string,
   session: string | null,
 ) {
-  db.query("UPDATE run SET harness = ?, session = ? WHERE id = ?").run(
-    harness,
-    session,
-    id,
+  db.query(
+    "UPDATE run SET harness = ?, model = ?, session = ? WHERE id = ?",
+  ).run(harness, model, session, id);
+}
+
+/** A chat tab `open` started for a run; it closes with the run's round. */
+export function addChat(db: Database, tab: string, runId: number) {
+  db.query("INSERT OR REPLACE INTO chat (tab, run_id) VALUES (?, ?)").run(
+    tab,
+    runId,
   );
+}
+
+/**
+ * Every tab a round has used: its reviewers' tabs (a replacement tab when
+ * the owner closed one) and the chat tabs reopened from its runs.
+ */
+export function roundTabs(db: Database, pr: number, round: number) {
+  return db
+    .query<{ tab: string }, [number, number, number, number]>(
+      `SELECT tab FROM run WHERE pr = ? AND round = ? AND tab IS NOT NULL
+       UNION
+       SELECT chat.tab FROM chat JOIN run ON run.id = chat.run_id
+       WHERE run.pr = ? AND run.round = ?`,
+    )
+    .all(pr, round, pr, round)
+    .map((row) => row.tab);
+}
+
+export function roundClosed(db: Database, pr: number, round: number | null) {
+  const row = db
+    .query<{ closed_at: number | null }, [number, number]>(
+      "SELECT closed_at FROM round WHERE pr = ? AND round = ?",
+    )
+    .get(pr, round ?? -1);
+  return row ? row.closed_at !== null : true;
 }
 
 export function setRunResult(db: Database, id: number, result: string) {
