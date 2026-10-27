@@ -24,3 +24,6 @@ editor, hidden Chat and transcript refreshes that leave focus elsewhere.
 The browser cases also cover a newer Chat winning an out-of-order load and
 focus moved during loading. `DeskView.browser.test.ts` previews a real
 Inspector Chat while J/K, Enter and Escape keep operating on the queue.
+The real mobile view-selector DOM regression checks menu-close focus restoration;
+the AgentChat browser also covers the focused Town opener being removed before
+the conversation loads. Later user focus, keys and pointer input still cancel.

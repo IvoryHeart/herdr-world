@@ -61,6 +61,45 @@ test("moving focus or typing while loading cancels the delayed request", async (
   });
 });
 
+test("removing the explicit opener keeps the body's passive fallback valid", async () => {
+  await withEditors((browser, first) => {
+    const opener = browser.document.createElement("button");
+    opener.textContent = "Open chat";
+    browser.document.body.append(opener);
+    opener.focus();
+    const intent = requestChatInputFocus();
+    opener.remove();
+    expect(document.activeElement === document.body).toBe(true);
+    expect(intent.focus(first)).toBe(true);
+    expect(document.activeElement === first).toBe(true);
+  });
+});
+
+test("opener removal never excuses a later focus choice or user input", async () => {
+  await withEditors((browser, first, second) => {
+    for (const action of ["focus", "key", "pointer"] as const) {
+      const opener = browser.document.createElement("button");
+      browser.document.body.append(opener);
+      opener.focus();
+      const intent = requestChatInputFocus();
+      opener.remove();
+      if (action === "focus") second.focus();
+      else
+        document.body.dispatchEvent(
+          action === "key"
+            ? (new browser.KeyboardEvent("keydown", {
+                key: "j",
+                bubbles: true,
+              }) as unknown as Event)
+            : (new browser.PointerEvent("pointerdown", {
+                bubbles: true,
+              }) as unknown as Event),
+        );
+      expect(intent.focus(first)).toBe(false);
+    }
+  });
+});
+
 test("retired opens, later pointer actions and leaving the browser cannot admit delayed focus", async () => {
   await withEditors((browser, first) => {
     let current = true;

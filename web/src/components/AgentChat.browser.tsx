@@ -4,6 +4,7 @@ import type { Pane } from "../types";
 import { AgentChat, type Conversation } from "./AgentChat";
 import { ChatComposer } from "./chat/ChatComposer";
 import { InspectorChat } from "./InspectorChat";
+import { requestChatInputFocus } from "../chatFocus";
 import { useAgentHistoryWindow } from "./useAgentHistoryWindow";
 import { useConnectionClient } from "../useConnectionClient";
 import { activateTerminalComposerDraftScope } from "../terminalComposer";
@@ -2399,6 +2400,33 @@ async function run() {
     // can move elsewhere, or open a newer Chat, before the response arrives.
     {
       reply = conversation([message("focus-reply", "assistant", "Ready")]);
+      const peekOpener = document.createElement("button");
+      peekOpener.textContent = "Open chat";
+      document.body.append(peekOpener);
+      peekOpener.focus();
+      const townOpening = requestChatInputFocus();
+      const townReply = Promise.withResolvers<Conversation>();
+      latestAnswer = () => townReply.promise;
+      root.render(
+        <InspectorChat
+          key="town-peek-open"
+          pane={pane("idle")}
+          active
+          focusIntent={townOpening}
+          onClose={() => {}}
+        />,
+      );
+      // Town closes the peek immediately, before qualified opening/readiness.
+      peekOpener.remove();
+      await settle();
+      townReply.resolve(reply);
+      await settle();
+      await settle();
+      check(
+        container.querySelector("textarea") !== null &&
+          document.activeElement === container.querySelector("textarea"),
+        "Town's removed Open chat button must not cancel the explicit opening focus",
+      );
       const delayed = Promise.withResolvers<Conversation>();
       latestAnswer = () => delayed.promise;
       root.render(

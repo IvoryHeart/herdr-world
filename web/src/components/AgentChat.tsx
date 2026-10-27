@@ -2,6 +2,7 @@ import "./AgentChat.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Copy, ListTree, RefreshCw, SquareTerminal } from "lucide-react";
 import { watchConversation } from "../conversationWatch";
+import { type ChatFocusIntent, useChatFocusIntent } from "../chatFocus";
 import { attachmentUploading } from "../attachmentUploads";
 import {
   beginTerminalComposerSubmission,
@@ -755,4 +756,3 @@ export function AgentChat({
     </div>
   );
 }
-import { type ChatFocusIntent, useChatFocusIntent } from "../chatFocus";

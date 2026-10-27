@@ -15,8 +15,13 @@ export function requestChatInputFocus(
   const owner = document;
   const origin = owner.activeElement;
   let cancelled = false;
+  // Opening Chat may remove its own button (Town's peek). The resulting
+  // body focus is teardown, not a later user focus/input choice.
+  const atOrigin = (target: EventTarget | null) =>
+    target === origin ||
+    (origin !== null && !origin.isConnected && target === owner.body);
   const moved = (event: FocusEvent) => {
-    if (event.target !== origin) intent.cancel();
+    if (!atOrigin(event.target)) intent.cancel();
   };
   const cancel = () => {
     cancelled = true;
@@ -33,7 +38,7 @@ export function requestChatInputFocus(
         cancelled ||
         pending !== intent ||
         !isCurrent() ||
-        owner.activeElement !== origin ||
+        !atOrigin(owner.activeElement) ||
         input.ownerDocument !== owner ||
         !input.isConnected
       ) {
