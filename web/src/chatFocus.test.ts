@@ -75,6 +75,20 @@ test("removing the explicit opener keeps the body's passive fallback valid", asy
   });
 });
 
+test("blurring a connected opener does not authorize a body-focus fallback", async () => {
+  await withEditors((browser, first) => {
+    const opener = browser.document.createElement("button");
+    browser.document.body.append(opener);
+    opener.focus();
+    const intent = requestChatInputFocus();
+    opener.blur();
+    expect(opener.isConnected).toBe(true);
+    expect(document.activeElement === document.body).toBe(true);
+    expect(intent.focus(first)).toBe(false);
+    expect(document.activeElement === document.body).toBe(true);
+  });
+});
+
 test("opener removal never excuses a later focus choice or user input", async () => {
   await withEditors((browser, first, second) => {
     for (const action of ["focus", "key", "pointer"] as const) {

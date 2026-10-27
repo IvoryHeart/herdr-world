@@ -27,3 +27,5 @@ Inspector Chat while J/K, Enter and Escape keep operating on the queue.
 The real mobile view-selector DOM regression checks menu-close focus restoration;
 the AgentChat browser also covers the focused Town opener being removed before
 the conversation loads. Later user focus, keys and pointer input still cancel.
+Blurring an opener that remains attached does not authorize the passive body
+fallback; the native-focus regression checks that boundary separately.
