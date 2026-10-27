@@ -1,5 +1,11 @@
 import type { Database } from "bun:sqlite";
-import { appendFileSync, existsSync, readFileSync } from "node:fs";
+import {
+  appendFileSync,
+  closeSync,
+  existsSync,
+  openSync,
+  readFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import { shortSha } from "../../shared/pullRequests";
 import { gateDir, loadConfig, runPass } from "./gate";
@@ -23,8 +29,10 @@ import {
   finishRun,
   getAction,
   getRun,
+  holdLock,
   latestRun,
   openCrewStore,
+  openLock,
   recentActions,
   recentRuns,
   setAction,
@@ -113,11 +121,13 @@ export const realDeps: Deps = {
       if (ran.code === 0) return { pid: null, pane };
       runProcess(["herdr", "pane", "close", pane]);
     }
-    const file = Bun.file(log);
+    // The worker appends its own lines to the log; errors join them, appended.
+    const errors = openSync(log, "a");
     const child = Bun.spawn(argv, {
-      stdio: ["ignore", file, file],
+      stdio: ["ignore", "ignore", errors],
       detached: true,
     } as Parameters<typeof Bun.spawn>[1]);
+    closeSync(errors);
     child.unref();
     return { pid: child.pid, pane: null };
   },
@@ -216,6 +226,8 @@ type PassContext = {
   /** One gate pass over the open PRs (or `prs`): verdicts and what they judged. */
   judge: () => { verdicts: Verdict[]; inputs: GateInput[] };
   crew: Database;
+  /** Held while a pass acts; see `openLock`. */
+  lock: Database;
   configPath: string;
   dir: string;
   prs: number[];
@@ -256,14 +268,25 @@ export function crewPass(context: PassContext) {
     return planned;
   }
 
-  // One pass at a time acts: a second process waits here, then sees what the
-  // first recorded, so no action is delivered twice.
-  crew
-    .transaction(() =>
-      act(crew, context, settings, planned, verdicts, live, authors, say),
-    )
-    .immediate();
+  // One pass at a time acts: a second process waits for the lock, then sees
+  // everything the first recorded. Each step is committed as it happens, so
+  // a crash never forgets a prompt that was already sent.
+  holdLock(context.lock, () =>
+    act(crew, context, settings, planned, verdicts, live, authors, say),
+  );
   return planned;
+}
+
+/** A notice to the owner that belongs to another action: `<parent>|<suffix>`. */
+function notice(parent: Action, suffix: string, text: string): Action {
+  return {
+    key: `${parent.key}|${suffix}`,
+    pr: parent.pr,
+    head: parent.head,
+    kind: "judgment",
+    target: "owner",
+    text,
+  };
 }
 
 function act(
@@ -277,36 +300,33 @@ function act(
   say: (text: string) => void,
 ) {
   const { prs, now, deps } = context;
+  const record = (entry: Action) => {
+    if (addAction(crew, entry, now))
+      say(`#${entry.pr} plan ${entry.kind} ${entry.target}: ${entry.text}`);
+  };
   // Record each action once; a repeat of a finished run means it is stuck.
   for (const entry of planned) {
-    if (addAction(crew, entry, now)) {
-      say(`#${entry.pr} plan ${entry.kind} ${entry.target}: ${entry.text}`);
-      continue;
-    }
-    const known = getAction(crew, entry.key)!;
+    record(entry);
     if (!RUN_KINDS.has(entry.kind)) continue;
+    const known = getAction(crew, entry.key)!;
     const stuck =
       (known.state === "done" && now - known.updatedAt > STUCK_MS) ||
       known.state === "failed";
-    if (stuck) {
-      const escalation: Action = {
-        key: `${entry.key}:stuck`,
-        pr: entry.pr,
-        head: entry.head,
-        kind: "judgment",
-        target: "owner",
-        text: `NEEDS-OWNER #${entry.pr} at ${shortSha(entry.head)}: ${entry.target}'s fresh run ${known.state === "failed" ? "failed" : "finished"} without a RESULT on this head; log ${latestRun(crew, entry.key)?.log ?? "missing"}`,
-      };
-      if (addAction(crew, escalation, now))
-        say(`#${entry.pr} plan judgment owner: ${escalation.text}`);
-    }
+    if (stuck)
+      record(
+        notice(
+          entry,
+          "stuck",
+          `NEEDS-OWNER #${entry.pr} at ${shortSha(entry.head)}: ${entry.target}'s fresh run ${known.state === "failed" ? "failed" : "finished"} without a RESULT on this head; log ${latestRun(crew, entry.key)?.log ?? "missing"}`,
+        ),
+      );
   }
 
   // Only a newer head, a merge or a close makes waiting actions moot. On the
   // same head an action this pass didn't plan stays: a rerun, a hold or an
   // unknown mergeable state is temporary, and a reviewer that has just
   // posted is still finishing. A pass over every open PR also retires
-  // the actions of PRs no longer open.
+  // the actions of PRs no longer open; a reopened PR plans them afresh.
   const observed = new Set(verdicts.map((verdict) => verdict.number));
   const heads = new Map(
     verdicts
@@ -331,15 +351,13 @@ function act(
   }
 
   settleRuns(crew, settings, now, deps, say);
-  // Deliver only what this pass planned from fresh reads: a scoped pass
-  // leaves other PRs' queued work alone, and a paused action waits.
+  // Deliver only what this pass planned from fresh reads, and the owner
+  // notices that belong to it: a scoped pass leaves other PRs' queued work
+  // alone, and a paused action waits.
   const keys = new Set(planned.map((entry) => entry.key));
-  for (const entry of planned)
-    if (entry.kind === "judgment") keys.add(entry.key);
-  for (const entry of actionsIn(crew, ["pending"]))
-    if (entry.key.endsWith(":stuck") && observed.has(entry.pr))
-      keys.add(entry.key);
-  deliver(crew, settings, live, authors, keys, context, say);
+  const deliverable = (entry: StoredAction) =>
+    keys.has(entry.key.split("|")[0]!);
+  deliver(crew, settings, live, authors, deliverable, record, context, say);
 }
 
 /** Turns finished, crashed or overdue reviewer runs into action states. */
@@ -391,45 +409,19 @@ function deliver(
   settings: CrewSettings,
   live: Seat[],
   authors: Map<number, string | null>,
-  keys: Set<string>,
+  deliverable: (entry: StoredAction) => boolean,
+  record: (entry: Action) => void,
   context: PassContext,
   say: (text: string) => void,
 ) {
   const { now, deps, dir } = context;
-  const pending = actionsIn(crew, ["pending"]).filter((entry) =>
-    keys.has(entry.key),
-  );
-  const notify = (entry: StoredAction, sound: "done" | "request") => {
-    const result = deps.run([
-      "herdr",
-      "notification",
-      "show",
-      entry.kind === "ready"
-        ? `Crew: READY #${entry.pr}`
-        : `Crew: #${entry.pr} needs you`,
-      "--body",
-      entry.text,
-      "--sound",
-      sound,
-    ]);
-    // A notification Herdr didn't show is tried again next pass.
-    if (result.code !== 0) {
-      const error = (result.stderr || result.stdout).trim().slice(0, 200);
-      setAction(crew, entry.key, "pending", now, error, true);
-      if (entry.detail !== error)
-        say(`#${entry.pr} notification failed: ${error}`);
-      return;
-    }
-    setAction(crew, entry.key, "sent", now, null, true);
-    say(`#${entry.pr} told owner: ${entry.text}`);
-  };
-  for (const entry of pending)
-    if (entry.target === "owner")
-      notify(entry, entry.kind === "ready" ? "done" : "request");
+  const pending = () =>
+    actionsIn(crew, ["pending"]).filter((entry) => deliverable(entry));
 
   // One prompt per seat per pass, carrying every action waiting for it.
+  // A seat that can't take it gets the owner a notice instead.
   const bySeat = new Map<string, StoredAction[]>();
-  for (const entry of pending)
+  for (const entry of pending())
     if (AUTHOR_KINDS.has(entry.kind))
       bySeat.set(entry.target, [...(bySeat.get(entry.target) ?? []), entry]);
   for (const [name, entries] of bySeat) {
@@ -443,16 +435,13 @@ function deliver(
         setAction(crew, entry.key, "pending", now, why);
         say(`#${entry.pr} waiting for ${name} (${why})`);
         if (why === "no live seat" || why === "never prompted")
-          deps.run([
-            "herdr",
-            "notification",
-            "show",
-            `Crew: #${entry.pr} waits for ${name}`,
-            "--body",
-            `${why}: ${entry.text}`,
-            "--sound",
-            "request",
-          ]);
+          record(
+            notice(
+              entry,
+              "waits",
+              `#${entry.pr} waits for ${name} (${why}): ${entry.text}`,
+            ),
+          );
       }
       continue;
     }
@@ -466,24 +455,18 @@ function deliver(
         const error = (result.stderr || result.stdout).trim().slice(0, 200);
         setAction(crew, entry.key, "pending", now, error, true);
         say(`#${entry.pr} prompt to ${name} refused: ${error}`);
-        if (entry.attempts + 1 === PROMPT_ATTEMPTS)
-          deps.run([
-            "herdr",
-            "notification",
-            "show",
-            `Crew: can't reach ${name}`,
-            "--body",
-            entry.text,
-            "--sound",
-            "request",
-          ]);
+        if (entry.attempts + 1 >= PROMPT_ATTEMPTS)
+          record(
+            notice(entry, "unreachable", `Can't reach ${name}: ${entry.text}`),
+          );
       }
     }
   }
 
-  // Fresh reviewers, up to the run limit.
+  // Fresh reviewers, up to the run limit. The run row is committed before
+  // the launch, so a crash still counts it against the limit.
   let slots = settings.maxRuns - activeRuns(crew).length;
-  for (const entry of pending) {
+  for (const entry of pending()) {
     if (!RUN_KINDS.has(entry.kind) || slots <= 0) continue;
     const log = join(
       dir,
@@ -501,6 +484,7 @@ function deliver(
       },
       now,
     );
+    setAction(crew, entry.key, "running", now, `run ${id}`, true);
     const author = authors.get(entry.pr);
     const argv = [
       ...context.worker,
@@ -524,11 +508,37 @@ function deliver(
     );
     if (started.pid !== null) setRunPid(crew, id, started.pid);
     if (started.pane) setRunPane(crew, id, started.pane);
-    setAction(crew, entry.key, "running", now, `run ${id}`, true);
     say(
       `#${entry.pr} started ${entry.target} ${entry.kind} (run ${id}${started.pane ? `, Herdr tab "review #${entry.pr} ${entry.target}"` : ""}, log ${log})`,
     );
     slots--;
+  }
+
+  // Owner notices last, so those raised above go out in this pass. One
+  // Herdr didn't show stays pending and is tried again next pass.
+  for (const entry of pending()) {
+    if (entry.target !== "owner") continue;
+    const result = deps.run([
+      "herdr",
+      "notification",
+      "show",
+      entry.kind === "ready"
+        ? `Crew: READY #${entry.pr}`
+        : `Crew: #${entry.pr} needs you`,
+      "--body",
+      entry.text,
+      "--sound",
+      entry.kind === "ready" ? "done" : "request",
+    ]);
+    if (result.code !== 0) {
+      const error = (result.stderr || result.stdout).trim().slice(0, 200);
+      setAction(crew, entry.key, "pending", now, error, true);
+      if (entry.detail !== error)
+        say(`#${entry.pr} notification failed: ${error}`);
+      continue;
+    }
+    setAction(crew, entry.key, "sent", now, null, true);
+    say(`#${entry.pr} told owner: ${entry.text}`);
   }
 }
 
@@ -748,6 +758,7 @@ export async function main(argv: string[], deps: Deps = realDeps) {
     }
     if (options.command !== "pass" && options.command !== "watch")
       throw new Error(`Unknown command ${options.command}\n\n${USAGE}`);
+    const lock = openLock(join(dir, "crew.lock"));
     const gate = openStore(join(dir, "gate.sqlite"));
     const worker = ["bun", join(import.meta.dir, "crew.ts")];
     try {
@@ -767,6 +778,7 @@ export async function main(argv: string[], deps: Deps = realDeps) {
                 options.prs,
               ),
             crew,
+            lock,
             configPath: join(dir, "config.json"),
             dir,
             prs: options.prs,
@@ -791,6 +803,7 @@ export async function main(argv: string[], deps: Deps = realDeps) {
       }
     } finally {
       gate.close();
+      lock.close();
     }
   } finally {
     crew.close();

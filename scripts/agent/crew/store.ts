@@ -131,13 +131,19 @@ export function getAction(db: Database, key: string) {
   return row ? action(row) : null;
 }
 
-/** Records a planned action the first time its key is seen; true if new. */
+/**
+ * Records a planned action the first time its key is seen, and re-arms one a
+ * close superseded when a reopened PR plans it again; true if it is new.
+ */
 export function addAction(db: Database, planned: Action, now: number) {
   const result = db
     .query(
-      `INSERT OR IGNORE INTO action
+      `INSERT INTO action
         (key, pr, head, kind, target, text, since, state, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+       ON CONFLICT(key) DO UPDATE SET state = 'pending', attempts = 0,
+         detail = NULL, updated_at = excluded.updated_at
+       WHERE action.state = 'superseded'`,
     )
     .run(
       planned.key,
@@ -291,6 +297,27 @@ export function recentRuns(db: Database, limit: number) {
     .query<RunRow, [number]>("SELECT * FROM run ORDER BY id DESC LIMIT ?")
     .all(limit)
     .map(run);
+}
+
+/**
+ * The crew's pass lock: a write transaction held on its own small database
+ * while a pass acts. The OS drops it if the process dies, and the action
+ * store itself commits every step as it happens.
+ */
+export function openLock(path: string, busyMs = 120_000) {
+  if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
+  const db = new Database(path, { create: true });
+  db.exec(`PRAGMA busy_timeout = ${Math.max(0, Math.floor(busyMs))}`);
+  return db;
+}
+
+export function holdLock<T>(lock: Database, act: () => T): T {
+  lock.exec("BEGIN IMMEDIATE");
+  try {
+    return act();
+  } finally {
+    lock.exec("ROLLBACK");
+  }
 }
 
 /** One line per event, for the owner to read; agents never pay to read it. */

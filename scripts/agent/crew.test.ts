@@ -23,6 +23,7 @@ import {
   finishRun,
   getAction,
   openCrewStore,
+  openLock,
 } from "./crew/store";
 import {
   describe as describeEvent,
@@ -262,6 +263,7 @@ describe("delivery", () => {
   let refuse: Set<string>;
   let onPrompt: (() => void) | null;
   let crew: ReturnType<typeof openCrewStore>;
+  let lock: ReturnType<typeof openLock>;
 
   beforeEach(() => {
     calls = [];
@@ -275,6 +277,7 @@ describe("delivery", () => {
     dead = new Set();
     live = SEATS.map((name) => ({ name, status: "idle", focused: false }));
     crew = openCrewStore(":memory:");
+    lock = openLock(":memory:");
   });
 
   const run: Run = (argv) => {
@@ -315,7 +318,7 @@ describe("delivery", () => {
   const passOver = (
     values: GateInput[],
     now = NOW,
-    options: { prs?: number[]; db?: typeof crew } = {},
+    options: { prs?: number[]; db?: typeof crew; lock?: typeof lock } = {},
   ) =>
     crewPass({
       judge: () => ({
@@ -323,6 +326,7 @@ describe("delivery", () => {
         inputs: values,
       }),
       crew: options.db ?? crew,
+      lock: options.lock ?? lock,
       configPath,
       dir: root,
       prs: options.prs ?? [],
@@ -426,6 +430,7 @@ describe("delivery", () => {
         inputs: [value],
       }),
       crew,
+      lock,
       configPath: limited,
       dir: root,
       prs: [],
@@ -467,7 +472,7 @@ describe("delivery", () => {
     pass(value, NOW + 2000);
     expect(getAction(crew, active!.actionKey)!.state).toBe("done");
     pass(value, NOW + 20 * 60_000);
-    expect(getAction(crew, `${active!.actionKey}:stuck`)?.kind).toBe(
+    expect(getAction(crew, `${active!.actionKey}|stuck`)?.kind).toBe(
       "judgment",
     );
   });
@@ -490,7 +495,7 @@ describe("delivery", () => {
     expect(spawned).toHaveLength(2);
     const key = `7:${SHA.reviewed}:review:rev2`;
     expect(getAction(crew, key)!.state).toBe("failed");
-    expect(getAction(crew, `${key}:stuck`)?.target).toBe("owner");
+    expect(getAction(crew, `${key}|stuck`)?.target).toBe("owner");
   });
 
   test("a new head supersedes waiting actions and stops stale runs", () => {
@@ -579,6 +584,7 @@ describe("delivery", () => {
           inputs: [value],
         }),
         crew,
+        lock,
         configPath: limited,
         dir: root,
         prs: [],
@@ -672,7 +678,7 @@ describe("delivery", () => {
       pass(trioPosted(), NOW + minute * 60_000);
     expect(prompts()).toHaveLength(6);
     expect(
-      notices().filter((argv) => argv.join(" ").includes("can't reach towncx")),
+      notices().filter((argv) => argv.join(" ").includes("Can't reach towncx")),
     ).toHaveLength(1);
   });
 
@@ -710,23 +716,73 @@ describe("delivery", () => {
 
   test("a second process acting at the same time sends nothing twice", () => {
     const file = join(root, "shared.sqlite");
-    const first = openCrewStore(file, 50);
-    const second = openCrewStore(file, 50);
+    const first = openCrewStore(file);
+    const second = openCrewStore(file);
+    const firstLock = openLock(join(root, "shared.lock"), 50);
+    const secondLock = openLock(join(root, "shared.lock"), 50);
     let overlapped: unknown = null;
     onPrompt = () => {
       onPrompt = null;
       try {
-        passOver([trioPosted()], NOW, { db: second });
+        passOver([trioPosted()], NOW, { db: second, lock: secondLock });
       } catch (error) {
         overlapped = error;
       }
     };
-    passOver([trioPosted()], NOW, { db: first });
+    passOver([trioPosted()], NOW, { db: first, lock: firstLock });
     expect(String(overlapped)).toContain("locked");
-    passOver([trioPosted()], NOW + 60_000, { db: second });
+    passOver([trioPosted()], NOW + 60_000, { db: second, lock: secondLock });
     expect(prompts()).toHaveLength(1);
     first.close();
     second.close();
+    firstLock.close();
+    secondLock.close();
+  });
+
+  test("a crash after a prompt keeps it sent; the next pass doesn't resend it", () => {
+    const review = { ...town({ head: SHA.other, posts: [] }), number: 8 };
+    const launch = deps.spawn;
+    deps.spawn = () => {
+      throw new Error("watcher stopped");
+    };
+    expect(() => passOver([trioPosted(), review])).toThrow("watcher stopped");
+    deps.spawn = launch;
+    expect(prompts()).toHaveLength(1);
+    passOver([trioPosted(), review], NOW + 60_000);
+    expect(prompts()).toHaveLength(1);
+    // The interrupted launch keeps its slot until it times out; the other
+    // two reviewers start now.
+    expect(spawned).toHaveLength(2);
+    expect(activeRuns(crew)).toHaveLength(3);
+  });
+
+  test("a PR closed and reopened on the same head is picked up again", () => {
+    pass(town({ head: SHA.reviewed, posts: [] }));
+    expect(spawned).toHaveLength(3);
+    passOver([], NOW + 60_000);
+    expect(actionsIn(crew, ["pending", "running"])).toEqual([]);
+    pass(town({ head: SHA.reviewed, posts: [] }), NOW + 120_000);
+    expect(spawned).toHaveLength(6);
+  });
+
+  test("an owner notice Herdr couldn't show is retried for every kind", () => {
+    const value = trioPosted();
+    const desk = {
+      ...value,
+      item: { ...value.item!, branch: "agent/firstmate-kit" },
+    };
+    refuse.add("notification");
+    pass(desk);
+    refuse.clear();
+    pass(desk, NOW + 60_000);
+    pass(desk, NOW + 120_000);
+    const waits = notices().filter((argv) =>
+      argv.join(" ").includes("waits for firstmate (never prompted)"),
+    );
+    expect(waits).toHaveLength(2);
+    expect(
+      actionsIn(crew, ["pending"]).filter((entry) => entry.target === "owner"),
+    ).toEqual([]);
   });
 });
 

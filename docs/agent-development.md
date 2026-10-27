@@ -254,11 +254,13 @@ plans the next step for every PR in scope and takes each step once:
 - **What stops a step.** Only a newer head, a merge or a close supersedes a
   waiting step or stops a running reviewer. On the same head, a CI rerun, a
   hold or an unknown mergeable state only pauses steps; they resume when the
-  head is eligible again. A reviewer that has just posted finishes its run.
+  head is eligible again. A reviewer that has just posted finishes its run. A
+  PR reopened on the same head is planned afresh.
 - **When a step repeats.** A CI step is keyed by the failed jobs, so a rerun
-  that fails again prompts the author again. A notification Herdr didn't
-  show is retried on the next pass. A seat that keeps refusing prompts is
-  reported to the owner once.
+  that fails again prompts the author again. Every owner notice is an action
+  of its own: READY, NEEDS-OWNER, a seat that is missing or never prompted,
+  and a seat that keeps refusing prompts. Each is shown once, and one that
+  Herdr didn't show is retried on the next pass.
 - **Where the owner reads it.** Every plan, prompt, run and notification is a
   line in `.agents/crew-gate/feed.log`, so the owner can follow the crew
   without any agent spending a turn on it.
@@ -284,9 +286,11 @@ Settings go under `crew` in the gate's `config.json`:
 
 `crew.sqlite` records each step once under a key built from the PR, head, kind,
 target and, for CI and judgment steps, their cause. A repeated pass or a
-restart never prompts twice. Only one pass acts at a time: a second watcher or
-an overlapping `pass` waits for the first to record what it did, and a scoped
-`pass --pr` acts only on the PRs it read. Run logs are kept in `runs/`. The watcher never pushes, merges, approves or writes to
+restart never prompts twice. Only one pass acts at a time. It holds
+`crew.lock`, which the OS releases if the process dies; a second watcher or an
+overlapping `pass` waits for it. Each step is committed as soon as it happens,
+so a crash never forgets a prompt that was already sent. A scoped `pass --pr`
+acts only on the PRs it read. Run logs are kept in `runs/`. The watcher never pushes, merges, approves or writes to
 GitHub; the fresh reviewers post their own reviews.
 
 Source: [`scripts/agent/crew.ts`](../scripts/agent/crew.ts) and
