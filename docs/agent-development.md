@@ -284,14 +284,20 @@ plans the next step for every PR in scope and takes each step once:
   hold or an unknown mergeable state only pauses steps; they resume when the
   head is eligible again. A reviewer that has just posted finishes its run. A
   PR reopened on the same head is planned afresh.
+- **Which checks count.** An attempt that a later attempt of the same
+  workflow replaced, as a rerun does, doesn't count. Same-name checks from
+  runs the gate can't order, such as two workflows, all count: the gate keeps
+  only the worst of them, but none has replaced another. The author gets a
+  failure's `ci` step once no counted check is still running, so a failure in
+  one workflow waits while a same-name job in another is still running, and
+  the step names every counted failure.
 - **A check that never finishes.** GitHub sometimes loses a finished job's
   status, and the check then shows as running for good, which holds every
-  review back. The watcher notes when it first sees each check running,
-  counting only each check's latest attempt, as the gate does. One still
-  running after `stallMinutes` (default 30) goes to the author as a `ci` step,
-  with the `gh run rerun --job` command for it, or to the owner once if the PR
-  has no author seat. `pass --dry-run` shows these too, without recording
-  anything.
+  review back. The watcher notes when it first sees each counted check
+  running. One still running after `stallMinutes` (default 30) goes to the
+  author as a `ci` step, with the `gh run rerun --job` command for it, or to
+  the owner once if the PR has no author seat. `pass --dry-run` shows these
+  too, without recording anything.
 - **When a step repeats.** A CI step is keyed by the failed jobs, so a rerun
   that fails again prompts the author again. Every owner notice is an action
   of its own: READY, NEEDS-OWNER, a seat that is missing or never prompted,
