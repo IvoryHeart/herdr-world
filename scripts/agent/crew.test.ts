@@ -1008,6 +1008,40 @@ describe("delivery", () => {
     expect(spawned).toHaveLength(3);
   });
 
+  test("a failed rerun of a stuck check sends the author the failure", () => {
+    const stuck = stuckCheck();
+    pass(stuck);
+    const rerunFailed = town({
+      head: SHA.reviewed,
+      posts: [],
+      checks: [
+        { name: "Delivery checks", state: "pass", required: true },
+        {
+          name: "Browser tests",
+          state: "pending",
+          required: false,
+          url: jobUrl(30),
+        },
+        {
+          name: "Browser tests",
+          state: "fail",
+          required: false,
+          url: jobUrl(12),
+        },
+      ],
+      executions: {
+        "30": { runId: 1001, workflowId: 9, runNumber: 1, attempt: 1 },
+        "12": { runId: 1001, workflowId: 9, runNumber: 1, attempt: 2 },
+      },
+    });
+    pass(rerunFailed, NOW + 31 * 60_000);
+    // The old pending attempt neither holds the failure back nor is sent to
+    // be rerun: the author gets the failure of the attempt that counts.
+    expect(prompts()).toHaveLength(1);
+    expect(prompts()[0]!.at(-1)).toContain("1 failing");
+    expect(prompts()[0]!.at(-1)).not.toContain("has been running");
+  });
+
   test("a stuck check on a PR with no author tells the owner once", () => {
     const orphan = stuckCheck({ branch: "agent/nobody-x" });
     pass(orphan);

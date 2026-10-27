@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { shortSha } from "../../../shared/pullRequests";
-import type { GateInput, Verdict } from "../gate/predicate";
+import { type GateInput, latestChecks, type Verdict } from "../gate/predicate";
 import { harnessFor } from "./worker";
 
 /**
@@ -195,13 +195,17 @@ export function plan(
   const failing = verdict.conditions.find(
     (entry) => entry.id === "checks" && entry.state === "unmet",
   );
+  // Each check's latest attempt, as the gate counts it: an attempt a rerun
+  // replaced neither holds the author back nor names the failure.
+  const checks = latestChecks(
+    input.item?.pr?.checks ?? [],
+    input.executions,
+  ).latest;
   // A run still going may replace the failure, as when a new push or label
   // cancels the run whose roll-up failed; the author hears once it settles.
-  const settled = !(input.item?.pr?.checks ?? []).some(
-    (check) => check.state === "pending",
-  );
+  const settled = !checks.some((check) => check.state === "pending");
   // Keyed by the failed jobs, so a rerun that fails again tells the author.
-  const failedJobs = (input.item?.pr?.checks ?? [])
+  const failedJobs = checks
     .filter((check) => check.state === "fail")
     .map((check) => check.url ?? check.name)
     .sort()
