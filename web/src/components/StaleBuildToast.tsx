@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import {
   checkServedBuild,
-  isStaleBuild,
+  dismissReloadRequest,
+  type ReloadOffer,
+  reloadOffer,
   useBuildFreshness,
 } from "../buildFreshness";
 import { CloseButton } from "./CloseButton";
@@ -9,7 +11,7 @@ import { reloadApplicationPage } from "./ConfigMenu";
 import { ToastMark } from "./NoticeContent";
 import { Toast } from "./Toast";
 
-/** The undismissed newer served build, or null while this tab is current. */
+/** The reload to offer, or null while this tab is current or it was put off. */
 export function useStaleBuild(status: string) {
   const build = useBuildFreshness();
   const [dismissed, setDismissed] = useState<string | null>(null);
@@ -17,23 +19,23 @@ export function useStaleBuild(status: string) {
     // A server restart drops the socket; ask which build it serves once back.
     if (status === "connected") void checkServedBuild();
   }, [status]);
-  if (!isStaleBuild(build) || build.served === dismissed) return null;
-  const served = build.served!;
+  const offer = reloadOffer(build, dismissed);
+  if (!offer) return null;
   return {
-    loaded: build.loaded!,
-    served,
-    onDismiss: () => setDismissed(served),
+    offer,
+    onDismiss: () => {
+      if (offer.kind === "chunk") dismissReloadRequest();
+      setDismissed(build.served);
+    },
   };
 }
 
-/** Offers a reload when the server serves a newer build than this tab runs. */
+/** Offers, never takes, a reload when this tab's build is out of date. */
 export function StaleBuildToast({
-  loaded,
-  served,
+  offer,
   onDismiss,
 }: {
-  loaded: string;
-  served: string;
+  offer: ReloadOffer;
   onDismiss: () => void;
 }) {
   return (
@@ -41,15 +43,29 @@ export function StaleBuildToast({
       className="toast toast-info"
       role="status"
       onDismiss={onDismiss}
-      notificationKey={served}
+      notificationKey={offer.kind === "build" ? offer.served : "chunk"}
     >
       <ToastMark kind="info" />
       <div className="toast-content">
-        <strong>A newer Herdr World build is available</strong>
-        <p>
-          This tab runs {loaded}; the server now serves {served}. Reload when
-          convenient. Herdr sessions keep running.
-        </p>
+        {offer.kind === "build" ? (
+          <>
+            <strong>
+              The service now serves a different Herdr World build
+            </strong>
+            <p>
+              This tab runs {offer.loaded}; the service serves {offer.served}.
+              Herdr sessions keep running.
+            </p>
+          </>
+        ) : (
+          <>
+            <strong>Reload to finish loading Herdr World</strong>
+            <p>
+              Part of the app could not load, usually after a service upgrade.
+              Herdr sessions keep running.
+            </p>
+          </>
+        )}
         <div className="toast-actions">
           <button
             type="button"
@@ -65,7 +81,7 @@ export function StaleBuildToast({
       </div>
       <CloseButton
         variant="toast"
-        label="Dismiss newer build notification"
+        label="Dismiss reload notification"
         onClick={onDismiss}
       />
     </Toast>

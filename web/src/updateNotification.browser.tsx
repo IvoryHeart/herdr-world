@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import App from "./App";
 import { bridge, type ConnectionClient } from "./api";
+import { importWithReload } from "./lazyWithReload";
 import { __storeTesting, store } from "./store";
 import "./styles/tokens.css";
 import "./styles/base.css";
@@ -33,7 +34,9 @@ let installFails = true;
 let installs = 0;
 let canAutoUpdate = true;
 let servedEntry: string | null = null;
+let buildChecks = 0;
 window.fetch = (async (url: string, init?: RequestInit) => {
+  if (url.startsWith("/index.html?")) buildChecks++;
   if (servedEntry && url.startsWith("/index.html?"))
     return new Response(
       `<script type="module" crossorigin src="${servedEntry}"></script>`,
@@ -298,28 +301,55 @@ async function run() {
   await until(() => !document.querySelector(".menu-update-dot"));
   check(!upgrade(), "Current installation still offers upgrade");
 
-  // A newer served build is offered, never loaded by itself.
-  const staleToast = () =>
+  // A different served build is offered, never loaded by itself.
+  let unloads = 0;
+  addEventListener("beforeunload", () => unloads++);
+  const toastTitled = (title: string) => () =>
     [...document.querySelectorAll<HTMLElement>(".toast")].find((toast) =>
-      toast.textContent?.includes("A newer Herdr World build is available"),
+      toast.querySelector("strong")?.textContent?.includes(title),
     );
-  check(!staleToast(), "Unchanged build offered a reload");
+  const differentBuild = toastTitled(
+    "The service now serves a different Herdr World build",
+  );
+  const chunkReload = toastTitled("Reload to finish loading Herdr World");
+  const later = (toast: HTMLElement) =>
+    [...toast.querySelectorAll("button")]
+      .find((button) => button.textContent === "Later")
+      ?.click();
+  const setStatus = (status: "connected" | "disconnected") =>
+    __storeTesting.replaceState({ ...store.get(), status });
+  // Waits for the build check a trigger starts to fetch and settle.
+  const checkAfter = async (trigger: () => void) => {
+    const before = buildChecks;
+    trigger();
+    await until(() => buildChecks > before);
+    for (let i = 0; i < 3; i++) await frame();
+  };
+  check(!differentBuild(), "Unchanged build offered a reload");
   servedEntry = "/assets/index-next.js";
-  dispatchEvent(new Event("online"));
-  await until(staleToast);
-  check(
-    staleToast()!.textContent?.includes("index-next"),
-    "Newer build notice does not name the served build",
-  );
-  const later = [...staleToast()!.querySelectorAll("button")].find(
-    (button) => button.textContent === "Later",
-  );
-  check(later, "Newer build notice has no Later action");
-  later?.click();
-  await until(() => !staleToast());
-  dispatchEvent(new Event("online"));
+  // A restarted service drops the socket; reconnecting asks again.
+  setStatus("disconnected");
   await frame();
-  check(!staleToast(), "Dismissed build was offered again");
+  await checkAfter(() => setStatus("connected"));
+  await until(differentBuild);
+  check(
+    differentBuild()!.textContent?.includes("index-next"),
+    "Different build notice does not name the served build",
+  );
+  later(differentBuild()!);
+  await until(() => !differentBuild());
+  await checkAfter(() => dispatchEvent(new Event("online")));
+  check(!differentBuild(), "Dismissed build was offered again");
+
+  // A lazy chunk missing after Later is offered too, not reloaded.
+  void importWithReload(`update-fixture-missing-${Date.now()}`, () =>
+    Promise.reject(new Error("chunk 404")),
+  );
+  await until(chunkReload);
+  check(!differentBuild(), "Missing chunk revived the dismissed build notice");
+  later(chunkReload()!);
+  await until(() => !chunkReload());
+  check(unloads === 0, "World reloaded the page by itself");
 }
 const childVersion = new URL(location.href).searchParams.get("claim");
 if (childVersion) {

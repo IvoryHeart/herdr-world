@@ -4,10 +4,13 @@ import {
   buildFingerprint,
   checkServedBuild,
   currentBuildFreshness,
+  dismissReloadRequest,
   entryScriptSrc,
   fetchServedBuildFingerprint,
   isStaleBuild,
   loadedBuildFingerprint,
+  reloadOffer,
+  requestReload,
   subscribeBuildFreshness,
 } from "./buildFreshness";
 
@@ -24,12 +27,17 @@ const htmlResponse = (body: string, init: ResponseInit = {}) =>
     ...init,
   });
 
-const documentWithEntry = (src: string | null) => ({
-  querySelector: (selector: string) =>
-    selector === 'script[type="module"][src]' && src
-      ? { getAttribute: (name: string) => (name === "src" ? src : null) }
-      : null,
+const documentWithEntry = (...sources: string[]) => ({
+  querySelectorAll: (selector: string) =>
+    (selector === 'script[type="module"][src]' ? sources : []).map((src) => ({
+      getAttribute: (name: string) => (name === "src" ? src : null),
+    })),
 });
+
+const devHtml = `<!doctype html><html><head>
+<script type="module" src="/@vite/client"></script>
+<script type="module">import RefreshRuntime from "/@react-refresh"</script>
+</head><body><script type="module" src="/src/main.tsx"></script></body></html>`;
 
 afterEach(() => {
   __resetBuildFreshnessForTests();
@@ -57,11 +65,18 @@ test("the entry is the first module script with a src", () => {
   expect(entryScriptSrc("<p>Sign in</p>")).toBeNull();
 });
 
+test("the Vite dev client is not the entry on either side", () => {
+  expect(entryScriptSrc(devHtml)).toBe("/src/main.tsx");
+  expect(
+    loadedBuildFingerprint(documentWithEntry("/@vite/client", "/src/main.tsx")),
+  ).toBe("main");
+});
+
 test("the loaded build comes from the tab's own entry script", () => {
   expect(loadedBuildFingerprint(documentWithEntry("/assets/index-A1.js"))).toBe(
     "index-A1",
   );
-  expect(loadedBuildFingerprint(documentWithEntry(null))).toBeNull();
+  expect(loadedBuildFingerprint(documentWithEntry())).toBeNull();
   expect(loadedBuildFingerprint(undefined)).toBeNull();
 });
 
@@ -100,11 +115,60 @@ test("a failed, redirected or unreachable entry is not a build", async () => {
   ).toBeNull();
 });
 
+test("a stalled check times out and the next one still reports a new build", async () => {
+  const stalled = (_url: string, init?: RequestInit) =>
+    new Promise<Response>((_resolve, reject) =>
+      init?.signal?.addEventListener("abort", () =>
+        reject(new DOMException("aborted", "AbortError")),
+      ),
+    );
+  let aborted = false;
+  const watched = (url: string, init?: RequestInit) => {
+    init?.signal?.addEventListener("abort", () => (aborted = true));
+    return stalled(url, init);
+  };
+  await checkServedBuild(watched as unknown as typeof fetch, 5);
+  expect(aborted).toBe(true);
+  expect(currentBuildFreshness().served).toBeNull();
+
+  // A fetch that ignores its signal is bounded by the deadline too.
+  const deaf = () => new Promise<Response>(() => {});
+  await checkServedBuild(deaf as unknown as typeof fetch, 5);
+
+  const recovered = async () => htmlResponse(servedHtml("index-B1"));
+  await checkServedBuild(recovered as unknown as typeof fetch, 5);
+  expect(currentBuildFreshness().served).toBe("index-B1");
+});
+
+test("a failed chunk is always offered; a different build until put off", () => {
+  const build = { loaded: "index-A1", served: "index-B1", reloadNeeded: false };
+  expect(reloadOffer(build, null)).toEqual({
+    kind: "build",
+    loaded: "index-A1",
+    served: "index-B1",
+  });
+  expect(reloadOffer(build, "index-B1")).toBeNull();
+  expect(reloadOffer({ ...build, served: "index-A1" }, null)).toBeNull();
+  // Later on a build does not hide a chunk that later fails to load.
+  expect(reloadOffer({ ...build, reloadNeeded: true }, "index-B1")).toEqual({
+    kind: "chunk",
+  });
+  requestReload();
+  expect(currentBuildFreshness().reloadNeeded).toBe(true);
+  dismissReloadRequest();
+  expect(currentBuildFreshness().reloadNeeded).toBe(false);
+});
+
 test("only two known, different builds are stale", () => {
-  expect(isStaleBuild({ loaded: "index-A1", served: "index-B1" })).toBe(true);
-  expect(isStaleBuild({ loaded: "index-A1", served: "index-A1" })).toBe(false);
-  expect(isStaleBuild({ loaded: "index-A1", served: null })).toBe(false);
-  expect(isStaleBuild({ loaded: null, served: "index-B1" })).toBe(false);
+  const build = (loaded: string | null, served: string | null) => ({
+    loaded,
+    served,
+    reloadNeeded: false,
+  });
+  expect(isStaleBuild(build("index-A1", "index-B1"))).toBe(true);
+  expect(isStaleBuild(build("index-A1", "index-A1"))).toBe(false);
+  expect(isStaleBuild(build("index-A1", null))).toBe(false);
+  expect(isStaleBuild(build(null, "index-B1"))).toBe(false);
 });
 
 test("checks report a newer served build and keep it through a failed check", async () => {
@@ -135,6 +199,7 @@ test("checks report a newer served build and keep it through a failed check", as
   expect(currentBuildFreshness()).toEqual({
     loaded: "index-A1",
     served: "index-A1",
+    reloadNeeded: false,
   });
   const sameBuildChanges = changes;
   await checkServedBuild(serve("index-B1") as unknown as typeof fetch);
