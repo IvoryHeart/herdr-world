@@ -58,6 +58,21 @@ const SOURCE_EXTENSIONS = new Set([
 ]);
 const DOCUMENT_BASENAME =
   /^(?:readme|changelog|contributing|license|notice|security|features|agents)\.(?:md|markdown|mdx|txt|rst)$/i;
+const EXECUTABLE_DIRECTORY =
+  /(?:^|[/\\])\.bin[/\\]|(?:^|[/\\])\.?venv[/\\](?:bin|scripts)[/\\]|^\/(?:usr\/(?:local\/)?)?s?bin\//i;
+
+type ReferenceRange = { start: number; end: number };
+
+const normalizeReferenceToken = (value: string) => value.replace(/[.,;]+$/, "");
+
+function isQualifiedReference(value: string) {
+  const parsed = parseSourceFileLink(value);
+  return Boolean(
+    parsed &&
+      /[/\\]/.test(parsed.path) &&
+      (parsed.line !== undefined || FILE_EXTENSION.test(parsed.path)),
+  );
+}
 
 /** Bare dotted words need both a known file type and a filename context. */
 function isBareReference(value: string, inCode: boolean) {
@@ -84,25 +99,48 @@ function isWholeCodeReference(text: string) {
           FILE_EXTENSION.test(parsed.path)
       : isBareReference(text, true);
   }
-  const tokens = text.trim().split(/\s+/);
+  const tokens = text.trim().split(/\s+/).map(normalizeReferenceToken);
   const first = tokens[0]!;
   const firstPath = parseSourceFileLink(first);
-  const anotherPath = tokens.slice(1).some((token) => {
-    const next = parseSourceFileLink(token);
-    return next && /[/\\]/.test(next.path) && FILE_EXTENSION.test(next.path);
-  });
-  // A location or a second qualified reference identifies a list. Otherwise
-  // a qualified prefix can introduce a filename containing spaces and dots.
-  // Commands start with a word rather than that path prefix.
+  const anotherPath = tokens.slice(1).some(isQualifiedReference);
+  const anotherBasename = tokens
+    .slice(1)
+    .some((token) => isBareReference(token, true));
+  // Locations and complete reference pairs identify lists. Executable
+  // directories also identify commands whose first token is itself a path.
+  // An incomplete qualified prefix can still introduce a spaced filename.
   return Boolean(
     firstPath &&
       /[/\\]/.test(firstPath.path) &&
       firstPath.line === undefined &&
       !(FILE_EXTENSION.test(firstPath.path) && anotherPath) &&
+      !(isBareReference(first, true) && anotherBasename) &&
+      !EXECUTABLE_DIRECTORY.test(firstPath.path) &&
       !/(?:^|\s)--?[a-z0-9]/i.test(text) &&
       (/^(?:\/|[a-z]:[\\/])/i.test(parsed.path) ||
         FILE_EXTENSION.test(parsed.path)),
   );
+}
+
+/** Split only groups whose pieces are complete references, preserving literal
+ * commas inside a single path such as `src/my, file.ts`. */
+function punctuatedReferenceRanges(text: string): ReferenceRange[] | null {
+  const pieces = [...text.matchAll(/[^,;]+/g)];
+  if (pieces.length < 2) return null;
+  const ranges: ReferenceRange[] = [];
+  for (const piece of pieces) {
+    const value = piece[0].trim();
+    const parsed = parseSourceFileLink(value);
+    if (
+      !parsed ||
+      !isWholeCodeReference(value) ||
+      !(parsed.line !== undefined || FILE_EXTENSION.test(parsed.path))
+    )
+      return null;
+    const start = piece.index + piece[0].indexOf(value);
+    ranges.push({ start, end: start + value.length });
+  }
+  return ranges;
 }
 
 /** Run after Markdown sanitization, only inside an Inspector's Chat. */
@@ -113,6 +151,24 @@ export function decorateSourceFileLinks(root: HTMLElement) {
     anchor.removeAttribute("target");
     anchor.removeAttribute("rel");
   };
+  const referenceFragment = (
+    text: string,
+    ranges: readonly ReferenceRange[],
+  ) => {
+    const fragment = root.ownerDocument.createDocumentFragment();
+    let from = 0;
+    for (const range of ranges) {
+      fragment.append(text.slice(from, range.start));
+      const href = text.slice(range.start, range.end);
+      const anchor = root.ownerDocument.createElement("a");
+      anchor.textContent = href;
+      mark(anchor, href);
+      fragment.append(anchor);
+      from = range.end;
+    }
+    fragment.append(text.slice(from));
+    return fragment;
+  };
   for (const anchor of root.querySelectorAll<HTMLAnchorElement>("a[href]")) {
     const href = anchor.getAttribute("href")!;
     if (parseSourceFileLink(href) !== undefined) mark(anchor, href);
@@ -122,11 +178,11 @@ export function decorateSourceFileLinks(root: HTMLElement) {
   for (const code of root.querySelectorAll<HTMLElement>("code")) {
     if (code.closest("pre, a")) continue;
     const text = code.textContent ?? "";
-    if (!isWholeCodeReference(text)) continue;
-    const anchor = root.ownerDocument.createElement("a");
-    anchor.textContent = text;
-    mark(anchor, text);
-    code.replaceChildren(anchor);
+    const ranges =
+      punctuatedReferenceRanges(text) ??
+      (isWholeCodeReference(text) ? [{ start: 0, end: text.length }] : null);
+    if (!ranges) continue;
+    code.replaceChildren(referenceFragment(text, ranges));
   }
   const walker = root.ownerDocument.createTreeWalker(
     root,
@@ -151,7 +207,18 @@ export function decorateSourceFileLinks(root: HTMLElement) {
               text.slice(item.end),
             )?.[0] ?? ""
           ).length,
-      }));
+      }))
+      .flatMap((range) => {
+        const parts = punctuatedReferenceRanges(
+          text.slice(range.start, range.end),
+        );
+        return parts
+          ? parts.map((part) => ({
+              start: range.start + part.start,
+              end: range.start + part.end,
+            }))
+          : [range];
+      });
     for (const match of text.matchAll(BASENAME_REFERENCE)) {
       const value = match[0].replace(/\.+$/, "");
       const start = match.index,
@@ -167,19 +234,6 @@ export function decorateSourceFileLinks(root: HTMLElement) {
     }
     if (!candidates.length) continue;
     candidates.sort((left, right) => left.start - right.start);
-    const fragment = root.ownerDocument.createDocumentFragment();
-    let from = 0;
-    for (const candidate of candidates) {
-      const end = candidate.end;
-      const href = text.slice(candidate.start, end);
-      fragment.append(text.slice(from, candidate.start));
-      const anchor = root.ownerDocument.createElement("a");
-      anchor.textContent = href;
-      mark(anchor, href);
-      fragment.append(anchor);
-      from = end;
-    }
-    fragment.append(text.slice(from));
-    node.replaceWith(fragment);
+    node.replaceWith(referenceFragment(text, candidates));
   }
 }

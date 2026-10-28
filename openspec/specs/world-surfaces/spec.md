@@ -342,6 +342,14 @@ choose-worktree state, without browser navigation to a local-path URL.
 - **THEN** the successful read still reveals its requested line, genuine binding
   replacements continue to retire old work, and notices follow their binding
 
+#### Scenario: Code lists and executable-led commands preserve source items
+
+- **WHEN** inline code contains comma/semicolon-separated references, mixed
+  qualified paths and basenames, or a command led by an executable-directory path
+- **THEN** each source item retains its own file link and line location, including
+  lists without spaces after commas; a single qualified filename containing
+  spaces or a literal comma remains whole when it is unambiguous
+
 ### Requirement: Exact visual terminal input focus
 
 In Town and Board, activating an Inspector window whose selected resource is Terminal

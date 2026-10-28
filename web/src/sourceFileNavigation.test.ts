@@ -152,7 +152,7 @@ test("Chat source links navigate through the admitted Inspector binding", async 
             h(Probe, { key: "probe" }),
             h(MarkdownPreview, {
               key: "markdown",
-              text: "[source](/project/demo/src/main.ts:12) [relative](src/other.ts#L2) [outside](/project/other/main.ts:8) [web](https://example.test/guide) [bare](main.ts:9) [drive](C:/project/demo/main.ts:9) [unsafe](javascript:alert(1)) [remote](file://other.example.test/project/demo/main.ts)\n\n`/project/demo/src/inline.ts:3`\n\n/project/demo/src/plain.ts:4\n\n`main.ts:12` and README.md, root.ts:9 and `/project/demo/src/a b.ts:12`. [escaped](src/C%23.ts#L12). [custom](schema.custom#L4). HTTP/1.1 and 3.12/3.13 stay prose. e.g. i.e. example.com Node.js Next.js v2.x stay prose too. `process.env` and `client.generation`.\n\n`bun test web/src/sourceFileLinks.test.ts`\n\n`bun run test web/src/foo.test.ts`\n\n`rg -n foo web/src/a.ts`\n\n`src/a.ts:12 src/b.ts:24`\n\n`web/src/my file.ts:3`\n\n`web/src/my.test file.ts:3`\n\n`./my file.ts:3`\n\n`src/a.ts src/b.ts`\n\n```\n/project/demo/do-not-link.ts:5\n```",
+              text: "[source](/project/demo/src/main.ts:12) [relative](src/other.ts#L2) [outside](/project/other/main.ts:8) [web](https://example.test/guide) [bare](main.ts:9) [drive](C:/project/demo/main.ts:9) [unsafe](javascript:alert(1)) [remote](file://other.example.test/project/demo/main.ts)\n\n`/project/demo/src/inline.ts:3`\n\n/project/demo/src/plain.ts:4\n\n`main.ts:12` and README.md, root.ts:9 and `/project/demo/src/a b.ts:12`. [escaped](src/C%23.ts#L12). [custom](schema.custom#L4). HTTP/1.1 and 3.12/3.13 stay prose. e.g. i.e. example.com Node.js Next.js v2.x stay prose too. `process.env` and `client.generation`.\n\n`bun test web/src/sourceFileLinks.test.ts`\n\n`bun run test web/src/foo.test.ts`\n\n`rg -n foo web/src/a.ts`\n\n`src/a.ts:12 src/b.ts:24`\n\n`web/src/my file.ts:3`\n\n`web/src/my.test file.ts:3`\n\n`./my file.ts:3`\n\n`src/a.ts src/b.ts`\n\n`src/a.ts:12, src/b.ts:24`\n\n`src/a.ts main.ts:24`\n\n`web/src/a.ts, web/src/b.ts`\n\n`web/src/a.ts:3, web/src/b.ts:9`\n\n`src/a.ts:12,src/b.ts:24`\n\n`src/a.ts,src/b.ts`\n\n`src/a.ts:12; src/b.ts:24`\n\n`src/a.ts and main.ts:24`\n\n`./node_modules/.bin/tsc main.ts`\n\n`./.venv/bin/python main.py`\n\n`/usr/bin/tsc main.ts`\n\n`./scripts/check.sh main.ts`\n\n[src comma](<src/my, file.ts:3>)\n\n`src/my file.ts:3, src/b.ts:9`\n\n`bun test src/a.ts:12,src/b.ts:24`\n\n`src/my, file.ts:3`\n\n`/project/demo/src/a,b.ts:3`\n\n[ambiguous comma](<src/my.ts, file.ts:3>)\n\n```\n/project/demo/do-not-link.ts:5\n```",
             }),
           ],
         }),
@@ -260,6 +260,148 @@ test("Chat source links navigate through the admitted Inspector binding", async 
         ),
       ).toBe(false);
     }
+    const listAndCommandCases = [
+      {
+        input: "src/a.ts:12, src/b.ts:24",
+        targets: [
+          ["src/a.ts:12", "src/a.ts", 12],
+          ["src/b.ts:24", "src/b.ts", 24],
+        ],
+      },
+      {
+        input: "src/a.ts main.ts:24",
+        targets: [
+          ["src/a.ts", "src/a.ts", null],
+          ["main.ts:24", "main.ts", 24],
+        ],
+      },
+      {
+        input: "web/src/a.ts, web/src/b.ts",
+        targets: [
+          ["web/src/a.ts", "web/src/a.ts", null],
+          ["web/src/b.ts", "web/src/b.ts", null],
+        ],
+      },
+      {
+        input: "web/src/a.ts:3, web/src/b.ts:9",
+        targets: [
+          ["web/src/a.ts:3", "web/src/a.ts", 3],
+          ["web/src/b.ts:9", "web/src/b.ts", 9],
+        ],
+      },
+      {
+        input: "src/a.ts:12,src/b.ts:24",
+        targets: [
+          ["src/a.ts:12", "src/a.ts", 12],
+          ["src/b.ts:24", "src/b.ts", 24],
+        ],
+      },
+      {
+        input: "src/a.ts,src/b.ts",
+        targets: [
+          ["src/a.ts", "src/a.ts", null],
+          ["src/b.ts", "src/b.ts", null],
+        ],
+      },
+      {
+        input: "src/a.ts:12; src/b.ts:24",
+        targets: [
+          ["src/a.ts:12", "src/a.ts", 12],
+          ["src/b.ts:24", "src/b.ts", 24],
+        ],
+      },
+      {
+        input: "src/a.ts and main.ts:24",
+        targets: [
+          ["src/a.ts", "src/a.ts", null],
+          ["main.ts:24", "main.ts", 24],
+        ],
+      },
+      {
+        input: "./node_modules/.bin/tsc main.ts",
+        targets: [["main.ts", "main.ts", null]],
+        command: true,
+      },
+      {
+        input: "./.venv/bin/python main.py",
+        targets: [["main.py", "main.py", null]],
+        command: true,
+      },
+      {
+        input: "/usr/bin/tsc main.ts",
+        targets: [["main.ts", "main.ts", null]],
+        command: true,
+      },
+      {
+        input: "./scripts/check.sh main.ts",
+        targets: [
+          ["./scripts/check.sh", "scripts/check.sh", null],
+          ["main.ts", "main.ts", null],
+        ],
+        command: true,
+      },
+      {
+        input: "src/my file.ts:3, src/b.ts:9",
+        targets: [
+          ["src/my file.ts:3", "src/my file.ts", 3],
+          ["src/b.ts:9", "src/b.ts", 9],
+        ],
+      },
+      {
+        input: "bun test src/a.ts:12,src/b.ts:24",
+        targets: [
+          ["src/a.ts:12", "src/a.ts", 12],
+          ["src/b.ts:24", "src/b.ts", 24],
+        ],
+        command: true,
+      },
+    ] as const;
+    for (const scenario of listAndCommandCases) {
+      const code = [...node.querySelectorAll("code")].find(
+        (item) => item.textContent === scenario.input,
+      );
+      expect(code).toBeDefined();
+      const links = [
+        ...code!.querySelectorAll<HTMLAnchorElement>("a[data-source-file]"),
+      ];
+      expect(
+        links.some(
+          (anchor) =>
+            anchor.getAttribute("data-source-file") === scenario.input,
+        ),
+      ).toBe(false);
+      if (!("command" in scenario))
+        expect(links.length).toBe(scenario.targets.length);
+      for (const [label, path, line] of scenario.targets) {
+        const anchor = links.find((item) => item.textContent === label);
+        expect(anchor).toBeDefined();
+        const event = new MouseEvent("click", {
+          bubbles: true,
+          cancelable: true,
+        });
+        await act(async () => {
+          anchor!.dispatchEvent(event);
+        });
+        expect(event.defaultPrevented).toBe(true);
+        expect(selection).toMatchObject({
+          entry: { path },
+          line: line ?? undefined,
+        });
+      }
+    }
+    for (const [label, path] of [
+      ["src/my, file.ts:3", "src/my, file.ts"],
+      ["/project/demo/src/a,b.ts:3", "src/a,b.ts"],
+      ["ambiguous comma", "src/my.ts, file.ts"],
+    ] as const) {
+      await click(label);
+      expect(selection).toMatchObject({ entry: { path }, line: 3 });
+    }
+    await click("src comma");
+    expect(selection).toMatchObject({
+      entry: { path: "src/my, file.ts" },
+      line: 3,
+    });
     for (const label of ["unsafe", "remote"]) {
       expect(
         [...node.querySelectorAll("a")]

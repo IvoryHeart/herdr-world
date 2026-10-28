@@ -144,7 +144,10 @@ that root; stat metadata cannot redirect the read to a different transcript.
   source/document formats: inline code or a line number supplies the file hint;
   standard document names such as README.md also link in prose. A command such
   as `bun test web/src/example.test.ts` links its source path, and a list of
-  source references keeps separate links and line targets. For a root filename
+  source references keeps separate links and line targets, including comma- or
+  semicolon-separated items and mixed paths/basenames. An executable-led command
+  such as `./node_modules/.bin/tsc main.ts` links its source argument separately.
+  For a root filename
   with spaces, use a path prefix such as `./my file.ts:12`. Dotted prose such
   as Node.js and code identifiers such as `process.env` stay text. Use an explicit
   Markdown file link for ambiguous filenames or unrecognized formats.
