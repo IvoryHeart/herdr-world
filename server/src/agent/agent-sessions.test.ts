@@ -491,25 +491,110 @@ describe("agent_turn.get session fence", () => {
   });
   const fingerprint = (value: string) =>
     taskSummarySessionFingerprint(session(value));
+  const piSession = (value: string) => ({
+    source: "herdr:pi",
+    agent: "pi",
+    kind: "path" as const,
+    value,
+  });
 
-  test("returns no receipt when the pane now runs another session", async () => {
+  test("uses the resolved session as the first fence without an extra pane read", async () => {
     const calls: string[] = [];
+    const files = remotePiFiles("synthetic session content");
+    let reads = 0;
+    files.readText = async () => {
+      reads++;
+      return "synthetic session content";
+    };
     const handlers = createAgentSessionHandlers({
       herdrCall: async (method) => {
         calls.push(method);
-        if (method === "pane.get")
-          return { pane: { pane_id: "p1", agent_session: session("B") } };
+        if (method === "agent.get")
+          return {
+            agent: {
+              agent: "pi",
+              agent_session: piSession(remotePiSessionPath),
+            },
+          };
         throw new Error(`unexpected ${method}`);
       },
-      files: {} as AgentSessionFileAccess,
+      files,
     });
     const result = (await handlers.readTurn({
       pane_id: "p1",
-      agent: "codex",
+      agent: "pi",
       agent_session_fingerprint: fingerprint("A"),
     })) as { turn: unknown; session_changed?: boolean };
     expect(result.turn).toBeNull();
     expect(result.session_changed).toBe(true);
-    expect(calls).toEqual(["pane.get"]);
+    expect(calls).toEqual(["agent.get"]);
+    expect(reads).toBe(0);
+  });
+
+  test("keeps the post-read pane fence for replacement during transcript loading", async () => {
+    const calls: string[] = [];
+    const text = [
+      JSON.stringify({
+        type: "session",
+        version: 3,
+        id: "A",
+        cwd: "/tmp/project",
+      }),
+      JSON.stringify({
+        type: "message",
+        id: "user",
+        message: { role: "user", content: [{ type: "text", text: "Go" }] },
+      }),
+      JSON.stringify({
+        type: "message",
+        id: "assistant",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "Done" }],
+        },
+      }),
+    ].join("\n");
+    const files = remotePiFiles(text);
+    const originalRead = files.readText;
+    let replaced = false;
+    files.readText = async (path) => {
+      replaced = true;
+      const value = await originalRead(path);
+      return value;
+    };
+    const handlers = createAgentSessionHandlers({
+      herdrCall: async (method) => {
+        calls.push(method);
+        if (method === "agent.get")
+          return {
+            agent: {
+              agent: "pi",
+              agent_session: piSession(remotePiSessionPath),
+            },
+          };
+        if (method === "pane.get")
+          return {
+            pane: {
+              pane_id: "p1",
+              agent_session: piSession(
+                replaced ? "/replacement" : remotePiSessionPath,
+              ),
+            },
+          };
+        throw new Error(`unexpected ${method}`);
+      },
+      files,
+    });
+    const result = (await handlers.readTurn({
+      pane_id: "p1",
+      agent: "pi",
+      agent_session_fingerprint: taskSummarySessionFingerprint(
+        piSession(remotePiSessionPath),
+      ),
+    })) as { turn: unknown; session_changed?: boolean };
+    expect(result.turn).toBeNull();
+    expect(result.session_changed).toBe(true);
+    expect(replaced).toBe(true);
+    expect(calls).toEqual(["agent.get", "pane.get"]);
   });
 });

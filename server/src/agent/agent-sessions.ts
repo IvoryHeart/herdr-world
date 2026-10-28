@@ -190,13 +190,18 @@ export function createAgentSessionHandlers(args: {
         session_changed: true,
         agent_session_fingerprint: expected,
       };
-      if (!(await sessionIsCurrent())) return changed;
       const resolved = await resolveAgentSession(
         params,
         args.herdrCall,
         args.files,
         resolverContext,
       );
+      if (
+        expected !== null &&
+        (!resolved.session ||
+          taskSummarySessionFingerprint(resolved.session) !== expected)
+      )
+        return changed;
       if (!resolved.file) {
         cache.invalidate(resolved);
         return { ...resolved, turn: null, agent_session_fingerprint: expected };
