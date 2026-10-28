@@ -4,6 +4,7 @@ import type { ConnectionClient } from "../api";
 import "../styles/tokens.css";
 import "../styles/base.css";
 import { terminalFocusBlockedByOverlay } from "../terminalFocus";
+import { handoffId } from "./handoffs";
 import { DeskBoard } from "./DeskView";
 import { WorldDeskStore } from "./deskStateStore";
 import { deskKey, type DeskRecord } from "../../../shared/deskState";
@@ -111,6 +112,7 @@ const client = {
 let revision = 0;
 const deskRecords = new Map<string, DeskRecord>();
 const deskControls = new Set<(control: BridgeControlMsg) => void>();
+let reviewReply: Promise<void> | undefined;
 const deskService = {
   async call(method: string, params?: Record<string, unknown>) {
     if (method !== "world.desk.get") {
@@ -132,6 +134,7 @@ const deskService = {
       for (const callback of deskControls)
         callback({ type: "world_desk_changed", revision });
     }
+    if (method === "world.desk.review") await reviewReply;
     return {
       revision,
       records: [...deskRecords.values()].map((record) => ({ ...record })),
@@ -180,6 +183,9 @@ async function run() {
     "all finished agents are in To review",
   );
 
+  // Admit the external-store render before mark() resumes, as a revision
+  // notification can publish before the mutation reply's continuation.
+  const stopFlush = deskStore.subscribe(() => flushSync(() => {}));
   // Tab to beta's button, then E: the agent that has focus is marked.
   const betaOpen =
     card("beta")?.querySelector<HTMLButtonElement>("button.is-primary");
@@ -188,6 +194,10 @@ async function run() {
   press(betaOpen!, "e");
   await settle(200);
   check(!card("beta"), "E marked the focused card (beta) reviewed");
+  check(
+    card("gamma")?.contains(document.activeElement) === true,
+    "E moves DOM focus to the next card, gamma, after the async shared mark",
+  );
   check(!!card("alpha") && !!card("gamma"), "E left the other cards alone");
 
   // Marking offers Undo, and the stop stays reachable under Reviewed.
@@ -207,12 +217,54 @@ async function run() {
   undo?.click();
   await settle(150);
   check(!!card("beta"), "Undo returns the stop to To review");
-  const betaAgain =
-    card("beta")?.querySelector<HTMLButtonElement>("button.is-primary");
-  betaAgain?.focus();
+  const betaMark = [
+    ...card("beta")!.querySelectorAll<HTMLButtonElement>("button"),
+  ].find((button) => button.textContent?.startsWith("Mark reviewed"))!;
+  betaMark.focus();
   await settle();
-  press(betaAgain!, "e");
+  betaMark.click();
   await settle(200);
+  check(
+    card("gamma")?.contains(document.activeElement) === true,
+    "Mark reviewed moves DOM focus to the next card after publication removes its focused button",
+  );
+  stopFlush();
+
+  // A slow save must not reclaim focus after the user leaves the Desk.
+  const heldReply = Promise.withResolvers<void>();
+  reviewReply = heldReply.promise;
+  const alphaMark = [
+    ...card("alpha")!.querySelectorAll<HTMLButtonElement>("button"),
+  ].find((button) => button.textContent?.startsWith("Mark reviewed"))!;
+  alphaMark.focus();
+  alphaMark.click();
+  await settle(100);
+  const elsewhere = document.createElement("button");
+  elsewhere.textContent = "Outside Desk";
+  document.body.append(elsewhere);
+  elsewhere.focus();
+  reviewReply = undefined;
+  heldReply.resolve();
+  await settle(150);
+  check(
+    document.activeElement === elsewhere,
+    "a late review save preserves newer focus outside the Desk",
+  );
+  await deskStore.mutate(
+    "world.desk.review",
+    {
+      connection_id: "local",
+      connection_generation: 1,
+      terminal_id: "alpha",
+      agent_session_fingerprint: "a".repeat(64),
+    },
+    {
+      stop_id: JSON.parse(handoffId(leaves[0]!, undefined))[1],
+      reviewed: false,
+    },
+  );
+  elsewhere.remove();
+  await settle(100);
 
   // A second browser sees the same service, without sharing browser storage.
   const secondBrowser = new WorldDeskStore(deskService);
@@ -225,7 +277,7 @@ async function run() {
     agent_session_fingerprint: "a".repeat(64),
   };
   await secondBrowser.mutate("world.desk.review", alphaIdentity, {
-    stop_id: "alpha-turn",
+    stop_id: JSON.parse(handoffId(leaves[0]!, undefined))[1],
     reviewed: true,
   });
   await settle(150);
@@ -234,7 +286,7 @@ async function run() {
     "a mark from another browser removes the same stop from To review",
   );
   await secondBrowser.mutate("world.desk.review", alphaIdentity, {
-    stop_id: "alpha-turn",
+    stop_id: JSON.parse(handoffId(leaves[0]!, undefined))[1],
     reviewed: false,
   });
   await settle(150);

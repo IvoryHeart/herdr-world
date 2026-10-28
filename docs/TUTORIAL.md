@@ -626,7 +626,9 @@ latest marked stop while it remains idle or done; older stops are not retained.
 Desk marks, observed stop times and recent opens live in bounded service memory.
 They survive browser reloads and changes to the Hosts filter, but clear when the
 World service restarts. A replacement runtime or agent session starts fresh.
-Existing browser-local Desk marks are not imported.
+Existing browser-local Desk marks are not imported. A mark stays shared even
+when another browser has not read that agent's receipt; later observed stops or
+native activity return the agent to review.
 
 On wide screens, selecting a Desk card opens a reading pane on the right and
 folds the lanes into one queue. Use **J** / **K** to preview neighboring agents,
@@ -901,8 +903,8 @@ as reliable alerts.
 
 ### 3.3 Multiple browsers are not separate permission roles
 
-Browsers share Herdr events and visual pane pins; fonts, review marks, drafts,
-workspace pins and shortcuts can remain browser-local.
+Browsers share Herdr events, visual pane pins and Desk review state; fonts,
+drafts, workspace pins and shortcuts can remain browser-local.
 Connection controls can pause your browser or others.
 
 **Profiles are shared; each browser saves its own Hosts filter.** Town, Board, Desk,

@@ -27,11 +27,18 @@ const copyIdentity = (identity: DeskIdentity): DeskIdentity => ({
 /** Browser-independent, process-local state. No transcript text is retained. */
 export class WorldDeskRegistry {
   private revision = 0;
+  private ownershipRevision = 0;
   private records = new Map<string, DeskRecord>();
   private recordByTerminal = new Map<string, string>();
   private previous = new Map<
     string,
-    { identity: DeskIdentity; status: string; at: number; mutation?: boolean }
+    {
+      identity: DeskIdentity;
+      status: string;
+      at: number;
+      mutation?: boolean;
+      session: object;
+    }
   >();
 
   list(): DeskState {
@@ -39,6 +46,16 @@ export class WorldDeskRegistry {
       revision: this.revision,
       records: [...this.records.values()].map((record) => ({ ...record })),
     };
+  }
+
+  /** Fence a native admission against replacement or retirement while it waits. */
+  captureMutation(identity: DeskIdentity) {
+    const key = terminalKey(identity);
+    const session = this.previous.get(key)?.session;
+    const revision = this.ownershipRevision;
+    return () =>
+      this.previous.get(key)?.session === session &&
+      (session !== undefined || this.ownershipRevision === revision);
   }
 
   mark(identity: DeskIdentity, stop: string, reviewed: boolean, now: number) {
@@ -111,6 +128,7 @@ export class WorldDeskRegistry {
       identity: copyIdentity(identity),
       status,
       at,
+      session: same ? previous.session : { revision: ++this.ownershipRevision },
     });
     while (this.previous.size > DESK_OBSERVATION_LIMIT)
       this.previous.delete(this.previous.keys().next().value!);
@@ -179,6 +197,10 @@ export class WorldDeskRegistry {
           : "unknown",
       at,
       mutation: true,
+      session:
+        previous && deskKey(previous.identity) === deskKey(identity)
+          ? previous.session
+          : { revision: ++this.ownershipRevision },
     });
     while (this.previous.size > DESK_OBSERVATION_LIMIT)
       this.previous.delete(this.previous.keys().next().value!);

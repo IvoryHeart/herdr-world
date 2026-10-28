@@ -11,6 +11,7 @@ import {
 import { agentThreadTitle } from "./worldObject";
 import {
   deskClient,
+  handoffId,
   DeskReadQueues,
   fetchFullReport,
   answersSession,
@@ -73,9 +74,7 @@ describe("partitionDesk", () => {
         leaf("unknown", "unknown"),
       ],
       (agent) => ({ receipt: receipts.get(agent.id) ?? null, current: true }),
-      new Set([
-        JSON.stringify([receiptIdentity(leaf("seen", "done")), "turn-seen"]),
-      ]),
+      new Set([handoffId(leaf("seen", "done"), undefined)]),
       NOW,
       new Map([[receiptIdentity(leaf("observed", "idle")), NOW - 60_000]]),
     );

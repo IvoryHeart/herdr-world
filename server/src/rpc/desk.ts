@@ -26,6 +26,7 @@ export async function handleDeskRpc(rpc: BridgeRpcContext): Promise<void> {
         !lease.isCurrent()
       )
         throw new Error("Desk agent is unavailable");
+      const mutationIsCurrent = worldDesk.captureMutation(identity);
       const result = await lease.runtime.herdr.call("pane.list", {}, 5_000);
       const panes = (result as { panes?: unknown })?.panes;
       const matches = Array.isArray(panes)
@@ -33,6 +34,7 @@ export async function handleDeskRpc(rpc: BridgeRpcContext): Promise<void> {
         : [];
       if (
         !lease.isCurrent() ||
+        !mutationIsCurrent() ||
         matches.length !== 1 ||
         !matches[0].agent ||
         deskSessionFingerprint(matches[0].agent_session) !==

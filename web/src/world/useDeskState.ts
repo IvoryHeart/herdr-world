@@ -2,7 +2,11 @@ import { useEffect, useMemo } from "react";
 import { deskKey, type DeskIdentity } from "../../../shared/deskState";
 import { bridge } from "../api";
 import { deskClient, receiptIdentity, type DeskClients } from "./handoffs";
-import { useWorldDeskState, WorldDeskStore } from "./deskStateStore";
+import {
+  useWorldDeskState,
+  WorldDeskStore,
+  type DeskStoreState,
+} from "./deskStateStore";
 import type { WorldLeafObject } from "./worldObject";
 
 export function deskIdentity(leaf: WorldLeafObject): DeskIdentity {
@@ -12,6 +16,31 @@ export function deskIdentity(leaf: WorldLeafObject): DeskIdentity {
     terminal_id: leaf.terminalId,
     agent_session_fingerprint: leaf.agentSessionFingerprint ?? null,
   };
+}
+
+export function deskMetadata(
+  agents: readonly WorldLeafObject[],
+  state: DeskStoreState,
+) {
+  const records = new Map(
+    (state.verified ? state.records : []).map((record) => [
+      deskKey(record),
+      record,
+    ]),
+  );
+  const handled = new Set<string>();
+  const stops = new Map<string, number>();
+  const opens = new Map<string, number>();
+  for (const leaf of agents) {
+    const record = records.get(deskKey(deskIdentity(leaf)));
+    if (!record) continue;
+    const key = receiptIdentity(leaf);
+    if (record.reviewed_stop !== null)
+      handled.add(JSON.stringify([key, record.reviewed_stop]));
+    if (record.stopped_at !== null) stops.set(key, record.stopped_at);
+    if (record.opened_at !== null) opens.set(key, record.opened_at);
+  }
+  return { handled, stops, opens };
 }
 
 export function useDeskState(
@@ -29,25 +58,7 @@ export function useDeskState(
     return () => store.stop();
   }, [store]);
   const { handled, stops, opens } = useMemo(() => {
-    const records = new Map(
-      (state.verified ? state.records : []).map((record) => [
-        deskKey(record),
-        record,
-      ]),
-    );
-    const handled = new Set<string>();
-    const stops = new Map<string, number>();
-    const opens = new Map<string, number>();
-    for (const leaf of agents) {
-      const record = records.get(deskKey(deskIdentity(leaf)));
-      if (!record) continue;
-      const key = receiptIdentity(leaf);
-      if (record.reviewed_stop !== null)
-        handled.add(JSON.stringify([key, record.reviewed_stop]));
-      if (record.stopped_at !== null) stops.set(key, record.stopped_at);
-      if (record.opened_at !== null) opens.set(key, record.opened_at);
-    }
-    return { handled, stops, opens };
+    return deskMetadata(agents, state);
   }, [agents, state]);
   const mark = async (handoffId: string, reviewed: boolean) => {
     const [identity, stop] = JSON.parse(handoffId) as [string, string];

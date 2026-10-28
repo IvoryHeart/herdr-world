@@ -54,8 +54,9 @@ function fixture() {
                   runtime: {
                     herdr: {
                       call: async () => {
+                        const result = { panes: [pane] };
                         await defer?.();
-                        return { panes: [pane] };
+                        return result;
                       },
                     },
                   },
@@ -75,7 +76,7 @@ function fixture() {
     replace: () => {
       pane = { ...pane, agent_session: { ...session, value: "replacement" } };
     },
-    defer: (callback: () => Promise<void>) => {
+    defer: (callback?: () => Promise<void>) => {
       defer = callback;
     },
   };
@@ -141,4 +142,106 @@ test("a runtime retired during admission cannot save a late mark", async () => {
   await pending;
   expect(f.errors).toHaveLength(1);
   expect(f.desk.list().records).toEqual([]);
+});
+
+for (const method of ["world.desk.review", "world.desk.open"]) {
+  test(`a delayed old-session ${method} cannot replace a newer session mark`, async () => {
+    const f = fixture();
+    const held = Promise.withResolvers<void>();
+    f.defer(() => held.promise);
+    const pending = f.rpc(method, {
+      ...identity,
+      stop_id: "old-stop",
+      reviewed: true,
+    });
+    f.defer();
+    f.replace();
+    const replacement = {
+      ...identity,
+      agent_session_fingerprint: deskSessionFingerprint({
+        ...session,
+        value: "replacement",
+      }),
+    };
+    f.desk.observeAgent(replacement, "idle", Date.now());
+    await f.rpc("world.desk.review", {
+      ...replacement,
+      stop_id: "new-stop",
+      reviewed: true,
+    });
+    const before = f.desk.list();
+    held.resolve();
+    await pending;
+    expect(f.errors).toHaveLength(1);
+    expect(f.desk.list()).toEqual(before);
+    expect(f.desk.list().records[0]!.reviewed_stop).toBe("new-stop");
+  });
+}
+
+test("same-session observations do not invalidate a pending metadata admission", async () => {
+  const f = fixture();
+  const now = Date.now();
+  f.desk.observeAgent(identity, "working", now);
+  const held = Promise.withResolvers<void>();
+  f.defer(() => held.promise);
+  const pending = f.rpc("world.desk.review", {
+    ...identity,
+    stop_id: "current-stop",
+    reviewed: true,
+  });
+  f.desk.observeAgent(identity, "done", now);
+  held.resolve();
+  await pending;
+  expect(f.errors).toEqual([]);
+  expect(f.desk.list().records[0]!.reviewed_stop).toBe("current-stop");
+});
+
+test("replacement followed by the original fingerprint still retires an older admission", async () => {
+  const f = fixture();
+  const now = Date.now();
+  f.desk.observeAgent(identity, "idle", now);
+  const held = Promise.withResolvers<void>();
+  f.defer(() => held.promise);
+  const pending = f.rpc("world.desk.open", identity);
+  const replacement = {
+    ...identity,
+    agent_session_fingerprint: "b".repeat(64),
+  };
+  f.desk.observeAgent(replacement, "idle", now);
+  f.desk.observeAgent(identity, "idle", now);
+  f.desk.mark(identity, "returned-session-stop", true, now);
+  const before = f.desk.list();
+  held.resolve();
+  await pending;
+  expect(f.errors).toHaveLength(1);
+  expect(f.desk.list()).toEqual(before);
+});
+
+test("observation eviction cannot make a replaced admission current again", async () => {
+  const f = fixture();
+  const held = Promise.withResolvers<void>();
+  f.defer(() => held.promise);
+  const pending = f.rpc("world.desk.review", {
+    ...identity,
+    stop_id: "old-stop",
+    reviewed: true,
+  });
+  const now = Date.now();
+  const replacement = {
+    ...identity,
+    agent_session_fingerprint: "b".repeat(64),
+  };
+  f.desk.observeAgent(replacement, "idle", now);
+  f.desk.mark(replacement, "new-stop", true, now);
+  for (let n = 0; n < 4096; n++)
+    f.desk.observeAgent(
+      { ...identity, terminal_id: `other-${n}` },
+      "idle",
+      now,
+    );
+  const before = f.desk.list();
+  held.resolve();
+  await pending;
+  expect(f.errors).toHaveLength(1);
+  expect(f.desk.list()).toEqual(before);
 });

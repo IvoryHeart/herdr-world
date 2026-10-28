@@ -842,12 +842,21 @@ done agents. Exact Undo SHALL remove only the stop it names, preserving any newe
 mark from another browser. Metadata SHALL survive browser reloads and host-filter
 changes, clear on service restart and retire on runtime or observed session
 replacement. Browser-local Desk metadata SHALL NOT be imported.
+A shared stop identity SHALL be independent of a browser's receipt polling or
+read failures: the same service stop and native activity observation SHALL have
+one identity with or without a receipt. A later observed stop or native activity
+SHALL invalidate the older mark. Receipt content SHALL remain presentation data.
+
 
 Mutations SHALL validate the exact live terminal and session through a current
 runtime lease and revalidate that lease after the read. Observed stops SHALL come
 only from fresh admitted host reads; cached, failed, invalidated or retired reads
 SHALL NOT record transitions. A host read begun before a newer metadata mutation
-SHALL NOT replace its session identity. Observed stops SHALL expire after 12 hours.
+SHALL NOT replace its session identity. A metadata admission started before a
+newer session observation or mutation SHALL NOT restore its replaced session,
+even if the original fingerprint subsequently reappears. Status observations
+of an already-known same session SHALL NOT retire a valid metadata admission. Observed stops SHALL
+expire after 12 hours.
 The service SHALL notify all browsers on real metadata changes. Browsers SHALL
 reject replies from an older socket epoch or service revision, treat disconnected
 state as unverified, and accept a restarted service's empty revision-zero state.

@@ -156,14 +156,13 @@ export function receiptIdentity(leaf: WorldLeafObject) {
 
 export function handoffId(
   leaf: WorldLeafObject,
-  receipt: TurnReceipt | null,
   stoppedAt: number | undefined,
 ) {
-  // Scoped to the agent session and runtime, so marking one agent's stop can
-  // never hide another session's stop with a matching turn id.
+  // Receipt coverage differs between browsers. Only shared observations name
+  // the stop; later service stops or native activity must need a fresh mark.
   return JSON.stringify([
     receiptIdentity(leaf),
-    receipt?.turn_id ?? `stop:${stoppedAt ?? leaf.lastActivityAt ?? ""}`,
+    `stop:${JSON.stringify([stoppedAt ?? null, leaf.lastActivityAt ?? null])}`,
   ]);
 }
 

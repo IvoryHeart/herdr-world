@@ -1,3 +1,4 @@
+import { agentName, agentRuntime, agentFolder, where } from "./deskAgentLabels";
 import {
   useCallback,
   useEffect,
@@ -45,30 +46,6 @@ type Item = {
   since: number | null;
 };
 
-function where(leaf: WorldLeafObject) {
-  return [leaf.hostLabel, leaf.spaceLabel, leaf.tabLabel, agentFolder(leaf)]
-    .filter(Boolean)
-    .join(" › ");
-}
-
-/**
- * What the operator recognizes an agent by: the name they gave it, otherwise
- * the harness's own thread title, otherwise the harness.
- */
-function agentName(leaf: WorldLeafObject) {
-  return leaf.agentName ?? leaf.terminalTitle ?? leaf.agentLabel ?? leaf.label;
-}
-
-/** Harness and model, so the operator can tell what each agent runs on. */
-function agentRuntime(leaf: WorldLeafObject) {
-  return [
-    leaf.agentName || leaf.terminalTitle ? leaf.agentLabel : null,
-    leaf.modelLabel,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-}
-
 export function partitionDesk(
   agents: WorldLeafObject[],
   receiptFor: (leaf: WorldLeafObject) => ReceiptState,
@@ -86,7 +63,7 @@ export function partitionDesk(
     const { receipt, current } = receiptFor(leaf);
     const pending = !current;
     const stoppedAt = stops.get(receiptIdentity(leaf));
-    const id = handoffId(leaf, receipt, stoppedAt);
+    const id = handoffId(leaf, stoppedAt);
     const since =
       receiptEndedAt(receipt) ?? stoppedAt ?? leaf.lastActivityAt ?? null;
     if (leaf.status === "blocked") {
@@ -224,13 +201,7 @@ const DESK_MODES: { mode: DeskMode; label: string }[] = [
 const RECENT_LIMIT = 6;
 const PREVIEW_DELAY_MS = 150;
 
-/** The folder an agent works in, which tells same-named tabs apart. */
-export function agentFolder(leaf: WorldLeafObject) {
-  const cwd = leaf.pane.foreground_cwd ?? leaf.pane.cwd;
-  if (!cwd) return null;
-  const parts = cwd.replace(/[\\/]+$/, "").split(/[\\/]/);
-  return parts[parts.length - 1] || cwd;
-}
+export { agentFolder } from "./deskAgentLabels";
 
 /**
  * Whether an agent matches every word of a search across the things an
@@ -568,6 +539,11 @@ export function DeskBoard({
       focusCard(focusedId);
   });
   const toggleReviewed = async (item: Item) => {
+    const activeBefore = document.activeElement;
+    const hadFocus = rootRef.current?.contains(activeBefore);
+    const index = order.findIndex((entry) => entry.leaf.id === item.leaf.id);
+    const neighbour =
+      index >= 0 ? (order[index + 1] ?? order[index - 1]) : undefined;
     if (!(await mark(item.handoffId, !item.handled))) {
       setError(
         "Could not save the review mark. Try again when the connection is ready.",
@@ -575,13 +551,15 @@ export function DeskBoard({
       return;
     }
     setError(null);
-    // Marking (or reopening) moves the item out of the list the operator is
-    // looking at, removing any control in it that held focus. Move focus to
-    // its neighbour explicitly: browsers do not fire blur for removed nodes.
-    const index = order.findIndex((entry) => entry.leaf.id === item.leaf.id);
-    const neighbour =
-      index >= 0 ? (order[index + 1] ?? order[index - 1]) : undefined;
-    if (rootRef.current?.contains(document.activeElement)) {
+    // Publication may remove the focused button before mark() resolves.
+    // Restore its captured neighbour without stealing newer focus elsewhere.
+    const activeNow = document.activeElement;
+    if (
+      hadFocus &&
+      (activeNow === activeBefore ||
+        activeNow === document.body ||
+        activeNow === rootRef.current)
+    ) {
       setFocusedId(neighbour?.leaf.id ?? null);
       focusCard(neighbour?.leaf.id ?? null);
     }
