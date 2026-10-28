@@ -4,6 +4,10 @@ The Inspector's **Chat** tab shows an agent's conversation as messages and lets
 you reply. Chat replaces the History tab. The **Terminal** tab remains a separate
 view that you open on purpose.
 
+Set **Menu → Configuration → Appearance → Chat text** to resize both your
+messages and agent replies. Chat can follow the terminal text size or use its
+own size.
+
 ## What Chat does
 
 On Unix SSH hosts, Claude Code sessions reported by Herdr as UUIDs are resolved
