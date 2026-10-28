@@ -9,7 +9,16 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { crewPass, promptable, roundLabel, type Seat, seats } from "./crew";
+import {
+  afterPass,
+  crewPass,
+  nextPass,
+  parseOptions,
+  promptable,
+  roundLabel,
+  type Seat,
+  seats,
+} from "./crew";
 import {
   type Deps,
   herdrIds,
@@ -20,6 +29,7 @@ import {
 import { openChat, runs } from "./crew/review";
 import {
   authorOf,
+  busyPrs,
   type CrewSettings,
   digest,
   plan,
@@ -104,6 +114,140 @@ describe("authorOf", () => {
         [],
       ),
     ).toBe("fixer");
+  });
+});
+
+describe("cadence", () => {
+  const verdicts = (inputs: GateInput[]) =>
+    inputs.map((value) => evaluate(value, config, NOW));
+  const busy = (inputs: GateInput[], open: number[] = []) =>
+    busyPrs(verdicts(inputs), inputs, SETTINGS, open);
+  const trio = (head: string) =>
+    ["rev2", "rev-astra", "rev-opus"].map((name) => confirm(name, head));
+
+  test("a PR is busy while a check runs, a step is open or it is READY", () => {
+    const running = {
+      ...town({
+        head: SHA.reviewed,
+        posts: [],
+        checks: [{ name: "Delivery checks", state: "pending", required: true }],
+      }),
+      number: 8,
+    };
+    const ready = {
+      ...town({ head: SHA.reviewed, posts: trio(SHA.reviewed) }),
+      number: 9,
+    };
+    const reviewing = {
+      ...town({ head: SHA.reviewed, posts: [] }),
+      number: 10,
+    };
+    const waiting = {
+      ...town({ head: SHA.reviewed, posts: [open(SHA.reviewed)] }),
+      number: 11,
+    };
+    expect(busy([running, ready, reviewing, waiting], [10])).toEqual([
+      8, 9, 10,
+    ]);
+  });
+
+  test("a merged, closed or out-of-scope PR is never busy", () => {
+    const merged = {
+      ...town({
+        head: SHA.reviewed,
+        posts: trio(SHA.reviewed),
+        state: "MERGED",
+      }),
+      number: 8,
+    };
+    const closed = {
+      ...town({ head: SHA.reviewed, posts: [], state: "CLOSED" }),
+      number: 9,
+    };
+    const elsewhere = {
+      ...input({ head: SHA.reviewed, posts: trio(SHA.reviewed), labels: [] }),
+      number: 10,
+    };
+    expect(busy([merged, closed, elsewhere], [8, 9, 10])).toEqual([]);
+  });
+
+  test("full passes start an interval apart, however long one takes", () => {
+    const options = { interval: 300, busyInterval: 60 };
+    // A pass that started at NOW and took 70 seconds: the next still
+    // starts 300 seconds after NOW, not 300 seconds after it ended.
+    expect(nextPass(NOW, NOW, [], options)).toEqual({
+      at: NOW + 300_000,
+      prs: null,
+    });
+  });
+
+  test("busy PRs get their own passes between full ones", () => {
+    const options = { interval: 300, busyInterval: 60 };
+    expect(nextPass(NOW, NOW, [8, 9], options)).toEqual({
+      at: NOW + 60_000,
+      prs: [8, 9],
+    });
+    // The full pass comes first once it is due before the next busy one.
+    expect(nextPass(NOW, NOW + 250_000, [8], options)).toEqual({
+      at: NOW + 300_000,
+      prs: null,
+    });
+    // A busy interval as long as the interval turns busy passes off.
+    expect(
+      nextPass(NOW, NOW, [8], { interval: 300, busyInterval: 300 }),
+    ).toEqual({ at: NOW + 300_000, prs: null });
+  });
+
+  test("the watch loop goes full, busy, busy, then full on time", () => {
+    const options = { interval: 300, busyInterval: 60 };
+    const start = { scope: null, lastFull: 0, busy: [] };
+    // A full pass at NOW finds #8 busy: the next pass reads #8 alone.
+    const first = afterPass(start, NOW, [8], options);
+    expect(first).toEqual({
+      cadence: { scope: [8], lastFull: NOW, busy: [8] },
+      at: NOW + 60_000,
+    });
+    // Busy passes leave the full pass's start where it was.
+    const second = afterPass(first.cadence, NOW + 60_000, [8], options);
+    expect(second.cadence.lastFull).toBe(NOW);
+    expect(second.at).toBe(NOW + 120_000);
+    // Once the full pass is due first, it comes 300 s after NOW.
+    const late = afterPass(second.cadence, NOW + 250_000, [8], options);
+    expect(late).toEqual({
+      cadence: { scope: null, lastFull: NOW, busy: [8] },
+      at: NOW + 300_000,
+    });
+    // That full pass, finding nothing busy, sets the next full one.
+    const full = afterPass(late.cadence, NOW + 300_000, [], options);
+    expect(full).toEqual({
+      cadence: { scope: null, lastFull: NOW + 300_000, busy: [] },
+      at: NOW + 600_000,
+    });
+  });
+
+  test("a failed pass keeps its busy PRs, and a quiet busy pass ends them", () => {
+    const options = { interval: 300, busyInterval: 60 };
+    const busy = { scope: [8], lastFull: NOW, busy: [8] };
+    expect(afterPass(busy, NOW + 60_000, null, options)).toEqual({
+      cadence: { scope: [8], lastFull: NOW, busy: [8] },
+      at: NOW + 120_000,
+    });
+    // #8 merged: the busy pass that closed its pod finds nothing busy.
+    expect(afterPass(busy, NOW + 60_000, [], options)).toEqual({
+      cadence: { scope: null, lastFull: NOW, busy: [] },
+      at: NOW + 300_000,
+    });
+  });
+
+  test("watch takes a busy interval, 60 seconds unless given", () => {
+    expect(parseOptions(["watch"]).busyInterval).toBe(60);
+    expect(parseOptions(["watch", "--busy-interval", "30"]).busyInterval).toBe(
+      30,
+    );
+    // Zero would read busy PRs back to back.
+    expect(() => parseOptions(["watch", "--busy-interval", "0"])).toThrow(
+      "at least 1 second",
+    );
   });
 });
 

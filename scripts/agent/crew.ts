@@ -10,6 +10,7 @@ import { type Deps, realDeps } from "./crew/deps";
 import {
   type Action,
   authorOf,
+  busyPrs,
   digest,
   type CrewSettings,
   currentChecks,
@@ -66,7 +67,9 @@ import {
 const USAGE = `Usage: bun run agent:crew -- <command> [options]
 
   pass [--pr N]... [--dry-run]   One pass: read, plan, act; --dry-run only prints the plan
-  watch [--interval SECONDS]     A pass every interval (default 300) until stopped
+  watch [--interval SECONDS] [--busy-interval SECONDS]
+                                 A pass over every PR every interval (default 300) and,
+                                 between them, over busy PRs every busy interval (default 60)
   status                         Open actions and recent reviewer runs
   feed [--lines N]               The last lines of the crew feed (default 40)
   runs [--pr N] [--lines N]      Reviewer runs: round, RESULT, tokens and how to reopen each
@@ -618,6 +621,7 @@ export function parseOptions(argv: string[]): Options {
     prs: [],
     dryRun: false,
     interval: 300,
+    busyInterval: 60,
     lines: 40,
   };
   for (let index = 0; index < argv.length; index++) {
@@ -636,7 +640,13 @@ export function parseOptions(argv: string[]): Options {
     if (arg === "--pr") options.prs.push(count("--pr"));
     else if (arg === "--dry-run") options.dryRun = true;
     else if (arg === "--interval") options.interval = count("--interval");
-    else if (arg === "--lines") options.lines = count("--lines");
+    else if (arg === "--busy-interval") {
+      // Zero would read the busy PRs back to back, and GitHub's rate limit
+      // with them, for as long as one stays busy.
+      options.busyInterval = count("--busy-interval");
+      if (options.busyInterval < 1)
+        throw new Error("--busy-interval needs at least 1 second");
+    } else if (arg === "--lines") options.lines = count("--lines");
     else if (arg === "--reviewer") options.reviewer = value();
     else if (arg === "--head") options.head = value();
     else if (arg === "--since") options.since = value();
@@ -670,6 +680,55 @@ function status(crew: Database, out: (text: string) => void, now: number) {
       `  run ${entry.id}\t#${entry.pr} ${entry.reviewer} @${shortSha(entry.head)} ${entry.finishedAt === null ? "running" : `exit ${entry.exitCode}`}${entry.usage ? ` usage ${entry.usage}` : ""}`,
     );
 }
+
+/**
+ * When the watcher's next pass starts and which PRs it reads, `null` being
+ * every PR. A pass over every PR starts `interval` seconds after the last
+ * one started, however long it took. While PRs are busy, passes over just
+ * those start `busyInterval` seconds apart in between: a few seconds each,
+ * so a green check, a posted review or a merge is acted on within a minute.
+ */
+export function nextPass(
+  lastFull: number,
+  lastStart: number,
+  busy: number[],
+  options: { interval: number; busyInterval: number },
+): { at: number; prs: number[] | null } {
+  const full = lastFull + options.interval * 1000;
+  const soon = lastStart + options.busyInterval * 1000;
+  return busy.length && soon < full
+    ? { at: soon, prs: busy }
+    : { at: full, prs: null };
+}
+
+/**
+ * The watcher's schedule between passes: the PRs the next pass reads (null
+ * for every PR), when the last pass over every PR started, and the PRs
+ * that were busy when last read.
+ */
+export type Cadence = {
+  scope: number[] | null;
+  lastFull: number;
+  busy: number[];
+};
+
+/**
+ * The schedule after a pass that started at `start` and found `busy`, or
+ * null when it failed: a failed pass keeps the busy PRs it had.
+ */
+export function afterPass(
+  cadence: Cadence,
+  start: number,
+  busy: number[] | null,
+  options: { interval: number; busyInterval: number },
+): { cadence: Cadence; at: number } {
+  const lastFull = cadence.scope === null ? start : cadence.lastFull;
+  const kept = busy ?? cadence.busy;
+  const next = nextPass(lastFull, start, kept, options);
+  return { cadence: { scope: next.prs, lastFull, busy: kept }, at: next.at };
+}
+
+const numbers = (prs: number[]) => prs.map((pr) => `#${pr}`).join(" ");
 
 export async function main(argv: string[], deps: Deps = realDeps) {
   const options = parseOptions(argv);
@@ -706,45 +765,64 @@ export async function main(argv: string[], deps: Deps = realDeps) {
     const lock = openLock(join(dir, "crew.lock"));
     const gate = openStore(join(dir, "gate.sqlite"));
     const worker = ["bun", join(import.meta.dir, "crew.ts")];
+    const configPath = join(dir, "config.json");
+    let cadence: Cadence = { scope: null, lastFull: 0, busy: [] };
     try {
       for (;;) {
         const now = Date.now();
+        const { scope } = cadence;
+        const prs = scope ?? options.prs;
+        // Null until the pass has read its PRs; a failed pass keeps the last.
+        let busy: number[] | null = null;
+        const judged: { value?: ReturnType<typeof runPass> } = {};
         try {
           const planned = crewPass({
             judge: () =>
-              runPass(
+              (judged.value = runPass(
                 gate,
                 {
-                  config: loadConfig(join(dir, "config.json")),
+                  config: loadConfig(configPath),
                   run: deps.run,
                   mirror: join(dir, "mirror.git"),
                   now,
                 },
-                options.prs,
-              ),
+                prs,
+              )),
             crew,
             lock,
-            configPath: join(dir, "config.json"),
+            configPath,
             dir,
-            prs: options.prs,
+            prs,
             dryRun: options.dryRun,
             now,
             deps,
             worker,
           });
+          const open = actionsIn(crew, ["pending", "running"]);
+          if (judged.value)
+            busy = busyPrs(
+              judged.value.verdicts,
+              judged.value.inputs,
+              loadSettings(configPath),
+              open.map((entry) => entry.pr),
+            );
           if (!options.dryRun)
             deps.out(
-              `${new Date(now).toISOString()} pass: ${planned.length} planned, ${actionsIn(crew, ["pending", "running"]).length} open`,
+              `${new Date(now).toISOString()} pass${scope ? ` ${numbers(scope)}` : ""}: ${planned.length} planned, ${open.length} open${busy?.length ? `; busy ${numbers(busy)}` : ""}`,
             );
         } catch (error) {
-          // A failed read costs one pass; the next pass reads everything again.
+          // A failed read costs one pass. Its PRs keep their last busy
+          // state, and the next pass over every PR still comes an interval
+          // after the last one started, as `afterPass` decides.
           deps.out(
             `pass failed: ${error instanceof Error ? error.message : String(error)}`,
           );
           if (options.command === "pass") return 1;
         }
         if (options.command === "pass") return 0;
-        await Bun.sleep(options.interval * 1000);
+        const next = afterPass(cadence, now, busy, options);
+        cadence = next.cadence;
+        await Bun.sleep(Math.max(0, next.at - Date.now()));
       }
     } finally {
       gate.close();

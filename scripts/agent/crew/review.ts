@@ -40,6 +40,7 @@ export type Options = {
   prs: number[];
   dryRun: boolean;
   interval: number;
+  busyInterval: number;
   lines: number;
   reviewer?: string;
   head?: string;
