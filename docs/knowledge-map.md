@@ -165,6 +165,11 @@ and [local ledger](../scripts/agent/usage-store.ts);
 focused tests are beside these modules. The report-only readiness gate,
 [`agent:gate`](../scripts/agent/gate/), reuses World's PR detail parser and
 readiness rules. Use synthetic data in tracked evidence.
+The [`agent:crew`](../scripts/agent/crew.ts) watcher acts on the gate's verdicts
+([guide](agent-development.md#act-on-readiness-with-agentcrew)). The parked
+[World primitives research](world-primitives-research.md) generalises it into
+goals, workflows, loops, skills, personas, templates and policies attached at
+each level of the world; it is research, not a contract.
 The optional [Quint adoption spike](quint-adoption-spike.md) inventories formal
 modeling candidates and records bounded model/replay experiments; it is not a CI gate.
 The [Quint adoption proposal](../openspec/changes/archive/2026-10-14-adopt-quint-behavioral-verification/proposal.md)
