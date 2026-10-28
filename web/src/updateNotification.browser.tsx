@@ -32,7 +32,13 @@ let available = true;
 let installFails = true;
 let installs = 0;
 let canAutoUpdate = true;
+let servedEntry: string | null = null;
 window.fetch = (async (url: string, init?: RequestInit) => {
+  if (servedEntry && url.startsWith("/index.html?"))
+    return new Response(
+      `<script type="module" crossorigin src="${servedEntry}"></script>`,
+      { headers: { "content-type": "text/html" } },
+    );
   if (url === "/api/update/check")
     return Response.json({
       current_version: "1.0.0",
@@ -291,6 +297,29 @@ async function run() {
   else await store.checkForUpdate();
   await until(() => !document.querySelector(".menu-update-dot"));
   check(!upgrade(), "Current installation still offers upgrade");
+
+  // A newer served build is offered, never loaded by itself.
+  const staleToast = () =>
+    [...document.querySelectorAll<HTMLElement>(".toast")].find((toast) =>
+      toast.textContent?.includes("A newer Herdr World build is available"),
+    );
+  check(!staleToast(), "Unchanged build offered a reload");
+  servedEntry = "/assets/index-next.js";
+  dispatchEvent(new Event("online"));
+  await until(staleToast);
+  check(
+    staleToast()!.textContent?.includes("index-next"),
+    "Newer build notice does not name the served build",
+  );
+  const later = [...staleToast()!.querySelectorAll("button")].find(
+    (button) => button.textContent === "Later",
+  );
+  check(later, "Newer build notice has no Later action");
+  later?.click();
+  await until(() => !staleToast());
+  dispatchEvent(new Event("online"));
+  await frame();
+  check(!staleToast(), "Dismissed build was offered again");
 }
 const childVersion = new URL(location.href).searchParams.get("claim");
 if (childVersion) {
