@@ -8,8 +8,9 @@ follows once a second workflow has run on the same pieces (see
 World should describe how agents work as a few composable primitives: goals,
 workflows, loops, skills, personas, templates and policies. Each can attach at
 any level of the world, from World down to a pane and the agent in it, and
-levels below inherit it. The `agent:crew` watcher from
-[#443](https://github.com/IvoryHeart/herdr-world/pull/443) is the first
+levels below inherit it. The [`agent:crew`](../scripts/agent/crew.ts) watcher
+([guide](agent-development.md#act-on-readiness-with-agentcrew)), merged in
+[#443](https://github.com/IvoryHeart/herdr-world/pull/443), is the first
 instance: a review workflow, run by a loop, pursuing the goal "this PR is
 READY" with three reviewer personas and one review skill.
 
@@ -102,7 +103,7 @@ The levels follow what Town draws:
 1. World: the whole install and owner-wide defaults.
 2. Building: a host, one Herdr connection.
 3. Room: a Herdr workspace, a team or a project.
-4. Desk: a Herdr tab, one work item's table.
+4. Table: a Herdr tab, one work item's table, as Town draws it.
 5. Seat: a pane in that tab.
 6. Agent: the session in the seat, with its harness and the model its persona chose.
 
@@ -119,7 +120,7 @@ Four rules resolve what applies at a level:
 Typical attachments: World holds the persona library, notice routing and
 owner-wide budgets; a building holds host limits; a room holds the project's
 skills (its `.agents/skills`), roster, workflows and loops, stamped out by a
-room template; a desk holds one work item's pod; a seat holds the persona and
+room template; a table holds one work item's pod; a seat holds the persona and
 its session. A cheaper reviewer on a smaller model is a separate persona, not a
 variant: World keeps no per-model variants.
 
@@ -133,7 +134,7 @@ any widened budget or permission, needs the owner's approval.
 | Owner           | World    | Anything                                                          | Nothing                                |
 | Town master     | Town     | Goals and loops for rooms, role bindings                          | New workflows or templates, wider budgets |
 | Room lead       | One room | Goals for work items, child goals, loops within the room's budget | Publishing a workflow or skill to other rooms |
-| Agent in a seat | Its desk | Child goals, its own session loop (`/goal`, `/loop`), skill drafts | Anything above its desk                |
+| Agent in a seat | Its table | Child goals, its own session loop (`/goal`, `/loop`), skill drafts | Anything above its table               |
 
 1. **Primitives are data** in a restricted schema World validates. A skill with
    scripts is code and is reviewed like code before others use it.
@@ -188,7 +189,7 @@ to, and what needs the owner's approval.
 Enforcement uses each harness's own locks. Building locks become the host's
 managed configuration (Claude Code managed settings,
 [Codex `requirements.toml`](https://learn.chatgpt.com/docs/enterprise/managed-configuration)),
-which apply machine-wide. Room, desk and seat locks become launch options for
+which apply machine-wide. Room, table and seat locks become launch options for
 one agent. World enforces run limits, budgets and never-prompt seats itself.
 
 ## Observability and economics
@@ -209,7 +210,7 @@ World launches every agent, so it can tag the place through
 `OTEL_RESOURCE_ATTRIBUTES`, which Claude Code documents for attribution. Where a
 harness cannot be tagged, World joins usage by session ID. World never depends
 on OTel alone: session files are the baseline source. Seat and session IDs stay
-on events, not metric labels. Totals add up from agent to desk, pod, room,
+on events, not metric labels. Totals add up from agent to table, pod, room,
 building and World; a level over budget notifies the owner and nothing is
 killed.
 
@@ -257,8 +258,13 @@ primitives live in the World service beside agent profiles.
 | Personas, templates, role bindings, World and building loops | The World service store                       |
 | Pods, runs, notices and usage records                        | World service records (`crew.sqlite` in the pilot) |
 
-Attachments are keyed by connection ID and the Herdr workspace or tab ID, so
-operations never fall back to another connection.
+Durable attachments are keyed by connection ID plus a stable identity: the
+repository checkout for a room, the work item for a pod. Herdr workspace and
+tab IDs change when Herdr restarts and are reused, as World's persisted
+workspace state already accounts for, so they never key anything that must
+survive. Runtime operations (launches, tabs, panes) are qualified by
+connection ID and runtime generation and never fall back to another
+connection.
 
 One reconcile cycle runs every workflow:
 
@@ -303,7 +309,8 @@ condition language invented from one example would be over-modelling.
 
 ## Path to a spec
 
-1. Merge #443 as the first cut and confirm its pods close at merge.
+1. Confirm that the watcher alone closes a merged PR's pod: its tabs,
+   reviewer sessions and checkouts.
 2. Run a second workflow on the same pieces, likely issue to PR: an author
    persona pursues "a PR for issue N is open and green", then hands over to
    `pr-review`. It tests child goals, one workflow feeding another and an agent
