@@ -311,3 +311,19 @@ pre-install replies (both available metadata and HTTP errors) cannot replace a
 successful-install state; later checks remain admitted. Persistent-storage denial
 retains only best-effort legacy markers and page-lifetime deduplication, while a
 slow persistent claim fails closed instead of racing a fallback.
+
+## Owner asks extension (#472)
+
+The existing World question ledger remains the system of record. Direct CLI and
+service regressions cover caller-scoped cause keys, withdrawal authority, answer
+preservation and wait cancellation. The watcher consumes it through the CLI and
+uses its existing action ledger only for receipts; crash/retry, one answer read,
+same-head clearing, blocked-seat recovery and held/scoped PR cases are exercised
+through that real seam. Qualified-target and queue/marker tests plus actual Town,
+Board and Desk browser suites cover the presentation. Notification tests bind the
+original terminal/session, reject a reused pane, suppress initial-backlog and
+duplicate announcements, reject obsolete socket replies, and retain local OS
+notices when Web Push is selected. These are finite ledger and direct consumer
+schedules; a separate model would duplicate those rules. Existing endpoint,
+lease, navigation, browser and protected verification gates remain mandatory.
+No OS delivery while every browser is closed is claimed by client announcements.

@@ -1,3 +1,6 @@
+import { useWorldAsks } from "./worldAsks";
+import { asksForWorld } from "./worldAskTargets";
+import { WorldAskMark } from "./WorldAskMark";
 import { boardObservation } from "./board/boardObservation";
 import { ConnectionRecoveryBanner } from "./ConnectionRecoveryBanner";
 import { ChevronDown, ChevronUp, Pin, Plus, Trash2 } from "lucide-react";
@@ -490,6 +493,8 @@ export default function BoardView({
   const fullModel = useMemo(() => projectBoard(shownWorld), [shownWorld]);
   // Each agent's quest, as a progress chip on its card.
   const quests = useAgentQuests(shownWorld.leaves);
+  const asks = useWorldAsks();
+  const asking = useMemo(() => asksForWorld(asks, world), [asks, world]);
   // A large board's first render is only the frame; its cards follow in a
   // transition, which yields to input while it builds.
   const [built, setBuilt] = useState(
@@ -3444,6 +3449,9 @@ export default function BoardView({
                       <span className="board-dot" />
                     )}
                     <span className="board-label">{tab.label}</span>
+                    {!multi && pane ? (
+                      <WorldAskMark ask={asking.get(pane.leaf.id)} />
+                    ) : null}
                     {pinnedKeys.has(tab.key) ? <PinBadge /> : null}
                     {!multi && pane?.isAgent && quests.get(pane.leaf.id) ? (
                       <QuestChip quest={quests.get(pane.leaf.id)!} />
@@ -3477,6 +3485,7 @@ export default function BoardView({
                           )}
                           <span className="board-pane-name">
                             {paneName(row)}
+                            <WorldAskMark ask={asking.get(row.leaf.id)} />
                           </span>
                           {row.isAgent && quests.get(row.leaf.id) ? (
                             <QuestChip quest={quests.get(row.leaf.id)!} />

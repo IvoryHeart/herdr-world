@@ -343,11 +343,11 @@ export function parseWorldArgs(
       };
     }
     case "ask": {
-      if (sub === "get" || sub === "answer") {
+      if (sub === "get" || sub === "answer" || sub === "withdraw") {
         const { values, positionals } = parsed(
           rest,
           { wait: { type: "boolean" }, timeout: { type: "string" } },
-          sub === "get" ? 1 : 2,
+          sub === "answer" ? 2 : 1,
         );
         return {
           command: `ask ${sub}`,
@@ -368,6 +368,7 @@ export function parseWorldArgs(
         {
           options: { type: "string" },
           "owner-only": { type: "boolean" },
+          key: { type: "string" },
           wait: { type: "boolean" },
           timeout: { type: "string" },
         },
@@ -377,6 +378,7 @@ export function parseWorldArgs(
         command: "ask",
         params: {
           question: need(positionals[0], "question"),
+          ...(values.key ? { key: values.key } : {}),
           options: values.options
             ? String(values.options)
                 .split(",")
@@ -445,7 +447,9 @@ function human(command: string, reply: Reply): string {
     const answer = entry.answer as { text?: string } | undefined;
     return answer?.text !== undefined
       ? String(answer.text)
-      : `${String(entry.id)} waiting for an answer`;
+      : entry.withdrawn
+        ? `${String(entry.id)} withdrawn`
+        : `${String(entry.id)} waiting for an answer`;
   }
   if (typeof entry.summary === "string")
     return `${String(entry.id)} ${entry.summary} (by ${who})`;
@@ -483,7 +487,12 @@ export async function runWorldCommand(
       const answered = Boolean(
         reply.ok && (reply.result as { answer?: unknown })?.answer,
       );
-      if (!reply.ok || answered) break;
+      if (
+        !reply.ok ||
+        answered ||
+        (reply.result as { withdrawn?: unknown })?.withdrawn
+      )
+        break;
       if (timeoutMs && Date.now() - started >= timeoutMs) {
         (asJson ? context.log : context.error)(
           asJson

@@ -11,6 +11,20 @@ export type NotificationFocusOptions = {
   activateConnection?: boolean;
 };
 
+/** Recheck the captured pane occupant when a notification is admitted or queued. */
+export function notificationPaneMatches(
+  target: Pick<QualifiedFocusTarget, "paneId" | "workspaceId" | "terminalId">,
+  pane: Pane | null | undefined,
+): pane is Pane {
+  return Boolean(
+    pane &&
+      pane.pane_id === target.paneId &&
+      pane.workspace_id === target.workspaceId &&
+      (target.terminalId === undefined ||
+        pane.terminal_id === target.terminalId),
+  );
+}
+
 /** The store supplies its existing lease, queue and selection operations. */
 export async function focusTaskNotification(
   target: TaskNotificationTarget,
@@ -46,12 +60,7 @@ export async function focusTaskNotification(
     });
     if (!current()) return false;
     const pane = result?.pane as Pane | undefined;
-    if (
-      !host.isCurrent(lease) ||
-      !pane ||
-      pane.pane_id !== target.paneId ||
-      pane.workspace_id !== target.workspaceId
-    ) {
+    if (!host.isCurrent(lease) || !notificationPaneMatches(target, pane)) {
       host.unavailable();
       return;
     }
@@ -75,6 +84,7 @@ export async function focusTaskNotification(
       workspaceId: target.workspaceId,
       paneId: target.paneId,
       agentSessionId: target.agentSessionId,
+      terminalId: target.terminalId,
       navigationRevision,
       isCurrent: current,
     });

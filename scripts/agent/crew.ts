@@ -1,3 +1,4 @@
+import { reconcileOwnerAsks } from "./crew/owner-asks";
 import type { Database } from "bun:sqlite";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -380,6 +381,7 @@ function act(
   const deliverable = (entry: StoredAction) =>
     keys.has(entry.key.split("|")[0]!);
   deliver(crew, settings, live, authors, deliverable, record, context, say);
+  reconcileOwnerAsks(crew, planned, context, say);
 }
 
 /**
@@ -479,7 +481,11 @@ function deliver(
         if (entry.detail === why) continue;
         setAction(crew, entry.key, "pending", now, why);
         say(`#${entry.pr} waiting for ${name} (${why})`);
-        if (why === "no live seat" || why === "never prompted")
+        if (
+          why === "no live seat" ||
+          why === "never prompted" ||
+          why === "blocked"
+        )
           record(
             notice(
               entry,
@@ -566,53 +572,6 @@ function deliver(
       `#${entry.pr} started ${entry.target} ${entry.kind} (run ${id}${started.pane ? `, Herdr tab "${label}"` : ""}, log ${log})`,
     );
     slots--;
-  }
-
-  // Owner notices last, so those raised above go out in this pass. One
-  // Herdr didn't show stays pending and is tried again next pass.
-  for (const entry of pending()) {
-    if (entry.target !== "owner") continue;
-    // A notice about a seat holds only while its step still waits for the
-    // same reason; once the seat takes the prompt or the cause changes, drop it.
-    const [parentKey, suffix] = entry.key.split("|");
-    if (suffix?.startsWith("waits") || suffix === "unreachable") {
-      const parent = getAction(crew, parentKey!);
-      const cause = parent?.detail ?? "";
-      // A bare `waits` suffix comes from stores written before notices
-      // carried their cause; it held only for a missing or never-prompted seat.
-      const holds =
-        parent?.state === "pending" &&
-        (suffix === "unreachable" ||
-          suffix === `waits-${digest(cause)}` ||
-          (suffix === "waits" &&
-            (cause === "no live seat" || cause === "never prompted")));
-      if (!holds) {
-        setAction(crew, entry.key, "superseded", now);
-        say(`#${entry.pr} dropped notice: its cause has cleared`);
-        continue;
-      }
-    }
-    const result = deps.run([
-      "herdr",
-      "notification",
-      "show",
-      entry.kind === "ready"
-        ? `Crew: READY #${entry.pr}`
-        : `Crew: #${entry.pr} needs you`,
-      "--body",
-      entry.text,
-      "--sound",
-      entry.kind === "ready" ? "done" : "request",
-    ]);
-    if (result.code !== 0) {
-      const error = (result.stderr || result.stdout).trim().slice(0, 200);
-      setAction(crew, entry.key, "pending", now, error, true);
-      if (entry.detail !== error)
-        say(`#${entry.pr} notification failed: ${error}`);
-      continue;
-    }
-    setAction(crew, entry.key, "sent", now, null, true);
-    say(`#${entry.pr} told owner: ${entry.text}`);
   }
 }
 

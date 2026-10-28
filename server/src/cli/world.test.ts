@@ -31,6 +31,19 @@ function context() {
 }
 
 describe("parsing", () => {
+  test("ask cause keys and withdrawal use the existing ask command", () => {
+    expect(
+      parseWorldArgs("ask", ["READY?", "--key", "crew:7", "--owner-only"]),
+    ).toMatchObject({ command: "ask", params: { key: "crew:7" } });
+    expect(
+      parseWorldArgs("ask", ["withdraw", "q-example", "--json"]),
+    ).toMatchObject({
+      command: "ask withdraw",
+      params: { id: "q-example" },
+      json: true,
+    });
+  });
+
   test("each verb becomes one service command", () => {
     expect(
       parseWorldArgs("board", ["card", "pin", "me", "10,20"]),
@@ -87,6 +100,32 @@ describe("parsing", () => {
 });
 
 describe("running", () => {
+  test("a withdrawn ask releases --wait without handing an invented answer to the agent", async () => {
+    const { context: ctx, out } = context();
+    let calls = 0;
+    const transport: WorldCliTransport = async () => ({
+      ok: true,
+      actor: { label: "Example", verified: true },
+      result:
+        ++calls === 1
+          ? { id: "q-example" }
+          : { id: "q-example", withdrawn: { at: 1 } },
+    });
+    expect(
+      await runWorldCommand(
+        "ask",
+        ["Ship?", "--wait", "--json"],
+        ctx,
+        transport,
+      ),
+    ).toBe(0);
+    expect(calls).toBe(2);
+    expect(JSON.parse(out[0]!).result).toEqual({
+      id: "q-example",
+      withdrawn: { at: 1 },
+    });
+  });
+
   test("JSON out when piped, and exit codes from the service's answer", async () => {
     const { context: ctx, out } = context();
     const sent: unknown[] = [];

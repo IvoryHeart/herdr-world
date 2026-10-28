@@ -72,6 +72,17 @@ function settle(actors: TownActors) {
   expect(actors.busy).toBe(false);
 }
 
+test("an open ask waits at reception until answered, even if its agent was opened", () => {
+  const { actorWorld } = world({ a: "idle", b: "working" });
+  const actors = new TownActors();
+  actors.sync(actorWorld, true, new Set(["a"]), new Set(["a", "b"]));
+  expect(actors.actors.get("a")!.goal!.kind).toBe("queue");
+  expect(actors.actors.get("b")!.goal!.kind).toBe("queue");
+  actors.sync(actorWorld, true, new Set(["a"]), new Set());
+  expect(actors.actors.get("a")!.goal!.kind).toBe("seat");
+  expect(actors.actors.get("b")!.goal!.kind).toBe("seat");
+});
+
 test("agents appear seated at their seat without walking", () => {
   const { actorWorld } = world({ a: "working", b: "unknown" });
   const actors = new TownActors();

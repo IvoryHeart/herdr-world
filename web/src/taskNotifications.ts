@@ -11,6 +11,7 @@ const NOTIFICATION_WORKER = "/task-notifications-sw.js?v=4";
 const NOTIFICATION_HASH = "#herdr-world-task=";
 
 export interface TaskNotificationTarget {
+  terminalId?: string;
   connectionId: string;
   runtimeGeneration: number;
   workspaceId: string;
@@ -78,6 +79,9 @@ export function isTaskNotificationTarget(
     target.workspaceId.length > 0 &&
     typeof target.paneId === "string" &&
     target.paneId.length > 0 &&
+    (target.terminalId === undefined ||
+      (typeof target.terminalId === "string" &&
+        target.terminalId.length > 0)) &&
     (target.agentSessionId === undefined ||
       (typeof target.agentSessionId === "string" &&
         target.agentSessionId.length > 0))

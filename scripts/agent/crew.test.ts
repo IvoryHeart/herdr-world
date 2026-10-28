@@ -448,6 +448,7 @@ describe("delivery", () => {
   const dir = join(root, "repo", "gate");
 
   let calls: string[][];
+  let output: string[];
   let events: string[];
   let closeFails: number;
   let removeFails: number;
@@ -462,11 +463,17 @@ describe("delivery", () => {
   let refuse: Set<string>;
   let opened: { line: string; cwd: string; label: string }[];
   let onPrompt: (() => void) | null;
+  let ownerAsks: Map<
+    string,
+    { id: string; answer?: { text: string }; withdrawn?: { at: number } }
+  >;
   let crew: ReturnType<typeof openCrewStore>;
   let lock: ReturnType<typeof openLock>;
 
   beforeEach(() => {
     calls = [];
+    output = [];
+    ownerAsks = new Map();
     spawned = [];
     killed = [];
     closed = [];
@@ -513,6 +520,31 @@ describe("delivery", () => {
         rmSync(path!, { recursive: true, force: true });
       }
     }
+    if (argv[0] === "herdr-world") {
+      if (refuse.has("ask"))
+        return { code: 1, stdout: "", stderr: "World unavailable" };
+      const verb = argv[2];
+      let ask;
+      if (verb === "get" || verb === "withdraw") {
+        ask = [...ownerAsks.values()].find((entry) => entry.id === argv[3]);
+        if (verb === "withdraw" && ask) ask.withdrawn = { at: NOW };
+      } else {
+        const key = argv[argv.indexOf("--key") + 1]!;
+        ask = ownerAsks.get(key);
+        if (!ask || ask.withdrawn) {
+          ask = { id: `q-${ownerAsks.size + 1}-${calls.length}` };
+          ownerAsks.set(key, ask);
+        }
+      }
+      return {
+        code: 0,
+        stdout: JSON.stringify({
+          ok: Boolean(ask),
+          ...(ask ? { result: ask } : { code: "not_found" }),
+        }),
+        stderr: "",
+      };
+    }
     if (argv[2] === "prompt") onPrompt?.();
     if (refuse.has(argv[1]!) || refuse.has(argv[2]!))
       return { code: 1, stdout: "", stderr: "agent_blocked" };
@@ -544,7 +576,7 @@ describe("delivery", () => {
     usage: (run) => `{"output_tokens":${run.id}}`,
     alive: (pid) => !dead.has(pid),
     kill: (pid) => killed.push(pid),
-    out: () => {},
+    out: (line) => output.push(line),
   };
   const passOver = (
     values: GateInput[],
@@ -568,7 +600,14 @@ describe("delivery", () => {
     });
   const pass = (value: GateInput, now = NOW) => passOver([value], now);
   const prompts = () => calls.filter((argv) => argv[2] === "prompt");
-  const notices = () => calls.filter((argv) => argv[1] === "notification");
+  const notices = () =>
+    calls.filter(
+      (argv) =>
+        argv[0] === "herdr-world" &&
+        argv[1] === "ask" &&
+        argv[2] !== "get" &&
+        argv[2] !== "withdraw",
+    );
 
   test("prompts an idle author once, however many passes run", () => {
     const value = town({
@@ -640,8 +679,93 @@ describe("delivery", () => {
     pass(value);
     pass(value, NOW + 60_000);
     expect(notices()).toHaveLength(1);
-    expect(notices()[0]).toContain("Crew: READY #7");
+    expect(notices()[0]!.join(" ")).toContain("READY #7");
     expect(prompts()).toHaveLength(0);
+  });
+
+  const ready = () =>
+    town({
+      head: SHA.reviewed,
+      posts: ["rev2", "rev-astra", "rev-opus"].map((name) =>
+        confirm(name, SHA.reviewed),
+      ),
+    });
+
+  test("an owner answer is read back to the watcher's own pane once", () => {
+    pass(ready());
+    const ask = [...ownerAsks.values()][0]!;
+    ask.answer = { text: "Wait for the other change" };
+    pass(ready(), NOW + 60_000);
+    pass(ready(), NOW + 120_000);
+    expect(notices()).toHaveLength(1);
+    expect(
+      output.filter((line) => line.includes("owner answered")),
+    ).toHaveLength(1);
+    expect(output.join(" ")).toContain("Wait for the other change");
+    expect(calls.some((argv) => argv[1] === "notification")).toBe(false);
+  });
+
+  test("an answer arriving before cause withdrawal is still read once", () => {
+    pass(ready());
+    [...ownerAsks.values()][0]!.answer = { text: "Already merged" };
+    passOver([], NOW + 60_000);
+    passOver([], NOW + 120_000);
+    expect(
+      output.filter((line) => line.includes("Already merged")),
+    ).toHaveLength(1);
+  });
+
+  test("a sent ask withdraws on same-head cause clearing and reopens only on recurrence", () => {
+    pass(ready());
+    const first = [...ownerAsks.values()][0]!;
+    pass(trioPosted(), NOW + 60_000);
+    expect(first.withdrawn).toBeDefined();
+    pass(ready(), NOW + 120_000);
+    expect(notices()).toHaveLength(2);
+    expect([...ownerAsks.values()][0]!.id).not.toBe(first.id);
+  });
+
+  test("a crash after World persisted an ask retries under the same cause key", () => {
+    const original = deps.run;
+    let crash = true;
+    deps.run = (argv) => {
+      const result = original(argv);
+      if (crash && argv[0] === "herdr-world" && argv.includes("--key")) {
+        crash = false;
+        throw new Error("watcher stopped after recording ask");
+      }
+      return result;
+    };
+    try {
+      expect(() => pass(ready())).toThrow("watcher stopped");
+      pass(ready(), NOW + 60_000);
+      expect(ownerAsks.size).toBe(1);
+    } finally {
+      deps.run = original;
+    }
+  });
+
+  test("a blocked author raises one owner ask in one pass and withdraws after it resumes", () => {
+    live = live.map((seat) =>
+      seat.name === "towncx" ? { ...seat, status: "blocked" } : seat,
+    );
+    pass(trioPosted());
+    pass(trioPosted(), NOW + 60_000);
+    expect(notices()).toHaveLength(1);
+    expect(prompts()).toHaveLength(0);
+    const ask = [...ownerAsks.values()][0]!;
+    live = live.map((seat) => ({ ...seat, status: "idle" }));
+    pass(trioPosted(), NOW + 120_000);
+    expect(ask.withdrawn).toBeDefined();
+  });
+
+  test("PR-scoped passes preserve other asks, and an on-hold label withdraws its notice", () => {
+    pass(ready());
+    const ask = [...ownerAsks.values()][0]!;
+    passOver([], NOW + 60_000, { prs: [8] });
+    expect(ask.withdrawn).toBeUndefined();
+    pass({ ...ready(), labels: ["pod:town", "on-hold"] }, NOW + 120_000);
+    expect(ask.withdrawn).toBeDefined();
   });
 
   test("starts fresh reviewers up to the limit, with the author for the brief", () => {
@@ -1388,7 +1512,7 @@ describe("delivery", () => {
         confirm(name, SHA.reviewed),
       ),
     });
-    refuse.add("notification");
+    refuse.add("ask");
     pass(ready);
     expect(actionsIn(crew, ["pending"])).toHaveLength(1);
     refuse.clear();
@@ -1470,7 +1594,7 @@ describe("delivery", () => {
       ...value,
       item: { ...value.item!, branch: "agent/firstmate-kit" },
     };
-    refuse.add("notification");
+    refuse.add("ask");
     pass(desk);
     refuse.clear();
     pass(desk, NOW + 60_000);
@@ -1541,7 +1665,7 @@ describe("delivery", () => {
       });
     const seated = live;
     live = live.filter((seat) => seat.name !== "towncx");
-    refuse.add("notification");
+    refuse.add("ask");
     at(NOW);
     refuse.clear();
     live = seated;
@@ -1585,7 +1709,7 @@ describe("delivery", () => {
       });
     const seated = live;
     live = live.filter((seat) => seat.name !== "towncx");
-    refuse.add("notification");
+    refuse.add("ask");
     at(NOW);
     // Rewrite the notice as an older watcher stored it: `<parent>|waits`.
     const [fresh] = actionsIn(crew, ["pending"]).filter((entry) =>

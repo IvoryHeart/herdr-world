@@ -23,6 +23,8 @@ who made it, and World-side changes can be undone.
     herdr-world town desk move me --onto tab:w1:t1 --herdr
     herdr-world ask "Ship the fix now?" --options yes,no --wait
     herdr-world ask "Which host?" --owner-only --wait --timeout 600
+    herdr-world ask "Task 7 is stuck. What next?" --key task:7:stuck --owner-only
+    herdr-world ask withdraw q-example
     herdr-world result --task FM-42 "Fixed the login race" --pr 12 --status done
     herdr-world history --actor w1:p2
     herdr-world undo c-lq3x9-4
@@ -47,10 +49,13 @@ Targets are on your own host; add --connection ID for another one.
          colours: red orange yellow green teal blue purple pink
   town desk move TARGET --onto TARGET|--last --herdr
          changes Herdr's tab order, so it needs --herdr; World cannot undo it
-  ask "QUESTION" [--options a,b,c] [--owner-only] [--wait [--timeout S]]
-  ask get ID [--wait] | ask answer ID "ANSWER"
+  ask "QUESTION" [--key CAUSE] [--options a,b,c] [--owner-only] [--wait [--timeout S]]
+  ask get ID [--wait] | ask answer ID "ANSWER" | ask withdraw ID
          another verified agent may answer, never the asker; --owner-only
          questions are answered only by the owner in World
+         --key deduplicates one cause for your verified occupant. Withdraw
+         your own cause when it clears; repeats then may create a fresh ask.
+         A withdrawn --wait returns withdrawn, not an invented answer.
   result --task ID "SUMMARY" [--pr N] [--status done|blocked|failed]
   result ls [--task ID]
   spawned-by PARENT_PANE   stamp your pane as spawned by PARENT_PANE
@@ -60,6 +65,15 @@ Targets are on your own host; add --connection ID for another one.
 
 The CLI never merges, deletes panes, tabs or workspaces, or sends anything
 outside World.
+
+## Reaching the owner
+
+Use herdr-world ask from your own pane; no other channel. Ask, then move on
+or --wait. Do not prompt the owner's seat, send Herdr custom notifications,
+edit shared runbooks/configuration, or substitute issue comments for asking.
+Your question waits at reception with ?, first in Town's Needs you list.
+The owner answers there; --wait hands that answer back to your process.
+Withdraw your own open ask once its cause clears.
 
 ## Output and exit codes
 

@@ -1,0 +1,188 @@
+import { createHash } from "node:crypto";
+import { CliError } from "./world-cli-errors";
+import type { WorldCliDeps } from "./world-cli";
+import { LEDGER_LIMITS, type CliActor, type WorldLedger } from "./world-ledger";
+
+export const ASK_WAIT_MAX_MS = 20_000;
+const usage = (message: string): never => {
+  throw new CliError("usage", message);
+};
+const refused = (message: string): never => {
+  throw new CliError("refused", message);
+};
+const notFound = (message: string): never => {
+  throw new CliError("not_found", message);
+};
+const text = (
+  value: unknown,
+  what: string,
+  max = LEDGER_LIMITS.text,
+): string => {
+  if (typeof value !== "string" || !value.trim() || value.length > max)
+    usage(`${what} must be text of at most ${max} characters`);
+  return (value as string).trim();
+};
+
+export function askSessionFingerprint(value: unknown): string | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    return undefined;
+  const session = value as Record<string, unknown>;
+  const fields = [session.source, session.agent, session.kind, session.value];
+  if (!fields.every((part) => typeof part === "string" && part.length > 0))
+    return undefined;
+  return createHash("sha256").update(JSON.stringify(fields)).digest("hex");
+}
+
+/** A cause key and withdrawal belong to the verified asking occupant. */
+function sameAsker(left: CliActor, right: CliActor) {
+  return (
+    left.verified &&
+    right.verified &&
+    left.connection_id === right.connection_id &&
+    left.connection_generation === right.connection_generation &&
+    left.pane_id === right.pane_id &&
+    left.terminal_id === right.terminal_id &&
+    left.agent_session_fingerprint === right.agent_session_fingerprint &&
+    left.agent_session_id === right.agent_session_id
+  );
+}
+
+export async function handleWorldAsk(
+  deps: WorldCliDeps,
+  command: string,
+  params: Record<string, unknown>,
+  actor: CliActor,
+  now: () => number,
+): Promise<unknown> {
+  switch (command) {
+    case "ask withdraw": {
+      const id = text(params.id, "the question ID");
+      const ask = deps.ledger.ask(id);
+      if (!ask) return notFound(`no question ${id}`);
+      if (!sameAsker(ask.actor, actor))
+        refused("only the verified asker can withdraw its question");
+      if (ask.withdrawn) return ask;
+      deps.publishLedger(
+        deps.ledger.update((document) => {
+          document.asks.find((entry) => entry.id === id)!.withdrawn = {
+            at: now(),
+          };
+        }),
+        true,
+      );
+      return deps.ledger.ask(id);
+    }
+    case "ask": {
+      const question = text(params.question, "the question");
+      const key =
+        params.key === undefined
+          ? undefined
+          : text(params.key, "the cause key", 512);
+      if (key && !actor.verified)
+        refused("cause keys require a verified asking pane");
+      if (key) {
+        const known = deps.ledger
+          .get()
+          .asks.find(
+            (ask) =>
+              ask.key === key && !ask.withdrawn && sameAsker(ask.actor, actor),
+          );
+        if (known) return { id: known.id };
+      }
+      const options = Array.isArray(params.options)
+        ? params.options.map((option) =>
+            text(option, "an option", LEDGER_LIMITS.option),
+          )
+        : [];
+      if (options.length > LEDGER_LIMITS.options)
+        usage(`at most ${LEDGER_LIMITS.options} options`);
+      const open = deps.ledger.openAsks().asks;
+      if (open.length >= LEDGER_LIMITS.asks)
+        refused("too many open questions; wait for answers");
+      // Verified panes each have their own allowance; unverified callers,
+      // whatever they claim, share one.
+      const bucket = (entry: CliActor) =>
+        entry.verified
+          ? `${entry.connection_id}\u0000${entry.pane_id}`
+          : "unverified";
+      if (
+        open.filter((entry) => bucket(entry.actor) === bucket(actor)).length >=
+        LEDGER_LIMITS.asksPerActor
+      )
+        refused(
+          `you have ${LEDGER_LIMITS.asksPerActor} open questions; wait for answers`,
+        );
+      const id = deps.ledger.nextId("q");
+      deps.publishLedger(
+        deps.ledger.update((document) =>
+          document.asks.push({
+            id,
+            at: now(),
+            actor,
+            question,
+            ...(key ? { key } : {}),
+            options,
+            owner_only: params.owner_only === true,
+          }),
+        ),
+        true,
+      );
+      return { id };
+    }
+    case "ask get": {
+      const id = text(params.id, "the question ID");
+      const wait = Math.min(
+        ASK_WAIT_MAX_MS,
+        Math.max(0, Number(params.wait_ms) || 0),
+      );
+      const until = now() + wait;
+      let ask = deps.ledger.ask(id);
+      // Hold the call a while (the CLI's --wait asks again), not forever.
+      while (ask && !ask.answer && !ask.withdrawn && now() < until) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        ask = deps.ledger.ask(id);
+      }
+      return ask ?? notFound(`no question ${id}`);
+    }
+    case "ask answer": {
+      const id = text(params.id, "the question ID");
+      const answer = text(params.answer, "the answer");
+      const ask = deps.ledger.ask(id);
+      if (!ask) notFound(`no question ${id}`);
+      if (ask!.withdrawn) refused(`${id} was withdrawn`);
+      if (ask!.owner_only) refused("only the owner answers this, in World");
+      // An answer from an agent must come from a pane World has placed,
+      // and never from the agent that asked.
+      if (!actor.verified)
+        refused("only the owner or a verified agent answers questions");
+      if (
+        ask!.actor.connection_id === actor.connection_id &&
+        ask!.actor.pane_id === actor.pane_id
+      )
+        refused("an agent cannot answer its own question");
+      if (ask!.answer) refused(`${id} is already answered`);
+      deps.publishLedger(
+        answerAsk(deps.ledger, id, answer, actor.label, now()),
+        true,
+      );
+      return deps.ledger.ask(id);
+    }
+  }
+}
+
+/** Record an answer; returns the ledger revision. Used by the CLI and by World. */
+export function answerAsk(
+  ledger: WorldLedger,
+  id: string,
+  answer: string,
+  by: string,
+  at: number,
+) {
+  return ledger.update((document) => {
+    const ask = document.asks.find((entry) => entry.id === id);
+    if (!ask) throw new CliError("not_found", `no question ${id}`);
+    if (ask.withdrawn) throw new CliError("refused", `${id} was withdrawn`);
+    if (ask.answer) throw new CliError("refused", `${id} is already answered`);
+    ask.answer = { text: answer, at, by };
+  });
+}

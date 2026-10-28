@@ -39,6 +39,7 @@ Work item:
 Rules:
 - Follow AGENTS.md. Look for correctness bugs, missing tests, documentation gaps, privacy leaks (real hosts, users, paths, sessions, tokens) and contract or verification impact. Grade findings P1, P2 or P3. The owner has every finding fixed, so report only real ones.
 - The machine is shared: typecheck and focused unit tests only; a browser suite only through \`bun run test <path>\` when the change needs one. Keep command output bounded.
+- To reach the owner, use \`herdr-world ask "QUESTION" --owner-only --wait\` from your own pane; no other channel. Do not prompt the owner, send Herdr custom notifications, edit shared runbooks/configuration or substitute an issue comment for asking.
 - Independence: do not read the other reviewers' reviews or comments on this head before you post yours.
 - Post exactly one formal review with \`gh pr review ${pr} --repo ${repo} --comment --body-file <file>\`. The body starts with exactly these three lines, no text before them:
   Reviewer: ${reviewer}

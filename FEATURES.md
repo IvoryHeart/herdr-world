@@ -530,10 +530,17 @@ when piped, with stable exit codes:
 - `town desk move … --herdr`: reorder a desk in its room with Herdr's tab
   order, as a drag in Town does. It needs `--herdr` because it changes Herdr,
   and World cannot undo it.
-- `ask "…" [--options a,b] [--owner-only] [--wait]`: a question for you. It
-  appears first in Town's **Needs you** list, where you pick an option or
-  type an answer; `--wait` blocks until then. Another verified agent (never
-  the one that asked) may answer a question that is not owner-only.
+- `ask "…" [--key CAUSE] [--options a,b] [--owner-only] [--wait]`: a question
+  for you. It appears first in Town's **Needs you** list and Summary, where you
+  pick an option or type an answer; `--wait` returns that answer to the asker.
+  Its agent waits at reception with **?**; Board and Desk show the same mark.
+  A new verified ask follows your chime, toast and OS notification preferences,
+  with **Open agent** for its exact original seat. Another verified agent
+  (never the asker) may answer a question that is not owner-only.
+- `ask withdraw ID`: the original verified asker withdraws a cleared cause.
+  Answering or withdrawing removes its question marks. `--key` keeps repeated
+  causes to one ask; after withdrawal a recurrence can create a fresh question.
+  A waiting CLI returns `withdrawn` when its question was cancelled.
 - `result --task ID "…" [--pr N] [--status done|blocked|failed]` and
   `result ls`: task results kept by World, instead of terminal scraping.
 - `spawned-by <parent-pane>`: the spawn stamp, made by the child itself. It

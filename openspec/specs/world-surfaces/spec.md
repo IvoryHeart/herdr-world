@@ -1302,9 +1302,50 @@ remain available as visible buttons.
 - **THEN** roofs cover the buildings and each roof shows its host's room and desk
   counts while the reception boards keep showing waiting agents
 
+### Requirement: Durable owner asks from crew panes
+
+The watcher, dispatcher and workers SHALL reach the owner through the existing
+World ask ledger from their own panes. They SHALL NOT substitute custom Herdr
+notifications, owner-seat prompts, shared-runbook/configuration edits or issue
+comments for asking. A worker awaiting a decision SHALL use the existing ask
+wait path; the watcher SHALL keep passes nonblocking, record one ask per cause,
+read an owner answer once into its own output/feed and withdraw the ask when
+the cause clears. Scoped passes SHALL leave other PRs' asks alone, and held PRs
+SHALL produce no new owner asks.
+
+The ask command SHALL accept a bounded optional cause key scoped to its verified
+asking occupant, return the same retained ask for repeated causes including
+answered ones, and allow a new occurrence after withdrawal. Only the original
+verified connection, runtime, terminal and session SHALL withdraw an ask.
+Withdrawal SHALL be idempotent, preserve an answer already recorded, release
+waiting reads without inventing an answer, and remove the question from every
+open-ask projection. Withdrawn questions SHALL share the existing ledger's
+closed-question retention bound. A withdrawn ask SHALL reject later answers.
+
+World SHALL announce newly observed verified asks through its existing chime,
+toast and OS-notification preferences. One page SHALL announce an ask ID only
+once while retained in its bounded seen set, without replaying the initial
+backlog. The common shell SHALL observe asks in every view. A local ask event
+SHALL retain its local OS-notification path when Web Push is selected. Open
+agent SHALL carry the original runtime, terminal and agent-session identity,
+refuse replacement targets and preserve the host filter. Obsolete socket or
+revision replies SHALL NOT restore answered or withdrawn asks.
+
+#### Scenario: A crew cause needs an owner decision
+
+- **WHEN** a blocked author, READY PR or stuck dispatch is observed in one pass
+- **THEN** its producer records one durable owner ask from its own verified pane,
+  World shows its question and announcement, and the owner can open and answer it
+
+#### Scenario: A cause clears after its ask was delivered
+
+- **WHEN** a producer's cause clears, including readiness changing on the same head
+- **THEN** the original asker withdraws the ask and all open-question markers clear,
+  while any answer recorded first remains on the same ledger question
+
 ### Requirement: Town agent locations
 
-Town SHALL seat working and unknown agents at their pane's seat. A blocked agent
+Town SHALL seat working and unknown agents at their pane's seat unless they have an open verified owner ask. A blocked agent
 SHALL move to its host's reception and queue in order of when it became blocked,
 oldest first, within a bounded number of queue positions; further blocked agents
 SHALL stay at their seat with a waiting cue and the reception SHALL show the exact
@@ -1324,6 +1365,20 @@ agent's status changes, it SHALL move to its new location, and an answered agent
 SHALL return to its seat. Location and movement SHALL be presentation only: they
 SHALL NOT delay operational state, and every agent SHALL keep its exact qualified
 pane target wherever it stands.
+
+An agent with an open ask verified against its current connection, runtime,
+terminal and agent session SHALL wait at reception with a quiet question mark.
+Urgent blocking SHALL keep its exclamation mark and priority over quiet asks;
+unchecked finishes SHALL follow both. Opening the asking agent SHALL preserve
+the ask. Answering or withdrawal SHALL remove its question marker and restore
+its normal status-based location. These cues SHALL respect existing scene and
+queue bounds without changing the native-order desk prefix. Hidden asking
+agents SHALL remain represented by reception counts and the existing question
+rail. Board and Desk SHALL show the same qualified question mark, and Desk
+SHALL include a current asking agent in Needs you regardless of working/idle
+status. A reception question entry SHALL open its original pane in one action. A
+verified asking shell pane, such as the watcher, SHALL receive a reception entry
+and Board/Desk marks without inventing an agent harness or changing Herdr status.
 
 #### Scenario: An agent asks for input and is answered
 

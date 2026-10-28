@@ -1,3 +1,4 @@
+import { useWorldAsks } from "./worldAsks";
 import "./world.css";
 import "./windows/WorldLayout.css";
 
@@ -94,6 +95,7 @@ export const SourcesDialog = lazyWithReload("world-sources", () =>
 );
 
 export default function WorldFoundationApp() {
+  useWorldAsks();
   const [view, setViewState] = useState<WorldView>(initialView);
   const { mobile } = useLayoutPreferences();
   const creationIntentRevision = useRef(0);
