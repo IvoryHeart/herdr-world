@@ -4,11 +4,12 @@ import { enrichAgentActivity } from "./agent-activity";
 import { createCodexSessionLinker } from "./codex-session-link";
 import { createConversationWatcher } from "./conversation-watch";
 import { createHerdrConversationSource } from "./herdr-conversation";
-import type { HerdrCall, SessionFile } from "./session-types";
+import type { AgentSessionInfo, HerdrCall, SessionFile } from "./session-types";
 import {
   createAgentSessionResolverContext,
   type AgentSessionResolverContext,
   resolveAgentSession,
+  resolveAgentSessionInfo,
 } from "./session-resolver";
 import {
   localAgentSessionFiles,
@@ -27,6 +28,7 @@ import {
   redactHistoryUpdate,
 } from "./session-history";
 import { taskSummarySessionFingerprint } from "../herdr/task-summary";
+import { isRecord } from "./session-utils";
 import { FULL_REPORT_CHARS, latestTurnReceipt } from "./turn-receipt";
 import type { CodexDiscoveryScope } from "./codex-discovery-cache";
 
@@ -190,22 +192,39 @@ export function createAgentSessionHandlers(args: {
         session_changed: true,
         agent_session_fingerprint: expected,
       };
-      const resolved = await resolveAgentSession(
-        params,
-        args.herdrCall,
-        args.files,
-        resolverContext,
-      );
+      const agentResult = await args.herdrCall("agent.get", {
+        target: params.pane_id,
+      });
+      const agentInfo =
+        isRecord(agentResult) && isRecord(agentResult.agent)
+          ? agentResult.agent
+          : null;
+      const reportedSession = sessionFromAgentInfo(agentInfo);
       if (
         expected !== null &&
-        (!resolved.session ||
-          taskSummarySessionFingerprint(resolved.session) !== expected)
+        reportedSession &&
+        taskSummarySessionFingerprint(reportedSession) !== expected
       )
         return changed;
+      const resolved = await resolveAgentSessionInfo(
+        params,
+        agentInfo,
+        args.files,
+        resolverContext,
+        { herdrCall: args.herdrCall },
+      );
       if (!resolved.file) {
         cache.invalidate(resolved);
         return { ...resolved, turn: null, agent_session_fingerprint: expected };
       }
+      if (expected !== null && !reportedSession) return changed;
+      if (
+        expected !== null &&
+        reportedSession?.agent === "codex" &&
+        resolved.session?.source === "codex-title" &&
+        !sameCodexThread(reportedSession, resolved.session)
+      )
+        return changed;
       const projection = await cache.get(resolved);
       const turn = latestTurnReceipt(
         projection.file,
@@ -490,6 +509,36 @@ export async function downloadAgentSessionAtif(
       "x-agent-session-path": encodeURIComponent(resolved.file.path),
     },
   });
+}
+
+function sessionFromAgentInfo(
+  agentInfo: Record<string, unknown> | null,
+): AgentSessionInfo | null {
+  const raw = agentInfo?.agent_session;
+  if (!isRecord(raw)) return null;
+  const { source, agent, kind, value } = raw;
+  if (
+    typeof source !== "string" ||
+    !source ||
+    typeof agent !== "string" ||
+    !agent ||
+    (kind !== "id" && kind !== "path") ||
+    typeof value !== "string" ||
+    !value
+  )
+    return null;
+  return { source, agent, kind, value };
+}
+
+/** A resolved Codex title may name the full ID for a reported ID prefix. */
+function sameCodexThread(
+  reported: AgentSessionInfo,
+  resolved: AgentSessionInfo,
+) {
+  if (reported.kind !== "id" || resolved.kind !== "id") return false;
+  const a = reported.value.toLowerCase();
+  const b = resolved.value.toLowerCase();
+  return a.startsWith(b) || b.startsWith(a);
 }
 
 /** The fingerprint of the agent session Herdr currently reports for a pane. */
