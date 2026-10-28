@@ -23,11 +23,15 @@ This reconciles the remaining baseline entries without treating a component mode
 ### Chat source navigation (Q16)
 
 The source-link parser fixtures cover absolute/relative paths, encoded names,
-line locations and traversal refusal. The real Markdown/Inspector source-link
+line locations, escaped filename delimiters, root filenames, whole inline-code
+paths with spaces, prose exclusions and traversal refusal. The real
+Markdown/Inspector source-link
 consumer rejects mismatched host, runtime, pane/session and missing worktree
 bindings, and discards pending previews after binding replacement. Desktop and
 phone Chrome fixtures use the real Chat and Inspector to open the same file at
-two requested lines through a qualified agent-worktree read. These direct
+two requested lines through a qualified agent-worktree read delayed across
+equivalent fresh RPC observations. Notice replacement and the actual unbound
+Spaces host retain their separate consumer assertions. These direct
 consumer/browser cases complement browser-preparation and runtime-leases;
 a new model would not establish Markdown parsing or CodeMirror line targeting.
 Filesystem containment and symlink admission remain the existing service adapter's

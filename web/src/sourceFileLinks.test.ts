@@ -43,6 +43,25 @@ test("source links keep their line or Markdown heading, including escaped paths"
     expect(parseSourceFileLink(href)).toBeNull();
 });
 
+test("escaped filename delimiters stay in the path and preserve line anchors", () => {
+  expect(parseSourceFileLink("src/C%23.ts#L12")).toEqual({
+    path: "src/C#.ts",
+    line: 12,
+  });
+  expect(parseSourceFileLink("src/a%3Fb.ts#L12")).toEqual({
+    path: "src/a?b.ts",
+    line: 12,
+  });
+  expect(parseSourceFileLink("src/a%3A12#L4")).toEqual({
+    path: "src/a:12",
+    line: 4,
+  });
+  expect(parseSourceFileLink("src/main.ts#part%23two")).toEqual({
+    path: "src/main.ts",
+    fragment: "part#two",
+  });
+});
+
 test("absolute and relative links stay inside the selected worktree", () => {
   const root = "/project/demo";
   expect(

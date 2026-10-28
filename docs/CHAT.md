@@ -129,8 +129,10 @@ that root; stat metadata cannot redirect the read to a different transcript.
   pick an option.
 - Keeps the last good conversation when a read fails, for example while the
   transcript is being written, and says that it could not refresh.
-- Opens local source references in the same Inspector's **Files** view.
-  Absolute paths, inline source paths and Markdown file links can include a
+- In Town, Board and Desk, opens local source references in the same
+  Inspector's **Files** view.
+  Absolute paths, root-level filenames such as `README.md`, inline code paths
+  (including spaces) and Markdown file links can include a
   line (`src/example.ts:12` or `src/example.ts#L12`); Markdown heading links
   such as `docs/guide.md#setup` open that section. Relative references start
   at the selected agent worktree. Files and Changes keep their shared binding
@@ -138,7 +140,9 @@ that root; stat metadata cannot redirect the read to a different transcript.
   outside the selected worktree, shows an unavailable notice with **Choose a
   worktree**. Choose the intended worktree and click the reference again;
   Chat never chooses another checkout or host for a link. HTTP and HTTPS
-  links continue to open as web links.
+  links continue to open as web links. Spaces retains ordinary Markdown link
+  navigation: its Inspector does not yet have an agent-worktree binding and
+  does not offer this worktree chooser.
 - When the conversation is unavailable, Chat shows the reason and the action it
   names: the integration command to copy, the Codex session link, **Refresh**
   and **Open Terminal**. It offers no composer then.

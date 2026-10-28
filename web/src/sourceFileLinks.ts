@@ -22,27 +22,31 @@ export function parseSourceFileLink(
     (!drive && !fileLocation && /^[a-z][a-z0-9+.-]*:/i.test(value))
   )
     return undefined;
-  let decoded: string;
+  // Split syntax before decoding: escaped delimiters belong to the filename.
+  const hash = value.indexOf("#");
+  let rawPath = hash < 0 ? value : value.slice(0, hash);
+  const rawFragment = hash < 0 ? undefined : value.slice(hash + 1);
+  if (rawPath.includes("?")) return null;
+  const location = /:(\d+)(?::\d+)?$/.exec(rawPath);
+  if (location) rawPath = rawPath.slice(0, location.index);
+  let path: string;
+  let fragment: string | undefined;
   try {
-    decoded = decodeURIComponent(value);
+    path = decodeURIComponent(rawPath);
+    fragment =
+      rawFragment === undefined ? undefined : decodeURIComponent(rawFragment);
   } catch {
     return null;
   }
   if (
-    /[\u0000-\u001f\u007f-\u009f]/.test(decoded) ||
-    decoded.startsWith("//") ||
-    decoded.startsWith("\\\\") ||
-    decoded.includes("?")
+    /[\u0000-\u001f\u007f-\u009f]/.test(path + (fragment ?? "")) ||
+    path.startsWith("//") ||
+    path.startsWith("\\\\")
   )
     return null;
-  const hash = decoded.indexOf("#");
-  const fragment = hash < 0 ? undefined : decoded.slice(hash + 1);
-  let path = hash < 0 ? decoded : decoded.slice(0, hash);
-  const location = /:(\d+)(?::\d+)?$/.exec(path);
   const anchorLine = fragment?.match(/^L(\d+)(?:-L?\d+)?$/i);
   const line =
     location || anchorLine ? Number((location ?? anchorLine)![1]) : undefined;
-  if (location) path = path.slice(0, location.index);
   if (
     !path ||
     (line !== undefined && (!Number.isSafeInteger(line) || line < 1))

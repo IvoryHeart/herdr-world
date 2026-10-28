@@ -24,7 +24,7 @@ export function InspectorChat({
       focusIntent={focusIntent}
     />
   );
-  return sourceFiles ? (
+  return sourceFiles?.worktree ? (
     <InspectorSourceFiles source={sourceFiles}>{chat}</InspectorSourceFiles>
   ) : (
     chat

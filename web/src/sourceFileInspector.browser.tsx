@@ -12,7 +12,7 @@ const failures: string[] = [];
 const check = (condition: unknown, message: string) => {
   if (!condition) failures.push(message);
 };
-const settle = () => new Promise((resolve) => setTimeout(resolve, 100));
+const settle = (ms = 100) => new Promise((resolve) => setTimeout(resolve, ms));
 const fingerprint = "a".repeat(64);
 const subject = {
   connectionId: "alpha",
@@ -76,7 +76,7 @@ const client: ConnectionClient = {
   isCurrent: () => true,
   acceptsServerGeneration: (value) => value === 7,
   async call(method, params = {}) {
-    if (method === "agent_worktree.get") return observation;
+    if (method === "agent_worktree.get") return structuredClone(observation);
     if (
       method === "agent_conversation.latest" ||
       method === "agent_conversation.get"
@@ -125,6 +125,7 @@ const client: ConnectionClient = {
       };
     if (method === "file.read") {
       reads.push(params);
+      await settle(300);
       return {
         workspace_id: "workspace",
         root: candidate.canonicalRoot,
@@ -231,9 +232,7 @@ async function run() {
   );
   check(link, "The real Chat transcript must render its local Markdown link");
   link?.click();
-  await settle();
-  await settle();
-  await settle();
+  await settle(750);
   check(
     target.querySelector(".inspector-files-resource:not(.is-hidden)"),
     "Clicking Chat source must activate Files in the same Inspector",
@@ -272,8 +271,7 @@ async function run() {
   );
   check(inline, "Inline source references must also be clickable");
   inline?.click();
-  await settle();
-  await settle();
+  await settle(750);
   check(
     target.querySelector(".cm-activeLine")?.textContent === "const line7 = 7;",
     "Reopening the same file must reveal the newly requested line",

@@ -297,11 +297,17 @@ retain its single-Inspector behavior.
 
 ### Requirement: Chat source links use the admitted Inspector worktree
 
-Local source references in an agent conversation SHALL open Files in that same
-Inspector at the referenced line or Markdown heading. Supported references SHALL
-include absolute paths with an optional line number, inline source paths and
-Markdown file links. Relative references SHALL resolve within the selected agent
-worktree. HTTP and HTTPS links SHALL remain web links.
+In Town, Board and Desk, local source references in an agent conversation SHALL
+open Files in that same Inspector at the referenced line or Markdown heading.
+Supported references SHALL
+include absolute paths with an optional line number, root-level filenames,
+complete inline-code paths (including spaces) and Markdown file links. Escaped
+filename delimiters SHALL remain filename content; version-number prose SHALL
+NOT become automatic source links. Relative references SHALL resolve within the
+selected agent
+worktree. HTTP and HTTPS links SHALL remain web links. Inspectors without an
+admitted agent-worktree integration, including Spaces, SHALL retain ordinary
+Markdown navigation and SHALL NOT offer a nonfunctional worktree chooser.
 
 Source navigation SHALL preserve the originating connection, runtime generation,
 pane/session and the shared Files/Changes worktree binding. It SHALL NOT admit a
@@ -322,6 +328,13 @@ choose-worktree state, without browser navigation to a local-path URL.
   or the path is outside the selected worktree
 - **THEN** no fallback file read or browser navigation occurs, and the Inspector
   offers an explicit unavailable notice or worktree choice
+
+#### Scenario: Refresh equivalent evidence while a source read is pending
+
+- **WHEN** opening Files refreshes worktree evidence with identical connection,
+  runtime, subject, revision, candidate and root values before the read completes
+- **THEN** the successful read still reveals its requested line, genuine binding
+  replacements continue to retire old work, and notices follow their binding
 
 ### Requirement: Exact visual terminal input focus
 

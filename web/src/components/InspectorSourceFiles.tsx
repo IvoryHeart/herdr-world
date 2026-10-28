@@ -35,16 +35,24 @@ export function InspectorSourceFiles({
   source: InspectorSourceFilesProps;
   children: ReactNode;
 }) {
-  const [notice, setNotice] = useState("");
   const { client, worktree } = source;
   const identity = JSON.stringify([
+    client.connectionId,
+    client.generation,
+    client.serverRuntimeGeneration,
     source.workspaceId,
     source.paneId,
     source.sessionFingerprint,
     worktree?.target,
     worktree?.selected?.canonicalRoot,
   ]);
-  const binding = useMemo(() => ({ identity, client }), [identity, client]);
+  const binding = useMemo(() => Symbol(identity), [identity]);
+  const [noticeState, setNoticeState] = useState<{
+    binding: symbol;
+    message: string;
+  } | null>(null);
+  const notice = noticeState?.binding === binding ? noticeState.message : "";
+  const setNotice = (message: string) => setNoticeState({ binding, message });
   const current = useRef<typeof binding | null>(binding);
   current.current = binding;
   useLayoutEffect(() => {
