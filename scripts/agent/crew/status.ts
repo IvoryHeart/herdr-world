@@ -5,7 +5,12 @@ import { shortSha } from "../../../shared/pullRequests";
 import type { GateInput } from "../gate/predicate";
 import { currentInputs, latestInput, openStore } from "../gate/store";
 import { type CrewSettings, inScope, isOnHold, loadSettings } from "./plan";
-import { type Seat, unrostered, type WatcherCode } from "./seats";
+import {
+  type Seat,
+  unrostered,
+  type WatcherCode,
+  watcherRunning,
+} from "./seats";
 import {
   actionsIn,
   metaWithPrefix,
@@ -68,6 +73,7 @@ export function showStatus(
     live?: Seat[];
     hours?: number;
     alive?: (pid: number) => boolean;
+    startOf?: (pid: number) => string | null;
   } = {},
 ) {
   const gate = openStore(join(dir, "gate.sqlite"));
@@ -89,10 +95,11 @@ export function showStatus(
     if (missing.length) out(`seats not in the roster: ${missing.join(", ")}`);
     // Each live watcher's versions come from its own checkout, whichever
     // checkout `status` runs from.
+    const running = watcherRunning(extra.alive ?? (() => false), extra.startOf);
     for (const { key, value } of metaWithPrefix(crew, "watcher:")) {
       const pid = Number(key.slice("watcher:".length));
       const code = JSON.parse(value) as WatcherCode;
-      if (code.loaded !== code.disk && (extra.alive ?? (() => false))(pid))
+      if (code.loaded !== code.disk && running(pid, code.started))
         out(
           `watcher ${pid} runs older crew code than its checkout; restart \`agent:crew -- watch\``,
         );

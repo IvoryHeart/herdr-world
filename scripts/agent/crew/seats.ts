@@ -1,7 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
-import type { Run } from "../gate/observe";
+import { type Run, runProcess } from "../gate/observe";
 import { type Deps, herdrIds } from "./deps";
 import { digest, loadSettings } from "./plan";
 import type { Options } from "./review";
@@ -80,7 +80,29 @@ export type WatcherCode = {
   disk: string;
   /** The checkout version the owner was last told about. */
   told?: string;
+  /** When its process started, which tells it from a later one with its pid. */
+  started?: string;
 };
+
+/** When a process started, as `ps` reports it; null if there is none. */
+export function processStart(pid: number): string | null {
+  const result = runProcess(["ps", "-o", "lstart=", "-p", String(pid)]);
+  const started = result.stdout.trim();
+  return result.code === 0 && started ? started : null;
+}
+
+/**
+ * Whether a recorded watcher still runs: its pid is alive and, when the
+ * record knows it, that process started when the watcher did. A pid the OS
+ * gave to another process since, even after a reboot, doesn't count.
+ */
+export function watcherRunning(
+  alive: (pid: number) => boolean,
+  startOf: (pid: number) => string | null = processStart,
+) {
+  return (pid: number, started?: string) =>
+    alive(pid) && (started === undefined || startOf(pid) === started);
+}
 
 /**
  * Records this watcher's loaded and on-disk code versions for `status`,
@@ -96,14 +118,26 @@ export function noticeStaleWatcher(
   deps: Deps,
   now = Date.now(),
   pid = process.pid,
+  startOf: (pid: number) => string | null = processStart,
 ) {
-  forgetGoneWatchers(crew, deps.alive, pid);
+  forgetGoneWatchers(crew, watcherRunning(deps.alive, startOf), pid);
   const key = `watcher:${pid}`;
   const raw = getMeta(crew, key);
-  const told = raw ? (JSON.parse(raw) as WatcherCode).told : undefined;
-  const record = (entry: WatcherCode) =>
-    setMeta(crew, key, JSON.stringify(entry));
-  record({ loaded, disk, ...(told ? { told } : {}) });
+  const known = raw ? (JSON.parse(raw) as WatcherCode) : null;
+  const started = known?.started ?? startOf(pid) ?? undefined;
+  const record = (told?: string) =>
+    setMeta(
+      crew,
+      key,
+      JSON.stringify({
+        loaded,
+        disk,
+        ...(started ? { started } : {}),
+        ...(told ? { told } : {}),
+      } satisfies WatcherCode),
+    );
+  const told = known?.told;
+  record(told);
   if (disk === loaded || told === disk) return;
   const result = deps.run([
     "herdr",
@@ -116,7 +150,7 @@ export function noticeStaleWatcher(
     "request",
   ]);
   if (result.code !== 0) return;
-  record({ loaded, disk, told: disk });
+  record(disk);
   feed(
     join(dir, "feed.log"),
     now,
@@ -125,17 +159,18 @@ export function noticeStaleWatcher(
 }
 
 /**
- * Drops the records of watchers whose process is gone, so a stopped
- * watcher's record can't be read again once the OS reuses its pid.
+ * Drops the records of watchers that no longer run, so a stopped watcher's
+ * record can't be read again once the OS reuses its pid.
  */
 export function forgetGoneWatchers(
   crew: Database,
-  alive: (pid: number) => boolean,
+  running: (pid: number, started?: string) => boolean,
   own = process.pid,
 ) {
-  for (const { key } of metaWithPrefix(crew, "watcher:")) {
+  for (const { key, value } of metaWithPrefix(crew, "watcher:")) {
     const pid = Number(key.slice("watcher:".length));
-    if (pid !== own && !alive(pid)) deleteMeta(crew, key);
+    const { started } = JSON.parse(value) as WatcherCode;
+    if (pid !== own && !running(pid, started)) deleteMeta(crew, key);
   }
 }
 

@@ -2028,6 +2028,9 @@ describe("seats", () => {
 });
 
 describe("seats and spend", () => {
+  // Watcher tests give their own process start times; none means pid only.
+  const noStart = () => null;
+
   test("a seat starts on exactly its roster harness, model, effort and persona", () => {
     expect(
       seatArgv({
@@ -2320,14 +2323,14 @@ describe("seats and spend", () => {
         existsSync(join(dir, "feed.log"))
           ? readFileSync(join(dir, "feed.log"), "utf8")
           : "";
-      noticeStaleWatcher(crew, "v1", "v1", dir, deps, NOW, 11);
+      noticeStaleWatcher(crew, "v1", "v1", dir, deps, NOW, 11, noStart);
       expect(notices).toEqual([]);
-      noticeStaleWatcher(crew, "v1", "v2", dir, deps, NOW, 11);
+      noticeStaleWatcher(crew, "v1", "v2", dir, deps, NOW, 11, noStart);
       expect(notices).toHaveLength(1);
       expect(feedText()).toBe("");
       refuse = false;
-      noticeStaleWatcher(crew, "v1", "v2", dir, deps, NOW, 11);
-      noticeStaleWatcher(crew, "v1", "v2", dir, deps, NOW, 11);
+      noticeStaleWatcher(crew, "v1", "v2", dir, deps, NOW, 11, noStart);
+      noticeStaleWatcher(crew, "v1", "v2", dir, deps, NOW, 11, noStart);
       expect(notices).toHaveLength(2);
       expect(notices[1]!.slice(0, 4)).toEqual([
         "herdr",
@@ -2337,7 +2340,7 @@ describe("seats and spend", () => {
       ]);
       expect(feedText()).toContain("told the owner to restart it");
       // Another merge is another version: the owner hears again.
-      noticeStaleWatcher(crew, "v1", "v3", dir, deps, NOW, 11);
+      noticeStaleWatcher(crew, "v1", "v3", dir, deps, NOW, 11, noStart);
       expect(notices).toHaveLength(3);
     } finally {
       crew.close();
@@ -2361,12 +2364,12 @@ describe("seats and spend", () => {
         return lines.filter((line) => line.includes("older crew code"));
       };
       // B runs v2 from its current checkout; A runs v1 from its own.
-      noticeStaleWatcher(crew, "v2", "v2", dir, deps, NOW, 202);
-      noticeStaleWatcher(crew, "v1", "v1", dir, deps, NOW, 101);
+      noticeStaleWatcher(crew, "v2", "v2", dir, deps, NOW, 202, noStart);
+      noticeStaleWatcher(crew, "v1", "v1", dir, deps, NOW, 101, noStart);
       expect(stale()).toEqual([]);
       // A's checkout moves on: only A is stale.
-      noticeStaleWatcher(crew, "v1", "v3", dir, deps, NOW, 101);
-      noticeStaleWatcher(crew, "v2", "v2", dir, deps, NOW, 202);
+      noticeStaleWatcher(crew, "v1", "v3", dir, deps, NOW, 101, noStart);
+      noticeStaleWatcher(crew, "v2", "v2", dir, deps, NOW, 202, noStart);
       expect(stale()).toEqual([
         "watcher 101 runs older crew code than its checkout; restart `agent:crew -- watch`",
       ]);
@@ -2389,20 +2392,59 @@ describe("seats and spend", () => {
         const lines: string[] = [];
         showStatus(crew, dir, (line) => lines.push(line), NOW, {
           alive: deps.alive,
+          startOf: noStart,
         });
         return lines.filter((line) => line.includes("older crew code"));
       };
       // Watcher 101 falls behind its checkout, then is killed without
       // cleaning up; watcher 202 replaces it.
-      noticeStaleWatcher(crew, "v1", "v2", dir, deps, NOW, 101);
+      noticeStaleWatcher(crew, "v1", "v2", dir, deps, NOW, 101, noStart);
       running.delete(101);
-      noticeStaleWatcher(crew, "v2", "v2", dir, deps, NOW, 202);
+      noticeStaleWatcher(crew, "v2", "v2", dir, deps, NOW, 202, noStart);
       expect(getMeta(crew, "watcher:101")).toBeNull();
       // The OS later gives pid 101 to an unrelated process.
       running.add(101);
       expect(stale()).toEqual([]);
       forgetGoneWatchers(crew, () => false, 202);
       expect(getMeta(crew, "watcher:202")).not.toBeNull();
+    } finally {
+      crew.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a crashed watcher's pid reused before any cleanup isn't taken for it", () => {
+    const dir = mkdtempSync(join(tmpdir(), "crew-reuse-"));
+    const crew = openCrewStore(":memory:");
+    try {
+      const starts = new Map([
+        [101, "Wed Oct 28 10:00:00 2026"],
+        [202, "Wed Oct 28 11:00:00 2026"],
+      ]);
+      const startOf = (pid: number) => starts.get(pid) ?? null;
+      const deps = {
+        alive: (pid: number) => starts.has(pid),
+        run: () => ({ code: 0, stdout: "", stderr: "" }),
+      } as unknown as Deps;
+      const stale = () => {
+        const lines: string[] = [];
+        showStatus(crew, dir, (line) => lines.push(line), NOW, {
+          alive: deps.alive,
+          startOf,
+        });
+        return lines.filter((line) => line.includes("older crew code"));
+      };
+      noticeStaleWatcher(crew, "v1", "v2", dir, deps, NOW, 101, startOf);
+      expect(stale()).toHaveLength(1);
+      // Watcher 101 crashes, and an unrelated process (or a reboot) takes
+      // its pid before any other watcher has run a pass.
+      starts.set(101, "Wed Oct 28 12:30:00 2026");
+      expect(stale()).toEqual([]);
+      noticeStaleWatcher(crew, "v2", "v2", dir, deps, NOW, 202, startOf);
+      expect(getMeta(crew, "watcher:101")).toBeNull();
+      expect(JSON.parse(getMeta(crew, "watcher:202")!).started).toBe(
+        "Wed Oct 28 11:00:00 2026",
+      );
     } finally {
       crew.close();
       rmSync(dir, { recursive: true, force: true });
