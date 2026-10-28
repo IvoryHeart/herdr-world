@@ -4,3 +4,5 @@
   Inspector's Files view at the requested line, using its selected agent
   worktree and host. Unavailable
   bindings and paths outside that worktree offer an explicit worktree choice.
+- Keep commands and lists linked to their individual source files, while ordinary
+  dotted prose and code identifiers remain text.

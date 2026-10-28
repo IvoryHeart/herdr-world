@@ -65,6 +65,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     Inspector's **Files** at the referenced line. Relative links use the selected
     agent worktree; unavailable
     or outside-worktree links offer **Choose a worktree**. Web links stay web links.
+    Bare filenames use known source/doc formats with a code, line-number or
+    standard-document hint; commands and lists keep individual source links.
+    Ordinary dotted prose and unrelated code identifiers stay text.
     Spaces keeps ordinary Markdown navigation without an agent-worktree chooser.
   - An agent's known PR announcement or current work claim can show a compact
     pull request card in Chat. **Details** has CI, reviews and owner actions;

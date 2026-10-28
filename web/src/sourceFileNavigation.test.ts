@@ -152,7 +152,7 @@ test("Chat source links navigate through the admitted Inspector binding", async 
             h(Probe, { key: "probe" }),
             h(MarkdownPreview, {
               key: "markdown",
-              text: "[source](/project/demo/src/main.ts:12) [relative](src/other.ts#L2) [outside](/project/other/main.ts:8) [web](https://example.test/guide) [bare](main.ts:9) [drive](C:/project/demo/main.ts:9) [unsafe](javascript:alert(1)) [remote](file://other.example.test/project/demo/main.ts)\n\n`/project/demo/src/inline.ts:3`\n\n/project/demo/src/plain.ts:4\n\n`main.ts:12` and README.md, root.ts:9 and `/project/demo/src/a b.ts:12`. [escaped](src/C%23.ts#L12). HTTP/1.1 and 3.12/3.13 stay prose.\n\n```\n/project/demo/do-not-link.ts:5\n```",
+              text: "[source](/project/demo/src/main.ts:12) [relative](src/other.ts#L2) [outside](/project/other/main.ts:8) [web](https://example.test/guide) [bare](main.ts:9) [drive](C:/project/demo/main.ts:9) [unsafe](javascript:alert(1)) [remote](file://other.example.test/project/demo/main.ts)\n\n`/project/demo/src/inline.ts:3`\n\n/project/demo/src/plain.ts:4\n\n`main.ts:12` and README.md, root.ts:9 and `/project/demo/src/a b.ts:12`. [escaped](src/C%23.ts#L12). [custom](schema.custom#L4). HTTP/1.1 and 3.12/3.13 stay prose. e.g. i.e. example.com Node.js Next.js v2.x stay prose too. `process.env` and `client.generation`.\n\n`bun test web/src/sourceFileLinks.test.ts`\n\n`bun run test web/src/foo.test.ts`\n\n`rg -n foo web/src/a.ts`\n\n`src/a.ts:12 src/b.ts:24`\n\n`web/src/my file.ts:3`\n\n`web/src/my.test file.ts:3`\n\n`./my file.ts:3`\n\n`src/a.ts src/b.ts`\n\n```\n/project/demo/do-not-link.ts:5\n```",
             }),
           ],
         }),
@@ -213,6 +213,47 @@ test("Chat source links navigate through the admitted Inspector binding", async 
       expect(selection).toMatchObject({ entry: { path }, line });
     }
     for (const prose of ["HTTP/1.1", "3.12/3.13"]) {
+      expect(
+        [...node.querySelectorAll("[data-source-file]")].some(
+          (a) => a.textContent === prose,
+        ),
+      ).toBe(false);
+    }
+    for (const [label, path, line] of [
+      [
+        "web/src/sourceFileLinks.test.ts",
+        "web/src/sourceFileLinks.test.ts",
+        undefined,
+      ],
+      ["web/src/foo.test.ts", "web/src/foo.test.ts", undefined],
+      ["web/src/a.ts", "web/src/a.ts", undefined],
+      ["src/a.ts:12", "src/a.ts", 12],
+      ["src/b.ts:24", "src/b.ts", 24],
+      ["web/src/my file.ts:3", "web/src/my file.ts", 3],
+      ["web/src/my.test file.ts:3", "web/src/my.test file.ts", 3],
+      ["./my file.ts:3", "my file.ts", 3],
+      ["custom", "schema.custom", 4],
+      ["src/a.ts", "src/a.ts", undefined],
+      ["src/b.ts", "src/b.ts", undefined],
+    ] as const) {
+      await click(label);
+      expect(selection).toMatchObject({ entry: { path }, line });
+    }
+    for (const prose of [
+      "e.g",
+      "i.e",
+      "example.com",
+      "Node.js",
+      "Next.js",
+      "v2.x",
+      "process.env",
+      "client.generation",
+      "bun test web/src/sourceFileLinks.test.ts",
+      "bun run test web/src/foo.test.ts",
+      "rg -n foo web/src/a.ts",
+      "src/a.ts:12 src/b.ts:24",
+      "src/a.ts src/b.ts",
+    ]) {
       expect(
         [...node.querySelectorAll("[data-source-file]")].some(
           (a) => a.textContent === prose,

@@ -303,7 +303,13 @@ Supported references SHALL
 include absolute paths with an optional line number, root-level filenames,
 complete inline-code paths (including spaces) and Markdown file links. Escaped
 filename delimiters SHALL remain filename content; version-number prose SHALL
-NOT become automatic source links. Relative references SHALL resolve within the
+NOT become automatic source links. Automatic basename recognition SHALL require
+both a known source/document format and a filename context (inline code, a line
+location or a standard document name). A code command or list of references
+SHALL retain individual source-path links and line locations rather than become
+one combined filename. Automatic recognition of a spaced inline-code filename
+SHALL require a qualified path prefix; explicit Markdown links SHALL remain
+available for ambiguous names or unrecognized automatic formats. Relative references SHALL resolve within the
 selected agent
 worktree. HTTP and HTTPS links SHALL remain web links. Inspectors without an
 admitted agent-worktree integration, including Spaces, SHALL retain ordinary

@@ -24,7 +24,10 @@ This reconciles the remaining baseline entries without treating a component mode
 
 The source-link parser fixtures cover absolute/relative paths, encoded names,
 line locations, escaped filename delimiters, root filenames, whole inline-code
-paths with spaces, prose exclusions and traversal refusal. The real
+paths with spaces, prose exclusions and traversal refusal. Command arguments and
+multiple references retain individual links and line targets; bare names use
+source/doc-format and context hints rather than linking dotted prose or code
+identifiers. The real
 Markdown/Inspector source-link
 consumer rejects mismatched host, runtime, pane/session and missing worktree
 bindings, and discards pending previews after binding replacement. Desktop and
