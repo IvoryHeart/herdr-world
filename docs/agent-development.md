@@ -213,10 +213,11 @@ Configuration and state stay untracked in the primary checkout's
 - `gate.sqlite` keeps every pass config and replay input, reviewer claim,
   check attempt, decision and verdict transition indefinitely. Identical input
   bodies share one stored payload, while each pass keeps its own reference and
-  freshness timestamps for replay. The gate does not delete history by age;
-  history clearing is not currently exposed in the application. Comment text
-  is reduced to RESULT lines. `agent:crew status` reports the combined SQLite
-  database, WAL and shared-memory file size.
+  freshness timestamps for replay. By owner decision, the gate retains this
+  development history indefinitely and does not delete it by age. A manual
+  history-clearing affordance is deferred. Comment text is reduced to RESULT
+  lines. `agent:crew status` reports the combined SQLite database, WAL and
+  shared-memory file size.
 - `mirror.git` is a bare mirror of main and pull request heads, so the gate
   never fetches into a checkout.
 
