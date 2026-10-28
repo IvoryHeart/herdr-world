@@ -25,7 +25,8 @@ import {
   worldInspectorWindowIdForNode,
   type WorldInspectorConversation,
 } from "./worldTerminalPresentation";
-import { inspectorPaneInput } from "./inspectorTerminalHandoff";
+import { createInspectorTerminalFocuser } from "./inspectorTerminalFocus";
+import { requestChatInputFocus } from "../chatFocus";
 import {
   worldSelectionIsCurrent,
   worldNodeForWorkspaceSurfaceSelection,
@@ -192,62 +193,11 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
     });
   };
 
-  const focusInspectorTerminal = (windowId: string) => {
-    const focusIntent = ++inspectorFocusIntentRef.current;
-    const expected = inspectorConversationsRef.current.find(
-      (candidate) => worldInspectorWindowId(candidate) === windowId,
-    );
-    if (!expected?.paneId) return;
-    if (
-      document.documentElement.dataset.layout === "mobile" ||
-      window.matchMedia?.("(any-pointer: coarse)").matches
-    ) {
-      return;
-    }
-    const attempt = (remaining: number) => {
-      if (inspectorFocusIntentRef.current !== focusIntent) return;
-      if (
-        document.querySelector(
-          '.world-hosts-menu, .command-popover, .modal-backdrop, [role="menu"]',
-        )
-      )
-        return;
-      const conversation = inspectorConversationsRef.current.find(
-        (candidate) => worldInspectorWindowId(candidate) === windowId,
-      );
-      const snapshot = conversation
-        ? connectionSnapshot(store.get(), conversation.connectionId)
-        : null;
-      if (
-        !conversation ||
-        !snapshot ||
-        conversation.view !== "terminal" ||
-        !conversation.paneId ||
-        conversation.paneId !== expected.paneId ||
-        conversation.terminalId !== expected.terminalId ||
-        snapshot.serverRuntimeGeneration !== conversation.runtimeGeneration ||
-        snapshot.selectedPaneId !== conversation.paneId ||
-        !snapshot.panes.some(
-          (pane) =>
-            pane.pane_id === conversation.paneId &&
-            pane.terminal_id === conversation.terminalId &&
-            pane.workspace_id === conversation.workspaceId &&
-            pane.tab_id === conversation.tabId,
-        )
-      )
-        return;
-      const target = floatingInspectorPortalsRef.current[windowId];
-      const input = inspectorPaneInput(target, conversation.paneId);
-      if (input) {
-        input.focus({ preventScroll: true });
-        return;
-      }
-      if (remaining > 0) {
-        window.setTimeout(() => attempt(remaining - 1), 0);
-      }
-    };
-    requestAnimationFrame(() => attempt(2));
-  };
+  const focusInspectorTerminal = createInspectorTerminalFocuser(
+    inspectorFocusIntentRef,
+    inspectorConversationsRef,
+    floatingInspectorPortalsRef,
+  );
 
   const bindSelectionIntentAbort = (
     signal: AbortSignal | undefined,
@@ -291,6 +241,13 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
       setIntentOpening(false);
       return true;
     }
+    const chatFocusIntent =
+      focusTarget && inspectorView === "history"
+        ? requestChatInputFocus(
+            () => intentRequestRef.current === requestId && !signal?.aborted,
+          )
+        : null;
+    let focusAdmitted = false;
     const existing = inspectorConversations.find(
       (conversation) =>
         worldInspectorWindowId(conversation) ===
@@ -317,10 +274,11 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
           currentExisting,
           observed,
         );
-        const admitted =
+        const viewed =
           inspectorView && reconciled.availableViews.includes(inspectorView)
             ? { ...reconciled, view: inspectorView }
             : reconciled;
+        const admitted = { ...viewed, chatFocusIntent };
         windowCommand({ type: "focus", id: worldInspectorWindowId(admitted) });
         if (admitted !== currentExisting) {
           const nextConversations = currentConversations.map((conversation) =>
@@ -332,6 +290,7 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
           inspectorConversationsRef.current = nextConversations;
           onInspectorConversationsChange(nextConversations);
         }
+        focusAdmitted = true;
         if (admitted.view === "terminal") {
           // A preview (focusTarget false) shows the terminal without taking
           // keyboard focus; only an explicit open focuses it.
@@ -346,6 +305,7 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
         }
         return false;
       } finally {
+        if (!focusAdmitted) chatFocusIntent?.cancel();
         unbindAbort();
         if (intentRequestRef.current === requestId) setIntentOpening(false);
       }
@@ -363,11 +323,13 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
       setSelection(next);
       const admittedConversation = {
         ...conversation,
+        chatFocusIntent,
         focusedListAdmissionAt: performance.now(),
       };
       const nextConversations = [...currentConversations, admittedConversation];
       inspectorConversationsRef.current = nextConversations;
       onInspectorConversationsChange(nextConversations);
+      focusAdmitted = true;
       dockedInspectorIdRef.current = null;
       onDockedInspectorIdChange(null);
       if (admittedConversation.view === "terminal") {
@@ -382,6 +344,7 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
       }
       return false;
     } finally {
+      if (!focusAdmitted) chatFocusIntent?.cancel();
       unbindAbort();
       if (intentRequestRef.current === requestId) setIntentOpening(false);
     }
@@ -410,7 +373,7 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
     backgroundOpenRef.current = { id: windowId, keep: activeInspectorId };
     const nextConversations = [
       ...inspectorConversationsRef.current,
-      conversation,
+      { ...conversation, chatFocusIntent: null },
     ];
     inspectorConversationsRef.current = nextConversations;
     onInspectorConversationsChange(nextConversations);
@@ -870,6 +833,13 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
     if (!conversation) throw new Error("This Inspector is no longer available");
     const requestId = intentRequestRef.current + 1;
     intentRequestRef.current = requestId;
+    const chatFocusIntent =
+      requested === "history"
+        ? requestChatInputFocus(
+            () => intentRequestRef.current === requestId && !signal?.aborted,
+          )
+        : null;
+    let focusAdmitted = false;
     setIntentError(null);
     setIntentOpening(true);
     const unbindAbort = bindSelectionIntentAbort(signal, requestId);
@@ -881,6 +851,7 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
       setSelection(node);
       const admittedConversation = {
         ...conversation,
+        chatFocusIntent,
         focusedListAdmissionAt: performance.now(),
       };
       const nextConversations = [
@@ -889,8 +860,10 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
       ];
       inspectorConversationsRef.current = nextConversations;
       onInspectorConversationsChange(nextConversations);
+      focusAdmitted = true;
       focusInspectorTerminal(worldInspectorWindowId(admittedConversation));
     } finally {
+      if (!focusAdmitted) chatFocusIntent?.cancel();
       unbindAbort();
       if (intentRequestRef.current === requestId) setIntentOpening(false);
     }
@@ -992,6 +965,13 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
     const unbindAbort = focusTarget
       ? bindSelectionIntentAbort(signal, requestId)
       : () => {};
+    const chatFocusIntent =
+      focusTarget && (requestedView ?? conversation.view) === "history"
+        ? requestChatInputFocus(
+            () => intentRequestRef.current === requestId && !signal?.aborted,
+          )
+        : null;
+    let focusAdmitted = false;
     try {
       if (focusTarget) await focusWorldNode(target);
       if (signal?.aborted || intentRequestRef.current !== requestId)
@@ -1009,10 +989,13 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
         observedConversation,
         observed,
       );
-      const currentConversation =
+      const viewed =
         requestedView && reconciled.availableViews.includes(requestedView)
           ? { ...reconciled, view: requestedView }
           : reconciled;
+      const currentConversation = focusTarget
+        ? { ...viewed, chatFocusIntent }
+        : viewed;
       if (currentConversation !== observedConversation) {
         const nextConversations = current.map((candidate) =>
           worldInspectorWindowId(candidate) ===
@@ -1023,6 +1006,7 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
         inspectorConversationsRef.current = nextConversations;
         onInspectorConversationsChange(nextConversations);
       }
+      focusAdmitted = true;
       setSelection(target);
       raiseInspector(worldInspectorWindowId(conversation));
       if (focusTarget && reveal) {
@@ -1038,6 +1022,7 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
       }
       throw cause;
     } finally {
+      if (!focusAdmitted) chatFocusIntent?.cancel();
       unbindAbort();
       if (focusTarget && intentRequestRef.current === requestId) {
         setIntentOpening(false);

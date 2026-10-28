@@ -8,6 +8,12 @@ Set **Menu → Configuration → Appearance → Chat text** to resize both your
 messages and agent replies. Chat can follow the terminal text size or use its
 own size.
 
+When a reply box is available, explicitly opening or returning to Chat focuses
+it so you can start typing immediately. Desk's J/K previews keep focus in the
+queue. Transcript, session and connection updates do not move your focus. If
+you move to another input or window while a conversation loads, its delayed
+reply box leaves focus where you put it.
+
 ## What Chat does
 
 On Unix SSH hosts, Claude Code sessions reported by Herdr as UUIDs are resolved

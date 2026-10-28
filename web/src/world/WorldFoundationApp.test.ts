@@ -74,6 +74,24 @@ function inspectorConversation(index: number): WorldInspectorConversation {
 }
 
 describe("independent multi-host Inspector leases", () => {
+  test("observations preserve opening focus intent and focus-neutral previews", () => {
+    const intent = { focus: () => false, cancel() {} };
+    const current = { ...inspectorConversation(1), chatFocusIntent: intent };
+    const observed = {
+      ...current,
+      agentSessionFingerprint: "new-session",
+      chatFocusIntent: undefined,
+    };
+    expect(
+      reconcileWorldInspectorConversation(current, observed).chatFocusIntent,
+    ).toBe(intent);
+    expect(
+      reconcileWorldInspectorConversation(
+        { ...current, chatFocusIntent: null },
+        observed,
+      ).chatFocusIntent,
+    ).toBeNull();
+  });
   test("retains both hosts and removes only a replaced generation, preserving resource tabs and geometry", () => {
     const alpha = {
       ...inspectorConversation(1),

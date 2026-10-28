@@ -1,4 +1,5 @@
-import { useState, type Ref, type KeyboardEvent } from "react";
+import { useRef, useState, type Ref, type KeyboardEvent } from "react";
+import { flushSync } from "react-dom";
 import {
   SquareTerminal,
   FolderTree,
@@ -46,6 +47,7 @@ export function WorkspaceInspectorViewSelect({
   onChange(view: InspectorView): void;
 }) {
   const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const views = MOBILE_VIEWS.filter((view) => availableViews.includes(view));
   const icons = {
     terminal: SquareTerminal,
@@ -59,6 +61,7 @@ export function WorkspaceInspectorViewSelect({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
+          ref={triggerRef}
           type="button"
           className="interest-button workspace-inspector-view-select"
           aria-label={`Inspector view: ${INSPECTOR_TAB_LABELS[value]}`}
@@ -89,7 +92,11 @@ export function WorkspaceInspectorViewSelect({
                 disabled={view === "history" && !historyAvailable}
                 onClick={() => {
                   if (view === "history" && !historyAvailable) return;
-                  setOpen(false);
+                  // Let the shared layer restore focus before Chat captures
+                  // its new opening origin. Escape/Back keep their policy.
+                  flushSync(() => setOpen(false));
+                  if (view === "history")
+                    triggerRef.current?.focus({ preventScroll: true });
                   onChange(view);
                 }}
               >

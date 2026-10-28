@@ -28,6 +28,7 @@ if (process.env.INSPECTOR_VIEW_DOM !== "1") {
   for (const key of [
     "HTMLButtonElement",
     "HTMLInputElement",
+    "HTMLTextAreaElement",
     "NodeFilter",
     "MutationObserver",
     "CustomEvent",
@@ -40,11 +41,83 @@ if (process.env.INSPECTOR_VIEW_DOM !== "1") {
     value: window.getComputedStyle.bind(window),
     configurable: true,
   });
-  const { act, createElement, createRef } = await import("react");
+  const { act, createElement, createRef, useState } = await import("react");
   const { createRoot } = await import("react-dom/client");
   const { WorkspaceInspectorViewSelect, WorkspaceInspectorSecondaryControls } =
     await import("./WorkspaceInspectorViewSelect");
   const { WindowControls } = await import("../world/windows/WindowControls");
+  const { ChatComposer } = await import("./chat/ChatComposer");
+  const { requestChatInputFocus } = await import("../chatFocus");
+  test("selecting Chat completes menu focus restoration before the editor handoff", async () => {
+    function Inspector() {
+      const [view, setView] =
+        useState<import("../workspaceResource").InspectorView>("terminal");
+      const [intent, setIntent] = useState<
+        import("../chatFocus").ChatFocusIntent | null
+      >(null);
+      return createElement(
+        "div",
+        {},
+        createElement(WorkspaceInspectorViewSelect, {
+          value: view,
+          availableViews: ["terminal", "history"],
+          historyAvailable: true,
+          onChange(next) {
+            setIntent(next === "history" ? requestChatInputFocus() : null);
+            setView(next);
+          },
+        }),
+        createElement(ChatComposer, {
+          active: view === "history",
+          focusIntent: intent,
+          client: {
+            connectionId: "view-host",
+            generation: 1,
+            serverRuntimeGeneration: 1,
+          } as import("../api").ConnectionClient,
+          pane: {
+            pane_id: "pane",
+            terminal_id: "terminal",
+            agent: "claude",
+          } as import("../types").Pane,
+          fingerprint: "view-session",
+          recipient: "Mira-claude",
+          notice: "",
+          onSubmit: async () => {},
+          onError() {},
+        }),
+      );
+    }
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    try {
+      await act(async () => root.render(createElement(Inspector)));
+      const trigger = host.querySelector<HTMLButtonElement>(
+        '[aria-label="Inspector view: Terminal"]',
+      )!;
+      await act(async () => {
+        trigger.focus();
+        trigger.click();
+      });
+      const chat = document.querySelector<HTMLButtonElement>(
+        '[aria-label="Inspector views"] [data-view="history"]',
+      )!;
+      await act(async () => {
+        chat.focus();
+        chat.click();
+      });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 30));
+      });
+      expect(document.activeElement === host.querySelector("textarea")).toBe(
+        true,
+      );
+    } finally {
+      await act(async () => root.unmount());
+      host.remove();
+    }
+  });
   test("view dropdown preserves admission and attention menu preserves its owner callback", async () => {
     const host = document.createElement("div");
     document.body.append(host);
