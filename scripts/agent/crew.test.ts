@@ -10,6 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  afterPass,
   crewPass,
   nextPass,
   parseOptions,
@@ -197,10 +198,55 @@ describe("cadence", () => {
     ).toEqual({ at: NOW + 300_000, prs: null });
   });
 
+  test("the watch loop goes full, busy, busy, then full on time", () => {
+    const options = { interval: 300, busyInterval: 60 };
+    const start = { scope: null, lastFull: 0, busy: [] };
+    // A full pass at NOW finds #8 busy: the next pass reads #8 alone.
+    const first = afterPass(start, NOW, [8], options);
+    expect(first).toEqual({
+      cadence: { scope: [8], lastFull: NOW, busy: [8] },
+      at: NOW + 60_000,
+    });
+    // Busy passes leave the full pass's start where it was.
+    const second = afterPass(first.cadence, NOW + 60_000, [8], options);
+    expect(second.cadence.lastFull).toBe(NOW);
+    expect(second.at).toBe(NOW + 120_000);
+    // Once the full pass is due first, it comes 300 s after NOW.
+    const late = afterPass(second.cadence, NOW + 250_000, [8], options);
+    expect(late).toEqual({
+      cadence: { scope: null, lastFull: NOW, busy: [8] },
+      at: NOW + 300_000,
+    });
+    // That full pass, finding nothing busy, sets the next full one.
+    const full = afterPass(late.cadence, NOW + 300_000, [], options);
+    expect(full).toEqual({
+      cadence: { scope: null, lastFull: NOW + 300_000, busy: [] },
+      at: NOW + 600_000,
+    });
+  });
+
+  test("a failed pass keeps its busy PRs, and a quiet busy pass ends them", () => {
+    const options = { interval: 300, busyInterval: 60 };
+    const busy = { scope: [8], lastFull: NOW, busy: [8] };
+    expect(afterPass(busy, NOW + 60_000, null, options)).toEqual({
+      cadence: { scope: [8], lastFull: NOW, busy: [8] },
+      at: NOW + 120_000,
+    });
+    // #8 merged: the busy pass that closed its pod finds nothing busy.
+    expect(afterPass(busy, NOW + 60_000, [], options)).toEqual({
+      cadence: { scope: null, lastFull: NOW, busy: [] },
+      at: NOW + 300_000,
+    });
+  });
+
   test("watch takes a busy interval, 60 seconds unless given", () => {
     expect(parseOptions(["watch"]).busyInterval).toBe(60);
     expect(parseOptions(["watch", "--busy-interval", "30"]).busyInterval).toBe(
       30,
+    );
+    // Zero would read busy PRs back to back.
+    expect(() => parseOptions(["watch", "--busy-interval", "0"])).toThrow(
+      "at least 1 second",
     );
   });
 });

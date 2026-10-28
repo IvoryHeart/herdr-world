@@ -640,9 +640,13 @@ export function parseOptions(argv: string[]): Options {
     if (arg === "--pr") options.prs.push(count("--pr"));
     else if (arg === "--dry-run") options.dryRun = true;
     else if (arg === "--interval") options.interval = count("--interval");
-    else if (arg === "--busy-interval")
+    else if (arg === "--busy-interval") {
+      // Zero would read the busy PRs back to back, and GitHub's rate limit
+      // with them, for as long as one stays busy.
       options.busyInterval = count("--busy-interval");
-    else if (arg === "--lines") options.lines = count("--lines");
+      if (options.busyInterval < 1)
+        throw new Error("--busy-interval needs at least 1 second");
+    } else if (arg === "--lines") options.lines = count("--lines");
     else if (arg === "--reviewer") options.reviewer = value();
     else if (arg === "--head") options.head = value();
     else if (arg === "--since") options.since = value();
@@ -697,6 +701,33 @@ export function nextPass(
     : { at: full, prs: null };
 }
 
+/**
+ * The watcher's schedule between passes: the PRs the next pass reads (null
+ * for every PR), when the last pass over every PR started, and the PRs
+ * that were busy when last read.
+ */
+export type Cadence = {
+  scope: number[] | null;
+  lastFull: number;
+  busy: number[];
+};
+
+/**
+ * The schedule after a pass that started at `start` and found `busy`, or
+ * null when it failed: a failed pass keeps the busy PRs it had.
+ */
+export function afterPass(
+  cadence: Cadence,
+  start: number,
+  busy: number[] | null,
+  options: { interval: number; busyInterval: number },
+): { cadence: Cadence; at: number } {
+  const lastFull = cadence.scope === null ? start : cadence.lastFull;
+  const kept = busy ?? cadence.busy;
+  const next = nextPass(lastFull, start, kept, options);
+  return { cadence: { scope: next.prs, lastFull, busy: kept }, at: next.at };
+}
+
 const numbers = (prs: number[]) => prs.map((pr) => `#${pr}`).join(" ");
 
 export async function main(argv: string[], deps: Deps = realDeps) {
@@ -735,15 +766,14 @@ export async function main(argv: string[], deps: Deps = realDeps) {
     const gate = openStore(join(dir, "gate.sqlite"));
     const worker = ["bun", join(import.meta.dir, "crew.ts")];
     const configPath = join(dir, "config.json");
-    // The PRs the next pass reads: null for every PR (or every `--pr`).
-    let scope: number[] | null = null;
-    let lastFull = 0;
-    let busy: number[] = [];
+    let cadence: Cadence = { scope: null, lastFull: 0, busy: [] };
     try {
       for (;;) {
         const now = Date.now();
+        const { scope } = cadence;
         const prs = scope ?? options.prs;
-        if (scope === null) lastFull = now;
+        // Null until the pass has read its PRs; a failed pass keeps the last.
+        let busy: number[] | null = null;
         const judged: { value?: ReturnType<typeof runPass> } = {};
         try {
           const planned = crewPass({
@@ -778,18 +808,20 @@ export async function main(argv: string[], deps: Deps = realDeps) {
             );
           if (!options.dryRun)
             deps.out(
-              `${new Date(now).toISOString()} pass${scope ? ` ${numbers(scope)}` : ""}: ${planned.length} planned, ${open.length} open${busy.length ? `; busy ${numbers(busy)}` : ""}`,
+              `${new Date(now).toISOString()} pass${scope ? ` ${numbers(scope)}` : ""}: ${planned.length} planned, ${open.length} open${busy?.length ? `; busy ${numbers(busy)}` : ""}`,
             );
         } catch (error) {
-          // A failed read costs one pass; the next pass reads everything again.
+          // A failed read costs one pass. Its PRs keep their last busy
+          // state, and the next pass over every PR still comes an interval
+          // after the last one started, as `afterPass` decides.
           deps.out(
             `pass failed: ${error instanceof Error ? error.message : String(error)}`,
           );
           if (options.command === "pass") return 1;
         }
         if (options.command === "pass") return 0;
-        const next = nextPass(lastFull, now, busy, options);
-        scope = next.prs;
+        const next = afterPass(cadence, now, busy, options);
+        cadence = next.cadence;
         await Bun.sleep(Math.max(0, next.at - Date.now()));
       }
     } finally {
