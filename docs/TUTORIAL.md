@@ -128,7 +128,8 @@ the service with the latest release. Choose **Reload** when convenient; Herdr
 sessions keep running and open terminals reconnect. **Later** hides the notice
 until another build is served, and **Menu** keeps showing both builds. If a
 part of the app fails to load because the service no longer has its files,
-World shows a **Reload** notice rather than reloading by itself.
+World shows a **Reload** notice rather than reloading by itself; reopening that
+part after **Later** shows the notice again.
 
 ### Choose a view for the task
 

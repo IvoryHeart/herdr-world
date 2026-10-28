@@ -35,11 +35,15 @@ afterEach(() => {
   delete (globalThis as { window?: unknown }).window;
 });
 
+const PLACEHOLDER = { ok: false };
+
 test("returns the module and clears the reload marker on success", async () => {
   storage.set(RELOAD_ATTEMPTED_KEY, "1");
   storage.set("herdr:lazy-chunk-reload:terminal-view", "1");
-  const module = await importWithReload(COMPONENT_KEY, () =>
-    Promise.resolve({ ok: true }),
+  const module = await importWithReload(
+    COMPONENT_KEY,
+    () => Promise.resolve({ ok: true }),
+    PLACEHOLDER,
   );
   expect(module).toEqual({ ok: true });
   expect(storage.has(RELOAD_ATTEMPTED_KEY)).toBe(false);
@@ -51,23 +55,23 @@ const reloadOffered = () => currentBuildFreshness().reloadNeeded;
 
 test("offers a reload once when the import fails, never reloads, then throws on a retry", async () => {
   const failure = () => Promise.reject(new Error("chunk 404"));
-  const pending = importWithReload(COMPONENT_KEY, failure);
-  await Promise.resolve();
-  expect(reloadOffered()).toBe(true);
-  // The first attempt stays suspended until the operator reloads.
+  // The first failure settles on the placeholder, which asks again on mount.
   await expect(
-    Promise.race([pending, Promise.resolve("settled")]),
-  ).resolves.toBe("settled");
-  await expect(importWithReload(COMPONENT_KEY, failure)).rejects.toThrow(
-    "chunk 404",
-  );
+    importWithReload(COMPONENT_KEY, failure, PLACEHOLDER),
+  ).resolves.toBe(PLACEHOLDER);
+  expect(reloadOffered()).toBe(true);
+  await expect(
+    importWithReload(COMPONENT_KEY, failure, PLACEHOLDER),
+  ).rejects.toThrow("chunk 404");
   expect(reloadCount).toBe(0);
 });
 
 test("a chunk failure after Later offers the reload again instead of taking it", async () => {
   dismissReloadRequest();
-  void importWithReload(COMPONENT_KEY, () =>
-    Promise.reject(new Error("chunk 404")),
+  void importWithReload(
+    COMPONENT_KEY,
+    () => Promise.reject(new Error("chunk 404")),
+    PLACEHOLDER,
   );
   await Promise.resolve();
   expect(reloadOffered()).toBe(true);
@@ -77,17 +81,21 @@ test("a chunk failure after Later offers the reload again instead of taking it",
 test("a successful terminal import does not reset a failing diff's reload guard", async () => {
   const error = new Error("diff chunk 404");
   const failure = () => Promise.reject(error);
-  void importWithReload(COMPONENT_KEY, failure);
+  void importWithReload(COMPONENT_KEY, failure, PLACEHOLDER);
   await Promise.resolve();
   expect(reloadOffered()).toBe(true);
 
   // TerminalView loads first after a reload; Changes is then opened again.
   for (let retry = 0; retry < 2; retry++) {
-    await importWithReload("terminal-view", () =>
-      Promise.resolve({ ok: true }),
+    await importWithReload(
+      "terminal-view",
+      () => Promise.resolve({ ok: true }),
+      PLACEHOLDER,
     );
     expect(storage.get(RELOAD_ATTEMPTED_KEY)).toBe("1");
-    await expect(importWithReload(COMPONENT_KEY, failure)).rejects.toBe(error);
+    await expect(
+      importWithReload(COMPONENT_KEY, failure, PLACEHOLDER),
+    ).rejects.toBe(error);
   }
   expect(reloadCount).toBe(0);
 });
@@ -97,12 +105,14 @@ test("each lazy component has its own reload offer", async () => {
   const failure = () => Promise.reject(error);
   for (const key of [COMPONENT_KEY, "terminal-view"]) {
     dismissReloadRequest();
-    void importWithReload(key, failure);
+    void importWithReload(key, failure, PLACEHOLDER);
     await Promise.resolve();
     expect(reloadOffered()).toBe(true);
   }
   for (const key of [COMPONENT_KEY, "terminal-view"]) {
-    await expect(importWithReload(key, failure)).rejects.toBe(error);
+    await expect(importWithReload(key, failure, PLACEHOLDER)).rejects.toBe(
+      error,
+    );
   }
   expect(reloadCount).toBe(0);
 });

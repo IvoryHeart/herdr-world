@@ -1,10 +1,11 @@
 import { createUpdateNotificationHistory } from "./updateNotifications";
 import { worldLocalStorage } from "./browserStorage";
+import { Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import App from "./App";
 import { bridge, type ConnectionClient } from "./api";
-import { importWithReload } from "./lazyWithReload";
+import { lazyWithReload } from "./lazyWithReload";
 import { __storeTesting, store } from "./store";
 import "./styles/tokens.css";
 import "./styles/base.css";
@@ -341,14 +342,29 @@ async function run() {
   await checkAfter(() => dispatchEvent(new Event("online")));
   check(!differentBuild(), "Dismissed build was offered again");
 
-  // A lazy chunk missing after Later is offered too, not reloaded.
-  void importWithReload(`update-fixture-missing-${Date.now()}`, () =>
+  // A lazy part missing after Later is offered too, not reloaded, and
+  // reopening it after Later offers the reload again.
+  const Missing = lazyWithReload(`update-fixture-missing-${Date.now()}`, () =>
     Promise.reject(new Error("chunk 404")),
   );
-  await until(chunkReload);
-  check(!differentBuild(), "Missing chunk revived the dismissed build notice");
-  later(chunkReload()!);
-  await until(() => !chunkReload());
+  const part = createRoot(
+    document.body.appendChild(document.createElement("div")),
+  );
+  for (let open = 0; open < 2; open++) {
+    flushSync(() =>
+      part.render(
+        <Suspense fallback={null}>
+          <Missing />
+        </Suspense>,
+      ),
+    );
+    await until(chunkReload);
+    check(!differentBuild(), "Missing part revived the dismissed build notice");
+    later(chunkReload()!);
+    await until(() => !chunkReload());
+    flushSync(() => part.render(null));
+  }
+  part.unmount();
   check(unloads === 0, "World reloaded the page by itself");
 }
 const childVersion = new URL(location.href).searchParams.get("claim");

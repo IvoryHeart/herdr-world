@@ -20,7 +20,8 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
   builds and offers **Reload** or **Later**; **Later** hides it until another
   build is served. **Menu** shows the tab's build, and the served build when
   they differ. If part of the app fails to load because its files are gone, a
-  **Reload** notice appears instead of the page reloading itself. **Upgrade &
+  **Reload** notice appears instead of the page reloading itself, and again
+  each time you reopen that part. **Upgrade &
   restart** still reloads once the restarted service is ready.
 
 ## Visual control plane
