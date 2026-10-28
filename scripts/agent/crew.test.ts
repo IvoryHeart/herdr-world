@@ -781,6 +781,101 @@ describe("delivery", () => {
     expect(comments()).toHaveLength(1);
   });
 
+  test("a head marked again after a hold, and one revisited after a push, keep true marks", () => {
+    const ready = town({ head: SHA.reviewed, posts: trio(SHA.reviewed) });
+    pass(ready);
+    pass({ ...ready, labels: ["pod:town", "on-hold"] }, NOW + 60_000);
+    pass(ready, NOW + 120_000);
+    expect(
+      statuses().map((entry) => [entry.sha, entry.context, entry.state]),
+    ).toEqual([
+      [SHA.reviewed, "crew/merge-ready", "success"],
+      [SHA.reviewed, "crew/merge-ready", "pending"],
+      [SHA.reviewed, "crew/merge-ready", "success"],
+    ]);
+    // A is marked, then B, then the branch goes back to A, held: A's mark
+    // is taken back even though B was marked last.
+    const fixed = town({
+      head: SHA.fixed,
+      commits: [SHA.reviewed, SHA.fixed],
+      posts: trio(SHA.fixed),
+    });
+    pass(fixed, NOW + 180_000);
+    pass({ ...ready, labels: ["pod:town", "on-hold"] }, NOW + 240_000);
+    expect(statuses().at(-1)).toMatchObject({
+      sha: SHA.reviewed,
+      context: "crew/merge-ready",
+      state: "pending",
+    });
+  });
+
+  test("a reviewer overdue while its PR is parked asks nothing of the owner", () => {
+    const fresh = town({ head: SHA.reviewed, posts: [] });
+    for (const parkedValue of [
+      { ...fresh, labels: ["pod:town", "on-hold"] },
+      { ...fresh, hold: { reason: "owner repro", at: NOW } },
+      { ...fresh, labels: ["pod:chat"] },
+    ]) {
+      crew = openCrewStore(":memory:");
+      calls = [];
+      pass(fresh);
+      expect(activeRuns(crew).length).toBeGreaterThan(0);
+      pass(parkedValue, NOW + 60_000);
+      pass(parkedValue, NOW + 91 * 60_000);
+      pass(parkedValue, NOW + 92 * 60_000);
+      const owner = actionsIn(crew, ["pending", "sent"]).filter(
+        (entry) => entry.target === "owner" || entry.target === "github",
+      );
+      expect(owner).toEqual([]);
+      expect(
+        statuses().some(
+          (entry) =>
+            entry.context === "crew/needs-owner" && entry.state === "pending",
+        ),
+      ).toBe(false);
+      // The reviewers keep working.
+      expect(activeRuns(crew).length).toBeGreaterThan(0);
+    }
+  });
+
+  test("a dry run prints the marks a real pass would set", () => {
+    // The author is a seat the watcher never prompts: the owner is told,
+    // and the head marked, by a seat notice rather than a planned judgment.
+    const value = town({
+      head: SHA.reviewed,
+      posts: [
+        open(SHA.reviewed),
+        confirm("rev-astra", SHA.reviewed),
+        confirm("rev-opus", SHA.reviewed),
+      ],
+      item: { branch: "agent/firstmate-12-plates" },
+    });
+    pass(value);
+    expect(
+      statuses().map((entry) => [entry.context, entry.state]),
+    ).toContainEqual(["crew/needs-owner", "pending"]);
+    const printed: string[] = [];
+    crewPass({
+      judge: () => ({
+        verdicts: [evaluate(value, config, NOW)],
+        inputs: [value],
+      }),
+      crew,
+      lock,
+      configPath,
+      dir,
+      prs: [],
+      dryRun: true,
+      now: NOW + 60_000,
+      deps: { ...deps, out: (line) => printed.push(line) },
+      worker: ["bun", "crew.ts"],
+    });
+    // The seat still can't be prompted, so the owner's mark stays as it is.
+    expect(printed.filter((line) => line.includes("crew/needs-owner"))).toEqual(
+      [],
+    );
+  });
+
   test("a READY PR with no finished review is never merge-ready", () => {
     expect(
       mergeReady({
@@ -1841,6 +1936,43 @@ describe("held status", () => {
       lines.length = 0;
       showStatus(crew, dir, (line) => lines.push(line), NOW);
       expect(lines[0]).toBe("0 held pull request(s) (as last read)");
+      crew.close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("before any full pass, every scoped pass's PRs are listed", () => {
+    const dir = mkdtempSync(join(tmpdir(), "crew-status-"));
+    try {
+      writeFileSync(
+        join(dir, "config.json"),
+        JSON.stringify({ ...config, crew: SETTINGS }),
+      );
+      const held = town({
+        head: SHA.reviewed,
+        posts: [],
+        labels: ["pod:town", "on-hold"],
+      });
+      const busy = { ...town({ head: SHA.reviewed, posts: [] }), number: 8 };
+      const gate = openStore(join(dir, "gate.sqlite"));
+      for (const [trigger, inputs] of [
+        ["pr 7", [held]],
+        ["pr 8", [busy]],
+      ] as const)
+        recordPass(gate, {
+          trigger,
+          config,
+          startedAt: NOW,
+          finishedAt: NOW,
+          inputs: [...inputs],
+          verdicts: inputs.map((value) => evaluate(value, config, NOW)),
+        });
+      gate.close();
+      const crew = openCrewStore(":memory:");
+      const lines: string[] = [];
+      showStatus(crew, dir, (line) => lines.push(line), NOW);
+      expect(lines[0]).toBe("1 held pull request(s) (as last read)");
       crew.close();
     } finally {
       rmSync(dir, { recursive: true, force: true });

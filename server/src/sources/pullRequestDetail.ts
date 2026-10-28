@@ -6,7 +6,7 @@ import type {
 } from "../../../shared/pullRequests";
 import type { WorkItem } from "../../../shared/worldSources";
 import { PULL_REQUEST_DETAIL_MAX_AGE_MS } from "../../../shared/pullRequestFreshness";
-import { record } from "./github";
+import { crewMark, record } from "./github";
 
 /**
  * Your open pull requests, read in detail: checks on the head, reviewer
@@ -229,16 +229,6 @@ export function countImages(body: unknown) {
   return (
     (body.match(/!\[[^\]]*\]\([^)\s]+[^)]*\)/gu)?.length ?? 0) +
     (body.match(/<img\b/giu)?.length ?? 0)
-  );
-}
-
-/** A `crew/…` commit status the crew watcher sets; see docs/agent-development.md. */
-export function crewMark(node: Record<string, unknown>) {
-  return (
-    node.__typename !== "CheckRun" &&
-    !("conclusion" in node) &&
-    typeof node.context === "string" &&
-    node.context.startsWith("crew/")
   );
 }
 

@@ -36,6 +36,60 @@ const response = (data: Record<string, unknown[]>) => ({
 });
 
 describe("GitHub source", () => {
+  test("the crew's own pending marks don't make a green head's checks pending", () => {
+    const rollup = (
+      state: string,
+      nodes: unknown[],
+      totalCount = nodes.length,
+    ) =>
+      pr(3, {
+        commits: {
+          nodes: [
+            {
+              commit: {
+                statusCheckRollup: { state, contexts: { totalCount, nodes } },
+              },
+            },
+          ],
+        },
+      });
+    const green = {
+      __typename: "CheckRun",
+      status: "COMPLETED",
+      conclusion: "SUCCESS",
+    };
+    const mark = {
+      __typename: "StatusContext",
+      context: "crew/merge-ready",
+      state: "PENDING",
+    };
+    const checks = (value: ReturnType<typeof pr>) =>
+      parseGitHubResponse(response({ authored: [value] }))[0]!.checks;
+    expect(checks(rollup("PENDING", [green, mark]))).toBe("pass");
+    // A real check still running or failing still counts.
+    expect(
+      checks(
+        rollup("PENDING", [
+          green,
+          mark,
+          { __typename: "CheckRun", status: "IN_PROGRESS", conclusion: null },
+        ]),
+      ),
+    ).toBe("pending");
+    expect(
+      checks(
+        rollup("FAILURE", [
+          mark,
+          { __typename: "StatusContext", context: "ci/lint", state: "FAILURE" },
+        ]),
+      ),
+    ).toBe("fail");
+    // An incomplete read keeps GitHub's combined state.
+    expect(checks(rollup("PENDING", [green, mark], 150))).toBe("pending");
+    // Without marks, GitHub's state stands as before.
+    expect(checks(pr(4))).toBe("pass");
+  });
+
   test("merges searches into one item per pull request with each role", () => {
     const items = parseGitHubResponse(
       response({

@@ -253,8 +253,9 @@ plans the next step for every PR in scope and takes each step once:
 
   Only the watcher sets these marks. They are commit statuses rather than
   labels because every label starts a CI run (`ci.yml` runs on `labeled`),
-  and they are not checks: the gate and World's PR card ignore `crew/*`
-  statuses.
+  and they are not checks: the gate, World's pull request list and card, and
+  the workspace's check summary leave `crew/*` statuses out, so a pending mark
+  never holds a green head back.
 - **Who the author is.** The branch names the author: `agent/<seat>-…`, or the
   pod lead for `batch/<pod>-<n>`. Set an override per PR in `authors`.
 - **When a seat gets a prompt.** Only when Herdr reports it idle or done and
