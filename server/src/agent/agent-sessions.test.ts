@@ -664,6 +664,50 @@ describe("agent_turn.get session fence", () => {
     expect(calls).toEqual(["agent.get", "pane.get"]);
   });
 
+  test("rejects a title-resolved Codex thread that differs from Herdr's report", async () => {
+    const reported = session("12345678-1234-1234-1234-123456789abc");
+    const titleThread = "abcdefab-1234-1234-1234-123456789abc";
+    const prefix = titleThread.slice(0, 29);
+    const codexPath = `/srv/synthetic/sessions/rollout-${titleThread}.jsonl`;
+    const files = remotePiFiles("synthetic transcript");
+    let reads = 0;
+    files.readText = async () => {
+      reads++;
+      return "synthetic transcript";
+    };
+    files.findCodexSessionByPrefix = async (value) => {
+      expect(value).toBe(prefix);
+      return { path: codexPath, mtimeMs: 1, size: 20 };
+    };
+    const calls: string[] = [];
+    const handlers = createAgentSessionHandlers({
+      herdrCall: async (method) => {
+        calls.push(method);
+        if (method === "agent.get")
+          return {
+            agent: {
+              agent: "codex",
+              terminal_title: `${prefix}... | project`,
+              agent_session: reported,
+            },
+          };
+        if (method === "pane.get")
+          return { pane: { pane_id: "p1", agent_session: reported } };
+        throw new Error(`unexpected ${method}`);
+      },
+      files,
+    });
+    const result = (await handlers.readTurn({
+      pane_id: "p1",
+      agent: "codex",
+      agent_session_fingerprint: taskSummarySessionFingerprint(reported),
+    })) as { turn: unknown; session_changed?: boolean };
+    expect(result.turn).toBeNull();
+    expect(result.session_changed).toBe(true);
+    expect(calls).toEqual(["agent.get"]);
+    expect(reads).toBe(0);
+  });
+
   test("preserves missing transcript details for a matching reported Codex session", async () => {
     const threadId = "12345678-1234-1234-1234-123456789abc";
     const prefix = threadId.slice(0, 29);
