@@ -28,6 +28,7 @@ import {
   Volume2,
 } from "lucide-react";
 import { APP_VERSION } from "../version";
+import { isStaleBuild, useBuildFreshness } from "../buildFreshness";
 import { worldLocalStorage } from "../browserStorage";
 import { openSounds } from "../chimes/chimeHost";
 import { logoutBrowserSession } from "../api";
@@ -95,6 +96,7 @@ export function ConfigMenu({
   onShowShortcuts,
   ...configuration
 }: ConfigMenuProps) {
+  const build = useBuildFreshness();
   const s = useStoreSelector(
     (state) => ({
       bridgeStatus: state.bridgeStatus,
@@ -271,6 +273,14 @@ export function ConfigMenu({
                 <div>
                   <strong>Herdr World</strong>
                   <span>Version {APP_VERSION}</span>
+                  {build.loaded ? (
+                    <span className="config-build" title="Loaded build">
+                      Build {build.loaded}
+                      {isStaleBuild(build)
+                        ? ` · server serves ${build.served}`
+                        : ""}
+                    </span>
+                  ) : null}
                 </div>
                 <span
                   className={`config-connection-summary status-${s.connectionPaused ? "paused" : s.status}`}

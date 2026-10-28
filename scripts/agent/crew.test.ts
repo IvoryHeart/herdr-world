@@ -16,6 +16,7 @@ import {
   parseOptions,
   promptable,
   roundLabel,
+  status,
   type Seat,
   seats,
 } from "./crew";
@@ -32,6 +33,7 @@ import {
   busyPrs,
   type CrewSettings,
   digest,
+  isOnHold,
   plan,
   SETTINGS_DEFAULTS,
 } from "./crew/plan";
@@ -171,6 +173,23 @@ describe("cadence", () => {
     expect(busy([merged, closed, elsewhere], [8, 9, 10])).toEqual([]);
   });
 
+  test("on-hold PRs are never busy and resume when the label is removed", () => {
+    const held = town({
+      head: SHA.reviewed,
+      posts: [],
+      labels: ["pod:town", "on-hold"],
+    });
+    expect(isOnHold(held)).toBe(true);
+    expect(busy([held], [held.number])).toEqual([]);
+    const resumed = { ...held, labels: ["pod:town"] };
+    expect(isOnHold(resumed)).toBe(false);
+    expect(planned(resumed).map((action) => action.kind)).toEqual([
+      "review",
+      "review",
+      "review",
+    ]);
+  });
+
   test("full passes start an interval apart, however long one takes", () => {
     const options = { interval: 300, busyInterval: 60 };
     // A pass that started at NOW and took 70 seconds: the next still
@@ -252,6 +271,19 @@ describe("cadence", () => {
 });
 
 describe("plan", () => {
+  test("an on-hold label suppresses every planned action, including READY notices", () => {
+    const held = town({
+      head: SHA.reviewed,
+      posts: [
+        confirm("rev2", SHA.reviewed),
+        confirm("rev-astra", SHA.reviewed),
+        confirm("rev-opus", SHA.reviewed),
+      ],
+      labels: ["pod:town", "on-hold"],
+    });
+    expect(planned(held)).toEqual([]);
+  });
+
   test("READY goes to the owner and nobody else", () => {
     const actions = planned(
       town({
@@ -1572,6 +1604,23 @@ describe("delivery", () => {
     expect(
       actionsIn(crew, ["pending"]).filter((entry) => entry.target === "owner"),
     ).toEqual([]);
+  });
+});
+
+describe("held status", () => {
+  test("status lists open on-hold PRs from the latest pass", () => {
+    const crew = openCrewStore(":memory:");
+    const lines: string[] = [];
+    const held = town({
+      head: SHA.reviewed,
+      posts: [],
+      labels: ["pod:town", "on-hold"],
+    });
+    status(crew, (line) => lines.push(line), NOW, SETTINGS, [held]);
+    expect(lines[0]).toBe("1 held pull request(s) (latest crew pass)");
+    expect(lines[1]).toContain(`#${held.number}`);
+    expect(lines[1]).toContain(held.item?.title ?? "");
+    crew.close();
   });
 });
 
