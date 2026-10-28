@@ -61,6 +61,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     Drag its inner edge to resize it; Town remembers the width. It can be
     undocked, and keeps the dock it was left with. On a phone, the Chat view
     shows only its own composer, without the terminal key bar.
+  - Local source links in Chat open the same Inspector's **Files** at the
+    referenced line. Relative links use the selected agent worktree; unavailable
+    or outside-worktree links offer **Choose a worktree**. Web links stay web links.
   - An agent's known PR announcement or current work claim can show a compact
     pull request card in Chat. **Details** has CI, reviews and owner actions;
     **Ask the author to fix** sends `↳ #N` to the author in this conversation.

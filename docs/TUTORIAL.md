@@ -212,6 +212,10 @@ hosts stay usable.
    If choices are ambiguous or stale, use **Choose a worktree** and **Refresh**;
    resource access waits for a current selection. **Open terminal** is for
    direct work.
+   Click a local source reference in **Chat** to open **Files** in the same
+   window at its line (for example, `src/example.ts:12`). Relative references
+   start at the selected worktree. If the path is outside it or its binding is
+   unavailable, use **Choose a worktree**, then click the reference again.
    If a retained file becomes unavailable, its preview shows a notice instead
    of closing the window. Choose a current worktree or another file, then
    **Retry preview** if needed; Chat and its draft remain open.
