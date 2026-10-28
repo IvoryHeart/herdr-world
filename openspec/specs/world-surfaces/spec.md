@@ -345,10 +345,13 @@ choose-worktree state, without browser navigation to a local-path URL.
 #### Scenario: Code lists and executable-led commands preserve source items
 
 - **WHEN** inline code contains comma/semicolon-separated references, mixed
-  qualified paths and basenames, or a command led by an executable-directory path
+  qualified paths and basenames, or a command led by an executable directly in
+  `bin`, `sbin` or `.bin` at any relative or absolute installation prefix, or in
+  virtualenv `Scripts`
 - **THEN** each source item retains its own file link and line location, including
   lists without spaces after commas; a single qualified filename containing
-  spaces or a literal comma remains whole when it is unambiguous
+  spaces or a literal comma remains whole when it is unambiguous; spaced names
+  directly in these executable directories remain available as explicit Markdown links
 
 ### Requirement: Exact visual terminal input focus
 

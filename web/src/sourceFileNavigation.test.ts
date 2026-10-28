@@ -152,7 +152,7 @@ test("Chat source links navigate through the admitted Inspector binding", async 
             h(Probe, { key: "probe" }),
             h(MarkdownPreview, {
               key: "markdown",
-              text: "[source](/project/demo/src/main.ts:12) [relative](src/other.ts#L2) [outside](/project/other/main.ts:8) [web](https://example.test/guide) [bare](main.ts:9) [drive](C:/project/demo/main.ts:9) [unsafe](javascript:alert(1)) [remote](file://other.example.test/project/demo/main.ts)\n\n`/project/demo/src/inline.ts:3`\n\n/project/demo/src/plain.ts:4\n\n`main.ts:12` and README.md, root.ts:9 and `/project/demo/src/a b.ts:12`. [escaped](src/C%23.ts#L12). [custom](schema.custom#L4). HTTP/1.1 and 3.12/3.13 stay prose. e.g. i.e. example.com Node.js Next.js v2.x stay prose too. `process.env` and `client.generation`.\n\n`bun test web/src/sourceFileLinks.test.ts`\n\n`bun run test web/src/foo.test.ts`\n\n`rg -n foo web/src/a.ts`\n\n`src/a.ts:12 src/b.ts:24`\n\n`web/src/my file.ts:3`\n\n`web/src/my.test file.ts:3`\n\n`./my file.ts:3`\n\n`src/a.ts src/b.ts`\n\n`src/a.ts:12, src/b.ts:24`\n\n`src/a.ts main.ts:24`\n\n`web/src/a.ts, web/src/b.ts`\n\n`web/src/a.ts:3, web/src/b.ts:9`\n\n`src/a.ts:12,src/b.ts:24`\n\n`src/a.ts,src/b.ts`\n\n`src/a.ts:12; src/b.ts:24`\n\n`src/a.ts and main.ts:24`\n\n`./node_modules/.bin/tsc main.ts`\n\n`./.venv/bin/python main.py`\n\n`/usr/bin/tsc main.ts`\n\n`./scripts/check.sh main.ts`\n\n[src comma](<src/my, file.ts:3>)\n\n`src/my file.ts:3, src/b.ts:9`\n\n`bun test src/a.ts:12,src/b.ts:24`\n\n`src/my, file.ts:3`\n\n`/project/demo/src/a,b.ts:3`\n\n[ambiguous comma](<src/my.ts, file.ts:3>)\n\n```\n/project/demo/do-not-link.ts:5\n```",
+              text: "[source](/project/demo/src/main.ts:12) [relative](src/other.ts#L2) [outside](/project/other/main.ts:8) [web](https://example.test/guide) [bare](main.ts:9) [drive](C:/project/demo/main.ts:9) [unsafe](javascript:alert(1)) [remote](file://other.example.test/project/demo/main.ts)\n\n`/project/demo/src/inline.ts:3`\n\n/project/demo/src/plain.ts:4\n\n`main.ts:12` and README.md, root.ts:9 and `/project/demo/src/a b.ts:12`. [escaped](src/C%23.ts#L12). [custom](schema.custom#L4). HTTP/1.1 and 3.12/3.13 stay prose. e.g. i.e. example.com Node.js Next.js v2.x stay prose too. `process.env` and `client.generation`.\n\n`bun test web/src/sourceFileLinks.test.ts`\n\n`bun run test web/src/foo.test.ts`\n\n`rg -n foo web/src/a.ts`\n\n`src/a.ts:12 src/b.ts:24`\n\n`web/src/my file.ts:3`\n\n`web/src/my.test file.ts:3`\n\n`./my file.ts:3`\n\n`src/a.ts src/b.ts`\n\n`src/a.ts:12, src/b.ts:24`\n\n`src/a.ts main.ts:24`\n\n`web/src/a.ts, web/src/b.ts`\n\n`web/src/a.ts:3, web/src/b.ts:9`\n\n`src/a.ts:12,src/b.ts:24`\n\n`src/a.ts,src/b.ts`\n\n`src/a.ts:12; src/b.ts:24`\n\n`src/a.ts and main.ts:24`\n\n`./node_modules/.bin/tsc main.ts`\n\n`./.venv/bin/python main.py`\n\n`/usr/bin/tsc main.ts`\n\n`./scripts/check.sh main.ts`\n\n`./bin/tsc main.ts`\n\n`/opt/toolchain/bin/tsc main.ts`\n\n`/opt/homebrew/bin/node main.ts`\n\n`~/.local/bin/tool main.ts`\n\n`~/.cargo/bin/tool src/main.rs`\n\n`./bin/dev main.ts`\n\n`bin/dev main.ts`\n\n`./sbin/tool main.ts`\n\n`./.venv/Scripts/python.exe main.py`\n\n`bin/source/my file.ts:3`\n\n[bin filename](<bin/my file.ts:3>)\n\n[src comma](<src/my, file.ts:3>)\n\n`src/my file.ts:3, src/b.ts:9`\n\n`bun test src/a.ts:12,src/b.ts:24`\n\n`src/my, file.ts:3`\n\n`/project/demo/src/a,b.ts:3`\n\n[ambiguous comma](<src/my.ts, file.ts:3>)\n\n```\n/project/demo/do-not-link.ts:5\n```",
             }),
           ],
         }),
@@ -355,6 +355,51 @@ test("Chat source links navigate through the admitted Inspector binding", async 
         ],
         command: true,
       },
+      {
+        input: "./bin/tsc main.ts",
+        targets: [["main.ts", "main.ts", null]],
+        command: true,
+      },
+      {
+        input: "/opt/toolchain/bin/tsc main.ts",
+        targets: [["main.ts", "main.ts", null]],
+        command: true,
+      },
+      {
+        input: "/opt/homebrew/bin/node main.ts",
+        targets: [["main.ts", "main.ts", null]],
+        command: true,
+      },
+      {
+        input: "~/.local/bin/tool main.ts",
+        targets: [["main.ts", "main.ts", null]],
+        command: true,
+      },
+      {
+        input: "~/.cargo/bin/tool src/main.rs",
+        targets: [["src/main.rs", "src/main.rs", null]],
+        command: true,
+      },
+      {
+        input: "./bin/dev main.ts",
+        targets: [["main.ts", "main.ts", null]],
+        command: true,
+      },
+      {
+        input: "bin/dev main.ts",
+        targets: [["main.ts", "main.ts", null]],
+        command: true,
+      },
+      {
+        input: "./sbin/tool main.ts",
+        targets: [["main.ts", "main.ts", null]],
+        command: true,
+      },
+      {
+        input: "./.venv/Scripts/python.exe main.py",
+        targets: [["main.py", "main.py", null]],
+        command: true,
+      },
     ] as const;
     for (const scenario of listAndCommandCases) {
       const code = [...node.querySelectorAll("code")].find(
@@ -393,6 +438,8 @@ test("Chat source links navigate through the admitted Inspector binding", async 
       ["src/my, file.ts:3", "src/my, file.ts"],
       ["/project/demo/src/a,b.ts:3", "src/a,b.ts"],
       ["ambiguous comma", "src/my.ts, file.ts"],
+      ["bin/source/my file.ts:3", "bin/source/my file.ts"],
+      ["bin filename", "bin/my file.ts"],
     ] as const) {
       await click(label);
       expect(selection).toMatchObject({ entry: { path }, line: 3 });

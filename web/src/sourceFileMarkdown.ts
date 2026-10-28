@@ -59,7 +59,7 @@ const SOURCE_EXTENSIONS = new Set([
 const DOCUMENT_BASENAME =
   /^(?:readme|changelog|contributing|license|notice|security|features|agents)\.(?:md|markdown|mdx|txt|rst)$/i;
 const EXECUTABLE_DIRECTORY =
-  /(?:^|[/\\])\.bin[/\\]|(?:^|[/\\])\.?venv[/\\](?:bin|scripts)[/\\]|^\/(?:usr\/(?:local\/)?)?s?bin\//i;
+  /(?:^|[/\\])(?:\.?bin|sbin)[/\\][^/\\]+$|(?:^|[/\\])\.?venv[/\\]scripts[/\\][^/\\]+$/i;
 
 type ReferenceRange = { start: number; end: number };
 
