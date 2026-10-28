@@ -140,6 +140,24 @@ export function forgetGoneWatchers(
 }
 
 /**
+ * Removes this watcher's record when it stops: on SIGINT or SIGTERM here, and
+ * on a normal exit through the returned function. One that crashed is
+ * forgotten by the next watcher's pass.
+ */
+export function forgetOnExit(crew: Database, pid = process.pid) {
+  const forget = () => deleteMeta(crew, `watcher:${pid}`);
+  for (const [signal, code] of [
+    ["SIGINT", 130],
+    ["SIGTERM", 143],
+  ] as const)
+    process.once(signal, () => {
+      forget();
+      process.exit(code);
+    });
+  return forget;
+}
+
+/**
  * `seat start <seat>`: a new Herdr tab in the primary checkout running the
  * seat on its roster harness, model, effort and persona, as a named agent.
  */

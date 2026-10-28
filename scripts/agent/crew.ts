@@ -29,6 +29,7 @@ import {
 import { markDue, markHeads } from "./crew/marks";
 import {
   crewCodeVersion,
+  forgetOnExit,
   noticeStaleWatcher,
   type Seat,
   seats,
@@ -43,7 +44,6 @@ import {
   addAction,
   addRun,
   closeRound,
-  deleteMeta,
   feed,
   finishRun,
   getAction,
@@ -914,20 +914,7 @@ export async function main(argv: string[], deps: Deps = realDeps) {
     // The crew code this process runs; a merge changes the checkout's, and
     // only a restart loads it.
     const loaded = crewCodeVersion();
-    // A watcher removes its own record when it stops, however it stops; one
-    // that crashed is forgotten by the next watcher's pass.
-    const own = `watcher:${process.pid}`;
-    const forget = () => {
-      if (options.command === "watch") deleteMeta(crew, own);
-    };
-    for (const [signal, code] of [
-      ["SIGINT", 130],
-      ["SIGTERM", 143],
-    ] as const)
-      process.once(signal, () => {
-        forget();
-        process.exit(code);
-      });
+    const forget = options.command === "watch" ? forgetOnExit(crew) : () => {};
     try {
       for (;;) {
         const now = Date.now();
