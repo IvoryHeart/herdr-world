@@ -220,6 +220,132 @@ Source: [`scripts/agent/gate.ts`](../scripts/agent/gate.ts) and
 [`scripts/agent/gate/`](../scripts/agent/gate/). The predicate is pure, and its
 acceptance cases live in `cases.ts`.
 
+### Act on readiness with agent:crew
+
+`agent:crew` is the crew watcher. Agents coordinate through the state on GitHub,
+not by messaging each other. Each pass reads the open PRs through `agent:gate`,
+plans the next step for every PR in scope and takes each step once:
+
+| Gate state | Step | Who |
+|---|---|---|
+| Findings are open on the head and every required reviewer has posted on it | One `ACT #N fix` prompt with the review URLs, so the author fixes in one pass | The author's seat |
+| A required check fails and no check is still running | `ACT #N ci` prompt | The author's seat |
+| GitHub reports a conflict, or screenshots are missing | `ACT #N conflict` or `ACT #N screenshots` prompt | The author's seat |
+| A required reviewer has no RESULT, or a newer head needs confirming; checks are green and GitHub reports the head mergeable | A fresh reviewer run | That reviewer's model |
+| READY | A Herdr notification | The owner |
+| A judgment condition, an unknown author, an unsupported roster model or a reviewer run that posted nothing | One `NEEDS-OWNER` notification per distinct cause | The owner |
+
+- **Who the author is.** The branch names the author: `agent/<seat>-…`, or the
+  pod lead for `batch/<pod>-<n>`. Set an override per PR in `authors`.
+- **When a seat gets a prompt.** Only when Herdr reports it idle or done and
+  it isn't focused, because a prompt types into the seat's input box. Other
+  steps wait for a later pass. Seats listed in `neverPrompt` are never
+  prompted; the owner gets a notification instead.
+- **How reviewers run.** Each review or confirmation is a fresh, interactive
+  `claude` (in auto permission mode) or `codex` session on the seat's roster
+  model, in a detached
+  checkout of the exact head, with its brief as the first message. The brief
+  gives references to the work item. The owner watches it work in the
+  harness's own interface and can type to it at any time, as with any agent
+  in Herdr. It posts one review with the canonical header. The review is done
+  once that RESULT is on GitHub: the watcher then records the result and the
+  token usage (read from the harness's session files) and frees the slot. The
+  session stays open in its pane as a chat. A confirmation reviews the delta
+  from that reviewer's last claimed commit. At most `maxRuns` reviewers work
+  at once. One that is still working after `runTimeoutMinutes` without posting
+  is reported to the owner, not stopped. A session that crashes before
+  posting is retried once. One that is quit, or exits cleanly, without a
+  RESULT on the head goes to the owner after 15 minutes. A post without a
+  RESULT line doesn't count. A RESULT counts for the head it was given, even
+  if the session has ended or a newer head has arrived since.
+- **Where reviewers show.** A PR is a pod, and each head it reviews is a
+  round. A round has its own Herdr tab, named like `#7 towncx-12-plates · r2`,
+  with one pane per reviewer, named after the reviewer. Every reviewer stays
+  in its pane until the PR merges or closes, so the owner can read and
+  question every round before merging. Only a reviewer still working when a
+  newer head arrives is stopped, since its review is stale; its pane says so
+  and gives the command to reopen it. If you quit a session yourself, its pane
+  gives the same command. A tab the owner closes is reopened for that round's
+  next reviewer, and every tab a round used closes with it. If Herdr or git
+  can't finish that cleanup, the round stays open and the next pass retries
+  it.
+- **Reopening a run.** Each run records its harness, model, session and
+  RESULT. `open` resumes a session that has ended (one still open is in its
+  pane), on the run's own model, as
+  an interactive chat in a new Herdr tab. It runs from the reviewer's checkout,
+  which `open` recreates if it's gone. There you can read the whole review and ask the
+  reviewer about it; it uses tokens only when you type. A chat tab closes with
+  its round, and only then is its checkout removed. `open` waits for a running
+  pass, so a merge can't land between opening a chat and recording it. A chat
+  opened after the PR has closed removes its checkout when you exit it. Until
+  then, `open` refuses a second chat on that run.
+- **What stops a step.** Only a newer head, a merge or a close supersedes a
+  waiting step or stops a running reviewer. On the same head, a CI rerun, a
+  hold or an unknown mergeable state only pauses steps; they resume when the
+  head is eligible again. A reviewer that has just posted finishes its run. A
+  PR reopened on the same head is planned afresh.
+- **Which checks count.** An attempt that a later attempt of the same
+  workflow replaced, as a rerun does, doesn't count. Same-name checks from
+  runs the gate can't order, such as two workflows, all count: the gate keeps
+  only the worst of them, but none has replaced another. The author gets a
+  failure's `ci` step once no counted check is still running, so a failure in
+  one workflow waits while a same-name job in another is still running. The
+  step's message summarises the failures (the first three names, then an
+  ellipsis); its key covers every counted failed job, so a new failure among
+  them sends a new step.
+- **A check that never finishes.** GitHub sometimes loses a finished job's
+  status, and the check then shows as running for good, which holds every
+  review back. The watcher notes when it first sees each counted check
+  running. One still running after `stallMinutes` (default 30) goes to the
+  author as a `ci` step, with the `gh run rerun --job` command for it, or to
+  the owner once if the PR has no author seat. `pass --dry-run` shows these
+  too, without recording anything.
+- **When a step repeats.** A CI step is keyed by the failed jobs, so a rerun
+  that fails again prompts the author again. Every owner notice is an action
+  of its own: READY, NEEDS-OWNER, a seat that is missing or never prompted,
+  and a seat that keeps refusing prompts. Each is shown once, and one that
+  Herdr didn't show is retried on the next pass. A notice about a seat is
+  dropped once its cause clears, for example when the seat takes the prompt.
+- **Where the owner reads it.** Every plan, prompt, run and notification is a
+  line in `.agents/crew-gate/feed.log`, so the owner can follow the crew
+  without any agent spending a turn on it.
+
+```bash
+bun run agent:crew -- pass --dry-run   # print the plan; change nothing
+bun run agent:crew -- watch            # a pass every 300 seconds (--interval)
+bun run agent:crew -- status           # open steps and recent reviewer runs, with token usage
+bun run agent:crew -- feed             # the last lines of the crew feed
+bun run agent:crew -- runs --pr 7      # each run's round, RESULT, tokens and open command
+bun run agent:crew -- open --run 12    # reopen a run as a chat (or --pr 7 --reviewer rev2 --round 2)
+bun run agent:crew -- review --pr 7 --reviewer rev2 --head <sha>   # one fresh reviewer now
+```
+
+Settings go under `crew` in the gate's `config.json`:
+
+- `pods` limits the watcher to PRs labelled `pod:<name>`; empty means every PR.
+- `prs` adds PRs regardless of their labels.
+- `leads` maps each pod to its lead seat.
+- `authors` holds per-PR author overrides.
+- `neverPrompt` lists seats the watcher never prompts.
+- `maxRuns` (default 3) bounds the reviewers working at once, and
+  `runTimeoutMinutes` (default 90) is when one still working without posting
+  is reported to the owner. `stallMinutes` (default 30) is when a check still
+  running counts as stuck.
+- The gate config's `roster` gives each reviewer's model and effort.
+
+`crew.sqlite` records each step once under a key built from the PR, head, kind,
+target and, for CI and judgment steps, their cause. A repeated pass or a
+restart never prompts twice. Only one pass reads and acts at a time. It holds
+`crew.lock` from its GitHub read to its last step, and the OS releases the lock
+if the process dies. A second watcher or an overlapping `pass` waits, then
+reads after the first has acted. Each step is committed as soon as it happens,
+so a crash never forgets a prompt that was already sent. A scoped `pass --pr`
+acts only on the PRs it read. Run logs are kept in `runs/`. The watcher never pushes, merges, approves or writes to
+GitHub; the fresh reviewers post their own reviews.
+
+Source: [`scripts/agent/crew.ts`](../scripts/agent/crew.ts) and
+[`scripts/agent/crew/`](../scripts/agent/crew/).
+
 ## Limit merge conflict churn
 
 Before parallel changes, identify shared implementation files and keep one writer

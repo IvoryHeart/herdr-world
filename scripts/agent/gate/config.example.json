@@ -7,5 +7,31 @@
   },
   "flakes": ["Browser tests"],
   "rerunBudget": 1,
-  "aggregateChecks": ["Delivery checks"]
+  "aggregateChecks": ["Delivery checks"],
+  "roster": {
+    "rev2": {
+      "model": "gpt-6.1-sol",
+      "effort": "xhigh"
+    },
+    "rev-astra": {
+      "model": "gpt-6-astra",
+      "effort": "high"
+    },
+    "rev-opus": {
+      "model": "claude-opus-5-5",
+      "effort": "high"
+    }
+  },
+  "crew": {
+    "pods": ["town"],
+    "prs": [],
+    "leads": {
+      "town": "towncx"
+    },
+    "authors": {},
+    "neverPrompt": ["firstmate"],
+    "maxRuns": 3,
+    "runTimeoutMinutes": 90,
+    "stallMinutes": 30
+  }
 }
