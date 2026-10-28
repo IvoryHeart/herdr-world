@@ -16,11 +16,10 @@ import {
   parseOptions,
   promptable,
   roundLabel,
-  showStatus,
-  status,
   type Seat,
   seats,
 } from "./crew";
+import { showStatus, status } from "./crew/status";
 import {
   type Deps,
   herdrIds,

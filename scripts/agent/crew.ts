@@ -5,7 +5,7 @@ import { shortSha } from "../../shared/pullRequests";
 import { gateDir, loadConfig, runPass } from "./gate";
 import type { Run } from "./gate/observe";
 import type { GateInput, Verdict } from "./gate/predicate";
-import { currentInputs, openStore } from "./gate/store";
+import { openStore } from "./gate/store";
 import { type Deps, realDeps } from "./crew/deps";
 import {
   type Action,
@@ -16,7 +16,6 @@ import {
   currentChecks,
   inScope,
   isOnHold,
-  type Mark,
   marks,
   loadSettings,
   plan,
@@ -28,6 +27,8 @@ import {
   review,
   runs,
 } from "./crew/review";
+import { markDue, markHeads } from "./crew/marks";
+import { showStatus } from "./crew/status";
 import {
   actionsIn,
   activeRuns,
@@ -37,22 +38,18 @@ import {
   feed,
   finishRun,
   getAction,
-  getMeta,
   holdLock,
   getRun,
   latestRun,
   openCrewStore,
   openLock,
   openRounds,
-  recentActions,
-  recentRuns,
   roundFor,
   roundPanes,
   roundTabs,
   runningSince,
   runsOf,
   setAction,
-  setMeta,
   setRoundTab,
   setRunPane,
   setRunPid,
@@ -464,67 +461,7 @@ function act(
       !causes.get(entry.pr)?.length
     )
       owe(entry);
-  const repo = loadConfig(context.configPath).repo;
-  for (const verdict of verdicts) {
-    const input = inputs.find((entry) => entry.number === verdict.number);
-    if (!input || !verdict.head) continue;
-    for (const mark of marks(
-      verdict,
-      input,
-      settings,
-      causes.get(verdict.number) ?? [],
-    )) {
-      if (!markDue(crew, verdict.number, verdict.head, mark)) continue;
-      const result = deps.run([
-        "gh",
-        "api",
-        "-X",
-        "POST",
-        `repos/${repo}/statuses/${verdict.head}`,
-        "-f",
-        `state=${mark.state}`,
-        "-f",
-        `context=${mark.context}`,
-        "-f",
-        `description=${mark.description}`,
-      ]);
-      if (result.code === 0) {
-        setMeta(
-          crew,
-          `mark:${verdict.number}:${mark.context}`,
-          JSON.stringify({
-            head: verdict.head,
-            state: mark.state,
-            description: mark.description,
-          }),
-        );
-        say(
-          `#${verdict.number} marked ${mark.context} ${mark.state}: ${mark.description}`,
-        );
-      } else
-        say(
-          `#${verdict.number} couldn't mark ${mark.context}: ${(result.stderr || result.stdout).trim().slice(0, 200)}`,
-        );
-    }
-  }
-}
-
-/**
- * Whether a mark should be posted: it differs from the last one posted for
- * this PR, and a mark that takes one back only goes on a head that was
- * marked before.
- */
-function markDue(crew: Database, pr: number, head: string, mark: Mark) {
-  const raw = getMeta(crew, `mark:${pr}:${mark.context}`);
-  const last = raw
-    ? (JSON.parse(raw) as { head: string; state: string; description: string })
-    : null;
-  if (mark.revokes) return last?.head === head && last.state !== mark.state;
-  return (
-    last?.head !== head ||
-    last.state !== mark.state ||
-    last.description !== mark.description
-  );
+  markHeads(crew, context, settings, verdicts, inputs, causes, say);
 }
 
 /**
@@ -846,63 +783,6 @@ export function parseOptions(argv: string[]): Options {
   }
   if (!options.command) throw new Error(USAGE);
   return options;
-}
-
-export function status(
-  crew: Database,
-  out: (text: string) => void,
-  now: number,
-  settings: CrewSettings | null,
-  held: GateInput[] = [],
-) {
-  if (settings) {
-    const heldPrs = held
-      .filter(
-        (input) =>
-          input.state === "OPEN" && inScope(input, settings) && isOnHold(input),
-      )
-      .sort((a, b) => a.number - b.number);
-    out(`${heldPrs.length} held pull request(s) (as last read)`);
-    for (const input of heldPrs)
-      out(`  #${input.number}\t${input.item?.title ?? ""}`.trimEnd());
-  } else out("held pull requests unknown: no crew pass or configuration yet");
-  const open = actionsIn(crew, ["pending", "running"]);
-  out(`${open.length} open action(s)`);
-  for (const entry of open)
-    out(
-      `  ${entry.state}\t#${entry.pr} ${entry.kind} ${entry.target}${entry.detail ? ` (${entry.detail})` : ""}`,
-    );
-  out("recent actions");
-  for (const entry of recentActions(crew, 10))
-    out(
-      `  ${entry.state}\t#${entry.pr} ${entry.kind} ${entry.target} ${Math.round((now - entry.updatedAt) / 60_000)} min ago`,
-    );
-  out("recent runs");
-  for (const entry of recentRuns(crew, 10))
-    out(
-      `  run ${entry.id}\t#${entry.pr} ${entry.reviewer} @${shortSha(entry.head)} ${entry.finishedAt === null ? "running" : `exit ${entry.exitCode}`}${entry.usage ? ` usage ${entry.usage}` : ""}`,
-    );
-}
-
-/**
- * `status` for the gate directory `dir`. The ledger shows without a
- * configuration or a recorded pass; held PRs need both.
- */
-export function showStatus(
-  crew: Database,
-  dir: string,
-  out: (text: string) => void,
-  now: number,
-) {
-  const gate = openStore(join(dir, "gate.sqlite"));
-  try {
-    const seen = currentInputs(gate);
-    const configPath = join(dir, "config.json");
-    const settings = existsSync(configPath) ? loadSettings(configPath) : null;
-    status(crew, out, now, seen && settings, seen ?? []);
-  } finally {
-    gate.close();
-  }
 }
 
 /**
