@@ -137,7 +137,13 @@ export function busyPrs(
   const busy: number[] = [];
   for (const verdict of verdicts) {
     const input = byNumber.get(verdict.number);
-    if (!input || input.state !== "OPEN" || !inScope(input, settings)) continue;
+    if (
+      !input ||
+      input.state !== "OPEN" ||
+      !inScope(input, settings) ||
+      isOnHold(input)
+    )
+      continue;
     if (
       verdict.state === "READY" ||
       open.includes(verdict.number) ||
@@ -146,6 +152,11 @@ export function busyPrs(
       busy.push(verdict.number);
   }
   return [...new Set(busy)].sort((a, b) => a - b);
+}
+
+/** The owner can park a PR with the `on-hold` label without leaving watch scope. */
+export function isOnHold(input: GateInput) {
+  return input.labels.includes("on-hold");
 }
 
 /** A check the watcher has seen running for `minutes`. */
@@ -161,6 +172,7 @@ export function plan(
   const { number: pr, head } = verdict;
   if (!head || verdict.state === "MERGED" || verdict.state === "CLOSED")
     return [];
+  if (isOnHold(input)) return [];
   const at = shortSha(head);
   const state = (id: string) =>
     verdict.conditions.find((entry) => entry.id === id)?.state;
