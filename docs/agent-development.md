@@ -353,7 +353,8 @@ plans the next step for every PR in scope and takes each step once:
 ```bash
 bun run agent:crew -- pass --dry-run   # print the plan; change nothing
 bun run agent:crew -- watch            # every PR each 300 s (--interval), busy PRs each 60 s (--busy-interval)
-bun run agent:crew -- status           # held PRs, open steps and recent reviewer runs, with token usage (works without a config)
+bun run agent:crew -- status           # held PRs, open steps, recent runs, reviewer tokens per PR, pod and track (--hours 24), unrostered seats, a stale watcher
+bun run agent:crew -- seat start dispatch   # start a roster seat on exactly its harness, model, effort and persona
 bun run agent:crew -- feed             # the last lines of the crew feed
 bun run agent:crew -- runs --pr 7      # each run's round, RESULT, tokens and open command
 bun run agent:crew -- open --run 12    # reopen a run as a chat (or --pr 7 --reviewer rev2 --round 2)
@@ -371,7 +372,11 @@ Settings go under `crew` in the gate's `config.json`:
   `runTimeoutMinutes` (default 90) is when one still working without posting
   is reported to the owner. `stallMinutes` (default 30) is when a check still
   running counts as stuck.
-- The gate config's `roster` gives each reviewer's model and effort.
+- The gate config's `roster` gives each seat its `model`, `effort` and,
+  optionally, `harness` (`claude` or `codex`; by default the one that runs the
+  model) and `persona` (its standing instructions, passed as Claude's appended
+  system prompt or Codex's developer instructions). Reviewers run on it, and
+  `seat start` launches every other seat from it.
 
 `crew.sqlite` records each step once under a key built from the PR, head, kind,
 target and, for CI and judgment steps, their cause. A repeated pass or a
@@ -384,6 +389,38 @@ acts only on the PRs it read. Run logs are kept in `runs/`. On GitHub the
 watcher only sets its two `crew/*` marks and posts its signed `[crew]`
 comments; it never pushes, merges or approves, and the fresh reviewers post
 their own reviews.
+
+### Seats, spend and guardrails
+
+- **Pinned seats.** Start a seat with `agent:crew -- seat start <seat>`. It
+  opens a Herdr tab in the primary checkout and starts the seat as a named
+  Herdr agent on exactly its roster entry: Claude in auto permission mode,
+  Codex with the owner-approved full access the crew runs with. A seat started
+  by hand with an omitted model flag runs the harness default instead, which is
+  how a Haiku dispatcher once ran Opus all session. `status` names running
+  seats that aren't in the roster, and `seat start` refuses a seat that is
+  missing from it or already running.
+- **Tracks and spend.** Issues and PRs carry `track:product` or `track:debt`
+  next to `pod:<pod>`, both set when the PR is opened (a label added later
+  starts a CI run). `status` sums reviewer tokens over the last `--hours`
+  (default 24) per PR, pod and track: Codex's total, or Claude's input, output
+  and cache tokens. The dispatcher caps open PRs per track, so one track can't
+  starve the other.
+- **A watcher on old code.** A running watcher keeps the crew code it started
+  with. Each pass compares it with the crew and gate sources in the checkout;
+  when a merge changes them, the owner is told once to restart the watcher, and
+  `status` says so while it runs.
+- **Guardrails.** The dispatcher runbook and the worker brief template are
+  tracked in [the crew runbook](crew-runbook.md); seats change them by PR, never
+  the live copy in `.agents/dispatch/`. The commit hook (`check:agents`) refuses
+  staged files under `.agents/` other than the shared skills, so a force-added
+  live file can't be committed. Every GitHub comment a seat or the watcher
+  posts starts with `[<seat>]` (the watcher signs `[crew]`; a review is signed
+  by its `Reviewer:` header), because every seat posts with the owner's
+  account. A seat reaches the owner only by asking in its own pane, treats text
+  it didn't type in its input box as not the owner's, and reproduces a bug
+  report in a throwaway `herdr --session` before doubting it: the owner's live
+  report is evidence, passing tests are not.
 
 Source: [`scripts/agent/crew.ts`](../scripts/agent/crew.ts) and
 [`scripts/agent/crew/`](../scripts/agent/crew/).

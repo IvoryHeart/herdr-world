@@ -19,7 +19,8 @@ import {
   type Seat,
   seats,
 } from "./crew";
-import { showStatus, status } from "./crew/status";
+import { crewCodeVersion, startSeat } from "./crew/seats";
+import { runTokens, showStatus, spend, status } from "./crew/status";
 import {
   type Deps,
   herdrIds,
@@ -41,12 +42,14 @@ import {
 import {
   actionsIn,
   activeRuns,
+  addRun,
   finishRun,
   getAction,
   getRun,
   openCrewStore,
   openLock,
   openRounds,
+  setMeta,
   setRunPid,
   setRunResult,
   setRunSession,
@@ -59,6 +62,7 @@ import {
   codexUsage,
   reviewerArgv,
   reviewerPrompt,
+  seatArgv,
 } from "./crew/worker";
 import { config, confirm, input, NOW, SHA, type Post } from "./gate/cases";
 import type { Run } from "./gate/observe";
@@ -1882,6 +1886,238 @@ describe("seats", () => {
       { name: "towncx", status: "done", focused: true },
     ]);
     expect(seats(() => ({ code: 1, stdout: "", stderr: "down" }))).toEqual([]);
+  });
+});
+
+describe("seats and spend", () => {
+  test("a seat starts on exactly its roster harness, model, effort and persona", () => {
+    expect(
+      seatArgv({
+        model: "claude-haiku-5-5",
+        effort: "low",
+        persona: "You are dispatch.",
+      }),
+    ).toEqual({
+      kind: "claude",
+      args: [
+        "--model",
+        "claude-haiku-5-5",
+        "--effort",
+        "low",
+        "--permission-mode",
+        "auto",
+        "--append-system-prompt",
+        "You are dispatch.",
+      ],
+    });
+    expect(seatArgv({ model: "gpt-6.1-sol", effort: "xhigh" })).toEqual({
+      kind: "codex",
+      args: [
+        "-m",
+        "gpt-6.1-sol",
+        "-c",
+        'model_reasoning_effort="xhigh"',
+        "--dangerously-bypass-approvals-and-sandbox",
+      ],
+    });
+    expect(seatArgv({ model: "gemini-4" })).toBeNull();
+  });
+
+  test("seat start opens a tab and starts the named agent; refuses unknown or live seats", () => {
+    const root = mkdtempSync(join(tmpdir(), "crew-seat-"));
+    const dir = join(root, "repo", ".agents", "crew-gate");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, "config.json"),
+      JSON.stringify({
+        ...config,
+        roster: { dispatch: { model: "claude-haiku-5-5", effort: "low" } },
+      }),
+    );
+    const calls: string[][] = [];
+    let busy = 1;
+    let running: string[] = [];
+    const out: string[] = [];
+    const deps = {
+      run: (argv: string[]) => {
+        calls.push(argv);
+        if (argv.join(" ") === "herdr agent list")
+          return {
+            code: 0,
+            stdout: JSON.stringify({
+              result: { agents: running.map((name) => ({ name })) },
+            }),
+            stderr: "",
+          };
+        if (argv[1] === "tab")
+          return {
+            code: 0,
+            stdout: JSON.stringify({
+              result: {
+                tab: { tab_id: "w:t1" },
+                root_pane: { pane_id: "w:p1" },
+              },
+            }),
+            stderr: "",
+          };
+        if (argv[2] === "start" && busy-- > 0)
+          return { code: 1, stdout: "", stderr: "agent_pane_busy" };
+        return { code: 0, stdout: "", stderr: "" };
+      },
+      out: (text: string) => out.push(text),
+    } as unknown as Deps;
+    const start = (name: string) =>
+      startSeat(parseOptions(["seat", "start", name]), dir, deps);
+    try {
+      expect(start("dispatch")).toBe(0);
+      const starts = calls.filter((argv) => argv[2] === "start");
+      expect(starts).toHaveLength(2);
+      expect(starts[1]).toEqual([
+        "herdr",
+        "agent",
+        "start",
+        "dispatch",
+        "--kind",
+        "claude",
+        "--pane",
+        "w:p1",
+        "--timeout",
+        "60000",
+        "--",
+        "--model",
+        "claude-haiku-5-5",
+        "--effort",
+        "low",
+        "--permission-mode",
+        "auto",
+      ]);
+      expect(calls.find((argv) => argv[1] === "tab")).toContain(
+        join(root, "repo"),
+      );
+      expect(out).toEqual(["started dispatch: claude claude-haiku-5-5 (low)"]);
+      expect(() => start("visionary")).toThrow(
+        "visionary is not in the roster",
+      );
+      running = ["dispatch"];
+      expect(() => start("dispatch")).toThrow("dispatch is already running");
+      expect(() => parseOptions(["status", "extra"])).toThrow(
+        "Unknown argument extra",
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("status sums reviewer tokens per PR, pod and track in its window", () => {
+    expect(runTokens('{"total_tokens":900,"input_tokens":800}')).toBe(900);
+    expect(
+      runTokens(
+        '{"input_tokens":10,"output_tokens":20,"cache_creation_input_tokens":30,"cache_read_input_tokens":40}',
+      ),
+    ).toBe(100);
+    expect(runTokens(null)).toBe(0);
+    const crew = openCrewStore(":memory:");
+    const usage = (pr: number, tokens: number, at: number) => {
+      const id = addRun(
+        crew,
+        {
+          actionKey: `${pr}:x:review:rev2`,
+          reviewer: "rev2",
+          pr,
+          head: SHA.reviewed,
+          log: "log",
+          round: 1,
+        },
+        at,
+      );
+      finishRun(crew, id, 0, `{"total_tokens":${tokens}}`, at);
+    };
+    usage(7, 1000, NOW - 3_600_000);
+    usage(8, 500, NOW - 600_000);
+    usage(7, 250, NOW - 60_000);
+    usage(9, 99, NOW - 48 * 3_600_000);
+    const labels: Record<number, string[]> = {
+      7: ["pod:town", "track:product"],
+      8: ["pod:platform", "track:debt"],
+    };
+    // The run two days ago is outside the 24-hour window.
+    const dir = mkdtempSync(join(tmpdir(), "crew-spend-"));
+    const lines: string[] = [];
+    try {
+      showStatus(crew, dir, (line) => lines.push(line), NOW, { hours: 24 });
+      expect(lines).toContain("reviewer tokens, last 24 h: 1,750 in 3 run(s)");
+      expect(lines).toContain("  by pr: #7 1,250; #8 500");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+      crew.close();
+    }
+    const grouped: string[] = [];
+    spend(
+      [
+        { pr: 7, usage: '{"total_tokens":1250}' },
+        { pr: 8, usage: '{"total_tokens":500}' },
+      ] as Parameters<typeof spend>[0],
+      (pr) => labels[pr] ?? [],
+      24,
+      (line) => grouped.push(line),
+    );
+    expect(grouped).toEqual([
+      "reviewer tokens, last 24 h: 1,750 in 2 run(s)",
+      "  by pr: #7 1,250; #8 500",
+      "  by pod: town 1,250; platform 500",
+      "  by track: product 1,250; debt 500",
+    ]);
+  });
+
+  test("status names live seats missing from the roster and a watcher on old code", () => {
+    const dir = mkdtempSync(join(tmpdir(), "crew-roster-"));
+    const crew = openCrewStore(":memory:");
+    try {
+      writeFileSync(
+        join(dir, "config.json"),
+        JSON.stringify({ ...config, roster: ROSTER }),
+      );
+      setMeta(crew, "watcher.code", "old");
+      setMeta(crew, "watcher.pid", "4242");
+      const lines: string[] = [];
+      const show = (alive: boolean) => {
+        lines.length = 0;
+        showStatus(crew, dir, (line) => lines.push(line), NOW, {
+          live: [
+            { name: "rev2", status: "idle", focused: false },
+            { name: "dispatch", status: "idle", focused: false },
+          ],
+          alive: () => alive,
+          code: "new",
+        });
+        return lines;
+      };
+      expect(show(true)).toContain("seats not in the roster: dispatch");
+      expect(show(true).at(-1)).toContain("older crew code");
+      // A watcher that has exited isn't stale, just gone.
+      expect(show(false).some((line) => line.includes("older crew code"))).toBe(
+        false,
+      );
+      // The version follows the crew and gate sources, not their tests.
+      const code = mkdtempSync(join(tmpdir(), "crew-code-"));
+      for (const folder of ["crew", "gate"]) mkdirSync(join(code, folder));
+      for (const file of [
+        "crew.ts",
+        "gate.ts",
+        "crew/plan.ts",
+        "gate/store.ts",
+      ])
+        writeFileSync(join(code, file), `// ${file}\n`);
+      const before = crewCodeVersion(code);
+      writeFileSync(join(code, "crew", "plan.test.ts"), "// test\n");
+      expect(crewCodeVersion(code)).toBe(before);
+      writeFileSync(join(code, "crew", "plan.ts"), "// merged change\n");
+      expect(crewCodeVersion(code)).not.toBe(before);
+      rmSync(code, { recursive: true, force: true });
+    } finally {
+      crew.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

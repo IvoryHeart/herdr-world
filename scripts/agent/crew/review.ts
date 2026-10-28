@@ -48,6 +48,10 @@ export type Options = {
   author?: string;
   run?: number;
   round?: number;
+  /** Words after the command, as in `seat start <seat>`. */
+  args: string[];
+  /** `status`: the window, in hours, for reviewer token totals. */
+  hours: number;
 };
 
 /** A run's own detached checkout below the primary checkout's worktrees. */

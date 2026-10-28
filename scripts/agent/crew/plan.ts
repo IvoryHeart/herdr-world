@@ -30,8 +30,20 @@ export type CrewSettings = {
    * stuck, as when GitHub loses a finished job's status; the author reruns it.
    */
   stallMinutes: number;
-  /** Seat → model; a reviewer runs fresh on its seat's model. */
-  roster: Record<string, { model: string; effort?: string }>;
+  /**
+   * Seat → how it runs: a reviewer runs fresh on its seat's model, and
+   * `seat start` launches a seat with exactly these settings.
+   */
+  roster: Record<string, RosterEntry>;
+};
+
+export type RosterEntry = {
+  model: string;
+  effort?: string;
+  /** Defaults to the harness that runs the model; see `harnessFor`. */
+  harness?: "claude" | "codex";
+  /** The seat's standing instructions, given as its system prompt. */
+  persona?: string;
 };
 
 export type ActionKind =

@@ -3,11 +3,22 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { shortSha } from "../../../shared/pullRequests";
 import type { GateInput } from "../gate/predicate";
-import { currentInputs, openStore } from "../gate/store";
+import { currentInputs, latestInput, openStore } from "../gate/store";
 import { type CrewSettings, inScope, isOnHold, loadSettings } from "./plan";
-import { actionsIn, recentActions, recentRuns } from "./store";
+import { crewCodeVersion, type Seat, unrostered } from "./seats";
+import {
+  actionsIn,
+  getMeta,
+  recentActions,
+  recentRuns,
+  runsSince,
+  type StoredRun,
+} from "./store";
 
-/** `agent:crew status`: held PRs, open and recent actions, recent runs. */
+/**
+ * `agent:crew status`: held PRs, open and recent actions, recent runs,
+ * reviewer tokens, unrostered seats and a watcher on old code.
+ */
 export function status(
   crew: Database,
   out: (text: string) => void,
@@ -53,6 +64,12 @@ export function showStatus(
   dir: string,
   out: (text: string) => void,
   now: number,
+  extra: {
+    live?: Seat[];
+    hours?: number;
+    alive?: (pid: number) => boolean;
+    code?: string;
+  } = {},
 ) {
   const gate = openStore(join(dir, "gate.sqlite"));
   try {
@@ -60,7 +77,93 @@ export function showStatus(
     const configPath = join(dir, "config.json");
     const settings = existsSync(configPath) ? loadSettings(configPath) : null;
     status(crew, out, now, seen && settings, seen ?? []);
+    const hours = extra.hours ?? 24;
+    spend(
+      runsSince(crew, now - hours * 3_600_000),
+      (pr) => latestInput(gate, pr)?.labels ?? [],
+      hours,
+      out,
+    );
+    const missing = settings
+      ? unrostered(extra.live ?? [], settings.roster)
+      : [];
+    if (missing.length) out(`seats not in the roster: ${missing.join(", ")}`);
+    const watcher = getMeta(crew, "watcher.code");
+    const pid = Number(getMeta(crew, "watcher.pid"));
+    if (
+      watcher &&
+      pid &&
+      (extra.alive ?? (() => false))(pid) &&
+      watcher !== (extra.code ?? crewCodeVersion())
+    )
+      out(
+        "the watcher runs older crew code than this checkout; restart `agent:crew -- watch`",
+      );
   } finally {
     gate.close();
   }
+}
+
+/** A run's tokens: Codex's total, or Claude's input, output and cache. */
+export function runTokens(usage: string | null) {
+  if (!usage) return 0;
+  try {
+    const value = JSON.parse(usage) as Record<string, unknown>;
+    const number = (key: string) =>
+      typeof value[key] === "number" ? (value[key] as number) : 0;
+    if (typeof value.total_tokens === "number") return value.total_tokens;
+    return (
+      number("input_tokens") +
+      number("output_tokens") +
+      number("cache_creation_input_tokens") +
+      number("cache_read_input_tokens")
+    );
+  } catch {
+    return 0;
+  }
+}
+
+/** Reviewer tokens in the window, per PR, pod and track. */
+export function spend(
+  runs: StoredRun[],
+  labelsOf: (pr: number) => string[],
+  hours: number,
+  out: (text: string) => void,
+) {
+  const groups = {
+    pr: new Map<string, number>(),
+    pod: new Map<string, number>(),
+    track: new Map<string, number>(),
+  };
+  const add = (map: Map<string, number>, key: string, tokens: number) =>
+    map.set(key, (map.get(key) ?? 0) + tokens);
+  let total = 0;
+  for (const entry of runs) {
+    const tokens = runTokens(entry.usage);
+    total += tokens;
+    const labels = labelsOf(entry.pr);
+    const named = (prefix: string) =>
+      labels
+        .filter((label) => label.startsWith(prefix))
+        .map((label) => label.slice(prefix.length));
+    add(groups.pr, `#${entry.pr}`, tokens);
+    for (const pod of named("pod:").length ? named("pod:") : ["(no pod)"])
+      add(groups.pod, pod, tokens);
+    for (const track of named("track:").length
+      ? named("track:")
+      : ["(no track)"])
+      add(groups.track, track, tokens);
+  }
+  const format = (value: number) => value.toLocaleString("en-US");
+  out(
+    `reviewer tokens, last ${hours} h: ${format(total)} in ${runs.length} run(s)`,
+  );
+  if (!runs.length) return;
+  for (const [name, map] of Object.entries(groups))
+    out(
+      `  by ${name}: ${[...map]
+        .sort((a, b) => b[1] - a[1])
+        .map(([key, value]) => `${key} ${format(value)}`)
+        .join("; ")}`,
+    );
 }

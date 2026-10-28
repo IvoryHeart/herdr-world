@@ -519,6 +519,16 @@ export function latestRun(db: Database, actionKey: string) {
   return row ? run(row) : null;
 }
 
+/** Reviewer runs started at or after `since`. */
+export function runsSince(db: Database, since: number) {
+  return db
+    .query<RunRow, [number]>(
+      "SELECT * FROM run WHERE started_at >= ? ORDER BY id",
+    )
+    .all(since)
+    .map(run);
+}
+
 /** A small value the watcher keeps, such as the last mark it set on a PR. */
 export function getMeta(db: Database, key: string) {
   return (

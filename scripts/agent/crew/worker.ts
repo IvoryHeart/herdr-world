@@ -89,6 +89,49 @@ export function reviewerArgv(
   ];
 }
 
+/**
+ * A seat's harness and its arguments after the executable, from its roster
+ * entry: the same permissions the crew's seats run with, the roster's model
+ * and effort, and its persona as standing instructions. Null when no harness
+ * runs the model.
+ */
+export function seatArgv(entry: {
+  model: string;
+  effort?: string;
+  harness?: "claude" | "codex";
+  persona?: string;
+}): { kind: "claude" | "codex"; args: string[] } | null {
+  const kind = entry.harness ?? harnessFor(entry.model);
+  if (kind === "claude")
+    return {
+      kind,
+      args: [
+        "--model",
+        entry.model,
+        ...(entry.effort ? ["--effort", entry.effort] : []),
+        "--permission-mode",
+        "auto",
+        ...(entry.persona ? ["--append-system-prompt", entry.persona] : []),
+      ],
+    };
+  if (kind === "codex")
+    return {
+      kind,
+      args: [
+        "-m",
+        entry.model,
+        ...(entry.effort
+          ? ["-c", `model_reasoning_effort="${entry.effort}"`]
+          : []),
+        "--dangerously-bypass-approvals-and-sandbox",
+        ...(entry.persona
+          ? ["-c", `developer_instructions=${JSON.stringify(entry.persona)}`]
+          : []),
+      ],
+    };
+  return null;
+}
+
 const claudeHome = () =>
   process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude");
 const codexSessions = () =>
