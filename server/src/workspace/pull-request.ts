@@ -5,6 +5,7 @@ import type {
   ReviewRemote,
 } from "../../../shared/pullRequest";
 import { sshCommandArgv } from "../bridge/ssh-command";
+import { crewMark } from "../sources/github";
 import type { GitActionContext } from "./git-actions";
 
 // Remote URLs and CLI diagnostics can contain credentials. Only project identity
@@ -73,6 +74,8 @@ export function githubChecks(value: unknown): string {
   const counts = new Map<string, number>();
   for (const item of value) {
     const check = object(item);
+    // The crew watcher's marks report on the checks; they aren't one.
+    if (crewMark(check)) continue;
     const state =
       check.__typename === "CheckRun"
         ? check.status === "COMPLETED"
@@ -83,6 +86,7 @@ export function githubChecks(value: unknown): string {
           : "Unknown";
     counts.set(state, (counts.get(state) ?? 0) + 1);
   }
+  if (!counts.size) return "No checks reported";
   return [...counts].map(([state, count]) => `${count} ${state}`).join(", ");
 }
 

@@ -745,6 +745,26 @@ describe("PR/MR status", () => {
         {},
       ]),
     ).toBe("1 SKIPPED, 1 PENDING, 1 Unknown");
+    // The crew watcher's marks aren't checks.
+    expect(
+      githubChecks([
+        { __typename: "CheckRun", status: "COMPLETED", conclusion: "SUCCESS" },
+        {
+          __typename: "StatusContext",
+          context: "crew/merge-ready",
+          state: "PENDING",
+        },
+      ]),
+    ).toBe("1 SUCCESS");
+    expect(
+      githubChecks([
+        {
+          __typename: "StatusContext",
+          context: "crew/needs-owner",
+          state: "PENDING",
+        },
+      ]),
+    ).toBe("No checks reported");
     expect(gitlabApprovals({ approved_by: [{}] })).toBe("Unavailable");
     expect(gitlabApprovals({ approved: true, approved_by: [] })).toBe(
       "Approved (provider-reported); 0 approver(s)",
