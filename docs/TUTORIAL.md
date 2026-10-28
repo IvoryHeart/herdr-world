@@ -225,6 +225,13 @@ hosts stay usable.
    If choices are ambiguous or stale, use **Choose a worktree** and **Refresh**;
    resource access waits for a current selection. **Open terminal** is for
    direct work.
+   In Town, Board or Desk, click a local source reference in **Chat** to open
+   **Files** in the same window at its line (for example, `src/example.ts:12`).
+   Relative references
+   start at the selected worktree. If the path is outside it or its binding is
+   unavailable, use **Choose a worktree**, then click the reference again.
+   For a root filename with spaces, use a path prefix, such as `./my file.ts:12`,
+   or an explicit Markdown file link.
    If a retained file becomes unavailable, its preview shows a notice instead
    of closing the window. Choose a current worktree or another file, then
    **Retry preview** if needed; Chat and its draft remain open.

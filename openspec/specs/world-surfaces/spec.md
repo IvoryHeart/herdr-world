@@ -295,6 +295,64 @@ retain its single-Inspector behavior.
 - **THEN** the request does not open the file in another Inspector or on another host, and the user
   receives an unavailable indication
 
+### Requirement: Chat source links use the admitted Inspector worktree
+
+In Town, Board and Desk, local source references in an agent conversation SHALL
+open Files in that same Inspector at the referenced line or Markdown heading.
+Supported references SHALL
+include absolute paths with an optional line number, root-level filenames,
+complete inline-code paths (including spaces) and Markdown file links. Escaped
+filename delimiters SHALL remain filename content; version-number prose SHALL
+NOT become automatic source links. Automatic basename recognition SHALL require
+both a known source/document format and a filename context (inline code, a line
+location or a standard document name). A code command or list of references
+SHALL retain individual source-path links and line locations rather than become
+one combined filename. Automatic recognition of a spaced inline-code filename
+SHALL require a qualified path prefix; explicit Markdown links SHALL remain
+available for ambiguous names or unrecognized automatic formats. Relative references SHALL resolve within the
+selected agent
+worktree. HTTP and HTTPS links SHALL remain web links. Inspectors without an
+admitted agent-worktree integration, including Spaces, SHALL retain ordinary
+Markdown navigation and SHALL NOT offer a nonfunctional worktree chooser.
+
+Source navigation SHALL preserve the originating connection, runtime generation,
+pane/session and the shared Files/Changes worktree binding. It SHALL NOT admit a
+path outside that selected root, use a workspace default, change another
+Inspector or accept a delayed result from a replaced binding. Missing or stale
+bindings and unresolved local paths SHALL show an explicit unavailable or
+choose-worktree state, without browser navigation to a local-path URL.
+
+#### Scenario: Open a source reference on desktop or phone
+
+- **WHEN** a user activates a local source link with a line in Chat
+- **THEN** that Inspector selects Files and reveals the file and line using its
+  admitted agent worktree, including when opening the same file at another line
+
+#### Scenario: Source link cannot use its originating worktree
+
+- **WHEN** the binding is stale or belongs to another host, generation or session,
+  or the path is outside the selected worktree
+- **THEN** no fallback file read or browser navigation occurs, and the Inspector
+  offers an explicit unavailable notice or worktree choice
+
+#### Scenario: Refresh equivalent evidence while a source read is pending
+
+- **WHEN** opening Files refreshes worktree evidence with identical connection,
+  runtime, subject, revision, candidate and root values before the read completes
+- **THEN** the successful read still reveals its requested line, genuine binding
+  replacements continue to retire old work, and notices follow their binding
+
+#### Scenario: Code lists and executable-led commands preserve source items
+
+- **WHEN** inline code contains comma/semicolon-separated references, mixed
+  qualified paths and basenames, or a command led by an executable directly in
+  `bin`, `sbin` or `.bin` at any relative or absolute installation prefix, or in
+  virtualenv `Scripts`
+- **THEN** each source item retains its own file link and line location, including
+  lists without spaces after commas; a single qualified filename containing
+  spaces or a literal comma remains whole when it is unambiguous; spaced names
+  directly in these executable directories remain available as explicit Markdown links
+
 ### Requirement: Exact visual terminal input focus
 
 In Town and Board, activating an Inspector window whose selected resource is Terminal
