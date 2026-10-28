@@ -140,6 +140,7 @@ import { runProcessWithCodeTimeout, shQuote } from "./utils/process-utils";
 import { rpcLogLevel, shouldLogRpc } from "./utils/rpc-logging";
 import { DOWNLOAD_TIMEOUT_MS } from "./workspace/file-constants";
 import { WorldSnapshotService } from "./world/snapshot";
+import { createWorldDeskService } from "./world/desk-service";
 import { WorldWatchlistRegistry } from "./world/watchlist";
 import { BoardStore, type BoardOp } from "./world/board-store";
 import { afterHerdrClose } from "./world/board-closing";
@@ -439,6 +440,9 @@ const connectionFailureReporters = new Map<string, RecoveryReporter>();
 const readyConnectionGenerations = new Map<string, number>();
 let worldSnapshots: WorldSnapshotService<LegacyConnectionRuntime> | null = null;
 const worldWatchlist = new WorldWatchlistRegistry();
+const deskService = createWorldDeskService((line) => {
+  for (const ws of clients) safeSend(ws, line, "world-desk");
+});
 let boardStore: BoardStore | null = null;
 function board() {
   boardStore ??= new BoardStore(undefined, {
@@ -550,6 +554,7 @@ function connectionFailureReporter(connectionId: string): RecoveryReporter {
 const connectionManager = new ConnectionManager<LegacyConnectionRuntime>(
   connectionBootstrap.defaultConnectionId,
   (status) => {
+    deskService.retire(status.id, status.generation);
     const retired = worldWatchlist.retireConnectionGeneration(
       status.id,
       status.generation,
@@ -598,6 +603,7 @@ worldSnapshots = new WorldSnapshotService(
     publishWorldInvalidation(connectionId, generation, true),
   undefined,
   () => worldWatchlist.list(),
+  deskService.observe,
 );
 
 const assistantContext = createAssistantContext({
@@ -927,6 +933,8 @@ const rpcServices = {
   snapshotAdmission,
   townMoveQueues,
   worldWatchlist,
+  worldDesk: deskService.registry,
+  publishDeskChanged: deskService.publish,
   worldCli,
   get worldSnapshots() {
     return worldSnapshots;

@@ -604,9 +604,16 @@ terminal before opening the result in the current view.
 In **Desk**, start with **Needs you** for blocked agents, **To review** for
 finished turns and **In flight** for running work. Open a card to read its Chat or
 inspect the terminal, files or changes. Read the result and verify the diff before
-using **Mark reviewed**; the mark is saved in this browser and does not commit
-files or certify success. **Agents** lists all agents in your Hosts filter;
-**Reviewed** lets you reopen a marked turn.
+using **Mark reviewed**; the mark is shared by every browser connected to this
+World service and does not commit files or certify success. **Undo** restores
+that exact stop across those browsers. **Agents** lists all agents in your Hosts
+filter, with recently opened agents shared too. **Reviewed** shows each agent's
+latest marked stop while it remains idle or done; older stops are not retained.
+
+Desk marks, observed stop times and recent opens live in bounded service memory.
+They survive browser reloads and changes to the Hosts filter, but clear when the
+World service restarts. A replacement runtime or agent session starts fresh.
+Existing browser-local Desk marks are not imported.
 
 On wide screens, selecting a Desk card opens a reading pane on the right and
 folds the lanes into one queue. Use **J** / **K** to preview neighboring agents,

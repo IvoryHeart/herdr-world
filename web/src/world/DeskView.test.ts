@@ -10,7 +10,6 @@ import {
 } from "./DeskView";
 import { agentThreadTitle } from "./worldObject";
 import {
-  advanceObservedStops,
   deskClient,
   DeskReadQueues,
   fetchFullReport,
@@ -312,48 +311,6 @@ describe("receipt currency", () => {
       receipt: null,
       current: true,
     });
-  });
-});
-
-describe("observed stops", () => {
-  const session = (fingerprint: string, status: WorldLeafObject["status"]) =>
-    ({
-      ...leaf("terminal", status),
-      connectionId: "local",
-      generation: 1,
-      agentSessionFingerprint: fingerprint,
-    }) as WorldLeafObject;
-
-  test("a replacement session does not inherit its predecessor's stop", () => {
-    const previous = new Map<string, string>();
-    let stops = advanceObservedStops(
-      new Map(),
-      previous,
-      [session("A", "working")],
-      NOW,
-    ).stops;
-    stops = advanceObservedStops(
-      stops,
-      previous,
-      [session("A", "idle")],
-      NOW,
-    ).stops;
-    expect(stops.size).toBe(1);
-    const replaced = advanceObservedStops(
-      stops,
-      previous,
-      [session("B", "idle")],
-      NOW + 1,
-    );
-    expect(replaced.stops.size).toBe(0);
-    const lanes = partitionDesk(
-      [session("B", "idle")],
-      () => ({ receipt: null, current: true }),
-      new Set(),
-      NOW + 1,
-      replaced.stops,
-    );
-    expect(lanes.review).toHaveLength(0);
   });
 });
 

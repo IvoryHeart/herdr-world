@@ -332,12 +332,18 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     read from the agent's screen.
   - **To review** lists finished turns with your request, the agent's closing
     report, how long it ran, its tool calls and the files it edited, all read from
-    the session transcript. **Mark reviewed** (`E`) clears a turn in this browser.
+    the session transcript. **Mark reviewed** (`E`) acknowledges a turn across
+    browsers of the same World service.
   - **In flight** lists working agents with their current request and a live line
     from each terminal. Quiet agents collapse below.
   - **Agents** lists every agent in the host filter, those you recently opened from the
     Desk first, then each workspace by recent activity. **Reviewed** lists the
-    stops you marked, newest first, with **Reopen**; marking offers **Undo**.
+    latest stop you marked for each idle or done agent, newest first, with
+    **Reopen**; marking offers **Undo** for that exact stop across browsers.
+    Marks, observed stops and recent opens are held in bounded service memory,
+    scoped by connection, runtime, terminal and agent session. They survive a
+    browser reload and clear on service restart or owner/session replacement;
+    previous browser-local Desk marks are not imported.
   - On wide screens, opening a card snaps that agent's Inspector to the right (on
     Chat, or the terminal when the agent has no Chat or **Agents open** is set to
     Terminal) beside the Desk as a reading pane and folds the lanes

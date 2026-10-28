@@ -5,6 +5,9 @@ import "../styles/tokens.css";
 import "../styles/base.css";
 import { terminalFocusBlockedByOverlay } from "../terminalFocus";
 import { DeskBoard } from "./DeskView";
+import { WorldDeskStore } from "./deskStateStore";
+import { deskKey, type DeskRecord } from "../../../shared/deskState";
+import type { BridgeControlMsg } from "../api";
 import { InspectorChat } from "../components/InspectorChat";
 import { ResourceConnectionClientContext } from "../useConnectionClient";
 import type { WorldLeafObject, WorldObject } from "./worldObject";
@@ -18,6 +21,7 @@ const settle = (ms = 80) => new Promise((resolve) => setTimeout(resolve, ms));
 function agent(id: string, fingerprint: string): WorldLeafObject {
   return {
     id,
+    terminalId: id,
     kind: "agent",
     status: "done",
     selectedHost: true,
@@ -104,6 +108,45 @@ const client = {
   },
 } as unknown as ConnectionClient;
 
+let revision = 0;
+const deskRecords = new Map<string, DeskRecord>();
+const deskControls = new Set<(control: BridgeControlMsg) => void>();
+const deskService = {
+  async call(method: string, params?: Record<string, unknown>) {
+    if (method !== "world.desk.get") {
+      const identity = params as unknown as DeskRecord;
+      const key = deskKey(identity);
+      const record = deskRecords.get(key) ?? {
+        ...identity,
+        reviewed_stop: null,
+        stopped_at: null,
+        opened_at: null,
+      };
+      if (method === "world.desk.review")
+        record.reviewed_stop = params?.reviewed
+          ? String(params?.stop_id)
+          : null;
+      else if (method === "world.desk.open") record.opened_at = Date.now();
+      deskRecords.set(key, record);
+      revision++;
+      for (const callback of deskControls)
+        callback({ type: "world_desk_changed", revision });
+    }
+    return {
+      revision,
+      records: [...deskRecords.values()].map((record) => ({ ...record })),
+    };
+  },
+  onControl: (callback: (control: BridgeControlMsg) => void) => {
+    deskControls.add(callback);
+    return () => {
+      deskControls.delete(callback);
+    };
+  },
+  onStatus: () => () => {},
+};
+const deskStore = new WorldDeskStore(deskService);
+
 const card = (id: string) =>
   document.querySelector<HTMLElement>(`[data-desk-card="${id}"]`);
 const press = (target: Element, key: string) => {
@@ -122,6 +165,7 @@ async function run() {
   flushSync(() =>
     root.render(
       <DeskBoard
+        deskStore={deskStore}
         world={world}
         client={client}
         onOpen={async (id) => {
@@ -169,6 +213,42 @@ async function run() {
   await settle();
   press(betaAgain!, "e");
   await settle(200);
+
+  // A second browser sees the same service, without sharing browser storage.
+  const secondBrowser = new WorldDeskStore(deskService);
+  secondBrowser.start();
+  await secondBrowser.refresh();
+  const alphaIdentity = {
+    connection_id: "local",
+    connection_generation: 1,
+    terminal_id: "alpha",
+    agent_session_fingerprint: "a".repeat(64),
+  };
+  await secondBrowser.mutate("world.desk.review", alphaIdentity, {
+    stop_id: "alpha-turn",
+    reviewed: true,
+  });
+  await settle(150);
+  check(
+    !card("alpha"),
+    "a mark from another browser removes the same stop from To review",
+  );
+  await secondBrowser.mutate("world.desk.review", alphaIdentity, {
+    stop_id: "alpha-turn",
+    reviewed: false,
+  });
+  await settle(150);
+  check(
+    !!card("alpha"),
+    "Undo from another browser restores the stop immediately",
+  );
+  secondBrowser.stop();
+  check(
+    !Object.keys(localStorage).some((key) =>
+      /handoffs|desk\.opened/u.test(key),
+    ),
+    "Desk metadata never writes browser storage",
+  );
 
   // Search narrows the Desk to matching agents.
   const search = document.querySelector<HTMLInputElement>(".desk-search input");
@@ -224,6 +304,7 @@ async function run() {
     root.render(
       <>
         <DeskBoard
+          deskStore={deskStore}
           world={world}
           client={client}
           onOpen={async (id) => {
@@ -396,6 +477,7 @@ async function run() {
   flushSync(() =>
     root.render(
       <DeskBoard
+        deskStore={deskStore}
         world={filtered}
         client={resolve}
         onOpen={async (id) => {
@@ -429,6 +511,7 @@ async function run() {
   flushSync(() =>
     root.render(
       <DeskBoard
+        deskStore={deskStore}
         world={{ ...filtered, leaves: [remote], hosts: [filtered.hosts[1]] }}
         client={resolve}
         onOpen={async (id) => {
@@ -443,7 +526,12 @@ async function run() {
     "host filtering retains the remote Desk card",
   );
 
-  localStorage.clear();
+  // Start an independent service-state scenario; clearing browser storage
+  // deliberately no longer clears shared review marks.
+  deskRecords.clear();
+  revision++;
+  for (const callback of deskControls)
+    callback({ type: "world_desk_changed", revision });
   let releaseSlow!: () => void;
   const slowRead = new Promise<void>((resolve) => {
     releaseSlow = resolve;
@@ -470,6 +558,7 @@ async function run() {
   flushSync(() =>
     root.render(
       <DeskBoard
+        deskStore={deskStore}
         key="slow-host"
         world={{ ...filtered, leaves: [remote, leaves[0]] }}
         client={independent}
@@ -496,6 +585,7 @@ async function run() {
   flushSync(() =>
     root.render(
       <DeskBoard
+        deskStore={deskStore}
         key="slow-host"
         world={{
           ...filtered,

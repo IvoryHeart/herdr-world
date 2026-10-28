@@ -10,7 +10,7 @@ import { bridge } from "../api";
 import { worldSessionStorage } from "../browserStorage";
 import {
   fetchFullReport,
-  deskScope,
+  handoffId,
   type DeskClients,
   formatSpan,
   IDLE_WINDOW_MS,
@@ -20,10 +20,7 @@ import {
   receiptEndedAt,
   type ReceiptState,
   type TurnReceipt,
-  useHandledTurns,
   useNow,
-  useObservedStops,
-  useRecentOpens,
   useTurnReceipts,
 } from "./handoffs";
 import {
@@ -32,6 +29,8 @@ import {
   usePaneScreens,
 } from "./paneScreen";
 import type { WorldLeafObject, WorldObject } from "./worldObject";
+import { useDeskState } from "./useDeskState";
+import type { WorldDeskStore } from "./deskStateStore";
 import "./DeskView.css";
 
 type Lane = "needs" | "review" | "working";
@@ -45,19 +44,6 @@ type Item = {
   pending: boolean;
   since: number | null;
 };
-
-function handoffId(
-  leaf: WorldLeafObject,
-  receipt: TurnReceipt | null,
-  stoppedAt: number | undefined,
-) {
-  // Scoped to the agent session and runtime, so marking one agent's stop can
-  // never hide another session's stop with a matching turn id.
-  return JSON.stringify([
-    receiptIdentity(leaf),
-    receipt?.turn_id ?? `stop:${stoppedAt ?? leaf.lastActivityAt ?? ""}`,
-  ]);
-}
 
 function where(leaf: WorldLeafObject) {
   return [leaf.hostLabel, leaf.spaceLabel, leaf.tabLabel, agentFolder(leaf)]
@@ -227,23 +213,7 @@ function Screen({
   );
 }
 
-/** Whether a media query matches, updating as the viewport changes. */
-export function useMediaQuery(query: string) {
-  const [matches, setMatches] = useState(
-    () =>
-      typeof window !== "undefined" &&
-      window.matchMedia?.(query).matches === true,
-  );
-  useEffect(() => {
-    const list = window.matchMedia?.(query);
-    if (!list) return;
-    const update = () => setMatches(list.matches);
-    update();
-    list.addEventListener("change", update);
-    return () => list.removeEventListener("change", update);
-  }, [query]);
-  return matches;
-}
+export { useMediaQuery } from "./deskMediaQuery";
 
 export type DeskMode = "now" | "agents" | "reviewed";
 const DESK_MODES: { mode: DeskMode; label: string }[] = [
@@ -406,7 +376,9 @@ export function DeskBoard({
   reading = null,
   onPreview = null,
   onCloseReading,
+  deskStore,
 }: {
+  deskStore?: WorldDeskStore;
   world: WorldObject;
   aggregate?: WorldObject;
   client: DeskClients;
@@ -418,10 +390,20 @@ export function DeskBoard({
 }) {
   const now = useNow(10_000);
   const agents = useMemo(() => operationalAgents(world), [world]);
-  const receiptFor = useTurnReceipts(agents, client);
-  const { handled, mark } = useHandledTurns(deskScope(client));
-  const stops = useObservedStops(deskScope(client), agents);
-  const { opens, record: recordOpen } = useRecentOpens(deskScope(client));
+  const receipts = useTurnReceipts(agents, client);
+  const {
+    handled,
+    stops,
+    opens,
+    mark,
+    record: recordOpen,
+    verified,
+    error: stateError,
+  } = useDeskState(agents, client, deskStore);
+  const receiptFor = (leaf: WorldLeafObject) => {
+    const receipt = receipts(leaf);
+    return { ...receipt, current: receipt.current && verified };
+  };
   const [mode, setModeState] = useState<DeskMode>(() => {
     try {
       // The mode lasts for this browser session; a fresh visit triages first.
@@ -545,7 +527,7 @@ export function DeskBoard({
   const open = (leaf: WorldLeafObject) => {
     cancelPreview();
     setError(null);
-    recordOpen(leaf);
+    void recordOpen(leaf);
     void onOpen(leaf.id).catch((reason: unknown) =>
       setError(
         reason instanceof Error ? reason.message : "Could not open this agent",
@@ -585,7 +567,14 @@ export function DeskBoard({
     )
       focusCard(focusedId);
   });
-  const toggleReviewed = (item: Item) => {
+  const toggleReviewed = async (item: Item) => {
+    if (!(await mark(item.handoffId, !item.handled))) {
+      setError(
+        "Could not save the review mark. Try again when the connection is ready.",
+      );
+      return;
+    }
+    setError(null);
     // Marking (or reopening) moves the item out of the list the operator is
     // looking at, removing any control in it that held focus. Move focus to
     // its neighbour explicitly: browsers do not fire blur for removed nodes.
@@ -596,7 +585,6 @@ export function DeskBoard({
       setFocusedId(neighbour?.leaf.id ?? null);
       focusCard(neighbour?.leaf.id ?? null);
     }
-    mark(item.handoffId, !item.handled);
     setToast(
       item.handled ? null : { id: item.handoffId, name: agentName(item.leaf) },
     );
@@ -1038,9 +1026,9 @@ export function DeskBoard({
           </label>
         </div>
       </header>
-      {error ? (
+      {error || stateError ? (
         <p className="desk-error" role="alert">
-          {error}
+          {error ?? stateError}
         </p>
       ) : null}
       {mode === "now" ? (
@@ -1169,8 +1157,10 @@ export function DeskBoard({
           <button
             type="button"
             onClick={() => {
-              mark(toast.id, false);
-              setToast(null);
+              void mark(toast.id, false).then((saved) => {
+                if (saved) setToast(null);
+                else setError("Could not undo this review mark.");
+              });
               // The toast (and this button) leaves the page.
               focusCard(focusedId);
             }}

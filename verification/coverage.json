@@ -387,7 +387,7 @@
       "status": "alternative-evidence",
       "remaining": "Snapshot integration is the selected consumer evidence for manager authority; no exhaustive claim over arbitrary host topology or transport schedules.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
-      "evidenceDecision": "Real snapshot tests exercise retirement during construction, expired catalogue scheduling, failed-host stale topology and healthy sibling publication with bounded synthetic transports.",
+      "evidenceDecision": "Real snapshot tests exercise retirement during construction, expired catalogue scheduling, failed-host stale topology and healthy sibling publication with bounded synthetic transports. Fresh Desk observation callbacks run once at successful host admission with the read-start time; cache reuse, invalidation and retirement never replay those observations.",
       "partialEvidence": {
         "models": [],
         "contracts": [
@@ -905,7 +905,13 @@
       "properties": "New turns invalidate old review marks; dedup and bounded observation; receipts remain session-qualified",
       "existingTests": [
         "web/src/world/DeskView.test.ts",
-        "server/src/agent/turn-receipt.test.ts"
+        "server/src/agent/turn-receipt.test.ts",
+        "server/src/world/desk-state.test.ts",
+        "server/src/world/desk-observation.test.ts",
+        "server/src/rpc/desk.test.ts",
+        "server/src/connections/profile-process.test.ts",
+        "web/src/world/deskStateStore.test.ts",
+        "web/src/world/DeskView.browser.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/145",
       "technique": "alternative",
@@ -913,13 +919,19 @@
       "status": "alternative-evidence",
       "remaining": "A summary is presentation evidence, not proof that external work succeeded; publication identity remains a separate operational guard.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
-      "evidenceDecision": "Fixture receipt parsing and real Desk browser routing/review tests directly check human-facing summaries and review intent.",
+      "evidenceDecision": "Fixture receipt parsing and real Desk browser routing/review tests directly check human-facing summaries and review intent. Shared Desk state (#164): direct registry cases cover bounded metadata, exact conditional Undo, owner/session replacement, expiry and older observations after live mutations. RPC tests revalidate the captured runtime and session after live pane admission. Two-WebSocket service and Desk browser regressions establish shared marks/recent opens and cross-browser Undo; deferred client replies cover revision and reconnect epochs. These finite metadata transitions are exercised directly rather than adding a model that repeats the store; arbitrary external transport liveness remains excluded.",
       "partialEvidence": {
         "models": [],
         "contracts": ["verification/consumer-evidence.md"],
         "tests": [
           "web/src/world/DeskView.test.ts",
-          "server/src/agent/turn-receipt.test.ts"
+          "server/src/agent/turn-receipt.test.ts",
+          "server/src/world/desk-state.test.ts",
+          "server/src/world/desk-observation.test.ts",
+          "server/src/rpc/desk.test.ts",
+          "server/src/connections/profile-process.test.ts",
+          "web/src/world/deskStateStore.test.ts",
+          "web/src/world/DeskView.browser.test.ts"
         ],
         "checks": ["bun run check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."

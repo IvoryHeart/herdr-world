@@ -1,3 +1,4 @@
+import { nativeId, priorityKey } from "./snapshot-identity";
 import { createHash } from "node:crypto";
 import { sanitizeConnectionError } from "../connections/manager";
 import type { ConnectionId, ConnectionStatus } from "../connections/types";
@@ -11,7 +12,6 @@ const MAX_CONCURRENT_CONNECTIONS = 4;
 const SNAPSHOT_RESPONSE_DEADLINE_MS = 20_000;
 const SNAPSHOT_FRESH_MS = 15_000;
 const MAX_PRIORITIES = 8;
-const MAX_NATIVE_ID_LENGTH = 512;
 const MAX_PRESENTED_SPACES = 128;
 const MAX_PRESENTED_TABS_PER_SPACE = 8;
 const MAX_PRESENTED_LEAVES_PER_SPACE = 16;
@@ -204,14 +204,6 @@ function boundedReservedRelevantRecords(
   return records.filter((record) => admitted.has(record));
 }
 
-function nativeId(value: unknown): string | null {
-  return typeof value === "string" &&
-    value.length > 0 &&
-    value.length <= MAX_NATIVE_ID_LENGTH
-    ? value
-    : null;
-}
-
 function parsePriorities(value: unknown): WorldSnapshotPriority[] {
   if (value === undefined) return [];
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -290,15 +282,6 @@ function parsePriorityConnections(value: unknown): string[] {
       }),
     ),
   ];
-}
-
-function priorityKey(
-  connectionId: string,
-  priorities: readonly WorldSnapshotPriority[],
-) {
-  return JSON.stringify(
-    priorities.filter(({ connection_id }) => connection_id === connectionId),
-  );
 }
 
 function emptyStatusCounts(): WorldAgentStatusCounts {
@@ -438,6 +421,12 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
       revision: 0,
       records: [],
     }),
+    private readonly onFreshObservation?: (
+      connectionId: string,
+      generation: number,
+      panes: readonly Record<string, unknown>[],
+      observedAt: number,
+    ) => void,
   ) {}
 
   invalidate(connectionId?: string): number {
@@ -696,6 +685,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
   }
 
   private async runWork(work: HostWork<Runtime>) {
+    const observedAt = this.now();
     let outcome: HostOutcome;
     try {
       const [workspace, tabs, panes, agents] = await Promise.allSettled([
@@ -743,6 +733,14 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
           freshUntil: this.now() + SNAPSHOT_FRESH_MS,
           dirty: this.wasInvalidatedSinceStart(work),
         });
+        if (!this.wasInvalidatedSinceStart(work)) {
+          this.onFreshObservation?.(
+            work.status.id,
+            work.lease.generation,
+            snapshot.panes,
+            observedAt,
+          );
+        }
         if ((work.late && changed) || this.wasInvalidatedSinceStart(work)) {
           this.queueLateInvalidation(work.status.id, work.lease.generation);
         }

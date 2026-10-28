@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ConnectionClient } from "../api";
 import { connectionClientScopeGeneration } from "../useConnectionClient";
-import { worldLocalStorage } from "../browserStorage";
 import type { WorldLeafObject, WorldObject } from "./worldObject";
 
 /** Aggregate reads resolve the immutable owner of each observed leaf. */
@@ -80,7 +79,6 @@ export type TurnReceipt = {
 // Receipt and screen reads are bounded; triage itself always covers every agent.
 export const MAX_POLLED_AGENTS = 40;
 const REFRESH_MS = 20_000;
-const HANDLED_LIMIT = 500;
 // An idle agent hands something back only right after its turn; older idle
 // sessions are history, not work waiting for review.
 export const IDLE_WINDOW_MS = 12 * 60 * 60_000;
@@ -146,61 +144,6 @@ export function deskHostGroups(
   return [...hosts.values()];
 }
 
-/**
- * Records stops this browser observed: an agent session that was working and
- * is not any more. Stops belong to one agent session in one runtime, so a
- * replacement session in the same terminal starts without its predecessor's
- * stop. `previous` (last seen status per identity) is updated in place.
- */
-export function advanceObservedStops(
-  stops: ReadonlyMap<string, number>,
-  previous: Map<string, string>,
-  leaves: readonly WorldLeafObject[],
-  now: number,
-): { stops: Map<string, number>; changed: boolean } {
-  let changed = false;
-  const next = new Map(stops);
-  const current = new Map(
-    leaves.map((leaf) => [leaf.id, receiptIdentity(leaf)]),
-  );
-  for (const leaf of leaves) {
-    const identity = receiptIdentity(leaf);
-    const before = previous.get(identity);
-    if (before === "working" && leaf.status !== "working") {
-      next.set(identity, now);
-      changed = true;
-    } else if (leaf.status === "working" && next.delete(identity)) {
-      changed = true;
-    }
-    previous.set(identity, leaf.status);
-  }
-  const live = new Set(current.values());
-  for (const key of [...next.keys()]) {
-    const leafId = stopLeafId(key);
-    if (leafId !== null && current.has(leafId) && !live.has(key)) {
-      next.delete(key);
-      changed = true;
-    }
-  }
-  for (const key of [...previous.keys()])
-    if (!live.has(key)) previous.delete(key);
-  for (const [key, at] of next)
-    if (now - at > IDLE_WINDOW_MS && next.delete(key)) changed = true;
-  return { stops: next, changed };
-}
-
-/** The terminal (leaf) id inside a `receiptIdentity`, or null if malformed. */
-function stopLeafId(identity: string): string | null {
-  try {
-    const value = JSON.parse(identity);
-    return Array.isArray(value) && typeof value[2] === "string"
-      ? value[2]
-      : null;
-  } catch {
-    return null;
-  }
-}
-
 /** The agent session a receipt describes. */
 export function receiptIdentity(leaf: WorldLeafObject) {
   return JSON.stringify([
@@ -208,6 +151,19 @@ export function receiptIdentity(leaf: WorldLeafObject) {
     leaf.generation,
     leaf.id,
     leaf.agentSessionFingerprint ?? null,
+  ]);
+}
+
+export function handoffId(
+  leaf: WorldLeafObject,
+  receipt: TurnReceipt | null,
+  stoppedAt: number | undefined,
+) {
+  // Scoped to the agent session and runtime, so marking one agent's stop can
+  // never hide another session's stop with a matching turn id.
+  return JSON.stringify([
+    receiptIdentity(leaf),
+    receipt?.turn_id ?? `stop:${stoppedAt ?? leaf.lastActivityAt ?? ""}`,
   ]);
 }
 
@@ -457,120 +413,6 @@ export function useTurnReceipts(
   );
 }
 
-function handledKey(connectionId: string) {
-  return `handoffs.handled.v1.${connectionId}`;
-}
-
-function readHandled(connectionId: string): string[] {
-  try {
-    const value = JSON.parse(
-      worldLocalStorage.getItem(handledKey(connectionId)) ?? "[]",
-    );
-    return Array.isArray(value)
-      ? value.filter((id): id is string => typeof id === "string")
-      : [];
-  } catch {
-    return [];
-  }
-}
-
-// Every mounted consumer shares one in-memory list per connection.
-const handledListeners = new Set<() => void>();
-
-/** Browser-local "handled" marks for individual turn receipts. */
-export function useHandledTurns(connectionId: string) {
-  const [handled, setHandled] = useState<string[]>(() =>
-    readHandled(connectionId),
-  );
-  useEffect(() => {
-    setHandled(readHandled(connectionId));
-    const sync = () => setHandled(readHandled(connectionId));
-    handledListeners.add(sync);
-    return () => {
-      handledListeners.delete(sync);
-    };
-  }, [connectionId]);
-  const set = useMemo(() => new Set(handled), [handled]);
-  const mark = useCallback(
-    (turnId: string, value: boolean) => {
-      const current = readHandled(connectionId);
-      const next = value
-        ? [...current.filter((id) => id !== turnId), turnId].slice(
-            -HANDLED_LIMIT,
-          )
-        : current.filter((id) => id !== turnId);
-      try {
-        worldLocalStorage.setItem(
-          handledKey(connectionId),
-          JSON.stringify(next),
-        );
-      } catch {
-        // Handled marks are a browser convenience; queues still work.
-      }
-      setHandled(next);
-      for (const listener of handledListeners) listener();
-    },
-    [connectionId],
-  );
-  return { handled: set, mark };
-}
-
-function stopsKey(connectionId: string) {
-  return `handoffs.stops.v2.${connectionId}`;
-}
-
-/**
- * When this browser saw each agent stop working. Herdr reports lifecycle but
- * not when it changed, and some agents have no readable transcript, so the
- * observed transition is what dates a fresh stop for review.
- */
-export function useObservedStops(
-  connectionId: string,
-  leaves: WorldLeafObject[],
-): Map<string, number> {
-  const previous = useRef(new Map<string, string>());
-  const [stops, setStops] = useState<Map<string, number>>(() => new Map());
-  useEffect(() => {
-    previous.current = new Map();
-    try {
-      const saved = JSON.parse(
-        worldLocalStorage.getItem(stopsKey(connectionId)) ?? "{}",
-      ) as Record<string, unknown>;
-      setStops(
-        new Map(
-          Object.entries(saved).filter(
-            (entry): entry is [string, number] => typeof entry[1] === "number",
-          ),
-        ),
-      );
-    } catch {
-      setStops(new Map());
-    }
-  }, [connectionId]);
-  const statusKey = leaves
-    .map((leaf) => `${receiptIdentity(leaf)}=${leaf.status}`)
-    .join("\n");
-  useEffect(() => {
-    const now = Date.now();
-    const result = advanceObservedStops(stops, previous.current, leaves, now);
-    const next = result.stops;
-    const changed = result.changed;
-    if (!changed) return;
-    setStops(next);
-    try {
-      worldLocalStorage.setItem(
-        stopsKey(connectionId),
-        JSON.stringify(Object.fromEntries(next)),
-      );
-    } catch {
-      // Observed stops are a browser convenience.
-    }
-    // statusKey captures every status change.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [connectionId, statusKey]);
-  return stops;
-}
-
 /** Fetches one agent's complete closing report for reading in full. */
 /** The request for one agent's latest turn, qualified by its session. */
 function turnRequest(leaf: WorldLeafObject, fullReport = false) {
@@ -618,55 +460,4 @@ export async function fetchFullReport(
   return isReceipt(turn) && turn.turn_id === expectedTurnId
     ? turn.report
     : null;
-}
-
-const OPENS_LIMIT = 40;
-
-function opensKey(connectionId: string) {
-  return `desk.opened.v1.${connectionId}`;
-}
-
-/**
- * When the operator last opened each agent session from the Desk, so the
- * agents they recently worked with stay one tap away after review.
- */
-export function useRecentOpens(connectionId: string) {
-  const read = useCallback((): Map<string, number> => {
-    try {
-      const saved = JSON.parse(
-        worldLocalStorage.getItem(opensKey(connectionId)) ?? "{}",
-      ) as Record<string, unknown>;
-      return new Map(
-        Object.entries(saved).filter(
-          (entry): entry is [string, number] => typeof entry[1] === "number",
-        ),
-      );
-    } catch {
-      return new Map();
-    }
-  }, [connectionId]);
-  const [opens, setOpens] = useState<Map<string, number>>(read);
-  useEffect(() => setOpens(read()), [read]);
-  const record = useCallback(
-    (leaf: WorldLeafObject) => {
-      const next = new Map(read());
-      next.set(receiptIdentity(leaf), Date.now());
-      const kept = new Map(
-        [...next]
-          .sort((left, right) => right[1] - left[1])
-          .slice(0, OPENS_LIMIT),
-      );
-      try {
-        worldLocalStorage.setItem(
-          opensKey(connectionId),
-          JSON.stringify(Object.fromEntries(kept)),
-        );
-      } catch {
-        // Recent opens are a browser convenience.
-      }
-      setOpens(kept);
-    },
-    [connectionId, read],
-  );
-  return { opens, record };
 }

@@ -750,7 +750,7 @@ cannot be opened without resolving to a colliding entity on another runtime or s
 Desk SHALL present every current actionable agent within the host filter by what it needs from the
 operator. Needs you SHALL list blocked agents, oldest wait first, with the question read from the
 bottom of the agent's visible screen. To review SHALL list done agents, idle agents whose latest turn
-ended within 12 hours, and agents this browser observed stop working within 12 hours, each with its
+ended within 12 hours, and agents the World service observed stop working within 12 hours, each with its
 turn receipt or, without one, its latest screen lines. In flight SHALL list working agents with their
 current request and a live screen line. Remaining agents SHALL collapse into a quiet list. Cards and
 rows SHALL name each agent by the name the operator gave Herdr, otherwise the thread title its harness
@@ -828,6 +828,41 @@ to another session or a same-named pane on another host.
 - **WHEN** two filtered hosts expose the same native pane ID
 - **THEN** Desk triages both agents and reads each host's own receipt and screen, and reviewing one
   stop does not mark the other host's stop reviewed
+
+### Requirement: Shared bounded Desk state
+
+The World service SHALL hold review marks, observed stop times and recent Desk
+opens in process-local memory, shared by every connected browser. It SHALL retain
+at most 500 qualified metadata records, 40 recent-open timestamps and 4,096 prior
+agent-status observations. Each record SHALL belong to one connection ID, runtime
+generation, terminal ID and agent-session fingerprint (or the explicit unknown
+session identity). Review marks SHALL store only the latest marked stop per agent
+session; Reviewed SHALL retain its existing latest-stop presentation for idle or
+done agents. Exact Undo SHALL remove only the stop it names, preserving any newer
+mark from another browser. Metadata SHALL survive browser reloads and host-filter
+changes, clear on service restart and retire on runtime or observed session
+replacement. Browser-local Desk metadata SHALL NOT be imported.
+
+Mutations SHALL validate the exact live terminal and session through a current
+runtime lease and revalidate that lease after the read. Observed stops SHALL come
+only from fresh admitted host reads; cached, failed, invalidated or retired reads
+SHALL NOT record transitions. A host read begun before a newer metadata mutation
+SHALL NOT replace its session identity. Observed stops SHALL expire after 12 hours.
+The service SHALL notify all browsers on real metadata changes. Browsers SHALL
+reject replies from an older socket epoch or service revision, treat disconnected
+state as unverified, and accept a restarted service's empty revision-zero state.
+
+#### Scenario: Review on a phone and undo on a desktop
+
+- **WHEN** one browser marks an agent's current stop reviewed
+- **THEN** another browser connected to the same service sees it reviewed, and
+  Undo from either browser restores that exact stop without removing a newer mark
+
+#### Scenario: Reload a browser or restart the service
+
+- **WHEN** a browser reloads while the World service still runs
+- **THEN** it reads the same qualified marks, stop times and recent opens; after
+  a service restart, reconnect replaces them with the new process's empty state
 
 ### Requirement: Bounded turn receipts
 
