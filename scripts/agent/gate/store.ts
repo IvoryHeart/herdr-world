@@ -12,8 +12,6 @@ import type { GateConfig, GateInput, Verdict, VerdictState } from "./predicate";
  */
 
 export const PARSER_VERSION = 1;
-export const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
-const CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 export type StoredVerdict = Verdict & {
   id: number;
@@ -222,7 +220,7 @@ export function recordPass(
     verdicts: Verdict[];
   },
 ) {
-  const result = db.transaction(() => {
+  return db.transaction(() => {
     const row = db
       .query(
         "INSERT INTO pass (started_at, finished_at, trigger, parser_version, config_hash, config_json) VALUES (?, ?, ?, ?, ?, ?) RETURNING id",
@@ -311,122 +309,8 @@ export function recordPass(
           pass.finishedAt,
         );
     }
-    const lastCleanup = db
-      .query("SELECT value FROM gate_meta WHERE key = 'retention_last_run'")
-      .get() as { value: string } | null;
-    let vacuum = false;
-    if (
-      !lastCleanup ||
-      pass.finishedAt - Number(lastCleanup.value) >= CLEANUP_INTERVAL_MS
-    ) {
-      pruneStore(db, pass.finishedAt);
-      db.query(
-        "INSERT INTO gate_meta (key, value) VALUES ('retention_last_run', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-      ).run(String(pass.finishedAt));
-      const space = db.query("PRAGMA page_size").get() as { page_size: number };
-      const free = db.query("PRAGMA freelist_count").get() as {
-        freelist_count: number;
-      };
-      vacuum = free.freelist_count * space.page_size >= 16 * 1024 * 1024;
-    }
-    return { passId, vacuum };
+    return passId;
   })();
-  if (result.vacuum) {
-    try {
-      db.exec("PRAGMA wal_checkpoint(TRUNCATE); VACUUM;");
-    } catch {
-      // The committed pass and retention work remain valid if compaction is busy.
-    }
-  }
-  return result.passId;
-}
-
-/** Prune replay payloads while retaining recent, latest-head and audit-linked passes. */
-function pruneStore(db: Database, now: number) {
-  const cutoff = now - RETENTION_MS;
-  const protectedPasses = new Set<number>();
-  for (const row of db
-    .query("SELECT pass_id, last_pass FROM verdict")
-    .all() as { pass_id: number; last_pass: number }[]) {
-    protectedPasses.add(row.pass_id);
-    protectedPasses.add(row.last_pass);
-  }
-  for (const decision of db
-    .query("SELECT pr, created_at FROM decision")
-    .all() as { pr: number; created_at: number }[]) {
-    const row = db
-      .query(
-        "SELECT pass_id FROM observation WHERE pr = ? AND fetched_at <= ? ORDER BY fetched_at DESC LIMIT 1",
-      )
-      .get(decision.pr, decision.created_at) as { pass_id: number } | null;
-    if (row) protectedPasses.add(row.pass_id);
-  }
-  const latestHeads = new Set<string>();
-  const observations = db
-    .query(
-      "SELECT id, pass_id, pr, head_sha, fetched_at, body_hash FROM observation ORDER BY fetched_at DESC, id DESC",
-    )
-    .all() as {
-    id: number;
-    pass_id: number;
-    pr: number;
-    head_sha: string | null;
-    fetched_at: number;
-    body_hash: string;
-  }[];
-  const keep = new Set<number>();
-  const terminalCutoff = new Map<number, boolean>();
-  for (const row of observations) {
-    const key = `${row.pr}:${row.head_sha ?? ""}`;
-    const latest = !latestHeads.has(key);
-    latestHeads.add(key);
-    if (row.fetched_at >= cutoff || latest || protectedPasses.has(row.pass_id))
-      keep.add(row.id);
-    if (!terminalCutoff.has(row.pr)) {
-      const body = db
-        .query("SELECT body_json FROM observation_body WHERE body_hash = ?")
-        .get(row.body_hash) as { body_json: string } | null;
-      const state = body
-        ? (JSON.parse(body.body_json) as { state?: string }).state
-        : undefined;
-      const absentSince = db
-        .query(
-          "SELECT MIN(p.finished_at) AS finished_at FROM pass p WHERE p.trigger = 'open' AND p.finished_at > ? AND NOT EXISTS (SELECT 1 FROM observation o WHERE o.pass_id = p.id AND o.pr = ?)",
-        )
-        .get(row.fetched_at, row.pr) as { finished_at: number | null };
-      terminalCutoff.set(
-        row.pr,
-        (row.fetched_at < cutoff && state !== "OPEN") ||
-          (absentSince.finished_at !== null &&
-            absentSince.finished_at < cutoff),
-      );
-    }
-  }
-  for (const row of observations) {
-    if (terminalCutoff.get(row.pr) && !protectedPasses.has(row.pass_id))
-      keep.delete(row.id);
-  }
-  const oldIds = observations
-    .filter((row) => !keep.has(row.id))
-    .map((row) => row.id);
-  if (oldIds.length) {
-    const remove = db.query("DELETE FROM observation WHERE id = ?");
-    for (const id of oldIds) remove.run(id);
-  }
-  db.query("DELETE FROM check_attempt WHERE completed_at < ?").run(cutoff);
-  // Closed and merged PR attempts are removable once their last observation ages out.
-  for (const [pr, terminal] of terminalCutoff)
-    if (terminal) db.query("DELETE FROM check_attempt WHERE pr = ?").run(pr);
-  db.query(
-    "DELETE FROM observation_body WHERE body_hash NOT IN (SELECT body_hash FROM observation)",
-  ).run();
-  const maxPass = (
-    db.query("SELECT MAX(id) AS id FROM pass").get() as { id: number | null }
-  ).id;
-  if (maxPass !== null)
-    db.query(
-      "DELETE FROM pass WHERE id < ? AND finished_at < ? AND id NOT IN (SELECT pass_id FROM observation) AND id NOT IN (SELECT pass_id FROM verdict) AND id NOT IN (SELECT last_pass FROM verdict)",
-    ).run(maxPass, cutoff);
 }
 
 type VerdictRow = {

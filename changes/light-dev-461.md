@@ -1,3 +1,3 @@
 ### Changed
 
-- The gate watcher now deduplicates observation payloads and prunes unreferenced history after seven days. `agent:crew status` reports the gate database size.
+- The gate keeps its pass, review, check and decision history indefinitely while deduplicating identical observation payloads. `agent:crew status` reports the gate database size.

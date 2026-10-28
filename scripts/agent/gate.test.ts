@@ -711,7 +711,7 @@ describe("store", () => {
     }
   });
 
-  test("keeps verdict replay snapshots and prunes unreferenced passes and attempts", () => {
+  test("keeps verdict replay snapshots and check attempts indefinitely", () => {
     const db = openStore(dbPath);
     try {
       const old = NOW - 16 * 24 * 60 * 60 * 1000;
@@ -739,17 +739,17 @@ describe("store", () => {
       });
       expect(passInputs(db, 1)).toHaveLength(1);
       expect(passConfig(db, 1)).toEqual(config);
-      expect(passInputs(db, 2)).toEqual([]);
-      expect(db.query("SELECT id FROM pass WHERE id = 2").get()).toBeNull();
+      expect(passInputs(db, 2)).toHaveLength(1);
+      expect(passInputs(db, 3)).toHaveLength(1);
       expect(db.query("SELECT COUNT(*) AS n FROM check_attempt").get()).toEqual(
-        { n: 0 },
+        { n: 1 },
       );
     } finally {
       db.close();
     }
   });
 
-  test("keeps a decision's preceding snapshot when newer snapshots are pruned", () => {
+  test("keeps decision history and all snapshots indefinitely", () => {
     const db = openStore(dbPath);
     try {
       const old = NOW - 16 * 24 * 60 * 60 * 1000;
@@ -787,14 +787,15 @@ describe("store", () => {
         verdicts: [],
       });
       expect(passInputs(db, 1)).toHaveLength(1);
-      expect(passInputs(db, 2)).toEqual([]);
+      expect(passInputs(db, 2)).toHaveLength(1);
+      expect(passInputs(db, 3)).toHaveLength(1);
       expect(db.query("SELECT id FROM pass WHERE id = 1").get()).not.toBeNull();
     } finally {
       db.close();
     }
   });
 
-  test("prunes PRs missing from a full open-PR pass for longer than retention", () => {
+  test("retains closed and missing PR history beyond the former retention window", () => {
     const db = openStore(dbPath);
     try {
       const observedAt = NOW - 20 * 24 * 60 * 60 * 1000;
@@ -827,61 +828,17 @@ describe("store", () => {
         inputs: [{ ...entry, number: 8, readAt: NOW }],
         verdicts: [],
       });
-      expect(passInputs(db, 1)).toEqual([]);
-      expect(db.query("SELECT id FROM pass WHERE id = 1").get()).toBeNull();
+      expect(passInputs(db, 1)).toHaveLength(1);
+      expect(db.query("SELECT id FROM pass WHERE id = 1").get()).not.toBeNull();
       expect(db.query("SELECT COUNT(*) AS n FROM check_attempt").get()).toEqual(
-        { n: 0 },
+        { n: 1 },
       );
     } finally {
       db.close();
     }
   });
 
-  test("runs retention no more than once every 24 hours", () => {
-    const db = openStore(dbPath);
-    try {
-      const entry = ready();
-      recordPass(db, {
-        trigger: "test",
-        config,
-        startedAt: NOW,
-        finishedAt: NOW,
-        inputs: [entry],
-        verdicts: [],
-      });
-      const marker = () =>
-        (
-          db
-            .query(
-              "SELECT value FROM gate_meta WHERE key = 'retention_last_run'",
-            )
-            .get() as { value: string }
-        ).value;
-      expect(marker()).toBe(String(NOW));
-      recordPass(db, {
-        trigger: "test",
-        config,
-        startedAt: NOW + 60 * 60 * 1000,
-        finishedAt: NOW + 60 * 60 * 1000,
-        inputs: [],
-        verdicts: [],
-      });
-      expect(marker()).toBe(String(NOW));
-      recordPass(db, {
-        trigger: "test",
-        config,
-        startedAt: NOW + 24 * 60 * 60 * 1000,
-        finishedAt: NOW + 24 * 60 * 60 * 1000,
-        inputs: [],
-        verdicts: [],
-      });
-      expect(marker()).toBe(String(NOW + 24 * 60 * 60 * 1000));
-    } finally {
-      db.close();
-    }
-  });
-
-  test("retains the latest observation for an active PR after the retention window", () => {
+  test("retains every active PR pass after the former retention window", () => {
     const db = openStore(dbPath);
     try {
       const old = NOW - 16 * 24 * 60 * 60 * 1000;
@@ -914,8 +871,10 @@ describe("store", () => {
         verdicts: [],
       });
       expect(db.query("SELECT COUNT(*) AS n FROM observation").get()).toEqual({
-        n: 1,
+        n: 3,
       });
+      expect(passInputs(db, 1)[0].readAt).toBe(old);
+      expect(passInputs(db, 2)[0].readAt).toBe(middleAt);
       expect(passInputs(db, 3)[0].readAt).toBe(NOW);
     } finally {
       db.close();

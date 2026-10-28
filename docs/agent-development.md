@@ -210,16 +210,13 @@ Configuration and state stay untracked in the primary checkout's
 - `config.json` holds the repository, reviewers, flakes, rerun budget and
   optional required and aggregate checks. Start from
   [`config.example.json`](../scripts/agent/gate/config.example.json).
-- `gate.sqlite` keeps pass configs, recent replay inputs, reviewer claims,
-  decisions and verdict transitions. Identical input bodies share one stored
-  payload. Gate passes prune old unreferenced observations and check attempts
-  daily, keep the latest observation for each PR head, and retain snapshots
-  referenced by verdicts or decisions. Observations and attempts older than
-  seven days are eligible; old merged or closed PR data is removed when it is
-  not needed for audit replay. A later full open-PR read establishes when a PR
-  disappeared from the open list. Verdicts and the decision log are retained.
-  Comment text is reduced to RESULT lines. `agent:crew status` reports the
-  combined SQLite database, WAL and shared-memory file size.
+- `gate.sqlite` keeps every pass config and replay input, reviewer claim,
+  check attempt, decision and verdict transition indefinitely. Identical input
+  bodies share one stored payload, while each pass keeps its own reference and
+  freshness timestamps for replay. The gate does not delete history by age;
+  history clearing is not currently exposed in the application. Comment text
+  is reduced to RESULT lines. `agent:crew status` reports the combined SQLite
+  database, WAL and shared-memory file size.
 - `mirror.git` is a bare mirror of main and pull request heads, so the gate
   never fetches into a checkout.
 
