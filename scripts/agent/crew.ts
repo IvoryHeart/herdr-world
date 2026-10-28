@@ -5,7 +5,7 @@ import { shortSha } from "../../shared/pullRequests";
 import { gateDir, loadConfig, runPass } from "./gate";
 import type { Run } from "./gate/observe";
 import type { GateInput, Verdict } from "./gate/predicate";
-import { openStore } from "./gate/store";
+import { latestPass, openStore, passInputs } from "./gate/store";
 import { type Deps, realDeps } from "./crew/deps";
 import {
   type Action,
@@ -15,6 +15,7 @@ import {
   type CrewSettings,
   currentChecks,
   inScope,
+  isOnHold,
   loadSettings,
   plan,
 } from "./crew/plan";
@@ -662,7 +663,22 @@ export function parseOptions(argv: string[]): Options {
   return options;
 }
 
-function status(crew: Database, out: (text: string) => void, now: number) {
+export function status(
+  crew: Database,
+  out: (text: string) => void,
+  now: number,
+  settings: CrewSettings,
+  held: GateInput[] = [],
+) {
+  const heldPrs = held
+    .filter(
+      (input) =>
+        input.state === "OPEN" && inScope(input, settings) && isOnHold(input),
+    )
+    .sort((a, b) => a.number - b.number);
+  out(`${heldPrs.length} held pull request(s) (latest crew pass)`);
+  for (const input of heldPrs)
+    out(`  #${input.number}\t${input.item?.title ?? ""}`.trimEnd());
   const open = actionsIn(crew, ["pending", "running"]);
   out(`${open.length} open action(s)`);
   for (const entry of open)
@@ -737,7 +753,19 @@ export async function main(argv: string[], deps: Deps = realDeps) {
   const crew = openCrewStore(join(dir, "crew.sqlite"));
   try {
     if (options.command === "status") {
-      status(crew, deps.out, Date.now());
+      const gate = openStore(join(dir, "gate.sqlite"));
+      try {
+        const pass = latestPass(gate);
+        status(
+          crew,
+          deps.out,
+          Date.now(),
+          loadSettings(join(dir, "config.json")),
+          pass ? passInputs(gate, pass.id) : [],
+        );
+      } finally {
+        gate.close();
+      }
       return 0;
     }
     if (options.command === "runs") {

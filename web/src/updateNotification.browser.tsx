@@ -1,9 +1,11 @@
 import { createUpdateNotificationHistory } from "./updateNotifications";
 import { worldLocalStorage } from "./browserStorage";
+import { type ComponentType, Suspense, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import App from "./App";
 import { bridge, type ConnectionClient } from "./api";
+import { lazyWithReload } from "./lazyWithReload";
 import { __storeTesting, store } from "./store";
 import "./styles/tokens.css";
 import "./styles/base.css";
@@ -32,7 +34,15 @@ let available = true;
 let installFails = true;
 let installs = 0;
 let canAutoUpdate = true;
+let servedEntry: string | null = null;
+let buildChecks = 0;
 window.fetch = (async (url: string, init?: RequestInit) => {
+  if (url.startsWith("/index.html?")) buildChecks++;
+  if (servedEntry && url.startsWith("/index.html?"))
+    return new Response(
+      `<script type="module" crossorigin src="${servedEntry}"></script>`,
+      { headers: { "content-type": "text/html" } },
+    );
   if (url === "/api/update/check")
     return Response.json({
       current_version: "1.0.0",
@@ -291,6 +301,91 @@ async function run() {
   else await store.checkForUpdate();
   await until(() => !document.querySelector(".menu-update-dot"));
   check(!upgrade(), "Current installation still offers upgrade");
+
+  // A different served build is offered, never loaded by itself.
+  let unloads = 0;
+  addEventListener("beforeunload", () => unloads++);
+  const toastTitled = (title: string) => () =>
+    [...document.querySelectorAll<HTMLElement>(".toast")].find((toast) =>
+      toast.querySelector("strong")?.textContent?.includes(title),
+    );
+  const differentBuild = toastTitled(
+    "The service now serves a different Herdr World build",
+  );
+  const chunkReload = toastTitled("Reload to finish loading Herdr World");
+  const later = (toast: HTMLElement) =>
+    [...toast.querySelectorAll("button")]
+      .find((button) => button.textContent === "Later")
+      ?.click();
+  const setStatus = (status: "connected" | "disconnected") =>
+    __storeTesting.replaceState({ ...store.get(), status });
+  // Waits for the build check a trigger starts to fetch and settle.
+  const checkAfter = async (trigger: () => void) => {
+    const before = buildChecks;
+    trigger();
+    await until(() => buildChecks > before);
+    for (let i = 0; i < 3; i++) await frame();
+  };
+  check(!differentBuild(), "Unchanged build offered a reload");
+  servedEntry = "/assets/index-next.js";
+  // A restarted service drops the socket; reconnecting asks again.
+  setStatus("disconnected");
+  await frame();
+  await checkAfter(() => setStatus("connected"));
+  await until(differentBuild);
+  check(
+    differentBuild()!.textContent?.includes("index-next"),
+    "Different build notice does not name the served build",
+  );
+  later(differentBuild()!);
+  await until(() => !differentBuild());
+  await checkAfter(() => dispatchEvent(new Event("online")));
+  check(!differentBuild(), "Dismissed build was offered again");
+
+  // A lazy part missing after Later is offered too, not reloaded. Like
+  // Settings, a dialog stays open until its own onClose; like Ranger, a panel
+  // stays mounted once opened and follows its open prop. Opening either again
+  // must ask again.
+  for (const retained of [false, true]) {
+    const Missing = lazyWithReload<
+      ComponentType<{ open: boolean; onClose: () => void }>
+    >(`update-fixture-missing-${retained}-${Date.now()}`, () =>
+      Promise.reject(new Error("chunk 404")),
+    );
+    let partOpen = false;
+    let openPart = () => {};
+    function PartHost() {
+      const [open, setOpen] = useState(false);
+      const [mounted, setMounted] = useState(false);
+      partOpen = open;
+      openPart = () => {
+        setOpen(true);
+        setMounted(true);
+      };
+      return (retained ? mounted : open) ? (
+        <Suspense fallback={null}>
+          <Missing open={open} onClose={() => setOpen(false)} />
+        </Suspense>
+      ) : null;
+    }
+    const host = createRoot(
+      document.body.appendChild(document.createElement("div")),
+    );
+    flushSync(() => host.render(<PartHost />));
+    for (let attempt = 0; attempt < 2; attempt++) {
+      flushSync(() => openPart());
+      await until(chunkReload);
+      await until(() => !partOpen);
+      check(
+        !differentBuild(),
+        "Missing part revived the dismissed build notice",
+      );
+      later(chunkReload()!);
+      await until(() => !chunkReload());
+    }
+    host.unmount();
+  }
+  check(unloads === 0, "World reloaded the page by itself");
 }
 const childVersion = new URL(location.href).searchParams.get("claim");
 if (childVersion) {

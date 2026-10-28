@@ -118,6 +118,19 @@ answers with a brief completion message without repeating the release notificati
 It remains available even if the Upgrade entry is disabled; the menu visibly
 explains the installation-channel restriction on phones and desktops.
 
+### Reload a tab after the service changes
+
+An open tab keeps running the build it loaded, even after the service is
+upgraded, rebuilt or rolled back. When the service serves a different build, a
+notice names this tab's build and the served one. This is separate from the
+release notification above: it compares this tab with the running service, not
+the service with the latest release. Choose **Reload** when convenient; Herdr
+sessions keep running and open terminals reconnect. **Later** hides the notice
+until another build is served, and **Menu** keeps showing both builds. If a
+part of the app fails to load because the service no longer has its files,
+World shows a **Reload** notice rather than reloading by itself; reopening that
+part after **Later** shows the notice again.
+
 ### Choose a view for the task
 
 Use the view switcher to move between these views without restarting work:
