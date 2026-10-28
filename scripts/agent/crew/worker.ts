@@ -56,52 +56,50 @@ export function harnessFor(model: string): "claude" | "codex" | null {
   return null;
 }
 
+type SeatEntry = {
+  model: string;
+  effort?: string;
+  harness?: "claude" | "codex";
+  persona?: string;
+};
+
+/** A roster entry's harness: its own, else the one that runs its model. */
+export function harnessOf(entry: Pick<SeatEntry, "model" | "harness">) {
+  return entry.harness ?? harnessFor(entry.model);
+}
+
 /**
- * The interactive harness command for a seat's model, with the brief as its
- * first message; the planner refuses other models first. Claude takes the
- * session id it is given; Codex names its own, found from its session files.
+ * The interactive harness command for a reviewer seat: its roster entry's
+ * arguments, as `seat start` uses them, then the brief as its first message.
+ * The planner refuses entries no harness runs. Claude takes the session id it
+ * is given; Codex names its own, found from its session files.
  */
 export function reviewerArgv(
-  model: { model: string; effort?: string },
+  entry: SeatEntry,
   prompt: string,
   session: string | null,
 ): string[] {
-  if (harnessFor(model.model) === "claude")
-    return [
-      "claude",
-      "--model",
-      model.model,
-      ...(model.effort ? ["--effort", model.effort] : []),
-      // Auto mode, as the crew's Claude seats run: no bypass warning to
-      // accept, and its classifier vets risky commands.
-      "--permission-mode",
-      "auto",
-      ...(session ? ["--session-id", session] : []),
-      prompt,
-    ];
+  const seat = seatArgv(entry);
+  if (!seat) throw new Error(`No harness runs ${entry.model}`);
   return [
-    "codex",
-    "-m",
-    model.model,
-    ...(model.effort ? ["-c", `model_reasoning_effort="${model.effort}"`] : []),
-    "--dangerously-bypass-approvals-and-sandbox",
+    seat.kind,
+    ...seat.args,
+    ...(seat.kind === "claude" && session ? ["--session-id", session] : []),
     prompt,
   ];
 }
 
 /**
  * A seat's harness and its arguments after the executable, from its roster
- * entry: the same permissions the crew's seats run with, the roster's model
- * and effort, and its persona as standing instructions. Null when no harness
- * runs the model.
+ * entry: the same permissions the crew's seats run with (Claude in auto mode,
+ * whose classifier vets risky commands; Codex with the owner-approved full
+ * access), the roster's model and effort, and its persona as standing
+ * instructions. Null when no harness runs the model.
  */
-export function seatArgv(entry: {
-  model: string;
-  effort?: string;
-  harness?: "claude" | "codex";
-  persona?: string;
-}): { kind: "claude" | "codex"; args: string[] } | null {
-  const kind = entry.harness ?? harnessFor(entry.model);
+export function seatArgv(
+  entry: SeatEntry,
+): { kind: "claude" | "codex"; args: string[] } | null {
+  const kind = harnessOf(entry);
   if (kind === "claude")
     return {
       kind,

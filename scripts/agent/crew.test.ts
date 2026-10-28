@@ -19,7 +19,7 @@ import {
   type Seat,
   seats,
 } from "./crew";
-import { crewCodeVersion, startSeat } from "./crew/seats";
+import { crewCodeVersion, noticeStaleWatcher, startSeat } from "./crew/seats";
 import { runTokens, showStatus, spend, status } from "./crew/status";
 import {
   type Deps,
@@ -2068,6 +2068,7 @@ describe("seats and spend", () => {
     );
     const calls: string[][] = [];
     let busy = 1;
+    let failStart = false;
     let running: string[] = [];
     const out: string[] = [];
     const deps = {
@@ -2094,6 +2095,8 @@ describe("seats and spend", () => {
           };
         if (argv[2] === "start" && busy-- > 0)
           return { code: 1, stdout: "", stderr: "agent_pane_busy" };
+        if (argv[2] === "start" && failStart)
+          return { code: 1, stdout: "", stderr: "agent_name_taken" };
         return { code: 0, stdout: "", stderr: "" };
       },
       out: (text: string) => out.push(text),
@@ -2127,6 +2130,12 @@ describe("seats and spend", () => {
         join(root, "repo"),
       );
       expect(out).toEqual(["started dispatch: claude claude-haiku-5-5 (low)"]);
+      // A seat that fails to start closes the tab it opened.
+      busy = 0;
+      failStart = true;
+      expect(() => start("dispatch")).toThrow("Herdr couldn't start dispatch");
+      expect(calls.at(-1)).toEqual(["herdr", "tab", "close", "w:t1"]);
+      failStart = false;
       expect(() => start("visionary")).toThrow(
         "visionary is not in the roster",
       );
@@ -2209,7 +2218,10 @@ describe("seats and spend", () => {
         join(dir, "config.json"),
         JSON.stringify({ ...config, roster: ROSTER }),
       );
+      // The watcher records both versions from its own checkout, so `status`
+      // run from another worktree compares the watcher's, not its own.
       setMeta(crew, "watcher.code", "old");
+      setMeta(crew, "watcher.disk", "new");
       setMeta(crew, "watcher.pid", "4242");
       const lines: string[] = [];
       const show = (alive: boolean) => {
@@ -2220,7 +2232,6 @@ describe("seats and spend", () => {
             { name: "dispatch", status: "idle", focused: false },
           ],
           alive: () => alive,
-          code: "new",
         });
         return lines;
       };
@@ -2230,26 +2241,128 @@ describe("seats and spend", () => {
       expect(show(false).some((line) => line.includes("older crew code"))).toBe(
         false,
       );
-      // The version follows the crew and gate sources, not their tests.
-      const code = mkdtempSync(join(tmpdir(), "crew-code-"));
-      for (const folder of ["crew", "gate"]) mkdirSync(join(code, folder));
-      for (const file of [
-        "crew.ts",
-        "gate.ts",
-        "crew/plan.ts",
-        "gate/store.ts",
-      ])
-        writeFileSync(join(code, file), `// ${file}\n`);
-      const before = crewCodeVersion(code);
-      writeFileSync(join(code, "crew", "plan.test.ts"), "// test\n");
-      expect(crewCodeVersion(code)).toBe(before);
-      writeFileSync(join(code, "crew", "plan.ts"), "// merged change\n");
-      expect(crewCodeVersion(code)).not.toBe(before);
-      rmSync(code, { recursive: true, force: true });
+      setMeta(crew, "watcher.disk", "old");
+      expect(show(true).some((line) => line.includes("older crew code"))).toBe(
+        false,
+      );
     } finally {
       crew.close();
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  test("the code version follows everything the watcher imports, not tests", () => {
+    const code = mkdtempSync(join(tmpdir(), "crew-code-"));
+    try {
+      const write = (file: string, text: string) => {
+        mkdirSync(join(code, file, ".."), { recursive: true });
+        writeFileSync(join(code, file), text);
+      };
+      write(
+        "scripts/agent/crew.ts",
+        'import { plan } from "./crew/plan";\nexport { gate } from "./gate";\n',
+      );
+      write(
+        "scripts/agent/crew/plan.ts",
+        'import type { Rule } from "../../../shared/rules";\n',
+      );
+      write(
+        "scripts/agent/gate.ts",
+        'const later = () => import("./gate/store");\n',
+      );
+      write("scripts/agent/gate/store.ts", "// store\n");
+      write("shared/rules.ts", "// rules v1\n");
+      write("shared/unrelated.ts", "// not imported\n");
+      const entry = join(code, "scripts", "agent", "crew.ts");
+      const before = crewCodeVersion(entry);
+      write("scripts/agent/crew/plan.test.ts", "// test\n");
+      write("shared/unrelated.ts", "// changed, still not imported\n");
+      expect(crewCodeVersion(entry)).toBe(before);
+      // A merged change only to an imported dependency outside the crew.
+      write("shared/rules.ts", "// rules v2\n");
+      const shared = crewCodeVersion(entry);
+      expect(shared).not.toBe(before);
+      write("scripts/agent/gate/store.ts", "// store v2\n");
+      expect(crewCodeVersion(entry)).not.toBe(shared);
+    } finally {
+      rmSync(code, { recursive: true, force: true });
+    }
+  });
+
+  test("a stale watcher tells the owner once per version, retrying a failed notice", () => {
+    const dir = mkdtempSync(join(tmpdir(), "crew-stale-"));
+    const crew = openCrewStore(":memory:");
+    try {
+      let refuse = true;
+      const notices: string[][] = [];
+      const deps = {
+        run: (argv: string[]) => {
+          notices.push(argv);
+          return refuse
+            ? { code: 1, stdout: "", stderr: "no server" }
+            : { code: 0, stdout: "", stderr: "" };
+        },
+      } as unknown as Deps;
+      const feedText = () =>
+        existsSync(join(dir, "feed.log"))
+          ? readFileSync(join(dir, "feed.log"), "utf8")
+          : "";
+      noticeStaleWatcher(crew, "v1", "v1", dir, deps, NOW);
+      expect(notices).toEqual([]);
+      noticeStaleWatcher(crew, "v1", "v2", dir, deps, NOW);
+      expect(notices).toHaveLength(1);
+      expect(feedText()).toBe("");
+      refuse = false;
+      noticeStaleWatcher(crew, "v1", "v2", dir, deps, NOW);
+      noticeStaleWatcher(crew, "v1", "v2", dir, deps, NOW);
+      expect(notices).toHaveLength(2);
+      expect(notices[1]!.slice(0, 4)).toEqual([
+        "herdr",
+        "notification",
+        "show",
+        "Crew: restart the watcher",
+      ]);
+      expect(feedText()).toContain("told the owner to restart it");
+      // Another merge is another version: the owner hears again.
+      noticeStaleWatcher(crew, "v1", "v3", dir, deps, NOW);
+      expect(notices).toHaveLength(3);
+    } finally {
+      crew.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("reviewers run on their roster harness and persona too", () => {
+    const entry = {
+      model: "sonnet",
+      harness: "claude" as const,
+      persona: "Use the review checklist.",
+    };
+    expect(reviewerArgv(entry, "brief", "s-1")).toEqual([
+      "claude",
+      "--model",
+      "sonnet",
+      "--permission-mode",
+      "auto",
+      "--append-system-prompt",
+      "Use the review checklist.",
+      "--session-id",
+      "s-1",
+      "brief",
+    ]);
+    const settings = {
+      ...SETTINGS,
+      roster: {
+        ...ROSTER,
+        rev2: { model: "sol-latest", harness: "codex" as const },
+      },
+    };
+    const actions = planned(town({ head: SHA.reviewed, posts: [] }), settings);
+    expect(actions.map((a) => [a.kind, a.target])).toContainEqual([
+      "review",
+      "rev2",
+    ]);
+    expect(actions.some((a) => a.kind === "judgment")).toBe(false);
   });
 });
 

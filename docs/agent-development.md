@@ -407,10 +407,12 @@ their own reviews.
   (default 24) per PR, pod and track: Codex's total, or Claude's input, output
   and cache tokens. The dispatcher caps open PRs per track, so one track can't
   starve the other.
-- **A watcher on old code.** A running watcher keeps the crew code it started
-  with. Each pass compares it with the crew and gate sources in the checkout;
-  when a merge changes them, the owner is told once to restart the watcher, and
-  `status` says so while it runs.
+- **A watcher on old code.** A running watcher keeps the code it started
+  with: the crew, the gate and every module they import, such as the shared
+  pull request rules and the server's GitHub readers. Each pass compares that
+  with the files in the watcher's checkout; when a merge changes any of them,
+  the owner is told once to restart the watcher (a notice Herdr didn't show is
+  retried), and `status`, run from any checkout, says so while it runs.
 - **Guardrails.** The dispatcher runbook and the worker brief template are
   tracked in [the crew runbook](crew-runbook.md); seats change them by PR, never
   the live copy in `.agents/dispatch/`. The commit hook (`check:agents`) refuses

@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { dirname, join, relative, resolve } from "node:path";
 import type { Run } from "../gate/observe";
 import { type Deps, herdrIds } from "./deps";
 import { digest, loadSettings } from "./plan";
@@ -32,32 +32,60 @@ export function seats(run: Run): Seat[] {
   }
 }
 
-/** The crew and gate code as of the files on disk, to tell a stale watcher. */
-export function crewCodeVersion(root = join(import.meta.dir, "..")) {
-  const files = [join(root, "crew.ts"), join(root, "gate.ts")];
-  for (const folder of ["crew", "gate"])
-    for (const name of readdirSync(join(root, folder)).sort())
-      if (name.endsWith(".ts") && !name.endsWith(".test.ts"))
-        files.push(join(root, folder, name));
+/** Relative imports and re-exports, static or dynamic, in a source file. */
+const IMPORTS = /\b(?:from|import)\s*\(?\s*["'](\.{1,2}\/[^"']+)["']/gu;
+
+/**
+ * The code a watcher started from `entry` runs, as of the files on disk: a
+ * digest of every source reached through relative imports, so a merged change
+ * to the gate, the shared pull request rules or the server's GitHub readers
+ * counts as much as one to the crew itself.
+ */
+export function crewCodeVersion(
+  entry = join(import.meta.dir, "..", "crew.ts"),
+) {
+  const files = new Set<string>();
+  const queue = [entry];
+  while (queue.length) {
+    const file = queue.pop()!;
+    if (files.has(file) || !existsSync(file)) continue;
+    files.add(file);
+    for (const match of readFileSync(file, "utf8").matchAll(IMPORTS)) {
+      const base = resolve(dirname(file), match[1]!);
+      const found = [
+        base,
+        `${base}.ts`,
+        `${base}.tsx`,
+        join(base, "index.ts"),
+      ].find(
+        (candidate) => existsSync(candidate) && statSync(candidate).isFile(),
+      );
+      if (found) queue.push(found);
+    }
+  }
+  const root = dirname(entry);
   return digest(
-    files
-      .filter((file) => existsSync(file))
-      .map((file) => readFileSync(file, "utf8"))
+    [...files]
+      .sort()
+      .map((file) => `${relative(root, file)}\0${readFileSync(file, "utf8")}`)
       .join("\0"),
   );
 }
 
 /**
- * Tells the owner once per checkout version that this watcher still runs
- * the code it started with: a merged crew change waits for a restart.
+ * Records the code version on disk for `status`, and tells the owner once
+ * per version that this watcher still runs the code it started with: a
+ * merged crew change waits for a restart. One Herdr didn't show is retried.
  */
 export function noticeStaleWatcher(
   crew: Database,
   loaded: string,
+  disk: string,
   dir: string,
   deps: Deps,
+  now = Date.now(),
 ) {
-  const disk = crewCodeVersion();
+  setMeta(crew, "watcher.disk", disk);
   if (disk === loaded || getMeta(crew, "watcher.stale") === disk) return;
   const result = deps.run([
     "herdr",
@@ -73,7 +101,7 @@ export function noticeStaleWatcher(
   setMeta(crew, "watcher.stale", disk);
   feed(
     join(dir, "feed.log"),
-    Date.now(),
+    now,
     "watcher runs older crew code than the checkout; told the owner to restart it",
   );
 }
@@ -108,9 +136,14 @@ export function startSeat(options: Options, dir: string, deps: Deps) {
     "--label",
     name,
   ]);
-  const { pane } = herdrIds(created.stdout);
+  const { pane, tab } = herdrIds(created.stdout);
   if (created.code !== 0 || !pane)
     throw new Error(`Herdr couldn't open a tab for ${name}`);
+  // A seat that doesn't start leaves no stray shell tab behind.
+  const fail = (message: string) => {
+    if (tab) deps.run(["herdr", "tab", "close", tab]);
+    return new Error(message);
+  };
   const argv = [
     "herdr",
     "agent",
@@ -131,7 +164,7 @@ export function startSeat(options: Options, dir: string, deps: Deps) {
     if (result.code === 0) break;
     const error = (result.stderr || result.stdout).trim();
     if (!error.includes("agent_pane_busy") || attempt >= 10)
-      throw new Error(`Herdr couldn't start ${name}: ${error.slice(0, 200)}`);
+      throw fail(`Herdr couldn't start ${name}: ${error.slice(0, 200)}`);
     Bun.sleepSync(1000);
   }
   deps.out(

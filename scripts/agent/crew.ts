@@ -922,7 +922,7 @@ export async function main(argv: string[], deps: Deps = realDeps) {
       for (;;) {
         const now = Date.now();
         if (options.command === "watch" && !options.dryRun)
-          noticeStaleWatcher(crew, loaded, dir, deps);
+          noticeStaleWatcher(crew, loaded, crewCodeVersion(), dir, deps);
         const { scope } = cadence;
         const prs = scope ?? options.prs;
         // Null until the pass has read its PRs; a failed pass keeps the last.

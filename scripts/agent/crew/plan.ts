@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { shortSha } from "../../../shared/pullRequests";
 import { type GateInput, latestChecks, type Verdict } from "../gate/predicate";
-import { harnessFor } from "./worker";
+import { harnessOf } from "./worker";
 
 /**
  * What the crew watcher does about one pull request's verdict, and its
@@ -40,7 +40,7 @@ export type CrewSettings = {
 export type RosterEntry = {
   model: string;
   effort?: string;
-  /** Defaults to the harness that runs the model; see `harnessFor`. */
+  /** Defaults to the harness that runs the model; see `harnessOf`. */
   harness?: "claude" | "codex";
   /** The seat's standing instructions, given as its system prompt. */
   persona?: string;
@@ -409,7 +409,7 @@ export function plan(
         judgments.push(`${run.name} has no roster model to run on`);
         continue;
       }
-      if (!harnessFor(model.model)) {
+      if (!harnessOf(model)) {
         judgments.push(
           `${run.name}'s roster model ${model.model} is neither a Claude nor a Codex model`,
         );

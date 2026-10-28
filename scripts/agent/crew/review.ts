@@ -24,7 +24,7 @@ import {
 import {
   chatArgv,
   findCodexSession,
-  harnessFor,
+  harnessOf,
   readUsage,
   reviewerArgv,
   reviewerPrompt,
@@ -118,7 +118,7 @@ export async function review(options: Options, dir: string, deps: Deps) {
     crew.close();
     return 143;
   }
-  const harness = harnessFor(model.model) ?? "codex";
+  const harness = harnessOf(model) ?? "codex";
   setRunSession(crew, runId, harness, model.model, null);
   process.on("SIGTERM", () => {
     show(`── stopped: a newer head made this review stale`);
