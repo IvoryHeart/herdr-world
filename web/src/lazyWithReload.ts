@@ -28,17 +28,25 @@ export async function importWithReload<T>(
 }
 
 /**
- * Stands in for a part that failed to load and asks for a reload on mount.
+ * Stands in for a part that failed to load and asks for a reload when shown.
  * Dialogs and panels stay open until their own onClose, so it closes itself:
- * the next open mounts it again and asks again.
+ * the next open either mounts it again or, for a panel kept mounted such as
+ * Ranger, turns its open prop back on, and either way it asks again.
  */
-function ReloadNeeded({ onClose }: { onClose?: unknown }) {
+function ReloadNeeded({
+  open,
+  onClose,
+}: {
+  open?: unknown;
+  onClose?: unknown;
+}) {
   useEffect(() => {
+    if (open === false) return;
     requestReload();
     if (typeof onClose === "function") onClose();
-    // Once per mount: a parent re-render must not close it again.
+    // Once per showing: a parent re-render must not close it again.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [open]);
   return null;
 }
 

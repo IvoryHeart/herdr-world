@@ -342,38 +342,49 @@ async function run() {
   await checkAfter(() => dispatchEvent(new Event("online")));
   check(!differentBuild(), "Dismissed build was offered again");
 
-  // A lazy dialog missing after Later is offered too, not reloaded. Like
-  // Settings, its parent keeps it open until the dialog's own onClose, so
-  // opening it again must ask again.
-  const Missing = lazyWithReload<ComponentType<{ onClose: () => void }>>(
-    `update-fixture-missing-${Date.now()}`,
-    () => Promise.reject(new Error("chunk 404")),
-  );
-  let dialogOpen = false;
-  let openDialog = () => {};
-  function DialogHost() {
-    const [open, setOpen] = useState(false);
-    dialogOpen = open;
-    openDialog = () => setOpen(true);
-    return open ? (
-      <Suspense fallback={null}>
-        <Missing onClose={() => setOpen(false)} />
-      </Suspense>
-    ) : null;
+  // A lazy part missing after Later is offered too, not reloaded. Like
+  // Settings, a dialog stays open until its own onClose; like Ranger, a panel
+  // stays mounted once opened and follows its open prop. Opening either again
+  // must ask again.
+  for (const retained of [false, true]) {
+    const Missing = lazyWithReload<
+      ComponentType<{ open: boolean; onClose: () => void }>
+    >(`update-fixture-missing-${retained}-${Date.now()}`, () =>
+      Promise.reject(new Error("chunk 404")),
+    );
+    let partOpen = false;
+    let openPart = () => {};
+    function PartHost() {
+      const [open, setOpen] = useState(false);
+      const [mounted, setMounted] = useState(false);
+      partOpen = open;
+      openPart = () => {
+        setOpen(true);
+        setMounted(true);
+      };
+      return (retained ? mounted : open) ? (
+        <Suspense fallback={null}>
+          <Missing open={open} onClose={() => setOpen(false)} />
+        </Suspense>
+      ) : null;
+    }
+    const host = createRoot(
+      document.body.appendChild(document.createElement("div")),
+    );
+    flushSync(() => host.render(<PartHost />));
+    for (let attempt = 0; attempt < 2; attempt++) {
+      flushSync(() => openPart());
+      await until(chunkReload);
+      await until(() => !partOpen);
+      check(
+        !differentBuild(),
+        "Missing part revived the dismissed build notice",
+      );
+      later(chunkReload()!);
+      await until(() => !chunkReload());
+    }
+    host.unmount();
   }
-  const host = createRoot(
-    document.body.appendChild(document.createElement("div")),
-  );
-  flushSync(() => host.render(<DialogHost />));
-  for (let attempt = 0; attempt < 2; attempt++) {
-    flushSync(() => openDialog());
-    await until(chunkReload);
-    await until(() => !dialogOpen);
-    check(!differentBuild(), "Missing part revived the dismissed build notice");
-    later(chunkReload()!);
-    await until(() => !chunkReload());
-  }
-  host.unmount();
   check(unloads === 0, "World reloaded the page by itself");
 }
 const childVersion = new URL(location.href).searchParams.get("claim");
