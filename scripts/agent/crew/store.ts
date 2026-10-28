@@ -540,6 +540,15 @@ export function getMeta(db: Database, key: string) {
   );
 }
 
+/** The values kept under keys that start with `prefix`. */
+export function metaWithPrefix(db: Database, prefix: string) {
+  return db
+    .query<{ key: string; value: string }, [string]>(
+      "SELECT key, value FROM meta WHERE substr(key, 1, length(?1)) = ?1 ORDER BY key",
+    )
+    .all(prefix);
+}
+
 export function setMeta(db: Database, key: string, value: string) {
   db.query("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run(
     key,

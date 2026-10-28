@@ -58,7 +58,6 @@ import {
   runningSince,
   runsOf,
   setAction,
-  setMeta,
   setRoundTab,
   setRunPane,
   setRunPid,
@@ -914,10 +913,6 @@ export async function main(argv: string[], deps: Deps = realDeps) {
     // The crew code this process runs; a merge changes the checkout's, and
     // only a restart loads it.
     const loaded = crewCodeVersion();
-    if (options.command === "watch" && !options.dryRun) {
-      setMeta(crew, "watcher.code", loaded);
-      setMeta(crew, "watcher.pid", String(process.pid));
-    }
     try {
       for (;;) {
         const now = Date.now();

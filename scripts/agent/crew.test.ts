@@ -2220,9 +2220,11 @@ describe("seats and spend", () => {
       );
       // The watcher records both versions from its own checkout, so `status`
       // run from another worktree compares the watcher's, not its own.
-      setMeta(crew, "watcher.code", "old");
-      setMeta(crew, "watcher.disk", "new");
-      setMeta(crew, "watcher.pid", "4242");
+      setMeta(
+        crew,
+        "watcher:4242",
+        JSON.stringify({ loaded: "old", disk: "new" }),
+      );
       const lines: string[] = [];
       const show = (alive: boolean) => {
         lines.length = 0;
@@ -2241,7 +2243,11 @@ describe("seats and spend", () => {
       expect(show(false).some((line) => line.includes("older crew code"))).toBe(
         false,
       );
-      setMeta(crew, "watcher.disk", "old");
+      setMeta(
+        crew,
+        "watcher:4242",
+        JSON.stringify({ loaded: "old", disk: "old" }),
+      );
       expect(show(true).some((line) => line.includes("older crew code"))).toBe(
         false,
       );
@@ -2307,14 +2313,14 @@ describe("seats and spend", () => {
         existsSync(join(dir, "feed.log"))
           ? readFileSync(join(dir, "feed.log"), "utf8")
           : "";
-      noticeStaleWatcher(crew, "v1", "v1", dir, deps, NOW);
+      noticeStaleWatcher(crew, "v1", "v1", dir, deps, NOW, 11);
       expect(notices).toEqual([]);
-      noticeStaleWatcher(crew, "v1", "v2", dir, deps, NOW);
+      noticeStaleWatcher(crew, "v1", "v2", dir, deps, NOW, 11);
       expect(notices).toHaveLength(1);
       expect(feedText()).toBe("");
       refuse = false;
-      noticeStaleWatcher(crew, "v1", "v2", dir, deps, NOW);
-      noticeStaleWatcher(crew, "v1", "v2", dir, deps, NOW);
+      noticeStaleWatcher(crew, "v1", "v2", dir, deps, NOW, 11);
+      noticeStaleWatcher(crew, "v1", "v2", dir, deps, NOW, 11);
       expect(notices).toHaveLength(2);
       expect(notices[1]!.slice(0, 4)).toEqual([
         "herdr",
@@ -2324,8 +2330,38 @@ describe("seats and spend", () => {
       ]);
       expect(feedText()).toContain("told the owner to restart it");
       // Another merge is another version: the owner hears again.
-      noticeStaleWatcher(crew, "v1", "v3", dir, deps, NOW);
+      noticeStaleWatcher(crew, "v1", "v3", dir, deps, NOW, 11);
       expect(notices).toHaveLength(3);
+    } finally {
+      crew.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("watchers in two checkouts sharing the store keep their own versions", () => {
+    const dir = mkdtempSync(join(tmpdir(), "crew-two-"));
+    const crew = openCrewStore(":memory:");
+    try {
+      const deps = {
+        run: () => ({ code: 0, stdout: "", stderr: "" }),
+      } as unknown as Deps;
+      const stale = () => {
+        const lines: string[] = [];
+        showStatus(crew, dir, (line) => lines.push(line), NOW, {
+          alive: () => true,
+        });
+        return lines.filter((line) => line.includes("older crew code"));
+      };
+      // B runs v2 from its current checkout; A runs v1 from its own.
+      noticeStaleWatcher(crew, "v2", "v2", dir, deps, NOW, 202);
+      noticeStaleWatcher(crew, "v1", "v1", dir, deps, NOW, 101);
+      expect(stale()).toEqual([]);
+      // A's checkout moves on: only A is stale.
+      noticeStaleWatcher(crew, "v1", "v3", dir, deps, NOW, 101);
+      noticeStaleWatcher(crew, "v2", "v2", dir, deps, NOW, 202);
+      expect(stale()).toEqual([
+        "watcher 101 runs older crew code than its checkout; restart `agent:crew -- watch`",
+      ]);
     } finally {
       crew.close();
       rmSync(dir, { recursive: true, force: true });

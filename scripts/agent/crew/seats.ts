@@ -72,9 +72,20 @@ export function crewCodeVersion(
   );
 }
 
+/** What one watcher process records about its code, under `watcher:<pid>`. */
+export type WatcherCode = {
+  /** The version it loaded at start. */
+  loaded: string;
+  /** Its checkout's version at its latest pass. */
+  disk: string;
+  /** The checkout version the owner was last told about. */
+  told?: string;
+};
+
 /**
- * Records the code version on disk for `status`, and tells the owner once
- * per version that this watcher still runs the code it started with: a
+ * Records this watcher's loaded and on-disk code versions for `status`,
+ * under its own pid so watchers in different checkouts don't mix, and tells
+ * the owner once per version that it still runs the code it started with: a
  * merged crew change waits for a restart. One Herdr didn't show is retried.
  */
 export function noticeStaleWatcher(
@@ -84,9 +95,15 @@ export function noticeStaleWatcher(
   dir: string,
   deps: Deps,
   now = Date.now(),
+  pid = process.pid,
 ) {
-  setMeta(crew, "watcher.disk", disk);
-  if (disk === loaded || getMeta(crew, "watcher.stale") === disk) return;
+  const key = `watcher:${pid}`;
+  const raw = getMeta(crew, key);
+  const told = raw ? (JSON.parse(raw) as WatcherCode).told : undefined;
+  const record = (entry: WatcherCode) =>
+    setMeta(crew, key, JSON.stringify(entry));
+  record({ loaded, disk, ...(told ? { told } : {}) });
+  if (disk === loaded || told === disk) return;
   const result = deps.run([
     "herdr",
     "notification",
@@ -98,11 +115,11 @@ export function noticeStaleWatcher(
     "request",
   ]);
   if (result.code !== 0) return;
-  setMeta(crew, "watcher.stale", disk);
+  record({ loaded, disk, told: disk });
   feed(
     join(dir, "feed.log"),
     now,
-    "watcher runs older crew code than the checkout; told the owner to restart it",
+    `watcher ${pid} runs older crew code than its checkout; told the owner to restart it`,
   );
 }
 

@@ -412,7 +412,9 @@ their own reviews.
   pull request rules and the server's GitHub readers. Each pass compares that
   with the files in the watcher's checkout; when a merge changes any of them,
   the owner is told once to restart the watcher (a notice Herdr didn't show is
-  retried), and `status`, run from any checkout, says so while it runs.
+  retried), and `status`, run from any checkout, names each running watcher
+  that is behind its own checkout. Each watcher keeps its versions under its
+  own process ID, so watchers in different checkouts don't mix.
 - **Guardrails.** The dispatcher runbook and the worker brief template are
   tracked in [the crew runbook](crew-runbook.md); seats change them by PR, never
   the live copy in `.agents/dispatch/`. The commit hook (`check:agents`) refuses
