@@ -2,6 +2,7 @@ import "./AgentChat.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Copy, ListTree, RefreshCw, SquareTerminal } from "lucide-react";
 import { watchConversation } from "../conversationWatch";
+import { type ChatFocusIntent, useChatFocusIntent } from "../chatFocus";
 import { attachmentUploading } from "../attachmentUploads";
 import {
   beginTerminalComposerSubmission,
@@ -64,6 +65,7 @@ export function AgentChat({
   onClose,
   workSessionFingerprint,
   recipientLabel,
+  focusIntent,
 }: {
   pane: Pane;
   active: boolean;
@@ -72,7 +74,11 @@ export function AgentChat({
   onClose: () => void;
   workSessionFingerprint?: string;
   recipientLabel?: string;
+  focusIntent?: ChatFocusIntent | null;
 }) {
+  const localFocusIntent = useChatFocusIntent(
+    active && focusIntent === undefined,
+  );
   const connectionClient = useConnectionClient();
   const [conversation, setConversation] = useState<Conversation | null>(null);
   // Set when the newest read failed; the last good conversation stays shown.
@@ -727,6 +733,10 @@ export function AgentChat({
       ) : null}
       {canSend ? (
         <ChatComposer
+          active={active}
+          focusIntent={
+            focusIntent === undefined ? localFocusIntent : focusIntent
+          }
           client={connectionClient}
           pane={pane}
           fingerprint={conversation?.session_fingerprint ?? ""}

@@ -73,7 +73,8 @@ import {
 } from "../workspaceResource";
 import { WorkspaceInspectorAgentIdentity } from "./WorkspaceInspectorAgentIdentity";
 import { agentName } from "./agentDisplayName";
-import { AgentChat } from "./AgentChat";
+import { InspectorChat } from "./InspectorChat";
+import type { ChatFocusIntent } from "../chatFocus";
 import { AgentCheckoutPanel } from "./AgentCheckoutPanel";
 import { paneHasAgentHistory } from "./agentSession";
 import {
@@ -152,6 +153,7 @@ export function WorkspaceInspectorHost({
   context,
   agentCheckout,
   historySessionFingerprint,
+  chatFocusIntent,
   agentWorktree,
   presentationStale = false,
 }: {
@@ -209,6 +211,7 @@ export function WorkspaceInspectorHost({
     onWorkspaceChanges(): void;
   };
   historySessionFingerprint?: string;
+  chatFocusIntent?: ChatFocusIntent | null;
 }) {
   const [locationOpen, setLocationOpen] = useState(false);
   const hostRef = useRef<HTMLElement | null>(null);
@@ -1279,11 +1282,8 @@ export function WorkspaceInspectorHost({
             }`}
           >
             {historyAvailable && historyPane ? (
-              <AgentChat
-                key={JSON.stringify([
-                  historyPane.pane_id,
-                  historySessionFingerprint ?? null,
-                ])}
+              <InspectorChat
+                focusIntent={chatFocusIntent}
                 pane={historyPane}
                 workSessionFingerprint={historySessionFingerprint}
                 recipientLabel={
