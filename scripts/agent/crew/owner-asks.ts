@@ -3,11 +3,22 @@ import type { Deps } from "./deps";
 import { digest, type Action } from "./plan";
 import { actionsIn, getAction, setAction, type StoredAction } from "./store";
 
-type Receipt = { ask: string; closed?: boolean };
+type Receipt = {
+  ask?: string;
+  closed?: boolean;
+  rearm?: boolean;
+  retired?: boolean;
+};
 function receipt(detail: string | null): Receipt | null {
   try {
     const value = JSON.parse(detail ?? "null") as Receipt | null;
-    return value && typeof value.ask === "string" ? value : null;
+    return value &&
+      typeof value === "object" &&
+      ((typeof value.ask === "string" && value.ask.length > 0) ||
+        value.rearm === true ||
+        value.retired === true)
+      ? value
+      : null;
   } catch {
     return null;
   }
@@ -61,50 +72,16 @@ export function reconcileOwnerAsks(
     say(line);
     deps.out(line);
   };
-  for (const entry of actionsIn(crew, ["pending", "sent", "superseded"])) {
-    if (entry.target !== "owner" || (prs.length && !prs.includes(entry.pr)))
-      continue;
-    const known = receipt(entry.detail);
-    if (!holds(crew, entry, keys)) {
-      if (known) {
-        const withdrawn = reply(
-          deps.run(["herdr-world", "ask", "withdraw", known.ask, "--json"]),
-        );
-        if (!withdrawn?.ok && withdrawn?.code !== "not_found") continue;
-        if (withdrawn?.result?.answer && !known.closed) {
-          setAction(crew, entry.key, "superseded", now);
-          answered(entry, known.ask, withdrawn.result.answer.text);
-        }
-      }
-      if (entry.state !== "superseded" || known) {
-        setAction(crew, entry.key, "superseded", now);
-        say(`#${entry.pr} withdrew owner cause: ${entry.text}`);
-      }
-      continue;
-    }
-    if (known) {
-      if (known.closed) continue;
-      const answer = reply(
-        deps.run(["herdr-world", "ask", "get", known.ask, "--json"]),
-      );
-      if (
-        answer?.result?.answer ||
-        answer?.result?.withdrawn ||
-        answer?.code === "not_found"
-      ) {
-        setAction(
-          crew,
-          entry.key,
-          "sent",
-          now,
-          JSON.stringify({ ...known, closed: true }),
-        );
-        if (answer?.result?.answer) {
-          answered(entry, known.ask, answer.result.answer.text);
-        }
-      }
-      continue;
-    }
+  const save = (
+    entry: StoredAction,
+    state: "pending" | "sent" | "superseded",
+    value: Receipt,
+    attempted = false,
+  ) => setAction(crew, entry.key, state, now, JSON.stringify(value), attempted);
+  const create = (entry: StoredAction, prior: Receipt | null) => {
+    // Persist uncertainty before dispatch: either a retry or cleanup must use
+    // the key if World records the ask but its reply never reaches this process.
+    save(entry, "pending", { ...prior, rearm: true, retired: false }, true);
     const asked = reply(
       deps.run([
         "herdr-world",
@@ -117,19 +94,69 @@ export function reconcileOwnerAsks(
       ]),
     );
     if (!asked?.ok || !asked.result?.id) {
-      if (entry.state !== "pending")
-        setAction(crew, entry.key, "pending", now, "World ask unavailable");
       say(`#${entry.pr} couldn't record its owner ask; retrying next pass`);
+      return;
+    }
+    const id = asked.result.id;
+    save(entry, "sent", { ask: id, closed: Boolean(asked.result.answer) });
+    if (asked.result.answer && !(prior?.ask === id && prior.closed))
+      answered(entry, id, asked.result.answer.text);
+    say(`#${entry.pr} asked owner (${id}): ${entry.text}`);
+  };
+  for (const entry of actionsIn(crew, ["pending", "sent", "superseded"])) {
+    if (entry.target !== "owner" || (prs.length && !prs.includes(entry.pr)))
+      continue;
+    const known = receipt(entry.detail);
+    if (!holds(crew, entry, keys)) {
+      if (known?.retired) continue;
+      const selector =
+        known?.ask && !known.rearm
+          ? [known.ask]
+          : ["--key", `crew:${entry.key}`];
+      const withdrawn = reply(
+        deps.run(["herdr-world", "ask", "withdraw", ...selector, "--json"]),
+      );
+      if (withdrawn?.code === "refused") {
+        save(entry, "superseded", { ...known, retired: true, rearm: false });
+        say(
+          `#${entry.pr} could not withdraw ${known?.ask ?? "its keyed ask"}; ${known?.closed ? "its answer was already read" : "left for the owner to answer"}`,
+        );
+        continue;
+      }
+      if (!withdrawn?.ok && withdrawn?.code !== "not_found") continue;
+      const id = withdrawn?.result?.id ?? known?.ask;
+      const answer = withdrawn?.result?.answer;
+      const alreadyRead = known?.ask === id && known?.closed;
+      save(entry, "superseded", {
+        ask: id,
+        retired: true,
+        closed: Boolean(answer) || Boolean(alreadyRead),
+      });
+      if (answer && id && !alreadyRead) answered(entry, id, answer.text);
+      say(`#${entry.pr} withdrew owner cause: ${entry.text}`);
       continue;
     }
-    setAction(
-      crew,
-      entry.key,
-      "sent",
-      now,
-      JSON.stringify({ ask: asked.result.id }),
-      true,
-    );
-    say(`#${entry.pr} asked owner (${asked.result.id}): ${entry.text}`);
+    if (known?.ask && !known.rearm && !known.retired) {
+      if (known.closed) continue;
+      const answer = reply(
+        deps.run(["herdr-world", "ask", "get", known.ask, "--json"]),
+      );
+      if (answer?.result?.withdrawn || answer?.code === "not_found") {
+        const next = {
+          ...known,
+          rearm: true,
+          closed: Boolean(answer?.result?.answer),
+        };
+        save(entry, "pending", next);
+        if (answer?.result?.answer)
+          answered(entry, known.ask, answer.result.answer.text);
+        create(entry, next);
+      } else if (answer?.result?.answer) {
+        save(entry, "sent", { ...known, closed: true });
+        answered(entry, known.ask, answer.result.answer.text);
+      }
+      continue;
+    }
+    create(entry, known);
   }
 }

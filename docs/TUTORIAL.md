@@ -592,7 +592,10 @@ task result, or ask you a question (`herdr-world ask "Ship it?" --options
 yes,no --wait`). A question shows first in Town's **Needs you** list with the
 agent's name and waits at reception with **?**; pick an option or type an answer,
 and the waiting agent carries on. An asker can withdraw a cleared question with
-`herdr-world ask withdraw <question-id>`, which clears its markers. `herdr-world history` shows who changed what, and `herdr-world undo` takes
+`herdr-world ask withdraw <question-id>`, which clears its markers. If its
+creation reply was lost, `herdr-world ask withdraw --key <cause-key>` withdraws
+that asking occupant's retained question without creating another one.
+`herdr-world history` shows who changed what, and `herdr-world undo` takes
 back a World-side change. A change marked **unverified** came from a process
 World could not place in the pane it named, or from a terminal that named no
 pane.

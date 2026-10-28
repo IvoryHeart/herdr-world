@@ -1622,6 +1622,25 @@ async function run() {
       .find((connection) => connection.connectionId === "local")
       ?.snapshot?.panes.find((pane) => !pane.agent);
     if (watcherPane) {
+      const finishedScene = base.connections.map((connection) => ({
+        ...connection,
+        snapshot: connection.snapshot && {
+          ...connection.snapshot,
+          panes: connection.snapshot.panes.map((pane) =>
+            connection.connectionId === "local" && pane.agent
+              ? { ...pane, agent_status: "done" }
+              : pane,
+          ),
+        },
+      }));
+      const localFinished = finishedScene[0]!.snapshot!.panes.filter(
+        (pane) => pane.agent,
+      );
+      check(
+        localFinished.length >= 6,
+        "the watcher reception fixture needs at least six finished agents",
+      );
+      setWorld(worldFor(finishedScene));
       ledger.asks.push({
         id: "q-watcher-terminal",
         at: Date.now(),
@@ -1644,10 +1663,41 @@ async function run() {
         () => Boolean(host.querySelector(".town-reception-question")),
         "a watcher terminal ask must reach reception even without an agent harness",
       );
+      const watcherId = worldFor(finishedScene).leaves.find(
+        (leaf) =>
+          leaf.connectionId === "local" &&
+          leaf.pane.pane_id === watcherPane.pane_id,
+      )!.id;
+      const watcherEntry = () =>
+        [
+          ...host.querySelectorAll<HTMLButtonElement>(
+            "[data-owner-question-terminal]",
+          ),
+        ].find((entry) => entry.dataset.ownerQuestionTerminal === watcherId);
+      await waitFor(
+        () => Boolean(watcherEntry()),
+        "a watcher question must take a reception entry ahead of six finishes",
+      );
+      const openedBefore = opened.length;
+      watcherEntry()!.click();
+      check(
+        opened.length === openedBefore + 1 &&
+          opened[openedBefore] === watcherId,
+        "the watcher reception entry opens its own original terminal in one action",
+      );
+      opened.splice(openedBefore);
       await sharedAsksStore().answer("q-watcher-terminal", "Wait");
       await waitFor(
         () => !host.querySelector(".town-reception-question"),
         "answering a watcher terminal ask must clear reception",
+      );
+      setWorld(worldFor(base.connections));
+      await waitFor(
+        () =>
+          host.querySelector(
+            '.world-semantic-targets-overlay[aria-busy="false"]',
+          ) !== null,
+        "the original town must be admitted after the watcher fixture",
       );
     }
     panelEntries.find((entry) => entry.id === "panel:town-summary")!.onClose();

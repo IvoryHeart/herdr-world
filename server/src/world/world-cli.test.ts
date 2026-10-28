@@ -455,6 +455,58 @@ describe("questions and results", () => {
     expect((resultOf(next) as { id: string }).id).not.toBe(id);
   });
 
+  test("withdraw by cause key recovers only the asking occupant's retained question", async () => {
+    const { run, ledger } = setup();
+    const request = { question: "Ship?", key: "demo:ready", owner_only: true };
+    const first = await run("ask", request);
+    const id = (resultOf(first) as { id: string }).id;
+    const sibling = await run("ask", request, "w1:p2", inPane(200));
+    const other = (resultOf(sibling) as { id: string }).id;
+    expect(await run("ask withdraw", { key: request.key })).toMatchObject({
+      ok: true,
+      result: { id, withdrawn: { at: 1000 } },
+    });
+    expect(ledger.openAsks().asks.map((ask) => ask.id)).toEqual([other]);
+    const revision = ledger.get().revision;
+    expect(await run("ask withdraw", { key: request.key })).toMatchObject({
+      ok: true,
+      result: { id },
+    });
+    expect(await run("ask withdraw", { key: "absent" })).toMatchObject({
+      ok: false,
+      code: "not_found",
+    });
+    expect(ledger.get().revision).toBe(revision);
+    expect(
+      await run("ask withdraw", { key: request.key }, null, null),
+    ).toMatchObject({ ok: false, code: "refused" });
+    const next = await run("ask", request);
+    const nextId = (resultOf(next) as { id: string }).id;
+    expect(nextId).not.toBe(id);
+    expect(await run("ask withdraw", { key: request.key })).toMatchObject({
+      ok: true,
+      result: { id: nextId },
+    });
+    expect(ledger.ask(other)!.withdrawn).toBeUndefined();
+  });
+
+  test("a keyed repeat returns its retained answer without reopening the question", async () => {
+    const { run, ledger, published } = setup();
+    const request = { question: "Ship?", key: "demo:ready", owner_only: true };
+    const first = await run("ask", request);
+    const id = (resultOf(first) as { id: string }).id;
+    ledger.update((document) => {
+      document.asks[0]!.answer = { text: "Wait", at: 1000, by: "owner" };
+    });
+    const before = published.asks;
+    expect(await run("ask", request)).toMatchObject({
+      ok: true,
+      result: { id, answer: { text: "Wait" } },
+    });
+    expect(published.asks).toBe(before);
+    expect(ledger.openAsks().asks).toEqual([]);
+  });
+
   test("an ask waits for its answer; owner-only questions refuse agents", async () => {
     const { ledger, published, run } = setup();
     const ask = await run("ask", {

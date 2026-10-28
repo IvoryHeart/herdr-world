@@ -1311,7 +1311,12 @@ comments for asking. A worker awaiting a decision SHALL use the existing ask
 wait path; the watcher SHALL keep passes nonblocking, record one ask per cause,
 read an owner answer once into its own output/feed and withdraw the ask when
 the cause clears. Scoped passes SHALL leave other PRs' asks alone, and held PRs
-SHALL produce no new owner asks.
+SHALL produce no new owner asks. A producer SHALL retain creation uncertainty
+before dispatch and recover a persisted ask by occupant-scoped cause key before
+retiring a cleared cause, including when its creation reply was lost. A lost
+withdrawal reply SHALL NOT suppress a recurring active cause. Permanent withdrawal
+refusal SHALL retire the cleared cause and report once that its question is left
+for the owner to answer; transient failures SHALL remain retryable.
 
 The ask command SHALL accept a bounded optional cause key scoped to its verified
 asking occupant, return the same retained ask for repeated causes including
@@ -1320,7 +1325,11 @@ verified connection, runtime, terminal and session SHALL withdraw an ask.
 Withdrawal SHALL be idempotent, preserve an answer already recorded, release
 waiting reads without inventing an answer, and remove the question from every
 open-ask projection. Withdrawn questions SHALL share the existing ledger's
-closed-question retention bound. A withdrawn ask SHALL reject later answers.
+closed-question retention bound. A withdrawn ask SHALL reject later answers. Withdrawal by cause key SHALL resolve
+only the original verified asking occupant's retained question, prefer its active
+occurrence, remain idempotent and never create a question. A keyed repeat SHALL
+return its retained answer state. Human withdrawal output SHALL name both its
+withdrawn state and any answer preserved before withdrawal.
 
 World SHALL announce newly observed verified asks through its existing chime,
 toast and OS-notification preferences. One page SHALL announce an ask ID only

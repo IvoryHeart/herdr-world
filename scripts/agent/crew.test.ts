@@ -526,7 +526,19 @@ describe("delivery", () => {
       const verb = argv[2];
       let ask;
       if (verb === "get" || verb === "withdraw") {
-        ask = [...ownerAsks.values()].find((entry) => entry.id === argv[3]);
+        if (verb === "withdraw" && refuse.has("withdraw"))
+          return {
+            code: 1,
+            stdout: JSON.stringify({
+              ok: false,
+              code: "refused",
+              error: "only the original asker",
+            }),
+            stderr: "",
+          };
+        ask = argv.includes("--key")
+          ? ownerAsks.get(argv[argv.indexOf("--key") + 1]!)
+          : [...ownerAsks.values()].find((entry) => entry.id === argv[3]);
         if (verb === "withdraw" && ask) ask.withdrawn = { at: NOW };
       } else {
         const key = argv[argv.indexOf("--key") + 1]!;
@@ -683,11 +695,11 @@ describe("delivery", () => {
     expect(prompts()).toHaveLength(0);
   });
 
-  const ready = () =>
+  const ready = (head = SHA.reviewed) =>
     town({
-      head: SHA.reviewed,
+      head,
       posts: ["rev2", "rev-astra", "rev-opus"].map((name) =>
-        confirm(name, SHA.reviewed),
+        confirm(name, head),
       ),
     });
 
@@ -743,6 +755,186 @@ describe("delivery", () => {
     } finally {
       deps.run = original;
     }
+  });
+
+  for (const clearing of ["closed", "held", "not-ready"]) {
+    test(`an unreceipted persisted ask is recovered when its cause becomes ${clearing}`, () => {
+      const original = deps.run;
+      let lost = true;
+      deps.run = (argv) => {
+        const result = original(argv);
+        if (
+          lost &&
+          argv[0] === "herdr-world" &&
+          argv[2] !== "withdraw" &&
+          argv[2] !== "get"
+        ) {
+          lost = false;
+          return {
+            code: 1,
+            stdout: "",
+            stderr: "reply lost after persistence",
+          };
+        }
+        return result;
+      };
+      try {
+        pass(ready());
+        const ask = [...ownerAsks.values()][0]!;
+        ask.answer = { text: "Cleared decision" };
+        const values =
+          clearing === "closed"
+            ? []
+            : clearing === "held"
+              ? [{ ...ready(), labels: ["pod:town", "on-hold"] }]
+              : [trioPosted()];
+        passOver(values, NOW + 60_000);
+        passOver(values, NOW + 120_000);
+        expect(ask.withdrawn).toBeDefined();
+        expect(notices()).toHaveLength(1);
+        expect(
+          output.filter((line) => line.includes("Cleared decision")),
+        ).toHaveLength(1);
+      } finally {
+        deps.run = original;
+      }
+    });
+  }
+
+  test("a withdrawn ask with a lost reply re-arms a same-head recurrence", () => {
+    pass(ready());
+    const first = [...ownerAsks.values()][0]!;
+    const original = deps.run;
+    let lost = true;
+    deps.run = (argv) => {
+      const result = original(argv);
+      if (lost && argv[0] === "herdr-world" && argv[2] === "withdraw") {
+        lost = false;
+        return { code: 1, stdout: "", stderr: "withdrawal reply lost" };
+      }
+      return result;
+    };
+    try {
+      pass(trioPosted(), NOW + 60_000);
+      expect(first.withdrawn).toBeDefined();
+      pass(ready(), NOW + 120_000);
+      pass(ready(), NOW + 180_000);
+      expect(notices()).toHaveLength(2);
+      const current = [...ownerAsks.values()][0]!;
+      expect(current.id).not.toBe(first.id);
+      expect(current.withdrawn).toBeUndefined();
+    } finally {
+      deps.run = original;
+    }
+  });
+
+  test("a lost reply while recreating a cause still withdraws the new ask", () => {
+    pass(ready());
+    const first = [...ownerAsks.values()][0]!;
+    first.answer = { text: "First decision" };
+    pass(ready(), NOW + 30_000);
+    pass(trioPosted(), NOW + 60_000);
+    const original = deps.run;
+    let lost = true;
+    deps.run = (argv) => {
+      const result = original(argv);
+      if (
+        lost &&
+        argv[0] === "herdr-world" &&
+        argv[2] !== "withdraw" &&
+        argv[2] !== "get"
+      ) {
+        lost = false;
+        return { code: 1, stdout: "", stderr: "creation reply lost" };
+      }
+      return result;
+    };
+    try {
+      pass(ready(), NOW + 120_000);
+      const current = [...ownerAsks.values()][0]!;
+      expect(current.id).not.toBe(first.id);
+      current.answer = { text: "Second decision" };
+      pass(trioPosted(), NOW + 180_000);
+      pass(trioPosted(), NOW + 240_000);
+      expect(current.withdrawn).toBeDefined();
+      expect(
+        output.filter((line) => line.includes("First decision")),
+      ).toHaveLength(1);
+      expect(
+        output.filter((line) => line.includes("Second decision")),
+      ).toHaveLength(1);
+    } finally {
+      deps.run = original;
+    }
+  });
+
+  test("a failed recreation superseded by a new head does not read the old answer again", () => {
+    pass(ready());
+    [...ownerAsks.values()][0]!.answer = { text: "Only once" };
+    pass(ready(), NOW + 30_000);
+    pass(trioPosted(), NOW + 60_000);
+    refuse.add("ask");
+    pass(ready(), NOW + 120_000);
+    refuse.delete("ask");
+    pass(ready(SHA.fixed), NOW + 180_000);
+    expect(output.filter((line) => line.includes("Only once"))).toHaveLength(1);
+  });
+
+  test("a process crash after creating an ask can still retire the cleared cause", () => {
+    const original = deps.run;
+    let crash = true;
+    deps.run = (argv) => {
+      const result = original(argv);
+      if (
+        crash &&
+        argv[0] === "herdr-world" &&
+        argv[2] !== "withdraw" &&
+        argv[2] !== "get"
+      ) {
+        crash = false;
+        throw new Error("watcher stopped before receipt");
+      }
+      return result;
+    };
+    try {
+      expect(() => pass(ready())).toThrow("watcher stopped before receipt");
+      const ask = [...ownerAsks.values()][0]!;
+      passOver([], NOW + 60_000);
+      passOver([], NOW + 120_000);
+      expect(ask.withdrawn).toBeDefined();
+      expect(notices()).toHaveLength(1);
+    } finally {
+      deps.run = original;
+    }
+  });
+
+  test("a refused withdrawal retires the cause and explains the leftover ask once", () => {
+    pass(ready());
+    const ask = [...ownerAsks.values()][0]!;
+    refuse.add("withdraw");
+    passOver([], NOW + 60_000);
+    passOver([], NOW + 120_000);
+    expect(
+      calls.filter(
+        (argv) => argv[0] === "herdr-world" && argv[2] === "withdraw",
+      ),
+    ).toHaveLength(1);
+    const owner = actionsIn(crew, ["superseded"]).find(
+      (entry) => entry.target === "owner",
+    );
+    expect(owner).toBeDefined();
+    const feed = readFileSync(join(dir, "feed.log"), "utf8");
+    expect(
+      feed
+        .split("\n")
+        .filter(
+          (line) =>
+            line.includes("could not withdraw") &&
+            line.includes(ask.id) &&
+            line.includes("owner to answer"),
+        ),
+    ).toHaveLength(1);
+    expect(ask.withdrawn).toBeUndefined();
   });
 
   test("a blocked author raises one owner ask in one pass and withdraws after it resumes", () => {

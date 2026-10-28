@@ -346,13 +346,21 @@ export function parseWorldArgs(
       if (sub === "get" || sub === "answer" || sub === "withdraw") {
         const { values, positionals } = parsed(
           rest,
-          { wait: { type: "boolean" }, timeout: { type: "string" } },
+          {
+            wait: { type: "boolean" },
+            timeout: { type: "string" },
+            ...(sub === "withdraw" ? { key: { type: "string" as const } } : {}),
+          },
           sub === "answer" ? 2 : 1,
         );
+        if (values.key && positionals.length)
+          throw new UsageError("use either a question ID or --key");
         return {
           command: `ask ${sub}`,
           params: {
-            id: need(positionals[0], "question ID"),
+            ...(values.key
+              ? { key: values.key }
+              : { id: need(positionals[0], "question ID") }),
             ...(sub === "answer"
               ? { answer: need(positionals[1], "answer") }
               : {
@@ -445,11 +453,11 @@ function human(command: string, reply: Reply): string {
   const entry = (result ?? {}) as Record<string, unknown>;
   if (command.startsWith("ask")) {
     const answer = entry.answer as { text?: string } | undefined;
+    if (command === "ask withdraw" || entry.withdrawn)
+      return `${String(entry.id)} withdrawn${answer?.text !== undefined ? ` (answered: ${String(answer.text)})` : ""}`;
     return answer?.text !== undefined
       ? String(answer.text)
-      : entry.withdrawn
-        ? `${String(entry.id)} withdrawn`
-        : `${String(entry.id)} waiting for an answer`;
+      : `${String(entry.id)} waiting for an answer`;
   }
   if (typeof entry.summary === "string")
     return `${String(entry.id)} ${entry.summary} (by ${who})`;

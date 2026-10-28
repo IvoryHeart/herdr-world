@@ -327,3 +327,11 @@ notices when Web Push is selected. These are finite ledger and direct consumer
 schedules; a separate model would duplicate those rules. Existing endpoint,
 lease, navigation, browser and protected verification gates remain mandatory.
 No OS delivery while every browser is closed is claimed by client announcements.
+
+Review-repair cases cover lost creation or recreation replies followed by a
+cleared cause, successful withdrawal with a lost reply followed by recurrence,
+permanent refusal retired with one feed explanation, and answer read-back once.
+The real CLI/ledger tests check self-scoped withdrawal by key without creation,
+retained answered repeats and explicit human withdrawal output. A real projection
+with six finishes checks shell-question priority, and the Town browser consumer
+checks its bounded reception entry and single-action original-terminal route.

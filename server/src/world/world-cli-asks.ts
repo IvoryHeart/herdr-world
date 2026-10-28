@@ -56,9 +56,30 @@ export async function handleWorldAsk(
 ): Promise<unknown> {
   switch (command) {
     case "ask withdraw": {
-      const id = text(params.id, "the question ID");
-      const ask = deps.ledger.ask(id);
-      if (!ask) return notFound(`no question ${id}`);
+      let ask;
+      if (params.key !== undefined) {
+        if (params.id !== undefined)
+          usage("use either a question ID or a cause key");
+        const key = text(params.key, "the cause key", 512);
+        if (!actor.verified)
+          refused("cause keys require a verified asking pane");
+        const retained = deps.ledger
+          .get()
+          .asks.filter(
+            (entry) => entry.key === key && sameAsker(entry.actor, actor),
+          )
+          .reverse();
+        ask = retained.find((entry) => !entry.withdrawn) ?? retained[0];
+        if (!ask)
+          return notFound(
+            "no retained question for this asking occupant and cause key",
+          );
+      } else {
+        const id = text(params.id, "the question ID");
+        ask = deps.ledger.ask(id);
+        if (!ask) return notFound(`no question ${id}`);
+      }
+      const id = ask.id;
       if (!sameAsker(ask.actor, actor))
         refused("only the verified asker can withdraw its question");
       if (ask.withdrawn) return ask;
@@ -87,7 +108,7 @@ export async function handleWorldAsk(
             (ask) =>
               ask.key === key && !ask.withdrawn && sameAsker(ask.actor, actor),
           );
-        if (known) return { id: known.id };
+        if (known) return known;
       }
       const options = Array.isArray(params.options)
         ? params.options.map((option) =>

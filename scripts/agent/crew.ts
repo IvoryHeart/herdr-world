@@ -334,7 +334,13 @@ function act(
       if (active && active.finishedAt === null)
         stopRun(crew, active.id, -15, now, deps);
     }
-    setAction(crew, waiting.key, "superseded", now);
+    setAction(
+      crew,
+      waiting.key,
+      "superseded",
+      now,
+      waiting.target === "owner" ? waiting.detail : null,
+    );
     say(`#${waiting.pr} superseded ${waiting.kind} ${waiting.target}`);
   }
 

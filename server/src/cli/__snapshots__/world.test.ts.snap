@@ -27,6 +27,7 @@ who made it, and World-side changes can be undone.
     herdr-world ask "Which host?" --owner-only --wait --timeout 600
     herdr-world ask "Task 7 is stuck. What next?" --key task:7:stuck --owner-only
     herdr-world ask withdraw q-example
+    herdr-world ask withdraw --key task:7:stuck
     herdr-world result --task FM-42 "Fixed the login race" --pr 12 --status done
     herdr-world history --actor w1:p2
     herdr-world undo c-lq3x9-4
@@ -52,11 +53,12 @@ Targets are on your own host; add --connection ID for another one.
   town desk move TARGET --onto TARGET|--last --herdr
          changes Herdr's tab order, so it needs --herdr; World cannot undo it
   ask "QUESTION" [--key CAUSE] [--options a,b,c] [--owner-only] [--wait [--timeout S]]
-  ask get ID [--wait] | ask answer ID "ANSWER" | ask withdraw ID
+  ask get ID [--wait] | ask answer ID "ANSWER" | ask withdraw ID|--key CAUSE
          another verified agent may answer, never the asker; --owner-only
          questions are answered only by the owner in World
          --key deduplicates one cause for your verified occupant. Withdraw
          your own cause when it clears; repeats then may create a fresh ask.
+         --key withdrawal recovers a lost ask ID without creating a question.
          A withdrawn --wait returns withdrawn, not an invented answer.
   result --task ID "SUMMARY" [--pr N] [--status done|blocked|failed]
   result ls [--task ID]

@@ -537,10 +537,14 @@ when piped, with stable exit codes:
   A new verified ask follows your chime, toast and OS notification preferences,
   with **Open agent** for its exact original seat. Another verified agent
   (never the asker) may answer a question that is not owner-only.
-- `ask withdraw ID`: the original verified asker withdraws a cleared cause.
+- `ask withdraw ID` or `ask withdraw --key CAUSE`: the original verified asker
+  withdraws a cleared cause, including when a creation reply lost its ask ID.
   Answering or withdrawing removes its question marks. `--key` keeps repeated
   causes to one ask; after withdrawal a recurrence can create a fresh question.
-  A waiting CLI returns `withdrawn` when its question was cancelled.
+  A waiting CLI returns `withdrawn` when its question was cancelled. Repeating
+  an answered key returns its answer; human withdrawal output also names any
+  preserved answer. Crew recovery handles lost replies, re-arms recurrences and
+  reports permanent withdrawal refusals once for the owner to answer.
 - `result --task ID "…" [--pr N] [--status done|blocked|failed]` and
   `result ls`: task results kept by World, instead of terminal scraping.
 - `spawned-by <parent-pane>`: the spawn stamp, made by the child itself. It

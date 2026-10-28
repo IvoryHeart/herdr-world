@@ -1,3 +1,4 @@
+import { townReceptionVisitors } from "./townReception";
 import "../worldAsks.css";
 import { TownBuildingSign } from "./TownBuildingSign";
 import { TownBuildingSigns } from "./townBuildingSigns";
@@ -1855,18 +1856,10 @@ const TownWorldLayer = memo(function TownWorldLayer({
               agent.semanticStatus === "done" ||
               askingKeys.has(agent.key)),
         );
-        const rank = (
-          entry:
-            | (typeof agentVisitors)[number]
-            | (typeof terminalQuestions)[number],
-        ) =>
-          "semanticStatus" in entry && entry.semanticStatus === "blocked"
-            ? 0
-            : askingKeys.has(entry.key)
-              ? 1
-              : 2;
-        const visitors = [...agentVisitors, ...terminalQuestions].sort(
-          (a, b) => rank(a) - rank(b),
+        const visitors = townReceptionVisitors(
+          agentVisitors,
+          terminalQuestions,
+          askingKeys,
         );
         const shown = visitors.slice(0, 6);
         const counts = building.rooms.reduce(

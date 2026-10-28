@@ -87,6 +87,19 @@ describe("parsing", () => {
     });
   });
 
+  test("withdrawal can recover a cause key without an ask ID", () => {
+    expect(
+      parseWorldArgs("ask", ["withdraw", "--key", "crew:7", "--json"]),
+    ).toMatchObject({
+      command: "ask withdraw",
+      params: { key: "crew:7" },
+      json: true,
+    });
+    expect(() =>
+      parseWorldArgs("ask", ["withdraw", "q-example", "--key", "crew:7"]),
+    ).toThrow("either");
+  });
+
   test("bad input is a usage error", () => {
     expect(() => parseWorldArgs("board", ["card", "pin", "me"])).toThrow("X,Y");
     expect(() => parseWorldArgs("town", ["desk", "move", "me"])).toThrow(
@@ -100,6 +113,46 @@ describe("parsing", () => {
 });
 
 describe("running", () => {
+  test("a retained answered cause prints its answer in human output", async () => {
+    const { context: ctx, out } = context();
+    const transport: WorldCliTransport = async () => ({
+      ok: true,
+      result: { id: "q-example", answer: { text: "Wait" } },
+    });
+    expect(
+      await runWorldCommand(
+        "ask",
+        ["Ship?", "--key", "crew:7"],
+        ctx,
+        transport,
+        true,
+      ),
+    ).toBe(0);
+    expect(out).toEqual(["Wait"]);
+  });
+
+  test("an answered withdrawal is explicit in human output", async () => {
+    const { context: ctx, out } = context();
+    const transport: WorldCliTransport = async () => ({
+      ok: true,
+      result: {
+        id: "q-example",
+        withdrawn: { at: 1 },
+        answer: { text: "Wait" },
+      },
+    });
+    expect(
+      await runWorldCommand(
+        "ask",
+        ["withdraw", "q-example"],
+        ctx,
+        transport,
+        true,
+      ),
+    ).toBe(0);
+    expect(out).toEqual(["q-example withdrawn (answered: Wait)"]);
+  });
+
   test("a withdrawn ask releases --wait without handing an invented answer to the agent", async () => {
     const { context: ctx, out } = context();
     let calls = 0;

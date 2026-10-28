@@ -233,6 +233,7 @@ herdr-world ask "Which design should I use?" --owner-only --wait
 herdr-world ask "Task 7 has no PR after an hour. What next?" --key dispatch:7:stuck --owner-only --json
 herdr-world ask get q-example --wait --json
 herdr-world ask withdraw q-example --json
+herdr-world ask withdraw --key dispatch:7:stuck --json
 ```
 
 `--key` deduplicates a cause for the verified asking occupant, including an
@@ -242,7 +243,11 @@ create a fresh ask under the same key. Withdrawal is idempotent and restricted
 to the original verified connection, runtime, terminal and agent session. A
 withdrawn ask releases `--wait` with a `withdrawn` field and no invented answer;
 withdrawal preserves an answer that arrived first. The existing ledger retains
-both, and closed questions remain subject to its retention bound.
+both, and closed questions remain subject to its retention bound. If a creation
+reply is lost, `ask withdraw --key CAUSE` recovers the original occupant's
+retained ask and withdraws it without creating a question. A repeated answered
+key returns its retained answer. Human withdrawal output explicitly names the
+withdrawal, including any answer already recorded.
 
 Open asks appear first in Town's Needs you rail and Summary. Their verified
 agents wait at reception with a quiet **?** until answered or withdrawn; **!**
@@ -255,7 +260,14 @@ is selected. A restarted page reads existing asks without replaying their
 announcements; an obsolete socket reply cannot restore a withdrawn ask.
 
 The watcher runs from its own pane, records asks without blocking a pass, and
-reads an answer back once into that pane's output and the crew feed. It never
+reads an answer back once into that pane's output and the crew feed. Pending
+creation/recreation receipts survive supersession, so a cause clearing after a
+lost reply still withdraws its persisted question by key. A withdrawal whose
+reply was lost permits a fresh question when the same cause recurs. If the
+original occupant can no longer withdraw (for example after a runtime-generation
+change or a restart in another pane), the watcher retires the cleared cause and
+records once in the feed that the question is left for the owner to answer; it
+does not retry that permanent refusal. Transient failures still retry. It never
 routes an answer to a different seat. Workers needing an answer use `--wait` in
 their own pane. Deploy the matching World service and CLI before restarting the
 watcher from the merged checkout. Dispatcher runbook changes are applied by the

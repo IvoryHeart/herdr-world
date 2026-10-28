@@ -43,6 +43,12 @@ Object.defineProperty(Crypto.prototype, "randomUUID", {
 // A synthetic sources service: one failing pull request on the "login fix"
 // agent's branch, a busy week of 150 merged ones and one ticket.
 const SOURCES_NOW = Date.now();
+// Calendar days can be 23 or 25 hours at daylight-saving boundaries.
+const sourceDay = (daysAgo: number) => {
+  const date = new Date(SOURCES_NOW);
+  date.setDate(date.getDate() - daysAgo);
+  return date.getTime();
+};
 const mergedWeek = Array.from({ length: 150 }, (_, index) => ({
   key: `github:pr:example-org/web-app#${1_000 + index}`,
   source: "github",
@@ -54,7 +60,7 @@ const mergedWeek = Array.from({ length: 150 }, (_, index) => ({
   status: "merged",
   roles: ["author"],
   updatedAt: SOURCES_NOW,
-  finishedAt: SOURCES_NOW - (index % 5) * 86_400_000,
+  finishedAt: sourceDay(index % 5),
   number: 1_000 + index,
   repo: "example-org/web-app",
   checks: "pass",
