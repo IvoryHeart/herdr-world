@@ -760,21 +760,21 @@ export async function runReviewedQuintModels(
   try {
     const tools = await assertVerificationInstalled();
     const nodeVersion = await runVerificationProcess(["node", "--version"], {
-      timeoutMs: 5000,
+      timeoutMs: 30_000,
     });
     const javaVersion = await runVerificationProcess(["java", "-version"], {
-      timeoutMs: 5000,
+      timeoutMs: 30_000,
     });
     assert.equal(nodeVersion.code, 0);
     assert.equal(javaVersion.code, 0);
     const revision = await runVerificationProcess(
       ["git", "rev-parse", "HEAD"],
-      { cwd: root, timeoutMs: 5000 },
+      { cwd: root, timeoutMs: 30_000 },
     );
     assert.equal(revision.code, 0);
     const tracked = await runVerificationProcess(["git", "ls-files", "-z"], {
       cwd: root,
-      timeoutMs: 5000,
+      timeoutMs: 30_000,
     });
     assert.equal(tracked.code, 0);
     const inputs = await fingerprintInputs(
