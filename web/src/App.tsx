@@ -1,5 +1,4 @@
-import { UpdateToast } from "./components/UpdateToast";
-import { NoticeDetail, ToastMark } from "./components/NoticeContent";
+import { AppToasts } from "./components/AppToasts";
 import { useTaskNotificationTarget } from "./useTaskNotificationTarget";
 import { useTerminalComposerDraftScopes } from "./useTerminalComposerDraftScopes";
 import {
@@ -99,7 +98,6 @@ import {
 import { AgentIcon } from "./components/AgentIcon";
 import { agentStateKind, paneHasAgentHistory } from "./components/agentSession";
 import { CloseButton } from "./components/CloseButton";
-import { Toast } from "./components/Toast";
 import { focusIfUnchanged } from "./components/dialogFocus";
 import { CommandCombobox } from "./components/CommandCombobox";
 import { measuredFixedPositionScale } from "./fixedPositionScale";
@@ -4669,62 +4667,14 @@ export default function App({
         </button>
       ) : null}
 
-      {s.updateInfo?.update_available || s.notice
-        ? createPortal(
-            <div className="toast-viewport" aria-live="polite">
-              <UpdateToast
-                info={s.updateInfo}
-                dismissedVersion={s.dismissedUpdateVersion}
-                installing={s.updateInstalling}
-                onDismiss={() => store.dismissUpdate()}
-                onInstall={() => {
-                  void store.installUpdate();
-                }}
-              />
-              {s.notice ? (
-                <Toast
-                  className={`toast toast-${s.notice.kind} ${
-                    s.notice.loading ? "toast-loading" : ""
-                  }`}
-                  role={s.notice.kind === "error" ? "alert" : "status"}
-                  notificationKey={s.notice.id}
-                  onDismiss={() => {
-                    // Swipes dismiss after their exit animation; keep any
-                    // newer notice that replaced this one meanwhile.
-                    if (store.get().notice?.id === s.notice?.id)
-                      store.clearNotice();
-                  }}
-                >
-                  <ToastMark kind={s.notice.kind} loading={s.notice.loading} />
-                  <div className="toast-content">
-                    <strong>{s.notice.message}</strong>
-                    <NoticeDetail notice={s.notice} />
-                    {s.notice.actionLabel &&
-                    (s.notice.actionPaneId ||
-                      s.notice.actionWorkspaceId ||
-                      s.notice.actionClipboardText !== undefined) ? (
-                      <div className="toast-actions">
-                        <button
-                          type="button"
-                          className="toast-action primary"
-                          onClick={() => handleNoticeAction(s.notice!)}
-                        >
-                          {s.notice.actionLabel}
-                        </button>
-                      </div>
-                    ) : null}
-                  </div>
-                  <CloseButton
-                    variant="toast"
-                    label="Dismiss notification"
-                    onClick={() => store.clearNotice()}
-                  />
-                </Toast>
-              ) : null}
-            </div>,
-            document.body,
-          )
-        : null}
+      <AppToasts
+        status={s.status}
+        updateInfo={s.updateInfo}
+        dismissedUpdateVersion={s.dismissedUpdateVersion}
+        updateInstalling={s.updateInstalling}
+        notice={s.notice}
+        onNoticeAction={handleNoticeAction}
+      />
 
       <div
         className={`body mobile-view-${mobileView} ${
