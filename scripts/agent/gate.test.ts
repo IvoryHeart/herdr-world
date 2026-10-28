@@ -15,8 +15,10 @@ import { CASES, config, confirm, input, NOW, SHA } from "./gate/cases";
 import type { Run } from "./gate/observe";
 import { evaluate } from "./gate/predicate";
 import {
+  addDecision,
   latestVerdict,
   openStore,
+  passConfig,
   passInputs,
   recordPass,
   transitions,
@@ -614,10 +616,32 @@ describe("store", () => {
 
   test("deduplicates unchanged observations while preserving their read times", () => {
     const first = { ...ready(), readAt: NOW };
-    const second = { ...ready(), readAt: NOW + 1_000 };
+    const second = {
+      ...ready(),
+      readAt: NOW + 1_000,
+      item: {
+        ...ready().item!,
+        prObservation: {
+          ...ready().item!.prObservation!,
+          readAt: NOW + 1_000,
+          expiresAt: NOW + 1_000 + 60_000,
+        },
+      },
+    };
+    const firstWithFreshness = {
+      ...first,
+      item: {
+        ...first.item!,
+        prObservation: {
+          ...first.item!.prObservation!,
+          readAt: NOW,
+          expiresAt: NOW + 60_000,
+        },
+      },
+    };
     const db = openStore(dbPath);
     try {
-      for (const entry of [first, second])
+      for (const entry of [firstWithFreshness, second])
         recordPass(db, {
           trigger: "test",
           config,
@@ -631,6 +655,227 @@ describe("store", () => {
       ).toEqual({ n: 1 });
       expect(passInputs(db, 1)[0].readAt).toBe(NOW);
       expect(passInputs(db, 2)[0].readAt).toBe(NOW + 1_000);
+      expect(passInputs(db, 1)[0].item?.prObservation?.readAt).toBe(NOW);
+      expect(passInputs(db, 2)[0].item?.prObservation?.readAt).toBe(
+        NOW + 1_000,
+      );
+      expect(passInputs(db, 2)[0].item?.prObservation?.expiresAt).toBe(
+        NOW + 61_000,
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  test("migrates inline legacy observations and restores both freshness times", () => {
+    const entry = {
+      ...ready(),
+      readAt: NOW - 1_000,
+      item: {
+        ...ready().item!,
+        prObservation: {
+          ...ready().item!.prObservation!,
+          readAt: NOW - 2_000,
+          expiresAt: NOW + 58_000,
+        },
+      },
+    };
+    let db = openStore(dbPath);
+    db.query(
+      "INSERT INTO pass (id, started_at, finished_at, trigger, parser_version, config_hash, config_json) VALUES (1, ?, ?, 'open', 1, 'legacy', ?)",
+    ).run(NOW - 1_000, NOW - 1_000, JSON.stringify(config));
+    db.query(
+      "INSERT INTO observation (pass_id, pr, kind, head_sha, fetched_at, body_hash, body_json) VALUES (1, ?, 'input', ?, ?, 'legacy-hash', ?)",
+    ).run(
+      entry.number,
+      entry.item!.headSha ?? "",
+      entry.readAt,
+      JSON.stringify(entry),
+    );
+    db.query(
+      "DELETE FROM gate_meta WHERE key = 'deduplicated_observations'",
+    ).run();
+    db.close();
+
+    db = openStore(dbPath);
+    try {
+      expect(
+        db.query("SELECT COUNT(*) AS n FROM observation_body").get(),
+      ).toEqual({ n: 1 });
+      expect(passInputs(db, 1)[0].readAt).toBe(entry.readAt);
+      expect(passInputs(db, 1)[0].item?.prObservation).toEqual(
+        entry.item?.prObservation,
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  test("keeps verdict replay snapshots and prunes unreferenced passes and attempts", () => {
+    const db = openStore(dbPath);
+    try {
+      const old = NOW - 16 * 24 * 60 * 60 * 1000;
+      const entry = { ...ready(), readAt: old };
+      const verdict = evaluate(entry, config, NOW);
+      for (const finishedAt of [old, NOW - 8 * 24 * 60 * 60 * 1000])
+        recordPass(db, {
+          trigger: "open",
+          config,
+          startedAt: finishedAt,
+          finishedAt,
+          inputs: [entry],
+          verdicts: [verdict],
+        });
+      db.query(
+        "INSERT INTO check_attempt (run_id, attempt, check_name, pr, head_sha, conclusion, completed_at) VALUES (1, 1, 'old', 7, ?, 'failure', ?)",
+      ).run(SHA.fixed, old);
+      recordPass(db, {
+        trigger: "open",
+        config,
+        startedAt: NOW,
+        finishedAt: NOW,
+        inputs: [entry],
+        verdicts: [verdict],
+      });
+      expect(passInputs(db, 1)).toHaveLength(1);
+      expect(passConfig(db, 1)).toEqual(config);
+      expect(passInputs(db, 2)).toEqual([]);
+      expect(db.query("SELECT id FROM pass WHERE id = 2").get()).toBeNull();
+      expect(db.query("SELECT COUNT(*) AS n FROM check_attempt").get()).toEqual(
+        { n: 0 },
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  test("keeps a decision's preceding snapshot when newer snapshots are pruned", () => {
+    const db = openStore(dbPath);
+    try {
+      const old = NOW - 16 * 24 * 60 * 60 * 1000;
+      const original = { ...ready(), readAt: old };
+      recordPass(db, {
+        trigger: "open",
+        config,
+        startedAt: old,
+        finishedAt: old,
+        inputs: [original],
+        verdicts: [],
+      });
+      addDecision(db, {
+        pr: original.number,
+        kind: "hold",
+        reason: "synthetic hold",
+        actor: "owner",
+        createdAt: old + 100,
+      });
+      const middleAt = NOW - 8 * 24 * 60 * 60 * 1000;
+      recordPass(db, {
+        trigger: "open",
+        config,
+        startedAt: middleAt,
+        finishedAt: middleAt,
+        inputs: [{ ...original, readAt: middleAt }],
+        verdicts: [],
+      });
+      recordPass(db, {
+        trigger: "open",
+        config,
+        startedAt: NOW,
+        finishedAt: NOW,
+        inputs: [{ ...original, readAt: NOW }],
+        verdicts: [],
+      });
+      expect(passInputs(db, 1)).toHaveLength(1);
+      expect(passInputs(db, 2)).toEqual([]);
+      expect(db.query("SELECT id FROM pass WHERE id = 1").get()).not.toBeNull();
+    } finally {
+      db.close();
+    }
+  });
+
+  test("prunes PRs missing from a full open-PR pass for longer than retention", () => {
+    const db = openStore(dbPath);
+    try {
+      const observedAt = NOW - 20 * 24 * 60 * 60 * 1000;
+      const entry = { ...ready(), readAt: observedAt };
+      recordPass(db, {
+        trigger: "open",
+        config,
+        startedAt: observedAt,
+        finishedAt: observedAt,
+        inputs: [entry],
+        verdicts: [],
+      });
+      const absentAt = NOW - 19 * 24 * 60 * 60 * 1000;
+      recordPass(db, {
+        trigger: "open",
+        config,
+        startedAt: absentAt,
+        finishedAt: absentAt,
+        inputs: [],
+        verdicts: [],
+      });
+      db.query(
+        "INSERT INTO check_attempt (run_id, attempt, check_name, pr, head_sha, conclusion, completed_at) VALUES (2, 1, 'old', 7, ?, 'failure', ?)",
+      ).run(SHA.fixed, observedAt);
+      recordPass(db, {
+        trigger: "open",
+        config,
+        startedAt: NOW,
+        finishedAt: NOW,
+        inputs: [{ ...entry, number: 8, readAt: NOW }],
+        verdicts: [],
+      });
+      expect(passInputs(db, 1)).toEqual([]);
+      expect(db.query("SELECT id FROM pass WHERE id = 1").get()).toBeNull();
+      expect(db.query("SELECT COUNT(*) AS n FROM check_attempt").get()).toEqual(
+        { n: 0 },
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  test("runs retention no more than once every 24 hours", () => {
+    const db = openStore(dbPath);
+    try {
+      const entry = ready();
+      recordPass(db, {
+        trigger: "test",
+        config,
+        startedAt: NOW,
+        finishedAt: NOW,
+        inputs: [entry],
+        verdicts: [],
+      });
+      const marker = () =>
+        (
+          db
+            .query(
+              "SELECT value FROM gate_meta WHERE key = 'retention_last_run'",
+            )
+            .get() as { value: string }
+        ).value;
+      expect(marker()).toBe(String(NOW));
+      recordPass(db, {
+        trigger: "test",
+        config,
+        startedAt: NOW + 60 * 60 * 1000,
+        finishedAt: NOW + 60 * 60 * 1000,
+        inputs: [],
+        verdicts: [],
+      });
+      expect(marker()).toBe(String(NOW));
+      recordPass(db, {
+        trigger: "test",
+        config,
+        startedAt: NOW + 24 * 60 * 60 * 1000,
+        finishedAt: NOW + 24 * 60 * 60 * 1000,
+        inputs: [],
+        verdicts: [],
+      });
+      expect(marker()).toBe(String(NOW + 24 * 60 * 60 * 1000));
     } finally {
       db.close();
     }
