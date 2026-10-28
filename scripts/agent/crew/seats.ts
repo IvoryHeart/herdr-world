@@ -5,7 +5,7 @@ import type { Run } from "../gate/observe";
 import { type Deps, herdrIds } from "./deps";
 import { digest, loadSettings } from "./plan";
 import type { Options } from "./review";
-import { feed, getMeta, setMeta } from "./store";
+import { deleteMeta, feed, getMeta, metaWithPrefix, setMeta } from "./store";
 import { seatArgv } from "./worker";
 
 export type Seat = { name: string; status: string; focused: boolean };
@@ -97,6 +97,7 @@ export function noticeStaleWatcher(
   now = Date.now(),
   pid = process.pid,
 ) {
+  forgetGoneWatchers(crew, deps.alive, pid);
   const key = `watcher:${pid}`;
   const raw = getMeta(crew, key);
   const told = raw ? (JSON.parse(raw) as WatcherCode).told : undefined;
@@ -121,6 +122,21 @@ export function noticeStaleWatcher(
     now,
     `watcher ${pid} runs older crew code than its checkout; told the owner to restart it`,
   );
+}
+
+/**
+ * Drops the records of watchers whose process is gone, so a stopped
+ * watcher's record can't be read again once the OS reuses its pid.
+ */
+export function forgetGoneWatchers(
+  crew: Database,
+  alive: (pid: number) => boolean,
+  own = process.pid,
+) {
+  for (const { key } of metaWithPrefix(crew, "watcher:")) {
+    const pid = Number(key.slice("watcher:".length));
+    if (pid !== own && !alive(pid)) deleteMeta(crew, key);
+  }
 }
 
 /**

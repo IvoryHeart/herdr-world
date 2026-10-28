@@ -540,6 +540,10 @@ export function getMeta(db: Database, key: string) {
   );
 }
 
+export function deleteMeta(db: Database, key: string) {
+  db.query("DELETE FROM meta WHERE key = ?").run(key);
+}
+
 /** The values kept under keys that start with `prefix`. */
 export function metaWithPrefix(db: Database, prefix: string) {
   return db

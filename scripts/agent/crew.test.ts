@@ -19,7 +19,12 @@ import {
   type Seat,
   seats,
 } from "./crew";
-import { crewCodeVersion, noticeStaleWatcher, startSeat } from "./crew/seats";
+import {
+  crewCodeVersion,
+  forgetGoneWatchers,
+  noticeStaleWatcher,
+  startSeat,
+} from "./crew/seats";
 import { runTokens, showStatus, spend, status } from "./crew/status";
 import {
   type Deps,
@@ -45,6 +50,7 @@ import {
   addRun,
   finishRun,
   getAction,
+  getMeta,
   getRun,
   openCrewStore,
   openLock,
@@ -2302,6 +2308,7 @@ describe("seats and spend", () => {
       let refuse = true;
       const notices: string[][] = [];
       const deps = {
+        alive: () => true,
         run: (argv: string[]) => {
           notices.push(argv);
           return refuse
@@ -2343,6 +2350,7 @@ describe("seats and spend", () => {
     const crew = openCrewStore(":memory:");
     try {
       const deps = {
+        alive: () => true,
         run: () => ({ code: 0, stdout: "", stderr: "" }),
       } as unknown as Deps;
       const stale = () => {
@@ -2362,6 +2370,39 @@ describe("seats and spend", () => {
       expect(stale()).toEqual([
         "watcher 101 runs older crew code than its checkout; restart `agent:crew -- watch`",
       ]);
+    } finally {
+      crew.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a stopped watcher's record is forgotten, so a reused pid isn't reported", () => {
+    const dir = mkdtempSync(join(tmpdir(), "crew-gone-"));
+    const crew = openCrewStore(":memory:");
+    try {
+      const running = new Set([101, 202]);
+      const deps = {
+        alive: (pid: number) => running.has(pid),
+        run: () => ({ code: 0, stdout: "", stderr: "" }),
+      } as unknown as Deps;
+      const stale = () => {
+        const lines: string[] = [];
+        showStatus(crew, dir, (line) => lines.push(line), NOW, {
+          alive: deps.alive,
+        });
+        return lines.filter((line) => line.includes("older crew code"));
+      };
+      // Watcher 101 falls behind its checkout, then is killed without
+      // cleaning up; watcher 202 replaces it.
+      noticeStaleWatcher(crew, "v1", "v2", dir, deps, NOW, 101);
+      running.delete(101);
+      noticeStaleWatcher(crew, "v2", "v2", dir, deps, NOW, 202);
+      expect(getMeta(crew, "watcher:101")).toBeNull();
+      // The OS later gives pid 101 to an unrelated process.
+      running.add(101);
+      expect(stale()).toEqual([]);
+      forgetGoneWatchers(crew, () => false, 202);
+      expect(getMeta(crew, "watcher:202")).not.toBeNull();
     } finally {
       crew.close();
       rmSync(dir, { recursive: true, force: true });
