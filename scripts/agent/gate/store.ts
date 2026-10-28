@@ -285,6 +285,30 @@ export function passInputs(db: Database, passId: number): GateInput[] {
   ).map((row) => JSON.parse(row.body_json));
 }
 
+/**
+ * Each PR as last seen since the latest pass over every open PR: that pass's
+ * PRs, updated by the scoped passes after it, which read only busy PRs. Null
+ * when no pass has been recorded.
+ */
+export function currentInputs(db: Database): GateInput[] | null {
+  const full = (db
+    .query(
+      "SELECT id FROM pass WHERE trigger = 'open' ORDER BY id DESC LIMIT 1",
+    )
+    .get() ?? latestPass(db)) as { id: number } | null;
+  if (!full) return null;
+  return (
+    db
+      .query(
+        `SELECT body_json FROM observation o
+         WHERE o.pass_id >= ?1
+           AND o.id = (SELECT MAX(id) FROM observation WHERE pr = o.pr AND pass_id >= ?1)
+         ORDER BY o.pr`,
+      )
+      .all(full.id) as { body_json: string }[]
+  ).map((row) => JSON.parse(row.body_json));
+}
+
 /** The verdict each PR had as of `passId`. */
 export function verdictsAt(db: Database, passId: number): StoredVerdict[] {
   return (

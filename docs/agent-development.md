@@ -231,10 +231,30 @@ plans the next step for every PR in scope and takes each step once:
 | Findings are open on the head and every required reviewer has posted on it | One `ACT #N fix` prompt with the review URLs, so the author fixes in one pass | The author's seat |
 | A required check fails and no check is still running | `ACT #N ci` prompt | The author's seat |
 | GitHub reports a conflict, or screenshots are missing | `ACT #N conflict` or `ACT #N screenshots` prompt | The author's seat |
-| A required reviewer has no RESULT, or a newer head needs confirming; checks are green and GitHub reports the head mergeable | A fresh reviewer run | That reviewer's model |
-| READY | A Herdr notification | The owner |
-| A judgment condition, an unknown author, an unsupported roster model or a reviewer run that posted nothing | One `NEEDS-OWNER` notification per distinct cause | The owner |
+| A required reviewer has no RESULT, or a newer head needs confirming; GitHub reports the head mergeable and its checks are green, or have finished while the owner judges a CI rerun | A fresh reviewer run | That reviewer's model |
+| READY, with every required reviewer confirmed on the head | The `crew/merge-ready` mark and a Herdr notification | The owner |
+| A judgment condition, an unknown author, an unsupported roster model, a stuck author seat or a reviewer run that posted nothing | The `crew/needs-owner` mark, one signed `[crew]` comment and one `NEEDS-OWNER` notification per distinct cause | The owner |
 
+- **Merge only `crew/merge-ready`.** The watcher marks a PR's head with two
+  commit statuses, shown with its checks on GitHub:
+  - `crew/merge-ready` is green when the head is READY and has had at least
+    one review round: at least one required reviewer, every one of them
+    confirmed on this head, required checks green, not draft, mergeable and
+    screenshots present where required. A PR no reviewer has finished never
+    gets it. If that stops holding on the same head, as with a hold or a new
+    finding, the next pass sets it back to pending. A push leaves the mark on
+    the old head, so a new head is unmarked until it is READY again.
+  - `crew/needs-owner` is pending while the watcher waits on the owner for
+    the PR: a CI judgment after reruns, an unknown author, a stuck or missing
+    author seat, or a reviewer run that ended without a RESULT. Each cause
+    also gets one comment signed `[crew]` saying what it needs, with local
+    paths left out. The mark turns green ("Nothing waits on the owner") once
+    every cause clears.
+
+  Only the watcher sets these marks. They are commit statuses rather than
+  labels because every label starts a CI run (`ci.yml` runs on `labeled`),
+  and they are not checks: the gate and World's PR card ignore `crew/*`
+  statuses.
 - **Who the author is.** The branch names the author: `agent/<seat>-…`, or the
   pod lead for `batch/<pod>-<n>`. Set an override per PR in `authors`.
 - **When a seat gets a prompt.** Only when Herdr reports it idle or done and
@@ -279,15 +299,23 @@ plans the next step for every PR in scope and takes each step once:
   pass, so a merge can't land between opening a chat and recording it. A chat
   opened after the PR has closed removes its checkout when you exit it. Until
   then, `open` refuses a second chat on that run.
+- **Review and the rerun question.** A CI rerun the owner has to judge
+  doesn't hold reviewers back: once the head's checks have finished, round 1
+  starts while the judgment is open. A head that is simply red, with no rerun
+  to judge, goes to the author first. READY still needs both the judgment and
+  the reviews.
 - **What stops a step.** Only a newer head, a merge or a close supersedes a
-  waiting step or stops a running reviewer. On the same head, a CI rerun, a
-  hold or an unknown mergeable state only pauses steps; they resume when the
-  head is eligible again. A reviewer that has just posted finishes its run. A
-  PR reopened on the same head is planned afresh.
-- **Parking a PR.** Add the `on-hold` label to leave a PR visible to the watcher
-  while it plans no new prompts, reviewer runs or owner notices for it. Remove
-  the label to resume on the next pass. `status` lists held PRs from the latest
-  recorded pass.
+  waiting step or stops a running reviewer. On the same head, a CI rerun or
+  an unknown mergeable state only pauses steps; they resume when the head is
+  eligible again. A reviewer that has just posted finishes its run. A PR
+  reopened on the same head is planned afresh.
+- **Parking a PR.** Add the `on-hold` label, or `agent:gate hold`, to leave a
+  PR visible to the watcher while it plans no new prompts, reviewer runs or
+  owner notices for it. Its waiting steps are retired, as are those of a PR
+  that leaves the watcher's scope, so `status` doesn't list them; a reviewer
+  already working finishes. Remove the hold to resume on the next pass, which
+  plans the steps again. `status` lists held PRs as last read: the latest pass
+  over every PR, updated by the busy passes since.
 - **Which checks count.** An attempt that a later attempt of the same
   workflow replaced, as a rerun does, doesn't count. Same-name checks from
   runs the gate can't order, such as two workflows, all count: the gate keeps
@@ -325,7 +353,7 @@ plans the next step for every PR in scope and takes each step once:
 ```bash
 bun run agent:crew -- pass --dry-run   # print the plan; change nothing
 bun run agent:crew -- watch            # every PR each 300 s (--interval), busy PRs each 60 s (--busy-interval)
-bun run agent:crew -- status           # held PRs, open steps and recent reviewer runs, with token usage
+bun run agent:crew -- status           # held PRs, open steps and recent reviewer runs, with token usage (works without a config)
 bun run agent:crew -- feed             # the last lines of the crew feed
 bun run agent:crew -- runs --pr 7      # each run's round, RESULT, tokens and open command
 bun run agent:crew -- open --run 12    # reopen a run as a chat (or --pr 7 --reviewer rev2 --round 2)
@@ -352,8 +380,10 @@ restart never prompts twice. Only one pass reads and acts at a time. It holds
 if the process dies. A second watcher or an overlapping `pass` waits, then
 reads after the first has acted. Each step is committed as soon as it happens,
 so a crash never forgets a prompt that was already sent. A scoped `pass --pr`
-acts only on the PRs it read. Run logs are kept in `runs/`. The watcher never pushes, merges, approves or writes to
-GitHub; the fresh reviewers post their own reviews.
+acts only on the PRs it read. Run logs are kept in `runs/`. On GitHub the
+watcher only sets its two `crew/*` marks and posts its signed `[crew]`
+comments; it never pushes, merges or approves, and the fresh reviewers post
+their own reviews.
 
 Source: [`scripts/agent/crew.ts`](../scripts/agent/crew.ts) and
 [`scripts/agent/crew/`](../scripts/agent/crew/).

@@ -16,6 +16,7 @@ import {
   parseOptions,
   promptable,
   roundLabel,
+  showStatus,
   status,
   type Seat,
   seats,
@@ -34,6 +35,7 @@ import {
   type CrewSettings,
   digest,
   isOnHold,
+  mergeReady,
   plan,
   SETTINGS_DEFAULTS,
 } from "./crew/plan";
@@ -62,6 +64,7 @@ import {
 import { config, confirm, input, NOW, SHA, type Post } from "./gate/cases";
 import type { Run } from "./gate/observe";
 import { evaluate, type GateInput } from "./gate/predicate";
+import { openStore, recordPass } from "./gate/store";
 
 const ROSTER = {
   rev2: { model: "gpt-6.1-sol", effort: "xhigh" },
@@ -364,6 +367,43 @@ describe("plan", () => {
     expect(actions.map((a) => [a.kind, a.target])).toEqual([["ci", "towncx"]]);
   });
 
+  test("a finished head is reviewed while the owner judges a CI rerun", () => {
+    // As on #468: one check went green on a rerun, another still fails.
+    const rerun = town({
+      head: SHA.reviewed,
+      posts: [],
+      checks: [
+        { name: "Delivery checks", state: "pass", required: true },
+        { name: "Validation scope", state: "fail", required: false },
+      ],
+      attempts: [
+        {
+          runId: 11,
+          attempt: 1,
+          name: "Delivery checks",
+          conclusion: "failure",
+          completedAt: NOW - 600_000,
+        },
+      ],
+    });
+    const kinds = planned(rerun).map((a) => [a.kind, a.target]);
+    expect(kinds).toContainEqual(["review", "rev2"]);
+    expect(kinds).toContainEqual(["review", "rev-astra"]);
+    expect(kinds).toContainEqual(["judgment", "owner"]);
+    expect(kinds).toContainEqual(["ci", "towncx"]);
+    // Still running: the rerun question waits for the checks to finish.
+    const running = town({
+      head: SHA.reviewed,
+      posts: [],
+      attempts: rerun.attempts,
+      checks: [
+        { name: "Delivery checks", state: "pass", required: true },
+        { name: "Validation scope", state: "pending", required: false },
+      ],
+    });
+    expect(planned(running).some((a) => a.kind === "review")).toBe(false);
+  });
+
   test("red CI waits while another check is still running", () => {
     const actions = planned(
       town({
@@ -618,6 +658,140 @@ describe("delivery", () => {
     );
     pass(value, NOW + 120_000);
     expect(prompts()).toHaveLength(1);
+  });
+
+  test("a held or out-of-scope PR's waiting steps retire and return on release", () => {
+    const value = town({
+      head: SHA.reviewed,
+      posts: [
+        open(SHA.reviewed),
+        confirm("rev-astra", SHA.reviewed),
+        confirm("rev-opus", SHA.reviewed),
+      ],
+    });
+    live = live.map((seat) =>
+      seat.name === "towncx" ? { ...seat, status: "working" } : seat,
+    );
+    pass(value);
+    const waiting = () =>
+      actionsIn(crew, ["pending"]).filter((entry) => entry.pr === value.number);
+    expect(waiting().map((entry) => entry.kind)).toEqual(["fix"]);
+    pass({ ...value, labels: ["pod:town", "on-hold"] }, NOW + 60_000);
+    expect(waiting()).toEqual([]);
+    expect(readFileSync(join(dir, "feed.log"), "utf8")).toContain(
+      "retired fix towncx: on hold",
+    );
+    pass(value, NOW + 120_000);
+    expect(waiting().map((entry) => entry.kind)).toEqual(["fix"]);
+    pass({ ...value, labels: ["pod:chat"] }, NOW + 180_000);
+    expect(waiting()).toEqual([]);
+    live = live.map((seat) =>
+      seat.name === "towncx" ? { ...seat, status: "idle" } : seat,
+    );
+    pass(value, NOW + 240_000);
+    expect(prompts()).toHaveLength(1);
+  });
+
+  const statuses = () =>
+    calls
+      .filter((argv) => argv[0] === "gh" && argv[4]?.includes("/statuses/"))
+      .map((argv) => ({
+        sha: argv[4]!.split("/").pop(),
+        state: argv[6]!.slice(6),
+        context: argv[8]!.slice(8),
+        description: argv[10]!.slice(12),
+      }));
+  const comments = () =>
+    calls.filter((argv) => argv[0] === "gh" && argv[4]?.endsWith("/comments"));
+  const trio = (head: string) =>
+    ["rev2", "rev-astra", "rev-opus"].map((name) => confirm(name, head));
+
+  test("marks a reviewed READY head merge-ready once; a new head carries no mark", () => {
+    const ready = town({ head: SHA.reviewed, posts: trio(SHA.reviewed) });
+    pass(ready);
+    pass(ready, NOW + 60_000);
+    expect(statuses()).toEqual([
+      {
+        sha: SHA.reviewed,
+        state: "success",
+        context: "crew/merge-ready",
+        description: `READY at ${SHA.reviewed.slice(0, 7)}; confirmed by rev2, rev-astra, rev-opus`,
+      },
+    ]);
+    // A push leaves the mark on the old head; the new one isn't marked.
+    pass(
+      town({
+        head: SHA.fixed,
+        commits: [SHA.reviewed, SHA.fixed],
+        posts: trio(SHA.reviewed),
+      }),
+      NOW + 120_000,
+    );
+    expect(statuses()).toHaveLength(1);
+    // Held on the same head: the mark is taken back.
+    pass({ ...ready, labels: ["pod:town", "on-hold"] }, NOW + 180_000);
+    expect(statuses().at(-1)).toMatchObject({
+      sha: SHA.reviewed,
+      state: "pending",
+      context: "crew/merge-ready",
+    });
+  });
+
+  test("a PR waiting on the owner is marked and signed once, and unmarked when it clears", () => {
+    const rerun = town({
+      head: SHA.reviewed,
+      posts: trio(SHA.reviewed),
+      attempts: [
+        {
+          runId: 11,
+          attempt: 1,
+          name: "Delivery checks",
+          conclusion: "failure",
+          completedAt: NOW - 600_000,
+        },
+      ],
+    });
+    pass(rerun);
+    pass(rerun, NOW + 60_000);
+    expect(statuses()).toEqual([
+      expect.objectContaining({
+        state: "pending",
+        context: "crew/needs-owner",
+        description: expect.stringContaining(
+          "Needs the owner: Delivery checks: 1 failed attempt retained",
+        ),
+      }),
+    ]);
+    expect(comments()).toHaveLength(1);
+    const body = comments()[0]!.at(-1)!;
+    expect(body).toStartWith("body=[crew] NEEDS-OWNER #7 at ");
+    // The owner judged it; the rerun is accepted, so the PR is READY.
+    const judged = town({ head: SHA.reviewed, posts: trio(SHA.reviewed) });
+    pass(judged, NOW + 120_000);
+    expect(statuses().slice(1)).toEqual([
+      expect.objectContaining({
+        state: "success",
+        context: "crew/merge-ready",
+      }),
+      expect.objectContaining({
+        state: "success",
+        context: "crew/needs-owner",
+        description: "Nothing waits on the owner",
+      }),
+    ]);
+    expect(comments()).toHaveLength(1);
+  });
+
+  test("a READY PR with no finished review is never merge-ready", () => {
+    expect(
+      mergeReady({
+        number: 7,
+        head: SHA.reviewed,
+        state: "READY",
+        conditions: [{ id: "checks", state: "met", detail: "" }],
+        notes: [],
+      } as unknown as Parameters<typeof mergeReady>[0]),
+    ).toBe(false);
   });
 
   test("never types into a never-prompt seat; the owner hears instead", () => {
@@ -1608,7 +1782,7 @@ describe("delivery", () => {
 });
 
 describe("held status", () => {
-  test("status lists open on-hold PRs from the latest pass", () => {
+  test("status lists open on-hold PRs as last read", () => {
     const crew = openCrewStore(":memory:");
     const lines: string[] = [];
     const held = town({
@@ -1617,10 +1791,77 @@ describe("held status", () => {
       labels: ["pod:town", "on-hold"],
     });
     status(crew, (line) => lines.push(line), NOW, SETTINGS, [held]);
-    expect(lines[0]).toBe("1 held pull request(s) (latest crew pass)");
+    expect(lines[0]).toBe("1 held pull request(s) (as last read)");
     expect(lines[1]).toContain(`#${held.number}`);
     expect(lines[1]).toContain(held.item?.title ?? "");
     crew.close();
+  });
+
+  test("a held PR stays listed after a scoped pass over another PR", () => {
+    const dir = mkdtempSync(join(tmpdir(), "crew-status-"));
+    try {
+      writeFileSync(
+        join(dir, "config.json"),
+        JSON.stringify({ ...config, crew: SETTINGS }),
+      );
+      const held = town({
+        head: SHA.reviewed,
+        posts: [],
+        labels: ["pod:town", "on-hold"],
+      });
+      const busy = { ...town({ head: SHA.reviewed, posts: [] }), number: 8 };
+      const gate = openStore(join(dir, "gate.sqlite"));
+      const record = (trigger: string, inputs: GateInput[]) =>
+        recordPass(gate, {
+          trigger,
+          config,
+          startedAt: NOW,
+          finishedAt: NOW,
+          inputs,
+          verdicts: inputs.map((value) => evaluate(value, config, NOW)),
+        });
+      record("open", [held, busy]);
+      record("pr 8", [busy]);
+      gate.close();
+      const crew = openCrewStore(":memory:");
+      const lines: string[] = [];
+      showStatus(crew, dir, (line) => lines.push(line), NOW);
+      expect(lines[0]).toBe("1 held pull request(s) (as last read)");
+      expect(lines[1]).toContain("#7");
+      // A later read that sees it closed drops it.
+      const reopened = openStore(join(dir, "gate.sqlite"));
+      recordPass(reopened, {
+        trigger: "pr 7",
+        config,
+        startedAt: NOW,
+        finishedAt: NOW,
+        inputs: [{ ...held, state: "CLOSED" }],
+        verdicts: [evaluate({ ...held, state: "CLOSED" }, config, NOW)],
+      });
+      reopened.close();
+      lines.length = 0;
+      showStatus(crew, dir, (line) => lines.push(line), NOW);
+      expect(lines[0]).toBe("0 held pull request(s) (as last read)");
+      crew.close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("status shows the ledger without a configuration or a pass", () => {
+    const dir = mkdtempSync(join(tmpdir(), "crew-status-"));
+    try {
+      const crew = openCrewStore(":memory:");
+      const lines: string[] = [];
+      showStatus(crew, dir, (line) => lines.push(line), NOW);
+      expect(lines[0]).toBe(
+        "held pull requests unknown: no crew pass or configuration yet",
+      );
+      expect(lines[1]).toBe("0 open action(s)");
+      crew.close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

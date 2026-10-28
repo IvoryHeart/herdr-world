@@ -217,6 +217,50 @@ describe("pull request detail", () => {
     ]);
   });
 
+  test("the crew watcher's crew/ statuses are marks, not checks", () => {
+    const base = detailNode();
+    const rollup = (
+      base.latest as {
+        nodes: {
+          commit: { statusCheckRollup: { contexts: { nodes: unknown[] } } };
+        }[];
+      }
+    ).nodes[0]!.commit.statusCheckRollup.contexts;
+    const marked = detailNode({
+      latest: {
+        nodes: [
+          {
+            commit: {
+              oid: HEAD,
+              statusCheckRollup: {
+                contexts: {
+                  totalCount: 4,
+                  nodes: [
+                    ...rollup.nodes,
+                    {
+                      __typename: "StatusContext",
+                      context: "crew/needs-owner",
+                      state: "PENDING",
+                      createdAt: "2026-01-01T12:20:00Z",
+                      isRequired: false,
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        ],
+      },
+    });
+    const detail = parseDetail(item(7), marked);
+    expect(detail.checks.map((check) => check.name)).toEqual([
+      "Unit tests",
+      "Browser suite",
+      "external/lint",
+    ]);
+    expect(detail.checksTruncated).toBe(false);
+  });
+
   test("a change outside the files World read is unknown, not a non-UI change", () => {
     const many = detailNode({
       files: { totalCount: 300, nodes: [{ path: "server/src/x.ts" }] },

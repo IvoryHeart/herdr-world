@@ -154,6 +154,95 @@ export function busyPrs(
   return [...new Set(busy)].sort((a, b) => a - b);
 }
 
+/** Gate conditions that ask the owner about a CI rerun, not about the code. */
+const CI_JUDGMENTS = new Set(["rerun", "aggregate"]);
+
+/**
+ * The watcher's marks: commit statuses on a PR's head, which start no CI
+ * run (a label would) and which a new push leaves behind. The gate and the
+ * PR card don't count them as checks.
+ */
+export const MERGE_READY = "crew/merge-ready";
+export const NEEDS_OWNER = "crew/needs-owner";
+
+export type Mark = {
+  context: typeof MERGE_READY | typeof NEEDS_OWNER;
+  state: "success" | "pending";
+  description: string;
+  /** Set only to take back an earlier mark on the same head. */
+  revokes?: true;
+};
+
+/**
+ * Safe to merge: READY with at least one required review, every one of them
+ * confirmed on this head. A PR no reviewer has finished never qualifies,
+ * even when no reviewers are configured for it.
+ */
+export function mergeReady(verdict: Verdict) {
+  const reviews = verdict.conditions.filter((entry) =>
+    entry.id.startsWith("review:"),
+  );
+  return (
+    verdict.state === "READY" &&
+    reviews.length > 0 &&
+    reviews.every((entry) => entry.state === "met")
+  );
+}
+
+/** GitHub caps a status description at 140 characters. */
+const short = (text: string) =>
+  text.length > 140 ? `${text.slice(0, 139)}…` : text;
+
+/**
+ * The marks an open PR's head should carry: `crew/merge-ready` while it is
+ * in scope, not held and `mergeReady`, and `crew/needs-owner` while it is in
+ * scope and the owner has `causes` to decide. A mark that no longer holds is
+ * taken back, which only matters if it was set on this head.
+ */
+export function marks(
+  verdict: Verdict,
+  input: GateInput,
+  settings: CrewSettings,
+  causes: string[],
+): Mark[] {
+  if (input.state !== "OPEN" || !verdict.head) return [];
+  const watched = inScope(input, settings) && !isOnHold(input);
+  const reviewers = verdict.conditions
+    .filter((entry) => entry.id.startsWith("review:"))
+    .map((entry) => entry.id.slice(7));
+  const ready: Mark =
+    watched && mergeReady(verdict)
+      ? {
+          context: MERGE_READY,
+          state: "success",
+          description: short(
+            `READY at ${shortSha(verdict.head)}; confirmed by ${reviewers.join(", ")}`,
+          ),
+        }
+      : {
+          context: MERGE_READY,
+          state: "pending",
+          description: short(`Not merge-ready: ${verdict.state}`),
+          revokes: true,
+        };
+  const owner: Mark =
+    watched && causes.length
+      ? {
+          context: NEEDS_OWNER,
+          state: "pending",
+          description: short(
+            `Needs the owner: ${causes[0]}${causes.length > 1 ? ` (+${causes.length - 1} more)` : ""}`,
+          ),
+        }
+      : {
+          context: NEEDS_OWNER,
+          state: "success",
+          description: "Nothing waits on the owner",
+          revokes: true,
+        };
+  return [ready, owner];
+}
+
 /** The owner can park a PR with the `on-hold` label without leaving watch scope. */
 export function isOnHold(input: GateInput) {
   return input.labels.includes("on-hold");
@@ -287,8 +376,15 @@ export function plan(
     );
 
   // Reviewers look at a head CI passed and GitHub knows it can merge: a
-  // red or conflicting head would only be reviewed again.
-  const reviewable = state("checks") === "met" && state("mergeable") === "met";
+  // red or conflicting head would only be reviewed again. A head whose
+  // checks have finished while the owner judges a rerun is reviewed too:
+  // the rerun question doesn't change the head, and READY still needs both.
+  const ciJudgment = verdict.conditions.some(
+    (entry) => CI_JUDGMENTS.has(entry.id) && entry.state === "judgment",
+  );
+  const reviewable =
+    state("mergeable") === "met" &&
+    (state("checks") === "met" || (ciJudgment && settled));
   if (reviewable)
     for (const run of runs) {
       const model = settings.roster[run.name];

@@ -161,7 +161,12 @@ export function parseDetail(
   const author = record(pr.author).login;
   const latest = record(record(nodes(pr.latest).at(-1)).commit);
   const contexts = record(record(latest.statusCheckRollup).contexts);
-  const checks = nodes(contexts).map(check).slice(0, MAX_CHECKS);
+  // The crew watcher's commit statuses mark a head for the owner; they
+  // report on the checks, so they never count as one.
+  const checks = nodes(contexts)
+    .filter((node) => !crewMark(node))
+    .map(check)
+    .slice(0, MAX_CHECKS);
   const files = record(pr.files);
   const paths = nodes(files)
     .map((node) => node.path)
@@ -177,7 +182,9 @@ export function parseDetail(
       ? (compare.aheadBy as number)
       : null,
     checks,
-    checksTruncated: Number(contexts.totalCount) > checks.length,
+    checksTruncated:
+      Number(contexts.totalCount) >
+      Math.min(nodes(contexts).length, MAX_CHECKS),
     reviewers: reviewerResults(
       item.number!,
       trustedPosts(posts),
@@ -222,6 +229,16 @@ export function countImages(body: unknown) {
   return (
     (body.match(/!\[[^\]]*\]\([^)\s]+[^)]*\)/gu)?.length ?? 0) +
     (body.match(/<img\b/giu)?.length ?? 0)
+  );
+}
+
+/** A `crew/…` commit status the crew watcher sets; see docs/agent-development.md. */
+export function crewMark(node: Record<string, unknown>) {
+  return (
+    node.__typename !== "CheckRun" &&
+    !("conclusion" in node) &&
+    typeof node.context === "string" &&
+    node.context.startsWith("crew/")
   );
 }
 
