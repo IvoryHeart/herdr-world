@@ -1,0 +1,79 @@
+{
+  "sourceCommit": "5dd8c154018ba4c66f335cbbccffb48ac5092753",
+  "fixture": "web/src/sourceFileInspector.browser.tsx",
+  "synthetic": true,
+  "unedited": true,
+  "fixtureFailures": [],
+  "captures": [
+    {
+      "filename": "chat-phone.png",
+      "state": "chat",
+      "width": 390,
+      "height": 844,
+      "sha256": "3fbf24594664438c28b5b3000aa7450ba7df909ad31dae6cfe0354c5bae73c76"
+    },
+    {
+      "filename": "files-phone.png",
+      "state": "files",
+      "width": 390,
+      "height": 844,
+      "sha256": "7479be46e5075771225a9e84bd91fcfa203eae74aa03c5b5a00df1d650c1eb7e"
+    },
+    {
+      "filename": "chat-mac-laptop.png",
+      "state": "chat",
+      "width": 1512,
+      "height": 982,
+      "sha256": "6b58c76393f81944229fae471840a3b07d6827aa4a2a53054537e490cb6794d7"
+    },
+    {
+      "filename": "files-mac-laptop.png",
+      "state": "files",
+      "width": 1512,
+      "height": 982,
+      "sha256": "6fb1753dfeff63ffda5b553d5c0559f516c0d7c4c208c84b6fe7786ad0d63a7f"
+    },
+    {
+      "filename": "chat-linux-half.png",
+      "state": "chat",
+      "width": 1280,
+      "height": 1440,
+      "sha256": "adcc5d41adfd9b1724ffc03f75ddb974f34d1194456e9a86efaaa31ab9242c74"
+    },
+    {
+      "filename": "files-linux-half.png",
+      "state": "files",
+      "width": 1280,
+      "height": 1440,
+      "sha256": "deedf933159170a552f9a2f94989ed1ac06aaf2cf58f96727b7b4c5f5de15996"
+    },
+    {
+      "filename": "chat-linux-wide.png",
+      "state": "chat",
+      "width": 2560,
+      "height": 1440,
+      "sha256": "3080e572c3fb29dff218314c173c2eb616db4cf418789844c9c9bec8af75ee7e"
+    },
+    {
+      "filename": "files-linux-wide.png",
+      "state": "files",
+      "width": 2560,
+      "height": 1440,
+      "sha256": "a8ab054344db6262ac8a6cf9a762f14ba685630132ea306c9a92a3f127559f7a"
+    },
+    {
+      "filename": "chat-portrait.png",
+      "state": "chat",
+      "width": 1440,
+      "height": 2560,
+      "sha256": "708bec707f64057bf32e35f897cd50474dcb1429c245cb7063d4631cfa7838e3"
+    },
+    {
+      "filename": "files-portrait.png",
+      "state": "files",
+      "width": 1440,
+      "height": 2560,
+      "sha256": "df5d7181c7a0b50e0704dea4e369cd92b77a6402330b8f440120c20627e46e0d"
+    }
+  ]
+}
