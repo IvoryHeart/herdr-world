@@ -284,6 +284,10 @@ plans the next step for every PR in scope and takes each step once:
   hold or an unknown mergeable state only pauses steps; they resume when the
   head is eligible again. A reviewer that has just posted finishes its run. A
   PR reopened on the same head is planned afresh.
+- **Parking a PR.** Add the `on-hold` label to leave a PR visible to the watcher
+  while it plans no new prompts, reviewer runs or owner notices for it. Remove
+  the label to resume on the next pass. `status` lists held PRs from the latest
+  recorded pass.
 - **Which checks count.** An attempt that a later attempt of the same
   workflow replaced, as a rerun does, doesn't count. Same-name checks from
   runs the gate can't order, such as two workflows, all count: the gate keeps
@@ -321,7 +325,7 @@ plans the next step for every PR in scope and takes each step once:
 ```bash
 bun run agent:crew -- pass --dry-run   # print the plan; change nothing
 bun run agent:crew -- watch            # every PR each 300 s (--interval), busy PRs each 60 s (--busy-interval)
-bun run agent:crew -- status           # open steps and recent reviewer runs, with token usage
+bun run agent:crew -- status           # held PRs, open steps and recent reviewer runs, with token usage
 bun run agent:crew -- feed             # the last lines of the crew feed
 bun run agent:crew -- runs --pr 7      # each run's round, RESULT, tokens and open command
 bun run agent:crew -- open --run 12    # reopen a run as a chat (or --pr 7 --reviewer rev2 --round 2)
