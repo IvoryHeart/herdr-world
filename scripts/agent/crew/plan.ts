@@ -122,6 +122,32 @@ export function currentChecks(input: GateInput) {
   return checks.filter((check) => !replaced.has(check));
 }
 
+/**
+ * In-scope open PRs where something can change within minutes: a check
+ * still running, an open step such as a reviewer at work, or a READY PR the
+ * owner may merge, which closes its pod. The watcher reads these more often.
+ */
+export function busyPrs(
+  verdicts: Verdict[],
+  inputs: GateInput[],
+  settings: CrewSettings,
+  open: number[],
+) {
+  const byNumber = new Map(inputs.map((input) => [input.number, input]));
+  const busy: number[] = [];
+  for (const verdict of verdicts) {
+    const input = byNumber.get(verdict.number);
+    if (!input || input.state !== "OPEN" || !inScope(input, settings)) continue;
+    if (
+      verdict.state === "READY" ||
+      open.includes(verdict.number) ||
+      currentChecks(input).some((check) => check.state === "pending")
+    )
+      busy.push(verdict.number);
+  }
+  return [...new Set(busy)].sort((a, b) => a - b);
+}
+
 /** A check the watcher has seen running for `minutes`. */
 export type RunningCheck = { name: string; url: string; minutes: number };
 

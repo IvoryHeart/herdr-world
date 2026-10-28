@@ -306,13 +306,21 @@ plans the next step for every PR in scope and takes each step once:
   and a seat that keeps refusing prompts. Each is shown once, and one that
   Herdr didn't show is retried on the next pass. A notice about a seat is
   dropped once its cause clears, for example when the seat takes the prompt.
+- **How often it looks.** `watch` reads every open PR once every `--interval`
+  seconds (300 by default), counted from the start of one pass to the start
+  of the next, so a slow read doesn't stretch the gap. In between, it reads
+  only the busy PRs every `--busy-interval` seconds (60 by default). A PR is
+  busy while a check runs, a step is open (such as a reviewer at work) or it
+  is READY and may be merged. A busy pass takes seconds, so a green check, a
+  posted review or a merge is acted on within about a minute. Set
+  `--busy-interval` to the interval to turn busy passes off.
 - **Where the owner reads it.** Every plan, prompt, run and notification is a
   line in `.agents/crew-gate/feed.log`, so the owner can follow the crew
   without any agent spending a turn on it.
 
 ```bash
 bun run agent:crew -- pass --dry-run   # print the plan; change nothing
-bun run agent:crew -- watch            # a pass every 300 seconds (--interval)
+bun run agent:crew -- watch            # every PR each 300 s (--interval), busy PRs each 60 s (--busy-interval)
 bun run agent:crew -- status           # open steps and recent reviewer runs, with token usage
 bun run agent:crew -- feed             # the last lines of the crew feed
 bun run agent:crew -- runs --pr 7      # each run's round, RESULT, tokens and open command
