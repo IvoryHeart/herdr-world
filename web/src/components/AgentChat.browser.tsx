@@ -341,6 +341,31 @@ async function run() {
         ?.textContent === "demo",
       "Assistant text must render as Markdown",
     );
+    const originalChatSize =
+      document.documentElement.style.getPropertyValue("--chat-font-size");
+    try {
+      for (const size of ["19px", "11px"]) {
+        document.documentElement.style.setProperty("--chat-font-size", size);
+        for (const selector of [
+          ".is-user .agent-history-chat-bubble > p",
+          ".is-assistant .agent-history-chat-markdown > p",
+          ".is-assistant .agent-history-chat-markdown strong",
+        ]) {
+          const text = container.querySelector(selector);
+          check(
+            !!text && getComputedStyle(text).fontSize === size,
+            `Chat text size ${size} must apply to ${selector}`,
+          );
+        }
+      }
+    } finally {
+      if (originalChatSize)
+        document.documentElement.style.setProperty(
+          "--chat-font-size",
+          originalChatSize,
+        );
+      else document.documentElement.style.removeProperty("--chat-font-size");
+    }
     check(
       (
         container.querySelector(".agent-history-chat-tools")?.textContent ?? ""

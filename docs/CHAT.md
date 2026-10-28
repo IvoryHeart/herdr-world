@@ -4,6 +4,10 @@ The Inspector's **Chat** tab shows an agent's conversation as messages and lets
 you reply. Chat replaces the History tab. The **Terminal** tab remains a separate
 view that you open on purpose.
 
+Set **Menu → Configuration → Appearance → Chat text** to resize both your
+messages and agent replies. Chat can follow the terminal text size or use its
+own size.
+
 When a reply box is available, explicitly opening or returning to Chat focuses
 it so you can start typing immediately. Desk's J/K previews keep focus in the
 queue. Transcript, session and connection updates do not move your focus. If
