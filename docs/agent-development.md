@@ -232,15 +232,15 @@ plans the next step for every PR in scope and takes each step once:
 | A required check fails and no check is still running | `ACT #N ci` prompt | The author's seat |
 | GitHub reports a conflict, or screenshots are missing | `ACT #N conflict` or `ACT #N screenshots` prompt | The author's seat |
 | A required reviewer has no RESULT, or a newer head needs confirming; checks are green and GitHub reports the head mergeable | A fresh reviewer run | That reviewer's model |
-| READY | A Herdr notification | The owner |
-| A judgment condition, an unknown author, an unsupported roster model or a reviewer run that posted nothing | One `NEEDS-OWNER` notification per distinct cause | The owner |
+| READY | A durable owner item linking to the PR, plus a notification | The owner |
+| A judgment condition, an unknown author, an unsupported roster model or a reviewer run that posted nothing | One durable owner item per distinct cause, plus a notification | The owner |
 
 - **Who the author is.** The branch names the author: `agent/<seat>-…`, or the
   pod lead for `batch/<pod>-<n>`. Set an override per PR in `authors`.
 - **When a seat gets a prompt.** Only when Herdr reports it idle or done and
   it isn't focused, because a prompt types into the seat's input box. Other
   steps wait for a later pass. Seats listed in `neverPrompt` are never
-  prompted; the owner gets a notification instead.
+  prompted; the owner gets an inbox item instead.
 - **How reviewers run.** Each review or confirmation is a fresh, interactive
   `claude` (in auto permission mode) or `codex` session on the seat's roster
   model, in a detached
@@ -303,9 +303,13 @@ plans the next step for every PR in scope and takes each step once:
 - **When a step repeats.** A CI step is keyed by the failed jobs, so a rerun
   that fails again prompts the author again. Every owner notice is an action
   of its own: READY, NEEDS-OWNER, a seat that is missing or never prompted,
-  and a seat that keeps refusing prompts. Each is shown once, and one that
-  Herdr didn't show is retried on the next pass. A notice about a seat is
-  dropped once its cause clears, for example when the seat takes the prompt.
+  and a seat that keeps refusing prompts. Each has one durable inbox item;
+  repeated passes preserve its age and any owner dismissal. Herdr nudges once
+  for a new item and retries failed nudges without losing the item. Every pass
+  clears notices whose cause resolved, including notices already shown. A
+  notice about a seat clears when it takes the prompt; READY clears when the
+  verdict changes, the head changes or the PR closes. A blocked crew seat gets
+  an item pointing to its chat, cleared once it resumes.
 - **How often it looks.** `watch` reads every open PR once every `--interval`
   seconds (300 by default), counted from the start of one pass to the start
   of the next, so a slow read doesn't stretch the gap. In between, it reads
@@ -327,6 +331,56 @@ bun run agent:crew -- runs --pr 7      # each run's round, RESULT, tokens and op
 bun run agent:crew -- open --run 12    # reopen a run as a chat (or --pr 7 --reviewer rev2 --round 2)
 bun run agent:crew -- review --pr 7 --reviewer rev2 --head <sha>   # one fresh reviewer now
 ```
+
+### Owner inbox
+
+`bun run agent:crew -- inbox` lists every open owner item, newest first, from
+both the watcher and the backlog dispatcher. Each line has its ID, PR or seat
+and reason. Items survive restarts and remain until their cause clears or you
+dismiss them. A dismissed cause stays hidden across repeats; if it clears and
+later recurs, it opens again. Failed GitHub passes retain the previous inbox.
+
+```bash
+bun run agent:crew -- inbox                 # all open items
+bun run agent:crew -- inbox tab             # focus the live Owner inbox Herdr tab
+bun run agent:crew -- inbox open 12         # open the PR in your browser, seat chat or reviewer tab
+bun run agent:crew -- inbox dismiss 12      # dismiss this occurrence
+bun run agent:crew -- inbox --json          # the same records for other consumers
+```
+
+The first new item opens **Owner inbox** as a background Herdr tab and raises a
+notification with a `done` or `request` sound pointing to the list. The tab lists
+updates as the shared store changes. Enter an item ID to open it, `d ID` to
+dismiss it, `r` to refresh, or `q` to quit. Use `inbox tab` to reopen a closed
+tab. Seat actions focus the existing interactive chat; reviewer actions open
+the round's table, falling back to the PR if no table exists. Browser actions
+use the platform's default browser.
+
+The tab is also available through World's **Spaces** view on that Herdr
+connection. Dedicated Town reception and Board presentations follow in #459;
+this change does not add those surfaces or a separate World chime.
+
+The shared SQLite store is `.agents/crew-gate/owner-items.sqlite` in the primary
+checkout, next to `crew.sqlite`. Every worktree uses it. Records include stable
+producer/key identity, reason, PR/seat, action target, creation time and
+notification/dismissal/resolution times. The watcher reconciles only its own
+records, and a PR-scoped pass leaves unobserved PR items alone. Missing Herdr
+seat observations do not clear blocked-seat items.
+
+The dispatcher uses the same commands and store instead of sending toasts:
+
+```bash
+bun run agent:crew -- inbox add --key item:7:stuck --pr 7 --seat example-seat --reason 'No PR after an hour'
+bun run agent:crew -- inbox resolve --key item:7:stuck
+```
+
+Use a stable key for each distinct cause, repeat `add` while it persists, and
+`resolve` as soon as a later pass observes it cleared. Specify exactly one of
+`--seat`, `--url` (an HTTPS link) or `--tab` as the action target. The store
+namespaces dispatcher and watcher keys so neither can resolve the other's
+items. The dispatch runbook is [`.agents/dispatch/BRIEF.md`](../.agents/dispatch/BRIEF.md).
+
+### Crew settings
 
 Settings go under `crew` in the gate's `config.json`:
 

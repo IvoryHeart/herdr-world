@@ -7,6 +7,8 @@ import type { Run } from "./gate/observe";
 import type { GateInput, Verdict } from "./gate/predicate";
 import { openStore } from "./gate/store";
 import { type Deps, realDeps } from "./crew/deps";
+import { inboxCommand } from "./crew/inbox";
+import { syncOwnerItems } from "./crew/notices";
 import {
   type Action,
   authorOf,
@@ -70,6 +72,7 @@ const USAGE = `Usage: bun run agent:crew -- <command> [options]
   watch [--interval SECONDS] [--busy-interval SECONDS]
                                  A pass over every PR every interval (default 300) and,
                                  between them, over busy PRs every busy interval (default 60)
+  inbox [--json]                 Durable owner items; inbox tab opens the live Herdr list
   status                         Open actions and recent reviewer runs
   feed [--lines N]               The last lines of the crew feed (default 40)
   runs [--pr N] [--lines N]      Reviewer runs: round, RESULT, tokens and how to reopen each
@@ -179,7 +182,12 @@ export function crewPass(context: PassContext) {
     const { verdicts, inputs } = context.judge();
     const live = seats(deps.run);
     const names = [
-      ...new Set([...Object.keys(settings.roster), ...live.map((s) => s.name)]),
+      ...new Set([
+        ...Object.keys(settings.roster),
+        ...Object.values(settings.leads),
+        ...Object.values(settings.authors),
+        ...live.map((s) => s.name),
+      ]),
     ];
     const byNumber = new Map(inputs.map((input) => [input.number, input]));
     // How long each running check of an in-scope PR has been running, as
@@ -379,6 +387,7 @@ function act(
   const deliverable = (entry: StoredAction) =>
     keys.has(entry.key.split("|")[0]!);
   deliver(crew, settings, live, authors, deliverable, record, context, say);
+  syncOwnerItems(crew, context, settings, planned, live, authors, say);
 }
 
 /**
@@ -566,53 +575,6 @@ function deliver(
     );
     slots--;
   }
-
-  // Owner notices last, so those raised above go out in this pass. One
-  // Herdr didn't show stays pending and is tried again next pass.
-  for (const entry of pending()) {
-    if (entry.target !== "owner") continue;
-    // A notice about a seat holds only while its step still waits for the
-    // same reason; once the seat takes the prompt or the cause changes, drop it.
-    const [parentKey, suffix] = entry.key.split("|");
-    if (suffix?.startsWith("waits") || suffix === "unreachable") {
-      const parent = getAction(crew, parentKey!);
-      const cause = parent?.detail ?? "";
-      // A bare `waits` suffix comes from stores written before notices
-      // carried their cause; it held only for a missing or never-prompted seat.
-      const holds =
-        parent?.state === "pending" &&
-        (suffix === "unreachable" ||
-          suffix === `waits-${digest(cause)}` ||
-          (suffix === "waits" &&
-            (cause === "no live seat" || cause === "never prompted")));
-      if (!holds) {
-        setAction(crew, entry.key, "superseded", now);
-        say(`#${entry.pr} dropped notice: its cause has cleared`);
-        continue;
-      }
-    }
-    const result = deps.run([
-      "herdr",
-      "notification",
-      "show",
-      entry.kind === "ready"
-        ? `Crew: READY #${entry.pr}`
-        : `Crew: #${entry.pr} needs you`,
-      "--body",
-      entry.text,
-      "--sound",
-      entry.kind === "ready" ? "done" : "request",
-    ]);
-    if (result.code !== 0) {
-      const error = (result.stderr || result.stdout).trim().slice(0, 200);
-      setAction(crew, entry.key, "pending", now, error, true);
-      if (entry.detail !== error)
-        say(`#${entry.pr} notification failed: ${error}`);
-      continue;
-    }
-    setAction(crew, entry.key, "sent", now, null, true);
-    say(`#${entry.pr} told owner: ${entry.text}`);
-  }
 }
 
 export function parseOptions(argv: string[]): Options {
@@ -731,6 +693,7 @@ export function afterPass(
 const numbers = (prs: number[]) => prs.map((pr) => `#${pr}`).join(" ");
 
 export async function main(argv: string[], deps: Deps = realDeps) {
+  if (argv[0] === "inbox") return inboxCommand(argv.slice(1), gateDir(), deps);
   const options = parseOptions(argv);
   const dir = gateDir();
   if (options.command === "review") return review(options, dir, deps);

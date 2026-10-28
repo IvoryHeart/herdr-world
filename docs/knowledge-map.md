@@ -166,7 +166,10 @@ focused tests are beside these modules. The report-only readiness gate,
 [`agent:gate`](../scripts/agent/gate/), reuses World's PR detail parser and
 readiness rules. Use synthetic data in tracked evidence.
 The [`agent:crew`](../scripts/agent/crew.ts) watcher acts on the gate's verdicts
-([guide](agent-development.md#act-on-readiness-with-agentcrew)). The parked
+([guide](agent-development.md#act-on-readiness-with-agentcrew)). Its
+[owner inbox](../scripts/agent/crew/owner-items.ts) is shared with the dispatcher;
+[CLI and Herdr tab](../scripts/agent/crew/inbox.ts) expose the same durable list
+([inbox guide](agent-development.md#owner-inbox)). The parked
 [World primitives research](world-primitives-research.md) generalises it into
 goals, workflows, loops, skills, personas, templates and policies attached at
 each level of the world; it is research, not a contract.

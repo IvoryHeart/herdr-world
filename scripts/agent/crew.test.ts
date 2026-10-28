@@ -27,6 +27,7 @@ import {
   tabClosed,
 } from "./crew/deps";
 import { openChat, runs } from "./crew/review";
+import { dismissItem, listItems, openOwnerStore } from "./crew/owner-items";
 import {
   authorOf,
   busyPrs,
@@ -434,6 +435,8 @@ describe("delivery", () => {
   let lock: ReturnType<typeof openLock>;
 
   beforeEach(() => {
+    for (const suffix of ["", "-wal", "-shm"])
+      rmSync(join(dir, `owner-items.sqlite${suffix}`), { force: true });
     calls = [];
     spawned = [];
     killed = [];
@@ -610,6 +613,98 @@ describe("delivery", () => {
     expect(notices()).toHaveLength(1);
     expect(notices()[0]).toContain("Crew: READY #7");
     expect(prompts()).toHaveLength(0);
+  });
+
+  const inbox = () => {
+    const db = openOwnerStore(join(dir, "owner-items.sqlite"));
+    try {
+      return listItems(db);
+    } finally {
+      db.close();
+    }
+  };
+
+  const readyItem = () =>
+    town({
+      head: SHA.reviewed,
+      posts: ["rev2", "rev-astra", "rev-opus"].map((name) =>
+        confirm(name, SHA.reviewed),
+      ),
+    });
+
+  test("READY is durable before a failed nudge and clears on the same head", () => {
+    refuse.add("notification");
+    pass(readyItem());
+    expect(inbox()).toHaveLength(1);
+    expect(inbox()[0]!.target).toEqual({
+      kind: "url",
+      value: `https://github.com/${config.repo}/pull/7`,
+    });
+    expect(inbox()[0]!.notifiedAt).toBeNull();
+    pass(trioPosted(), NOW + 60_000);
+    expect(inbox()).toEqual([]);
+    expect(notices()).toHaveLength(1);
+  });
+
+  test("dismissal survives repeated crew passes until the cause clears", () => {
+    pass(readyItem());
+    const db = openOwnerStore(join(dir, "owner-items.sqlite"));
+    dismissItem(db, inbox()[0]!.id, NOW + 1);
+    db.close();
+    pass(readyItem(), NOW + 60_000);
+    expect(inbox()).toEqual([]);
+    expect(notices()).toHaveLength(1);
+    pass(trioPosted(), NOW + 120_000);
+    pass(readyItem(), NOW + 180_000);
+    expect(inbox()).toHaveLength(1);
+    expect(notices()).toHaveLength(2);
+  });
+
+  test("a blocked seat appears in one pass and clears when it resumes", () => {
+    live = live.map((seat) =>
+      seat.name === "towncx" ? { ...seat, status: "blocked" } : seat,
+    );
+    pass(trioPosted());
+    const blocked = inbox().find((entry) => entry.key === "blocked:towncx")!;
+    expect(blocked.target).toEqual({ kind: "seat", value: "towncx" });
+    pass(trioPosted(), NOW + 60_000);
+    expect(inbox().filter((entry) => entry.key === blocked.key)).toHaveLength(
+      1,
+    );
+    live = live.map((seat) => ({ ...seat, status: "idle" }));
+    pass(trioPosted(), NOW + 120_000);
+    expect(inbox()).toEqual([]);
+  });
+
+  test("a sent seat notice clears after the prompt succeeds", () => {
+    live = live.filter((seat) => seat.name !== "towncx");
+    pass(trioPosted());
+    expect(inbox()[0]!.target).toEqual({ kind: "seat", value: "towncx" });
+    live.push({ name: "towncx", status: "idle", focused: false });
+    pass(trioPosted(), NOW + 60_000);
+    expect(inbox()).toEqual([]);
+  });
+
+  test("a scoped pass preserves another PR's durable items; closing clears them", () => {
+    pass(readyItem());
+    passOver([{ ...readyItem(), number: 8 }], NOW + 60_000, { prs: [8] });
+    expect(inbox().map((entry) => entry.pr)).toEqual([8, 7]);
+    passOver([], NOW + 120_000);
+    expect(inbox()).toEqual([]);
+  });
+
+  test("a reviewer that posts nothing links to its round table and clears after RESULT", () => {
+    panes = true;
+    pass(town({ head: SHA.reviewed, posts: [] }));
+    const run = activeRuns(crew)[0]!;
+    finishRun(crew, run.id, 0, null, NOW + 1);
+    pass(town({ head: SHA.reviewed, posts: [] }), NOW + 60_000);
+    pass(town({ head: SHA.reviewed, posts: [] }), NOW + 20 * 60_000);
+    expect(
+      inbox().find((entry) => entry.key.endsWith("|stuck"))!.target,
+    ).toMatchObject({ kind: "tab", value: "wP:t1" });
+    pass(readyItem(), NOW + 21 * 60_000);
+    expect(inbox().filter((entry) => entry.key.endsWith("|stuck"))).toEqual([]);
   });
 
   test("starts fresh reviewers up to the limit, with the author for the brief", () => {
