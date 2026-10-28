@@ -16,7 +16,7 @@ their admission across refreshes; queued work coalesces to the latest observatio
 | Task | Open these owners | Focused evidence |
 | --- | --- | --- |
 | Lane routing, ordering or keyboard triage | `partitionDesk` and `DeskView` in [DeskView.tsx](DeskView.tsx); [DeskView.css](DeskView.css) styles `.desk-*`. | [Desk tests](DeskView.test.ts) |
-| Receipts, review marks, observed stops or polling limits | `useTurnReceipts`, `pollingTargets`, `useHandledTurns` and `useObservedStops` in [handoffs.ts](handoffs.ts); the service side is `agent_turn.get` in [agent-sessions.ts](../../../server/src/agent/agent-sessions.ts), with receipt construction in [turn-receipt.ts](../../../server/src/agent/turn-receipt.ts). The service compares the resolved session before reading and rechecks the pane after reading; Triage always covers every agent, while only reads are bounded. | [Desk tests](DeskView.test.ts), [session-fence tests](../../../server/src/agent/agent-sessions.test.ts), [receipt tests](../../../server/src/agent/turn-receipt.test.ts) |
+| Receipts, review marks, observed stops or polling limits | `useTurnReceipts`, `pollingTargets`, `useHandledTurns` and `useObservedStops` in [handoffs.ts](handoffs.ts); the service side is `latestTurnReceipt` in [turn-receipt.ts](../../../server/src/agent/turn-receipt.ts). Triage always covers every agent; only reads are bounded. | [Desk tests](DeskView.test.ts), [receipt tests](../../../server/src/agent/turn-receipt.test.ts) |
 | Questions or live lines read from agent screens | `usePaneScreens`, `screenIdentity`, `questionFromScreen` and `activityFromScreen` in [paneScreen.ts](paneScreen.ts). Excerpts are keyed by pane, runtime generation and session. | [Desk tests](DeskView.test.ts) |
 
 ## Town
