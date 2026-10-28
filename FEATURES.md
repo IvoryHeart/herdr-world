@@ -15,6 +15,14 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
   remain in force. If persistent storage is blocked, only page-lifetime
   deduplication is guaranteed. Manual checking still gives completion feedback
   and remains reachable beside blocked Upgrade entries with visible guidance.
+- A tab keeps running the build it loaded. When the service serves a different
+  build (after an upgrade, rebuild, rollback or restart), a notice names both
+  builds and offers **Reload** or **Later**; **Later** hides it until another
+  build is served. **Menu** shows the tab's build, and the served build when
+  they differ. If part of the app fails to load because its files are gone, a
+  **Reload** notice appears instead of the page reloading itself, and again
+  each time you reopen that part. **Upgrade &
+  restart** still reloads once the restarted service is ready.
 
 ## Visual control plane
 

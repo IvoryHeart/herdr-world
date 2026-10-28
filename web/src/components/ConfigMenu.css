@@ -52,6 +52,11 @@
   font-size: 11px;
 }
 
+.config-summary .config-build {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .config-connection-summary {
   display: inline-flex;
   align-items: center;
