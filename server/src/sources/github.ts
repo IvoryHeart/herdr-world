@@ -51,11 +51,14 @@ export const GITHUB_SIGNED_OUT =
 const GITHUB_FAILED =
   "GitHub did not answer. World keeps the last pull requests and tries again shortly.";
 
+/** Contexts read with each PR's rollup, to leave the crew's marks out of it. */
+const ROLLUP_CONTEXTS = 100;
+
 export const PR_FIELDS = `
   number title url isDraft state updatedAt mergedAt headRefName headRefOid baseRefName reviewDecision mergeable
   repository { nameWithOwner }
   headRepository { nameWithOwner }
-  commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }`;
+  commits(last: 1) { nodes { commit { statusCheckRollup { state contexts(first: ${ROLLUP_CONTEXTS}) { totalCount nodes { __typename ... on CheckRun { status conclusion } ... on StatusContext { context state } } } } } } }`;
 
 export function normalizeMergedDays(value: unknown) {
   if (
@@ -343,9 +346,55 @@ function issueItem(node: Record<string, unknown>): WorkItem | null {
   };
 }
 
+/**
+ * A `crew/…` commit status: the crew watcher's mark on a head, which reports
+ * on the checks and never counts as one (see docs/agent-development.md).
+ */
+export function crewMark(node: Record<string, unknown>) {
+  return (
+    node.__typename !== "CheckRun" &&
+    !("conclusion" in node) &&
+    typeof node.context === "string" &&
+    node.context.startsWith("crew/")
+  );
+}
+
+/**
+ * The head's checks, as GitHub's combined state, except that the crew's own
+ * marks don't count: when a complete read of the contexts holds any, the
+ * state comes from the others. An incomplete read keeps GitHub's state.
+ */
 function rollup(commits: unknown): WorkChecks {
   const last = nodes(commits).at(-1);
-  const state = record(record(record(last?.commit).statusCheckRollup)).state;
+  const summary = record(record(last?.commit).statusCheckRollup);
+  const contexts = record(summary.contexts);
+  const all = nodes(contexts);
+  const own = all.filter(crewMark);
+  if (
+    own.length &&
+    summary.state !== "EXPECTED" &&
+    Number(contexts.totalCount) === all.length
+  ) {
+    const states = all
+      .filter((node) => !crewMark(node))
+      .map((node) =>
+        node.__typename === "CheckRun"
+          ? node.status !== "COMPLETED"
+            ? "PENDING"
+            : ["SUCCESS", "SKIPPED", "NEUTRAL"].includes(
+                  String(node.conclusion),
+                )
+              ? "SUCCESS"
+              : "FAILURE"
+          : String(node.state),
+      );
+    if (states.some((state) => state === "FAILURE" || state === "ERROR"))
+      return "fail";
+    if (states.some((state) => state === "PENDING" || state === "EXPECTED"))
+      return "pending";
+    return states.length ? "pass" : "none";
+  }
+  const state = summary.state;
   if (state === "SUCCESS") return "pass";
   if (state === "FAILURE" || state === "ERROR") return "fail";
   if (state === "PENDING" || state === "EXPECTED") return "pending";

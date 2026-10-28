@@ -184,7 +184,7 @@ function normalizedBody(input: GateInput) {
   };
 }
 
-function restoreInput(
+export function restoreInput(
   bodyJson: string,
   fetchedAt: number,
   detailReadAt: number | null,
@@ -397,6 +397,44 @@ export function passInputs(db: Database, passId: number): GateInput[] {
         "SELECT b.body_json, o.fetched_at, o.detail_read_at, o.detail_expires_at FROM observation o JOIN observation_body b USING (body_hash) WHERE o.pass_id = ? ORDER BY o.id",
       )
       .all(passId) as {
+      body_json: string;
+      fetched_at: number;
+      detail_read_at: number | null;
+      detail_expires_at: number | null;
+    }[]
+  ).map((row) =>
+    restoreInput(
+      row.body_json,
+      row.fetched_at,
+      row.detail_read_at,
+      row.detail_expires_at,
+    ),
+  );
+}
+
+/**
+ * Each PR as last seen since the latest pass over every open PR: that pass's
+ * PRs, updated by the scoped passes after it, which read only busy PRs; with
+ * no such pass yet, every PR any scoped pass read. Null when no pass has been
+ * recorded.
+ */
+export function currentInputs(db: Database): GateInput[] | null {
+  if (!latestPass(db)) return null;
+  const full = db
+    .query(
+      "SELECT id FROM pass WHERE trigger = 'open' ORDER BY id DESC LIMIT 1",
+    )
+    .get() as { id: number } | null;
+  return (
+    db
+      .query(
+        `SELECT b.body_json, o.fetched_at, o.detail_read_at, o.detail_expires_at FROM observation o
+         JOIN observation_body b USING (body_hash)
+         WHERE o.pass_id >= ?1
+           AND o.id = (SELECT MAX(id) FROM observation WHERE pr = o.pr AND pass_id >= ?1)
+         ORDER BY o.pr`,
+      )
+      .all(full?.id ?? 0) as {
       body_json: string;
       fetched_at: number;
       detail_read_at: number | null;

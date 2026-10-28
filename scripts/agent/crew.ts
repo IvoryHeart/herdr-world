@@ -1,11 +1,11 @@
 import type { Database } from "bun:sqlite";
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { shortSha } from "../../shared/pullRequests";
 import { gateDir, loadConfig, runPass } from "./gate";
 import type { Run } from "./gate/observe";
 import type { GateInput, Verdict } from "./gate/predicate";
-import { latestPass, openStore, passInputs } from "./gate/store";
+import { openStore } from "./gate/store";
 import { type Deps, realDeps } from "./crew/deps";
 import {
   type Action,
@@ -16,6 +16,7 @@ import {
   currentChecks,
   inScope,
   isOnHold,
+  marks,
   loadSettings,
   plan,
 } from "./crew/plan";
@@ -26,6 +27,8 @@ import {
   review,
   runs,
 } from "./crew/review";
+import { markDue, markHeads } from "./crew/marks";
+import { showStatus } from "./crew/status";
 import {
   actionsIn,
   activeRuns,
@@ -41,8 +44,6 @@ import {
   openCrewStore,
   openLock,
   openRounds,
-  recentActions,
-  recentRuns,
   roundFor,
   roundPanes,
   roundTabs,
@@ -61,8 +62,10 @@ import {
  * plans what each in-scope pull request needs next, and acts once per
  * action: it prompts the one seat that must act when that seat is idle,
  * runs fresh reviewers, and tells the owner about READY and judgment calls.
- * Everything it does is also written to the crew feed. It never merges,
- * pushes, approves or writes to GitHub itself.
+ * Everything it does is also written to the crew feed. On GitHub it only
+ * sets its own `crew/merge-ready` and `crew/needs-owner` commit statuses and
+ * posts one signed `[crew]` comment per cause it needs the owner for; it
+ * never merges, pushes or approves.
  */
 
 const USAGE = `Usage: bun run agent:crew -- <command> [options]
@@ -71,7 +74,7 @@ const USAGE = `Usage: bun run agent:crew -- <command> [options]
   watch [--interval SECONDS] [--busy-interval SECONDS]
                                  A pass over every PR every interval (default 300) and,
                                  between them, over busy PRs every busy interval (default 60)
-  status                         Open actions and recent reviewer runs
+  status                         Held PRs, open actions and recent reviewer runs
   feed [--lines N]               The last lines of the crew feed (default 40)
   runs [--pr N] [--lines N]      Reviewer runs: round, RESULT, tokens and how to reopen each
   open --run ID | --pr N --reviewer NAME [--round K]
@@ -228,9 +231,31 @@ export function crewPass(context: PassContext) {
     if (dryRun) {
       deps.out(`plan: ${planned.length} action(s) for ${authors.size} PR(s)`);
       for (const entry of planned) deps.out(`  ${entry.kind}\t${entry.text}`);
+      // The same causes a real pass would mark.
+      const owed = new Map<number, string[]>();
+      const root = dirname(dirname(context.dir));
+      for (const entry of planned)
+        if (entry.target === "owner" && entry.kind === "judgment")
+          owe(owed, entry, root);
+      oweHeldNotices(crew, owed, root, parkedPrs(inputs, verdicts, settings));
+      for (const verdict of verdicts) {
+        const input = byNumber.get(verdict.number);
+        if (!input) continue;
+        const due = marks(
+          verdict,
+          input,
+          settings,
+          owed.get(verdict.number) ?? [],
+        );
+        for (const mark of due)
+          if (markDue(crew, verdict.number, verdict.head!, mark))
+            deps.out(
+              `  mark\t#${verdict.number} ${mark.context} ${mark.state}: ${mark.description}`,
+            );
+      }
       return planned;
     }
-    act(crew, context, settings, planned, verdicts, live, authors, say);
+    act(crew, context, settings, planned, verdicts, inputs, live, authors, say);
     return planned;
   };
   return dryRun ? pass() : holdLock(context.lock, pass);
@@ -254,12 +279,37 @@ function act(
   settings: CrewSettings,
   planned: Action[],
   verdicts: Verdict[],
+  inputs: GateInput[],
   live: Seat[],
   authors: Map<number, Item>,
   say: (text: string) => void,
 ) {
   const { prs, now, deps } = context;
+  // Each PR's causes for the owner that hold this pass: a planned judgment,
+  // or a notice raised again because its cause still holds. Local paths
+  // stay local in everything GitHub shows.
+  // A PR parked with a hold or out of the watcher's scope gets no steps and
+  // asks nothing of the owner; a reviewer already working still finishes.
+  const parked = parkedPrs(inputs, verdicts, settings);
+  const causes = new Map<number, string[]>();
+  const root = dirname(dirname(context.dir));
+  const publicText = (text: string) => text.replaceAll(`${root}/`, "");
   const record = (entry: Action) => {
+    if (entry.target === "owner" && parked.has(entry.pr)) return;
+    if (entry.target === "owner" && entry.kind === "judgment") {
+      owe(causes, entry, root);
+      // Its signed GitHub comment, posted once.
+      addAction(
+        crew,
+        {
+          ...entry,
+          key: `${entry.key}|github`,
+          target: "github",
+          text: `[crew] ${publicText(entry.text)}`,
+        },
+        now,
+      );
+    }
     if (addAction(crew, entry, now))
       say(`#${entry.pr} plan ${entry.kind} ${entry.target}: ${entry.text}`);
   };
@@ -337,6 +387,15 @@ function act(
     say(`#${waiting.pr} superseded ${waiting.kind} ${waiting.target}`);
   }
 
+  // A PR parked with a hold or out of the watcher's scope gets no steps, so
+  // the ones still waiting are retired; planning them again revives them.
+  for (const waiting of actionsIn(crew, ["pending"])) {
+    const why = parked.get(waiting.pr);
+    if (!why) continue;
+    setAction(crew, waiting.key, "superseded", now, why);
+    say(`#${waiting.pr} retired ${waiting.kind} ${waiting.target}: ${why}`);
+  }
+
   // A pod lasts as long as its PR: each round's tab stays, stopped runs
   // included, for the owner to read until the PR merges or closes.
   // Its tabs close first, chats reopened from its runs included, then the
@@ -380,6 +439,88 @@ function act(
   const deliverable = (entry: StoredAction) =>
     keys.has(entry.key.split("|")[0]!);
   deliver(crew, settings, live, authors, deliverable, record, context, say);
+
+  // A notice about a seat that still holds keeps the owner's mark on.
+  oweHeldNotices(crew, causes, root, parked);
+  markHeads(crew, context, settings, verdicts, inputs, causes, say);
+}
+
+/**
+ * The open PRs that get no steps: held (by label or `agent:gate hold`) or
+ * out of the watcher's scope, each with why.
+ */
+function parkedPrs(
+  inputs: GateInput[],
+  verdicts: Verdict[],
+  settings: CrewSettings,
+) {
+  const parked = new Map<number, string>();
+  for (const input of inputs) {
+    if (input.state !== "OPEN") continue;
+    const verdict = verdicts.find((entry) => entry.number === input.number);
+    const held =
+      isOnHold(input) ||
+      verdict?.conditions.some(
+        (entry) => entry.id === "hold" && entry.state === "unmet",
+      );
+    if (!inScope(input, settings)) parked.set(input.number, "out of scope");
+    else if (held) parked.set(input.number, "on hold");
+  }
+  return parked;
+}
+
+/**
+ * Adds what a PR waits on the owner for, as GitHub may show it: without
+ * local paths or the `NEEDS-OWNER #N at <sha>:` prefix.
+ */
+function owe(
+  causes: Map<number, string[]>,
+  entry: { pr: number; text: string },
+  root: string,
+) {
+  causes.set(entry.pr, [
+    ...(causes.get(entry.pr) ?? []),
+    entry.text
+      .replaceAll(`${root}/`, "")
+      .replace(/^(?:NEEDS-OWNER )?#\d+ (?:at \w+: )?/u, ""),
+  ]);
+}
+
+/** A notice about a seat whose cause still holds also waits on the owner. */
+function oweHeldNotices(
+  crew: Database,
+  causes: Map<number, string[]>,
+  root: string,
+  parked: Map<number, string>,
+) {
+  for (const entry of actionsIn(crew, ["pending", "sent"]))
+    if (
+      entry.target === "owner" &&
+      !parked.has(entry.pr) &&
+      !causes.get(entry.pr)?.length &&
+      noticeHolds(crew, entry) === true
+    )
+      owe(causes, entry, root);
+}
+
+/**
+ * Whether a notice about a seat still holds: only while its step waits for
+ * the same reason. Null for a notice that isn't about a seat.
+ */
+function noticeHolds(crew: Database, entry: StoredAction) {
+  const [parentKey, suffix] = entry.key.split("|");
+  if (!suffix?.startsWith("waits") && suffix !== "unreachable") return null;
+  const parent = getAction(crew, parentKey!);
+  const cause = parent?.detail ?? "";
+  // A bare `waits` suffix comes from stores written before notices
+  // carried their cause; it held only for a missing or never-prompted seat.
+  return (
+    parent?.state === "pending" &&
+    (suffix === "unreachable" ||
+      suffix === `waits-${digest(cause)}` ||
+      (suffix === "waits" &&
+        (cause === "no live seat" || cause === "never prompted")))
+  );
 }
 
 /**
@@ -568,29 +709,49 @@ function deliver(
     slots--;
   }
 
+  // Each owner notice's signed comment, once, so GitHub shows what the PR
+  // waits for. One whose notice was dropped before it went out is dropped
+  // too; one GitHub refused is tried again next pass.
+  const repo = loadConfig(context.configPath).repo;
+  for (const entry of pending()) {
+    if (entry.target !== "github") continue;
+    const owner = getAction(crew, entry.key.slice(0, -"|github".length));
+    if (
+      owner?.state === "superseded" ||
+      (owner && noticeHolds(crew, owner) === false)
+    ) {
+      setAction(crew, entry.key, "superseded", now);
+      continue;
+    }
+    const result = deps.run([
+      "gh",
+      "api",
+      "-X",
+      "POST",
+      `repos/${repo}/issues/${entry.pr}/comments`,
+      "-f",
+      `body=${entry.text}`,
+    ]);
+    if (result.code === 0) {
+      setAction(crew, entry.key, "sent", now, null, true);
+      say(`#${entry.pr} commented: ${entry.text}`);
+    } else {
+      const error = (result.stderr || result.stdout).trim().slice(0, 200);
+      setAction(crew, entry.key, "pending", now, error, true);
+      if (entry.detail !== error) say(`#${entry.pr} comment failed: ${error}`);
+    }
+  }
+
   // Owner notices last, so those raised above go out in this pass. One
   // Herdr didn't show stays pending and is tried again next pass.
   for (const entry of pending()) {
     if (entry.target !== "owner") continue;
     // A notice about a seat holds only while its step still waits for the
     // same reason; once the seat takes the prompt or the cause changes, drop it.
-    const [parentKey, suffix] = entry.key.split("|");
-    if (suffix?.startsWith("waits") || suffix === "unreachable") {
-      const parent = getAction(crew, parentKey!);
-      const cause = parent?.detail ?? "";
-      // A bare `waits` suffix comes from stores written before notices
-      // carried their cause; it held only for a missing or never-prompted seat.
-      const holds =
-        parent?.state === "pending" &&
-        (suffix === "unreachable" ||
-          suffix === `waits-${digest(cause)}` ||
-          (suffix === "waits" &&
-            (cause === "no live seat" || cause === "never prompted")));
-      if (!holds) {
-        setAction(crew, entry.key, "superseded", now);
-        say(`#${entry.pr} dropped notice: its cause has cleared`);
-        continue;
-      }
+    if (noticeHolds(crew, entry) === false) {
+      setAction(crew, entry.key, "superseded", now);
+      say(`#${entry.pr} dropped notice: its cause has cleared`);
+      continue;
     }
     const result = deps.run([
       "herdr",
@@ -663,58 +824,6 @@ export function parseOptions(argv: string[]): Options {
   return options;
 }
 
-export function status(
-  crew: Database,
-  out: (text: string) => void,
-  now: number,
-  settings: CrewSettings,
-  held: GateInput[] = [],
-  gateStoreBytes = 0,
-) {
-  const heldPrs = held
-    .filter(
-      (input) =>
-        input.state === "OPEN" && inScope(input, settings) && isOnHold(input),
-    )
-    .sort((a, b) => a.number - b.number);
-  out(`${heldPrs.length} held pull request(s) (latest crew pass)`);
-  for (const input of heldPrs)
-    out(`  #${input.number}\t${input.item?.title ?? ""}`.trimEnd());
-  out(`gate store: ${formatBytes(gateStoreBytes)}`);
-  const open = actionsIn(crew, ["pending", "running"]);
-  out(`${open.length} open action(s)`);
-  for (const entry of open)
-    out(
-      `  ${entry.state}\t#${entry.pr} ${entry.kind} ${entry.target}${entry.detail ? ` (${entry.detail})` : ""}`,
-    );
-  out("recent actions");
-  for (const entry of recentActions(crew, 10))
-    out(
-      `  ${entry.state}\t#${entry.pr} ${entry.kind} ${entry.target} ${Math.round((now - entry.updatedAt) / 60_000)} min ago`,
-    );
-  out("recent runs");
-  for (const entry of recentRuns(crew, 10))
-    out(
-      `  run ${entry.id}\t#${entry.pr} ${entry.reviewer} @${shortSha(entry.head)} ${entry.finishedAt === null ? "running" : `exit ${entry.exitCode}`}${entry.usage ? ` usage ${entry.usage}` : ""}`,
-    );
-}
-
-const formatBytes = (bytes: number) =>
-  bytes < 1024
-    ? `${bytes} B`
-    : bytes < 1024 ** 2
-      ? `${(bytes / 1024).toFixed(1)} KiB`
-      : bytes < 1024 ** 3
-        ? `${(bytes / 1024 ** 2).toFixed(1)} MiB`
-        : `${(bytes / 1024 ** 3).toFixed(1)} GiB`;
-
-function storeSize(path: string) {
-  return [path, `${path}-wal`, `${path}-shm`].reduce(
-    (total, file) => total + (existsSync(file) ? statSync(file).size : 0),
-    0,
-  );
-}
-
 /**
  * When the watcher's next pass starts and which PRs it reads, `null` being
  * every PR. A pass over every PR starts `interval` seconds after the last
@@ -771,21 +880,7 @@ export async function main(argv: string[], deps: Deps = realDeps) {
   const crew = openCrewStore(join(dir, "crew.sqlite"));
   try {
     if (options.command === "status") {
-      const gate = openStore(join(dir, "gate.sqlite"));
-      const gatePath = join(dir, "gate.sqlite");
-      try {
-        const pass = latestPass(gate);
-        status(
-          crew,
-          deps.out,
-          Date.now(),
-          loadSettings(join(dir, "config.json")),
-          pass ? passInputs(gate, pass.id) : [],
-          storeSize(gatePath),
-        );
-      } finally {
-        gate.close();
-      }
+      showStatus(crew, dir, deps.out, Date.now());
       return 0;
     }
     if (options.command === "runs") {

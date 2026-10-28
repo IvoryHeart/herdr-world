@@ -15,6 +15,14 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
   remain in force. If persistent storage is blocked, only page-lifetime
   deduplication is guaranteed. Manual checking still gives completion feedback
   and remains reachable beside blocked Upgrade entries with visible guidance.
+- A tab keeps running the build it loaded. When the service serves a different
+  build (after an upgrade, rebuild, rollback or restart), a notice names both
+  builds and offers **Reload** or **Later**; **Later** hides it until another
+  build is served. **Menu** shows the tab's build, and the served build when
+  they differ. If part of the app fails to load because its files are gone, a
+  **Reload** notice appears instead of the page reloading itself, and again
+  each time you reopen that part. **Upgrade &
+  restart** still reloads once the restarted service is ready.
 
 ## Visual control plane
 
@@ -61,6 +69,14 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     Drag its inner edge to resize it; Town remembers the width. It can be
     undocked, and keeps the dock it was left with. On a phone, the Chat view
     shows only its own composer, without the terminal key bar.
+  - In Town, Board and Desk, local source links in Chat open the same
+    Inspector's **Files** at the referenced line. Relative links use the selected
+    agent worktree; unavailable
+    or outside-worktree links offer **Choose a worktree**. Web links stay web links.
+    Bare filenames use known source/doc formats with a code, line-number or
+    standard-document hint; commands and lists keep individual source links.
+    Ordinary dotted prose and unrelated code identifiers stay text.
+    Spaces keeps ordinary Markdown navigation without an agent-worktree chooser.
   - An agent's known PR announcement or current work claim can show a compact
     pull request card in Chat. **Details** has CI, reviews and owner actions;
     **Ask the author to fix** sends `↳ #N` to the author in this conversation.

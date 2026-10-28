@@ -6,7 +6,7 @@ import type {
 } from "../../../shared/pullRequests";
 import type { WorkItem } from "../../../shared/worldSources";
 import { PULL_REQUEST_DETAIL_MAX_AGE_MS } from "../../../shared/pullRequestFreshness";
-import { record } from "./github";
+import { crewMark, record } from "./github";
 
 /**
  * Your open pull requests, read in detail: checks on the head, reviewer
@@ -161,7 +161,12 @@ export function parseDetail(
   const author = record(pr.author).login;
   const latest = record(record(nodes(pr.latest).at(-1)).commit);
   const contexts = record(record(latest.statusCheckRollup).contexts);
-  const checks = nodes(contexts).map(check).slice(0, MAX_CHECKS);
+  // The crew watcher's commit statuses mark a head for the owner; they
+  // report on the checks, so they never count as one.
+  const checks = nodes(contexts)
+    .filter((node) => !crewMark(node))
+    .map(check)
+    .slice(0, MAX_CHECKS);
   const files = record(pr.files);
   const paths = nodes(files)
     .map((node) => node.path)
@@ -177,7 +182,9 @@ export function parseDetail(
       ? (compare.aheadBy as number)
       : null,
     checks,
-    checksTruncated: Number(contexts.totalCount) > checks.length,
+    checksTruncated:
+      Number(contexts.totalCount) >
+      Math.min(nodes(contexts).length, MAX_CHECKS),
     reviewers: reviewerResults(
       item.number!,
       trustedPosts(posts),

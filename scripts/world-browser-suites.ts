@@ -53,6 +53,7 @@ export const worldBrowserIgnorePattern = ignorePattern(worldBrowserSuites);
 export const webBrowserSuites = [
   "web/src/uiScale.test.ts",
   "web/src/filePreviewNavigation.test.ts",
+  "web/src/sourceFileInspector.test.ts",
   "web/src/mobileTerminal.test.ts",
   "web/src/layerStack.browser.test.ts",
   "web/src/components/VisualPreview.test.ts",
