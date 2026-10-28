@@ -1,6 +1,6 @@
 import { createUpdateNotificationHistory } from "./updateNotifications";
 import { worldLocalStorage } from "./browserStorage";
-import { Suspense } from "react";
+import { type ComponentType, Suspense, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import App from "./App";
@@ -342,29 +342,38 @@ async function run() {
   await checkAfter(() => dispatchEvent(new Event("online")));
   check(!differentBuild(), "Dismissed build was offered again");
 
-  // A lazy part missing after Later is offered too, not reloaded, and
-  // reopening it after Later offers the reload again.
-  const Missing = lazyWithReload(`update-fixture-missing-${Date.now()}`, () =>
-    Promise.reject(new Error("chunk 404")),
+  // A lazy dialog missing after Later is offered too, not reloaded. Like
+  // Settings, its parent keeps it open until the dialog's own onClose, so
+  // opening it again must ask again.
+  const Missing = lazyWithReload<ComponentType<{ onClose: () => void }>>(
+    `update-fixture-missing-${Date.now()}`,
+    () => Promise.reject(new Error("chunk 404")),
   );
-  const part = createRoot(
+  let dialogOpen = false;
+  let openDialog = () => {};
+  function DialogHost() {
+    const [open, setOpen] = useState(false);
+    dialogOpen = open;
+    openDialog = () => setOpen(true);
+    return open ? (
+      <Suspense fallback={null}>
+        <Missing onClose={() => setOpen(false)} />
+      </Suspense>
+    ) : null;
+  }
+  const host = createRoot(
     document.body.appendChild(document.createElement("div")),
   );
-  for (let open = 0; open < 2; open++) {
-    flushSync(() =>
-      part.render(
-        <Suspense fallback={null}>
-          <Missing />
-        </Suspense>,
-      ),
-    );
+  flushSync(() => host.render(<DialogHost />));
+  for (let attempt = 0; attempt < 2; attempt++) {
+    flushSync(() => openDialog());
     await until(chunkReload);
+    await until(() => !dialogOpen);
     check(!differentBuild(), "Missing part revived the dismissed build notice");
     later(chunkReload()!);
     await until(() => !chunkReload());
-    flushSync(() => part.render(null));
   }
-  part.unmount();
+  host.unmount();
   check(unloads === 0, "World reloaded the page by itself");
 }
 const childVersion = new URL(location.href).searchParams.get("claim");
