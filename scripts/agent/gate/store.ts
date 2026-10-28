@@ -12,6 +12,8 @@ import type { GateConfig, GateInput, Verdict, VerdictState } from "./predicate";
  */
 
 export const PARSER_VERSION = 1;
+export const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+const CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 export type StoredVerdict = Verdict & {
   id: number;
@@ -55,7 +57,16 @@ export function openStore(path: string) {
       body_hash TEXT NOT NULL,
       body_json TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS observation_body (
+      body_hash TEXT PRIMARY KEY,
+      body_json TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS gate_meta (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
     CREATE INDEX IF NOT EXISTS observation_pr ON observation(pr, pass_id);
+    CREATE INDEX IF NOT EXISTS observation_body_hash ON observation(body_hash);
     CREATE TABLE IF NOT EXISTS claim (
       pr INTEGER NOT NULL,
       source_id TEXT NOT NULL,
@@ -102,7 +113,45 @@ export function openStore(path: string) {
     );
     CREATE INDEX IF NOT EXISTS verdict_pr ON verdict(pr, id);
   `);
+  migrateObservationBodies(db);
   return db;
+}
+
+/** Move legacy inline payloads into the content-addressed body table once. */
+function migrateObservationBodies(db: Database) {
+  const migrated = db
+    .query(
+      "SELECT value FROM gate_meta WHERE key = 'deduplicated_observations'",
+    )
+    .get() as { value: string } | null;
+  if (migrated) return;
+  db.transaction(() => {
+    let lastId = 0;
+    for (;;) {
+      const rows = db
+        .query(
+          "SELECT id, body_json FROM observation WHERE id > ? ORDER BY id LIMIT 500",
+        )
+        .all(lastId) as { id: number; body_json: string }[];
+      if (!rows.length) break;
+      for (const row of rows) {
+        const input = JSON.parse(row.body_json) as Record<string, unknown>;
+        delete input.readAt;
+        const bodyJson = JSON.stringify(input);
+        const bodyHash = hash(input);
+        db.query(
+          "INSERT OR IGNORE INTO observation_body (body_hash, body_json) VALUES (?, ?)",
+        ).run(bodyHash, bodyJson);
+        db.query(
+          "UPDATE observation SET body_hash = ?, body_json = '{}' WHERE id = ?",
+        ).run(bodyHash, row.id);
+        lastId = row.id;
+      }
+    }
+    db.query(
+      "INSERT INTO gate_meta (key, value) VALUES ('deduplicated_observations', '1')",
+    ).run();
+  })();
 }
 
 const hash = (value: unknown) =>
@@ -126,7 +175,7 @@ export function recordPass(
     verdicts: Verdict[];
   },
 ) {
-  return db.transaction(() => {
+  const result = db.transaction(() => {
     const row = db
       .query(
         "INSERT INTO pass (started_at, finished_at, trigger, parser_version, config_hash, config_json) VALUES (?, ?, ?, ?, ?, ?) RETURNING id",
@@ -144,16 +193,15 @@ export function recordPass(
     const passId = row.id;
     for (const input of pass.inputs) {
       const head = input.item?.headSha ?? null;
+      const body = { ...input, readAt: undefined };
+      const bodyJson = JSON.stringify(body);
+      const bodyHash = hash(body);
+      db.query(
+        "INSERT OR IGNORE INTO observation_body (body_hash, body_json) VALUES (?, ?)",
+      ).run(bodyHash, bodyJson);
       db.query(
         "INSERT INTO observation (pass_id, pr, kind, head_sha, fetched_at, body_hash, body_json) VALUES (?, ?, 'input', ?, ?, ?, ?)",
-      ).run(
-        passId,
-        input.number,
-        head,
-        input.readAt,
-        hash(input),
-        JSON.stringify(input),
-      );
+      ).run(passId, input.number, head, input.readAt, bodyHash, "{}");
       for (const claim of input.item?.pr?.reviewers ?? [])
         db.query(
           "INSERT OR IGNORE INTO claim (pr, source_id, reviewer, url, posted_at, reviewed_commit, outcome, line, first_pass) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -208,8 +256,112 @@ export function recordPass(
           pass.finishedAt,
         );
     }
-    return passId;
+    const lastCleanup = db
+      .query("SELECT value FROM gate_meta WHERE key = 'retention_last_run'")
+      .get() as { value: string } | null;
+    let vacuum = false;
+    if (
+      !lastCleanup ||
+      pass.finishedAt - Number(lastCleanup.value) >= CLEANUP_INTERVAL_MS
+    ) {
+      pruneStore(db, pass.finishedAt);
+      db.query(
+        "INSERT INTO gate_meta (key, value) VALUES ('retention_last_run', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+      ).run(String(pass.finishedAt));
+      const space = db.query("PRAGMA page_size").get() as { page_size: number };
+      const free = db.query("PRAGMA freelist_count").get() as {
+        freelist_count: number;
+      };
+      vacuum = free.freelist_count * space.page_size >= 16 * 1024 * 1024;
+    }
+    return { passId, vacuum };
   })();
+  if (result.vacuum) {
+    try {
+      db.exec("PRAGMA wal_checkpoint(TRUNCATE); VACUUM;");
+    } catch {
+      // The committed pass and retention work remain valid if compaction is busy.
+    }
+  }
+  return result.passId;
+}
+
+/** Prune replay payloads while retaining recent, latest-head and audit-linked passes. */
+function pruneStore(db: Database, now: number) {
+  const cutoff = now - RETENTION_MS;
+  const protectedPasses = new Set<number>();
+  for (const row of db
+    .query("SELECT pass_id, last_pass FROM verdict")
+    .all() as { pass_id: number; last_pass: number }[]) {
+    protectedPasses.add(row.pass_id);
+    protectedPasses.add(row.last_pass);
+  }
+  for (const decision of db
+    .query("SELECT pr, created_at FROM decision")
+    .all() as { pr: number; created_at: number }[]) {
+    const row = db
+      .query(
+        "SELECT pass_id FROM observation WHERE pr = ? AND fetched_at <= ? ORDER BY fetched_at DESC LIMIT 1",
+      )
+      .get(decision.pr, decision.created_at) as { pass_id: number } | null;
+    if (row) protectedPasses.add(row.pass_id);
+  }
+  const latestHeads = new Set<string>();
+  const observations = db
+    .query(
+      "SELECT id, pass_id, pr, head_sha, fetched_at, body_hash FROM observation ORDER BY fetched_at DESC, id DESC",
+    )
+    .all() as {
+    id: number;
+    pass_id: number;
+    pr: number;
+    head_sha: string | null;
+    fetched_at: number;
+    body_hash: string;
+  }[];
+  const keep = new Set<number>();
+  const terminalCutoff = new Map<number, boolean>();
+  for (const row of observations) {
+    const key = `${row.pr}:${row.head_sha ?? ""}`;
+    const latest = !latestHeads.has(key);
+    latestHeads.add(key);
+    if (row.fetched_at >= cutoff || latest || protectedPasses.has(row.pass_id))
+      keep.add(row.id);
+    if (!terminalCutoff.has(row.pr)) {
+      const body = db
+        .query("SELECT body_json FROM observation_body WHERE body_hash = ?")
+        .get(row.body_hash) as { body_json: string } | null;
+      const state = body
+        ? (JSON.parse(body.body_json) as { state?: string }).state
+        : undefined;
+      terminalCutoff.set(row.pr, row.fetched_at < cutoff && state !== "OPEN");
+    }
+  }
+  for (const row of observations) {
+    if (terminalCutoff.get(row.pr) && !protectedPasses.has(row.pass_id))
+      keep.delete(row.id);
+  }
+  const oldIds = observations
+    .filter((row) => !keep.has(row.id))
+    .map((row) => row.id);
+  if (oldIds.length) {
+    const remove = db.query("DELETE FROM observation WHERE id = ?");
+    for (const id of oldIds) remove.run(id);
+  }
+  db.query("DELETE FROM check_attempt WHERE completed_at < ?").run(cutoff);
+  // Closed and merged PR attempts are removable once their last observation ages out.
+  for (const [pr, terminal] of terminalCutoff)
+    if (terminal) db.query("DELETE FROM check_attempt WHERE pr = ?").run(pr);
+  db.query(
+    "DELETE FROM observation_body WHERE body_hash NOT IN (SELECT body_hash FROM observation)",
+  ).run();
+  const maxPass = (
+    db.query("SELECT MAX(id) AS id FROM pass").get() as { id: number | null }
+  ).id;
+  if (maxPass !== null)
+    db.query(
+      "DELETE FROM pass WHERE id < ? AND finished_at < ? AND id NOT IN (SELECT pass_id FROM observation) AND id NOT IN (SELECT pass_id FROM verdict) AND id NOT IN (SELECT last_pass FROM verdict)",
+    ).run(maxPass, cutoff);
 }
 
 type VerdictRow = {
@@ -271,18 +423,20 @@ export function latestPass(db: Database) {
 export function latestInput(db: Database, pr: number): GateInput | null {
   const row = db
     .query(
-      "SELECT body_json FROM observation WHERE pr = ? ORDER BY id DESC LIMIT 1",
+      "SELECT b.body_json, o.fetched_at FROM observation o JOIN observation_body b USING (body_hash) WHERE o.pr = ? ORDER BY o.id DESC LIMIT 1",
     )
-    .get(pr) as { body_json: string } | null;
-  return row ? JSON.parse(row.body_json) : null;
+    .get(pr) as { body_json: string; fetched_at: number } | null;
+  return row ? { ...JSON.parse(row.body_json), readAt: row.fetched_at } : null;
 }
 
 export function passInputs(db: Database, passId: number): GateInput[] {
   return (
     db
-      .query("SELECT body_json FROM observation WHERE pass_id = ? ORDER BY id")
-      .all(passId) as { body_json: string }[]
-  ).map((row) => JSON.parse(row.body_json));
+      .query(
+        "SELECT b.body_json, o.fetched_at FROM observation o JOIN observation_body b USING (body_hash) WHERE o.pass_id = ? ORDER BY o.id",
+      )
+      .all(passId) as { body_json: string; fetched_at: number }[]
+  ).map((row) => ({ ...JSON.parse(row.body_json), readAt: row.fetched_at }));
 }
 
 /** The verdict each PR had as of `passId`. */

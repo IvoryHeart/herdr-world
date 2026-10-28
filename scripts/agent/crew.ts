@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { shortSha } from "../../shared/pullRequests";
 import { gateDir, loadConfig, runPass } from "./gate";
@@ -669,6 +669,7 @@ export function status(
   now: number,
   settings: CrewSettings,
   held: GateInput[] = [],
+  gateStoreBytes = 0,
 ) {
   const heldPrs = held
     .filter(
@@ -679,6 +680,7 @@ export function status(
   out(`${heldPrs.length} held pull request(s) (latest crew pass)`);
   for (const input of heldPrs)
     out(`  #${input.number}\t${input.item?.title ?? ""}`.trimEnd());
+  out(`gate store: ${formatBytes(gateStoreBytes)}`);
   const open = actionsIn(crew, ["pending", "running"]);
   out(`${open.length} open action(s)`);
   for (const entry of open)
@@ -695,6 +697,16 @@ export function status(
     out(
       `  run ${entry.id}\t#${entry.pr} ${entry.reviewer} @${shortSha(entry.head)} ${entry.finishedAt === null ? "running" : `exit ${entry.exitCode}`}${entry.usage ? ` usage ${entry.usage}` : ""}`,
     );
+}
+
+const formatBytes = (bytes: number) =>
+  bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KiB`;
+
+function storeSize(path: string) {
+  return [path, `${path}-wal`, `${path}-shm`].reduce(
+    (total, file) => total + (existsSync(file) ? statSync(file).size : 0),
+    0,
+  );
 }
 
 /**
@@ -754,6 +766,7 @@ export async function main(argv: string[], deps: Deps = realDeps) {
   try {
     if (options.command === "status") {
       const gate = openStore(join(dir, "gate.sqlite"));
+      const gatePath = join(dir, "gate.sqlite");
       try {
         const pass = latestPass(gate);
         status(
@@ -762,6 +775,7 @@ export async function main(argv: string[], deps: Deps = realDeps) {
           Date.now(),
           loadSettings(join(dir, "config.json")),
           pass ? passInputs(gate, pass.id) : [],
+          storeSize(gatePath),
         );
       } finally {
         gate.close();

@@ -17,6 +17,7 @@ import { evaluate } from "./gate/predicate";
 import {
   latestVerdict,
   openStore,
+  passInputs,
   recordPass,
   transitions,
 } from "./gate/store";
@@ -606,6 +607,71 @@ describe("store", () => {
         "READY",
       ]);
       expect(latestVerdict(db, 7)!.passId).toBe(4);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("deduplicates unchanged observations while preserving their read times", () => {
+    const first = { ...ready(), readAt: NOW };
+    const second = { ...ready(), readAt: NOW + 1_000 };
+    const db = openStore(dbPath);
+    try {
+      for (const entry of [first, second])
+        recordPass(db, {
+          trigger: "test",
+          config,
+          startedAt: entry.readAt,
+          finishedAt: entry.readAt,
+          inputs: [entry],
+          verdicts: [evaluate(entry, config, entry.readAt)],
+        });
+      expect(
+        db.query("SELECT COUNT(*) AS n FROM observation_body").get(),
+      ).toEqual({ n: 1 });
+      expect(passInputs(db, 1)[0].readAt).toBe(NOW);
+      expect(passInputs(db, 2)[0].readAt).toBe(NOW + 1_000);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("retains the latest observation for an active PR after the retention window", () => {
+    const db = openStore(dbPath);
+    try {
+      const old = NOW - 16 * 24 * 60 * 60 * 1000;
+      const entry = { ...ready(), readAt: old };
+      recordPass(db, {
+        trigger: "test",
+        config,
+        startedAt: old,
+        finishedAt: old,
+        inputs: [entry],
+        verdicts: [],
+      });
+      const middleAt = NOW - 8 * 24 * 60 * 60 * 1000;
+      const middle = { ...entry, readAt: middleAt };
+      recordPass(db, {
+        trigger: "test",
+        config,
+        startedAt: middleAt,
+        finishedAt: middleAt,
+        inputs: [middle],
+        verdicts: [],
+      });
+      const current = { ...entry, readAt: NOW };
+      recordPass(db, {
+        trigger: "test",
+        config,
+        startedAt: NOW,
+        finishedAt: NOW,
+        inputs: [current],
+        verdicts: [],
+      });
+      expect(db.query("SELECT COUNT(*) AS n FROM observation").get()).toEqual({
+        n: 1,
+      });
+      expect(passInputs(db, 3)[0].readAt).toBe(NOW);
     } finally {
       db.close();
     }

@@ -1620,6 +1620,7 @@ describe("held status", () => {
     expect(lines[0]).toBe("1 held pull request(s) (latest crew pass)");
     expect(lines[1]).toContain(`#${held.number}`);
     expect(lines[1]).toContain(held.item?.title ?? "");
+    expect(lines).toContain("gate store: 0 B");
     crew.close();
   });
 });
