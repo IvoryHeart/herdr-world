@@ -47,12 +47,8 @@ export function markHeads(
       if (result.code === 0) {
         setMeta(
           crew,
-          `mark:${verdict.number}:${mark.context}`,
-          JSON.stringify({
-            head: verdict.head,
-            state: mark.state,
-            description: mark.description,
-          }),
+          markKey(verdict.number, verdict.head, mark),
+          JSON.stringify({ state: mark.state, description: mark.description }),
         );
         say(
           `#${verdict.number} marked ${mark.context} ${mark.state}: ${mark.description}`,
@@ -65,20 +61,20 @@ export function markHeads(
   }
 }
 
+/** Marks are kept per head: a PR can go back to a head it marked before. */
+const markKey = (pr: number, head: string, mark: Mark) =>
+  `mark:${pr}:${head}:${mark.context}`;
+
 /**
- * Whether a mark should be posted: it differs from the last one posted for
- * this PR, and a mark that takes one back only goes on a head that was
+ * Whether a mark should be posted: it differs from the last one posted on
+ * this head, and a mark that takes one back only goes on a head that was
  * marked before.
  */
 export function markDue(crew: Database, pr: number, head: string, mark: Mark) {
-  const raw = getMeta(crew, `mark:${pr}:${mark.context}`);
+  const raw = getMeta(crew, markKey(pr, head, mark));
   const last = raw
-    ? (JSON.parse(raw) as { head: string; state: string; description: string })
+    ? (JSON.parse(raw) as { state: string; description: string })
     : null;
-  if (mark.revokes) return last?.head === head && last.state !== mark.state;
-  return (
-    last?.head !== head ||
-    last.state !== mark.state ||
-    last.description !== mark.description
-  );
+  if (mark.revokes) return last !== null && last.state !== mark.state;
+  return last?.state !== mark.state || last.description !== mark.description;
 }

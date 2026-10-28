@@ -72,9 +72,9 @@ import {
  * action: it prompts the one seat that must act when that seat is idle,
  * runs fresh reviewers, and tells the owner about READY and judgment calls.
  * Everything it does is also written to the crew feed. On GitHub it only
- * sets its own `merge-ready` and `needs-owner` labels and posts one signed
- * `[crew]` comment per cause it needs the owner for; it never merges,
- * pushes or approves.
+ * sets its own `crew/merge-ready` and `crew/needs-owner` commit statuses and
+ * posts one signed `[crew]` comment per cause it needs the owner for; it
+ * never merges, pushes or approves.
  */
 
 const USAGE = `Usage: bun run agent:crew -- <command> [options]
@@ -220,10 +220,13 @@ export function crewPass(context: PassContext) {
     if (dryRun) {
       deps.out(`plan: ${planned.length} action(s) for ${authors.size} PR(s)`);
       for (const entry of planned) deps.out(`  ${entry.kind}\t${entry.text}`);
+      // The same causes a real pass would mark.
       const owed = new Map<number, string[]>();
+      const root = dirname(dirname(context.dir));
       for (const entry of planned)
-        if (entry.kind === "judgment")
-          owed.set(entry.pr, [...(owed.get(entry.pr) ?? []), entry.text]);
+        if (entry.target === "owner" && entry.kind === "judgment")
+          owe(owed, entry, root);
+      oweHeldNotices(crew, owed, root, parkedPrs(inputs, verdicts, settings));
       for (const verdict of verdicts) {
         const input = byNumber.get(verdict.number);
         if (!input) continue;
@@ -274,20 +277,16 @@ function act(
   // Each PR's causes for the owner that hold this pass: a planned judgment,
   // or a notice raised again because its cause still holds. Local paths
   // stay local in everything GitHub shows.
+  // A PR parked with a hold or out of the watcher's scope gets no steps and
+  // asks nothing of the owner; a reviewer already working still finishes.
+  const parked = parkedPrs(inputs, verdicts, settings);
   const causes = new Map<number, string[]>();
   const root = dirname(dirname(context.dir));
   const publicText = (text: string) => text.replaceAll(`${root}/`, "");
-  const owe = (entry: Action) =>
-    causes.set(entry.pr, [
-      ...(causes.get(entry.pr) ?? []),
-      publicText(entry.text).replace(
-        /^(?:NEEDS-OWNER )?#\d+ (?:at \w+: )?/u,
-        "",
-      ),
-    ]);
   const record = (entry: Action) => {
+    if (entry.target === "owner" && parked.has(entry.pr)) return;
     if (entry.target === "owner" && entry.kind === "judgment") {
-      owe(entry);
+      owe(causes, entry, root);
       // Its signed GitHub comment, posted once.
       addAction(
         crew,
@@ -379,18 +378,6 @@ function act(
 
   // A PR parked with a hold or out of the watcher's scope gets no steps, so
   // the ones still waiting are retired; planning them again revives them.
-  const parked = new Map<number, string>();
-  for (const input of inputs) {
-    if (input.state !== "OPEN") continue;
-    const verdict = verdicts.find((entry) => entry.number === input.number);
-    const held =
-      isOnHold(input) ||
-      verdict?.conditions.some(
-        (entry) => entry.id === "hold" && entry.state === "unmet",
-      );
-    if (!inScope(input, settings)) parked.set(input.number, "out of scope");
-    else if (held) parked.set(input.number, "on hold");
-  }
   for (const waiting of actionsIn(crew, ["pending"])) {
     const why = parked.get(waiting.pr);
     if (!why) continue;
@@ -443,14 +430,66 @@ function act(
   deliver(crew, settings, live, authors, deliverable, record, context, say);
 
   // A notice about a seat that still holds keeps the owner's mark on.
+  oweHeldNotices(crew, causes, root, parked);
+  markHeads(crew, context, settings, verdicts, inputs, causes, say);
+}
+
+/**
+ * The open PRs that get no steps: held (by label or `agent:gate hold`) or
+ * out of the watcher's scope, each with why.
+ */
+function parkedPrs(
+  inputs: GateInput[],
+  verdicts: Verdict[],
+  settings: CrewSettings,
+) {
+  const parked = new Map<number, string>();
+  for (const input of inputs) {
+    if (input.state !== "OPEN") continue;
+    const verdict = verdicts.find((entry) => entry.number === input.number);
+    const held =
+      isOnHold(input) ||
+      verdict?.conditions.some(
+        (entry) => entry.id === "hold" && entry.state === "unmet",
+      );
+    if (!inScope(input, settings)) parked.set(input.number, "out of scope");
+    else if (held) parked.set(input.number, "on hold");
+  }
+  return parked;
+}
+
+/**
+ * Adds what a PR waits on the owner for, as GitHub may show it: without
+ * local paths or the `NEEDS-OWNER #N at <sha>:` prefix.
+ */
+function owe(
+  causes: Map<number, string[]>,
+  entry: { pr: number; text: string },
+  root: string,
+) {
+  causes.set(entry.pr, [
+    ...(causes.get(entry.pr) ?? []),
+    entry.text
+      .replaceAll(`${root}/`, "")
+      .replace(/^(?:NEEDS-OWNER )?#\d+ (?:at \w+: )?/u, ""),
+  ]);
+}
+
+/** A notice about a seat whose cause still holds also waits on the owner. */
+function oweHeldNotices(
+  crew: Database,
+  causes: Map<number, string[]>,
+  root: string,
+  parked: Map<number, string>,
+) {
   for (const entry of actionsIn(crew, ["pending", "sent"]))
     if (
       entry.target === "owner" &&
-      noticeHolds(crew, entry) === true &&
-      !causes.get(entry.pr)?.length
+      !parked.has(entry.pr) &&
+      !causes.get(entry.pr)?.length &&
+      noticeHolds(crew, entry) === true
     )
-      owe(entry);
-  markHeads(crew, context, settings, verdicts, inputs, causes, say);
+      owe(causes, entry, root);
 }
 
 /**

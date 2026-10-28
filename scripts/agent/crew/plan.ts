@@ -207,7 +207,7 @@ const short = (text: string) =>
 
 /**
  * The marks an open PR's head should carry: `crew/merge-ready` while it is
- * in scope, not held and `mergeReady`, and `crew/needs-owner` while it is in
+ * in scope, not held (by label or `agent:gate hold`) and `mergeReady`, and `crew/needs-owner` while it is in
  * scope and the owner has `causes` to decide. A mark that no longer holds is
  * taken back, which only matters if it was set on this head.
  */
@@ -218,7 +218,12 @@ export function marks(
   causes: string[],
 ): Mark[] {
   if (input.state !== "OPEN" || !verdict.head) return [];
-  const watched = inScope(input, settings) && !isOnHold(input);
+  const held =
+    isOnHold(input) ||
+    verdict.conditions.some(
+      (entry) => entry.id === "hold" && entry.state === "unmet",
+    );
+  const watched = inScope(input, settings) && !held;
   const reviewers = verdict.conditions
     .filter((entry) => entry.id.startsWith("review:"))
     .map((entry) => entry.id.slice(7));
