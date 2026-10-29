@@ -457,6 +457,9 @@ export default function WorldFoundationApp() {
           )}
           primaryViewControl={
             <div className="world-topbar-control-plane">
+              {view === "spaces" ? null : (
+                <NeedsYouCounter world={topbarWorld} />
+              )}
               <label
                 className="world-primary-view-select"
                 title={`World view: ${view}`}

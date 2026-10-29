@@ -97,3 +97,8 @@
   min-height: 32px;
   white-space: nowrap;
 }
+@media (max-width: 640px) {
+  .world-topbar-control-plane .needs-you-counter span {
+    display: none;
+  }
+}
