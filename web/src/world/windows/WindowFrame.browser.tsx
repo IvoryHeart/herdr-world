@@ -441,7 +441,24 @@ async function run() {
             ? harness.size.height - 2
             : harness.size.height / 2);
       pointer(window, "pointermove", x, y);
-      await settle();
+      const workArea = () => {
+        const area =
+          target === "maximize"
+            ? { left: 0, top: 0, ...harness.size }
+            : snapGeometry(target, harness.size);
+        area.left += surface.scrollLeft;
+        area.top += surface.scrollTop;
+        return area;
+      };
+      // Dragging shrinks the canvas, so the browser may clamp its scroll; the
+      // work area follows on the scroll event, which a busy machine delivers late.
+      const matched = () => {
+        const shown = document.querySelector<HTMLElement>(
+          ".world-window-snap-preview",
+        );
+        return !!shown && sameGeometry(cssGeometry(shown), workArea());
+      };
+      for (let wait = 0; wait < 25 && !matched(); wait += 1) await settle();
       const preview = document.querySelector<HTMLElement>(
         ".world-window-snap-preview",
       );
@@ -449,12 +466,7 @@ async function run() {
         Boolean(preview),
         `${preset}/${target}: no snap preview at viewport edge`,
       );
-      const expected =
-        target === "maximize"
-          ? { left: 0, top: 0, ...harness.size }
-          : snapGeometry(target, harness.size);
-      expected.left += surface.scrollLeft;
-      expected.top += surface.scrollTop;
+      const expected = workArea();
       if (preview)
         check(
           sameGeometry(cssGeometry(preview), expected),
