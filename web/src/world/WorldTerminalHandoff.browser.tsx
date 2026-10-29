@@ -4447,6 +4447,21 @@ async function run() {
     () => splitBuilderWindow.querySelectorAll(".xterm").length === 2,
     "both split renderers before disconnect",
   );
+  // The title's pane map (#444) draws the same split and marks the shown pane.
+  const paneMapGlyph = () =>
+    splitBuilderWindow.querySelector<HTMLButtonElement>(
+      ".workspace-inspector-head .inspector-pane-map-glyph",
+    );
+  const paneMapSelected = () =>
+    [...(paneMapGlyph()?.querySelectorAll("i") ?? [])].findIndex((cell) =>
+      cell.classList.contains("is-selected"),
+    );
+  await until(
+    () =>
+      paneMapGlyph()?.querySelectorAll("i").length === 2 &&
+      paneMapSelected() === 0,
+    "split window title shows its pane map",
+  );
   const retainedWindows = [
     ...document.querySelectorAll(".world-managed-window .workspace-inspector"),
   ];
@@ -4714,6 +4729,44 @@ async function run() {
   await until(
     () => document.activeElement === siblingInput,
     "keyboard activated window focused selected sibling",
+  );
+  check(paneMapSelected() === 1, "title map did not follow the clicked pane");
+  // Switching from the title map shows the other pane, World-only.
+  const switchFromPaneMap = async (paneId: string) => {
+    paneMapGlyph()!.click();
+    await until(
+      () =>
+        document.querySelector(
+          `[aria-label="Panes in this tab"] [data-map-pane-id="${paneId}"]`,
+        ),
+      `title map opened for ${paneId}`,
+    );
+    document
+      .querySelector<HTMLButtonElement>(
+        `[aria-label="Panes in this tab"] [data-map-pane-id="${paneId}"]`,
+      )!
+      .click();
+    await until(
+      () =>
+        store.get().selectedPaneId === paneId &&
+        splitBuilderWindow
+          .querySelector(".pane-layout-cell.is-active")
+          ?.getAttribute("data-pane-id") === paneId &&
+        !document.querySelector('[aria-label="Panes in this tab"]'),
+      `title map switched to ${paneId}`,
+    );
+  };
+  const paneMoves = calls.filter(({ method }) =>
+    ["pane.focus_direction", "pane.zoom", "pane.swap"].includes(method),
+  ).length;
+  await switchFromPaneMap("builder-pane");
+  check(paneMapSelected() === 0, "title map did not mark its own switch");
+  await switchFromPaneMap(siblingPane.pane_id);
+  check(
+    calls.filter(({ method }) =>
+      ["pane.focus_direction", "pane.zoom", "pane.swap"].includes(method),
+    ).length === paneMoves,
+    "title map changed Herdr's panes",
   );
   viewSelect.value = "town";
   viewSelect.dispatchEvent(new Event("change", { bubbles: true }));

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   shallowEqual,
   useOperationalStore,
@@ -6,6 +6,7 @@ import {
   type State,
 } from "./store";
 import {
+  drawableTabLayout,
   provisionalTabLayout,
   rememberTabLayout,
   tabLayoutFor,
@@ -67,6 +68,63 @@ export function queueVisibleTabLayoutRead<T>(
   });
 }
 
+type VisibleTabLayoutRead = ReturnType<typeof queueVisibleTabLayoutRead>;
+type LayoutReader = {
+  read: () => Promise<unknown>;
+  stillNeeded: () => boolean;
+};
+const queuedVisibleLayoutReads = new Map<
+  string,
+  { readers: LayoutReader[]; result: VisibleTabLayoutRead }
+>();
+
+/**
+ * One queued read per tab: a window's terminal and its title map observe the
+ * same tab, so a second caller joins a read still waiting in the queue
+ * instead of queueing another. When it starts, the read is the newest caller
+ * that still needs it (an earlier caller may have read a pane since closed),
+ * and from then on a new caller queues a fresh read rather than receive a
+ * reply to an older observation.
+ */
+export function shareVisibleTabLayoutRead(
+  key: string,
+  read: () => Promise<unknown>,
+  stillNeeded: () => boolean,
+): VisibleTabLayoutRead {
+  const queued = queuedVisibleLayoutReads.get(key);
+  if (queued) {
+    queued.readers.push({ read, stillNeeded });
+    return queued.result;
+  }
+  // Registered before the read is queued: a free queue checks stillNeeded
+  // at once, and a read skipped then must not stay behind for later callers.
+  const entry = { readers: [{ read, stillNeeded }] as LayoutReader[] } as {
+    readers: LayoutReader[];
+    result: VisibleTabLayoutRead;
+  };
+  const release = () => {
+    if (queuedVisibleLayoutReads.get(key) === entry)
+      queuedVisibleLayoutReads.delete(key);
+  };
+  queuedVisibleLayoutReads.set(key, entry);
+  entry.result = queueVisibleTabLayoutRead(
+    () => {
+      release();
+      const newest = [...entry.readers].reverse();
+      const reader =
+        newest.find((candidate) => candidate.stillNeeded()) ?? newest[0]!;
+      return reader.read();
+    },
+    () => {
+      const needed = entry.readers.some((candidate) => candidate.stillNeeded());
+      if (!needed) release();
+      return needed;
+    },
+  );
+  entry.result.then(release, release);
+  return entry.result;
+}
+
 /** Reject a layout after a lease change, pane move, split or close. */
 export function tabLayoutMatchesSnapshot(
   layout: unknown,
@@ -83,21 +141,25 @@ export function tabLayoutMatchesSnapshot(
 ): layout is PaneLayout {
   if (!layout || typeof layout !== "object") return false;
   const candidate = layout as Partial<PaneLayout>;
-  const validRect = (rect: unknown) => {
+  // A tab no client shows can have 0-cell panes and splits (see
+  // drawableTabLayout); only its area must have a size.
+  const validRect = (rect: unknown, sized = false) => {
     if (!rect || typeof rect !== "object") return false;
     const value = rect as Record<string, unknown>;
-    return (
-      ["x", "y", "width", "height"].every(
+    if (
+      !["x", "y", "width", "height"].every(
         (key) => typeof value[key] === "number" && Number.isFinite(value[key]),
-      ) &&
-      (value.width as number) > 0 &&
-      (value.height as number) > 0
-    );
+      )
+    )
+      return false;
+    const width = value.width as number;
+    const height = value.height as number;
+    return sized ? width > 0 && height > 0 : width >= 0 && height >= 0;
   };
   if (
     !Array.isArray(candidate.panes) ||
     !Array.isArray(candidate.splits) ||
-    !validRect(candidate.area) ||
+    !validRect(candidate.area, true) ||
     typeof candidate.focused_pane_id !== "string" ||
     candidate.panes.some(
       (pane) => typeof pane?.pane_id !== "string" || !validRect(pane.rect),
@@ -196,9 +258,17 @@ export function useVisibleTabLayoutState(
       tabId,
     );
   const provisional = provisionalTabLayout(candidate, snapshot.panes, tabId);
-  const layout = tabLayoutMatchesSnapshot(provisional, identity, snapshot)
+  const observedLayout = tabLayoutMatchesSnapshot(
+    provisional,
+    identity,
+    snapshot,
+  )
     ? provisional
     : null;
+  const layout = useMemo(
+    () => (observedLayout ? drawableTabLayout(observedLayout) : null),
+    [observedLayout],
+  );
 
   useEffect(() => {
     if (
@@ -232,13 +302,14 @@ export function useVisibleTabLayoutState(
       tabId,
     };
     let cancelled = false;
-    void queueVisibleTabLayoutRead(
+    void shareVisibleTabLayoutRead(
+      tabIdentityKey(requestIdentity),
       () => client.call("pane.layout", { pane_id: pane.pane_id }),
       () => !cancelled && client.isCurrent(),
     )
       .then((read) => {
         if (read.skipped || cancelled || !client.isCurrent()) return;
-        const result = read.value;
+        const result = read.value as { layout?: unknown } | null;
         const next = (result?.layout ?? null) as PaneLayout | null;
         if (!tabLayoutMatchesSnapshot(next, requestIdentity, store.get())) {
           setError("Tab layout is unavailable.");
@@ -274,7 +345,14 @@ export function useVisibleTabLayoutState(
     snapshot.panes,
     activeLayout,
   ]);
-  return { layout, error: layout ? null : error };
+  return {
+    layout,
+    error: layout
+      ? null
+      : observedLayout
+        ? "Tab layout is unavailable."
+        : error,
+  };
 }
 
 /** Layout-only convenience for an Inspector with its own loading UI. */

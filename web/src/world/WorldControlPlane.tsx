@@ -222,6 +222,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
     showSelectionProfile,
     applySelection,
     openInBackground,
+    focusInspectorPane,
   } = controller;
   useWorldPanelFocus(panelRegistry, managedWindows, windowCommand);
   /**
@@ -693,6 +694,9 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
               onInspectorConversationsChange(next);
             }}
             onClose={() => closeInspector(conversation)}
+            onSelectPane={(paneId) =>
+              focusInspectorPane(worldInspectorWindowId(conversation), paneId)
+            }
             windowControls={{
               compact: compactArrangement,
               maximized:

@@ -360,6 +360,11 @@ text. It works for any agent you open from Town, Board or Desk.
    The tool call running now sits at the end of the conversation with its
    own timer. **Stop**, or Esc pressed twice, interrupts Claude Code, Codex
    or Pi; Chat never stops an agent by itself.
+   When the agent's tab has several panes (a review round, say), a small
+   drawing of the tab's split comes first in the window title, with the
+   agent that needs you in yellow. Tap it to open a map of the real layout,
+   then tap a pane to show that agent's Chat or terminal in the same window.
+   Switching changes only what World shows, not Herdr's focus.
 3. Open a tool row to see what the call did: the edit's diff, a test run's
    pass or fail with its first failure, or the end of its output. An agent
    with a quest shows one slim title and progress row in the conversation;
