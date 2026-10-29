@@ -7,3 +7,5 @@
   while the top bar is hidden in Zen.
 - Keep Open windows in a visible phone Inspector's header so it clears the
   composer, and keep its stage fallback below mobile menu backdrops.
+- Keep Town's window controls at least 40px on touch tablets, including narrow
+  columns, without overflowing the header.

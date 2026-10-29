@@ -2,7 +2,12 @@ import { useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { useWindowManager } from "./useWindowManager";
-import { WindowControls } from "./WindowControls";
+import { WindowBackButton, WindowControls } from "./WindowControls";
+import { WorkspaceInspectorAgentIdentity } from "../../components/WorkspaceInspectorAgentIdentity";
+import "../../styles/tokens.css";
+import "../../styles/base.css";
+import "../../components/WorkspaceInspectorHost.css";
+import "../../components/InspectorPaneMap.css";
 import { WindowFrame } from "./WindowFrame";
 import { WindowSurface } from "./WindowSurface";
 import { WindowSwitcher } from "./WindowSwitcher";
@@ -150,6 +155,96 @@ const pointer = (target: EventTarget, type: string, x: number, y: number) =>
       }),
     ),
   );
+
+async function checkNarrowTownHeaders() {
+  const coarse = new URLSearchParams(location.search).has("coarse");
+  check(
+    matchMedia(`(pointer: ${coarse ? "coarse" : "fine"})`).matches,
+    "browser did not emulate the requested primary pointer",
+  );
+  document.documentElement.dataset.layout = "desktop";
+  const host = document.createElement("div");
+  document.body.append(host);
+  const root = createRoot(host);
+  const controls = {
+    compact: false,
+    narrow: true,
+    maximized: false,
+    back: { label: "Back to Town" },
+    onClose() {},
+    onMinimize() {},
+    onMaximize() {},
+    onSnap() {},
+    onFloat() {},
+  };
+  // Four Columns on a landscape tablet leave about 256px per window.
+  for (const width of [240, 256, 279]) {
+    flushSync(() =>
+      root.render(
+        <div className="world-managed-window is-town-skin" style={{ width }}>
+          <aside className="workspace-inspector">
+            <header className="workspace-inspector-head" data-views-in-menu="">
+              <WindowBackButton controls={controls} label="Inspector window" />
+              <WorkspaceInspectorAgentIdentity
+                context={{
+                  kind: "agent",
+                  label: "Builder",
+                  agent: "claude",
+                  stateLabel: "Working",
+                  locationLabel: "Studio / Builder",
+                }}
+                paneMap={
+                  <button
+                    className="inspector-pane-map-glyph"
+                    aria-label="Tab panes"
+                  />
+                }
+                location={
+                  <button className="workspace-inspector-location">
+                    <span className="workspace-inspector-location-text">
+                      Studio / Builder
+                    </span>
+                  </button>
+                }
+              />
+              <WindowControls controls={controls} label="Inspector window" />
+            </header>
+          </aside>
+        </div>,
+      ),
+    );
+    await settle();
+    const header = host.querySelector<HTMLElement>("header")!;
+    const bounds = header.getBoundingClientRect();
+    const buttons = host.querySelectorAll<HTMLElement>(
+      ".world-window-back, .world-window-controls > button",
+    );
+    check(
+      buttons.length === 3,
+      "narrow Town header lost Back, menu or Minimize",
+    );
+    for (const button of buttons) {
+      const rect = button.getBoundingClientRect();
+      check(
+        rect.width >= (coarse ? 40 : 30) && rect.height >= (coarse ? 40 : 30),
+        `${width}px Town ${button.getAttribute("aria-label")} target is ${rect.width}×${rect.height} for ${coarse ? "coarse" : "fine"} pointer`,
+      );
+      check(
+        rect.left >= bounds.left &&
+          rect.right <= bounds.right &&
+          rect.top >= bounds.top &&
+          rect.bottom <= bounds.bottom,
+        `${width}px Town control overflows its header`,
+      );
+    }
+    check(
+      header.scrollWidth <= header.clientWidth,
+      `${width}px Town header content overflows`,
+    );
+  }
+  root.unmount();
+  host.remove();
+}
 window.addEventListener("error", (event) => failures.push(event.message));
 async function run() {
   const root = createRoot(document.getElementById("root")!);
@@ -493,6 +588,7 @@ async function run() {
     }
   }
   root.unmount();
+  await checkNarrowTownHeaders();
 }
 void run()
   .catch((error) => failures.push(String(error)))

@@ -484,19 +484,46 @@
 .is-town-skin .world-window-controls {
   gap: 6px;
 }
-/* Narrow desktop Columns still show the pane map, portrait and location.
-   Use the desktop control size so those identity columns retain space. */
-@container workspace-inspector (max-width: 279px) {
-  .world-managed-window.is-town-skin:not(.is-compact)
-    .workspace-inspector-agent-identity {
-    column-gap: 4px;
+/* Fine pointers can use smaller controls in narrow desktop Columns. */
+@media (pointer: fine) {
+  @container workspace-inspector (max-width: 279px) {
+    .world-managed-window.is-town-skin:not(.is-compact)
+      .workspace-inspector-agent-identity {
+      column-gap: 4px;
+    }
+    .world-managed-window.is-town-skin:not(.is-compact)
+      :is(.world-window-back, .world-window-controls > button) {
+      min-width: 30px;
+      min-height: 30px;
+      width: 30px;
+      height: 30px;
+    }
   }
-  .world-managed-window.is-town-skin:not(.is-compact)
-    :is(.world-window-back, .world-window-controls > button) {
-    min-width: 30px;
-    min-height: 30px;
-    width: 30px;
-    height: 30px;
+}
+/* Touch tablets use desktop Columns too. Give the name the pane map's
+   space, keeping Back and window actions at their 40px Town size. */
+@media (pointer: coarse) {
+  @container workspace-inspector (max-width: 279px) {
+    .world-managed-window.is-town-skin:not(.is-compact)
+      .workspace-inspector-agent-identity {
+      grid-template-columns: 32px minmax(0, 1fr);
+      column-gap: 4px;
+    }
+    .world-managed-window.is-town-skin:not(.is-compact)
+      .workspace-inspector-agent-identity
+      > .inspector-pane-map-glyph {
+      display: none;
+    }
+    .world-managed-window.is-town-skin:not(.is-compact)
+      .workspace-inspector-agent-identity
+      > .workspace-inspector-agent-avatar {
+      grid-column: 1;
+    }
+    .world-managed-window.is-town-skin:not(.is-compact)
+      .workspace-inspector-agent-identity
+      > :not(.inspector-pane-map-glyph, .workspace-inspector-agent-avatar) {
+      grid-column: 2;
+    }
   }
 }
 .is-town-skin .workspace-inspector-tabs {
