@@ -125,6 +125,11 @@ be recreated through `verification:setup`; production code does not depend on Qu
 
 ## Failure diagnostics and progress review
 
+Node, Java and Git identity probes have a bounded 30-second startup allowance,
+share their worker's cancellation, and name the failed command in diagnostics.
+This tolerates cold tooling under the enforced two-CPU quota without changing
+model deadlines, the complete-run deadline or the hard memory/CPU limits.
+
 Failed runs retain completed command progress and the failing model/phase in the
 incomplete manifest. A curated diagnostic directory contains failure metadata,
 checker/replay log tails, the selected request and relevant counterexample/trace.

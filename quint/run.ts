@@ -26,7 +26,10 @@ import {
 } from "../scripts/verification-setup";
 import checker from "../tools/quint/checker.json";
 import { publishVerificationEvidence } from "../scripts/verification-publication";
-import { runVerificationProcess } from "../scripts/verification-process";
+import {
+  runVerificationProcess,
+  runVerificationMetadata,
+} from "../scripts/verification-process";
 import {
   fingerprintInputs,
   validateEvidence,
@@ -759,24 +762,20 @@ export async function runReviewedQuintModels(
   process.once("SIGTERM", abort);
   try {
     const tools = await assertVerificationInstalled();
-    const nodeVersion = await runVerificationProcess(["node", "--version"], {
-      timeoutMs: 5000,
+    const nodeVersion = await runVerificationMetadata(["node", "--version"], {
+      signal: cancellation.signal,
     });
-    const javaVersion = await runVerificationProcess(["java", "-version"], {
-      timeoutMs: 5000,
+    const javaVersion = await runVerificationMetadata(["java", "-version"], {
+      signal: cancellation.signal,
     });
-    assert.equal(nodeVersion.code, 0);
-    assert.equal(javaVersion.code, 0);
-    const revision = await runVerificationProcess(
+    const revision = await runVerificationMetadata(
       ["git", "rev-parse", "HEAD"],
-      { cwd: root, timeoutMs: 5000 },
+      { cwd: root, signal: cancellation.signal },
     );
-    assert.equal(revision.code, 0);
-    const tracked = await runVerificationProcess(["git", "ls-files", "-z"], {
+    const tracked = await runVerificationMetadata(["git", "ls-files", "-z"], {
       cwd: root,
-      timeoutMs: 5000,
+      signal: cancellation.signal,
     });
-    assert.equal(tracked.code, 0);
     const inputs = await fingerprintInputs(
       root,
       tracked.stdout.split("\0").filter(Boolean),
