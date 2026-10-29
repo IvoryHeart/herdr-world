@@ -8,7 +8,7 @@ for compatibility with branch rules.
 
 | Entry point | Responsibility | Deliberate boundary |
 | --- | --- | --- |
-| Local pre-commit | `check:commit`: read-only formatting and lint | Quick feedback before a commit; not a delivery gate |
+| Local pre-commit | `check:commit`: no live `.agents/` files, read-only formatting and lint | Quick feedback before a commit; not a delivery gate |
 | Local pre-push | `check:changed`, expanding to the full gate for configuration or gate-policy changes | Affected tests save local work; CI remains authoritative |
 | CI on a PR | Validate the proposed merge; check its description and changelog policy | One shared scope decision; native platforms and browser shards keep separate runners |
 | CI on main | Validate the integrated main tree | PR success cannot prove the result of later merges |
@@ -23,7 +23,7 @@ for compatibility with branch rules.
 
 | Command | Coverage and definition |
 | --- | --- |
-| `check:commit` | Formatting and lint; shared by the Git hook, source checks and static lane |
+| `check:commit` | Staged `.agents/` files other than the shared skills (`check:agents`), formatting and lint; shared by the Git hook, source checks and static lane |
 | `check:source` | Commit guard, asset-building type check and tests; release preparation and tag validation |
 | `precommit` | Compatibility alias for `check:source`; not the Git pre-commit hook |
 | `check:static` | Notices, fragments, size, commit guard, all three source type checks, Bun type checks, production build, site and specs; defined once in `scripts/check-delivery.ts` |

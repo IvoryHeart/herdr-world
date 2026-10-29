@@ -24,7 +24,7 @@ import {
 import {
   chatArgv,
   findCodexSession,
-  harnessFor,
+  harnessOf,
   readUsage,
   reviewerArgv,
   reviewerPrompt,
@@ -48,6 +48,10 @@ export type Options = {
   author?: string;
   run?: number;
   round?: number;
+  /** Words after the command, as in `seat start <seat>`. */
+  args: string[];
+  /** `status`: the window, in hours, for reviewer token totals. */
+  hours: number;
 };
 
 /** A run's own detached checkout below the primary checkout's worktrees. */
@@ -114,7 +118,7 @@ export async function review(options: Options, dir: string, deps: Deps) {
     crew.close();
     return 143;
   }
-  const harness = harnessFor(model.model) ?? "codex";
+  const harness = harnessOf(model) ?? "codex";
   setRunSession(crew, runId, harness, model.model, null);
   process.on("SIGTERM", () => {
     show(`── stopped: a newer head made this review stale`);

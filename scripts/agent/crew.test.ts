@@ -19,7 +19,14 @@ import {
   type Seat,
   seats,
 } from "./crew";
-import { showStatus, status } from "./crew/status";
+import {
+  crewCodeVersion,
+  forgetGoneWatchers,
+  noticeStaleWatcher,
+  processStart,
+  startSeat,
+} from "./crew/seats";
+import { runTokens, showStatus, spend, status } from "./crew/status";
 import {
   type Deps,
   herdrIds,
@@ -41,12 +48,15 @@ import {
 import {
   actionsIn,
   activeRuns,
+  addRun,
   finishRun,
   getAction,
+  getMeta,
   getRun,
   openCrewStore,
   openLock,
   openRounds,
+  setMeta,
   setRunPid,
   setRunResult,
   setRunSession,
@@ -59,6 +69,7 @@ import {
   codexUsage,
   reviewerArgv,
   reviewerPrompt,
+  seatArgv,
 } from "./crew/worker";
 import { config, confirm, input, NOW, SHA, type Post } from "./gate/cases";
 import type { Run } from "./gate/observe";
@@ -2014,6 +2025,533 @@ describe("seats", () => {
       { name: "towncx", status: "done", focused: true },
     ]);
     expect(seats(() => ({ code: 1, stdout: "", stderr: "down" }))).toEqual([]);
+  });
+});
+
+describe("seats and spend", () => {
+  // Watcher tests give their own process start times; none means pid only.
+  const noStart = () => null;
+
+  test("a seat starts on exactly its roster harness, model, effort and persona", () => {
+    expect(
+      seatArgv({
+        model: "claude-haiku-5-5",
+        effort: "low",
+        persona: "You are dispatch.",
+      }),
+    ).toEqual({
+      kind: "claude",
+      args: [
+        "--model",
+        "claude-haiku-5-5",
+        "--effort",
+        "low",
+        "--permission-mode",
+        "auto",
+        "--append-system-prompt",
+        "You are dispatch.",
+      ],
+    });
+    expect(seatArgv({ model: "gpt-6.1-sol", effort: "xhigh" })).toEqual({
+      kind: "codex",
+      args: [
+        "-m",
+        "gpt-6.1-sol",
+        "-c",
+        'model_reasoning_effort="xhigh"',
+        "--dangerously-bypass-approvals-and-sandbox",
+      ],
+    });
+    expect(seatArgv({ model: "gemini-4" })).toBeNull();
+  });
+
+  test("seat start opens a tab and starts the named agent; refuses unknown or live seats", () => {
+    const root = mkdtempSync(join(tmpdir(), "crew-seat-"));
+    const dir = join(root, "repo", ".agents", "crew-gate");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, "config.json"),
+      JSON.stringify({
+        ...config,
+        roster: { dispatch: { model: "claude-haiku-5-5", effort: "low" } },
+      }),
+    );
+    const calls: string[][] = [];
+    let busy = 1;
+    let failStart = false;
+    let running: string[] = [];
+    const out: string[] = [];
+    const deps = {
+      run: (argv: string[]) => {
+        calls.push(argv);
+        if (argv.join(" ") === "herdr agent list")
+          return {
+            code: 0,
+            stdout: JSON.stringify({
+              result: { agents: running.map((name) => ({ name })) },
+            }),
+            stderr: "",
+          };
+        if (argv[1] === "tab")
+          return {
+            code: 0,
+            stdout: JSON.stringify({
+              result: {
+                tab: { tab_id: "w:t1" },
+                root_pane: { pane_id: "w:p1" },
+              },
+            }),
+            stderr: "",
+          };
+        if (argv[2] === "start" && busy-- > 0)
+          return { code: 1, stdout: "", stderr: "agent_pane_busy" };
+        if (argv[2] === "start" && failStart)
+          return { code: 1, stdout: "", stderr: "agent_name_taken" };
+        return { code: 0, stdout: "", stderr: "" };
+      },
+      out: (text: string) => out.push(text),
+    } as unknown as Deps;
+    const start = (name: string) =>
+      startSeat(parseOptions(["seat", "start", name]), dir, deps);
+    try {
+      expect(start("dispatch")).toBe(0);
+      const starts = calls.filter((argv) => argv[2] === "start");
+      expect(starts).toHaveLength(2);
+      expect(starts[1]).toEqual([
+        "herdr",
+        "agent",
+        "start",
+        "dispatch",
+        "--kind",
+        "claude",
+        "--pane",
+        "w:p1",
+        "--timeout",
+        "60000",
+        "--",
+        "--model",
+        "claude-haiku-5-5",
+        "--effort",
+        "low",
+        "--permission-mode",
+        "auto",
+      ]);
+      expect(calls.find((argv) => argv[1] === "tab")).toContain(
+        join(root, "repo"),
+      );
+      expect(out).toEqual(["started dispatch: claude claude-haiku-5-5 (low)"]);
+      // A seat that fails to start closes the tab it opened.
+      busy = 0;
+      failStart = true;
+      expect(() => start("dispatch")).toThrow("Herdr couldn't start dispatch");
+      expect(calls.at(-1)).toEqual(["herdr", "tab", "close", "w:t1"]);
+      failStart = false;
+      expect(() => start("visionary")).toThrow(
+        "visionary is not in the roster",
+      );
+      running = ["dispatch"];
+      expect(() => start("dispatch")).toThrow("dispatch is already running");
+      expect(() => parseOptions(["status", "extra"])).toThrow(
+        "Unknown argument extra",
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("status sums reviewer tokens per PR, pod and track in its window", () => {
+    expect(runTokens('{"total_tokens":900,"input_tokens":800}')).toBe(900);
+    expect(
+      runTokens(
+        '{"input_tokens":10,"output_tokens":20,"cache_creation_input_tokens":30,"cache_read_input_tokens":40}',
+      ),
+    ).toBe(100);
+    expect(runTokens(null)).toBe(0);
+    const crew = openCrewStore(":memory:");
+    const usage = (pr: number, tokens: number, at: number) => {
+      const id = addRun(
+        crew,
+        {
+          actionKey: `${pr}:x:review:rev2`,
+          reviewer: "rev2",
+          pr,
+          head: SHA.reviewed,
+          log: "log",
+          round: 1,
+        },
+        at,
+      );
+      finishRun(crew, id, 0, `{"total_tokens":${tokens}}`, at);
+    };
+    usage(7, 1000, NOW - 3_600_000);
+    usage(8, 500, NOW - 600_000);
+    usage(7, 250, NOW - 60_000);
+    usage(9, 99, NOW - 48 * 3_600_000);
+    const labels: Record<number, string[]> = {
+      7: ["pod:town", "track:product"],
+      8: ["pod:platform", "track:debt"],
+    };
+    // The run two days ago is outside the 24-hour window.
+    const dir = mkdtempSync(join(tmpdir(), "crew-spend-"));
+    const lines: string[] = [];
+    try {
+      showStatus(crew, dir, (line) => lines.push(line), NOW, { hours: 24 });
+      expect(lines).toContain("reviewer tokens, last 24 h: 1,750 in 3 run(s)");
+      expect(lines).toContain("  by pr: #7 1,250; #8 500");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+      crew.close();
+    }
+    const grouped: string[] = [];
+    spend(
+      [
+        { pr: 7, usage: '{"total_tokens":1250}' },
+        { pr: 8, usage: '{"total_tokens":500}' },
+      ] as Parameters<typeof spend>[0],
+      (pr) => labels[pr] ?? [],
+      24,
+      (line) => grouped.push(line),
+    );
+    expect(grouped).toEqual([
+      "reviewer tokens, last 24 h: 1,750 in 2 run(s)",
+      "  by pr: #7 1,250; #8 500",
+      "  by pod: town 1,250; platform 500",
+      "  by track: product 1,250; debt 500",
+    ]);
+  });
+
+  test("status names live seats missing from the roster and a watcher on old code", () => {
+    const dir = mkdtempSync(join(tmpdir(), "crew-roster-"));
+    const crew = openCrewStore(":memory:");
+    try {
+      writeFileSync(
+        join(dir, "config.json"),
+        JSON.stringify({ ...config, roster: ROSTER }),
+      );
+      // The watcher records both versions from its own checkout, so `status`
+      // run from another worktree compares the watcher's, not its own.
+      setMeta(
+        crew,
+        "watcher:4242",
+        JSON.stringify({ loaded: "old", disk: "new" }),
+      );
+      const lines: string[] = [];
+      const show = (alive: boolean) => {
+        lines.length = 0;
+        showStatus(crew, dir, (line) => lines.push(line), NOW, {
+          live: [
+            { name: "rev2", status: "idle", focused: false },
+            { name: "dispatch", status: "idle", focused: false },
+          ],
+          alive: () => alive,
+        });
+        return lines;
+      };
+      expect(show(true)).toContain("seats not in the roster: dispatch");
+      expect(show(true).at(-1)).toContain("older crew code");
+      // A watcher that has exited isn't stale, just gone.
+      expect(show(false).some((line) => line.includes("older crew code"))).toBe(
+        false,
+      );
+      setMeta(
+        crew,
+        "watcher:4242",
+        JSON.stringify({ loaded: "old", disk: "old" }),
+      );
+      expect(show(true).some((line) => line.includes("older crew code"))).toBe(
+        false,
+      );
+    } finally {
+      crew.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("the code version follows everything the watcher imports, not tests", () => {
+    const code = mkdtempSync(join(tmpdir(), "crew-code-"));
+    try {
+      const write = (file: string, text: string) => {
+        mkdirSync(join(code, file, ".."), { recursive: true });
+        writeFileSync(join(code, file), text);
+      };
+      write(
+        "scripts/agent/crew.ts",
+        'import { plan } from "./crew/plan";\nexport { gate } from "./gate";\n',
+      );
+      write(
+        "scripts/agent/crew/plan.ts",
+        'import type { Rule } from "../../../shared/rules";\n',
+      );
+      write(
+        "scripts/agent/gate.ts",
+        'const later = () => import("./gate/store");\n',
+      );
+      write("scripts/agent/gate/store.ts", "// store\n");
+      write("shared/rules.ts", "// rules v1\n");
+      write("shared/unrelated.ts", "// not imported\n");
+      const entry = join(code, "scripts", "agent", "crew.ts");
+      const before = crewCodeVersion(entry);
+      write("scripts/agent/crew/plan.test.ts", "// test\n");
+      write("shared/unrelated.ts", "// changed, still not imported\n");
+      expect(crewCodeVersion(entry)).toBe(before);
+      // A merged change only to an imported dependency outside the crew.
+      write("shared/rules.ts", "// rules v2\n");
+      const shared = crewCodeVersion(entry);
+      expect(shared).not.toBe(before);
+      write("scripts/agent/gate/store.ts", "// store v2\n");
+      expect(crewCodeVersion(entry)).not.toBe(shared);
+    } finally {
+      rmSync(code, { recursive: true, force: true });
+    }
+  });
+
+  test("a stale watcher tells the owner once per version, retrying a failed notice", () => {
+    const dir = mkdtempSync(join(tmpdir(), "crew-stale-"));
+    const crew = openCrewStore(":memory:");
+    try {
+      let refuse = true;
+      const notices: string[][] = [];
+      const deps = {
+        alive: () => true,
+        run: (argv: string[]) => {
+          notices.push(argv);
+          return refuse
+            ? { code: 1, stdout: "", stderr: "no server" }
+            : { code: 0, stdout: "", stderr: "" };
+        },
+      } as unknown as Deps;
+      const feedText = () =>
+        existsSync(join(dir, "feed.log"))
+          ? readFileSync(join(dir, "feed.log"), "utf8")
+          : "";
+      noticeStaleWatcher(crew, "v1", "v1", dir, deps, NOW, 11, noStart);
+      expect(notices).toEqual([]);
+      noticeStaleWatcher(crew, "v1", "v2", dir, deps, NOW, 11, noStart);
+      expect(notices).toHaveLength(1);
+      expect(feedText()).toBe("");
+      refuse = false;
+      noticeStaleWatcher(crew, "v1", "v2", dir, deps, NOW, 11, noStart);
+      noticeStaleWatcher(crew, "v1", "v2", dir, deps, NOW, 11, noStart);
+      expect(notices).toHaveLength(2);
+      expect(notices[1]!.slice(0, 4)).toEqual([
+        "herdr",
+        "notification",
+        "show",
+        "Crew: restart the watcher",
+      ]);
+      expect(feedText()).toContain("told the owner to restart it");
+      // Another merge is another version: the owner hears again.
+      noticeStaleWatcher(crew, "v1", "v3", dir, deps, NOW, 11, noStart);
+      expect(notices).toHaveLength(3);
+    } finally {
+      crew.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("watchers in two checkouts sharing the store keep their own versions", () => {
+    const dir = mkdtempSync(join(tmpdir(), "crew-two-"));
+    const crew = openCrewStore(":memory:");
+    try {
+      const deps = {
+        alive: () => true,
+        run: () => ({ code: 0, stdout: "", stderr: "" }),
+      } as unknown as Deps;
+      const stale = () => {
+        const lines: string[] = [];
+        showStatus(crew, dir, (line) => lines.push(line), NOW, {
+          alive: () => true,
+        });
+        return lines.filter((line) => line.includes("older crew code"));
+      };
+      // B runs v2 from its current checkout; A runs v1 from its own.
+      noticeStaleWatcher(crew, "v2", "v2", dir, deps, NOW, 202, noStart);
+      noticeStaleWatcher(crew, "v1", "v1", dir, deps, NOW, 101, noStart);
+      expect(stale()).toEqual([]);
+      // A's checkout moves on: only A is stale.
+      noticeStaleWatcher(crew, "v1", "v3", dir, deps, NOW, 101, noStart);
+      noticeStaleWatcher(crew, "v2", "v2", dir, deps, NOW, 202, noStart);
+      expect(stale()).toEqual([
+        "watcher 101 runs older crew code than its checkout; restart `agent:crew -- watch`",
+      ]);
+    } finally {
+      crew.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a stopped watcher's record is forgotten, so a reused pid isn't reported", () => {
+    const dir = mkdtempSync(join(tmpdir(), "crew-gone-"));
+    const crew = openCrewStore(":memory:");
+    try {
+      const running = new Set([101, 202]);
+      const deps = {
+        alive: (pid: number) => running.has(pid),
+        run: () => ({ code: 0, stdout: "", stderr: "" }),
+      } as unknown as Deps;
+      const stale = () => {
+        const lines: string[] = [];
+        showStatus(crew, dir, (line) => lines.push(line), NOW, {
+          alive: deps.alive,
+          startOf: noStart,
+        });
+        return lines.filter((line) => line.includes("older crew code"));
+      };
+      // Watcher 101 falls behind its checkout, then is killed without
+      // cleaning up; watcher 202 replaces it.
+      noticeStaleWatcher(crew, "v1", "v2", dir, deps, NOW, 101, noStart);
+      running.delete(101);
+      noticeStaleWatcher(crew, "v2", "v2", dir, deps, NOW, 202, noStart);
+      expect(getMeta(crew, "watcher:101")).toBeNull();
+      // The OS later gives pid 101 to an unrelated process.
+      running.add(101);
+      expect(stale()).toEqual([]);
+      forgetGoneWatchers(crew, () => false, 202);
+      expect(getMeta(crew, "watcher:202")).not.toBeNull();
+    } finally {
+      crew.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a crashed watcher's pid reused before any cleanup isn't taken for it", () => {
+    const dir = mkdtempSync(join(tmpdir(), "crew-reuse-"));
+    const crew = openCrewStore(":memory:");
+    try {
+      const starts = new Map([
+        [101, "Wed Oct 28 10:00:00 2026"],
+        [202, "Wed Oct 28 11:00:00 2026"],
+      ]);
+      const startOf = (pid: number) => starts.get(pid) ?? null;
+      const deps = {
+        alive: (pid: number) => starts.has(pid),
+        run: () => ({ code: 0, stdout: "", stderr: "" }),
+      } as unknown as Deps;
+      const stale = () => {
+        const lines: string[] = [];
+        showStatus(crew, dir, (line) => lines.push(line), NOW, {
+          alive: deps.alive,
+          startOf,
+        });
+        return lines.filter((line) => line.includes("older crew code"));
+      };
+      noticeStaleWatcher(crew, "v1", "v2", dir, deps, NOW, 101, startOf);
+      expect(stale()).toHaveLength(1);
+      // Watcher 101 crashes, and an unrelated process (or a reboot) takes
+      // its pid before any other watcher has run a pass.
+      starts.set(101, "Wed Oct 28 12:30:00 2026");
+      expect(stale()).toEqual([]);
+      noticeStaleWatcher(crew, "v2", "v2", dir, deps, NOW, 202, startOf);
+      expect(getMeta(crew, "watcher:101")).toBeNull();
+      expect(JSON.parse(getMeta(crew, "watcher:202")!).started).toBe(
+        "Wed Oct 28 11:00:00 2026",
+      );
+    } finally {
+      crew.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a new watcher on a crashed watcher's pid starts its own record", () => {
+    const dir = mkdtempSync(join(tmpdir(), "crew-replace-"));
+    const crew = openCrewStore(":memory:");
+    try {
+      const starts = new Map([
+        [101, "Wed Oct 28 10:00:00 2026"],
+        [202, "Wed Oct 28 11:00:00 2026"],
+      ]);
+      const startOf = (pid: number) => starts.get(pid) ?? null;
+      const notices: string[][] = [];
+      const deps = {
+        alive: (pid: number) => starts.has(pid),
+        run: (argv: string[]) => {
+          notices.push(argv);
+          return { code: 0, stdout: "", stderr: "" };
+        },
+      } as unknown as Deps;
+      // Watcher 101 runs v1 and is told about v3 in its checkout.
+      noticeStaleWatcher(crew, "v1", "v3", dir, deps, NOW, 101, startOf);
+      expect(notices).toHaveLength(1);
+      // It crashes; a new watcher gets pid 101 before any cleanup, runs v2,
+      // and its checkout is at v3 too: it hasn't been told, so it tells.
+      starts.set(101, "Wed Oct 28 12:30:00 2026");
+      noticeStaleWatcher(crew, "v2", "v3", dir, deps, NOW, 101, startOf);
+      expect(JSON.parse(getMeta(crew, "watcher:101")!)).toEqual({
+        loaded: "v2",
+        disk: "v3",
+        started: "Wed Oct 28 12:30:00 2026",
+        told: "v3",
+      });
+      expect(notices).toHaveLength(2);
+      // Another watcher's pass keeps the live record, and status reports it.
+      noticeStaleWatcher(crew, "v3", "v3", dir, deps, NOW, 202, startOf);
+      expect(getMeta(crew, "watcher:101")).not.toBeNull();
+      const lines: string[] = [];
+      showStatus(crew, dir, (line) => lines.push(line), NOW, {
+        alive: deps.alive,
+        startOf,
+      });
+      expect(lines.filter((line) => line.includes("older crew code"))).toEqual([
+        "watcher 101 runs older crew code than its checkout; restart `agent:crew -- watch`",
+      ]);
+    } finally {
+      crew.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a process's start time reads the same whatever the caller's TZ and locale", () => {
+    // Callers with different settings, such as a watcher and `status` run
+    // from other shells, read this test process's start time.
+    const read = (env: Record<string, string>) =>
+      Bun.spawnSync(
+        [
+          process.execPath,
+          "-e",
+          `import { processStart } from ${JSON.stringify(join(import.meta.dir, "crew", "seats.ts"))}; console.log(processStart(${process.pid}));`,
+        ],
+        { env: { ...process.env, ...env }, stdout: "pipe" },
+      )
+        .stdout.toString()
+        .trim();
+    const tokyo = read({ TZ: "Asia/Tokyo", LC_ALL: "C" });
+    const losAngeles = read({ TZ: "America/Los_Angeles", LC_ALL: "C" });
+    expect(tokyo).not.toBe("null");
+    expect(tokyo).toBe(losAngeles);
+    expect(processStart(process.pid)).toBe(tokyo);
+  });
+
+  test("reviewers run on their roster harness and persona too", () => {
+    const entry = {
+      model: "sonnet",
+      harness: "claude" as const,
+      persona: "Use the review checklist.",
+    };
+    expect(reviewerArgv(entry, "brief", "s-1")).toEqual([
+      "claude",
+      "--model",
+      "sonnet",
+      "--permission-mode",
+      "auto",
+      "--append-system-prompt",
+      "Use the review checklist.",
+      "--session-id",
+      "s-1",
+      "brief",
+    ]);
+    const settings = {
+      ...SETTINGS,
+      roster: {
+        ...ROSTER,
+        rev2: { model: "sol-latest", harness: "codex" as const },
+      },
+    };
+    const actions = planned(town({ head: SHA.reviewed, posts: [] }), settings);
+    expect(actions.map((a) => [a.kind, a.target])).toContainEqual([
+      "review",
+      "rev2",
+    ]);
+    expect(actions.some((a) => a.kind === "judgment")).toBe(false);
   });
 });
 

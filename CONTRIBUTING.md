@@ -89,7 +89,8 @@ The local check uses the same knowledge-map and changelog functions as CI agains
 the committed diff from `origin/main`. For a stacked PR, append its base ref to
 the check command. It validates fragment contents as well as the description.
 
-`check:commit` names the hook's format/lint guard. Release workflows use
+`check:commit` names the hook's guard: it refuses staged files under `.agents/`
+other than the shared skills (`check:agents`), then checks format and lint. Release workflows use
 `check:source` for the guard, asset-building type check and tests; `precommit`
 remains its compatibility alias. `check` delegates static validation to the same
 lane used by local delivery, then runs tests. That lane checks source types and
