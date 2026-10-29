@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
-import { parseCommandMenu } from "./pending-prompt";
+import { menuQuoted, parseCommandMenu } from "./pending-prompt";
 
 const context = { session: "fixture", seq: 7 };
 const screen = (name: string) =>
@@ -221,4 +221,46 @@ test("the fingerprint covers the session and Herdr's state", () => {
   expect(
     parseCommandMenu("codex", text, { ...context, seq: 8 })!.fingerprint,
   ).not.toBe(base);
+});
+
+const quotedConfirmation = [
+  "• The confirmation looks like this:",
+  "",
+  "    Enable full access?",
+  "    When Codex runs with full access, it can edit any file.",
+  "",
+  "  › 1. Yes, continue anyway  Apply full access for this session",
+  "    2. Cancel                Go back without enabling full access",
+  "",
+  "    enter select · esc back",
+  "",
+  "› Ask Codex to do anything",
+  "",
+  "  GPT-6.1-Sol high · Context 0% used",
+  "  ? for shortcuts",
+].join("\n");
+
+test("a Codex menu above the composer may be the agent quoting one", () => {
+  // The layout alone cannot tell a quoted menu from a real one.
+  const quoted = parseCommandMenu("codex", quotedConfirmation, context)!;
+  expect(quoted.question).toEqual(["Enable full access?"]);
+  expect(quoted.menu!.overlay).toBe(true);
+  expect(menu("menu-codex-full-access")!.menu!.overlay).toBe(true);
+  // The agent's last message decides: quoting the title or footer, or an
+  // unreadable transcript, is not a menu.
+  expect(
+    menuQuoted(
+      quoted,
+      "The confirmation looks like this:\n\nEnable full access?",
+    ),
+  ).toBe(true);
+  expect(menuQuoted(quoted, "Press enter select · esc back to leave.")).toBe(
+    true,
+  );
+  expect(menuQuoted(quoted, null)).toBe(true);
+  expect(menuQuoted(quoted, "Switched permissions.")).toBe(false);
+  // A menu at the bottom of the screen replaces the composer: never a quote.
+  const bottom = menu("menu-codex-permissions")!;
+  expect(bottom.menu!.overlay).toBeUndefined();
+  expect(menuQuoted(bottom, null)).toBe(false);
 });

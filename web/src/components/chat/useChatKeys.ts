@@ -4,6 +4,12 @@ import type { KeyResult } from "./types";
 
 /** After a slash command, rereads that catch the menu it opens. */
 const COMMAND_REREADS_MS = [700, 1800];
+/**
+ * After a key, rereads that catch a redraw later than the service's own
+ * wait (a composer key has none): a changed menu does not change what the
+ * conversation watch reports.
+ */
+const KEY_REREADS_MS = [300, 900];
 
 /**
  * Keys Chat presses in the agent's pane: a command menu's keys and field
@@ -29,14 +35,28 @@ export function useChatKeys({
   const [notice, setNotice] = useState<{ scope: string; text: string } | null>(
     null,
   );
-  const timers = useRef<number[]>([]);
+  const timers = useRef(new Set<number>());
   useEffect(() => {
     setNotice(null);
+    const pending = timers.current;
     return () => {
-      for (const timer of timers.current) window.clearTimeout(timer);
-      timers.current = [];
+      for (const timer of pending) window.clearTimeout(timer);
+      pending.clear();
     };
   }, [scope]);
+
+  const rereadLater = useCallback(
+    (delays: readonly number[]) => {
+      for (const ms of delays) {
+        const timer = window.setTimeout(() => {
+          timers.current.delete(timer);
+          reload();
+        }, ms);
+        timers.current.add(timer);
+      }
+    },
+    [reload],
+  );
 
   /** Press `key`, or type `text`, and return why nothing was sent. */
   const press = useCallback(
@@ -63,9 +83,10 @@ export function useChatKeys({
       } finally {
         setPressing(false);
         reload();
+        rereadLater(KEY_REREADS_MS);
       }
     },
-    [client, paneId, reload, sessionFingerprint],
+    [client, paneId, reload, rereadLater, sessionFingerprint],
   );
 
   const pressMenu = useCallback(
@@ -82,10 +103,10 @@ export function useChatKeys({
 
   // A slash command's menu opens after the command lands; Herdr has no
   // event for it, so Chat rereads twice.
-  const afterCommand = useCallback(() => {
-    for (const ms of COMMAND_REREADS_MS)
-      timers.current.push(window.setTimeout(reload, ms));
-  }, [reload]);
+  const afterCommand = useCallback(
+    () => rereadLater(COMMAND_REREADS_MS),
+    [rereadLater],
+  );
 
   return {
     pressing,

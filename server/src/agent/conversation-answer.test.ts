@@ -4,6 +4,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHerdrConversationSource } from "./herdr-conversation";
+import { parseCommandMenu } from "./pending-prompt";
 import { localAgentSessionFiles } from "./session-file-access";
 import { createSessionProjectionCache } from "./session-projection-cache";
 import { createAgentSessionResolverContext } from "./session-resolver";
@@ -545,5 +546,88 @@ describe("a command menu open while the agent is idle", () => {
       reason: "changed",
     });
     expect(state.sent).toHaveLength(1);
+  });
+});
+
+const quotedConfirmation = [
+  "• The confirmation looks like this:",
+  "",
+  "    Enable full access?",
+  "    When Codex runs with full access, it can edit any file.",
+  "",
+  "  › 1. Yes, continue anyway  Apply full access for this session",
+  "    2. Cancel                Go back without enabling full access",
+  "",
+  "    enter select · esc back",
+  "",
+  "› Ask Codex to do anything",
+  "",
+  "  GPT-6.1-Sol high · Context 0% used",
+  "  ? for shortcuts",
+].join("\n");
+
+describe("a Codex menu drawn above its composer", () => {
+  const rollout = async (name: string, said: string) => {
+    const path = join(root, `rollout-${name}.jsonl`);
+    await writeFile(
+      path,
+      [
+        { type: "session_meta", payload: { id: name, cwd: root } },
+        {
+          type: "response_item",
+          timestamp: new Date().toISOString(),
+          payload: {
+            type: "message",
+            role: "assistant",
+            content: [{ type: "output_text", text: said }],
+          },
+        },
+      ]
+        .map((line) => JSON.stringify(line))
+        .join("\n") + "\n",
+    );
+    return path;
+  };
+
+  test("is the agent's message when its last message quotes it", async () => {
+    const { state, source } = fakeHerdr("codex");
+    state.status = "done";
+    state.screen = quotedConfirmation;
+    state.session = await rollout(
+      "quoting",
+      "The confirmation looks like this:\n\n    Enable full access?\n    enter select · esc back",
+    );
+    const shown = await source.latest({ pane_id: "w1:p1", menus: true });
+    expect(shown.session_fingerprint).toBeTruthy();
+    expect(shown.pending_prompt).toBeNull();
+    // Nor can a key reach the composer through it.
+    const fingerprint = parseCommandMenu("codex", quotedConfirmation, {
+      session: null,
+      seq: null,
+    })!.fingerprint;
+    expect(
+      await source.press({
+        pane_id: "w1:p1",
+        key: "1",
+        session_fingerprint: shown.session_fingerprint!,
+        menu_fingerprint: fingerprint,
+      }),
+    ).toMatchObject({ status: "refused", menu: null });
+    expect(state.sent).toEqual([]);
+  });
+
+  test("is Codex's confirmation when the transcript does not quote it", async () => {
+    const { state, source } = fakeHerdr("codex");
+    state.status = "done";
+    state.screen = readFileSync(
+      new URL(
+        "./fixtures/pending-prompts/menu-codex-full-access.txt",
+        import.meta.url,
+      ),
+      "utf8",
+    );
+    state.session = await rollout("confirming", "Permissions are set.");
+    const shown = await source.latest({ pane_id: "w1:p1", menus: true });
+    expect(shown.pending_prompt?.question).toEqual(["Enable full access?"]);
   });
 });

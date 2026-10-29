@@ -1,5 +1,5 @@
 import { SquareTerminal } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { PendingPrompt } from "../types";
 import "./ask.css";
 
@@ -40,12 +40,35 @@ export function MenuCard({
 }) {
   const { menu } = prompt;
   const [text, setText] = useState("");
+  // A draft belongs to the field it was typed for.
+  useEffect(() => setText(""), [prompt.fingerprint]);
+  // After a key sent from inside the card, focus returns to the card itself,
+  // whose keys work: the control that sent it was disabled meanwhile, and a
+  // focused button would take the next arrow.
+  const cardRef = useRef<HTMLElement>(null);
+  const refocus = useRef(false);
+  const own =
+    <T extends unknown[]>(send: (...args: T) => void) =>
+    (...args: T) => {
+      refocus.current = Boolean(
+        cardRef.current?.contains(document.activeElement),
+      );
+      send(...args);
+    };
+  const press = own(onPress);
+  const type = own(onType);
+  useEffect(() => {
+    if (pressing || !refocus.current) return;
+    refocus.current = false;
+    cardRef.current?.focus({ preventScroll: true });
+  }, [pressing, prompt.fingerprint]);
   const keys = new Set([
     ...prompt.options.map((option) => option.key).filter(Boolean),
     ...menu.controls.map((control) => control.key),
   ]);
   return (
     <section
+      ref={cardRef}
       className="agent-chat-ask agent-chat-menu"
       aria-label={`${agent} menu`}
       // Keys reach the menu only while this card has focus, and a held key
@@ -71,7 +94,7 @@ export function MenuCard({
         if (!key || !keys.has(key)) return;
         event.preventDefault();
         event.stopPropagation();
-        onPress(key);
+        press(key);
       }}
     >
       <h3>{prompt.question.join(" ")}</h3>
@@ -84,7 +107,7 @@ export function MenuCard({
           onSubmit={(event) => {
             event.preventDefault();
             if (text && !pressing) {
-              onType(text);
+              type(text);
               setText("");
             }
           }}
@@ -123,7 +146,7 @@ export function MenuCard({
                   ? `Press ${option.key}`
                   : "Move the cursor here with ↑ and ↓"
               }
-              onClick={() => onPress(option.key)}
+              onClick={() => press(option.key)}
             >
               <kbd>{option.number}</kbd>
               <span className="agent-chat-ask-label">
@@ -146,7 +169,7 @@ export function MenuCard({
             type="button"
             disabled={pressing}
             aria-label={`${control.label}: ${control.action}`}
-            onClick={() => onPress(control.key)}
+            onClick={() => press(control.key)}
           >
             <kbd>{control.label}</kbd> {control.action}
           </button>

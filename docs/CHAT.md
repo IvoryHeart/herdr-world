@@ -183,7 +183,10 @@ that root; stat metadata cannot redirect the read to a different transcript.
     field are shown as they are.
   - Codex: a title paragraph directly above a block of numbered options, and
     a footer such as `enter select · esc back`, at the bottom of the screen or
-    directly above the idle composer (the full-access confirmation).
+    directly above the idle composer (the full-access confirmation). Codex
+    draws its own messages in that place too, so a menu above the composer is
+    not offered when the agent's last message quotes its title or footer, or
+    when the transcript cannot be read.
   The menu card shows the title, the other lines, each numbered option with
   the harness's cursor marked, the field's contents and one button per key
   the footer names (plus `↑`/`↓` for a list and `←`/`→` where a line says
@@ -193,14 +196,18 @@ that root; stat metadata cannot redirect the read to a different transcript.
   would take the digit as text; those options are reached with the arrows.
   Field text is one line of at most 500 characters without control
   characters, typed without Enter so the next screen shows it before the
-  menu's own Enter submits it. The card's keys also work while it has focus.
+  menu's own Enter submits it. The card's keys also work while it has focus;
+  the card stays in place across the menu's steps, and after a key sent from
+  it (a click included) focus returns to the card, so ↓ ↓ Enter walks a list.
 - Each menu key calls `agent_conversation.press` with the session and the
   menu's fingerprint. The service checks that the session is the one Chat
   showed, the pane still shows a menu by the rules above, the screen shows that exact
   menu and the key is one it names; then it reads the pane again (agent,
   session, terminal, title, revision and state sequence) and presses the key.
   It rereads for up to about half a second until the screen changes and
-  returns the next menu, or none when it closed. Any difference refuses with
+  returns the next menu, or none when it closed; Chat also rereads 0.3 and
+  0.9 seconds after any key, since a changed menu does not trigger the
+  conversation watch. Any difference refuses with
   nothing sent and returns the menu now shown. A new connection, runtime, pane
   or session retires the card and its notice. Answers and keys to one pane
   never interleave. The same gap as answers remains: Herdr cannot make the key
@@ -211,7 +218,11 @@ that root; stat metadata cannot redirect the read to a different transcript.
   arranged in Settings, on desktop and phone. Each press calls
   `agent_conversation.press` without a menu fingerprint: the service checks
   the session and Herdr's key name (`ctrl+c`, `alt+up`, `shift+tab`, `esc`,
-  `f5`, one character), then the pane again, and presses it. Page Up/Down
+  `f5`, one character), then the pane again, and presses it. A custom
+  combination sends what the Terminal sends: Shift makes a printable key its
+  shifted character (Shift+1 is `!`, Shift+A is `A`), Ctrl+Shift keeps Shift
+  on letters (`ctrl+shift+x`), and combinations the Terminal refuses or sends
+  as their own key code (Ctrl+Shift+1, Alt+[) are disabled. Page Up/Down
   scroll the Terminal and Herdr names no Home, End, Insert or Delete, so those
   buttons are disabled in Chat. The popover stays open to walk a menu.
 - Keeps the last good conversation when a read fails, for example while the

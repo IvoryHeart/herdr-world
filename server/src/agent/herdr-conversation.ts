@@ -19,6 +19,7 @@ import {
   type DeliveryView,
 } from "./conversation-delivery";
 import {
+  menuQuoted,
   parseCommandMenu,
   parsePendingPrompt,
   PROMPT_SCREEN_LINES,
@@ -441,7 +442,7 @@ export function createHerdrConversationSource(args: {
   const readMenu = async (
     paneId: string,
     info: Record<string, unknown> | null,
-    openTool?: boolean,
+    shown?: Conversation,
   ): Promise<PendingPrompt | null> => {
     const status = stringValue(info?.agent_status);
     if (!MENU_STATUSES.has(status) && status !== "blocked") return null;
@@ -457,11 +458,22 @@ export function createHerdrConversationSource(args: {
     if (text === null) return null;
     const agent = normalizeAgentName(stringValue(info?.agent));
     const context = promptContext(info);
+    let seen = shown;
+    const transcript = async () => (seen ??= await readShown(paneId));
     if (status === "blocked") {
       if (parsePendingPrompt(agent, text, context)?.options.length) return null;
-      if (openTool ?? (await readShown(paneId).then(hasOpenTool))) return null;
+      if (hasOpenTool(await transcript())) return null;
     }
-    return parseCommandMenu(agent, text, context);
+    const menu = parseCommandMenu(agent, text, context);
+    if (menu?.menu?.overlay) {
+      const conversation = await transcript();
+      let said: string | null = conversation.status === "ok" ? "" : null;
+      for (const message of conversation.messages ?? [])
+        if (message.role === "assistant" && message.kind === "message")
+          said = message.text;
+      if (menuQuoted(menu, said)) return null;
+    }
+    return menu;
   };
 
   const read = async ({
@@ -488,9 +500,7 @@ export function createHerdrConversationSource(args: {
                   : null;
               if (asked?.options.length || !menus || !shown.session_fingerprint)
                 return asked;
-              return (
-                (await readMenu(pane_id, info, hasOpenTool(shown))) ?? asked
-              );
+              return (await readMenu(pane_id, info, shown)) ?? asked;
             })
             .catch(() => null)
         : null;

@@ -56,6 +56,11 @@ export type PromptMenu = {
   controls: MenuControl[];
   /** What the menu's text field shows: a placeholder or typed text. */
   field?: string;
+  /**
+   * Drawn above Codex's idle composer, where the agent's own messages also
+   * appear: see `menuQuoted`.
+   */
+  overlay?: true;
 };
 
 export type MenuControl = {
@@ -703,8 +708,25 @@ function commandMenu(lines: string[], agent: string): Parsed | null {
       after,
       controls,
       ...(field !== undefined ? { field } : {}),
+      ...(lines.slice(footerAt + 1).some((line) => line.trim())
+        ? { overlay: true as const }
+        : {}),
     },
   };
+}
+
+/**
+ * Whether a menu drawn above Codex's composer may be the agent's own message
+ * quoting one: its last message (null when unreadable) shows the menu's title
+ * or footer. Codex draws message text in the same place and indentation, so
+ * such a menu is not offered.
+ */
+export function menuQuoted(menu: PendingPrompt, said: string | null) {
+  if (!menu.menu?.overlay) return false;
+  if (said === null) return true;
+  return [menu.question[0] ?? "", menu.menu.footer].some(
+    (line) => line && said.includes(line),
+  );
 }
 
 /**

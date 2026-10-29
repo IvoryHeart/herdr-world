@@ -471,11 +471,18 @@ otherwise, and never a menu for Town. The real parser and key action were also
 driven natively against the isolated session: Claude Code `/permissions` to a
 saved project-local rule and back, Codex `/model` with its effort step and
 `/permissions` with its confirmation, and a Claude `/clear` after which a key
-from the old session was refused. `chatKeys.test.ts` maps every Terminal key control to Herdr's names.
+from the old session was refused. A menu drawn above Codex's composer that the agent's last message quotes, as
+an agent describing the confirmation would, is rejected at the parser and
+source levels. `chatKeys.test.ts` maps every Terminal key control to Herdr's
+names and checks printable Shift/Alt combinations against the Terminal's own
+encoder; Herdr 0.9.3 was observed sending `shift+1` as `1`, so Chat sends
+the shifted character.
 `chatMenus.test.ts` uses real Chrome at desktop and phone widths to check the
 whole Chat chain: menus requested only by Chat, the reread after a slash
 command, cursor marking, arrow-only options, the qualified press parameters,
-card keyboard keys, refusal notices retired by a session change, field typing,
+card keyboard keys across successive redrawn menus, focus back on the card
+after a clicked key, a composer key's late redraw caught by the reread,
+refusal notices retired by a session change, field typing,
 composer draft retention and the ellipsis key controls. No model is added: the
 property is the same check-then-dispatch admission as prompt answers, directly
 tested; the race after the last check is the documented Herdr gap.

@@ -1868,7 +1868,9 @@ Chat SHALL show a harness's own command menu (such as Claude Code's or Codex's
 idle or done, read from the bottom of its screen only on Chat's request. When
 Herdr reports the pane blocked, Chat SHALL show a menu only if the prompt
 parser reads no question there and the transcript is readable with no open
-tool call; otherwise the screen remains a question. Only a
+tool call; otherwise the screen remains a question. A Codex menu drawn above
+its idle composer SHALL NOT be offered when the agent's last message quotes its
+title or footer or the transcript cannot be read. Only a
 complete recognized panel SHALL be offered: a Claude Code panel between its top
 edge and a footer of key segments including Escape, or a Codex title paragraph,
 numbered option block and such a footer at the bottom of the screen or directly
@@ -1888,10 +1890,12 @@ refusal SHALL return the menu now shown; a sent key SHALL return the next menu
 or none. Menu keys and answers to one pane SHALL NOT interleave.
 
 The composer's ellipsis menu SHALL offer the Terminal's configured key
-controls on desktop and phone. Each SHALL be sent only as a Herdr key name for
+controls on desktop and phone, with the characters and modifiers the Terminal
+would send; a combination Herdr cannot name that way SHALL be disabled. Each SHALL be sent only as a Herdr key name for
 the session Chat shows and only after a second unchanged pane read; scrolling
 and keys Herdr does not name SHALL be disabled. A new connection, runtime, pane
-or session SHALL retire a shown menu and its notice. Opening, changing or
+or session SHALL retire a shown menu and its notice. Keyboard focus SHALL stay on
+the menu card across the menu's steps. Opening, changing or
 closing a menu SHALL keep the transcript, its scroll position, the composer
 draft, attachments and send receipts. Herdr's lack of conditional input
 remains a documented gap between the last check and the key.

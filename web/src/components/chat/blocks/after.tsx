@@ -81,7 +81,9 @@ export function ChatAfterBlocks({
       ) : null}
       {prompt?.menu && onPress && onType ? (
         <MenuCard
-          key={prompt.fingerprint}
+          // One card for the menu's steps, so keyboard focus survives each
+          // redraw; the scope above remounts it for another session.
+          key="menu"
           agent={agent}
           prompt={{ ...prompt, menu: prompt.menu }}
           pressing={pressing}

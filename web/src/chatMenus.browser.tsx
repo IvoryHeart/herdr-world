@@ -250,6 +250,59 @@ try {
     "The menu card fits the viewport",
   );
 
+  // Keyboard navigation across steps: each sent key redraws the menu with a
+  // new fingerprint, and focus stays on the card for the next key.
+  let step = 0;
+  pressReply = (params) => {
+    step += 1;
+    menu = {
+      ...modelMenu,
+      fingerprint: `model-menu-${step}`,
+      options: modelMenu.options.map((option, index) => ({
+        ...option,
+        cursor: index === Math.min(step, 2) || undefined,
+      })),
+    };
+    return { status: "sent", key: params.key, menu };
+  };
+  const before = presses().length;
+  for (const key of ["ArrowDown", "ArrowDown", "Enter"]) {
+    const card =
+      document.activeElement?.closest<HTMLElement>(".agent-chat-menu");
+    check(card, `Focus is on the menu card before ${key}`);
+    await act(async () =>
+      document.activeElement!.dispatchEvent(
+        new KeyboardEvent("keydown", { key, bubbles: true }),
+      ),
+    );
+    await settle();
+  }
+  check(
+    JSON.stringify(
+      presses()
+        .slice(before)
+        .map((press) => press.key),
+    ) === JSON.stringify(["down", "down", "enter"]) &&
+      presses()
+        .slice(before)
+        .every((press, index) =>
+          index === 0
+            ? press.menu_fingerprint === "model-menu"
+            : press.menu_fingerprint === `model-menu-${index}`,
+        ),
+    "Successive keys reach successive menus from the keyboard",
+  );
+  // A clicked control is disabled while its key is sent; focus returns to
+  // the card afterwards.
+  const moveDown = button("move");
+  moveDown?.focus();
+  await act(async () => moveDown!.click());
+  await settle();
+  check(
+    document.activeElement?.classList.contains("agent-chat-menu"),
+    "After a clicked key, keyboard focus is back on the card",
+  );
+
   // A new session retires the card's notice; its keys go to that session.
   session = "b".repeat(64);
   await chat("chat-2");
@@ -321,8 +374,23 @@ try {
     )?.disabled,
     "Paging, which Herdr cannot press, is shown disabled",
   );
+  // A composer key's redraw can land after the service replied: Chat
+  // rereads shortly after, so the menu it opened still appears.
+  pressReply = (params) => {
+    setTimeout(() => (menu = modelMenu), 100);
+    return { status: "sent", key: params.key, menu: null };
+  };
   await act(async () => ctrlC!.click());
   await settle();
+  check(
+    !document.querySelector(".agent-chat-menu"),
+    "The redraw has not landed yet",
+  );
+  await act(async () => sleep(500));
+  check(
+    document.querySelector(".agent-chat-menu"),
+    "A redraw after a composer key appears without a manual refresh",
+  );
   check(
     JSON.stringify(last()) ===
       JSON.stringify({
