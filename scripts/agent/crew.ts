@@ -3,7 +3,6 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { shortSha } from "../../shared/pullRequests";
 import { gateDir, loadConfig, runPass } from "./gate";
-import type { Run } from "./gate/observe";
 import type { GateInput, Verdict } from "./gate/predicate";
 import { openStore } from "./gate/store";
 import { type Deps, realDeps } from "./crew/deps";
@@ -28,6 +27,16 @@ import {
   runs,
 } from "./crew/review";
 import { markDue, markHeads } from "./crew/marks";
+import {
+  crewCodeVersion,
+  forgetOnExit,
+  noticeStaleWatcher,
+  type Seat,
+  seats,
+  startSeat,
+} from "./crew/seats";
+
+export { type Seat, seats } from "./crew/seats";
 import { showStatus } from "./crew/status";
 import {
   actionsIn,
@@ -74,7 +83,11 @@ const USAGE = `Usage: bun run agent:crew -- <command> [options]
   watch [--interval SECONDS] [--busy-interval SECONDS]
                                  A pass over every PR every interval (default 300) and,
                                  between them, over busy PRs every busy interval (default 60)
-  status                         Held PRs, open actions and recent reviewer runs
+  status [--hours N]             Held PRs, open actions, recent reviewer runs, reviewer tokens
+                                 per PR, pod and track over the last N hours (default 24),
+                                 seats missing from the roster and a watcher on old code
+  seat start SEAT                Start a roster seat in a new Herdr tab on exactly its roster
+                                 harness, model, effort and persona
   feed [--lines N]               The last lines of the crew feed (default 40)
   runs [--pr N] [--lines N]      Reviewer runs: round, RESULT, tokens and how to reopen each
   open --run ID | --pr N --reviewer NAME [--round K]
@@ -96,8 +109,6 @@ const PROMPT_ATTEMPTS = 3;
 /** A run whose worker hasn't reported its pid by then never started. */
 const START_MS = 3 * 60_000;
 
-export type Seat = { name: string; status: string; focused: boolean };
-
 /** A round tab's name for a PR: its number and its branch's short name. */
 export function roundLabel(
   pr: number,
@@ -106,28 +117,6 @@ export function roundLabel(
 ) {
   const name = branch?.split("/").slice(1).join("/") || branch;
   return `#${pr}${name ? ` ${name}` : ""} · r${round}`;
-}
-
-/** Herdr's named agents; an empty list if Herdr can't be read. */
-export function seats(run: Run): Seat[] {
-  const result = run(["herdr", "agent", "list"]);
-  if (result.code !== 0) return [];
-  try {
-    const agents = (
-      JSON.parse(result.stdout) as {
-        result?: { agents?: Record<string, unknown>[] };
-      }
-    ).result?.agents;
-    return (agents ?? [])
-      .filter((agent) => typeof agent.name === "string")
-      .map((agent) => ({
-        name: agent.name as string,
-        status: String(agent.agent_status ?? "unknown"),
-        focused: agent.focused === true,
-      }));
-  } catch {
-    return [];
-  }
 }
 
 /**
@@ -785,6 +774,8 @@ export function parseOptions(argv: string[]): Options {
     interval: 300,
     busyInterval: 60,
     lines: 40,
+    args: [],
+    hours: 24,
   };
   for (let index = 0; index < argv.length; index++) {
     const arg = argv[index]!;
@@ -816,8 +807,13 @@ export function parseOptions(argv: string[]): Options {
     else if (arg === "--run") options.run = count("--run");
     else if (arg === "--round")
       options.round = Number(value().replace(/^r/u, "")) || 0;
-    else if (arg.startsWith("--") || options.command)
+    else if (arg === "--hours") options.hours = count("--hours");
+    else if (
+      arg.startsWith("--") ||
+      (options.command && options.command !== "seat")
+    )
       throw new Error(`Unknown argument ${arg}\n\n${USAGE}`);
+    else if (options.command) options.args.push(arg);
     else options.command = arg;
   }
   if (!options.command) throw new Error(USAGE);
@@ -880,9 +876,14 @@ export async function main(argv: string[], deps: Deps = realDeps) {
   const crew = openCrewStore(join(dir, "crew.sqlite"));
   try {
     if (options.command === "status") {
-      showStatus(crew, dir, deps.out, Date.now());
+      showStatus(crew, dir, deps.out, Date.now(), {
+        live: seats(deps.run),
+        hours: options.hours,
+        alive: deps.alive,
+      });
       return 0;
     }
+    if (options.command === "seat") return startSeat(options, dir, deps);
     if (options.command === "runs") {
       runs(crew, options, deps.out);
       return 0;
@@ -910,9 +911,15 @@ export async function main(argv: string[], deps: Deps = realDeps) {
     const worker = ["bun", join(import.meta.dir, "crew.ts")];
     const configPath = join(dir, "config.json");
     let cadence: Cadence = { scope: null, lastFull: 0, busy: [] };
+    // The crew code this process runs; a merge changes the checkout's, and
+    // only a restart loads it.
+    const loaded = crewCodeVersion();
+    const forget = options.command === "watch" ? forgetOnExit(crew) : () => {};
     try {
       for (;;) {
         const now = Date.now();
+        if (options.command === "watch" && !options.dryRun)
+          noticeStaleWatcher(crew, loaded, crewCodeVersion(), dir, deps);
         const { scope } = cadence;
         const prs = scope ?? options.prs;
         // Null until the pass has read its PRs; a failed pass keeps the last.
@@ -968,6 +975,7 @@ export async function main(argv: string[], deps: Deps = realDeps) {
         await Bun.sleep(Math.max(0, next.at - Date.now()));
       }
     } finally {
+      forget();
       gate.close();
       lock.close();
     }

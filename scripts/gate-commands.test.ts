@@ -83,7 +83,7 @@ test("the static lane retains all checks and builds production assets once", () 
 test("the commit guard and source validation keep distinct acceptance boundaries", () => {
   expect(exercise(["run", "check:commit"])).toEqual({
     status: 0,
-    commands: ["run format:check", "run lint"],
+    commands: ["run check:agents", "run format:check", "run lint"],
   });
   expect(exercise(["run", "check:source"])).toEqual({
     status: 0,
