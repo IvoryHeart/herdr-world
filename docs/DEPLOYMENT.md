@@ -431,7 +431,9 @@ Jira or SSH lookup finishes in the background.
   source says **Sign in with gh auth login**. World stores no GitHub token.
   Merged pull requests cover the last 7 days by default (1 to 90 in
   **Settings → Sources**, saved as `custom.world_sources.github.mergedDays`);
-  World reads them 100 per request, up to GitHub search's 1,000 results.
+  World follows cursor pages of 100 results through GitHub search's 1,000-result
+  limit. The configured window filters this history; there is no smaller
+  client-side count cap.
 - **Your open pull requests** are read in more detail: checks on the head,
   changed files, and the last 30 reviews and 50 comments, which stay in the
   service (the browser gets only reviewer results and an image count). World
