@@ -130,7 +130,8 @@ const pane: Pane = {
   tab_id: "shared",
   focused: false,
   ...(operation === "bare-navigator" ? {} : { agent: "codex" }),
-  agent_status: "idle",
+  // Needs you lists blocked agents: every host's agent is blocked there.
+  agent_status: operation === "needs-you" ? "blocked" : "idle",
   revision: 1,
 };
 const tab: Tab = {
@@ -203,8 +204,9 @@ const densePanes: Pane[] = Array.from({ length: 40 }, (_, index) => ({
 let revision = 0;
 const statusCounts = {
   working: 0,
-  idle: fixturePanes.filter((value) => value.agent).length,
-  blocked: 0,
+  idle: fixturePanes.filter((value) => value.agent_status === "idle").length,
+  blocked: fixturePanes.filter((value) => value.agent_status === "blocked")
+    .length,
   done: 0,
   unknown: 0,
 };
@@ -1744,6 +1746,37 @@ async function operationalScenario(unmount: () => void) {
       resources.unmount();
       element.remove();
     }
+    return;
+  }
+  if (operation === "needs-you") {
+    // Needs you lists, counts and opens agents of the admitted hosts only.
+    writeHostsFilter(["alpha"]);
+    await frame();
+    document.querySelector<HTMLButtonElement>(".needs-you-counter")!.click();
+    await waitFor(
+      () => document.querySelectorAll(".needs-you-item.is-needs").length === 1,
+      "Needs you did not list exactly the admitted host's blocked agent",
+    );
+    const item = document.querySelector<HTMLElement>(".needs-you-item")!;
+    check(
+      item.textContent!.includes("Synthetic alpha") &&
+        !document
+          .querySelector(".needs-you")!
+          .textContent!.includes("Synthetic beta"),
+      "Needs you showed an agent of a filtered-out host",
+    );
+    check(
+      document.querySelector(".needs-you-counter b")?.textContent === "1",
+      "the Needs you counter and window disagree under the Hosts filter",
+    );
+    item.querySelector<HTMLButtonElement>(".needs-you-open")!.click();
+    await waitFor(
+      () =>
+        [
+          ...document.querySelectorAll<HTMLElement>(".world-floating-terminal"),
+        ].some((element) => inspectorForHost(element, "alpha")),
+      "Open agent in Needs you did not open the admitted host's agent",
+    );
     return;
   }
   if (operation === "actions") {

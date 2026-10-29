@@ -68,6 +68,7 @@ const leaves = [
   leaf("old-done", "done", 5),
   leaf("new-done", "done", 50),
   leaf("reviewed", "done", 60),
+  leaf("idle-finished", "idle", 40),
   leaf("gone", "blocked", 2, { stale: true, actionable: false }),
   leaf("shell", "blocked", 3, { kind: "terminal" }),
 ];
@@ -77,10 +78,14 @@ const world = {
 };
 
 test("Needs you lists asks, then blocked agents, then work to review", () => {
+  // The caller decides what awaits review (useReviewedWork): here done
+  // agents and one idle agent whose turn just ended, minus a reviewed one.
   const items = needsYouItems(
     world,
     [ask("later", 20, true), ask("earlier", 10, false)],
-    (entry) => entry.id === "reviewed",
+    (entry) =>
+      (entry.status === "done" || entry.id === "idle-finished") &&
+      entry.id !== "reviewed",
   );
   expect(items.map((item) => item.key)).toEqual([
     "ask:earlier",
@@ -88,6 +93,7 @@ test("Needs you lists asks, then blocked agents, then work to review", () => {
     "leaf:early-blocked",
     "leaf:late-blocked",
     "leaf:new-done",
+    "leaf:idle-finished",
     "leaf:old-done",
   ]);
   // The counter counts what blocks someone, not work to review.
@@ -112,6 +118,7 @@ test("each item names its agent, marks unverified asks and answers in place", ()
       world,
       now: 60_000,
       onOpenAgent: () => {},
+      onOpenTerminal: () => {},
       asksStore,
       deskStore,
     }),
@@ -134,4 +141,41 @@ test("each item names its agent, marks unverified asks and answers in place", ()
   expect(html).toContain('data-mark="asks"');
   expect(html).toContain('data-mark="needs"');
   expect(html).toContain('data-mark="done"');
+});
+
+test("an item an opener asks for is shown past the limit, and the rest can be shown", () => {
+  const blocked = Array.from({ length: 32 }, (_, index) =>
+    leaf(`b${index + 1}`, "blocked", index + 1),
+  );
+  const crowd = {
+    leaves: blocked,
+    nodeById: new Map(blocked.map((entry) => [entry.id, entry])),
+  };
+  const html = renderToStaticMarkup(
+    createElement(NeedsYouWindow, {
+      world: crowd,
+      focusKey: "leaf:b32",
+      now: 60_000,
+      onOpenAgent: () => {},
+      onOpenTerminal: () => {},
+      asksStore: {
+        get: () => [],
+        subscribe: () => () => {},
+        start: () => {},
+        stop: () => {},
+      } as unknown as WorldAsksStore,
+      deskStore: new WorldDeskStore({
+        call: async () => null,
+        onControl: () => () => {},
+        onStatus: () => () => {},
+      }),
+    }),
+  );
+  expect(html).toContain("32 waiting on you");
+  // The first 30, then the one asked for; the 31st waits behind Show more.
+  expect(html).toContain('data-needs-you-item="leaf:b30"');
+  expect(html).not.toContain('data-needs-you-item="leaf:b31"');
+  expect(html).toContain('data-needs-you-item="leaf:b32"');
+  expect(html).toContain("needs-you-item is-needs is-focused");
+  expect(html).toContain("Show 1 more of 1</button>");
 });

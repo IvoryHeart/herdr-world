@@ -660,8 +660,11 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
         </div>
       )}
       <NeedsYouHost
-        world={aggregateWorld}
+        world={world}
         onOpenAgent={(id) => void openNodeById(id).catch(() => undefined)}
+        onOpenTerminal={(id) =>
+          void openTerminalById(id).catch(() => undefined)
+        }
       />
       <Suspense fallback={null}>
         {inspectorConversations.map((conversation) => (

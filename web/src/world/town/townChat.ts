@@ -122,9 +122,23 @@ export function useTownConversation(
   leaf: WorldLeafObject | null,
   active: boolean,
 ): TownConversation | null {
+  return useTownConversationRead(leaf, active).conversation;
+}
+
+/**
+ * The same read, which also reads again whenever `readFor` changes and says
+ * which `readFor` the conversation shown was read for, so a caller can tell
+ * a report of an earlier stop from the current one.
+ */
+export function useTownConversationRead(
+  leaf: WorldLeafObject | null,
+  active: boolean,
+  readFor: string | null = null,
+): { conversation: TownConversation | null; readFor: string | null } {
   const [conversation, setConversation] = useState<{
     id: string;
     value: TownConversation;
+    readFor: string | null;
   } | null>(null);
   const identity = leaf ? townPaneIdentity(leaf) : null;
   useEffect(() => {
@@ -154,7 +168,7 @@ export function useTownConversation(
         )
           return;
         shown = reply;
-        setConversation({ id: identity, value: reply });
+        setConversation({ id: identity, value: reply, readFor });
       } catch {
         // An unreadable conversation keeps the last one until it can be read.
       }
@@ -169,8 +183,10 @@ export function useTownConversation(
     };
     // identity captures the leaf's owner and pane.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [identity, active]);
-  return conversation?.id === identity ? conversation.value : null;
+  }, [identity, active, readFor]);
+  return conversation?.id === identity
+    ? { conversation: conversation.value, readFor: conversation.readFor }
+    : { conversation: null, readFor: null };
 }
 
 /**

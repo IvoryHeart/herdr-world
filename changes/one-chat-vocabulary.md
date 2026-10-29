@@ -19,7 +19,9 @@
   their agents, with Chat's formatting and answers in place: options or a
   typed answer, **Dismiss**, the agent's own question, **Mark reviewed** and
   **Open agent**. Town's reception letters, Desk's **Answer** and a Board
-  card's **!**/**✓** badge open it at that item.
+  card's **!**/**✓** badge open it at that item. Finished work is what Desk's
+  To review lane counts, an unconfirmed answer says so and offers the
+  Terminal, and the window follows the Hosts filter.
 
 ### Removed
 

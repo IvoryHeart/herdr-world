@@ -3,11 +3,11 @@ import { WorldPanel } from "./windows/WorldPanel";
 import { useNow } from "./handoffs";
 import { agentMarkKind } from "../agentMarks";
 import { AgentMark } from "../components/AgentMark";
-import { AskCard } from "../components/chat/blocks/ask";
+import { ChatAfterBlocks } from "../components/chat/blocks/after";
 import type { AnswerResult } from "../components/chat/types";
 import { MarkdownPreview } from "../components/markdown";
 import { townAgo } from "./town/TownRail";
-import { townOwner, useTownConversation } from "./town/townChat";
+import { townOwner, useTownConversationRead } from "./town/townChat";
 import { useReviewedWork } from "./useReviewedWork";
 import {
   askerName,
@@ -32,7 +32,11 @@ const leafName = (leaf: WorldLeafObject) => leaf.agentName ?? leaf.label;
 const leafWhere = (leaf: WorldLeafObject) =>
   [leaf.tabLabel, leaf.spaceLabel, leaf.hostLabel].filter(Boolean).join(" · ");
 
-/** The window shows at most this many items; the rest are counted. */
+/**
+ * The window shows this many items at a time (each blocked or finished one
+ * watches its conversation); Show more adds as many again, and an item an
+ * opener asks for is always shown.
+ */
 const ITEM_LIMIT = 30;
 
 /**
@@ -44,9 +48,11 @@ const ITEM_LIMIT = 30;
 export function NeedsYouHost({
   world,
   onOpenAgent,
+  onOpenTerminal,
 }: {
   world: Pick<WorldObject, "leaves" | "nodeById">;
   onOpenAgent(leafId: string): void;
+  onOpenTerminal(leafId: string): void;
 }) {
   const [open, setOpen] = useState<{ itemKey?: string; at: number } | null>(
     null,
@@ -70,6 +76,7 @@ export function NeedsYouHost({
         world={world}
         focusKey={open.itemKey}
         onOpenAgent={onOpenAgent}
+        onOpenTerminal={onOpenTerminal}
       />
     </WorldPanel>
   ) : null;
@@ -119,6 +126,7 @@ export function NeedsYouWindow({
   focusKey,
   now: shownNow,
   onOpenAgent,
+  onOpenTerminal,
   asksStore = sharedAsksStore(),
   deskStore,
 }: {
@@ -128,6 +136,8 @@ export function NeedsYouWindow({
   /** A fixed clock for tests; the open window ticks its own. */
   now?: number;
   onOpenAgent(leafId: string): void;
+  /** Answering in the Terminal: opens the agent's Terminal, never its Chat. */
+  onOpenTerminal(leafId: string): void;
   /** The shared stores unless a test provides its own. */
   asksStore?: WorldAsksStore;
   deskStore?: WorldDeskStore;
@@ -136,21 +146,25 @@ export function NeedsYouWindow({
   const now = shownNow ?? ticking;
   const asks = useWorldAsks(asksStore);
   const work = useReviewedWork(deskStore);
-  const all = needsYouItems(world, asks, work.reviewed);
-  const items = all.slice(0, ITEM_LIMIT);
+  const all = needsYouItems(world, asks, (leaf) => work.toReview(leaf, now));
+  const [limit, setLimit] = useState(ITEM_LIMIT);
   // Answers given here, shown folded until the window closes.
   const [answered, setAnswered] = useState<
     readonly { key: string; name: string; text: string }[]
   >([]);
   const body = useRef<HTMLDivElement | null>(null);
-  // An opener names an item, or an agent (needsYouLeafKey) for its item.
-  const focused = focusKey
-    ? items.find(
+  // An opener names an item, or an agent (needsYouLeafKey) for its item;
+  // it is shown even past the limit.
+  const target = focusKey
+    ? all.find(
         (item) =>
           item.key === focusKey ||
           (item.leaf && needsYouLeafKey(item.leaf.id) === focusKey),
-      )?.key
+      )
     : undefined;
+  const items = all.slice(0, limit);
+  if (target && !items.includes(target)) items.push(target);
+  const focused = target?.key;
   useEffect(() => {
     if (!focused) return;
     body.current
@@ -175,7 +189,9 @@ export function NeedsYouWindow({
           item={item}
           now={now}
           focused={item.key === focused}
+          stop={item.kind === "asks" ? null : work.stopOf(item.leaf)}
           onOpenAgent={onOpenAgent}
+          onOpenTerminal={onOpenTerminal}
           onAnswer={async (text) => {
             if (item.kind !== "asks") return null;
             const problem = await asksStore.answer(item.ask.id, text);
@@ -191,13 +207,22 @@ export function NeedsYouWindow({
               ? asksStore.dismiss(item.ask.id)
               : Promise.resolve(null)
           }
-          onReviewed={() =>
-            item.kind === "done" ? work.mark(item.leaf) : Promise.resolve(false)
+          onReviewed={(stop) =>
+            item.kind === "done"
+              ? work.mark(item.leaf, stop)
+              : Promise.resolve(false)
           }
         />
       ))}
       {all.length > items.length ? (
-        <p className="needs-you-count">+{all.length - items.length} more</p>
+        <button
+          type="button"
+          className="needs-you-more"
+          onClick={() => setLimit(limit + ITEM_LIMIT)}
+        >
+          Show {Math.min(ITEM_LIMIT, all.length - items.length)} more of{" "}
+          {all.length - items.length}
+        </button>
       ) : null}
       {folded.map((entry) => (
         <article
@@ -222,7 +247,9 @@ function NeedsYouMessage({
   item,
   now,
   focused,
+  stop,
   onOpenAgent,
+  onOpenTerminal,
   onAnswer,
   onDismiss,
   onReviewed,
@@ -230,10 +257,13 @@ function NeedsYouMessage({
   item: NeedsYouItem;
   now: number;
   focused: boolean;
+  /** The agent's current stop, as the reviewed record names it. */
+  stop: string | null;
   onOpenAgent(leafId: string): void;
+  onOpenTerminal(leafId: string): void;
   onAnswer(text: string): Promise<string | null>;
   onDismiss(): Promise<string | null>;
-  onReviewed(): Promise<boolean>;
+  onReviewed(stop: string): Promise<boolean>;
 }) {
   const { leaf } = item;
   const name = item.kind === "asks" ? askName(item) : leafName(item.leaf);
@@ -288,7 +318,8 @@ function NeedsYouMessage({
           leaf={item.leaf}
           name={name}
           kind={item.kind}
-          onOpenAgent={() => onOpenAgent(item.leaf.id)}
+          stop={stop}
+          onOpenTerminal={() => onOpenTerminal(item.leaf.id)}
           onReviewed={onReviewed}
         />
       )}
@@ -381,29 +412,42 @@ function NeedsYouAsk({
 
 /**
  * A blocked or finished agent's latest message, as Chat reads it. A blocked
- * agent's question is answered with Chat's checked answer; finished work is
- * marked reviewed in the one reviewed record.
+ * agent's question is answered with Chat's checked answer and receipt;
+ * finished work is marked reviewed in the one reviewed record, for the stop
+ * whose report is shown.
  */
 function NeedsYouAgent({
   leaf,
   name,
   kind,
-  onOpenAgent,
+  stop,
+  onOpenTerminal,
   onReviewed,
 }: {
   leaf: WorldLeafObject;
   name: string;
   kind: "needs" | "done";
-  onOpenAgent(): void;
-  onReviewed(): Promise<boolean>;
+  stop: string | null;
+  onOpenTerminal(): void;
+  onReviewed(stop: string): Promise<boolean>;
 }) {
-  const conversation = useTownConversation(leaf, true);
+  // Read again when the stop moves on, so the report and the mark agree.
+  const read = useTownConversationRead(leaf, true, stop);
+  const conversation = read.conversation;
   const latest = conversation?.latest ?? null;
   const prompt =
     kind === "needs" ? (conversation?.pending_prompt ?? null) : null;
   const [answering, setAnswering] = useState(false);
   const [notice, setNotice] = useState("");
+  const [answered, setAnswered] = useState<
+    | (Pick<
+        Extract<AnswerResult, { status: "sent" }>,
+        "number" | "label" | "text" | "acknowledged" | "unconfirmed_reason"
+      > & { question: string[]; fingerprint: string })
+    | null
+  >(null);
   const [marking, setMarking] = useState(false);
+  const [markError, setMarkError] = useState(false);
   const answer = async (key: string, text?: string) => {
     const client = townOwner(leaf);
     if (!prompt || !client || answering) return;
@@ -416,15 +460,25 @@ function NeedsYouAgent({
         ...(text !== undefined ? { text } : {}),
         prompt_fingerprint: prompt.fingerprint,
       })) as AnswerResult;
-      setNotice(
-        result.status === "sent" ? `Answered ${result.label}.` : result.message,
-      );
+      if (result.status === "sent")
+        setAnswered({
+          fingerprint: prompt.fingerprint,
+          question: prompt.question,
+          number: result.number,
+          label: result.label,
+          ...(result.text !== undefined ? { text: result.text } : {}),
+          acknowledged: result.acknowledged,
+          unconfirmed_reason: result.unconfirmed_reason,
+        });
+      else setNotice(result.message);
     } catch (reason) {
       setNotice(reason instanceof Error ? reason.message : String(reason));
     } finally {
       setAnswering(false);
     }
   };
+  // The report on screen belongs to the current stop only once read for it.
+  const current = stop !== null && read.readFor === stop && conversation;
   return (
     <>
       {latest ? (
@@ -442,31 +496,55 @@ function NeedsYouAgent({
               : "Loading conversation…"}
         </p>
       )}
-      {prompt ? (
-        <AskCard
-          agent={name}
-          prompt={prompt}
-          answering={answering}
-          notice={notice}
-          onAnswer={(key, text) => void answer(key, text)}
-          onOpenTerminal={onOpenAgent}
-        />
-      ) : notice ? (
-        <small role="status">{notice}</small>
+      <ChatAfterBlocks
+        running={null}
+        clock={0}
+        // A new question replaces the last answer's receipt, as in Chat.
+        answered={
+          answered && (!prompt || prompt.fingerprint === answered.fingerprint)
+            ? answered
+            : null
+        }
+        prompt={
+          prompt && prompt.fingerprint !== answered?.fingerprint ? prompt : null
+        }
+        agent={name}
+        answering={answering}
+        notice={notice}
+        onAnswer={(key, text) => void answer(key, text)}
+        onOpenTerminal={onOpenTerminal}
+      />
+      {answered && !answered.acknowledged ? (
+        <div className="needs-you-options">
+          <button type="button" onClick={onOpenTerminal}>
+            Open Terminal
+          </button>
+        </div>
       ) : null}
       {kind === "done" ? (
         <div className="needs-you-options">
           <button
             type="button"
             className="is-primary"
-            disabled={marking}
+            disabled={marking || !current}
+            title={current ? undefined : "Reading the latest report…"}
             onClick={() => {
+              if (!current || stop === null) return;
               setMarking(true);
-              void onReviewed().finally(() => setMarking(false));
+              setMarkError(false);
+              void onReviewed(stop)
+                .then((saved) => setMarkError(!saved))
+                .finally(() => setMarking(false));
             }}
           >
             Mark reviewed
           </button>
+          {markError ? (
+            <small role="alert">
+              Could not save the review mark. Try again when the connection is
+              ready.
+            </small>
+          ) : null}
         </div>
       ) : null}
     </>

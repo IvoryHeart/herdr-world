@@ -5,7 +5,8 @@ import type { WorldLeafObject, WorldObject } from "./worldObject";
 /**
  * What waits on the owner, as one conversation: questions agents asked
  * (`herdr-world ask`, oldest first), agents blocked on their own question
- * (oldest first), then finished work not reviewed yet (newest first).
+ * (oldest first), then finished work not reviewed yet (newest first):
+ * done agents and idle ones whose turn ended recently, as Desk's review lane.
  */
 export type NeedsYouItem =
   | { kind: "asks"; key: string; ask: WorldAsk; leaf: WorldLeafObject | null }
@@ -19,7 +20,7 @@ export const needsYouAskKey = (askId: string) => `ask:${askId}`;
 export function needsYouItems(
   world: Pick<WorldObject, "leaves" | "nodeById">,
   asks: readonly WorldAsk[],
-  reviewed: (leaf: WorldLeafObject) => boolean,
+  toReview: (leaf: WorldLeafObject) => boolean,
 ): NeedsYouItem[] {
   const askedBy = askLeaves(asks, world);
   const leafOf = (id: string | undefined) => {
@@ -52,7 +53,7 @@ export function needsYouItems(
         }),
       ),
     ...live
-      .filter((leaf) => leaf.status === "done" && !reviewed(leaf))
+      .filter((leaf) => leaf.status !== "blocked" && toReview(leaf))
       .sort((left, right) => at(right) - at(left))
       .map(
         (leaf): NeedsYouItem => ({

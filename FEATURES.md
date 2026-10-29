@@ -385,14 +385,18 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   removed saved identities are pruned, with an explained return to All hosts
   when none remain. Offline hosts keep labelled roots; an empty catalogue offers onboarding.
 - **Needs you** (beside the view buttons, bottom left on a phone) counts open
-  questions and blocked agents in every view and opens one movable window
-  (move, resize, expand; it reopens where you left it). Each item is a message
-  from its agent with Chat's formatting and its answer in place: **?** questions
-  (options, a typed answer, **Dismiss**), **!** blocked agents (the agent's own
-  question, answered as Chat answers it) and **✓** finished work (**Mark
-  reviewed**). Every item names its agent, marks an unverified asker and has
-  **Open agent**. Town's reception letters, Desk's **Answer** and the **!**/**✓**
-  badge on a Board card open it at that item. It replaces Town's Needs you rail.
+  questions and the blocked agents of the hosts the Hosts filter shows, in every
+  view, and opens one movable window (move, resize, expand; it reopens where you
+  left it). Each item is a message from its agent with Chat's formatting and its
+  answer in place: **?** questions (options, a typed answer, **Dismiss**), **!**
+  blocked agents (the agent's own question, answered and confirmed as Chat does,
+  with **Open Terminal** when the answer could not be confirmed) and **✓**
+  finished work, as Desk's To review lane counts it (**Mark reviewed** marks the
+  report shown, and says so if the mark could not be saved). Every item names its
+  agent, marks an unverified asker and has **Open agent**. It shows 30 items at a
+  time with **Show more**. Town's reception letters, Desk's **Answer** and the
+  **!**/**✓** badge on a Board card open it at that item. It replaces Town's
+  Needs you rail.
 - Inspectors and terminals capture their own host, runtime generation and resource
   identity. Focus and filters cannot retarget them. Global creation confirms one
   destination; room creation inherits its room. Notifications outside the filter
