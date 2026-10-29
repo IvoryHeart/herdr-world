@@ -34,6 +34,7 @@ import {
   shellLine,
   tabClosed,
 } from "./crew/deps";
+import { fixerPrompt } from "./crew/fixer";
 import { openChat, runs } from "./crew/review";
 import {
   authorOf,
@@ -368,7 +369,7 @@ describe("plan", () => {
     });
   });
 
-  test("red CI goes to the author and holds reviewer runs", () => {
+  test("red CI goes to the author; reviewers read the diff regardless", () => {
     const actions = planned(
       town({
         head: SHA.reviewed,
@@ -376,7 +377,29 @@ describe("plan", () => {
         checks: [{ name: "Delivery checks", state: "fail", required: true }],
       }),
     );
-    expect(actions.map((a) => [a.kind, a.target])).toEqual([["ci", "towncx"]]);
+    expect(actions.map((a) => [a.kind, a.target])).toEqual([
+      ["ci", "towncx"],
+      ["review", "rev2"],
+      ["review", "rev-astra"],
+      ["review", "rev-opus"],
+    ]);
+  });
+
+  test("a pushed head is reviewed while its checks still run", () => {
+    const pushed = town({
+      head: SHA.fixed,
+      posts: [
+        open(SHA.reviewed),
+        confirm("rev-astra", SHA.reviewed),
+        confirm("rev-opus", SHA.reviewed),
+      ],
+      checks: [{ name: "Delivery checks", state: "pending", required: true }],
+    });
+    expect(planned(pushed).map((a) => [a.kind, a.target, a.since])).toEqual([
+      ["confirm", "rev2", SHA.reviewed],
+      ["confirm", "rev-astra", SHA.reviewed],
+      ["confirm", "rev-opus", SHA.reviewed],
+    ]);
   });
 
   test("a finished head is reviewed while the owner judges a CI rerun", () => {
@@ -403,7 +426,8 @@ describe("plan", () => {
     expect(kinds).toContainEqual(["review", "rev-astra"]);
     expect(kinds).toContainEqual(["judgment", "owner"]);
     expect(kinds).toContainEqual(["ci", "towncx"]);
-    // Still running: the rerun question waits for the checks to finish.
+    // Still running: the failure waits for the checks to finish; the
+    // reviewers don't.
     const running = town({
       head: SHA.reviewed,
       posts: [],
@@ -413,7 +437,9 @@ describe("plan", () => {
         { name: "Validation scope", state: "pending", required: false },
       ],
     });
-    expect(planned(running).some((a) => a.kind === "review")).toBe(false);
+    const whileRunning = planned(running);
+    expect(whileRunning.some((a) => a.kind === "ci")).toBe(false);
+    expect(whileRunning.filter((a) => a.kind === "review")).toHaveLength(3);
   });
 
   test("red CI waits while another check is still running", () => {
@@ -427,7 +453,7 @@ describe("plan", () => {
         ],
       }),
     );
-    expect(actions).toEqual([]);
+    expect(actions.some((a) => a.kind === "ci")).toBe(false);
   });
 
   test("drafts plan nothing; unknown authors and models go to the owner", () => {
@@ -515,6 +541,10 @@ describe("delivery", () => {
   let refuse: Set<string>;
   let opened: { line: string; cwd: string; label: string }[];
   let onPrompt: (() => void) | null;
+  // What `git worktree list --porcelain`, `status` and `rev-parse` report.
+  let worktrees: string;
+  let dirty: string;
+  let checkedOut: string;
   let ownerAsks: Map<
     string,
     { id: string; answer?: { text: string }; withdrawn?: { at: number } }
@@ -539,6 +569,9 @@ describe("delivery", () => {
     opened = [];
     onPrompt = null;
     dead = new Set();
+    worktrees = "";
+    dirty = "";
+    checkedOut = SHA.reviewed;
     live = SEATS.map((name) => ({ name, status: "idle", focused: false }));
     crew = openCrewStore(":memory:");
     lock = openLock(":memory:");
@@ -560,6 +593,12 @@ describe("delivery", () => {
         }),
         stderr: "",
       };
+    if (argv[0] === "git" && argv[4] === "list")
+      return { code: 0, stdout: worktrees, stderr: "" };
+    if (argv[0] === "git" && argv[3] === "status")
+      return { code: 0, stdout: dirty, stderr: "" };
+    if (argv[0] === "git" && argv[3] === "rev-parse")
+      return { code: 0, stdout: `${checkedOut}\n`, stderr: "" };
     if (argv[0] === "git" && argv[3] === "worktree") {
       const path = argv.at(-2) === "--detach" ? argv.at(-2) : argv.at(-1)!;
       if (argv[4] === "add") {
@@ -645,7 +684,12 @@ describe("delivery", () => {
   const passOver = (
     values: GateInput[],
     now = NOW,
-    options: { prs?: number[]; db?: typeof crew; lock?: typeof lock } = {},
+    options: {
+      prs?: number[];
+      db?: typeof crew;
+      lock?: typeof lock;
+      configPath?: string;
+    } = {},
   ) =>
     crewPass({
       judge: () => ({
@@ -654,7 +698,7 @@ describe("delivery", () => {
       }),
       crew: options.db ?? crew,
       lock: options.lock ?? lock,
-      configPath,
+      configPath: options.configPath ?? configPath,
       dir,
       prs: options.prs ?? [],
       dryRun: false,
@@ -721,6 +765,201 @@ describe("delivery", () => {
     );
     pass(value, NOW + 120_000);
     expect(prompts()).toHaveLength(1);
+  });
+
+  describe("fixers", () => {
+    // The author seat has a roster model, so a fixer can run on it.
+    const fixerConfig = join(root, "fixer.json");
+    writeFileSync(
+      fixerConfig,
+      JSON.stringify({
+        ...config,
+        roster: { ...ROSTER, towncx: { model: "claude-opus-5-5" } },
+        crew: SETTINGS,
+      }),
+    );
+    const worktree = join(root, "repo", ".agents", "worktrees", "towncx-12");
+    const checkOut = () => {
+      worktrees = `worktree ${join(root, "repo")}\nHEAD ${SHA.fixed}\nbranch refs/heads/main\n\nworktree ${worktree}\nHEAD ${SHA.reviewed}\nbranch refs/heads/agent/towncx-12-plates\n\n`;
+    };
+    const author = (status: string) => {
+      live = live.map((seat) =>
+        seat.name === "towncx" ? { ...seat, status } : seat,
+      );
+    };
+    const findings = (
+      head = SHA.reviewed,
+      checks: Parameters<typeof town>[0]["checks"] = [],
+    ) =>
+      town({
+        head,
+        posts: [
+          open(SHA.reviewed),
+          confirm("rev-astra", SHA.reviewed),
+          confirm("rev-opus", SHA.reviewed),
+        ],
+        checks,
+      });
+    const passFixer = (value: GateInput, now = NOW) =>
+      passOver([value], now, { configPath: fixerConfig });
+    const fixes = () => spawned.filter((argv) => argv[2] === "fix");
+
+    test("a busy author's fix goes to one fresh fixer in the PR's worktree", () => {
+      author("working");
+      checkOut();
+      passFixer(findings());
+      expect(prompts()).toEqual([]);
+      expect(fixes()).toEqual([
+        [
+          "bun",
+          "crew.ts",
+          "fix",
+          "--pr",
+          "7",
+          "--author",
+          "towncx",
+          "--head",
+          SHA.reviewed,
+          "--run",
+          "1",
+        ],
+      ]);
+      expect(places[0]!.title).toBe("towncx fixer");
+      expect(getRun(crew, 1)).toMatchObject({
+        reviewer: "towncx",
+        cwd: worktree,
+      });
+      const [step] = actionsIn(crew, ["running"]);
+      expect(step).toMatchObject({
+        kind: "fix",
+        target: "towncx",
+        detail: "run 1",
+      });
+      // One fixer at a time: later passes start no second one, and a new
+      // step on the PR waits for it rather than going to the author.
+      author("idle");
+      passFixer(
+        findings(SHA.reviewed, [
+          { name: "Delivery checks", state: "fail", required: true },
+        ]),
+        NOW + 60_000,
+      );
+      expect(fixes()).toHaveLength(1);
+      expect(prompts()).toEqual([]);
+      expect(actionsIn(crew, ["pending"]).map((a) => a.kind)).toEqual(["ci"]);
+      // Its push ends its job: the run finishes with its usage and its
+      // session stays open as a chat, while the new head's round starts.
+      passFixer(findings(SHA.fixed), NOW + 120_000);
+      expect(getRun(crew, 1)).toMatchObject({
+        exitCode: 0,
+        finishedAt: NOW + 120_000,
+        usage: '{"output_tokens":1}',
+      });
+      expect(killed).toEqual([]);
+      expect(getAction(crew, step!.key)!.state).toBe("superseded");
+      expect(spawned.slice(1).map((argv) => argv[2])).toEqual([
+        "review",
+        "review",
+        "review",
+      ]);
+    });
+
+    test("a blocked author's steps go to a fixer without asking the owner", () => {
+      author("blocked");
+      checkOut();
+      passFixer(findings());
+      expect(fixes()).toHaveLength(1);
+      expect(notices()).toEqual([]);
+    });
+
+    test("the step waits for the author when a fixer could clash with them", () => {
+      const waits = (setup: () => void) => {
+        crew = openCrewStore(":memory:");
+        spawned = [];
+        author("working");
+        checkOut();
+        setup();
+        passFixer(findings());
+        expect(fixes()).toEqual([]);
+        expect(actionsIn(crew, ["pending"]).map((a) => a.detail)).toEqual([
+          "working",
+        ]);
+      };
+      // Last prompted about this PR: the author may be on it now.
+      waits(() => {
+        addAction(
+          crew,
+          {
+            key: "earlier",
+            pr: 7,
+            head: SHA.reviewed,
+            kind: "ci",
+            target: "towncx",
+            text: "ACT #7 ci",
+          },
+          NOW - 60_000,
+        );
+        setAction(crew, "earlier", "sent", NOW - 60_000);
+      });
+      // Work in progress in the worktree, or a worktree off the head.
+      waits(() => {
+        dirty = " M web/src/App.tsx\n";
+      });
+      waits(() => {
+        dirty = "";
+        checkedOut = SHA.fixed;
+      });
+      // No worktree has the branch.
+      waits(() => {
+        checkedOut = SHA.reviewed;
+        worktrees = "";
+      });
+      // An idle author takes the step themselves.
+      crew = openCrewStore(":memory:");
+      spawned = [];
+      author("idle");
+      checkOut();
+      passFixer(findings());
+      expect(fixes()).toEqual([]);
+      expect(prompts()).toHaveLength(1);
+    });
+
+    test("a fixer that ends without pushing leaves the step to the author", () => {
+      author("working");
+      checkOut();
+      passFixer(findings());
+      // Quit cleanly, as when the owner closes its session.
+      finishRun(crew, 1, 0, null, NOW + 1000);
+      passFixer(findings(), NOW + 60_000);
+      // A head gets one fixer; the step waits for the author.
+      expect(fixes()).toHaveLength(1);
+      expect(actionsIn(crew, ["pending"]).map((a) => a.kind)).toEqual(["fix"]);
+      author("idle");
+      passFixer(findings(), NOW + 120_000);
+      expect(prompts()).toHaveLength(1);
+      expect(prompts()[0]![4]).toStartWith("[crew -> towncx] ACT #7 fix @");
+    });
+
+    test("a fixer reopens as a chat in its PR's worktree, which it never removes", () => {
+      author("working");
+      checkOut();
+      mkdirSync(worktree, { recursive: true });
+      passFixer(findings());
+      setRunSession(crew, 1, "claude", "claude-opus-5-5", "session-1");
+      finishRun(crew, 1, 0, null, NOW + 1000);
+      dead.add(getRun(crew, 1)!.pid!);
+      openChat(crew, { prs: [], run: 1 }, dir, lock, deps);
+      expect(opened).toEqual([
+        {
+          line: "claude --resume session-1 --model claude-opus-5-5",
+          cwd: worktree,
+          label: "#7 towncx fixer · chat",
+        },
+      ]);
+      expect(
+        calls.some((argv) => argv[3] === "worktree" && argv[4] !== "list"),
+      ).toBe(false);
+    });
   });
 
   test("a held or out-of-scope PR's waiting steps retire and return on release", () => {
@@ -1520,8 +1759,18 @@ describe("delivery", () => {
       }),
       NOW + 60_000,
     );
-    expect(actionsIn(crew, ["pending", "running"])).toEqual([]);
+    expect(
+      actionsIn(crew, ["pending", "running"]).filter(
+        (a) => a.head === SHA.reviewed,
+      ),
+    ).toEqual([]);
     expect(killed).toEqual([1001, 1002]);
+    // The new head's round starts in the same pass, while CI runs.
+    expect(spawned.slice(2).map((argv) => argv[6])).toEqual([
+      "rev2",
+      "rev-astra",
+      "rev-opus",
+    ]);
   });
 
   test("shows a round's reviewers as panes of one tab, kept after they finish", () => {
@@ -1909,8 +2158,12 @@ describe("delivery", () => {
         SHA.reviewed.slice(0, 7) +
         ": World browser tests (4/6) has been running over 30 minutes, longer than CI takes; GitHub may have lost its status. Rerun it: gh run rerun --job 22",
     ]);
-    // No reviewer starts while a check is still running.
-    expect(spawned).toEqual([]);
+    // Reviewers started on the push and didn't wait for the check.
+    expect(spawned.map((argv) => argv[6])).toEqual([
+      "rev2",
+      "rev-astra",
+      "rev-opus",
+    ]);
   });
 
   const jobUrl = (id: number) =>
@@ -3072,6 +3325,26 @@ describe("worker", () => {
     branch: "agent/towncx-12-plates",
     author: "towncx",
   };
+
+  test("a fixer's brief carries the steps, the branch and its signature", () => {
+    const brief = fixerPrompt({
+      repo: "example-org/widgets",
+      pr: 7,
+      head: SHA.reviewed,
+      author: "towncx",
+      title: "Plates",
+      url: "https://github.com/example-org/widgets/pull/7",
+      branch: "agent/towncx-12-plates",
+      steps: ["[crew -> towncx] ACT #7 fix @aaaaaaa: findings from rev2"],
+    });
+    expect(brief).toContain(
+      "- [crew -> towncx] ACT #7 fix @aaaaaaa: findings from rev2",
+    );
+    expect(brief).toContain("Push to agent/towncx-12-plates only.");
+    expect(brief).toContain("starts with `[fixer #7]`");
+    expect(brief).toContain("Never use git stash");
+    expect(brief).toContain("candidate-delivery skill");
+  });
 
   test("the brief carries the canonical header and the delta for a confirm", () => {
     const prompt = reviewerPrompt({ ...task, since: SHA.reviewed });

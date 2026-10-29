@@ -327,7 +327,8 @@ plans the next step for every PR in scope and takes each step once:
 | Findings are open on the head and every required reviewer has posted on it | One `ACT #N fix` prompt with the review URLs, so the author fixes in one pass | The author's seat |
 | A required check fails and no check is still running | `ACT #N ci` prompt | The author's seat |
 | GitHub reports a conflict, or screenshots are missing | `ACT #N conflict` or `ACT #N screenshots` prompt | The author's seat |
-| A required reviewer has no RESULT, or a newer head needs confirming; GitHub reports the head mergeable and its checks are green, or have finished while the owner judges a CI rerun | A fresh reviewer run | That reviewer's model |
+| A fix, ci or conflict step is due and the author seat is busy with another PR | A fresh fixer run in the PR's own worktree | The author seat's roster model |
+| A required reviewer has no RESULT, or a newer head needs confirming, and GitHub reports the head mergeable, whatever its checks | A fresh reviewer run | That reviewer's model |
 | READY, with every required reviewer confirmed on the head | The `crew/merge-ready` mark and a World ask with the PR and reason | The owner |
 | A judgment condition, an unknown author, an unsupported roster model, a stuck author seat or a reviewer run that posted nothing | The `crew/needs-owner` mark, one signed `[crew]` state comment and one World ask per distinct cause | The owner |
 
@@ -357,7 +358,7 @@ plans the next step for every PR in scope and takes each step once:
   pod lead for `batch/<pod>-<n>`. Set an override per PR in `authors`.
 - **When a seat gets a prompt.** Only when Herdr reports it idle or done and
   it isn't focused, because a prompt types into the seat's input box. Other
-  steps wait for a later pass. Seats listed in `neverPrompt` are never
+  steps wait for a later pass, or go to a fresh fixer (below). Seats listed in `neverPrompt` are never
   prompted; the owner gets an ask instead.
 - **How reviewers run.** Each review or confirmation is a fresh, interactive
   `claude` (in auto permission mode) or `codex` session on the seat's roster
@@ -397,11 +398,31 @@ plans the next step for every PR in scope and takes each step once:
   pass, so a merge can't land between opening a chat and recording it. A chat
   opened after the PR has closed removes its checkout when you exit it. Until
   then, `open` refuses a second chat on that run.
-- **Review and the rerun question.** A CI rerun the owner has to judge
-  doesn't hold reviewers back: once the head's checks have finished, round 1
-  starts while the judgment is open. A head that is simply red, with no rerun
-  to judge, goes to the author first. READY still needs both the judgment and
-  the reviews.
+- **Review on push.** Reviewers read the diff, not CI results, so a round
+  starts as soon as a new head is pushed and GitHub reports it mergeable, in
+  parallel with its checks: with busy passes, within about a minute of the
+  push. A failure still goes to the author as a `ci` step once the checks
+  settle, and a CI rerun the owner has to judge still asks them. READY and
+  `crew/merge-ready` still need green checks, any judgment and the reviews.
+- **A fresh fixer for a busy author.** A seat works on one PR at a time, so
+  when a PR's `fix`, `ci` or `conflict` step is due and its author seat is
+  working (or blocked) on something else, the watcher starts a fresh fixer
+  instead of waiting. It runs like a reviewer: a fresh, interactive session
+  on the author seat's roster model and harness, in a pane of the PR head's
+  round tab named `<seat> fixer`, briefed with the steps' messages, the PR and
+  the candidate-delivery skill. It works in the PR's own worktree, pushes to
+  the PR branch through the normal pre-push gate, replies on the PR in one
+  comment signed `[fixer #N]`, and is done: its push makes a new head, which
+  ends the run (its session stays open as a chat, and `open --run` reopens it
+  in that worktree) and starts the next round as usual. The step waits for
+  the author instead when a fixer could clash with them or can't run: the
+  author was last prompted about this same PR, the PR's worktree is missing,
+  has uncommitted changes or isn't at the PR's head, the seat has no roster
+  model, or no run slot is free. At most one fixer works on a PR at a time,
+  and each head gets one: while it works, the PR's other author steps wait
+  for it, and a fixer that ends without pushing leaves its steps to the
+  author. Fixers count against `maxRuns` and `runTimeoutMinutes` like
+  reviewers; screenshots stay with the author.
 - **What stops a step.** Only a newer head, a merge or a close supersedes a
   waiting step or stops a running reviewer. On the same head, a CI rerun or
   an unknown mergeable state only pauses steps; they resume when the head is

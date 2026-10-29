@@ -18,7 +18,8 @@ ledger. Everything after the hand-off already runs without you:
 
 - the seat implements, opens a ready PR, and fixes review findings;
 - the crew watcher (`bun run agent:crew -- watch`) starts fresh reviewers for
-  every PR head, sends findings back to the author seat, and marks a head
+  every PR head as soon as it is pushed, sends findings back to the author
+  seat (or to a fresh fixer when that seat is busy on another PR), and marks a head
   `crew/merge-ready` or `crew/needs-owner`;
 - the owner merges, and only PRs whose head shows a green `crew/merge-ready`.
 
@@ -125,6 +126,9 @@ You are <seat>. Task <item>: <title> (<issue link, or "no issue yet: file one fi
   Never add labels to an open PR: each label starts a CI run.
 - Reviews arrive by themselves. When the watcher sends you findings, fix every
   P1–P3 finding in place and reply on the PR with one line per finding.
+  While you are busy on another PR, a fresh fixer may do a step for you in
+  that PR's worktree and reply signed `[fixer #N]`; keep a worktree you
+  aren't working in committed, so the fixer can take it.
 - Start every GitHub comment you post with `[<seat>]`, because every seat posts
   with the owner's account. A review is signed by its `Reviewer:` header.
 - Reach the owner only by asking in your own pane (`herdr-world ask` once #472
