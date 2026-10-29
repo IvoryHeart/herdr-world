@@ -5,7 +5,10 @@ import { dirname, relative, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { verificationModels } from "../quint/models";
 import { runVerificationPool } from "./verification-pool";
-import { runVerificationProcess } from "./verification-process";
+import {
+  runVerificationProcess,
+  runVerificationMetadata,
+} from "./verification-process";
 import {
   fingerprintInputs,
   validateEvidence,
@@ -161,18 +164,14 @@ export async function runParallelVerification(
     `${new Date().toISOString().replaceAll(":", "-")}-parallel-${randomUUID()}`,
   );
   await mkdir(output, { recursive: true });
-  const revision = await runVerificationProcess(["git", "rev-parse", "HEAD"], {
+  const revision = await runVerificationMetadata(["git", "rev-parse", "HEAD"], {
     cwd: root,
-    timeoutMs: 5000,
     signal,
   });
-  const tracked = await runVerificationProcess(["git", "ls-files", "-z"], {
+  const tracked = await runVerificationMetadata(["git", "ls-files", "-z"], {
     cwd: root,
-    timeoutMs: 5000,
     signal,
   });
-  assert.equal(revision.code, 0);
-  assert.equal(tracked.code, 0);
   const inputs = await fingerprintInputs(
     root,
     tracked.stdout.split("\0").filter(Boolean),

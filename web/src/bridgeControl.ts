@@ -5,6 +5,7 @@ export interface BridgeControlMsg {
     | "pause_connection"
     | "world_invalidated"
     | "world_watchlist_changed"
+    | "world_desk_changed"
     | "world_board_changed"
     | "world_ledger_changed"
     | "world_profiles_changed"
