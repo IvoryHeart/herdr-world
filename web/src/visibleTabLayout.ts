@@ -69,32 +69,50 @@ export function queueVisibleTabLayoutRead<T>(
 }
 
 type VisibleTabLayoutRead = ReturnType<typeof queueVisibleTabLayoutRead>;
-const sharedVisibleLayoutReads = new Map<
+type LayoutReader = {
+  read: () => Promise<unknown>;
+  stillNeeded: () => boolean;
+};
+const queuedVisibleLayoutReads = new Map<
   string,
-  { needed: Set<() => boolean>; read: VisibleTabLayoutRead }
+  { readers: LayoutReader[]; result: VisibleTabLayoutRead }
 >();
 
 /**
- * One queued read per tab at a time: a window's terminal and its title map
- * observe the same tab, so the second joins the first instead of reading
- * again. The read runs while any of them still needs it.
+ * One queued read per tab: a window's terminal and its title map observe the
+ * same tab, so a second caller joins a read still waiting in the queue
+ * instead of queueing another. When it starts, the read is the newest caller
+ * that still needs it (an earlier caller may have read a pane since closed),
+ * and from then on a new caller queues a fresh read rather than receive a
+ * reply to an older observation.
  */
 export function shareVisibleTabLayoutRead(
   key: string,
   read: () => Promise<unknown>,
   stillNeeded: () => boolean,
 ): VisibleTabLayoutRead {
-  const current = sharedVisibleLayoutReads.get(key);
-  if (current) {
-    current.needed.add(stillNeeded);
-    return current.read;
+  const queued = queuedVisibleLayoutReads.get(key);
+  if (queued) {
+    queued.readers.push({ read, stillNeeded });
+    return queued.result;
   }
-  const needed = new Set([stillNeeded]);
-  const shared = queueVisibleTabLayoutRead(read, () =>
-    [...needed].some((check) => check()),
-  ).finally(() => sharedVisibleLayoutReads.delete(key));
-  sharedVisibleLayoutReads.set(key, { needed, read: shared });
-  return shared;
+  const readers: LayoutReader[] = [{ read, stillNeeded }];
+  const result = queueVisibleTabLayoutRead(
+    () => {
+      queuedVisibleLayoutReads.delete(key);
+      const newest = [...readers].reverse();
+      const reader =
+        newest.find((candidate) => candidate.stillNeeded()) ?? newest[0]!;
+      return reader.read();
+    },
+    () => {
+      const needed = readers.some((candidate) => candidate.stillNeeded());
+      if (!needed) queuedVisibleLayoutReads.delete(key);
+      return needed;
+    },
+  );
+  queuedVisibleLayoutReads.set(key, { readers, result });
+  return result;
 }
 
 /** Reject a layout after a lease change, pane move, split or close. */

@@ -96,12 +96,16 @@ export function provisionalTabLayout(
 type LayoutRect = PaneLayout["area"];
 type LayoutSplit = PaneLayout["splits"][number];
 
-/** A split's place in Herdr's tree: "split_2_10" is root → after → before. */
+/**
+ * A split's place in Herdr's tree from its id, split_<index>_<path>: the
+ * path is root, or its first (0) and second (1) sides from the root, so
+ * "split_2_10" is the root's second side, then that split's first side. The
+ * index is only the split's place in Herdr's list.
+ */
 function splitPath(split: LayoutSplit): string | null {
-  const match = /^split_(\d+)_(root|[01]+)$/.exec(split.id);
+  const match = /^split_\d+_(root|[01]+)$/.exec(split.id);
   if (!match) return null;
-  const path = match[2] === "root" ? "" : match[2]!;
-  return Number(match[1]) === path.length ? path : null;
+  return match[1] === "root" ? "" : match[1]!;
 }
 
 /**
