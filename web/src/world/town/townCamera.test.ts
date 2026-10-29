@@ -85,6 +85,33 @@ test("zooming about a point keeps that world point under the pointer", () => {
   expect(after.y).toBeCloseTo(before.y, 5);
 });
 
+test("camera bounds and fit zoom refresh when a room shrinks", () => {
+  const hosts = [{ key: "a", displayOrder: 0 }];
+  const room = (count: number) => ({
+    hosts,
+    rooms: [
+      {
+        key: "a/room",
+        hostKey: "a",
+        order: 0,
+        deskKeys: Array.from({ length: count }, (_, index) => `tab-${index}`),
+      },
+    ],
+  });
+  const expanded = layoutTown(room(80), "wide");
+  const reduced = layoutTown(room(2), "wide", expanded.memory);
+  const camera = new TownCamera();
+  camera.configure(expanded.layout, desktop);
+  const oldBounds = { ...camera.bounds };
+  const oldFit = camera.limits!.all;
+  camera.jumpTo(oldBounds.width, oldBounds.height, camera.limits!.home);
+  camera.configure(reduced.layout, desktop);
+  expect(camera.bounds.height).toBeLessThan(oldBounds.height);
+  expect(camera.limits!.all).toBeGreaterThan(oldFit);
+  expect(camera.x).toBeLessThanOrEqual(camera.bounds.width);
+  expect(camera.y).toBeLessThanOrEqual(camera.bounds.height);
+});
+
 test("a flight ends exactly on its target and reduced motion jumps", () => {
   const { layout } = layoutTown(input, "wide");
   const camera = new TownCamera();
