@@ -107,6 +107,18 @@ export function parseCgroupResources(
   return { peakBytes, memoryMaxBytes, oomKills };
 }
 
+/** systemd services start with a separate environment; pass only public CI identity. */
+export function verificationIdentityEnvironment(
+  env: Record<string, string | undefined> = process.env,
+): string[] {
+  return ["GITHUB_RUN_ID", "GITHUB_RUN_ATTEMPT"].flatMap((name) => {
+    const value = env[name];
+    if (value === undefined) return [];
+    assert(/^[1-9][0-9]*$/.test(value), `Invalid ${name}`);
+    return [`--setenv=${name}=${value}`];
+  });
+}
+
 export async function runConstrainedVerification(
   root: string,
   system: boolean,
@@ -193,6 +205,7 @@ export async function runConstrainedVerification(
           `--unit=${unit}`,
           `--working-directory=${root}`,
           `--setenv=PATH=${process.env.PATH ?? ""}`,
+          ...verificationIdentityEnvironment(),
           `--setenv=RESOURCE_EXIT_FILE=${exitFile}`,
           ...(system
             ? [`--uid=${process.getuid!()}`, `--gid=${process.getgid!()}`]
