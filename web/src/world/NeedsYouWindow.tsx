@@ -404,7 +404,7 @@ function NeedsYouAgent({
   const [answering, setAnswering] = useState(false);
   const [notice, setNotice] = useState("");
   const [marking, setMarking] = useState(false);
-  const answer = async (key: string) => {
+  const answer = async (key: string, text?: string) => {
     const client = townOwner(leaf);
     if (!prompt || !client || answering) return;
     setAnswering(true);
@@ -413,6 +413,7 @@ function NeedsYouAgent({
       const result = (await client.call("agent_conversation.answer", {
         pane_id: leaf.pane.pane_id,
         key,
+        ...(text !== undefined ? { text } : {}),
         prompt_fingerprint: prompt.fingerprint,
       })) as AnswerResult;
       setNotice(
@@ -447,7 +448,7 @@ function NeedsYouAgent({
           prompt={prompt}
           answering={answering}
           notice={notice}
-          onAnswer={(key) => void answer(key)}
+          onAnswer={(key, text) => void answer(key, text)}
           onOpenTerminal={onOpenAgent}
         />
       ) : notice ? (
