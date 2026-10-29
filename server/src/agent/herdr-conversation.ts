@@ -1,4 +1,4 @@
-import { createPromptAnswerer } from "./prompt-answer";
+import { createPromptActions } from "./prompt-answer";
 import { isSlashCommand } from "../../../shared/conversationInput";
 import { existsSync, type FSWatcher, watch } from "node:fs";
 import { basename, join } from "node:path";
@@ -19,6 +19,7 @@ import {
   type DeliveryView,
 } from "./conversation-delivery";
 import {
+  parseCommandMenu,
   parsePendingPrompt,
   PROMPT_SCREEN_LINES,
   type PendingPrompt,
@@ -42,6 +43,12 @@ import {
   type CodexInferenceBatch,
 } from "./codex-daemon-binding";
 export { paneBinding, sessionLabel } from "./conversation-binding";
+
+/** Herdr states in which a harness's own command menu can be open. */
+const MENU_STATUSES = new Set(["idle", "done"]);
+/** An unreadable transcript, or one with a call still open, may be asking. */
+const hasOpenTool = (shown: Conversation) =>
+  shown.status !== "ok" || shown.running_tool !== null;
 
 export const CODEX_DAEMON_ISSUE =
   "https://github.com/IvoryHeart/herdr-world/issues/250";
@@ -424,30 +431,73 @@ export function createHerdrConversationSource(args: {
         );
   };
 
+  /**
+   * A command menu the harness shows. Herdr reports it idle or done, or
+   * blocked when its screen rules take the menu for a form (Claude Code's
+   * `/permissions` list). A blocked pane shows a menu only when the prompt
+   * parser reads no question there and the transcript has no open tool call:
+   * questions, approvals and plans are tool calls; command menus are not.
+   */
+  const readMenu = async (
+    paneId: string,
+    info: Record<string, unknown> | null,
+    openTool?: boolean,
+  ): Promise<PendingPrompt | null> => {
+    const status = stringValue(info?.agent_status);
+    if (!MENU_STATUSES.has(status) && status !== "blocked") return null;
+    const text = screenText(
+      await args.herdrCall("pane.read", {
+        pane_id: paneId,
+        source: "recent",
+        lines: PROMPT_SCREEN_LINES,
+        format: "text",
+        strip_ansi: true,
+      }),
+    );
+    if (text === null) return null;
+    const agent = normalizeAgentName(stringValue(info?.agent));
+    const context = promptContext(info);
+    if (status === "blocked") {
+      if (parsePendingPrompt(agent, text, context)?.options.length) return null;
+      if (openTool ?? (await readShown(paneId).then(hasOpenTool))) return null;
+    }
+    return parseCommandMenu(agent, text, context);
+  };
+
   const read = async ({
     pane_id,
+    menus = false,
   }: {
     pane_id: string;
+    menus?: boolean;
   }): Promise<Conversation> => {
     const shown = await readShown(pane_id);
     await settle(pane_id, shown);
-    // A blocked agent's question is on its screen, not in its transcript.
+    const status = shown.agent_status ?? "";
+    // A blocked agent's question is on its screen, not in its transcript,
+    // and so is a command menu, which Chat asks for.
     const pending_prompt =
-      shown.agent_status === "blocked" &&
+      (status === "blocked" || (menus && MENU_STATUSES.has(status))) &&
       shown.session_binding !== "guessed" &&
       (shown.agent !== "codex" || Boolean(shown.session_fingerprint))
         ? await agentInfo(pane_id)
-            .then((info) =>
-              stringValue(info?.agent_status) === "blocked"
-                ? readPrompt(pane_id, info)
-                : null,
-            )
+            .then(async (info) => {
+              const asked =
+                stringValue(info?.agent_status) === "blocked"
+                  ? await readPrompt(pane_id, info)
+                  : null;
+              if (asked?.options.length || !menus || !shown.session_fingerprint)
+                return asked;
+              return (
+                (await readMenu(pane_id, info, hasOpenTool(shown))) ?? asked
+              );
+            })
             .catch(() => null)
         : null;
     return { ...shown, deliveries: deliveries.list(pane_id), pending_prompt };
   };
 
-  const latest = async (target: { pane_id: string }) =>
+  const latest = async (target: { pane_id: string; menus?: boolean }) =>
     withoutMessages(await read(target));
 
   // Steps per projection, so repeated asks while nothing changed do not
@@ -505,13 +555,18 @@ export function createHerdrConversationSource(args: {
 
   return {
     id: "herdr",
-    answer: createPromptAnswerer({
+    ...createPromptActions({
       herdrCall: args.herdrCall,
       agentInfo,
       readPrompt,
+      readMenu,
       isCodexBound: async (paneId) => {
         const step = await resolve(paneId);
         return "resolved" in step && Boolean(step.base.session_fingerprint);
+      },
+      sessionFingerprint: async (paneId) => {
+        const step = await resolve(paneId);
+        return "resolved" in step ? step.base.session_fingerprint : null;
       },
     }),
     dismiss: ({ pane_id, delivery_id }) =>

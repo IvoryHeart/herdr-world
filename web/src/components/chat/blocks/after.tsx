@@ -1,5 +1,6 @@
 import { elapsed } from "./now";
 import { AskCard, UNCONFIRMED } from "./ask";
+import { MenuCard } from "./menu";
 import type { AnswerResult, PendingPrompt } from "../types";
 
 /** Only live step/prompt content trails the transcript. Sends stay at their time. */
@@ -12,6 +13,9 @@ export function ChatAfterBlocks({
   answering,
   notice,
   onAnswer,
+  pressing = false,
+  onPress,
+  onType,
   onOpenTerminal,
 }: {
   running: {
@@ -32,6 +36,10 @@ export function ChatAfterBlocks({
   answering: boolean;
   notice: string;
   onAnswer: (key: string, text?: string) => void;
+  /** A command menu's keys, checked against that menu before each one. */
+  pressing?: boolean;
+  onPress?: (key: string) => void;
+  onType?: (text: string) => void;
   onOpenTerminal?: () => void;
 }) {
   return (
@@ -71,7 +79,18 @@ export function ChatAfterBlocks({
           </span>
         </p>
       ) : null}
-      {prompt ? (
+      {prompt?.menu && onPress && onType ? (
+        <MenuCard
+          key={prompt.fingerprint}
+          agent={agent}
+          prompt={{ ...prompt, menu: prompt.menu }}
+          pressing={pressing}
+          notice={notice}
+          onPress={onPress}
+          onType={onType}
+          onOpenTerminal={onOpenTerminal}
+        />
+      ) : prompt && !prompt.menu ? (
         <AskCard
           key={prompt.fingerprint}
           agent={agent}

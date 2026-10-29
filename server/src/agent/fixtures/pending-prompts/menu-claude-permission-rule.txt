@@ -1,0 +1,11 @@
+▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔ ● high · /effort ▔
+   Add allow permission rule
+
+   Permission rules are a tool name, optionally followed by a specifier in parentheses.
+   e.g., WebFetch or Bash(ls *)
+
+   ╭───────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+   │ Enter permission rule…                                                                                        │
+   ╰───────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+   Enter to submit · Esc to cancel

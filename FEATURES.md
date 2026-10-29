@@ -93,6 +93,12 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     not checked** until transcript evidence. Native working-state admission
     shows queued message bubbles with the recipient and time; blocked sends
     preserve the draft and the refusal reason.
+  - Harness command menus, such as Claude Code's and Codex's `/model` and
+    `/permissions`, appear as a menu card: numbered options, the cursor, the
+    footer's keys as buttons and any text field. Each key is checked against
+    that menu and session first; follow-up steps replace the card. **⋮** also
+    offers the Terminal's key controls (arrows, Esc, Tab, Enter, Ctrl keys),
+    sent to the session Chat shows; paging stays in the Terminal.
   - The top selector follows the window's own width, docked, floating or on a
     phone: labelled from 640px, icons (with their names as tooltips) below
     that, and below 360px only the active view, with the others under ⋯.

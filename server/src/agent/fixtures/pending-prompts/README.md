@@ -28,3 +28,24 @@ Codex title binding and read its pending prompt without Codex turn hooks.
 The live World answer path selected Blue after logical-key dispatch was fixed.
 Existing session admission is retained; these captures grant no authority to an
 unbound or inferred Codex conversation and claim no other native platform.
+
+## Command menus
+
+The `menu-*` captures came from Claude Code 2.1.312 and Codex 0.164.0 in an
+isolated Herdr 0.9.3 session, in a scratch project. Paths, the user and host
+were replaced (`/project/demo`, `dev@example`); blank runs were squeezed.
+
+- Claude Code `/model` in its full-screen rendering (top edge `▔`, with the
+  status text Claude draws into it) and inline (`─`), and scrolled to option
+  11. The list holds 13 models, so `1` is never a digit choice. A digit saves
+  the default for new sessions at once; `s` uses the model for this session.
+- Claude Code `/permissions`: tabs, a search field and its rules, then
+  **Add a new rule…** with its entry field and the save-location step.
+- Codex `/model` and its reasoning-level step, `/permissions` and the
+  full-access confirmation, which Codex draws above its idle composer. A Codex
+  digit selects without Enter.
+- `menu-claude-permissions-list` is the same list after ↓ moves the cursor
+  onto a rule; Herdr 0.9.3's `live_blocked_form` screen rule then reports
+  Claude Code `blocked`.
+- `menu-claude-closed` and `menu-codex-closed` show the screens after Escape
+  or a choice. Otherwise Herdr reported Claude Code `idle` and Codex `done`.

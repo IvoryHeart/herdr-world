@@ -1861,6 +1861,57 @@ of conditional input remains a documented gap between the last check and dispatc
 - **THEN** Chat acknowledges only same-owner working progress or a completed
   turn with at least two sequence advances, and otherwise leaves it unconfirmed
 
+### Requirement: Chat completes harness command menus and composer keys
+
+Chat SHALL show a harness's own command menu (such as Claude Code's or Codex's
+`/model` and `/permissions`) that is open while Herdr reports the bound agent
+idle or done, read from the bottom of its screen only on Chat's request. When
+Herdr reports the pane blocked, Chat SHALL show a menu only if the prompt
+parser reads no question there and the transcript is readable with no open
+tool call; otherwise the screen remains a question. Only a
+complete recognized panel SHALL be offered: a Claude Code panel between its top
+edge and a footer of key segments including Escape, or a Codex title paragraph,
+numbered option block and such a footer at the bottom of the screen or directly
+above its idle composer. Options SHALL come only from numbered rows with at most
+one cursor and consecutive numbers; Chat SHALL NOT infer choices from prose. A
+digit SHALL pick an option only when no longer option number starts with it and
+the menu has no text field. Key buttons SHALL come only from keys the footer or
+an arrow hint names, plus the arrows of a list.
+
+Each menu key SHALL carry the session and menu fingerprint Chat showed. The
+service SHALL refuse with nothing sent unless the pane's session matches, the
+pane still shows a menu under those rules, the screen shows that menu, the key is one it names and
+the pane's agent, session, terminal, title, revision and state sequence are
+unchanged on a second read. Field text SHALL be one line of at most 500
+characters without control characters and SHALL be typed without Enter. A
+refusal SHALL return the menu now shown; a sent key SHALL return the next menu
+or none. Menu keys and answers to one pane SHALL NOT interleave.
+
+The composer's ellipsis menu SHALL offer the Terminal's configured key
+controls on desktop and phone. Each SHALL be sent only as a Herdr key name for
+the session Chat shows and only after a second unchanged pane read; scrolling
+and keys Herdr does not name SHALL be disabled. A new connection, runtime, pane
+or session SHALL retire a shown menu and its notice. Opening, changing or
+closing a menu SHALL keep the transcript, its scroll position, the composer
+draft, attachments and send receipts. Herdr's lack of conditional input
+remains a documented gap between the last check and the key.
+
+#### Scenario: Pick a model from Chat
+
+- **WHEN** a user sends `/model` from Chat and picks a numbered model
+- **THEN** Chat shows the harness's menu, presses that digit only if the same
+  session still shows the same menu, and shows the next step or none
+
+#### Scenario: The menu changes before the key
+
+- **WHEN** the menu, session or pane changes between Chat's card and the key
+- **THEN** the service sends nothing and returns the menu now shown
+
+#### Scenario: Press a terminal key from Chat
+
+- **WHEN** a user presses Ctrl+C in the composer's ellipsis menu
+- **THEN** the service presses it only for the session Chat shows
+
 ### Requirement: Town peeks show recent chatter and take replies
 
 An agent's peek SHALL show the agent's latest message from the conversation

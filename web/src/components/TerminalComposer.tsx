@@ -797,8 +797,7 @@ export function TerminalComposer({
         aria-label={surface === "chat" ? "Chat input" : "Terminal input"}
         tabIndex={-1}
         onFocus={(event) => {
-          // Composer dock/background focus stays neutral. Only its native
-          // editor opens the keyboard; Direct retains its explicit handoff.
+          // Dock focus is neutral: only the editor opens the keyboard.
           if (event.target !== event.currentTarget) return;
           if (mode === "direct" && !directDisabled) onFocusDirect();
         }}
@@ -912,6 +911,7 @@ export function TerminalComposer({
               disabled={busy || composing}
               commandsAvailable={commands.length > 0}
               onCommands={browseCommands}
+              {...{ shortcutRows, onRunShortcut }}
             />
           ) : null}
           <div

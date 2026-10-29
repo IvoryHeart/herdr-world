@@ -60,14 +60,36 @@ export type PendingPrompt = {
     description?: string;
     input?: "text" | "chat";
     active?: boolean;
+    /** A command menu's cursor is on this option. */
+    cursor?: boolean;
   }[];
   /**
    * A multi-question form's questions by their headers, in order: the agent
    * shows one at a time, then a review that submits them all.
    */
   steps?: { label: string; answered: boolean }[];
+  /**
+   * The harness's own command menu (such as `/model`), read from its screen
+   * while the agent is idle or done; its title is the question.
+   */
+  menu?: {
+    footer: string;
+    after: string[];
+    controls: { key: string; label: string; action: string }[];
+    field?: string;
+  };
   fingerprint: string;
 };
+
+// Mirrors ConversationKeyResult in server/src/agent/conversation.ts.
+export type KeyResult =
+  | { status: "sent"; key: string; text?: string; menu: PendingPrompt | null }
+  | {
+      status: "refused";
+      reason: string;
+      message: string;
+      menu: PendingPrompt | null;
+    };
 
 export type AnswerResult =
   | {

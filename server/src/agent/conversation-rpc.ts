@@ -7,6 +7,7 @@ export const CONVERSATION_RPC_METHODS: ReadonlySet<string> = new Set([
   "agent_conversation.steps",
   "agent_conversation.send",
   "agent_conversation.answer",
+  "agent_conversation.press",
   "agent_conversation.dismiss",
 ]);
 
@@ -35,52 +36,75 @@ export async function conversationRpc(
   const result =
     method === "agent_conversation.get"
       ? await source.read({ pane_id: paneId })
-      : method === "agent_conversation.answer"
-        ? await source.answer({
+      : method === "agent_conversation.press"
+        ? await source.press({
             pane_id: paneId,
             key: typeof p.key === "string" ? p.key : "",
+            session_fingerprint:
+              typeof p.session_fingerprint === "string"
+                ? p.session_fingerprint
+                : "",
+            ...(p.menu_fingerprint !== undefined
+              ? {
+                  menu_fingerprint:
+                    typeof p.menu_fingerprint === "string"
+                      ? p.menu_fingerprint
+                      : "",
+                }
+              : {}),
             ...(p.text !== undefined
               ? { text: typeof p.text === "string" ? p.text : "" }
               : {}),
-            prompt_fingerprint:
-              typeof p.prompt_fingerprint === "string"
-                ? p.prompt_fingerprint
-                : "",
           })
-        : method === "agent_conversation.dismiss"
-          ? {
-              dismissed: source.dismiss({
-                pane_id: paneId,
-                delivery_id:
-                  typeof p.delivery_id === "string" ? p.delivery_id : "",
-              }),
-            }
-          : method === "agent_conversation.send"
-            ? await source.send({
-                pane_id: paneId,
-                text: typeof p.text === "string" ? p.text : "",
-                session_fingerprint:
-                  typeof p.session_fingerprint === "string"
-                    ? p.session_fingerprint
-                    : "",
-                ...(Array.isArray(p.baseline)
-                  ? {
-                      baseline: p.baseline.filter(
-                        (id): id is string => typeof id === "string",
-                      ),
-                    }
-                  : {}),
-              })
-            : paneId
-              ? await source.latest({ pane_id: paneId })
-              : {
-                  conversations: await source.latestAll(
-                    Array.isArray(p.pane_ids)
-                      ? p.pane_ids.filter(
+        : method === "agent_conversation.answer"
+          ? await source.answer({
+              pane_id: paneId,
+              key: typeof p.key === "string" ? p.key : "",
+              ...(p.text !== undefined
+                ? { text: typeof p.text === "string" ? p.text : "" }
+                : {}),
+              prompt_fingerprint:
+                typeof p.prompt_fingerprint === "string"
+                  ? p.prompt_fingerprint
+                  : "",
+            })
+          : method === "agent_conversation.dismiss"
+            ? {
+                dismissed: source.dismiss({
+                  pane_id: paneId,
+                  delivery_id:
+                    typeof p.delivery_id === "string" ? p.delivery_id : "",
+                }),
+              }
+            : method === "agent_conversation.send"
+              ? await source.send({
+                  pane_id: paneId,
+                  text: typeof p.text === "string" ? p.text : "",
+                  session_fingerprint:
+                    typeof p.session_fingerprint === "string"
+                      ? p.session_fingerprint
+                      : "",
+                  ...(Array.isArray(p.baseline)
+                    ? {
+                        baseline: p.baseline.filter(
                           (id): id is string => typeof id === "string",
-                        )
-                      : undefined,
-                  ),
-                };
+                        ),
+                      }
+                    : {}),
+                })
+              : paneId
+                ? await source.latest({
+                    pane_id: paneId,
+                    menus: p.menus === true,
+                  })
+                : {
+                    conversations: await source.latestAll(
+                      Array.isArray(p.pane_ids)
+                        ? p.pane_ids.filter(
+                            (id): id is string => typeof id === "string",
+                          )
+                        : undefined,
+                    ),
+                  };
   return result;
 }

@@ -35,11 +35,37 @@ export type PendingPrompt = {
    * Code shows one at a time, then a review that submits them all.
    */
   steps?: PromptStep[];
+  /**
+   * The harness's own command menu (such as `/model` or `/permissions`), open
+   * while Herdr reports the agent idle or done. Its title is the question;
+   * its other lines are the request.
+   */
+  menu?: PromptMenu;
   /** Identifies this exact prompt, in this session, at this Herdr state. */
   fingerprint: string;
 };
 
 export type PromptStep = { label: string; answered: boolean };
+
+export type PromptMenu = {
+  /** The menu's footer, as shown. */
+  footer: string;
+  /** Lines shown below the options, such as "… +3 models". */
+  after: string[];
+  /** Keys the footer and hints name, with what each does. */
+  controls: MenuControl[];
+  /** What the menu's text field shows: a placeholder or typed text. */
+  field?: string;
+};
+
+export type MenuControl = {
+  /** A Herdr key name, such as "enter", "esc", "up" or "s". */
+  key: string;
+  /** The key as the harness writes it, such as "Enter" or "↑". */
+  label: string;
+  /** What the harness says it does, such as "set as default". */
+  action: string;
+};
 
 export type PromptOption = {
   /** What the menu shows, such as "1". */
@@ -53,6 +79,8 @@ export type PromptOption = {
   input?: "text" | "chat";
   /** The empty inline editor is already selected on this screen. */
   active?: boolean;
+  /** A command menu's cursor is on this option. */
+  cursor?: boolean;
 };
 
 /** Lines of recent output read for a blocked agent's prompt. */
@@ -115,6 +143,7 @@ type Parsed = {
   request: string[];
   options: PromptOption[];
   steps?: PromptStep[];
+  menu?: PromptMenu;
 };
 
 /** A form's header chips, or null for any other line. */
@@ -479,6 +508,224 @@ function codexQuestion(lines: string[]): Parsed | null {
     question,
     request: [],
     options: valid ? options : [],
+  };
+}
+
+// A command menu's keys, as Claude Code and Codex write them in footers.
+const MENU_KEYS: Record<string, string> = {
+  enter: "enter",
+  esc: "esc",
+  tab: "tab",
+  space: "space",
+  "shift+tab": "shift+tab",
+  "↑": "up",
+  "↓": "down",
+  "←": "left",
+  "→": "right",
+};
+const MENU_OPTION_ROW = /^(\s*)(❯|›|↑|↓)?\s*(\d{1,2})\.\s+(\S.*?)\s*$/u;
+const MENU_HINT = /(←\/→|↑\/↓) to ([a-z][a-z ]*)$/u;
+const MENU_MORE = /^…\s*\+(\d+)\b/u;
+const MENU_TOP = /^\s*(?:▔{3,}|─{3,}\s*$)/u;
+const BOX_ROW = /^\s*[╭╰]─+[╮╯]\s*$/u;
+
+/** One footer segment's keys, such as "↑/↓"; null when it names others. */
+function menuKeys(token: string, action: string): MenuControl[] | null {
+  const controls: MenuControl[] = [];
+  for (const label of token.split("/")) {
+    const lower = label.toLowerCase();
+    const key = MENU_KEYS[lower] ?? (/^[a-z0-9]$/.test(lower) ? lower : null);
+    if (!key) return null;
+    controls.push({ key, label, action });
+  }
+  return controls;
+}
+
+/**
+ * A command menu's footer: segments joined by " · ", each a key and what it
+ * does ("Enter to select" in Claude Code, "enter select" in Codex), one of
+ * them Escape. Segments naming other keys, such as ctrl+g, give no control.
+ */
+function menuFooter(line: string, agent: string): MenuControl[] | null {
+  const controls: MenuControl[] = [];
+  for (const segment of line.trim().split(/\s+·\s+/u)) {
+    const match =
+      agent === "codex"
+        ? /^(\S+) ([a-z][a-z ]*)$/u.exec(segment)
+        : /^(\S+) to (\S.*)$/u.exec(segment);
+    if (!match) return null;
+    controls.push(...(menuKeys(match[1]!, match[2]!) ?? []));
+  }
+  return controls.some((control) => control.key === "esc") ? controls : null;
+}
+
+/** Where a command menu's footer is, or -1. */
+function menuFooterAt(lines: string[], agent: string) {
+  let end = lines.length - 1;
+  while (end >= 0 && !lines[end]!.trim()) end -= 1;
+  if (end < 0) return -1;
+  if (menuFooter(lines[end]!, agent)) return end;
+  if (agent !== "codex") return -1;
+  // Codex draws a confirmation above its idle composer: the footer, blank
+  // rows, then the composer's › row and at most three status rows.
+  let composer = end;
+  while (composer > end - 4 && composer >= 0 && !/^›\s/u.test(lines[composer]!))
+    composer -= 1;
+  if (composer < 0 || !/^›\s/u.test(lines[composer]!)) return -1;
+  let footer = composer - 1;
+  while (footer >= 0 && !lines[footer]!.trim()) footer -= 1;
+  return footer >= 0 && menuFooter(lines[footer]!, agent) ? footer : -1;
+}
+
+/**
+ * A harness's own command menu at the bottom of a screen: Claude Code's
+ * panel between a top edge (▔ or ─) and its footer, or a Codex list, its
+ * title paragraph directly above, and its footer. Options are read only from
+ * numbered rows with at most one cursor; a digit picks one only where it
+ * cannot be the start of another option's number and no text field would
+ * take it. Anything else is not a menu Chat offers.
+ */
+function commandMenu(lines: string[], agent: string): Parsed | null {
+  const footerAt = menuFooterAt(lines, agent);
+  if (footerAt < 0) return null;
+  const footer = lines[footerAt]!;
+  let start: number;
+  if (agent === "claude") {
+    start = footerAt - 1;
+    while (start >= Math.max(0, footerAt - 60) && !MENU_TOP.test(lines[start]!))
+      start -= 1;
+    if (start < 0 || !MENU_TOP.test(lines[start]!)) return null;
+    start += 1;
+  } else {
+    // Codex has no top edge: up through the block of options, which
+    // starts with one, then the title paragraph above it.
+    start = footerAt - 1;
+    for (const block of ["options", "title"]) {
+      while (start >= 0 && !lines[start]!.trim()) start -= 1;
+      while (start >= 0 && lines[start]!.trim()) start -= 1;
+      if (block === "options" && !MENU_OPTION_ROW.test(lines[start + 1] ?? ""))
+        return null;
+    }
+    start += 1;
+  }
+  const region = lines.slice(start, footerAt);
+  const options: PromptOption[] = [];
+  const body: string[] = [];
+  const after: string[] = [];
+  let field: string | undefined;
+  let title: string | undefined;
+  let column = -1;
+  let cursors = 0;
+  let more = 0;
+  let afterOptions = false;
+  for (let index = 0; index < region.length; index += 1) {
+    const line = region[index]!;
+    if (!line.trim()) continue;
+    if (BOX_ROW.test(line)) continue;
+    const boxed = BOX_LINE.exec(line);
+    if (boxed) {
+      // One text field: a search or an entry box.
+      if (field !== undefined || options.length) return null;
+      field = boxed[1]!.replace(/^\s*⌕\s*/u, "").trim();
+      continue;
+    }
+    const option = MENU_OPTION_ROW.exec(line);
+    if (option) {
+      if (afterOptions) return null;
+      const [label, description] = option[4]!.split(/\s{2,}/u, 2);
+      if (option[2] === "❯" || option[2] === "›") cursors += 1;
+      options.push({
+        number: option[3]!,
+        label: label!.trim(),
+        key: "",
+        ...(description ? { description: description.trim() } : {}),
+        ...(option[2] === "❯" || option[2] === "›" ? { cursor: true } : {}),
+      });
+      column = option[1]!.length;
+      continue;
+    }
+    const indent = /^\s*/u.exec(line)![0].length;
+    if (options.length && !afterOptions && indent > column + 3) {
+      // A description wrapped under its option.
+      const last = options[options.length - 1]!;
+      last.description = [last.description, line.trim()]
+        .filter(Boolean)
+        .join(" ");
+      continue;
+    }
+    if (options.length) afterOptions = true;
+    const text = line.trim();
+    if (title === undefined && !options.length) title = text;
+    else (afterOptions ? after : body).push(text);
+    more = Number(MENU_MORE.exec(text)?.[1] ?? more);
+  }
+  if (title === undefined || (!options.length && field === undefined))
+    return null;
+  if (
+    cursors > 1 ||
+    options.some(
+      (option, index) =>
+        index > 0 &&
+        Number(option.number) !== Number(options[0]!.number) + index,
+    )
+  )
+    return null;
+  const total = options.length
+    ? Number(options[options.length - 1]!.number) + more
+    : 0;
+  for (const option of options) {
+    const number = Number(option.number);
+    // "1" cannot pick in a list that reaches 10: it may start "10".
+    if (field === undefined && number <= 9 && number * 10 > total)
+      option.key = option.number;
+  }
+  const controls = menuFooter(footer, agent)!;
+  const add = (control: MenuControl) => {
+    if (!controls.some((known) => known.key === control.key))
+      controls.push(control);
+  };
+  for (const line of [...body, ...after]) {
+    const hint = MENU_HINT.exec(line);
+    if (hint) for (const control of menuKeys(hint[1]!, hint[2]!)!) add(control);
+  }
+  // Every list moves its cursor with the arrow keys.
+  if (options.length > 1) {
+    add({ key: "up", label: "↑", action: "move" });
+    add({ key: "down", label: "↓", action: "move" });
+  }
+  return {
+    shown: [...region, footer],
+    question: [title],
+    request: body,
+    options,
+    menu: {
+      footer: footer.trim(),
+      after,
+      controls,
+      ...(field !== undefined ? { field } : {}),
+    },
+  };
+}
+
+/**
+ * Read a command menu the harness shows while Herdr reports the agent idle
+ * or done, such as Claude Code's or Codex's `/model` and `/permissions`.
+ * Returns null when the screen shows no complete, recognised menu.
+ */
+export function parseCommandMenu(
+  agent: string,
+  screen: string,
+  context: PromptContext,
+): PendingPrompt | null {
+  if (agent !== "claude" && agent !== "codex") return null;
+  const parsed = commandMenu(screen.split("\n").map(trimEnd), agent);
+  if (!parsed) return null;
+  return {
+    question: parsed.question,
+    request: parsed.request,
+    options: parsed.options,
+    menu: parsed.menu!,
+    fingerprint: fingerprint(context, parsed.shown),
   };
 }
 
