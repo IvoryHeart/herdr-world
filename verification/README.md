@@ -111,7 +111,8 @@ invalidates publication. The diagnostic, OOM and cancellation controls remain
 mandatory on every group runner. Local canonical commands remain unfiltered.
 
 Each Linux CI group executes in an isolated cgroup with hard 4 GiB memory,
-zero swap and two CPUs of quota; the local full gate retains one such envelope.
+zero swap and two CPUs of quota. The explicit local `verification:resources`
+command retains one such envelope; ordinary local canonical execution is unchanged.
 The CI aggregate preserves all three per-runner accounting records rather than
 claiming a single global peak across separate machines. The service subtree's `memory.peak`, enforced
 limits and OOM events are retained, bound to the canonical manifest. An actual

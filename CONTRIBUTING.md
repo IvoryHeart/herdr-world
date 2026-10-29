@@ -105,8 +105,9 @@ and explicit `check:delivery` always run everything.
 CI verification groups are partial evidence. The aggregate requires every accepted
 model exactly once, the current complete source inventory/revision, matching tool
 identities and successful resource accounting for all three groups. Each runner
-retains the 4 GiB/no-swap/two-CPU limit and its OOM/cancellation controls; the local
-canonical gate keeps its single envelope. The aggregate retains each runner's
+retains the 4 GiB/no-swap/two-CPU limit and its OOM/cancellation controls. The
+standalone local `verification:resources` command retains one single-machine
+envelope; ordinary local canonical commands remain unchanged. The aggregate retains each runner's
 accounting. Reruns select the newest artifact attempt for each group and cannot
 fall back from incomplete newer evidence. The canonical local gate still accepts
 no model filters.
