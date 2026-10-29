@@ -1,6 +1,10 @@
 import { appendFileSync } from "node:fs";
-import { changedPathsBetween } from "./check-knowledge-map";
-import { isToolingOnlyChange } from "./validation-scope";
+import {
+  repositorySelection,
+  fullValidationSelection,
+  isDocumentationPath,
+  type ValidationSelection,
+} from "./validation-scope";
 import { execFileSync } from "node:child_process";
 
 type Step = { name: string; conclusion: string | null };
@@ -105,28 +109,7 @@ export function checkoutCommitFromLog(log: string): string | undefined {
  * Evidence contracts, execution policy and packaged notices must receive the
  * full candidate gate.
  */
-export function isDocumentationPath(path: string): boolean {
-  return (
-    path.endsWith(".md") &&
-    ![
-      "verification/",
-      "quint/",
-      "tools/quint/",
-      "openspec/",
-      ".agents/",
-      ".github/",
-    ].some((prefix) => path.startsWith(prefix)) &&
-    ![
-      "AGENTS.md",
-      "CONTRIBUTING.md",
-      // Copied into every release package by scripts/package-release.sh.
-      "THIRD_PARTY_NOTICES.md",
-      "DEPENDENCY_NOTICES.md",
-      "DEPENDENCY_LICENSES.md",
-      "UPSTREAM.md",
-    ].includes(path)
-  );
-}
+export { isDocumentationPath } from "./validation-scope";
 
 /** Only ordinary documentation changes may use the shorter gate. */
 export function isDocsOnlyChange(
@@ -170,18 +153,38 @@ export async function selectValidationMode(
   docsOnly: boolean,
   reuse: () => Promise<boolean>,
   toolingOnly = false,
-): Promise<"docs" | "tooling" | "reuse" | "full"> {
+  scoped = false,
+): Promise<"docs" | "tooling" | "scoped" | "reuse" | "full"> {
   if (toolingOnly) return "tooling";
   if (docsOnly) return "docs";
-  if (action !== "edited" && action !== "labeled") return "full";
+  const fresh = scoped ? "scoped" : "full";
+  if (action !== "edited" && action !== "labeled") return fresh;
   try {
-    return (await reuse()) ? "reuse" : "full";
+    return (await reuse()) ? "reuse" : fresh;
   } catch (error) {
     console.error(
       `Cannot reuse validation: ${error instanceof Error ? error.message : String(error)}`,
     );
-    return "full";
+    return fresh;
   }
+}
+
+export function writeValidationOutputs(
+  output: string,
+  mode: string,
+  selection: ValidationSelection,
+) {
+  const active = mode !== "reuse";
+  appendFileSync(
+    output,
+    [
+      `mode=${mode}`,
+      `selection=${JSON.stringify(selection)}`,
+      `world=${active && !!(selection.world.length + selection.web.length + selection.latency.length)}`,
+      `verification=${active && selection.verification}`,
+      `packaging=${active && selection.packaging}`,
+    ].join("\n") + "\n",
+  );
 }
 
 if (import.meta.main) {
@@ -192,6 +195,16 @@ if (import.meta.main) {
   const baseSha = process.env.PR_BASE_SHA ?? "";
   const jobName = process.env.REQUIRED_JOB_NAME;
   const fullStepName = process.env.REQUIRED_FULL_STEP;
+  if (process.env.GITHUB_EVENT_NAME !== "pull_request") {
+    if (!output) throw new Error("Missing CI output file");
+    writeValidationOutputs(
+      output,
+      "full",
+      fullValidationSelection(process.cwd()),
+    );
+    process.exit(0);
+  }
+
   const prNumber = Number(process.env.PR_NUMBER);
   const currentRunId = Number(process.env.GITHUB_RUN_ID);
   if (
@@ -208,10 +221,14 @@ if (import.meta.main) {
     throw new Error("Missing CI reuse context");
 
   let mode = "full";
+  const common = execFileSync("git", ["merge-base", baseSha, headSha], {
+    encoding: "utf8",
+  }).trim();
+  let selection = repositorySelection(process.cwd(), common, headSha);
   try {
     mode = await selectValidationMode(
       process.env.PR_ACTION,
-      isDocsOnlyChange(baseSha, headSha),
+      selection.documentation,
       async () => {
         const query = new URLSearchParams({
           head_sha: headSha,
@@ -257,13 +274,15 @@ if (import.meta.main) {
           },
         );
       },
-      isToolingOnlyChange(changedPathsBetween(process.cwd(), baseSha, headSha)),
+      selection.tooling,
+      !selection.full,
     );
   } catch (error) {
     console.error(
       `Cannot shorten validation: ${error instanceof Error ? error.message : String(error)}`,
     );
+    selection = fullValidationSelection(process.cwd());
   }
-  appendFileSync(output, `mode=${mode}\n`);
+  writeValidationOutputs(output, mode, selection);
   console.log(`${jobName}: ${mode} validation`);
 }

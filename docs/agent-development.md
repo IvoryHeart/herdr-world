@@ -128,8 +128,12 @@ this guide, `docs/crew-runbook.md`, `docs/dispatch-runbook.md` and
 include both paths. This mode runs the full static lane and affected unit tests,
 including all source type checks, and skips World browser/latency, behavioral
 verification and native installation work. `Delivery checks` and the protected
-macOS reports still run. Other code paths keep the full CI matrix, as do all main
-pushes. See [pipeline ownership](ci-pipelines.md) for result requirements.
+macOS reports still run. Other classified changes run their affected contracts and consumers under the
+same rules as pre-push; unknown paths and every main push keep the full matrix.
+Unit/web tests use two CI runners, behavioral models three groups with complete
+source-bound aggregation, and each latency suite remains isolated on its runner.
+Leaf failures are visible before `Delivery checks` finishes; the crew's reaction
+to a first failure is a separate workflow concern. See [pipeline ownership](ci-pipelines.md) for result requirements.
 Fetch main before pushing: `check:size` evaluates the proposed merge against
 main's ceilings, allowing an unchanged branch behind main and rejecting restored
 ceilings or merge conflicts. For a stacked PR, use

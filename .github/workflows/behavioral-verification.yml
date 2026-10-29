@@ -13,8 +13,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  candidate:
-    name: Behavioral verification
+  shards:
+    name: Behavioral models (${{ matrix.shard }}/3)
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -40,17 +44,48 @@ jobs:
           bun run verification:typecheck
           bun run verification:notices:check
       - name: Run all accepted models within enforced resource limits
-        run: bun run verification:resources --system
+        run: bun run verification:resources --system --shard=${{ matrix.shard }}/3
       - name: Exercise a failing candidate and verify retained diagnostics
         run: bun run verification:diagnostic-control
       - name: Retain source-bound evidence manifests
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: behavioral-evidence-${{ github.run_attempt }}
+          name: behavioral-shard-${{ matrix.shard }}-attempt-${{ github.run_attempt }}
           path: |
             .agents/verification/runs/**/manifest.json
             .agents/verification/diagnostics/**
             .agents/verification/resources/**/resources.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+  candidate:
+    name: Behavioral verification
+    needs: shards
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.4.3"
+          no-cache: true
+      - run: bun install --frozen-lockfile
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: behavioral-shard-*
+          path: .agents/verification
+          merge-multiple: true
+      - name: Require complete source-bound models and every enforced shard limit
+        run: bun scripts/ci-verification.ts aggregate
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: behavioral-evidence-${{ github.run_attempt }}
+          path: .agents/verification/runs/ci-aggregate-*/manifest.json
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 14

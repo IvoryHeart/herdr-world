@@ -425,11 +425,18 @@ export async function verifyPostExitCancellation(
 
 if (import.meta.main) {
   assert(
-    process.argv.length === 2 ||
-      (process.argv.length === 3 && process.argv[2] === "--system"),
-    "Resource gate accepts no model filters",
+    process.argv
+      .slice(2)
+      .every((arg) => arg === "--system" || /^--shard=[123]\/3$/.test(arg)) &&
+      new Set(process.argv.slice(2)).size === process.argv.length - 2 &&
+      process.argv.filter((arg) => arg.startsWith("--shard=")).length <= 1,
+    "Resource gate accepts only --system and a maintained --shard=i/3",
   );
   const root = resolve(import.meta.dir, "..");
+  const shard = process.argv
+    .find((arg) => arg.startsWith("--shard="))
+    ?.slice(8);
+  const system = process.argv.includes("--system");
   const cancellation = new AbortController();
   const stop = () =>
     cancellation.abort(new Error("Constrained verification cancelled"));
@@ -440,7 +447,7 @@ if (import.meta.main) {
     // accepting a successful constrained canonical run.
     const control = await runConstrainedVerification(
       root,
-      process.argv[2] === "--system",
+      system,
       [
         process.execPath,
         "-e",
@@ -458,7 +465,7 @@ if (import.meta.main) {
       control.evidence.oomKills > 0 && control.code !== 0,
       "Memory limit control did not kill the over-budget process",
     );
-    await verifyResourceCancellation(root, process.argv[2] === "--system");
+    await verifyResourceCancellation(root, system);
     const regressions = await runVerificationProcess(
       [process.execPath, "test", "scripts/verification-resources.live.test.ts"],
       {
@@ -466,8 +473,7 @@ if (import.meta.main) {
         timeoutMs: 45000,
         env: {
           ...process.env,
-          HERDR_RESOURCE_MANAGER:
-            process.argv[2] === "--system" ? "system" : "user",
+          HERDR_RESOURCE_MANAGER: system ? "system" : "user",
         },
         signal: cancellation.signal,
       },
@@ -479,8 +485,10 @@ if (import.meta.main) {
     );
     const result = await runConstrainedVerification(
       root,
-      process.argv[2] === "--system",
-      [process.execPath, "run", "verification:check"],
+      system,
+      shard
+        ? [process.execPath, "scripts/ci-verification.ts", shard]
+        : [process.execPath, "run", "verification:check"],
       limits,
       cancellation.signal,
     );

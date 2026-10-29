@@ -1,14 +1,6 @@
 import { mkdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import {
-  CHROME,
-  TEST,
-  affected,
-  buildGraph,
-  coverageOwners,
-  gitChanges,
-  type Affected,
-} from "./affected";
+import { CHROME, TEST, type Affected } from "./affected";
 import {
   acquireAllCheckSlots,
   acquireCheckSlot,
@@ -16,7 +8,7 @@ import {
   heldEnv,
 } from "./check-lock";
 import { guardDiskSpace } from "./disk-guard";
-import { isToolingOnlyChange } from "./validation-scope";
+import { repositorySelection } from "./validation-scope";
 import { worldBrowserSuites, worldTimedSuites } from "./world-browser-suites";
 
 /**
@@ -70,34 +62,16 @@ function scope(): Affected & { why: string } {
   const from = base || common;
   if (!from)
     return { full: true, reason: "no base", why: "no base to compare" };
-  const { tracked, changed, deleted } = gitChanges(root, from);
-  // Classify the complete PR, even on an incremental push after a code gate.
-  tooling =
-    common !== null && isToolingOnlyChange(gitChanges(root, common).changed);
-  const result = affected(
-    buildGraph(root, tracked, deleted),
-    changed,
-    worldBrowserSuites,
-    coverageOwners(root),
-  );
-  if (tooling)
-    return {
-      full: false,
-      // An uncovered agent module still exercises the agent test inventory.
-      unit: result.full
-        ? tracked.filter(
-            (path) => path.startsWith("scripts/agent/") && TEST.test(path),
-          )
-        : result.unit,
-      browser: [],
-      verification: false,
-      why: `tooling-only; ${changed.length} changed files`,
-    };
+  const result = repositorySelection(root, common || from, "HEAD", from);
+  tooling = result.tooling;
+  if (result.full)
+    return { full: true, reason: result.reason, why: result.reason };
   return {
-    ...result,
-    why: result.full
-      ? result.reason
-      : `${changed.length} changed files since ${from.slice(0, 8)}`,
+    full: false,
+    unit: [...result.unit, ...result.web],
+    browser: [...result.world, ...result.latency],
+    verification: result.verification,
+    why: `${tooling ? "tooling-only" : "scoped"}; ${result.reason}`,
   };
 }
 

@@ -25,7 +25,7 @@ type WorkflowJob = {
     matrix?: {
       include?: Array<{ arch?: string; runner?: string }>;
       platform?: string[];
-      shard?: number[];
+      shard?: number[] | string;
       suite?: string[];
       order?: string[];
     };
@@ -143,24 +143,23 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
       WORLD_RESULT: "${{ needs.world-browser.result }}",
     },
   });
-  const validation = workflow.jobs.validation;
-  expect(validation?.needs).toBe("validation-scope");
-  // Browser jobs stay parallel with repository validation after the shared
-  // scope decision; consolidating commands must not serialize these lanes.
-  expect(workflow.jobs["world-browser"].needs).toBe(validation?.needs);
+  expect(workflow.jobs.validation.needs).toEqual([
+    "validation-scope",
+    "static",
+    "unit-tests",
+  ]);
+  expect(workflow.jobs["world-browser"].needs).toBe("validation-scope");
   expect(
-    validation?.steps.find((step) => step.run === "bun run check"),
-  ).toMatchObject({
-    if: "needs.validation-scope.outputs.mode == 'full'",
-    env: {
-      HERDR_TEST_EXCLUDE_WORLD_BROWSER: "1",
-      HERDR_TEST_PARALLEL: "1",
-      HERDR_TEST_MAX_CONCURRENCY: "2",
-    },
-  });
+    workflow.jobs.static.steps.find(
+      (step) => step.run === "bun run check:static",
+    )?.if,
+  ).toBe("needs.validation-scope.outputs.mode != 'docs'");
   expect(
-    validation?.steps.find((step) => step.run === "bun run check:docs")?.if,
+    workflow.jobs.static.steps.find((step) => step.run === "bun run check:docs")
+      ?.if,
   ).toBe("needs.validation-scope.outputs.mode == 'docs'");
+  expect(workflow.jobs["unit-tests"].strategy?.matrix?.shard).toEqual([1, 2]);
+  expect(workflow.jobs["unit-tests"].strategy?.["fail-fast"]).toBe(false);
   const scope = workflow.jobs["validation-scope"];
   expect(
     scope?.steps.find((step) => step.name === "Determine validation scope"),
@@ -191,10 +190,13 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
 });
 
 test("latency budgets run alone in a dedicated, quiet job that gates delivery", () => {
-  const latency = worldWorkflow.jobs["world-latency"];
+  const latency = worldWorkflow.jobs["latency-shards"];
   expect(latency?.needs).toBeUndefined();
-  expect(latency?.if).toBeUndefined();
-  expect(latency?.strategy).toBeUndefined();
+  expect(latency?.if).toBe(
+    "toJSON(fromJSON(inputs.selection).latency) != '[]'",
+  );
+  expect(latency?.strategy?.matrix?.shard).toEqual([1, 2, 3, 4, 5, 6]);
+  expect(worldWorkflow.jobs["world-latency"].needs).toBe("latency-shards");
   expect(latency?.["continue-on-error"] ?? false).toBe(false);
   for (const step of latency?.steps ?? [])
     expect(step["continue-on-error"] ?? false).toBe(false);
@@ -206,7 +208,7 @@ test("latency budgets run alone in a dedicated, quiet job that gates delivery", 
   expect(runs).toEqual([
     "bun install --frozen-lockfile",
     "bun scripts/wait-for-quiet.ts",
-    "bun run test:world --shard=latency --parallel=1 --max-concurrency=1 --retry=1",
+    "bun scripts/ci-tests.ts latency ${{ matrix.shard }}",
   ]);
   expect(JSON.stringify(worldWorkflow.jobs["world-browser"])).not.toContain(
     "--retry",
@@ -223,28 +225,27 @@ test("latency budgets run alone in a dedicated, quiet job that gates delivery", 
 test("all World browser shards and the web browser suites run independently and retain failure evidence", () => {
   expect(workflow.jobs["world-browser"]).toMatchObject({
     needs: "validation-scope",
-    if: "needs.validation-scope.outputs.mode == 'full'",
+    if: "needs.validation-scope.outputs.world == 'true'",
     uses: "./.github/workflows/world-browser.yml",
   });
   expect(Object.keys(worldWorkflow.on)).toEqual(["workflow_call"]);
   expect(worldWorkflow.permissions.contents).toBe("read");
   const world = worldWorkflow.jobs["world-browser"];
   expect(world?.needs).toBeUndefined();
-  expect(world?.if).toBeUndefined();
+  expect(world?.if).toBe("toJSON(fromJSON(inputs.selection).world) != '[]'");
   expect(world?.["continue-on-error"] ?? false).toBe(false);
   for (const step of world?.steps ?? [])
     expect(step["continue-on-error"] ?? false).toBe(false);
   expect(world?.["runs-on"]).toBe("ubuntu-latest");
-  expect(world?.strategy?.matrix?.shard).toEqual(
-    worldBrowserShards.map((_, index) => index + 1),
+  expect(world?.strategy?.matrix?.shard).toBe(
+    "${{ fromJSON(inputs.selection).worldShards }}",
   );
   expect(world?.strategy?.["fail-fast"]).toBe(false);
   expect(world?.strategy?.["max-parallel"]).toBe(worldBrowserShards.length);
   expect(
     world?.steps.find(
       (step) =>
-        step.run ===
-        "bun run test:world --shard=${{ matrix.shard }}/6 --parallel=1 --max-concurrency=1",
+        step.run === "bun scripts/ci-tests.ts world ${{ matrix.shard }}",
     ),
   ).toMatchObject({
     env: {
@@ -264,16 +265,20 @@ test("all World browser shards and the web browser suites run independently and 
       ),
     },
   });
-  const web = worldWorkflow.jobs["web-browser"];
+  const web = worldWorkflow.jobs["web-shards"];
   expect(web?.needs).toBeUndefined();
-  expect(web?.if).toBeUndefined();
-  expect(web?.strategy).toBeUndefined();
+  expect(web?.if).toBe("toJSON(fromJSON(inputs.selection).web) != '[]'");
+  expect(web?.strategy?.matrix?.shard).toEqual([1, 2]);
+  expect(worldWorkflow.jobs["web-browser"].needs).toBe("web-shards");
   for (const step of web?.steps ?? [])
     expect(step["continue-on-error"] ?? false).toBe(false);
   expect(
-    web?.steps.find((step) => step.run?.includes("--web-browser")),
+    web?.steps.find(
+      (step) =>
+        step.run === "bun scripts/ci-tests.ts web ${{ matrix.shard }}/2",
+    ),
   ).toMatchObject({
-    run: "mkdir -p .agents/delivery && bun run test --web-browser --reporter=junit --reporter-outfile=.agents/delivery/web-browser.xml",
+    run: "bun scripts/ci-tests.ts web ${{ matrix.shard }}/2",
     env: { HERDR_TEST_PARALLEL: "1", HERDR_TEST_MAX_CONCURRENCY: "2" },
   });
   expect(
@@ -355,7 +360,7 @@ test("CI exercises the real plugin-managed launchd lifecycle on both protected a
       (step) =>
         step.name === "Exercise the real plugin-managed launchd lifecycle",
     )?.if,
-  ).toBe("needs.validation-scope.outputs.mode == 'full'");
+  ).toBe("needs.validation-scope.outputs.packaging == 'true'");
   expect(launchd?.needs).toBe("validation-scope");
   expect(
     launchd?.steps.some(
@@ -383,12 +388,23 @@ test("accepted behavioral evidence stays unfiltered whenever its protected depen
   };
   expect(candidate.on.workflow_call).toBeNull();
   expect(candidate.permissions).toEqual({ contents: "read" });
-  const job = candidate.jobs.candidate;
+  const job = candidate.jobs.shards;
+  expect(job.strategy?.matrix?.shard).toEqual([1, 2, 3]);
+  expect(job.strategy?.["fail-fast"]).toBe(false);
+  expect(candidate.jobs.candidate.needs).toBe("shards");
+  expect(candidate.jobs.candidate.name).toBe("Behavioral verification");
+  expect(
+    candidate.jobs.candidate.steps.some(
+      (step) => step.run === "bun scripts/ci-verification.ts aggregate",
+    ),
+  ).toBe(true);
   expect(job.if).toBeUndefined();
   expect(job["continue-on-error"]).toBeUndefined();
   expect(job["timeout-minutes"]).toBe(20);
   const verify = job.steps.find(
-    (step) => step.run === "bun run verification:resources --system",
+    (step) =>
+      step.run ===
+      "bun run verification:resources --system --shard=${{ matrix.shard }}/3",
   )!;
   expect(verify).toBeDefined();
   expect(verify.if).toBeUndefined();
@@ -418,7 +434,7 @@ test("accepted behavioral evidence stays unfiltered whenever its protected depen
     "./.github/workflows/behavioral-verification.yml",
   );
   expect(workflow.jobs.behavioral.if).toBe(
-    "needs.validation-scope.outputs.mode == 'full' || needs.validation-scope.outputs.mode == 'docs'",
+    "needs.validation-scope.outputs.verification == 'true'",
   );
   for (const step of workflow.jobs.delivery.steps.filter(
     (step) => step.run === "bun scripts/ci-delivery-result.ts",
@@ -433,7 +449,7 @@ test("CI checks native plugin compatibility on Windows and both macOS architectu
   expect(workflow.jobs.delivery.needs).toContain("plugin-windows");
   expect(windows).toMatchObject({
     needs: "validation-scope",
-    if: "needs.validation-scope.outputs.mode == 'full'",
+    if: "needs.validation-scope.outputs.packaging == 'true'",
   });
   for (const step of workflow.jobs.delivery.steps.filter(
     (step) => step.run === "bun scripts/ci-delivery-result.ts",
@@ -485,34 +501,31 @@ test("red main runs open one alert and an unmerged revert; green runs resolve it
   expect(script.run).not.toContain("gh pr merge");
 });
 
-test("tooling CI retains static validation and delivery while heavy jobs keep full-only guards", () => {
-  const validation = workflow.jobs.validation;
+test("the shared plan controls scoped jobs and always preserves protected delivery", () => {
   expect(
-    validation.steps.find((step) => step.name === "Run tooling checks"),
+    workflow.jobs["unit-tests"].steps.find(
+      (step) => step.name === "Run affected non-browser tests",
+    ),
   ).toMatchObject({
-    if: "needs.validation-scope.outputs.mode == 'tooling'",
-    run: 'bun run check:changed --scope-base="$PR_BASE_SHA"',
-    env: { PR_BASE_SHA: "${{ github.event.pull_request.base.sha }}" },
+    run: "bun scripts/ci-tests.ts unit ${{ matrix.shard }}/2",
   });
-  expect(
-    validation.steps.find((step) => step.uses?.startsWith("actions/checkout@"))
-      ?.with?.["fetch-depth"],
-  ).toBe(0);
-  for (const job of ["world-browser", "installer-upgrade", "plugin-windows"]) {
+  expect(workflow.jobs["world-browser"].if).toBe(
+    "needs.validation-scope.outputs.world == 'true'",
+  );
+  for (const job of ["installer-upgrade", "plugin-windows"])
     expect(workflow.jobs[job].if).toBe(
-      "needs.validation-scope.outputs.mode == 'full'",
+      "needs.validation-scope.outputs.packaging == 'true'",
     );
-  }
   expect(workflow.jobs.delivery.if).toBe("always()");
   expect(
-    workflow.jobs.delivery.steps.find(
-      (step) => step.name === "Verify documentation, tooling or reused results",
+    workflow.jobs["validation-scope"].steps.find(
+      (step) => step.name === "Determine validation scope",
     )?.if,
-  ).toBe("needs.validation-scope.outputs.mode != 'full'");
+  ).toBeUndefined();
 });
 
 test("the ratchet checks the proposed merge into the exact PR target", () => {
-  expect(workflow.jobs.validation).toMatchObject({
+  expect(workflow.jobs.static).toMatchObject({
     env: {
       HERDR_WORLD_RATCHET_TARGET: "${{ github.event.pull_request.base.sha }}",
     },

@@ -49,60 +49,45 @@ test("full delivery requires both repository validation and every World shard to
   }
 });
 
-test("documentation and exact-head reuse allow only their expected skipped jobs", () => {
-  expect(() =>
-    assertDeliveryResults(
-      "docs",
-      "success",
-      "success",
-      "skipped",
-      "success",
-      skip,
-    ),
-  ).not.toThrow();
-  expect(() =>
-    assertDeliveryResults(
-      "reuse",
-      "success",
-      "skipped",
-      "skipped",
-      "skipped",
-      skip,
-    ),
-  ).not.toThrow();
-  expect(() =>
-    assertDeliveryResults(
-      "docs",
-      "success",
-      "failure",
-      "skipped",
-      "success",
-      skip,
-    ),
-  ).toThrow();
-  expect(() =>
-    assertDeliveryResults(
-      "reuse",
-      "failure",
-      "skipped",
-      "skipped",
-      "skipped",
-      skip,
-    ),
-  ).toThrow();
+test("docs and reuse require their exact skipped results", () => {
+  for (const mode of ["docs", "reuse"]) {
+    const validation = mode === "docs" ? "success" : "skipped";
+    expect(() =>
+      assertDeliveryResults(
+        mode,
+        "success",
+        validation,
+        "skipped",
+        "skipped",
+        skip,
+      ),
+    ).not.toThrow();
+    for (const result of ["success", "failure", "cancelled", undefined]) {
+      expect(() =>
+        assertDeliveryResults(
+          mode,
+          "success",
+          validation,
+          "skipped",
+          result,
+          skip,
+        ),
+      ).toThrow();
+    }
+  }
   expect(() =>
     assertDeliveryResults(
       undefined,
       "success",
       "skipped",
       "skipped",
-      "success",
+      "skipped",
       skip,
     ),
   ).toThrow();
 });
 
-test("behavioral failure, cancellation and missing evidence block full and docs delivery", () => {
+test("behavioral failure, cancellation and missing evidence block full delivery", () => {
   for (const result of ["failure", "cancelled", "skipped", undefined]) {
     expect(() =>
       assertDeliveryResults(
@@ -112,16 +97,6 @@ test("behavioral failure, cancellation and missing evidence block full and docs 
         "success",
         result,
         ok,
-      ),
-    ).toThrow();
-    expect(() =>
-      assertDeliveryResults(
-        "docs",
-        "success",
-        "success",
-        "skipped",
-        result,
-        skip,
       ),
     ).toThrow();
   }
@@ -209,4 +184,65 @@ test("tooling delivery requires validation and protected macOS reports, with hea
       expect(() => check(changed)).toThrow();
     }
   }
+});
+
+test("scoped delivery accepts only its planned jobs and rejects every absent or failed dependency", () => {
+  for (const verification of [false, true])
+    for (const packaging of [false, true])
+      for (const browser of [false, true]) {
+        const selection = {
+          full: false,
+          tooling: false,
+          documentation: false,
+          reason: "fixture",
+          unit: [],
+          world: browser ? ["web/src/world/fixture.test.ts"] : [],
+          worldShards: [],
+          web: [],
+          latency: [],
+          verification,
+          packaging,
+        };
+        const results = [
+          "success",
+          "success",
+          browser ? "success" : "skipped",
+          verification ? "success" : "skipped",
+          packaging ? "success" : "skipped",
+          packaging ? "success" : "skipped",
+          "success",
+        ];
+        const check = (r: Array<string | undefined>) =>
+          assertDeliveryResults(
+            "scoped",
+            r[0],
+            r[1],
+            r[2],
+            r[3],
+            r.slice(4),
+            selection,
+          );
+        expect(() => check(results)).not.toThrow();
+        for (let index = 0; index < results.length; index++)
+          for (const result of [
+            "failure",
+            "cancelled",
+            undefined,
+            results[index] === "success" ? "skipped" : "success",
+          ]) {
+            const changed: Array<string | undefined> = [...results];
+            changed[index] = result;
+            expect(() => check(changed)).toThrow();
+          }
+      }
+  expect(() =>
+    assertDeliveryResults(
+      "scoped",
+      "success",
+      "success",
+      "skipped",
+      "skipped",
+      skip,
+    ),
+  ).toThrow();
 });
