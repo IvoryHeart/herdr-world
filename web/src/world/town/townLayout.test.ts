@@ -231,7 +231,6 @@ test("folding or closing tabs shrinks an expanded room to its remaining desks", 
     );
     expect(next.layout.deskCells.size).toBe(24);
     const closedInput = town({ a: [2] });
-    closedInput.rooms[0]!.deskFold = "expanded";
     const closed = layoutTown(closedInput, shape, first.memory);
     expect(closed.layout.buildings[0]!.rooms[0]!.h).toBeLessThan(
       first.layout.buildings[0]!.rooms[0]!.h,
