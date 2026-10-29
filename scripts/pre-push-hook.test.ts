@@ -84,13 +84,18 @@ test("pre-push compares with the pushed branch, and uses the docs gate only afte
     git("init", "-q");
     git("config", "user.email", "example@example.invalid");
     git("config", "user.name", "Example");
+    mkdirSync(join(root, "verification"));
+    writeFileSync(
+      join(root, "verification/coverage.json"),
+      '{"areas":[{"owner":"server/src/config/"}]}',
+    );
     writeFileSync(join(root, "README.md"), "base\n");
     git("add", ".");
     git("commit", "-qm", "base");
     const base = git("rev-parse", "HEAD");
     writeFileSync(
       join(root, "bun"),
-      '#!/bin/sh\nprintf "%s\\n" "$*" > "$HOOK_ARGS_FILE"\nexit "$HOOK_EXIT_CODE"\n',
+      '#!/bin/sh\nif [ "$1" = scripts/validation-scope.ts ]; then exec "$REAL_BUN" "$SCOPE_SCRIPT" "$2"; fi\nprintf "%s\\n" "$*" > "$HOOK_ARGS_FILE"\nexit "$HOOK_EXIT_CODE"\n',
       { mode: 0o755 },
     );
     const run = (
@@ -109,6 +114,10 @@ test("pre-push compares with the pushed branch, and uses the docs gate only afte
           PATH: `${root}:${process.env.PATH ?? ""}`,
           HOOK_ARGS_FILE: argsPath,
           HOOK_EXIT_CODE: String(exitCode),
+          REAL_BUN: process.execPath,
+          SCOPE_SCRIPT: fileURLToPath(
+            new URL("./validation-scope.ts", import.meta.url),
+          ),
           ...extra,
         },
       });
@@ -126,6 +135,8 @@ test("pre-push compares with the pushed branch, and uses the docs gate only afte
     expect(run(docs, base).status).toBe(0);
     expect(readFileSync(argsPath, "utf8")).toBe("run check:docs\n");
     for (const path of [
+      "server/src/config/guide.md",
+      "docs/agent-development.md",
       "verification/contracts/runtime-leases.md",
       "openspec/specs/runtime-federation/spec.md",
       "AGENTS.md",

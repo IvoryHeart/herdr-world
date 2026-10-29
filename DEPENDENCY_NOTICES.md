@@ -272,7 +272,7 @@ are reproduced in `DEPENDENCY_LICENSES.md`.
 | diff | 8.0.4 | BSD-3-Clause |
 | diff | 9.0.0 | BSD-3-Clause |
 | diff2html | 3.4.56 | MIT |
-| dompurify | 3.4.16 | (MPL-2.0 OR Apache-2.0) |
+| dompurify | 3.4.17 | (MPL-2.0 OR Apache-2.0) |
 | earcut | 3.2.4 | ISC |
 | ecdsa-sig-formatter | 1.0.11 | Apache-2.0 |
 | elkjs | 0.11.1 | EPL-2.0 |
@@ -434,7 +434,7 @@ are reproduced in `DEPENDENCY_LICENSES.md`.
 | typescript | 7.0.2 | Apache-2.0 |
 | undici-types | 8.11.2 | MIT |
 | undici-types | 8.3.0 | MIT |
-| undici | 8.11.2 | MIT |
+| undici | 8.12.3 | MIT |
 | unique-names-generator | 4.7.1 | MIT |
 | unist-util-is | 6.0.1 | MIT |
 | unist-util-position | 5.0.0 | MIT |

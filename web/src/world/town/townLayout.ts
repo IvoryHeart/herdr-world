@@ -3,8 +3,8 @@
  *
  * Hosts become buildings, workspaces become rooms on carpets and tabs become
  * team tables in desk cells. Desk slots follow Herdr's tab order. The
- * placement memory keeps each room's size while a scene is live, and every
- * room capacity step contains the previous one.
+ * placement memory keeps pinned desks and explicitly expanded rooms in place
+ * while a scene is live, and every room capacity step contains the previous one.
  */
 
 export const TOWN_TILE = 16;
@@ -185,7 +185,7 @@ export type TownLayout = {
 };
 
 export type TownInputRoom = {
-  /** Explicit Fold may shrink a room; ordinary tab closures keep its tier. */
+  /** Explicit Fold reserves room controls; Expand keeps the room's capacity. */
   deskFold?: "folded" | "expanded";
   key: string;
   hostKey: string;
@@ -204,7 +204,6 @@ export type TownInput = {
 };
 
 type RoomMemory = {
-  deskFold?: "folded" | "expanded";
   tier: number;
   cells: Map<string, { col: number; row: number }>;
   /** The building column the room keeps while the scene is live. */
@@ -238,8 +237,8 @@ export function townTierFor(
 /**
  * Assign desks to grid coordinates. Desk slots follow Herdr's tab order: the
  * i-th tab takes the i-th cell in reading order, so a reorder in Herdr, Spaces
- * or Town moves desks, and a closed desk leaves no gap. The room only grows
- * while a scene is live, so its walls never jump when a desk closes.
+ * or Town moves desks, and a closed desk leaves no gap. Ordinary room size
+ * follows the current desk count; explicit expansion and pinned cells persist.
  *
  * A pinned desk keeps its cell whatever the tab order or room size, and the
  * room grows to hold it; the other desks take the free cells in tab order.
@@ -248,6 +247,7 @@ function placeRoomDesks(
   deskKeys: readonly string[],
   previous: RoomMemory | undefined,
   maxCols: number,
+  minimumTier: number,
   pins: TownPinnedCells | undefined,
   reserveFoldActions: boolean,
 ): { memory: RoomMemory; overflow: string[]; cols: number; rows: number } {
@@ -264,10 +264,10 @@ function placeRoomDesks(
       ({ col, row }) => row * maxCols + col + (reserveFoldActions ? 3 : 1),
     ),
   );
-  const tiers = townRoomTiers(maxCols, needed, previous?.tier ?? 0);
+  const tiers = townRoomTiers(maxCols, needed, minimumTier);
   let tier = townTierFor(
     deskKeys.length + (reserveFoldActions ? 1 : 0),
-    previous?.tier ?? 0,
+    minimumTier,
     tiers,
   );
   const outside = (tier: number) =>
@@ -340,8 +340,6 @@ function draftBuilding(
 ): DraftBuilding {
   const placed = rooms.map((room) => {
     const previous = memory.get(room.key);
-    const folded =
-      previous?.deskFold === "expanded" && room.deskFold !== "expanded";
     const {
       memory: roomMemory,
       overflow,
@@ -349,12 +347,12 @@ function draftBuilding(
       rows,
     } = placeRoomDesks(
       room.deskKeys,
-      folded ? { ...previous, tier: 0 } : previous,
+      previous,
       shape.deskColumns,
+      room.deskFold === "expanded" ? (previous?.tier ?? 0) : 0,
       pins,
       !!room.deskFold,
     );
-    roomMemory.deskFold = room.deskFold;
     nextMemory.set(room.key, roomMemory);
     return {
       key: room.key,
