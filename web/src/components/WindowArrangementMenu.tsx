@@ -170,7 +170,7 @@ export function WindowArrangementMenu({
 
   if (mobile && showWindowSwitcher)
     return control.windows?.some((entry) => entry.minimized) ? (
-      <WindowSwitcher entries={control.windows} />
+      <WindowSwitcher entries={control.windows} floating />
     ) : null;
 
   return (

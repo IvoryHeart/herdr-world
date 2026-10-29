@@ -15,8 +15,11 @@ export type WindowSwitcherEntry = {
 };
 export function WindowSwitcher({
   entries,
+  floating = false,
 }: {
   entries: readonly WindowSwitcherEntry[];
+  /** Keep the mobile trigger outside the shell's translated Zen header. */
+  floating?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -42,7 +45,7 @@ export function WindowSwitcher({
             Math.min(
               bounds.bottom + 4,
               window.innerHeight -
-                Math.min(entries.length * 40 + 16, 320) * scale -
+                (menu.current?.getBoundingClientRect().height ?? 320 * scale) -
                 8,
             ),
           ) / scale,
@@ -57,21 +60,24 @@ export function WindowSwitcher({
     anchors: () => [trigger.current],
   });
   if (!entries.length) return null;
+  const button = (
+    <button
+      ref={trigger}
+      type="button"
+      className={`world-window-switcher-trigger${floating ? " is-floating" : ""}`}
+      title="Open windows"
+      aria-label={`Open windows (${entries.length})`}
+      aria-haspopup="menu"
+      aria-expanded={open}
+      onClick={() => setOpen((value) => !value)}
+    >
+      <PanelsTopLeft size={15} />
+      <span>{entries.length}</span>
+    </button>
+  );
   return (
     <>
-      <button
-        ref={trigger}
-        type="button"
-        className="world-window-switcher-trigger"
-        title="Open windows"
-        aria-label={`Open windows (${entries.length})`}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => setOpen((value) => !value)}
-      >
-        <PanelsTopLeft size={15} />
-        <span>{entries.length}</span>
-      </button>
+      {floating ? createPortal(button, document.body) : button}
       {open &&
         createPortal(
           <div

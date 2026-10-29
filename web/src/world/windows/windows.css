@@ -319,6 +319,16 @@
   background: transparent;
   color: var(--muted);
 }
+.world-window-switcher-trigger.is-floating {
+  position: fixed;
+  left: max(12px, env(safe-area-inset-left, 0px));
+  bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+  z-index: 80;
+  min-width: 44px;
+  min-height: 44px;
+  background: var(--shell-panel);
+  box-shadow: 0 3px 12px #0005;
+}
 .world-window-switcher-menu {
   position: fixed;
   z-index: 6000;

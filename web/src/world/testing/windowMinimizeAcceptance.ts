@@ -1,3 +1,8 @@
+import { updateLayoutPreferences } from "../../layoutPreferences";
+const captureControls = new URLSearchParams(location.search).has(
+  "window-control-captures",
+);
+
 /** Exercises production Inspector controls while the underlying sessions keep running. */
 export async function windowMinimizeAcceptance({
   frame,
@@ -53,10 +58,55 @@ export async function windowMinimizeAcceptance({
       !currentFrame() || currentFrame()!.getBoundingClientRect().width === 0,
     "Inspector minimized through its header button",
   );
+  if (compact && captureControls) {
+    const stage = document.querySelector<HTMLElement>(".world-view-layout")!;
+    const { width, height } = stage.style;
+    try {
+      stage.style.width = stage.style.height = "";
+      updateLayoutPreferences({ mode: "auto" });
+      if (!(await fetch("/capture/window-controls")).ok)
+        throw new Error("Window controls capture failed");
+    } finally {
+      stage.style.width = width;
+      stage.style.height = height;
+      updateLayoutPreferences({ mode: "mobile" });
+    }
+    await until(
+      () => document.documentElement.dataset.layout === "mobile",
+      "mobile layout after captures",
+    );
+  }
   const switcher = document.querySelector<HTMLButtonElement>(
     'button[aria-label^="Open windows ("]',
   );
   if (!switcher) throw new Error("Minimized Inspector lacks an open control");
+  if (compact) {
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    );
+    await Promise.all(
+      (document.querySelector(".topbar")?.getAnimations() ?? []).map(
+        (animation) => animation.finished.catch(() => {}),
+      ),
+    );
+    const visibleBounds = switcher.getBoundingClientRect();
+    check(
+      visibleBounds.left >= 0 &&
+        visibleBounds.top >= 0 &&
+        visibleBounds.right <= innerWidth &&
+        visibleBounds.bottom <= innerHeight,
+      "Open windows is outside the settled viewport",
+    );
+    check(
+      document
+        .elementFromPoint(
+          visibleBounds.x + visibleBounds.width / 2,
+          visibleBounds.y + visibleBounds.height / 2,
+        )
+        ?.closest("button") === switcher,
+      "Open windows cannot receive a tap",
+    );
+  }
   check(switcher.getBoundingClientRect().width > 0, "Open windows is hidden");
   if (compact) {
     const bounds = switcher.getBoundingClientRect();
@@ -77,6 +127,21 @@ export async function windowMinimizeAcceptance({
     ?.closest("button");
   if (!restore)
     throw new Error("Minimized Inspector is missing from Open windows");
+  if (compact) {
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    );
+    const bounds = restore.getBoundingClientRect();
+    check(
+      document
+        .elementFromPoint(
+          bounds.x + bounds.width / 2,
+          bounds.y + bounds.height / 2,
+        )
+        ?.closest("button") === restore,
+      "Minimized window menu entry cannot receive a tap",
+    );
+  }
   restore.click();
   await until(
     () =>

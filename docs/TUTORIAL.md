@@ -670,6 +670,9 @@ Use the visible **− Minimize** button in an Inspector's header to hide its
 window, then **Open windows** to restore it. **Close** (or **‹ Back**) dismisses
 the window; tap the agent or terminal again to reopen it. These controls leave
 agents and terminal sessions running and work in Town, Board and Desk.
+On a phone, **Open windows** appears at the bottom left, above the bottom
+controls, while a window is minimized—even in Zen. **Tabs** in the expanded
+mobile controls also lists windows.
 On desktop, **Arrange windows** can tile or cascade open Inspectors.
 On mobile, one Inspector fills the screen:
 use the on-screen **Back** to return straight to the visual view, including
