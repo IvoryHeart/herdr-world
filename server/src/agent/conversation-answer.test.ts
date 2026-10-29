@@ -128,7 +128,7 @@ describe("answering a blocked agent's prompt", () => {
       acknowledged: false,
       unconfirmed_reason: "still_showing",
     });
-    expect(state.sent).toEqual([{ pane_id: "w1:p1", text: "2", keys: [] }]);
+    expect(state.sent).toEqual([{ pane_id: "w1:p1", text: "", keys: ["2"] }]);
     const moving = fakeHerdr();
     moving.state.onSend = () => {
       moving.state.status = "working";
@@ -178,7 +178,7 @@ describe("answering a blocked agent's prompt", () => {
       label: "Yes",
       acknowledged: true,
     });
-    expect(state.sent).toEqual([{ pane_id: "w1:p1", text: "1", keys: [] }]);
+    expect(state.sent).toEqual([{ pane_id: "w1:p1", text: "", keys: ["1"] }]);
   });
 
   test("a form's next tab asking the same question is still the agent moving on", async () => {
