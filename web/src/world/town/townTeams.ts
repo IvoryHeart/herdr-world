@@ -1,4 +1,5 @@
 import { terminalKey, type Relation } from "../../../../shared/relations";
+import type { WorldPod } from "../pods";
 import type { TerminalPlace } from "../relations";
 import type { TerminalColor } from "../terminalColor";
 import { TOWN_TILE as T, type TownCell, type TownLayout } from "./townLayout";
@@ -10,7 +11,8 @@ import type { TownModel } from "./townModel";
  * other) share one wall: a box, or the traced outline of the desks when
  * another team's desk sits inside that box. A connector joins related desks
  * across walls. A spawn draws solid, a manual group dotted, and stale
- * evidence faded.
+ * evidence faded. A pod's desks (townPods.ts) are one team too, and its
+ * wall around the current round carries the pod's plaque.
  */
 
 export type TownTeamWall = {
@@ -38,6 +40,26 @@ export type TownTeamLink = {
   current: boolean;
 };
 
+/** A pod's plaque, on the wall around its current round. */
+export type TownPodPlaque = {
+  key: string;
+  pod: WorldPod;
+  roomKey: string;
+  /**
+   * Where it hangs: the wall's top-left corner, or its bottom-left when the
+   * wall starts on the room's first row, whose top edge the room's nameplate
+   * covers.
+   */
+  edge: "top" | "bottom";
+  x: number;
+  y: number;
+  /** The wall's width, which the plaque stays within. */
+  w: number;
+  /** Plaques on one wall stack downwards: 0 for the first. */
+  row: number;
+  color: TerminalColor;
+};
+
 export type TownTeams = {
   /** Each related desk's team. */
   deskTeams: ReadonlyMap<string, string>;
@@ -45,6 +67,7 @@ export type TownTeams = {
   groupedDesks: ReadonlySet<string>;
   walls: TownTeamWall[];
   links: TownTeamLink[];
+  plaques: TownPodPlaque[];
 };
 
 export const NO_TOWN_TEAMS: TownTeams = {
@@ -52,6 +75,7 @@ export const NO_TOWN_TEAMS: TownTeams = {
   groupedDesks: new Set(),
   walls: [],
   links: [],
+  plaques: [],
 };
 
 const placeKey = (connectionId: string, tabId: string) =>
@@ -210,8 +234,9 @@ export function townTeams(
   layout: TownLayout,
   relations: readonly Relation[],
   places: ReadonlyMap<string, TerminalPlace>,
+  pods: readonly WorldPod[] = [],
 ): TownTeams {
-  if (!relations.length) return NO_TOWN_TEAMS;
+  if (!relations.length && !pods.length) return NO_TOWN_TEAMS;
   const deskOfTab = new Map<string, string>();
   for (const desk of model.desks.values())
     deskOfTab.set(
@@ -238,6 +263,11 @@ export function townTeams(
     parent.set(key, root);
     return root;
   };
+  const join = (a: string, b: string) => {
+    for (const key of [a, b]) if (!parent.has(key)) parent.set(key, key);
+    const [x, y] = [find(a), find(b)].sort();
+    parent.set(y!, x!);
+  };
   const pairs: { a: string; b: string; relation: Relation }[] = [];
   const groupedDesks = new Set<string>();
   for (const relation of relations) {
@@ -247,10 +277,25 @@ export function townTeams(
     if (relation.evidence.some((entry) => entry.kind === "manual"))
       for (const desk of [a, b]) if (desk) groupedDesks.add(desk);
     if (!a || !b || a === b) continue;
-    for (const key of [a, b]) if (!parent.has(key)) parent.set(key, key);
-    const [x, y] = [find(a), find(b)].sort();
-    parent.set(y!, x!);
+    join(a, b);
     pairs.push({ a, b, relation });
+  }
+  // A pod's desks join its current round's; a lone round is a team of one.
+  const podPairs: { a: string; b: string }[] = [];
+  const podDesks = new Map<WorldPod, string[]>();
+  for (const pod of pods) {
+    const desks = [
+      ...pod.rounds.map((round) => round.tabKey).reverse(),
+      ...pod.authorKeys,
+    ].filter((key) => cells.has(key) && model.desks.has(key));
+    const [head, ...rest] = desks;
+    if (!head) continue;
+    podDesks.set(pod, desks);
+    join(head, head);
+    for (const key of rest) {
+      join(head, key);
+      podPairs.push({ a: head, b: key });
+    }
   }
   const deskTeams = new Map<string, string>();
   for (const key of parent.keys()) deskTeams.set(key, find(key));
@@ -269,8 +314,11 @@ export function townTeams(
       currentDesks.add(pair.a);
       currentDesks.add(pair.b);
     }
+  for (const desks of podDesks.values())
+    for (const key of desks) currentDesks.add(key);
   const walls: TownTeamWall[] = [];
   const walled = new Map<string, string>();
+  const firstRow = new Map<string, number>();
   for (const [key, deskKeys] of byRoom) {
     const team = deskTeams.get(deskKeys[0]!)!;
     const roomKey = model.desks.get(deskKeys[0]!)?.roomKey;
@@ -307,6 +355,7 @@ export function townTeams(
         desks: group.length,
       });
       for (const cell of group) walled.set(cell.deskKey!, wallKey);
+      firstRow.set(wallKey, r0);
     }
   }
 
@@ -325,6 +374,12 @@ export function townTeams(
     entry.current ||= relation.strength > 0;
     byPair.set(key, entry);
   }
+  for (const { a, b } of podPairs) {
+    const key = [a, b].sort().join("\u0001");
+    const entry = byPair.get(key) ?? { a, b, spawned: false, current: false };
+    entry.current = true;
+    byPair.set(key, entry);
+  }
   const links: TownTeamLink[] = [];
   for (const [key, { a, b, spawned, current }] of byPair) {
     if (!spawned && walled.get(a) && walled.get(a) === walled.get(b)) continue;
@@ -341,5 +396,27 @@ export function townTeams(
       current,
     });
   }
-  return { deskTeams, groupedDesks, walls, links };
+  const wallByKey = new Map(walls.map((wall) => [wall.key, wall]));
+  const plaques: TownPodPlaque[] = [];
+  const rows = new Map<string, number>();
+  for (const [pod, desks] of podDesks) {
+    const wall = wallByKey.get(walled.get(desks[0]!) ?? "");
+    const desk = model.desks.get(desks[0]!);
+    if (!wall || !desk) continue;
+    const row = rows.get(wall.key) ?? 0;
+    rows.set(wall.key, row + 1);
+    const edge = firstRow.get(wall.key) === 0 ? "bottom" : "top";
+    plaques.push({
+      key: pod.key,
+      pod,
+      roomKey: desk.roomKey,
+      edge,
+      x: wall.x,
+      y: edge === "top" ? wall.y : wall.y + wall.h,
+      w: wall.w,
+      row,
+      color: wall.color,
+    });
+  }
+  return { deskTeams, groupedDesks, walls, links, plaques };
 }

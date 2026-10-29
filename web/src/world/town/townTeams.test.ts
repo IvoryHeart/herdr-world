@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import type { Relation } from "../../../../shared/relations";
+import type { WorldPod } from "../pods";
 import type { TerminalPlace } from "../relations";
 import { TOWN_TILE as T, type TownCell, type TownLayout } from "./townLayout";
 import type { TownModel } from "./townModel";
@@ -9,7 +10,7 @@ import { outlinePath, touching, townTeams } from "./townTeams";
  * A room drawn as a grid: a letter is a desk of that team, "." an empty
  * cell. Each team's desks are joined by spawn relations in reading order.
  */
-function room(rows: string[]) {
+function room(rows: string[], pods: WorldPod[] = []) {
   const cells: TownCell[] = [];
   const desks = new Map<string, unknown>();
   const places = new Map<string, TerminalPlace>();
@@ -34,28 +35,30 @@ function room(rows: string[]) {
       teams.set(mark, [...(teams.get(mark) ?? []), deskKey]);
     }),
   );
-  const relations: Relation[] = [...teams.values()].flatMap((keys) =>
-    keys.slice(1).map((key, index) => ({
-      key: `${keys[index]}-${key}`,
-      a: { connection_id: "c", terminal_id: keys[index]! },
-      b: { connection_id: "c", terminal_id: key },
-      evidence: [
-        {
-          kind: "spawned" as const,
-          sor: "herdr" as const,
-          source: "token",
-          observed_at: null,
-          current: true,
-        },
-      ],
-      strength: 1,
-    })),
-  );
+  const relations: Relation[] = [...teams]
+    .filter(([mark]) => mark !== mark.toUpperCase())
+    .flatMap(([, keys]) =>
+      keys.slice(1).map((key, index) => ({
+        key: `${keys[index]}-${key}`,
+        a: { connection_id: "c", terminal_id: keys[index]! },
+        b: { connection_id: "c", terminal_id: key },
+        evidence: [
+          {
+            kind: "spawned" as const,
+            sor: "herdr" as const,
+            source: "token",
+            observed_at: null,
+            current: true,
+          },
+        ],
+        strength: 1,
+      })),
+    );
   const model = { desks, deskColors: new Map() } as unknown as TownModel;
   const layout = {
     buildings: [{ rooms: [{ cells }] }],
   } as unknown as TownLayout;
-  const result = townTeams(model, layout, relations, places);
+  const result = townTeams(model, layout, relations, places, pods);
   const wallsOf = (team: string) =>
     result.walls.filter(
       (wall) => result.deskTeams.get(teams.get(team)![0]!) === wall.team,
@@ -120,4 +123,47 @@ test("an outline of one cell is its footprint", () => {
   expect(path.match(/Q/g)).toHaveLength(4);
   expect(path).toContain(`Q${0.6 * T} ${-0.3 * T}`);
   expect(path).toContain(`Q${5.4 * T} ${4.7 * T}`);
+});
+
+/** A pod over desks named by their grid marks; capitals have no relations. */
+const pod = (rounds: string[], authorKeys: string[] = []): WorldPod => ({
+  key: "room\u0000#7",
+  connectionId: "c",
+  roomKey: "room",
+  number: 7,
+  slug: "fix",
+  rounds: rounds.map((tabKey, index) => ({ round: index + 1, tabKey })),
+  authorKeys,
+  item: null,
+  state: null,
+});
+
+test("a pod's round and author share a wall with the pod's plaque", () => {
+  const { result } = room(["RA"], [pod(["R00"], ["A10"])]);
+  expect(result.walls).toHaveLength(1);
+  expect(result.walls[0]).toMatchObject({ desks: 2, current: true });
+  expect(result.plaques).toHaveLength(1);
+  expect(result.plaques[0]).toMatchObject({
+    key: "room\u0000#7",
+    roomKey: "room",
+    // The room's first row: the nameplate covers its top edge.
+    edge: "bottom",
+    x: result.walls[0]!.x,
+    y: result.walls[0]!.y + result.walls[0]!.h,
+    row: 0,
+  });
+  expect(result.links).toHaveLength(0);
+});
+
+test("a lone round is walled, and an author elsewhere gets a connector", () => {
+  const { result } = room(["...", "R.A"], [pod(["R01"], ["A21"])]);
+  expect(result.walls.map((wall) => wall.desks)).toEqual([1, 1]);
+  expect(result.links).toMatchObject([{ kind: "manual", current: true }]);
+  // The plaque sits on top of the current round's wall.
+  const wall = result.walls.find((entry) => entry.key.endsWith("R01"))!;
+  expect(result.plaques[0]).toMatchObject({
+    edge: "top",
+    x: wall.x,
+    y: wall.y,
+  });
 });

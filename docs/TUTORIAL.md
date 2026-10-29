@@ -303,7 +303,11 @@ hosts stay usable.
    room's bare floor, away from the free spot (**Leave the team**); a spawn
    link stays. Without a drag, focus a table and press **M**: **Group with…**
    lists the tables to join, and **Leave the team** takes it out. A table's
-   name for screen readers says who its team is.
+   name for screen readers says who its team is. A pull request's review
+   rounds (tabs named like `#512 settings-sync · r2`) form a pod with the
+   author's table: one wall with a plaque giving the pull request, its state
+   and its round, and earlier rounds stacked faded behind the current table.
+   Click the number on the plaque to open the pull request card.
 10. To keep a table where it is, open one of its agents (its window) and choose
    **Pin desk in Town** at the top of the phone window's **⋯** menu. On desktop,
    choose the same action from the window’s **⋯** menu.

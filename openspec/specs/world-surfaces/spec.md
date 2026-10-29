@@ -1238,6 +1238,19 @@ Desks of one team that touch in a room, side by side or one above another,
 SHALL share one wall; when another team's desk sits inside the box around them,
 the wall SHALL follow their outline instead of splitting into one box per desk.
 
+A pull request's review rounds SHALL be drawn as a pod. World SHALL project a
+pod from the tabs of one workspace named `#<N> <slug> · r<K>` (the crew
+watcher's round tabs) and SHALL take as its author the other tabs whose agent
+panes World sources link to that pull request; a later Herdr group MAY replace
+the projection. The pod's desks SHALL be one team, and its wall around the
+current round SHALL carry a plaque, within the wall's width, with the pull
+request's number, its state from the pull request card (Reviewing, Fixes
+requested, READY) when World sources know it, and its rounds; its accessible
+name SHALL also give the branch name and title. Earlier rounds SHALL stack
+as faded tables behind the current round's table instead of taking a desk
+each, except a round whose agent needs the user or whose desk is pinned. A
+pod SHALL leave Town when its round tabs close.
+
 A building for a host whose topology is cached after failure SHALL be visibly
 stale and its entities SHALL be non-actionable. Town SHALL NOT invent activity,
 cost, completion or project data when no authoritative state or optional provider
@@ -1266,6 +1279,20 @@ supplies it.
 - **WHEN** no optional provider supplies cost, activity or project data
 - **THEN** Town shows authoritative Herdr state only and omits or labels the
   unavailable figures instead of showing estimates
+
+#### Scenario: A pull request in its second review round
+
+- **WHEN** a room holds round tabs `#512 settings-sync · r1` and `· r2` and the
+  author's tab, whose agent World sources link to pull request 512
+- **THEN** the author's and round 2's desks share the pod's wall, its plaque
+  shows `#512`, the pull request's state and `r2 +1`, its accessible name
+  reads `#512 settings-sync`, the state and `r2 · +1 earlier`, and round 1 is
+  a faded table behind round 2's
+
+#### Scenario: A pull request merges
+
+- **WHEN** the watcher closes the pull request's round tabs
+- **THEN** the pod's plaque, stack and wall leave Town
 
 ### Requirement: Stable Town placement
 

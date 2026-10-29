@@ -31,3 +31,61 @@
   stroke-dasharray: 6 6;
   opacity: 0.4;
 }
+/* A pod's plaque on its wall's top edge (TownPodPlaque.tsx). */
+.town-pod-plaque-at {
+  z-index: 1;
+  width: 0;
+  height: 0;
+}
+.town-pod-plaque {
+  position: absolute;
+  left: 8px;
+  bottom: -4px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  box-sizing: border-box;
+  /* Within its wall, however far it scales. */
+  max-width: calc((var(--wall-w, 76px) - 12px) / clamp(1, var(--iz), 1.6));
+  white-space: nowrap;
+  font:
+    600 7px / 1.35 "JetBrains Mono",
+    ui-monospace,
+    monospace;
+  color: #f1efe6;
+  background: rgba(14, 17, 24, 0.88);
+  border: 1px solid #6d5a3a;
+  border-radius: 3px;
+  padding: 0 4px;
+  transform: scale(clamp(1, var(--iz), 1.6));
+  transform-origin: 0 100%;
+}
+/* On a wall's bottom edge it hangs just inside the wall. */
+.town-pod-plaque-at[data-edge="bottom"] .town-pod-plaque {
+  bottom: 2px;
+}
+.town-pod-plaque > i {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 1px;
+  background: #a9b2a4;
+}
+.town-pod-plaque[data-state="reviewing"] > i {
+  background: #6fc3ff;
+}
+.town-pod-plaque[data-state="fixes"] > i {
+  background: #ff7a6b;
+}
+.town-pod-plaque[data-state="ready"] > i {
+  background: #7be08f;
+}
+.town-pod-plaque-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.town-pod-plaque-rounds {
+  flex: none;
+  color: #a9b2a4;
+}

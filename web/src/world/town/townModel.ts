@@ -39,7 +39,21 @@ export type TownModel = {
   placeColors: TownPlaceColors;
   /** Pinned desks (useDeskPins.ts): each keeps its cell, its agents stay. */
   deskPins: ReadonlyMap<string, TownDeskPin>;
+  /** Earlier pod rounds stacked behind a current round's desk (townPods.ts). */
+  deskStacks?: ReadonlyMap<string, number>;
 };
+
+/**
+ * Where the faded tables of a pod's earlier rounds sit behind its current
+ * round's table, back to front: up and to the right, two at most.
+ */
+export function townPodStack(earlier = 0) {
+  const depth = Math.min(2, earlier);
+  return Array.from({ length: depth }, (_, index) => {
+    const behind = depth - index;
+    return { dx: 4 * behind, dy: -5 * behind, alpha: behind > 1 ? 0.3 : 0.45 };
+  });
+}
 
 /** A pinned desk: the key its pin is saved under, and its cell once placed. */
 export type TownDeskPin = {
