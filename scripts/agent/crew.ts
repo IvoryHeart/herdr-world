@@ -148,7 +148,10 @@ type PassContext = {
   /** Gate history supplies the branch for a PR omitted from the open list. */
   gate?: Database;
   /** Confirm a tracked PR's current state by number before terminal cleanup. */
-  lookupTerminal?: (pr: number) => GateInput | null;
+  lookupTracked?: (prs: number[]) => {
+    inputs: GateInput[];
+    failures: Map<number, string>;
+  };
   configPath: string;
   dir: string;
   prs: number[];
@@ -335,14 +338,21 @@ function act(
       )
       .map((verdict) => [verdict.number, verdict.head]),
   );
-  const terminal = terminalInputs(
+  const selection = terminalInputs(
     crew,
     context.gate,
     prs,
     inputs,
     verdicts,
-    context.lookupTerminal,
+    context.lookupTracked,
+    say,
   );
+  const { terminal } = selection;
+  for (const input of selection.confirmedOpen.values()) {
+    observed.add(input.number);
+    const head = input.item?.headSha;
+    if (head) heads.set(input.number, head);
+  }
   // A review is done once its RESULT is on GitHub for the head it was
   // given, whatever its session has done since: it may have posted just
   // before a newer push, or ended before this pass saw the post. A session
@@ -897,8 +907,10 @@ export async function main(argv: string[], deps: Deps = realDeps) {
             crew,
             lock,
             gate,
-            lookupTerminal: (pr) =>
-              runPass(gate, gateContext, [pr]).inputs[0] ?? null,
+            lookupTracked: (candidates) => ({
+              inputs: runPass(gate, gateContext, candidates).inputs,
+              failures: new Map(),
+            }),
             configPath,
             dir,
             prs,

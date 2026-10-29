@@ -1,8 +1,14 @@
 import { expect, test } from "bun:test";
-import { cleanupAuthorWorktree, cleanupTerminalPrs } from "./cleanup";
-import { openCrewStore } from "./store";
+import {
+  cleanupAuthorWorktree,
+  cleanupTerminalPrs,
+  terminalInputs,
+} from "./cleanup";
+import { addRun, getMeta, openCrewStore } from "./store";
 import type { GateInput } from "../gate/predicate";
 import type { Deps } from "./deps";
+import { config, input, NOW, SHA } from "../gate/cases";
+import { openStore, recordPass } from "../gate/store";
 
 test("cleanup prunes only the author's matching branch checkout", () => {
   const out: string[] = [];
@@ -101,10 +107,117 @@ test("terminal cleanup refreshes origin/main once for all author worktrees", () 
       refreshMain: () => {
         refreshes++;
       },
-      cleanupAuthor: (_repo, _pr, _branch, _out, options) =>
-        options?.refreshMain?.("/repo"),
+      cleanupAuthor: (_repo, _pr, _branch, _out, options) => {
+        options?.refreshMain?.("/repo");
+        return true;
+      },
     },
   );
   expect(refreshes).toBe(1);
+  crew.close();
+});
+
+test("terminal observations retain the last known branch for author cleanup", () => {
+  const crew = openCrewStore(":memory:");
+  const gate = openStore(":memory:");
+  addRun(
+    crew,
+    {
+      actionKey: "manual-review",
+      reviewer: "rev2",
+      pr: 17,
+      head: SHA.reviewed,
+      log: "stdout",
+    },
+    NOW,
+  );
+  const open = {
+    ...input({
+      head: SHA.reviewed,
+      posts: [],
+      item: { branch: "agent/example" },
+    }),
+    number: 17,
+  };
+  recordPass(gate, {
+    trigger: "open",
+    config,
+    startedAt: NOW,
+    finishedAt: NOW,
+    inputs: [open],
+    verdicts: [],
+  });
+  const terminal = { ...open, state: "MERGED" as const, item: undefined };
+  const selection = terminalInputs(crew, gate, [], [], [], () => ({
+    inputs: [terminal],
+    failures: new Map(),
+  }));
+  expect(selection.terminal.get(17)?.item?.branch).toBe("agent/example");
+  expect(getMeta(crew, "terminal-branch:17")).toBe("agent/example");
+  const retried = terminalInputs(crew, undefined, [], [], [], () => ({
+    inputs: [terminal],
+    failures: new Map(),
+  }));
+  expect(retried.terminal.get(17)?.item?.branch).toBe("agent/example");
+  gate.close();
+  crew.close();
+});
+
+test("failed main refresh leaves terminal cleanup pending for retry", () => {
+  const crew = openCrewStore(":memory:");
+  const pr = 17;
+  addRun(
+    crew,
+    {
+      actionKey: "manual-review",
+      reviewer: "rev2",
+      pr,
+      head: SHA.reviewed,
+      log: "stdout",
+    },
+    NOW,
+  );
+  const value = {
+    ...input({
+      head: SHA.reviewed,
+      posts: [],
+      item: { branch: "agent/example" },
+    }),
+    number: pr,
+  };
+  const deps = {
+    closeTab: () => true,
+    run: () => ({ code: 0, stdout: "", stderr: "" }),
+    kill: () => {},
+  } as unknown as Deps;
+  cleanupTerminalPrs(
+    crew,
+    "/repo/.agents/crew",
+    NOW,
+    deps,
+    new Map([[pr, value]]),
+    () => {},
+    {
+      cleanupAuthor: (repo, number, branch, out, options) =>
+        cleanupAuthorWorktree(repo, number, branch, out, {
+          worktrees: [
+            {
+              path: "/repo/.agents/worktrees/author",
+              branch: "refs/heads/agent/example",
+              detached: false,
+              locked: false,
+            },
+          ],
+          refreshMain: options?.refreshMain,
+          prune: () => {
+            throw new Error("prune must wait for a successful refresh");
+          },
+        }),
+      refreshMain: () => {
+        throw new Error("network timeout");
+      },
+    },
+  );
+  expect(getMeta(crew, `terminal-cleanup:${pr}`)).toBe("pending");
   crew.close();
 });

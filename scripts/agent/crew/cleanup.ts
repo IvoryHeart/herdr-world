@@ -34,14 +34,27 @@ export function terminalInputs(
   prs: number[],
   inputs: GateInput[],
   verdicts: Verdict[],
-  lookupTerminal?: (pr: number) => GateInput | null,
+  lookupTracked?: (prs: number[]) => {
+    inputs: GateInput[];
+    failures: Map<number, string>;
+  },
+  out: (line: string) => void = () => {},
 ) {
   const terminal = new Map<number, GateInput>();
+  const confirmedOpen = new Map<number, GateInput>();
   const observed = new Set(verdicts.map((verdict) => verdict.number));
   const tracked = new Set(trackedPrs(crew));
   const cleanupKey = (pr: number) => `terminal-cleanup:${pr}`;
+  const branchKey = (pr: number) => `terminal-branch:${pr}`;
   for (const input of inputs)
-    if (input.state === "OPEN") deleteMeta(crew, cleanupKey(input.number));
+    if (input.state === "OPEN") {
+      deleteMeta(crew, cleanupKey(input.number));
+      if (tracked.has(input.number)) {
+        deleteMeta(crew, branchKey(input.number));
+        if (input.item?.branch)
+          setMeta(crew, branchKey(input.number), input.item.branch);
+      }
+    }
   for (const verdict of verdicts)
     if (
       (verdict.state === "MERGED" || verdict.state === "CLOSED") &&
@@ -54,20 +67,68 @@ export function terminalInputs(
   // Gate history may be advanced by standalone gate passes or dry runs. Query
   // each tracked PR by number to confirm an omission is terminal before acting.
   if (!prs.length) {
-    for (const pr of tracked) {
-      if (observed.has(pr) || getMeta(crew, cleanupKey(pr)) === "done")
-        continue;
-      const latest = lookupTerminal
-        ? lookupTerminal(pr)
-        : gate
-          ? latestInput(gate, pr)
-          : null;
-      if (latest?.state === "MERGED" || latest?.state === "CLOSED")
-        terminal.set(pr, latest);
+    const candidates = [...tracked].filter(
+      (pr) => !observed.has(pr) && getMeta(crew, cleanupKey(pr)) !== "done",
+    );
+    const previous = new Map(
+      candidates.map((pr) => [pr, gate ? latestInput(gate, pr) : null]),
+    );
+    for (const [pr, input] of previous)
+      if (input?.item?.branch) setMeta(crew, branchKey(pr), input.item.branch);
+    let lookedUp: { inputs: GateInput[]; failures: Map<number, string> } = {
+      inputs: [],
+      failures: new Map(),
+    };
+    if (lookupTracked && candidates.length) {
+      try {
+        lookedUp = lookupTracked(candidates);
+      } catch {
+        for (const pr of candidates)
+          try {
+            const result = lookupTracked([pr]);
+            lookedUp.inputs.push(...result.inputs);
+            for (const [failedPr, error] of result.failures)
+              lookedUp.failures.set(failedPr, error);
+          } catch (error) {
+            lookedUp.failures.set(
+              pr,
+              error instanceof Error ? error.message : String(error),
+            );
+          }
+      }
+    }
+    for (const [pr, error] of lookedUp.failures)
+      out(`#${pr} couldn't confirm pull request state; retrying: ${error}`);
+    for (const latest of lookedUp.inputs) {
+      if (latest.state === "OPEN") {
+        confirmedOpen.set(latest.number, latest);
+        deleteMeta(crew, cleanupKey(latest.number));
+        deleteMeta(crew, branchKey(latest.number));
+        if (latest.item?.branch)
+          setMeta(crew, branchKey(latest.number), latest.item.branch);
+      }
+      if (latest.state !== "MERGED" && latest.state !== "CLOSED") continue;
+      const prior = previous.get(latest.number);
+      const branch =
+        latest.item?.branch ??
+        prior?.item?.branch ??
+        getMeta(crew, branchKey(latest.number)) ??
+        undefined;
+      terminal.set(
+        latest.number,
+        branch && !latest.item
+          ? {
+              ...latest,
+              item: { ...prior?.item, branch } as NonNullable<
+                GateInput["item"]
+              >,
+            }
+          : latest,
+      );
     }
   }
   for (const pr of terminal.keys()) setMeta(crew, cleanupKey(pr), "pending");
-  return terminal;
+  return { terminal, confirmedOpen };
 }
 
 /** Finish cleanup for terminal PRs; failed reviewer cleanup is retried. */
@@ -103,14 +164,18 @@ export function cleanupTerminalPrs(
       setMeta(crew, key, "pending");
       continue;
     }
-    (options.cleanupAuthor ?? cleanupAuthorWorktree)(
+    const authorCleaned = (options.cleanupAuthor ?? cleanupAuthorWorktree)(
       repo,
       pr,
       input.item?.branch,
       out,
       { refreshMain },
     );
-    setMeta(crew, key, "done");
+    if (authorCleaned === false) setMeta(crew, key, "pending");
+    else {
+      setMeta(crew, key, "done");
+      deleteMeta(crew, `terminal-branch:${pr}`);
+    }
   }
 }
 
@@ -183,14 +248,14 @@ export function cleanupAuthorWorktree(
     prune?: Prune;
     refreshMain?: (repo: string) => void;
   } = {},
-) {
+): boolean {
   if (!branch) {
     out(
       `#${pr} couldn't identify the author branch; leaving its worktree alone`,
     );
-    return;
+    return true;
   }
-  if (!options.worktrees && !existsSync(join(repo, ".git"))) return;
+  if (!options.worktrees && !existsSync(join(repo, ".git"))) return true;
   const ref = `refs/heads/${branch.replace(/^refs\/heads\//u, "")}`;
   let worktrees: Worktree[];
   try {
@@ -199,10 +264,10 @@ export function cleanupAuthorWorktree(
     out(
       `#${pr} couldn't inspect worktrees safely; leaving the author checkout alone`,
     );
-    return;
+    return true;
   }
   const worktree = worktrees.find((entry) => entry.branch === ref);
-  if (!worktree) return;
+  if (!worktree) return true;
 
   try {
     (options.refreshMain ?? refreshOriginMain)(repo);
@@ -210,7 +275,7 @@ export function cleanupAuthorWorktree(
     out(
       `#${pr} kept author worktree for ${branch}: couldn't refresh origin/main`,
     );
-    return;
+    return false;
   }
 
   let result: ReturnType<Prune>;
@@ -218,7 +283,7 @@ export function cleanupAuthorWorktree(
     result = (options.prune ?? pruneWorktree)(worktree.path, { cwd: repo });
   } catch {
     out(`#${pr} couldn't assess the author worktree safely; leaving it alone`);
-    return;
+    return true;
   }
   if (result.action === "remove")
     out(`#${pr} removed author worktree for ${branch}: ${result.reason}`);
@@ -227,6 +292,7 @@ export function cleanupAuthorWorktree(
       `#${pr} stripped build output from author worktree for ${branch}: ${result.reason}`,
     );
   else out(`#${pr} kept author worktree for ${branch}: ${result.reason}`);
+  return true;
 }
 
 function refreshOriginMain(repo: string) {

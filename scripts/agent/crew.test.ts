@@ -654,7 +654,10 @@ describe("delivery", () => {
       db?: typeof crew;
       lock?: typeof lock;
       gate?: ReturnType<typeof openStore>;
-      lookupTerminal?: (pr: number) => GateInput | null;
+      lookupTracked?: (prs: number[]) => {
+        inputs: GateInput[];
+        failures: Map<number, string>;
+      };
     } = {},
   ) =>
     crewPass({
@@ -665,7 +668,7 @@ describe("delivery", () => {
       crew: options.db ?? crew,
       lock: options.lock ?? lock,
       gate: options.gate,
-      lookupTerminal: options.lookupTerminal,
+      lookupTracked: options.lookupTracked,
       configPath,
       dir,
       prs: options.prs ?? [],
@@ -1622,9 +1625,14 @@ describe("delivery", () => {
       setRunPid(crew, active!.id, 4242);
       passOver([], NOW + 60_000, {
         gate: history,
-        lookupTerminal: () => ({
-          ...town({ head: SHA.reviewed, posts: [], state: "CLOSED" }),
-          number: value.number,
+        lookupTracked: () => ({
+          inputs: [
+            {
+              ...town({ head: SHA.reviewed, posts: [], state: "CLOSED" }),
+              number: value.number,
+            },
+          ],
+          failures: new Map(),
         }),
       });
       expect(closed).toEqual(["wP:t1"]);
@@ -1752,7 +1760,7 @@ describe("delivery", () => {
     addChat(crew, "manual-tab", runId);
     const openPr = { ...town({ head: SHA.reviewed, posts: [] }), number: 474 };
     passOver([], NOW + 60_000, {
-      lookupTerminal: () => openPr,
+      lookupTracked: () => ({ inputs: [openPr], failures: new Map() }),
     });
     expect(closed).not.toContain("manual-tab");
     expect(getMeta(crew, "terminal-cleanup:474")).toBeNull();
@@ -1764,10 +1772,53 @@ describe("delivery", () => {
         markersAtClose.push(getMeta(crew, "terminal-cleanup:474"));
       return close(tab);
     };
-    passOver([], NOW + 120_000, { lookupTerminal: () => terminal });
+    passOver([], NOW + 120_000, {
+      lookupTracked: () => ({ inputs: [terminal], failures: new Map() }),
+    });
     expect(markersAtClose).toEqual(["pending"]);
     expect(getMeta(crew, "terminal-cleanup:474")).toBe("done");
     expect(closed).toContain("manual-tab");
+  });
+
+  test("confirmed OPEN lookup preserves an omitted active review action", () => {
+    const value = town({ head: SHA.reviewed, posts: [] });
+    pass(value);
+    const active = activeRuns(crew)[0]!;
+    setRunPid(crew, active.id, 4242);
+    passOver([], NOW + 60_000, {
+      lookupTracked: () => ({ inputs: [value], failures: new Map() }),
+    });
+    expect(getAction(crew, active.actionKey)?.state).toBe("running");
+    expect(getRun(crew, active.id)?.finishedAt).toBeNull();
+    expect(killed).not.toContain(4242);
+  });
+
+  test("one failed tracked PR lookup does not stop actions for other PRs", () => {
+    const invalid = addRun(
+      crew,
+      {
+        actionKey: "manual:999:head:rev2",
+        reviewer: "rev2",
+        pr: 999,
+        head: SHA.reviewed,
+        log: join(root, "invalid.log"),
+      },
+      NOW,
+    );
+    expect(invalid).toBeGreaterThan(0);
+    const value = town({ head: SHA.reviewed, posts: [] });
+    expect(() =>
+      passOver([value], NOW + 60_000, {
+        lookupTracked: (prs) => {
+          if (prs.includes(999)) throw new Error("not a pull request");
+          return { inputs: [], failures: new Map() };
+        },
+      }),
+    ).not.toThrow();
+    expect(spawned.length).toBeGreaterThan(0);
+    expect(readFileSync(join(dir, "feed.log"), "utf8")).toContain(
+      "#999 couldn't confirm pull request state",
+    );
   });
 
   test("manual review chats without a round close before their checkout", () => {
