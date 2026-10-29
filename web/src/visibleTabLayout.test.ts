@@ -181,6 +181,22 @@ describe("visible tab layout fencing", () => {
     expect(asked).toEqual(["p2"]);
   });
 
+  test("a read skipped at once does not block the next caller", async () => {
+    let reads = 0;
+    const read = async () => {
+      reads += 1;
+      return "layout";
+    };
+    // A stale client (a reconnect not yet rendered) skips its read.
+    expect(
+      await shareVisibleTabLayoutRead("recovering-tab", read, () => false),
+    ).toEqual({ skipped: true });
+    expect(
+      await shareVisibleTabLayoutRead("recovering-tab", read, () => true),
+    ).toEqual({ skipped: false, value: "layout" });
+    expect(reads).toBe(1);
+  });
+
   test("a read already sent is never shared with a later caller", async () => {
     const gate = Promise.withResolvers<string>();
     let reads = 0;
