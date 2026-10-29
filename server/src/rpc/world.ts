@@ -1,3 +1,4 @@
+import { pruneSnapshotAppearance } from "../world/appearance-prune";
 import { legacyAppearanceOps } from "../world/appearance-observation";
 import { handleAppearanceRpc } from "./appearance";
 import { handleDeskRpc } from "./desk";
@@ -48,7 +49,28 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
         req.accept_world_snapshot_chunk_admission === true
       )
         transfer = snapshotAdmission.open(ws, id);
+      const beforeAppearanceRead = board().get();
       const snapshot = await snapshots.snapshot(params);
+      void pruneSnapshotAppearance(
+        board(),
+        beforeAppearanceRead,
+        snapshot,
+        (connectionId, generation) => {
+          const lease = connectionManager.readyRuntimeLease(connectionId);
+          return lease && lease.generation === generation && lease.isCurrent()
+            ? {
+                call: (method, params) =>
+                  lease.runtime.herdr.call(method, params, 10_000),
+                isCurrent: () => lease.isCurrent(),
+              }
+            : null;
+        },
+        publishBoardChanged,
+      ).catch((error) =>
+        logger.warn("World could not prune absent appearance", {
+          detail: String(error),
+        }),
+      );
       recordSpawnClaims(board(), snapshot, publishBoardChanged, logger);
       try {
         const appearanceOps = legacyAppearanceOps(

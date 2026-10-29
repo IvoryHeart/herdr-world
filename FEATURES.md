@@ -240,14 +240,17 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     the profile's look in Town.
   See the [New agent exercise](./docs/TUTORIAL.md#new-agent).
 - **Shared terminal appearance.** The title-bar icon opens the same editor in
-  every view; a phone has the appearance button in its terminal app bar. The
+  every view, including the Spaces tab strip and arranged window headers; a
+  phone has the appearance button in its terminal app bar. The
   header shows the native Herdr tab name, with **Save name** calling its current
   connection's `tab.rename`. Tab colour and a 160-character manual status are
   shared across split panes; each pane can choose an existing bounded sprite
   avatar. Board shows icon/status, Town shows the character/desk callout, Spaces
   shows icon/status tooltip and Desk shows the same choices. Resets restore
   existing defaults, and failed saves preserve their drafts. Workspace icons
-  and status messages are outside these controls. Runtime status badges retain
+  and status messages are outside these controls. Complete current observations
+  reclaim settings for closed terminals; unavailable hosts retain their settings.
+  Runtime status badges retain
   their system colours and meanings.
 - **Terminal colours.** Every tab has one colour, shown as the tab in Spaces,
   the card in Board and its table in Town (tabs beyond a room's drawn tables

@@ -2,6 +2,7 @@ import { colorFollowOps } from "./board-color-moves";
 import { movedAppearanceOps } from "./appearance-observation";
 import {
   restoreAppearance,
+  pruneAppearances,
   relocateAppearance,
   applyAppearance,
   parseAppearanceRecords,
@@ -122,6 +123,7 @@ export type BoardDocument = {
 };
 
 export type BoardOp =
+  | { op: "appearance.prune"; keys: string[] }
   | { op: "appearance.set"; target: AppearanceTarget; fields: AppearanceFields }
   | {
       op: "appearance.relocate";
@@ -230,6 +232,7 @@ export function clientBoardOps(
     )
       fail("tab colours require qualified appearance admission");
     if (
+      op.op === "appearance.prune" ||
       op.op === "appearance.restore" ||
       op.op === "appearance.relocate" ||
       op.op === "appearance.set" ||
@@ -765,6 +768,9 @@ function applyOp(
         next.layout.folded = keys(op.folded, "folded");
       return;
     }
+    case "appearance.prune":
+      pruneAppearances(next, op.keys);
+      return;
     case "appearance.restore":
       restoreAppearance(next, op.key, op.record);
       return;
@@ -953,14 +959,6 @@ function pinFollowOps(
     { op: "desk.unpin", key: previousKey },
   ];
 }
-
-/**
- * A moved tab keeps the colour it showed (shared/terminalColor.ts), chosen,
- * inherited or default: its new tab ID would otherwise give it another
- * default. It is saved as the moved tab's own colour. Read from
- * `colors.before`, taken before the move, so a close of the old tab seen
- * during the move cannot lose it.
- */
 
 /** The colours before a move, and the host's workspace IDs for tab keys. */
 export type MoveColors = {

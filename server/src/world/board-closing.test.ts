@@ -28,7 +28,10 @@ test("a closed tab drops its colour and pin; a closed pane drops gone terminals'
   ]);
   const revisions: number[] = [];
   const host = {
-    call: async () => ({ panes: [] }),
+    call: async (method: string) => {
+      if (method === "tab.get") throw new Error("tab_not_found: closed");
+      return { panes: [] };
+    },
     isCurrent: () => true,
     changed: (revision: number) => revisions.push(revision),
   };
@@ -49,4 +52,28 @@ test("a closed tab drops its colour and pin; a closed pane drops gone terminals'
   afterHerdrClose(board, "conn-a", "pane_agent_status_changed", {}, host);
   await settle();
   expect(revisions.length).toBe(2);
+});
+
+test("a delayed close cannot erase a reused tab's current colour or pin", async () => {
+  const board = new BoardStore(join(root, "board.json"));
+  board.patch([
+    { op: "card.color", key: "conn-a:tab:w1", color: "teal" },
+    { op: "desk.pin", key: "conn-a:tab:w1", cell: null },
+  ]);
+  const before = board.get();
+  await afterHerdrClose(
+    board,
+    "conn-a",
+    "tab_closed",
+    { data: { tab_id: "w1" } },
+    {
+      call: async (method: string) =>
+        method === "tab.get" ? { tab: { tab_id: "w1" } } : { panes: [] },
+      isCurrent: () => true,
+      changed: () => {
+        throw new Error("a reused tab must retain its settings");
+      },
+    },
+  );
+  expect(board.get()).toEqual(before);
 });

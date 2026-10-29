@@ -262,6 +262,7 @@ export function MobileTerminalAppBar() {
           key={JSON.stringify([
             terminal.owner.connectionId,
             terminal.generation,
+            terminal.tab.tab_id,
             terminal.paneId,
             terminal.terminalId,
           ])}

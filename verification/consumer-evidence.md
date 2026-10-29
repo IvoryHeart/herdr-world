@@ -392,3 +392,11 @@ no additional abstract model substitutes for the actual native read boundaries.
 The browser fixture's native responses/event stream are synthetic. Existing
 transport, current-generation and window/handoff consumers remain mandatory,
 and neither arbitrary upstream atomicity nor authenticated principals is claimed.
+
+The shared-appearance review regressions additionally drive the actual Spaces
+window adapter and mobile app bar, refusing draft retargeting after a pane move.
+Real handler/store tests cover lost move replies after native close cleanup,
+launch on a reused tab, complete-current absence pruning, held-read edit races,
+cached-live topology, response timing, coalesced native reads and historical
+churn beyond the record cap. These are bounded consumer checks;
+unknown or retired observations still provide no deletion authority.

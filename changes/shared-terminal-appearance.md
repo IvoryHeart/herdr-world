@@ -8,3 +8,7 @@
 
 - Keep bound appearance from attaching to a reused Herdr tab or pane ID, and
   preserve choices through confirmed moves without changing runtime status colours.
+- Keep explicit colour choices through lost move acknowledgements and native
+  close cleanup; bind profile colours to newly launched terminals on reused IDs.
+- Reclaim closed terminals' appearance settings from complete current evidence,
+  and discard unsaved phone drafts when their pane moves into a different tab.

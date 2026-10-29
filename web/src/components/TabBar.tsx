@@ -1,5 +1,5 @@
 import { useAppearanceDocument, leafAppearance } from "../world/appearance";
-import { AppearanceAvatar } from "../world/AppearanceAvatar";
+import { SpacesTerminalAppearance } from "../world/SpacesTerminalAppearance";
 import { shortcutTitle, useShortcutPreferences } from "../shortcutPreferences";
 import {
   shallowEqual,
@@ -458,7 +458,20 @@ export function TabBar({
                     .filter(Boolean)
                     .join(" · ")}
                 >
-                  <AppearanceAvatar id={custom?.avatar} />
+                  {tabColors && color ? (
+                    <span onClick={(event) => event.stopPropagation()}>
+                      <SpacesTerminalAppearance
+                        connectionId={s.activeConnectionId}
+                        generation={s.serverRuntimeGeneration ?? -1}
+                        tab={t}
+                        color={{
+                          palette: tabColors.palette,
+                          current: { id: color.id, custom: color.custom },
+                          onColor: (id) => tabColors.onColor(colorOwner, t, id),
+                        }}
+                      />
+                    </span>
+                  ) : null}
                   {agentSummary ? (
                     <span
                       className="tabbar-agent-marker"

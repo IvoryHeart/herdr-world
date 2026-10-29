@@ -259,3 +259,23 @@ export function restoreAppearance(
     (document.appearance ??= {})[key] = parsed[key]!;
   } else if (document.appearance) delete document.appearance[key];
 }
+
+/** Internal GC uses only complete current absence, admitted at one document revision. */
+export function pruneAppearances(
+  document: AppearanceDocument,
+  keys: string[],
+): void {
+  if (
+    !Array.isArray(keys) ||
+    keys.length > APPEARANCE_LIMITS.records ||
+    keys.some((key) => typeof key !== "string" || key.length > 1024)
+  )
+    fail();
+  for (const key of keys) {
+    const entry = document.appearance?.[key];
+    if (!entry) continue;
+    if (entry.color_key && document.layout.colors)
+      delete document.layout.colors[entry.color_key];
+    delete document.appearance![key];
+  }
+}

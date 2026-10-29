@@ -3,6 +3,13 @@ import {
   tabCardKey,
 } from "../../../shared/terminalColor";
 import type { BoardOp, CardColor, MoveColors } from "./board-store";
+/**
+ * A moved tab keeps the colour it showed (shared/terminalColor.ts), chosen,
+ * inherited or default: its new tab ID would otherwise give it another
+ * default. It is saved as the moved tab's own colour. Read from
+ * `colors.before`, taken before the move, so a close of the old tab seen
+ * during the move cannot lose it.
+ */
 export function colorFollowOps(
   connectionId: string,
   movedTab: string,

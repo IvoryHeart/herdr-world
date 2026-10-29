@@ -32,6 +32,17 @@ test.skipIf(!chrome)(
       Promise.withResolvers<string[]>(),
       Promise.withResolvers<string[]>(),
     ];
+    const adapterResult = Promise.withResolvers<string[]>();
+    const adapterTools =
+      Promise.withResolvers<
+        (
+          method: string,
+          params?: Record<string, unknown>,
+        ) => Promise<Record<string, unknown>>
+      >();
+    const calls: { method: string; params: Record<string, unknown> }[] = [];
+    let destination = false,
+      moved = false;
     let label = "Analysis",
       failName = false;
     const assets = new Map<string, Blob>();
@@ -55,7 +66,24 @@ test.skipIf(!chrome)(
             { headers: { "Content-Type": "text/event-stream" } },
           );
         }
-        if (url.pathname === "/native") return Response.json({ label });
+        if (url.pathname === "/native")
+          return Response.json({ label, destination, moved });
+        if (url.pathname === "/inspection") return Response.json(calls);
+        if (url.pathname === "/adapter-mobile") {
+          const cdp = await adapterTools.promise;
+          await cdp("Emulation.setDeviceMetricsOverride", {
+            width: 390,
+            height: 844,
+            deviceScaleFactor: 1,
+            mobile: true,
+          });
+          return new Response(null, { status: 204 });
+        }
+        if (url.pathname === "/move-pane") {
+          moved = true;
+          publish({ type: "world_invalidated" });
+          return new Response(null, { status: 204 });
+        }
         if (url.pathname === "/fail-next-name") {
           failName = true;
           return new Response("ok");
@@ -63,9 +91,11 @@ test.skipIf(!chrome)(
         if (url.pathname === "/result") {
           const result = (await request.json()) as {
             receiver: boolean;
+            adapters?: boolean;
             failures: string[];
           };
-          results[result.receiver ? 1 : 0]!.resolve(result.failures);
+          if (result.adapters) adapterResult.resolve(result.failures);
+          else results[result.receiver ? 1 : 0]!.resolve(result.failures);
           return new Response("ok");
         }
         if (url.pathname === "/rpc") {
@@ -73,6 +103,7 @@ test.skipIf(!chrome)(
             method: string;
             params: Record<string, unknown>;
           };
+          calls.push({ method, params: params ?? {} });
           if (method === "world.board.get")
             return Response.json({ result: board.get() });
           let reply: unknown, error: unknown;
@@ -108,14 +139,31 @@ test.skipIf(!chrome)(
                             ) => {
                               if (method === "pane.list")
                                 return {
-                                  panes: [1, 2].map((number) => ({
-                                    pane_id: `pane-${number}`,
-                                    terminal_id: `terminal-${number}`,
-                                    tab_id: "tab-1",
-                                  })),
+                                  panes: (destination ? [1, 2, 3] : [1, 2]).map(
+                                    (number) => ({
+                                      pane_id: `pane-${number}`,
+                                      terminal_id: `terminal-${number}`,
+                                      tab_id:
+                                        number === 3 || (moved && number === 2)
+                                          ? "tab-2"
+                                          : "tab-1",
+                                    }),
+                                  ),
                                 };
                               if (method === "tab.list")
-                                return { tabs: [{ tab_id: "tab-1", label }] };
+                                return {
+                                  tabs: [
+                                    { tab_id: "tab-1", label },
+                                    ...(destination
+                                      ? [
+                                          {
+                                            tab_id: "tab-2",
+                                            label: "Destination",
+                                          },
+                                        ]
+                                      : []),
+                                  ],
+                                };
                               if (method === "workspace.list")
                                 return {
                                   workspaces: [{ workspace_id: "space-1" }],
@@ -159,6 +207,7 @@ test.skipIf(!chrome)(
       width: number,
       height: number,
       receiver: boolean,
+      adapters = false,
     ) {
       const profile = join(dir, name),
         log = join(dir, `${name}.log`);
@@ -222,7 +271,7 @@ test.skipIf(!chrome)(
         mobile: receiver,
       });
       await cdp("Page.navigate", {
-        url: `${server.url.href}${receiver ? "?receiver=1" : ""}`,
+        url: `${server.url.href}${adapters ? "?adapters=1" : receiver ? "?receiver=1" : ""}`,
       });
       return cdp;
     }
@@ -304,6 +353,32 @@ test.skipIf(!chrome)(
           Buffer.from(String(shot.data), "base64"),
         );
       }
+      for (const socket of sockets) socket.close();
+      await Promise.all(children.map((child) => stopChrome(child)));
+      destination = true;
+      calls.length = 0;
+      board.patch([
+        {
+          op: "appearance.set",
+          target: {
+            connection_id: "alpha",
+            kind: "tab",
+            native_id: "tab-2",
+            color_key: "alpha:tab-2",
+            witness: ["terminal-3"],
+          },
+          fields: { status: "Destination status" },
+        },
+      ]);
+      const adapter = await start("adapters", 1200, 900, false, true);
+      adapterTools.resolve(adapter);
+      expect(
+        await withBrowserDeadline(
+          adapterResult.promise,
+          "actual Spaces and mobile appearance adapters",
+          30000,
+        ),
+      ).toEqual([]);
     } finally {
       for (const socket of sockets) socket.close();
       for (const stream of events) {

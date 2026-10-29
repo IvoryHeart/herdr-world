@@ -18,7 +18,11 @@ startup; notification-policy tests retain the captured host/runtime/session rule
 ## Shared terminal appearance
 
 [TerminalAppearanceEditor](TerminalAppearanceEditor.tsx) is composed into the
-Inspector title bar and the phone's [appearance button](TerminalAppearanceButton.tsx).
+Inspector title bar, both native and arranged Spaces headers through
+[SpacesTerminalAppearance](SpacesTerminalAppearance.tsx), and the phone's
+[appearance button](TerminalAppearanceButton.tsx). Spaces selects the tab's selected
+pane, then its focused/first pane. Editor keys include the native tab ID so an
+unsaved draft cannot follow a pane into a different tab.
 Native tab labels come from Herdr; renaming uses qualified
 `world.appearance.rename`, with no saved shadow name. The [appearance adapter](appearance.ts)
 projects shared tab status and per-pane avatars into World, then Board, Town,
@@ -45,7 +49,16 @@ never rebind conflicting IDs or use offline/partial absence as deletion. Legacy
 colours have no reconstructable earlier witness; initial adoption preserves
 that existing colour on the currently observed tab. Confirmed moves and positive
 compensation evidence carry bindings with their terminals. Unknown topology
-remains unresolved. Limits are 2,048 records, 64 terminal witnesses per target,
+remains unresolved. [Pruning](../../../server/src/world/appearance-prune.ts) removes
+a record and its colour alias only when all its terminal witnesses are absent
+from a complete current snapshot or a current native list after a close. Its
+document revision is captured before the read and compared at write time; newer
+edits, unknown observations and live moving terminals are retained. Snapshot
+absence is only a candidate: one coalesced background sweep confirms it through
+a current native pane list, because fresh snapshots can contain cached topology.
+The response never waits for that cleanup. Profile
+launches bind their colour to the newly returned terminal, replacing stale
+occupants through the same appearance operation. Limits are 2,048 records, 64 terminal witnesses per target,
 160 status/name characters and the existing fixed colour/avatar palettes.
 
 [Service identity tests](../../../server/src/rpc/appearance.test.ts),

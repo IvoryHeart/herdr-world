@@ -118,6 +118,9 @@ test("appearance parsing rejects malformed and unbounded persisted data", () => 
 
 test("browser Board patches cannot bypass qualified appearance admission", () => {
   expect(() =>
+    clientBoardOps([{ op: "appearance.prune", keys: [appearanceKey(tab)] }]),
+  ).toThrow();
+  expect(() =>
     clientBoardOps([
       { op: "appearance.set", target: tab, fields: { status: "Bypass" } },
     ]),

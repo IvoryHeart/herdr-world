@@ -1729,7 +1729,7 @@
       "area": "Rendering/layout/search/metrics/site",
       "owner": "web/src/world/WorldFoundationApp.tsx",
       "requirement": "openspec/specs/world-surfaces/spec.md",
-      "properties": "Deterministic geometry/counts; renderer lifetime; bounded metric/cache work",
+      "properties": "Deterministic geometry/counts; renderer lifetime; bounded metric/cache work Appearance pruning requires complete current all-witness absence and the observation-admission document revision; live moves, newer edits and unknown topology retain records. Actual Spaces/mobile adapters bind editor drafts to the native tab, and profile launches bind colours to the returned terminal.",
       "existingTests": [
         "shared/herdrIdentity.test.ts",
         "server/src/http/herdr-info.test.ts",
@@ -1792,7 +1792,12 @@
         "web/src/world/appearance.test.ts",
         "web/src/world/town/townAppearance.test.ts",
         "server/src/world/appearance.browser.test.ts",
-        "server/src/world/world-cli.test.ts"
+        "server/src/world/world-cli.test.ts",
+        "server/src/rpc/appearance-move.test.ts",
+        "server/src/rpc/launcher-appearance.test.ts",
+        "server/src/rpc/appearance-snapshot.test.ts",
+        "server/src/world/appearance-prune.test.ts",
+        "server/src/world/board-closing.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
       "technique": "alternative",
@@ -1850,7 +1855,12 @@
           "web/src/world/appearance.test.ts",
           "web/src/world/town/townAppearance.test.ts",
           "server/src/world/appearance.browser.test.ts",
-          "server/src/world/world-cli.test.ts"
+          "server/src/world/world-cli.test.ts",
+          "server/src/rpc/appearance-move.test.ts",
+          "server/src/rpc/launcher-appearance.test.ts",
+          "server/src/rpc/appearance-snapshot.test.ts",
+          "server/src/world/appearance-prune.test.ts",
+          "server/src/world/board-closing.test.ts"
         ],
         "checks": ["bun run check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory. The shared-appearance extension awaits independent PR review; previous acceptance covers its earlier documented scope."

@@ -56,6 +56,19 @@ viewport bounds. Its native runtime and event stream are synthetic; existing
 Bridge/WebSocket, live Herdr and native window/handoff browser consumers remain
 responsible for their transport and integration boundaries.
 
+The actual Spaces arrangement adapter and phone app bar are exercised in a third
+Chrome session. It selects a split pane in a desktop header, saves through the
+qualified handler, then moves that pane with unsaved phone drafts and checks
+that neither draft can mutate the destination. Handler/store regressions also
+cover lost move acknowledgements after real native close cleanup (including a
+newer explicit colour/reset), profile launch over a stale binding, and close or
+snapshot pruning. Pruning requires all witnesses absent and a current complete
+observation admitted at the saved document revision. Snapshot absence is rechecked against a current native pane
+list in a coalesced background sweep; cached topology alone cannot delete a new
+terminal, and cleanup cannot hold the aggregate snapshot response deadline. A held read cannot erase a
+newer edit. Churn exceeds 2,048 historical records without exhausting the bound,
+and one complete snapshot can reclaim an already full store in one operation.
+
 ## Limits and required checks
 
 This direct finite evidence does not enumerate arbitrary Herdr split/move races,

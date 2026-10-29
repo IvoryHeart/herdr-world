@@ -247,7 +247,7 @@ async function dispatchBoardTownRpc(
             if (result.status === "failed" && current.appearance)
               ops.push(
                 ...reconciledAppearanceOps(
-                  current,
+                  { ...current, layout: { ...current.layout, colors: chosen } },
                   route.connectionId,
                   result.topology ?? [],
                   workspaceIds,

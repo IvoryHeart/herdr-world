@@ -241,7 +241,9 @@ hosts stay usable.
    Spaces header). A workspace's colour shows on its tables that have no colour
    of their own; a host's does not.
    Click the icon beside the terminal's name to open **Terminal appearance**;
-   on a phone, use the coloured appearance button in the terminal app bar.
+   In Spaces, use the same icon in the native tab strip or an arranged window's
+   header. It edits the selected pane in that tab. On a phone, use the coloured
+   appearance button in the terminal app bar.
    The header shows the native tab name. Edit **Tab name** and choose **Save
    name** to rename that Herdr tab in every view. Pick a colour, enter a short
    **Status message** (up to 160 characters) and choose **Save status**, or
@@ -249,7 +251,8 @@ hosts stay usable.
    while each pane can have its own avatar. **Default colour**, **Clear status**
    and **Default avatar** reset only that choice; the avatar returns to its
    profile or identity default. An error stays in the editor and keeps an
-   unsaved name/status draft, so it can be retried.
+   unsaved name/status draft, so it can be retried. If the pane moves to another
+   tab, reopen the editor for that destination; the old draft is not transferred.
    Board shows the avatar and status on the card, Town uses the character and
    desk callout, Spaces shows the avatar and status in its tab tooltip, and
    Desk uses the same shared choices. These choices are saved by World for

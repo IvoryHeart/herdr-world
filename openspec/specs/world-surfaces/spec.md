@@ -2183,6 +2183,12 @@ the captured current runtime and refuse conflicting/reused IDs or retired reads.
 Unavailable hosts SHALL NOT authorize writes, rebind metadata or prove deletion.
 Bound choices SHALL be projected only onto matching current terminal evidence.
 Legacy Board colours SHALL migrate without introducing a second colour authority.
+Complete current evidence that all of a record's terminal witnesses are absent
+SHALL reclaim that record and its colour alias. A read admitted before a newer
+metadata edit SHALL NOT prune that edit. A moving terminal that remains present
+SHALL retain its choices, including after a lost move acknowledgement.
+An unsaved editor draft SHALL remain bound to its original native tab and pane;
+moving that pane into another tab SHALL NOT retarget the draft.
 
 Board SHALL show avatar/status on the tab card, Town SHALL use the avatar for the
 agent and show the status near its desk, Spaces SHALL show the avatar and include

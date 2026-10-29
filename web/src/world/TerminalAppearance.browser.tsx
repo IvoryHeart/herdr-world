@@ -1,3 +1,15 @@
+import { useSpacesTabWindowArrangement } from "./useSpacesTabWindowArrangement";
+import {
+  initializeLayoutPreferences,
+  updateLayoutPreferences,
+  useLayoutPreferences,
+} from "../layoutPreferences";
+import {
+  MobileTerminalAppBar,
+  MobileTerminalIdentity,
+  usePublishMobileControls,
+} from "../components/MobileControls";
+import { useStoreSelector } from "../store";
 import { TabBar } from "../components/TabBar";
 import { __storeTesting, store as runtimeStore } from "../store";
 import { useEffect, useState } from "react";
@@ -14,6 +26,8 @@ import "../styles/tokens.css";
 import "../styles/base.css";
 import "../components/WorkspaceInspectorHost.css";
 
+const adapterMode = new URLSearchParams(location.search).has("adapters");
+if (adapterMode) initializeLayoutPreferences();
 const controls = new Set<(event: BridgeControlMsg) => void>();
 bridge.onControl = (fn) => {
   controls.add(fn);
@@ -37,13 +51,14 @@ stream.onmessage = (event) => {
   for (const listener of controls) listener(JSON.parse(event.data));
   window.dispatchEvent(new Event("native-change"));
 };
-function acceptNative(label: string) {
+function acceptNative(label: string, destination = false, moved = false) {
   __storeTesting.replaceState({
     ...runtimeStore.get(),
     status: "connected",
     catalogueReady: true,
     activeConnectionId: "alpha",
     serverRuntimeGeneration: 3,
+    selectedPaneId: adapterMode ? "pane-2" : runtimeStore.get().selectedPaneId,
     connections: [
       {
         id: "alpha",
@@ -62,7 +77,8 @@ function acceptNative(label: string) {
         number: 1,
         focused: true,
         pane_count: 2,
-        tab_count: 1,
+        tab_count: destination ? 2 : 1,
+        active_tab_id: moved ? "tab-2" : "tab-1",
         agent_status: "working",
       },
     ],
@@ -72,17 +88,30 @@ function acceptNative(label: string) {
         workspace_id: "space-1",
         label,
         number: 1,
-        focused: true,
-        pane_count: 2,
+        focused: !moved,
+        pane_count: moved ? 1 : 2,
         agent_status: "working",
       },
+      ...(destination
+        ? [
+            {
+              tab_id: "tab-2",
+              workspace_id: "space-1",
+              label: "Destination",
+              number: 2,
+              focused: moved,
+              pane_count: moved ? 2 : 1,
+              agent_status: "working",
+            },
+          ]
+        : []),
     ],
-    panes: [1, 2].map((number) => ({
+    panes: (destination ? [1, 2, 3] : [1, 2]).map((number) => ({
       pane_id: `pane-${number}`,
       terminal_id: `terminal-${number}`,
-      tab_id: "tab-1",
+      tab_id: number === 3 || (moved && number === 2) ? "tab-2" : "tab-1",
       workspace_id: "space-1",
-      focused: number === 1,
+      focused: number === (adapterMode ? 2 : 1),
       agent: "codex",
       agent_status: "working",
       revision: 1,
@@ -100,7 +129,7 @@ function App() {
       void fetch("/native")
         .then((response) => response.json())
         .then((native) => {
-          acceptNative(native.label);
+          acceptNative(native.label, native.destination, native.moved);
           setLabel(native.label);
         });
     refresh();
@@ -124,6 +153,7 @@ function App() {
     native_id: "tab-1",
     witness: ["terminal-1", "terminal-2"],
   })?.status;
+  if (adapterMode) return <AdapterApp color={color} />;
   return (
     <main style={{ padding: 12, maxWidth: 700 }}>
       <TabBar
@@ -186,6 +216,83 @@ function App() {
         );
       })}
     </main>
+  );
+}
+function AdapterApp({
+  color,
+}: {
+  color: Parameters<typeof TerminalAppearanceEditor>[0]["color"];
+}) {
+  const arrangement = useSpacesTabWindowArrangement(true),
+    { mobile } = useLayoutPreferences();
+  useEffect(() => {
+    if (!mobile && !arrangement.arrangementControl.disabledReasons.columns)
+      arrangement.arrangementControl.onSelect("columns");
+  }, [mobile, arrangement.arrangementControl.disabledReasons.columns]);
+  return (
+    <main>
+      {mobile ? (
+        <MobileAdapter color={color} />
+      ) : (
+        <>
+          <div data-adapter-native-tabs>
+            <TabBar
+              tabColors={{
+                palette: color.palette,
+                colorOf: () => color.current,
+                onColor: () => {},
+              }}
+            />
+          </div>
+          <div
+            className="workspace-stage"
+            style={{ position: "relative", width: "100%", height: "100vh" }}
+          >
+            <div
+              ref={arrangement.onSpacesWindowLayerReady}
+              className="spaces-window-layer"
+              style={{ position: "absolute", inset: 0 }}
+            />
+            {arrangement.renderWindows}
+          </div>
+        </>
+      )}
+    </main>
+  );
+}
+function MobileAdapter({
+  color,
+}: {
+  color: Parameters<typeof TerminalAppearanceEditor>[0]["color"];
+}) {
+  const pane = useStoreSelector((state) =>
+    state.panes.find((pane) => pane.pane_id === "pane-2"),
+  );
+  const [element, setElement] = useState<HTMLDivElement | null>(null);
+  usePublishMobileControls({
+    tabCount: 2,
+    attention: false,
+    tabsDisabled: false,
+    tabsOpen: false,
+    showTabs: () => {},
+    moreOpen: false,
+    toggleMore: () => {},
+    workspacesOpen: false,
+    toggleWorkspaces: () => {},
+    tabColors: {
+      palette: color.palette,
+      colorOf: () => color.current,
+      onColor: () => {},
+    },
+  });
+  return (
+    <>
+      <MobileTerminalAppBar />
+      <div ref={setElement} style={{ height: 500, width: "100%" }}>
+        Synthetic terminal viewport
+      </div>
+      <MobileTerminalIdentity pane={pane} active element={element} />
+    </>
   );
 }
 createRoot(document.getElementById("root")!).render(<App />);
@@ -269,6 +376,211 @@ function close() {
   document.dispatchEvent(
     new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
   );
+}
+async function runAdapters() {
+  const nativeOpener = await waitFor(
+    () =>
+      document.querySelector<HTMLButtonElement>(
+        '[data-adapter-native-tabs] [data-tab-id="tab-1"] .mobile-appearance-button',
+      ),
+    "native Spaces tab-strip editor missing",
+  );
+  nativeOpener.click();
+  await waitFor(
+    () => document.querySelector(".terminal-appearance-editor"),
+    "native tab-strip editor did not mount",
+  );
+  input("Tab status message", "Native Spaces status");
+  await waitFor(
+    () => button("Save status") && !button("Save status")!.disabled,
+    "native tab status draft",
+  );
+  button("Save status")!.click();
+  await saved("Tab status saved");
+  close();
+  await waitFor(
+    () =>
+      document.querySelector(".spaces-tab-window .mobile-appearance-button"),
+    "desktop Spaces common appearance opener missing",
+  );
+  document
+    .querySelector<HTMLButtonElement>(
+      '.spaces-tab-window[data-world-window-id="tab-1"] .mobile-appearance-button, .spaces-tab-window[data-tab-id="tab-1"] .mobile-appearance-button, .spaces-tab-window .mobile-appearance-button',
+    )!
+    .click();
+  await waitFor(
+    () => document.querySelector(".terminal-appearance-editor"),
+    "desktop Spaces editor did not mount",
+  );
+  input("Tab status message", "Desktop Spaces status");
+  await waitFor(
+    () => button("Save status") && !button("Save status")!.disabled,
+    "desktop status draft",
+  );
+  button("Save status")!.click();
+  await saved("Tab status saved");
+  await click("Avatar Builder");
+  await saved("Pane avatar saved");
+  input("Tab name", "Desktop native tab");
+  await waitFor(
+    () => button("Save name") && !button("Save name")!.disabled,
+    "desktop rename draft",
+  );
+  button("Save name")!.click();
+  await saved("Native tab name saved");
+  close();
+  let calls = await fetch("/inspection").then((reply) => reply.json());
+  check(
+    calls.some(
+      (call: {
+        method: string;
+        params: {
+          native_id: string;
+          connection_id: string;
+          connection_generation: number;
+          fields?: { status: string };
+        };
+      }) =>
+        call.method === "world.appearance.patch" &&
+        call.params.native_id === "tab-1" &&
+        call.params.connection_id === "alpha" &&
+        call.params.connection_generation === 3 &&
+        call.params.fields?.status === "Native Spaces status",
+    ),
+    "native tab-strip save lost its qualified tab owner",
+  );
+  check(
+    calls.some(
+      (call: {
+        method: string;
+        params: {
+          native_id: string;
+          connection_id: string;
+          connection_generation: number;
+          fields?: { status: string };
+        };
+      }) =>
+        call.method === "world.appearance.patch" &&
+        call.params.native_id === "tab-1" &&
+        call.params.connection_id === "alpha" &&
+        call.params.connection_generation === 3 &&
+        call.params.fields?.status === "Desktop Spaces status",
+    ),
+    "desktop status lost its qualified tab owner",
+  );
+  check(
+    calls.some(
+      (call: {
+        method: string;
+        params: {
+          native_id: string;
+          kind: string;
+          connection_id: string;
+          connection_generation: number;
+          fields?: { avatar: string };
+        };
+      }) =>
+        call.method === "world.appearance.patch" &&
+        call.params.kind === "pane" &&
+        call.params.native_id === "pane-2" &&
+        call.params.connection_id === "alpha" &&
+        call.params.connection_generation === 3 &&
+        call.params.fields?.avatar === "builder",
+    ),
+    "desktop avatar did not target the selected pane",
+  );
+  await fetch("/adapter-mobile", { method: "POST" });
+  updateLayoutPreferences({ mode: "mobile" });
+  const opener = await waitFor(
+    () =>
+      document.querySelector<HTMLButtonElement>(
+        ".mobile-terminal-appbar .mobile-appearance-button",
+      ),
+    "real phone appearance opener missing",
+  );
+  opener.click();
+  await waitFor(
+    () => document.querySelector(".terminal-appearance-editor"),
+    "phone editor missing",
+  );
+  input("Tab name", "Source tab name draft");
+  input("Tab status message", "Source tab status draft");
+  await waitFor(
+    () => button("Save status") && !button("Save status")!.disabled,
+    "phone source draft missing",
+  );
+  await fetch("/move-pane", { method: "POST" });
+  await waitFor(
+    () =>
+      document
+        .querySelector(".mobile-terminal-name")
+        ?.textContent?.includes("Destination"),
+    "phone publisher did not retarget the moved pane",
+  );
+  const stale = document.querySelector(".terminal-appearance-editor");
+  check(
+    !stale,
+    "phone editor retained a dirty source-tab draft after moving panes",
+  );
+  if (stale) {
+    button("Save status")!.click();
+    await saved("Tab status saved");
+    close();
+  }
+  document
+    .querySelector<HTMLButtonElement>(
+      ".mobile-terminal-appbar .mobile-appearance-button",
+    )!
+    .click();
+  await waitFor(
+    () => document.querySelector(".terminal-appearance-editor"),
+    "destination editor missing",
+  );
+  check(
+    document.querySelector<HTMLInputElement>('input[aria-label="Tab name"]')
+      ?.value === "Destination",
+    "source name draft crossed into destination tab",
+  );
+  check(
+    document.querySelector<HTMLInputElement>(
+      'input[aria-label="Tab status message"]',
+    )?.value === "Destination status",
+    "source status draft crossed into destination tab",
+  );
+  input("Tab status message", "Destination status updated");
+  await waitFor(
+    () => button("Save status") && !button("Save status")!.disabled,
+    "destination draft missing",
+  );
+  button("Save status")!.click();
+  await saved("Tab status saved");
+  calls = await fetch("/inspection").then((reply) => reply.json());
+  check(
+    !calls.some(
+      (call: { params: { fields?: { status: string }; label?: string } }) =>
+        call.params.fields?.status === "Source tab status draft" ||
+        call.params.label === "Source tab name draft",
+    ),
+    "phone editor saved a source-tab draft against its destination",
+  );
+  check(
+    calls.some(
+      (call: {
+        params: {
+          native_id: string;
+          connection_id: string;
+          connection_generation: number;
+          fields?: { status: string };
+        };
+      }) =>
+        call.params.native_id === "tab-2" &&
+        call.params.connection_id === "alpha" &&
+        call.params.connection_generation === 3 &&
+        call.params.fields?.status === "Destination status updated",
+    ),
+    "destination save was not qualified to its actual tab",
+  );
+  return failures;
 }
 async function run() {
   await waitFor(
@@ -385,11 +697,12 @@ async function run() {
   return failures;
 }
 if (!new URLSearchParams(location.search).has("capture"))
-  void run()
+  void (adapterMode ? runAdapters() : run())
     .then((failures) =>
       fetch("/result", {
         method: "POST",
         body: JSON.stringify({
+          adapters: adapterMode,
           receiver: new URLSearchParams(location.search).has("receiver"),
           failures,
         }),
@@ -399,6 +712,7 @@ if (!new URLSearchParams(location.search).has("capture"))
       fetch("/result", {
         method: "POST",
         body: JSON.stringify({
+          adapters: adapterMode,
           receiver: new URLSearchParams(location.search).has("receiver"),
           failures: [String(error)],
         }),

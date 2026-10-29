@@ -13,8 +13,15 @@
 
 - [x] 3.1 Synchronize the affected current requirements and update coverage/consumer evidence using bounded identity/order properties and concrete adapter tests; validate the OpenSpec change and record the required full gate in the PR handoff.
 - [x] 3.2 Update current user/developer guides, knowledge map and changelog fragment; build the tutorial site and capture desktop and phone viewports with synthetic data.
-- [ ] 3.3 Format the staged candidate, pass repository hooks and push, then validate the final PR description and open a ready independently reviewed PR fixing #221 with creation-time labels; record the PR and verification evidence in the handoff.
+- [x] 3.3 Format the staged candidate, pass repository hooks and push, then validate the final PR description and open a ready independently reviewed PR fixing #221 with creation-time labels; record the PR and verification evidence in the handoff.
 
 The implementation tasks above describe delivered code and evidence consumers.
 The external gate and PR outcome are recorded in the PR handoff; independent
 review and acceptance remain required before archiving this change.
+
+## 4. Independent review repairs
+
+- [x] 4.1 Exercise native close cleanup during lost move replies and retain the latest explicit colour/reset.
+- [x] 4.2 Bind profile launch colours to new terminal witnesses and reclaim closed records only from complete current, revision-admitted evidence.
+- [x] 4.3 Wire both desktop Spaces entry points to the common editor and verify actual mobile drafts cannot retarget after a pane move.
+The repair gate result and each finding's fixing commit are recorded on PR #492.
