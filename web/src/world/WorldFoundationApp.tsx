@@ -457,9 +457,6 @@ export default function WorldFoundationApp() {
           )}
           primaryViewControl={
             <div className="world-topbar-control-plane">
-              {view === "spaces" ? null : (
-                <NeedsYouCounter world={topbarWorld} />
-              )}
               <label
                 className="world-primary-view-select"
                 title={`World view: ${view}`}
@@ -483,6 +480,11 @@ export default function WorldFoundationApp() {
                   ))}
                 </select>
               </label>
+              {/* A phone's top bar is a detail screen's; its counter sits
+                  beside the views instead. */}
+              {view === "spaces" || mobile ? null : (
+                <NeedsYouCounter world={topbarWorld} />
+              )}
               {canReturnToView ? (
                 <button
                   type="button"
