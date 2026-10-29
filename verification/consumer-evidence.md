@@ -20,6 +20,30 @@ This reconciles the remaining baseline entries without treating a component mode
 | Q32 File search and annotation drafts | Runtime-qualified late-result admission is the shared rule; real File Explorer tests exercise retired prefetch/preview and annotation tests retain durable checkout identity and stale anchors. Models: browser-preparation, runtime-leases. | Draft persistence intentionally uses durable checkout identity rather than transient generation; glob expansion and anchor reconstruction remain pure/fixture tests. |
 | Q37 Whole-service startup/shutdown | Manager shutdown prevents new starts and drains retained owners. Startup/shutdown tests verify listener availability, one shared drain and forced exit deadline. Models: runtime-control, runtime-drain. | Actual listener/process/service-manager lifecycle and forced-exit policy are integration/platform evidence; models do not prove OS termination. |
 
+### Chat source navigation (Q16)
+
+The source-link parser fixtures cover absolute/relative paths, encoded names,
+line locations, escaped filename delimiters, root filenames, whole inline-code
+paths with spaces, prose exclusions and traversal refusal. Command arguments and
+multiple references retain individual links and line targets. Scoped code-span
+click cases cover comma/semicolon boundaries, mixed basename/path items,
+no-space comma lists, executable-directory prefixes (including relative, home and
+non-system absolute `bin`/`sbin` installations and virtualenv `Scripts`) and punctuation inside a
+single filename. Bare names use
+source/doc-format and context hints rather than linking dotted prose or code
+identifiers. The real
+Markdown/Inspector source-link
+consumer rejects mismatched host, runtime, pane/session and missing worktree
+bindings, and discards pending previews after binding replacement. Desktop and
+phone Chrome fixtures use the real Chat and Inspector to open the same file at
+two requested lines through a qualified agent-worktree read delayed across
+equivalent fresh RPC observations. Notice replacement and the actual unbound
+Spaces host retain their separate consumer assertions. These direct
+consumer/browser cases complement browser-preparation and runtime-leases;
+a new model would not establish Markdown parsing or CodeMirror line targeting.
+Filesystem containment and symlink admission remain the existing service adapter's
+responsibility and retain their current real filesystem tests.
+
 ## Direct implementation, browser and platform alternatives
 
 | Area | Selected evidence and reason | Limits |

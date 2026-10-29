@@ -129,6 +129,35 @@ that root; stat metadata cannot redirect the read to a different transcript.
   pick an option.
 - Keeps the last good conversation when a read fails, for example while the
   transcript is being written, and says that it could not refresh.
+- In Town, Board and Desk, opens local source references in the same
+  Inspector's **Files** view.
+  Absolute paths, root-level filenames such as `README.md`, inline code paths
+  (including spaces) and Markdown file links can include a
+  line (`src/example.ts:12` or `src/example.ts#L12`); Markdown heading links
+  such as `docs/guide.md#setup` open that section. Relative references start
+  at the selected agent worktree. Files and Changes keep their shared binding
+  to that host, runtime and worktree. A missing or stale binding, or a path
+  outside the selected worktree, shows an unavailable notice with **Choose a
+  worktree**. Choose the intended worktree and click the reference again;
+  Chat never chooses another checkout or host for a link. HTTP and HTTPS
+  links continue to open as web links. Automatic basename links use known
+  source/document formats: inline code or a line number supplies the file hint;
+  standard document names such as README.md also link in prose. A command such
+  as `bun test web/src/example.test.ts` links its source path, and a list of
+  source references keeps separate links and line targets, including comma- or
+  semicolon-separated items and mixed paths/basenames. An executable-led command
+  such as `./node_modules/.bin/tsc main.ts`, `./bin/dev main.ts` or
+  `/opt/toolchain/bin/tsc main.ts` links its source argument separately. Executables
+  directly inside `bin`, `sbin` or `.bin` are recognized at any installation
+  prefix, as are virtualenv `Scripts` executables. Use an explicit Markdown link
+  for a spaced filename directly inside one of these executable directories.
+  For a root filename
+  with spaces, use a path prefix such as `./my file.ts:12`. Dotted prose such
+  as Node.js and code identifiers such as `process.env` stay text. Use an explicit
+  Markdown file link for ambiguous filenames or unrecognized formats.
+  Spaces retains ordinary Markdown link
+  navigation: its Inspector does not yet have an agent-worktree binding and
+  does not offer this worktree chooser.
 - When the conversation is unavailable, Chat shows the reason and the action it
   names: the integration command to copy, the Codex session link, **Refresh**
   and **Open Terminal**. It offers no composer then.

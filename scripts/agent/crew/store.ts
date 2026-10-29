@@ -127,6 +127,10 @@ export function openCrewStore(path: string, busyMs = 120_000) {
       tab TEXT PRIMARY KEY,
       run_id INTEGER NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS meta (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
   `);
   return db;
 }
@@ -514,6 +518,24 @@ export function latestRun(db: Database, actionKey: string) {
     )
     .get(actionKey);
   return row ? run(row) : null;
+}
+
+/** A small value the watcher keeps, such as the last mark it set on a PR. */
+export function getMeta(db: Database, key: string) {
+  return (
+    db
+      .query<{ value: string }, [string]>(
+        "SELECT value FROM meta WHERE key = ?",
+      )
+      .get(key)?.value ?? null
+  );
+}
+
+export function setMeta(db: Database, key: string, value: string) {
+  db.query("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run(
+    key,
+    value,
+  );
 }
 
 export function recentRuns(db: Database, limit: number) {
