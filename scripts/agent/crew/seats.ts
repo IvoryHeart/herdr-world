@@ -86,7 +86,18 @@ export type WatcherCode = {
 
 /** When a process started, as `ps` reports it; null if there is none. */
 export function processStart(pid: number): string | null {
-  const result = runProcess(["ps", "-o", "lstart=", "-p", String(pid)]);
+  // `lstart` is local time in the locale's format: pin both, so every
+  // caller reads the same value whatever its own TZ and LC_TIME.
+  const result = runProcess([
+    "env",
+    "LC_ALL=C",
+    "TZ=UTC",
+    "ps",
+    "-o",
+    "lstart=",
+    "-p",
+    String(pid),
+  ]);
   const started = result.stdout.trim();
   return result.code === 0 && started ? started : null;
 }
@@ -123,8 +134,11 @@ export function noticeStaleWatcher(
   forgetGoneWatchers(crew, watcherRunning(deps.alive, startOf), pid);
   const key = `watcher:${pid}`;
   const raw = getMeta(crew, key);
-  const known = raw ? (JSON.parse(raw) as WatcherCode) : null;
-  const started = known?.started ?? startOf(pid) ?? undefined;
+  // A record left under this pid by a crashed watcher isn't this one's:
+  // only one with this process's start time carries its notice state.
+  const started = startOf(pid) ?? undefined;
+  const stored = raw ? (JSON.parse(raw) as WatcherCode) : null;
+  const known = stored?.started === started ? stored : null;
   const record = (told?: string) =>
     setMeta(
       crew,

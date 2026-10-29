@@ -23,6 +23,7 @@ import {
   crewCodeVersion,
   forgetGoneWatchers,
   noticeStaleWatcher,
+  processStart,
   startSeat,
 } from "./crew/seats";
 import { runTokens, showStatus, spend, status } from "./crew/status";
@@ -2449,6 +2450,75 @@ describe("seats and spend", () => {
       crew.close();
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  test("a new watcher on a crashed watcher's pid starts its own record", () => {
+    const dir = mkdtempSync(join(tmpdir(), "crew-replace-"));
+    const crew = openCrewStore(":memory:");
+    try {
+      const starts = new Map([
+        [101, "Wed Oct 28 10:00:00 2026"],
+        [202, "Wed Oct 28 11:00:00 2026"],
+      ]);
+      const startOf = (pid: number) => starts.get(pid) ?? null;
+      const notices: string[][] = [];
+      const deps = {
+        alive: (pid: number) => starts.has(pid),
+        run: (argv: string[]) => {
+          notices.push(argv);
+          return { code: 0, stdout: "", stderr: "" };
+        },
+      } as unknown as Deps;
+      // Watcher 101 runs v1 and is told about v3 in its checkout.
+      noticeStaleWatcher(crew, "v1", "v3", dir, deps, NOW, 101, startOf);
+      expect(notices).toHaveLength(1);
+      // It crashes; a new watcher gets pid 101 before any cleanup, runs v2,
+      // and its checkout is at v3 too: it hasn't been told, so it tells.
+      starts.set(101, "Wed Oct 28 12:30:00 2026");
+      noticeStaleWatcher(crew, "v2", "v3", dir, deps, NOW, 101, startOf);
+      expect(JSON.parse(getMeta(crew, "watcher:101")!)).toEqual({
+        loaded: "v2",
+        disk: "v3",
+        started: "Wed Oct 28 12:30:00 2026",
+        told: "v3",
+      });
+      expect(notices).toHaveLength(2);
+      // Another watcher's pass keeps the live record, and status reports it.
+      noticeStaleWatcher(crew, "v3", "v3", dir, deps, NOW, 202, startOf);
+      expect(getMeta(crew, "watcher:101")).not.toBeNull();
+      const lines: string[] = [];
+      showStatus(crew, dir, (line) => lines.push(line), NOW, {
+        alive: deps.alive,
+        startOf,
+      });
+      expect(lines.filter((line) => line.includes("older crew code"))).toEqual([
+        "watcher 101 runs older crew code than its checkout; restart `agent:crew -- watch`",
+      ]);
+    } finally {
+      crew.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a process's start time reads the same whatever the caller's TZ and locale", () => {
+    // Callers with different settings, such as a watcher and `status` run
+    // from other shells, read this test process's start time.
+    const read = (env: Record<string, string>) =>
+      Bun.spawnSync(
+        [
+          process.execPath,
+          "-e",
+          `import { processStart } from ${JSON.stringify(join(import.meta.dir, "crew", "seats.ts"))}; console.log(processStart(${process.pid}));`,
+        ],
+        { env: { ...process.env, ...env }, stdout: "pipe" },
+      )
+        .stdout.toString()
+        .trim();
+    const tokyo = read({ TZ: "Asia/Tokyo", LC_ALL: "C" });
+    const losAngeles = read({ TZ: "America/Los_Angeles", LC_ALL: "C" });
+    expect(tokyo).not.toBe("null");
+    expect(tokyo).toBe(losAngeles);
+    expect(processStart(process.pid)).toBe(tokyo);
   });
 
   test("reviewers run on their roster harness and persona too", () => {
