@@ -1,7 +1,11 @@
 import { expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import {
   isToolingOnlyChange,
   isToolingPath,
+  repositorySelection,
   selectValidation,
 } from "./validation-scope";
 import type { Graph } from "./affected";
@@ -229,4 +233,58 @@ test("build-version changes select native jobs because the module is compiled in
   expect(selection.full).toBe(false);
   expect(selection.unit).toEqual([versionTest]);
   expect(selection.packaging).toBe(true);
+});
+
+test("an incremental-only deletion keeps the repository's affected unit scope", () => {
+  const root = mkdtempSync(join(tmpdir(), "validation-scope-"));
+  const git = (...args: string[]) => {
+    const result = Bun.spawnSync(["git", ...args], { cwd: root });
+    expect(result.exitCode).toBe(0);
+    return result.stdout.toString().trim();
+  };
+  const write = (path: string, text: string) => {
+    mkdirSync(dirname(join(root, path)), { recursive: true });
+    writeFileSync(join(root, path), text);
+  };
+  const commit = (message: string) => {
+    git("add", ".");
+    git("commit", "-qm", message);
+    return git("rev-parse", "HEAD");
+  };
+  try {
+    git("init", "-q");
+    git("config", "user.name", "Scope Test");
+    git("config", "user.email", "scope@example.invalid");
+    write("verification/coverage.json", '{"areas": []}\n');
+    write(chat, "export const value = 1;\n");
+    write(unit, 'import "./components/chat/Example";\n');
+    write("web/src/unrelated.test.ts", "export {};\n");
+    write(worldBrowserSuites[0]!, "export {};\n");
+    const base = commit("base");
+    const transient = "web/src/transient.ts";
+    write(transient, "export const temporary = 1;\n");
+    write(chat, "export const value = 2;\n");
+    const priorPush = commit("introduce temporary source");
+    rmSync(join(root, transient));
+    write(chat, "export const value = 3;\n");
+    commit("remove temporary source and update view");
+
+    const expected = {
+      full: false,
+      tooling: false,
+      unit: [unit],
+      world: [],
+      worldShards: [],
+      web: [],
+      latency: [],
+      verification: false,
+      packaging: false,
+    };
+    expect(repositorySelection(root, base)).toMatchObject(expected);
+    expect(repositorySelection(root, base, "HEAD", priorPush)).toMatchObject(
+      expected,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

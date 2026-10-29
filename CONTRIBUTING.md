@@ -75,6 +75,8 @@ failure diagnosis.
 PR CI and pre-push use the same suite rules. Static checks always run for code;
 ordinary Markdown uses `check:docs`. The complete PR determines applicability,
 including both rename paths; a local incremental push may narrow unit consumers.
+The graph retains deletions from both diffs, so adding then removing an unused
+file across pushes does not widen the remaining change's scope.
 A reverted gate/configuration edit in the incremental delta still selects the
 full gate, even when that input is absent from the net PR diff.
 

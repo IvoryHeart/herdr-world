@@ -185,7 +185,7 @@ export function repositorySelection(
   const complete = gitChanges(root, base, head);
   const tests = testBase === base ? complete : gitChanges(root, testBase, head);
   return selectValidation(
-    buildGraph(root, complete.tracked, complete.deleted),
+    buildGraph(root, complete.tracked, [...complete.deleted, ...tests.deleted]),
     complete.changed,
     coverageOwners(root),
     tests.changed,
