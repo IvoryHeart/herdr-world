@@ -32,7 +32,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
 
 - **Town** is the default view (`/town`); the root URL opens it too.
   Each host is a building, each workspace a room, each tab a team table and each
-  pane a seat. Plain terminals show prompts. Additional panes beyond the drawn
+  pane a seat. Rooms resize as tabs open and close. Plain terminals show prompts. Additional panes beyond the drawn
   seats remain available through the table's count and chooser. Each table
   carries its tab's name on a nameplate at its front edge. Agents go by the
   name Herdr gives them (`firstmate`), else their harness (`claude`); window

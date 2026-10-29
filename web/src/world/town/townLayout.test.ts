@@ -199,12 +199,17 @@ test("at every capacity step, slot i is the i-th desk in reading order", () => {
   }
 });
 
-test("a live room does not shrink, and a rebuild re-derives from native order", () => {
+test("a live room shrinks to fit remaining desks, and a rebuild re-derives from native order", () => {
   const big = layoutTown(town({ a: [10] }), "wide");
-  const live = layoutTown(town({ a: [2] }), "wide", big.memory).layout;
-  expect(live.buildings[0]!.rooms[0]!.cols).toBe(
-    big.layout.buildings[0]!.rooms[0]!.cols,
+  const liveResult = layoutTown(town({ a: [2] }), "wide", big.memory);
+  const live = liveResult.layout;
+  expect(live.buildings[0]!.rooms[0]!.h).toBeLessThan(
+    big.layout.buildings[0]!.rooms[0]!.h,
   );
+  expect([
+    live.buildings[0]!.rooms[0]!.cols,
+    live.buildings[0]!.rooms[0]!.rows,
+  ]).toEqual([...TOWN_ROOM_TIERS[townTierFor(2)]!]);
   const rebuilt = layoutTown(town({ a: [2] }), "wide").layout;
   const room = rebuilt.buildings[0]!.rooms[0]!;
   expect([room.cols, room.rows]).toEqual([...TOWN_ROOM_TIERS[townTierFor(2)]!]);
@@ -213,7 +218,7 @@ test("a live room does not shrink, and a rebuild re-derives from native order", 
   );
 });
 
-test("an explicit Fold shrinks an expanded room while ordinary tab closures preserve its size", () => {
+test("folding or closing tabs shrinks an expanded room to its remaining desks", () => {
   for (const shape of Object.values(TOWN_SHAPES)) {
     const expanded = town({ a: [130] });
     Object.assign(expanded.rooms[0]!, { deskFold: "expanded" });
@@ -228,7 +233,7 @@ test("an explicit Fold shrinks an expanded room while ordinary tab closures pres
     const closedInput = town({ a: [2] });
     closedInput.rooms[0]!.deskFold = "expanded";
     const closed = layoutTown(closedInput, shape, first.memory);
-    expect(closed.layout.buildings[0]!.rooms[0]!.h).toBe(
+    expect(closed.layout.buildings[0]!.rooms[0]!.h).toBeLessThan(
       first.layout.buildings[0]!.rooms[0]!.h,
     );
   }
