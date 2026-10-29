@@ -2,12 +2,23 @@ import { test } from "bun:test";
 import { resolve } from "node:path";
 import {
   verifyPostExitCancellation,
+  verifyResourceOOMIsolation,
   verifyTimeoutAccounting,
 } from "./verification-resources";
 
 // The required resource command explicitly selects its systemd manager and runs
 // these real-cgroup regressions. Ordinary unit runs report the missing prerequisite.
 const manager = Bun.env.HERDR_RESOURCE_MANAGER;
+test.skipIf(manager !== "user" && manager !== "system").serial(
+  "payload-wide OOM preserves its separate supervisor and resource accounting",
+  async () => {
+    await verifyResourceOOMIsolation(
+      resolve(import.meta.dir, ".."),
+      manager === "system",
+    );
+  },
+  20000,
+);
 test
   .skipIf(manager !== "user" && manager !== "system")
   .serial.each(["exited", "cleanup"] as const)(

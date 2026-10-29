@@ -2,6 +2,10 @@ name: World browser validation
 
 on:
     workflow_call:
+        inputs:
+            selection:
+                required: true
+                type: string
 
 permissions:
     contents: read
@@ -9,13 +13,14 @@ permissions:
 jobs:
     world-browser:
         name: World browser tests (${{ matrix.shard }}/6)
+        if: toJSON(fromJSON(inputs.selection).world) != '[]'
         runs-on: ubuntu-latest
         timeout-minutes: 15
         strategy:
             fail-fast: false
             max-parallel: 6
             matrix:
-                shard: [1, 2, 3, 4, 5, 6]
+                shard: ${{ fromJSON(inputs.selection).worldShards }}
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
               with:
@@ -29,7 +34,9 @@ jobs:
               env:
                   WORLD_TRACE_PREFIX: .agents/delivery/world-production
                   WORLD_TIMINGS_ONLY: "1"
-              run: bun run test:world --shard=${{ matrix.shard }}/6 --parallel=1 --max-concurrency=1
+                  HERDR_CI_SELECTION: ${{ inputs.selection }}
+                  HERDR_WORLD_TEST_LABEL: shard-${{ matrix.shard }}-of-6
+              run: bun scripts/ci-tests.ts world ${{ matrix.shard }}
             - name: Upload World test results and timings
               if: always()
               uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
@@ -45,10 +52,15 @@ jobs:
 
     # Chrome-driven suites outside World, one file at a time as in repository
     # validation, which leaves them out.
-    web-browser:
-        name: Web browser tests
+    web-shards:
+        name: Web browser shard (${{ matrix.shard }}/2)
+        if: toJSON(fromJSON(inputs.selection).web) != '[]'
         runs-on: ubuntu-latest
         timeout-minutes: 15
+        strategy:
+            fail-fast: false
+            matrix:
+                shard: [1, 2]
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
               with:
@@ -62,26 +74,42 @@ jobs:
               env:
                   HERDR_TEST_PARALLEL: "1"
                   HERDR_TEST_MAX_CONCURRENCY: "2"
-              run: mkdir -p .agents/delivery && bun run test --web-browser --reporter=junit --reporter-outfile=.agents/delivery/web-browser.xml
+                  HERDR_CI_SELECTION: ${{ inputs.selection }}
+              run: bun scripts/ci-tests.ts web ${{ matrix.shard }}/2
             - name: Upload web browser test results
               if: always()
               uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
               with:
-                  name: web-browser-attempt-${{ github.run_attempt }}
-                  path: .agents/delivery/web-browser.xml
+                  name: web-browser-${{ matrix.shard }}-attempt-${{ github.run_attempt }}
+                  path: .agents/delivery/web-browser-*.xml
                   include-hidden-files: true
                   if-no-files-found: warn
                   retention-days: 7
+
+    web-browser:
+        name: Web browser tests
+        needs: web-shards
+        if: always() && toJSON(fromJSON(inputs.selection).web) != '[]'
+        runs-on: ubuntu-latest
+        steps:
+            - env:
+                  RESULT: ${{ needs.web-shards.result }}
+              run: test "$RESULT" = success
 
     # Suites with wall-clock budgets (input latency, frame counts) on a runner
     # of their own: nothing else runs, it waits for the machine to go quiet
     # after setup, and it runs one case at a time. A case that fails is run
     # once more (owner decision, #230): a hosted runner still produces the
     # odd slow event, and the worst-event budgets are judged on one run.
-    world-latency:
-        name: World latency budgets
+    latency-shards:
+        name: World latency suite (${{ matrix.shard }}/6)
+        if: toJSON(fromJSON(inputs.selection).latency) != '[]'
         runs-on: ubuntu-latest
         timeout-minutes: 15
+        strategy:
+            fail-fast: false
+            matrix:
+                shard: [1, 2, 3, 4, 5, 6]
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
               with:
@@ -97,12 +125,14 @@ jobs:
               env:
                   WORLD_TRACE_PREFIX: .agents/delivery/world-production
                   WORLD_TIMINGS_ONLY: "1"
-              run: bun run test:world --shard=latency --parallel=1 --max-concurrency=1 --retry=1
+                  HERDR_CI_SELECTION: ${{ inputs.selection }}
+                  HERDR_WORLD_TEST_LABEL: shard-latency-${{ matrix.shard }}
+              run: bun scripts/ci-tests.ts latency ${{ matrix.shard }}
             - name: Upload World latency results and timings
               if: always()
               uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
               with:
-                  name: world-latency-attempt-${{ github.run_attempt }}
+                  name: world-latency-${{ matrix.shard }}-attempt-${{ github.run_attempt }}
                   path: |
                       .agents/delivery/world-shard-*.xml
                       .agents/delivery/world-shard-*.timings.json
@@ -110,3 +140,13 @@ jobs:
                   include-hidden-files: true
                   if-no-files-found: warn
                   retention-days: 7
+
+    world-latency:
+        name: World latency budgets
+        needs: latency-shards
+        if: always() && toJSON(fromJSON(inputs.selection).latency) != '[]'
+        runs-on: ubuntu-latest
+        steps:
+            - env:
+                  RESULT: ${{ needs.latency-shards.result }}
+              run: test "$RESULT" = success

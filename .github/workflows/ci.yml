@@ -117,6 +117,10 @@ jobs:
         runs-on: ubuntu-latest
         outputs:
             mode: ${{ steps.scope.outputs.mode || 'full' }}
+            selection: ${{ steps.scope.outputs.selection }}
+            world: ${{ steps.scope.outputs.world }}
+            verification: ${{ steps.scope.outputs.verification }}
+            packaging: ${{ steps.scope.outputs.packaging }}
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
               with:
@@ -133,7 +137,6 @@ jobs:
               if: github.event_name == 'pull_request'
               run: bun scripts/changelog-fragments.ts pr "$GITHUB_EVENT_PATH"
             - name: Determine validation scope
-              if: github.event_name == 'pull_request'
               id: scope
               env:
                   GITHUB_TOKEN: ${{ github.token }}
@@ -145,14 +148,15 @@ jobs:
                   REQUIRED_FULL_STEP: Run full repository check
               run: bun scripts/ci-reuse-full-check.ts
 
-    validation:
-        name: Repository validation
+    static:
+        name: Static checks
         needs: validation-scope
         if: needs.validation-scope.outputs.mode != 'reuse'
         runs-on: ubuntu-latest
         timeout-minutes: 30
         env:
             HERDR_WORLD_RATCHET_TARGET: ${{ github.event.pull_request.base.sha }}
+            HERDR_CI_SELECTION: ${{ needs.validation-scope.outputs.selection }}
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
               with:
@@ -166,34 +170,75 @@ jobs:
             - name: Run documentation checks
               if: needs.validation-scope.outputs.mode == 'docs'
               run: bun run check:docs
-            - name: Run tooling checks
-              if: needs.validation-scope.outputs.mode == 'tooling'
+            - name: Run static repository checks
+              if: needs.validation-scope.outputs.mode != 'docs'
+              run: bun run check:static
+
+    unit-tests:
+        name: Non-browser tests (${{ matrix.shard }}/2)
+        needs: [validation-scope, static]
+        if: needs.validation-scope.outputs.mode != 'reuse' && needs.validation-scope.outputs.mode != 'docs'
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        strategy:
+            fail-fast: false
+            matrix:
+                shard: [1, 2]
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  persist-credentials: false
+            - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+              with:
+                  bun-version: "1.4.3"
+                  no-cache: true
+            - run: bun install --frozen-lockfile
+            - name: Build process-test assets on this runner
+              run: bun run build
+            - name: Run affected non-browser tests
               env:
-                  PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-              run: bun run check:changed --scope-base="$PR_BASE_SHA"
-            - name: Run repository checks except World browser shards
-              if: needs.validation-scope.outputs.mode == 'full'
-              env:
+                  HERDR_CI_SELECTION: ${{ needs.validation-scope.outputs.selection }}
                   HERDR_TEST_PARALLEL: "1"
                   HERDR_TEST_MAX_CONCURRENCY: "2"
                   HERDR_TEST_EXCLUDE_WORLD_BROWSER: "1"
-              run: bun run check
+              run: bun scripts/ci-tests.ts unit ${{ matrix.shard }}/2
+
+    validation:
+        name: Repository validation
+        needs: [validation-scope, static, unit-tests]
+        if: always() && needs.validation-scope.outputs.mode != 'reuse'
+        runs-on: ubuntu-latest
+        steps:
+            - name: Require static checks and applicable unit shards
+              env:
+                  STATIC_RESULT: ${{ needs.static.result }}
+                  UNIT_RESULT: ${{ needs.unit-tests.result }}
+                  MODE: ${{ needs.validation-scope.outputs.mode }}
+              run: |
+                  test "$STATIC_RESULT" = success
+                  expected=success
+                  if [ "$MODE" = docs ]; then expected=skipped; fi
+                  test "$UNIT_RESULT" = "$expected"
 
     world-browser:
         name: World browser tests
         needs: validation-scope
-        if: needs.validation-scope.outputs.mode == 'full'
+        if: needs.validation-scope.outputs.world == 'true'
         uses: ./.github/workflows/world-browser.yml
+        with:
+            selection: ${{ needs.validation-scope.outputs.selection }}
 
     behavioral:
         name: Behavioral verification
         needs: validation-scope
-        if: needs.validation-scope.outputs.mode == 'full' || needs.validation-scope.outputs.mode == 'docs'
+        if: needs.validation-scope.outputs.verification == 'true'
         uses: ./.github/workflows/behavioral-verification.yml
 
     delivery:
         name: Delivery checks
         needs: [validation-scope, validation, world-browser, behavioral, plugin-windows, installer-upgrade, launchd]
+        env:
+            HERDR_CI_SELECTION: ${{ needs.validation-scope.outputs.selection }}
         if: always()
         runs-on: ubuntu-latest
         steps:
@@ -220,7 +265,7 @@ jobs:
                   INSTALLER_RESULT: ${{ needs.installer-upgrade.result }}
                   LAUNCHD_RESULT: ${{ needs.launchd.result }}
               run: bun scripts/ci-delivery-result.ts
-            - name: Verify documentation, tooling or reused results
+            - name: Verify applicable or reused results
               if: needs.validation-scope.outputs.mode != 'full'
               env:
                   VALIDATION_MODE: ${{ needs.validation-scope.outputs.mode }}
@@ -237,7 +282,7 @@ jobs:
     # Markdown that no package contains, and exact-head reuse already passed them.
     installer-upgrade:
         needs: validation-scope
-        if: needs.validation-scope.outputs.mode == 'full'
+        if: needs.validation-scope.outputs.packaging == 'true'
         uses: ./.github/workflows/installer-upgrade.yml
 
     launchd:
@@ -262,20 +307,20 @@ jobs:
                   bun-version: "1.4.3"
                   no-cache: true
             - run: bun install --frozen-lockfile
-              if: needs.validation-scope.outputs.mode == 'full'
+              if: needs.validation-scope.outputs.packaging == 'true'
             - name: Build the native World service
-              if: needs.validation-scope.outputs.mode == 'full'
+              if: needs.validation-scope.outputs.packaging == 'true'
               run: bun run build
             - name: Compile the standalone plugin launcher
-              if: needs.validation-scope.outputs.mode == 'full'
+              if: needs.validation-scope.outputs.packaging == 'true'
               run: bun scripts/world-plugin.ts compile-launcher
             - name: Verify Bun-free installation and prepare the native compatibility launcher
-              if: needs.validation-scope.outputs.mode == 'full'
+              if: needs.validation-scope.outputs.packaging == 'true'
               run: |
                   bun test scripts/install-plugin.test.ts scripts/plugin-native.test.ts server/src/config/plugin-command.test.ts
                   cp server/herdr-world server/herdr-world-plugin.exe
             - name: Exercise the real plugin-managed launchd lifecycle
-              if: needs.validation-scope.outputs.mode == 'full'
+              if: needs.validation-scope.outputs.packaging == 'true'
               shell: bash
               run: |
                   set -euo pipefail
@@ -312,7 +357,7 @@ jobs:
     plugin-windows:
         name: Windows Bun-free plugin installation
         needs: validation-scope
-        if: needs.validation-scope.outputs.mode == 'full'
+        if: needs.validation-scope.outputs.packaging == 'true'
         runs-on: windows-latest
         timeout-minutes: 20
         steps:

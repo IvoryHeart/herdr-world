@@ -1,6 +1,12 @@
 import { expect, test } from "bun:test";
-import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -221,5 +227,75 @@ test("tooling mode validates every event afresh without querying full-result reu
         true,
       ),
     ).toBe("tooling");
+  }
+});
+
+test("classified PRs use fresh scoped validation, while unknown changes retain full validation", async () => {
+  for (const action of [
+    "opened",
+    "synchronize",
+    "reopened",
+    "edited",
+    "labeled",
+  ]) {
+    expect(
+      await selectValidationMode(action, false, async () => false, false, true),
+    ).toBe("scoped");
+    expect(await selectValidationMode(action, false, async () => false)).toBe(
+      "full",
+    );
+  }
+  expect(
+    await selectValidationMode("edited", false, async () => true, false, true),
+  ).toBe("reuse");
+});
+
+test("every main push forces all suite classes even when a tracked doc is dirty", () => {
+  const root = mkdtempSync(join(tmpdir(), "main-scope-"));
+  const git = (...args: string[]) =>
+    execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
+  try {
+    git("init", "-q");
+    git("config", "user.name", "Example");
+    git("config", "user.email", "example@example.invalid");
+    writeFileSync(join(root, "README.md"), "base\n");
+    mkdirSync(join(root, "verification"));
+    writeFileSync(join(root, "verification/coverage.json"), '{"areas":[]}');
+    git("add", ".");
+    git("commit", "-qm", "base");
+    writeFileSync(join(root, "README.md"), "dirty docs\n");
+    const output = join(root, "outputs");
+    const result = spawnSync(
+      process.execPath,
+      [new URL("./ci-reuse-full-check.ts", import.meta.url).pathname],
+      {
+        cwd: root,
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          GITHUB_EVENT_NAME: "push",
+          GITHUB_OUTPUT: output,
+        },
+      },
+    );
+    expect(result.status).toBe(0);
+    const fields = Object.fromEntries(
+      readFileSync(output, "utf8")
+        .trim()
+        .split("\n")
+        .map((line) => [
+          line.slice(0, line.indexOf("=")),
+          line.slice(line.indexOf("=") + 1),
+        ]),
+    );
+    expect(fields).toMatchObject({
+      mode: "full",
+      world: "true",
+      verification: "true",
+      packaging: "true",
+    });
+    expect(JSON.parse(fields.selection!).full).toBe(true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });

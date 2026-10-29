@@ -18,6 +18,8 @@ concurrency:
 jobs:
   validate:
     name: Validate release
+    outputs:
+      selection: ${{ steps.scope.outputs.selection }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -29,6 +31,9 @@ jobs:
           bun-version: "1.4.3"
           no-cache: true
       - run: bun install --frozen-lockfile
+      - name: Select the complete release suite inventory
+        id: scope
+        run: bun scripts/ci-reuse-full-check.ts
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "24"
@@ -70,6 +75,8 @@ jobs:
     name: World browser tests
     needs: validate
     uses: ./.github/workflows/world-browser.yml
+    with:
+      selection: ${{ needs.validate.outputs.selection }}
 
   package:
     name: Package ${{ matrix.platform }}
