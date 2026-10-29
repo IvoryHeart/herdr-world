@@ -2393,10 +2393,18 @@ describe("held status", () => {
       posts: [],
       labels: ["pod:town", "on-hold"],
     });
-    status(crew, (line) => lines.push(line), NOW, SETTINGS, [held]);
+    status(
+      crew,
+      (line) => lines.push(line),
+      NOW,
+      SETTINGS,
+      [held],
+      2 * 1024 ** 2,
+    );
     expect(lines[0]).toBe("1 held pull request(s) (as last read)");
     expect(lines[1]).toContain(`#${held.number}`);
     expect(lines[1]).toContain(held.item?.title ?? "");
+    expect(lines).toContain("gate store: 2.0 MiB");
     crew.close();
   });
 
@@ -2497,7 +2505,7 @@ describe("held status", () => {
       expect(lines[0]).toBe(
         "held pull requests unknown: no crew pass or configuration yet",
       );
-      expect(lines[1]).toBe("0 open action(s)");
+      expect(lines[2]).toBe("0 open action(s)");
       crew.close();
     } finally {
       rmSync(dir, { recursive: true, force: true });

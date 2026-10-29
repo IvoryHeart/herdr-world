@@ -53,9 +53,20 @@ export function openStore(path: string) {
       head_sha TEXT,
       fetched_at INTEGER NOT NULL,
       body_hash TEXT NOT NULL,
+      body_json TEXT NOT NULL,
+      detail_read_at INTEGER,
+      detail_expires_at INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS observation_body (
+      body_hash TEXT PRIMARY KEY,
       body_json TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS gate_meta (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
     CREATE INDEX IF NOT EXISTS observation_pr ON observation(pr, pass_id);
+    CREATE INDEX IF NOT EXISTS observation_body_hash ON observation(body_hash);
     CREATE TABLE IF NOT EXISTS claim (
       pr INTEGER NOT NULL,
       source_id TEXT NOT NULL,
@@ -102,7 +113,90 @@ export function openStore(path: string) {
     );
     CREATE INDEX IF NOT EXISTS verdict_pr ON verdict(pr, id);
   `);
+  const observationColumns = db
+    .query("PRAGMA table_info(observation)")
+    .all() as { name: string }[];
+  if (!observationColumns.some((column) => column.name === "detail_read_at"))
+    db.exec("ALTER TABLE observation ADD COLUMN detail_read_at INTEGER");
+  if (!observationColumns.some((column) => column.name === "detail_expires_at"))
+    db.exec("ALTER TABLE observation ADD COLUMN detail_expires_at INTEGER");
+  migrateObservationBodies(db);
   return db;
+}
+
+/** Move legacy inline payloads into the content-addressed body table once. */
+function migrateObservationBodies(db: Database) {
+  const migrated = db
+    .query(
+      "SELECT value FROM gate_meta WHERE key = 'deduplicated_observations'",
+    )
+    .get() as { value: string } | null;
+  if (migrated) return;
+  db.transaction(() => {
+    let lastId = 0;
+    for (;;) {
+      const rows = db
+        .query(
+          "SELECT id, body_json FROM observation WHERE id > ? ORDER BY id LIMIT 500",
+        )
+        .all(lastId) as { id: number; body_json: string }[];
+      if (!rows.length) break;
+      for (const row of rows) {
+        const input = JSON.parse(row.body_json) as GateInput;
+        const normalized = normalizedBody(input);
+        const bodyJson = JSON.stringify(normalized.body);
+        const bodyHash = hash(normalized.body);
+        db.query(
+          "INSERT OR IGNORE INTO observation_body (body_hash, body_json) VALUES (?, ?)",
+        ).run(bodyHash, bodyJson);
+        db.query(
+          "UPDATE observation SET body_hash = ?, body_json = '{}', detail_read_at = ?, detail_expires_at = ? WHERE id = ?",
+        ).run(
+          bodyHash,
+          normalized.detailReadAt,
+          normalized.detailExpiresAt,
+          row.id,
+        );
+        lastId = row.id;
+      }
+    }
+    db.query(
+      "INSERT INTO gate_meta (key, value) VALUES ('deduplicated_observations', '1')",
+    ).run();
+  })();
+}
+
+function normalizedBody(input: GateInput) {
+  const body = structuredClone(input) as unknown as Record<string, unknown>;
+  delete body.readAt;
+  const item = body.item as
+    | { prObservation?: { readAt?: number | null; expiresAt?: number | null } }
+    | undefined;
+  const freshness = input.item?.prObservation;
+  if (item?.prObservation) {
+    delete item.prObservation.readAt;
+    delete item.prObservation.expiresAt;
+  }
+  return {
+    body,
+    detailReadAt: freshness?.readAt ?? null,
+    detailExpiresAt: freshness?.expiresAt ?? null,
+  };
+}
+
+export function restoreInput(
+  bodyJson: string,
+  fetchedAt: number,
+  detailReadAt: number | null,
+  detailExpiresAt: number | null,
+) {
+  const input = JSON.parse(bodyJson) as GateInput;
+  input.readAt = fetchedAt;
+  if (input.item?.prObservation) {
+    input.item.prObservation.readAt = detailReadAt;
+    input.item.prObservation.expiresAt = detailExpiresAt;
+  }
+  return input;
 }
 
 const hash = (value: unknown) =>
@@ -144,15 +238,22 @@ export function recordPass(
     const passId = row.id;
     for (const input of pass.inputs) {
       const head = input.item?.headSha ?? null;
+      const normalized = normalizedBody(input);
+      const bodyJson = JSON.stringify(normalized.body);
+      const bodyHash = hash(normalized.body);
       db.query(
-        "INSERT INTO observation (pass_id, pr, kind, head_sha, fetched_at, body_hash, body_json) VALUES (?, ?, 'input', ?, ?, ?, ?)",
+        "INSERT OR IGNORE INTO observation_body (body_hash, body_json) VALUES (?, ?)",
+      ).run(bodyHash, bodyJson);
+      db.query(
+        "INSERT INTO observation (pass_id, pr, kind, head_sha, fetched_at, body_hash, body_json, detail_read_at, detail_expires_at) VALUES (?, ?, 'input', ?, ?, ?, '{}', ?, ?)",
       ).run(
         passId,
         input.number,
         head,
         input.readAt,
-        hash(input),
-        JSON.stringify(input),
+        bodyHash,
+        normalized.detailReadAt,
+        normalized.detailExpiresAt,
       );
       for (const claim of input.item?.pr?.reviewers ?? [])
         db.query(
@@ -271,18 +372,44 @@ export function latestPass(db: Database) {
 export function latestInput(db: Database, pr: number): GateInput | null {
   const row = db
     .query(
-      "SELECT body_json FROM observation WHERE pr = ? ORDER BY id DESC LIMIT 1",
+      "SELECT b.body_json, o.fetched_at, o.detail_read_at, o.detail_expires_at FROM observation o JOIN observation_body b USING (body_hash) WHERE o.pr = ? ORDER BY o.id DESC LIMIT 1",
     )
-    .get(pr) as { body_json: string } | null;
-  return row ? JSON.parse(row.body_json) : null;
+    .get(pr) as {
+    body_json: string;
+    fetched_at: number;
+    detail_read_at: number | null;
+    detail_expires_at: number | null;
+  } | null;
+  return row
+    ? restoreInput(
+        row.body_json,
+        row.fetched_at,
+        row.detail_read_at,
+        row.detail_expires_at,
+      )
+    : null;
 }
 
 export function passInputs(db: Database, passId: number): GateInput[] {
   return (
     db
-      .query("SELECT body_json FROM observation WHERE pass_id = ? ORDER BY id")
-      .all(passId) as { body_json: string }[]
-  ).map((row) => JSON.parse(row.body_json));
+      .query(
+        "SELECT b.body_json, o.fetched_at, o.detail_read_at, o.detail_expires_at FROM observation o JOIN observation_body b USING (body_hash) WHERE o.pass_id = ? ORDER BY o.id",
+      )
+      .all(passId) as {
+      body_json: string;
+      fetched_at: number;
+      detail_read_at: number | null;
+      detail_expires_at: number | null;
+    }[]
+  ).map((row) =>
+    restoreInput(
+      row.body_json,
+      row.fetched_at,
+      row.detail_read_at,
+      row.detail_expires_at,
+    ),
+  );
 }
 
 /**
@@ -301,13 +428,26 @@ export function currentInputs(db: Database): GateInput[] | null {
   return (
     db
       .query(
-        `SELECT body_json FROM observation o
+        `SELECT b.body_json, o.fetched_at, o.detail_read_at, o.detail_expires_at FROM observation o
+         JOIN observation_body b USING (body_hash)
          WHERE o.pass_id >= ?1
            AND o.id = (SELECT MAX(id) FROM observation WHERE pr = o.pr AND pass_id >= ?1)
          ORDER BY o.pr`,
       )
-      .all(full?.id ?? 0) as { body_json: string }[]
-  ).map((row) => JSON.parse(row.body_json));
+      .all(full?.id ?? 0) as {
+      body_json: string;
+      fetched_at: number;
+      detail_read_at: number | null;
+      detail_expires_at: number | null;
+    }[]
+  ).map((row) =>
+    restoreInput(
+      row.body_json,
+      row.fetched_at,
+      row.detail_read_at,
+      row.detail_expires_at,
+    ),
+  );
 }
 
 /** The verdict each PR had as of `passId`. */

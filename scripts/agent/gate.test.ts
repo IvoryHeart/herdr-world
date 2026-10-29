@@ -15,8 +15,11 @@ import { CASES, config, confirm, input, NOW, SHA } from "./gate/cases";
 import type { Run } from "./gate/observe";
 import { evaluate } from "./gate/predicate";
 import {
+  addDecision,
   latestVerdict,
   openStore,
+  passConfig,
+  passInputs,
   recordPass,
   transitions,
 } from "./gate/store";
@@ -606,6 +609,273 @@ describe("store", () => {
         "READY",
       ]);
       expect(latestVerdict(db, 7)!.passId).toBe(4);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("deduplicates unchanged observations while preserving their read times", () => {
+    const first = { ...ready(), readAt: NOW };
+    const second = {
+      ...ready(),
+      readAt: NOW + 1_000,
+      item: {
+        ...ready().item!,
+        prObservation: {
+          ...ready().item!.prObservation!,
+          readAt: NOW + 1_000,
+          expiresAt: NOW + 1_000 + 60_000,
+        },
+      },
+    };
+    const firstWithFreshness = {
+      ...first,
+      item: {
+        ...first.item!,
+        prObservation: {
+          ...first.item!.prObservation!,
+          readAt: NOW,
+          expiresAt: NOW + 60_000,
+        },
+      },
+    };
+    const db = openStore(dbPath);
+    try {
+      for (const entry of [firstWithFreshness, second])
+        recordPass(db, {
+          trigger: "test",
+          config,
+          startedAt: entry.readAt,
+          finishedAt: entry.readAt,
+          inputs: [entry],
+          verdicts: [evaluate(entry, config, entry.readAt)],
+        });
+      expect(
+        db.query("SELECT COUNT(*) AS n FROM observation_body").get(),
+      ).toEqual({ n: 1 });
+      expect(passInputs(db, 1)[0].readAt).toBe(NOW);
+      expect(passInputs(db, 2)[0].readAt).toBe(NOW + 1_000);
+      expect(passInputs(db, 1)[0].item?.prObservation?.readAt).toBe(NOW);
+      expect(passInputs(db, 2)[0].item?.prObservation?.readAt).toBe(
+        NOW + 1_000,
+      );
+      expect(passInputs(db, 2)[0].item?.prObservation?.expiresAt).toBe(
+        NOW + 61_000,
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  test("migrates inline legacy observations and restores both freshness times", () => {
+    const entry = {
+      ...ready(),
+      readAt: NOW - 1_000,
+      item: {
+        ...ready().item!,
+        prObservation: {
+          ...ready().item!.prObservation!,
+          readAt: NOW - 2_000,
+          expiresAt: NOW + 58_000,
+        },
+      },
+    };
+    let db = openStore(dbPath);
+    db.query(
+      "INSERT INTO pass (id, started_at, finished_at, trigger, parser_version, config_hash, config_json) VALUES (1, ?, ?, 'open', 1, 'legacy', ?)",
+    ).run(NOW - 1_000, NOW - 1_000, JSON.stringify(config));
+    db.query(
+      "INSERT INTO observation (pass_id, pr, kind, head_sha, fetched_at, body_hash, body_json) VALUES (1, ?, 'input', ?, ?, 'legacy-hash', ?)",
+    ).run(
+      entry.number,
+      entry.item!.headSha ?? "",
+      entry.readAt,
+      JSON.stringify(entry),
+    );
+    db.query(
+      "DELETE FROM gate_meta WHERE key = 'deduplicated_observations'",
+    ).run();
+    db.close();
+
+    db = openStore(dbPath);
+    try {
+      expect(
+        db.query("SELECT COUNT(*) AS n FROM observation_body").get(),
+      ).toEqual({ n: 1 });
+      expect(passInputs(db, 1)[0].readAt).toBe(entry.readAt);
+      expect(passInputs(db, 1)[0].item?.prObservation).toEqual(
+        entry.item?.prObservation,
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  test("keeps verdict replay snapshots and check attempts indefinitely", () => {
+    const db = openStore(dbPath);
+    try {
+      const old = NOW - 16 * 24 * 60 * 60 * 1000;
+      const entry = { ...ready(), readAt: old };
+      const verdict = evaluate(entry, config, NOW);
+      for (const finishedAt of [old, NOW - 8 * 24 * 60 * 60 * 1000])
+        recordPass(db, {
+          trigger: "open",
+          config,
+          startedAt: finishedAt,
+          finishedAt,
+          inputs: [entry],
+          verdicts: [verdict],
+        });
+      db.query(
+        "INSERT INTO check_attempt (run_id, attempt, check_name, pr, head_sha, conclusion, completed_at) VALUES (1, 1, 'old', 7, ?, 'failure', ?)",
+      ).run(SHA.fixed, old);
+      recordPass(db, {
+        trigger: "open",
+        config,
+        startedAt: NOW,
+        finishedAt: NOW,
+        inputs: [entry],
+        verdicts: [verdict],
+      });
+      expect(passInputs(db, 1)).toHaveLength(1);
+      expect(passConfig(db, 1)).toEqual(config);
+      expect(passInputs(db, 2)).toHaveLength(1);
+      expect(passInputs(db, 3)).toHaveLength(1);
+      expect(db.query("SELECT COUNT(*) AS n FROM check_attempt").get()).toEqual(
+        { n: 1 },
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  test("keeps decision history and all snapshots indefinitely", () => {
+    const db = openStore(dbPath);
+    try {
+      const old = NOW - 16 * 24 * 60 * 60 * 1000;
+      const original = { ...ready(), readAt: old };
+      recordPass(db, {
+        trigger: "open",
+        config,
+        startedAt: old,
+        finishedAt: old,
+        inputs: [original],
+        verdicts: [],
+      });
+      addDecision(db, {
+        pr: original.number,
+        kind: "hold",
+        reason: "synthetic hold",
+        actor: "owner",
+        createdAt: old + 100,
+      });
+      const middleAt = NOW - 8 * 24 * 60 * 60 * 1000;
+      recordPass(db, {
+        trigger: "open",
+        config,
+        startedAt: middleAt,
+        finishedAt: middleAt,
+        inputs: [{ ...original, readAt: middleAt }],
+        verdicts: [],
+      });
+      recordPass(db, {
+        trigger: "open",
+        config,
+        startedAt: NOW,
+        finishedAt: NOW,
+        inputs: [{ ...original, readAt: NOW }],
+        verdicts: [],
+      });
+      expect(passInputs(db, 1)).toHaveLength(1);
+      expect(passInputs(db, 2)).toHaveLength(1);
+      expect(passInputs(db, 3)).toHaveLength(1);
+      expect(db.query("SELECT id FROM pass WHERE id = 1").get()).not.toBeNull();
+    } finally {
+      db.close();
+    }
+  });
+
+  test("retains closed and missing PR history beyond the former retention window", () => {
+    const db = openStore(dbPath);
+    try {
+      const observedAt = NOW - 20 * 24 * 60 * 60 * 1000;
+      const entry = { ...ready(), readAt: observedAt };
+      recordPass(db, {
+        trigger: "open",
+        config,
+        startedAt: observedAt,
+        finishedAt: observedAt,
+        inputs: [entry],
+        verdicts: [],
+      });
+      const absentAt = NOW - 19 * 24 * 60 * 60 * 1000;
+      recordPass(db, {
+        trigger: "open",
+        config,
+        startedAt: absentAt,
+        finishedAt: absentAt,
+        inputs: [],
+        verdicts: [],
+      });
+      db.query(
+        "INSERT INTO check_attempt (run_id, attempt, check_name, pr, head_sha, conclusion, completed_at) VALUES (2, 1, 'old', 7, ?, 'failure', ?)",
+      ).run(SHA.fixed, observedAt);
+      recordPass(db, {
+        trigger: "open",
+        config,
+        startedAt: NOW,
+        finishedAt: NOW,
+        inputs: [{ ...entry, number: 8, readAt: NOW }],
+        verdicts: [],
+      });
+      expect(passInputs(db, 1)).toHaveLength(1);
+      expect(db.query("SELECT id FROM pass WHERE id = 1").get()).not.toBeNull();
+      expect(db.query("SELECT COUNT(*) AS n FROM check_attempt").get()).toEqual(
+        { n: 1 },
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  test("retains every active PR pass after the former retention window", () => {
+    const db = openStore(dbPath);
+    try {
+      const old = NOW - 16 * 24 * 60 * 60 * 1000;
+      const entry = { ...ready(), readAt: old };
+      recordPass(db, {
+        trigger: "test",
+        config,
+        startedAt: old,
+        finishedAt: old,
+        inputs: [entry],
+        verdicts: [],
+      });
+      const middleAt = NOW - 8 * 24 * 60 * 60 * 1000;
+      const middle = { ...entry, readAt: middleAt };
+      recordPass(db, {
+        trigger: "test",
+        config,
+        startedAt: middleAt,
+        finishedAt: middleAt,
+        inputs: [middle],
+        verdicts: [],
+      });
+      const current = { ...entry, readAt: NOW };
+      recordPass(db, {
+        trigger: "test",
+        config,
+        startedAt: NOW,
+        finishedAt: NOW,
+        inputs: [current],
+        verdicts: [],
+      });
+      expect(db.query("SELECT COUNT(*) AS n FROM observation").get()).toEqual({
+        n: 3,
+      });
+      expect(passInputs(db, 1)[0].readAt).toBe(old);
+      expect(passInputs(db, 2)[0].readAt).toBe(middleAt);
+      expect(passInputs(db, 3)[0].readAt).toBe(NOW);
     } finally {
       db.close();
     }

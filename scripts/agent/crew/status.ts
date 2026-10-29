@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { shortSha } from "../../../shared/pullRequests";
 import type { GateInput } from "../gate/predicate";
@@ -30,6 +30,7 @@ export function status(
   now: number,
   settings: CrewSettings | null,
   held: GateInput[] = [],
+  gateStoreBytes = 0,
 ) {
   if (settings) {
     const heldPrs = held
@@ -42,6 +43,7 @@ export function status(
     for (const input of heldPrs)
       out(`  #${input.number}\t${input.item?.title ?? ""}`.trimEnd());
   } else out("held pull requests unknown: no crew pass or configuration yet");
+  out(`gate store: ${formatBytes(gateStoreBytes)}`);
   const open = actionsIn(crew, ["pending", "running"]);
   out(`${open.length} open action(s)`);
   for (const entry of open)
@@ -60,6 +62,22 @@ export function status(
     );
 }
 
+const formatBytes = (bytes: number) =>
+  bytes < 1024
+    ? `${bytes} B`
+    : bytes < 1024 ** 2
+      ? `${(bytes / 1024).toFixed(1)} KiB`
+      : bytes < 1024 ** 3
+        ? `${(bytes / 1024 ** 2).toFixed(1)} MiB`
+        : `${(bytes / 1024 ** 3).toFixed(1)} GiB`;
+
+function storeSize(path: string) {
+  return [path, `${path}-wal`, `${path}-shm`].reduce(
+    (total, file) => total + (existsSync(file) ? statSync(file).size : 0),
+    0,
+  );
+}
+
 /**
  * `status` for the gate directory `dir`. The ledger shows without a
  * configuration or a recorded pass; held PRs need both.
@@ -76,12 +94,13 @@ export function showStatus(
     startOf?: (pid: number) => string | null;
   } = {},
 ) {
-  const gate = openStore(join(dir, "gate.sqlite"));
+  const gatePath = join(dir, "gate.sqlite");
+  const gate = openStore(gatePath);
   try {
     const seen = currentInputs(gate);
     const configPath = join(dir, "config.json");
     const settings = existsSync(configPath) ? loadSettings(configPath) : null;
-    status(crew, out, now, seen && settings, seen ?? []);
+    status(crew, out, now, seen && settings, seen ?? [], storeSize(gatePath));
     const hours = extra.hours ?? 24;
     spend(
       runsSince(crew, now - hours * 3_600_000),
