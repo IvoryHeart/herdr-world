@@ -3497,6 +3497,12 @@ Chat's conversation-binding and receipt requirements SHALL remain applicable.
 - **THEN** History SHALL show the terminal's existing draft and SHALL send it at most once
 - **AND** retirement during input SHALL NOT move the draft or dispatch to another connection
 
+#### Scenario: Codex readiness is unknown
+
+- **WHEN** Codex has an unknown, absent or unrecognized status and the user presses Enter or Send in History
+- **THEN** History SHALL show the terminal-input warning without dispatching the draft
+- **AND** repeated Enter or Send SHALL NOT confirm; a separate **Send anyway** activation SHALL be required
+
 ### Requirement: Mobile shell agent commands require explicit selection
 
 Ordinary mobile shell panes SHALL offer editable agent launch commands beside

@@ -398,7 +398,9 @@ claim about arbitrary import graphs or live external runtimes.
 
 History Details Chat shares the terminal's in-memory runtime-qualified draft and
 submission lock. AgentHistoryComposer DOM regressions cover image-path recovery,
-IME, touch release, failure restoration and a separate busy-agent confirmation.
+IME, touch release, failure restoration and a separate busy/unknown-agent
+confirmation, including unknown Codex readiness. Pure status fixtures cover absent
+and unrecognized Codex statuses; repeated Enter cannot confirm terminal dispatch.
 The AgentHistoryDrawer browser consumer deliberately gives the transport epoch
 and admitted runtime different numbers: History must read the terminal draft,
 send once to its captured pane, and refuse/restore after client retirement.
@@ -452,3 +454,15 @@ or inline editor semantics. No new model or broader native-platform claim is mad
 Herdr still has no atomic conditional input, so a change after the last check
 remains outside the guarantee. A successful input write alone never proves the
 answer was accepted.
+
+### Repository PR/MR report retention (Q25)
+
+The actual WorkspaceInspectorLocation popover is kept open while its branch,
+workspace, checkout, cwd, connection, admitted runtime, worktree binding or agent
+checkout selection changes. ModalDialogs DOM consumers require the old request
+to disappear both during the new read and after that read fails. A negative
+control with the unkeyed production popover reproduces the retained old request.
+Existing same-association manual-refresh cases keep the current request while
+pending and mark the last success after transport or retryable provider failure.
+This direct cache/React identity boundary adds no provider or Git concurrency
+model; existing qualified request and runtime-lease consumers remain mandatory.

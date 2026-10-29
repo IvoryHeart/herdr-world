@@ -53,8 +53,8 @@ export function shouldShowAgentStatusLabel(status?: string): boolean {
 /**
  * Explains where a message typed into the agent's terminal will land when the
  * agent is not waiting at its prompt. Returns null for idle and done agents,
- * whose terminal input starts a new turn, and for Codex in the unknown state,
- * which is how Herdr reports it sitting interactive at its prompt.
+ * whose terminal input starts a new turn. Unknown readiness always needs
+ * confirmation, including Codex without a positive idle/done observation.
  */
 export function agentPromptWarning(
   agent: string | undefined,
@@ -62,7 +62,6 @@ export function agentPromptWarning(
 ): string | null {
   const name = agent?.trim() || "The agent";
   const kind = agentStateKind(status);
-  if (kind === "unknown" && name === "codex") return null;
   switch (kind) {
     case "idle":
     case "done":

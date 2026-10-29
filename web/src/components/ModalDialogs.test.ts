@@ -12,6 +12,7 @@ import type { ReactElement } from "react";
 import type { Root } from "react-dom/client";
 import type { ConnectionClient } from "../api";
 import type { Workspace, WorktreeList } from "../types";
+import type { AgentWorktreeView } from "../useAgentWorktree";
 import type {
   PullRequestStatus,
   PullRequestSummary,
@@ -50,6 +51,11 @@ async function registerDomTests() {
     "Event",
     "KeyboardEvent",
     "MouseEvent",
+    "PointerEvent",
+    "CustomEvent",
+    "NodeFilter",
+    "MutationObserver",
+    "ResizeObserver",
     "localStorage",
     "sessionStorage",
   ] as const) {
@@ -59,7 +65,12 @@ async function registerDomTests() {
       configurable: true,
     });
   }
-  Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+  Object.assign(globalThis, {
+    getComputedStyle: browser.getComputedStyle.bind(browser),
+    requestAnimationFrame: browser.requestAnimationFrame.bind(browser),
+    cancelAnimationFrame: browser.cancelAnimationFrame.bind(browser),
+    IS_REACT_ACT_ENVIRONMENT: true,
+  });
   const {
     act,
     createElement: h,
@@ -83,6 +94,9 @@ async function registerDomTests() {
   const { __storeTesting, store } = await import("../store");
   const { WorkspaceTree } = await import("./WorkspaceTree");
   const { PullRequestCard } = await import("./PullRequestCard");
+  const { WorkspaceInspectorLocation } = await import(
+    "./WorkspaceInspectorLocation"
+  );
   let listCalls = 0;
   const client: ConnectionClient = {
     connectionId: "dialog-test",
@@ -1091,6 +1105,159 @@ async function registerDomTests() {
     expect(title()).toBe("Status unavailable");
     expect(container.querySelector(".pull-request-card-link")).toBeNull();
   });
+
+  test.each([
+    "branch",
+    "workspace",
+    "checkout",
+    "cwd",
+    "connection",
+    "runtime",
+    "worktree",
+    "agent-checkout",
+    "agent-branch",
+    "agent-target",
+  ])(
+    "repository popover discards another target's last-known request after %s changes",
+    async (changed) => {
+      const replies: Array<(value: PullRequestStatus | Error) => void> = [];
+      let cardClient: ConnectionClient = {
+        ...client,
+        agentWorktree: {
+          subject: {
+            connectionId: client.connectionId,
+            generation: 1,
+            paneId: "pane-a",
+            terminalId: "terminal-a",
+            sessionFingerprint: "session-a",
+          },
+          revision: "revision-a",
+          candidateId: "checkout-a",
+        },
+        call: async () =>
+          new Promise((resolve, reject) =>
+            replies.push((value) =>
+              value instanceof Error ? reject(value) : resolve(value),
+            ),
+          ),
+      };
+      const workspace = structuredClone(sidebarWorkspace);
+      workspace.cwd = "/repo/topic-0";
+      const worktree: AgentWorktreeView | undefined = changed.startsWith(
+        "agent-",
+      )
+        ? {
+            selected: {
+              candidateId: "checkout-a",
+              canonicalRoot: "/repo/agent-a",
+              gitCommonDir: "/repo/.git",
+              branch: "agent-a",
+              source: "foreground_cwd",
+              evidence: {
+                sourceRef: "pane-a",
+                observedAt: "2026-10-01T00:00:00Z",
+                basis: "reported",
+              },
+            },
+            target: cardClient.agentWorktree ?? null,
+            observation: null,
+            loading: false,
+            refresh() {},
+            select() {},
+          }
+        : undefined;
+      const container = document.createElement("div");
+      document.body.append(container);
+      root = createRoot(container);
+      const render = () =>
+        act(async () =>
+          root!.render(
+            h(WorkspaceInspectorLocation, {
+              enabled: true,
+              workspace,
+              client: cardClient,
+              worktree,
+              content: "Repo",
+              description: "Repository",
+              open: true,
+              onOpenChange() {},
+            }),
+          ),
+        );
+      await render();
+      const initialBranch =
+        worktree?.selected?.branch ?? workspace.worktree!.git_status!.branch!;
+      await act(async () =>
+        replies.shift()!({
+          ...mergedStatus,
+          root:
+            worktree?.selected?.canonicalRoot ??
+            workspace.worktree!.checkout_path,
+          branch: initialBranch,
+          request: { ...mergedStatus.request!, source: initialBranch },
+        }),
+      );
+      expect(document.body.textContent).toContain("Merged feature");
+      workspace.label = "Same checkout, new display label";
+      await render();
+      expect(replies).toHaveLength(0);
+      expect(document.body.textContent).toContain("Merged feature");
+      switch (changed) {
+        case "branch":
+          workspace.worktree!.git_status!.branch = "topic-b";
+          break;
+        case "workspace":
+          workspace.workspace_id = "workspace-b";
+          break;
+        case "checkout":
+          workspace.worktree!.checkout_path = "/repo/checkout-b";
+          break;
+        case "cwd":
+          workspace.cwd = "/repo/topic-0/subdirectory";
+          break;
+        case "connection":
+          cardClient = { ...cardClient, connectionId: "host-b" };
+          break;
+        case "runtime":
+          cardClient = { ...cardClient, serverRuntimeGeneration: 2 };
+          break;
+        case "worktree":
+          cardClient = {
+            ...cardClient,
+            agentWorktree: {
+              ...cardClient.agentWorktree!,
+              candidateId: "checkout-b",
+              revision: "revision-b",
+            },
+          };
+          break;
+        case "agent-checkout":
+          worktree!.selected!.canonicalRoot = "/repo/agent-b";
+          break;
+        case "agent-branch":
+          worktree!.selected!.branch = "agent-b";
+          break;
+        case "agent-target":
+          worktree!.target = {
+            ...worktree!.target!,
+            candidateId: "checkout-b",
+            revision: "revision-b",
+          };
+          break;
+      }
+      await render();
+      const carriedWhileLoading =
+        document.body.textContent?.includes("Merged feature");
+      await act(async () =>
+        replies.shift()!(new Error("Target B refresh failed")),
+      );
+      expect(carriedWhileLoading).toBe(false);
+      expect(document.body.textContent).not.toContain("Merged feature");
+      expect(document.body.textContent).toContain("Status unavailable");
+      expect(document.querySelector(".pull-request-card-stale")).toBeNull();
+      expect(document.querySelector(".pull-request-card-link")).toBeNull();
+    },
+  );
 
   test("worktree reviews bound concurrency, keep ordinary list polling local, and discard obsolete replies", async () => {
     const pending: Array<(value: PullRequestStatus) => void> = [];

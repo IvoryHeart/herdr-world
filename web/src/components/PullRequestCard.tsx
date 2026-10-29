@@ -30,8 +30,8 @@ export function PullRequestCard({
   const [finishedAt, setFinishedAt] = useState("");
   const [loading, setLoading] = useState(true);
   const sequence = useRef(0);
-  // The host remounts this card when its workspace, branch or connection
-  // changes; remote/match selections reset this explicitly.
+  // The repository location keys this card by its complete qualified target.
+  // Only same-target refreshes retain status; remote/match changes reset it.
   const lastGood = useRef<PullRequestStatus | null>(null);
   useEffect(() => {
     const request = ++sequence.current;

@@ -131,11 +131,14 @@ if (process.env.ROAMGATE_HISTORY_COMPOSER_DOM_TEST !== "1") {
       expect(readTerminalComposerDraft(draftKey)).toBe("");
       expect(input().value).toBe("");
 
-      // Codex reports "unknown" while it sits at its prompt.
+      // Unknown Codex readiness needs its own explicit confirmation too.
       await render("unknown");
       await fill("status?");
       await key("Enter");
-      expect(warning()).toBeNull();
+      await key("Enter");
+      expect(send).toHaveBeenCalledTimes(1);
+      expect(warning()?.textContent).toContain("codex's status is unknown.");
+      await sendAnyway();
       expect(send).toHaveBeenCalledTimes(2);
 
       // A working agent needs Send anyway: Enter again only keeps the warning.

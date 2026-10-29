@@ -755,7 +755,8 @@ sidebar's visibility unchanged. Workspace rows show the latest PR/MR status whil
 keeping workspace names visible; Inspector commit navigation preserves focus and
 refreshes Files after changes. PR/MR refreshes keep the current badge visible.
 A failed refresh leaves the last known result dimmed with its successful check
-time; the status card marks it **Last known**. A paused branch rebase can retain
+time; the status card marks it **Last known**. This fallback belongs to the same
+host, runtime, workspace, checkout and branch; changing targets clears it. A paused branch rebase can retain
 its request on detached HEAD; unrelated detached checkouts stay unresolved.
 
 - Activating a desktop terminal preserves a docked Inspector. After prefilling

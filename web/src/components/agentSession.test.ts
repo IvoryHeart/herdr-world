@@ -282,7 +282,11 @@ describe("agent session presentation", () => {
     expect(agentPromptWarning(undefined, "")).toStartWith(
       "The agent's status is unknown.",
     );
-    expect(agentPromptWarning("codex", "unknown")).toBeNull();
+    for (const status of ["unknown", undefined, "", "unrecognized"]) {
+      expect(agentPromptWarning("codex", status)).toStartWith(
+        "codex's status is unknown.",
+      );
+    }
     expect(agentPromptWarning("claude", "unknown")).toStartWith(
       "claude's status is unknown.",
     );

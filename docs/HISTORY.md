@@ -33,7 +33,8 @@ It types into the captured pane through the connection client; a retired client
 refuses sending and restores the draft. Image uploads use the same-origin,
 connection/generation-qualified route. Late successful paths remain in the
 original draft. Working, blocked or unknown agent states require a separate
-**Send anyway** activation; repeated Enter cannot confirm. The primary AgentChat
+**Send anyway** activation; repeated Enter cannot confirm. Codex also requires
+confirmation when its status is unknown, absent or unrecognized. The primary AgentChat
 continues to require session-fingerprint authority and supplies its own receipts.
 
 ## Cache and consistency
