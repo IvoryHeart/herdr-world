@@ -396,11 +396,12 @@ claim about arbitrary import graphs or live external runtimes.
 
 ### Board attention, appearance and pane moves
 
-Board's Next selector consumes the existing qualified aggregate and verified
-shared questions. Direct fixtures cover native order, wrapping, shells and stale
-hosts. Appearance fixtures validate the surface and five independent status
-colours; the real Board browser checks palette changes, reset and persistence
-without modifying shared card colours, plus the Help entry point.
+Board's Next selector consumes the existing qualified aggregate and shared
+questions placed on their pane, including shell questions. Direct fixtures cover
+native order, wrapping, shells and stale hosts. Appearance fixtures validate the
+surface and five independent status colours; the real Board browser checks
+palette changes, reset and persistence without modifying shared card colours,
+plus the Help entry point.
 
 The pane-drag consumer uses the existing shared gesture machine and qualified
 `town.move_pane` service. Its direct request tests reject foreign, stale and
