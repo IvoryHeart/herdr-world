@@ -159,8 +159,11 @@ that root; stat metadata cannot redirect the read to a different transcript.
   key may have reached it), Herdr reports a status such as `unknown`
   (`unknown_status`), Herdr no longer reports the agent (`agent_missing`), or
   the screen could not be read (`unreadable`). A discussion reply additionally
-  requires a new `working` state sequence after its final destination check;
-  an unchanged or idle state gives `no_progress`, because closing the menu
+  waits up to three seconds for Herdr to report `working` after queuing the
+  reply, then checks the same agent and session. It requires a newer sequence
+  in `working`, or an `idle`/`done` sequence at least two changes newer than
+  its final destination check, covering a turn that already finished. Without
+  that evidence it gives `no_progress`; closing the menu or queuing the text
   alone does not prove the reply was accepted. Chat answers only when you
   pick an option.
 - Keeps the last good conversation when a read fails, for example while the

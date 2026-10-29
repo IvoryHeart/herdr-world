@@ -261,6 +261,18 @@ export function createPromptAnswerer(args: {
           throw new Error(
             "Herdr did not confirm the text submission. Check the Terminal before trying again.",
           );
+        // agent.prompt confirms queuing, before hooks or screen detection can
+        // report the new turn. Wait once for that evidence, without resending.
+        try {
+          await args.herdrCall("agent.wait", {
+            target: pane_id,
+            until: ["working"],
+            timeout_ms: 3000,
+          });
+        } catch {
+          // A quick turn may already be idle/done. Inspect its sequence below
+          // even if the wait times out or cannot observe the working state.
+        }
       }
     }
     // An answer is acknowledged only on evidence that this agent moved on
@@ -290,12 +302,16 @@ export function createPromptAnswerer(args: {
             return "session_changed";
           const beforeSeq = discussionState.state_change_seq;
           const afterSeq = info.state_change_seq;
-          return status === "working" &&
-            typeof beforeSeq === "number" &&
-            Number.isSafeInteger(beforeSeq) &&
-            typeof afterSeq === "number" &&
-            Number.isSafeInteger(afterSeq) &&
-            afterSeq > beforeSeq
+          if (
+            typeof beforeSeq !== "number" ||
+            !Number.isSafeInteger(beforeSeq) ||
+            typeof afterSeq !== "number" ||
+            !Number.isSafeInteger(afterSeq)
+          )
+            return "no_progress";
+          const progress = afterSeq - beforeSeq;
+          return (status === "working" && progress > 0) ||
+            ((status === "idle" || status === "done") && progress >= 2)
             ? null
             : "no_progress";
         }

@@ -401,7 +401,11 @@ empty and multiline composers check the complete frame, not only its first row.
 inline answer, plan feedback and discussion transitions, including invalid RPC
 text, replacement races, duplicate in-flight submissions and unchanged-screen
 receipts, screen-read state/title/status races, placeholder-prefix drafts and
-post-write discussion progress. Existing `conversation-answer.test.ts` retains its complete original
+post-write discussion progress. The prompt operation leaves status and sequence
+unchanged in the harness; a subsequent bounded wait supplies asynchronous
+working evidence or a completed idle/done turn with two sequence advances.
+Timeouts without evidence, a single idle/done sequence advance and replacement
+owners remain unconfirmed without resending. Existing `conversation-answer.test.ts` retains its complete original
 prompt/session/state admission and acknowledgement matrix after extraction of
 that implementation into `prompt-answer.ts`.
 

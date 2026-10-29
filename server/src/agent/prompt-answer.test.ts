@@ -24,8 +24,10 @@ function harness(name = "claude-question") {
     onRead: () => {},
     onComposerRead: () => {},
     afterText: () => {},
+    onProgressWait: () => {},
   };
   const writes: { method: string; params: Record<string, unknown> }[] = [];
+  const waits: Record<string, unknown>[] = [];
   const info = () => ({
     agent: state.agent,
     terminal_id: state.terminal,
@@ -57,7 +59,14 @@ function harness(name = "claude-question") {
         return {};
       }
       if (method === "agent.wait") {
-        if (state.status === "blocked") throw new Error("timeout");
+        waits.push(params);
+        const progress = JSON.stringify(params.until) === '["working"]';
+        if (progress) state.onProgressWait();
+        if (
+          state.status === "blocked" ||
+          (progress && state.status !== "working")
+        )
+          throw new Error("timeout");
         return {};
       }
       writes.push({ method, params });
@@ -74,6 +83,9 @@ function harness(name = "claude-question") {
       ) {
         state.screen = fixture("claude-composer-empty");
         state.status = "working";
+      } else if (method === "agent.prompt") {
+        // Queuing a prompt does not wait for the native agent to react.
+        state.afterText();
       } else {
         state.status = "working";
         state.afterText();
@@ -90,7 +102,7 @@ function harness(name = "claude-question") {
       text,
       prompt_fingerprint: read()!.fingerprint,
     });
-  return { state, writes, answer, read, submit };
+  return { state, writes, waits, answer, read, submit };
 }
 
 test("Codex digit choices are logical keys rather than pasted notes", async () => {
@@ -154,7 +166,11 @@ test("a plan's feedback uses its verified inline editor", async () => {
 });
 test("Chat about this submits through the normal prompt operation after the menu closes", async () => {
   const h = harness();
-  h.state.afterText = () => {
+  h.state.onWait = () => {
+    h.state.status = "idle";
+  };
+  h.state.onProgressWait = () => {
+    h.state.status = "working";
     h.state.seq += 1;
   };
   expect(await h.submit("4", "Discuss a violet badge.")).toMatchObject({
@@ -407,18 +423,94 @@ test("a successful discussion write without subsequent progress is unconfirmed",
   }
 });
 
-test("discussion acknowledgement needs a new working sequence after the reply", async () => {
+test("discussion waits for asynchronous working evidence after queuing the reply", async () => {
   const h = harness();
   h.state.onWait = () => {
     h.state.status = "idle";
   };
-  h.state.afterText = () => {
+  h.state.onProgressWait = () => {
+    expect(h.writes.at(-1)?.method).toBe("agent.prompt");
+    expect(h.state.status).toBe("idle");
+    expect(h.state.seq).toBe(7);
+    h.state.status = "working";
     h.state.seq += 1;
   };
   expect(await h.submit("4", "A Chat reply")).toMatchObject({
     status: "sent",
     acknowledged: true,
   });
+  expect(h.waits.at(-1)).toEqual({
+    target: "w1:p1",
+    until: ["working"],
+    timeout_ms: 3000,
+  });
+});
+
+test("discussion recognizes a turn completed before the progress wait finishes", async () => {
+  for (const status of ["idle", "done"]) {
+    for (const advance of [1, 2, 3]) {
+      const h = harness();
+      h.state.onWait = () => {
+        h.state.status = "idle";
+      };
+      h.state.onProgressWait = () => {
+        h.state.status = status;
+        h.state.seq += advance;
+      };
+      expect(await h.submit("4", "A Chat reply")).toMatchObject({
+        status: "sent",
+        acknowledged: advance >= 2,
+        unconfirmed_reason: advance >= 2 ? null : "no_progress",
+      });
+      expect(h.writes).toHaveLength(2);
+    }
+  }
+});
+
+test("a failed progress wait leaves an unchanged discussion reply unconfirmed", async () => {
+  const h = harness();
+  h.state.onWait = () => {
+    h.state.status = "idle";
+  };
+  h.state.onProgressWait = () => {
+    throw new Error("timeout");
+  };
+  expect(await h.submit("4", "A Chat reply")).toMatchObject({
+    status: "sent",
+    acknowledged: false,
+    unconfirmed_reason: "no_progress",
+  });
+  expect(h.writes).toHaveLength(2);
+  expect(h.waits).toHaveLength(2);
+});
+
+test("progress from a replacement owner cannot acknowledge a discussion reply", async () => {
+  for (const replace of [
+    (h: ReturnType<typeof harness>) => {
+      h.state.session = "replacement";
+    },
+    (h: ReturnType<typeof harness>) => {
+      h.state.terminal = "replacement";
+    },
+    (h: ReturnType<typeof harness>) => {
+      h.state.agent = "replacement";
+    },
+  ]) {
+    const h = harness();
+    h.state.onWait = () => {
+      h.state.status = "idle";
+    };
+    h.state.onProgressWait = () => {
+      replace(h);
+      h.state.status = "working";
+      h.state.seq += 1;
+    };
+    expect(await h.submit("4", "A Chat reply")).toMatchObject({
+      status: "sent",
+      acknowledged: false,
+      unconfirmed_reason: "session_changed",
+    });
+  }
 });
 
 test("prefix-shaped native drafts receive no menu digit or appended Chat text", async () => {

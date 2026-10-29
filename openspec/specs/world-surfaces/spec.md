@@ -1778,8 +1778,13 @@ interleave inside a conversation source.
 
 Digits within the reply input SHALL remain text. A replacement prompt or admitted
 connection, runtime, pane or session SHALL reset its option and draft. An answer receipt SHALL claim acknowledgement only from the
-same session moving on, not merely from successfully writing input. Discussion acknowledgement SHALL require a new working state sequence after
-the final destination check. A post-selection refusal SHALL remain visible across
+same session moving on, not merely from successfully writing input. After queuing
+a discussion reply, Chat SHALL wait at most three seconds for working evidence,
+then recheck the same owner. Discussion acknowledgement SHALL require a newer
+working sequence, or an idle/done sequence at least two changes newer than the
+final destination check, covering a completed turn. An unchanged sequence or an
+idle/done sequence only one change newer SHALL remain unconfirmed.
+A post-selection refusal SHALL remain visible across
 question reloads in the same owner scope until the next answer attempt, even
 when the question disappears. Herdr's lack
 of conditional input remains a documented gap between the last check and dispatch.
@@ -1802,6 +1807,13 @@ of conditional input remains a documented gap between the last check and dispatc
 - **WHEN** the native editor cannot be verified or its pane, session or question changes
 - **THEN** Chat sends no text, explains that the option may already be selected,
   and directs the user to the Terminal
+
+#### Scenario: Discussion progress follows prompt queuing asynchronously
+
+- **WHEN** the prompt operation queues a discussion reply before Herdr reports
+  its new turn, and progress arrives during the bounded wait
+- **THEN** Chat acknowledges only same-owner working progress or a completed
+  turn with at least two sequence advances, and otherwise leaves it unconfirmed
 
 ### Requirement: Town peeks show recent chatter and take replies
 
