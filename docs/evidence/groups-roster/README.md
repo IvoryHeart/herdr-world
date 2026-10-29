@@ -8,10 +8,10 @@ Pod detail after the fixture refuses a stale role confirmation.
 | Viewport | Roster | Detail |
 | --- | --- | --- |
 | Phone, 390 × 844 | [Roster](groups-roster-390x844.png) | [Detail](groups-detail-390x844.png) |
-| Laptop, 1440 × 900 | [Roster](groups-roster-1440x900.png) | [Detail](groups-detail-1440x900.png) |
+| Laptop, 1512 × 982 | [Roster](groups-roster-1512x982.png) | [Detail](groups-detail-1512x982.png) |
 | Wide, 2560 × 1440 | [Roster](groups-roster-2560x1440.png) | [Detail](groups-detail-2560x1440.png) |
 | Half width, 1280 × 1440 | [Roster](groups-roster-1280x1440.png) | [Detail](groups-detail-1280x1440.png) |
-| Portrait, 1080 × 1920 | [Roster](groups-roster-1080x1920.png) | [Detail](groups-detail-1080x1920.png) |
+| Portrait, 1440 × 2560 | [Roster](groups-roster-1440x2560.png) | [Detail](groups-detail-1440x2560.png) |
 
 The fixture asserts actual CSS width and height, roster/detail fit, kind filters,
 qualified ambiguous-member inspection, linked PR warnings, unchanged needs-you

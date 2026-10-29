@@ -15,14 +15,14 @@ import { groupsBrowserServer } from "./testing/groupsBrowserServer";
 const chrome =
   Bun.env.CHROME_BIN || Bun.which("google-chrome") || Bun.which("chromium");
 test.skipIf(!chrome).each([
-  [1440, 900],
+  [1512, 982],
   [390, 844],
   [320, 900],
   [360, 900],
   [430, 900],
   [2560, 1440],
   [1280, 1440],
-  [1080, 1920],
+  [1440, 2560],
 ])(
   "Groups panel uses current membership and refuses stale role confirmation at %ix%ipx",
   async (width: number, height: number) => {

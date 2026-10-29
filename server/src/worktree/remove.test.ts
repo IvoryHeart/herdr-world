@@ -508,9 +508,10 @@ describe("worktree removal checkout inspection", () => {
     }
   });
 
+  // Three scans and a signal each allow 10 seconds under concurrent load.
   test("stops a stable process whose cwd is inside the checkout", async () => {
     const root = await mkdtemp(join(tmpdir(), "herdr-gui-process-"));
-    const sleeper = Bun.spawn(["sleep", "30"], {
+    const sleeper = Bun.spawn(["sleep", "120"], {
       cwd: root,
       stdout: "ignore",
       stderr: "ignore",
@@ -527,5 +528,5 @@ describe("worktree removal checkout inspection", () => {
       if (sleeper.exitCode === null) sleeper.kill();
       await rm(root, { recursive: true, force: true });
     }
-  }, 10_000);
+  }, 45_000);
 });

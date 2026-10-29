@@ -153,7 +153,7 @@ proves stale reviewed revisions cannot delete or change a newer Group and return
 the current document. The panel's registered browser suite uses real panel/window
 components and the actual service Group store/handler: kind filters, away and
 ambiguous states, linked PR warnings and a competing edit during confirmation at
-actual 320/360/390/430/1080/1280/1440/2560 CSS-pixel widths and explicit heights. The fixture includes the required
+actual 320/360/390/430/1280/1440/1512/2560 CSS-pixel widths and explicit heights. The fixture includes the required
 snapshot coverage and asserts admission of its current connection before UI
 checks. It waits for rendered edit controls, inspects a qualified ambiguous match
 without resolving membership, and checks every member after a refused transfer.
