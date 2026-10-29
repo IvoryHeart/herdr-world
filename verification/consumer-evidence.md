@@ -393,3 +393,18 @@ existing shared model retains quiet backlog loading and one announcement per new
 ask; the existing notification-policy consumers retain runtime/session authority.
 These are direct JavaScript/module and browser consumers, with no abstract-model
 claim about arbitrary import graphs or live external runtimes.
+
+### History input and mobile shell launches (Q09)
+
+History Details Chat shares the terminal's in-memory runtime-qualified draft and
+submission lock. AgentHistoryComposer DOM regressions cover image-path recovery,
+IME, touch release, failure restoration and a separate busy-agent confirmation.
+The AgentHistoryDrawer browser consumer deliberately gives the transport epoch
+and admitted runtime different numbers: History must read the terminal draft,
+send once to its captured pane, and refuse/restore after client retirement.
+AgentLauncher DOM and TerminalView input-mode consumers cover target replacement,
+per-connection saved commands, single-line validation, empty-draft admission,
+exactly one command with Enter and recovery after failed sends in both input modes.
+These direct native-input consumers extend Q09's accepted alternative; no abstract
+shell-execution guarantee is added. Q25's conversation fingerprint, read-only Codex
+inference and receipt boundaries remain mandatory for primary Chat.

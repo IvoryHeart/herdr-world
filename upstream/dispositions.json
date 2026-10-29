@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "source": "1a81c5daa49fe49e55a5eafbe88e5d8ce94a4376",
+  "source": "b84ccd53db19701308a8bfb4a7002db1e4559490",
   "changes": [
     {
       "commit": "447f7196b9a23979b026d6b79619836d3337cc06",
@@ -28,7 +28,7 @@
       ],
       "followUp": "docs/upstream-follow-ups.md#world-workflow-controls",
       "revisitWhen": "Every source sync; manually assess upstream action security fixes and required platform changes.",
-      "reviewedFor": "1a81c5daa49fe49e55a5eafbe88e5d8ce94a4376"
+      "reviewedFor": "b84ccd53db19701308a8bfb4a7002db1e4559490"
     },
     {
       "commit": "20cb447a808a1e09359cef4f4fb632a385d4485e",
@@ -567,7 +567,7 @@
       ],
       "followUp": "docs/upstream-follow-ups.md#world-workflow-controls",
       "revisitWhen": "Every source sync and relevant action security or platform change.",
-      "reviewedFor": "1a81c5daa49fe49e55a5eafbe88e5d8ce94a4376"
+      "reviewedFor": "b84ccd53db19701308a8bfb4a7002db1e4559490"
     },
     {
       "commit": "3d95be35d72b7498c2e66fbf2b68b3c2b8c395da",
@@ -591,7 +591,7 @@
       ],
       "followUp": "docs/upstream-follow-ups.md#react-18-compatibility",
       "revisitWhen": "Every source sync, React security advisory, or owner-approved major migration.",
-      "reviewedFor": "1a81c5daa49fe49e55a5eafbe88e5d8ce94a4376"
+      "reviewedFor": "b84ccd53db19701308a8bfb4a7002db1e4559490"
     },
     {
       "commit": "25e85076e122dcbf83d5f475ee67c65749750c45",
@@ -782,6 +782,124 @@
       "followUp": null,
       "revisitWhen": null,
       "reviewedFor": "1a81c5daa49fe49e55a5eafbe88e5d8ce94a4376"
+    },
+    {
+      "commit": "6bf13cd6116f0f08f93168946da85562268631b2",
+      "title": "Unify list panels with the slash command picker style (#471)",
+      "status": "adapted",
+      "reason": "Apply command-picker panel and row chrome to World menus, including the existing top-right More and managed-window Tabs sheet; retain World navigation and portal semantics.",
+      "evidence": [
+        "web/src/components/MobileControls.css",
+        "web/src/components/MobileTabSheet.css",
+        "web/src/components/MobileTabSheet.test.ts",
+        "web/src/components/ui/command.css"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "b84ccd53db19701308a8bfb4a7002db1e4559490"
+    },
+    {
+      "commit": "9e88a4ce5d303d84167ff093c856eba3f68c6483",
+      "title": "Add configurable agent commands beside mobile Message (#470)",
+      "status": "adapted",
+      "reason": "Add editable per-connection agent commands to mobile shell terminals using captured World clients and the isolated World browser-storage namespace.",
+      "evidence": [
+        "web/src/components/AgentLauncher.tsx",
+        "web/src/components/AgentLauncher.dom.test.ts",
+        "web/src/agentLauncher.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "b84ccd53db19701308a8bfb4a7002db1e4559490"
+    },
+    {
+      "commit": "d17f393480d735ddd05979c94d493da34505b605",
+      "title": "Add a message box to the Agent History chat view (#472)",
+      "status": "adapted",
+      "reason": "Add History Chat terminal input using World runtime-qualified drafts and bounded history windows; preserve primary Chat fingerprint authority.",
+      "evidence": [
+        "web/src/components/AgentHistoryDrawer.tsx",
+        "web/src/components/AgentHistoryDrawer.browser.tsx",
+        "web/src/components/AgentHistoryComposer.test.tsx"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "b84ccd53db19701308a8bfb4a7002db1e4559490"
+    },
+    {
+      "commit": "2ab96ab4833151b499d77b1e46f6bb1a0b81f1f9",
+      "title": "Support image uploads in History chat and simplify minimap (#473)",
+      "status": "adapted",
+      "reason": "Share image upload and touch-submission behavior between History and terminal input while retaining same-origin generation-qualified uploads and original-draft recovery; adopt simplified minimap.",
+      "evidence": [
+        "web/src/components/AgentHistoryComposer.test.tsx",
+        "web/src/components/TerminalComposer.dom.test.ts",
+        "web/src/components/TerminalComposer.uploads.test.ts",
+        "web/src/components/ConversationMinimap.tsx"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "b84ccd53db19701308a8bfb4a7002db1e4559490"
+    },
+    {
+      "commit": "9e560fc64eee998b59d5ac8350c04b9aa366b007",
+      "title": "Keep PR/MR status through rebases and refresh failures (#474)",
+      "status": "adapted",
+      "reason": "Retain last-known PR/MR status during refresh failures and paused rebases; preserve World client qualification, association validation and React 18 callback freshness.",
+      "evidence": [
+        "server/src/workspace/pull-request.test.ts",
+        "web/src/components/ModalDialogs.test.ts",
+        "web/src/components/PullRequestCard.test.ts",
+        "web/src/components/WorktreePullRequestBadge.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "b84ccd53db19701308a8bfb4a7002db1e4559490"
+    },
+    {
+      "commit": "777cb5507664a683302998b8c6be84dddd2f6141",
+      "title": "Fix Codex History by launching a backend for each pane (#476)",
+      "status": "adapted",
+      "reason": "Default Codex launches to --no-daemon, include the attributed optional shell helper and update missing-session guidance. Retain World-owned explicit links, title precedence and read-only inference for existing sessions.",
+      "evidence": [
+        "scripts/codex-herdr.test.ts",
+        "server/src/agent/codex-session.test.ts",
+        "server/src/agent/codex-session-link.test.ts",
+        "docs/HISTORY.md#pane-scoped-codex-launches"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "b84ccd53db19701308a8bfb4a7002db1e4559490"
+    },
+    {
+      "commit": "be1ab35877ec58721745c623944c27b3f2e5f835",
+      "title": "Launch agents immediately from terminal picker (#477)",
+      "status": "adapted",
+      "reason": "Send the selected launch command once with Enter from the captured mobile shell pane, retaining failed commands and existing drafts; place the picker in the World toolbar so both input modes remain usable.",
+      "evidence": [
+        "web/src/components/TerminalView.inputMode.test.ts",
+        "web/src/components/AgentLauncher.dom.test.ts",
+        "web/src/terminalComposer.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "b84ccd53db19701308a8bfb4a7002db1e4559490"
+    },
+    {
+      "commit": "b84ccd53db19701308a8bfb4a7002db1e4559490",
+      "title": "Release 0.8.8 (#478)",
+      "status": "adapted",
+      "reason": "Record the frozen v0.8.8 merge source while retaining World 0.2.7 release metadata, React 18, asset budgets and the already-adopted U1 security dependency versions.",
+      "evidence": [
+        "UPSTREAM.md",
+        "package.json",
+        "web/package.json",
+        "bun.lock",
+        "docs/packaging.md"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "b84ccd53db19701308a8bfb4a7002db1e4559490"
     }
   ]
 }
