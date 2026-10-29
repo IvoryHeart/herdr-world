@@ -1713,21 +1713,28 @@ const TownTeamsLayer = memo(function TownTeamsLayer({
   if (!teams.walls.length && !teams.links.length) return null;
   return (
     <svg className="town-teams" aria-hidden="true" data-testid="town-teams">
-      {teams.walls.map((wall) => (
-        <rect
-          key={wall.key}
-          className="town-team-wall"
-          data-team={wall.team}
-          data-current={String(wall.current)}
-          data-desks={wall.desks}
-          x={wall.x}
-          y={wall.y}
-          width={wall.w}
-          height={wall.h}
-          rx={10}
-          style={{ stroke: TERMINAL_COLOR_HEX[wall.color] }}
-        />
-      ))}
+      {teams.walls.map((wall) => {
+        const props = {
+          className: "town-team-wall",
+          "data-team": wall.team,
+          "data-current": String(wall.current),
+          "data-desks": wall.desks,
+          style: { stroke: TERMINAL_COLOR_HEX[wall.color] },
+        };
+        return wall.outline ? (
+          <path key={wall.key} {...props} d={wall.outline} />
+        ) : (
+          <rect
+            key={wall.key}
+            {...props}
+            x={wall.x}
+            y={wall.y}
+            width={wall.w}
+            height={wall.h}
+            rx={10}
+          />
+        );
+      })}
       {teams.links.map((link) => (
         <line
           key={link.key}

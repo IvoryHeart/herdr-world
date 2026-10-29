@@ -160,8 +160,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     only the rooms below it, and never
     while you hold the town. Town asks Herdr to move the tab and
     shows the new order when Herdr reports it; agents stay with their table.
-  - **Teams.** Tables whose agents know each other are drawn inside one wall
-    with a connector: a spawned agent is joined to the agent that started it,
+  - **Teams.** Tables whose agents know each other share one wall where they
+    sit side by side or one above another; the wall bends around another
+    team's table inside it. A connector joins a team's tables across walls:
+    a spawned agent is joined to the agent that started it,
     and a manual group with dotted lines; stale links are faded while a host
     is offline, and dropped once its agents have closed.
     Drag a table onto another table and hold it there a moment: it snaps to

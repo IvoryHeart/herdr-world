@@ -1234,6 +1234,10 @@ room or captured generation is unavailable, the launcher SHALL require a deliber
 choice of a current room before creation; an unqualified launcher entry MAY default
 to an available room.
 
+Desks of one team that touch in a room, side by side or one above another,
+SHALL share one wall; when another team's desk sits inside the box around them,
+the wall SHALL follow their outline instead of splitting into one box per desk.
+
 A building for a host whose topology is cached after failure SHALL be visibly
 stale and its entities SHALL be non-actionable. Town SHALL NOT invent activity,
 cost, completion or project data when no authoritative state or optional provider
