@@ -1,0 +1,36 @@
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   Ready to code?
+
+   Here is Claude's plan:
+  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+   Synthetic badge color update
+
+   Context
+
+   Synthetic fixture: change the badge color. No project files were inspected, so file names and the target color
+   are placeholders.
+
+   Steps
+
+   1. Locate the badge color definition (a style token or component prop) and set it to the chosen color (Red or
+      Blue).
+   2. Check the badge in the UI and run the related tests or typecheck.
+
+   Verification
+
+   - The badge renders in the new color.
+   - Tests and typecheck pass.
+  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+
+
+
+
+  ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   Claude has written up a plan and is ready to execute. Would you like to proceed?
+
+     1. Yes, and use auto mode
+   ❯ 2. Yes, manually approve edits
+     3. Keep this native plan feedback
+        shift+tab to approve with this feedback
+
+   ctrl+g to edit in VS Code · /project/demo/plan.md

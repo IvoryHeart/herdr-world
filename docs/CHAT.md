@@ -78,8 +78,9 @@ that root; stat metadata cannot redirect the read to a different transcript.
     and above its footer of controls ("Enter to select · … · Esc to cancel",
     or the plan's "ctrl+g to edit"), with the question ending in "?" and the ❯
     cursor on one option. A digit selects. Each choice shows the description
-    under it. Options that open a text box ("Type something.", "Chat about
-    this", "Tell Claude what to change") are not offered. A form with several
+    under it. "Type something.", "Chat about this" and "Tell Claude what to
+    change" open a text field in Chat: write a single-line reply and choose
+    **Send text answer**. A form with several
     questions shows one at a time under a row of header chips
     ("←  ☐ Color  ☒ Size  ✔ Submit  →"); the card lists every header and
     whether it is answered, and a digit answers the question shown, after
@@ -91,6 +92,13 @@ that root; stat metadata cannot redirect the read to a different transcript.
     cut off by the capture is left to the Terminal.
   - Codex's approval menu: options ending in their key hints such as "(y)" or
     "(esc)", the › cursor on one. The hint key selects.
+  - Codex's questions: the complete "Question 1/1 (1 unanswered)" dialog with
+    its notes/submit/interrupt footer, numbered choices and the › cursor on
+    one. Choices can have descriptions without approval key hints; a digit
+    submits the selected answer. Choices use logical keys: pasted digits would
+    become notes in this dialog. Herdr 0.9.5 reports these waiting panes through
+    screen detection rather than Codex turn hooks. Chat still requires a bound
+    Codex conversation before it reads or answers the prompt.
 
   It shows an ask card with the complete request (the whole command, the file
   and its edit, or a form's header and answers so far), the question and each
@@ -104,6 +112,26 @@ that root; stat metadata cannot redirect the read to a different transcript.
   sequence); the prompt's fingerprint covers the shown prompt, the session and
   the state sequence, and any difference refuses with nothing sent. Then it
   presses that option's key.
+- Text replies are at most 4000 characters and cannot include line breaks or
+  terminal control characters. Chat selects the native text option, waits for
+  the editor, and rechecks its pane, session and question before sending text
+  and Enter. "Chat about this" closes the question first and sends the reply
+  through Herdr's normal `agent prompt`; discussion replies cannot start with
+  `/`, `!` or `#` commands. Digits typed in the reply field remain text.
+  A different question discards that field's draft. An already-open native
+  editor, even if it appears empty, stays in the Terminal: Chat cannot distinguish
+  a placeholder from identical text already typed there. Chat does not append to
+  or replace it; start a text answer from an untouched menu in Chat instead.
+  A typed native draft stays in the Terminal after its cursor moves away,
+  including text beginning with a placeholder or another option's label.
+  Discussion replies require the complete empty composer frame, with no
+  continuation rows, and unchanged status, title and state sequence across
+  its screen read.
+  If the editor cannot be verified after the option was selected, Chat says
+  **No text was sent** and offers the Terminal. Another answer to the same pane
+  is refused while the first is in progress. The refusal stays visible across
+  subsequent question reloads, including when the card disappears, until the
+  next answer attempt in that same connection, pane and session.
 - Codex conversations inferred from the shared daemon are read-only guesses.
   World cannot see every client sharing that daemon: another Herdr session or
   an outside terminal can make the guess wrong. Recent unloaded threads count
@@ -114,7 +142,7 @@ that root; stat metadata cannot redirect the read to a different transcript.
   to answer, or identify the thread with `/title` or an explicit session link.
 - **The gap World cannot close.** Herdr has no conditional input
   ([herdrdev/herdr#4764](https://github.com/herdrdev/herdr/issues/4764)), so
-  the key cannot be made conditional on the prompt. If the prompt or session
+  neither a selection key nor subsequent text can be made conditional on the prompt. If the prompt or session
   changes in the instant between the last check and the key, the key reaches
   the new prompt. The card says so under its options. The owner accepted this
   risk until Herdr can close it; it is tracked as a known issue in
@@ -130,7 +158,13 @@ that root; stat metadata cannot redirect the read to a different transcript.
   (`still_showing`), the pane has another session (`session_changed`, and the
   key may have reached it), Herdr reports a status such as `unknown`
   (`unknown_status`), Herdr no longer reports the agent (`agent_missing`), or
-  the screen could not be read (`unreadable`). Chat answers only when you
+  the screen could not be read (`unreadable`). A discussion reply additionally
+  waits up to three seconds for Herdr to report `working` after queuing the
+  reply, then checks the same agent and session. It requires a newer sequence
+  in `working`, or an `idle`/`done` sequence at least two changes newer than
+  its final destination check, covering a turn that already finished. Without
+  that evidence it gives `no_progress`; closing the menu or queuing the text
+  alone does not prove the reply was accepted. Chat answers only when you
   pick an option.
 - Keeps the last good conversation when a read fails, for example while the
   transcript is being written, and says that it could not refresh.

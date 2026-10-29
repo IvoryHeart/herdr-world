@@ -5795,20 +5795,24 @@ async function run() {
     "local",
   );
   await worldRuntimeStore.refresh();
-  const betaNode = buildWorldObject(
-    worldRuntimeStore.get().connections,
-    "local",
-  ).leaves.find(
-    (node) =>
-      node.connectionId === "beta" && node.nativeId === reuseAgent.pane_id,
-  )!;
-  const betaTarget = () =>
-    [
+  // A refresh already in flight can queue this catalog's observation, so
+  // wait for both its qualified node and its rendered target.
+  const betaTarget = () => {
+    const betaNode = buildWorldObject(
+      worldRuntimeStore.get().connections,
+      "local",
+    ).leaves.find(
+      (node) =>
+        node.connectionId === "beta" && node.nativeId === reuseAgent.pane_id,
+    );
+    if (!betaNode) return undefined;
+    return [
       ...document.querySelectorAll<HTMLElement>("[data-world-node-anchor]"),
     ].find(
       (element) =>
         element.getAttribute("data-world-node-anchor") === betaNode.id,
     );
+  };
   await until(betaTarget, "second host's qualified Board target");
   betaTarget()!.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
   await until(
