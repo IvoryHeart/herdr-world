@@ -671,12 +671,16 @@ lead/builder role asks first and keeps any other roles. An ambiguous address
 remains ambiguous: **Inspect** opens one current match; it does not pick its
 identity for membership. Rename duplicates in Herdr or explicitly replace the
 member with a distinct address.
+Selecting a current agent refuses duplicate Herdr names on the same connection.
+It also refuses to add a replacement that has appeared in the selected terminal;
+choose the agent again or supply the intended qualified address.
 
 **Edit pod…** changes its name, Now list and warning limit. **Promote to Pod…**
 shows every terminal-to-address mapping before preserving a Team's identity as a
 Pod. **Delete…** asks first and leaves agents running. If someone edits the Board
-while a form or confirmation is open, review the refreshed Group before trying
-again. Recent changes retain sender claims and their basis, or unknown attribution
+while a form or confirmation is open, the write is refused and your draft stays
+open. Review the current values shown in the form, choose **Use current version**,
+then explicitly save again. Reviewing does not retry the write. Recent changes retain sender claims and their basis, or unknown attribution
 when no claim was supplied.
 
 A Team/Pod's Interest button offers **Default**, **Muted** and **Focused**.

@@ -64,12 +64,42 @@ function setup() {
     expect(reply.ok).toBe(true);
     return (reply as { result: { group: { id: string } } }).result.group.id;
   };
-  return { board, run, created };
+  return { board, run, created, topology };
 }
 const result = (reply: WorldCliResponse) => {
   expect(reply.ok).toBe(true);
   return (reply as { result: unknown }).result;
 };
+
+test.each(["group add", "group lead", "group reviewers"])(
+  "%s refuses a terminal selection whose Pod address names multiple agents",
+  async (command) => {
+    const { board, run, created, topology } = setup();
+    const id = await created("Chat");
+    topology.connections[0]!.snapshot!.agents[1]!.name = "one";
+    for (const agent of ["terminal:terminal-one", "pane:pane-one"]) {
+      const before = board.get();
+      const reply = await run(command, {
+        group: id,
+        agent,
+        agents: [agent],
+      });
+      expect(reply).toMatchObject({
+        ok: false,
+        code: "refused",
+        error: expect.stringContaining("rename"),
+      });
+      expect(board.get()).toEqual(before);
+    }
+    result(
+      await run(command, {
+        group: id,
+        agent: agentAddress("connection-a", "one"),
+        agents: [agentAddress("connection-a", "one")],
+      }),
+    );
+  },
+);
 
 test("World Groups CLI creates intent and projects Room/Desk separately", async () => {
   const { board, run, created } = setup();

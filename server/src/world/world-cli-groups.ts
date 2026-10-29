@@ -212,6 +212,14 @@ function resolveRef(
       "refused",
       "this terminal has no actual Herdr agent name; give an explicit agent:// address",
     );
+  if (
+    connection.terminals.filter((entry) => entry.name === terminal.name)
+      .length !== 1
+  )
+    return fail(
+      "refused",
+      "several current agents have that Herdr name; rename the agent or give an explicit agent:// address",
+    );
   return agentAddress(connectionId, terminal.name);
 }
 

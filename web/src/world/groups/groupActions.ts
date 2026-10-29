@@ -37,6 +37,7 @@ export const groupPrText = (group: GroupView) =>
 export function memberRef(
   group: GroupView,
   terminal: GroupTerminalObservation,
+  terminals: readonly GroupTerminalObservation[],
 ): GroupRef {
   if (group.owner !== "world")
     throw new Error(
@@ -51,13 +52,47 @@ export function memberRef(
     throw new Error(
       "This agent has no actual Herdr name. Supply a qualified address.",
     );
+  if (
+    terminals.filter(
+      (entry) =>
+        entry.connectionId === terminal.connectionId &&
+        entry.name === terminal.name,
+    ).length !== 1
+  )
+    throw new Error(
+      "Several current agents have that Herdr name. Please rename the agent or give an explicit agent:// address.",
+    );
   return agentAddress(terminal.connectionId, terminal.name);
+}
+/** Revalidate the selection's captured identity rather than adopting a new occupant. */
+export function selectedMemberRef(
+  group: GroupView,
+  selected: GroupTerminalObservation,
+  terminals: readonly GroupTerminalObservation[],
+): GroupRef {
+  const matches = terminals.filter(
+    (terminal) =>
+      terminal.connectionId === selected.connectionId &&
+      terminal.generation === selected.generation &&
+      terminal.terminalId === selected.terminalId &&
+      terminal.paneId === selected.paneId &&
+      terminal.name === selected.name &&
+      (terminal.sessionFingerprint ?? null) ===
+        (selected.sessionFingerprint ?? null),
+  );
+  if (matches.length !== 1)
+    throw new Error(
+      "This agent changed or is no longer current. Choose it again or give an explicit address.",
+    );
+  return memberRef(group, selected, terminals);
 }
 export type GroupEditPlan = {
   ops: GroupOp[];
   confirmation?: string;
   replace?: boolean;
   revision?: number;
+  /** Forms keep their draft until the revision-bound write returns successfully. */
+  onComplete?(error: string | null): void;
 };
 export function groupMemberEdit(
   group: GroupView,

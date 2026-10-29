@@ -163,7 +163,10 @@ async function preview(context: TownMoveContext, request: GroupMoveRequest) {
         (terminal) => terminal.paneId === pane.pane_id,
       )!;
       return {
-        ...pane,
+        pane_id: pane.pane_id,
+        terminal_id: pane.terminal_id,
+        tab_id: pane.tab_id,
+        workspace_id: pane.workspace_id,
         name:
           terminal.name ?? `terminal ${pane.terminal_id} (name unavailable)`,
         session: terminal.sessionFingerprint ?? null,

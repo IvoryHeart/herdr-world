@@ -21,6 +21,7 @@ import { parseWorldSnapshotResult, worldRuntimeStore } from "../runtimeStore";
 import { GroupsWindow } from "./GroupsWindow";
 import { GroupsSummary } from "./GroupsSummary";
 import { TownSummaryPanel } from "../town/TownSummaryPanel";
+import { verifyGroupEdits } from "./testing/groupEditAcceptance";
 import "../../styles/tokens.css";
 import "../../styles/base.css";
 import "../../components/WorkspaceAgentRows.css";
@@ -473,6 +474,7 @@ async function run() {
     ),
     "stale confirmation must not transfer a new role",
   );
+  await verifyGroupEdits(check, waitFor);
   click("Back to Groups");
   await waitFor(() => document.querySelector(".group-roster"));
   check(

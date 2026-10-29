@@ -428,6 +428,16 @@ runtime owner. The detail reuses browser-only PullRequestCard controls.
 and service. Forms and confirmations pass the reviewed Board revision through
 BoardDocumentStore and the optional `world.board.patch` revision parameter to
 BoardStore.patchIf. A stale revision returns current state/conflict without retry.
+Add captures that revision when its form opens, including before transfer
+confirmation. Add/Edit/Roles close only after their completion callback reports
+a successful write. A refused write keeps the draft and form-local error;
+adopting the refreshed revision requires an explicit review action and never
+dispatches a write itself. Current-agent Add captures its canonical ref and
+connection/generation/pane/terminal/name/session witness at selection, then
+revalidates without substituting a replacement. UI and CLI terminal selections
+must have one current Herdr name match on that connection before deriving a Pod
+address; an explicit qualified address remains intentional, including when away
+or ambiguous.
 Legacy callers omitting a revision keep their existing operation-specific rules.
 Browser edits without an explicit sender claim retain unknown attribution; the
 crew rule is explanatory, not a principal check. Ambiguous member inspection

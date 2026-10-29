@@ -158,6 +158,7 @@ export async function groupsBrowserServer(directory: string) {
   const assets = new Map<string, Blob>();
   const result = Promise.withResolvers<string[]>();
   const requested = Promise.withResolvers<void>();
+  let heldWrite: ReturnType<typeof Promise.withResolvers<void>> | null = null;
   const server = Bun.serve({
     hostname: "127.0.0.1",
     port: 0,
@@ -175,6 +176,26 @@ export async function groupsBrowserServer(directory: string) {
         return new Response("ok");
       }
       if (path === "/api/world/sources") return Response.json(source);
+      if (path === "/board") return Response.json(board.get());
+      if (path === "/compete") {
+        board.patch(await request.json());
+        return Response.json(board.get());
+      }
+      if (path === "/hold-write") {
+        heldWrite = Promise.withResolvers<void>();
+        return new Response("ok");
+      }
+      if (path === "/release-write") {
+        heldWrite?.resolve();
+        heldWrite = null;
+        return new Response("ok");
+      }
+      if (path === "/replace-agent") {
+        const { name } = await request.json();
+        payload.connections[0]!.snapshot.agents[1]!.name = name;
+        payload.revision++;
+        return Response.json(payload);
+      }
       if (path === "/advance") {
         board.patch([
           { op: "group.set_attrs", id: "town", name: "Town updated" },
@@ -188,6 +209,7 @@ export async function groupsBrowserServer(directory: string) {
           params: unknown;
         };
         if (method === "world.snapshot") return Response.json(payload);
+        if (method === "world.board.patch") await heldWrite?.promise;
         let response: unknown;
         await handleWorldRpc({
           method,

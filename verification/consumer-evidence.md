@@ -83,6 +83,19 @@ attribution. Existing relation/store/CLI tests retain terminal grouping,
 pruning and undo; the browser adapter also proves Pod-only data does not scan
 terminal topology or enable magnetic Ungroup.
 
+Group form properties require preserving reviewed intent across concurrent edits:
+Add binds the Board revision when opened and retains it through confirmation;
+Add/Edit/Roles keep their drafts until a successful write, expose conflicts in
+the form, and accept a refreshed Board revision only through explicit review without retry.
+`GroupsWindow.test.ts` executes the real forms and Board store at desktop/phone
+and owner viewports: another client's Team assignment is preserved by a stale
+Add, a pre-confirmation edit refuses transfer, and retained drafts save only on
+explicit resubmission. A replacement in the selected terminal cannot retarget a
+Pod address. `groupActions.test.ts` also checks captured generation/session/name
+witnesses and same-connection duplicate-name refusal. Real browser interaction
+and atomic Board conflicts directly exercise this finite contract; they do not
+establish arbitrary UI schedules or authenticated crew roles.
+
 Group read-model properties come from the Group projections and derived facts
 requirement. `shared/groupViews.test.ts` enumerates all 36 pairs of the six
 roll-up states and covers qualified Room/Desk projections, separate stored
@@ -122,11 +135,19 @@ terminal-to-address mapping. `world-cli-groups.test.ts` exercises the actual
 service edits, retained deletion attribution and role preservation;
 `cli/world-groups.test.ts` checks parser intent and preview-before-mutation output.
 These edits have recent Group attribution rather than Board ledger undo. Markdown tests add explicit table parsing/escaped rendering, duplicate role/Now-column and separator-width refusal, and actual service all-or-none import, existing-name refusal, role-conflict rollback and sender attribution; the CLI test proves only the selected file is read and piped Markdown stays Markdown. No file watcher or resynchronization is introduced.
+Terminal/pane selections for add/lead/reviewers refuse a Pod address when its
+Herdr name matches multiple current terminals on that connection; actual service
+tests cover each command, preserve Board state on refusal, and retain intentional
+explicit-address edits.
 
 `group-move.test.ts` drives the real native move orchestration and the actual CLI
 HTTP service. A controlled queue blocker demonstrates the same injected queue as
 RPC, changed occupants refuse before any move, retired queued leases make zero
-Herdr calls, and terminal witnesses refuse changes after preflight. Known partial
+Herdr calls, and terminal witnesses refuse changes after preflight.
+Room/Desk preview witnesses include only explicit pane/terminal/tab/workspace
+identities, name and session, rather than incidental runtime rows. Both move
+paths accept status/focus/revision-only changes; changed occupants and missing
+destinations still refuse before a native move. Known partial
 failure reconciles Board anchors from observed terminals; lost replies with
 unreadable topology return Unknown without retry. `town-move.test.ts` retains
 queue-versus-Board-follow ordering checks, while native desk/pane tests retain

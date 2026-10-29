@@ -20,3 +20,6 @@
 ### Fixed
 
 - Reduce Interest overhead in dense views when there are no effective Focus claims.
+- Keep Group Add, Edit and Roles drafts after conflicting edits, require explicit
+  review before resubmission, and refuse replaced or ambiguously named agent selections.
+- Keep reviewed Room/Desk moves valid across incidental status, focus and revision changes.

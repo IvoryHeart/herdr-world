@@ -567,7 +567,11 @@ open or raise its Groups detail. Pod roll-ups do not add to reception counts.
 Create Teams/Pods, add/remove members, edit roles, name/Now/limit, delete with
 confirmation or explicitly promote a Team with a complete current address mapping.
 Exclusive-role transfers ask first. An edit or confirmation based on an older
-Board revision is refused and refreshes the roster. Ambiguous member actions
+Board revision is refused and refreshes the roster. Add, Edit and Roles keep
+their drafts open until a write succeeds; after a conflict, review the current
+values and choose **Use current version** before explicitly saving again.
+Current-agent selection refuses a replaced agent or a duplicate Herdr name;
+rename duplicates or supply an explicit qualified address. Ambiguous member actions
 inspect a qualified match without treating it as resolved. Room/Desk membership
 belongs to Herdr and uses Town's move gestures or guarded CLI moves.
 

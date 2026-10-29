@@ -8,6 +8,7 @@ import type { GroupChange } from "../../../../shared/groups";
 import { PullRequestCard } from "../PullRequestCard";
 import { GroupMembers } from "./GroupMembers";
 import { GroupInterestButton } from "./GroupInterestButton";
+import { GroupEditFeedback } from "./GroupEditFeedback";
 import {
   groupPromotion,
   groupPrText,
@@ -41,6 +42,7 @@ export function GroupDetail({
 }) {
   const [editing, setEditing] = useState(false);
   const [editRevision, setEditRevision] = useState(revision);
+  const [editError, setEditError] = useState<string | null>(null);
   const [name, setName] = useState(group.name);
   const [now, setNow] = useState(group.now.join("\n"));
   const [limit, setLimit] = useState(String(group.openPrLimit ?? 2));
@@ -121,6 +123,7 @@ export function GroupDetail({
                 setLimit(String(group.openPrLimit ?? 2));
                 setEditing(!editing);
                 setEditRevision(revision);
+                setEditError(null);
               }}
             >
               Edit {group.kind}…
@@ -163,11 +166,16 @@ export function GroupDetail({
                 event.preventDefault();
                 const numeric = Number(limit);
                 if (!Number.isSafeInteger(numeric) || numeric < 0) {
+                  setEditError("Open-PR limit must be a nonnegative integer.");
                   onError("Open-PR limit must be a nonnegative integer.");
                   return;
                 }
                 onPlan({
                   revision: editRevision,
+                  onComplete: (error) => {
+                    setEditError(error);
+                    if (!error) setEditing(false);
+                  },
                   ops: [
                     {
                       op: "group.set_attrs",
@@ -185,9 +193,17 @@ export function GroupDetail({
                     },
                   ],
                 });
-                setEditing(false);
               }}
             >
+              <GroupEditFeedback
+                error={editError}
+                changed={revision !== editRevision}
+                current={`Current ${group.kind}: ${group.name}. Now: ${group.now.join("; ") || "none"}.${group.kind === "pod" ? ` Open-PR limit: ${group.openPrLimit}.` : ""}`}
+                onReview={() => {
+                  setEditRevision(revision);
+                  setEditError(null);
+                }}
+              />
               <label>
                 Name
                 <input

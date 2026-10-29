@@ -6,7 +6,13 @@ import type {
   GroupView,
   GroupViewMember,
 } from "../../../../shared/groupViews";
-import { groupMemberEdit, type GroupEditPlan, memberRef } from "./groupActions";
+import {
+  groupMemberEdit,
+  type GroupEditPlan,
+  memberRef,
+  selectedMemberRef,
+} from "./groupActions";
+import { GroupEditFeedback } from "./GroupEditFeedback";
 
 export function MemberPortrait({
   member,
@@ -52,19 +58,27 @@ export function GroupMembers({
   harness(terminal: GroupTerminalObservation): string | undefined;
 }) {
   const [adding, setAdding] = useState(false);
-  const [selected, setSelected] = useState("");
+  const [selected, setSelected] = useState<{
+    terminal: GroupTerminalObservation;
+    ref: GroupRef;
+  } | null>(null);
+  const [addRevision, setAddRevision] = useState(revision);
+  const [addError, setAddError] = useState<string | null>(null);
   const [address, setAddress] = useState("");
   const [role, setRole] = useState("builder");
   const [editing, setEditing] = useState<string | null>(null);
   const [roles, setRoles] = useState<string[]>([]);
   const [roleRevision, setRoleRevision] = useState(revision);
+  const [roleError, setRoleError] = useState<string | null>(null);
   const sections =
     group.kind === "pod" ? ["lead", "builder", "reviewer", "other"] : ["other"];
-  const apply = (action: () => void) => {
+  const apply = (action: () => void, onFailure: (message: string) => void) => {
     try {
       action();
     } catch (error) {
-      onError(error instanceof Error ? error.message : String(error));
+      const message = error instanceof Error ? error.message : String(error);
+      onError(message);
+      onFailure(message);
     }
   };
   const eligible = terminals.filter(
@@ -82,7 +96,13 @@ export function GroupMembers({
           <button
             type="button"
             disabled={busy}
-            onClick={() => setAdding(!adding)}
+            onClick={() => {
+              setAdding(!adding);
+              setAddRevision(revision);
+              setAddError(null);
+              setSelected(null);
+              setAddress("");
+            }}
           >
             Add…
           </button>
@@ -94,15 +114,11 @@ export function GroupMembers({
           onSubmit={(event) => {
             event.preventDefault();
             apply(() => {
-              const terminal = eligible.find(
-                (entry) =>
-                  `${entry.connectionId}\0${entry.terminalId}` === selected,
-              );
+              if (!address.trim() && selected)
+                selectedMemberRef(group, selected.terminal, eligible);
               const ref = address.trim()
                 ? parseGroupRef(address.trim())
-                : terminal
-                  ? memberRef(group, terminal)
-                  : undefined;
+                : selected?.ref;
               if (!ref)
                 throw new Error("Choose an agent or give a qualified address.");
               const plan = groupMemberEdit(
@@ -111,18 +127,56 @@ export function GroupMembers({
                 group.kind === "team" ? [] : [role],
                 groups,
               );
-              onPlan(plan);
-              setAdding(false);
-              setAddress("");
-              setSelected("");
-            });
+              onPlan({
+                ...plan,
+                revision: addRevision,
+                onComplete: (error) => {
+                  setAddError(error);
+                  if (!error) {
+                    setAdding(false);
+                    setAddress("");
+                    setSelected(null);
+                  }
+                },
+              });
+            }, setAddError);
           }}
         >
+          <GroupEditFeedback
+            error={addError}
+            changed={revision !== addRevision}
+            current={`Current members of ${group.name}: ${group.members.map((member) => `${member.label}${member.roles.length ? ` (${member.roles.join(", ")})` : ""}`).join("; ") || "none"}.`}
+            onReview={() => {
+              setAddRevision(revision);
+              setAddError(null);
+            }}
+          />
           <label>
             Current agent
             <select
-              value={selected}
-              onChange={(event) => setSelected(event.target.value)}
+              value={
+                selected
+                  ? `${selected.terminal.connectionId}\0${selected.terminal.terminalId}`
+                  : ""
+              }
+              onChange={(event) => {
+                setSelected(null);
+                setAddError(null);
+                const terminal = eligible.find(
+                  (entry) =>
+                    `${entry.connectionId}\0${entry.terminalId}` ===
+                    event.target.value,
+                );
+                if (terminal)
+                  apply(
+                    () =>
+                      setSelected({
+                        terminal: { ...terminal },
+                        ref: memberRef(group, terminal, terminals),
+                      }),
+                    setAddError,
+                  );
+              }}
             >
               <option value="">Choose…</option>
               {eligible.map((terminal) => (
@@ -253,6 +307,7 @@ export function GroupMembers({
                             setEditing(key);
                             setRoles([...member.roles]);
                             setRoleRevision(revision);
+                            setRoleError(null);
                           }}
                         >
                           Roles…
@@ -273,11 +328,23 @@ export function GroupMembers({
                                   true,
                                 ),
                                 revision: roleRevision,
+                                onComplete: (error) => {
+                                  setRoleError(error);
+                                  if (!error) setEditing(null);
+                                },
                               });
-                              setEditing(null);
-                            });
+                            }, setRoleError);
                           }}
                         >
+                          <GroupEditFeedback
+                            error={roleError}
+                            changed={revision !== roleRevision}
+                            current={`Current roles for ${member.label}: ${member.roles.join(", ") || "none"}.`}
+                            onReview={() => {
+                              setRoleRevision(revision);
+                              setRoleError(null);
+                            }}
+                          />
                           {[
                             ...new Set([
                               "lead",

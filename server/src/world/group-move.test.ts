@@ -148,6 +148,60 @@ test("queued CLI preview revalidation shares the queue and refuses changed occup
   expect(state.context.queues.get(state.context.connectionId)).toBe(queue);
 });
 
+test.each(["room", "desk"] as const)(
+  "%s preview ignores incidental runtime activity",
+  async (kind) => {
+    const state = setup();
+    if (kind === "desk")
+      state.request = {
+        ...state.request,
+        kind,
+        destination_id: state.destination.tab,
+      };
+    const call = state.context.call;
+    let activity = 1;
+    state.context.call = async (method, params) => {
+      const response = await call(method, params);
+      if (method !== "pane.list") return response;
+      return {
+        panes: (response as { panes: object[] }).panes.map((pane) => ({
+          ...pane,
+          revision: activity,
+          focused: activity === 1,
+          agent_status: activity === 1 ? "working" : "idle",
+        })),
+      };
+    };
+    const expected_plan = await plan(state);
+    activity++;
+    expect(
+      await runGroupMove(state.context, {
+        ...state.request,
+        preview: false,
+        expected_plan,
+      }),
+    ).toMatchObject({ status: "moved" });
+  },
+);
+
+test("a changed destination refuses a previously reviewed move", async () => {
+  const state = setup();
+  const expected_plan = await plan(state);
+  const call = state.context.call;
+  state.context.call = async (method, params) =>
+    method === "workspace.list"
+      ? { workspaces: [{ workspace_id: "w1", label: "Origin" }] }
+      : call(method, params);
+  await expect(
+    runGroupMove(state.context, {
+      ...state.request,
+      preview: false,
+      expected_plan,
+    }),
+  ).rejects.toMatchObject({ code: "refused" });
+  expect(state.herdr.moves()).toBe(0);
+});
+
 test("a queued retired lease makes no reads or moves after admission", async () => {
   const state = setup();
   const expected_plan = await plan(state);

@@ -111,13 +111,18 @@ function GroupsBody({
         leaf.connectionId === terminal.connectionId &&
         leaf.terminalId === terminal.terminalId,
     )?.pane.agent;
-  const write = async (ops: GroupOp[], revision: number) => {
+  const write = async (
+    ops: GroupOp[],
+    revision: number,
+    onComplete?: GroupEditPlan["onComplete"],
+  ) => {
     setError(null);
     setBusy(true);
     const result = await boardStore.patch(ops, revision);
     if (mounted.current) {
       setBusy(false);
       setError(result);
+      onComplete?.(result);
     }
   };
   const plan = (plan: GroupEditPlan) => {
@@ -125,7 +130,11 @@ function GroupsBody({
     if (plan.confirmation)
       setPending({ plan, revision: plan.revision ?? document.revision });
     else
-      void write(confirmedGroupOps(plan), plan.revision ?? document.revision);
+      void write(
+        confirmedGroupOps(plan),
+        plan.revision ?? document.revision,
+        plan.onComplete,
+      );
   };
   const inspect = (terminal: GroupTerminalObservation) => {
     const connection = groupRuntimeObservations(
@@ -380,7 +389,11 @@ function GroupsBody({
           onClose={() => setPending(null)}
           onConfirm={() => {
             if (pending) {
-              void write(confirmedGroupOps(pending.plan), pending.revision);
+              void write(
+                confirmedGroupOps(pending.plan),
+                pending.revision,
+                pending.plan.onComplete,
+              );
               setPending(null);
             }
           }}

@@ -6,6 +6,8 @@ import {
   groupMemberEdit,
   groupPromotion,
   groupPrText,
+  memberRef,
+  selectedMemberRef,
 } from "./groupActions";
 
 const addr = agentAddress("connection-a", "builder");
@@ -73,4 +75,64 @@ test("unavailable PR sources cannot present a confirmed zero", () => {
   expect(groupPrText({ ...group, workState: "stale" })).toBe(
     "0/2 open PRs · cached",
   );
+});
+
+test("choosing one terminal cannot create an ambiguous Pod address", () => {
+  const pod = buildGroupViews([stored("Chat")], [])[0]!;
+  const terminal = {
+    connectionId: "connection-a",
+    generation: 1,
+    terminalId: "terminal-1",
+    paneId: "pane-1",
+    roomId: "room-1",
+    deskId: "desk-1",
+    name: "builder",
+    status: "working",
+  };
+  const duplicate = { ...terminal, terminalId: "terminal-2", paneId: "pane-2" };
+  expect(() => memberRef(pod, terminal, [terminal, duplicate])).toThrow(
+    "rename",
+  );
+  expect(
+    memberRef(pod, terminal, [
+      terminal,
+      { ...duplicate, connectionId: "connection-b" },
+    ]),
+  ).toBe(addr);
+  expect(
+    memberRef({ ...pod, kind: "team" }, terminal, [terminal, duplicate]),
+  ).toEqual({
+    connection_id: "connection-a",
+    terminal_id: "terminal-1",
+  });
+});
+
+test("a selected Pod address retains its name, generation and session witness", () => {
+  const pod = buildGroupViews([stored("Chat")], [])[0]!;
+  const selected = {
+    connectionId: "connection-a",
+    generation: 1,
+    terminalId: "terminal-1",
+    paneId: "pane-1",
+    roomId: "room-1",
+    deskId: "desk-1",
+    name: "builder",
+    status: "working",
+    sessionFingerprint: "session-a",
+  };
+  for (const changed of [
+    { name: "replacement" },
+    { generation: 2 },
+    { sessionFingerprint: "session-b" },
+    { paneId: "pane-2" },
+  ])
+    expect(() =>
+      selectedMemberRef(pod, selected, [{ ...selected, ...changed }]),
+    ).toThrow("changed");
+  expect(() => selectedMemberRef(pod, selected, [])).toThrow("current");
+  expect(
+    selectedMemberRef(pod, selected, [
+      { ...selected, deskId: "desk-2", status: "idle" },
+    ]),
+  ).toBe(addr);
 });
