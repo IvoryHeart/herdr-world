@@ -240,16 +240,18 @@ export default function TownView({
 
   // Reviewed is the one service record every view reads: marking work
   // reviewed in Town, Desk or Needs you clears it everywhere.
-  const reviewedWork = useReviewedWork(world.leaves);
+  // Only done agents can be reviewed, so only they are looked up.
+  const reviewedWork = useReviewedWork();
+  const { reviewed: isReviewed } = reviewedWork;
   const completionSeenKeys = useMemo(() => {
     const keys = new Set<string>();
     for (const { agent } of observedOffice.roster) {
+      if (agent.semanticStatus !== "done") continue;
       const leaf = world.nodeById.get(agent.nodeId);
-      if (leaf?.kind === "agent" && reviewedWork.reviewed(leaf))
-        keys.add(agent.key);
+      if (leaf?.kind === "agent" && isReviewed(leaf)) keys.add(agent.key);
     }
     return keys;
-  }, [observedOffice, world, reviewedWork]);
+  }, [observedOffice, world, isReviewed]);
   const office = useMemo(
     () =>
       withTownFinished(

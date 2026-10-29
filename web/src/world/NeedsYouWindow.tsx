@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { WorldPanel } from "./windows/WorldPanel";
 import { useNow } from "./handoffs";
 import { agentMarkKind } from "../agentMarks";
@@ -59,7 +59,6 @@ export function NeedsYouHost({
     window.addEventListener(NEEDS_YOU_OPEN_EVENT, show);
     return () => window.removeEventListener(NEEDS_YOU_OPEN_EVENT, show);
   }, []);
-  const now = useNow(5_000);
   return open ? (
     <WorldPanel
       name="needs-you"
@@ -70,7 +69,6 @@ export function NeedsYouHost({
       <NeedsYouWindow
         world={world}
         focusKey={open.itemKey}
-        now={now}
         onOpenAgent={onOpenAgent}
       />
     </WorldPanel>
@@ -84,15 +82,18 @@ export function NeedsYouCounter({
   world: Pick<WorldObject, "leaves">;
 }) {
   const asks = useWorldAsks(sharedAsksStore());
-  const count =
-    asks.length +
-    world.leaves.filter(
-      (leaf) =>
-        leaf.kind === "agent" &&
-        leaf.status === "blocked" &&
-        leaf.actionable &&
-        !leaf.stale,
-    ).length;
+  const blocked = useMemo(
+    () =>
+      world.leaves.filter(
+        (leaf) =>
+          leaf.kind === "agent" &&
+          leaf.status === "blocked" &&
+          leaf.actionable &&
+          !leaf.stale,
+      ).length,
+    [world.leaves],
+  );
+  const count = asks.length + blocked;
   return (
     <button
       type="button"
@@ -116,7 +117,7 @@ export function NeedsYouCounter({
 export function NeedsYouWindow({
   world,
   focusKey,
-  now,
+  now: shownNow,
   onOpenAgent,
   asksStore = sharedAsksStore(),
   deskStore,
@@ -124,15 +125,17 @@ export function NeedsYouWindow({
   world: Pick<WorldObject, "leaves" | "nodeById">;
   /** The item an opener asked for, scrolled into view. */
   focusKey?: string;
-  now: number;
+  /** A fixed clock for tests; the open window ticks its own. */
+  now?: number;
   onOpenAgent(leafId: string): void;
   /** The shared stores unless a test provides its own. */
   asksStore?: WorldAsksStore;
   deskStore?: WorldDeskStore;
 }) {
+  const ticking = useNow(5_000);
+  const now = shownNow ?? ticking;
   const asks = useWorldAsks(asksStore);
-  const agents = world.leaves;
-  const work = useReviewedWork(agents, deskStore);
+  const work = useReviewedWork(deskStore);
   const all = needsYouItems(world, asks, work.reviewed);
   const items = all.slice(0, ITEM_LIMIT);
   // Answers given here, shown folded until the window closes.
