@@ -7,18 +7,100 @@ import type { Deps } from "./deps";
 import {
   activeRuns,
   closeRound,
+  deleteMeta,
   finishRun,
+  getMeta,
+  metaWithPrefix,
   openRounds,
   roundTabs,
   runsOf,
+  setMeta,
+  trackedPrs,
 } from "./store";
 import type { Database } from "bun:sqlite";
+import type { GateInput, Verdict } from "../gate/predicate";
+import { latestInput, previousOpenPassInputs } from "../gate/store";
 
 type Worktree = ReturnType<typeof listWorktrees>[number];
 type Prune = (
   path: string,
   options: { cwd: string },
 ) => { action: string; reason: string };
+
+/** PRs whose tracked reviewer state needs terminal cleanup on this pass. */
+export function terminalInputs(
+  crew: Database,
+  gate: Database | undefined,
+  prs: number[],
+  inputs: GateInput[],
+  verdicts: Verdict[],
+  rounds: { pr: number }[],
+) {
+  const terminal = new Map<number, GateInput>();
+  const observed = new Set(verdicts.map((verdict) => verdict.number));
+  const tracked = new Set(trackedPrs(crew));
+  const cleanupKey = (pr: number) => `terminal-cleanup:${pr}`;
+  for (const input of inputs)
+    if (input.state === "OPEN") deleteMeta(crew, cleanupKey(input.number));
+  for (const verdict of verdicts)
+    if (
+      (verdict.state === "MERGED" || verdict.state === "CLOSED") &&
+      tracked.has(verdict.number) &&
+      getMeta(crew, cleanupKey(verdict.number)) !== "done"
+    ) {
+      const input = inputs.find((entry) => entry.number === verdict.number);
+      if (input) terminal.set(verdict.number, input);
+    }
+  // A full pass reads the complete open-PR list. A previously open PR missing
+  // from that list has merged or closed; scoped passes cannot infer it.
+  if (!prs.length) {
+    const previous = new Map<number, GateInput>();
+    for (const input of gate ? previousOpenPassInputs(gate) : [])
+      previous.set(input.number, input);
+    for (const round of rounds) {
+      const input = gate
+        ? latestInput(gate, round.pr)
+        : inputs.find((entry) => entry.number === round.pr);
+      if (input) previous.set(round.pr, input);
+    }
+    for (const [pr, input] of previous)
+      if (
+        tracked.has(pr) &&
+        !observed.has(pr) &&
+        getMeta(crew, cleanupKey(pr)) !== "done"
+      ) {
+        const latest = gate ? latestInput(gate, pr) : input;
+        if (latest) terminal.set(pr, latest);
+      }
+    for (const { key, value } of metaWithPrefix(crew, "terminal-cleanup:")) {
+      if (value !== "pending") continue;
+      const pr = Number(key.slice("terminal-cleanup:".length));
+      const input = gate ? latestInput(gate, pr) : null;
+      if (input && !observed.has(pr)) terminal.set(pr, input);
+    }
+  }
+  return terminal;
+}
+
+/** Finish cleanup for terminal PRs; failed reviewer cleanup is retried. */
+export function cleanupTerminalPrs(
+  crew: Database,
+  dir: string,
+  now: number,
+  deps: Deps,
+  terminal: Map<number, GateInput>,
+  out: (line: string) => void,
+) {
+  for (const [pr, input] of terminal) {
+    const key = `terminal-cleanup:${pr}`;
+    if (!cleanupTerminalReviewers(crew, dir, pr, now, deps, out)) {
+      setMeta(crew, key, "pending");
+      continue;
+    }
+    cleanupAuthorWorktree(dirname(dirname(dir)), pr, input.item?.branch, out);
+    setMeta(crew, key, "done");
+  }
+}
 
 /** Close every reviewer tab and remove its sessions and checkouts for a terminal PR. */
 export function cleanupTerminalReviewers(
