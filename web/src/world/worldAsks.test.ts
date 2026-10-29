@@ -1,6 +1,11 @@
 import { expect, test } from "bun:test";
 import { bridge, type BridgeControlMsg } from "../api";
-import { WorldAsksStore, sharedAsksStore, type WorldAsk } from "./worldAsks";
+import {
+  askerName,
+  WorldAsksStore,
+  sharedAsksStore,
+  type WorldAsk,
+} from "./worldAsks";
 
 const ask = (id: string, answered = false): WorldAsk => ({
   id,
@@ -53,6 +58,57 @@ test("open questions follow the ledger; the owner's answer goes to the service",
     params: undefined,
   });
   store.stop();
+});
+
+test("the owner dismisses a question without answering it", async () => {
+  let ledger = { revision: 1, asks: [ask("q-1")] };
+  const calls: unknown[] = [];
+  const store = new WorldAsksStore({
+    call: async (method, params) => {
+      calls.push({ method, params });
+      if (method === "world.ask.dismiss") {
+        if (ledger.revision > 1)
+          throw new Error("q-1 was dismissed by the owner");
+        ledger = {
+          revision: 2,
+          asks: [{ ...ask("q-1"), dismissed: { at: 2, by: "owner" } }],
+        };
+      }
+      return ledger;
+    },
+    onControl: () => () => {},
+    onStatus: () => () => {},
+  });
+  store.start();
+  await store.refresh();
+  expect(await store.dismiss("q-1")).toBeNull();
+  expect(store.get()).toEqual([]);
+  expect(calls).toContainEqual({
+    method: "world.ask.dismiss",
+    params: { id: "q-1" },
+  });
+  expect(await store.dismiss("q-1")).toBe("q-1 was dismissed by the owner");
+  store.stop();
+});
+
+test("an asker is named by Herdr, else as identified, else by its claimed pane", () => {
+  const base = ask("q-1");
+  expect(
+    askerName({ ...base, actor: { ...base.actor, name: "dispatch" } }),
+  ).toBe("dispatch");
+  expect(askerName(base)).toBe("codex in w1:p1");
+  expect(
+    askerName({
+      ...base,
+      actor: { label: "unverified w1:p6", verified: false, pane_id: "w1:p6" },
+    }),
+  ).toBe("w1:p6");
+  expect(
+    askerName({
+      ...base,
+      actor: { label: "terminal with no pane", verified: false },
+    }),
+  ).toBe("terminal with no pane");
 });
 
 test("new asks announce once, withdrawn asks disappear, and old socket replies cannot resurrect them", async () => {
