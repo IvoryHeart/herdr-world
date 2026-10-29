@@ -11,7 +11,7 @@ import {
   Pin,
   X,
 } from "lucide-react";
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   type ColorChoice,
@@ -21,6 +21,7 @@ import {
 import { measuredFixedPositionScale } from "../../fixedPositionScale";
 import { useLayer } from "../../layerStack";
 import type { SnapTarget } from "./windowManager";
+import { registerCompactWindowHeader } from "./windowSwitcherHeader";
 import "./windows.css";
 
 export type ManagedWindowControls = {
@@ -196,6 +197,10 @@ export function WindowControls({
     ...(!controls.compact ? pinItems : []),
   ];
   const host = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (!controls.compact || !host.current) return;
+    return registerCompactWindowHeader(host.current);
+  }, [controls.compact]);
   const menu = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   useLayer(open, () => setOpen(false), {

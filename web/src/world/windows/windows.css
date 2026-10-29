@@ -319,11 +319,16 @@
   background: transparent;
   color: var(--muted);
 }
+.world-window-controls > .world-window-switcher-trigger {
+  display: flex;
+  width: auto;
+  padding: 4px 7px;
+}
 .world-window-switcher-trigger.is-floating {
   position: fixed;
   left: max(12px, env(safe-area-inset-left, 0px));
   bottom: calc(96px + env(safe-area-inset-bottom, 0px));
-  z-index: 80;
+  z-index: 78;
   min-width: 44px;
   min-height: 44px;
   background: var(--shell-panel);
@@ -478,6 +483,21 @@
 }
 .is-town-skin .world-window-controls {
   gap: 6px;
+}
+/* Narrow desktop Columns still show the pane map, portrait and location.
+   Use the desktop control size so those identity columns retain space. */
+@container workspace-inspector (max-width: 279px) {
+  .world-managed-window.is-town-skin:not(.is-compact)
+    .workspace-inspector-agent-identity {
+    column-gap: 4px;
+  }
+  .world-managed-window.is-town-skin:not(.is-compact)
+    :is(.world-window-back, .world-window-controls > button) {
+    min-width: 30px;
+    min-height: 30px;
+    width: 30px;
+    height: 30px;
+  }
 }
 .is-town-skin .workspace-inspector-tabs {
   padding: 3px;

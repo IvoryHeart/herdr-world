@@ -68,7 +68,7 @@ test.skipIf(!chrome)(
             port!,
             controlsCaptureDir,
             "window-controls",
-            `innerWidth > 768 || (() => { const b = document.querySelector('button[aria-label^="Open windows ("]'); if (!b) return false; const r = b.getBoundingClientRect(); return r.width >= 44 && r.height >= 44 && r.top >= 0 && r.left >= 0 && r.right <= innerWidth && r.bottom <= innerHeight && document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.closest('button') === b; })()`,
+            `innerWidth > 768 || (() => { const b = document.querySelector('button[aria-label^="Open windows ("]'); if (!b) return false; const r = b.getBoundingClientRect(); return r.width >= 44 && r.height >= 44 && r.top >= 0 && r.left >= 0 && r.right <= innerWidth && r.bottom <= innerHeight && document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.closest('button') === b && [...document.querySelectorAll('.world-managed-window.is-compact.is-active textarea.terminal-composer-input, .world-managed-window.is-compact.is-active .terminal-composer-toolbar button')].every(c => { const q = c.getBoundingClientRect(); return !q.width || !q.height || r.right <= q.left || r.left >= q.right || r.bottom <= q.top || r.top >= q.bottom; }); })()`,
           );
           return new Response(null, { status: 204 });
         }

@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { measuredFixedPositionScale } from "../../fixedPositionScale";
 import { PanelsTopLeft, Minus } from "lucide-react";
 import { useLayer } from "../../layerStack";
+import { useWindowSwitcherHeader } from "./windowSwitcherHeader";
 import "./windows.css";
 
 export type WindowSwitcherEntry = {
@@ -22,6 +23,7 @@ export function WindowSwitcher({
   floating?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const header = useWindowSwitcherHeader(floating);
   const trigger = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState({ left: 0, top: 0 });
@@ -54,7 +56,7 @@ export function WindowSwitcher({
       menu.current?.querySelector<HTMLButtonElement>('[aria-current="true"]') ??
       menu.current?.querySelector<HTMLButtonElement>("button")
     )?.focus();
-  }, [open, entries.length]);
+  }, [open, entries.length, header]);
   useLayer(open, () => setOpen(false), {
     element: () => menu.current,
     anchors: () => [trigger.current],
@@ -64,7 +66,7 @@ export function WindowSwitcher({
     <button
       ref={trigger}
       type="button"
-      className={`world-window-switcher-trigger${floating ? " is-floating" : ""}`}
+      className={`world-window-switcher-trigger${floating && !header ? " is-floating" : ""}`}
       title="Open windows"
       aria-label={`Open windows (${entries.length})`}
       aria-haspopup="menu"
@@ -77,7 +79,7 @@ export function WindowSwitcher({
   );
   return (
     <>
-      {floating ? createPortal(button, document.body) : button}
+      {floating ? createPortal(button, header ?? document.body) : button}
       {open &&
         createPortal(
           <div

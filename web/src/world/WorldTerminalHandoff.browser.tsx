@@ -95,7 +95,10 @@ async function until(
   message: string | (() => string),
 ) {
   for (let index = 0; index < 200; index += 1) {
-    if (renderError) throw renderError;
+    if (renderError)
+      throw new Error(
+        `Render failed while waiting for ${typeof message === "function" ? message() : message}: ${renderError instanceof Error ? renderError.stack : String(renderError)}`,
+      );
     if (condition()) return;
     await settle();
   }
@@ -2216,6 +2219,12 @@ async function run() {
       calls,
       until,
       check,
+      openComposer: () =>
+        requestTerminalComposer({
+          connectionId: "local",
+          generation: runtimeGeneration,
+          paneId: "builder-pane",
+        }),
     })
   ).querySelector<HTMLElement>(".workspace-inspector")!;
   // On a phone, the Chat view shows one composer, Chat's own: no terminal

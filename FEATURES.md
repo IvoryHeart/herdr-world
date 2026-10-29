@@ -417,8 +417,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   placements; snapping into an occupied region overlaps without rearranging it.
   Tiled windows share resizable dividers. **Open windows** restores minimized windows.
   **− Minimize** stays visible on phones. While a window is minimized,
-  **Open windows** floats at the bottom left above the phone's bottom controls,
-  including in Zen; **Tabs** in the expanded mobile controls also lists windows.
+  **Open windows** sits beside **− Minimize** in the phone Inspector's header,
+  clear of its composer. With all Inspectors minimized it floats at the bottom
+  left above the phone's bottom controls, including in Zen. **Tabs** in the
+  expanded mobile controls also lists windows.
   **Close** (or **‹ Back**) dismisses
   the window; open the agent or terminal again to reopen it. Minimizing or
   closing a window leaves agents and terminal sessions running. Native tab
