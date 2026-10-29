@@ -81,6 +81,15 @@ export function ChatAfterBlocks({
           onAnswer={onAnswer}
           onOpenTerminal={onOpenTerminal}
         />
+      ) : notice ? (
+        <p className="agent-chat-ask-notice" role="alert">
+          {notice}{" "}
+          {onOpenTerminal ? (
+            <button type="button" onClick={onOpenTerminal}>
+              Open Terminal
+            </button>
+          ) : null}
+        </p>
       ) : null}
     </>
   );

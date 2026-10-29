@@ -19,8 +19,10 @@ function harness(name = "claude-question") {
     status: "blocked",
     session: "fixture",
     seq: 7,
+    title: "Fixture title",
     onWait: () => {},
     onRead: () => {},
+    onComposerRead: () => {},
     afterText: () => {},
   };
   const writes: { method: string; params: Record<string, unknown> }[] = [];
@@ -30,6 +32,7 @@ function harness(name = "claude-question") {
     agent_status: state.status,
     agent_session: state.session,
     state_change_seq: state.seq,
+    terminal_title: state.title,
   });
   const read = () => {
     const prompt = parsePendingPrompt(agent, state.screen, {
@@ -44,7 +47,11 @@ function harness(name = "claude-question") {
     readPrompt: async () => read(),
     isCodexBound: async () => true,
     herdrCall: async (method, params = {}) => {
-      if (method === "pane.read") return { read: { text: state.screen } };
+      if (method === "pane.read") {
+        const text = state.screen;
+        state.onComposerRead();
+        return { read: { text } };
+      }
       if (method === "pane.wait_for_output") {
         state.onWait();
         return {};
@@ -65,7 +72,7 @@ function harness(name = "claude-question") {
         method === "pane.send_input" &&
         (params.keys as string[] | undefined)?.[0] === "4"
       ) {
-        state.screen = "❯\n";
+        state.screen = fixture("claude-composer-empty");
         state.status = "working";
       } else {
         state.status = "working";
@@ -147,6 +154,9 @@ test("a plan's feedback uses its verified inline editor", async () => {
 });
 test("Chat about this submits through the normal prompt operation after the menu closes", async () => {
   const h = harness();
+  h.state.afterText = () => {
+    h.state.seq += 1;
+  };
   expect(await h.submit("4", "Discuss a violet badge.")).toMatchObject({
     status: "sent",
     acknowledged: true,
@@ -325,4 +335,118 @@ test("the RPC preserves text and refuses a non-string value rather than treating
       source,
     ),
   ).toMatchObject({ status: "sent" });
+});
+
+test("discussion checks the complete native composer rather than its first row", async () => {
+  const empty = fixture("claude-chat-typed").replace(/❯[^\n]*/, "❯");
+  const lines = empty.trimEnd().split("\n");
+  for (const screen of [
+    fixture("claude-composer-multiline"),
+    [
+      ...lines.slice(0, 2),
+      "  Keep this multiline native draft",
+      ...lines.slice(2),
+    ].join("\n"),
+    "❯\n",
+  ]) {
+    const h = harness();
+    h.state.onWait = () => {
+      h.state.screen = screen;
+    };
+    expect(await h.submit("4", "A Chat reply")).toMatchObject({
+      status: "refused",
+      reason: "changed",
+    });
+    expect(h.writes).toHaveLength(1);
+  }
+});
+
+test("discussion fences its screen read with unchanged sequence, title and status", async () => {
+  for (const change of [
+    (h: ReturnType<typeof harness>) => {
+      h.state.seq += 1;
+    },
+    (h: ReturnType<typeof harness>) => {
+      h.state.title = "New native turn";
+    },
+    (h: ReturnType<typeof harness>) => {
+      h.state.status = "working";
+    },
+    (h: ReturnType<typeof harness>) => {
+      h.state.seq += 1;
+      h.state.status = "working";
+    },
+  ]) {
+    const h = harness();
+    h.state.onWait = () => {
+      h.state.status = "idle";
+    };
+    h.state.onComposerRead = () => change(h);
+    expect(await h.submit("4", "A Chat reply")).toMatchObject({
+      status: "refused",
+      reason: "changed",
+    });
+    expect(h.writes).toHaveLength(1);
+  }
+});
+
+test("a successful discussion write without subsequent progress is unconfirmed", async () => {
+  for (const status of ["idle", "working"]) {
+    const h = harness();
+    h.state.onWait = () => {
+      h.state.status = status;
+    };
+    h.state.afterText = () => {
+      h.state.status = status;
+    };
+    expect(await h.submit("4", "A Chat reply")).toMatchObject({
+      status: "sent",
+      acknowledged: false,
+      unconfirmed_reason: "no_progress",
+    });
+  }
+});
+
+test("discussion acknowledgement needs a new working sequence after the reply", async () => {
+  const h = harness();
+  h.state.onWait = () => {
+    h.state.status = "idle";
+  };
+  h.state.afterText = () => {
+    h.state.seq += 1;
+  };
+  expect(await h.submit("4", "A Chat reply")).toMatchObject({
+    status: "sent",
+    acknowledged: true,
+  });
+});
+
+test("prefix-shaped native drafts receive no menu digit or appended Chat text", async () => {
+  const existing = harness("claude-text-entry");
+  existing.state.screen = existing.state.screen.replace(
+    "Type something.",
+    "Chat about this later",
+  );
+  expect(
+    await existing.answer({
+      pane_id: "w1:p1",
+      key: "1",
+      prompt_fingerprint: existing.read()!.fingerprint,
+    }),
+  ).toMatchObject({ status: "refused" });
+  expect(existing.writes).toEqual([]);
+  for (const draft of [
+    "Type something. Keep this native draft",
+    "Tell Claude what to change instead",
+  ]) {
+    const h = harness();
+    h.state.onWait = () => {
+      h.state.screen = h.state.screen.replace("Type something.", draft);
+    };
+    expect(await h.submit()).toMatchObject({
+      status: "refused",
+      reason: "changed",
+    });
+    expect(h.writes).toHaveLength(1);
+  }
 });

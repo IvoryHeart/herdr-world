@@ -7,6 +7,20 @@ import type { HerdrCall } from "./session-types";
 import { isRecord, normalizeAgentName, stringValue } from "./session-utils";
 const MOVED_ON = new Set(["working", "idle", "done"]);
 
+/** The captured empty Claude composer is one blank prompt row between rules.
+ * Additional rows can contain a multiline draft, even if its first row is blank. */
+function emptyDiscussionComposer(text: string | null) {
+  if (text === null) return false;
+  const lines = text.split("\n").map((line) => line.replace(/\s+$/, ""));
+  const prompt = lines.findLastIndex((line) => line.startsWith("❯"));
+  return (
+    prompt > 0 &&
+    /^─{3,}$/.test(lines[prompt - 1]!) &&
+    /^❯[ \t\u00a0]*$/.test(lines[prompt]!) &&
+    lines[prompt + 1] === lines[prompt - 1]
+  );
+}
+
 /** Answer only the checked screen in its originating pane and session. */
 export function createPromptAnswerer(args: {
   herdrCall: HerdrCall;
@@ -23,6 +37,7 @@ export function createPromptAnswerer(args: {
     prompt_fingerprint,
     text,
   }) => {
+    let discussionState: Record<string, unknown> | null = null;
     // Herdr has no conditional input (herdr#4764), so the key cannot be
     // made conditional on the prompt. World checks as close to the key as
     // it can: Herdr's state, the screen, then Herdr's state again, and any
@@ -101,12 +116,11 @@ export function createPromptAnswerer(args: {
         "changed",
         "The agent changed while Chat checked its question. Nothing was sent; check it and answer again.",
       );
-    if (!option.active)
-      await args.herdrCall("pane.send_input", {
-        pane_id,
-        text: "",
-        keys: [option.key],
-      });
+    await args.herdrCall("pane.send_input", {
+      pane_id,
+      text: "",
+      keys: [option.key],
+    });
     if (option.input) {
       // Wait on Herdr's output event, then recheck the destination before
       // writing text. A selected option alone does not prove an editor opened.
@@ -157,6 +171,7 @@ export function createPromptAnswerer(args: {
           stringValue(current.agent_status) !== "blocked" ||
           !selected?.active ||
           selected.input !== "text" ||
+          selected.label !== option.label ||
           JSON.stringify([editor?.question, editor?.request, editor?.steps]) !==
             JSON.stringify([prompt.question, prompt.request, prompt.steps])
         )
@@ -208,16 +223,19 @@ export function createPromptAnswerer(args: {
           typeof screen.read.text === "string"
             ? screen.read.text
             : null;
-        const composer = content
-          ?.split("\n")
-          .filter((line) => /^❯/.test(line))
-          .at(-1);
         const checked = await args.agentInfo(pane_id);
         if (
-          !composer ||
-          !/^❯[ \t\u00a0]*$/.test(composer) ||
+          !emptyDiscussionComposer(content) ||
           !checked ||
-          ["agent", "agent_session", "revision", "terminal_id"].some(
+          [
+            "agent",
+            "agent_session",
+            "revision",
+            "terminal_id",
+            "state_change_seq",
+            "terminal_title",
+            "agent_status",
+          ].some(
             (name) =>
               JSON.stringify(checked[name] ?? null) !==
               JSON.stringify(current[name] ?? null),
@@ -230,6 +248,7 @@ export function createPromptAnswerer(args: {
           );
         // The normal prompt operation pastes literal text and submits it,
         // and refuses if the agent became blocked before dispatch.
+        discussionState = checked;
         const sent = await args.herdrCall("agent.prompt", {
           target: pane_id,
           text: text!,
@@ -260,6 +279,26 @@ export function createPromptAnswerer(args: {
           JSON.stringify(before?.agent_session ?? null)
         )
           return "session_changed";
+        if (discussionState) {
+          if (
+            ["agent", "agent_session", "revision", "terminal_id"].some(
+              (name) =>
+                JSON.stringify(info[name] ?? null) !==
+                JSON.stringify(discussionState![name] ?? null),
+            )
+          )
+            return "session_changed";
+          const beforeSeq = discussionState.state_change_seq;
+          const afterSeq = info.state_change_seq;
+          return status === "working" &&
+            typeof beforeSeq === "number" &&
+            Number.isSafeInteger(beforeSeq) &&
+            typeof afterSeq === "number" &&
+            Number.isSafeInteger(afterSeq) &&
+            afterSeq > beforeSeq
+            ? null
+            : "no_progress";
+        }
         if (MOVED_ON.has(status)) return null;
         if (status !== "blocked") return "unknown_status";
         // Read under the checked state, so only what the screen shows

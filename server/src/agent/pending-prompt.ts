@@ -76,9 +76,10 @@ const PLAN_EDGE = /^\s*╌{3,}\s*$/;
 const MENU_FOOTER =
   /^\s*(?:enter to (?:select|confirm)\b.*\besc to cancel\b|ctrl\+g to edit\b)/i;
 const MENU_OPTION = /^\s*(❯\s*)?(\d)\.\s+(.{1,200}?)\s*$/;
-// Options that open a text box in the terminal rather than answer.
-const FREE_TEXT =
-  /^(?:type something|chat about this|tell claude what to change)\b/i;
+const TYPE_PLACEHOLDER = "Type something.";
+const PLAN_PLACEHOLDER = "Tell Claude what to change";
+const CHAT_OPTION = "Chat about this";
+const PLAN_FEEDBACK = "shift+tab to approve with this feedback";
 const INLINE_EDITOR = /^\s*enter to (?:select|confirm)\b.*ctrl\+g to edit\b/i;
 const CODEX_OPTION = /^\s*(›\s*)?(\d)\.\s+(.{1,200}?)\s+\(([a-z]|esc)\)\s*$/i;
 // Signs that the harness shortened the request it shows.
@@ -206,6 +207,8 @@ function claudeMenuPrompt(lines: string[]): Parsed | null {
   if (!footer && !MENU_OPTION.test(lines[end]!)) return null;
   if (!footer) end += 1;
   const all: PromptOption[] = [];
+  const optionLines = new Map<PromptOption, number>();
+  const rawLabels = new Map<PromptOption, string>();
   let cursor = 0;
   let menuStart = -1;
   let described: string[] = [];
@@ -223,6 +226,8 @@ function claudeMenuPrompt(lines: string[]): Parsed | null {
         key: match[2]!,
         ...(described.length ? { description: described.join(" ") } : {}),
       });
+      optionLines.set(all[0]!, index);
+      rawLabels.set(all[0]!, match[3]!.trim());
       if (match[1]) selected = all[0];
       described = [];
       if (match[2] === "1") {
@@ -278,14 +283,47 @@ function claudeMenuPrompt(lines: string[]): Parsed | null {
     described.length === 0 &&
     question.length > 0 &&
     /\?\s*$/.test(question[question.length - 1]!);
-  const editing =
-    INLINE_EDITOR.test(lines[end] ?? "") ||
-    (PLAN_FOOTER.test(lines[end] ?? "") &&
-      selected?.description?.includes(
-        "shift+tab to approve with this feedback",
-      ));
+  // Identify the editable slot from the renderer's structure, never from
+  // the user's draft. Its contents remain a draft when the cursor moves away.
+  const planMenu = PLAN_FOOTER.test(lines[end] ?? "");
+  const last = all.at(-1);
+  const chat =
+    !planMenu && last && rawLabels.get(last) === CHAT_OPTION ? last : undefined;
+  const beforeChat = chat ? all.at(-2) : undefined;
+  const formText =
+    beforeChat &&
+    lines
+      .slice(optionLines.get(beforeChat)! + 1, optionLines.get(chat!)!)
+      .some((line) => RULE.test(line))
+      ? beforeChat
+      : undefined;
+  const feedback = planMenu
+    ? all.filter((option) => option.description?.endsWith(PLAN_FEEDBACK))
+    : [];
+  const textSlot = planMenu
+    ? feedback.length === 1
+      ? feedback[0]
+      : undefined
+    : formText;
+  const placeholder = planMenu ? PLAN_PLACEHOLDER : TYPE_PLACEHOLDER;
+  const draft =
+    textSlot &&
+    (rawLabels.get(textSlot) !== placeholder ||
+      (planMenu
+        ? textSlot.description !== PLAN_FEEDBACK
+        : textSlot.description !== undefined));
+  const unknownEditor =
+    INLINE_EDITOR.test(lines[end] ?? "") && selected !== textSlot;
+  const unmappedText = all.some(
+    (option) =>
+      [TYPE_PLACEHOLDER, PLAN_PLACEHOLDER, CHAT_OPTION].includes(
+        rawLabels.get(option)!,
+      ) &&
+      option !== textSlot &&
+      !(option === chat && textSlot),
+  );
   const readableEditor =
-    !editing || (selected && FREE_TEXT.test(selected.label));
+    !draft && !unknownEditor && !unmappedText && feedback.length <= 1;
   return {
     shown: lines.slice(Math.max(0, from), footer ? end + 1 : end),
     question: question.map((line) => line.trim()),
@@ -298,18 +336,15 @@ function claudeMenuPrompt(lines: string[]): Parsed | null {
     options:
       valid && readableEditor
         ? all.map((option) =>
-            FREE_TEXT.test(option.label)
+            option === textSlot
               ? {
                   ...option,
-                  input: /^chat about this\b/i.test(option.label)
-                    ? ("chat" as const)
-                    : ("text" as const),
-                  ...(option === selected &&
-                  !/^chat about this\b/i.test(option.label)
-                    ? { active: true }
-                    : {}),
+                  input: "text" as const,
+                  ...(option === selected ? { active: true } : {}),
                 }
-              : option,
+              : option === chat && textSlot
+                ? { ...option, input: "chat" as const }
+                : option,
           )
         : [],
     ...(steps ? { steps } : {}),

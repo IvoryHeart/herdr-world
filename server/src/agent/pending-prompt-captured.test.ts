@@ -119,3 +119,28 @@ test("Codex notes being edited in the native dialog offer no digit actions", () 
       .options,
   ).toEqual([]);
 });
+
+test("native drafts remain non-actionable after the cursor moves to another choice", () => {
+  for (const name of ["claude-draft-unfocused", "claude-plan-draft-unfocused"])
+    expect(
+      parsePendingPrompt("claude", screen(name), context)!.options,
+    ).toEqual([]);
+});
+
+test("text-option prefixes inside native draft contents are not placeholders", () => {
+  for (const draft of [
+    "Chat about this later",
+    "Type something. Keep this native draft",
+    "Tell Claude what to change instead",
+    "Type something. ✔",
+    "Type something.\n     Wrapped native draft",
+  ]) {
+    expect(
+      parsePendingPrompt(
+        "claude",
+        screen("claude-text-entry").replace("Type something.", draft),
+        context,
+      )!.options,
+    ).toEqual([]);
+  }
+});

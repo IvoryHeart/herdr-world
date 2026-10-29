@@ -1768,13 +1768,20 @@ the destination again before submitting text. Missing, stale, replaced or
 unrecognized editors SHALL receive no text. A native editor that was already
 active before Chat selected its option SHALL remain in the Terminal, including
 when it appears empty; it SHALL receive neither menu digits nor text. Text SHALL be nonempty, at most 4000 characters
-and free of terminal control characters; discussion text SHALL NOT invoke the
+and free of terminal control characters. An existing native draft SHALL remain
+in the Terminal after its cursor moves away, including text resembling a
+placeholder or another option. Discussion dispatch SHALL require a complete empty
+composer with no continuation rows and unchanged session, terminal, revision,
+state sequence, title and status across its screen read; discussion text SHALL NOT invoke the
 composer's slash, shell or memory commands. Answers to one pane SHALL NOT
 interleave inside a conversation source.
 
 Digits within the reply input SHALL remain text. A replacement prompt or admitted
 connection, runtime, pane or session SHALL reset its option and draft. An answer receipt SHALL claim acknowledgement only from the
-same session moving on, not merely from successfully writing input. Herdr's lack
+same session moving on, not merely from successfully writing input. Discussion acknowledgement SHALL require a new working state sequence after
+the final destination check. A post-selection refusal SHALL remain visible across
+question reloads in the same owner scope until the next answer attempt, even
+when the question disappears. Herdr's lack
 of conditional input remains a documented gap between the last check and dispatch.
 
 #### Scenario: Codex waits without hooks

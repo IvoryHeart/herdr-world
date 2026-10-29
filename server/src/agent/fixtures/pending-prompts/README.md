@@ -14,8 +14,13 @@ The dialog layout and control footers are retained for parser regressions.
 - Claude question and plan captures include the initial choices, a selected
   empty inline editor and typed text replacing its placeholder. Enter submits
   the text; an empty answer declines the question.
+- Claude inline and plan draft captures also show the cursor moved back to an
+  ordinary choice. The typed draft remains in its editable slot even though the
+  inline-editor footer disappears.
 - Claude's discussion choice closes the question and returns to the composer;
-  the discussion capture shows its typed reply before submission.
+  the discussion capture shows its typed reply before submission. The empty and
+  multiline composer captures distinguish an empty prompt from a blank first row
+  followed by an existing draft.
 
 Herdr 0.9.5 reported Codex as `blocked` with `osc_title_blocked` matching and
 `screen_detection_skipped: false`. World resolved the same pane through its

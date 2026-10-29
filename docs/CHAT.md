@@ -122,9 +122,16 @@ that root; stat metadata cannot redirect the read to a different transcript.
   editor, even if it appears empty, stays in the Terminal: Chat cannot distinguish
   a placeholder from identical text already typed there. Chat does not append to
   or replace it; start a text answer from an untouched menu in Chat instead.
+  A typed native draft stays in the Terminal after its cursor moves away,
+  including text beginning with a placeholder or another option's label.
+  Discussion replies require the complete empty composer frame, with no
+  continuation rows, and unchanged status, title and state sequence across
+  its screen read.
   If the editor cannot be verified after the option was selected, Chat says
   **No text was sent** and offers the Terminal. Another answer to the same pane
-  is refused while the first is in progress.
+  is refused while the first is in progress. The refusal stays visible across
+  subsequent question reloads, including when the card disappears, until the
+  next answer attempt in that same connection, pane and session.
 - Codex conversations inferred from the shared daemon are read-only guesses.
   World cannot see every client sharing that daemon: another Herdr session or
   an outside terminal can make the guess wrong. Recent unloaded threads count
@@ -151,7 +158,10 @@ that root; stat metadata cannot redirect the read to a different transcript.
   (`still_showing`), the pane has another session (`session_changed`, and the
   key may have reached it), Herdr reports a status such as `unknown`
   (`unknown_status`), Herdr no longer reports the agent (`agent_missing`), or
-  the screen could not be read (`unreadable`). Chat answers only when you
+  the screen could not be read (`unreadable`). A discussion reply additionally
+  requires a new `working` state sequence after its final destination check;
+  an unchanged or idle state gives `no_progress`, because closing the menu
+  alone does not prove the reply was accepted. Chat answers only when you
   pick an option.
 - Keeps the last good conversation when a read fails, for example while the
   transcript is being written, and says that it could not refresh.

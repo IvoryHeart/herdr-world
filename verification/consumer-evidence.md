@@ -394,11 +394,14 @@ fails; the refusal says so. Input text does not acquire command authority.
 Code 2.1.312 screens captured in an isolated Herdr 0.9.5 session. It checks
 approval hints, question dialogs without hints, logical-key dispatch rather than
 pasted digits, complete-frame admission,
-wrapped descriptions, inline editor selection and preservation of native drafts.
+wrapped descriptions, inline editor selection and preservation of native drafts,
+including real inline/plan drafts after their cursor moves away. The captured
+empty and multiline composers check the complete frame, not only its first row.
 `prompt-answer.test.ts` drives the real parser and answer implementation across
 inline answer, plan feedback and discussion transitions, including invalid RPC
 text, replacement races, duplicate in-flight submissions and unchanged-screen
-receipts. Existing `conversation-answer.test.ts` retains its complete original
+receipts, screen-read state/title/status races, placeholder-prefix drafts and
+post-write discussion progress. Existing `conversation-answer.test.ts` retains its complete original
 prompt/session/state admission and acknowledgement matrix after extraction of
 that implementation into `prompt-answer.ts`.
 
@@ -406,7 +409,9 @@ that implementation into `prompt-answer.ts`.
 selection without dispatch, exact typed text, editable-digit isolation, disabled
 in-flight controls and draft retirement when the question or owning host changes.
 The full Chat component also verifies that text reaches its answer RPC and that
-the returned literal text appears in its receipt. The native
+the returned literal text appears in its receipt, and that post-selection
+refusals survive question replacement or disappearance without crossing owner
+scopes. The native
 captures verify the external protocol itself; fixtures and controlled transition
 cases test forbidden states that cannot safely be induced against live user work.
 These direct parser, state-transition and browser checks add evidence beyond the

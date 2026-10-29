@@ -1,0 +1,14 @@
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ☐ Color
+
+Which color should the badge use?
+
+  1. Red
+     A warm, high-contrast red for attention-grabbing badges.
+❯ 2. Blue
+     A cool, calm blue for neutral or informational badges.
+  3. Keep this native draft
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  4. Chat about this
+
+Enter to select · ↑/↓ to navigate · Esc to cancel

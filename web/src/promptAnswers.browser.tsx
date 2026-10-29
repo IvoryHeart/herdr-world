@@ -185,6 +185,11 @@ try {
   // Exercise the complete Chat callback/RPC chain, beyond the isolated card.
   const requests: Record<string, unknown>[] = [];
   let connectionId = "answer-host";
+  let chatKey = "full-chat";
+  let refusalMode: "changed" | "gone" | null = null;
+  let hidePrompt = false;
+  const refusalMessage =
+    "The option was selected, but Chat could not verify its text editor. No text was sent; continue in the Terminal.";
   const client = {
     get connectionId() {
       return connectionId;
@@ -206,7 +211,7 @@ try {
           status: "ok",
           unavailable: null,
           latest: null,
-          pending_prompt: prompt,
+          pending_prompt: hidePrompt ? null : prompt,
           deliveries: [],
         };
       if (method === "agent_history.get")
@@ -225,6 +230,21 @@ try {
         };
       if (method === "agent_conversation.answer") {
         requests.push(params);
+        if (refusalMode) {
+          hidePrompt = refusalMode === "gone";
+          prompt = {
+            ...prompt,
+            fingerprint: "selected-" + refusalMode,
+            options: prompt.options.map((option) =>
+              option.key === "3" ? { ...option, active: true } : option,
+            ),
+          };
+          return {
+            status: "refused",
+            reason: "changed",
+            message: refusalMessage,
+          };
+        }
         return {
           status: "sent",
           number: "3",
@@ -258,7 +278,9 @@ try {
   };
   const fullChat = () =>
     act(async () =>
-      root.render(h(AgentChat, { pane, active: true, onClose() {} })),
+      root.render(
+        h(AgentChat, { key: chatKey, pane, active: true, onClose() {} }),
+      ),
     );
   await fullChat();
   await click("Type something.");
@@ -297,6 +319,40 @@ try {
       "Exact Chat reply 2",
     "Full Chat displays the literal text from its answer receipt",
   );
+  for (const mode of ["changed", "gone"] as const) {
+    chatKey = "refusal-" + mode;
+    hidePrompt = false;
+    refusalMode = mode;
+    prompt = {
+      ...prompt,
+      options: nativeOptions,
+      fingerprint: "before-refusal-" + mode,
+    };
+    await fullChat();
+    await click("Type something.");
+    await type("Keep this reply");
+    await act(async () =>
+      document
+        .querySelector<HTMLFormElement>(".agent-chat-ask-text")!
+        .requestSubmit(),
+    );
+    check(
+      document.body.textContent?.includes(refusalMessage),
+      "A post-selection refusal remains visible after the question reloads: " +
+        mode,
+    );
+    if (mode === "gone")
+      check(
+        !document.querySelector(".agent-chat-ask"),
+        "The refusal survives without an ask card",
+      );
+    connectionId = "next-host-" + mode;
+    await fullChat();
+    check(
+      !document.body.textContent?.includes(refusalMessage),
+      "The refusal does not carry into another host",
+    );
+  }
 } catch (error) {
   failures.push(String(error));
 }

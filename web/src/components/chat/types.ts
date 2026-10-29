@@ -87,7 +87,8 @@ export type UnconfirmedReason =
   | "session_changed"
   | "unknown_status"
   | "unreadable"
-  | "still_showing";
+  | "still_showing"
+  | "no_progress";
 
 export type ConversationDelivery = {
   kind?: "command";

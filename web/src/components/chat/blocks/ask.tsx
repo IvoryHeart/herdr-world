@@ -4,6 +4,8 @@ import type { PendingPrompt, UnconfirmedReason } from "../types";
 import "./ask.css";
 
 export const UNCONFIRMED: Record<UnconfirmedReason, string> = {
+  no_progress:
+    "Chat has not seen a new working turn after this discussion reply. Check the Terminal.",
   still_showing:
     "the question is still showing; check the Terminal if it does not move on.",
   session_changed:
