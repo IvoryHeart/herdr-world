@@ -4,7 +4,7 @@ import {
   type State,
   type StoreConnectionLease,
 } from "./types";
-import type { WorldAsk } from "../world/worldAsks";
+import { sharedAsksStore, type WorldAsk } from "../world/worldAsks";
 import { worldLocalStorage } from "../browserStorage";
 import { type TaskNotificationPreferences } from "../taskPush";
 import { type Pane, type Workspace, type Tab } from "../types";
@@ -595,3 +595,6 @@ export {
   trackTaskCompletions,
   notifyCompletedTasks,
 };
+
+// Install policy without starting reads; the asks model never imports this module.
+sharedAsksStore(notifyWorldAsk);

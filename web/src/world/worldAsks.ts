@@ -1,5 +1,4 @@
 import { useEffect, useSyncExternalStore } from "react";
-import { notifyWorldAsk } from "../store/notifications";
 import { bridge, type BridgeControlMsg, type ConnectionStatus } from "../api";
 
 /**
@@ -150,8 +149,11 @@ export class WorldAsksStore {
 }
 
 let shared: WorldAsksStore | null = null;
-export function sharedAsksStore() {
-  shared ??= new WorldAsksStore(bridge, notifyWorldAsk);
+let announceSharedAsk: (ask: WorldAsk) => void = () => {};
+/** The application supplies notification policy; this read model stays independent. */
+export function sharedAsksStore(announce?: (ask: WorldAsk) => void) {
+  if (announce) announceSharedAsk = announce;
+  shared ??= new WorldAsksStore(bridge, (ask) => announceSharedAsk(ask));
   return shared;
 }
 

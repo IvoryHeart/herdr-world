@@ -365,3 +365,17 @@ The real CLI/ledger tests check self-scoped withdrawal by key without creation,
 retained answered repeats and explicit human withdrawal output. A real projection
 with six finishes checks shell-question priority, and the Town browser consumer
 checks its bounded reception entry and single-action original-terminal route.
+
+
+### Browser startup and ask notification composition
+
+Fresh-process coverage initializes browser storage, imports the asks model first,
+and then requires application state and its saved notification preference to load.
+The real `main.tsx` entry also runs through Vite in Chrome with isolated synthetic
+proxy endpoints: uncaught startup errors, rejected imports and ErrorBoundary output
+fail acceptance before the mounted shell is credited. Both checks reproduce the
+reported initialization failure before repair. Late notifier installation on the
+existing shared model retains quiet backlog loading and one announcement per new
+ask; the existing notification-policy consumers retain runtime/session authority.
+These are direct JavaScript/module and browser consumers, with no abstract-model
+claim about arbitrary import graphs or live external runtimes.

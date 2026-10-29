@@ -5,6 +5,16 @@ and service ownership. This file routes visual and terminal tasks to the small s
 browser owners and focused tests. Search the **symbols** below inside large files;
 line numbers and CSS ranges change as components move.
 
+## Application startup and owner questions
+
+The asks read model in [worldAsks.ts](worldAsks.ts) takes an announcement callback
+installed by the notification-policy module during application initialization.
+It does not import notification policy or the application store. Late callback
+configuration also updates an existing shared asks model, preserving quiet backlog loading and one
+announcement for each new ask. [Import-order coverage](../storeImportOrder.test.ts)
+and the [real Vite entry check](../appStartup.browser.test.ts) exercise fresh
+startup; notification-policy tests retain the captured host/runtime/session rules.
+
 ## Desk
 
 Desk follows the aggregate host filter. Receipt and screen reads capture each leaf's
