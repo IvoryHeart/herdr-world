@@ -548,7 +548,12 @@ describe("delivery", () => {
   let checkedOut: string;
   let ownerAsks: Map<
     string,
-    { id: string; answer?: { text: string }; withdrawn?: { at: number } }
+    {
+      id: string;
+      answer?: { text: string };
+      withdrawn?: { at: number };
+      dismissed?: { at: number; by: string };
+    }
   >;
   let crew: ReturnType<typeof openCrewStore>;
   let lock: ReturnType<typeof openLock>;
@@ -1741,6 +1746,30 @@ describe("delivery", () => {
     const ask = [...ownerAsks.values()][0]!;
     live = live.map((seat) => ({ ...seat, status: "idle" }));
     pass(trioPosted(), NOW + 120_000);
+    expect(ask.withdrawn).toBeDefined();
+  });
+
+  test("an owner-dismissed ask is not asked again while its cause holds, and is withdrawn when it clears", () => {
+    live = live.map((seat) =>
+      seat.name === "towncx" ? { ...seat, status: "blocked" } : seat,
+    );
+    pass(trioPosted());
+    const ask = [...ownerAsks.values()][0]!;
+    ask.dismissed = { at: NOW, by: "owner" };
+    pass(trioPosted(), NOW + 60_000);
+    pass(trioPosted(), NOW + 120_000);
+    expect(ownerAsks.size).toBe(1);
+    const feed = readFileSync(join(dir, "feed.log"), "utf8");
+    expect(
+      feed
+        .split("\n")
+        .filter((line) => line.includes(`owner dismissed ${ask.id}`)),
+    ).toHaveLength(1);
+    expect(
+      calls.filter((argv) => argv[0] === "herdr-world" && argv[2] === "get"),
+    ).toHaveLength(1);
+    live = live.map((seat) => ({ ...seat, status: "idle" }));
+    pass(trioPosted(), NOW + 180_000);
     expect(ask.withdrawn).toBeDefined();
   });
 

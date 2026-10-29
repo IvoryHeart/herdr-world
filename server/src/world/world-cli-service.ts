@@ -3,6 +3,7 @@ import {
   answerAsk,
   CliError,
   createWorldCli,
+  dismissAsk,
   type WorldCliDeps,
 } from "./world-cli";
 import { WorldLedger } from "./world-ledger";
@@ -10,8 +11,9 @@ import type { WorldSnapshotResult } from "./snapshot";
 
 /**
  * The agent CLI inside the running service: its ledger, the notices World's
- * pages get when it changes, the `/api/world/cli` route, and the two methods
- * pages call for questions (`world.asks.get`, `world.ask.answer`).
+ * pages get when it changes, the `/api/world/cli` route, and the
+ * methods pages call for questions (`world.asks.get`, `world.ask.answer`,
+ * `world.ask.dismiss`).
  */
 /** A ready runtime of one connection, as the connection manager leases it. */
 type Lease = {
@@ -97,14 +99,24 @@ export function createWorldCliService(deps: {
     /** A page's question method; undefined when `method` is not one. */
     rpc(method: string, params: unknown): unknown {
       if (method === "world.asks.get") return ledger().openAsks();
-      if (method !== "world.ask.answer") return undefined;
+      if (method !== "world.ask.answer" && method !== "world.ask.dismiss")
+        return undefined;
       const p = (params ?? {}) as Record<string, unknown>;
       const answer = typeof p.answer === "string" ? p.answer.trim() : "";
-      if (typeof p.id !== "string" || !answer || answer.length > 4000)
-        throw new Error("an answer needs a question ID and text");
+      if (
+        typeof p.id !== "string" ||
+        (method === "world.ask.answer" && (!answer || answer.length > 4000))
+      )
+        throw new Error(
+          method === "world.ask.answer"
+            ? "an answer needs a question ID and text"
+            : "a dismissal needs a question ID",
+        );
       try {
         publishLedger(
-          answerAsk(ledger(), p.id, answer, "owner", Date.now()),
+          method === "world.ask.answer"
+            ? answerAsk(ledger(), p.id, answer, "owner", Date.now())
+            : dismissAsk(ledger(), p.id, "owner", Date.now()),
           true,
         );
       } catch (error) {
