@@ -12,6 +12,10 @@ import { createHash } from "node:crypto";
  *   the plan's "ctrl+g to edit"), with the ❯ cursor on exactly one option.
  *   A digit selects. Options that open a text box ("Type something.", "Chat
  *   about this", "Tell Claude what to change") are left to the Terminal.
+ *   A form of several questions shows one at a time under a row of header
+ *   chips ("←  ☐ Color  ☒ Size  ✔ Submit  →"): a digit answers the question
+ *   shown and moves to the next. Its review ("Review your answers", then
+ *   "Submit answers" and "Cancel") is drawn with no footer.
  * - Codex: numbered options each ending in its key hint, such as "(y)",
  *   "(a)" or "(esc)", with the › cursor on exactly one, below a question that
  *   ends in "?". The hint key selects.
@@ -26,9 +30,16 @@ export type PendingPrompt = {
   /** The complete request asked about: a command, or a file and its edit. */
   request: string[];
   options: PromptOption[];
+  /**
+   * A multi-question form's questions, by their headers, in order: Claude
+   * Code shows one at a time, then a review that submits them all.
+   */
+  steps?: PromptStep[];
   /** Identifies this exact prompt, in this session, at this Herdr state. */
   fingerprint: string;
 };
+
+export type PromptStep = { label: string; answered: boolean };
 
 export type PromptOption = {
   /** What the menu shows, such as "1". */
@@ -52,6 +63,9 @@ const BOX_LINE = /^\s*│(.*)│\s*$/;
 const CLAUDE_OPTION =
   /^\s*(❯\s*)?(\d)\.\s+(.{1,200}?)\s*(?:\((?:esc|shift\+tab)\))?\s*$/i;
 const RULE = /^\s*─{3,}\s*$/;
+// A multi-question form's header chips, ☐ unanswered and ☒ answered.
+const FORM_STEPS = /^\s*←\s+(.*?)\s+✔\s*Submit\s+→\s*$/;
+const FORM_REVIEW = /^\s*Review your answers\s*$/i;
 // Plan approval's footer, and the dashed edges Claude draws around the plan.
 const PLAN_FOOTER = /^\s*ctrl\+g to edit\b/i;
 const PLAN_EDGE = /^\s*╌{3,}\s*$/;
@@ -94,7 +108,21 @@ type Parsed = {
   question: string[];
   request: string[];
   options: PromptOption[];
+  steps?: PromptStep[];
 };
+
+/** A form's header chips, or null for any other line. */
+function formSteps(line: string): PromptStep[] | null {
+  const row = FORM_STEPS.exec(line)?.[1];
+  if (row === undefined) return null;
+  const steps: PromptStep[] = [];
+  for (const chip of row.split(/\s*(?=[☐☒])/u)) {
+    const match = /^([☐☒])\s+(\S.*?)\s*$/u.exec(chip);
+    if (!match) return null;
+    steps.push({ label: match[2]!, answered: match[1] === "☒" });
+  }
+  return steps.length ? steps : null;
+}
 
 /** A Claude Code permission box at the bottom of the screen. */
 function claudePrompt(lines: string[]): Parsed | "incomplete" | null {
@@ -167,7 +195,11 @@ function claudePrompt(lines: string[]): Parsed | "incomplete" | null {
 function claudeMenuPrompt(lines: string[]): Parsed | null {
   let end = lines.length - 1;
   while (end >= 0 && !lines[end]!.trim()) end -= 1;
-  if (end < 0 || !MENU_FOOTER.test(lines[end]!)) return null;
+  if (end < 0) return null;
+  // A form's review has no footer: its menu ends the screen.
+  const footer = MENU_FOOTER.test(lines[end]!);
+  if (!footer && !MENU_OPTION.test(lines[end]!)) return null;
+  if (!footer) end += 1;
   const all: PromptOption[] = [];
   let cursor = 0;
   let menuStart = -1;
@@ -180,7 +212,8 @@ function claudeMenuPrompt(lines: string[]): Parsed | null {
       if (match[1]) cursor += 1;
       all.unshift({
         number: match[2]!,
-        label: match[3]!.trim(),
+        // A form marks the answer already chosen on a revisited question.
+        label: match[3]!.replace(/\s+✔$/u, "").trim(),
         key: match[2]!,
         ...(described.length ? { description: described.join(" ") } : {}),
       });
@@ -201,7 +234,15 @@ function claudeMenuPrompt(lines: string[]): Parsed | null {
   if (menuStart < 0) return null;
   let top = menuStart - 1;
   while (top >= 0 && !RULE.test(lines[top]!)) top -= 1;
-  const above = paragraphs(lines.slice(Math.max(0, top + 1), menuStart));
+  let above = paragraphs(lines.slice(Math.max(0, top + 1), menuStart));
+  // A multi-question form opens with its header chips.
+  const steps = above[0]?.length === 1 ? formSteps(above[0][0]!) : null;
+  if (steps) above = above.slice(1);
+  const review = FORM_REVIEW.test(above[0]?.[0] ?? "");
+  // A review lists each question and its answer: those are its request.
+  if (review && above.length >= 2)
+    above = [above.slice(1, -1).flat(), above[above.length - 1]!];
+  if (!footer && !(steps && review)) return null;
   const question = above[above.length - 1] ?? [];
   // Plan approval approves the plan drawn above it, between dashed edges.
   // The whole plan is the request, and part of what the fingerprint covers;
@@ -231,7 +272,7 @@ function claudeMenuPrompt(lines: string[]): Parsed | null {
     question.length > 0 &&
     /\?\s*$/.test(question[question.length - 1]!);
   return {
-    shown: lines.slice(Math.max(0, from), end + 1),
+    shown: lines.slice(Math.max(0, from), footer ? end + 1 : end),
     question: question.map((line) => line.trim()),
     request:
       plan ??
@@ -240,6 +281,7 @@ function claudeMenuPrompt(lines: string[]): Parsed | null {
         .flat()
         .map((line) => line.trim()),
     options: valid ? all.filter((option) => !FREE_TEXT.test(option.label)) : [],
+    ...(steps ? { steps } : {}),
   };
 }
 
@@ -324,6 +366,7 @@ export function parsePendingPrompt(
       question: parsed.question,
       request: parsed.request,
       options: abbreviated ? [] : parsed.options,
+      ...(parsed.steps ? { steps: parsed.steps } : {}),
       fingerprint: fingerprint(context, parsed.shown),
     };
   }

@@ -776,7 +776,9 @@ See [resource ownership](docs/ARCHITECTURE.md#workspace-resource-ownership).
   When the agent waits on a permission prompt, a question (one or several,
   with each choice's description) or plan approval, Chat shows it as an ask
   card and answers with the option you pick (click or its number key), after
-  checking the question has not changed.
+  checking the question has not changed. A form of several questions lists
+  every question's header with whether it is answered, asks them one at a
+  time, and then offers **Submit answers** from its review.
   Each tool call's row in Chat carries its evidence: a plain label, its state
   and time, a pass or fail badge for a test run, and when opened, the edit's
   diff, the test strip with its first failure, or the end of its output.

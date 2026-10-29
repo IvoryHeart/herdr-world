@@ -1270,6 +1270,34 @@ async function run() {
         !choices[1]!.querySelector("small"),
       "A question's choices must show their descriptions",
     );
+    // A multi-question form shows each question's header and its state.
+    reply = {
+      ...reply,
+      pending_prompt: {
+        question: ["How large should the badge be?"],
+        request: [],
+        options: [
+          { number: "1", label: "Small", key: "1" },
+          { number: "2", label: "Large", key: "2" },
+        ],
+        steps: [
+          { label: "Color", answered: true },
+          { label: "Size", answered: false },
+        ],
+        fingerprint: "f2s",
+      },
+    };
+    push();
+    await settle();
+    const steps = [
+      ...container.querySelectorAll<HTMLElement>(".agent-chat-ask-steps li"),
+    ];
+    check(
+      steps.map((step) => step.getAttribute("aria-label")).join("|") ===
+        "Color, answered|Size, not answered yet" &&
+        !container.querySelector(".agent-chat-ask pre"),
+      "A form must show every question's header and whether it is answered",
+    );
     // Two Chats with questions: a key on one card never answers the other.
     reply = {
       ...reply,

@@ -374,8 +374,11 @@ text. It works for any agent you open from Town, Board or Desk.
    each option on an ask card. Pick one (or press its number with the card
    focused): Chat checks the prompt, session and state have not changed,
    presses that key in the agent's pane and shows what it sent. It says **You
-   answered** only once Herdr shows the agent moved on. Herdr cannot hold a
-   prompt between that check and the key, so read the card first. Options that
+   answered** only once Herdr shows the agent moved on. A form of several
+   questions lists every question's header, answered or not, and asks them
+   one at a time; after the last, its review offers **Submit answers**. Herdr
+   cannot hold a prompt between that check and the key, so read the card
+   first. Options that
    open a text box, and unsupported menus, offer the Terminal instead.
 7. A known pull request named in an agent's **READY** or **opened**
    announcement, or its current work claim, gets a PR card. Open **Details**

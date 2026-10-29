@@ -80,8 +80,13 @@ that root; stat metadata cannot redirect the read to a different transcript.
     cursor on one option. A digit selects. Each choice shows the description
     under it. Options that open a text box ("Type something.", "Chat about
     this", "Tell Claude what to change") are not offered. A form with several
-    questions is answered one tab at a time, then its "Ready to submit your
-    answers?" review. Plan approval shows the whole plan Claude drew between
+    questions shows one at a time under a row of header chips
+    ("←  ☐ Color  ☒ Size  ✔ Submit  →"); the card lists every header and
+    whether it is answered, and a digit answers the question shown, after
+    which the form moves to the next. Its "Ready to submit your answers?"
+    review, which Claude Code draws without a footer, lists the answers and
+    offers Submit answers or Cancel; a footerless menu is read only with the
+    chips and the "Review your answers" heading above it. Plan approval shows the whole plan Claude drew between
     its dashed edges as the request, and the fingerprint covers it; a plan
     cut off by the capture is left to the Terminal.
   - Codex's approval menu: options ending in their key hints such as "(y)" or
