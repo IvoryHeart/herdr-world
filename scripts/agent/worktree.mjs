@@ -259,7 +259,7 @@ function inside(path, directory) {
   return path === directory || path.startsWith(directory + sep);
 }
 
-function commandUses(command, directory) {
+export function commandUses(command, directory) {
   let index = command.indexOf(directory);
   while (index !== -1) {
     const next = command[index + directory.length];

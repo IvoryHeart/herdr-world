@@ -42,8 +42,15 @@ Run `bun run install-hooks` once per clone to point Git at the tracked
 writing files, and its `pre-push` hook runs the applicable check. Use focused checks
 only for a specific question while developing. For a code push, the hook runs
 `bun run check:changed` against the remote branch (or `origin/main` for a new
-branch). It always runs formatting, lint, type checks, the build, the site and
-OpenSpec validation. It then runs the unit tests that import or read a changed
+branch). It always runs notices, changelog validation, the size ratchet, formatting,
+lint, type checks, the build, the site and OpenSpec validation. The size ratchet
+checks the proposed merge tree against main's ceilings, so an unchanged branch
+behind main passes while a restored ceiling fails. Tracked working edits and
+newly staged sources are included without changing HEAD or staged contents.
+Merge conflicts block the check. Fetch main to refresh the proposed merge input.
+For a stacked PR, run `bun run check:size origin/main <target-ref>` or set
+`HERDR_WORLD_RATCHET_TARGET=<target-ref>` for pre-push; CI supplies the exact PR
+base SHA. The gate then runs the unit tests that import or read a changed
 file, the World browser suites nearest to each changed file, and behavioral
 verification when a change touches its models, adapters, contracts or a
 `verification/coverage.json` owner. A deleted file runs the tests that still
@@ -63,6 +70,29 @@ falls back to full validation. One scope decision feeds every platform job,
 and Delivery checks includes both macOS lifecycle results. See the
 [pipeline ownership guide](docs/ci-pipelines.md) for the job boundaries and
 failure diagnosis.
+
+The tooling-only mode is shared by CI and pre-push. Every path in the complete PR
+diff must be under `scripts/agent/**` (including its tests), or exactly
+`docs/agent-development.md`, `docs/crew-runbook.md`, `docs/dispatch-runbook.md`, or
+`changes/<slug>.md`. It runs the complete static lane, including all source type
+checks, and affected unit tests. An agent module without known test coverage runs
+the agent test inventory. World browser/latency suites, behavioral verification,
+Windows installation and installer upgrades are skipped. Both protected macOS
+jobs still report success with native steps skipped; `Delivery checks` validates
+all expected results. Any other code path retains the full CI matrix. Main pushes
+and explicit `check:delivery` always run the full gate. Renames are classified as
+both their old and new paths, and incremental pushes classify the entire PR.
+
+Prepare the final PR description in a file after committing, then run:
+
+```bash
+bun run check:pr-body <file>
+gh pr create --body-file <file> # include the required labels at creation
+```
+
+The local check uses the same knowledge-map and changelog functions as CI against
+the committed diff from `origin/main`. For a stacked PR, append its base ref to
+the check command. It validates fragment contents as well as the description.
 
 `check:commit` names the hook's guard: it refuses staged files under `.agents/`
 other than the shared skills (`check:agents`), then checks format and lint. Release workflows use
@@ -158,9 +188,11 @@ For modeled changes, run `bun run verification:setup`, then
 the complete required run. The canonical command uses two isolated case workers
 by default, as configured in `tools/quint/execution.json`, and requires complete
 source-consistent aggregate evidence. The Behavioral verification
-workflow runs all models without labels or path exclusions and is a protected
-Delivery checks dependency. CI's Delivery checks run every repository check
-and the full `verification:gate`, including the diagnostic control. Pre-push runs
+workflow runs all models without case filtering and is a protected Delivery
+checks dependency in full and ordinary documentation modes. The narrow tooling
+mode above skips it; application, verification and gate-policy changes cannot
+qualify. Full CI runs every repository check and the full `verification:gate`,
+including the diagnostic control. Pre-push runs
 `bun run check:changed`, which runs the full `verification:gate` (never `--case`)
 when a change touches verification inputs or a contract owner, and leaves the
 rest to CI; `bun run check:delivery` runs everything locally. Linux CI additionally enforces the aggregate resource envelope described

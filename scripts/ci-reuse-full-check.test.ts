@@ -202,3 +202,24 @@ test("behavioral contracts, agent policy and packaged notices cannot take the Ma
   for (const path of ["README.md", "docs/guide.md", "CHANGELOG.md"])
     expect(isDocumentationPath(path)).toBe(true);
 });
+
+test("tooling mode validates every event afresh without querying full-result reuse", async () => {
+  for (const action of [
+    "opened",
+    "synchronize",
+    "reopened",
+    "edited",
+    "labeled",
+  ]) {
+    expect(
+      await selectValidationMode(
+        action,
+        false,
+        async () => {
+          throw new Error("must not reuse");
+        },
+        true,
+      ),
+    ).toBe("tooling");
+  }
+});

@@ -183,3 +183,30 @@ test("every native result is required, including macOS jobs that skip native ste
     }
   }
 });
+
+test("tooling delivery requires validation and protected macOS reports, with heavy jobs skipped", () => {
+  const results = [
+    "success",
+    "success",
+    "skipped",
+    "skipped",
+    "skipped",
+    "skipped",
+    "success",
+  ];
+  const check = (r: Array<string | undefined>) =>
+    assertDeliveryResults("tooling", r[0], r[1], r[2], r[3], r.slice(4));
+  expect(() => check(results)).not.toThrow();
+  for (let index = 0; index < results.length; index++) {
+    for (const result of [
+      "failure",
+      "cancelled",
+      undefined,
+      results[index] === "success" ? "skipped" : "success",
+    ]) {
+      const changed = [...results] as Array<string | undefined>;
+      changed[index] = result;
+      expect(() => check(changed)).toThrow();
+    }
+  }
+});

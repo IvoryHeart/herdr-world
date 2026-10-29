@@ -368,7 +368,7 @@ test("CI exercises the real plugin-managed launchd lifecycle on both protected a
     expect(step.env?.LAUNCHD_RESULT).toBe("${{ needs.launchd.result }}");
 });
 
-test("accepted behavioral evidence is an unfiltered protected delivery dependency", async () => {
+test("accepted behavioral evidence stays unfiltered whenever its protected dependency runs", async () => {
   const candidate = Bun.YAML.parse(
     await Bun.file(
       new URL(
@@ -418,7 +418,7 @@ test("accepted behavioral evidence is an unfiltered protected delivery dependenc
     "./.github/workflows/behavioral-verification.yml",
   );
   expect(workflow.jobs.behavioral.if).toBe(
-    "needs.validation-scope.outputs.mode != 'reuse'",
+    "needs.validation-scope.outputs.mode == 'full' || needs.validation-scope.outputs.mode == 'docs'",
   );
   for (const step of workflow.jobs.delivery.steps.filter(
     (step) => step.run === "bun scripts/ci-delivery-result.ts",
@@ -483,4 +483,38 @@ test("red main runs open one alert and an unmerged revert; green runs resolve it
   const script = alert.steps.at(-1)!;
   expect(script.run).toContain("bun scripts/main-gate.ts");
   expect(script.run).not.toContain("gh pr merge");
+});
+
+test("tooling CI retains static validation and delivery while heavy jobs keep full-only guards", () => {
+  const validation = workflow.jobs.validation;
+  expect(
+    validation.steps.find((step) => step.name === "Run tooling checks"),
+  ).toMatchObject({
+    if: "needs.validation-scope.outputs.mode == 'tooling'",
+    run: 'bun run check:changed --scope-base="$PR_BASE_SHA"',
+    env: { PR_BASE_SHA: "${{ github.event.pull_request.base.sha }}" },
+  });
+  expect(
+    validation.steps.find((step) => step.uses?.startsWith("actions/checkout@"))
+      ?.with?.["fetch-depth"],
+  ).toBe(0);
+  for (const job of ["world-browser", "installer-upgrade", "plugin-windows"]) {
+    expect(workflow.jobs[job].if).toBe(
+      "needs.validation-scope.outputs.mode == 'full'",
+    );
+  }
+  expect(workflow.jobs.delivery.if).toBe("always()");
+  expect(
+    workflow.jobs.delivery.steps.find(
+      (step) => step.name === "Verify documentation, tooling or reused results",
+    )?.if,
+  ).toBe("needs.validation-scope.outputs.mode != 'full'");
+});
+
+test("the ratchet checks the proposed merge into the exact PR target", () => {
+  expect(workflow.jobs.validation).toMatchObject({
+    env: {
+      HERDR_WORLD_RATCHET_TARGET: "${{ github.event.pull_request.base.sha }}",
+    },
+  });
 });

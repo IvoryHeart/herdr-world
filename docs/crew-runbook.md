@@ -116,6 +116,10 @@ You are <seat>. Task <item>: <title> (<issue link, or "no issue yet: file one fi
   Branch: `agent/<seat>-<item>` (the watcher finds the author from this name).
 - Deliver with the candidate-delivery skill (.agents/skills/candidate-delivery/SKILL.md):
   tests, docs and a changelog fragment as AGENTS.md requires.
+- After committing, prepare the final PR description in a local file and run
+  `bun run check:pr-body <file>`; fix any knowledge-map or changelog failures.
+  Append the base ref for a stacked PR. Use the same file with
+  `gh pr create --body-file <file>` when opening the PR.
 - Open a ready (not draft) PR that says `Fixes #<issue>` and carries the labels
   `<pod label>` and `track:<track>`, both set at creation (`gh pr create --label ...`).
   Never add labels to an open PR: each label starts a CI run.
@@ -144,3 +148,7 @@ Add item-specific notes after the template only when the queue gives them
 (for example: "do together with H2", or "verify only: #329 may have fixed it").
 For the Roamgate sync items: read `UPSTREAM.md`, sync one version per PR,
 strictly in order, and record the synchronization in `UPSTREAM.md`.
+
+The PR-description check uses CI's existing knowledge-map and changelog policies
+against the committed PR diff. After this tracked template changes, the owner
+copies its delivery steps into the live dispatcher template.

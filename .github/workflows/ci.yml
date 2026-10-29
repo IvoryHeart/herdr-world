@@ -151,10 +151,13 @@ jobs:
         if: needs.validation-scope.outputs.mode != 'reuse'
         runs-on: ubuntu-latest
         timeout-minutes: 30
+        env:
+            HERDR_WORLD_RATCHET_TARGET: ${{ github.event.pull_request.base.sha }}
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
               with:
                   persist-credentials: false
+                  fetch-depth: 0
             - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
               with:
                   bun-version: "1.4.3"
@@ -163,6 +166,11 @@ jobs:
             - name: Run documentation checks
               if: needs.validation-scope.outputs.mode == 'docs'
               run: bun run check:docs
+            - name: Run tooling checks
+              if: needs.validation-scope.outputs.mode == 'tooling'
+              env:
+                  PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+              run: bun run check:changed --scope-base="$PR_BASE_SHA"
             - name: Run repository checks except World browser shards
               if: needs.validation-scope.outputs.mode == 'full'
               env:
@@ -180,7 +188,7 @@ jobs:
     behavioral:
         name: Behavioral verification
         needs: validation-scope
-        if: needs.validation-scope.outputs.mode != 'reuse'
+        if: needs.validation-scope.outputs.mode == 'full' || needs.validation-scope.outputs.mode == 'docs'
         uses: ./.github/workflows/behavioral-verification.yml
 
     delivery:
@@ -212,7 +220,7 @@ jobs:
                   INSTALLER_RESULT: ${{ needs.installer-upgrade.result }}
                   LAUNCHD_RESULT: ${{ needs.launchd.result }}
               run: bun scripts/ci-delivery-result.ts
-            - name: Verify documentation or reused results
+            - name: Verify documentation, tooling or reused results
               if: needs.validation-scope.outputs.mode != 'full'
               env:
                   VALIDATION_MODE: ${{ needs.validation-scope.outputs.mode }}

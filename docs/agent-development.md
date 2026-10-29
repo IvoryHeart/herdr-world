@@ -103,6 +103,39 @@ the site build for tutorial changes.
 New foundation modules need an owner and focused evidence in the guide. Leave
 machine- and user-specific data untracked and use synthetic examples in tests.
 
+### Worker PR handoff template
+
+After committing the complete candidate, save the final PR description to a local
+file and run `bun run check:pr-body <file>` before `gh pr create --body-file <file>`.
+The same file must be used for both commands. The check validates CI's knowledge-map
+and changelog policies against committed HEAD; append the base ref for a stacked PR.
+Use this delivery step in worker briefs:
+
+```text
+- Prepare the final PR description in a local file after committing.
+- Run `bun run check:pr-body <file>` and fix any policy failures.
+- Open one ready PR with `gh pr create --body-file <file>` and all required
+  labels set at creation. Preserve independent review and do not merge.
+```
+
+The dispatcher uses this [tracked worker template](crew-runbook.md) for its PR
+handoff. Live dispatch files remain local; the owner updates them from the tracked
+instructions after merge.
+
+CI and pre-push share a tooling-only allowlist: `scripts/agent/**` and its tests,
+this guide, `docs/crew-runbook.md`, `docs/dispatch-runbook.md` and
+`changes/<slug>.md`. Every changed path in the complete PR must qualify; renames
+include both paths. This mode runs the full static lane and affected unit tests,
+including all source type checks, and skips World browser/latency, behavioral
+verification and native installation work. `Delivery checks` and the protected
+macOS reports still run. Other code paths keep the full CI matrix, as do all main
+pushes. See [pipeline ownership](ci-pipelines.md) for result requirements.
+Fetch main before pushing: `check:size` evaluates the proposed merge against
+main's ceilings, allowing an unchanged branch behind main and rejecting restored
+ceilings or merge conflicts. For a stacked PR, use
+`bun run check:size origin/main <target-ref>` or set
+`HERDR_WORLD_RATCHET_TARGET=<target-ref>` for pre-push. CI uses its exact PR base.
+
 ### Post review results
 
 Put an explicit sender claim and reviewed commit before the RESULT line in

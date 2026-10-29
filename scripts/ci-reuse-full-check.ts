@@ -1,4 +1,6 @@
 import { appendFileSync } from "node:fs";
+import { changedPathsBetween } from "./check-knowledge-map";
+import { isToolingOnlyChange } from "./validation-scope";
 import { execFileSync } from "node:child_process";
 
 type Step = { name: string; conclusion: string | null };
@@ -162,12 +164,14 @@ async function githubJson<T>(path: string, token: string): Promise<T> {
   return (await (await githubResponse(path, token)).json()) as T;
 }
 
-/** Code events validate; metadata events may reuse exact-revision proof. */
+/** Tooling/docs validate afresh; other metadata may reuse exact-revision proof. */
 export async function selectValidationMode(
   action: string | undefined,
   docsOnly: boolean,
   reuse: () => Promise<boolean>,
-): Promise<"docs" | "reuse" | "full"> {
+  toolingOnly = false,
+): Promise<"docs" | "tooling" | "reuse" | "full"> {
+  if (toolingOnly) return "tooling";
   if (docsOnly) return "docs";
   if (action !== "edited" && action !== "labeled") return "full";
   try {
@@ -253,6 +257,7 @@ if (import.meta.main) {
           },
         );
       },
+      isToolingOnlyChange(changedPathsBetween(process.cwd(), baseSha, headSha)),
     );
   } catch (error) {
     console.error(

@@ -20,7 +20,10 @@ type Use = {
   unknown?: boolean;
 };
 const modulePath: string = "./worktree.mjs";
-const { pruneWorktrees, processUse } = (await import(modulePath)) as {
+const { pruneWorktrees, processUse, commandUses } = (await import(
+  modulePath
+)) as {
+  commandUses: (command: string, directory: string) => boolean;
   processUse: () => Use;
   pruneWorktrees: (options: {
     cwd: string;
@@ -253,47 +256,39 @@ test("root, ancestor and sibling process paths do not keep a worktree", () => {
 });
 
 test("command paths require a boundary after the worktree name", () => {
-  const repo = fixture();
+  // Exercise the boundary predicate directly. Repeating the complete Git
+  // prune scan per case makes this finite test exceed its deadline under load.
+  // The pruning tests above retain real-worktree liveness integration coverage.
+  const directory = join("/", "example", "worktrees", "merged");
   const cases = [
-    [`preview --directory ${repo.merged}6/.pages-dist`, "remove"],
-    [`preview --directory ${repo.merged}-other`, "remove"],
+    [`preview --directory ${directory}6/.pages-dist`, "remove"],
+    [`preview --directory ${directory}-other`, "remove"],
     ...["a", "_", ".", "+", "@", "~"].map((suffix) => [
-      `preview --directory ${repo.merged}${suffix}other`,
+      `preview --directory ${directory}${suffix}other`,
       "remove",
     ]),
-    [`preview --directory ${repo.merged}`, "keep"],
-    [`preview --directory ${repo.merged}/.pages-dist`, "keep"],
-    [`preview --directory ${join(repo.merged, ".pages-dist")}`, "keep"],
-    [`preview --directory ${repo.merged} --flag`, "keep"],
-    [`preview --directory ${repo.merged}\t--flag`, "keep"],
-    [`preview --directory "${repo.merged}"`, "keep"],
-    [`preview --directory '${repo.merged}'`, "keep"],
-    [`preview ${repo.merged}=directory`, "keep"],
-    [`docker run --volume ${repo.merged}:/work example`, "keep"],
+    [`preview --directory ${directory}`, "keep"],
+    [`preview --directory ${directory}/.pages-dist`, "keep"],
+    [`preview --directory ${join(directory, ".pages-dist")}`, "keep"],
+    [`preview --directory ${directory} --flag`, "keep"],
+    [`preview --directory ${directory}\t--flag`, "keep"],
+    [`preview --directory "${directory}"`, "keep"],
+    [`preview --directory '${directory}'`, "keep"],
+    [`preview ${directory}=directory`, "keep"],
+    [`docker run --volume ${directory}:/work example`, "keep"],
     [
-      `docker run --mount type=bind,source=${repo.merged},target=/work example`,
+      `docker run --mount type=bind,source=${directory},target=/work example`,
       "keep",
     ],
     ...[";", "&&", "|", "&", ")", "`", "]"].map((suffix) => [
-      `preview ${repo.merged}${suffix}`,
+      `preview ${directory}${suffix}`,
       "keep",
     ]),
     // An earlier sibling reference must not hide a later genuine reference.
-    [`preview ${repo.merged}6 --directory ${repo.merged}`, "keep"],
+    [`preview ${directory}6 --directory ${directory}`, "keep"],
   ];
   for (const [command, action] of cases) {
-    const actions = pruneWorktrees({
-      cwd: repo.primary,
-      dryRun: true,
-      live: { ...idle, commands: [command] },
-    });
-    expect(actions.find((item) => item.path === repo.merged)).toMatchObject({
-      action,
-      reason:
-        action === "keep"
-          ? "merged into origin/main; a running process uses it"
-          : "merged into origin/main",
-    });
+    expect(commandUses(command, directory)).toBe(action === "keep");
   }
 });
 

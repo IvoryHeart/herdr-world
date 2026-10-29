@@ -24,6 +24,8 @@ const FULL = [
   /^(?:web|server)\/package\.json$/,
   /^bun\.lockb?$/,
   /^bunfig\.toml$/,
+  /^\.github\/workflows\//,
+  /^scripts\/(?:validation-scope|ci-reuse-full-check|ci-delivery-result|check-pr-body|file-size-ratchet)\.ts$/,
   /(?:^|\/)tsconfig[^/]*\.json$/,
   /^web\/vite\.config\.ts$/,
   /^web\/index\.html$/,

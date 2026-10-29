@@ -73,6 +73,7 @@
     "check:source": "bun run check:commit && bun run typecheck && bun run test",
     "precommit": "bun run check:source",
     "changelog:check": "bun scripts/changelog-fragments.ts check",
+    "check:pr-body": "bun scripts/check-pr-body.ts",
     "check:size": "bun scripts/file-size-ratchet.ts",
     "check:move": "bun scripts/move-check.ts",
     "changelog:assemble": "bun scripts/changelog-fragments.ts assemble",
