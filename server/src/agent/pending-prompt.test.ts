@@ -215,6 +215,175 @@ describe("Claude Code's questions", () => {
     ]);
   });
 
+  // A three-question form as Claude Code 2.1 draws it: one question at a
+  // time under its header chips, then a review with no footer. Captured in a
+  // throwaway Herdr session; the questions are synthetic.
+  const TAB_FOOTER =
+    "Enter to select · Tab/Arrow keys to navigate · Esc to cancel";
+  const chips = (answered: boolean[]) =>
+    `←  ${["Color", "Size", "Shape"]
+      .map((label, index) => `${answered[index] ? "☒" : "☐"} ${label}`)
+      .join("  ")}  ✔ Submit  →`;
+  const formTab = (
+    answered: boolean[],
+    question: string,
+    options: [string, string][],
+    chosen?: number,
+  ) =>
+    [
+      "● Asking about the badge.",
+      RULE,
+      chips(answered),
+      "",
+      question,
+      "",
+      ...options.flatMap(([label, description], index) => [
+        `${index === 0 ? "❯" : " "} ${index + 1}. ${label}${chosen === index + 1 ? " ✔" : ""}`,
+        `     ${description}`,
+      ]),
+      `  ${options.length + 1}. Type something.`,
+      RULE,
+      `  ${options.length + 2}. Chat about this`,
+      "",
+      TAB_FOOTER,
+    ].join("\n");
+  const COLOR: [string, string][] = [
+    ["Red", "Warm color"],
+    ["Blue", "Cool color"],
+    ["Green", "Calm color"],
+  ];
+  const SIZE: [string, string][] = [
+    ["Small", "Compact badge"],
+    ["Medium", "Mid-sized badge"],
+    ["Large", "Prominent badge"],
+  ];
+  const formReview = (answers: [string, string][], all = true) =>
+    [
+      RULE,
+      chips([all, all, all]),
+      "",
+      "Review your answers",
+      "",
+      ...(all
+        ? answers.flatMap(([question, answer]) => [
+            ` ● ${question}`,
+            `   → ${answer}`,
+          ])
+        : ["⚠ You have not answered all questions"]),
+      "",
+      "Ready to submit your answers?",
+      "",
+      "❯ 1. Submit answers",
+      "  2. Cancel",
+      "",
+    ].join("\n");
+
+  test("a form shows every question's header and whether it is answered", () => {
+    const first = parsePendingPrompt(
+      "claude",
+      formTab(
+        [false, false, false],
+        "Which color should the badge use?",
+        COLOR,
+      ),
+      context,
+    )!;
+    expect(first.question).toEqual(["Which color should the badge use?"]);
+    expect(first.request).toEqual([]);
+    expect(first.steps).toEqual([
+      { label: "Color", answered: false },
+      { label: "Size", answered: false },
+      { label: "Shape", answered: false },
+    ]);
+    expect(first.options.map((option) => [option.label, option.key])).toEqual([
+      ["Red", "1"],
+      ["Blue", "2"],
+      ["Green", "3"],
+    ]);
+    // A digit answers the question shown and moves to the next one, which is
+    // a different prompt with the first header answered.
+    const second = parsePendingPrompt(
+      "claude",
+      formTab([true, false, false], "How large should the badge be?", SIZE),
+      context,
+    )!;
+    expect(second.question).toEqual(["How large should the badge be?"]);
+    expect(second.steps?.map((step) => step.answered)).toEqual([
+      true,
+      false,
+      false,
+    ]);
+    expect(second.fingerprint).not.toBe(first.fingerprint);
+  });
+
+  test("a revisited question offers its options without the chosen mark", () => {
+    const prompt = parsePendingPrompt(
+      "claude",
+      formTab([true, true, true], "How large should the badge be?", SIZE, 2),
+      context,
+    )!;
+    expect(prompt.options.map((option) => option.label)).toEqual([
+      "Small",
+      "Medium",
+      "Large",
+    ]);
+  });
+
+  test("the form's review, drawn with no footer, submits from Chat", () => {
+    const prompt = parsePendingPrompt(
+      "claude",
+      formReview([
+        ["Which color should the badge use?", "Blue"],
+        ["How large should the badge be?", "Small"],
+        ["Which shape fits best?", "Square"],
+      ]),
+      context,
+    )!;
+    expect(prompt.question).toEqual(["Ready to submit your answers?"]);
+    expect(prompt.request).toEqual([
+      "● Which color should the badge use?",
+      "→ Blue",
+      "● How large should the badge be?",
+      "→ Small",
+      "● Which shape fits best?",
+      "→ Square",
+    ]);
+    expect(prompt.steps?.every((step) => step.answered)).toBe(true);
+    expect(prompt.options.map((option) => [option.label, option.key])).toEqual([
+      ["Submit answers", "1"],
+      ["Cancel", "2"],
+    ]);
+    const unanswered = parsePendingPrompt(
+      "claude",
+      formReview([], false),
+      context,
+    )!;
+    expect(unanswered.request).toEqual([
+      "⚠ You have not answered all questions",
+    ]);
+    expect(unanswered.options).toHaveLength(2);
+  });
+
+  test("a menu with no footer is read only as a form's review", () => {
+    const bare = [
+      RULE,
+      "Which build should ship?",
+      "",
+      "❯ 1. Stable",
+      "  2. Preview",
+      "",
+    ].join("\n");
+    expect(parsePendingPrompt("claude", bare, context)!.options).toEqual([]);
+    // Header chips alone, without the review heading, are not a review.
+    const tab = [
+      RULE,
+      chips([true, true, true]),
+      "",
+      bare.split("\n").slice(1).join("\n"),
+    ].join("\n");
+    expect(parsePendingPrompt("claude", tab, context)!.options).toEqual([]);
+  });
+
   const EDGE = "  " + "╌".repeat(40);
   const planScreen = (plan: string[]) =>
     [

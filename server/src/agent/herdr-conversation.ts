@@ -598,6 +598,7 @@ export function createHerdrConversationSource(args: {
               asked.question,
               asked.request,
               asked.options.map((option) => option.label),
+              asked.steps ?? null,
             ]);
           // Only a recognised menu is a next question; a partial or
           // unrecognised screen (no options) proves nothing, whether or not
