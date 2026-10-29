@@ -173,6 +173,8 @@ export const productionContextCases = [
   { view: "uncertain", entry: "popup" },
   { view: "board", entry: "" },
   { view: "town", entry: "" },
+  { view: "board", entry: "maximum-scale" },
+  { view: "town", entry: "maximum-scale" },
   { view: "town", entry: "animated" },
 ].flatMap((item) => [1440, 390].map((width) => ({ ...item, width })));
 export function productionContextGroup({

@@ -496,6 +496,10 @@ on your phone and desktop.
    shells looks like a small terminal. A working agent's tab pulses (as does the
    selected tab); idle, finished and waiting tabs stay still, and the **⋯** menu
    turns the pulses off. Each workspace card counts its agents by status.
+   The same menu offers **Surface → Follow theme / Whiteboard / Blackboard**,
+   **Status colours…** and **Help**. Surface and status choices stay in this
+   browser; they do not change the card colours shared across your devices.
+   Reset status colours to use the chosen surface's defaults again.
    An agent's card shows a ⚑ chip with its quest progress, such as 2/5; hover
    the chip for the quest and its current step.
    The round **+** on a workspace's right edge (shown on hover or selection)
@@ -525,7 +529,9 @@ on your phone and desktop.
 4. Tap a workspace, tab or pane row to open its Inspector with Terminal, Files,
    Changes and Chat; a line joins each Inspector window to its card. Tapping or
    double-clicking an agent's tab opens its Chat, as in Town; a plain shell, or an
-   agent without Chat, opens its terminal.
+   agent without Chat, opens its terminal. **Next**, beside Work, opens the next
+   agent who needs you, including a verified shared question. At narrow widths,
+   Next remains available in the Board menu. Stale hosts and plain shells are skipped.
 5. Double-click (or double-tap) empty board to pin a note and type; double-click
    a note to edit it. Tap a note for its bar: colour, **Edit**, **String to…**, **Delete** (or press Delete).
 6. Drag a card's red dot onto a pane row, a tab or a workspace to string a note
@@ -552,6 +558,11 @@ on your phone and desktop.
    phone, hold the tab still for a moment first; a quick swipe pans). Board
    asks first, with **Don't ask again**, and always asks before moving a
    workspace's last tab, which closes that workspace. Strings follow the move.
+   To move just one pane, drag its row onto another tab on the same host; on a
+   phone, hold the row first. The other panes and the whole card stay in place.
+   Cancelling the drag or dropping on empty board sends no move. If moving the
+   pane would close its old room, Board asks for confirmation first. Strings
+   to that pane follow it.
 
 9. Press the labelled **Work** pill, first in Board's bottom-right controls:
    if an Inspector fills the phone screen, close it with **X** or **Back** first.

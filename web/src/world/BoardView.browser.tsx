@@ -26,6 +26,10 @@ import {
 } from "../../../shared/relations";
 import { currentBoardCardPins } from "./board/boardCardPins";
 import { worldSourcesStore } from "./worldSources";
+import {
+  boardFollowupsAcceptance,
+  type PaneMoveCall,
+} from "./testing/boardFollowupsAcceptance";
 import "./world.css";
 
 /*
@@ -382,6 +386,8 @@ let lastAnchors: Record<
   { x: number; y: number; visible: boolean }
 > | null = null;
 const movedTabs: { tab: string; to: string }[] = [];
+const movedPanes: PaneMoveCall[] = [];
+let paneMoveNeedsConfirmation = false;
 const host = document.createElement("div");
 host.style.cssText = "position:fixed;inset:0";
 document.body.appendChild(host);
@@ -400,6 +406,24 @@ function mount(key: number, shown = world, selectedId: string | null = null) {
         onSelect={(id) => selected.push(id)}
         onOpen={(id) => opened.push(id)}
         store={store}
+        movePane={async (request, allowClose) => {
+          movedPanes.push({
+            paneId: request.pane.leaf.pane.pane_id,
+            tabId: request.target.nativeId,
+            allowClose,
+          });
+          return paneMoveNeedsConfirmation && !allowClose
+            ? {
+                status: "refused",
+                reason: "room_would_close",
+                message: "Moving this pane closes its old room.",
+              }
+            : {
+                status: "moved",
+                tab_id: request.target.nativeId,
+                workspace_id: request.targetWorkspace.nativeId,
+              };
+        }}
         sendNote={async (target, note, confirm) => {
           // As the service does: a replacement is sent to only once confirmed.
           if (replacedBy && confirm !== replacedBy)
@@ -631,7 +655,16 @@ async function fresh() {
   closedPanes.clear();
   heldChecks = null;
   lastAnchors = null;
-  for (const list of [selected, opened, sent, started, createdTabs, movedTabs])
+  paneMoveNeedsConfirmation = false;
+  for (const list of [
+    selected,
+    opened,
+    sent,
+    started,
+    createdTabs,
+    movedTabs,
+    movedPanes,
+  ])
     list.length = 0;
   try {
     localStorage.clear();
@@ -3259,6 +3292,24 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
     },
   ],
 ];
+
+scenarios.push([
+  "Board follow-ups",
+  () =>
+    boardFollowupsAcceptance({
+      host,
+      mount,
+      settle,
+      waitFor,
+      check,
+      opened,
+      moves: movedPanes,
+      requireConfirmation: (value) => {
+        paneMoveNeedsConfirmation = value;
+      },
+      cardColors: () => JSON.stringify(saved.layout.colors),
+    }),
+]);
 
 /**
  * Every scenario, or `?scenario=<name>[|<name>…]` alone, in order; one

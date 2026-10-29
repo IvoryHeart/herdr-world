@@ -44,6 +44,7 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
           ? null
           : createDenseSnapshotFixture({
               workingInitially: entry === "animated",
+              maximumScale: entry === "maximum-scale",
             });
       const initialSnapshot = fixture ? await fixture.service.snapshot() : null;
       const payload = initialSnapshot ? JSON.stringify(initialSnapshot) : "";
@@ -105,7 +106,7 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
         const text = stringify(value, replacer, space);
         if (diagnostic && performance.now() - began > 15)
           serviceTasks.push({ stage: "serialize", beginAt, endAt: Date.now() });
-        if (value?.connections?.length === 64)
+        if (fixture && value?.connections?.length === fixture.hostCount)
           serializationMs = Math.max(
             serializationMs,
             performance.now() - began,
@@ -654,7 +655,7 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
           // Canvas rendering improvements ratchet both view limits down;
           // keep cold initialization and refresh tails in both measurements.
           const latencyBudget =
-            view === "town"
+            view === "town" || entry === "maximum-scale"
               ? { p95: 150, maximum: 450 }
               : { p95: 200, maximum: 500 };
           expect(delays[Math.ceil(delays.length * 0.95) - 1]).toBeLessThan(

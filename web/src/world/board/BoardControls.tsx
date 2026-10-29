@@ -5,6 +5,7 @@ import {
   Minus,
   Plus,
   Sparkles,
+  SkipForward,
 } from "lucide-react";
 import {
   useEffect,
@@ -20,9 +21,12 @@ import {
   type BoardControlsLayout,
 } from "./boardControlsLayout";
 import "./boardControls.css";
+import { BoardSettingsDialog } from "./BoardSettingsDialog";
+import { BOARD_SURFACES, type BoardAppearance } from "./boardAppearance";
 
 const CONTROLS: readonly BoardControl[] = [
   "work",
+  "next",
   "home",
   "zoomOut",
   "fit",
@@ -32,6 +36,7 @@ const CONTROLS: readonly BoardControl[] = [
 ];
 const INITIAL_WIDTHS = {
   work: 76,
+  next: 64,
   home: 140,
   zoomOut: 36,
   fit: 36,
@@ -42,6 +47,7 @@ const INITIAL_WIDTHS = {
 const icon = (control: BoardControl) => {
   const Icon = {
     work: GitPullRequest,
+    next: SkipForward,
     home: null,
     zoomOut: Minus,
     fit: Maximize2,
@@ -57,6 +63,9 @@ export function BoardControls(props: {
   workRef: RefObject<HTMLButtonElement>;
   workOpen: boolean;
   onWork(): void;
+  onNext?(): void;
+  appearance: BoardAppearance;
+  onAppearance(next: BoardAppearance): void;
   count: number;
   onHome(): void;
   onZoom(factor: number): void;
@@ -74,6 +83,7 @@ export function BoardControls(props: {
   const menu = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
+  const [dialog, setDialog] = useState<"help" | "colors" | null>(null);
   const [layout, setLayout] = useState<BoardControlsLayout>(() =>
     boardControlsLayout({
       available: Infinity,
@@ -91,7 +101,7 @@ export function BoardControls(props: {
   useEffect(() => {
     if (open)
       menu.current
-        ?.querySelector<HTMLButtonElement>("button")
+        ?.querySelector<HTMLButtonElement>("button:not(:disabled)")
         ?.focus({ preventScroll: true });
   }, [open]);
   useLayoutEffect(() => {
@@ -147,6 +157,7 @@ export function BoardControls(props: {
   const label = (control: BoardControl) =>
     ({
       work: "Work",
+      next: "Next",
       home: `Needs a home · ${props.count}`,
       zoomOut: "Zoom out",
       fit: "Fit everything",
@@ -157,15 +168,20 @@ export function BoardControls(props: {
   const accessible = (control: BoardControl) =>
     control === "work"
       ? "Work: pull requests and tickets"
-      : control === "home"
-        ? `Needs a home: ${props.count} string${props.count === 1 ? "" : "s"}`
-        : control === "tidy"
-          ? props.tidyLabel
-          : label(control);
+      : control === "next"
+        ? "Next agent needing you"
+        : control === "home"
+          ? `Needs a home: ${props.count} string${props.count === 1 ? "" : "s"}`
+          : control === "tidy"
+            ? props.tidyLabel
+            : label(control);
   const content = (control: BoardControl, inMenu = false) => (
     <>
       {icon(control)}
-      {control === "work" || control === "home" || inMenu ? (
+      {control === "work" ||
+      control === "home" ||
+      control === "next" ||
+      inMenu ? (
         <span>
           {inMenu && control === "home"
             ? `Needs a home (${props.count})`
@@ -179,6 +195,7 @@ export function BoardControls(props: {
   const act = (control: BoardControl) => {
     setOpen(false);
     if (control === "work") props.onWork();
+    else if (control === "next") props.onNext?.();
     else if (control === "home") props.onHome();
     else if (control === "fit") props.onFit();
     else if (control === "zoomIn") props.onZoom(1.25);
@@ -221,7 +238,7 @@ export function BoardControls(props: {
                       return;
                     const buttons = [
                       ...event.currentTarget.querySelectorAll<HTMLButtonElement>(
-                        "button",
+                        "button:not(:disabled)",
                       ),
                     ];
                     const current = buttons.indexOf(
@@ -247,11 +264,53 @@ export function BoardControls(props: {
                       className={className(control)}
                       role="menuitem"
                       aria-label={accessible(control)}
+                      disabled={control === "next" && !props.onNext}
                       onClick={() => act(control)}
                     >
                       {content(control, true)}
                     </button>
                   ))}
+                  <div role="presentation" className="board-menu-section">
+                    Surface
+                  </div>
+                  {BOARD_SURFACES.map((surface) => (
+                    <button
+                      key={surface}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={props.appearance.surface === surface}
+                      onClick={() => {
+                        props.onAppearance({ ...props.appearance, surface });
+                        setOpen(false);
+                      }}
+                    >
+                      {surface === "theme"
+                        ? "Follow theme"
+                        : surface === "whiteboard"
+                          ? "Whiteboard"
+                          : "Blackboard"}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setOpen(false);
+                      setDialog("colors");
+                    }}
+                  >
+                    Status colours…
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setOpen(false);
+                      setDialog("help");
+                    }}
+                  >
+                    Help
+                  </button>
                   <button
                     type="button"
                     role="menuitemcheckbox"
@@ -280,6 +339,7 @@ export function BoardControls(props: {
               className={className(control)}
               ref={control === "work" ? props.workRef : undefined}
               aria-label={accessible(control)}
+              disabled={control === "next" && !props.onNext}
               aria-pressed={control === "work" ? props.workOpen : undefined}
               onClick={() => act(control)}
             >
@@ -288,6 +348,14 @@ export function BoardControls(props: {
           ),
         )}
       </div>
+      {dialog ? (
+        <BoardSettingsDialog
+          mode={dialog}
+          appearance={props.appearance}
+          onChange={props.onAppearance}
+          onClose={() => setDialog(null)}
+        />
+      ) : null}
       <div className="board-controls board-controls-measure" aria-hidden="true">
         {CONTROLS.map((control) => (
           <span

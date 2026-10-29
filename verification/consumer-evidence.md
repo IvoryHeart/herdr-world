@@ -393,3 +393,29 @@ existing shared model retains quiet backlog loading and one announcement per new
 ask; the existing notification-policy consumers retain runtime/session authority.
 These are direct JavaScript/module and browser consumers, with no abstract-model
 claim about arbitrary import graphs or live external runtimes.
+
+### Board attention, appearance and pane moves
+
+Board's Next selector consumes the existing qualified aggregate and verified
+shared questions. Direct fixtures cover native order, wrapping, shells and stale
+hosts. Appearance fixtures validate the surface and five independent status
+colours; the real Board browser checks palette changes, reset and persistence
+without modifying shared card colours, plus the Help entry point.
+
+The pane-drag consumer uses the existing shared gesture machine and qualified
+`town.move_pane` service. Its direct request tests reject foreign, stale and
+replacement-runtime targets before dispatch and preserve uncertain outcomes.
+The Board browser checks mouse and touch hold, cancellation, stationary source
+cards, refusal of tabs hidden by overlays and last-room confirmation. Existing
+service move, rollback and string remapping checks remain mandatory; these
+consumer checks add no model claim
+about native Herdr execution or arbitrary pointer schedules.
+
+The native-input/CDP production harness also runs the documented owner maximum:
+three hosts, eight workspaces per host, fifteen tabs per workspace, using its
+existing seventeen-pane tab load. Board and the Town baseline run at 1440 px and
+390 px with the same p95 acknowledgement budget below 150 ms and maximum below
+450 ms. Initial projection and a fresh observation with two stalled hosts are
+included; every input retains its original host and runtime. This is a repeatable
+synthetic Chrome workload, not a network or runtime latency guarantee. Existing
+larger dense cases and their budgets remain unchanged.

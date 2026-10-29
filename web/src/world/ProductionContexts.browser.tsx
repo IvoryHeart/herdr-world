@@ -25,6 +25,8 @@ import "../styles/vendor.css";
 import "./world.css";
 
 const view = new URL(location.href).searchParams.get("view")!;
+const maximumScale =
+  new URL(location.href).searchParams.get("entry") === "maximum-scale";
 const traceEnabled = new URL(location.href).searchParams.has("trace");
 const failures: string[] = [];
 window.__HERDR_WORLD_RENDERER_DEBUG__ = "counters";
@@ -622,11 +624,14 @@ async function run() {
           detail: { phase: stage },
         });
       const world: WorldObject = buildWorldObject(runtime.get().connections);
-      check(world.hosts.length === 64, "Actual Bridge lost catalogue roots");
+      check(
+        world.hosts.length === (maximumScale ? 3 : 64),
+        "Actual Bridge lost catalogue roots",
+      );
       if (stage === "refresh") {
         check(
           runtime.get().connections.filter((connection) => connection.stale)
-            .length === 3,
+            .length === (maximumScale ? 2 : 3),
           "Stalled owners did not retain stale cached coverage",
         );
         check(

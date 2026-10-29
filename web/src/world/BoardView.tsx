@@ -102,6 +102,11 @@ import { createFrameLoop, type FrameLoop } from "./board/boardScheduler";
 import { BoardZoneColor } from "./board/BoardZoneColor";
 import { WorkLens } from "./board/WorkLens";
 import { BoardControls } from "./board/BoardControls";
+import { boardAppearanceStyle } from "./board/boardAppearance";
+import { useBoardAppearance } from "./board/useBoardAppearance";
+import { nextBoardAttention } from "./board/boardAttention";
+import { useBoardPaneMoves } from "./board/useBoardPaneMoves";
+import type { BoardPaneMove } from "./board/boardPaneMove";
 import { DEVTOOLS, NO_TRACE } from "./devtools/flag";
 import { TraceOverlay } from "./devtools/TraceOverlay";
 import { openTrace, rememberTrace, traceGesture } from "./devtools/trace";
@@ -435,6 +440,7 @@ export default function BoardView({
   checkAnchor = checkAnchorThroughService,
   startAgent = startAgentThroughService,
   moveTab = moveTabThroughService,
+  movePane,
   createTab = createTabThroughStore,
   conversationNodeIds = NO_IDS,
   onNodeAnchorsChange,
@@ -461,6 +467,7 @@ export default function BoardView({
     space: BoardWorkspace,
     allowClose: boolean,
   ) => Promise<TabMoveOutcome>;
+  movePane?: BoardPaneMove;
   /** Start an agent in a workspace with a note; World's service by default. */
   startAgent?: (
     space: BoardWorkspace,
@@ -573,6 +580,11 @@ export default function BoardView({
     stringFrom?: StringEnd;
   } | null>(null);
   const [pulses, setPulses] = useState(readPulses);
+  const { appearance, change: changeAppearance } = useBoardAppearance();
+  const nextAttention = useMemo(
+    () => nextBoardAttention(fullModel.tabs, selectedId, asking),
+    [fullModel, selectedId, asking],
+  );
   const [tracing, setTracing] = useState(false);
   const [toast, setToast] = useState<{
     text: string;
@@ -605,6 +617,14 @@ export default function BoardView({
   );
   /** The card under the pointer while dragged, and where it was grabbed. */
   const held = useRef<{ key: string; grab: Point } | null>(null);
+  const paneMoves = useBoardPaneMoves({
+    model,
+    move: movePane,
+    notice: (text) => setToast({ text }),
+    moved: () => {
+      void boardStore.refresh();
+    },
+  });
   /** A string being drawn from a card or note. */
   const stringDrag = useRef<{
     from: StringEnd;
@@ -1858,6 +1878,7 @@ export default function BoardView({
         return;
       }
       case "liftCard": {
+        if (paneMoves.begin(effect.target, effect.at)) return;
         const card = cards.current.get(effect.key);
         if (!card) return;
         const grab = toWorld(effect.grab.x, effect.grab.y);
@@ -1873,12 +1894,15 @@ export default function BoardView({
         return;
       }
       case "moveCard":
+        if (paneMoves.move(effect.at)) return;
         moveHeld(effect.at);
         return;
       case "dropCard":
+        if (paneMoves.drop(effect.at)) return;
         dropHeld(effect.vx / cam.current.s, effect.vy / cam.current.s);
         return;
       case "settleCard":
+        if (paneMoves.cancel()) return;
         dropHeld(0, 0);
         return;
       case "tap":
@@ -3027,6 +3051,7 @@ export default function BoardView({
         }
       }
       if (event.key === "Escape") {
+        paneMoves.cancel();
         setPicked(null);
         setStringFrom(null);
       }
@@ -3170,8 +3195,11 @@ export default function BoardView({
       {/* Search covers everything observed, including what the board leaves
           out, as in the other views. */}
       <WorldSearchResults world={world} query={query} onSelect={onSelect} />
+      {paneMoves.dialog}
       <div
         ref={boardRef}
+        data-surface={appearance.surface}
+        style={boardAppearanceStyle(appearance)}
         className={`board${far ? " board-far" : ""}${pulses ? "" : " board-no-pulse"}${culling ? " board-culling" : ""}`}
         aria-label="Board of hosts, workspaces and tabs"
         onPointerDown={onPointerDown}
@@ -3918,6 +3946,17 @@ export default function BoardView({
           </div>
         ) : null}
         <BoardControls
+          appearance={appearance}
+          onAppearance={changeAppearance}
+          onNext={
+            nextAttention
+              ? () => {
+                  focusWorkspace(nextAttention.tab.workspaceKey);
+                  onSelect(nextAttention.pane.leaf.id);
+                  onOpen(nextAttention.pane.leaf.id);
+                }
+              : undefined
+          }
           workRef={workButtonRef}
           workOpen={workOpen}
           onWork={() => setWorkOpen(!workOpen)}

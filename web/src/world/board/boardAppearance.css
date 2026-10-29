@@ -1,0 +1,55 @@
+/* Board: a pin board drawn from World's theme tokens, so a light theme reads as
+   a whiteboard and a dark theme as a blackboard. */
+.board {
+  /* The prototype's palettes: a blackboard for dark themes (the default)
+     and a whiteboard for light ones. */
+  --board-ground: #1c2320;
+  --board-grid: #2b3430;
+  --board-card: #252d29;
+  --board-line: #45504a;
+  --board-wire: #7d8a82;
+  --board-ink: #e7ebe3;
+  --board-soft: #a2aba1;
+  --board-zone: #92b3ff;
+  --board-accent: #92b3ff;
+  --board-shadow: 0 1px 0 rgb(0 0 0 / 20%), 0 6px 18px rgb(0 0 0 / 35%);
+  --board-lift: 0 14px 34px rgb(0 0 0 / 55%);
+  --s-working: #7fa7ff;
+  --s-blocked: #ffc25a;
+  --s-done: #6dd29a;
+  --s-idle: #8e978e;
+  --s-unknown: #c3a2ff;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grab;
+  color: var(--board-ink);
+  background-color: var(--board-ground);
+  background-image: radial-gradient(
+    circle,
+    var(--board-grid) 1.2px,
+    transparent 1.4px
+  );
+}
+:root[data-theme="light"] .board:not([data-surface="blackboard"]),
+.board[data-surface="whiteboard"] {
+  --board-ground: #f2f3ee;
+  --board-grid: #d6d9cf;
+  --board-card: #ffffff;
+  --board-line: #c2c7bb;
+  --board-wire: #8f978b;
+  --board-ink: #1e231f;
+  --board-soft: #5a6159;
+  --board-zone: #2a59c9;
+  --board-accent: #2a59c9;
+  --board-shadow: 0 1px 0 rgb(30 35 31 / 6%), 0 6px 18px rgb(30 35 31 / 11%);
+  --board-lift: 0 14px 34px rgb(30 35 31 / 24%);
+  --s-working: #2a6bd4;
+  --s-blocked: #c47f08;
+  --s-done: #2a8753;
+  --s-idle: #8a9189;
+  --s-unknown: #8656c4;
+}

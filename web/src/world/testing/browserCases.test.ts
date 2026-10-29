@@ -28,16 +28,36 @@ test("World suite splitting preserves every original viewport/operation/view cas
     expect(assigned.some((item) => hostFilterGroup(item) === group)).toBe(true);
 });
 
-test("production workload splitting preserves all twelve view/entry/viewport cases, including Town and Board", () => {
-  expect(productionContextCases).toHaveLength(12);
+test("production workload splitting preserves the twelve original cases and four maximum-scale comparisons", () => {
+  expect(
+    productionContextCases.filter((item) => item.entry !== "maximum-scale"),
+  ).toEqual([
+    ...[
+      { view: "uncertain", entry: "typing" },
+      { view: "uncertain", entry: "fallback" },
+      { view: "uncertain", entry: "popup" },
+      { view: "board", entry: "" },
+      { view: "town", entry: "" },
+      { view: "town", entry: "animated" },
+    ].flatMap((item) => [1440, 390].map((width) => ({ ...item, width }))),
+  ]);
+  expect(
+    productionContextCases.filter((item) => item.entry === "maximum-scale"),
+  ).toEqual([
+    { view: "board", entry: "maximum-scale", width: 1440 },
+    { view: "board", entry: "maximum-scale", width: 390 },
+    { view: "town", entry: "maximum-scale", width: 1440 },
+    { view: "town", entry: "maximum-scale", width: 390 },
+  ]);
+  expect(productionContextCases).toHaveLength(16);
   expect(
     new Set(productionContextCases.map((item) => JSON.stringify(item))).size,
-  ).toBe(12);
+  ).toBe(16);
   const assigned = productionContextGroups.flatMap((group) =>
     productionContextCases.filter(
       (item) => productionContextGroup(item) === group,
     ),
   );
-  expect(assigned).toHaveLength(12);
+  expect(assigned).toHaveLength(16);
   expect(new Set(assigned)).toEqual(new Set(productionContextCases));
 });
