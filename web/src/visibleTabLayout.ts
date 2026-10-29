@@ -96,23 +96,33 @@ export function shareVisibleTabLayoutRead(
     queued.readers.push({ read, stillNeeded });
     return queued.result;
   }
-  const readers: LayoutReader[] = [{ read, stillNeeded }];
-  const result = queueVisibleTabLayoutRead(
-    () => {
+  // Registered before the read is queued: a free queue checks stillNeeded
+  // at once, and a read skipped then must not stay behind for later callers.
+  const entry = { readers: [{ read, stillNeeded }] as LayoutReader[] } as {
+    readers: LayoutReader[];
+    result: VisibleTabLayoutRead;
+  };
+  const release = () => {
+    if (queuedVisibleLayoutReads.get(key) === entry)
       queuedVisibleLayoutReads.delete(key);
-      const newest = [...readers].reverse();
+  };
+  queuedVisibleLayoutReads.set(key, entry);
+  entry.result = queueVisibleTabLayoutRead(
+    () => {
+      release();
+      const newest = [...entry.readers].reverse();
       const reader =
         newest.find((candidate) => candidate.stillNeeded()) ?? newest[0]!;
       return reader.read();
     },
     () => {
-      const needed = readers.some((candidate) => candidate.stillNeeded());
-      if (!needed) queuedVisibleLayoutReads.delete(key);
+      const needed = entry.readers.some((candidate) => candidate.stillNeeded());
+      if (!needed) release();
       return needed;
     },
   );
-  queuedVisibleLayoutReads.set(key, { readers, result });
-  return result;
+  entry.result.then(release, release);
+  return entry.result;
 }
 
 /** Reject a layout after a lease change, pane move, split or close. */
