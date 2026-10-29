@@ -2079,6 +2079,14 @@ const TownWorldLayer = memo(function TownWorldLayer({
                               } as React.CSSProperties
                             }
                           >
+                            {desk.appearanceStatus ? (
+                              <span
+                                className="town-appearance-status"
+                                title={desk.appearanceStatus}
+                              >
+                                {desk.appearanceStatus}
+                              </span>
+                            ) : null}
                             <span className="town-desk-tag">
                               <span
                                 className="town-desk-name"
