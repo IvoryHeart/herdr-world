@@ -3,7 +3,14 @@ import { asksForWorld } from "./worldAskTargets";
 import { WorldAskMark } from "./WorldAskMark";
 import { boardObservation } from "./board/boardObservation";
 import { ConnectionRecoveryBanner } from "./ConnectionRecoveryBanner";
-import { ChevronDown, ChevronUp, Pin, Plus, Trash2 } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+  GripVertical,
+  Pin,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import {
   type CSSProperties,
   lazy,
@@ -105,6 +112,7 @@ import { BoardControls } from "./board/BoardControls";
 import { boardAppearanceStyle } from "./board/boardAppearance";
 import { useBoardAppearance } from "./board/useBoardAppearance";
 import { nextBoardAttention } from "./board/boardAttention";
+import { BoardStatusSummary } from "./board/BoardStatusSummary";
 import { useBoardPaneMoves } from "./board/useBoardPaneMoves";
 import type { BoardPaneMove } from "./board/boardPaneMove";
 import { DEVTOOLS, NO_TRACE } from "./devtools/flag";
@@ -1293,7 +1301,7 @@ export default function BoardView({
           el =
             shown(
               card?.querySelector<HTMLElement>(
-                `[data-pane="${CSS.escape(pane.key)}"]`,
+                `.board-pane[data-pane="${CSS.escape(pane.key)}"]`,
               ),
             ) ??
             card ??
@@ -1532,7 +1540,7 @@ export default function BoardView({
     if (key === target.cardKey && target.paneKey) {
       const el = cardEls.current.get(key);
       const row = el?.querySelector<HTMLElement>(
-        `[data-pane="${CSS.escape(target.paneKey)}"]`,
+        `.board-pane[data-pane="${CSS.escape(target.paneKey)}"]`,
       );
       if (el && row)
         return {
@@ -3402,16 +3410,23 @@ export default function BoardView({
                   />
                   <div className="board-counts">{workspaceCounts(space)}</div>
                   <div className="board-sum" aria-hidden="true">
-                    {space.squares.map((square, i) => (
-                      <span
-                        key={i}
-                        className={
-                          square.isAgent
-                            ? `board-s-${square.status}`
-                            : "board-sq-shell"
-                        }
+                    {space.squares.length > 64 ? (
+                      <BoardStatusSummary
+                        squares={space.squares}
+                        overview={far}
                       />
-                    ))}
+                    ) : (
+                      space.squares.map((square, i) => (
+                        <span
+                          key={i}
+                          className={
+                            square.isAgent
+                              ? `board-s-${square.status}`
+                              : "board-sq-shell"
+                          }
+                        />
+                      ))
+                    )}
                   </div>
                 </div>
               );
@@ -3491,6 +3506,15 @@ export default function BoardView({
                           ? paneName(pane)
                           : ""}
                     </span>
+                    {!multi && pane ? (
+                      <span
+                        className="board-pane-handle"
+                        data-pane={pane.key}
+                        title="Drag pane to another tab; hold first on a phone"
+                      >
+                        <GripVertical size={16} aria-hidden="true" />
+                      </span>
+                    ) : null}
                   </div>
                   {multi ? (
                     <div className="board-panes">

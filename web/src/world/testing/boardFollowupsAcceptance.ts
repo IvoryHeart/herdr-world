@@ -17,8 +17,8 @@ export async function boardFollowupsAcceptance({
   check,
   opened,
   moves,
-  requireConfirmation,
   cardColors,
+  placeCards,
 }: {
   host: HTMLElement;
   mount(key: number, world: WorldObject): void;
@@ -27,8 +27,10 @@ export async function boardFollowupsAcceptance({
   check(condition: boolean, message: string): void;
   opened: readonly string[];
   moves: readonly PaneMoveCall[];
-  requireConfirmation(value: boolean): void;
   cardColors(): string;
+  placeCards(
+    pinned: Record<string, { x: number; y: number }>,
+  ): Promise<unknown>;
 }) {
   const world = fixtureWorld([
     fixtureHost("synthetic-board", [
@@ -193,10 +195,13 @@ export async function boardFollowupsAcceptance({
     "move fixture remounts",
   );
   await settle(1000);
+  let sourceKey = "synthetic-board:w1:t1";
+  let destinationKey = "synthetic-board:w1:t2";
+  let paneIndex = 1;
   const source = () =>
-    host.querySelector<HTMLElement>('[data-key="synthetic-board:w1:t1"]')!;
+    host.querySelector<HTMLElement>(`[data-key="${sourceKey}"]`)!;
   const destination = () =>
-    host.querySelector<HTMLElement>('[data-key="synthetic-board:w1:t2"]')!;
+    host.querySelector<HTMLElement>(`[data-key="${destinationKey}"]`)!;
   const center = (element: Element) => {
     const rect = element.getBoundingClientRect();
     return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
@@ -220,7 +225,8 @@ export async function boardFollowupsAcceptance({
       }),
     );
   const drag = async (touch: boolean, cancel: boolean | "escape" = false) => {
-    const row = source().querySelectorAll<HTMLElement>("[data-pane]")[1]!;
+    const row =
+      source().querySelectorAll<HTMLElement>("[data-pane]")[paneIndex]!;
     if (!row) throw new Error("Single-pane row is not visible");
     const start = center(row),
       finish = center(destination());
@@ -291,7 +297,68 @@ export async function boardFollowupsAcceptance({
     moves.length === before + 2,
     "touch hold moves one pane with the same gesture",
   );
-  requireConfirmation(true);
+  const singleWorld = fixtureWorld([
+    fixtureHost("synthetic-board", [
+      {
+        label: "Last-pane room",
+        tabs: [{ label: "Single-pane source", panes: [["blocked"]] }],
+      },
+      {
+        label: "Destination room",
+        tabs: [{ label: "Destination desk", panes: [["idle"]] }],
+      },
+    ]),
+  ]);
+  sourceKey = "synthetic-board:w1:t1";
+  destinationKey = "synthetic-board:w2:t1";
+  paneIndex = 0;
+  mount(9103, singleWorld);
+  await waitFor(
+    () => host.querySelectorAll(".board-tab").length === 2,
+    "single-pane rooms mount",
+  );
+  await settle(1000);
+  await placeCards({
+    "synthetic-board:w1": { x: 0, y: 0 },
+    "synthetic-board:w2": { x: 280, y: 0 },
+    [sourceKey]: { x: 0, y: 150 },
+    [destinationKey]: { x: 280, y: 150 },
+  });
+  await settle(1000);
+  const fit = host.querySelector<HTMLButtonElement>(
+    '[aria-label="Fit everything"]',
+  );
+  if (fit) fit.click();
+  else action(await menu(), "Fit everything");
+  await settle(1000);
+  // Fit starts in workspace overview on a phone; use the real zoom controls
+  // to expose both neighbouring tabs before starting their pane gesture.
+  for (let i = 0; i < 2; i++) {
+    const zoom = host.querySelector<HTMLButtonElement>(
+      '[aria-label="Zoom in"]',
+    );
+    if (zoom) zoom.click();
+    else action(await menu(), "Zoom in");
+    await settle(1000);
+  }
+  const grip = source().querySelector<HTMLElement>(".board-pane-handle")!;
+  const gripCenter = center(grip);
+  const hit = document.elementFromPoint(gripCenter.x, gripCenter.y);
+  if (hit?.closest("[data-pane]") !== grip)
+    throw new Error(
+      `Single-pane grip is not reachable: ${JSON.stringify({ rect: grip.getBoundingClientRect().toJSON(), hit: hit?.className, board: board().className, transform: board().querySelector<HTMLElement>(".board-world")?.style.transform, cards: [...host.querySelectorAll<HTMLElement>(".board-card")].map((el) => ({ key: el.dataset.key, rect: el.getBoundingClientRect().toJSON() })) })}`,
+    );
+  const label = source().querySelector(".board-label")!;
+  const start = center(label);
+  pointer(label, "pointerdown", start);
+  pointer(label, "pointermove", { x: start.x + 30, y: start.y + 30 });
+  await settle();
+  check(
+    !document.querySelector(".board-pane-drag"),
+    "single-pane card label preserves the card gesture",
+  );
+  pointer(label, "pointercancel", start);
+  await settle();
   await drag(false);
   await waitFor(
     () => document.querySelector('[aria-label="Move the room\'s last pane?"]'),
@@ -316,5 +383,20 @@ export async function boardFollowupsAcceptance({
     moves.length === before + 5 && moves[moves.length - 1]?.allowClose === true,
     "only explicit confirmation permits closing the old room",
   );
-  requireConfirmation(false);
+  check(
+    moves[moves.length - 1]?.paneId === singleWorld.leaves[0]!.pane.pane_id &&
+      moves[moves.length - 1]?.tabId === "w2:t1",
+    "confirmation moves the real single-pane source across rooms",
+  );
+  await drag(true);
+  action(
+    document.querySelector('[aria-label="Move the room\'s last pane?"]')!,
+    "Cancel",
+  );
+  await settle();
+  check(
+    moves.length === before + 6,
+    "single-pane touch hold reaches the last-room warning without a confirmed retry",
+  );
+  await settle(10_000); // Let the transient move notice expire before visual capture.
 }

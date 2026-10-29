@@ -1,0 +1,21 @@
+.board-sum svg {
+  display: block;
+  flex: none;
+}
+.board-sum path {
+  fill: var(--pulse, var(--s-idle));
+}
+.board-sum path.board-sq-shell {
+  fill: var(--s-idle);
+}
+.board-far .board-sum path.board-s-working {
+  animation: board-blink var(--pace, 5s) ease-in-out infinite;
+}
+.board-no-pulse .board-sum path.board-s-working {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .board-far .board-sum path.board-s-working {
+    animation: none;
+  }
+}

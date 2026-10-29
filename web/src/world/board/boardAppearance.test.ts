@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import {
+  BOARD_STATUS_LABELS,
   boardAppearance,
   boardAppearanceStyle,
   defaultBoardStatusColor,
@@ -42,4 +43,30 @@ test("default status colours follow the selected surface without changing the th
       "dark",
     ),
   ).toBe("#c47f08");
+});
+
+test("default status colours match the CSS palette for both themes and surface overrides", async () => {
+  const css = await Bun.file(
+    new URL("./boardAppearance.css", import.meta.url),
+  ).text();
+  const [dark, light] = css.split(':root[data-theme="light"]');
+  for (const surface of ["theme", "whiteboard", "blackboard"] as const) {
+    for (const theme of ["light", "dark"]) {
+      const palette =
+        surface === "whiteboard" || (surface === "theme" && theme === "light")
+          ? light!
+          : dark!;
+      for (const status of Object.keys(
+        BOARD_STATUS_LABELS,
+      ) as (keyof typeof BOARD_STATUS_LABELS)[]) {
+        const color = palette.match(
+          new RegExp(`--s-${status}:\\s*(#[0-9a-f]{6})`),
+        )?.[1];
+        expect(color).toBeDefined();
+        expect(
+          defaultBoardStatusColor(status, boardAppearance({ surface }), theme),
+        ).toBe(color!);
+      }
+    }
+  }
 });

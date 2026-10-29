@@ -17,3 +17,20 @@
   outline: 2px solid var(--board-accent);
   outline-offset: 3px;
 }
+
+.board-pane-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  color: var(--board-soft);
+  cursor: grab;
+}
+@media (hover: none) {
+  .board-pane-handle {
+    width: 44px;
+    height: 44px;
+  }
+}

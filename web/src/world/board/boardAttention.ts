@@ -9,23 +9,19 @@ export function nextBoardAttention(
   let first: { tab: BoardTab; pane: BoardTab["panes"][number] } | null = null;
   let afterCurrent = false;
   for (const tab of tabs) {
-    if (
-      !tab.actionable ||
-      tab.stale ||
-      (!asks.size && tab.status !== "blocked")
-    )
-      continue;
     for (const pane of tab.panes) {
       if (
-        !pane.isAgent ||
-        !pane.leaf.actionable ||
-        pane.leaf.stale ||
-        (pane.status !== "blocked" && !asks.has(pane.leaf.id))
-      )
-        continue;
-      const candidate = { tab, pane };
-      if (afterCurrent || selectedId === null) return candidate;
-      first ??= candidate;
+        tab.actionable &&
+        !tab.stale &&
+        pane.leaf.actionable &&
+        !pane.leaf.stale &&
+        (asks.has(pane.leaf.id) || (pane.isAgent && pane.status === "blocked"))
+      ) {
+        const candidate = { tab, pane };
+        if (afterCurrent || selectedId === null) return candidate;
+        first ??= candidate;
+      }
+      // Keep the cursor's position even after its question has been answered.
       if (pane.leaf.id === selectedId) afterCurrent = true;
     }
   }

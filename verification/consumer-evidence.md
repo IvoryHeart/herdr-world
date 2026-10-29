@@ -419,3 +419,18 @@ existing seventeen-pane tab load. Board and the Town baseline run at 1440 px and
 included; every input retains its original host and runtime. This is a repeatable
 synthetic Chrome workload, not a network or runtime latency guarantee. Existing
 larger dense cases and their budgets remain unchanged.
+
+Board review repair (#222): the direct Next tests retain native position after an
+answered pane and include shared questions placed on shells. The appearance test
+compares every default with the CSS palette for both themes and surface overrides.
+The Board browser scenario uses a real single-pane source in another room, derives
+the fake service's last-room refusal from that topology, and checks the separate
+card gesture, mouse/touch pane gestures, cancellation and explicit confirmation.
+These extend Q22/Q42/Q43's existing direct consumer evidence; no new authority or
+ordering state machine is introduced.
+The maximum-scale Board input acceptance retains its existing 150ms p95 / 450ms
+worst-event limits. Dense room summaries batch same-status squares into SVG paths;
+a direct rendering test checks every agent/shell contour, both zoom geometries,
+and a bounded path count. This preserves status and pulse presentation without
+thousands of independently animated DOM nodes. CPU-throttled before/after runs
+supplement the unchanged native-input consumer instead of changing its budget.

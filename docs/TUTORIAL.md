@@ -530,8 +530,9 @@ on your phone and desktop.
    Changes and Chat; a line joins each Inspector window to its card. Tapping or
    double-clicking an agent's tab opens its Chat, as in Town; a plain shell, or an
    agent without Chat, opens its terminal. **Next**, beside Work, opens the next
-   agent who needs you, including a verified shared question. At narrow widths,
-   Next remains available in the Board menu. Stale hosts and plain shells are skipped.
+   pane needing you: a waiting agent or a shared question placed on its pane,
+   including a shell question. At narrow widths, Next remains available in the
+   Board menu. Stale hosts and shells without questions are skipped.
 5. Double-click (or double-tap) empty board to pin a note and type; double-click
    a note to edit it. Tap a note for its bar: colour, **Edit**, **String to…**, **Delete** (or press Delete).
 6. Drag a card's red dot onto a pane row, a tab or a workspace to string a note
@@ -558,8 +559,10 @@ on your phone and desktop.
    phone, hold the tab still for a moment first; a quick swipe pans). Board
    asks first, with **Don't ask again**, and always asks before moving a
    workspace's last tab, which closes that workspace. Strings follow the move.
-   To move just one pane, drag its row onto another tab on the same host; on a
-   phone, hold the row first. The other panes and the whole card stay in place.
+   To move just one pane, drag its row—or the grip on a single-pane tab—onto
+   another tab on the same host; on a phone, hold the row or grip first. Dragging
+   the rest of a single-pane card still arranges the whole card. During a pane
+   move, the other panes and the whole card stay in place.
    Cancelling the drag or dropping on empty board sends no move. If moving the
    pane would close its old room, Board asks for confirmation first. Strings
    to that pane follow it.

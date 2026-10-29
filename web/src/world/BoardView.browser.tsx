@@ -387,7 +387,6 @@ let lastAnchors: Record<
 > | null = null;
 const movedTabs: { tab: string; to: string }[] = [];
 const movedPanes: PaneMoveCall[] = [];
-let paneMoveNeedsConfirmation = false;
 const host = document.createElement("div");
 host.style.cssText = "position:fixed;inset:0";
 document.body.appendChild(host);
@@ -412,7 +411,10 @@ function mount(key: number, shown = world, selectedId: string | null = null) {
             tabId: request.target.nativeId,
             allowClose,
           });
-          return paneMoveNeedsConfirmation && !allowClose
+          return request.sourceWorkspace.key !== request.targetWorkspace.key &&
+            request.sourceWorkspace.tabKeys.length === 1 &&
+            request.source.panes.length === 1 &&
+            !allowClose
             ? {
                 status: "refused",
                 reason: "room_would_close",
@@ -655,7 +657,6 @@ async function fresh() {
   closedPanes.clear();
   heldChecks = null;
   lastAnchors = null;
-  paneMoveNeedsConfirmation = false;
   for (const list of [
     selected,
     opened,
@@ -3304,10 +3305,8 @@ scenarios.push([
       check,
       opened,
       moves: movedPanes,
-      requireConfirmation: (value) => {
-        paneMoveNeedsConfirmation = value;
-      },
       cardColors: () => JSON.stringify(saved.layout.colors),
+      placeCards: (pinned) => store.patch([{ op: "layout.set", pinned }]),
     }),
 ]);
 

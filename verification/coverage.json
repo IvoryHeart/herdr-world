@@ -1699,7 +1699,8 @@
         "web/src/shortcutCheatSheet.test.ts",
         "web/src/shortcutBindings.test.ts",
         "web/src/components/ModalDialogs.test.ts",
-        "web/src/world/board/boardAppearance.test.ts"
+        "web/src/world/board/boardAppearance.test.ts",
+        "web/src/world/board/BoardStatusSummary.test.tsx"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
       "technique": "alternative",
