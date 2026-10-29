@@ -15,6 +15,10 @@ hold deltas and decisions at different delivery stages. Check their task state w
 spec or prove verification. [Historical numbered specs](specs/) explain earlier
 decisions and are not current operational guidance.
 
+Browser startup has dedicated [fresh import-order coverage](../web/src/storeImportOrder.test.ts)
+and a [real Vite application-entry browser check](../web/src/appStartup.browser.test.ts).
+Notification wiring is described in the [World startup guide](../web/src/world/README.md#application-startup-and-owner-questions).
+
 | When changing | Current contract | Start in source | Focused evidence or runbook |
 | --- | --- | --- | --- |
 | Saved local/SSH profiles, runtime leases, reconnects | [Runtime federation](../openspec/specs/runtime-federation/spec.md) | [Connection manager](../server/src/connections/manager.ts), [running-server identity](../shared/herdrIdentity.ts), [per-host version view](../web/src/components/ConnectionHerdrInfo.tsx), [profile recovery](../server/src/connections/profile-service.ts), [runtime](../server/src/connections/runtime.ts), [SSH runtime](../server/src/connections/ssh-profile-runtime.ts), [Windows bridge](../server/src/bridge/ssh-windows.ts) | [Manager tests](../server/src/connections/manager.test.ts), [SSH tests](../server/src/connections/ssh-profile-runtime.test.ts), [HOME preflight recovery tests](../server/src/connections/ssh-preflight-recovery.test.ts), [Windows bridge tests](../server/src/bridge/ssh-windows.test.ts), [deployment](DEPLOYMENT.md), [failed-host recovery](world-connection-recovery.md) |
