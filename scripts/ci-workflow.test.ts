@@ -531,3 +531,31 @@ test("the ratchet checks the proposed merge into the exact PR target", () => {
     },
   });
 });
+
+test("release validation passes the full non-PR plan to the shared browser workflow", async () => {
+  const release = Bun.YAML.parse(
+    await Bun.file(
+      new URL("../.github/workflows/release.yml", import.meta.url),
+    ).text(),
+  ) as {
+    jobs: Record<
+      string,
+      {
+        outputs?: { selection?: string };
+        steps?: WorkflowStep[];
+        with?: { selection?: string };
+      }
+    >;
+  };
+  expect(release.jobs.validate.outputs?.selection).toBe(
+    "${{ steps.scope.outputs.selection }}",
+  );
+  expect(
+    release.jobs.validate.steps?.some(
+      (step) => step.run === "bun scripts/ci-reuse-full-check.ts",
+    ),
+  ).toBe(true);
+  expect(release.jobs["world-browser"].with?.selection).toBe(
+    "${{ needs.validate.outputs.selection }}",
+  );
+});
