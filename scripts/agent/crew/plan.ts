@@ -166,9 +166,6 @@ export function busyPrs(
   return [...new Set(busy)].sort((a, b) => a - b);
 }
 
-/** Gate conditions that ask the owner about a CI rerun, not about the code. */
-const CI_JUDGMENTS = new Set(["rerun", "aggregate"]);
-
 /**
  * The watcher's marks: commit statuses on a PR's head, which start no CI
  * run (a label would) and which a new push leaves behind. The gate and the
@@ -345,7 +342,7 @@ export function plan(
   if (fixes.length && !runs.length)
     toAuthor(
       "fix",
-      `ACT #${pr} fix @${at}: findings from ${fixes.join(", ")}. Fix every finding in one pass, reply on the PR with one line per finding naming its fixing commit, and push. Reviewers rerun by themselves once CI is green; no need to tell anyone.`,
+      `ACT #${pr} fix @${at}: findings from ${fixes.join(", ")}. Fix every finding in one pass, reply on the PR with one line per finding naming its fixing commit, and push. Reviewers rerun by themselves on your push; no need to tell anyone.`,
     );
   const failing = verdict.conditions.find(
     (entry) => entry.id === "checks" && entry.state === "unmet",
@@ -392,16 +389,10 @@ export function plan(
       `ACT #${pr} screenshots @${at}: add captures for the five owner viewports to the PR.`,
     );
 
-  // Reviewers look at a head CI passed and GitHub knows it can merge: a
-  // red or conflicting head would only be reviewed again. A head whose
-  // checks have finished while the owner judges a rerun is reviewed too:
-  // the rerun question doesn't change the head, and READY still needs both.
-  const ciJudgment = verdict.conditions.some(
-    (entry) => CI_JUDGMENTS.has(entry.id) && entry.state === "judgment",
-  );
-  const reviewable =
-    state("mergeable") === "met" &&
-    (state("checks") === "met" || (ciJudgment && settled));
+  // Reviewers read the diff, not CI, so they start as soon as a head is
+  // pushed, in parallel with its checks; READY still needs both. A head
+  // GitHub can't merge yet would only be reviewed again after the merge.
+  const reviewable = state("mergeable") === "met";
   if (reviewable)
     for (const run of runs) {
       const model = settings.roster[run.name];
