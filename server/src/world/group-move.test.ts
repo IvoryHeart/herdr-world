@@ -418,3 +418,54 @@ test("the actual CLI service injects the RPC-owned queue and exact lease", async
   });
   expect(selected).toEqual(["connection-a", "connection-a"]);
 });
+
+test.each([
+  ["inherited", false],
+  ["explicit", true],
+] as const)(
+  "Room move preserves %s desk colour after preview",
+  async (_kind, own) => {
+    const state = setup();
+    const child = state.request.terminal_id;
+    const parent = state.herdr.panes.get(state.destination.ids[0]!)!.terminal;
+    const expected_plan = await plan(state);
+    state.board.patch([
+      {
+        op: "spawn.record",
+        claims: [
+          {
+            child: { connection_id: "connection-a", terminal_id: child },
+            parent: { connection_id: "connection-a", terminal_id: parent },
+            source: "herdr:spawned_by",
+            generation: 4,
+            observed_at: 1,
+          },
+        ],
+      },
+      {
+        op: "card.color",
+        key: `connection-a:${state.destination.tab}`,
+        color: "pink",
+      },
+      ...(own
+        ? [
+            {
+              op: "card.color" as const,
+              key: `connection-a:${state.source.tab}`,
+              color: "blue" as const,
+            },
+          ]
+        : []),
+    ]);
+    const result = await runGroupMove(state.context, {
+      ...state.request,
+      preview: false,
+      expected_plan,
+    });
+    expect(result.status).toBe("moved");
+    const colors = state.board.get().layout.colors;
+    const movedKey = `connection-a:${(result as { tab_id: string }).tab_id}`;
+    if (own) expect(colors[movedKey]).toBe("blue");
+    else expect(Object.hasOwn(colors, movedKey)).toBe(false);
+  },
+);

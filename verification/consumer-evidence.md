@@ -130,7 +130,10 @@ Herdr calls, and terminal witnesses refuse changes after preflight. Known partia
 failure reconciles Board anchors from observed terminals; lost replies with
 unreadable topology return Unknown without retry. `town-move.test.ts` retains
 queue-versus-Board-follow ordering checks, while native desk/pane tests retain
-rollback, last-room consent and uncertain-step contracts. Source roll-up tests
+rollback, last-room consent and uncertain-step contracts. Actual native move
+regressions add spawn claims and explicit colours after the preview: the moved
+desk keeps its explicit choice or retains parent inheritance without saving a
+new default override. Source roll-up tests
 distinguish current, stale and unknown work so unavailable counts cannot claim
 a confirmed limit warning.
 
@@ -178,7 +181,9 @@ sound; existing shared shouldChime, chime center, host/device and prune consumer
 retain Town-master, motif, seen, device and current-topology boundaries. The
 registered panel consumer exercises Default/Watch controls through both the bell
 and mobile Attention menu, restoration of Group Focus through Default, and
-unchanged needs-you counts at all eight actual viewports. No terminal choice is copied from membership.
+unchanged needs-you counts at all eight actual viewports. The real Inspector
+handoff browser also requires the exact four mobile Attention choices and retains
+cross-view persistence and failed-save checks. No terminal choice is copied from membership.
 These finite precedence and existing atomic-storage adapters warrant direct
 exhaustive evidence rather than a separate model of the same small table.
 

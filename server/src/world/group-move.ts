@@ -1,4 +1,9 @@
 import { createHash } from "node:crypto";
+import {
+  relationsOf,
+  spawnParents,
+  terminalKey,
+} from "../../../shared/relations";
 import { groupObject } from "../../../shared/groups";
 import { groupSnapshotObservations } from "./group-observations";
 import { executeTownMove, type TownMoveContext } from "./town-move";
@@ -35,6 +40,7 @@ const label = (row: Record<string, unknown>, fallback: string): string =>
 async function preview(context: TownMoveContext, request: GroupMoveRequest) {
   if (!context.isCurrent())
     throw new CliError("refused", "The host reconnected. Read Groups again.");
+  const relationsBefore = context.board.get().relations;
   const [paneResult, agentResult, workspaceResult] = await Promise.all([
     context.call("pane.list", {}),
     context.call("agent.list", {}),
@@ -124,6 +130,33 @@ async function preview(context: TownMoveContext, request: GroupMoveRequest) {
       "refused",
       "The desk has ambiguous identities; no move was made",
     );
+  const parents = spawnParents(
+    relationsOf(relationsBefore, [
+      {
+        connection_id: context.connectionId,
+        generation: context.generation,
+        current: true,
+        complete: true,
+        panes: panes as Pane[],
+      },
+    ]),
+  );
+  const inheritedColor = affected.some((pane) => {
+    const parent = parents.get(
+      terminalKey({
+        connection_id: context.connectionId,
+        terminal_id: pane.terminal_id,
+      }),
+    );
+    return (
+      parent?.connection_id === context.connectionId &&
+      panes.some(
+        (candidate) =>
+          candidate.terminal_id === parent.terminal_id &&
+          candidate.tab_id !== request.tab_id,
+      )
+    );
+  });
   const members = affected
     .map((pane) => {
       const terminal = observed.terminals.find(
@@ -162,7 +195,10 @@ async function preview(context: TownMoveContext, request: GroupMoveRequest) {
     .digest("hex");
   if (!context.isCurrent())
     throw new CliError("refused", "The host reconnected. Read Groups again.");
-  return { status: "preview" as const, plan, summary, effect };
+  return {
+    result: { status: "preview" as const, plan, summary, effect },
+    inheritedColor,
+  };
 }
 
 export function groupMoveSummary(result: MoveOutcome): string {
@@ -196,11 +232,11 @@ export async function runGroupMove(
       "refused",
       "The selected host generation changed. Read Groups again.",
     );
-  if (request.preview) return preview(context, request);
+  if (request.preview) return (await preview(context, request)).result;
   if (!request.expected_plan || !/^[a-f0-9]{64}$/.test(request.expected_plan))
     throw new CliError("refused", "Preview this Herdr move before acting");
   const result = await executeTownMove(context, async () => {
-    const current = await preview(context, request);
+    const { result: current, inheritedColor } = await preview(context, request);
     if (current.plan !== request.expected_plan)
       return {
         status: "refused",
@@ -211,6 +247,7 @@ export async function runGroupMove(
     return request.kind === "room"
       ? {
           kind: "desk",
+          inherited_color: inheritedColor,
           tab_id: request.tab_id,
           workspace_id: request.destination_id,
           allow_close_room: request.allow_close_room,

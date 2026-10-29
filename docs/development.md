@@ -395,6 +395,10 @@ file watcher or synchronization exists. `group list --kind pod --markdown`
 renders qualified role refs and ordered Now items with escaped table content.
 Derived PR counts are display-only; this rendering is not a full Board backup.
 
+Room moves preserve a desk's chosen colour or its spawn-parent colour
+inheritance. Saved relations and colours are captured at queue admission; a
+colour or spawn claim changed after the preview is read at that boundary.
+
 Rooms/Desks remain unpersisted. Their create/delete/role edits are refused.
 `group add DESTINATION AGENT --herdr` reads a complete effect from the captured
 connection/generation before moving. Room moves print the whole desk and every
