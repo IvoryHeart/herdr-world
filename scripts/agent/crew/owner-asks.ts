@@ -109,17 +109,15 @@ export function reconcileOwnerAsks(
     const known = receipt(entry.detail);
     if (!holds(crew, entry, keys)) {
       if (known?.retired) continue;
-      const selector =
-        known?.ask && !known.rearm
-          ? [known.ask]
-          : ["--key", `crew:${entry.key}`];
+      const knownId = known?.rearm ? undefined : known?.ask;
+      const selector = knownId ? [knownId] : ["--key", `crew:${entry.key}`];
       const withdrawn = reply(
         deps.run(["herdr-world", "ask", "withdraw", ...selector, "--json"]),
       );
       if (withdrawn?.code === "refused") {
         save(entry, "superseded", { ...known, retired: true, rearm: false });
         say(
-          `#${entry.pr} could not withdraw ${known?.ask ?? "its keyed ask"}; ${known?.closed ? "its answer was already read" : "left for the owner to answer"}`,
+          `#${entry.pr} could not withdraw ${knownId ?? "its keyed ask"}; ${knownId && known?.closed ? "its answer was already read" : "left for the owner to answer"}`,
         );
         continue;
       }

@@ -908,6 +908,47 @@ describe("delivery", () => {
     }
   });
 
+  test("refused cleanup of an uncertain recreation does not name its older answered ask", () => {
+    pass(ready());
+    const first = [...ownerAsks.values()][0]!;
+    first.answer = { text: "Previous decision" };
+    pass(ready(), NOW + 30_000);
+    pass(trioPosted(), NOW + 60_000);
+    const original = deps.run;
+    let lost = true;
+    deps.run = (argv) => {
+      const result = original(argv);
+      if (
+        lost &&
+        argv[0] === "herdr-world" &&
+        argv[2] !== "withdraw" &&
+        argv[2] !== "get"
+      ) {
+        lost = false;
+        return { code: 1, stdout: "", stderr: "creation reply lost" };
+      }
+      return result;
+    };
+    try {
+      pass(ready(), NOW + 120_000);
+      const current = [...ownerAsks.values()][0]!;
+      expect(current.id).not.toBe(first.id);
+      refuse.add("withdraw");
+      passOver([], NOW + 180_000);
+      passOver([], NOW + 240_000);
+      const lines = readFileSync(join(dir, "feed.log"), "utf8")
+        .split("\n")
+        .filter((line) => line.includes("could not withdraw"));
+      expect(lines).toHaveLength(1);
+      expect(lines[0]).toContain("its keyed ask");
+      expect(lines[0]).toContain("owner to answer");
+      expect(lines[0]).not.toContain(first.id);
+      expect(current.withdrawn).toBeUndefined();
+    } finally {
+      deps.run = original;
+    }
+  });
+
   test("a refused withdrawal retires the cause and explains the leftover ask once", () => {
     pass(ready());
     const ask = [...ownerAsks.values()][0]!;
