@@ -285,6 +285,22 @@ export function passInputs(db: Database, passId: number): GateInput[] {
   ).map((row) => JSON.parse(row.body_json));
 }
 
+/** Inputs from the full open-PR pass immediately before the latest one. */
+export function previousOpenPassInputs(db: Database): GateInput[] {
+  const latest = db
+    .query<{ id: number }, []>(
+      "SELECT id FROM pass WHERE trigger = 'open' ORDER BY id DESC LIMIT 1",
+    )
+    .get();
+  if (!latest) return [];
+  const previous = db
+    .query<{ id: number }, [number]>(
+      "SELECT id FROM pass WHERE trigger = 'open' AND id < ? ORDER BY id DESC LIMIT 1",
+    )
+    .get(latest.id);
+  return previous ? passInputs(db, previous.id) : [];
+}
+
 /**
  * Each PR as last seen since the latest pass over every open PR: that pass's
  * PRs, updated by the scoped passes after it, which read only busy PRs; with

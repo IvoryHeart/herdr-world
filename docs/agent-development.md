@@ -36,8 +36,8 @@ space fail halfway and leave debris. These rules keep each worktree small:
     for 12 hours. The merged local branch is deleted with it.
   - **Stripped:** if processes only sit in such a worktree (an idle shell in an
     agent's pane, say), only its build output goes: `node_modules`, `dist`,
-    `web/dist`, `server/public`, the `server/herdr-world` binary and
-    `.agents/verification`.
+    `web/dist`, `server/public`, the `server/herdr-world` binary and its source
+    map, platform binaries and maps, and `.agents/verification`.
   - **Kept in use:** a worktree a running process uses in any other way (its
     executable, an open file, a path in its command line like a preview
     server's `--directory`, or the working directory of anything but a shell,
@@ -54,6 +54,11 @@ space fail halfway and leave debris. These rules keep each worktree small:
     Protect a worktree a long-running preview or instance serves with
     `git worktree lock --reason "<why>" <path>`.
   - **Dry run:** `--dry-run` prints the decisions without acting.
+- **Closed PRs:** after closing a PR's review tabs, the crew watcher ends its
+  reviewer sessions and removes their review checkouts. It removes the author's
+  branch checkout only when the normal prune checks accept it; otherwise the
+  feed says why it was kept. A full open-PR pass treats a previously active PR
+  missing from GitHub's open list as closed or merged.
 - Behavioral verification's checker (about 190 MB) is downloaded once per user into
   `$XDG_CACHE_HOME/herdr-world/verification` (or `~/.cache/…`;
   `HERDR_WORLD_VERIFICATION_CACHE` moves it). Every worktree reads it there after

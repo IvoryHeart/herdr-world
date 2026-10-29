@@ -4,7 +4,11 @@ import { dirname, join } from "node:path";
 import { shortSha } from "../../shared/pullRequests";
 import { gateDir, loadConfig, runPass } from "./gate";
 import type { GateInput, Verdict } from "./gate/predicate";
-import { openStore } from "./gate/store";
+import { latestInput, openStore, previousOpenPassInputs } from "./gate/store";
+import {
+  cleanupAuthorWorktree,
+  cleanupTerminalReviewers,
+} from "./crew/cleanup";
 import { type Deps, realDeps } from "./crew/deps";
 import {
   type Action,
@@ -43,26 +47,28 @@ import {
   activeRuns,
   addAction,
   addRun,
-  closeRound,
   feed,
   finishRun,
   getAction,
+  getMeta,
   holdLock,
   getRun,
   latestRun,
+  metaWithPrefix,
   openCrewStore,
   openLock,
   openRounds,
   roundFor,
   roundPanes,
-  roundTabs,
   runningSince,
-  runsOf,
   setAction,
   setRoundTab,
   setRunPane,
   setRunPid,
   setRunResult,
+  setMeta,
+  trackedPrs,
+  deleteMeta,
   type StoredAction,
 } from "./crew/store";
 
@@ -147,6 +153,8 @@ type PassContext = {
   crew: Database;
   /** Held while a pass acts; see `openLock`. */
   lock: Database;
+  /** Gate history supplies the branch for a PR omitted from the open list. */
+  gate?: Database;
   configPath: string;
   dir: string;
   prs: number[];
@@ -280,6 +288,7 @@ function act(
   // A PR parked with a hold or out of the watcher's scope gets no steps and
   // asks nothing of the owner; a reviewer already working still finishes.
   const parked = parkedPrs(inputs, verdicts, settings);
+  const roundsAtStart = openRounds(crew);
   const causes = new Map<number, string[]>();
   const root = dirname(dirname(context.dir));
   const publicText = (text: string) => text.replaceAll(`${root}/`, "");
@@ -333,6 +342,50 @@ function act(
       )
       .map((verdict) => [verdict.number, verdict.head]),
   );
+  const terminal = new Map<number, GateInput>();
+  const tracked = new Set(trackedPrs(crew));
+  const cleanupKey = (pr: number) => `terminal-cleanup:${pr}`;
+  for (const input of inputs)
+    if (input.state === "OPEN") deleteMeta(crew, cleanupKey(input.number));
+  for (const verdict of verdicts)
+    if (
+      (verdict.state === "MERGED" || verdict.state === "CLOSED") &&
+      tracked.has(verdict.number) &&
+      getMeta(crew, cleanupKey(verdict.number)) !== "done"
+    ) {
+      const input = inputs.find((entry) => entry.number === verdict.number);
+      if (input) terminal.set(verdict.number, input);
+    }
+  // A full pass reads the complete open-PR list. A previously open PR missing
+  // from that list has merged or closed; scoped passes cannot infer it.
+  if (!prs.length) {
+    const previous = new Map<number, GateInput>();
+    for (const input of context.gate
+      ? previousOpenPassInputs(context.gate)
+      : [])
+      previous.set(input.number, input);
+    for (const round of roundsAtStart) {
+      const input = context.gate
+        ? latestInput(context.gate, round.pr)
+        : inputs.find((entry) => entry.number === round.pr);
+      if (input) previous.set(round.pr, input);
+    }
+    for (const [pr, input] of previous)
+      if (
+        tracked.has(pr) &&
+        !observed.has(pr) &&
+        getMeta(crew, cleanupKey(pr)) !== "done"
+      ) {
+        const latest = context.gate ? latestInput(context.gate, pr) : input;
+        if (latest) terminal.set(pr, latest);
+      }
+    for (const { key, value } of metaWithPrefix(crew, "terminal-cleanup:")) {
+      if (value !== "pending") continue;
+      const pr = Number(key.slice("terminal-cleanup:".length));
+      const input = context.gate ? latestInput(context.gate, pr) : null;
+      if (input && !observed.has(pr)) terminal.set(pr, input);
+    }
+  }
   // A review is done once its RESULT is on GitHub for the head it was
   // given, whatever its session has done since: it may have posted just
   // before a newer push, or ended before this pass saw the post. A session
@@ -369,7 +422,7 @@ function act(
     if (heads.get(waiting.pr) === waiting.head) continue;
     if (waiting.state === "running") {
       const active = latestRun(crew, waiting.key);
-      if (active && active.finishedAt === null)
+      if (active && active.finishedAt === null && !terminal.has(waiting.pr))
         stopRun(crew, active.id, -15, now, deps);
     }
     setAction(crew, waiting.key, "superseded", now);
@@ -385,39 +438,18 @@ function act(
     say(`#${waiting.pr} retired ${waiting.kind} ${waiting.target}: ${why}`);
   }
 
-  // A pod lasts as long as its PR: each round's tab stays, stopped runs
-  // included, for the owner to read until the PR merges or closes.
-  // Its tabs close first, chats reopened from its runs included, then the
-  // checkouts those chats recreated go. A step that fails keeps the round
-  // open, so the next pass tries again.
-  for (const round of openRounds(crew)) {
-    if (heads.has(round.pr)) continue;
-    if (prs.length && !observed.has(round.pr)) continue;
-    const tabs = new Set(roundTabs(crew, round.pr, round.round));
-    if (round.tab) tabs.add(round.tab);
-    let done = true;
-    for (const tab of tabs) done = deps.closeTab(tab) && done;
-    for (const entry of runsOf(crew, round.pr)) {
-      const checkout = checkoutOf(context.dir, entry);
-      if (!done || entry.round !== round.round || !existsSync(checkout))
-        continue;
-      const removed = deps.run([
-        "git",
-        "-C",
-        dirname(dirname(context.dir)),
-        "worktree",
-        "remove",
-        "--force",
-        checkout,
-      ]);
-      if (removed.code !== 0 && existsSync(checkout)) done = false;
-    }
-    if (!done) {
-      say(`#${round.pr} couldn't close round ${round.round} yet; retrying`);
+  for (const [pr, input] of terminal) {
+    if (!cleanupTerminalReviewers(crew, context.dir, pr, now, deps, say)) {
+      setMeta(crew, cleanupKey(pr), "pending");
       continue;
     }
-    closeRound(crew, round.pr, round.round, now);
-    say(`#${round.pr} closed round ${round.round}`);
+    cleanupAuthorWorktree(
+      dirname(dirname(context.dir)),
+      pr,
+      input.item?.branch,
+      say,
+    );
+    setMeta(crew, cleanupKey(pr), "done");
   }
 
   settleRuns(crew, settings, now, deps, record, say);
@@ -940,6 +972,7 @@ export async function main(argv: string[], deps: Deps = realDeps) {
               )),
             crew,
             lock,
+            gate,
             configPath,
             dir,
             prs,

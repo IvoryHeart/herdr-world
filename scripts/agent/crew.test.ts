@@ -593,13 +593,21 @@ describe("delivery", () => {
     },
     usage: (run) => `{"output_tokens":${run.id}}`,
     alive: (pid) => !dead.has(pid),
-    kill: (pid) => killed.push(pid),
+    kill: (pid) => {
+      killed.push(pid);
+      events.push(`kill ${pid}`);
+    },
     out: () => {},
   };
   const passOver = (
     values: GateInput[],
     now = NOW,
-    options: { prs?: number[]; db?: typeof crew; lock?: typeof lock } = {},
+    options: {
+      prs?: number[];
+      db?: typeof crew;
+      lock?: typeof lock;
+      gate?: ReturnType<typeof openStore>;
+    } = {},
   ) =>
     crewPass({
       judge: () => ({
@@ -608,6 +616,7 @@ describe("delivery", () => {
       }),
       crew: options.db ?? crew,
       lock: options.lock ?? lock,
+      gate: options.gate,
       configPath,
       dir,
       prs: options.prs ?? [],
@@ -1072,14 +1081,54 @@ describe("delivery", () => {
   test("a PR that merges or closes takes all its round tabs with it", () => {
     panes = true;
     pass(town({ head: SHA.reviewed, posts: [] }));
+    const [first] = activeRuns(crew);
+    setRunSession(crew, first!.id, "codex", "gpt-6-old", "thread-1");
+    finishRun(crew, first!.id, 0, null, NOW + 1);
+    openChat(crew, { prs: [], run: first!.id }, dir, lock, deps);
     pass(town({ head: SHA.fixed, posts: [] }), NOW + 60_000);
     // A pass scoped to another PR leaves this pod alone.
     passOver([], NOW + 90_000, { prs: [8] });
     expect(closed).toEqual([]);
     pass(town({ head: SHA.fixed, posts: [], state: "MERGED" }), NOW + 120_000);
-    expect(closed).toEqual(["wP:t1", "wP:t4"]);
+    expect(closed.toSorted()).toEqual(["wP:t1", "wP:t4", "wP:tC1"].toSorted());
     expect(openRounds(crew)).toEqual([]);
     expect(actionsIn(crew, ["pending", "running"])).toEqual([]);
+  });
+
+  test("a full open-PR pass closes rounds for PRs missing from the list", () => {
+    panes = true;
+    const value = town({ head: SHA.reviewed, posts: [] });
+    const history = openStore(":memory:");
+    recordPass(history, {
+      trigger: "open",
+      config,
+      startedAt: NOW,
+      finishedAt: NOW,
+      inputs: [value],
+      verdicts: [evaluate(value, config, NOW)],
+    });
+    try {
+      pass(value);
+      recordPass(history, {
+        trigger: "open",
+        config,
+        startedAt: NOW + 60_000,
+        finishedAt: NOW + 60_000,
+        inputs: [],
+        verdicts: [],
+      });
+      const [active] = activeRuns(crew);
+      setRunPid(crew, active!.id, 4242);
+      passOver([], NOW + 60_000, { gate: history });
+      expect(closed).toEqual(["wP:t1"]);
+      expect(killed).toContain(4242);
+      expect(events.indexOf("close wP:t1")).toBeLessThan(
+        events.indexOf("kill 4242"),
+      );
+      expect(openRounds(crew)).toEqual([]);
+    } finally {
+      history.close();
+    }
   });
 
   test("a tab the owner closed is replaced by a new one for the round", () => {

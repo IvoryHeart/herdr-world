@@ -52,7 +52,7 @@ function fixture() {
   writeFileSync(join(primary, "README.md"), "base\n");
   writeFileSync(
     join(primary, ".gitignore"),
-    "node_modules/\n.agents/*\n.env*\n*.tsbuildinfo\nserver/public/\n",
+    "node_modules/\n.agents/*\n.env*\n*.tsbuildinfo\nserver/public/\nserver/herdr-world.map\n",
   );
   run(primary, "add", "-A");
   run(primary, "commit", "-qm", "base");
@@ -94,6 +94,10 @@ function fixture() {
   mkdirSync(join(built, ".agents/delivery"), { recursive: true });
   writeFileSync(join(built, ".agents/delivery/gate.log"), "log\n");
   writeFileSync(join(built, "web.tsbuildinfo"), "{}\n");
+  const sourceMap = add("source-map", "-b", "agent/source-map");
+  commit(sourceMap, "source-map.ts");
+  mkdirSync(join(sourceMap, "server"), { recursive: true });
+  writeFileSync(join(sourceMap, "server/herdr-world.map"), "generated\n");
   const locked = add("locked", "-b", "agent/locked");
   commit(locked, "locked.ts");
   // Merge them into main, as their PRs would be.
@@ -104,6 +108,7 @@ function fixture() {
     "agent/served",
     "agent/evidence",
     "agent/built",
+    "agent/source-map",
     "agent/locked",
   ])
     run(primary, "merge", "-q", "--no-edit", branch);
@@ -127,6 +132,7 @@ function fixture() {
     served,
     evidence,
     built,
+    sourceMap,
     locked,
     unmerged,
     fresh,
@@ -165,6 +171,7 @@ test("prune removes merged clean worktrees and spares everything else", () => {
     evidence:
       "keep: ignored files that are not build output: .agents/evidence, .env.local",
     built: "remove: merged into origin/main",
+    "source-map": "remove: merged into origin/main",
     locked: "keep: locked",
     unmerged: "keep: has commits not in origin/main",
     fresh: "keep: no commits of its own yet",
@@ -185,6 +192,7 @@ test("prune removes merged clean worktrees and spares everything else", () => {
   expect(existsSync(join(repo.live, "node_modules"))).toBe(false);
   expect(existsSync(join(repo.live, "server/public"))).toBe(false);
   expect(existsSync(repo.built)).toBe(false);
+  expect(existsSync(repo.sourceMap)).toBe(false);
   for (const kept of [
     repo.dirty,
     repo.unmerged,

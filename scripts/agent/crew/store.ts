@@ -457,6 +457,16 @@ export function openRounds(db: Database) {
     .all();
 }
 
+/** PRs the crew has already acted on or reviewed. */
+export function trackedPrs(db: Database) {
+  return db
+    .query<{ pr: number }, []>(
+      `SELECT pr FROM action UNION SELECT pr FROM run UNION SELECT pr FROM round ORDER BY pr`,
+    )
+    .all()
+    .map((row) => row.pr);
+}
+
 export function closeRound(
   db: Database,
   pr: number,

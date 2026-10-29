@@ -101,6 +101,21 @@ export const BUILD_OUTPUTS = [
   "web/dist",
   "server/public",
   "server/herdr-world",
+  "server/herdr-world.map",
+  "server/herdr-world-darwin-arm64",
+  "server/herdr-world-darwin-arm64.map",
+  "server/herdr-world-darwin-x64",
+  "server/herdr-world-darwin-x64.map",
+  "server/herdr-world-linux-arm64",
+  "server/herdr-world-linux-arm64.map",
+  "server/herdr-world-linux-x64",
+  "server/herdr-world-linux-x64.map",
+  "server/herdr-world-linux-x64-musl",
+  "server/herdr-world-linux-x64-musl.map",
+  "server/herdr-world-windows-arm64.exe",
+  "server/herdr-world-windows-arm64.exe.map",
+  "server/herdr-world-windows-x64.exe",
+  "server/herdr-world-windows-x64.exe.map",
   ".agents/verification",
 ];
 
@@ -348,6 +363,7 @@ export function pruneWorktrees({
   dryRun = false,
   live = processUse(),
   now = Date.now(),
+  onlyPath,
 } = {}) {
   const primary = primaryCheckout(cwd);
   const root = real(join(primary, ".agents/worktrees")) + sep;
@@ -355,6 +371,7 @@ export function pruneWorktrees({
   const actions = [];
   for (const entry of listWorktrees(cwd)) {
     const path = real(entry.path);
+    if (onlyPath && path !== real(onlyPath)) continue;
     if (!path.startsWith(root)) continue;
     const act = (action, reason) =>
       actions.push({ path: entry.path, action, reason });
@@ -425,6 +442,15 @@ export function pruneWorktrees({
     }
   }
   return actions;
+}
+
+/** Apply prune's safety checks to just one worktree. */
+export function pruneWorktree(path, options = {}) {
+  return (
+    pruneWorktrees({ ...options, onlyPath: path }).find(
+      (entry) => real(entry.path) === real(path),
+    ) ?? { path, action: "keep", reason: "not a registered worktree" }
+  );
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
