@@ -1,6 +1,29 @@
+/* In the window title the glyph takes its own column before the avatar,
+   and the name and location move one column right. */
+.workspace-inspector-agent-identity:has(> .inspector-pane-map-glyph) {
+  grid-template-columns: 26px 30px minmax(0, 1fr);
+}
+.is-town-skin
+  .workspace-inspector-agent-identity:has(> .inspector-pane-map-glyph) {
+  grid-template-columns: 26px 32px minmax(0, 1fr);
+}
+.workspace-inspector-agent-identity > .inspector-pane-map-glyph {
+  grid-column: 1;
+}
+.workspace-inspector-agent-identity:has(> .inspector-pane-map-glyph)
+  > .workspace-inspector-agent-avatar {
+  grid-column: 2;
+}
+.workspace-inspector-agent-identity:has(> .inspector-pane-map-glyph)
+  > :not(.inspector-pane-map-glyph, .workspace-inspector-agent-avatar) {
+  grid-column: 3;
+}
+
 /* The tab's split as a small glyph, first in the window title: the shown
    pane in the accent colour, a pane that needs you in yellow. */
 .inspector-pane-map-glyph {
+  grid-row: 1 / 4;
+  align-self: center;
   position: relative;
   flex: 0 0 auto;
   width: 26px;
