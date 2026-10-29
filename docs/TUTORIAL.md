@@ -334,10 +334,13 @@ narrow the work you are following. The **Town calm motion** setting reduces
 ambient animation.
 
 A quiet **?** at reception means an agent has asked you a question with
-`herdr-world ask`. It stays there until answered or withdrawn; tapping its
-reception entry opens that agent. Read the question first in **Needs you** or
-**Summary**, then choose an option or type an answer. The waiting agent receives
-that answer. Board and Desk show the same question mark. **!** means urgent
+`herdr-world ask`. It stays there until answered, dismissed or withdrawn;
+tapping its reception entry opens that agent. Read the question first in
+**Needs you** or **Summary**, where it names the asking agent, then choose an
+option or type an answer. The waiting agent receives that answer. **Open agent**
+opens the asker; **Dismiss** closes a stale or mistaken question without
+answering it. A question marked unverified came from a process World could not
+confirm runs in that pane. Board and Desk show the same question mark. **!** means urgent
 blocking, while **✓** means a finish still needs checking.
 
 **Mark reviewed** acknowledges that completion in this browser. Opening a finished

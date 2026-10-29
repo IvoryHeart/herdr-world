@@ -150,16 +150,26 @@ export function claudeTranscript(
   );
 }
 
-/** The session a Codex rollout's first line names, if it ran in `cwd`. */
-export function codexSessionOf(firstLine: string, cwd: string): string | null {
+/**
+ * The session a Codex rollout's first line names, if it ran in `cwd` and,
+ * given `since`, was created then or later: a fixer shares its worktree
+ * with the author, whose older session may still be writing there.
+ */
+export function codexSessionOf(
+  firstLine: string,
+  cwd: string,
+  since?: number,
+): string | null {
   try {
     const meta = JSON.parse(firstLine) as {
       type?: unknown;
-      payload?: { id?: unknown; cwd?: unknown };
+      payload?: { id?: unknown; cwd?: unknown; timestamp?: unknown };
     };
+    const created = Date.parse(String(meta.payload?.timestamp ?? ""));
     return meta.type === "session_meta" &&
       meta.payload?.cwd === cwd &&
-      typeof meta.payload.id === "string"
+      typeof meta.payload.id === "string" &&
+      (since === undefined || created >= since)
       ? meta.payload.id
       : null;
   } catch {
@@ -198,7 +208,7 @@ export function findCodexSession(
   for (const path of recentRollouts(root)) {
     if (statSync(path).mtimeMs < since) continue;
     const first = readFileSync(path, "utf8").split("\n", 1)[0] ?? "";
-    const session = codexSessionOf(first, cwd);
+    const session = codexSessionOf(first, cwd, since);
     if (session) return session;
   }
   return null;

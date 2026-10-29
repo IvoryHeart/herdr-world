@@ -287,8 +287,9 @@ retained ask and withdraws it without creating a question. A repeated answered
 key returns its retained answer. Human withdrawal output explicitly names the
 withdrawal, including any answer already recorded.
 
-Open asks appear first in Town's Needs you rail and Summary. Their verified
-agents wait at reception with a quiet **?** until answered or withdrawn; **!**
+Open asks appear first in Town's Needs you rail and Summary, named as Town
+labels the asking desk. Their agents wait at reception with a quiet **?** until
+answered, dismissed or withdrawn, an unverified asker marked as such; **!**
 remains urgent blocking and **✓** an unchecked finish. Board and Desk use the
 same qualified question mark. A plain watcher terminal receives an asking-seat
 entry too, without being relabelled as an LLM agent. A new ask uses World's usual chime, toast and OS
@@ -310,7 +311,12 @@ without claiming the earlier question was withdrawn. If the original occupant
 can no longer withdraw (for example after a runtime-generation
 change or a restart in another pane), the watcher retires the cleared cause and
 records once in the feed that the question is left for the owner to answer; it
-does not retry that permanent refusal. Transient failures still retry. It never
+does not retry that permanent refusal. Transient failures still retry. When the
+owner dismisses an ask, the watcher records that once in the feed and does not
+ask again while the cause holds; it withdraws the ask when the cause clears.
+The watcher's asks use `--key`, which the service refuses to an unverified
+caller, so run it in a Herdr pane with `herdr-world` reaching the service's own
+port, never a dev proxy such as Vite's. It never
 routes an answer to a different seat. Workers needing an answer use `--wait` in
 their own pane. Deploy the matching World service and CLI before restarting the
 watcher from the merged checkout. Dispatcher runbook changes are applied by the
@@ -327,7 +333,8 @@ plans the next step for every PR in scope and takes each step once:
 | Findings are open on the head and every required reviewer has posted on it | One `ACT #N fix` prompt with the review URLs, so the author fixes in one pass | The author's seat |
 | A required check fails and no check is still running | `ACT #N ci` prompt | The author's seat |
 | GitHub reports a conflict, or screenshots are missing | `ACT #N conflict` or `ACT #N screenshots` prompt | The author's seat |
-| A required reviewer has no RESULT, or a newer head needs confirming; GitHub reports the head mergeable and its checks are green, or have finished while the owner judges a CI rerun | A fresh reviewer run | That reviewer's model |
+| A fix, ci or conflict step is due and the author seat is busy with another PR | A fresh fixer run in the PR's own worktree | The author seat's roster model |
+| A required reviewer has no RESULT, or a newer head needs confirming, and GitHub reports the head mergeable, whatever its checks | A fresh reviewer run | That reviewer's model |
 | READY, with every required reviewer confirmed on the head | The `crew/merge-ready` mark and a World ask with the PR and reason | The owner |
 | A judgment condition, an unknown author, an unsupported roster model, a stuck author seat or a reviewer run that posted nothing | The `crew/needs-owner` mark, one signed `[crew]` state comment and one World ask per distinct cause | The owner |
 
@@ -357,7 +364,7 @@ plans the next step for every PR in scope and takes each step once:
   pod lead for `batch/<pod>-<n>`. Set an override per PR in `authors`.
 - **When a seat gets a prompt.** Only when Herdr reports it idle or done and
   it isn't focused, because a prompt types into the seat's input box. Other
-  steps wait for a later pass. Seats listed in `neverPrompt` are never
+  steps wait for a later pass, or go to a fresh fixer (below). Seats listed in `neverPrompt` are never
   prompted; the owner gets an ask instead.
 - **How reviewers run.** Each review or confirmation is a fresh, interactive
   `claude` (in auto permission mode) or `codex` session on the seat's roster
@@ -397,11 +404,39 @@ plans the next step for every PR in scope and takes each step once:
   pass, so a merge can't land between opening a chat and recording it. A chat
   opened after the PR has closed removes its checkout when you exit it. Until
   then, `open` refuses a second chat on that run.
-- **Review and the rerun question.** A CI rerun the owner has to judge
-  doesn't hold reviewers back: once the head's checks have finished, round 1
-  starts while the judgment is open. A head that is simply red, with no rerun
-  to judge, goes to the author first. READY still needs both the judgment and
-  the reviews.
+- **Review on push.** Reviewers read the diff, not CI results, so a round
+  starts as soon as a new head is pushed and GitHub reports it mergeable, in
+  parallel with its checks: with busy passes, within about a minute of the
+  push. A failure still goes to the author as a `ci` step once the checks
+  settle, and a CI rerun the owner has to judge still asks them. READY and
+  `crew/merge-ready` still need green checks, any judgment and the reviews.
+- **A fresh fixer for a busy author.** A seat works on one PR at a time, so
+  when a PR's `fix`, `ci` or `conflict` step is due and its author seat is
+  working (or blocked) on another PR, the watcher starts a fresh fixer
+  instead of waiting. It runs like a reviewer: a fresh, interactive session
+  on the author seat's roster model and harness, in a pane of the PR head's
+  round tab named `<seat> fixer`, briefed with the steps' messages, the PR and
+  the candidate-delivery skill. It works in the PR's own worktree, pushes to
+  the PR branch through the normal pre-push gate and replies on the PR in one
+  comment signed `[fixer #N]`. It is done when the watcher sees a new head
+  that its worktree is at (its own push), or when it runs the `fixed --run N`
+  command its brief gives, as after rerunning a flaky job without a push.
+  Its session then stays open as a chat, and `open --run` reopens it in that
+  worktree, under the pass lock. A fixer overtaken by someone else's push, or
+  whose PR merges or closes, is stopped like a stale reviewer.
+  - **Only on evidence that the author is elsewhere:** the seat's latest crew
+    prompt was only about other PRs. One prompt carries every waiting step,
+    so a prompt that included this PR means the author may be on it. A seat
+    the crew has never prompted keeps its steps too.
+  - **Only where it can't clash:** the step also waits for the author when the
+    PR's worktree is missing, has uncommitted changes or isn't at the PR's
+    head, the seat has no roster model, or no run slot is free.
+  - **One at a time:** at most one fixer works on a PR, and each head gets
+    one. While it works, the PR's other author steps wait for it; a fixer
+    that ends without being done leaves its steps to the author. Fixers count
+    against `maxRuns` and `runTimeoutMinutes` like reviewers; screenshots stay
+    with the author. A Codex fixer's session is the one created after it
+    started, not the author's older one in the same worktree.
 - **What stops a step.** Only a newer head, a merge or a close supersedes a
   waiting step or stops a running reviewer. On the same head, a CI rerun or
   an unknown mergeable state only pauses steps; they resume when the head is

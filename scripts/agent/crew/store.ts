@@ -13,7 +13,7 @@ export type ActionState =
   | "pending"
   /** Prompted, notified or written to the feed. */
   | "sent"
-  /** A reviewer run is going. */
+  /** A reviewer or fixer run is going. */
   | "running"
   /** A reviewer run finished. */
   | "done"
@@ -48,6 +48,11 @@ export type StoredRun = {
   session: string | null;
   /** The RESULT line the reviewer printed. */
   result: string | null;
+  /**
+   * A fixer's working directory: the PR's own worktree. Null for a
+   * reviewer, which works in a detached checkout of its own.
+   */
+  cwd: string | null;
   log: string;
   startedAt: number;
   finishedAt: number | null;
@@ -104,6 +109,7 @@ export function openCrewStore(path: string, busyMs = 120_000) {
     ["model", "TEXT"],
     ["session", "TEXT"],
     ["result", "TEXT"],
+    ["cwd", "TEXT"],
   ])
     if (!columns.includes(name))
       db.exec(`ALTER TABLE run ADD COLUMN ${name} ${type}`);
@@ -250,6 +256,7 @@ type RunRow = {
   model: string | null;
   session: string | null;
   result: string | null;
+  cwd: string | null;
   log: string;
   started_at: number;
   finished_at: number | null;
@@ -272,6 +279,7 @@ function run(row: RunRow): StoredRun {
     model: row.model,
     session: row.session,
     result: row.result,
+    cwd: row.cwd,
     log: row.log,
     startedAt: row.started_at,
     finishedAt: row.finished_at,
@@ -284,14 +292,15 @@ export function addRun(
   db: Database,
   entry: Pick<StoredRun, "actionKey" | "reviewer" | "pr" | "head" | "log"> & {
     round?: number;
+    cwd?: string;
   },
   now: number,
 ) {
   return Number(
     db
       .query(
-        `INSERT INTO run (action_key, reviewer, pr, head, log, round, started_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO run (action_key, reviewer, pr, head, log, round, cwd, started_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         entry.actionKey,
@@ -300,6 +309,7 @@ export function addRun(
         entry.head,
         entry.log,
         entry.round ?? null,
+        entry.cwd ?? null,
         now,
       ).lastInsertRowid,
   );
@@ -509,6 +519,33 @@ export function activeRuns(db: Database) {
     )
     .all()
     .map(run);
+}
+
+/**
+ * The run working on a running action: the one its detail names, since a
+ * fixer run carries every step of its PR, else the action's latest.
+ */
+export function runFor(db: Database, entry: StoredAction) {
+  const id = /^run (\d+)$/u.exec(entry.detail ?? "")?.[1];
+  return id ? getRun(db, Number(id)) : latestRun(db, entry.key);
+}
+
+/**
+ * The PRs a seat's latest prompt was about: one prompt carries every step
+ * waiting for the seat, and marks them all sent at once. Empty when the
+ * crew has never prompted the seat.
+ */
+export function latestPromptPrs(db: Database, seat: string) {
+  return new Set(
+    db
+      .query<{ pr: number }, [string]>(
+        `SELECT pr FROM action WHERE target = ?1 AND state = 'sent'
+         AND updated_at = (SELECT MAX(updated_at) FROM action
+                           WHERE target = ?1 AND state = 'sent')`,
+      )
+      .all(seat)
+      .map((row) => row.pr),
+  );
 }
 
 export function latestRun(db: Database, actionKey: string) {

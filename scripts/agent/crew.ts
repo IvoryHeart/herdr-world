@@ -6,6 +6,8 @@ import { shortSha } from "../../shared/pullRequests";
 import { gateDir, loadConfig, runPass } from "./gate";
 import type { GateInput, Verdict } from "./gate/predicate";
 import { openStore } from "./gate/store";
+import { fix, fixed, startFixers } from "./crew/fixer";
+import { launchRun } from "./crew/launch";
 import { type Deps, realDeps } from "./crew/deps";
 import {
   type Action,
@@ -38,12 +40,12 @@ import {
 } from "./crew/seats";
 
 export { type Seat, seats } from "./crew/seats";
+export { roundLabel } from "./crew/launch";
 import { showStatus } from "./crew/status";
 import {
   actionsIn,
   activeRuns,
   addAction,
-  addRun,
   closeRound,
   feed,
   finishRun,
@@ -54,15 +56,11 @@ import {
   openCrewStore,
   openLock,
   openRounds,
-  roundFor,
-  roundPanes,
   roundTabs,
+  runFor,
   runningSince,
   runsOf,
   setAction,
-  setRoundTab,
-  setRunPane,
-  setRunPid,
   setRunResult,
   type StoredAction,
 } from "./crew/store";
@@ -95,6 +93,9 @@ const USAGE = `Usage: bun run agent:crew -- <command> [options]
                                  Reopen a reviewer's session as a chat in a new Herdr tab
   review --pr N --reviewer NAME --head SHA [--since SHA] [--author SEAT] [--run ID]
                                  Run one fresh reviewer now (the watcher starts these itself)
+  fix --pr N --author SEAT --head SHA --run ID
+                                 Run a fresh fixer for a busy author (the watcher starts these)
+  fixed --run ID                 A fixer is done, pushed or not: free its slot and the PR's steps
 
 Settings live under "crew" in the gate config (.agents/crew-gate/config.json).`;
 
@@ -109,16 +110,6 @@ const RUN_ATTEMPTS = 2;
 const PROMPT_ATTEMPTS = 3;
 /** A run whose worker hasn't reported its pid by then never started. */
 const START_MS = 3 * 60_000;
-
-/** A round tab's name for a PR: its number and its branch's short name. */
-export function roundLabel(
-  pr: number,
-  branch: string | undefined,
-  round: number,
-) {
-  const name = branch?.split("/").slice(1).join("/") || branch;
-  return `#${pr}${name ? ` ${name}` : ""} · r${round}`;
-}
 
 /**
  * Only a seat that is idle and not focused gets a prompt: a prompt types
@@ -369,8 +360,20 @@ function act(
     if (prs.length && !observed.has(waiting.pr)) continue;
     if (heads.get(waiting.pr) === waiting.head) continue;
     if (waiting.state === "running") {
-      const active = latestRun(crew, waiting.key);
-      if (active && active.finishedAt === null)
+      const active = runFor(crew, waiting);
+      // A fixer whose worktree is at the new head pushed it: it is done,
+      // and its session stays open as a chat. One overtaken by another
+      // push, a merge or a close is stopped, as a stale reviewer is.
+      const head = heads.get(waiting.pr);
+      const pushed =
+        active?.cwd &&
+        head &&
+        deps
+          .run(["git", "-C", active.cwd, "rev-parse", "HEAD"])
+          .stdout.trim() === head;
+      if (pushed)
+        finishRun(crew, active.id, 0, deps.usage(active, active.cwd!), now);
+      else if (active && active.finishedAt === null)
         stopRun(crew, active.id, -15, now, deps);
     }
     setAction(
@@ -563,7 +566,7 @@ function settleRuns(
           notice(
             action,
             "overdue",
-            `NEEDS-OWNER #${action.pr} at ${shortSha(action.head)}: ${action.target} has worked ${settings.runTimeoutMinutes}+ minutes without posting; look at its pane in the round's tab.`,
+            `NEEDS-OWNER #${action.pr} at ${shortSha(action.head)}: ${active.cwd ? `${action.target}'s fixer has worked ${settings.runTimeoutMinutes}+ minutes without saying it is done` : `${action.target} has worked ${settings.runTimeoutMinutes}+ minutes without posting`}; look at its pane in the round's tab.`,
           ),
         );
       continue;
@@ -574,9 +577,22 @@ function settleRuns(
     else stopRun(crew, active.id, -2, now, deps);
   }
   for (const running of actionsIn(crew, ["running"])) {
-    const last = latestRun(crew, running.key);
+    const last = runFor(crew, running);
     if (!last || last.finishedAt === null) continue;
-    if (last.exitCode === 0) {
+    // A fixer that ended without pushing leaves the step to the author;
+    // a head gets one fixer.
+    if (last.cwd) {
+      setAction(
+        crew,
+        running.key,
+        "pending",
+        now,
+        `fixer exited ${last.exitCode}`,
+      );
+      say(
+        `#${running.pr} fixer for ${running.target} ended without pushing (exit ${last.exitCode}); the step waits for ${running.target}`,
+      );
+    } else if (last.exitCode === 0) {
       setAction(crew, running.key, "done", now);
       say(`#${running.pr} run ${running.target} finished (run ${last.id})`);
     } else if (running.attempts < RUN_ATTEMPTS) {
@@ -603,15 +619,21 @@ function deliver(
   context: PassContext,
   say: (text: string) => void,
 ) {
-  const { now, deps, dir } = context;
+  const { now, deps } = context;
   const pending = () =>
     actionsIn(crew, ["pending"]).filter((entry) => deliverable(entry));
 
   // One prompt per seat per pass, carrying every action waiting for it.
-  // A seat that can't take it gets the owner a notice instead.
+  // A seat that can't take it gets the owner a notice instead. A PR's
+  // steps wait while a fixer works on it.
+  const fixing = new Set(
+    activeRuns(crew)
+      .filter((run) => run.cwd)
+      .map((run) => run.pr),
+  );
   const bySeat = new Map<string, StoredAction[]>();
   for (const entry of pending())
-    if (AUTHOR_KINDS.has(entry.kind))
+    if (AUTHOR_KINDS.has(entry.kind) && !fixing.has(entry.pr))
       bySeat.set(entry.target, [...(bySeat.get(entry.target) ?? []), entry]);
   for (const [name, entries] of bySeat) {
     const why = promptable(
@@ -619,10 +641,21 @@ function deliver(
       settings,
     );
     if (why) {
+      // A busy author's fix, ci and conflict steps can go to a fresh fixer.
+      const seat = live.find((candidate) => candidate.name === name);
+      const branches = new Map(
+        entries.map((entry) => [entry.pr, authors.get(entry.pr)?.branch]),
+      );
+      const fixers = seat
+        ? startFixers(crew, context, settings, seat, entries, branches, say)
+        : { handed: new Set<string>(), waits: new Map<number, string>() };
       for (const entry of entries) {
-        if (entry.detail === why) continue;
+        if (fixers.handed.has(entry.key) || entry.detail === why) continue;
         setAction(crew, entry.key, "pending", now, why);
-        say(`#${entry.pr} waiting for ${name} (${why})`);
+        const fixer = fixers.waits.get(entry.pr);
+        say(
+          `#${entry.pr} waiting for ${name} (${why}${fixer ? `; no fixer: ${fixer}` : ""})`,
+        );
         if (
           why === "no live seat" ||
           why === "never prompted" ||
@@ -656,63 +689,38 @@ function deliver(
     }
   }
 
-  // Fresh reviewers, up to the run limit. The run row is committed before
-  // the launch, so a crash still counts it against the limit.
+  // Fresh reviewers, up to the run limit.
   let slots = settings.maxRuns - activeRuns(crew).length;
   for (const entry of pending()) {
     if (!RUN_KINDS.has(entry.kind) || slots <= 0) continue;
-    const log = join(
-      dir,
-      "runs",
-      `${entry.pr}-${entry.target}-${shortSha(entry.head)}-${now}.log`,
-    );
-    const round = roundFor(crew, entry.pr, entry.head, now);
-    const panes = roundPanes(crew, entry.pr, round.round);
-    const id = addRun(
-      crew,
-      {
-        actionKey: entry.key,
-        reviewer: entry.target,
-        pr: entry.pr,
-        head: entry.head,
-        log,
-        round: round.round,
-      },
-      now,
-    );
-    setAction(crew, entry.key, "running", now, `run ${id}`, true);
     const item = authors.get(entry.pr);
     const author = item?.author;
-    const argv = [
-      ...context.worker,
-      "review",
-      "--pr",
-      String(entry.pr),
-      "--reviewer",
-      entry.target,
-      "--head",
-      entry.head,
-      "--run",
-      String(id),
-      ...(entry.since ? ["--since", entry.since] : []),
-      ...(author ? ["--author", author] : []),
-    ];
-    Bun.write(log, "");
-    const label = roundLabel(entry.pr, item?.branch, round.round);
-    const started = deps.spawn(argv, log, {
-      tab: round.tab,
-      after: panes.at(-1) ?? null,
-      direction: panes.length % 2 ? "right" : "down",
-      label,
-      title: entry.target,
-    });
-    if (started.pid !== null) setRunPid(crew, id, started.pid);
-    if (started.pane) setRunPane(crew, id, started.pane, started.tab);
-    if (started.tab && started.tab !== round.tab)
-      setRoundTab(crew, entry.pr, round.round, started.tab);
-    say(
-      `#${entry.pr} started ${entry.target} ${entry.kind} (run ${id}${started.pane ? `, Herdr tab "${label}"` : ""}, log ${log})`,
+    const run = launchRun(
+      crew,
+      context,
+      {
+        keys: [entry.key],
+        pr: entry.pr,
+        head: entry.head,
+        name: entry.target,
+        branch: item?.branch,
+      },
+      (id) => [
+        ...context.worker,
+        "review",
+        "--pr",
+        String(entry.pr),
+        "--reviewer",
+        entry.target,
+        "--head",
+        entry.head,
+        "--run",
+        String(id),
+        ...(entry.since ? ["--since", entry.since] : []),
+        ...(author ? ["--author", author] : []),
+      ],
     );
+    say(`#${entry.pr} started ${entry.target} ${entry.kind} (${run.where})`);
     slots--;
   }
 
@@ -857,6 +865,8 @@ export async function main(argv: string[], deps: Deps = realDeps) {
   const options = parseOptions(argv);
   const dir = gateDir();
   if (options.command === "review") return review(options, dir, deps);
+  if (options.command === "fix") return fix(options, dir, deps);
+  if (options.command === "fixed") return fixed(options, dir, deps);
   const crew = openCrewStore(join(dir, "crew.sqlite"));
   try {
     if (options.command === "status") {

@@ -339,11 +339,17 @@ World's pages fetch only the open questions (`world.asks.get`), and only when
 a ledger notice says a question changed. `ask --key CAUSE` deduplicates a cause
 for the verified asking occupant, even after an answer; `ask withdraw ID`
 closes that cause and allows recurrence. Only the verified original connection,
-runtime, terminal and session may withdraw it. A waiting CLI returns on answer
-or withdrawal. Withdrawn questions are retained and trimmed like answered ones.
-New verified asks carry their runtime, terminal, workspace and session identity
-into reception and notification targets. World announces newly observed asks
-once, and excludes answered/withdrawn asks from every open-question projection. Behind a reverse proxy on
+runtime, terminal and session may withdraw it. The owner may dismiss any open
+question in World (`world.ask.dismiss`): it closes without an answer, and a
+keyed repeat returns it, as it returns an answered one, until the asker
+withdraws. A waiting CLI returns on answer, dismissal or withdrawal. Closed
+questions are retained and trimmed together. New verified asks carry their
+runtime, terminal, workspace and session identity into reception and
+notification targets; an unverified ask carries them, still marked
+unverified, only when exactly one local Herdr has the pane it claims. Asks
+from agents also carry Herdr's agent name (`agent.get`). World announces newly
+observed asks once, and excludes closed asks from every open-question
+projection. Behind a reverse proxy on
 loopback every peer looks local, so "loopback only" is a transport rule, not
 proof of locality: the token itself stays in the service's private data
 directory, and attribution still needs the caller's process on this machine.
@@ -354,7 +360,9 @@ their descendants through `/proc`, and accepts its `HERDR_PANE_ID` only when it
 is found there on a local Herdr (`server/src/world/caller-identity.ts`). A call
 naming no pane is not looked up and is labelled "terminal with no pane"; a
 claim that is not a Herdr pane ID is refused. Unverified callers share one
-allowance of open questions. Changes, questions and results live
+allowance of open questions. A call through a proxy, such as the Vite dev
+server, reaches the service from the proxy's connection, so it is never
+verified: point `HERDR_WORLD_URL` at the service's own port. Changes, questions and results live
 in `world-ledger.json` beside the Board file (`HERDR_WORLD_LEDGER_PATH`
 overrides it). To try it against a development service, run the CLI with the
 same `HOME` (or set `HERDR_WORLD_URL` to its loopback URL and

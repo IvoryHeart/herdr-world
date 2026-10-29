@@ -25,6 +25,8 @@ export type CliActor = {
   agent_session_fingerprint?: string;
   terminal_id?: string;
   agent?: string;
+  /** Herdr's name for the asking agent (`agent.get`), kept with a question. */
+  name?: string;
 };
 
 /** One aspect of one card or terminal a change touched. */
@@ -65,7 +67,13 @@ export type LedgerAsk = {
   /** Only the owner, in World, may answer. */
   owner_only: boolean;
   answer?: { text: string; at: number; by: string };
+  /** Closed by the owner without an answer; the asker's `--wait` ends. */
+  dismissed?: { at: number; by: string };
 };
+
+/** An answered, dismissed or withdrawn question is closed. */
+export const askClosed = (ask: LedgerAsk) =>
+  Boolean(ask.answer || ask.dismissed || ask.withdrawn);
 
 export type ResultStatus = "done" | "blocked" | "failed";
 export const RESULT_STATUSES: readonly ResultStatus[] = [
@@ -192,7 +200,7 @@ export class WorldLedger {
     return {
       revision: this.document.revision,
       asks: structuredClone(
-        this.document.asks.filter((ask) => !ask.answer && !ask.withdrawn),
+        this.document.asks.filter((ask) => !askClosed(ask)),
       ),
     };
   }
@@ -204,12 +212,10 @@ export class WorldLedger {
     next.revision = this.document.revision + 1;
     trim(next.changes, LEDGER_LIMITS.changes);
     trim(next.results, LEDGER_LIMITS.results);
-    // Keep open questions: only answered ones are dropped, oldest first
+    // Keep open questions: only closed ones are dropped, oldest first
     // (`ask` refuses a new question when the open ones fill the list).
     while (next.asks.length > LEDGER_LIMITS.asks) {
-      const answered = next.asks.findIndex(
-        (ask) => ask.answer || ask.withdrawn,
-      );
+      const answered = next.asks.findIndex(askClosed);
       if (answered < 0) break;
       next.asks.splice(answered, 1);
     }

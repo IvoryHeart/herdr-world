@@ -6,7 +6,7 @@ import { shortSha } from "../../../shared/pullRequests";
 import { loadConfig } from "../gate";
 import type { Deps } from "./deps";
 import { shellLine } from "./deps";
-import { loadSettings } from "./plan";
+import { loadSettings, type RosterEntry } from "./plan";
 import {
   addChat,
   addRun,
@@ -133,28 +133,7 @@ export async function review(options: Options, dir: string, deps: Deps) {
     if (fetched.code !== 0) throw new Error(`fetch failed: ${fetched.stderr}`);
     const added = git("worktree", "add", "--detach", checkout, head);
     if (added.code !== 0) throw new Error(`worktree failed: ${added.stderr}`);
-    const view = deps.run([
-      "gh",
-      "pr",
-      "view",
-      String(pr),
-      "--repo",
-      config.repo,
-      "--json",
-      "title,url,headRefName",
-    ]);
-    const meta =
-      view.code === 0
-        ? (JSON.parse(view.stdout) as {
-            title: string;
-            url: string;
-            headRefName: string;
-          })
-        : {
-            title: "",
-            url: `https://github.com/${config.repo}/pull/${pr}`,
-            headRefName: "",
-          };
+    const meta = prMeta(pr, config.repo, deps);
     const prompt = reviewerPrompt({
       repo: config.repo,
       pr,
@@ -169,39 +148,14 @@ export async function review(options: Options, dir: string, deps: Deps) {
     show(
       `${reviewer} ${options.since ? "confirms" : "reviews"} #${pr} at ${shortSha(head)} (${model.model}); type here to steer it`,
     );
-    // The harness takes this pane's terminal: the owner watches it work,
-    // can type to it, and keeps it as a chat after it posts. The watcher
-    // marks the review done once its RESULT is on GitHub.
-    const session = harness === "claude" ? randomUUID() : null;
-    if (session) setRunSession(crew, runId, harness, model.model, session);
-    const started = Date.now();
-    // Ctrl-C in the pane is for the harness; this process waits for it.
-    process.on("SIGINT", () => {});
-    const child = Bun.spawn(reviewerArgv(model, prompt, session), {
-      cwd: checkout,
-      stdio: ["inherit", "inherit", "inherit"],
-    });
-    // Codex names its session itself; find it once its rollout exists.
-    let named = harness !== "codex";
-    const finding = setInterval(() => {
-      if (named) return;
-      const found = findCodexSession(checkout, started - 5_000);
-      if (!found) return;
-      setRunSession(crew, runId, harness, model.model, found);
-      named = true;
-    }, 3_000);
-    code = await child.exited;
-    clearInterval(finding);
-    const run = getRun(crew, runId);
-    usage = readUsage({
-      harness,
-      session: run?.session ?? null,
-      cwd: checkout,
-    });
-    show(
-      `── session ended (exit ${code}) · ${run?.result ?? "no RESULT posted"}`,
-    );
-    if (run?.session) show(`   reopen as a chat: ${reopen(runId)}`);
+    ({ code, usage } = await runSession(
+      crew,
+      runId,
+      model,
+      prompt,
+      checkout,
+      show,
+    ));
   } catch (error) {
     show(error instanceof Error ? error.message : String(error));
     show(`── failed to start`);
@@ -212,6 +166,75 @@ export async function review(options: Options, dir: string, deps: Deps) {
     crew.close();
   }
   return code;
+}
+
+/** A PR's title, URL and branch, or what can stand in for them. */
+export function prMeta(pr: number, repo: string, deps: Deps) {
+  const view = deps.run([
+    "gh",
+    "pr",
+    "view",
+    String(pr),
+    "--repo",
+    repo,
+    "--json",
+    "title,url,headRefName",
+  ]);
+  return view.code === 0
+    ? (JSON.parse(view.stdout) as {
+        title: string;
+        url: string;
+        headRefName: string;
+      })
+    : {
+        title: "",
+        url: `https://github.com/${repo}/pull/${pr}`,
+        headRefName: "",
+      };
+}
+
+/**
+ * Runs a run's harness session in this pane's terminal, on its roster
+ * entry, with the brief as its first message: the owner watches it work,
+ * can type to it, and keeps it as a chat once it is done. Returns how it
+ * ended and the tokens it used.
+ */
+export async function runSession(
+  crew: Database,
+  runId: number,
+  model: RosterEntry,
+  prompt: string,
+  cwd: string,
+  show: (text: string) => void,
+) {
+  const harness = harnessOf(model) ?? "codex";
+  const session = harness === "claude" ? randomUUID() : null;
+  setRunSession(crew, runId, harness, model.model, session);
+  const started = Date.now();
+  // Ctrl-C in the pane is for the harness; this process waits for it.
+  process.on("SIGINT", () => {});
+  const child = Bun.spawn(reviewerArgv(model, prompt, session), {
+    cwd,
+    stdio: ["inherit", "inherit", "inherit"],
+  });
+  // Codex names its session itself; find it once its rollout exists.
+  let named = harness !== "codex";
+  const finding = setInterval(() => {
+    if (named) return;
+    const found = findCodexSession(cwd, started - 5_000);
+    if (!found) return;
+    setRunSession(crew, runId, harness, model.model, found);
+    named = true;
+  }, 3_000);
+  const code = await child.exited;
+  clearInterval(finding);
+  const run = getRun(crew, runId);
+  const usage = readUsage({ harness, session: run?.session ?? null, cwd });
+  show(
+    `── session ended (exit ${code}) · ${run?.result ?? (run?.cwd ? "fixer" : "no RESULT posted")}`,
+  );
+  if (run?.session) show(`   reopen as a chat: ${reopen(runId)}`);
+  return { code, usage };
 }
 
 /** Input and output tokens from a run's recorded usage. */
@@ -274,6 +297,29 @@ export function openChat(
     throw new Error(
       `run ${found.id}'s session is still open in its pane, ${found.reviewer} in the PR's round ${found.round ?? "?"} tab; talk to it there`,
     );
+  // A fixer worked in its PR's worktree, which stays the author's.
+  // Under the pass lock, as below: a chat opened in a round that is still
+  // open closes with it; one opened after the round closed is the owner's.
+  if (found.cwd) {
+    const cwd = found.cwd;
+    if (!existsSync(cwd))
+      throw new Error(`run ${found.id}'s worktree ${cwd} is gone`);
+    return holdLock(lock, () => {
+      const line = shellLine(
+        chatArgv(found.harness!, found.session!, found.model),
+      );
+      const label = `#${found.pr} ${found.reviewer} fixer · chat`;
+      const tab = deps.openTab(line, cwd, label);
+      if (tab && !roundClosed(crew, found.pr, found.round))
+        addChat(crew, tab, found.id);
+      deps.out(
+        tab
+          ? `opened "${label}"`
+          : `Herdr couldn't open a tab; run:\n  cd ${shellLine([cwd])} && ${line}`,
+      );
+      return 0;
+    });
+  }
   const primary = dirname(dirname(dir));
   const checkout = checkoutOf(dir, found);
   const remove = [

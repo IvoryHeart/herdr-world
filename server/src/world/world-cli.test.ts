@@ -8,10 +8,12 @@ import type { CallerProcess } from "./caller-identity";
 import type { WorldSnapshotResult } from "./snapshot";
 import {
   createWorldCli,
+  dismissAsk,
   NO_PANE,
   type CliHost,
   type WorldCliResponse,
 } from "./world-cli";
+import { createWorldCliService } from "./world-cli-service";
 import { WorldLedger } from "./world-ledger";
 
 const resultOf = (reply: WorldCliResponse) =>
@@ -525,6 +527,216 @@ describe("questions and results", () => {
       code: "refused",
     });
     expect(ledger.openAsks().asks).toHaveLength(1);
+  });
+
+  /** A host whose Herdr names the agents in its panes (`agent.get`). */
+  const naming = (overrides: Partial<CliHost> = {}) => {
+    const base = host(overrides);
+    return {
+      ...base,
+      call: async (method: string, params: Record<string, unknown>) =>
+        method === "agent.get"
+          ? {
+              agent: {
+                name: params.target === "w1:p1" ? "dispatch" : "reviewer",
+              },
+            }
+          : base.call(method, params),
+    };
+  };
+
+  test("an ask carries its asker's name; an unverified claim is placed at its one local pane", async () => {
+    const { run, ledger } = setup({ hosts: [naming()] });
+    const verified = await run(
+      "ask",
+      { question: "Ship?" },
+      "w1:p2",
+      inPane(200),
+    );
+    expect(
+      ledger.ask((resultOf(verified) as { id: string }).id)?.actor,
+    ).toMatchObject({ verified: true, pane_id: "w1:p2", name: "reviewer" });
+    // A plain shell World cannot verify (e.g. behind a dev proxy).
+    const claimed = await run(
+      "ask",
+      { question: "Which?\nMore." },
+      "w1:p1",
+      null,
+    );
+    expect(claimed).toMatchObject({ ok: true, actor: { verified: false } });
+    expect(ledger.ask((resultOf(claimed) as { id: string }).id)?.actor).toEqual(
+      {
+        label: "unverified w1:p1",
+        verified: false,
+        connection_id: "studio",
+        connection_generation: 2,
+        pane_id: "w1:p1",
+        terminal_id: "term_a",
+        workspace_id: "w1",
+        agent: "claude",
+        name: "dispatch",
+      },
+    );
+    // Still unverified: no cause keys, and its allowance is the shared one.
+    expect(
+      await run("ask", { question: "Again?", key: "k" }, "w1:p1", null),
+    ).toMatchObject({ ok: false, code: "refused" });
+  });
+
+  test("concurrent asks keep one ask per cause and the shared allowance while Herdr is slow", async () => {
+    const quick = naming();
+    const slow = {
+      ...quick,
+      call: async (method: string, params: Record<string, unknown>) => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return quick.call(method, params);
+      },
+    };
+    const { run, ledger } = setup({ hosts: [slow] });
+    const request = { question: "Ship?", key: "crew:7:ready" };
+    const keyed = await Promise.all([run("ask", request), run("ask", request)]);
+    expect(
+      new Set(keyed.map((reply) => (resultOf(reply) as { id: string }).id))
+        .size,
+    ).toBe(1);
+    const unverified = await Promise.all(
+      Array.from({ length: 21 }, (_, index) =>
+        run("ask", { question: `Which ${index}?` }, "w1:p1", null),
+      ),
+    );
+    expect(unverified.filter((reply) => reply.ok)).toHaveLength(20);
+    expect(unverified.filter((reply) => !reply.ok)).toMatchObject([
+      { code: "refused" },
+    ]);
+    expect(
+      ledger.openAsks().asks.filter((ask) => !ask.actor.verified),
+    ).toHaveLength(20);
+  });
+
+  test("an unverified claim is never placed on a remote, unknown or ambiguous pane", async () => {
+    const bare = {
+      label: "unverified w1:p1",
+      verified: false,
+      pane_id: "w1:p1",
+    };
+    for (const hosts of [
+      [naming({ local: false })],
+      [naming(), naming({ connection_id: "second" })],
+    ]) {
+      const { run, ledger } = setup({ hosts });
+      const asked = await run("ask", { question: "Where?" }, "w1:p1", null);
+      expect(ledger.ask((resultOf(asked) as { id: string }).id)?.actor).toEqual(
+        bare,
+      );
+    }
+    const { run, ledger } = setup({ hosts: [naming()] });
+    const asked = await run("ask", { question: "Where?" }, "w9:p9", null);
+    expect(ledger.ask((resultOf(asked) as { id: string }).id)?.actor).toEqual({
+      label: "unverified w9:p9",
+      verified: false,
+      pane_id: "w9:p9",
+    });
+  });
+
+  test("the owner dismisses without answering: waits end and a keyed cause stays closed until withdrawn", async () => {
+    const { run, ledger } = setup();
+    const request = {
+      question: "Ship?",
+      key: "crew:7:ready",
+      owner_only: true,
+    };
+    const id = (resultOf(await run("ask", request)) as { id: string }).id;
+    const waiting = run("ask get", { id, wait_ms: 1000 });
+    dismissAsk(ledger, id, "owner", 1_000);
+    expect(await waiting).toMatchObject({
+      ok: true,
+      result: { id, dismissed: { at: 1000, by: "owner" } },
+    });
+    expect(ledger.openAsks().asks).toEqual([]);
+    expect(resultOf(await run("ask get", { id })) as object).not.toHaveProperty(
+      "answer",
+    );
+    // A keyed repeat returns the dismissed ask, as it does an answered one.
+    expect(await run("ask", request)).toMatchObject({
+      ok: true,
+      result: { id, dismissed: { by: "owner" } },
+    });
+    expect(
+      await run("ask answer", { id, answer: "yes" }, "w1:p2", inPane(200)),
+    ).toMatchObject({ ok: false, code: "refused" });
+    const revision = ledger.get().revision;
+    dismissAsk(ledger, id, "owner", 2_000);
+    expect(ledger.ask(id)?.dismissed).toEqual({ at: 1000, by: "owner" });
+    expect(ledger.get().revision).toBe(revision + 1);
+    // The asker's withdrawal releases the key; a recurrence asks afresh.
+    expect(await run("ask withdraw", { id })).toMatchObject({
+      ok: true,
+      result: { withdrawn: { at: 1000 }, dismissed: { by: "owner" } },
+    });
+    const next = (resultOf(await run("ask", request)) as { id: string }).id;
+    expect(next).not.toBe(id);
+    // Answered or unknown questions cannot be dismissed.
+    ledger.update((document) => {
+      document.asks.find((entry) => entry.id === next)!.answer = {
+        text: "Ship",
+        at: 1,
+        by: "owner",
+      };
+    });
+    expect(() => dismissAsk(ledger, next, "owner", 1)).toThrow(
+      "already answered",
+    );
+    expect(() => dismissAsk(ledger, "q-none", "owner", 1)).toThrow(
+      "no question q-none",
+    );
+  });
+
+  test("World's pages dismiss a question through world.ask.dismiss", async () => {
+    const path = join(root, "service-ledger.json");
+    const previous = process.env.HERDR_WORLD_LEDGER_PATH;
+    process.env.HERDR_WORLD_LEDGER_PATH = path;
+    try {
+      const lines: string[] = [];
+      const service = createWorldCliService({
+        board: new BoardStore(join(root, "board.json")),
+        connections: () => ({
+          list: () => [],
+          readyRuntimeLease: () => null,
+          defaultId: () => null,
+        }),
+        snapshots: () => null,
+        publishBoard: () => {},
+        broadcast: (line) => lines.push(line),
+      });
+      const ledger = new WorldLedger(path, { persist: false });
+      expect(ledger.openAsks().asks).toEqual([]);
+      const asked = await service.http(
+        new Request("http://127.0.0.1/api/world/cli", {
+          method: "POST",
+          body: JSON.stringify({
+            command: "ask",
+            params: { question: "Ship?" },
+          }),
+        }),
+        { address: "127.0.0.1", port: 40000 },
+        8787,
+        () => true,
+      );
+      const { result } = (await asked.json()) as { result: { id: string } };
+      expect(service.rpc("world.ask.dismiss", { id: result.id })).toMatchObject(
+        { asks: [] },
+      );
+      expect(lines.at(-1)).toContain('"asks":true');
+      expect(() => service.rpc("world.ask.dismiss", {})).toThrow(
+        "a dismissal needs a question ID",
+      );
+      expect(() =>
+        service.rpc("world.ask.answer", { id: result.id, answer: "Ship" }),
+      ).toThrow("dismissed by the owner");
+    } finally {
+      if (previous === undefined) delete process.env.HERDR_WORLD_LEDGER_PATH;
+      else process.env.HERDR_WORLD_LEDGER_PATH = previous;
+    }
   });
 
   test("a cause is asked once, only its verified asker can withdraw, and recurrence is fresh", async () => {
