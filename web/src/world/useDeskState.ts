@@ -30,6 +30,7 @@ export function deskMetadata(
   );
   const handled = new Set<string>();
   const stops = new Map<string, number>();
+  const stopIds = new Map<string, string>();
   const opens = new Map<string, number>();
   for (const leaf of agents) {
     const record = records.get(deskKey(deskIdentity(leaf)));
@@ -37,10 +38,11 @@ export function deskMetadata(
     const key = receiptIdentity(leaf);
     if (record.reviewed_stop !== null)
       handled.add(JSON.stringify([key, record.reviewed_stop]));
+    if (record.observed_stop_id) stopIds.set(key, record.observed_stop_id);
     if (record.stopped_at !== null) stops.set(key, record.stopped_at);
     if (record.opened_at !== null) opens.set(key, record.opened_at);
   }
-  return { handled, stops, opens };
+  return { handled, stops, stopIds, opens };
 }
 
 export function useDeskState(
@@ -57,7 +59,7 @@ export function useDeskState(
     store.start();
     return () => store.stop();
   }, [store]);
-  const { handled, stops, opens } = useMemo(() => {
+  const { handled, stops, stopIds, opens } = useMemo(() => {
     return deskMetadata(agents, state);
   }, [agents, state]);
   const mark = async (handoffId: string, reviewed: boolean) => {
@@ -76,6 +78,7 @@ export function useDeskState(
   return {
     handled,
     stops,
+    stopIds,
     opens,
     mark,
     record,

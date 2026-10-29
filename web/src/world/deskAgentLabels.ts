@@ -1,3 +1,4 @@
+import type { TurnReceipt } from "./handoffs";
 import type { WorldLeafObject } from "./worldObject";
 
 export function where(leaf: WorldLeafObject) {
@@ -30,4 +31,35 @@ export function agentFolder(leaf: WorldLeafObject) {
   if (!cwd) return null;
   const parts = cwd.replace(/[\\/]+$/, "").split(/[\\/]/);
   return parts[parts.length - 1] || cwd;
+}
+
+/**
+ * Whether an agent matches every word of a search across the things an
+ * operator remembers: its name, harness, workspace, tab, folder, request and
+ * report.
+ */
+export function matchesQuery(
+  leaf: WorldLeafObject,
+  receipt: TurnReceipt | null,
+  query: string,
+) {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return true;
+  const haystack = [
+    leaf.agentName,
+    leaf.terminalTitle,
+    leaf.agentLabel,
+    leaf.modelLabel,
+    leaf.label,
+    leaf.spaceLabel,
+    leaf.tabLabel,
+    agentFolder(leaf),
+    leaf.taskSummary,
+    receipt?.ask,
+    receipt?.report,
+  ]
+    .filter(Boolean)
+    .join("\n")
+    .toLowerCase();
+  return words.every((word) => haystack.includes(word));
 }

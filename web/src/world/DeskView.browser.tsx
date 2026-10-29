@@ -110,7 +110,21 @@ const client = {
 } as unknown as ConnectionClient;
 
 let revision = 0;
-const deskRecords = new Map<string, DeskRecord>();
+const deskRecords = new Map<string, DeskRecord>(
+  leaves.map((leaf) => {
+    const record: DeskRecord = {
+      connection_id: leaf.connectionId,
+      connection_generation: leaf.generation,
+      terminal_id: leaf.terminalId,
+      agent_session_fingerprint: leaf.agentSessionFingerprint ?? null,
+      reviewed_stop: null,
+      stopped_at: 1,
+      opened_at: null,
+      observed_stop_id: `observed-${leaf.id}`,
+    };
+    return [deskKey(record), record];
+  }),
+);
 const deskControls = new Set<(control: BridgeControlMsg) => void>();
 let reviewReply: Promise<void> | undefined;
 const deskService = {
@@ -200,6 +214,20 @@ async function run() {
   );
   check(!!card("alpha") && !!card("gamma"), "E left the other cards alone");
 
+  // Recency can expire while the retained stop and review mark stay the same.
+  const betaRecord = [...deskRecords.values()].find(
+    (entry) => entry.terminal_id === "beta",
+  )!;
+  betaRecord.stopped_at = null;
+  revision++;
+  for (const callback of deskControls)
+    callback({ type: "world_desk_changed", revision });
+  await settle(150);
+  check(
+    !card("beta"),
+    "expiring only the display time does not return the same stop to To review",
+  );
+
   // Marking offers Undo, and the stop stays reachable under Reviewed.
   const undo = [
     ...document.querySelectorAll<HTMLButtonElement>(".desk-toast button"),
@@ -259,7 +287,9 @@ async function run() {
       agent_session_fingerprint: "a".repeat(64),
     },
     {
-      stop_id: JSON.parse(handoffId(leaves[0]!, undefined))[1],
+      stop_id: JSON.parse(
+        handoffId(leaves[0]!, undefined, "observed-alpha"),
+      )[1],
       reviewed: false,
     },
   );
@@ -277,7 +307,7 @@ async function run() {
     agent_session_fingerprint: "a".repeat(64),
   };
   await secondBrowser.mutate("world.desk.review", alphaIdentity, {
-    stop_id: JSON.parse(handoffId(leaves[0]!, undefined))[1],
+    stop_id: JSON.parse(handoffId(leaves[0]!, undefined, "observed-alpha"))[1],
     reviewed: true,
   });
   await settle(150);
@@ -285,8 +315,19 @@ async function run() {
     !card("alpha"),
     "a mark from another browser removes the same stop from To review",
   );
+  const alphaRecord = deskRecords.get(deskKey(alphaIdentity))!;
+  alphaRecord.observed_stop_id = "observed-alpha-later";
+  alphaRecord.stopped_at = Date.now();
+  revision++;
+  for (const callback of deskControls)
+    callback({ type: "world_desk_changed", revision });
+  await settle(150);
+  check(
+    !!card("alpha"),
+    "native progress returns a new completed stop to review without a working browser frame",
+  );
   await secondBrowser.mutate("world.desk.review", alphaIdentity, {
-    stop_id: JSON.parse(handoffId(leaves[0]!, undefined))[1],
+    stop_id: JSON.parse(handoffId(leaves[0]!, undefined, "observed-alpha"))[1],
     reviewed: false,
   });
   await settle(150);

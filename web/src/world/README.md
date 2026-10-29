@@ -10,7 +10,10 @@ line numbers and CSS ranges change as components move.
 Desk follows the aggregate host filter. Receipt and screen reads capture each leaf's
 connection and runtime generation; retirement never reroutes a read. Review marks
 and recent opens use qualified session identities across filter and focus changes.
-Reads use fair bounded admission and independent host queues. Pending reads keep
+Stable service stop identities survive expiry of display times. The fresh
+snapshot producer passes existing `agent.list` metadata to the Desk adapter;
+qualified native state-change sequences reveal later completed turns even when
+no browser observed their working phase. Reads use fair bounded admission and independent host queues. Pending reads keep
 their admission across refreshes; queued work coalesces to the latest observation.
 
 | Task | Open these owners | Focused evidence |

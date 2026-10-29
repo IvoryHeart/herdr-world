@@ -114,3 +114,20 @@ test("malformed replies and disconnected writes remain unavailable", async () =>
   expect(store.get().verified).toBe(false);
   expect(store.get().error).toContain("Invalid Desk state");
 });
+
+for (const token of [17, "", "x".repeat(513)])
+  test("malformed stable stop identities keep Desk state unverified", async () => {
+    const store = new WorldDeskStore({
+      call: async () => ({
+        ...state(1),
+        records: state(1).records.map((record) => ({
+          ...record,
+          observed_stop_id: token,
+        })),
+      }),
+      onControl: () => () => {},
+      onStatus: () => () => {},
+    });
+    await store.refresh();
+    expect(store.get().verified).toBe(false);
+  });

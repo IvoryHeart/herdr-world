@@ -157,12 +157,13 @@ export function receiptIdentity(leaf: WorldLeafObject) {
 export function handoffId(
   leaf: WorldLeafObject,
   stoppedAt: number | undefined,
+  stopId?: string,
 ) {
   // Receipt coverage differs between browsers. Only shared observations name
   // the stop; later service stops or native activity must need a fresh mark.
   return JSON.stringify([
     receiptIdentity(leaf),
-    `stop:${JSON.stringify([stoppedAt ?? null, leaf.lastActivityAt ?? null])}`,
+    `stop:${JSON.stringify([stopId ?? stoppedAt ?? null, leaf.lastActivityAt ?? null])}`,
   ]);
 }
 

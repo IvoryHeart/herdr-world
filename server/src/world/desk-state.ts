@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import {
   DESK_RECORD_LIMIT,
   DESK_OPENS_LIMIT,
@@ -24,11 +25,13 @@ const copyIdentity = (identity: DeskIdentity): DeskIdentity => ({
   agent_session_fingerprint: identity.agent_session_fingerprint,
 });
 
+type StoredDeskRecord = DeskRecord & { stateChangeSeq?: number };
+
 /** Browser-independent, process-local state. No transcript text is retained. */
 export class WorldDeskRegistry {
   private revision = 0;
   private ownershipRevision = 0;
-  private records = new Map<string, DeskRecord>();
+  private records = new Map<string, StoredDeskRecord>();
   private recordByTerminal = new Map<string, string>();
   private previous = new Map<
     string,
@@ -38,13 +41,20 @@ export class WorldDeskRegistry {
       at: number;
       mutation?: boolean;
       session: object;
+      stateChangeSeq?: number;
     }
   >();
 
   list(): DeskState {
     return {
       revision: this.revision,
-      records: [...this.records.values()].map((record) => ({ ...record })),
+      records: [...this.records.values()].map((record) => ({
+        ...copyIdentity(record),
+        reviewed_stop: record.reviewed_stop,
+        stopped_at: record.stopped_at,
+        opened_at: record.opened_at,
+        observed_stop_id: record.observed_stop_id ?? null,
+      })),
     };
   }
 
@@ -89,7 +99,12 @@ export class WorldDeskRegistry {
     }
   }
 
-  observeAgent(identity: DeskIdentity, status: string, at: number) {
+  observeAgent(
+    identity: DeskIdentity,
+    status: string,
+    at: number,
+    stateChangeSeq?: number,
+  ) {
     this.validate(identity);
     const terminal = terminalKey(identity);
     const previous = this.previous.get(terminal);
@@ -101,33 +116,53 @@ export class WorldDeskRegistry {
     const same = previous && deskKey(previous.identity) === deskKey(identity);
     if (!same) this.retireSession(identity);
     const existing = this.records.get(deskKey(identity));
-    if (same && !["working", "idle", "done", "blocked"].includes(status)) {
+    const sequence =
+      Number.isSafeInteger(stateChangeSeq) && stateChangeSeq! >= 0
+        ? stateChangeSeq
+        : undefined;
+    const priorSequence =
+      (same ? previous.stateChangeSeq : undefined) ?? existing?.stateChangeSeq;
+    if (
+      sequence !== undefined &&
+      priorSequence !== undefined &&
+      sequence < priorSequence
+    )
+      return;
+    const knownStatus = ["working", "idle", "done", "blocked"].includes(status);
+    if (same && !knownStatus) {
       previous.at = at;
       return;
     }
-    if (
+    const nextSequence = knownStatus
+      ? (sequence ?? priorSequence)
+      : priorSequence;
+    const stopped = ["idle", "done", "blocked"].includes(status);
+    const advanced =
+      sequence !== undefined &&
+      priorSequence !== undefined &&
+      sequence > priorSequence;
+    const transitioned =
       same &&
-      previous.status === "working" &&
-      status !== "working" &&
-      status !== "unknown"
-    ) {
+      (previous.status === "working" ||
+        (status === "done" && ["idle", "blocked"].includes(previous.status)));
+    if (stopped && (advanced || transitioned)) {
       const record = this.record(identity);
+      record.observed_stop_id = randomUUID();
       record.stopped_at = at;
+      record.stateChangeSeq = nextSequence;
       this.save(record);
-    } else if (
-      status === "working" &&
-      existing?.stopped_at !== null &&
-      existing?.stopped_at !== undefined
-    ) {
+    } else if (status === "working" && existing?.stopped_at != null) {
       existing.stopped_at = null;
       this.removeEmpty(existing);
       this.revision++;
     }
+    if (existing) existing.stateChangeSeq = nextSequence;
     this.previous.delete(terminal);
     this.previous.set(terminal, {
       identity: copyIdentity(identity),
       status,
       at,
+      stateChangeSeq: nextSequence,
       session: same ? previous.session : { revision: ++this.ownershipRevision },
     });
     while (this.previous.size > DESK_OBSERVATION_LIMIT)
@@ -197,6 +232,10 @@ export class WorldDeskRegistry {
           : "unknown",
       at,
       mutation: true,
+      stateChangeSeq:
+        previous && deskKey(previous.identity) === deskKey(identity)
+          ? previous.stateChangeSeq
+          : this.records.get(deskKey(identity))?.stateChangeSeq,
       session:
         previous && deskKey(previous.identity) === deskKey(identity)
           ? previous.session
@@ -210,18 +249,21 @@ export class WorldDeskRegistry {
     if (!validDeskIdentity(identity))
       throw new Error("invalid Desk agent identity");
   }
-  private record(identity: DeskIdentity): DeskRecord {
+  private record(identity: DeskIdentity): StoredDeskRecord {
     this.retireSession(identity);
     return (
       this.records.get(deskKey(identity)) ?? {
         ...copyIdentity(identity),
         reviewed_stop: null,
         stopped_at: null,
+        observed_stop_id: null,
+        stateChangeSeq: this.previous.get(terminalKey(identity))
+          ?.stateChangeSeq,
         opened_at: null,
       }
     );
   }
-  private save(record: DeskRecord) {
+  private save(record: StoredDeskRecord) {
     const key = deskKey(record);
     this.records.delete(key);
     this.records.set(key, record);
@@ -231,7 +273,7 @@ export class WorldDeskRegistry {
       this.remove(this.records.keys().next().value!);
     this.revision++;
   }
-  private removeEmpty(record: DeskRecord) {
+  private removeEmpty(record: StoredDeskRecord) {
     if (
       record.reviewed_stop === null &&
       record.stopped_at === null &&

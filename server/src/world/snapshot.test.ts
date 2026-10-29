@@ -87,6 +87,17 @@ describe("WorldSnapshotService", () => {
     let duringRead = () => {};
     host.herdr.call = async (method) => {
       duringRead();
+      if (method === "agent.list")
+        return {
+          agents: [
+            {
+              pane_id: "shared-pane",
+              terminal_id: "shared-terminal",
+              agent: "codex",
+              state_change_seq: 11,
+            },
+          ],
+        };
       return paneRead(method);
     };
     const service = new WorldSnapshotService<Runtime>(
@@ -103,13 +114,19 @@ describe("WorldSnapshotService", () => {
       undefined,
       undefined,
       undefined,
-      (connectionId, generation, panes, at) =>
-        observed.push([connectionId, generation, panes, at]),
+      (connectionId, generation, panes, at, agents) =>
+        observed.push([connectionId, generation, panes, at, agents]),
     );
     await service.snapshot();
     expect(observed).toHaveLength(1);
     expect(observed[0]!.slice(0, 2)).toEqual(["alpha", 1]);
     expect(observed[0]![3]).toBe(1);
+    expect(observed[0]![4]).toEqual([
+      expect.objectContaining({
+        state_change_seq: 11,
+        terminal_id: "shared-terminal",
+      }),
+    ]);
     await service.snapshot();
     expect(observed).toHaveLength(1);
     now = 20_000;

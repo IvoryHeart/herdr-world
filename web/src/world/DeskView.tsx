@@ -1,4 +1,10 @@
-import { agentName, agentRuntime, agentFolder, where } from "./deskAgentLabels";
+import {
+  agentName,
+  agentRuntime,
+  agentFolder,
+  where,
+  matchesQuery,
+} from "./deskAgentLabels";
 import {
   useCallback,
   useEffect,
@@ -52,6 +58,7 @@ export function partitionDesk(
   handled: Set<string>,
   now: number,
   stops: Map<string, number> = new Map(),
+  stopIds: ReadonlyMap<string, string> = new Map(),
 ) {
   const needs: Item[] = [];
   const review: Item[] = [];
@@ -63,7 +70,7 @@ export function partitionDesk(
     const { receipt, current } = receiptFor(leaf);
     const pending = !current;
     const stoppedAt = stops.get(receiptIdentity(leaf));
-    const id = handoffId(leaf, stoppedAt);
+    const id = handoffId(leaf, stoppedAt, stopIds.get(receiptIdentity(leaf)));
     const since =
       receiptEndedAt(receipt) ?? stoppedAt ?? leaf.lastActivityAt ?? null;
     if (leaf.status === "blocked") {
@@ -89,6 +96,7 @@ export function partitionDesk(
       });
     } else if (
       leaf.status === "done" ||
+      (leaf.status === "idle" && handled.has(id)) ||
       isRecent(receipt, now) ||
       (stoppedAt !== undefined && now - stoppedAt <= IDLE_WINDOW_MS)
     ) {
@@ -201,38 +209,7 @@ const DESK_MODES: { mode: DeskMode; label: string }[] = [
 const RECENT_LIMIT = 6;
 const PREVIEW_DELAY_MS = 150;
 
-export { agentFolder } from "./deskAgentLabels";
-
-/**
- * Whether an agent matches every word of a search across the things an
- * operator remembers: its name, harness, workspace, tab, folder, request and
- * report.
- */
-export function matchesQuery(
-  leaf: WorldLeafObject,
-  receipt: TurnReceipt | null,
-  query: string,
-) {
-  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-  if (!words.length) return true;
-  const haystack = [
-    leaf.agentName,
-    leaf.terminalTitle,
-    leaf.agentLabel,
-    leaf.modelLabel,
-    leaf.label,
-    leaf.spaceLabel,
-    leaf.tabLabel,
-    agentFolder(leaf),
-    leaf.taskSummary,
-    receipt?.ask,
-    receipt?.report,
-  ]
-    .filter(Boolean)
-    .join("\n")
-    .toLowerCase();
-  return words.every((word) => haystack.includes(word));
-}
+export { agentFolder, matchesQuery } from "./deskAgentLabels";
 
 export type DirectoryGroup = {
   /** Connection-qualified workspace identity. */
@@ -365,6 +342,7 @@ export function DeskBoard({
   const {
     handled,
     stops,
+    stopIds,
     opens,
     mark,
     record: recordOpen,
@@ -410,6 +388,7 @@ export function DeskBoard({
     handled,
     now,
     stops,
+    stopIds,
   );
   const pendingReview = review.filter((item) => !item.handled);
   const matches = (item: Item) => matchesQuery(item.leaf, item.receipt, query);

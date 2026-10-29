@@ -8,6 +8,8 @@ export type DeskIdentity = {
 export type DeskRecord = DeskIdentity & {
   reviewed_stop: string | null;
   stopped_at: number | null;
+  /** Stable current-stop identity, independent of its expiring display time. */
+  observed_stop_id?: string | null;
   opened_at: number | null;
 };
 export type DeskState = { revision: number; records: DeskRecord[] };
@@ -60,6 +62,13 @@ export function parseDeskState(value: unknown): DeskState | null {
         (typeof record.reviewed_stop === "string" &&
           record.reviewed_stop.length > 0 &&
           record.reviewed_stop.length <= 8192)
+      ) ||
+      !(
+        record.observed_stop_id === undefined ||
+        record.observed_stop_id === null ||
+        (typeof record.observed_stop_id === "string" &&
+          record.observed_stop_id.length > 0 &&
+          record.observed_stop_id.length <= 512)
       ) ||
       ![record.stopped_at, record.opened_at].every(
         (at) => at === null || (Number.isFinite(at) && at >= 0),

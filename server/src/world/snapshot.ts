@@ -426,6 +426,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
       generation: number,
       panes: readonly Record<string, unknown>[],
       observedAt: number,
+      agents: readonly Record<string, unknown>[],
     ) => void,
   ) {}
 
@@ -739,6 +740,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
             work.lease.generation,
             snapshot.panes,
             observedAt,
+            snapshot.agents,
           );
         }
         if ((work.late && changed) || this.wasInvalidatedSinceStart(work)) {

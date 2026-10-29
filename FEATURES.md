@@ -353,6 +353,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     browser reload and clear on service restart or owner/session replacement;
     previous browser-local Desk marks are not imported. Marks agree even when
     browsers read different receipts; later stops or native activity need review.
+    Review marks survive expiry of the stop's display time. Native state-change
+    progress reveals later completed work even when no browser saw it working.
   - On wide screens, opening a card snaps that agent's Inspector to the right (on
     Chat, or the terminal when the agent has no Chat or **Agents open** is set to
     Terminal) beside the Desk as a reading pane and folds the lanes

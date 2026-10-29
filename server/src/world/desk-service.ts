@@ -26,9 +26,10 @@ export function createWorldDeskService(broadcast: (line: string) => void) {
       generation: number,
       panes: readonly Record<string, unknown>[],
       at: number,
+      agents: readonly Record<string, unknown>[] = [],
     ) =>
       changed(() =>
-        observeDeskPanes(registry, connectionId, generation, panes, at),
+        observeDeskPanes(registry, connectionId, generation, panes, at, agents),
       ),
   };
 }

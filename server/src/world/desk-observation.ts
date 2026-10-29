@@ -22,7 +22,18 @@ export function observeDeskPanes(
   generation: number,
   panes: readonly Record<string, unknown>[],
   observedAt: number,
+  agents: readonly Record<string, unknown>[] = [],
 ) {
+  const agentByPane = new Map<string, Record<string, unknown> | null>();
+  for (const agent of agents) {
+    if (
+      typeof agent.pane_id !== "string" ||
+      typeof agent.terminal_id !== "string"
+    )
+      continue;
+    const key = JSON.stringify([agent.pane_id, agent.terminal_id]);
+    agentByPane.set(key, agentByPane.has(key) ? null : agent);
+  }
   const seen = new Set<string>(),
     duplicates = new Set<string>();
   for (const pane of panes) {
@@ -32,31 +43,51 @@ export function observeDeskPanes(
   }
   for (const pane of panes) {
     if (
-      typeof pane.agent !== "string" ||
-      !pane.agent ||
       typeof pane.terminal_id !== "string" ||
       duplicates.has(pane.terminal_id)
     )
       continue;
+    const candidate = agentByPane.get(
+      JSON.stringify([pane.pane_id, pane.terminal_id]),
+    );
+    const paneSession = deskSessionFingerprint(pane.agent_session);
+    const agentSession = deskSessionFingerprint(candidate?.agent_session);
+    const agent =
+      paneSession && agentSession && paneSession !== agentSession
+        ? undefined
+        : candidate;
+    const harness =
+      typeof agent?.agent === "string" && agent.agent
+        ? agent.agent
+        : pane.agent;
+    if (typeof harness !== "string" || !harness) continue;
+    const status =
+      typeof agent?.agent_status === "string" && agent.agent_status
+        ? agent.agent_status
+        : pane.agent_status;
+    const sequence = agent?.state_change_seq ?? pane.state_change_seq;
     const identity: DeskIdentity = {
       connection_id: connectionId,
       connection_generation: generation,
       terminal_id: pane.terminal_id,
-      agent_session_fingerprint: deskSessionFingerprint(pane.agent_session),
+      agent_session_fingerprint: paneSession ?? (agent ? agentSession : null),
     };
     if (validDeskIdentity(identity))
       desk.observeAgent(
         identity,
-        ["working", "busy", "running"].includes(String(pane.agent_status))
+        ["working", "busy", "running"].includes(String(status))
           ? "working"
-          : ["idle", "waiting"].includes(String(pane.agent_status))
+          : ["idle", "waiting"].includes(String(status))
             ? "idle"
-            : ["blocked", "error"].includes(String(pane.agent_status))
+            : ["blocked", "error"].includes(String(status))
               ? "blocked"
-              : ["done", "completed"].includes(String(pane.agent_status))
+              : ["done", "completed"].includes(String(status))
                 ? "done"
                 : "unknown",
         observedAt,
+        Number.isSafeInteger(sequence) && (sequence as number) >= 0
+          ? (sequence as number)
+          : undefined,
       );
   }
 }

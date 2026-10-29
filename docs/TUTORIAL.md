@@ -628,7 +628,10 @@ They survive browser reloads and changes to the Hosts filter, but clear when the
 World service restarts. A replacement runtime or agent session starts fresh.
 Existing browser-local Desk marks are not imported. A mark stays shared even
 when another browser has not read that agent's receipt; later observed stops or
-native activity return the agent to review.
+native activity return the agent to review. The stop's 12-hour display time can
+expire without removing its review mark. Native state progress also reveals work
+that finished while World was closed or between snapshots, even when no browser
+saw the agent working.
 
 On wide screens, selecting a Desk card opens a reading pane on the right and
 folds the lanes into one queue. Use **J** / **K** to preview neighboring agents,

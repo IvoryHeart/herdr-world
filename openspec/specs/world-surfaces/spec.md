@@ -846,7 +846,14 @@ A shared stop identity SHALL be independent of a browser's receipt polling or
 read failures: the same service stop and native activity observation SHALL have
 one identity with or without a receipt. A later observed stop or native activity
 SHALL invalidate the older mark. Receipt content SHALL remain presentation data.
-
+The service SHALL assign a stable observed-stop identity separate from the
+12-hour display timestamp. Retained review marks SHALL keep that identity when
+only the timestamp expires. Qualified native `state_change_seq` progress in an
+already stopped state SHALL reveal a subsequent stop even if no browser observed
+the intervening working state. Native progress checkpoints on retained metadata
+SHALL survive display/observation expiry. Equal, older, malformed or ambiguous
+native progress SHALL NOT invalidate a mark. Without a native sequence, a known
+idle/blocked-to-done transition SHALL still advance the stop.
 
 Mutations SHALL validate the exact live terminal and session through a current
 runtime lease and revalidate that lease after the read. Observed stops SHALL come
@@ -855,8 +862,9 @@ SHALL NOT record transitions. A host read begun before a newer metadata mutation
 SHALL NOT replace its session identity. A metadata admission started before a
 newer session observation or mutation SHALL NOT restore its replaced session,
 even if the original fingerprint subsequently reappears. Status observations
-of an already-known same session SHALL NOT retire a valid metadata admission. Observed stops SHALL
-expire after 12 hours.
+of an already-known same session SHALL NOT retire a valid metadata admission.
+Observed-stop display times SHALL expire after 12 hours; expiry alone SHALL NOT
+reopen an unchanged reviewed idle/done stop.
 The service SHALL notify all browsers on real metadata changes. Browsers SHALL
 reject replies from an older socket epoch or service revision, treat disconnected
 state as unverified, and accept a restarted service's empty revision-zero state.
