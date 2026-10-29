@@ -370,7 +370,12 @@ Placed, named and dismissed asks (#493) stay on the same ledger. A caller the
 service cannot verify keeps an unverified actor, no cause keys and the shared
 allowance; the service records its claimed pane's connection, runtime, terminal
 and session only when exactly one local Herdr has that pane, so remote, unknown
-and ambiguous claims stay in the question list. Owner dismissal is a closed
+and ambiguous claims stay in the question list. Every competing local read must
+explicitly prove absence: actual CLI regressions cover a match plus timeout,
+unavailability, unsupported method or malformed reply in both host orders, a
+malformed sole-local reply, confirmed absence, and exclusion of unknown remote
+hosts. The caller stays unverified and retains the shared allowance and cause-key
+restrictions. Owner dismissal is a closed
 state beside answer and withdrawal: service, CLI and watcher cases check that
 waits end, answers are refused, a keyed repeat returns it until the asker
 withdraws, and the watcher does not re-ask a dismissed cause. The service asks
@@ -466,3 +471,29 @@ Existing same-association manual-refresh cases keep the current request while
 pending and mark the last success after transport or retryable provider failure.
 This direct cache/React identity boundary adds no provider or Git concurrency
 model; existing qualified request and runtime-lease consumers remain mandatory.
+
+## Shared terminal appearance
+
+[The appearance consumer contract](contracts/shared-appearance.md) derives
+admission, continuity, field-preservation and native-name failure properties from
+the approved tab-only scope. A direct 64-case handler matrix, real store reopen
+and move/migration tests, delayed-acknowledgement consumer and two isolated Chrome
+profiles cover the actual service and UI compositions. The existing runtime
+lease model is reused through its captured-currentness consumer obligation;
+no additional abstract model substitutes for the actual native read boundaries.
+The browser fixture's native responses/event stream are synthetic. Existing
+transport, current-generation and window/handoff consumers remain mandatory,
+and neither arbitrary upstream atomicity nor authenticated principals is claimed.
+
+The shared-appearance review regressions additionally drive the actual Spaces
+window adapter and mobile app bar, refusing draft retargeting after a pane move.
+Real handler/store tests cover lost move replies after native close cleanup,
+launch on a reused tab, complete-current absence pruning, held-read edit races,
+cached-live topology, response timing, coalesced native reads and historical
+churn beyond the record cap. These are bounded consumer checks;
+unknown or retired observations still provide no deletion authority.
+
+Move-colour schedules include explicit edits and resets both before and after
+native close cleanup. Closed-tab colour/pin tests interleave unrelated writes at
+both native absence reads, require fresh checks after revision conflicts, preserve
+a replacement tab, and cover runtime retirement and the three-attempt bound.

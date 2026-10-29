@@ -74,7 +74,9 @@ async function placeAsker(
     for (const entry of hosts) {
       if (!entry.local) continue;
       const pane = await paneActor(entry, paneId);
-      if (pane.found) found.push({ host: entry, actor: pane.actor });
+      if (pane.state === "unknown") return actor;
+      if (pane.state === "present")
+        found.push({ host: entry, actor: pane.actor });
     }
     if (found.length !== 1) return actor;
     host = found[0]!.host;

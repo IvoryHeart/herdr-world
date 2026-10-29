@@ -3591,7 +3591,7 @@ async function run() {
   await arrangeWindows("Columns");
   const arrangedBuilder = retainedBuilder.getBoundingClientRect();
   document
-    .querySelector<HTMLElement>('.tabbar-tab[title="created-tab-3"]')!
+    .querySelector<HTMLElement>('.tabbar-tab[data-tab-id="created-tab-3"]')!
     .click();
   await until(
     () => document.querySelectorAll(".world-managed-window").length === 3,
@@ -4373,12 +4373,12 @@ async function run() {
   await until(
     () =>
       document
-        // The bar shortens a long name in the middle; its title keeps it whole.
+        // The replacement agent keeps the native tab name in its header.
         .querySelector(
-          ".world-managed-window.is-active .workspace-inspector-checkout",
+          '[aria-label="Reviewer Next Inspector"] .workspace-inspector-checkout',
         )
         ?.getAttribute("title")
-        ?.includes("Reviewer Next") &&
+        ?.startsWith(`${tabs[1]!.label} · `) &&
       document
         .querySelector(".world-managed-window.is-active .workspace-inspector")
         ?.getAttribute("data-view") === "terminal",
@@ -4446,6 +4446,21 @@ async function run() {
   await until(
     () => splitBuilderWindow.querySelectorAll(".xterm").length === 2,
     "both split renderers before disconnect",
+  );
+  // The title's pane map (#444) draws the same split and marks the shown pane.
+  const paneMapGlyph = () =>
+    splitBuilderWindow.querySelector<HTMLButtonElement>(
+      ".workspace-inspector-head .inspector-pane-map-glyph",
+    );
+  const paneMapSelected = () =>
+    [...(paneMapGlyph()?.querySelectorAll("i") ?? [])].findIndex((cell) =>
+      cell.classList.contains("is-selected"),
+    );
+  await until(
+    () =>
+      paneMapGlyph()?.querySelectorAll("i").length === 2 &&
+      paneMapSelected() === 0,
+    "split window title shows its pane map",
   );
   const retainedWindows = [
     ...document.querySelectorAll(".world-managed-window .workspace-inspector"),
@@ -4715,6 +4730,44 @@ async function run() {
     () => document.activeElement === siblingInput,
     "keyboard activated window focused selected sibling",
   );
+  check(paneMapSelected() === 1, "title map did not follow the clicked pane");
+  // Switching from the title map shows the other pane, World-only.
+  const switchFromPaneMap = async (paneId: string) => {
+    paneMapGlyph()!.click();
+    await until(
+      () =>
+        document.querySelector(
+          `[aria-label="Panes in this tab"] [data-map-pane-id="${paneId}"]`,
+        ),
+      `title map opened for ${paneId}`,
+    );
+    document
+      .querySelector<HTMLButtonElement>(
+        `[aria-label="Panes in this tab"] [data-map-pane-id="${paneId}"]`,
+      )!
+      .click();
+    await until(
+      () =>
+        store.get().selectedPaneId === paneId &&
+        splitBuilderWindow
+          .querySelector(".pane-layout-cell.is-active")
+          ?.getAttribute("data-pane-id") === paneId &&
+        !document.querySelector('[aria-label="Panes in this tab"]'),
+      `title map switched to ${paneId}`,
+    );
+  };
+  const paneMoves = calls.filter(({ method }) =>
+    ["pane.focus_direction", "pane.zoom", "pane.swap"].includes(method),
+  ).length;
+  await switchFromPaneMap("builder-pane");
+  check(paneMapSelected() === 0, "title map did not mark its own switch");
+  await switchFromPaneMap(siblingPane.pane_id);
+  check(
+    calls.filter(({ method }) =>
+      ["pane.focus_direction", "pane.zoom", "pane.swap"].includes(method),
+    ).length === paneMoves,
+    "title map changed Herdr's panes",
+  );
   viewSelect.value = "town";
   viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
   await until(
@@ -4885,7 +4938,7 @@ async function run() {
           '[aria-label="Reviewer Next Inspector"] .workspace-inspector-checkout',
         )
         ?.getAttribute("title")
-        ?.includes("Reviewer Next") === true &&
+        ?.startsWith(`${tabs[1]!.label} · `) === true &&
       Math.abs(afterSiblingBounds.left - splitBuilderBounds.left) <= 2 &&
       Math.abs(afterSiblingBounds.top - splitBuilderBounds.top) <= 2,
     "sibling focus moved or docked its floating Inspector",

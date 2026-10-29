@@ -1,3 +1,8 @@
+import {
+  applyAppearance,
+  type AppearanceTarget,
+  type AppearanceFields,
+} from "../../../shared/appearance";
 import { bridge } from "../api";
 import { sharedAsksStore, type WorldAsk } from "./worldAsks";
 import { fixturePullRequest as detailedPr } from "./testing/pullRequestFixture";
@@ -335,6 +340,21 @@ let holdNextWrite: ((release: () => void) => void) | null = null;
  * one: a store keeps its document and refuses an older revision, so reusing
  * it would carry the last scenario's notes into the next.
  */
+function applyRequest(
+  method: string,
+  params: Record<string, unknown> | undefined,
+) {
+  if (method !== "world.appearance.patch")
+    return apply((params as { ops: BoardOp[] }).ops);
+  const next = structuredClone(saved);
+  applyAppearance(
+    next,
+    params as unknown as AppearanceTarget,
+    params?.fields as AppearanceFields,
+  );
+  saved = { ...next, revision: next.revision + 1 };
+  return { document: structuredClone(saved) };
+}
 const newStore = () =>
   new BoardDocumentStore({
     call: async (method, params) =>
@@ -343,12 +363,12 @@ const newStore = () =>
             const hold = holdNextWrite!;
             holdNextWrite = null;
             hold(resolve);
-          }).then(() => apply((params as { ops: BoardOp[] }).ops))
+          }).then(() => applyRequest(method, params))
         : method !== "world.board.get" && failingWrites > 0 && failingWrites--
           ? Promise.reject(new Error("write failed"))
           : method === "world.board.get"
             ? structuredClone(saved)
-            : apply((params as { ops: BoardOp[] }).ops),
+            : applyRequest(method, params),
     onControl: () => () => {},
     onStatus: () => () => {},
   });
@@ -926,6 +946,16 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         merged.querySelectorAll(".work-card").length === 60 &&
           !merged.querySelector(".work-card-facts"),
         "opening a day shows its compact cards",
+      );
+      for (const day of days.slice(2)) day.click();
+      await settle(50);
+      check(
+        days.reduce(
+          (count, day) =>
+            count + Number(day.querySelector("span")?.textContent),
+          0,
+        ) === 150 && merged.querySelectorAll(".work-card").length === 150,
+        "all 150 merged pull requests remain available when each day is open",
       );
       const link = fixing?.querySelector<HTMLAnchorElement>(".work-card-ref");
       check(

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import {
   clearTabLayouts,
+  drawableTabLayout,
   retainTabLayoutOwners,
   forgetTabLayoutsExcept,
   provisionalTabLayout,
@@ -147,4 +148,134 @@ test("same-runtime unavailable owners keep geometry; replaced and removed owners
   retainTabLayoutOwners([{ id: "alpha", generation: 8 }]);
   expect(tabLayoutFor("alpha", 7, "t1")).toBeNull();
   expect(tabLayoutFor("beta", 3, "t1")).toBeNull();
+});
+
+describe("drawable tab layout", () => {
+  type Rect = PaneLayout["area"];
+  const rect = (x: number, y: number, width: number, height: number): Rect => ({
+    x,
+    y,
+    width,
+    height,
+  });
+  // Herdr's own shape: splits named split_<depth>_<path from the root>, panes
+  // in the tree's left-to-right order, all squeezed into a 10×1 tab.
+  const squeezed = (
+    splits: [string, "right" | "down", Rect][],
+    panes: Rect[],
+  ): PaneLayout => ({
+    workspace_id: "w1",
+    tab_id: "t1",
+    zoomed: false,
+    area: rect(0, 0, 10, 1),
+    focused_pane_id: "p1",
+    splits: splits.map(([id, direction, at]) => ({
+      id,
+      direction,
+      ratio: 0.5,
+      rect: at,
+    })),
+    panes: panes.map((at, index) => ({
+      pane_id: `p${index + 1}`,
+      focused: index === 0,
+      rect: at,
+    })),
+  });
+  const drawn = (layout: PaneLayout) =>
+    drawableTabLayout(layout)?.panes.map((pane) => [
+      pane.pane_id,
+      pane.rect.x,
+      pane.rect.y,
+      pane.rect.width,
+      pane.rect.height,
+    ]);
+
+  test("rebuilds a review round: the author beside a stack of reviewers", () => {
+    const round = squeezed(
+      [
+        ["split_0_root", "right", rect(0, 0, 10, 1)],
+        ["split_1_1", "down", rect(5, 0, 5, 1)],
+        ["split_2_11", "down", rect(5, 1, 5, 0)],
+      ],
+      [rect(0, 0, 5, 1), rect(5, 0, 5, 1), rect(5, 1, 5, 0), rect(5, 1, 5, 0)],
+    );
+    expect(drawn(round)).toEqual([
+      ["p1", 0, 0, 500, 1000],
+      ["p2", 500, 0, 500, 500],
+      ["p3", 500, 500, 500, 250],
+      ["p4", 500, 750, 500, 250],
+    ]);
+    expect(drawableTabLayout(round)?.splits.map((split) => split.rect)).toEqual(
+      [
+        rect(0, 0, 1000, 1000),
+        rect(500, 0, 500, 1000),
+        rect(500, 500, 500, 500),
+      ],
+    );
+    expect(drawableTabLayout(round)?.area).toEqual(rect(0, 0, 1000, 1000));
+  });
+
+  test("rebuilds an author pair beside a reviewer stack", () => {
+    // Herdr numbers splits by their place in its list, not their depth:
+    // this is exactly how it names this shape.
+    const nested = squeezed(
+      [
+        ["split_0_root", "right", rect(0, 0, 10, 1)],
+        ["split_1_0", "right", rect(0, 0, 5, 1)],
+        ["split_2_1", "down", rect(5, 0, 5, 1)],
+      ],
+      [rect(0, 0, 3, 1), rect(3, 0, 2, 1), rect(5, 0, 5, 1), rect(5, 1, 5, 0)],
+    );
+    expect(drawn(nested)).toEqual([
+      ["p1", 0, 0, 250, 1000],
+      ["p2", 250, 0, 250, 1000],
+      ["p3", 500, 0, 500, 500],
+      ["p4", 500, 500, 500, 500],
+    ]);
+  });
+
+  test("rebuilds a 2×2 grid", () => {
+    const grid = squeezed(
+      [
+        ["split_0_root", "right", rect(0, 0, 10, 1)],
+        ["split_1_0", "down", rect(0, 0, 5, 1)],
+        ["split_2_1", "down", rect(5, 0, 5, 1)],
+      ],
+      [rect(0, 0, 5, 1), rect(0, 1, 5, 0), rect(5, 0, 5, 1), rect(5, 1, 5, 0)],
+    );
+    expect(drawn(grid)).toEqual([
+      ["p1", 0, 0, 500, 500],
+      ["p2", 0, 500, 500, 500],
+      ["p3", 500, 0, 500, 500],
+      ["p4", 500, 500, 500, 500],
+    ]);
+  });
+
+  test("keeps real geometry and refuses geometry it cannot draw", () => {
+    const shown = layout("t1", ["p1", "p2"]);
+    expect(drawableTabLayout(shown)).toBe(shown);
+    const pane = [rect(0, 0, 5, 1), rect(5, 1, 5, 0)];
+    const root: [string, "right", Rect] = [
+      "split_0_root",
+      "right",
+      rect(0, 0, 10, 1),
+    ];
+    // Unknown split names, a split off the tree, or too few panes.
+    expect(
+      drawableTabLayout(squeezed([["s", "right", rect(0, 0, 10, 1)]], pane)),
+    ).toBeNull();
+    expect(
+      drawableTabLayout(
+        squeezed(
+          [root, ["split_2_10", "down", rect(5, 0, 5, 1)]],
+          [...pane, pane[1]!],
+        ),
+      ),
+    ).toBeNull();
+    expect(
+      drawableTabLayout(
+        squeezed([root, ["split_1_1", "down", rect(5, 0, 5, 1)]], pane),
+      ),
+    ).toBeNull();
+  });
 });
