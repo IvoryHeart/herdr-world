@@ -808,7 +808,10 @@ See [resource ownership](docs/ARCHITECTURE.md#workspace-resource-ownership).
   card and answers with the option you pick (click or its number key), after
   checking the question has not changed. A form of several questions lists
   every question's header with whether it is answered, asks them one at a
-  time, and then offers **Submit answers** from its review.
+  time, and then offers **Submit answers** from its review. Codex question
+  dialogs offer numbered choices without approval key hints. Claude Code's
+  **Type something.**, **Chat about this** and plan feedback offer a text field
+  and **Send text answer**, with the native destination checked before sending.
   Each tool call's row in Chat carries its evidence: a plain label, its state
   and time, a pass or fail badge for a test run, and when opened, the edit's
   diff, the test strip with its first failure, or the end of its output.

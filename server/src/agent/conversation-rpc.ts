@@ -39,6 +39,9 @@ export async function conversationRpc(
         ? await source.answer({
             pane_id: paneId,
             key: typeof p.key === "string" ? p.key : "",
+            ...(p.text !== undefined
+              ? { text: typeof p.text === "string" ? p.text : "" }
+              : {}),
             prompt_fingerprint:
               typeof p.prompt_fingerprint === "string"
                 ? p.prompt_fingerprint

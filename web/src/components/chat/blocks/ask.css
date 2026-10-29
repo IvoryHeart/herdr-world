@@ -96,6 +96,32 @@
   cursor: default;
 }
 
+.agent-chat-ask-text,
+.agent-chat-ask-text label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.agent-chat-ask-text input {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  box-sizing: border-box;
+  padding: 8px;
+  color: var(--text);
+  background: var(--input-bg);
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  font: inherit;
+}
+
+.agent-chat-ask-text button {
+  align-self: flex-start;
+  min-height: 36px;
+}
+
 .agent-chat-ask-options kbd {
   min-width: 1.4em;
   font: 600 11px var(--font-mono, ui-monospace, monospace);
