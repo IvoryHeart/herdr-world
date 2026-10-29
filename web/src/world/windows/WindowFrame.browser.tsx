@@ -174,6 +174,9 @@ async function run() {
     flushSync(() =>
       choice.dispatchEvent(new MouseEvent("mouseover", { bubbles: true })),
     );
+    // The frame hears the menu's preview through a DOM event, so it renders
+    // on React's next pass rather than inside this flushSync.
+    await settle();
     const preview = document.querySelector<HTMLElement>(
       ".world-window-snap-preview",
     );
