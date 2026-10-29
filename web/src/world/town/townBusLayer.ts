@@ -187,10 +187,11 @@ export class TownBusLayer implements TownOverlay {
       h: STOP_H * z,
     };
 
-    // The road the bus runs on, kept on screen when the stop is not.
+    // The road the bus runs on, kept on screen when the stop is not (on a
+    // phone, above the attention rail docked along the bottom).
     const busH = BUS_H * z;
     const road = Math.min(
-      height - inset.bottom - 6,
+      height - inset.bottom - (width < 640 ? 110 : 6),
       Math.max(inset.top + busH + 6, sy + BUS_ROAD_OFFSET * z),
     );
     const stopLeft = Math.min(
@@ -258,7 +259,8 @@ export class TownBusLayer implements TownOverlay {
     const next = this.trips[0];
     const parked = this.buses.find((bus) => !bus.departing)?.rect;
     this.status = {
-      x: sx,
+      // Over the stop, but kept on screen.
+      x: Math.min(width - 96, Math.max(96, sx)),
       y: sy - STOP_H * z - 6,
       visible: !!next,
       // The bus's box (canvas pixels), so a press can find it without the canvas.
@@ -267,7 +269,7 @@ export class TownBusLayer implements TownOverlay {
         : "",
       text: next
         ? this.held
-          ? "Bus held · drag someone back to their desk"
+          ? "Bus held · doors open"
           : `${this.phaseLabel(next, quiet)} · ${Math.ceil(next.leftMs / 1000)}s`
         : "",
     };
