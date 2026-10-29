@@ -1,6 +1,6 @@
 import { askSessionFingerprint } from "./world-cli-asks";
 import { handleWorldAsk } from "./world-cli-asks";
-export { answerAsk, ASK_WAIT_MAX_MS } from "./world-cli-asks";
+export { answerAsk, ASK_WAIT_MAX_MS, dismissAsk } from "./world-cli-asks";
 import { teamMembers, type GroupSender } from "../../../shared/groups";
 import { isGroupOp } from "./board-groups";
 import {
@@ -163,50 +163,57 @@ export async function identifyCaller(
       const roots = paneRoots(info);
       const chain = roots.length ? locate(roots) : null;
       if (!chain || !runsInPane(chain, info)) continue;
-      const pane = (
-        (await host
-          .call("pane.get", { pane_id: paneId })
-          .catch(() => null)) as {
-          pane?: Record<string, unknown>;
-        } | null
-      )?.pane;
-      const agent = typeof pane?.agent === "string" ? pane.agent : undefined;
-      return {
-        actor: {
-          label: `${agent ?? "terminal"} in ${paneId}`,
-          verified: true,
-          connection_id: host.connection_id,
-          connection_generation: host.generation,
-          pane_id: paneId,
-          ...(typeof pane?.terminal_id === "string"
-            ? { terminal_id: pane.terminal_id }
-            : {}),
-          ...(typeof pane?.workspace_id === "string"
-            ? { workspace_id: pane.workspace_id }
-            : {}),
-          ...(typeof pane?.agent_session === "object" &&
-          pane.agent_session !== null
-            ? {
-                agent_session_fingerprint: askSessionFingerprint(
-                  pane.agent_session,
-                ),
-                ...(typeof (pane.agent_session as { value?: unknown }).value ===
-                "string"
-                  ? {
-                      agent_session_id: (
-                        pane.agent_session as { value: string }
-                      ).value,
-                    }
-                  : {}),
-              }
-            : {}),
-          ...(agent ? { agent } : {}),
-        },
-        host,
-      };
+      return { actor: (await paneActor(host, paneId)).actor, host };
     }
   return {
     actor: { label: `unverified ${paneId}`, verified: false, pane_id: paneId },
+  };
+}
+
+/**
+ * The caller fields Herdr gives for a pane on `host`, as for a verified
+ * caller there; `found` is false when the host has no such pane.
+ */
+export async function paneActor(
+  host: CliHost,
+  paneId: string,
+): Promise<{ found: boolean; actor: CliActor }> {
+  const pane = (
+    (await host.call("pane.get", { pane_id: paneId }).catch(() => null)) as {
+      pane?: Record<string, unknown>;
+    } | null
+  )?.pane;
+  const agent = typeof pane?.agent === "string" ? pane.agent : undefined;
+  return {
+    found: Boolean(pane),
+    actor: {
+      label: `${agent ?? "terminal"} in ${paneId}`,
+      verified: true,
+      connection_id: host.connection_id,
+      connection_generation: host.generation,
+      pane_id: paneId,
+      ...(typeof pane?.terminal_id === "string"
+        ? { terminal_id: pane.terminal_id }
+        : {}),
+      ...(typeof pane?.workspace_id === "string"
+        ? { workspace_id: pane.workspace_id }
+        : {}),
+      ...(typeof pane?.agent_session === "object" && pane.agent_session !== null
+        ? {
+            agent_session_fingerprint: askSessionFingerprint(
+              pane.agent_session,
+            ),
+            ...(typeof (pane.agent_session as { value?: unknown }).value ===
+            "string"
+              ? {
+                  agent_session_id: (pane.agent_session as { value: string })
+                    .value,
+                }
+              : {}),
+          }
+        : {}),
+      ...(agent ? { agent } : {}),
+    },
   };
 }
 

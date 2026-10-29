@@ -88,7 +88,12 @@ function Fixture({ world }: { world: WorldObject }) {
           now={1}
           onOpenAgent={() => {}}
           onShowRoom={() => {}}
-          onAnswer={async () => null}
+          askActions={{
+            askers: new Map(),
+            answer: async () => null,
+            dismiss: async () => null,
+            open() {},
+          }}
           groups={<GroupsSummary />}
         />
       )}

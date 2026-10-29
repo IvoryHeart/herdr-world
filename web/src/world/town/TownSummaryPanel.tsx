@@ -12,8 +12,10 @@ import {
   TownAsk,
   townRailInset,
   townLocation,
+  type TownAskActions,
   type TownCall,
 } from "./TownRail";
+import { townAskers } from "./townAskers";
 import { sharedAsksStore, useWorldAsks } from "../worldAsks";
 import {
   townSummary,
@@ -34,7 +36,7 @@ export function TownSummaryPanel({
   now,
   onOpenAgent,
   onShowRoom,
-  onAnswer,
+  askActions,
   groups,
 }: {
   summary: TownSummaryModel;
@@ -43,7 +45,7 @@ export function TownSummaryPanel({
   onOpenAgent(agentKey: string): void;
   /** Move the Town camera to a room. */
   onShowRoom(roomKey: string): void;
-  onAnswer(id: string, text: string): Promise<string | null>;
+  askActions: TownAskActions;
   groups?: ReactNode;
 }) {
   return (
@@ -55,7 +57,7 @@ export function TownSummaryPanel({
         {summary.asks.length > 0 ? (
           <div className="town-asks">
             {summary.asks.map((ask) => (
-              <TownAsk key={ask.id} ask={ask} now={now} onAnswer={onAnswer} />
+              <TownAsk key={ask.id} ask={ask} now={now} actions={askActions} />
             ))}
           </div>
         ) : null}
@@ -233,6 +235,7 @@ export function useTownSummary({
   observability,
   now,
   openAgent,
+  openTerminal,
   showRoom,
 }: {
   railCollapsed: boolean;
@@ -242,11 +245,14 @@ export function useTownSummary({
   observability: OfficeObservability;
   now: number;
   openAgent(agentKey: string): void;
+  /** Open a terminal by its World node, as a reception question entry does. */
+  openTerminal(nodeId: string): void;
   showRoom(roomKey: string): void;
 }): {
   summary: TownSummaryModel;
   railInset: number;
-  answerAsk(id: string, text: string): Promise<string | null>;
+  askActions: TownAskActions;
+  openTerminal(nodeId: string): void;
   open(): void;
   window: ReactNode;
 } {
@@ -258,7 +264,23 @@ export function useTownSummary({
   }, []);
   const asksStore = sharedAsksStore();
   const asks = useWorldAsks(asksStore);
-  const answerAsk = (id: string, text: string) => asksStore.answer(id, text);
+  const askers = useMemo(
+    () => townAskers(asks, world, office),
+    [asks, world, office],
+  );
+  const askActions = useMemo<TownAskActions>(
+    () => ({
+      askers,
+      answer: (id, text) => asksStore.answer(id, text),
+      dismiss: (id) => asksStore.dismiss(id),
+      open: (asker) => {
+        if (asker.key === null) return;
+        if (asker.terminal) openTerminal(asker.key);
+        else openAgent(asker.key);
+      },
+    }),
+    [askers, asksStore, openAgent, openTerminal],
+  );
   const summary = useMemo(
     () =>
       townSummary(
@@ -284,7 +306,8 @@ export function useTownSummary({
       railCollapsed,
       summary.counts.needsYou,
     ),
-    answerAsk,
+    askActions,
+    openTerminal,
     open: () => {
       setOpen(true);
       setFocusKey((key) => key + 1);
@@ -301,7 +324,7 @@ export function useTownSummary({
           groups={<GroupsSummary />}
           now={now}
           onOpenAgent={openAgent}
-          onAnswer={answerAsk}
+          askActions={askActions}
           onShowRoom={(roomKey) => {
             if (viewportWidth <= 640) setOpen(false);
             showRoom(roomKey);

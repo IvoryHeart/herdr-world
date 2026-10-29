@@ -107,7 +107,12 @@ test("Town places Pods after Hosts and before Spend without changing reception",
     now: 1,
     onOpenAgent: () => {},
     onShowRoom: () => {},
-    onAnswer: async () => null,
+    askActions: {
+      askers: new Map(),
+      answer: async () => null,
+      dismiss: async () => null,
+      open() {},
+    },
   };
   const baseline = renderToStaticMarkup(<TownSummaryPanel {...props} />);
   const html = renderToStaticMarkup(
