@@ -24,14 +24,14 @@ export function ChatAfterBlocks({
   answered:
     | (Pick<
         Extract<AnswerResult, { status: "sent" }>,
-        "number" | "label" | "acknowledged" | "unconfirmed_reason"
+        "number" | "label" | "text" | "acknowledged" | "unconfirmed_reason"
       > & { question: string[] })
     | null;
   prompt: PendingPrompt | null;
   agent: string;
   answering: boolean;
   notice: string;
-  onAnswer: (key: string) => void;
+  onAnswer: (key: string, text?: string) => void;
   onOpenTerminal?: () => void;
 }) {
   return (
@@ -57,6 +57,12 @@ export function ChatAfterBlocks({
           <b>
             {answered.number} · {answered.label}
           </b>
+          {answered.text !== undefined ? (
+            <>
+              {" "}
+              · <q>{answered.text}</q>
+            </>
+          ) : null}
           {answered.acknowledged
             ? null
             : ` · ${UNCONFIRMED[answered.unconfirmed_reason ?? "still_showing"]}`}
@@ -67,6 +73,7 @@ export function ChatAfterBlocks({
       ) : null}
       {prompt ? (
         <AskCard
+          key={prompt.fingerprint}
           agent={agent}
           prompt={prompt}
           answering={answering}
@@ -74,6 +81,15 @@ export function ChatAfterBlocks({
           onAnswer={onAnswer}
           onOpenTerminal={onOpenTerminal}
         />
+      ) : notice ? (
+        <p className="agent-chat-ask-notice" role="alert">
+          {notice}{" "}
+          {onOpenTerminal ? (
+            <button type="button" onClick={onOpenTerminal}>
+              Open Terminal
+            </button>
+          ) : null}
+        </p>
       ) : null}
     </>
   );

@@ -277,21 +277,34 @@ export function AgentChat({
     question: string[];
     number: string;
     label: string;
+    text?: string;
     acknowledged: boolean;
     unconfirmed_reason: UnconfirmedReason | null;
   } | null>(null);
-  const [askNotice, setAskNotice] = useState("");
+  const answerScope = JSON.stringify([
+    connectionClient.connectionId,
+    connectionClient.generation,
+    connectionClient.serverRuntimeGeneration,
+    pane.pane_id,
+    conversation?.session_fingerprint,
+  ]);
+  const [askNotice, setAskNotice] = useState<{
+    scope: string;
+    text: string;
+  } | null>(null);
+  useEffect(() => setAskNotice(null), [answerScope]);
   const answer = useCallback(
-    async (key: string) => {
+    async (key: string, text?: string) => {
       if (!prompt || answering) return;
       setAnswering(true);
-      setAskNotice("");
+      setAskNotice(null);
       try {
         const result = (await connectionClient.call(
           "agent_conversation.answer",
           {
             pane_id: pane.pane_id,
             key,
+            ...(text !== undefined ? { text } : {}),
             prompt_fingerprint: prompt.fingerprint,
           },
         )) as AnswerResult;
@@ -301,25 +314,28 @@ export function AgentChat({
             question: prompt.question,
             number: result.number,
             label: result.label,
+            ...(result.text !== undefined ? { text: result.text } : {}),
             acknowledged: result.acknowledged,
             unconfirmed_reason: result.unconfirmed_reason,
           });
-        else setAskNotice(result.message);
+        else setAskNotice({ scope: answerScope, text: result.message });
       } catch (reason) {
-        setAskNotice(reason instanceof Error ? reason.message : String(reason));
+        setAskNotice({
+          scope: answerScope,
+          text: reason instanceof Error ? reason.message : String(reason),
+        });
       } finally {
         setAnswering(false);
         load();
       }
     },
-    [answering, connectionClient, load, pane.pane_id, prompt],
+    [answering, answerScope, connectionClient, load, pane.pane_id, prompt],
   );
   // A different question replaces the last answer's receipt.
   const showAsk =
     prompt !== null && prompt.fingerprint !== answered?.fingerprint;
   useEffect(() => {
     if (prompt && prompt.fingerprint !== answered?.fingerprint) {
-      setAskNotice("");
       setAnswered(null);
     }
     // Only a new question resets the receipt.
@@ -699,14 +715,15 @@ export function AgentChat({
             decorationTokens={decorationTokens}
             after={
               <ChatAfterBlocks
+                key={answerScope}
                 running={running}
                 clock={clock}
                 answered={answered}
                 prompt={showAsk ? prompt : null}
                 agent={conversation?.agent ?? "The agent"}
                 answering={answering}
-                notice={askNotice}
-                onAnswer={(key) => void answer(key)}
+                notice={askNotice?.scope === answerScope ? askNotice.text : ""}
+                onAnswer={(key, text) => void answer(key, text)}
                 onOpenTerminal={onOpenTerminal}
               />
             }
