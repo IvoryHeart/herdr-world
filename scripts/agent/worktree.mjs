@@ -113,9 +113,9 @@ export const BUILD_OUTPUTS = [
   "server/herdr-world-linux-x64-musl",
   "server/herdr-world-linux-x64-musl.map",
   "server/herdr-world-windows-arm64.exe",
-  "server/herdr-world-windows-arm64.exe.map",
+  "server/herdr-world-windows-arm64.map",
   "server/herdr-world-windows-x64.exe",
-  "server/herdr-world-windows-x64.exe.map",
+  "server/herdr-world-windows-x64.map",
   ".agents/verification",
 ];
 

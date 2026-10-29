@@ -385,6 +385,17 @@ export function roundTabs(db: Database, pr: number, round: number) {
     .map((row) => row.tab);
 }
 
+/** Chat tabs belonging to any run for a PR, including manual runs without a round. */
+export function chatTabsForPr(db: Database, pr: number) {
+  return db
+    .query<{ tab: string }, [number]>(
+      `SELECT chat.tab FROM chat JOIN run ON run.id = chat.run_id
+       WHERE run.pr = ? ORDER BY chat.rowid`,
+    )
+    .all(pr)
+    .map((row) => row.tab);
+}
+
 export function roundClosed(db: Database, pr: number, round: number | null) {
   const row = db
     .query<{ closed_at: number | null }, [number, number]>(

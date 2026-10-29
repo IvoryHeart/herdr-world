@@ -52,7 +52,7 @@ function fixture() {
   writeFileSync(join(primary, "README.md"), "base\n");
   writeFileSync(
     join(primary, ".gitignore"),
-    "node_modules/\n.agents/*\n.env*\n*.tsbuildinfo\nserver/public/\nserver/herdr-world.map\n",
+    "node_modules/\n.agents/*\n.env*\n*.tsbuildinfo\nserver/public/\nserver/herdr-world.map\nserver/herdr-world-*\n",
   );
   run(primary, "add", "-A");
   run(primary, "commit", "-qm", "base");
@@ -98,6 +98,16 @@ function fixture() {
   commit(sourceMap, "source-map.ts");
   mkdirSync(join(sourceMap, "server"), { recursive: true });
   writeFileSync(join(sourceMap, "server/herdr-world.map"), "generated\n");
+  for (const arch of ["x64", "arm64"]) {
+    writeFileSync(
+      join(sourceMap, `server/herdr-world-windows-${arch}.exe`),
+      "binary\n",
+    );
+    writeFileSync(
+      join(sourceMap, `server/herdr-world-windows-${arch}.map`),
+      "generated\n",
+    );
+  }
   const locked = add("locked", "-b", "agent/locked");
   commit(locked, "locked.ts");
   // Merge them into main, as their PRs would be.

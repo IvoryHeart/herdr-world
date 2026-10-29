@@ -51,6 +51,7 @@ import {
   setAction,
   activeRuns,
   addRun,
+  addChat,
   finishRun,
   getAction,
   getMeta,
@@ -653,6 +654,7 @@ describe("delivery", () => {
       db?: typeof crew;
       lock?: typeof lock;
       gate?: ReturnType<typeof openStore>;
+      lookupTerminal?: (pr: number) => GateInput | null;
     } = {},
   ) =>
     crewPass({
@@ -663,6 +665,7 @@ describe("delivery", () => {
       crew: options.db ?? crew,
       lock: options.lock ?? lock,
       gate: options.gate,
+      lookupTerminal: options.lookupTerminal,
       configPath,
       dir,
       prs: options.prs ?? [],
@@ -1617,7 +1620,13 @@ describe("delivery", () => {
       });
       const [active] = activeRuns(crew);
       setRunPid(crew, active!.id, 4242);
-      passOver([], NOW + 60_000, { gate: history });
+      passOver([], NOW + 60_000, {
+        gate: history,
+        lookupTerminal: () => ({
+          ...town({ head: SHA.reviewed, posts: [], state: "CLOSED" }),
+          number: value.number,
+        }),
+      });
       expect(closed).toEqual(["wP:t1"]);
       expect(killed).toContain(4242);
       expect(events.indexOf("close wP:t1")).toBeLessThan(
@@ -1660,6 +1669,20 @@ describe("delivery", () => {
     expect(killed).toEqual([4242]);
     // One that hadn't reported is finished, so its worker exits on start.
     expect(getRun(crew, quiet!.id)!.finishedAt).not.toBeNull();
+  });
+
+  test("terminal cleanup rereads a pid published during run finish", () => {
+    panes = true;
+    pass(town({ head: SHA.reviewed, posts: [] }));
+    crew.exec(`CREATE TRIGGER publish_pid_after_finish
+      AFTER UPDATE OF finished_at ON run
+      WHEN NEW.finished_at IS NOT NULL AND NEW.pid IS NULL
+      BEGIN UPDATE run SET pid = 4242 WHERE id = NEW.id; END;`);
+    pass(
+      town({ head: SHA.reviewed, posts: [], state: "CLOSED" }),
+      NOW + 60_000,
+    );
+    expect(killed).toContain(4242);
   });
 
   const finishedWithSession = () => {
@@ -1712,6 +1735,69 @@ describe("delivery", () => {
       openChat(crew, { prs: [], run: first.id }, dir, lock, deps),
     ).toThrow("may still be open");
     expect(opened).toHaveLength(2);
+  });
+
+  test("terminal lookup protects a tracked PR omitted from an open-list pass", () => {
+    const runId = addRun(
+      crew,
+      {
+        actionKey: "manual-review",
+        reviewer: "rev2",
+        pr: 474,
+        head: SHA.reviewed,
+        log: join(root, "manual.log"),
+      },
+      NOW,
+    );
+    addChat(crew, "manual-tab", runId);
+    const openPr = { ...town({ head: SHA.reviewed, posts: [] }), number: 474 };
+    passOver([], NOW + 60_000, {
+      lookupTerminal: () => openPr,
+    });
+    expect(closed).not.toContain("manual-tab");
+    expect(getMeta(crew, "terminal-cleanup:474")).toBeNull();
+    const terminal = { ...openPr, state: "CLOSED" as const };
+    const markersAtClose: (string | null)[] = [];
+    const close = deps.closeTab;
+    deps.closeTab = (tab) => {
+      if (tab === "manual-tab")
+        markersAtClose.push(getMeta(crew, "terminal-cleanup:474"));
+      return close(tab);
+    };
+    passOver([], NOW + 120_000, { lookupTerminal: () => terminal });
+    expect(markersAtClose).toEqual(["pending"]);
+    expect(getMeta(crew, "terminal-cleanup:474")).toBe("done");
+    expect(closed).toContain("manual-tab");
+  });
+
+  test("manual review chats without a round close before their checkout", () => {
+    const runId = addRun(
+      crew,
+      {
+        actionKey: "manual-review",
+        reviewer: "rev2",
+        pr: 474,
+        head: SHA.reviewed,
+        log: join(root, "manual.log"),
+      },
+      NOW,
+    );
+    addChat(crew, "manual-tab", runId);
+    const value = {
+      ...town({ head: SHA.reviewed, posts: [], state: "CLOSED" }),
+      number: 474,
+    };
+    mkdirSync(
+      join(
+        root,
+        ".agents/worktrees",
+        `review-474-rev2-${SHA.reviewed.slice(0, 7)}-${runId}`,
+      ),
+      { recursive: true },
+    );
+    passOver([value], NOW + 60_000);
+    expect(closed).toContain("manual-tab");
+    expect(events.at(-1)).toBe("remove");
   });
 
   test("open waits for a pass that holds the lock, so a merge can't slip between", () => {

@@ -6,11 +6,11 @@ import { checkoutOf } from "./review";
 import type { Deps } from "./deps";
 import {
   activeRuns,
+  chatTabsForPr,
   closeRound,
   deleteMeta,
   finishRun,
   getMeta,
-  metaWithPrefix,
   openRounds,
   roundTabs,
   runsOf,
@@ -19,7 +19,7 @@ import {
 } from "./store";
 import type { Database } from "bun:sqlite";
 import type { GateInput, Verdict } from "../gate/predicate";
-import { latestInput, previousOpenPassInputs } from "../gate/store";
+import { latestInput } from "../gate/store";
 
 type Worktree = ReturnType<typeof listWorktrees>[number];
 type Prune = (
@@ -34,7 +34,7 @@ export function terminalInputs(
   prs: number[],
   inputs: GateInput[],
   verdicts: Verdict[],
-  rounds: { pr: number }[],
+  lookupTerminal?: (pr: number) => GateInput | null,
 ) {
   const terminal = new Map<number, GateInput>();
   const observed = new Set(verdicts.map((verdict) => verdict.number));
@@ -51,34 +51,22 @@ export function terminalInputs(
       const input = inputs.find((entry) => entry.number === verdict.number);
       if (input) terminal.set(verdict.number, input);
     }
-  // A full pass reads the complete open-PR list. A previously open PR missing
-  // from that list has merged or closed; scoped passes cannot infer it.
+  // Gate history may be advanced by standalone gate passes or dry runs. Query
+  // each tracked PR by number to confirm an omission is terminal before acting.
   if (!prs.length) {
-    const previous = new Map<number, GateInput>();
-    for (const input of gate ? previousOpenPassInputs(gate) : [])
-      previous.set(input.number, input);
-    for (const round of rounds) {
-      const input = gate
-        ? latestInput(gate, round.pr)
-        : inputs.find((entry) => entry.number === round.pr);
-      if (input) previous.set(round.pr, input);
-    }
-    for (const [pr, input] of previous)
-      if (
-        tracked.has(pr) &&
-        !observed.has(pr) &&
-        getMeta(crew, cleanupKey(pr)) !== "done"
-      ) {
-        const latest = gate ? latestInput(gate, pr) : input;
-        if (latest) terminal.set(pr, latest);
-      }
-    for (const { key, value } of metaWithPrefix(crew, "terminal-cleanup:")) {
-      if (value !== "pending") continue;
-      const pr = Number(key.slice("terminal-cleanup:".length));
-      const input = gate ? latestInput(gate, pr) : null;
-      if (input && !observed.has(pr)) terminal.set(pr, input);
+    for (const pr of tracked) {
+      if (observed.has(pr) || getMeta(crew, cleanupKey(pr)) === "done")
+        continue;
+      const latest = lookupTerminal
+        ? lookupTerminal(pr)
+        : gate
+          ? latestInput(gate, pr)
+          : null;
+      if (latest?.state === "MERGED" || latest?.state === "CLOSED")
+        terminal.set(pr, latest);
     }
   }
+  for (const pr of terminal.keys()) setMeta(crew, cleanupKey(pr), "pending");
   return terminal;
 }
 
@@ -90,14 +78,38 @@ export function cleanupTerminalPrs(
   deps: Deps,
   terminal: Map<number, GateInput>,
   out: (line: string) => void,
+  options: {
+    cleanupAuthor?: typeof cleanupAuthorWorktree;
+    refreshMain?: (repo: string) => void;
+  } = {},
 ) {
+  const repo = dirname(dirname(dir));
+  let refreshAttempted = false;
+  let refreshError: unknown;
+  const refreshMain = () => {
+    if (!refreshAttempted) {
+      refreshAttempted = true;
+      try {
+        (options.refreshMain ?? refreshOriginMain)(repo);
+      } catch (error) {
+        refreshError = error;
+      }
+    }
+    if (refreshError) throw refreshError;
+  };
   for (const [pr, input] of terminal) {
     const key = `terminal-cleanup:${pr}`;
     if (!cleanupTerminalReviewers(crew, dir, pr, now, deps, out)) {
       setMeta(crew, key, "pending");
       continue;
     }
-    cleanupAuthorWorktree(dirname(dirname(dir)), pr, input.item?.branch, out);
+    (options.cleanupAuthor ?? cleanupAuthorWorktree)(
+      repo,
+      pr,
+      input.item?.branch,
+      out,
+      { refreshMain },
+    );
     setMeta(crew, key, "done");
   }
 }
@@ -115,6 +127,7 @@ export function cleanupTerminalReviewers(
     (a, b) => (a.round ?? 0) - (b.round ?? 0) || a.id - b.id,
   );
   const tabs = new Set(runs.flatMap((run) => (run.tab ? [run.tab] : [])));
+  for (const tab of chatTabsForPr(crew, pr)) tabs.add(tab);
   for (const run of runs)
     if (run.round !== null)
       for (const tab of roundTabs(crew, pr, run.round)) tabs.add(tab);
@@ -130,7 +143,8 @@ export function cleanupTerminalReviewers(
 
   for (const run of activeRuns(crew).filter((entry) => entry.pr === pr)) {
     finishRun(crew, run.id, -15, null, now);
-    if (run.pid) deps.kill(run.pid);
+    const pid = runsOf(crew, pr).find((entry) => entry.id === run.id)?.pid;
+    if (pid) deps.kill(pid);
   }
   for (const run of runs) {
     const checkout = checkoutOf(dir, run);
@@ -208,11 +222,16 @@ export function cleanupAuthorWorktree(
   }
   if (result.action === "remove")
     out(`#${pr} removed author worktree for ${branch}: ${result.reason}`);
+  else if (result.action === "strip")
+    out(
+      `#${pr} stripped build output from author worktree for ${branch}: ${result.reason}`,
+    );
   else out(`#${pr} kept author worktree for ${branch}: ${result.reason}`);
 }
 
 function refreshOriginMain(repo: string) {
   execFileSync("git", ["-C", repo, "fetch", "--quiet", "origin", "main"], {
     stdio: ["ignore", "ignore", "pipe"],
+    timeout: 15_000,
   });
 }

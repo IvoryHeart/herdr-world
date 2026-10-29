@@ -53,7 +53,6 @@ import {
   latestRun,
   openCrewStore,
   openLock,
-  openRounds,
   roundFor,
   roundPanes,
   runningSince,
@@ -148,6 +147,8 @@ type PassContext = {
   lock: Database;
   /** Gate history supplies the branch for a PR omitted from the open list. */
   gate?: Database;
+  /** Confirm a tracked PR's current state by number before terminal cleanup. */
+  lookupTerminal?: (pr: number) => GateInput | null;
   configPath: string;
   dir: string;
   prs: number[];
@@ -281,7 +282,6 @@ function act(
   // A PR parked with a hold or out of the watcher's scope gets no steps and
   // asks nothing of the owner; a reviewer already working still finishes.
   const parked = parkedPrs(inputs, verdicts, settings);
-  const roundsAtStart = openRounds(crew);
   const causes = new Map<number, string[]>();
   const root = dirname(dirname(context.dir));
   const publicText = (text: string) => text.replaceAll(`${root}/`, "");
@@ -341,7 +341,7 @@ function act(
     prs,
     inputs,
     verdicts,
-    roundsAtStart,
+    context.lookupTerminal,
   );
   // A review is done once its RESULT is on GitHub for the head it was
   // given, whatever its session has done since: it may have posted just
@@ -882,25 +882,23 @@ export async function main(argv: string[], deps: Deps = realDeps) {
           noticeStaleWatcher(crew, loaded, crewCodeVersion(), dir, deps);
         const { scope } = cadence;
         const prs = scope ?? options.prs;
+        const gateContext = {
+          config: loadConfig(configPath),
+          run: deps.run,
+          mirror: join(dir, "mirror.git"),
+          now,
+        };
         // Null until the pass has read its PRs; a failed pass keeps the last.
         let busy: number[] | null = null;
         const judged: { value?: ReturnType<typeof runPass> } = {};
         try {
           const planned = crewPass({
-            judge: () =>
-              (judged.value = runPass(
-                gate,
-                {
-                  config: loadConfig(configPath),
-                  run: deps.run,
-                  mirror: join(dir, "mirror.git"),
-                  now,
-                },
-                prs,
-              )),
+            judge: () => (judged.value = runPass(gate, gateContext, prs)),
             crew,
             lock,
             gate,
+            lookupTerminal: (pr) =>
+              runPass(gate, gateContext, [pr]).inputs[0] ?? null,
             configPath,
             dir,
             prs,
