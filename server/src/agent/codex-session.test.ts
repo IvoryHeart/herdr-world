@@ -155,6 +155,7 @@ describe("Codex transcript lookup", () => {
     }));
     expect(result.status).toBe("missing_session");
     expect(result.detail).toContain("--no-daemon");
+    expect(result.detail).toContain("/title");
     expect(result.detail).not.toContain("not installed");
     expect(result.command).toBe("herdr integration install codex");
   });

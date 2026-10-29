@@ -78,7 +78,8 @@ Codex launches default to `--no-daemon` so each pane's hooks inherit its environ
 the attributed optional Bash/Zsh helper supports typed commands too. World retains
 explicit linking, title precedence and read-only daemon inference for compatibility.
 Missing-session guidance now offers the integration install command and pane-scoped
-launch instructions. This does not install or restart an external runtime.
+launch instructions alongside existing `/title` thread-ID recovery. This does not
+install or restart an external runtime.
 
 All eight incoming commits, including release metadata, are classified in the
 ledger. The upstream version-only release commit is adapted to World's existing
