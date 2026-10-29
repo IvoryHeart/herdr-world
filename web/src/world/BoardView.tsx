@@ -1,5 +1,6 @@
 import { useWorldAsks } from "./worldAsks";
 import { agentStateWord } from "../agentMarks";
+import { needsYouLeafKey, openNeedsYou } from "./needsYou";
 import { asksForWorld } from "./worldAskTargets";
 import { WorldAskMark } from "./WorldAskMark";
 import { boardObservation } from "./board/boardObservation";
@@ -3514,7 +3515,20 @@ export default function BoardView({
                         : STATUS_LABEL[tab.status]}
                     </div>
                   )}
-                  <span className="board-badge" aria-hidden="true" />
+                  {/* Its ! or ✓ opens Needs you at this agent. */}
+                  <button
+                    type="button"
+                    className="board-badge"
+                    aria-label={`Open ${tab.label} in Needs you`}
+                    disabled={tab.status === "unknown"}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      openNeedsYou(
+                        pane ? needsYouLeafKey(pane.leaf.id) : undefined,
+                      );
+                    }}
+                  />
                   <span
                     className="board-handle"
                     title="Drag to string this to a note or card"

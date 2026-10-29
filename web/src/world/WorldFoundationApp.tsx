@@ -73,6 +73,7 @@ import { closeTopLayer } from "../layerStack";
 import "./worldFonts.css";
 import { WorldMobileNav, worldViewLabel } from "./WorldMobileNav";
 import { WorldViewPicker } from "./WorldViewPicker";
+import { NeedsYouCounter } from "./NeedsYouWindow";
 import { WorldControlPlane } from "./WorldControlPlane";
 import {
   WorldPanelsContext,
@@ -386,6 +387,11 @@ export default function WorldFoundationApp() {
               mobile={mobile}
               onSelect={setView}
               onExitZen={exitZen}
+              extra={
+                view === "spaces" ? null : (
+                  <NeedsYouCounter world={topbarWorld} />
+                )
+              }
             />
           )}
           onZenActiveChange={setZenActive}

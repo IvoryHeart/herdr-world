@@ -72,8 +72,6 @@ import {
   townCalls,
   townLocation,
   unseenTownCompletions,
-  readTownRailCollapsed,
-  TownRail,
 } from "./town/TownRail";
 import { useNow } from "./handoffs";
 import type {
@@ -105,11 +103,7 @@ import {
   officeRoomKeyForSelection,
   type OfficeCreationActionState,
 } from "./officeRoomActions";
-import {
-  officeCompletionIdentity,
-  readCompletionSeen,
-  writeCompletionSeen,
-} from "./completionSeenState";
+import { useReviewedWork } from "./useReviewedWork";
 import { preferredOfficeConnectorAnchor } from "./worldConnectorGeometry";
 import { officeCreationInputsEqual } from "./officeCreationInputs";
 
@@ -190,9 +184,6 @@ export default function TownView({
   );
   const preferencesRef = useRef(preferences);
   const [roomDialog, setRoomDialog] = useState<RoomDialog | null>(null);
-  const [completionSeen, setCompletionSeen] = useState(() =>
-    readCompletionSeen(worldLocalStorage),
-  );
   const [sceneHover, setSceneHover] = useState<WorldCanvasHover | null>(null);
   const [observability, setObservability] = useState<OfficeObservability>(
     EMPTY_OFFICE_OBSERVABILITY,
@@ -247,44 +238,18 @@ export default function TownView({
       );
   }, []);
 
-  // Seen marks name their agent last; only those agents need their full
-  // identity checked, not the whole roster.
-  const seenAgentKeys = useMemo(() => {
-    const keys = new Set<string>();
-    for (const identity of completionSeen)
-      try {
-        const parts: unknown = JSON.parse(identity);
-        if (Array.isArray(parts) && typeof parts[3] === "string")
-          keys.add(parts[3]);
-      } catch {
-        // A malformed mark names no agent.
-      }
-    return keys;
-  }, [completionSeen]);
+  // Reviewed is the one service record every view reads: marking work
+  // reviewed in Town, Desk or Needs you clears it everywhere.
+  const reviewedWork = useReviewedWork(world.leaves);
   const completionSeenKeys = useMemo(() => {
     const keys = new Set<string>();
-    if (seenAgentKeys.size)
-      for (const { agent } of observedOffice.roster)
-        if (
-          seenAgentKeys.has(agent.key) &&
-          completionSeen.has(officeCompletionIdentity(agent))
-        )
-          keys.add(agent.key);
+    for (const { agent } of observedOffice.roster) {
+      const leaf = world.nodeById.get(agent.nodeId);
+      if (leaf?.kind === "agent" && reviewedWork.reviewed(leaf))
+        keys.add(agent.key);
+    }
     return keys;
-  }, [completionSeen, seenAgentKeys, observedOffice]);
-  // Seen marks belong to one completion: an agent that works again, or
-  // finishes again, has new work to check.
-  useEffect(() => {
-    if (!townFinished.fresh.length) return;
-    setCompletionSeen((current) => {
-      const next = new Set(current);
-      for (const agent of townFinished.fresh)
-        next.delete(officeCompletionIdentity(agent));
-      if (next.size === current.size) return current;
-      writeCompletionSeen(worldLocalStorage, next);
-      return next;
-    });
-  }, [townFinished.fresh]);
+  }, [observedOffice, world, reviewedWork]);
   const office = useMemo(
     () =>
       withTownFinished(
@@ -478,12 +443,8 @@ export default function TownView({
   };
   const markCompletionSeen = (agent: OfficeAgent) => {
     townFinished.dismiss(agent.key);
-    setCompletionSeen((current) => {
-      const next = new Set(current);
-      next.add(officeCompletionIdentity(agent));
-      writeCompletionSeen(worldLocalStorage, next);
-      return next;
-    });
+    const leaf = world.nodeById.get(agent.nodeId);
+    if (leaf?.kind === "agent") void reviewedWork.mark(leaf);
   };
   /**
    * Open the terminal for a pane, agent or desk. Opening a finished agent's
@@ -503,7 +464,6 @@ export default function TownView({
 
   /* ---------- Town attention, peek, replies and toasts ---------- */
   const now = useNow(5_000);
-  const [railCollapsed, setRailCollapsed] = useState(readTownRailCollapsed);
   const blockedSince = useRef(new Map<string, number>());
   // Built on first use: a dense town's roster is large, and these lookups are
   // only needed by taps, hovers and an open peek.
@@ -553,7 +513,6 @@ export default function TownView({
     [office.roster, unseenCompletions, agentByKey],
   );
   const townSummary = useTownSummary({
-    railCollapsed,
     world,
     office,
     calls,
@@ -1145,25 +1104,6 @@ export default function TownView({
             onClose={() => setTrace(false)}
           />
         ) : null}
-        <TownRail
-          needsYouCount={townSummary.summary.counts.needsYou}
-          asks={townSummary.summary.asks}
-          askActions={townSummary.askActions}
-          collapsed={railCollapsed}
-          onCollapsedChange={setRailCollapsed}
-          calls={calls}
-          activeKey={peek?.key ?? null}
-          now={now}
-          onPeek={(key, rect) =>
-            key && rect
-              ? hoverAgent(key, {
-                  x: rect.right,
-                  y: rect.top + rect.height / 2,
-                })
-              : hoverAgent(null)
-          }
-          onOpen={(key) => openAgent(key)}
-        />
         {moveFlow ? (
           <TownChooser
             {...moveChooser(moveFlow)}
@@ -1267,7 +1207,6 @@ export default function TownView({
             completionSeenKeys={completionSeenKeys}
             summonedKeys={summonedKeys}
             askingKeys={askingKeys}
-            onActivateAsk={townSummary.openTerminal}
             quests={questMarks}
             conversationTargets={conversationTargets}
             onSelect={tapTown}
@@ -1306,7 +1245,7 @@ export default function TownView({
             roomFocus={roomFocus}
             calm={preferences.townCalm}
             chrome={{
-              left: townSummary.railInset,
+              left: 0,
               right: 0,
             }}
             roomActions={{

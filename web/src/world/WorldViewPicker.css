@@ -142,9 +142,27 @@
   }
 }
 
-/* Town's phone strip makes room for the picker in the corner. */
-@media (max-width: 640px) {
-  .world-foundation-shell[data-zen] .town-view-shell .town-rail {
-    left: 76px;
-  }
+/* The Needs you counter (NeedsYouWindow.tsx) leads the views. */
+.world-view-picker .needs-you-counter {
+  margin-inline-end: 4px;
+  border-inline-end: 1px solid var(--border);
+  border-radius: 6px 0 0 6px;
+  min-height: 24px;
+}
+.world-view-picker .needs-you-counter span {
+  display: inline;
+}
+.world-view-picker-extra {
+  position: fixed;
+  left: calc(72px + env(safe-area-inset-left, 0px));
+  bottom: calc(22px + env(safe-area-inset-bottom, 0px));
+  z-index: 120;
+}
+.world-view-picker-extra .needs-you-counter {
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: var(--shadow-lg);
 }

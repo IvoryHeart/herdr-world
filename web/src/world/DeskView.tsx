@@ -41,8 +41,8 @@ import {
 import type { WorldLeafObject, WorldObject } from "./worldObject";
 import { useDeskState } from "./useDeskState";
 import type { WorldDeskStore } from "./deskStateStore";
-import { agentMarkKind, agentStateWord } from "../agentMarks";
-import { AgentMark } from "../components/AgentMark";
+import { AgentState } from "../components/AgentMark";
+import { needsYouLeafKey, openNeedsYou } from "./needsYou";
 import "./DeskView.css";
 
 type Lane = "needs" | "review" | "working";
@@ -803,7 +803,11 @@ export function DeskBoard({
           <button
             type="button"
             className="is-primary"
-            onClick={() => open(leaf)}
+            onClick={() =>
+              item.lane === "needs"
+                ? openNeedsYou(needsYouLeafKey(leaf.id))
+                : open(leaf)
+            }
           >
             {item.lane === "needs"
               ? "Answer"
@@ -851,10 +855,7 @@ export function DeskBoard({
           onClick={() => open(leaf)}
         >
           <span className="desk-row-status">
-            <AgentMark
-              kind={agentMarkKind(leaf.status, { asking: asking.has(leaf.id) })}
-            />
-            {agentStateWord(leaf.status, { asking: asking.has(leaf.id) })}
+            <AgentState status={leaf.status} asking={asking.has(leaf.id)} />
           </span>
           <span className="desk-row-main">
             <span className="desk-row-title">

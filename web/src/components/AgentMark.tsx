@@ -1,4 +1,4 @@
-import { AGENT_MARKS, type AgentMarkKind } from "../agentMarks";
+import { AGENT_MARKS, agentMarkKind, type AgentMarkKind } from "../agentMarks";
 import "./AgentMark.css";
 
 /** An agent's state as its one glyph and colour; the word is its title. */
@@ -21,5 +21,20 @@ export function AgentMark({
     >
       {mark.glyph}
     </span>
+  );
+}
+
+/** An agent's mark followed by its word, for a row's status. */
+export function AgentState(props: {
+  status: string | null | undefined;
+  asking?: boolean;
+  reviewed?: boolean;
+}) {
+  const kind = agentMarkKind(props.status, props);
+  return (
+    <>
+      <AgentMark kind={kind} />
+      {AGENT_MARKS[kind].word}
+    </>
   );
 }
