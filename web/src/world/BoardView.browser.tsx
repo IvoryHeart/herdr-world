@@ -927,6 +927,16 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
           !merged.querySelector(".work-card-facts"),
         "opening a day shows its compact cards",
       );
+      for (const day of days.slice(2)) day.click();
+      await settle(50);
+      check(
+        days.reduce(
+          (count, day) =>
+            count + Number(day.querySelector("span")?.textContent),
+          0,
+        ) === 150 && merged.querySelectorAll(".work-card").length === 150,
+        "all 150 merged pull requests remain available when each day is open",
+      );
       const link = fixing?.querySelector<HTMLAnchorElement>(".work-card-ref");
       check(
         link?.target === "_blank" && link.rel.includes("noopener"),
