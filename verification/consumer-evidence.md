@@ -188,7 +188,9 @@ Direct rendering checks use the shared Group projection and the actual Summary
 panel to cover Pod-only rows, first Now item, current PR warnings, cached/unknown
 work, loading/error/empty distinction, placement between Hosts and Spend, and
 unchanged reception markup. The production hook mounts the optional section only
-while Summary is open. The registered Groups browser fixture exercises its real
+while Summary is open. The actual Town browser fixture retains an exact section
+order check including Pods between Hosts/rooms and Spend. The registered Groups
+browser fixture exercises its real
 Groups-open event and shared panel focus path, including minimized-window restore,
 at all eight actual viewports. Final batch verification and review remain delivery
 acceptance. This adds a projection consumer, not
