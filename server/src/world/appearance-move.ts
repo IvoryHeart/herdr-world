@@ -4,7 +4,7 @@ import {
   type AppearanceRecord,
 } from "../../../shared/appearance";
 import { tabCardKey } from "../../../shared/terminalColor";
-import type { BoardDocument, BoardOp } from "./board-store";
+import type { BoardDocument, BoardOp, CardColor } from "./board-store";
 
 /** A current native list gates both appearance and the colour a move carries. */
 export function appearanceForMove(
@@ -105,14 +105,14 @@ export function capturedMoveColors(
   before: BoardDocument["layout"]["colors"],
   current: BoardDocument,
   connectionId: string,
-  changed: (key: string) => boolean,
+  changed: (key: string) => CardColor | null | undefined,
 ): BoardDocument["layout"]["colors"] {
   const colors = { ...before };
   for (const record of Object.values(current.appearance ?? {})) {
     const key = record.color_key;
-    if (record.connection_id !== connectionId || !key || !changed(key))
-      continue;
-    const color = current.layout.colors[key];
+    if (record.connection_id !== connectionId || !key) continue;
+    const color = changed(key);
+    if (color === undefined) continue;
     if (color) colors[key] = color;
     else delete colors[key];
   }

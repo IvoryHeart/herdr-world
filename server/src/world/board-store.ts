@@ -1,4 +1,8 @@
-import { colorFollowOps } from "./board-color-moves";
+import {
+  colorFollowOps,
+  trackColorEdits,
+  type ColorEdit,
+} from "./board-color-moves";
 import { movedAppearanceOps } from "./appearance-observation";
 import {
   restoreAppearance,
@@ -586,7 +590,7 @@ function checkBounds(document: BoardDocument) {
 
 export class BoardStore {
   private document: BoardDocument;
-  private readonly colorEdits = new Map<string, number>();
+  private readonly colorEdits = new Map<string, ColorEdit>();
 
   constructor(
     private readonly path: string = defaultBoardPath(),
@@ -622,9 +626,14 @@ export class BoardStore {
   }
 
   /** In-flight moves distinguish explicit edits from native close cleanup. */
-  captureColorChanges(): (key: string) => boolean {
+  captureColorChanges(): (key: string) => CardColor | null | undefined {
     const captured = new Map(this.colorEdits);
-    return (key) => captured.get(key) !== this.colorEdits.get(key);
+    return (key) => {
+      const edit = this.colorEdits.get(key);
+      return edit && captured.get(key)?.revision !== edit.revision
+        ? edit.color
+        : undefined;
+    };
   }
 
   /**
@@ -644,33 +653,7 @@ export class BoardStore {
     if (payload.length > BOARD_LIMITS.bytes) fail("the board is too large");
     replaceDataFile(this.path, payload);
     this.document = next;
-    for (const op of ops) {
-      if (
-        op.op === "appearance.set" &&
-        op.fields.color !== undefined &&
-        op.target.color_key
-      )
-        this.colorEdits.set(op.target.color_key, next.revision);
-      if (
-        op.op === "appearance.relocate" &&
-        op.from.color_key &&
-        op.target.color_key &&
-        op.from.color_key !== op.target.color_key
-      ) {
-        const edit = this.colorEdits.get(op.from.color_key);
-        this.colorEdits.delete(op.from.color_key);
-        if (edit !== undefined) this.colorEdits.set(op.target.color_key, edit);
-      }
-    }
-    if (this.colorEdits.size) {
-      const owned = new Set(
-        Object.values(next.appearance ?? {}).flatMap((record) =>
-          record.color_key ? [record.color_key] : [],
-        ),
-      );
-      for (const key of this.colorEdits.keys())
-        if (!owned.has(key)) this.colorEdits.delete(key);
-    }
+    trackColorEdits(this.colorEdits, ops, next);
     return this.get();
   }
   /**

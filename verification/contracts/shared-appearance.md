@@ -26,9 +26,12 @@ retirement at none or each of three native reads. It executes the actual RPC
 handler with controlled runtime reads and checks document revision, errors and
 native rename dispatch. Existing API/manager consumers remain mandatory.
 
-In-flight moves retain a bounded in-memory colour-edit clock: explicit edits and
-resets advance it, while native close cleanup does not. A concrete store test
-distinguishes those histories. The per-connection move queue includes metadata
+In-flight moves retain a bounded in-memory colour-edit clock and the latest
+explicit value/reset, independently of the colour map that native close cleanup
+can clear. Explicit edits advance it; cleanup does not. The clock follows
+confirmed relocations and drops unowned keys. `layout.colors` remains the sole
+persisted colour authority. Store and real-handler tests distinguish edits before
+and after cleanup, including lost native acknowledgements. The per-connection move queue includes metadata
 reconciliation, with current document reads after native probes, so another move
 or a delayed snapshot cannot overwrite unrelated field/string edits.
 
@@ -38,6 +41,12 @@ replacement IDs and confirmed moves. Observation tests require complete current
 coverage before legacy adoption, learn continuing split witnesses, and reject
 conflicting or unavailable evidence. Move tests reject reused occupants and
 require positive complete witnesses for compensated tab relocation.
+Closed-tab colour and pin cleanup retries up to three times on a document
+revision conflict, re-reading the document and native tab/workspace absence each
+time. Unrelated edits survive while the closed settings are removed; a reused
+tab, retired runtime or unknown read cannot authorize deletion. Continued
+contention retains settings after the bounded attempts. Controlled handler tests
+cover both awaited native reads, replacement during retry and the retry bound.
 
 Two independent browser document clients test normal shared revisions and a held
 old acknowledgement after a newer peer edit. Projection tests keep runtime state

@@ -48,7 +48,14 @@ bind legacy colours once and learn additional continuing split terminals. They
 never rebind conflicting IDs or use offline/partial absence as deletion. Legacy
 colours have no reconstructable earlier witness; initial adoption preserves
 that existing colour on the currently observed tab. Confirmed moves and positive
-compensation evidence carry bindings with their terminals. Unknown topology
+compensation evidence carry bindings with their terminals. The bounded in-memory
+colour-edit clock also retains each latest explicit value/reset, so close cleanup
+cannot erase an edit that precedes it during an in-flight move. It follows
+confirmed relocations and is discarded with unowned bindings; the persisted
+colour authority remains `layout.colors`. Closed-tab colour and pin cleanup
+retries a document conflict with fresh tab/workspace absence checks, up to three
+attempts, preserving unrelated edits and refusing reused or retired targets.
+Unknown topology
 remains unresolved. [Pruning](../../../server/src/world/appearance-prune.ts) removes
 a record and its colour alias only when all its terminal witnesses are absent
 from a complete current snapshot or a current native list after a close. Its

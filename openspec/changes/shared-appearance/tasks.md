@@ -21,7 +21,9 @@ review and acceptance remain required before archiving this change.
 
 ## 4. Independent review repairs
 
-- [x] 4.1 Exercise native close cleanup during lost move replies and retain the latest explicit colour/reset.
+- [x] 4.1 Exercise explicit edits both before and after native close cleanup during lost move replies, retaining the latest explicit colour/reset independently of cleanup.
 - [x] 4.2 Bind profile launch colours to new terminal witnesses and reclaim closed records only from complete current, revision-admitted evidence.
 - [x] 4.3 Wire both desktop Spaces entry points to the common editor and verify actual mobile drafts cannot retarget after a pane move.
+- [x] 4.4 Recheck tab/workspace absence on close-cleanup revision conflicts, covering unrelated edits, replacement tabs, retired runtimes and bounded retries.
+
 The repair gate result and each finding's fixing commit are recorded on PR #492.

@@ -48,30 +48,35 @@ async function dropClosedTabSettings(
   { call, isCurrent, changed }: Host,
 ) {
   try {
-    const before = board.get();
-    const { colors, desk_pins: pins } = before.layout;
-    const saved = (key: string) => Boolean(colors[key] || pins[key]);
-    const plain = saved(`${connectionId}:${tabId}`);
-    if (!plain && !saved(`${connectionId}:tab:${tabId}`)) return;
-    if (
-      (await checkAnchor(call, { kind: "tab", native_id: tabId, isCurrent }))
-        .state !== "absent"
-    )
-      return;
-    const absent =
-      plain &&
-      (
-        await checkAnchor(call, {
-          kind: "workspace",
-          native_id: tabId,
-          isCurrent,
-        })
-      ).state === "absent";
-    if (!isCurrent()) return;
-    const ops = tabClosedOps(before, connectionId, tabId, absent);
-    if (ops.length) {
-      const saved = board.patchIf(before.revision, ops);
-      if (saved) changed(saved.revision);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (!isCurrent()) return;
+      const before = board.get();
+      const { colors, desk_pins: pins } = before.layout;
+      const saved = (key: string) => Boolean(colors[key] || pins[key]);
+      const plain = saved(`${connectionId}:${tabId}`);
+      if (!plain && !saved(`${connectionId}:tab:${tabId}`)) return;
+      if (
+        (await checkAnchor(call, { kind: "tab", native_id: tabId, isCurrent }))
+          .state !== "absent"
+      )
+        return;
+      const absent =
+        plain &&
+        (
+          await checkAnchor(call, {
+            kind: "workspace",
+            native_id: tabId,
+            isCurrent,
+          })
+        ).state === "absent";
+      if (!isCurrent()) return;
+      const ops = tabClosedOps(before, connectionId, tabId, absent);
+      if (!ops.length) return;
+      const patched = board.patchIf(before.revision, ops);
+      if (patched) {
+        changed(patched.revision);
+        return;
+      }
     }
   } catch (error) {
     serverLogger.warn("Board could not drop a closed tab's colour or pin", {

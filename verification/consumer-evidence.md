@@ -400,3 +400,8 @@ launch on a reused tab, complete-current absence pruning, held-read edit races,
 cached-live topology, response timing, coalesced native reads and historical
 churn beyond the record cap. These are bounded consumer checks;
 unknown or retired observations still provide no deletion authority.
+
+Move-colour schedules include explicit edits and resets both before and after
+native close cleanup. Closed-tab colour/pin tests interleave unrelated writes at
+both native absence reads, require fresh checks after revision conflicts, preserve
+a replacement tab, and cover runtime retirement and the three-attempt bound.
