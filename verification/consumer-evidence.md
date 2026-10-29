@@ -399,6 +399,50 @@ ask; the existing notification-policy consumers retain runtime/session authority
 These are direct JavaScript/module and browser consumers, with no abstract-model
 claim about arbitrary import graphs or live external runtimes.
 
+### Captured Chat prompt choices and text destinations (Q25)
+
+The allowed transition is a checked, current prompt selecting its own choice,
+then the same pane/session exposing that choice's empty editor before text is
+submitted. A replaced question, session, agent or terminal, a missing editor,
+already-active native editor, existing native draft, invalid text and concurrent answer to that pane must
+receive no text. Selection can already have happened when the editor check
+fails; the refusal says so. Input text does not acquire command authority.
+
+`pending-prompt-captured.test.ts` uses sanitized real Codex 0.164.0 and Claude
+Code 2.1.312 screens captured in an isolated Herdr 0.9.5 session. It checks
+approval hints, question dialogs without hints, logical-key dispatch rather than
+pasted digits, complete-frame admission,
+wrapped descriptions, inline editor selection and preservation of native drafts,
+including real inline/plan drafts after their cursor moves away. The captured
+empty and multiline composers check the complete frame, not only its first row.
+`prompt-answer.test.ts` drives the real parser and answer implementation across
+inline answer, plan feedback and discussion transitions, including invalid RPC
+text, replacement races, duplicate in-flight submissions and unchanged-screen
+receipts, screen-read state/title/status races, placeholder-prefix drafts and
+post-write discussion progress. The prompt operation leaves status and sequence
+unchanged in the harness; a subsequent bounded wait supplies asynchronous
+working evidence or a completed idle/done turn with two sequence advances.
+Timeouts without evidence, a single idle/done sequence advance and replacement
+owners remain unconfirmed without resending. Existing `conversation-answer.test.ts` retains its complete original
+prompt/session/state admission and acknowledgement matrix after extraction of
+that implementation into `prompt-answer.ts`.
+
+`promptAnswers.test.ts` uses real Chrome at desktop and phone widths to check
+selection without dispatch, exact typed text, editable-digit isolation, disabled
+in-flight controls and draft retirement when the question or owning host changes.
+The full Chat component also verifies that text reaches its answer RPC and that
+the returned literal text appears in its receipt, and that post-selection
+refusals survive question replacement or disappearance without crossing owner
+scopes. The native
+captures verify the external protocol itself; fixtures and controlled transition
+cases test forbidden states that cannot safely be induced against live user work.
+These direct parser, state-transition and browser checks add evidence beyond the
+maintained runtime-lease models; those models do not encode harness screen strings
+or inline editor semantics. No new model or broader native-platform claim is made.
+Herdr still has no atomic conditional input, so a change after the last check
+remains outside the guarantee. A successful input write alone never proves the
+answer was accepted.
+
 ## Shared terminal appearance
 
 [The appearance consumer contract](contracts/shared-appearance.md) derives

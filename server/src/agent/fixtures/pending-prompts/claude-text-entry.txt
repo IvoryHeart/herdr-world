@@ -1,0 +1,14 @@
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ☐ Color
+
+Which color should the badge use?
+
+  1. Red
+     Warm color
+  2. Blue
+     Cool color
+❯ 3. Type something.
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  4. Chat about this
+
+Enter to select · ↑/↓ to navigate · ctrl+g to edit in VS Code · Esc to cancel

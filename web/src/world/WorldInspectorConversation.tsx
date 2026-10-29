@@ -27,6 +27,7 @@ import type { ActiveFilePreviewSelection } from "../components/FilePreviewConten
 import { WorkspaceInspectorHost } from "../components/WorkspaceInspectorHost";
 import { ThemeScope } from "../themeScope";
 import { AgentProfileLink } from "./AgentProfileLink";
+import { InspectorPaneMap } from "../components/InspectorPaneMap";
 import {
   OperationalContext,
   connectionSnapshot,
@@ -116,6 +117,7 @@ function InspectorResources({
   windowMaximized = false,
   onTerminalPortalChange,
   onBind,
+  onSelectPane,
 }: {
   /**
    * The window is shown but its host's session has not loaded this
@@ -141,6 +143,8 @@ function InspectorResources({
   onWindowMaximize?(): void;
   windowMaximized?: boolean;
   onTerminalPortalChange(element: HTMLDivElement | null): void;
+  /** Show another pane of this window's tab (World-only, from the title map). */
+  onSelectPane?(paneId: string): void;
 }) {
   const baseConnectionClient = useConnectionClient();
   const portalOwnerRef = useRef<HTMLDivElement | null>(null);
@@ -170,8 +174,8 @@ function InspectorResources({
   const { workspaces, panes, tabs, status, catalogueReady } = useStoreSelector(
     (snapshot) => ({
       workspaces: snapshot.workspaces,
-      panes: snapshot.panes,
       tabs: snapshot.tabs,
+      panes: snapshot.panes,
       status: snapshot.status,
       catalogueReady: snapshot.catalogueReady,
     }),
@@ -646,6 +650,26 @@ function InspectorResources({
                       />
                     ) : null}
                   </TerminalAppearanceEditor>
+                ) : undefined
+              }
+              paneMap={
+                conversation.tabId && onSelectPane ? (
+                  <InspectorPaneMap
+                    workspaceId={conversation.workspaceId}
+                    tabId={conversation.tabId}
+                    tabLabel={
+                      tabs.find((tab) => tab.tab_id === conversation.tabId)
+                        ?.label
+                    }
+                    tabPanes={panes.filter(
+                      (pane) =>
+                        pane.workspace_id === conversation.workspaceId &&
+                        pane.tab_id === conversation.tabId,
+                    )}
+                    workspace={workspace}
+                    selectedPaneId={conversation.paneId}
+                    onSelect={onSelectPane}
+                  />
                 ) : undefined
               }
               onWindowMaximize={onWindowMaximize}

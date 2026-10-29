@@ -973,6 +973,9 @@
         "server/src/agent/conversation-steps-source.test.ts",
         "server/src/agent/conversation-answer.test.ts",
         "server/src/agent/pending-prompt.test.ts",
+        "server/src/agent/pending-prompt-captured.test.ts",
+        "server/src/agent/prompt-answer.test.ts",
+        "web/src/promptAnswers.test.ts",
         "server/src/agent/quest.test.ts",
         "server/src/agent/conversation-now.test.ts",
         "server/src/agent/codex-session-link.test.ts",
@@ -1729,7 +1732,7 @@
       "area": "Rendering/layout/search/metrics/site",
       "owner": "web/src/world/WorldFoundationApp.tsx",
       "requirement": "openspec/specs/world-surfaces/spec.md",
-      "properties": "Deterministic Town geometry/counts and room-size transitions; renderer lifetime; bounded metric/cache work Appearance pruning requires complete current all-witness absence and the observation-admission document revision; live moves, newer edits and unknown topology retain records. Actual Spaces/mobile adapters bind editor drafts to the native tab, and profile launches bind colours to the returned terminal.",
+      "properties": "Deterministic Town geometry/counts and room-size transitions; renderer lifetime; bounded metric/cache work; Appearance pruning requires complete current all-witness absence and the observation-admission document revision; live moves, newer edits and unknown topology retain records. Actual Spaces/mobile adapters bind editor drafts to the native tab, and profile launches bind colours to the returned terminal.",
       "existingTests": [
         "shared/herdrIdentity.test.ts",
         "server/src/http/herdr-info.test.ts",
