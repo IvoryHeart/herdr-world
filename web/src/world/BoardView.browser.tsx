@@ -27,6 +27,8 @@ import {
 import { currentBoardCardPins } from "./board/boardCardPins";
 import { worldSourcesStore } from "./worldSources";
 import "./world.css";
+import { fakeBinService } from "./bin/binTestService";
+import { setTabPinned } from "../tabPins";
 
 /*
  * Synthetic Board fixture. `?mode=test` runs checks and posts them to
@@ -206,6 +208,8 @@ const space = (
     ) as FixtureSpace["tabs"][number]["panes"],
   })),
 });
+/** The service's bin, faked: records calls, closes only when told. */
+const bin = fakeBinService();
 const world = fixtureWorld([
   fixtureHost("studio", [
     space("web-app", [
@@ -633,6 +637,7 @@ async function fresh() {
   lastAnchors = null;
   for (const list of [selected, opened, sent, started, createdTabs, movedTabs])
     list.length = 0;
+  bin.reset();
   try {
     localStorage.clear();
   } catch {
@@ -2498,6 +2503,154 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
           // Nothing stored.
         }
       }
+    },
+  ],
+  [
+    "drops a tab card in the bin",
+    async () => {
+      // The bin: it shows on a drag, a drop sends one qualified pane to the
+      // service's countdown, opening it pauses, and Put back restores the card.
+      if (innerWidth <= 720) return;
+      host
+        .querySelector<HTMLButtonElement>('[aria-label="Fit everything"]')!
+        .click();
+      await rest();
+      for (
+        let i = 0;
+        i < 12 && boardEl().classList.contains("board-far");
+        i++
+      ) {
+        host
+          .querySelector<HTMLButtonElement>('[aria-label="Zoom in"]')!
+          .click();
+        await settle(40);
+      }
+      await rest();
+      const binned = card("studio:w2:t1")!;
+      const from = centre(binned.querySelector(".board-label")!);
+      check(
+        !host.querySelector(".world-bin-shown"),
+        "the bin is hidden while nothing is dragged or held",
+      );
+      const dragToBin = async (
+        moving: HTMLElement,
+        start: { x: number; y: number },
+      ) => {
+        pointer(moving, "pointerdown", start.x, start.y, 21);
+        pointer(moving, "pointermove", start.x + 30, start.y + 30, 21);
+        await settle(16);
+        const to = centre(host.querySelector(".world-bin-can")!);
+        for (let i = 1; i <= 10; i++) {
+          pointer(
+            moving,
+            "pointermove",
+            start.x + ((to.x - start.x) * i) / 10,
+            start.y + ((to.y - start.y) * i) / 10,
+            21,
+          );
+          await settle(16);
+        }
+        return to;
+      };
+      const to = await dragToBin(binned, from);
+      check(
+        Boolean(host.querySelector(".world-bin-hot")),
+        "the bin opens its lid under a dragged card",
+      );
+      check(
+        host
+          .querySelector(".world-bin-label")!
+          .textContent!.endsWith(" is working. Drop anyway?"),
+        "a working agent gets the stronger label",
+      );
+      pointer(binned, "pointerup", to.x, to.y, 21);
+      await waitFor(
+        () => bin.calls.some((c) => c.method === "world.bin.add"),
+        "dropping puts the agent in the bin",
+      );
+      const added = bin.calls.find((c) => c.method === "world.bin.add")!.params;
+      check(
+        added.connection_id === "studio" &&
+          added.connection_generation === 1 &&
+          added.tab_id === "w2:t1" &&
+          added.view === "board",
+        "the close is qualified by connection, generation and tab",
+      );
+      await waitFor(
+        () => binned.classList.contains("board-binned"),
+        "the card waits in the bin, hidden",
+      );
+      check(
+        Boolean(host.querySelector(".world-bin-holding .world-bin-seconds")),
+        "the bin stays out with its countdown while it holds anything",
+      );
+      host.querySelector<HTMLButtonElement>(".world-bin-can")!.click();
+      await waitFor(
+        () => Boolean(host.querySelector(".world-bin-tray")),
+        "clicking the bin opens it",
+      );
+      check(
+        bin.calls.some((c) => c.method === "world.bin.pause"),
+        "opening the bin pauses its timers",
+      );
+      [...host.querySelectorAll<HTMLButtonElement>(".world-bin-tray button")]
+        .find((b) => b.textContent === "Put back")!
+        .click();
+      await waitFor(
+        () => !binned.classList.contains("board-binned"),
+        "Put back restores the card",
+      );
+      check(
+        bin.calls.some((c) => c.method === "world.bin.restore") &&
+          !bin.calls.some((c) => c.method === "world.bin.close_now"),
+        "putting back closes nothing",
+      );
+      await rest();
+
+      // A pinned tab is refused with the tab bar's reason; nothing is sent.
+      setTabPinned("studio", "w2:t1", true);
+      const adds = bin.calls.filter((c) => c.method === "world.bin.add").length;
+      const again = await dragToBin(
+        binned,
+        centre(binned.querySelector(".board-label")!),
+      );
+      check(
+        host.querySelector(".world-bin-label")!.textContent ===
+          "Unpin this tab before closing it",
+        "the bin says why a pinned tab can't go in",
+      );
+      pointer(binned, "pointerup", again.x, again.y, 21);
+      await settle(200);
+      check(
+        bin.calls.filter((c) => c.method === "world.bin.add").length === adds,
+        "a pinned tab never reaches the service",
+      );
+      setTabPinned("studio", "w2:t1", false);
+
+      // A close elsewhere (the countdown ending) shows a receipt.
+      await rest();
+      const pair = card("studio:w1:t4")!;
+      const row = pair.querySelector<HTMLElement>("[data-pane]")!;
+      const end = await dragToBin(pair, centre(row));
+      pointer(pair, "pointerup", end.x, end.y, 21);
+      await waitFor(
+        () => Boolean(pair.querySelector(".board-pane-binned")),
+        "a pane row dropped in the bin hides; its tab card stays",
+      );
+      check(
+        !pair.classList.contains("board-binned"),
+        "the tab keeps its other pane on the board",
+      );
+      bin.expire(bin.entries()[0]!.id);
+      await waitFor(
+        () =>
+          Boolean(
+            host
+              .querySelector(".world-bin-toast")
+              ?.textContent?.startsWith("Closed "),
+          ),
+        "the close shows a receipt",
+      );
     },
   ],
   [

@@ -1,3 +1,4 @@
+import { handleBinRpc } from "./bin";
 import { handleDeskRpc } from "./desk";
 import { profileWrite } from "../agent/profile-store";
 import { recordSpawnClaims } from "../world/relations";
@@ -6,7 +7,7 @@ import { sendWorldSnapshotReply } from "../bridge/world-snapshot-reply";
 import { BoardConflictError, clientBoardOps } from "../world/board-store";
 import type { BridgeRpcContext } from "./context";
 
-/** Aggregate World methods: snapshot, board document, profiles and watchlist (world.*). */
+/** Aggregate World methods: snapshot, board document, profiles, watchlist and bin (world.*). */
 export function handleWorldRpc(
   rpc: BridgeRpcContext,
 ): false | Promise<false | void> {
@@ -35,6 +36,7 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
     worldCli,
   } = rpc.services;
   if (method.startsWith("world.desk.")) return handleDeskRpc(rpc);
+  if (method.startsWith("world.bin.")) return handleBinRpc(rpc);
   if (method === "world.snapshot") {
     let transfer: ReturnType<WorldSnapshotAdmission["open"]> | undefined;
     try {

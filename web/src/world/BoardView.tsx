@@ -3,6 +3,15 @@ import { asksForWorld } from "./worldAskTargets";
 import { WorldAskMark } from "./WorldAskMark";
 import { boardObservation } from "./board/boardObservation";
 import { ConnectionRecoveryBanner } from "./ConnectionRecoveryBanner";
+import { WorldBin, type BinDrag } from "./bin/WorldBin";
+import { addToBin, binEntryFor, useWorldBin } from "./bin/binStore";
+import {
+  binCandidate,
+  leafBinSubject,
+  overBin,
+  type BinCandidate,
+} from "./bin/binTargets";
+import { playBinSound } from "./bin/binSounds";
 import { ChevronDown, ChevronUp, Pin, Plus, Trash2 } from "lucide-react";
 import {
   type CSSProperties,
@@ -541,6 +550,18 @@ export default function BoardView({
     workspaceKey: string;
     lastTab: boolean;
   } | null>(null);
+  /** A tab card on its way to the bin: the pane that closes, and any refusal. */
+  const binning = useRef<(BinCandidate & { key: string }) | null>(null);
+  const [binDrag, setBinDrag] = useState<BinDrag | null>(null);
+  const [binHot, setBinHot] = useState(false);
+  const binHotRef = useRef(false);
+  const [binShake, setBinShake] = useState(0);
+  /** The binned card being dragged out of the open bin: its place shows. */
+  const [binHome, setBinHome] = useState<string | null>(null);
+  /** The pane row a pointer went down on, so the bin closes that pane. */
+  const downPane = useRef<string | undefined>(undefined);
+  const { bin } = useWorldBin();
+  useEffect(() => invalidate("bin"), [bin]);
   /** Anchors already asked about this session: `string id:end`. */
   const checkedAnchors = useRef(new Set<string>());
   // A large board opens in the overview (where fitting it lands anyway), so
@@ -1403,6 +1424,9 @@ export default function BoardView({
     if (!farRef.current)
       for (const tab of m.tabs) {
         if (latest.current.collapsed.has(tab.workspaceKey)) continue;
+        // A card waiting in the bin is hidden, and so is its line.
+        if (cardEls.current.get(tab.key)?.classList.contains("board-binned"))
+          continue;
         const a = cards.current.get(tab.workspaceKey),
           b = cards.current.get(tab.key);
         if (!a || !b) continue;
@@ -1719,7 +1743,12 @@ export default function BoardView({
   /* ---------- Pointer input ---------- */
   /** What a pointer landed on; null for controls and text being edited. */
   function classify(target: HTMLElement): GestureTarget | null {
-    if (target.closest("[contenteditable='true'], .work-lens")) return null;
+    if (
+      target.closest(
+        "[contenteditable='true'], .work-lens, .world-bin, .world-bin-tray",
+      )
+    )
+      return null;
     if (
       target.closest("button, input, a, label") &&
       !target.closest(".board-card")
@@ -1763,6 +1792,7 @@ export default function BoardView({
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     const target = classify(event.target as HTMLElement);
     if (!target) return;
+    downPane.current = target.kind === "card" ? target.paneKey : undefined;
     lastPointerType.current = event.pointerType;
     if (target.kind !== "string")
       try {
@@ -1869,6 +1899,11 @@ export default function BoardView({
         card.gliding = false;
         cardEls.current.get(effect.key)?.classList.add("board-lifted");
         if (effect.held) navigator.vibrate?.(12);
+        const liftedTab = latest.current.model.tabByKey.get(effect.key);
+        binning.current = liftedTab
+          ? binFor(liftedTab, downPane.current)
+          : null;
+        setBinDrag(binning.current?.drag ?? null);
         moveHeld(effect.at);
         return;
       }
@@ -1879,6 +1914,8 @@ export default function BoardView({
         dropHeld(effect.vx / cam.current.s, effect.vy / cam.current.s);
         return;
       case "settleCard":
+        // A cancelled drag never bins.
+        binHotRef.current = false;
         dropHeld(0, 0);
         return;
       case "tap":
@@ -1995,6 +2032,24 @@ export default function BoardView({
     warmUp();
     const tab = latest.current.model.tabByKey.get(h.key);
     if (!tab) return;
+    const hot = !!binning.current && overBin(screen.x, screen.y);
+    if (hot !== binHotRef.current) {
+      binHotRef.current = hot;
+      setBinHot(hot);
+      cardEls.current
+        .get(h.key)
+        ?.classList.toggle(
+          "board-over-bin",
+          hot && !binning.current?.drag.refusal,
+        );
+    }
+    if (hot) {
+      for (const key of [teammate.current, glue.current])
+        if (key) cardEls.current.get(key)?.classList.remove("board-glue");
+      cardEls.current.get(h.key)?.classList.remove("board-gluing");
+      teammate.current = glue.current = null;
+      return;
+    }
     // Over another tab card it glows, and a drop there groups the two. No
     // dwell as in Town: Board's elastic cards slide away from a resting one,
     // and they do not overlap unless dragged onto each other.
@@ -2058,7 +2113,20 @@ export default function BoardView({
     const m = latest.current.model;
     const card = cards.current.get(h.key);
     cardEls.current.get(h.key)?.classList.remove("board-lifted");
+    const binned = binning.current;
+    const intoBin = binHotRef.current && binned?.key === h.key;
+    binning.current = null;
+    binHotRef.current = false;
+    setBinHot(false);
+    setBinDrag(null);
+    cardEls.current.get(h.key)?.classList.remove("board-over-bin");
     if (!card) return;
+    if (intoBin && binned) {
+      // The card keeps its place on the board while it waits in the bin.
+      travelToLayout(m);
+      dropInBin(binned);
+      return;
+    }
     if (isNoteKey(h.key)) {
       const note = latest.current.saved?.notes.find(
         (n) => NOTE_PREFIX + n.id === h.key,
@@ -2105,6 +2173,55 @@ export default function BoardView({
     }
     warmUp();
   }
+
+  /** What the bin would close for a tab card: the pane grabbed, else its primary. */
+  function binFor(tab: BoardTab, paneKey?: string) {
+    const pane =
+      tab.panes.find((candidate) => candidate.key === paneKey) ??
+      primaryPane(tab);
+    return pane
+      ? {
+          key: tab.key,
+          ...binCandidate(leafBinSubject(pane.leaf, tab.panes.length), "board"),
+        }
+      : null;
+  }
+  /** Put an agent in the bin, or say why it can't go. */
+  function dropInBin(candidate: BinCandidate) {
+    if (candidate.drag.refusal) {
+      playBinSound("refuse");
+      setBinShake((n) => n + 1);
+      setToast({ text: `${candidate.drag.refusal}.` });
+      return;
+    }
+    playBinSound("drop");
+    void addToBin(candidate.target).catch((error) =>
+      setToast({
+        text: error instanceof Error ? error.message : String(error),
+      }),
+    );
+  }
+  const paneBinned = (pane: BoardPane) =>
+    !!binEntryFor(
+      bin,
+      pane.leaf.connectionId,
+      pane.leaf.generation,
+      pane.leaf.nativeId,
+    );
+  /** The tab card holding a binned pane. */
+  const tabOfBinned = (entry: {
+    connection_id: string;
+    connection_generation: number;
+    pane_id: string;
+  }) =>
+    latest.current.model.tabs.find((tab) =>
+      tab.panes.some(
+        (pane) =>
+          pane.leaf.connectionId === entry.connection_id &&
+          pane.leaf.generation === entry.connection_generation &&
+          pane.leaf.nativeId === entry.pane_id,
+      ),
+    );
 
   /** A tap: finish a pending string, select a note, zoom into an overview workspace, or select. */
   function tap(target: GestureTarget) {
@@ -3216,7 +3333,7 @@ export default function BoardView({
           if (
             card ||
             target.closest(
-              ".board-controls, .board-zone-label, .board-notebar, .board-chooser, .board-cut, .board-toast, .board-trace, .board-banner, .board-tray, .work-lens",
+              ".board-controls, .board-zone-label, .board-notebar, .board-chooser, .board-cut, .board-toast, .board-trace, .board-banner, .board-tray, .work-lens, .world-bin, .world-bin-tray",
             )
           )
             return;
@@ -3429,6 +3546,11 @@ export default function BoardView({
                     tab.shellOnly ? "board-terminal" : "",
                     multi ? "board-multi" : "",
                     tab.stale ? "board-stale" : "",
+                    tab.panes.length && tab.panes.every(paneBinned)
+                      ? binHome === tab.key
+                        ? "board-bin-home"
+                        : "board-binned"
+                      : "",
                     selectedKeys.has(tab.key) ? "board-selected" : "",
                     matches && !matches.has(tab.key) ? "board-dim" : "",
                   ].join(" ")}
@@ -3473,7 +3595,7 @@ export default function BoardView({
                           data-world-node-anchor={row.leaf.id}
                           role="button"
                           aria-pressed={selectedId === row.leaf.id}
-                          className={`board-pane${row.isAgent ? ` board-s-${row.status}` : " board-pane-shell"}${selectedId === row.leaf.id ? " board-pane-selected" : ""}`}
+                          className={`board-pane${row.isAgent ? ` board-s-${row.status}` : " board-pane-shell"}${selectedId === row.leaf.id ? " board-pane-selected" : ""}${paneBinned(row) ? " board-pane-binned" : ""}`}
                           aria-label={`${paneName(row)}, ${row.isAgent ? STATUS_LABEL[row.status] : "shell"}`}
                         >
                           {row.isAgent ? (
@@ -3831,6 +3953,18 @@ export default function BoardView({
               }
               pinned={pinnedKeys.has(colorKey)}
               onPin={() => togglePin(colorKey)}
+              onBin={
+                model.tabByKey.has(colorKey)
+                  ? () => {
+                      const tab = model.tabByKey.get(colorKey)!;
+                      const pane = model.tabs
+                        .find((t) => t.key === colorKey)
+                        ?.panes.find((p) => p.leaf.id === selectedId);
+                      const candidate = binFor(tab, pane?.key);
+                      if (candidate) dropInBin(candidate);
+                    }
+                  : undefined
+              }
             />
           ) : null}
           {noteSelected && saved?.notes.find((n) => n.id === noteSelected) ? (
@@ -3942,6 +4076,25 @@ export default function BoardView({
           onPulses={togglePulses}
           tracing={tracing}
           onTrace={DEVTOOLS ? () => setTrace(!tracing) : undefined}
+        />
+        <WorldBin
+          drag={binDrag}
+          hot={binHot}
+          shake={binShake}
+          onDragOut={(entry) =>
+            setBinHome(entry ? (tabOfBinned(entry)?.key ?? null) : null)
+          }
+          onReturned={(entry, at) => {
+            const key = tabOfBinned(entry)?.key;
+            const card = key ? cards.current.get(key) : undefined;
+            if (card && at) {
+              // Fly home from where it was dropped.
+              const from = toWorld(at.x, at.y);
+              card.x = from.x;
+              card.y = from.y;
+            }
+            travelToLayout(latest.current.model);
+          }}
         />
         {workOpen ? (
           <WorkLens
@@ -4352,6 +4505,7 @@ function CardBar({
   team,
   pinned,
   onPin,
+  onBin,
 }: {
   label: string;
   color: CardColor | null;
@@ -4366,6 +4520,8 @@ function CardBar({
   };
   pinned: boolean;
   onPin(): void;
+  /** For a tab: put its agent in the bin (the visible twin of dragging it there). */
+  onBin?: () => void;
 }) {
   return (
     <div
@@ -4414,6 +4570,12 @@ function CardBar({
         <Pin size={14} aria-hidden="true" />
         {pinned ? "Unpin" : "Pin"}
       </button>
+      {onBin ? (
+        <button type="button" className="board-bin-action" onClick={onBin}>
+          <Trash2 size={14} aria-hidden="true" />
+          Close agent…
+        </button>
+      ) : null}
     </div>
   );
 }

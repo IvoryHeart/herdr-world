@@ -1,4 +1,5 @@
 import { Suspense, useEffect, useState } from "react";
+import { WorldBin } from "./bin/WorldBin";
 import { worldLocalStorage } from "../browserStorage";
 import { useChimeHost, WORLD_SOUNDS_EVENT } from "../chimes/chimeHost";
 import { CreateWorkspaceDialog } from "../components/CreateWorkspaceDialog";
@@ -319,6 +320,10 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
           className={`world-view-layout ${showSelectionProfile || contextRailInspector ? "has-context" : ""}`}
         >
           <section className="world-view-stage" aria-label={`${view} view`}>
+            {/* Board and Town draw their own bin; Desk shows what waits in it. */}
+            {active && view === "desk" ? (
+              <WorldBin drag={null} hot={false} className="world-bin-desk" />
+            ) : null}
             {active ? (
               <Suspense
                 fallback={

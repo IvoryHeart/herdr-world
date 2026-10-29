@@ -1,0 +1,86 @@
+/* The bus stop's chrome over the Town canvas (useTownBus.tsx). */
+.town-bus-chrome {
+  position: absolute;
+  inset: 0;
+  z-index: 11;
+  overflow: hidden;
+  pointer-events: none;
+}
+.town-bus-timetable {
+  position: absolute;
+  left: 0;
+  top: 0;
+  translate: -50% -100%;
+  padding: 3px 8px;
+  border: 2px solid #1f3b8f;
+  border-radius: 6px;
+  background: #1d2633;
+  color: #ffd166;
+  font:
+    600 12px "Pixelify Sans",
+    "Rubik",
+    system-ui,
+    sans-serif;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+.town-bus-held,
+.town-bus-receipt {
+  position: absolute;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+  translate: -50% 0;
+  max-width: calc(100% - 32px);
+  padding: 8px 12px;
+  border: 2px solid #6b7480;
+  border-radius: 10px;
+  background: rgba(14, 17, 24, 0.94);
+  color: #f1efe6;
+  font:
+    500 13px "Rubik",
+    system-ui,
+    sans-serif;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+}
+.town-bus-held {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-color: #d7261e;
+  pointer-events: auto;
+}
+.town-bus-held button {
+  min-height: 36px;
+  padding: 4px 12px;
+  border: 2px solid #ffd166;
+  border-radius: 8px;
+  background: #d7261e;
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.town-bus-held + .town-bus-receipt {
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 72px);
+}
+.town-bus-held button {
+  flex: none;
+  white-space: nowrap;
+}
+/* Phones: clear of the attention rail docked along the bottom. */
+@media (max-width: 720px) {
+  .town-bus-held,
+  .town-bus-receipt {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 92px);
+    width: max-content;
+  }
+  .town-bus-held + .town-bus-receipt {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 152px);
+  }
+  .town-bus-held button {
+    min-height: 44px;
+  }
+}
+.town-bus-timetable[hidden] {
+  display: none;
+}

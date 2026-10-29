@@ -235,6 +235,24 @@ export function playChime(timbre: Timbre, motif: Motif, volume: number) {
   return true;
 }
 
+/**
+ * Play a short World sound effect (the bin's drop and close) through the
+ * chimes' audio context. Effects follow a gesture, which also unlocks audio.
+ */
+export function playEffect(
+  build: (ctx: AudioContext, output: AudioNode) => void,
+  volume: number,
+) {
+  const ctx = audioContext();
+  if (!ctx) return false;
+  if (ctx.state !== "running") void ctx.resume().catch(() => {});
+  const output = ctx.createGain();
+  output.gain.value = Math.max(0, Math.min(1, volume));
+  output.connect(ctx.destination);
+  build(ctx, output);
+  return true;
+}
+
 /** A preview or test from a button: the tap itself unlocks audio. */
 export async function previewChime(
   timbre: Timbre,

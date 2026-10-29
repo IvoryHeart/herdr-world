@@ -13,6 +13,8 @@ import { AgentLauncherDialog } from "../AgentLauncherDialog";
 import { WORLD_AGENT_LAUNCH_EVENT, type LaunchTarget } from "../agentProfiles";
 import { sharedAsksStore, type WorldAsk } from "../worldAsks";
 import { checkTownRoomPlates } from "./townRoomPlates.browser";
+import { checkTownBus } from "./townBus.browser";
+import { fakeBinService } from "../bin/binTestService";
 import { checkTownRoomFold, tapTownControl } from "./townRoomFold.browser";
 import type { BoardDocument, BoardOp } from "../board/boardDocument";
 import {
@@ -57,6 +59,8 @@ import {
 const params = new URL(location.href).searchParams;
 const mode = params.get("mode") ?? "test";
 const scale = params.get("scale") ?? "typical";
+/** The service's bin, faked (bin/binTestService.ts). */
+const bin = fakeBinService();
 const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
@@ -1230,6 +1234,16 @@ async function run() {
       ) !== null,
     "town targets did not finish progressive admission",
   );
+
+  if (scale === "bus" && mode === "test") {
+    const agent = worldFor(base.connections).leaves.find(
+      (leaf) => leaf.kind === "agent" && !leaf.stale && leaf.actionable,
+    )!;
+    await checkTownBus(host, check, waitFor, bin, agent.id, phone);
+    root.unmount();
+    await settle();
+    return;
+  }
 
   if (scale === "plates" && mode === "test") {
     await checkTownRoomPlates(host, check, waitFor, {

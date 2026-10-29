@@ -142,6 +142,8 @@ import { DOWNLOAD_TIMEOUT_MS } from "./workspace/file-constants";
 import { WorldSnapshotService } from "./world/snapshot";
 import { createWorldDeskService } from "./world/desk-service";
 import { WorldWatchlistRegistry } from "./world/watchlist";
+import { WorldBinRegistry } from "./world/bin";
+import { binCloser } from "./world/bin-close";
 import { BoardStore, type BoardOp } from "./world/board-store";
 import { afterHerdrClose } from "./world/board-closing";
 import { reconcileReadyInterest } from "./world/interest-prune";
@@ -440,9 +442,20 @@ const connectionFailureReporters = new Map<string, RecoveryReporter>();
 const readyConnectionGenerations = new Map<string, number>();
 let worldSnapshots: WorldSnapshotService<LegacyConnectionRuntime> | null = null;
 const worldWatchlist = new WorldWatchlistRegistry();
-const deskService = createWorldDeskService((line) => {
-  for (const ws of clients) safeSend(ws, line, "world-desk");
-});
+const worldBin = new WorldBinRegistry(
+  binCloser(() => connectionManager),
+  (revision) => publishRevision("world_bin_changed", revision, "world-bin"),
+);
+function broadcast(line: string, context: string) {
+  for (const ws of clients) safeSend(ws, line, context);
+}
+/** Tell every open World that a revisioned service document changed. */
+function publishRevision(type: string, revision: number, context: string) {
+  broadcast(JSON.stringify({ control: { type, revision } }), context);
+}
+const deskService = createWorldDeskService((line) =>
+  broadcast(line, "world-desk"),
+);
 let boardStore: BoardStore | null = null;
 function board() {
   boardStore ??= new BoardStore(undefined, {
@@ -459,12 +472,8 @@ function profiles() {
   });
   return profileStore;
 }
-function publishProfilesChanged(revision: number) {
-  const line = JSON.stringify({
-    control: { type: "world_profiles_changed", revision },
-  });
-  for (const ws of clients) safeSend(ws, line, "world-profiles");
-}
+const publishProfilesChanged = (revision: number) =>
+  publishRevision("world_profiles_changed", revision, "world-profiles");
 
 /**
  * Record which agent each newly strung pane end is for: the agent the
@@ -495,30 +504,19 @@ async function bindBoardRecipients(
   if (recorded.length) publishBoardChanged(board().patch(recorded).revision);
 }
 
-function publishBoardChanged(revision: number) {
-  const line = JSON.stringify({
-    control: { type: "world_board_changed", revision },
-  });
-  for (const ws of clients) safeSend(ws, line, "world-board");
-}
-
+const publishBoardChanged = (revision: number) =>
+  publishRevision("world_board_changed", revision, "world-board");
 /** The agent CLI (world-cli-service.ts). */
 const worldCli = createWorldCliService({
   board: { get: () => board().get(), patch: (ops) => board().patch(ops) },
   connections: () => connectionManager,
   snapshots: () => worldSnapshots,
   publishBoard: publishBoardChanged,
-  broadcast: (line) => {
-    for (const ws of clients) safeSend(ws, line, "world-ledger");
-  },
+  broadcast: (line) => broadcast(line, "world-ledger"),
 });
 
-function publishWatchlistChanged(revision: number) {
-  const line = JSON.stringify({
-    control: { type: "world_watchlist_changed", revision },
-  });
-  for (const ws of clients) safeSend(ws, line, "world-watchlist");
-}
+const publishWatchlistChanged = (revision: number) =>
+  publishRevision("world_watchlist_changed", revision, "world-watchlist");
 
 function publishWorldInvalidation(
   connectionId: string,
@@ -560,6 +558,7 @@ const connectionManager = new ConnectionManager<LegacyConnectionRuntime>(
       status.generation,
     );
     if (retired.changed) publishWatchlistChanged(retired.revision);
+    worldBin.retireConnectionGeneration(status.id, status.generation);
     publishWorldInvalidation(status.id, status.generation);
     const fields = {
       connection: status.id,
@@ -933,6 +932,7 @@ const rpcServices = {
   snapshotAdmission,
   townMoveQueues,
   worldWatchlist,
+  worldBin,
   worldDesk: deskService.registry,
   publishDeskChanged: deskService.publish,
   worldCli,

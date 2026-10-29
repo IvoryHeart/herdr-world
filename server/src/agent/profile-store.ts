@@ -16,11 +16,17 @@ import {
   TIMBRE_LABELS,
   parseChimeSettings,
 } from "../../../shared/chimes";
+import {
+  BIN_COUNTDOWNS,
+  type BinCountdown,
+  DEFAULT_BIN_COUNTDOWN,
+  parseBinCountdown,
+} from "../../../shared/bin";
 
 /**
  * The World service's agent profiles, plus which launched terminal came from
  * which profile so Town can dress it, the owner's chime settings and who
- * holds the Town master role. One revisioned document, bounded and written
+ * holds the Town master role, and the bin countdown. One revisioned document, bounded and written
  * atomically. Starter profiles are seeded once and are then the owner's to
  * edit or delete.
  */
@@ -44,6 +50,8 @@ export type ProfilesDocument = {
    * terminal (a Herdr restart).
    */
   town_master: TerminalKey | null;
+  /** How long an agent waits in the bin before it is closed. */
+  bin_countdown_s: BinCountdown;
 };
 
 export const MAX_ASSIGNMENTS = 256;
@@ -62,6 +70,7 @@ function seeded(): ProfilesDocument {
     assignments: [],
     chimes: structuredClone(DEFAULT_CHIMES),
     town_master: null,
+    bin_countdown_s: DEFAULT_BIN_COUNTDOWN,
   };
 }
 
@@ -130,6 +139,7 @@ export function parseProfilesDocument(value: unknown): ProfilesDocument {
       .slice(-MAX_ASSIGNMENTS),
     chimes,
     town_master: parseTerminalKey(v.town_master),
+    bin_countdown_s: parseBinCountdown(v.bin_countdown_s),
   };
   // A profile that took the master's chime before falls back to its class's.
   const master = chimes.timbres.town_master;
@@ -222,6 +232,15 @@ export class ProfileStore {
     return this.commit(next);
   }
 
+  /** Set the bin countdown to one of the offered lengths. */
+  saveBinCountdown(value: unknown): ProfilesDocument {
+    if (!BIN_COUNTDOWNS.includes(value as BinCountdown))
+      throw new ProfileError("choose a bin countdown from the list");
+    const next = structuredClone(this.document);
+    next.bin_countdown_s = value as BinCountdown;
+    return this.commit(next);
+  }
+
   /**
    * Give the Town master role to a terminal, or clear it with null. Moving it
    * from another holder needs `replace`, so the owner is asked first.
@@ -272,11 +291,12 @@ type Write = (
   store: ProfileStore,
   p: Record<string, unknown>,
 ) => ProfilesDocument;
-/** The RPCs that write the profiles document, which also holds the chimes and the Town master. */
+/** The RPCs that write the profiles document, which also holds the chimes, the Town master and the bin countdown. */
 const WRITES: Record<string, Write> = {
   "world.profiles.save": (store, p) => store.save(p.profile),
   "world.profiles.delete": (store, p) => store.delete(String(p.id ?? "")),
   "world.chimes.save": (store, p) => store.saveChimes(p.chimes),
+  "world.bin_countdown.save": (store, p) => store.saveBinCountdown(p.seconds),
   "world.town_master.set": (store, p) =>
     store.setTownMaster(p.terminal ?? null, { replace: p.replace === true }),
 };

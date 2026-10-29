@@ -10,6 +10,7 @@ import {
 } from "../../../shared/harnessReadiness";
 export type { HarnessReadiness } from "../../../shared/harnessReadiness";
 import type { ChimeSettings } from "../../../shared/chimes";
+import type { BinCountdown } from "../../../shared/bin";
 import type { TownLook } from "./town/townSprites";
 
 /**
@@ -32,6 +33,8 @@ export type ProfilesDocument = {
   chimes: ChimeSettings;
   /** The one Town master, assigned only by the owner. */
   town_master: TerminalKey | null;
+  /** The bin countdown; an older service omits it (30 s). */
+  bin_countdown_s?: BinCountdown;
 };
 type State = { document: ProfilesDocument | null; error: string | null };
 
@@ -115,6 +118,8 @@ export const deleteProfile = (id: string) =>
   write("world.profiles.delete", { id });
 export const saveChimes = (chimes: ChimeSettings) =>
   write("world.chimes.save", { chimes });
+export const saveBinCountdown = (seconds: BinCountdown) =>
+  write("world.bin_countdown.save", { seconds });
 /** Give the Town master role to a terminal (null clears it). */
 export const setTownMaster = (terminal: TerminalKey | null, replace = false) =>
   write("world.town_master.set", { terminal, replace });
