@@ -715,7 +715,7 @@ button.desk-host {
   width: min(760px, 56%);
 }
 .desk.has-reading {
-  padding-right: calc(min(760px, 56%) + 24px);
+  padding-right: calc(50% + 24px);
 }
 .desk.has-reading .desk-lanes {
   grid-template-columns: minmax(0, 1fr);

@@ -2786,7 +2786,7 @@ async function run() {
               height: Number(params.rows ?? 24),
               full: true,
               bytes: btoa(
-                `Synthetic ${id} fixture terminal\r\nNo live agent output.\r\n`,
+                `\x1b[2J\x1b[HSynthetic ${id} fixture terminal\r\nNo live agent output.\r\n`,
               ),
             });
         return {

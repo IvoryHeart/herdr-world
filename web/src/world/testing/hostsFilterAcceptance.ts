@@ -23,7 +23,7 @@ export function registerHostsFilterTests(group: HostFilterGroup) {
       hostFilterCases.filter((item) => hostFilterGroup(item) === group),
     )(
     "the shell preserves qualified operational targets: %j",
-    async ({ width, operation, view }) => {
+    async ({ width, height = 1000, operation, view }) => {
       const dir = await mkdtemp(join(tmpdir(), "world-hosts-filter-"));
       const { assets } = await worldBrowserBundle("HostsFilter");
       const result = Promise.withResolvers<unknown>();
@@ -52,7 +52,7 @@ export function registerHostsFilterTests(group: HostFilterGroup) {
           [
             chrome!,
             "--headless=new",
-            `--window-size=${width},1000`,
+            `--window-size=${width},${height}`,
             "--disable-dev-shm-usage",
             "--disable-background-networking",
             "--no-first-run",

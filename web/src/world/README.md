@@ -40,7 +40,9 @@ Desktop and phone shell consumers run in [HostsFilter.test.ts](HostsFilter.test.
 with the [reveal acceptance](testing/deskRevealAcceptance.ts); finite admission
 and retirement cases run in [deskReveal.test.ts](deskReveal.test.ts). Shell reveal
 cases minimize the phone Inspector through its menu and check actual viewport
-bounds and pointer hits for host chips and expanded reveal actions. Pending reads keep
+bounds and pointer hits for host chips and expanded reveal actions at all five
+review viewports. Desk reserves the snapped right half for its reading pane,
+including on wide monitors. Pending reads keep
 their admission across refreshes; queued work coalesces to the latest observation.
 
 | Task | Open these owners | Focused evidence |
