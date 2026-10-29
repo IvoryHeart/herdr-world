@@ -204,7 +204,6 @@ export type TownInput = {
 };
 
 type RoomMemory = {
-  tier: number;
   cells: Map<string, { col: number; row: number }>;
   /** The building column the room keeps while the scene is live. */
   column?: number;
@@ -237,7 +236,7 @@ export function townTierFor(
 /**
  * Assign desks to grid coordinates. Desk slots follow Herdr's tab order: the
  * i-th tab takes the i-th cell in reading order, so a reorder in Herdr, Spaces
- * or Town moves desks, and a closed desk leaves no gap. Ordinary room size
+ * or Town moves desks, and a closed desk leaves no gap. Room size
  * follows the current desk count; pinned cells persist.
  *
  * A pinned desk keeps its cell whatever the tab order or room size, and the
@@ -247,7 +246,6 @@ function placeRoomDesks(
   deskKeys: readonly string[],
   previous: RoomMemory | undefined,
   maxCols: number,
-  minimumTier: number,
   pins: TownPinnedCells | undefined,
   reserveFoldActions: boolean,
 ): { memory: RoomMemory; overflow: string[]; cols: number; rows: number } {
@@ -264,10 +262,10 @@ function placeRoomDesks(
       ({ col, row }) => row * maxCols + col + (reserveFoldActions ? 3 : 1),
     ),
   );
-  const tiers = townRoomTiers(maxCols, needed, minimumTier);
+  const tiers = townRoomTiers(maxCols, needed);
   let tier = townTierFor(
     deskKeys.length + (reserveFoldActions ? 1 : 0),
-    minimumTier,
+    0,
     tiers,
   );
   const outside = (tier: number) =>
@@ -308,7 +306,7 @@ function placeRoomDesks(
     cells.set(key, { col: index % cols, row: Math.floor(index / cols) });
     taken.add(index);
   }
-  return { memory: { tier, cells }, overflow, cols, rows };
+  return { memory: { cells }, overflow, cols, rows };
 }
 
 function mulberry32(seed: number) {
@@ -349,7 +347,6 @@ function draftBuilding(
       room.deskKeys,
       previous,
       shape.deskColumns,
-      0,
       pins,
       !!room.deskFold,
     );
