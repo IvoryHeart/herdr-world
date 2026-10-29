@@ -198,3 +198,35 @@ test("CI unit and web partitions are disjoint, exhaustive and keep each latency 
     ),
   ).toEqual(worldTimedSuites);
 });
+
+test("an incremental full-gate path escalates every suite even when absent from the final PR diff", () => {
+  const timed = new Set(worldTimedSuites);
+  for (const paths of [[chat], ["README.md"], ["scripts/agent/new.ts"]]) {
+    const selection = selectValidation(graph, paths, () => false, [
+      "package.json",
+    ]);
+    expect(selection.full).toBe(true);
+    expect(selection.tooling).toBe(false);
+    expect(selection.documentation).toBe(false);
+    expect(selection.world).toEqual(
+      worldBrowserSuites.filter((path) => !timed.has(path)),
+    );
+    expect(selection.latency).toEqual(worldTimedSuites);
+    expect(selection.verification).toBe(true);
+    expect(selection.packaging).toBe(true);
+  }
+});
+
+test("build-version changes select native jobs because the module is compiled into the service", () => {
+  const version = "scripts/build-version.ts";
+  const versionTest = "scripts/build-version.test.ts";
+  const versionGraph: Graph = {
+    ...graph,
+    files: new Set([...graph.files, version, versionTest]),
+    deps: new Map([...graph.deps, [versionTest, new Set([version])]]),
+  };
+  const selection = selectValidation(versionGraph, [version], () => true);
+  expect(selection.full).toBe(false);
+  expect(selection.unit).toEqual([versionTest]);
+  expect(selection.packaging).toBe(true);
+});

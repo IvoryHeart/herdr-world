@@ -79,12 +79,15 @@ Main pushes and explicit full local gates always run everything.
 ### Shared suite plan and sharding
 
 `validation-scope.ts` applies the affected import graph to the complete PR; unknown
-paths, workflow/gate policy and configuration select every suite. Verification
+paths, workflow/gate policy and configuration select every suite. A full-gate
+incremental delta also escalates all suite families, including World and latency,
+even when the triggering input was reverted out of the net PR diff. Verification
 runs for model/tooling/OpenSpec inputs or an inventory owner. World browser suites
 are the nearest consumers; web suites come from their maintained inventory.
 World runtime/UI changes or a nearest timed World consumer select latency suites.
-Native checks cover install/plugin/package inputs, server/shared binary sources
-and installation consumers. The agent-tooling exception remains explicit.
+Native checks cover install/plugin/package inputs, server/shared binary sources,
+compiled `scripts/build-version.ts` metadata and installation consumers. The
+agent-tooling exception remains explicit.
 
 Main and non-PR dispatches force the full plan. Code receives all static checks;
 ordinary docs receive `check:docs`. Non-browser tests and web suites are partitioned

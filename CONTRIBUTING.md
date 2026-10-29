@@ -75,6 +75,8 @@ failure diagnosis.
 PR CI and pre-push use the same suite rules. Static checks always run for code;
 ordinary Markdown uses `check:docs`. The complete PR determines applicability,
 including both rename paths; a local incremental push may narrow unit consumers.
+A reverted gate/configuration edit in the incremental delta still selects the
+full gate, even when that input is absent from the net PR diff.
 
 | Suite | PR selection | Full/main execution |
 | --- | --- | --- |
@@ -83,7 +85,7 @@ including both rename paths; a local incremental push may narrow unit consumers.
 | World browser tests | Nearest consumer suites in the import graph | All six World shards |
 | Web browser tests | Affected registered browser suites | All suites, across two runners |
 | World latency | World runtime/UI paths or a nearest timed World consumer | Six suites, each alone on its own runner |
-| Native installation | Install/plugin/package inputs, server/shared binary sources or affected installation consumers | Installer upgrades, Windows plugin and both macOS architectures |
+| Native installation | Install/plugin/package inputs, server/shared binary sources, build-version metadata or affected installation consumers | Installer upgrades, Windows plugin and both macOS architectures |
 
 The agent-tooling exception from #484 still covers `scripts/agent/**`, the named
 agent/crew/dispatch runbooks and `changes/<slug>.md`: static checks and affected

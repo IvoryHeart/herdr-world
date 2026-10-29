@@ -74,7 +74,7 @@ export type ValidationSelection = {
 };
 
 const NATIVE =
-  /^(?:server\/|shared\/|scripts\/(?:install|installer|package|release|prepare-release|publish|world-plugin|plugin|homebrew|verify-release|check-(?:binary|homebrew))|herdr-plugin\.toml$)/;
+  /^(?:server\/|shared\/|scripts\/(?:install|installer|package|release|prepare-release|build-version|publish|world-plugin|plugin|homebrew|verify-release|check-(?:binary|homebrew))|herdr-plugin\.toml$)/;
 const WORLD_RUNTIME =
   /^(?:web\/src\/world\/|server\/src\/(?:world|connections|bridge)\/|server\/src\/index\.ts$|web\/src\/(?:store(?:\/|\.ts$)|api\.ts$|worldSnapshotDecode\.ts$)|shared\/world)/;
 
@@ -97,8 +97,17 @@ export function selectValidation(
   owns: (path: string) => boolean = () => false,
   testPaths = paths,
 ): ValidationSelection {
-  const tooling = isToolingOnlyChange(paths);
-  if (ordinaryDocumentation(paths, owns))
+  const completeTooling = isToolingOnlyChange(paths);
+  // The accepted agent-tooling exception uses unit evidence, not Q41's broad
+  // scripts owner. Uncovered agent modules therefore still need the fallback.
+  const relevantOwner = completeTooling ? () => false : owns;
+  const complete = affected(graph, paths, worldBrowserSuites, relevantOwner);
+  const tests = affected(graph, testPaths, worldBrowserSuites, relevantOwner);
+  // A reverted gate/configuration edit can exist only in the incremental diff.
+  // Preserve the tooling exception only when that diff is also tooling-only.
+  const tooling =
+    completeTooling && !(tests.full && !isToolingOnlyChange(testPaths));
+  if (ordinaryDocumentation(paths, owns) && !tests.full)
     return {
       full: false,
       tooling: false,
@@ -112,15 +121,10 @@ export function selectValidation(
       verification: false,
       packaging: false,
     };
-  // The accepted agent-tooling exception uses unit evidence, not Q41's broad
-  // scripts owner. Uncovered agent modules therefore still need the fallback.
-  const relevantOwner = tooling ? () => false : owns;
-  const complete = affected(graph, paths, worldBrowserSuites, relevantOwner);
   const allTests = [...graph.files]
     .filter((path) => TEST.test(path) && !graph.gone.has(path))
     .sort();
-  const full = !tooling && (paths.length === 0 || complete.full);
-  const tests = affected(graph, testPaths, worldBrowserSuites, relevantOwner);
+  const full = !tooling && (paths.length === 0 || complete.full || tests.full);
   const fallback = tooling && (complete.full || tests.full);
   const chosen = full
     ? allTests
@@ -145,9 +149,11 @@ export function selectValidation(
     tooling,
     documentation: false,
     reason: full
-      ? complete.full
-        ? complete.reason
-        : "empty or unknown change"
+      ? tests.full
+        ? tests.reason
+        : complete.full
+          ? complete.reason
+          : "empty or unknown change"
       : tooling
         ? "agent tooling"
         : "affected contracts and consumers",
