@@ -1,0 +1,8 @@
+  Question 1/1 (1 unanswered)
+  Which color should the badge use?
+
+  › 1. Red                Use a red badge.
+    2. Blue               Use a blue badge.
+    3. None of the above  Optionally, add details in notes (tab)
+
+  tab to add notes | enter to submit answer | esc to interrupt

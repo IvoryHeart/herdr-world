@@ -31,7 +31,12 @@ function readWorkflow(name: string): Workflow {
 }
 
 test.each([
-  ["ci.yml", "validation", "bun run check", true],
+  [
+    "ci.yml",
+    "unit-tests",
+    "bun scripts/ci-tests.ts unit ${{ matrix.shard }}/2",
+    true,
+  ],
   ["release.yml", "validate", "bun run check:source", true],
   ["prepare-release.yml", "prepare", "bun run check:source", false],
 ] as const)(

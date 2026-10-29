@@ -1,3 +1,4 @@
+import { createPromptAnswerer } from "./prompt-answer";
 import { isSlashCommand } from "../../../shared/conversationInput";
 import { existsSync, type FSWatcher, watch } from "node:fs";
 import { basename, join } from "node:path";
@@ -6,7 +7,6 @@ import {
   runningTool,
   latestAssistantMessage,
   type AgentQuest,
-  type AnswerUnconfirmedReason,
   type Conversation,
   type ConversationLatest,
   type ConversationSource,
@@ -47,9 +47,6 @@ export const CODEX_DAEMON_ISSUE =
   "https://github.com/IvoryHeart/herdr-world/issues/250";
 
 type Unavailable = Extract<Conversation, { status: "unavailable" }>;
-
-/** Herdr statuses that show an agent moved on from a prompt. */
-const MOVED_ON = new Set(["working", "idle", "done"]);
 
 function withoutMessages(conversation: Conversation): ConversationLatest {
   const latest: Partial<Conversation> = { ...conversation };
@@ -508,119 +505,15 @@ export function createHerdrConversationSource(args: {
 
   return {
     id: "herdr",
-    answer: async ({ pane_id, key, prompt_fingerprint }) => {
-      // Herdr has no conditional input (herdr#4764), so the key cannot be
-      // made conditional on the prompt. World checks as close to the key as
-      // it can: Herdr's state, the screen, then Herdr's state again, and any
-      // difference refuses. A change between the last check and the key is
-      // not caught; Chat says so on the card and docs/CHAT.md explains it.
-      const before = await agentInfo(pane_id);
-      const refuse = (
-        reason: "not_blocked" | "changed" | "unknown_option",
-        message: string,
-        pending_prompt: PendingPrompt | null = null,
-      ) => ({ status: "refused" as const, reason, message, pending_prompt });
-      if (stringValue(before?.agent_status) !== "blocked")
-        return refuse(
-          "not_blocked",
-          "The agent is no longer waiting on a question. Nothing was sent.",
-        );
-      if (normalizeAgentName(stringValue(before?.agent)) === "codex") {
-        const step = await resolve(pane_id);
-        if (!("resolved" in step) || !step.base.session_fingerprint)
-          return refuse(
-            "changed",
-            "This Codex conversation is not tied to the pane. Answer in the Terminal.",
-          );
-      }
-      const prompt = await readPrompt(pane_id, before);
-      if (!prompt || prompt.fingerprint !== prompt_fingerprint)
-        return refuse(
-          "changed",
-          "The question changed. Nothing was sent; check it and answer again.",
-          prompt,
-        );
-      const option = prompt.options.find((candidate) => candidate.key === key);
-      if (!option)
-        return refuse(
-          "unknown_option",
-          "That is not one of the agent's options. Nothing was sent; answer in the Terminal.",
-          prompt,
-        );
-      const after = await agentInfo(pane_id);
-      const same = (name: string) =>
-        JSON.stringify(after?.[name] ?? null) ===
-        JSON.stringify(before?.[name] ?? null);
-      if (
-        stringValue(after?.agent_status) !== "blocked" ||
-        ![
-          "state_change_seq",
-          "agent_session",
-          "terminal_title",
-          "revision",
-        ].every(same)
-      )
-        return refuse(
-          "changed",
-          "The agent changed while Chat checked its question. Nothing was sent; check it and answer again.",
-        );
-      await args.herdrCall(
-        "pane.send_input",
-        option.key === "escape"
-          ? { pane_id, text: "", keys: ["escape"] }
-          : { pane_id, text: option.key, keys: [] },
-      );
-      // An answer is acknowledged only on evidence that this agent moved on
-      // from this prompt: the same session, then a status that shows progress
-      // (working, idle or done), or a new state and a different question on
-      // a readable screen. No agent, another session, an unrecognised status,
-      // an unreadable screen or the same question leaves it unconfirmed, with
-      // the reason.
-      const unconfirmed = await agentInfo(pane_id)
-        .then(async (info): Promise<AnswerUnconfirmedReason | null> => {
-          const status = stringValue(info?.agent_status);
-          if (!info || !status) return "agent_missing";
-          if (
-            JSON.stringify(info.agent_session ?? null) !==
-            JSON.stringify(before?.agent_session ?? null)
-          )
-            return "session_changed";
-          if (MOVED_ON.has(status)) return null;
-          if (status !== "blocked") return "unknown_status";
-          // Read under the checked state, so only what the screen shows
-          // counts as a different question. A form's next question can
-          // follow with no new Herdr state; a new state with a changed
-          // screen is the agent's next prompt.
-          const shown = await readPrompt(pane_id, before);
-          if (!shown) return "unreadable";
-          const asks = (asked: PendingPrompt) =>
-            JSON.stringify([
-              asked.question,
-              asked.request,
-              asked.options.map((option) => option.label),
-              asked.steps ?? null,
-            ]);
-          // Only a recognised menu is a next question; a partial or
-          // unrecognised screen (no options) proves nothing, whether or not
-          // Herdr's state moved.
-          if (!shown.options.length) return "still_showing";
-          return asks(shown) !== asks(prompt) ||
-            (shown.fingerprint !== prompt.fingerprint &&
-              info.state_change_seq !== before?.state_change_seq)
-            ? null
-            : "still_showing";
-        })
-        .catch(() => "unreadable" as const);
-      return {
-        status: "sent" as const,
-        key: option.key,
-        number: option.number,
-        label: option.label,
-        acknowledged: unconfirmed === null,
-        unconfirmed_reason: unconfirmed,
-        prompt_fingerprint: prompt.fingerprint,
-      };
-    },
+    answer: createPromptAnswerer({
+      herdrCall: args.herdrCall,
+      agentInfo,
+      readPrompt,
+      isCodexBound: async (paneId) => {
+        const step = await resolve(paneId);
+        return "resolved" in step && Boolean(step.base.session_fingerprint);
+      },
+    }),
     dismiss: ({ pane_id, delivery_id }) =>
       deliveries.dismiss(pane_id, delivery_id),
     dispose: () => {

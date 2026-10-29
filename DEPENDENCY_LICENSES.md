@@ -2812,7 +2812,7 @@ Sources:
 
 Sources:
 
-- `dompurify@3.4.16` — `LICENSE-MPL`
+- `dompurify@3.4.17` — `LICENSE-MPL`
 
     Mozilla Public License Version 2.0
     ==================================
@@ -3791,7 +3791,7 @@ Sources:
 Sources:
 
 - `@google/genai@2.21.0` — `LICENSE`
-- `dompurify@3.4.16` — `LICENSE`
+- `dompurify@3.4.17` — `LICENSE`
 - `gaxios@7.3.1` — `LICENSE`
 - `gcp-metadata@8.1.2` — `LICENSE`
 - `google-auth-library@10.9.1` — `LICENSE`
@@ -12592,7 +12592,7 @@ Sources:
 
 - `undici-types@8.11.2` — `LICENSE`
 - `undici-types@8.3.0` — `LICENSE`
-- `undici@8.11.2` — `LICENSE`
+- `undici@8.12.3` — `LICENSE`
 
     MIT License
 

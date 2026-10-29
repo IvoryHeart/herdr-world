@@ -111,8 +111,8 @@ Use focused tests and type checks when they answer a specific question. The
 pre-commit hook checks formatting and lint without writing files; the pre-push
 hook runs `bun run check:changed` for code changes: static checks, the affected
 unit tests and nearest World browser suites, and the unfiltered verification
-gate when its inputs change. CI runs the full gate; `bun run check:delivery` runs
-it locally in parallel lanes. A Markdown-only follow-up uses `bun run check:docs`
+gate when its inputs change. CI shares the suite-selection rules and runs the full
+matrix on every main commit; `bun run check:delivery` runs it locally in parallel lanes. A Markdown-only follow-up uses `bun run check:docs`
 only when a passed code gate already covers its code, and a push that only merges
 `origin/main` (no edits beyond changelog fragments) runs `bun run check:static`.
 Heavy checks from every worktree share one machine-wide queue (one browser lane and
@@ -124,8 +124,15 @@ to `scripts/agent/**`, `docs/agent-development.md`, `docs/crew-runbook.md`,
 `docs/dispatch-runbook.md` and `changes/<slug>.md` use the shared tooling mode:
 static checks and affected unit tests, without World suites, behavioral
 verification or native installers. `Delivery checks` and both protected macOS
-reports remain required. Other code paths retain the full CI matrix; main pushes
-always run it. Pre-push uses the same tooling allowlist against the complete PR.
+reports remain required. Other classified PRs run affected unit and nearest browser suites, verification
+for its inputs/contract owners, latency for World runtime/UI consumers, and native
+jobs for installation or binary inputs. Unknown paths, policy/configuration and
+main pushes run everything. Pre-push uses the same complete-PR classification.
+CI splits units/web suites across two runners and verification across three model
+groups; each latency suite has its own runner. Verification aggregates require all
+models, source/tool identity and each group's enforced resource accounting.
+Leaf checks report failure when their job ends; `Delivery checks` remains the
+required aggregate, and protected report names and branch rules stay unchanged.
 After committing, run `bun run check:pr-body <file>` on the exact description
 file passed to `gh pr create --body-file <file>`; append a base ref for a stacked
 PR. This applies CI's knowledge-map and changelog rules before publication.

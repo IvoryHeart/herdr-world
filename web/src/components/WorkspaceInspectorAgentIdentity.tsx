@@ -18,6 +18,7 @@ export function WorkspaceInspectorAgentIdentity({
   terminalColor,
   agentSettings,
   location,
+  paneMap,
 }: {
   context: WorkspaceInspectorContext;
   terminalColor?: ManagedWindowControls["color"];
@@ -25,6 +26,8 @@ export function WorkspaceInspectorAgentIdentity({
   agentSettings?: ReactNode;
   /** The location line under the name. */
   location: ReactNode;
+  /** A multi-pane tab's map (InspectorPaneMap), first in the title. */
+  paneMap?: ReactNode;
 }) {
   const name = agentName(context);
   // The state is a badge on the icon; the word stays in its label and title.
@@ -59,6 +62,7 @@ export function WorkspaceInspectorAgentIdentity({
       className="workspace-inspector-identity workspace-inspector-agent-identity"
       data-kind={context.kind}
     >
+      {paneMap}
       {terminalColor ? (
         <Popover>
           <PopoverTrigger asChild>

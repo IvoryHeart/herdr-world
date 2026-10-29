@@ -275,8 +275,10 @@ hosts stay usable.
    To change the order, drag a table onto another table in the same room: it
    takes that table's place, and the tables in between shift along. Drop it on
    the room's free spot to put it last of the tables shown. A room grows as
-   tabs open, up to eight tables wide on a wide screen, six on a portrait or
-   half-width screen and four on a phone, then row by row. A folded room normally
+   tabs open and ordinary rooms shrink to fit when tabs close. An expanded room
+   keeps its capacity through closures until you use **« Fold**. Rooms grow up
+   to eight tables wide on a wide screen, six on a portrait or half-width screen
+   and four on a phone, then row by row. A folded room normally
    shows the first 24 tabs in the same order as Spaces. Use the room's bottom-right
    **» +N** tile beside the dashed **+** seat to reveal the next 20 tables per
    click until the whole room is shown. **+N** counts currently hidden tabs;
@@ -320,10 +322,13 @@ narrow the work you are following. The **Town calm motion** setting reduces
 ambient animation.
 
 A quiet **?** at reception means an agent has asked you a question with
-`herdr-world ask`. It stays there until answered or withdrawn; tapping its
-reception entry opens that agent. Read the question first in **Needs you** or
-**Summary**, then choose an option or type an answer. The waiting agent receives
-that answer. Board and Desk show the same question mark. **!** means urgent
+`herdr-world ask`. It stays there until answered, dismissed or withdrawn;
+tapping its reception entry opens that agent. Read the question first in
+**Needs you** or **Summary**, where it names the asking agent, then choose an
+option or type an answer. The waiting agent receives that answer. **Open agent**
+opens the asker; **Dismiss** closes a stale or mistaken question without
+answering it. A question marked unverified came from a process World could not
+confirm runs in that pane. Board and Desk show the same question mark. **!** means urgent
 blocking, while **✓** means a finish still needs checking.
 
 **Mark reviewed** acknowledges that completion in this browser. Opening a finished
@@ -355,6 +360,11 @@ text. It works for any agent you open from Town, Board or Desk.
    The tool call running now sits at the end of the conversation with its
    own timer. **Stop**, or Esc pressed twice, interrupts Claude Code, Codex
    or Pi; Chat never stops an agent by itself.
+   When the agent's tab has several panes (a review round, say), a small
+   drawing of the tab's split comes first in the window title, with the
+   agent that needs you in yellow. Tap it to open a map of the real layout,
+   then tap a pane to show that agent's Chat or terminal in the same window.
+   Switching changes only what World shows, not Herdr's focus.
 3. Open a tool row to see what the call did: the edit's diff, a test run's
    pass or fail with its first failure, or the end of its output. An agent
    with a quest shows one slim title and progress row in the conversation;
@@ -377,7 +387,7 @@ text. It works for any agent you open from Town, Board or Desk.
    another session if there is evidence the message went there, and pauses
    Send. Claude Code's `!` and `#` modes still need the Terminal.
 6. Answer the agent's own prompts. When Claude Code shows a permission box or
-   a question form, or Codex an approval menu, Chat shows the full request and
+   a question form, or Codex an approval or question dialog, Chat shows the full request and
    each option on an ask card. Pick one (or press its number with the card
    focused): Chat checks the prompt, session and state have not changed,
    presses that key in the agent's pane and shows what it sent. It says **You
@@ -385,8 +395,10 @@ text. It works for any agent you open from Town, Board or Desk.
    questions lists every question's header, answered or not, and asks them
    one at a time; after the last, its review offers **Submit answers**. Herdr
    cannot hold a prompt between that check and the key, so read the card
-   first. Options that
-   open a text box, and unsupported menus, offer the Terminal instead.
+   first. For **Type something.**, **Chat about this** or plan feedback, pick
+   the option, type a single-line reply and choose **Send text answer**. Chat
+   checks the native text editor before submitting. Already-open native text
+   editors and unsupported menus stay in the Terminal.
 7. A known pull request named in an agent's **READY** or **opened**
    announcement, or its current work claim, gets a PR card. Open **Details**
    for CI and reviews. **Ask the author to fix** sends a `↳ #N` message when

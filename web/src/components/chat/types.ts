@@ -58,6 +58,8 @@ export type PendingPrompt = {
     label: string;
     key: string;
     description?: string;
+    input?: "text" | "chat";
+    active?: boolean;
   }[];
   /**
    * A multi-question form's questions by their headers, in order: the agent
@@ -72,6 +74,7 @@ export type AnswerResult =
       status: "sent";
       number: string;
       label: string;
+      text?: string;
       acknowledged: boolean;
       unconfirmed_reason: UnconfirmedReason | null;
       prompt_fingerprint: string;
@@ -84,7 +87,8 @@ export type UnconfirmedReason =
   | "session_changed"
   | "unknown_status"
   | "unreadable"
-  | "still_showing";
+  | "still_showing"
+  | "no_progress";
 
 export type ConversationDelivery = {
   kind?: "command";

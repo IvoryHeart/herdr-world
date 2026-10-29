@@ -1,0 +1,145 @@
+/* In the window title the glyph takes its own column before the avatar,
+   and the name and location move one column right. */
+.workspace-inspector-agent-identity:has(> .inspector-pane-map-glyph) {
+  grid-template-columns: 26px 30px minmax(0, 1fr);
+}
+.is-town-skin
+  .workspace-inspector-agent-identity:has(> .inspector-pane-map-glyph) {
+  grid-template-columns: 26px 32px minmax(0, 1fr);
+}
+.workspace-inspector-agent-identity > .inspector-pane-map-glyph {
+  grid-column: 1;
+}
+.workspace-inspector-agent-identity:has(> .inspector-pane-map-glyph)
+  > .workspace-inspector-agent-avatar {
+  grid-column: 2;
+}
+.workspace-inspector-agent-identity:has(> .inspector-pane-map-glyph)
+  > :not(.inspector-pane-map-glyph, .workspace-inspector-agent-avatar) {
+  grid-column: 3;
+}
+
+/* The tab's split as a small glyph, first in the window title: the shown
+   pane in the accent colour, a pane that needs you in yellow. */
+.inspector-pane-map-glyph {
+  grid-row: 1 / 4;
+  align-self: center;
+  position: relative;
+  flex: 0 0 auto;
+  width: 26px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--panel);
+  cursor: pointer;
+}
+.inspector-pane-map-glyph:hover {
+  border-color: var(--accent);
+}
+.inspector-pane-map-glyph:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.inspector-pane-map-glyph i {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px solid var(--panel);
+  border-radius: 2px;
+  background: var(--muted);
+  opacity: 0.45;
+}
+.inspector-pane-map-glyph i[data-tone="blocked"] {
+  background: var(--yellow);
+  opacity: 1;
+}
+.inspector-pane-map-glyph i.is-selected {
+  background: var(--accent);
+  opacity: 1;
+}
+
+/* The map: Herdr's real layout, one button per pane. */
+.inspector-pane-map {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+.inspector-pane-map-title {
+  font-size: 12px;
+}
+.inspector-pane-map-area {
+  position: relative;
+  width: min(280px, 80vw);
+  height: 150px;
+}
+.inspector-pane-map-cell {
+  position: absolute;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 2px solid var(--panel);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+}
+.inspector-pane-map-cell:hover {
+  background: var(--accent-soft);
+}
+.inspector-pane-map-cell[aria-pressed="true"] {
+  border-color: var(--accent);
+}
+.inspector-pane-map-cell:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.inspector-pane-map-cell b,
+.inspector-pane-map-cell small {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.inspector-pane-map-cell b {
+  font-size: 12px;
+}
+.inspector-pane-map-cell small {
+  color: var(--muted);
+  font-size: 11px;
+}
+/* The same state marks as the agent's icon badge. */
+.inspector-pane-map-mark {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--muted);
+  color: var(--bg);
+  font:
+    800 9px / 1 system-ui,
+    sans-serif;
+}
+.inspector-pane-map-mark:empty {
+  width: 8px;
+  height: 8px;
+}
+.inspector-pane-map-cell[data-tone="done"] .inspector-pane-map-mark {
+  background: var(--green);
+}
+.inspector-pane-map-cell[data-tone="blocked"] .inspector-pane-map-mark {
+  background: var(--yellow);
+}
+.inspector-pane-map-cell[data-tone="working"] .inspector-pane-map-mark {
+  background: var(--blue);
+}
+.inspector-pane-map-cell[data-tone="unknown"] .inspector-pane-map-mark {
+  display: none;
+}
