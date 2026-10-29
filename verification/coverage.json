@@ -1727,7 +1727,7 @@
       "area": "Rendering/layout/search/metrics/site",
       "owner": "web/src/world/WorldFoundationApp.tsx",
       "requirement": "openspec/specs/world-surfaces/spec.md",
-      "properties": "Deterministic geometry/counts; renderer lifetime; bounded metric/cache work",
+      "properties": "Deterministic Town geometry/counts and room-size transitions; renderer lifetime; bounded metric/cache work",
       "existingTests": [
         "shared/herdrIdentity.test.ts",
         "server/src/http/herdr-info.test.ts",
