@@ -1,4 +1,5 @@
 import { SquareTerminal } from "lucide-react";
+import { useState } from "react";
 import type { PendingPrompt, UnconfirmedReason } from "../types";
 import "./ask.css";
 
@@ -33,9 +34,19 @@ export function AskCard({
   prompt: PendingPrompt;
   answering: boolean;
   notice: string;
-  onAnswer(key: string): void;
+  onAnswer(key: string, text?: string): void;
   onOpenTerminal?: () => void;
 }) {
+  const [textKey, setTextKey] = useState<string | null>(
+    () => prompt.options.find((option) => option.active)?.key ?? null,
+  );
+  const [text, setText] = useState("");
+  const textOption = prompt.options.find((option) => option.key === textKey);
+  const choose = (key: string) => {
+    const option = prompt.options.find((item) => item.key === key);
+    if (option?.input) setTextKey(key);
+    else onAnswer(key);
+  };
   const terminal = onOpenTerminal ? (
     <button type="button" onClick={onOpenTerminal}>
       <SquareTerminal size={13} /> Answer in the Terminal
@@ -55,7 +66,11 @@ export function AskCard({
           event.metaKey ||
           event.ctrlKey ||
           event.altKey ||
-          answering
+          answering ||
+          (event.target instanceof HTMLElement &&
+            event.target.closest(
+              "input, textarea, button, [contenteditable=true]",
+            ))
         )
           return;
         const option = prompt.options.find(
@@ -63,7 +78,7 @@ export function AskCard({
         );
         if (!option) return;
         event.preventDefault();
-        onAnswer(option.key);
+        choose(option.key);
       }}
     >
       <h3>{agent} is waiting on you</h3>
@@ -102,7 +117,10 @@ export function AskCard({
                 type="button"
                 className={index === 0 ? "is-primary" : undefined}
                 disabled={answering}
-                onClick={() => onAnswer(option.key)}
+                aria-expanded={
+                  option.input ? textKey === option.key : undefined
+                }
+                onClick={() => choose(option.key)}
               >
                 <kbd>{option.number}</kbd>
                 <span className="agent-chat-ask-label">
@@ -114,11 +132,37 @@ export function AskCard({
               </button>
             ))}
           </div>
+          {textOption?.input ? (
+            <form
+              className="agent-chat-ask-text"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (text.trim() && !answering) onAnswer(textOption.key, text);
+              }}
+            >
+              <label>
+                {textOption.label}
+                <input
+                  type="text"
+                  value={text}
+                  maxLength={4000}
+                  required
+                  autoFocus
+                  disabled={answering}
+                  onChange={(event) => setText(event.target.value)}
+                />
+              </label>
+              <button type="submit" disabled={answering || !text.trim()}>
+                Send text answer
+              </button>
+            </form>
+          ) : null}
           <p className="agent-chat-ask-fine">
             Options read from {agent}'s own prompt. Chat checks the question
             again just before it presses the one you pick, but Herdr cannot hold
             it still: if it changes in that instant, the key reaches the new
-            one. With this card focused, its number picks it too.
+            one. Text options open a reply field; Chat checks the editor before
+            sending your text. With this card focused, its number picks it too.
           </p>
         </>
       ) : (

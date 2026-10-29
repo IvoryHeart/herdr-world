@@ -144,7 +144,7 @@ const askForm = (header: string, cursorOn = 1) =>
   ].join("\n");
 
 describe("Claude Code's questions", () => {
-  test("a question form offers its choices, with descriptions, not its text boxes", () => {
+  test("a question form offers choices and identifies its text inputs", () => {
     const prompt = parsePendingPrompt(
       "claude",
       askForm(" ☐ Banner colour"),
@@ -167,6 +167,8 @@ describe("Claude Code's questions", () => {
         key: "2",
         description: "Set the demo banner to green.",
       },
+      { number: "3", label: "Type something.", key: "3", input: "text" },
+      { number: "4", label: "Chat about this", key: "4", input: "chat" },
     ]);
   });
 
@@ -181,7 +183,12 @@ describe("Claude Code's questions", () => {
       askForm("←  ☐ Banner colour  ☐ Sticky  ✔ Submit  →", 2),
       context,
     )!;
-    expect(first.options.map((option) => option.key)).toEqual(["1", "2"]);
+    expect(first.options.map((option) => option.key)).toEqual([
+      "1",
+      "2",
+      "3",
+      "4",
+    ]);
     // The cursor moving is a different screen, so a different prompt.
     expect(moved.fingerprint).not.toBe(first.fingerprint);
   });
@@ -299,6 +306,8 @@ describe("Claude Code's questions", () => {
       ["Red", "1"],
       ["Blue", "2"],
       ["Green", "3"],
+      ["Type something.", "4"],
+      ["Chat about this", "5"],
     ]);
     // A digit answers the question shown and moves to the next one, which is
     // a different prompt with the first header answered.
@@ -326,6 +335,8 @@ describe("Claude Code's questions", () => {
       "Small",
       "Medium",
       "Large",
+      "Type something.",
+      "Chat about this",
     ]);
   });
 
@@ -413,7 +424,7 @@ describe("Claude Code's questions", () => {
     "2. Read it back.",
   ];
 
-  test("plan approval shows the whole plan, and offers its answers but not the feedback box", () => {
+  test("plan approval shows the whole plan and its feedback input", () => {
     const prompt = parsePendingPrompt("claude", planScreen(PLAN), context)!;
     expect(prompt.question).toEqual([
       "Claude has written up a plan and is ready to execute. Would you like to proceed?",
@@ -426,6 +437,7 @@ describe("Claude Code's questions", () => {
     expect(prompt.options.map((option) => option.label)).toEqual([
       "Yes, and use auto mode",
       "Yes, manually approve edits",
+      "Tell Claude what to change",
     ]);
   });
 

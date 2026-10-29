@@ -10,15 +10,15 @@ import { createHash } from "node:crypto";
  * - Claude Code's questions and plan approval: a numbered menu below a rule,
  *   above its footer of controls ("Enter to select · … · Esc to cancel", or
  *   the plan's "ctrl+g to edit"), with the ❯ cursor on exactly one option.
- *   A digit selects. Options that open a text box ("Type something.", "Chat
- *   about this", "Tell Claude what to change") are left to the Terminal.
+ *   A digit selects. Text options identify their inline editor or composer.
  *   A form of several questions shows one at a time under a row of header
  *   chips ("←  ☐ Color  ☒ Size  ✔ Submit  →"): a digit answers the question
  *   shown and moves to the next. Its review ("Review your answers", then
  *   "Submit answers" and "Cancel") is drawn with no footer.
  * - Codex: numbered options each ending in its key hint, such as "(y)",
  *   "(a)" or "(esc)", with the › cursor on exactly one, below a question that
- *   ends in "?". The hint key selects.
+ *   ends in "?". The hint key selects. Question dialogs instead show a
+ *   Question X/Y counter and notes/submit footer; digit shortcuts select.
  *
  * Anything else, a box cut off by the capture, or a request the harness shows
  * shortened gives the question with no options, and Chat points to the
@@ -49,6 +49,10 @@ export type PromptOption = {
   key: string;
   /** The line a question form shows under the option, if any. */
   description?: string;
+  /** A choice that needs text after selection, rather than a digit alone. */
+  input?: "text" | "chat";
+  /** The empty inline editor is already selected on this screen. */
+  active?: boolean;
 };
 
 /** Lines of recent output read for a blocked agent's prompt. */
@@ -75,6 +79,7 @@ const MENU_OPTION = /^\s*(❯\s*)?(\d)\.\s+(.{1,200}?)\s*$/;
 // Options that open a text box in the terminal rather than answer.
 const FREE_TEXT =
   /^(?:type something|chat about this|tell claude what to change)\b/i;
+const INLINE_EDITOR = /^\s*enter to (?:select|confirm)\b.*ctrl\+g to edit\b/i;
 const CODEX_OPTION = /^\s*(›\s*)?(\d)\.\s+(.{1,200}?)\s+\(([a-z]|esc)\)\s*$/i;
 // Signs that the harness shortened the request it shows.
 const ABBREVIATED =
@@ -204,6 +209,7 @@ function claudeMenuPrompt(lines: string[]): Parsed | null {
   let cursor = 0;
   let menuStart = -1;
   let described: string[] = [];
+  let selected: PromptOption | undefined;
   for (let index = end - 1; index >= 0; index -= 1) {
     const line = lines[index]!;
     if (!line.trim() || RULE.test(line)) continue;
@@ -217,6 +223,7 @@ function claudeMenuPrompt(lines: string[]): Parsed | null {
         key: match[2]!,
         ...(described.length ? { description: described.join(" ") } : {}),
       });
+      if (match[1]) selected = all[0];
       described = [];
       if (match[2] === "1") {
         menuStart = index;
@@ -271,6 +278,14 @@ function claudeMenuPrompt(lines: string[]): Parsed | null {
     described.length === 0 &&
     question.length > 0 &&
     /\?\s*$/.test(question[question.length - 1]!);
+  const editing =
+    INLINE_EDITOR.test(lines[end] ?? "") ||
+    (PLAN_FOOTER.test(lines[end] ?? "") &&
+      selected?.description?.includes(
+        "shift+tab to approve with this feedback",
+      ));
+  const readableEditor =
+    !editing || (selected && FREE_TEXT.test(selected.label));
   return {
     shown: lines.slice(Math.max(0, from), footer ? end + 1 : end),
     question: question.map((line) => line.trim()),
@@ -280,7 +295,23 @@ function claudeMenuPrompt(lines: string[]): Parsed | null {
         .slice(0, -1)
         .flat()
         .map((line) => line.trim()),
-    options: valid ? all.filter((option) => !FREE_TEXT.test(option.label)) : [],
+    options:
+      valid && readableEditor
+        ? all.map((option) =>
+            FREE_TEXT.test(option.label)
+              ? {
+                  ...option,
+                  input: /^chat about this\b/i.test(option.label)
+                    ? ("chat" as const)
+                    : ("text" as const),
+                  ...(option === selected &&
+                  !/^chat about this\b/i.test(option.label)
+                    ? { active: true }
+                    : {}),
+                }
+              : option,
+          )
+        : [],
     ...(steps ? { steps } : {}),
   };
 }
@@ -317,10 +348,19 @@ function codexPrompt(lines: string[]): Parsed | null {
   let asked = -1;
   for (let index = above.length - 1; index >= 0; index -= 1) {
     const paragraph = above[index]!;
-    if (/\?\s*$/.test(paragraph[paragraph.length - 1]!)) {
+    if (
+      /^Would you like to\b/.test(paragraph[0]!.trim()) &&
+      /\?\s*$/.test(paragraph[paragraph.length - 1]!)
+    ) {
       asked = index;
       break;
     }
+    if (
+      asked < 0 &&
+      !/^(?:Reason|Environment|Justification):/i.test(paragraph[0]!.trim()) &&
+      /\?\s*$/.test(paragraph[paragraph.length - 1]!)
+    )
+      asked = index;
   }
   const valid =
     options.length >= 2 &&
@@ -341,6 +381,72 @@ function codexPrompt(lines: string[]): Parsed | null {
   };
 }
 
+/** Codex's request_user_input dialog uses digit shortcuts without key hints. */
+function codexQuestion(lines: string[]): Parsed | null {
+  let end = lines.length - 1;
+  while (end >= 0 && !lines[end]!.trim()) end -= 1;
+  if (
+    !/^\s*tab to add notes \| enter to submit answer \| esc to interrupt\s*$/i.test(
+      lines[end] ?? "",
+    )
+  )
+    return null;
+  let start = end - 1;
+  while (
+    start >= 0 &&
+    !/^\s*Question \d+\/\d+ \(\d+ unanswered\)\s*$/.test(lines[start]!)
+  )
+    start -= 1;
+  if (start < 0) return null;
+  const header = /^\s*Question (\d+)\/(\d+) \((\d+) unanswered\)\s*$/.exec(
+    lines[start]!,
+  )!;
+  const content = lines.slice(start + 1, end);
+  const first = content.findIndex((line) => /^\s*›?\s*1\.\s+/.test(line));
+  if (first < 0) return null;
+  const question = content
+    .slice(0, first)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const options: PromptOption[] = [];
+  let cursor = 0;
+  let valid =
+    Number(header[1]) > 0 &&
+    Number(header[1]) <= Number(header[2]) &&
+    Number(header[3]) <= Number(header[2]);
+  for (const line of content.slice(first)) {
+    if (!line.trim()) continue;
+    const match =
+      /^\s*(›\s*)?(\d)\.\s+(.{1,200}?)(?:\s{2,}(\S.{0,400}))?\s*$/.exec(line);
+    if (match) {
+      if (match[1]) cursor += 1;
+      options.push({
+        number: match[2]!,
+        label: match[3]!.trim(),
+        key: match[2]!,
+        ...(match[4] ? { description: match[4].trim() } : {}),
+      });
+    } else if (/^\s{4,}\S/.test(line) && options.length) {
+      const option = options[options.length - 1]!;
+      option.description = [option.description, line.trim()]
+        .filter(Boolean)
+        .join(" ");
+    } else valid = false;
+  }
+  valid =
+    valid &&
+    question.length > 0 &&
+    options.length >= 2 &&
+    cursor === 1 &&
+    options.every((option, index) => option.number === String(index + 1));
+  return {
+    shown: lines.slice(start, end + 1),
+    question,
+    request: [],
+    options: valid ? options : [],
+  };
+}
+
 /**
  * Parse the bottom of a blocked agent's screen for `agent`'s own menu.
  * Returns null when the screen is empty.
@@ -357,7 +463,7 @@ export function parsePendingPrompt(
     agent === "claude"
       ? (claudePrompt(lines) ?? claudeMenuPrompt(lines))
       : agent === "codex"
-        ? codexPrompt(lines)
+        ? (codexQuestion(lines) ?? codexPrompt(lines))
         : null;
   if (parsed && parsed !== "incomplete") {
     // A request the harness shortened is not one Chat can approve.

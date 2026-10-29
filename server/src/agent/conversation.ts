@@ -189,6 +189,8 @@ export type ConversationAnswerResult =
       key: string;
       number: string;
       label: string;
+      /** Literal text submitted for a text option, when present. */
+      text?: string;
       /**
        * Herdr showed this agent move on from this prompt after the key: the
        * same session, and a status other than blocked or a new question.
@@ -200,7 +202,12 @@ export type ConversationAnswerResult =
     }
   | {
       status: "refused";
-      reason: "not_blocked" | "changed" | "unknown_option";
+      reason:
+        | "not_blocked"
+        | "changed"
+        | "unknown_option"
+        | "invalid_text"
+        | "busy";
       message: string;
       pending_prompt: PendingPrompt | null;
     };
@@ -240,7 +247,11 @@ export interface ConversationSource {
    * the agent is still blocked on that same prompt.
    */
   answer(
-    target: ConversationTarget & { key: string; prompt_fingerprint: string },
+    target: ConversationTarget & {
+      key: string;
+      prompt_fingerprint: string;
+      text?: string;
+    },
   ): Promise<ConversationAnswerResult>;
 }
 

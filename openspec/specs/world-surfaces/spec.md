@@ -1751,6 +1751,50 @@ existing double-Escape stop SHALL retain their existing scope.
 - **THEN** its slim receipt remains **sent, not checked** without pausing normal sends
   as a misdelivery; no command effect is inferred
 
+### Requirement: Chat answers captured prompt choices and text options
+
+Chat SHALL recognize complete Codex approval menus with key hints and complete
+Codex question dialogs with their question counter, numbered choices, one cursor
+and notes/submit/interrupt footer. Question choices SHALL use their digit shortcut
+without requiring an approval key hint. A waiting Codex pane detected by Herdr
+without turn hooks SHALL use the same bound-conversation admission; an inferred
+or guessed conversation SHALL NOT gain answer authority from a recognized screen.
+
+Claude Code's question and plan menus SHALL expose their recognized text options.
+Selecting one in Chat SHALL open a single-line reply field without sending input.
+Submitting SHALL check the original prompt and session, select its native option,
+wait for the corresponding empty inline editor or discussion composer, and check
+the destination again before submitting text. Missing, stale, replaced or
+unrecognized editors SHALL receive no text. Native text already being edited
+SHALL remain in the Terminal. Text SHALL be nonempty, at most 4000 characters
+and free of terminal control characters; discussion text SHALL NOT invoke the
+composer's slash, shell or memory commands. Answers to one pane SHALL NOT
+interleave inside a conversation source.
+
+Digits within the reply input SHALL remain text. A replacement prompt or admitted
+connection, runtime, pane or session SHALL reset its option and draft. An answer receipt SHALL claim acknowledgement only from the
+same session moving on, not merely from successfully writing input. Herdr's lack
+of conditional input remains a documented gap between the last check and dispatch.
+
+#### Scenario: Codex waits without hooks
+
+- **WHEN** Herdr reports a bound Codex pane blocked on a complete question dialog
+  whose choices have descriptions but no key hints
+- **THEN** Chat shows those choices and sends the selected digit to that pane
+
+#### Scenario: Submit a Claude text option
+
+- **WHEN** a user chooses a text option and submits a reply from Chat
+- **THEN** Chat verifies the native editor in the same question and session before
+  sending the reply and Enter, or verifies the discussion composer before using
+  the normal agent prompt operation
+
+#### Scenario: The destination changes after selecting a text option
+
+- **WHEN** the native editor cannot be verified or its pane, session or question changes
+- **THEN** Chat sends no text, explains that the option may already be selected,
+  and directs the user to the Terminal
+
 ### Requirement: Town peeks show recent chatter and take replies
 
 An agent's peek SHALL show the agent's latest message from the conversation

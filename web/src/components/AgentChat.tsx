@@ -277,12 +277,13 @@ export function AgentChat({
     question: string[];
     number: string;
     label: string;
+    text?: string;
     acknowledged: boolean;
     unconfirmed_reason: UnconfirmedReason | null;
   } | null>(null);
   const [askNotice, setAskNotice] = useState("");
   const answer = useCallback(
-    async (key: string) => {
+    async (key: string, text?: string) => {
       if (!prompt || answering) return;
       setAnswering(true);
       setAskNotice("");
@@ -292,6 +293,7 @@ export function AgentChat({
           {
             pane_id: pane.pane_id,
             key,
+            ...(text !== undefined ? { text } : {}),
             prompt_fingerprint: prompt.fingerprint,
           },
         )) as AnswerResult;
@@ -301,6 +303,7 @@ export function AgentChat({
             question: prompt.question,
             number: result.number,
             label: result.label,
+            ...(result.text !== undefined ? { text: result.text } : {}),
             acknowledged: result.acknowledged,
             unconfirmed_reason: result.unconfirmed_reason,
           });
@@ -699,6 +702,13 @@ export function AgentChat({
             decorationTokens={decorationTokens}
             after={
               <ChatAfterBlocks
+                key={JSON.stringify([
+                  connectionClient.connectionId,
+                  connectionClient.generation,
+                  connectionClient.serverRuntimeGeneration,
+                  pane.pane_id,
+                  conversation?.session_fingerprint,
+                ])}
                 running={running}
                 clock={clock}
                 answered={answered}
@@ -706,7 +716,7 @@ export function AgentChat({
                 agent={conversation?.agent ?? "The agent"}
                 answering={answering}
                 notice={askNotice}
-                onAnswer={(key) => void answer(key)}
+                onAnswer={(key, text) => void answer(key, text)}
                 onOpenTerminal={onOpenTerminal}
               />
             }
