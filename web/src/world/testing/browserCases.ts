@@ -1,4 +1,9 @@
 export const hostFilterCases = [
+  ...[1440, 390].map((width) => ({
+    width,
+    operation: "desk-reveal",
+    view: "desk",
+  })),
   ...[1440, 390].flatMap((width) => [
     ...[
       "pending-inspector-scope",

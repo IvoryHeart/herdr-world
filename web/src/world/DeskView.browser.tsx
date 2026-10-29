@@ -1,3 +1,4 @@
+import { checkDeskOtherHosts } from "./testing/deskOtherHostsAcceptance";
 import { bridge } from "../api";
 import { sharedAsksStore, type WorldAsk } from "./worldAsks";
 import { flushSync } from "react-dom";
@@ -905,6 +906,7 @@ async function run() {
     !document.querySelector('[data-world-ask="q-desk"]'),
     "withdrawal clears Desk's question mark",
   );
+  await checkDeskOtherHosts(check);
 }
 
 run()

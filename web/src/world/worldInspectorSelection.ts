@@ -386,7 +386,14 @@ export async function focusWorldNode(
     runtimeGeneration: node.generation,
     workspaceId: target.workspaceId,
     paneId: target.paneId,
-    ...(agentSessionId ? { agentSessionId } : {}),
+    ...(agentSessionId
+      ? {
+          agentSessionId,
+          ...(node.kind === "agent" || node.kind === "terminal"
+            ? { terminalId: node.terminalId }
+            : {}),
+        }
+      : {}),
   });
   if (!focused) {
     throw new Error("The selected item could not be focused");

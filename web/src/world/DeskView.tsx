@@ -41,6 +41,8 @@ import {
 import type { WorldLeafObject, WorldObject } from "./worldObject";
 import { useDeskState } from "./useDeskState";
 import type { WorldDeskStore } from "./deskStateStore";
+import { DeskOtherHosts } from "./DeskOtherHosts";
+export { otherHostSummaries } from "./DeskOtherHosts";
 import "./DeskView.css";
 
 type Lane = "needs" | "review" | "working";
@@ -128,47 +130,6 @@ export function partitionDesk(
   );
   working.sort(oldestFirst);
   return { needs, review, working, quiet };
-}
-
-type Elsewhere = {
-  connectionId: string;
-  label: string;
-  stale: boolean;
-  needs: number;
-  done: number;
-  working: number;
-};
-
-/** Read-only summaries of managed hosts other than the selected one. */
-export function otherHostSummaries(
-  world: WorldObject,
-  filtered?: WorldObject,
-): Elsewhere[] {
-  const included = filtered
-    ? new Set(filtered.hosts.map((host) => host.connectionId))
-    : null;
-  const hosts = new Map<string, Elsewhere>();
-  for (const leaf of world.leaves) {
-    if (
-      leaf.kind !== "agent" ||
-      (included ? included.has(leaf.connectionId) : leaf.selectedHost)
-    )
-      continue;
-    const host = hosts.get(leaf.connectionId) ?? {
-      connectionId: leaf.connectionId,
-      label: leaf.hostLabel,
-      stale: false,
-      needs: 0,
-      done: 0,
-      working: 0,
-    };
-    host.stale ||= leaf.stale;
-    if (leaf.status === "blocked") host.needs += 1;
-    else if (leaf.status === "done") host.done += 1;
-    else if (leaf.status === "working") host.working += 1;
-    hosts.set(leaf.connectionId, host);
-  }
-  return [...hosts.values()];
 }
 
 function Screen({
@@ -310,6 +271,7 @@ export function DeskView(props: {
   world: WorldObject;
   aggregate?: WorldObject;
   onOpen(id: string): Promise<void>;
+  onReveal?: (leaf: WorldLeafObject) => Promise<void>;
   reading?: string | null;
   onPreview?: ((id: string) => Promise<void>) | null;
   onCloseReading?: () => void;
@@ -328,6 +290,7 @@ export function DeskBoard({
   aggregate,
   client,
   onOpen,
+  onReveal,
   reading = null,
   onPreview = null,
   onCloseReading,
@@ -338,6 +301,7 @@ export function DeskBoard({
   aggregate?: WorldObject;
   client: DeskClients;
   onOpen(id: string): Promise<void>;
+  onReveal?: (leaf: WorldLeafObject) => Promise<void>;
   /** The agent shown in the docked reading pane, on wide screens. */
   reading?: string | null;
   onPreview?: ((id: string) => Promise<void>) | null;
@@ -464,8 +428,6 @@ export function DeskBoard({
               ].map((leaf) => [leaf.id, { leaf }]),
             ).values(),
           ];
-  // Hosts outside the filter remain read-only aggregate summaries.
-  const others = otherHostSummaries(aggregate ?? world, world);
   const hostLabel =
     world.hosts.length === 1
       ? world.hosts[0]?.label
@@ -945,26 +907,20 @@ export function DeskBoard({
             <strong>{quiet.length}</strong>
             <span>quiet</span>
           </button>
-          <div className="desk-hosts">
-            <span className="desk-host is-selected">{hostLabel}</span>
-            {others.map((host) => (
-              <span
-                key={host.connectionId}
-                className={`desk-host${host.needs ? " has-needs" : ""}`}
-                title={
-                  host.stale
-                    ? "Cached observation; switch hosts to act"
-                    : "Observed in the background; switch hosts to act"
-                }
-              >
-                {host.label}
-                {host.needs ? ` · ${host.needs} need you` : ""}
-                {host.done ? ` · ${host.done} done` : ""}
-                {host.working ? ` · ${host.working} working` : ""}
-                {!host.needs && !host.done && !host.working ? " · quiet" : ""}
-              </span>
-            ))}
-          </div>
+          <DeskOtherHosts
+            world={aggregate ?? world}
+            filtered={world}
+            label={hostLabel}
+            onReveal={
+              onReveal
+                ? async (leaf) => {
+                    cancelPreview();
+                    await onReveal(leaf);
+                    void recordOpen(leaf);
+                  }
+                : undefined
+            }
+          />
         </div>
         <div className="desk-controls">
           <div className="desk-modes" role="tablist" aria-label="Desk views">

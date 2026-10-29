@@ -12,6 +12,7 @@ import {
   WORLD_AGENT_LAUNCH_EVENT,
   WORLD_AGENT_PROFILES_EVENT,
 } from "./agentProfiles";
+import { useDeskReveal } from "./deskReveal";
 import { DeskView } from "./DeskView";
 import {
   floatingTerminalGeometryId,
@@ -37,6 +38,7 @@ import { WindowSurface } from "./windows/WindowSurface";
 import { type WorldControlPlaneProps } from "./worldControlPlaneContract";
 import {
   activateWorldNodeHost,
+  defaultOpenView,
   worldNodeForInspectorPaneFocus,
 } from "./worldInspectorSelection";
 import type {
@@ -224,6 +226,21 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
     openInBackground,
     focusInspectorPane,
   } = controller;
+  const revealDeskAgent = useDeskReveal({
+    active: active && view === "desk",
+    intentRequestRef,
+    world: aggregateWorld,
+    hostsFilter,
+    open: (leaf, candidateWorld, sessionId) =>
+      applySelection(
+        leaf.id,
+        defaultOpenView(leaf),
+        true,
+        candidateWorld,
+        undefined,
+        sessionId,
+      ),
+  });
   useWorldPanelFocus(panelRegistry, managedWindows, windowCommand);
   /**
    * Only Town reads where a window was left docked, so only Town writes it:
@@ -332,6 +349,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                       world={world}
                       aggregate={aggregateWorld}
                       onOpen={openNodeById}
+                      onReveal={revealDeskAgent}
                       reading={
                         deskReadingPane && contextRailInspector
                           ? contextRailInspector.nodeId

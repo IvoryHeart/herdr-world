@@ -1,5 +1,6 @@
 // First: the page runs on test time (see testing/testClock.ts).
 import { clock } from "./testing/installHostsFilterClock";
+import { runDeskRevealAcceptance } from "./testing/deskRevealAcceptance";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { bridge, type ConnectionClient } from "../api";
@@ -123,6 +124,12 @@ const resourceWorkspace: Workspace = {
     is_linked_worktree: true,
   },
 };
+const deskSession = {
+  source: "herdr:codex",
+  agent: "codex",
+  kind: "id",
+  value: "synthetic-desk-session",
+};
 const pane: Pane = {
   pane_id: "shared",
   terminal_id: "shared",
@@ -132,6 +139,11 @@ const pane: Pane = {
   ...(operation === "bare-navigator" ? {} : { agent: "codex" }),
   agent_status: "idle",
   revision: 1,
+  ...(operation === "desk-reveal"
+    ? {
+        agent_session: deskSession,
+      }
+    : {}),
 };
 const tab: Tab = {
   tab_id: "shared",
@@ -235,11 +247,14 @@ function snapshot() {
       is_default: id === "alpha",
       state: id === "offline" || offline ? "disconnected" : "ready",
       generation: 7,
-      snapshot_generation: id === "offline" ? null : 7,
-      stale: offline && id !== "offline",
+      snapshot_generation:
+        id === "offline" && operation !== "desk-reveal" ? null : 7,
+      stale:
+        (offline && id !== "offline") ||
+        (operation === "desk-reveal" && id === "offline"),
       actionable: !offline && id !== "offline",
       snapshot:
-        id === "offline"
+        id === "offline" && operation !== "desk-reveal"
           ? null
           : {
               workspaces: [
@@ -434,6 +449,17 @@ async function float(id: string) {
   await frame();
 }
 async function operationalScenario(unmount: () => void) {
+  if (operation === "desk-reveal") {
+    await runDeskRevealAcceptance({
+      check,
+      waitFor,
+      frame,
+      calls,
+      dispatches,
+      inspectorForHost,
+    });
+    return;
+  }
   if (operation.startsWith("pending-inspector-")) {
     const client = bridge.connection("alpha", 7);
     const request = {
@@ -2712,6 +2738,10 @@ async function run() {
                 }
               : layout,
         };
+      if (operation === "desk-reveal" && method === "agent_session.get")
+        return {
+          session: (pane as Pane & { agent_session: unknown }).agent_session,
+        };
       if (method === "pane.get") {
         if (heldNotificationGet?.host === id) {
           const held = heldNotificationGet;
@@ -2894,9 +2924,14 @@ async function run() {
       view.value = requestedView;
       view.dispatchEvent(new Event("change", { bubbles: true }));
       if (requestedView !== "spaces") {
-        const title = "Town";
+        const title = requestedView === "desk" ? "Desk" : "Town";
         await waitFor(
-          () => !!document.querySelector(`[aria-label="${title} controls"]`),
+          () =>
+            !!document.querySelector(
+              requestedView === "desk"
+                ? ".desk"
+                : `[aria-label="${title} controls"]`,
+            ),
           `${title} did not mount`,
         );
       }

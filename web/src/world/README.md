@@ -30,7 +30,15 @@ reads for a preceding stop cannot enable its successor's review mark. Display
 expiry alone does not invalidate a receipt. Shared Desk metadata belongs to agent
 panes; verified asking shells still appear in Needs you and open their original
 terminal without attempting an agent-metadata mutation. Reads use fair bounded admission and
-independent host queues. Pending reads keep
+independent host queues. [DeskOtherHosts.tsx](DeskOtherHosts.tsx) expands aggregate
+summaries without operational reads and captures the displayed agent sessions.
+[deskReveal.ts](deskReveal.ts) admits the captured runtime, pane, terminal and
+session through a qualified live pane read before widening Hosts and opening the
+Inspector through the existing session-checked focus queue. Stale or replaced
+occupants remain explained and disabled; existing Inspector ownership is unchanged.
+Desktop and phone shell consumers run in [HostsFilter.test.ts](HostsFilter.test.ts)
+with the [reveal acceptance](testing/deskRevealAcceptance.ts); finite admission
+and retirement cases run in [deskReveal.test.ts](deskReveal.test.ts). Pending reads keep
 their admission across refreshes; queued work coalesces to the latest observation.
 
 | Task | Open these owners | Focused evidence |
