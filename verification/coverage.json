@@ -973,6 +973,9 @@
         "server/src/agent/conversation-steps-source.test.ts",
         "server/src/agent/conversation-answer.test.ts",
         "server/src/agent/pending-prompt.test.ts",
+        "server/src/agent/pending-prompt-captured.test.ts",
+        "server/src/agent/prompt-answer.test.ts",
+        "web/src/promptAnswers.test.ts",
         "server/src/agent/quest.test.ts",
         "server/src/agent/conversation-now.test.ts",
         "server/src/agent/codex-session-link.test.ts",
@@ -1731,7 +1734,7 @@
       "area": "Rendering/layout/search/metrics/site",
       "owner": "web/src/world/WorldFoundationApp.tsx",
       "requirement": "openspec/specs/world-surfaces/spec.md",
-      "properties": "Deterministic geometry/counts; renderer lifetime; bounded metric/cache work",
+      "properties": "Deterministic Town geometry/counts and room-size transitions; renderer lifetime; bounded metric/cache work",
       "existingTests": [
         "shared/herdrIdentity.test.ts",
         "server/src/http/herdr-info.test.ts",

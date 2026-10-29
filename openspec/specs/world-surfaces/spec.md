@@ -1282,9 +1282,10 @@ building column. There SHALL be no hard expanded desk ceiling: repeated Expand
 actions SHALL eventually reveal every observed desk. While partially expanded,
 the room SHALL offer Fold alongside Expand, with separate non-overlapping targets
 of at least 40 CSS pixels, so one Fold click can restore the folded target at any step.
-Ordinary tab closures SHALL keep the live size step. An expanded room SHALL
-retain its Fold control after closures, including at or below 24 desks, until
-the user folds it. A folded room SHALL show exactly the first 24 observed tabs
+An ordinary room's size SHALL follow its current desks and shrink when tabs
+close. An explicitly expanded room SHALL retain its capacity through tab
+closures, including at or below 24 desks, until the user folds it. A folded
+room SHALL show exactly the first 24 observed tabs
 (or all tabs when fewer exist) in the same native tab order as Spaces. Each
 expansion SHALL append the next native-order prefix of up to 20 tabs. Activity,
 selection, pins and recent tabs SHALL NOT promote later tabs across this boundary.
@@ -1308,8 +1309,9 @@ without moving other desks, and a closed tab SHALL leave no gap: the desks after
 it in reading order SHALL close up in their existing order while the desks
 before it keep their spots. A room that reaches a new capacity step MAY shift
 later rooms and rows of the same building without reordering rooms, and its
-desks MAY reflow to the step's columns; it SHALL keep its size step when desks
-close. Room placement SHALL be re-derived from native order when the scene is
+desks MAY reflow to the step's columns. Ordinary rooms SHALL resize to their
+current desk count; explicitly expanded rooms SHALL retain their capacity until
+Fold. Room placement SHALL be re-derived from native order when the scene is
 rebuilt. Town SHALL take its shape from its container's size rather than one
 breakpoint: on a phone, rooms SHALL stack in one column and buildings in one
 vertical column; on a portrait screen or a half-width window, rooms SHALL form
@@ -1342,6 +1344,19 @@ waiting for that ambient quiet period.
 - **WHEN** a tab whose desk sits between other desks closes
 - **THEN** the desks after it close up in order, the desks before it keep their
   spots, and the room keeps no empty gap
+
+#### Scenario: An ordinary room shrinks after a tab closes
+
+- **WHEN** a tab closes in an ordinary room
+- **THEN** the room resizes to fit its remaining desks
+
+#### Scenario: An expanded room keeps capacity through tab closures
+
+- **WHEN** tabs close in an explicitly expanded room
+- **THEN** its capacity stays unchanged, even at or below 24 desks, until Fold
+- **AND WHEN** the user folds the room
+- **THEN** it resizes to fit its folded desks while retaining pinned cells and
+  its building column
 
 #### Scenario: A room fills its capacity step
 
@@ -1781,6 +1796,70 @@ existing double-Escape stop SHALL retain their existing scope.
 - **WHEN** a bound Chat sends a slash command and the harness switches sessions
 - **THEN** its slim receipt remains **sent, not checked** without pausing normal sends
   as a misdelivery; no command effect is inferred
+
+### Requirement: Chat answers captured prompt choices and text options
+
+Chat SHALL recognize complete Codex approval menus with key hints and complete
+Codex question dialogs with their question counter, numbered choices, one cursor
+and notes/submit/interrupt footer. Question choices SHALL use their digit shortcut
+without requiring an approval key hint. A waiting Codex pane detected by Herdr
+without turn hooks SHALL use the same bound-conversation admission; an inferred
+or guessed conversation SHALL NOT gain answer authority from a recognized screen.
+
+Claude Code's question and plan menus SHALL expose their recognized text options.
+Selecting one in Chat SHALL open a single-line reply field without sending input.
+Submitting SHALL check the original prompt and session, select its native option,
+wait for the corresponding empty inline editor or discussion composer, and check
+the destination again before submitting text. Missing, stale, replaced or
+unrecognized editors SHALL receive no text. A native editor that was already
+active before Chat selected its option SHALL remain in the Terminal, including
+when it appears empty; it SHALL receive neither menu digits nor text. Text SHALL be nonempty, at most 4000 characters
+and free of terminal control characters. An existing native draft SHALL remain
+in the Terminal after its cursor moves away, including text resembling a
+placeholder or another option. Discussion dispatch SHALL require a complete empty
+composer with no continuation rows and unchanged session, terminal, revision,
+state sequence, title and status across its screen read; discussion text SHALL NOT invoke the
+composer's slash, shell or memory commands. Answers to one pane SHALL NOT
+interleave inside a conversation source.
+
+Digits within the reply input SHALL remain text. A replacement prompt or admitted
+connection, runtime, pane or session SHALL reset its option and draft. An answer receipt SHALL claim acknowledgement only from the
+same session moving on, not merely from successfully writing input. After queuing
+a discussion reply, Chat SHALL wait at most three seconds for working evidence,
+then recheck the same owner. Discussion acknowledgement SHALL require a newer
+working sequence, or an idle/done sequence at least two changes newer than the
+final destination check, covering a completed turn. An unchanged sequence or an
+idle/done sequence only one change newer SHALL remain unconfirmed.
+A post-selection refusal SHALL remain visible across
+question reloads in the same owner scope until the next answer attempt, even
+when the question disappears. Herdr's lack
+of conditional input remains a documented gap between the last check and dispatch.
+
+#### Scenario: Codex waits without hooks
+
+- **WHEN** Herdr reports a bound Codex pane blocked on a complete question dialog
+  whose choices have descriptions but no key hints
+- **THEN** Chat shows those choices and sends the selected digit to that pane
+
+#### Scenario: Submit a Claude text option
+
+- **WHEN** a user chooses a text option and submits a reply from Chat
+- **THEN** Chat verifies the native editor in the same question and session before
+  sending the reply and Enter, or verifies the discussion composer before using
+  the normal agent prompt operation
+
+#### Scenario: The destination changes after selecting a text option
+
+- **WHEN** the native editor cannot be verified or its pane, session or question changes
+- **THEN** Chat sends no text, explains that the option may already be selected,
+  and directs the user to the Terminal
+
+#### Scenario: Discussion progress follows prompt queuing asynchronously
+
+- **WHEN** the prompt operation queues a discussion reply before Herdr reports
+  its new turn, and progress arrives during the bounded wait
+- **THEN** Chat acknowledges only same-owner working progress or a completed
+  turn with at least two sequence advances, and otherwise leaves it unconfirmed
 
 ### Requirement: Town peeks show recent chatter and take replies
 

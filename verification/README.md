@@ -93,26 +93,37 @@ times, not peak-memory or all-platform measurements.
 No supplemental exploration substitutes for real consumer/platform/browser checks.
 
 CI calls the maintained behavioral workflow as a protected Delivery checks
-dependency alongside repository and World browser jobs; it is the authority.
-Local pre-push runs `bun run check:changed`, which runs the complete
-`verification:gate` (locked setup, types/notices, unfiltered models and the
-required diagnostic control) when a change touches `verification/`, `quint/`,
-`tools/quint/` or a `coverage.json` owner, and otherwise leaves verification to
-CI. `bun run check:delivery` runs every repository check and the gate locally.
-Model, adapter, contract, tooling and consumer changes cannot use the documentation
-shortcut. The owner-approved agent-tooling allowlist in
-[the CI guide](../docs/ci-pipelines.md#scope-and-scheduling) skips this dependency;
-application, verification and gate-policy paths cannot qualify. Full CI and
-ordinary docs still require behavioral CI; metadata-only exact-head reuse
-requires a prior successful full Delivery checks result that includes this dependency.
-Failure, missing evidence and cancellation block delivery. No existing integration,
-browser, scheduler, persistence or supported-platform check is replaced.
+dependency whenever the shared scope selects verification: verification/tooling
+and OpenSpec inputs, an inventory owner, an unknown path or a full main push.
+The explicit agent-tooling exception and unrelated ordinary docs skip it. See
+[the CI guide](../docs/ci-pipelines.md#shared-suite-plan-and-sharding). Local
+pre-push uses the same complete-PR classification and runs the complete
+`verification:gate` when selected; `check:delivery` always runs it.
 
-Linux CI executes the canonical check in an isolated cgroup with hard 4 GiB memory,
-zero swap and two CPUs of quota. The service subtree's `memory.peak`, enforced
+CI partitions all accepted models across three runners. Every model still runs
+its maintained bounds, replay and sensitivity checks. Partial `ci-shard` artifacts
+are not canonical evidence. The final aggregate requires all groups and every
+model exactly once, current source/revision and matching tool identities, plus
+successful enforced accounting for each group. On a rerun it selects each newest
+group attempt; missing, incomplete, duplicate, foreign or mismatched evidence
+fails. Only that aggregate publishes canonical success; late cancellation
+invalidates publication. The diagnostic, OOM and cancellation controls remain
+mandatory on every group runner. Local canonical commands remain unfiltered.
+
+Each Linux CI group executes in an isolated cgroup with hard 4 GiB memory,
+zero swap and two CPUs of quota. The explicit local `verification:resources`
+command retains one such envelope; ordinary local canonical execution is unchanged.
+The CI aggregate preserves all three per-runner accounting records rather than
+claiming a single global peak across separate machines. The payload subtree's `memory.peak`, enforced
 limits and OOM events are retained, bound to the canonical manifest. An actual
 64 MiB over-budget control must be OOM-killed and an actual cancellation control
 must drain its worker and descendant before the complete run is accepted.
+The service delegates sibling `payload` and `supervisor` cgroups. The hard memory
+limit, zero swap and measured peak cover the payload and all its descendants;
+the supervisor sits outside that memory envelope so payload-wide OOM kills
+cannot destroy its exit notification or accounting. Both siblings share the
+service's two-CPU quota. The live OOM regression checks their separate membership,
+requires a real OOM kill and retains accounting after the whole payload dies.
 `bun run verification:resources` exercises this through a local systemd user manager;
 CI uses `--system` and its existing passwordless sudo. Missing cgroup accounting or
 unsupported tooling fails rather than silently skipping limits. This establishes

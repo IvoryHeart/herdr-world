@@ -32,7 +32,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
 
 - **Town** is the default view (`/town`); the root URL opens it too.
   Each host is a building, each workspace a room, each tab a team table and each
-  pane a seat. Plain terminals show prompts. Additional panes beyond the drawn
+  pane a seat. Rooms resize as tabs open and close; explicitly expanded rooms
+  keep their size until folded. Plain terminals show prompts. Additional panes beyond the drawn
   seats remain available through the table's count and chooser. Each table
   carries its tab's name on a nameplate at its front edge. Agents go by the
   name Herdr gives them (`firstmate`), else their harness (`claude`); window
@@ -818,7 +819,10 @@ See [resource ownership](docs/ARCHITECTURE.md#workspace-resource-ownership).
   card and answers with the option you pick (click or its number key), after
   checking the question has not changed. A form of several questions lists
   every question's header with whether it is answered, asks them one at a
-  time, and then offers **Submit answers** from its review.
+  time, and then offers **Submit answers** from its review. Codex question
+  dialogs offer numbered choices without approval key hints. Claude Code's
+  **Type something.**, **Chat about this** and plan feedback offer a text field
+  and **Send text answer**, with the native destination checked before sending.
   Each tool call's row in Chat carries its evidence: a plain label, its state
   and time, a pass or fail badge for a test run, and when opened, the edit's
   diff, the test strip with its first failure, or the end of its output.
