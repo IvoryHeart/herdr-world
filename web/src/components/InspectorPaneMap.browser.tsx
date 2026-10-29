@@ -84,8 +84,18 @@ __storeTesting.replaceState({
     area: rect(0, 0, 10, 1),
     focused_pane_id: "w1:p1",
     splits: [
-      { id: "root", direction: "right", rect: rect(0, 0, 10, 1), ratio: 0.5 },
-      { id: "right", direction: "down", rect: rect(5, 0, 5, 1), ratio: 0.5 },
+      {
+        id: "split_0_root",
+        direction: "right",
+        rect: rect(0, 0, 10, 1),
+        ratio: 0.5,
+      },
+      {
+        id: "split_1_1",
+        direction: "down",
+        rect: rect(5, 0, 5, 1),
+        ratio: 0.5,
+      },
     ],
     panes: [
       { pane_id: "w1:p1", focused: true, rect: rect(0, 0, 5, 1) },

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   queueVisibleTabLayoutRead,
+  shareVisibleTabLayoutRead,
   tabLayoutMatchesSnapshot,
 } from "./visibleTabLayout";
 import type { Pane, PaneLayout, Tab, Workspace } from "./types";
@@ -107,6 +108,41 @@ describe("visible tab layout fencing", () => {
       { skipped: false, value: 4 },
       { skipped: true },
     ]);
+  });
+
+  test("a tab's terminal and title map share one read", async () => {
+    const gate = Promise.withResolvers<string>();
+    let reads = 0;
+    const read = () => {
+      reads += 1;
+      return gate.promise;
+    };
+    // Other tabs fill the queue, so this tab's read waits its turn.
+    const busy = Promise.withResolvers<void>();
+    const others = Array.from({ length: 4 }, () =>
+      queueVisibleTabLayoutRead(
+        () => busy.promise,
+        () => true,
+      ),
+    );
+    let terminalNeeds = true;
+    const terminal = shareVisibleTabLayoutRead(
+      "tab",
+      read,
+      () => terminalNeeds,
+    );
+    const map = shareVisibleTabLayoutRead("tab", read, () => true);
+    // The read still runs for the map after the terminal stops needing it.
+    terminalNeeds = false;
+    busy.resolve();
+    await Promise.all(others);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    gate.resolve("layout");
+    expect(await terminal).toEqual({ skipped: false, value: "layout" });
+    expect(await map).toEqual({ skipped: false, value: "layout" });
+    expect(reads).toBe(1);
+    await shareVisibleTabLayoutRead("tab", read, () => true);
+    expect(reads).toBe(2);
   });
 
   test("accepts exactly the current tab split", () => {
