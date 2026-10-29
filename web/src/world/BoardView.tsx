@@ -4244,14 +4244,10 @@ function NewTabDialog({
   );
 }
 
-/** A workspace's agents by status, and its shells: "3 agents · 1 working · 2 idle". */
-const COUNT_ORDER: [WorldAgentStatus, string][] = [
-  ["blocked", "waiting"],
-  ["working", "working"],
-  ["done", "done"],
-  ["idle", "idle"],
-  ["unknown", "unknown"],
-];
+/** A workspace's agents by state word, and its terminals: "3 agents · 1 working · 2 idle". */
+const COUNT_ORDER = (
+  ["blocked", "working", "done", "idle", "unknown"] as const
+).map((status) => [status, STATUS_LABEL[status].toLowerCase()] as const);
 function workspaceCounts(space: BoardWorkspace) {
   const agents = space.squares.filter((square) => square.isAgent);
   const shells = space.squares.length - agents.length;
@@ -4260,7 +4256,7 @@ function workspaceCounts(space: BoardWorkspace) {
     const n = agents.filter((square) => square.status === status).length;
     if (n) parts.push(`${n} ${word}`);
   }
-  if (shells) parts.push(`${shells} shell${shells === 1 ? "" : "s"}`);
+  if (shells) parts.push(`${shells} terminal${shells === 1 ? "" : "s"}`);
   return parts.join(" · ");
 }
 const NO_IDS: readonly string[] = [];
