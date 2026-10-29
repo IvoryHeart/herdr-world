@@ -150,7 +150,9 @@ function plan(selection: Affected) {
                 "bun",
                 "scripts/run-world-tests.ts",
                 ...timedSuites,
-                "--parallel=2",
+                // Match the latency shard: independent Chrome/renderer loads
+                // must not compete inside the exclusive timed lane.
+                "--parallel=1",
               ],
             ]
           : []),

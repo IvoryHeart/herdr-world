@@ -220,6 +220,7 @@ export class TownActors {
   private world: TownActorWorld | null = null;
   private clock = 0;
   private summoned: ReadonlySet<string> = new Set();
+  private asking: ReadonlySet<string> = new Set();
 
   get time() {
     return this.clock;
@@ -233,10 +234,12 @@ export class TownActors {
     world: TownActorWorld,
     instant: boolean,
     summoned: ReadonlySet<string> = this.summoned,
+    asking: ReadonlySet<string> = this.asking,
   ) {
     const previousWorld = this.world;
     this.world = world;
     this.summoned = summoned;
+    this.asking = asking;
     const { model } = world;
     const seen = new Set<string>();
     const fresh = new Set<string>();
@@ -341,8 +344,9 @@ export class TownActors {
       const agent = model.agents.get(actor.key)!;
       if (
         (agent.semanticStatus !== "blocked" &&
-          agent.semanticStatus !== "done") ||
-        this.summoned.has(actor.key)
+          agent.semanticStatus !== "done" &&
+          !this.asking.has(actor.key)) ||
+        (this.summoned.has(actor.key) && !this.asking.has(actor.key))
       )
         continue;
       const list = queues.get(actor.hostKey) ?? [];
@@ -353,9 +357,11 @@ export class TownActors {
     for (const [hostKey, list] of queues) {
       // Waiting agents first, oldest first; finished agents after them.
       const waiting = (actor: TownActor) => actor.blockedSince > 0;
+      const rank = (actor: TownActor) =>
+        waiting(actor) ? 0 : this.asking.has(actor.key) ? 1 : 2;
       list.sort(
         (a, b) =>
-          Number(waiting(b)) - Number(waiting(a)) ||
+          rank(a) - rank(b) ||
           (waiting(a)
             ? a.blockedSince - b.blockedSince
             : a.doneSince - b.doneSince) ||
@@ -380,6 +386,7 @@ export class TownActors {
       else if (
         agent.semanticStatus === "idle" &&
         !this.summoned.has(actor.key) &&
+        !this.asking.has(actor.key) &&
         !model.deskPins.has(seat.deskKey)
       ) {
         if (actor.spot) goal = { kind: "lounge", spot: actor.spot };

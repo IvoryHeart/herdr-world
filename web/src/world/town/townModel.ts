@@ -286,15 +286,30 @@ export function townRoomCounts(
 export function townAttention(
   model: TownModel,
   since: ReadonlyMap<string, number>,
+  asking: ReadonlySet<string> = new Set(),
 ): OfficeAgent[] {
   const at = (agent: OfficeAgent) => since.get(agent.key) ?? 0;
-  const agents = [...model.agents.values()];
+  const agents = asking.size
+    ? [
+        ...new Map([
+          ...model.agents,
+          ...(model.projection?.roster ?? [])
+            .filter((entry) => asking.has(entry.agent.key))
+            .map((entry) => [entry.agent.key, entry.agent] as const),
+        ]).values(),
+      ]
+    : [...model.agents.values()];
   return [
     ...agents
       .filter((agent) => agent.semanticStatus === "blocked")
       .sort((a, b) => at(a) - at(b) || a.key.localeCompare(b.key)),
+    ...agents.filter(
+      (agent) => agent.semanticStatus !== "blocked" && asking.has(agent.key),
+    ),
     ...agents
-      .filter((agent) => agent.semanticStatus === "done")
+      .filter(
+        (agent) => agent.semanticStatus === "done" && !asking.has(agent.key),
+      )
       .sort((a, b) => at(b) - at(a) || a.key.localeCompare(b.key)),
   ];
 }

@@ -90,6 +90,23 @@ export function operationalAgents(world: WorldObject): WorldLeafObject[] {
   );
 }
 
+/** Agents plus already-qualified asking shells, in the Desk's existing order. */
+export function deskAgents(
+  world: WorldObject,
+  asking: ReadonlyMap<string, unknown>,
+) {
+  return [
+    ...operationalAgents(world),
+    ...world.leaves.filter(
+      (leaf) =>
+        leaf.kind === "terminal" &&
+        leaf.actionable &&
+        !leaf.stale &&
+        asking.has(leaf.id),
+    ),
+  ];
+}
+
 const ATTENTION_ORDER: Record<string, number> = {
   blocked: 0,
   done: 1,

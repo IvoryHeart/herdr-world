@@ -1,3 +1,4 @@
+import { townBubbleKind, townAgentChatting } from "./townBubbleKind";
 /**
  * Pixi renderer for the Office town.
  *
@@ -83,6 +84,7 @@ export type TownSceneState = {
   completionSeenKeys: ReadonlySet<string>;
   /** Agents the user opened, who walk back to their desks. */
   summonedKeys: ReadonlySet<string>;
+  askingKeys?: ReadonlySet<string>;
   /** Building currently held open (for example while moving a desk). */
   openHostKey: string | null;
   calm: boolean;
@@ -956,30 +958,23 @@ export async function createTownRenderer(
         if (!agent) continue;
         const status = agent.semanticStatus;
         const near = level === "room" || level === "desk";
-        // Working agents chat in short bursts: a typing bubble a third of the time.
-        const phase = clock * 0.35 + (townHash(actor.key) % 97) / 97;
-        const chatting =
-          near &&
-          !state.calm &&
-          !camera.reducedMotion &&
-          status === "working" &&
-          actor.mode === "seat" &&
-          phase - Math.floor(phase) < 0.33;
-        const kind =
-          status === "blocked"
-            ? "blocked"
-            : status === "done" && !state.completionSeenKeys.has(agent.key)
-              ? "done"
-              : level === "desk" && status === "idle" && actor.mode === "stand"
-                ? "idle"
-                : near && status === "idle" && actor.mode === "seat"
-                  ? "sleep"
-                  : chatting
-                    ? (`typing${Math.floor(clock * 3) % 3}` as
-                        | "typing0"
-                        | "typing1"
-                        | "typing2")
-                    : null;
+        const chatting = townAgentChatting(
+          agent.key,
+          clock,
+          level,
+          status,
+          actor.mode,
+          !state.calm && !camera.reducedMotion,
+        );
+        const kind = townBubbleKind(
+          status,
+          state.askingKeys?.has(agent.key) ?? false,
+          state.completionSeenKeys.has(agent.key),
+          level,
+          actor.mode,
+          chatting,
+          Math.floor(clock * 3),
+        );
         if (!kind) continue;
         let headX = actor.x;
         let headY = actor.y - 20 * TOWN_AGENT_SCALE;
@@ -1012,7 +1007,9 @@ export async function createTownRenderer(
         }
         bubble.texture = textureOf(sprites.bubble[kind]);
         const bubbleScale =
-          (kind === "blocked" || kind === "done") && !near ? 2 : scale;
+          (kind === "blocked" || kind === "ask" || kind === "done") && !near
+            ? 2
+            : scale;
         bubble.scale.set(bubbleScale);
         const bounce =
           kind === "blocked" && !camera.reducedMotion && !state.calm
@@ -1298,6 +1295,7 @@ export async function createTownRenderer(
       actorWorld,
       instant || camera.reducedMotion,
       state.summonedKeys,
+      state.askingKeys ?? new Set(),
     );
     stats.summoned = [...state.summonedKeys].filter(
       (key) => actors.actors.get(key)?.goal?.kind === "seat",
@@ -1629,7 +1627,9 @@ export async function createTownRenderer(
       request("scene");
     },
     setState(nextState) {
-      const summonedChanged = nextState.summonedKeys !== state.summonedKeys;
+      const summonedChanged =
+        nextState.summonedKeys !== state.summonedKeys ||
+        nextState.askingKeys !== state.askingKeys;
       state = nextState;
       camera.calm = nextState.calm;
       if (summonedChanged) syncActors(false);

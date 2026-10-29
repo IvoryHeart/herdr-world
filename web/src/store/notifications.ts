@@ -4,6 +4,7 @@ import {
   type State,
   type StoreConnectionLease,
 } from "./types";
+import type { WorldAsk } from "../world/worldAsks";
 import { worldLocalStorage } from "../browserStorage";
 import { type TaskNotificationPreferences } from "../taskPush";
 import { type Pane, type Workspace, type Tab } from "../types";
@@ -55,6 +56,9 @@ export function isTaskNotificationTarget(
     target.workspaceId.length > 0 &&
     typeof target.paneId === "string" &&
     target.paneId.length > 0 &&
+    (target.terminalId === undefined ||
+      (typeof target.terminalId === "string" &&
+        target.terminalId.length > 0)) &&
     (target.agentSessionId === undefined ||
       (typeof target.agentSessionId === "string" &&
         target.agentSessionId.length > 0))
@@ -203,11 +207,12 @@ function maybeShowBrowserTaskNotification(
   target: NotificationTarget | null,
   /** World plays its own chime on this page, so the OS stays quiet. */
   silent = false,
+  localEvent = false,
 ) {
   if (
     !state.taskNotificationsEnabled ||
     state.taskNotificationBusy ||
-    state.taskNotificationTransport === "push"
+    (state.taskNotificationTransport === "push" && !localEvent)
   )
     return;
   const version = taskNotificationPreferenceVersion;
@@ -272,6 +277,7 @@ export function taskNotificationTargetFromNotice(
     | "actionWorkspaceId"
     | "actionPaneId"
     | "actionAgentSessionId"
+    | "actionTerminalId"
   >,
 ): TaskNotificationTarget | null {
   const target = {
@@ -279,6 +285,7 @@ export function taskNotificationTargetFromNotice(
     runtimeGeneration: notice.actionRuntimeGeneration,
     workspaceId: notice.actionWorkspaceId,
     paneId: notice.actionPaneId,
+    ...(notice.actionTerminalId ? { terminalId: notice.actionTerminalId } : {}),
     ...(notice.actionAgentSessionId
       ? { agentSessionId: notice.actionAgentSessionId }
       : {}),
@@ -357,9 +364,49 @@ function documentIsVisible() {
   );
 }
 
+/** New ledger asks use the existing chime, toast and OS-notification policy. */
+export function notifyWorldAsk(ask: WorldAsk) {
+  const actor = ask.actor;
+  if (
+    !actor.verified ||
+    !actor.connection_id ||
+    !actor.pane_id ||
+    !actor.workspace_id ||
+    !actor.terminal_id ||
+    !Number.isSafeInteger(actor.connection_generation) ||
+    ask.answer ||
+    ask.withdrawn
+  )
+    return;
+  notifyHerdrTask(
+    actor.connection_id,
+    {
+      kind: "message",
+      title: ask.question,
+      body: ask.question,
+      agent: actor.agent ?? actor.label,
+      agentKnown: Boolean(actor.agent),
+      sender: actor.agent
+        ? { known: true, agent: actor.agent }
+        : { known: false },
+      workspaceId: actor.workspace_id,
+      paneId: actor.pane_id,
+      ...(actor.agent_session_id
+        ? { agentSessionId: actor.agent_session_id }
+        : actor.agent
+          ? { sessionIdentityUnavailable: true as const }
+          : {}),
+    },
+    actor.connection_generation,
+    actor.terminal_id,
+  );
+}
+
 function notifyHerdrTask(
   connectionId: string,
   notification: HerdrTaskNotification,
+  askGeneration?: number,
+  askTerminalId?: string,
 ) {
   // A message for the owner follows the completed switch, as before.
   const notify =
@@ -368,8 +415,16 @@ function notifyHerdrTask(
       notification.kind === "message" ? "completed" : notification.kind
     ];
   const snapshot = connectionSnapshot(state, connectionId);
-  const runtimeGeneration = snapshot.serverRuntimeGeneration;
-  if (runtimeGeneration === null) return;
+  const runtimeGeneration = askGeneration ?? snapshot.serverRuntimeGeneration;
+  if (
+    runtimeGeneration === null ||
+    (askGeneration !== undefined &&
+      !taskNotificationTargetIsCurrent(state, {
+        connectionId,
+        runtimeGeneration,
+      }))
+  )
+    return;
   const { workspaceId, paneId } = notification;
   // Someone looking at the pane already sees it; Herdr stays the policy owner.
   if (
@@ -382,13 +437,16 @@ function notifyHerdrTask(
   const scope = { connectionId, runtimeGeneration };
   const target =
     workspaceId && paneId && !notification.sessionIdentityUnavailable
-      ? taskNotificationTarget(connectionId, runtimeGeneration, {
-          workspace_id: workspaceId,
-          pane_id: paneId,
-          ...(notification.agentSessionId
-            ? { agent_session: { value: notification.agentSessionId } }
-            : {}),
-        })
+      ? {
+          ...taskNotificationTarget(connectionId, runtimeGeneration, {
+            workspace_id: workspaceId,
+            pane_id: paneId,
+            ...(notification.agentSessionId
+              ? { agent_session: { value: notification.agentSessionId } }
+              : {}),
+          }),
+          ...(askTerminalId ? { terminalId: askTerminalId } : {}),
+        }
       : null;
   // The reason line carries a message's title; Herdr's body follows it.
   const message = notification.kind === "message";
@@ -402,7 +460,7 @@ function notifyHerdrTask(
   const announcement = announceChange({
     kind: notification.kind,
     connectionId,
-    terminalId: pane?.terminal_id || null,
+    terminalId: askTerminalId ?? pane?.terminal_id ?? null,
     agent: notification.agentKnown ? notification.agent : null,
     // Without a pane, Herdr's title is all that says what it is.
     detail: message || !paneId ? notification.title : null,
@@ -423,6 +481,9 @@ function notifyHerdrTask(
             actionWorkspaceId: target.workspaceId,
             actionPaneId: target.paneId,
             actionAgentSessionId: target.agentSessionId,
+            ...(target.terminalId
+              ? { actionTerminalId: target.terminalId }
+              : {}),
           }
         : {}),
       autoDismissMs: TASK_COMPLETED_TOAST_DISMISS_MS,
@@ -443,6 +504,7 @@ function notifyHerdrTask(
       scope,
       target,
       announcement.silent,
+      askGeneration !== undefined,
     );
 }
 
