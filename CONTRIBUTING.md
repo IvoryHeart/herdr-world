@@ -89,6 +89,11 @@ quieter. Timed World browser files run serially, matching the CI latency shard,
 so independent Chrome renderers do not compete for the measured budget. Each
 fixture still exercises its own concurrent production contexts and deadlines.
 Lane logs are kept in `.agents/delivery/lanes/`.
+The Web browser lane also boots the real `web/src/main.tsx` through an isolated
+Vite development server, captures startup exceptions and ErrorBoundary failures,
+and requires the application shell to mount. A fresh-process unit regression
+loads the asks model before the application store with browser storage present.
+These checks exercise entry initialization as well as the focused UI fixtures.
 
 Heavy local checks share one machine-wide queue (`scripts/check-lock.ts`) across
 all worktrees and clones: one browser lane (World browser suites, Chrome-driven

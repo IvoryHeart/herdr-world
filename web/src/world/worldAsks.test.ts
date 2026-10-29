@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import type { BridgeControlMsg } from "../api";
-import { WorldAsksStore, type WorldAsk } from "./worldAsks";
+import { bridge, type BridgeControlMsg } from "../api";
+import { WorldAsksStore, sharedAsksStore, type WorldAsk } from "./worldAsks";
 
 const ask = (id: string, answered = false): WorldAsk => ({
   id,
@@ -105,3 +105,28 @@ test("new asks announce once, withdrawn asks disappear, and old socket replies c
   expect(announced).toEqual(["q-new"]);
   store.stop();
 });
+
+test.serial(
+  "the application can attach its notifier after the shared asks model exists",
+  async () => {
+    const original = bridge.call;
+    let ledger = { revision: 1, asks: [ask("q-backlog")] };
+    const announced: string[] = [];
+    bridge.call = (async () => ledger) as typeof bridge.call;
+    try {
+      const shared = sharedAsksStore();
+      await shared.refresh();
+      expect(sharedAsksStore((entry) => announced.push(entry.id))).toBe(shared);
+      ledger = {
+        revision: 2,
+        asks: [ask("q-backlog"), ask("q-new-after-bootstrap")],
+      };
+      await shared.refresh();
+      await shared.refresh();
+      expect(announced).toEqual(["q-new-after-bootstrap"]);
+    } finally {
+      bridge.call = original;
+      sharedAsksStore(() => {});
+    }
+  },
+);
