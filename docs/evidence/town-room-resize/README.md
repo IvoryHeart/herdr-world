@@ -3,9 +3,10 @@
 Synthetic captures of the Town browser fixture at the five owner viewports.
 They use invented hosts, workspaces and agents. The phone, laptop, half-width
 and portrait views focus on the fixture's 26-desk folded room; the wide view
-shows all three host buildings and their different room sizes. The synthetic
-ask was answered through its normal UI before capture. The expanded-capacity
-closure and Fold transitions are covered by `townLayout.test.ts`.
+shows the full Atlas building and part of the neighboring Lab building. The
+synthetic ask was answered through its normal UI before capture. The
+expanded-capacity closure and Fold transitions are covered by
+`townLayout.test.ts`.
 
 | Viewport | Capture |
 | --- | --- |
