@@ -158,11 +158,15 @@ export function useTownBus(
         if (!latest.current.current.bin.entries.length) return;
         layer.hold();
         playBinSound("back");
-        // A pause the service refuses lets the bus go again.
-        void pauseBin().catch((error: unknown) => {
-          layer.release();
-          report(error);
-        });
+        // A pause the service refuses, or a resume that overtook it, lets the
+        // bus go again.
+        void pauseBin().then(
+          (latest) => layer.holdAnswered(latest.paused),
+          (error: unknown) => {
+            layer.release();
+            report(error);
+          },
+        );
       },
       release() {
         layer.release();

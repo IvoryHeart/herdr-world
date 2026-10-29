@@ -56,8 +56,11 @@ export class WorldBinRegistry {
   private outcomes: BinOutcome[] = [];
   private timer: unknown = null;
   private nextId = 1;
-  /** Closes run one at a time, so each reads the panes the previous close left. */
-  private closing: Promise<void> = Promise.resolve();
+  /**
+   * Closes on one connection run one at a time, so each reads the panes the
+   * previous close left; a stalled host never holds back another's.
+   */
+  private closing = new Map<string, Promise<void>>();
 
   constructor(
     private readonly close: BinClose,
@@ -229,13 +232,20 @@ export class WorldBinRegistry {
    * and both send pane.close: the second is the workspace's last pane.
    */
   private queue(entry: Pending) {
+    const key = entry.connection_id;
     // run records its own failures; nothing may stop later closes.
-    this.closing = this.closing.then(() => this.run(entry)).catch(() => {});
+    const next = (this.closing.get(key) ?? Promise.resolve())
+      .then(() => this.run(entry))
+      .catch(() => {});
+    this.closing.set(key, next);
+    void next.then(() => {
+      if (this.closing.get(key) === next) this.closing.delete(key);
+    });
   }
 
   /** Settles once every queued close has finished (tests). */
-  settled() {
-    return this.closing;
+  async settled() {
+    await Promise.all(this.closing.values());
   }
 
   private async run(entry: Pending) {

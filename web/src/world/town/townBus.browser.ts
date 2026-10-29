@@ -192,7 +192,7 @@ export async function checkTownBus(
       view: "board",
       join,
     });
-  const riders = phone ? 1 : 6;
+  const riders = 6;
   await rider(0);
   const first = bin.entries()[0]!.id;
   for (let i = 1; i < riders; i += 1) await rider(i, first);
@@ -206,7 +206,7 @@ export async function checkTownBus(
   await rider(riders);
   const late = bin.entries()[bin.entries().length - 1]!.id;
   await waitFor(
-    () => parked().length === (phone ? 2 : 3),
+    () => parked().length === 3,
     () => `the later trip ran ${parked().length} buses`,
   );
   const boxes = parked();
@@ -215,6 +215,16 @@ export async function checkTownBus(
       boxes.every((b, j) => i === j || a.x + a.w <= b.x || b.x + b.w <= a.x),
     ),
     `parked buses overlap: ${JSON.stringify(boxes.map((item) => [item.x, item.w]))}`,
+  );
+  const { width, height } = origin();
+  check(
+    parked().every((item) =>
+      item.seats.every(
+        (seat) =>
+          seat.x >= 0 && seat.x <= width && seat.y >= 0 && seat.y <= height,
+      ),
+    ) && parked().every((item) => item.x >= 0 && item.x + item.w <= width + 1),
+    `a parked bus or passenger left the screen: ${JSON.stringify(parked().map((item) => [item.x, item.y, item.w]))}`,
   );
   const lateBus = parked().length - 1;
   await waitFor(

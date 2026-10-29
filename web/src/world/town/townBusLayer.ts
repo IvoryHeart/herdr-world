@@ -3,8 +3,10 @@ import type { BinEntry } from "../../../../shared/bin";
 import { binTimeLeft, type WorldBinState } from "../bin/binStore";
 import {
   BUS_ROAD_OFFSET,
+  busParking,
   busPhase,
   busTimes,
+  BusHold,
   busTrips,
   busX,
   catchableTrip,
@@ -53,6 +55,9 @@ type BusView = {
   /** Seats: the entries shown at each upper-deck window. */
   seats: { entry: BinEntry; rect: Rect }[];
   departing: { from: number; since: number } | null;
+  /** Its row's road line and its scale while parked; it leaves on them. */
+  bottom: number;
+  scale: number;
 };
 
 const inside = (r: Rect, x: number, y: number) =>
@@ -75,9 +80,7 @@ export class TownBusLayer implements TownOverlay {
   private buses: BusView[] = [];
   private bin: WorldBinState | null = null;
   private agentOf = new Map<string, string>();
-  private heldAt: number | null = null;
-  /** Held here, and the service has not yet confirmed the pause. */
-  private holdPending = false;
+  private grip = new BusHold();
   private trips: BusTrip[] = [];
   private nextChange: ReturnType<typeof setTimeout> | null = null;
   private status = { x: 0, y: 0, text: "", visible: false, bus: "" };
@@ -96,13 +99,7 @@ export class TownBusLayer implements TownOverlay {
   setBin(bin: WorldBinState, agentOf: Map<string, string>) {
     this.bin = bin;
     this.agentOf = agentOf;
-    // The service's pause decides: once confirmed, a resume from any World
-    // (or an empty bin) lets the bus go here too.
-    if (bin.bin.paused) this.holdPending = false;
-    else if (!this.holdPending || !bin.bin.entries.length) {
-      this.heldAt = null;
-      this.holdPending = false;
-    }
+    this.grip.observe(bin.bin.paused, !bin.bin.entries.length);
     this.hidden = new Set(
       bin.bin.entries.flatMap((entry) => agentOf.get(entry.id) ?? []),
     );
@@ -111,18 +108,21 @@ export class TownBusLayer implements TownOverlay {
 
   /** Press and hold: freeze the bus at once, before the service pauses. */
   hold() {
-    if (this.heldAt === null && !this.bin?.bin.paused) this.holdPending = true;
-    this.heldAt ??= performance.now();
+    this.grip.hold(performance.now(), !!this.bin?.bin.paused);
     this.invalidate();
   }
   /** Let the bus go, or undo a hold the service refused. */
   release() {
-    this.heldAt = null;
-    this.holdPending = false;
+    this.grip.release();
+    this.invalidate();
+  }
+  /** The pause settled; `paused` is the service's latest state, which may be a later resume. */
+  holdAnswered(paused: boolean) {
+    this.grip.answered(paused);
     this.invalidate();
   }
   get held() {
-    return this.heldAt !== null || !!this.bin?.bin.paused;
+    return this.grip.held(!!this.bin?.bin.paused);
   }
 
   /** A bus a newly dropped agent can still catch: one of its passengers. */
@@ -167,7 +167,7 @@ export class TownBusLayer implements TownOverlay {
   update(camera: TownCamera, look: (key: string) => TownLook) {
     if (this.stopSprite.destroyed) return false;
     const bin = this.bin;
-    const now = this.heldAt ?? performance.now();
+    const now = this.grip.at ?? performance.now();
     const z = camera.z;
     const { width, height, inset } = camera.viewport;
     const quiet = camera.reducedMotion;
@@ -205,27 +205,31 @@ export class TownBusLayer implements TownOverlay {
       height - inset.bottom - (width < 640 ? 110 : 6),
       Math.max(inset.top + busH + 6, sy + BUS_ROAD_OFFSET * z),
     );
-    const stopLeft = Math.min(
-      width - BUS_W * z - 8,
-      Math.max(inset.left + 8, sx - (BUS_DOOR_X + 4) * z),
-    );
-    const from = -BUS_W * z - 16;
+    // A bus seats five: a bigger trip runs as many buses as it needs, and
+    // every parked bus stands on screen (busParking).
+    const parking = busParking({
+      count: this.trips.reduce(
+        (sum, trip) =>
+          sum + Math.ceil(trip.entries.length / BUS_WINDOWS.length),
+        0,
+      ),
+      zoom: z,
+      stopX: sx,
+      road,
+      left: inset.left + 8,
+      right: width - 8,
+      top: inset.top + 6,
+      busW: BUS_W,
+      busH: BUS_H,
+      doorX: BUS_DOOR_X,
+    });
+    const scale = parking.scale;
+    const from = -BUS_W * scale - 16;
     const to = width + 16;
 
     let moving = false;
     const kept: BusView[] = [];
     const waiting: BinEntry[] = [];
-    // Parked buses stand side by side from the stop, right while there is
-    // room and then left, so none hides another or its passengers.
-    const pitch = BUS_W * z + 6;
-    const rightSlots = Math.max(
-      1,
-      Math.floor((width - BUS_W * z - 8 - stopLeft) / pitch) + 1,
-    );
-    const slotX = (slot: number) =>
-      slot < rightSlots
-        ? stopLeft + slot * pitch
-        : stopLeft - (slot - rightSlots + 1) * pitch;
     let slot = 0;
     for (const trip of this.trips) {
       const pose = quiet
@@ -235,7 +239,6 @@ export class TownBusLayer implements TownOverlay {
       const open = pose.phase === "wait" || this.held;
       const driving = pose.phase !== "wait" && !this.held;
       moving ||= driving && !bin?.bin.paused;
-      // A bus seats five: a bigger trip runs as many buses as it needs.
       for (let i = 0; i < trip.entries.length; i += BUS_WINDOWS.length) {
         const load = trip.entries.slice(i, i + BUS_WINDOWS.length);
         const view =
@@ -246,14 +249,17 @@ export class TownBusLayer implements TownOverlay {
               load.some((entry) => bus.ids.has(entry.id)),
           ) ?? this.newBus();
         view.ids = new Set(load.map((entry) => entry.id));
-        view.x = busX(pose, from, slotX(slot), to);
+        const place = parking.slots[slot]!;
         slot += 1;
+        view.x = busX(pose, from, place.x, to);
+        view.bottom = place.bottom;
+        view.scale = scale;
         this.drawBus(
           view,
           open,
           driving,
-          road,
-          z,
+          place.bottom,
+          scale,
           pose.phase === "arrive" ? [] : load,
           look,
         );
@@ -277,7 +283,7 @@ export class TownBusLayer implements TownOverlay {
         bus.sprite.destroy({ children: true });
         continue;
       }
-      this.drawBus(bus, false, true, road, z, [], look);
+      this.drawBus(bus, false, true, bus.bottom, bus.scale, [], look);
       moving = true;
       kept.push(bus);
     }
@@ -343,6 +349,8 @@ export class TownBusLayer implements TownOverlay {
       rect: { x: 0, y: 0, w: 0, h: 0 },
       seats: [],
       departing: null,
+      bottom: 0,
+      scale: 1,
     };
   }
 

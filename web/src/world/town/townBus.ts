@@ -115,3 +115,101 @@ export function townBusStop(layout: TownLayout): TownPoint | null {
 
 /** Where the bus's wheels run: the middle of the road below the stop. */
 export const BUS_ROAD_OFFSET = TOWN_TILE * 2;
+
+/**
+ * A press-and-hold on the bus: it freezes at once, before the service pauses,
+ * and then follows the service. Once the service has answered the pause, a
+ * resume from any World (or an empty bin) lets it go; a refused pause, or a
+ * resume that overtook the pause, lets it go too.
+ */
+export class BusHold {
+  /** performance.now() when the bus froze, or null while it drives. */
+  at: number | null = null;
+  /** Held here, and the service has not answered the pause yet. */
+  private pending = false;
+
+  hold(now: number, servicePaused: boolean) {
+    if (this.at === null && !servicePaused) this.pending = true;
+    this.at ??= now;
+  }
+  release() {
+    this.at = null;
+    this.pending = false;
+  }
+  /** The pause call settled; `paused` is the latest state the service gave. */
+  answered(paused: boolean) {
+    this.pending = false;
+    if (!paused) this.at = null;
+  }
+  /** The service's latest state arrived. */
+  observe(paused: boolean, empty: boolean) {
+    if (paused) this.pending = false;
+    else if (!this.pending || empty) this.release();
+  }
+  held(servicePaused: boolean) {
+    return this.at !== null || servicePaused;
+  }
+}
+
+export type BusParkingInput = {
+  /** Buses waiting at the stop at once. */
+  count: number;
+  /** The camera's zoom: buses are drawn at it when they fit. */
+  zoom: number;
+  /** The stop's screen x, and the bottom of the first row (the road). */
+  stopX: number;
+  road: number;
+  /** The usable screen area, in canvas pixels. */
+  left: number;
+  right: number;
+  top: number;
+  /** One bus at scale 1, and where its door is. */
+  busW: number;
+  busH: number;
+  doorX: number;
+};
+
+const BUS_GAP = 6;
+
+/**
+ * Where parked buses stand, so every one is on screen: side by side from the
+ * stop, the first with its door at the stop, in rows rising above the road
+ * when one row is not enough, and smaller (never below scale 1) when even the
+ * rows run out.
+ */
+export function busParking(input: BusParkingInput) {
+  const { count, left, right, top, road, busW, busH } = input;
+  const fits = (scale: number) => {
+    const cols = Math.max(
+      1,
+      Math.floor((right - left + BUS_GAP) / (busW * scale + BUS_GAP)),
+    );
+    const rows = Math.max(
+      1,
+      Math.floor((road - top + BUS_GAP) / (busH * scale + BUS_GAP)),
+    );
+    return { cols, ok: cols * rows >= count };
+  };
+  let scale = input.zoom;
+  while (scale > 1 && !fits(scale).ok) scale = Math.max(1, scale * 0.85);
+  const { cols } = fits(scale);
+  const pitch = busW * scale + BUS_GAP;
+  const atStop = Math.min(
+    right - busW * scale,
+    Math.max(left, input.stopX - (input.doorX + 4) * scale),
+  );
+  const slots = Array.from({ length: count }, (_, index) => {
+    const row = Math.floor(index / cols);
+    const inRow = Math.min(cols, count - row * cols);
+    // A row starts at the stop when it fits there, else as far right as fits.
+    const start = Math.max(
+      left,
+      Math.min(atStop, right - inRow * pitch + BUS_GAP),
+    );
+    return {
+      x: start + (index % cols) * pitch,
+      bottom: road - row * (busH * scale + BUS_GAP),
+    };
+  });
+  return { scale, slots };
+}

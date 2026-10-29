@@ -256,6 +256,30 @@ describe("closeBinEntry", () => {
     ]);
   });
 
+  test("a host that never answers holds back only its own closes", async () => {
+    const closed: string[] = [];
+    const bin = new WorldBinRegistry(
+      (entry) =>
+        entry.connection_id === "stalled"
+          ? new Promise(() => {})
+          : Promise.resolve(closed.push(entry.pane_id)).then(() => ({
+              result: "closed" as const,
+              closed_tab: false,
+            })),
+      () => {},
+      fakeClock().clock,
+    );
+    bin.add({ ...target("p1"), connection_id: "stalled" }, 30_000);
+    bin.add({ ...target("p2"), connection_id: "stalled" }, 30_000);
+    bin.add(target("p3"), 30_000);
+    bin.closeNow("all");
+    await settle();
+    expect(closed).toEqual(["p3"]);
+    expect(bin.list().outcomes.map((outcome) => outcome.label)).toEqual([
+      "agent p3",
+    ]);
+  });
+
   test("closes the workspace when it is the workspace's last pane", async () => {
     const { lease, calls } = herdr([pane("p2"), pane("p9", "t9", "w9")]);
     expect(await closeBinEntry(entry, lease)).toEqual({
