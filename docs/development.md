@@ -346,7 +346,11 @@ withdraws. A waiting CLI returns on answer, dismissal or withdrawal. Closed
 questions are retained and trimmed together. New verified asks carry their
 runtime, terminal, workspace and session identity into reception and
 notification targets; an unverified ask carries them, still marked
-unverified, only when exactly one local Herdr has the pane it claims. Asks
+unverified, only when exactly one local Herdr has the pane it claims and every
+other candidate local Herdr explicitly reports `pane_not_found`. A timeout,
+unavailable or unsupported host, or a malformed pane reply, leaves that ask in
+the question list without a reception or notification target. Remote hosts do
+not participate in this local placement check. Asks
 from agents also carry Herdr's agent name (`agent.get`). World announces newly
 observed asks once, and excludes closed asks from every open-question
 projection. Behind a reverse proxy on

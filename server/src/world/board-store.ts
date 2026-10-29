@@ -1,4 +1,21 @@
 import {
+  colorFollowOps,
+  trackColorEdits,
+  type ColorEdit,
+} from "./board-color-moves";
+import { movedAppearanceOps } from "./appearance-observation";
+import {
+  restoreAppearance,
+  pruneAppearances,
+  relocateAppearance,
+  applyAppearance,
+  parseAppearanceRecords,
+  type AppearanceFields,
+  type AppearanceTarget,
+  type AppearanceRecords,
+  type AppearanceRecord,
+} from "../../../shared/appearance";
+import {
   checkStoredGroups,
   parseStoredGroup,
   parseGroupChanges,
@@ -14,11 +31,7 @@ import { join } from "node:path";
 import { dataRoot, replaceDataFile } from "../config/data-paths";
 import { worldEnv } from "../config/environment";
 import { RECIPIENT_MAX, type ObservedAgent } from "./board-recipient";
-import {
-  cardKey,
-  resolveTerminalColor,
-  tabCardKey,
-} from "../../../shared/terminalColor";
+import { cardKey, tabCardKey } from "../../../shared/terminalColor";
 import {
   leaveGroups,
   RELATION_LIMITS,
@@ -103,6 +116,7 @@ export type BoardLayoutDocument = {
 export type DeskCell = { col: number; row: number };
 export type DeskPin = { cell: DeskCell | null };
 export type BoardDocument = {
+  appearance?: AppearanceRecords;
   version: 1;
   revision: number;
   layout: BoardLayoutDocument;
@@ -113,6 +127,14 @@ export type BoardDocument = {
 };
 
 export type BoardOp =
+  | { op: "appearance.prune"; keys: string[] }
+  | { op: "appearance.set"; target: AppearanceTarget; fields: AppearanceFields }
+  | {
+      op: "appearance.relocate";
+      from: AppearanceTarget;
+      target: AppearanceTarget;
+    }
+  | { op: "appearance.restore"; key: string; record: AppearanceRecord | null }
   | {
       op: "note.put";
       note: Omit<BoardNote, "rev">;
@@ -195,7 +217,10 @@ export type BoardOp =
  * carry what the browser showed in the pane (`observed`); it is taken out
  * and returned for this save only, never stored.
  */
-export function clientBoardOps(ops: unknown): {
+export function clientBoardOps(
+  ops: unknown,
+  document?: BoardDocument,
+): {
   ops: BoardOp[];
   observed: Map<string, ObservedAgent>;
 } {
@@ -204,6 +229,17 @@ export function clientBoardOps(ops: unknown): {
   const clean = ops.map((op) => {
     if (!isObject(op)) fail("op must be an object");
     if (
+      op.op === "card.color" &&
+      Object.values(document?.appearance ?? {}).some(
+        (record) => record.kind === "tab" && record.color_key === op.key,
+      )
+    )
+      fail("tab colours require qualified appearance admission");
+    if (
+      op.op === "appearance.prune" ||
+      op.op === "appearance.restore" ||
+      op.op === "appearance.relocate" ||
+      op.op === "appearance.set" ||
       op.op === "anchor.recipient" ||
       op.op === "spawn.record" ||
       op.op === "relations.prune"
@@ -481,6 +517,9 @@ export function parseBoardDocument(value: unknown): BoardDocument {
   const document: BoardDocument = {
     version: 1,
     revision: value.revision as number,
+    ...(value.appearance === undefined
+      ? {}
+      : { appearance: parseAppearanceRecords(value.appearance) }),
     layout: {
       anchors: points(layout.anchors, "anchors"),
       offsets: points(layout.offsets, "offsets"),
@@ -551,6 +590,7 @@ function checkBounds(document: BoardDocument) {
 
 export class BoardStore {
   private document: BoardDocument;
+  private readonly colorEdits = new Map<string, ColorEdit>();
 
   constructor(
     private readonly path: string = defaultBoardPath(),
@@ -585,6 +625,17 @@ export class BoardStore {
     return structuredClone(this.document);
   }
 
+  /** In-flight moves distinguish explicit edits from native close cleanup. */
+  captureColorChanges(): (key: string) => CardColor | null | undefined {
+    const captured = new Map(this.colorEdits);
+    return (key) => {
+      const edit = this.colorEdits.get(key);
+      return edit && captured.get(key)?.revision !== edit.revision
+        ? edit.color
+        : undefined;
+    };
+  }
+
   /**
    * Apply every operation or none. A note edit made against an older note
    * revision is refused with the current document, so a second client never
@@ -602,6 +653,7 @@ export class BoardStore {
     if (payload.length > BOARD_LIMITS.bytes) fail("the board is too large");
     replaceDataFile(this.path, payload);
     this.document = next;
+    trackColorEdits(this.colorEdits, ops, next);
     return this.get();
   }
   /**
@@ -699,6 +751,18 @@ function applyOp(
         next.layout.folded = keys(op.folded, "folded");
       return;
     }
+    case "appearance.prune":
+      pruneAppearances(next, op.keys);
+      return;
+    case "appearance.restore":
+      restoreAppearance(next, op.key, op.record);
+      return;
+    case "appearance.relocate":
+      relocateAppearance(next, op.from, op.target);
+      return;
+    case "appearance.set":
+      applyAppearance(next, op.target, op.fields);
+      return;
     case "card.color": {
       const key = text(op.key, "card key", BOARD_LIMITS.key);
       if (op.color === null) delete next.layout.colors[key];
@@ -846,6 +910,15 @@ export function moveFollowOps(
     ops.push(...colorFollowOps(connectionId, movedTab, moved, colors));
     ops.push(...pinFollowOps(document, connectionId, movedTab, moved, colors));
   }
+  ops.push(
+    ...movedAppearanceOps(
+      document,
+      connectionId,
+      movedTab,
+      moved,
+      colors?.workspaceIds ?? new Set(),
+    ),
+  );
   return ops;
 }
 
@@ -868,51 +941,6 @@ function pinFollowOps(
     { op: "desk.pin", key: nextKey, cell: null },
     { op: "desk.unpin", key: previousKey },
   ];
-}
-
-/**
- * A moved tab keeps the colour it showed (shared/terminalColor.ts), chosen,
- * inherited or default: its new tab ID would otherwise give it another
- * default. It is saved as the moved tab's own colour. Read from
- * `colors.before`, taken before the move, so a close of the old tab seen
- * during the move cannot lose it.
- */
-function colorFollowOps(
-  connectionId: string,
-  movedTab: string,
-  moved: {
-    tab_id: string;
-    workspace_id?: string;
-    source_workspace_id?: string;
-  },
-  colors: MoveColors,
-): BoardOp[] {
-  const { before, workspaceIds } = colors;
-  const { source_workspace_id: from, workspace_id: to } = moved;
-  if (!from || !to) return [];
-  // A spawned tab's inherited colour follows its terminals, not its tab ID.
-  if (
-    colors.inherited &&
-    !before[tabCardKey(connectionId, movedTab, workspaceIds)]
-  )
-    return [];
-  const previousKey = tabCardKey(connectionId, movedTab, workspaceIds);
-  const nextKey = tabCardKey(connectionId, moved.tab_id, workspaceIds);
-  if (previousKey === nextKey) return [];
-  const { color } = resolveTerminalColor(before, {
-    connectionId,
-    workspaceId: from,
-    tabId: movedTab,
-    workspaceIds,
-  });
-  // Always as the tab's own colour: one that merely matched the new room's
-  // would otherwise be lost to it, and change when that room is recoloured.
-  const ops: BoardOp[] = [
-    { op: "card.color", key: nextKey, color: color as CardColor },
-  ];
-  if (before[previousKey])
-    ops.push({ op: "card.color", key: previousKey, color: null });
-  return ops;
 }
 
 /** The colours before a move, and the host's workspace IDs for tab keys. */

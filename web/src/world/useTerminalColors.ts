@@ -1,4 +1,9 @@
 import {
+  runtimeAppearanceTargets,
+  visibleAppearanceColors,
+  saveAppearance,
+} from "./appearance";
+import {
   useCallback,
   useEffect,
   useMemo,
@@ -15,7 +20,6 @@ import {
   resolveTerminal,
   TERMINAL_COLOR_PALETTE,
   TERMINAL_COLORS,
-  terminalColorKey,
   type TerminalColor,
   type TerminalColors,
   type TerminalColorTarget,
@@ -149,7 +153,7 @@ export function useTerminalColors(
     last.current = keepColors(
       last.current,
       inherited(
-        document?.layout.colors ?? NONE,
+        visibleAppearanceColors(document, runtime.get().connections),
         document?.relations ?? NO_RELATIONS,
         runtime.get().connections,
       ),
@@ -165,9 +169,23 @@ export function setTerminalColor(
   color: TerminalColor | null,
   store: BoardDocumentStore = sharedBoardStore(),
 ) {
-  return store.patch([
-    { op: "card.color", key: terminalColorKey(target), color },
-  ]);
+  const connections = worldRuntimeStore.get().connections;
+  const connection = connections.find(
+    (item) => item.connectionId === target.connectionId,
+  );
+  const observed = runtimeAppearanceTargets(connections).find(
+    (item) =>
+      item.kind === "tab" &&
+      item.connection_id === target.connectionId &&
+      item.native_id === target.tabId,
+  );
+  if (!connection || !observed)
+    return Promise.resolve("Terminal appearance is unavailable");
+  return saveAppearance(
+    { ...observed, connection_generation: connection.generation },
+    { color },
+    store,
+  );
 }
 
 /** Spaces' tab strip, coloured from World's store (TabBar's colour seam). */
