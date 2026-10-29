@@ -1734,6 +1734,17 @@ async function run() {
         ) && !unverifiedAsk?.textContent?.includes("unverified unverified"),
         "the rail must mark an unverified ask once, naming its asker",
       );
+      // Open agent on a shell asker opens its own terminal, as reception does.
+      const openedBeforeAsk = opened.length;
+      unverifiedAsk!
+        .querySelector<HTMLButtonElement>('button[aria-label^="Open "]')!
+        .click();
+      check(
+        opened.length === openedBeforeAsk + 1 &&
+          opened[openedBeforeAsk] === watcherId,
+        "Open agent on a shell question must open its original terminal",
+      );
+      opened.splice(openedBeforeAsk);
       unverifiedAsk!
         .querySelector<HTMLButtonElement>('button[aria-label^="Dismiss"]')!
         .click();

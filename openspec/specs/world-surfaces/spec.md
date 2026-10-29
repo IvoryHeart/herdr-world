@@ -1472,7 +1472,8 @@ ask, so World places it as it places a verified ask; otherwise the ask SHALL
 remain in the question list only. The service SHALL record Herdr's name for an
 asking agent. The question list SHALL name each asker as Town names its desk,
 else by that agent name or its pane, mark an unverified asker once, and offer
-Open agent for a placed ask.
+Open agent for each placed ask, including every ask from one pane, opening the
+asking agent, or the terminal of an asking pane without one.
 
 The owner SHALL be able to dismiss any open ask in World. Dismissal SHALL close
 the question without an answer, release waiting reads with a dismissed state,

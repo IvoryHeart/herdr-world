@@ -145,6 +145,16 @@ export async function handleWorldAsk(
           : text(params.key, "the cause key", 512);
       if (key && !actor.verified)
         refused("cause keys require a verified asking pane");
+      const options = Array.isArray(params.options)
+        ? params.options.map((option) =>
+            text(option, "an option", LEDGER_LIMITS.option),
+          )
+        : [];
+      if (options.length > LEDGER_LIMITS.options)
+        usage(`at most ${LEDGER_LIMITS.options} options`);
+      // Herdr is asked first: from here to the insertion nothing waits, so
+      // concurrent asks cannot all pass the cause and allowance checks.
+      const asker = await placeAsker(deps.hosts(), actor);
       if (key) {
         const known = deps.ledger
           .get()
@@ -154,13 +164,6 @@ export async function handleWorldAsk(
           );
         if (known) return known;
       }
-      const options = Array.isArray(params.options)
-        ? params.options.map((option) =>
-            text(option, "an option", LEDGER_LIMITS.option),
-          )
-        : [];
-      if (options.length > LEDGER_LIMITS.options)
-        usage(`at most ${LEDGER_LIMITS.options} options`);
       const open = deps.ledger.openAsks().asks;
       if (open.length >= LEDGER_LIMITS.asks)
         refused("too many open questions; wait for answers");
@@ -178,7 +181,6 @@ export async function handleWorldAsk(
           `you have ${LEDGER_LIMITS.asksPerActor} open questions; wait for answers`,
         );
       const id = deps.ledger.nextId("q");
-      const asker = await placeAsker(deps.hosts(), actor);
       deps.publishLedger(
         deps.ledger.update((document) =>
           document.asks.push({

@@ -63,12 +63,15 @@ export type TownAskActions = {
   answer(id: string, text: string): Promise<string | null>;
   /** Close a question without answering it. */
   dismiss(id: string): Promise<string | null>;
+  /** Open the asking agent, or the asking terminal when it has no agent. */
+  open(asker: TownAsker): void;
 };
 
 const NO_ASK_ACTIONS: TownAskActions = {
   askers: new Map(),
   answer: async () => null,
   dismiss: async () => null,
+  open: () => {},
 };
 
 /** One open question from an agent (`herdr-world ask`), answered here. */
@@ -76,12 +79,10 @@ export function TownAsk({
   ask,
   now,
   actions,
-  onOpen,
 }: {
   ask: WorldAsk;
   now: number;
   actions: TownAskActions;
-  onOpen?(key: string): void;
 }) {
   const questionId = useId();
   const [draft, setDraft] = useState("");
@@ -143,11 +144,11 @@ export function TownAsk({
         </button>
       </div>
       <div className="town-ask-actions">
-        {asker?.key && onOpen ? (
+        {asker?.key ? (
           <button
             type="button"
             aria-label={`Open ${name}`}
-            onClick={() => onOpen(asker.key!)}
+            onClick={() => actions.open(asker)}
           >
             Open agent
           </button>
@@ -280,13 +281,7 @@ export function TownRail({
           aria-live="polite"
         >
           {asks.map((ask) => (
-            <TownAsk
-              key={ask.id}
-              ask={ask}
-              now={now}
-              actions={askActions}
-              onOpen={onOpen}
-            />
+            <TownAsk key={ask.id} ask={ask} now={now} actions={askActions} />
           ))}
         </div>
       ) : null}

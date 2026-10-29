@@ -1,34 +1,45 @@
 import type { HerdrOfficeProjection } from "../herdrOfficeProjection";
 import { askerName, type WorldAsk } from "../worldAsks";
-import { asksForWorld } from "../worldAskTargets";
+import { askLeaves } from "../worldAskTargets";
 import type { WorldObject } from "../worldObject";
 
-/** Who asked a question, as Town names them, and the agent Open agent opens. */
-export type TownAsker = { name: string; key: string | null };
+/**
+ * Who asked a question, as Town names them, and what Open agent opens: the
+ * asking agent, or the terminal of an asking pane that has no agent.
+ */
+export type TownAsker = { name: string; key: string | null; terminal: boolean };
 
 /**
- * Each open question's asker: the agent or terminal World places it on,
- * named as Town labels its desk, else the name the ask carries.
+ * Each open question's asker: the agent or terminal World places that
+ * question on, named as Town labels its desk, else the name the ask carries.
+ * Every question resolves on its own, so several from one pane all place.
  */
 export function townAskers(
   asks: readonly WorldAsk[],
   world: Pick<WorldObject, "leaves">,
   office: Pick<HerdrOfficeProjection, "roster" | "paneRoster">,
 ): ReadonlyMap<string, TownAsker> {
-  const placed = new Map(
-    [...asksForWorld(asks, world)].map(([key, ask]) => [ask.id, key]),
+  const leaves = askLeaves(asks, world);
+  const agents = new Map(
+    office.roster.map((entry) => [entry.agent.key, entry.agent.displayLabel]),
   );
-  const labels = new Map<string, string>();
-  for (const entry of office.paneRoster)
-    labels.set(entry.device.nodeId, entry.device.displayLabel);
-  for (const entry of office.roster)
-    labels.set(entry.agent.key, entry.agent.displayLabel);
+  const terminals = new Map(
+    office.paneRoster.map((entry) => [
+      entry.device.nodeId,
+      entry.device.displayLabel,
+    ]),
+  );
   return new Map(
     asks.map((ask) => {
-      const key = placed.get(ask.id) ?? null;
+      const key = leaves.get(ask.id) ?? null;
+      const agent = key === null ? undefined : agents.get(key);
+      const name =
+        agent ??
+        (key === null ? undefined : terminals.get(key)) ??
+        askerName(ask);
       return [
         ask.id,
-        { name: (key && labels.get(key)) || askerName(ask), key },
+        { name, key, terminal: key !== null && agent === undefined },
       ];
     }),
   );

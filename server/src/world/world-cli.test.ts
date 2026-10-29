@@ -474,6 +474,36 @@ describe("questions and results", () => {
     ).toMatchObject({ ok: false, code: "refused" });
   });
 
+  test("concurrent asks keep one ask per cause and the shared allowance while Herdr is slow", async () => {
+    const quick = naming();
+    const slow = {
+      ...quick,
+      call: async (method: string, params: Record<string, unknown>) => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return quick.call(method, params);
+      },
+    };
+    const { run, ledger } = setup({ hosts: [slow] });
+    const request = { question: "Ship?", key: "crew:7:ready" };
+    const keyed = await Promise.all([run("ask", request), run("ask", request)]);
+    expect(
+      new Set(keyed.map((reply) => (resultOf(reply) as { id: string }).id))
+        .size,
+    ).toBe(1);
+    const unverified = await Promise.all(
+      Array.from({ length: 21 }, (_, index) =>
+        run("ask", { question: `Which ${index}?` }, "w1:p1", null),
+      ),
+    );
+    expect(unverified.filter((reply) => reply.ok)).toHaveLength(20);
+    expect(unverified.filter((reply) => !reply.ok)).toMatchObject([
+      { code: "refused" },
+    ]);
+    expect(
+      ledger.openAsks().asks.filter((ask) => !ask.actor.verified),
+    ).toHaveLength(20);
+  });
+
   test("an unverified claim is never placed on a remote, unknown or ambiguous pane", async () => {
     const bare = {
       label: "unverified w1:p1",

@@ -27,6 +27,7 @@ export function askMatchesLeaf(ask: WorldAsk, leaf: WorldLeafObject) {
 
 const NO_ASKS: ReadonlyMap<string, WorldAsk> = new Map();
 const NO_KEYS: ReadonlySet<string> = new Set();
+const NO_ASKS_BY_ID: ReadonlyMap<string, string> = new Map();
 
 export function askingKeysForWorld(
   asks: readonly WorldAsk[],
@@ -35,24 +36,39 @@ export function askingKeysForWorld(
   return asks.length ? new Set(asksForWorld(asks, world).keys()) : NO_KEYS;
 }
 
-export function asksForWorld(
+/** Each open ask's own current leaf, by ask ID; unplaced asks are left out. */
+export function askLeaves(
   asks: readonly WorldAsk[],
   world: Pick<WorldObject, "leaves">,
-) {
-  if (!asks.length) return NO_ASKS;
+): ReadonlyMap<string, string> {
+  if (!asks.length) return NO_ASKS_BY_ID;
   const panes = new Map(
     world.leaves.map((leaf) => [
       JSON.stringify([leaf.connectionId, leaf.pane.pane_id]),
       leaf,
     ]),
   );
-  const result = new Map<string, WorldAsk>();
+  const result = new Map<string, string>();
   for (const ask of asks) {
     const leaf = panes.get(
       JSON.stringify([ask.actor.connection_id, ask.actor.pane_id]),
     );
-    if (leaf && askMatchesLeaf(ask, leaf) && !result.has(leaf.id))
-      result.set(leaf.id, ask);
+    if (leaf && askMatchesLeaf(ask, leaf)) result.set(ask.id, leaf.id);
+  }
+  return result;
+}
+
+/** Each asking leaf's first open ask: the one its marks stand for. */
+export function asksForWorld(
+  asks: readonly WorldAsk[],
+  world: Pick<WorldObject, "leaves">,
+) {
+  if (!asks.length) return NO_ASKS;
+  const leaves = askLeaves(asks, world);
+  const result = new Map<string, WorldAsk>();
+  for (const ask of asks) {
+    const leaf = leaves.get(ask.id);
+    if (leaf && !result.has(leaf)) result.set(leaf, ask);
   }
   return result;
 }

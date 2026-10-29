@@ -6,7 +6,8 @@
 
 ### Fixed
 
-- Name the asking agent, as Town labels its desk, in the **Needs you** list and
-  the new-ask notification, with the question's first line and **Open agent**.
+- Name the asking agent in the **Needs you** list as Town labels its desk, with
+  **Open agent**, and in the new-ask notification by its Herdr name (else its
+  pane) with the question's first line.
 - Bring an unverified ask to reception, marked unverified, when exactly one
   local Herdr has the pane it names, instead of leaving it in the list only.

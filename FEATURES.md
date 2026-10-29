@@ -562,7 +562,8 @@ when piped, with stable exit codes:
   for you. It appears first in Town's **Needs you** list and Summary, where you
   pick an option or type an answer; `--wait` returns that answer to the asker.
   Its agent waits at reception with **?**; Board and Desk show the same mark.
-  Each question names its agent as Town labels its desk, with **Open agent**,
+  Each question names its agent as Town labels its desk, with **Open agent**
+  (a shell pane without an agent opens its terminal),
   and **Dismiss** closes it without sending an answer (`--wait` then returns
   `dismissed`). A caller World cannot verify is marked unverified; it still
   reaches reception when exactly one local Herdr has the pane it names. A new

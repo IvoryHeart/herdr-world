@@ -54,13 +54,7 @@ export function TownSummaryPanel({
         {summary.asks.length > 0 ? (
           <div className="town-asks">
             {summary.asks.map((ask) => (
-              <TownAsk
-                key={ask.id}
-                ask={ask}
-                now={now}
-                actions={askActions}
-                onOpen={onOpenAgent}
-              />
+              <TownAsk key={ask.id} ask={ask} now={now} actions={askActions} />
             ))}
           </div>
         ) : null}
@@ -237,6 +231,7 @@ export function useTownSummary({
   observability,
   now,
   openAgent,
+  openTerminal,
   showRoom,
 }: {
   railCollapsed: boolean;
@@ -246,11 +241,14 @@ export function useTownSummary({
   observability: OfficeObservability;
   now: number;
   openAgent(agentKey: string): void;
+  /** Open a terminal by its World node, as a reception question entry does. */
+  openTerminal(nodeId: string): void;
   showRoom(roomKey: string): void;
 }): {
   summary: TownSummaryModel;
   railInset: number;
   askActions: TownAskActions;
+  openTerminal(nodeId: string): void;
   open(): void;
   window: ReactNode;
 } {
@@ -271,8 +269,13 @@ export function useTownSummary({
       askers,
       answer: (id, text) => asksStore.answer(id, text),
       dismiss: (id) => asksStore.dismiss(id),
+      open: (asker) => {
+        if (asker.key === null) return;
+        if (asker.terminal) openTerminal(asker.key);
+        else openAgent(asker.key);
+      },
     }),
-    [askers, asksStore],
+    [askers, asksStore, openAgent, openTerminal],
   );
   const summary = useMemo(
     () =>
@@ -300,6 +303,7 @@ export function useTownSummary({
       summary.counts.needsYou,
     ),
     askActions,
+    openTerminal,
     open: () => {
       setOpen(true);
       setFocusKey((key) => key + 1);

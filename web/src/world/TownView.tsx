@@ -560,6 +560,7 @@ export default function TownView({
     observability,
     now,
     openAgent: (key) => openChat(key),
+    openTerminal: (id) => void onOpenTerminal(id).catch(() => undefined),
     showRoom: focusRoom,
   });
   const askingKeys = useMemo(() => {
@@ -1266,9 +1267,7 @@ export default function TownView({
             completionSeenKeys={completionSeenKeys}
             summonedKeys={summonedKeys}
             askingKeys={askingKeys}
-            onActivateAsk={(id) => {
-              void onOpenTerminal(id).catch(() => undefined);
-            }}
+            onActivateAsk={townSummary.openTerminal}
             quests={questMarks}
             conversationTargets={conversationTargets}
             onSelect={tapTown}

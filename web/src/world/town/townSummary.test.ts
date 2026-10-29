@@ -587,10 +587,14 @@ test("the summary panel reads in attention order and never shows zero spend", as
       onShowRoom: () => {},
       askActions: {
         askers: new Map([
-          ["question-one", { name: "Synthetic seat", key: "agent-one" }],
+          [
+            "question-one",
+            { name: "Synthetic seat", key: "agent-one", terminal: false },
+          ],
         ]),
         answer: async () => null,
         dismiss: async () => null,
+        open: () => {},
       },
     }),
   );
@@ -640,6 +644,7 @@ test("blocked rows show supplied reasons and fall back for missing or blank labe
         askers: new Map(),
         answer: async () => null,
         dismiss: async () => null,
+        open: () => {},
       },
     }),
   );

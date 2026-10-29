@@ -373,7 +373,9 @@ and session only when exactly one local Herdr has that pane, so remote, unknown
 and ambiguous claims stay in the question list. Owner dismissal is a closed
 state beside answer and withdrawal: service, CLI and watcher cases check that
 waits end, answers are refused, a keyed repeat returns it until the asker
-withdraws, and the watcher does not re-ask a dismissed cause. Rail markup, pure
+withdraws, and the watcher does not re-ask a dismissed cause. The service asks
+Herdr before its synchronous cause, allowance and insertion step, and a
+slow-Herdr case checks concurrent keyed repeats and the shared allowance. Rail markup, pure
 naming and the Town browser consumer check one unverified mark, Open agent, and
 reception clearing on Dismiss without an answer. These are finite ledger states
 in the existing consumers; no model or new authority is claimed.

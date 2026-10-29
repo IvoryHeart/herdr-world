@@ -86,10 +86,14 @@ test("a question names its asker once, marks it unverified, and offers Open agen
       askActions: {
         // Only the placed one has a Town agent, named as its desk is.
         askers: new Map([
-          ["q-placed", { name: "dispatch", key: "agent-dispatch" }],
+          [
+            "q-placed",
+            { name: "dispatch", key: "agent-dispatch", terminal: false },
+          ],
         ]),
         answer: async () => null,
         dismiss: async () => null,
+        open: () => {},
       },
       calls: [],
       activeKey: null,

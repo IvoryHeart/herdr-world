@@ -36,7 +36,7 @@ const asked = (id: string, pane: string, terminal?: string): WorldAsk => ({
   },
 });
 
-test("a placed asker is named as Town labels its desk, others by what they carry", () => {
+test("every placed asker is named as Town labels its desk, others by what they carry", () => {
   const office = {
     roster: [{ agent: { key: "agent-leaf", displayLabel: "dispatch" } }],
     paneRoster: [
@@ -52,6 +52,7 @@ test("a placed asker is named as Town labels its desk, others by what they carry
   const askers = townAskers(
     [
       asked("q-agent", "w1:p1", "term-a"),
+      asked("q-agent-again", "w1:p1", "term-a"),
       asked("q-shell", "w1:p2", "term-b"),
       asked("q-gone", "w1:p1", "term-old"),
       asked("q-bare", "w1:p9"),
@@ -60,10 +61,13 @@ test("a placed asker is named as Town labels its desk, others by what they carry
     office,
   );
   expect(Object.fromEntries(askers)).toEqual({
-    "q-agent": { name: "dispatch", key: "agent-leaf" },
-    "q-shell": { name: "watcher shell", key: "shell-leaf" },
+    "q-agent": { name: "dispatch", key: "agent-leaf", terminal: false },
+    // A second question from the same pane is placed and named the same.
+    "q-agent-again": { name: "dispatch", key: "agent-leaf", terminal: false },
+    // A pane without an agent opens its terminal.
+    "q-shell": { name: "watcher shell", key: "shell-leaf", terminal: true },
     // Its terminal is gone: named as it asked, with nothing to open.
-    "q-gone": { name: "herdr-name", key: null },
-    "q-bare": { name: "w1:p9", key: null },
+    "q-gone": { name: "herdr-name", key: null, terminal: false },
+    "q-bare": { name: "w1:p9", key: null, terminal: false },
   });
 });
