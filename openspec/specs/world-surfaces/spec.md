@@ -854,6 +854,14 @@ the intervening working state. Native progress checkpoints on retained metadata
 SHALL survive display/observation expiry. Equal, older, malformed or ambiguous
 native progress SHALL NOT invalidate a mark. Without a native sequence, a known
 idle/blocked-to-done transition SHALL still advance the stop.
+The stable observed-stop identity SHALL participate in receipt refresh and
+currency admission. A read started for a preceding stop SHALL NOT become current
+for its successor. While a new stop's receipt is pending or failing, the previous
+report SHALL NOT enable marking; an unreadable stop may settle without a report
+under the existing bounded retry policy. Pane rows alone SHALL supply the observed
+agent harness and session identity. Matched agent.list status and sequence data
+SHALL be used only when its session fingerprint agrees with the pane's; metadata
+SHALL NOT fill in a missing pane identity.
 
 Mutations SHALL validate the exact live terminal and session through a current
 runtime lease and revalidate that lease after the read. Observed stops SHALL come

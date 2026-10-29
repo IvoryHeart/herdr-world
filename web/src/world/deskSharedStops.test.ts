@@ -9,6 +9,9 @@ import { deskIdentity, deskMetadata } from "./useDeskState";
 import { partitionDesk } from "./DeskView";
 import {
   pollingTargets,
+  receiptAfterRead,
+  receiptAfterError,
+  receiptIdentity,
   receiptStateOf,
   receiptTrigger,
   type TurnReceipt,
@@ -78,9 +81,16 @@ for (const observed of [false, true])
           [leaf],
           () =>
             receiptStateOf(
-              { receipt, trigger: receiptTrigger(leaf) },
+              {
+                receipt,
+                trigger: receiptTrigger(
+                  leaf,
+                  stopIds.get(receiptIdentity(leaf)),
+                ),
+              },
               leaf,
               polled,
+              stopIds.get(receiptIdentity(leaf)),
             ),
           handled,
           now,
@@ -225,20 +235,105 @@ test("a non-done to done transition also advances a stop when sequences are abse
   expect(projectedStop(registry, now + 2000).handled).toBe(false);
 });
 
-test("qualified agent.list metadata detects progress when pane.list omits agent fields", () => {
+for (const missing of ["agent", "agent_session"] as const) {
+  test(`agent.list cannot supply a missing pane ${missing} identity`, () => {
+    const registry = new WorldDeskRegistry();
+    const pane = { ...nativePane };
+    delete (pane as Record<string, unknown>)[missing];
+    observeDeskPanes(registry, "alpha", 1, [pane], now - 1000, [
+      { ...nativePane, state_change_seq: 1 },
+    ]);
+    observeDeskPanes(registry, "alpha", 1, [pane], now + 1000, [
+      { ...nativePane, state_change_seq: 3 },
+    ]);
+    expect(registry.list().records).toEqual([]);
+  });
+}
+
+test("pane-only identity remains null when metadata reports a session absent from the pane", () => {
   const registry = new WorldDeskRegistry();
-  const bare = {
-    pane_id: nativePane.pane_id,
-    terminal_id: nativePane.terminal_id,
-  };
-  observeDeskPanes(registry, "alpha", 1, [bare], now - 1000, [
-    { ...nativePane, state_change_seq: 1 },
-  ]);
+  const pane = { ...nativePane, agent_session: undefined };
+  observeDeskPanes(
+    registry,
+    "alpha",
+    1,
+    [{ ...pane, agent_status: "working" }],
+    now - 1000,
+    [{ ...nativePane, state_change_seq: 10 }],
+  );
+  observeDeskPanes(
+    registry,
+    "alpha",
+    1,
+    [{ ...pane, agent_status: "idle" }],
+    now + 1000,
+    [{ ...nativePane, state_change_seq: 12 }],
+  );
+  expect(registry.list().records).toHaveLength(1);
+  expect(registry.list().records[0]!.agent_session_fingerprint).toBeNull();
+});
+
+test("a newly observed native stop cannot use its predecessor report as current", () => {
+  const registry = new WorldDeskRegistry();
+  observeNative(registry, "working", now - 2000, 9);
+  observeNative(registry, "done", now - 1000, 10);
   reviewCurrent(registry);
-  observeDeskPanes(registry, "alpha", 1, [bare], now + 1000, [
-    { ...nativePane, state_change_seq: 3 },
-  ]);
-  expect(projectedStop(registry, now + 1000).handled).toBe(false);
+  const metadata = () =>
+    deskMetadata([stoppedLeaf], {
+      ...registry.list(),
+      verified: true,
+      error: null,
+    });
+  const identity = receiptIdentity(stoppedLeaf);
+  const oldStop = metadata().stopIds.get(identity);
+  const oldReceipt = {
+    turn_id: "old-turn",
+    report: "Preceding stop report",
+    files: [],
+  } as unknown as TurnReceipt;
+  const stored = receiptAfterRead(
+    oldReceipt,
+    receiptTrigger(stoppedLeaf, oldStop),
+  );
+  observeNative(registry, "done", now + 1000, 12);
+  const fresh = metadata(),
+    nextStop = fresh.stopIds.get(identity);
+  expect(nextStop).not.toBe(oldStop);
+  const project = (value: typeof stored) =>
+    partitionDesk(
+      [stoppedLeaf],
+      () => receiptStateOf(value, stoppedLeaf, true, nextStop),
+      fresh.handled,
+      now + 1000,
+      fresh.stops,
+      fresh.stopIds,
+    ).review[0]!;
+  expect(project(stored)).toMatchObject({ pending: true, handled: false });
+  const failed = receiptAfterError(
+    stored,
+    receiptTrigger(stoppedLeaf, nextStop),
+    1,
+  );
+  expect(project(failed)).toMatchObject({ pending: true, handled: false });
+  const unavailable = receiptAfterError(
+    failed,
+    receiptTrigger(stoppedLeaf, nextStop),
+    2,
+  );
+  expect(project(unavailable)).toMatchObject({
+    pending: false,
+    handled: false,
+    receipt: null,
+  });
+  const latest = receiptAfterRead(
+    { ...oldReceipt, turn_id: "new-turn" },
+    receiptTrigger(stoppedLeaf, nextStop),
+  );
+  expect(project(latest)).toMatchObject({
+    pending: false,
+    handled: false,
+    receipt: { turn_id: "new-turn" },
+  });
 });
 
 test("equal or obsolete native progress does not retire a mark after display expiry", () => {
@@ -300,6 +395,8 @@ for (const row of [
     { ...nativePane, state_change_seq: 9 },
     { ...nativePane, state_change_seq: 10 },
   ],
+  [{ ...nativePane, agent_session: undefined, state_change_seq: 9 }],
+  [{ ...nativePane, agent_session: {}, state_change_seq: 9 }],
   [{ ...nativePane, state_change_seq: -1 }],
   [{ ...nativePane, state_change_seq: "9" }],
 ])

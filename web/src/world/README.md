@@ -13,7 +13,12 @@ and recent opens use qualified session identities across filter and focus change
 Stable service stop identities survive expiry of display times. The fresh
 snapshot producer passes existing `agent.list` metadata to the Desk adapter;
 qualified native state-change sequences reveal later completed turns even when
-no browser observed their working phase. Reads use fair bounded admission and independent host queues. Pending reads keep
+no browser observed their working phase. Pane rows alone supply the agent harness
+and session identity; only matching `agent.list` sessions may augment status and
+progress. Shared stop IDs participate in receipt refresh and currency, so late
+reads for a preceding stop cannot enable its successor's review mark. Display
+expiry alone does not invalidate a receipt. Reads use fair bounded admission and
+independent host queues. Pending reads keep
 their admission across refreshes; queued work coalesces to the latest observation.
 
 | Task | Open these owners | Focused evidence |

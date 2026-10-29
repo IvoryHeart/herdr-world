@@ -43,6 +43,8 @@ export function observeDeskPanes(
   }
   for (const pane of panes) {
     if (
+      typeof pane.agent !== "string" ||
+      !pane.agent ||
       typeof pane.terminal_id !== "string" ||
       duplicates.has(pane.terminal_id)
     )
@@ -53,14 +55,7 @@ export function observeDeskPanes(
     const paneSession = deskSessionFingerprint(pane.agent_session);
     const agentSession = deskSessionFingerprint(candidate?.agent_session);
     const agent =
-      paneSession && agentSession && paneSession !== agentSession
-        ? undefined
-        : candidate;
-    const harness =
-      typeof agent?.agent === "string" && agent.agent
-        ? agent.agent
-        : pane.agent;
-    if (typeof harness !== "string" || !harness) continue;
+      candidate && agentSession === paneSession ? candidate : undefined;
     const status =
       typeof agent?.agent_status === "string" && agent.agent_status
         ? agent.agent_status
@@ -70,7 +65,7 @@ export function observeDeskPanes(
       connection_id: connectionId,
       connection_generation: generation,
       terminal_id: pane.terminal_id,
-      agent_session_fingerprint: paneSession ?? (agent ? agentSession : null),
+      agent_session_fingerprint: paneSession,
     };
     if (validDeskIdentity(identity))
       desk.observeAgent(

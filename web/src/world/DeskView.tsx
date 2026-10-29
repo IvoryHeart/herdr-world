@@ -338,7 +338,6 @@ export function DeskBoard({
 }) {
   const now = useNow(10_000);
   const agents = useMemo(() => operationalAgents(world), [world]);
-  const receipts = useTurnReceipts(agents, client);
   const {
     handled,
     stops,
@@ -349,6 +348,7 @@ export function DeskBoard({
     verified,
     error: stateError,
   } = useDeskState(agents, client, deskStore);
+  const receipts = useTurnReceipts(agents, client, stopIds);
   const receiptFor = (leaf: WorldLeafObject) => {
     const receipt = receipts(leaf);
     return { ...receipt, current: receipt.current && verified };

@@ -8,3 +8,5 @@
   next Desk card after marking a stop reviewed.
 - Keep reviewed stops acknowledged after their display times expire, and notice
   later completed work through native state progress even while World was closed.
+- Refresh receipts for newly detected stops, fence older in-flight reads, and
+  prevent the preceding report from enabling Mark reviewed during refresh.

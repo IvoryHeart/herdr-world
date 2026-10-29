@@ -51,6 +51,31 @@ const world = {
   hosts: [{ selectedHost: true, label: "local" }],
 } as unknown as WorldObject;
 const opened: string[] = [];
+const alphaReceiptReads: Array<() => Promise<unknown>> = [];
+const receiptReadCounts = new Map<string, number>();
+function receiptReply(
+  id: string,
+  fingerprint: unknown,
+  turnId = `${id}-turn`,
+  report = `Report from ${id}`,
+) {
+  return {
+    agent_session_fingerprint: fingerprint,
+    turn: {
+      turn_id: turnId,
+      ask: `Request for ${id}`,
+      report,
+      report_truncated: false,
+      started_at: new Date(Date.now() - 60_000).toISOString(),
+      ended_at: new Date().toISOString(),
+      duration_ms: 60_000,
+      tool_calls: 1,
+      commands: 0,
+      files: [],
+      files_truncated: false,
+    },
+  };
+}
 const client = {
   connectionId: "local",
   generation: 1,
@@ -86,23 +111,11 @@ const client = {
       };
     if (method === "agent_conversation.steps") return { steps: [] };
     if (method === "agent_turn.get") {
-      const id = String(params?.pane_id).split(":")[1];
-      return {
-        agent_session_fingerprint: params?.agent_session_fingerprint,
-        turn: {
-          turn_id: `${id}-turn`,
-          ask: `Request for ${id}`,
-          report: `Report from ${id}`,
-          report_truncated: false,
-          started_at: new Date(Date.now() - 60_000).toISOString(),
-          ended_at: new Date().toISOString(),
-          duration_ms: 60_000,
-          tool_calls: 1,
-          commands: 0,
-          files: [],
-          files_truncated: false,
-        },
-      };
+      const id = String(params?.pane_id).split(":")[1]!;
+      receiptReadCounts.set(id, (receiptReadCounts.get(id) ?? 0) + 1);
+      const queued = id === "alpha" ? alphaReceiptReads.shift() : undefined;
+      if (queued) return queued();
+      return receiptReply(id, params?.agent_session_fingerprint);
     }
     if (method === "pane.read") return { text: "" };
     return null;
@@ -218,6 +231,7 @@ async function run() {
   const betaRecord = [...deskRecords.values()].find(
     (entry) => entry.terminal_id === "beta",
   )!;
+  const betaReadsBeforeExpiry = receiptReadCounts.get("beta");
   betaRecord.stopped_at = null;
   revision++;
   for (const callback of deskControls)
@@ -226,6 +240,11 @@ async function run() {
   check(
     !card("beta"),
     "expiring only the display time does not return the same stop to To review",
+  );
+
+  check(
+    receiptReadCounts.get("beta") === betaReadsBeforeExpiry,
+    "display expiry does not refetch an unchanged stable stop",
   );
 
   // Marking offers Undo, and the stop stays reachable under Reviewed.
@@ -315,6 +334,13 @@ async function run() {
     !card("alpha"),
     "a mark from another browser removes the same stop from To review",
   );
+  const oldStopRead = Promise.withResolvers<unknown>();
+  const latestStopRead = Promise.withResolvers<unknown>();
+  alphaReceiptReads.push(
+    () => oldStopRead.promise,
+    () => latestStopRead.promise,
+  );
+  const alphaReadsBeforeStop = receiptReadCounts.get("alpha") ?? 0;
   const alphaRecord = deskRecords.get(deskKey(alphaIdentity))!;
   alphaRecord.observed_stop_id = "observed-alpha-later";
   alphaRecord.stopped_at = Date.now();
@@ -325,6 +351,84 @@ async function run() {
   check(
     !!card("alpha"),
     "native progress returns a new completed stop to review without a working browser frame",
+  );
+  const alphaMarkButton = () =>
+    [
+      ...(card("alpha")?.querySelectorAll<HTMLButtonElement>("button") ?? []),
+    ].find((button) => button.textContent?.startsWith("Mark reviewed"));
+  check(
+    (receiptReadCounts.get("alpha") ?? 0) > alphaReadsBeforeStop,
+    "shared stop identity triggers a new receipt read with unchanged native status/activity",
+  );
+  check(
+    alphaMarkButton()?.disabled === true,
+    "a new stop is not markable while its receipt is pending",
+  );
+  const precedingMark = alphaRecord.reviewed_stop;
+  card("alpha")?.focus();
+  press(card("alpha")!, "e");
+  await settle();
+  check(
+    alphaRecord.reviewed_stop === precedingMark,
+    "E cannot mark a new stop against its preceding report",
+  );
+
+  // Supersede an in-flight read without changing status, activity or session.
+  alphaRecord.observed_stop_id = "observed-alpha-newest";
+  revision++;
+  for (const callback of deskControls)
+    callback({ type: "world_desk_changed", revision });
+  await settle(150);
+  oldStopRead.resolve(
+    receiptReply(
+      "alpha",
+      "a".repeat(64),
+      "superseded-turn",
+      "Superseded report must not publish",
+    ),
+  );
+  await settle(150);
+  check(
+    alphaMarkButton()?.disabled === true,
+    "a late read from an older stop cannot settle the newest stop",
+  );
+  check(
+    !card("alpha")?.textContent?.includes("Superseded report must not publish"),
+    "a superseded stop response is fenced before publication",
+  );
+  latestStopRead.reject(new Error("synthetic receipt refresh failure"));
+  await settle(150);
+  check(
+    alphaMarkButton()?.disabled === true,
+    "one failed refresh cannot make the preceding report current",
+  );
+
+  alphaReceiptReads.push(async () => {
+    throw new Error("synthetic repeated receipt failure");
+  });
+  document.dispatchEvent(new Event("visibilitychange"));
+  await settle(200);
+  check(
+    alphaMarkButton()?.disabled === false,
+    "an unreadable stop can settle without a report after retry",
+  );
+  check(
+    !card("alpha")?.textContent?.includes("Report from alpha"),
+    "repeated failures discard the preceding stop report instead of validating it",
+  );
+
+  alphaReceiptReads.push(async () =>
+    receiptReply("alpha", "a".repeat(64), "newest-turn", "Newest stop report"),
+  );
+  document.dispatchEvent(new Event("visibilitychange"));
+  await settle(200);
+  check(
+    card("alpha")?.textContent?.includes("Newest stop report") === true,
+    "a successful refresh publishes the newest stop report",
+  );
+  check(
+    alphaMarkButton()?.disabled === false,
+    "a current stop report enables Mark reviewed",
   );
   await secondBrowser.mutate("world.desk.review", alphaIdentity, {
     stop_id: JSON.parse(handoffId(leaves[0]!, undefined, "observed-alpha"))[1],

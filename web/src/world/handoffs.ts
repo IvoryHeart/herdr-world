@@ -168,8 +168,12 @@ export function handoffId(
 }
 
 /** Changes that make a stored receipt worth fetching again. */
-export function receiptTrigger(leaf: WorldLeafObject) {
-  return `${leaf.status}:${leaf.lastActivityAt ?? ""}`;
+export function receiptTrigger(leaf: WorldLeafObject, stopId?: string) {
+  return JSON.stringify([
+    leaf.status,
+    leaf.lastActivityAt ?? null,
+    stopId ?? null,
+  ]);
 }
 
 /** A stored receipt and the agent state it was read for. */
@@ -218,11 +222,13 @@ export function receiptStateOf(
   stored: StoredReceipt | undefined,
   leaf: WorldLeafObject,
   polled: boolean,
+  stopId?: string,
 ): ReceiptState {
   if (!polled) return { receipt: null, current: true };
   return {
     receipt: stored?.receipt ?? null,
-    current: stored !== undefined && stored.trigger === receiptTrigger(leaf),
+    current:
+      stored !== undefined && stored.trigger === receiptTrigger(leaf, stopId),
   };
 }
 
@@ -268,7 +274,7 @@ export function useNow(intervalMs = 15_000) {
 /**
  * Latest turn receipt per agent session. The stored receipt is keyed by the
  * session (`receiptIdentity`), so it stays visible while a refresh is in
- * flight; a change in status or activity (`receiptTrigger`) only marks it due.
+ * flight; status, activity or shared stop changes (`receiptTrigger`) mark it due.
  * Changed agents are fetched first, and every agent is refreshed on a slow
  * interval so transcript writes that land after a state change are seen.
  * Polling pauses while the page is hidden.
@@ -276,6 +282,7 @@ export function useNow(intervalMs = 15_000) {
 export function useTurnReceipts(
   leaves: WorldLeafObject[],
   clients: DeskClients,
+  stopIds: ReadonlyMap<string, string> = new Map(),
 ) {
   const [receipts, setReceipts] = useState<Map<string, StoredReceipt>>(
     () => new Map(),
@@ -289,7 +296,10 @@ export function useTurnReceipts(
   const queues = useMemo(() => new DeskReadQueues(MAX_POLLED_AGENTS), []);
   const targets = pollingTargets(leaves);
   const requestKeys = targets
-    .map((leaf) => `${receiptIdentity(leaf)}=${receiptTrigger(leaf)}`)
+    .map(
+      (leaf) =>
+        `${receiptIdentity(leaf)}=${receiptTrigger(leaf, stopIds.get(receiptIdentity(leaf)))}`,
+    )
     .join("\n");
 
   const clientScope = deskScope(clients);
@@ -332,7 +342,8 @@ export function useTurnReceipts(
       const identity = receiptIdentity(leaf);
       return (
         due.current.has(identity) ||
-        fetched.current.get(identity) !== receiptTrigger(leaf)
+        fetched.current.get(identity) !==
+          receiptTrigger(leaf, stopIds.get(identity))
       );
     });
     let cancelled = false;
@@ -346,7 +357,7 @@ export function useTurnReceipts(
           // are read when it is shown again.
           if (document.visibilityState === "hidden") return;
           const identity = receiptIdentity(leaf);
-          const trigger = receiptTrigger(leaf);
+          const trigger = receiptTrigger(leaf, stopIds.get(identity));
           if (!leaf.pane.agent) {
             fetched.current.set(identity, trigger);
             due.current.delete(identity);
@@ -405,7 +416,12 @@ export function useTurnReceipts(
   return useCallback(
     (leaf: WorldLeafObject): ReceiptState => {
       const identity = receiptIdentity(leaf);
-      return receiptStateOf(receipts.get(identity), leaf, polled.has(identity));
+      return receiptStateOf(
+        receipts.get(identity),
+        leaf,
+        polled.has(identity),
+        stopIds.get(identity),
+      );
     },
     // requestKeys covers the polled set.
     // eslint-disable-next-line react-hooks/exhaustive-deps
