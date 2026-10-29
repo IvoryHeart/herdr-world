@@ -225,6 +225,13 @@ hosts stay usable.
    If choices are ambiguous or stale, use **Choose a worktree** and **Refresh**;
    resource access waits for a current selection. **Open terminal** is for
    direct work.
+   In Town, Board or Desk, click a local source reference in **Chat** to open
+   **Files** in the same window at its line (for example, `src/example.ts:12`).
+   Relative references
+   start at the selected worktree. If the path is outside it or its binding is
+   unavailable, use **Choose a worktree**, then click the reference again.
+   For a root filename with spaces, use a path prefix, such as `./my file.ts:12`,
+   or an explicit Markdown file link.
    If a retained file becomes unavailable, its preview shows a notice instead
    of closing the window. Choose a current worktree or another file, then
    **Retry preview** if needed; Chat and its draft remain open.
@@ -367,8 +374,11 @@ text. It works for any agent you open from Town, Board or Desk.
    each option on an ask card. Pick one (or press its number with the card
    focused): Chat checks the prompt, session and state have not changed,
    presses that key in the agent's pane and shows what it sent. It says **You
-   answered** only once Herdr shows the agent moved on. Herdr cannot hold a
-   prompt between that check and the key, so read the card first. Options that
+   answered** only once Herdr shows the agent moved on. A form of several
+   questions lists every question's header, answered or not, and asks them
+   one at a time; after the last, its review offers **Submit answers**. Herdr
+   cannot hold a prompt between that check and the key, so read the card
+   first. Options that
    open a text box, and unsupported menus, offer the Terminal instead.
 7. A known pull request named in an agent's **READY** or **opened**
    announcement, or its current work claim, gets a PR card. Open **Details**
@@ -617,9 +627,23 @@ terminal before opening the result in the current view.
 In **Desk**, start with **Needs you** for blocked agents, **To review** for
 finished turns and **In flight** for running work. Open a card to read its Chat or
 inspect the terminal, files or changes. Read the result and verify the diff before
-using **Mark reviewed**; the mark is saved in this browser and does not commit
-files or certify success. **Agents** lists all agents in your Hosts filter;
-**Reviewed** lets you reopen a marked turn.
+using **Mark reviewed**; the mark is shared by every browser connected to this
+World service and does not commit files or certify success. **Undo** restores
+that exact stop across those browsers. **Agents** lists all agents in your Hosts
+filter, with recently opened agents shared too. **Reviewed** shows each agent's
+latest marked stop while it remains idle or done; older stops are not retained.
+
+Desk marks, observed stop times and recent opens live in bounded service memory.
+They survive browser reloads and changes to the Hosts filter, but clear when the
+World service restarts. A replacement runtime or agent session starts fresh.
+Existing browser-local Desk marks are not imported. A mark stays shared even
+when another browser has not read that agent's receipt; later observed stops or
+native activity return the agent to review. The stop's 12-hour display time can
+expire without removing its review mark. Native state progress also reveals work
+that finished while World was closed or between snapshots, even when no browser
+saw the agent working. **Mark reviewed** waits while the new stop's report
+refreshes; an older report cannot enable the mark. An unavailable report can
+settle without blocking review.
 
 On wide screens, selecting a Desk card opens a reading pane on the right and
 folds the lanes into one queue. Use **J** / **K** to preview neighboring agents,
@@ -894,8 +918,8 @@ as reliable alerts.
 
 ### 3.3 Multiple browsers are not separate permission roles
 
-Browsers share Herdr events and visual pane pins; fonts, review marks, drafts,
-workspace pins and shortcuts can remain browser-local.
+Browsers share Herdr events, visual pane pins and Desk review state; fonts,
+drafts, workspace pins and shortcuts can remain browser-local.
 Connection controls can pause your browser or others.
 
 **Profiles are shared; each browser saves its own Hosts filter.** Town, Board, Desk,

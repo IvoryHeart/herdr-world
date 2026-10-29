@@ -72,7 +72,7 @@ import {
   type WorkspaceInspectorContext,
 } from "../workspaceResource";
 import { WorkspaceInspectorAgentIdentity } from "./WorkspaceInspectorAgentIdentity";
-import { agentName } from "./agentDisplayName";
+import { agentName, inspectorAgentContext } from "./agentDisplayName";
 import { InspectorChat } from "./InspectorChat";
 import type { ChatFocusIntent } from "../chatFocus";
 import { AgentCheckoutPanel } from "./AgentCheckoutPanel";
@@ -95,7 +95,6 @@ import { changedCount, checkoutLabel } from "./inspectorCheckout";
 import { useAgentInterestChoice } from "./AgentInterestButton";
 import { InterestButton } from "./InterestButton";
 import { InspectorSplitResizer } from "./InspectorSplitResizer";
-import { paneAgentTitle } from "../agentName";
 import "./WorkspaceInspectorHost.css";
 
 const DiffContentView = lazyWithReload("diff-content-view", () =>
@@ -1283,6 +1282,23 @@ export function WorkspaceInspectorHost({
           >
             {historyAvailable && historyPane ? (
               <InspectorChat
+                sourceFiles={{
+                  client: connectionClient,
+                  worktree: agentWorktree,
+                  paneId: historyPane.pane_id,
+                  sessionFingerprint: historySessionFingerprint,
+                  workspaceId: workspace.workspace_id,
+                  previewRequestRef,
+                  onSelection: onFileSelectionChange,
+                  onOpen: () => {
+                    setDrillInByView((current) => ({
+                      ...current,
+                      files: true,
+                    }));
+                    onViewChange("files");
+                  },
+                  onChoose: () => setLocationOpen(true),
+                }}
                 focusIntent={chatFocusIntent}
                 pane={historyPane}
                 workSessionFingerprint={historySessionFingerprint}
@@ -1342,26 +1358,4 @@ export function WorkspaceInspectorHost({
       ) : null}
     </aside>
   );
-}
-
-function inspectorAgentContext(
-  pane: Pane | undefined,
-  workspace: Workspace | undefined,
-): WorkspaceInspectorContext | null {
-  if (!pane?.agent) return null;
-  const status = pane.agent_status || "unknown";
-  return {
-    kind: "agent",
-    label: paneAgentTitle(pane, pane.display_agent?.trim() || pane.agent),
-    stateLabel: pane.state_labels?.[status]?.trim() || status,
-    locationLabel: workspace?.label || "Workspace",
-    agent: pane.agent,
-    // Spaces shows the same state badge as World: Herdr's statuses are the tones.
-    statusTone: status,
-    // The agent's Herdr name (agent.list), not its display label.
-    ...(pane.agent_name?.trim() ? { agentName: pane.agent_name.trim() } : {}),
-    ...(pane.task_summary?.trim()
-      ? { taskSummary: pane.task_summary.trim() }
-      : {}),
-  };
 }

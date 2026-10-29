@@ -78,6 +78,68 @@ function deferred<T>() {
 }
 
 describe("WorldSnapshotService", () => {
+  test("fresh observers run once per admitted host read, never for cache, invalidation or retirement", async () => {
+    let now = 1,
+      current = true;
+    const observed: unknown[][] = [];
+    const host = runtime("Synthetic");
+    const paneRead = host.herdr.call;
+    let duringRead = () => {};
+    host.herdr.call = async (method) => {
+      duringRead();
+      if (method === "agent.list")
+        return {
+          agents: [
+            {
+              pane_id: "shared-pane",
+              terminal_id: "shared-terminal",
+              agent: "codex",
+              state_change_seq: 11,
+            },
+          ],
+        };
+      return paneRead(method);
+    };
+    const service = new WorldSnapshotService<Runtime>(
+      {
+        list: () => [status("alpha")],
+        readyRuntimeLease: (connectionId) => ({
+          connectionId,
+          generation: 1,
+          runtime: host,
+          isCurrent: () => current,
+        }),
+      },
+      () => now,
+      undefined,
+      undefined,
+      undefined,
+      (connectionId, generation, panes, at, agents) =>
+        observed.push([connectionId, generation, panes, at, agents]),
+    );
+    await service.snapshot();
+    expect(observed).toHaveLength(1);
+    expect(observed[0]!.slice(0, 2)).toEqual(["alpha", 1]);
+    expect(observed[0]![3]).toBe(1);
+    expect(observed[0]![4]).toEqual([
+      expect.objectContaining({
+        state_change_seq: 11,
+        terminal_id: "shared-terminal",
+      }),
+    ]);
+    await service.snapshot();
+    expect(observed).toHaveLength(1);
+    now = 20_000;
+    duringRead = () => {
+      service.invalidate("alpha");
+    };
+    await service.snapshot();
+    expect(observed).toHaveLength(1);
+    current = false;
+    await service.snapshot();
+    expect(observed).toHaveLength(1);
+  });
+
   test("expired catalogue observations admit ordinary transport work between hosts", async () => {
     const ids = Array.from({ length: 64 }, (_, index) => `synthetic-${index}`);
     const host = runtime("Synthetic");

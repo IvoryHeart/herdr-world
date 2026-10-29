@@ -295,6 +295,64 @@ retain its single-Inspector behavior.
 - **THEN** the request does not open the file in another Inspector or on another host, and the user
   receives an unavailable indication
 
+### Requirement: Chat source links use the admitted Inspector worktree
+
+In Town, Board and Desk, local source references in an agent conversation SHALL
+open Files in that same Inspector at the referenced line or Markdown heading.
+Supported references SHALL
+include absolute paths with an optional line number, root-level filenames,
+complete inline-code paths (including spaces) and Markdown file links. Escaped
+filename delimiters SHALL remain filename content; version-number prose SHALL
+NOT become automatic source links. Automatic basename recognition SHALL require
+both a known source/document format and a filename context (inline code, a line
+location or a standard document name). A code command or list of references
+SHALL retain individual source-path links and line locations rather than become
+one combined filename. Automatic recognition of a spaced inline-code filename
+SHALL require a qualified path prefix; explicit Markdown links SHALL remain
+available for ambiguous names or unrecognized automatic formats. Relative references SHALL resolve within the
+selected agent
+worktree. HTTP and HTTPS links SHALL remain web links. Inspectors without an
+admitted agent-worktree integration, including Spaces, SHALL retain ordinary
+Markdown navigation and SHALL NOT offer a nonfunctional worktree chooser.
+
+Source navigation SHALL preserve the originating connection, runtime generation,
+pane/session and the shared Files/Changes worktree binding. It SHALL NOT admit a
+path outside that selected root, use a workspace default, change another
+Inspector or accept a delayed result from a replaced binding. Missing or stale
+bindings and unresolved local paths SHALL show an explicit unavailable or
+choose-worktree state, without browser navigation to a local-path URL.
+
+#### Scenario: Open a source reference on desktop or phone
+
+- **WHEN** a user activates a local source link with a line in Chat
+- **THEN** that Inspector selects Files and reveals the file and line using its
+  admitted agent worktree, including when opening the same file at another line
+
+#### Scenario: Source link cannot use its originating worktree
+
+- **WHEN** the binding is stale or belongs to another host, generation or session,
+  or the path is outside the selected worktree
+- **THEN** no fallback file read or browser navigation occurs, and the Inspector
+  offers an explicit unavailable notice or worktree choice
+
+#### Scenario: Refresh equivalent evidence while a source read is pending
+
+- **WHEN** opening Files refreshes worktree evidence with identical connection,
+  runtime, subject, revision, candidate and root values before the read completes
+- **THEN** the successful read still reveals its requested line, genuine binding
+  replacements continue to retire old work, and notices follow their binding
+
+#### Scenario: Code lists and executable-led commands preserve source items
+
+- **WHEN** inline code contains comma/semicolon-separated references, mixed
+  qualified paths and basenames, or a command led by an executable directly in
+  `bin`, `sbin` or `.bin` at any relative or absolute installation prefix, or in
+  virtualenv `Scripts`
+- **THEN** each source item retains its own file link and line location, including
+  lists without spaces after commas; a single qualified filename containing
+  spaces or a literal comma remains whole when it is unambiguous; spaced names
+  directly in these executable directories remain available as explicit Markdown links
+
 ### Requirement: Exact visual terminal input focus
 
 In Town and Board, activating an Inspector window whose selected resource is Terminal
@@ -750,7 +808,7 @@ cannot be opened without resolving to a colliding entity on another runtime or s
 Desk SHALL present every current actionable agent within the host filter by what it needs from the
 operator. Needs you SHALL list blocked agents, oldest wait first, with the question read from the
 bottom of the agent's visible screen. To review SHALL list done agents, idle agents whose latest turn
-ended within 12 hours, and agents this browser observed stop working within 12 hours, each with its
+ended within 12 hours, and agents the World service observed stop working within 12 hours, each with its
 turn receipt or, without one, its latest screen lines. In flight SHALL list working agents with their
 current request and a live screen line. Remaining agents SHALL collapse into a quiet list. Cards and
 rows SHALL name each agent by the name the operator gave Herdr, otherwise the thread title its harness
@@ -828,6 +886,66 @@ to another session or a same-named pane on another host.
 - **WHEN** two filtered hosts expose the same native pane ID
 - **THEN** Desk triages both agents and reads each host's own receipt and screen, and reviewing one
   stop does not mark the other host's stop reviewed
+
+### Requirement: Shared bounded Desk state
+
+The World service SHALL hold review marks, observed stop times and recent Desk
+opens in process-local memory, shared by every connected browser. It SHALL retain
+at most 500 qualified metadata records, 40 recent-open timestamps and 4,096 prior
+agent-status observations. Each record SHALL belong to one connection ID, runtime
+generation, terminal ID and agent-session fingerprint (or the explicit unknown
+session identity). Review marks SHALL store only the latest marked stop per agent
+session; Reviewed SHALL retain its existing latest-stop presentation for idle or
+done agents. Exact Undo SHALL remove only the stop it names, preserving any newer
+mark from another browser. Metadata SHALL survive browser reloads and host-filter
+changes, clear on service restart and retire on runtime or observed session
+replacement. Browser-local Desk metadata SHALL NOT be imported.
+A shared stop identity SHALL be independent of a browser's receipt polling or
+read failures: the same service stop and native activity observation SHALL have
+one identity with or without a receipt. A later observed stop or native activity
+SHALL invalidate the older mark. Receipt content SHALL remain presentation data.
+The service SHALL assign a stable observed-stop identity separate from the
+12-hour display timestamp. Retained review marks SHALL keep that identity when
+only the timestamp expires. Qualified native `state_change_seq` progress in an
+already stopped state SHALL reveal a subsequent stop even if no browser observed
+the intervening working state. Native progress checkpoints on retained metadata
+SHALL survive display/observation expiry. Equal, older, malformed or ambiguous
+native progress SHALL NOT invalidate a mark. Without a native sequence, a known
+idle/blocked-to-done transition SHALL still advance the stop.
+The stable observed-stop identity SHALL participate in receipt refresh and
+currency admission. A read started for a preceding stop SHALL NOT become current
+for its successor. While a new stop's receipt is pending or failing, the previous
+report SHALL NOT enable marking; an unreadable stop may settle without a report
+under the existing bounded retry policy. Pane rows alone SHALL supply the observed
+agent harness and session identity. Matched agent.list status and sequence data
+SHALL be used only when its session fingerprint agrees with the pane's; metadata
+SHALL NOT fill in a missing pane identity.
+
+Mutations SHALL validate the exact live terminal and session through a current
+runtime lease and revalidate that lease after the read. Observed stops SHALL come
+only from fresh admitted host reads; cached, failed, invalidated or retired reads
+SHALL NOT record transitions. A host read begun before a newer metadata mutation
+SHALL NOT replace its session identity. A metadata admission started before a
+newer session observation or mutation SHALL NOT restore its replaced session,
+even if the original fingerprint subsequently reappears. Status observations
+of an already-known same session SHALL NOT retire a valid metadata admission.
+Observed-stop display times SHALL expire after 12 hours; expiry alone SHALL NOT
+reopen an unchanged reviewed idle/done stop.
+The service SHALL notify all browsers on real metadata changes. Browsers SHALL
+reject replies from an older socket epoch or service revision, treat disconnected
+state as unverified, and accept a restarted service's empty revision-zero state.
+
+#### Scenario: Review on a phone and undo on a desktop
+
+- **WHEN** one browser marks an agent's current stop reviewed
+- **THEN** another browser connected to the same service sees it reviewed, and
+  Undo from either browser restores that exact stop without removing a newer mark
+
+#### Scenario: Reload a browser or restart the service
+
+- **WHEN** a browser reloads while the World service still runs
+- **THEN** it reads the same qualified marks, stop times and recent opens; after
+  a service restart, reconnect replaces them with the new process's empty state
 
 ### Requirement: Bounded turn receipts
 
