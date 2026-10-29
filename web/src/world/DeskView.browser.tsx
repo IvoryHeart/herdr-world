@@ -4,7 +4,11 @@ import type { ConnectionClient } from "../api";
 import "../styles/tokens.css";
 import "../styles/base.css";
 import { terminalFocusBlockedByOverlay } from "../terminalFocus";
+import { handoffId } from "./handoffs";
 import { DeskBoard } from "./DeskView";
+import { WorldDeskStore } from "./deskStateStore";
+import { deskKey, type DeskRecord } from "../../../shared/deskState";
+import type { BridgeControlMsg } from "../api";
 import { InspectorChat } from "../components/InspectorChat";
 import { ResourceConnectionClientContext } from "../useConnectionClient";
 import type { WorldLeafObject, WorldObject } from "./worldObject";
@@ -18,6 +22,7 @@ const settle = (ms = 80) => new Promise((resolve) => setTimeout(resolve, ms));
 function agent(id: string, fingerprint: string): WorldLeafObject {
   return {
     id,
+    terminalId: id,
     kind: "agent",
     status: "done",
     selectedHost: true,
@@ -46,6 +51,31 @@ const world = {
   hosts: [{ selectedHost: true, label: "local" }],
 } as unknown as WorldObject;
 const opened: string[] = [];
+const alphaReceiptReads: Array<() => Promise<unknown>> = [];
+const receiptReadCounts = new Map<string, number>();
+function receiptReply(
+  id: string,
+  fingerprint: unknown,
+  turnId = `${id}-turn`,
+  report = `Report from ${id}`,
+) {
+  return {
+    agent_session_fingerprint: fingerprint,
+    turn: {
+      turn_id: turnId,
+      ask: `Request for ${id}`,
+      report,
+      report_truncated: false,
+      started_at: new Date(Date.now() - 60_000).toISOString(),
+      ended_at: new Date().toISOString(),
+      duration_ms: 60_000,
+      tool_calls: 1,
+      commands: 0,
+      files: [],
+      files_truncated: false,
+    },
+  };
+}
 const client = {
   connectionId: "local",
   generation: 1,
@@ -81,28 +111,71 @@ const client = {
       };
     if (method === "agent_conversation.steps") return { steps: [] };
     if (method === "agent_turn.get") {
-      const id = String(params?.pane_id).split(":")[1];
-      return {
-        agent_session_fingerprint: params?.agent_session_fingerprint,
-        turn: {
-          turn_id: `${id}-turn`,
-          ask: `Request for ${id}`,
-          report: `Report from ${id}`,
-          report_truncated: false,
-          started_at: new Date(Date.now() - 60_000).toISOString(),
-          ended_at: new Date().toISOString(),
-          duration_ms: 60_000,
-          tool_calls: 1,
-          commands: 0,
-          files: [],
-          files_truncated: false,
-        },
-      };
+      const id = String(params?.pane_id).split(":")[1]!;
+      receiptReadCounts.set(id, (receiptReadCounts.get(id) ?? 0) + 1);
+      const queued = id === "alpha" ? alphaReceiptReads.shift() : undefined;
+      if (queued) return queued();
+      return receiptReply(id, params?.agent_session_fingerprint);
     }
     if (method === "pane.read") return { text: "" };
     return null;
   },
 } as unknown as ConnectionClient;
+
+let revision = 0;
+const deskRecords = new Map<string, DeskRecord>(
+  leaves.map((leaf) => {
+    const record: DeskRecord = {
+      connection_id: leaf.connectionId,
+      connection_generation: leaf.generation,
+      terminal_id: leaf.terminalId,
+      agent_session_fingerprint: leaf.agentSessionFingerprint ?? null,
+      reviewed_stop: null,
+      stopped_at: 1,
+      opened_at: null,
+      observed_stop_id: `observed-${leaf.id}`,
+    };
+    return [deskKey(record), record];
+  }),
+);
+const deskControls = new Set<(control: BridgeControlMsg) => void>();
+let reviewReply: Promise<void> | undefined;
+const deskService = {
+  async call(method: string, params?: Record<string, unknown>) {
+    if (method !== "world.desk.get") {
+      const identity = params as unknown as DeskRecord;
+      const key = deskKey(identity);
+      const record = deskRecords.get(key) ?? {
+        ...identity,
+        reviewed_stop: null,
+        stopped_at: null,
+        opened_at: null,
+      };
+      if (method === "world.desk.review")
+        record.reviewed_stop = params?.reviewed
+          ? String(params?.stop_id)
+          : null;
+      else if (method === "world.desk.open") record.opened_at = Date.now();
+      deskRecords.set(key, record);
+      revision++;
+      for (const callback of deskControls)
+        callback({ type: "world_desk_changed", revision });
+    }
+    if (method === "world.desk.review") await reviewReply;
+    return {
+      revision,
+      records: [...deskRecords.values()].map((record) => ({ ...record })),
+    };
+  },
+  onControl: (callback: (control: BridgeControlMsg) => void) => {
+    deskControls.add(callback);
+    return () => {
+      deskControls.delete(callback);
+    };
+  },
+  onStatus: () => () => {},
+};
+const deskStore = new WorldDeskStore(deskService);
 
 const card = (id: string) =>
   document.querySelector<HTMLElement>(`[data-desk-card="${id}"]`);
@@ -122,6 +195,7 @@ async function run() {
   flushSync(() =>
     root.render(
       <DeskBoard
+        deskStore={deskStore}
         world={world}
         client={client}
         onOpen={async (id) => {
@@ -136,6 +210,9 @@ async function run() {
     "all finished agents are in To review",
   );
 
+  // Admit the external-store render before mark() resumes, as a revision
+  // notification can publish before the mutation reply's continuation.
+  const stopFlush = deskStore.subscribe(() => flushSync(() => {}));
   // Tab to beta's button, then E: the agent that has focus is marked.
   const betaOpen =
     card("beta")?.querySelector<HTMLButtonElement>("button.is-primary");
@@ -144,7 +221,31 @@ async function run() {
   press(betaOpen!, "e");
   await settle(200);
   check(!card("beta"), "E marked the focused card (beta) reviewed");
+  check(
+    card("gamma")?.contains(document.activeElement) === true,
+    "E moves DOM focus to the next card, gamma, after the async shared mark",
+  );
   check(!!card("alpha") && !!card("gamma"), "E left the other cards alone");
+
+  // Recency can expire while the retained stop and review mark stay the same.
+  const betaRecord = [...deskRecords.values()].find(
+    (entry) => entry.terminal_id === "beta",
+  )!;
+  const betaReadsBeforeExpiry = receiptReadCounts.get("beta");
+  betaRecord.stopped_at = null;
+  revision++;
+  for (const callback of deskControls)
+    callback({ type: "world_desk_changed", revision });
+  await settle(150);
+  check(
+    !card("beta"),
+    "expiring only the display time does not return the same stop to To review",
+  );
+
+  check(
+    receiptReadCounts.get("beta") === betaReadsBeforeExpiry,
+    "display expiry does not refetch an unchanged stable stop",
+  );
 
   // Marking offers Undo, and the stop stays reachable under Reviewed.
   const undo = [
@@ -163,12 +264,188 @@ async function run() {
   undo?.click();
   await settle(150);
   check(!!card("beta"), "Undo returns the stop to To review");
-  const betaAgain =
-    card("beta")?.querySelector<HTMLButtonElement>("button.is-primary");
-  betaAgain?.focus();
+  const betaMark = [
+    ...card("beta")!.querySelectorAll<HTMLButtonElement>("button"),
+  ].find((button) => button.textContent?.startsWith("Mark reviewed"))!;
+  betaMark.focus();
   await settle();
-  press(betaAgain!, "e");
+  betaMark.click();
   await settle(200);
+  check(
+    card("gamma")?.contains(document.activeElement) === true,
+    "Mark reviewed moves DOM focus to the next card after publication removes its focused button",
+  );
+  stopFlush();
+
+  // A slow save must not reclaim focus after the user leaves the Desk.
+  const heldReply = Promise.withResolvers<void>();
+  reviewReply = heldReply.promise;
+  const alphaMark = [
+    ...card("alpha")!.querySelectorAll<HTMLButtonElement>("button"),
+  ].find((button) => button.textContent?.startsWith("Mark reviewed"))!;
+  alphaMark.focus();
+  alphaMark.click();
+  await settle(100);
+  const elsewhere = document.createElement("button");
+  elsewhere.textContent = "Outside Desk";
+  document.body.append(elsewhere);
+  elsewhere.focus();
+  reviewReply = undefined;
+  heldReply.resolve();
+  await settle(150);
+  check(
+    document.activeElement === elsewhere,
+    "a late review save preserves newer focus outside the Desk",
+  );
+  await deskStore.mutate(
+    "world.desk.review",
+    {
+      connection_id: "local",
+      connection_generation: 1,
+      terminal_id: "alpha",
+      agent_session_fingerprint: "a".repeat(64),
+    },
+    {
+      stop_id: JSON.parse(
+        handoffId(leaves[0]!, undefined, "observed-alpha"),
+      )[1],
+      reviewed: false,
+    },
+  );
+  elsewhere.remove();
+  await settle(100);
+
+  // A second browser sees the same service, without sharing browser storage.
+  const secondBrowser = new WorldDeskStore(deskService);
+  secondBrowser.start();
+  await secondBrowser.refresh();
+  const alphaIdentity = {
+    connection_id: "local",
+    connection_generation: 1,
+    terminal_id: "alpha",
+    agent_session_fingerprint: "a".repeat(64),
+  };
+  await secondBrowser.mutate("world.desk.review", alphaIdentity, {
+    stop_id: JSON.parse(handoffId(leaves[0]!, undefined, "observed-alpha"))[1],
+    reviewed: true,
+  });
+  await settle(150);
+  check(
+    !card("alpha"),
+    "a mark from another browser removes the same stop from To review",
+  );
+  const oldStopRead = Promise.withResolvers<unknown>();
+  const latestStopRead = Promise.withResolvers<unknown>();
+  alphaReceiptReads.push(
+    () => oldStopRead.promise,
+    () => latestStopRead.promise,
+  );
+  const alphaReadsBeforeStop = receiptReadCounts.get("alpha") ?? 0;
+  const alphaRecord = deskRecords.get(deskKey(alphaIdentity))!;
+  alphaRecord.observed_stop_id = "observed-alpha-later";
+  alphaRecord.stopped_at = Date.now();
+  revision++;
+  for (const callback of deskControls)
+    callback({ type: "world_desk_changed", revision });
+  await settle(150);
+  check(
+    !!card("alpha"),
+    "native progress returns a new completed stop to review without a working browser frame",
+  );
+  const alphaMarkButton = () =>
+    [
+      ...(card("alpha")?.querySelectorAll<HTMLButtonElement>("button") ?? []),
+    ].find((button) => button.textContent?.startsWith("Mark reviewed"));
+  check(
+    (receiptReadCounts.get("alpha") ?? 0) > alphaReadsBeforeStop,
+    "shared stop identity triggers a new receipt read with unchanged native status/activity",
+  );
+  check(
+    alphaMarkButton()?.disabled === true,
+    "a new stop is not markable while its receipt is pending",
+  );
+  const precedingMark = alphaRecord.reviewed_stop;
+  card("alpha")?.focus();
+  press(card("alpha")!, "e");
+  await settle();
+  check(
+    alphaRecord.reviewed_stop === precedingMark,
+    "E cannot mark a new stop against its preceding report",
+  );
+
+  // Supersede an in-flight read without changing status, activity or session.
+  alphaRecord.observed_stop_id = "observed-alpha-newest";
+  revision++;
+  for (const callback of deskControls)
+    callback({ type: "world_desk_changed", revision });
+  await settle(150);
+  oldStopRead.resolve(
+    receiptReply(
+      "alpha",
+      "a".repeat(64),
+      "superseded-turn",
+      "Superseded report must not publish",
+    ),
+  );
+  await settle(150);
+  check(
+    alphaMarkButton()?.disabled === true,
+    "a late read from an older stop cannot settle the newest stop",
+  );
+  check(
+    !card("alpha")?.textContent?.includes("Superseded report must not publish"),
+    "a superseded stop response is fenced before publication",
+  );
+  latestStopRead.reject(new Error("synthetic receipt refresh failure"));
+  await settle(150);
+  check(
+    alphaMarkButton()?.disabled === true,
+    "one failed refresh cannot make the preceding report current",
+  );
+
+  alphaReceiptReads.push(async () => {
+    throw new Error("synthetic repeated receipt failure");
+  });
+  document.dispatchEvent(new Event("visibilitychange"));
+  await settle(200);
+  check(
+    alphaMarkButton()?.disabled === false,
+    "an unreadable stop can settle without a report after retry",
+  );
+  check(
+    !card("alpha")?.textContent?.includes("Report from alpha"),
+    "repeated failures discard the preceding stop report instead of validating it",
+  );
+
+  alphaReceiptReads.push(async () =>
+    receiptReply("alpha", "a".repeat(64), "newest-turn", "Newest stop report"),
+  );
+  document.dispatchEvent(new Event("visibilitychange"));
+  await settle(200);
+  check(
+    card("alpha")?.textContent?.includes("Newest stop report") === true,
+    "a successful refresh publishes the newest stop report",
+  );
+  check(
+    alphaMarkButton()?.disabled === false,
+    "a current stop report enables Mark reviewed",
+  );
+  await secondBrowser.mutate("world.desk.review", alphaIdentity, {
+    stop_id: JSON.parse(handoffId(leaves[0]!, undefined, "observed-alpha"))[1],
+    reviewed: false,
+  });
+  await settle(150);
+  check(
+    !!card("alpha"),
+    "Undo from another browser restores the stop immediately",
+  );
+  secondBrowser.stop();
+  check(
+    !Object.keys(localStorage).some((key) =>
+      /handoffs|desk\.opened/u.test(key),
+    ),
+    "Desk metadata never writes browser storage",
+  );
 
   // Search narrows the Desk to matching agents.
   const search = document.querySelector<HTMLInputElement>(".desk-search input");
@@ -224,6 +501,7 @@ async function run() {
     root.render(
       <>
         <DeskBoard
+          deskStore={deskStore}
           world={world}
           client={client}
           onOpen={async (id) => {
@@ -396,6 +674,7 @@ async function run() {
   flushSync(() =>
     root.render(
       <DeskBoard
+        deskStore={deskStore}
         world={filtered}
         client={resolve}
         onOpen={async (id) => {
@@ -429,6 +708,7 @@ async function run() {
   flushSync(() =>
     root.render(
       <DeskBoard
+        deskStore={deskStore}
         world={{ ...filtered, leaves: [remote], hosts: [filtered.hosts[1]] }}
         client={resolve}
         onOpen={async (id) => {
@@ -443,7 +723,12 @@ async function run() {
     "host filtering retains the remote Desk card",
   );
 
-  localStorage.clear();
+  // Start an independent service-state scenario; clearing browser storage
+  // deliberately no longer clears shared review marks.
+  deskRecords.clear();
+  revision++;
+  for (const callback of deskControls)
+    callback({ type: "world_desk_changed", revision });
   let releaseSlow!: () => void;
   const slowRead = new Promise<void>((resolve) => {
     releaseSlow = resolve;
@@ -470,6 +755,7 @@ async function run() {
   flushSync(() =>
     root.render(
       <DeskBoard
+        deskStore={deskStore}
         key="slow-host"
         world={{ ...filtered, leaves: [remote, leaves[0]] }}
         client={independent}
@@ -496,6 +782,7 @@ async function run() {
   flushSync(() =>
     root.render(
       <DeskBoard
+        deskStore={deskStore}
         key="slow-host"
         world={{
           ...filtered,
