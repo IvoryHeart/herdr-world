@@ -382,12 +382,12 @@ function rowsByUrgency(tab: BoardTab): BoardPane[] {
 }
 
 function paneName(pane: BoardPane) {
-  if (!pane.isAgent) return "shell";
+  if (!pane.isAgent) return "terminal";
   return pane.leaf.agentName ?? pane.leaf.agentLabel ?? "agent";
 }
 
 function paneLine(pane: BoardPane, status: WorldAgentStatus) {
-  if (!pane.isAgent) return pane.leaf.terminalTitle ?? "shell";
+  if (!pane.isAgent) return pane.leaf.terminalTitle ?? "terminal";
   return (
     pane.leaf.taskSummary ?? pane.leaf.terminalTitle ?? STATUS_LABEL[status]
   );
@@ -3475,7 +3475,7 @@ export default function BoardView({
                           role="button"
                           aria-pressed={selectedId === row.leaf.id}
                           className={`board-pane${row.isAgent ? ` board-s-${row.status}` : " board-pane-shell"}${selectedId === row.leaf.id ? " board-pane-selected" : ""}`}
-                          aria-label={`${paneName(row)}, ${row.isAgent ? STATUS_LABEL[row.status] : "shell"}`}
+                          aria-label={`${paneName(row)}, ${row.isAgent ? STATUS_LABEL[row.status] : "terminal"}`}
                         >
                           {row.isAgent ? (
                             <span className="board-dot" />
@@ -3492,7 +3492,9 @@ export default function BoardView({
                             <QuestChip quest={quests.get(row.leaf.id)!} />
                           ) : null}
                           <span className="board-pane-state">
-                            {row.isAgent ? STATUS_LABEL[row.status] : "shell"}
+                            {row.isAgent
+                              ? STATUS_LABEL[row.status]
+                              : "terminal"}
                           </span>
                         </div>
                       ))}
@@ -3925,7 +3927,7 @@ export default function BoardView({
                 )}
                 <span className="board-pane-name">{paneName(row)}</span>
                 <span className="board-pane-state">
-                  {row.isAgent ? STATUS_LABEL[row.status] : "shell"}
+                  {row.isAgent ? STATUS_LABEL[row.status] : "terminal"}
                 </span>
               </button>
             ))}

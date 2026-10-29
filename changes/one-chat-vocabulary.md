@@ -7,6 +7,9 @@
 - Reviewed is one record on the service: marking finished work reviewed in
   Town, Desk or Needs you clears it in every view and browser. Town no longer
   keeps its own reviewed marks in the browser.
+- One vocabulary for the same things: Town's Summary says **Done, not
+  reviewed** and **needs you**, Desk names an agent's **desk** rather than its
+  tab, and Board calls a pane without an agent a **terminal**, as Town does.
 
 ### Added
 

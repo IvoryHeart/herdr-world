@@ -2522,7 +2522,7 @@ function ReceptionEntry({
           ? `${agent.displayLabel}, owner question`
           : agent.semanticStatus === "done"
             ? `${agent.displayLabel}, finished`
-            : `${agent.displayLabel}, needs input for ${ago(since, now)}`
+            : `${agent.displayLabel}, needs you for ${ago(since, now)}`
       }
       title={agent.taskSummary ?? agent.displayLabel}
       onClick={() =>

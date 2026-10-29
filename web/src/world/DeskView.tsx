@@ -842,7 +842,7 @@ export function DeskBoard({
     const meta = [
       agentRuntime(leaf),
       showWorkspace ? leaf.spaceLabel : null,
-      leaf.tabLabel ? `tab ${leaf.tabLabel}` : null,
+      leaf.tabLabel ? `desk ${leaf.tabLabel}` : null,
       agentFolder(leaf),
     ].filter(Boolean);
     return (
