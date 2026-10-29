@@ -17,7 +17,11 @@ import {
 } from "./town/townMoves";
 import { isMobileLayout, useLayoutPreferences } from "../layoutPreferences";
 import { useSystemBack } from "../systemBack";
-import { useTownFinished, withTownFinished } from "./town/townFinished";
+import {
+  townCheckedKeys,
+  useTownFinished,
+  withTownFinished,
+} from "./town/townFinished";
 import { WorldSearchResults } from "./WorldSearchResults";
 import { DEVTOOLS, NO_TRACE } from "./devtools/flag";
 import { openTrace, rememberTrace, TRACE_TOGGLE_EVENT } from "./devtools/trace";
@@ -239,19 +243,19 @@ export default function TownView({
   }, []);
 
   // Reviewed is the one service record every view reads: marking work
-  // reviewed in Town, Desk or Needs you clears it everywhere.
-  // Only done agents can be reviewed, so only they are looked up.
+  // reviewed in Town, Desk or Needs you clears it everywhere. Only finished
+  // agents can be reviewed (done, or idle ones Town saw finish), so only they
+  // are looked up.
   const reviewedWork = useReviewedWork();
   const { reviewed: isReviewed } = reviewedWork;
-  const completionSeenKeys = useMemo(() => {
-    const keys = new Set<string>();
-    for (const { agent } of observedOffice.roster) {
-      if (agent.semanticStatus !== "done") continue;
-      const leaf = world.nodeById.get(agent.nodeId);
-      if (leaf?.kind === "agent" && isReviewed(leaf)) keys.add(agent.key);
-    }
-    return keys;
-  }, [observedOffice, world, isReviewed]);
+  const completionSeenKeys = useMemo(
+    () =>
+      townCheckedKeys(observedOffice, townFinished.finished, ({ nodeId }) => {
+        const leaf = world.nodeById.get(nodeId);
+        return leaf?.kind === "agent" && isReviewed(leaf);
+      }),
+    [observedOffice, world, isReviewed, townFinished.finished],
+  );
   const office = useMemo(
     () =>
       withTownFinished(
@@ -443,10 +447,17 @@ export default function TownView({
     }
     onSelect(key);
   };
-  const markCompletionSeen = (agent: OfficeAgent) => {
-    townFinished.dismiss(agent.key);
+  /** Marks the work reviewed; true once the service saved the mark. */
+  const markCompletionSeen = async (agent: OfficeAgent) => {
     const leaf = world.nodeById.get(agent.nodeId);
-    if (leaf?.kind === "agent") void reviewedWork.mark(leaf);
+    const saved = leaf?.kind === "agent" && (await reviewedWork.mark(leaf));
+    if (saved) townFinished.dismiss(agent.key);
+    else
+      toast(
+        "error",
+        `Could not save ${agent.displayLabel}'s review mark. Try again when the connection is ready.`,
+      );
+    return saved;
   };
   /**
    * Open the terminal for a pane, agent or desk. Opening a finished agent's
@@ -1164,8 +1175,11 @@ export default function TownView({
             }
             deskColor={peekDeskColor(peekAgent.key)}
             onReviewed={() => {
-              markCompletionSeen(peekAgent);
-              toast("ok", `${peekAgent.displayLabel}'s work reviewed`);
+              void markCompletionSeen(peekAgent).then(
+                (saved) =>
+                  saved &&
+                  toast("ok", `${peekAgent.displayLabel}'s work reviewed`),
+              );
             }}
             onChat={() => openChat(peekAgent.key)}
             onTerminal={() => {
