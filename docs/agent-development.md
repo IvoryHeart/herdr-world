@@ -287,8 +287,9 @@ retained ask and withdraws it without creating a question. A repeated answered
 key returns its retained answer. Human withdrawal output explicitly names the
 withdrawal, including any answer already recorded.
 
-Open asks appear first in Town's Needs you rail and Summary. Their verified
-agents wait at reception with a quiet **?** until answered or withdrawn; **!**
+Open asks appear first in Town's Needs you rail and Summary, named as Town
+labels the asking desk. Their agents wait at reception with a quiet **?** until
+answered, dismissed or withdrawn, an unverified asker marked as such; **!**
 remains urgent blocking and **✓** an unchecked finish. Board and Desk use the
 same qualified question mark. A plain watcher terminal receives an asking-seat
 entry too, without being relabelled as an LLM agent. A new ask uses World's usual chime, toast and OS
@@ -310,7 +311,12 @@ without claiming the earlier question was withdrawn. If the original occupant
 can no longer withdraw (for example after a runtime-generation
 change or a restart in another pane), the watcher retires the cleared cause and
 records once in the feed that the question is left for the owner to answer; it
-does not retry that permanent refusal. Transient failures still retry. It never
+does not retry that permanent refusal. Transient failures still retry. When the
+owner dismisses an ask, the watcher records that once in the feed and does not
+ask again while the cause holds; it withdraws the ask when the cause clears.
+The watcher's asks use `--key`, which the service refuses to an unverified
+caller, so run it in a Herdr pane with `herdr-world` reaching the service's own
+port, never a dev proxy such as Vite's. It never
 routes an answer to a different seat. Workers needing an answer use `--wait` in
 their own pane. Deploy the matching World service and CLI before restarting the
 watcher from the merged checkout. Dispatcher runbook changes are applied by the

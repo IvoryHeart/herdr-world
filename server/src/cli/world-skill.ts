@@ -57,7 +57,9 @@ Targets are on your own host; add --connection ID for another one.
          --key deduplicates one cause for your verified occupant. Withdraw
          your own cause when it clears; repeats then may create a fresh ask.
          --key withdrawal recovers a lost ask ID without creating a question.
-         A withdrawn --wait returns withdrawn, not an invented answer.
+         A withdrawn --wait returns withdrawn, not an invented answer;
+         one the owner dismissed returns dismissed, and its --key stays
+         closed, like an answered one, until you withdraw it.
   result --task ID "SUMMARY" [--pr N] [--status done|blocked|failed]
   result ls [--task ID]
   spawned-by PARENT_PANE   stamp your pane as spawned by PARENT_PANE
@@ -74,7 +76,9 @@ Use herdr-world ask from your own pane; no other channel. Ask, then move on
 or --wait. Do not prompt the owner's seat, send Herdr custom notifications,
 edit shared runbooks/configuration, or substitute issue comments for asking.
 Your question waits at reception with ?, first in Town's Needs you list.
-The owner answers there; --wait hands that answer back to your process.
+The owner answers there, or dismisses it without an answer; --wait hands
+either back to your process. Ask through the service's own port, never a
+dev proxy, or World cannot verify your pane.
 Withdraw your own open ask once its cause clears.
 
 ## Output and exit codes

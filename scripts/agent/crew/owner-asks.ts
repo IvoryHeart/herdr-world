@@ -30,7 +30,12 @@ function reply(result: ReturnType<Deps["run"]>) {
     const value = JSON.parse(result.stdout) as {
       ok: boolean;
       code?: string;
-      result?: { id?: string; answer?: { text: string }; withdrawn?: unknown };
+      result?: {
+        id?: string;
+        answer?: { text: string };
+        withdrawn?: unknown;
+        dismissed?: unknown;
+      };
     };
     return typeof value.ok === "boolean" && !(result.code !== 0 && value.ok)
       ? value
@@ -105,10 +110,18 @@ export function reconcileOwnerAsks(
       return;
     }
     const id = asked.result.id;
-    save(entry, "sent", { ask: id, closed: Boolean(asked.result.answer) });
+    const dismissed = Boolean(asked.result.dismissed);
+    save(entry, "sent", {
+      ask: id,
+      closed: Boolean(asked.result.answer) || dismissed,
+    });
     if (asked.result.answer && !(prior?.ask === id && prior.closed))
       answered(entry, id, asked.result.answer.text);
-    say(`#${entry.pr} asked owner (${id}): ${entry.text}`);
+    say(
+      dismissed
+        ? `#${entry.pr} owner dismissed ${id}: ${entry.text}`
+        : `#${entry.pr} asked owner (${id}): ${entry.text}`,
+    );
   };
   for (const entry of actionsIn(crew, ["pending", "sent", "superseded"])) {
     if (entry.target !== "owner" || (prs.length && !prs.includes(entry.pr)))
@@ -173,6 +186,10 @@ export function reconcileOwnerAsks(
       } else if (answer?.result?.answer) {
         save(entry, "sent", { ...known, closed: true });
         answered(entry, known.ask, answer.result.answer.text);
+      } else if (answer?.result?.dismissed) {
+        // Closed without an answer: not asked again while the cause holds.
+        save(entry, "sent", { ...known, closed: true });
+        say(`#${entry.pr} owner dismissed ${known.ask}: ${entry.text}`);
       }
       continue;
     }

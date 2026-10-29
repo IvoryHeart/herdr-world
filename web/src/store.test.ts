@@ -3756,7 +3756,7 @@ describe("Herdr task notifications", () => {
     };
   }
 
-  test("a new verified ask uses its captured host, runtime and session for Open agent", () => {
+  test("a new ask names its asker, quotes its first line and opens its captured host, runtime and session", () => {
     const ask = {
       id: "q-example",
       at: 1,
@@ -3777,16 +3777,35 @@ describe("Herdr task notifications", () => {
     };
     try {
       __storeTesting.replaceState(enabledState({ notice: null }));
-      notifyWorldAsk(ask);
+      notifyWorldAsk({ ...ask, question: `${ask.question}\nMore detail.` });
       expect(store.get().notice).toMatchObject({
+        message: "Example watcher · for you: READY #7: ship it?",
+        detail: "READY #7: ship it?",
         actionLabel: "Open agent",
         actionConnectionId: "beta",
         actionRuntimeGeneration: 1,
         actionPaneId: "w1:p9",
         actionAgentSessionId: "original-session",
       });
+      // Herdr's agent name wins; an unverified asker World placed is marked.
       __storeTesting.replaceState(enabledState({ notice: null }));
-      notifyWorldAsk({ ...ask, actor: { ...ask.actor, verified: false } });
+      notifyWorldAsk({
+        ...ask,
+        actor: { ...ask.actor, verified: false, name: "dispatch" },
+      });
+      expect(store.get().notice).toMatchObject({
+        message: "dispatch (unverified) · for you: READY #7: ship it?",
+        actionLabel: "Open agent",
+        actionPaneId: "w1:p9",
+      });
+      // An ask World could not place, or a closed one, raises nothing.
+      __storeTesting.replaceState(enabledState({ notice: null }));
+      notifyWorldAsk({
+        ...ask,
+        actor: { label: "unverified w1:p9", verified: false, pane_id: "w1:p9" },
+      });
+      expect(store.get().notice).toBeNull();
+      notifyWorldAsk({ ...ask, dismissed: { at: 2, by: "owner" } });
       expect(store.get().notice).toBeNull();
       notifyWorldAsk({
         ...ask,

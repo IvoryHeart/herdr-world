@@ -62,7 +62,11 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
     }
     return;
   }
-  if (method === "world.asks.get" || method === "world.ask.answer") {
+  if (
+    method === "world.asks.get" ||
+    method === "world.ask.answer" ||
+    method === "world.ask.dismiss"
+  ) {
     try {
       sendReply({ id, result: worldCli.rpc(method, params) }, method);
     } catch (error) {
