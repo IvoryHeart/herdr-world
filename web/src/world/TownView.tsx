@@ -246,7 +246,7 @@ export default function TownView({
   // reviewed in Town, Desk or Needs you clears it everywhere. Only finished
   // agents can be reviewed (done, or idle ones Town saw finish), so only they
   // are looked up.
-  const reviewedWork = useReviewedWork();
+  const reviewedWork = useReviewedWork(undefined, false);
   const { reviewed: isReviewed } = reviewedWork;
   const completionSeenKeys = useMemo(
     () =>

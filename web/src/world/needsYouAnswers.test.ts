@@ -57,7 +57,7 @@ async function registerDomTest() {
   const { bridge } = await import("../api");
   const { WorldDeskStore } = await import("./deskStateStore");
   const { deskIdentity } = await import("./useDeskState");
-  const { reviewStop } = await import("./useReviewedWork");
+  const { reviewStop, useReviewedWork } = await import("./useReviewedWork");
   const { NeedsYouWindow } = await import("./NeedsYouWindow");
   type Leaf = import("./worldObject").WorldLeafObject;
   type Asks = import("./worldAsks").WorldAsksStore;
@@ -269,5 +269,51 @@ async function registerDomTest() {
     await settle();
     expect(item("done").querySelector('[role="alert"]')).toBeNull();
     await act(async () => root.unmount());
+  });
+
+  test("Town's reviewed view ignores stop observations and follows review marks", async () => {
+    // The service publishes a Desk change for every stop it sees; in a dense
+    // Town only a changed review mark may re-render Town.
+    let state: {
+      revision: number;
+      records: import("../../../shared/deskState").DeskRecord[];
+    } = { revision: 1, records: [{ ...deskState().records[0]! }] };
+    let changed: (() => void) | null = null;
+    const store = new WorldDeskStore({
+      call: async () => structuredClone(state),
+      onControl: (listener: (control: { type: string }) => void) => {
+        changed = () => listener({ type: "world_desk_changed" });
+        return () => {};
+      },
+      onStatus: () => () => {},
+    } as unknown as ConstructorParameters<typeof WorldDeskStore>[0]);
+    let renders = 0;
+    let reviewedNow = false;
+    const Probe = () => {
+      renders++;
+      reviewedNow = useReviewedWork(store, false).reviewed(done);
+      return null;
+    };
+    const probeRoot = createRoot(document.createElement("div"));
+    await act(async () => probeRoot.render(createElement(Probe)));
+    await settle();
+    const settled = renders;
+    state = {
+      revision: 2,
+      records: [{ ...state.records[0]!, stopped_at: 950 }],
+    };
+    await act(async () => changed!());
+    await settle();
+    expect(renders).toBe(settled);
+    const record = state.records[0]!;
+    state = {
+      revision: 3,
+      records: [{ ...record, reviewed_stop: reviewStop(done, record) }],
+    };
+    await act(async () => changed!());
+    await settle();
+    expect(renders).toBeGreaterThan(settled);
+    expect(reviewedNow).toBe(true);
+    await act(async () => probeRoot.unmount());
   });
 }
