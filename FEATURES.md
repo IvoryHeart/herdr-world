@@ -407,7 +407,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   named `<name>-<harness>` (for example `otter-claude`), shortened in the middle
   past 14 characters, and its state is a badge on its icon: a tick when done, a
   spinner while working, **!** when it needs you and a grey dot when idle. **⋯** holds
-  minimize, the snap choices and float. Tapping the location line under the name
+  minimize, the snap choices and float. **Fit left** and **Fit right**, under
+  **Default size**, restore the normal window size against that edge; hover or
+  focus a snap choice to preview it. Tapping the location line under the name
   shows the branch, worktree and PR status, replacing the card above Changes. In
   Town the window takes the Town look (portrait, pixel name, chunky buttons,
   **‹ Back**). On a phone the window fills the screen like the

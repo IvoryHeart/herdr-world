@@ -21,6 +21,7 @@ import { measuredFixedPositionScale } from "../../fixedPositionScale";
 import { useLayer } from "../../layerStack";
 import type { SnapTarget } from "./windowManager";
 import "./windows.css";
+import { previewWindowSnap } from "./windowSnapPreview";
 
 export type ManagedWindowControls = {
   maximized: boolean;
@@ -101,6 +102,7 @@ type MenuItem = {
   /** A setting turned on and off (the desk pin), not a choice among views. */
   toggle?: boolean;
   section?: string;
+  preview?: SnapTarget;
   run(): void;
 };
 
@@ -188,6 +190,13 @@ export function WindowControls({
       : [
           ...choices.map(({ target, label }) => ({
             label,
+            preview: target,
+            run: () => controls.onSnap(target),
+          })),
+          ...(["fit-left", "fit-right"] as const).map((target, index) => ({
+            label: target === "fit-left" ? "Fit left" : "Fit right",
+            section: index === 0 ? "Default size" : undefined,
+            preview: target,
             run: () => controls.onSnap(target),
           })),
           { label: "Float window", run: controls.onFloat },
@@ -197,6 +206,9 @@ export function WindowControls({
   const host = useRef<HTMLDivElement>(null);
   const menu = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!open) previewWindowSnap(host.current, null);
+  }, [open]);
   useLayer(open, () => setOpen(false), {
     element: () => menu.current,
     anchors: () => [trigger.current],
@@ -346,6 +358,14 @@ export function WindowControls({
                         : "menuitemradio"
                   }
                   aria-checked={item.checked}
+                  onMouseEnter={() =>
+                    previewWindowSnap(host.current, item.preview ?? null)
+                  }
+                  onMouseLeave={() => previewWindowSnap(host.current, null)}
+                  onFocus={() =>
+                    previewWindowSnap(host.current, item.preview ?? null)
+                  }
+                  onBlur={() => previewWindowSnap(host.current, null)}
                   onClick={() => {
                     item.run();
                     setOpen(false);

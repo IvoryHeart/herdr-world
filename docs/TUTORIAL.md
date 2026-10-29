@@ -666,7 +666,10 @@ it does not verify the work for you.
 **You are done when:** you can find the same agent in Town, Board or Desk and
 open its terminal on the expected host.
 
-On desktop, **Arrange windows** can tile or cascade open Inspectors; use **Open
+On desktop, a window's **⋯ → Default size → Fit left / Fit right** restores its
+normal size against that edge. Hover or focus a snap choice to preview the
+placement; half-screen snaps remain separate.
+**Arrange windows** can tile or cascade open Inspectors; use **Open
 windows** to restore minimized ones. On mobile, one Inspector fills the screen:
 use the on-screen **Back** to return straight to the visual view, including
 when Composer is open. The phone's own Back closes Composer first, then the

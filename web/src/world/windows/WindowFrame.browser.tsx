@@ -155,6 +155,45 @@ async function run() {
   const root = createRoot(document.getElementById("root")!);
   flushSync(() => root.render(<Fixture />));
   await settle();
+  for (const target of ["fit-left", "fit-right"] as const) {
+    flushSync(() =>
+      frame()
+        .querySelector<HTMLButtonElement>('[aria-label="More actions for A"]')!
+        .click(),
+    );
+    const choice = [
+      ...document.querySelectorAll<HTMLButtonElement>(
+        ".world-window-snap-menu button",
+      ),
+    ].find(
+      (button) =>
+        button.textContent ===
+        (target === "fit-left" ? "Fit left" : "Fit right"),
+    );
+    if (!choice) throw new Error(`Missing ${target} menu choice`);
+    flushSync(() =>
+      choice.dispatchEvent(new MouseEvent("mouseover", { bubbles: true })),
+    );
+    const preview = document.querySelector<HTMLElement>(
+      ".world-window-snap-preview",
+    );
+    check(
+      Boolean(preview) &&
+        sameGeometry(cssGeometry(preview!), snapGeometry(target, harness.size)),
+      `${target}: menu hover did not preview default size: ${JSON.stringify(preview ? cssGeometry(preview) : null)}, expected ${JSON.stringify(snapGeometry(target, harness.size))}`,
+    );
+    flushSync(() => choice.click());
+    await settle();
+    check(
+      sameGeometry(cssGeometry(frame()), snapGeometry(target, harness.size)),
+      `${target}: menu did not fit to the selected edge`,
+    );
+    check(
+      !document.querySelector(".world-window-snap-preview"),
+      `${target}: closing menu retained its preview`,
+    );
+    flushSync(() => harness.dispatch({ type: "float", id: "A" }));
+  }
   const before = geometry();
   frame("B").focus();
   await settle();

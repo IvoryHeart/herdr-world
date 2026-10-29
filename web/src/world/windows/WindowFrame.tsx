@@ -19,6 +19,7 @@ import {
   type ResizeEdge,
 } from "./windowInteraction";
 import "./windows.css";
+import { WINDOW_SNAP_PREVIEW } from "./windowSnapPreview";
 
 export function WindowFrame({
   id,
@@ -277,6 +278,9 @@ export function WindowFrame({
       );
     };
     const focus = () => latest.current.onRaise();
+    const menuPreview = (event: Event) =>
+      setPreview((event as CustomEvent<SnapTarget | null>).detail);
+    element.addEventListener(WINDOW_SNAP_PREVIEW, menuPreview);
     element.addEventListener("pointerdown", begin, true);
     element.addEventListener("focusin", focus);
     element.addEventListener("keydown", key, true);
@@ -284,6 +288,7 @@ export function WindowFrame({
     window.addEventListener("pointerup", end, true);
     window.addEventListener("pointercancel", end, true);
     return () => {
+      element.removeEventListener(WINDOW_SNAP_PREVIEW, menuPreview);
       element.removeEventListener("pointerdown", begin, true);
       element.removeEventListener("focusin", focus);
       element.removeEventListener("keydown", key, true);

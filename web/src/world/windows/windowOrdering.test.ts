@@ -21,6 +21,13 @@ const steps: Step[] = [
         id,
       })) as WindowCommand[],
   ),
+  ...ids.flatMap((id) =>
+    (["fit-left", "fit-right"] as const).map((target) => ({
+      type: "snap" as const,
+      id,
+      target,
+    })),
+  ),
   ...["columns", "grid", "single", "cascade"].map(
     (preset) => ({ type: "arrange", preset }) as WindowCommand,
   ),
@@ -94,7 +101,11 @@ function check(
       assert(members.includes(id), "removed owner excluded from restore");
   } else if ("id" in step && before.windows[step.id]) {
     const previous = before.windows[step.id]!;
-    if (step.type === "focus" || step.type === "maximize") {
+    if (
+      step.type === "focus" ||
+      step.type === "maximize" ||
+      step.type === "snap"
+    ) {
       assert.equal(after.activeId, step.id, "explicit focus owner");
       assert.equal(
         after.stack[after.stack.length - 1],
@@ -126,11 +137,23 @@ function check(
         "peer minimization isolation",
       );
     }
-    assert.deepEqual(
-      after.windows[step.id]!.placement,
-      previous.placement,
-      "focus/hide/maximize preserves normal placement",
-    );
+    if (step.type === "snap") {
+      assert.deepEqual(
+        windowGeometry(after, step.id, size),
+        {
+          left: step.target === "fit-right" ? size.width - 760 : 0,
+          top: 0,
+          width: 760,
+          height: 520,
+        },
+        "fit snap uses default size and the selected edge",
+      );
+    } else
+      assert.deepEqual(
+        after.windows[step.id]!.placement,
+        previous.placement,
+        "focus/hide/maximize preserves normal placement",
+      );
   } else if (step.type === "restore-layout") {
     for (const id of members) {
       assert.equal(
@@ -177,7 +200,7 @@ function explore(subject = transition) {
 test("all bounded two-owner window command orderings retain visibility, ownership and restore contracts", () => {
   const result = explore();
   console.info(
-    `Window bounded exploration: ${result.states} states, ${result.transitions} transitions, depth 5, 21 commands`,
+    `Window bounded exploration: ${result.states} states, ${result.transitions} transitions, depth 5, ${steps.length} commands`,
   );
   expect(result.states).toBeGreaterThan(100);
   expect(result.transitions).toBeGreaterThan(1000);

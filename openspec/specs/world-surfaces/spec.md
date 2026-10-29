@@ -3000,6 +3000,20 @@ At the first arrangement of an eligible window set, World SHALL capture its prev
 
 Maximize SHALL temporarily present a window over the available stage while preserving its other arrangement participants. It SHALL capture the complete prior presentation context and geometry, including dock placement, arrangement membership, tile geometry and order. The window's Restore control SHALL return it to that captured presentation. If Restore positions is invoked while a window is maximized, all still-open participants SHALL return to the captured arrangement baseline and the maximize snapshot SHALL be cleared; an individual Restore action SHALL NOT reapply superseded geometry.
 
+Fit left and Fit right SHALL place a window against the selected edge at the
+normal default floating size, clamped to the available stage below shell controls.
+They SHALL remain distinct from half-screen snaps. Hovering or keyboard-focusing
+a snap choice SHALL preview its destination without changing placement; leaving
+or closing the menu SHALL remove the preview. Minimize and maximize/restore SHALL
+preserve the selected fit placement.
+
+#### Scenario: Fit a window to its default size
+
+- **WHEN** the user selects Fit left or Fit right in a desktop window's snap menu
+- **THEN** the window returns to the viewport-clamped default size at that edge,
+  other windows keep their placements, and half-screen snap choices keep their
+  existing dimensions
+
 #### Scenario: Compact visual layout preserves desktop positions
 
 - **WHEN** a visual view with arranged Inspectors enters a compact layout and the user attempts a menu choice, assigned shortcut, drag or resize
