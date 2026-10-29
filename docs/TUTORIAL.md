@@ -241,14 +241,28 @@ hosts stay usable.
    building's reception board colours the host (its roof, Board zone and
    Spaces header). A workspace's colour shows on its tables that have no colour
    of their own; a host's does not.
-   The colour swatch beside the agent's name changes the colour of its table;
-   it is the tab's colour everywhere in World. In an agent's window the icon
-   sits on that colour: click it to open the agent's settings and choose
-   another. The same settings link to the agent's profile: **Edit profile ·
-   <name>** when it was launched from one, otherwise **Profiles…**. The
-   terminal window's menu has **Colour**, and
-   in Spaces the tab's menu (right-click or long-press) offers the same palette
-   and **Default colour**.
+   Click the icon beside the terminal's name to open **Terminal appearance**;
+   In Spaces, use the same icon in the native tab strip or an arranged window's
+   header. It edits the selected pane in that tab. On a phone, use the coloured
+   appearance button in the terminal app bar.
+   The header shows the native tab name. Edit **Tab name** and choose **Save
+   name** to rename that Herdr tab in every view. Pick a colour, enter a short
+   **Status message** (up to 160 characters) and choose **Save status**, or
+   select a **Pane avatar**. Split panes share the tab name, colour and status,
+   while each pane can have its own avatar. **Default colour**, **Clear status**
+   and **Default avatar** reset only that choice; the avatar returns to its
+   profile or identity default. An error stays in the editor and keeps an
+   unsaved name/status draft, so it can be retried. If the pane moves to another
+   tab, reopen the editor for that destination; the old draft is not transferred.
+   Board shows the avatar and status on the card, Town uses the character and
+   desk callout, Spaces shows the avatar and status in its tab tooltip, and
+   Desk uses the same shared choices. These choices are saved by World for
+   every browser; runtime status badges keep their normal meanings and colours.
+   Appearance does not add workspace icon or workspace status controls.
+   The settings still link to **Edit profile · <name>** when World launched the
+   agent from a profile, otherwise **Profiles…**. The terminal window's menu
+   has **Colour**, and the Spaces tab menu (right-click or long-press) offers
+   the same palette and **Default colour**.
    In the agent's window, the button beside its name sets its interest (on a
    phone, use **⋯ → Attention**):
    **Muted** stops its chimes, **Focused** lets only focused agents chime, and

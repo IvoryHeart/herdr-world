@@ -1,3 +1,4 @@
+import { pruneGoneAppearance } from "./appearance-prune";
 import { serverLogger } from "../utils/logger";
 import { checkAnchor } from "./board-anchor";
 import { tabClosedOps, type BoardStore } from "./board-store";
@@ -13,7 +14,8 @@ type Host = {
 /**
  * What Board's saved state does after Herdr closes something on a host's
  * current runtime: a closed tab's colour and desk pin go, and mute or focus
- * records for terminals that are gone go.
+ * records for terminals that are gone go. Appearance is reclaimed only when
+ * a complete current native read proves all its terminal witnesses are gone.
  */
 export function afterHerdrClose(
   board: BoardStore,
@@ -26,10 +28,17 @@ export function afterHerdrClose(
     eventName?.replaceAll("_", ".") === "tab.closed"
       ? (event as { data?: { tab_id?: unknown } }).data?.tab_id
       : undefined;
-  if (typeof closedTab === "string" && closedTab)
-    void dropClosedTabSettings(board, connectionId, closedTab, host);
   if (closesTerminals(eventName))
-    void pruneGoneInterest(board, connectionId, host);
+    return (async () => {
+      if (typeof closedTab === "string" && closedTab)
+        await dropClosedTabSettings(board, connectionId, closedTab, host);
+      await pruneGoneAppearance(board, connectionId, host);
+      await pruneGoneInterest(board, connectionId, host);
+    })().catch((error) =>
+      serverLogger.warn("Board could not prune closed terminal appearance", {
+        detail: String(error),
+      }),
+    );
 }
 
 async function dropClosedTabSettings(
@@ -39,22 +48,36 @@ async function dropClosedTabSettings(
   { call, isCurrent, changed }: Host,
 ) {
   try {
-    const { colors, desk_pins: pins } = board.get().layout;
-    const saved = (key: string) => Boolean(colors[key] || pins[key]);
-    const plain = saved(`${connectionId}:${tabId}`);
-    if (!plain && !saved(`${connectionId}:tab:${tabId}`)) return;
-    const absent =
-      plain &&
-      (
-        await checkAnchor(call, {
-          kind: "workspace",
-          native_id: tabId,
-          isCurrent,
-        })
-      ).state === "absent";
-    if (!isCurrent()) return;
-    const ops = tabClosedOps(board.get(), connectionId, tabId, absent);
-    if (ops.length) changed(board.patch(ops).revision);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (!isCurrent()) return;
+      const before = board.get();
+      const { colors, desk_pins: pins } = before.layout;
+      const saved = (key: string) => Boolean(colors[key] || pins[key]);
+      const plain = saved(`${connectionId}:${tabId}`);
+      if (!plain && !saved(`${connectionId}:tab:${tabId}`)) return;
+      if (
+        (await checkAnchor(call, { kind: "tab", native_id: tabId, isCurrent }))
+          .state !== "absent"
+      )
+        return;
+      const absent =
+        plain &&
+        (
+          await checkAnchor(call, {
+            kind: "workspace",
+            native_id: tabId,
+            isCurrent,
+          })
+        ).state === "absent";
+      if (!isCurrent()) return;
+      const ops = tabClosedOps(before, connectionId, tabId, absent);
+      if (!ops.length) return;
+      const patched = board.patchIf(before.revision, ops);
+      if (patched) {
+        changed(patched.revision);
+        return;
+      }
+    }
   } catch (error) {
     serverLogger.warn("Board could not drop a closed tab's colour or pin", {
       detail: String(error),

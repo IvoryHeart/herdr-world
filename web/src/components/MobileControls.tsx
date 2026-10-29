@@ -5,7 +5,7 @@ import { useStoreSelector } from "../store";
 import type { Pane, Tab } from "../types";
 import { agentStateKind, type AgentStateKind } from "./agentSession";
 import { agentStateWord } from "../agentMarks";
-import { ColorSwatchButton } from "./ColorSwatch";
+import { TerminalAppearanceButton } from "../world/TerminalAppearanceButton";
 import type { TabColorControl, TabColorOwner } from "./TabBar";
 import "./MobileControls.css";
 
@@ -40,6 +40,11 @@ export type TabPinControl = {
 };
 
 type MobileTerminalIdentity = {
+  available: boolean;
+  generation: number;
+  tabTerminals: string[];
+  paneId: string;
+  terminalId: string;
   workspaceId: string;
   agent: string;
   place: string;
@@ -136,6 +141,21 @@ export function MobileTerminalIdentity({
   );
   const place = tabName(tab);
   const connectionId = useStoreSelector((state) => state.activeConnectionId);
+  const generation = useStoreSelector(
+    (state) => state.serverRuntimeGeneration ?? -1,
+  );
+  const available = useStoreSelector(
+    (state) =>
+      state.status === "connected" &&
+      state.catalogueReady &&
+      state.serverRuntimeGeneration !== null,
+  );
+  const tabTerminals = useStoreSelector((state) =>
+    state.panes
+      .filter((item) => item.tab_id === pane?.tab_id)
+      .map((item) => item.terminal_id)
+      .join("\n"),
+  );
   const workspaceIds = useStoreSelector((state) =>
     (state.workspaces ?? [])
       .map((workspace) => workspace.workspace_id)
@@ -164,6 +184,11 @@ export function MobileTerminalIdentity({
   useLayoutEffect(() => {
     if (!visible) return;
     const identity = {
+      available,
+      tabTerminals: tabTerminals.split("\n"),
+      generation,
+      paneId: pane!.pane_id,
+      terminalId: pane!.terminal_id,
       workspaceId,
       agent: agent || "Terminal",
       place,
@@ -188,6 +213,11 @@ export function MobileTerminalIdentity({
     tab,
     connectionId,
     workspaceIds,
+    generation,
+    pane?.pane_id,
+    pane?.terminal_id,
+    tabTerminals,
+    available,
   ]);
   return null;
 }
@@ -229,16 +259,28 @@ export function MobileTerminalAppBar() {
   return (
     <div className="mobile-terminal-appbar">
       {terminal?.tab && controls.tabColors && color ? (
-        <ColorSwatchButton
-          className="mobile-terminal-swatch"
-          label="Terminal colour"
-          palette={controls.tabColors.palette}
-          current={color}
-          onColor={(id) => {
-            const { tabColors } = controls;
-            if (terminal.tab && tabColors)
-              tabColors.onColor(terminal.owner, terminal.tab, id);
+        <TerminalAppearanceButton
+          key={JSON.stringify([
+            terminal.owner.connectionId,
+            terminal.generation,
+            terminal.tab.tab_id,
+            terminal.paneId,
+            terminal.terminalId,
+          ])}
+          connectionId={terminal.owner.connectionId}
+          generation={terminal.generation}
+          tabId={terminal.tab.tab_id}
+          paneId={terminal.paneId}
+          terminalId={terminal.terminalId}
+          tabTerminals={terminal.tabTerminals}
+          workspaceIds={terminal.owner.workspaceIds}
+          tabName={terminal.place}
+          color={{
+            palette: controls.tabColors.palette,
+            current: color,
+            onColor: () => {},
           }}
+          disabled={!terminal.available}
         />
       ) : null}
       {terminal?.tab && controls.tabPin ? (
@@ -257,10 +299,7 @@ export function MobileTerminalAppBar() {
           onClick={controls.toggleWorkspaces}
         >
           <span className="mobile-terminal-name">
-            {terminal.agent}
-            {terminal.place ? (
-              <span className="mobile-terminal-place"> · {terminal.place}</span>
-            ) : null}
+            {terminal.place || terminal.agent}
           </span>
           {STATUS_LABEL[terminal.status] ? (
             <span

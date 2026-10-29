@@ -111,7 +111,12 @@ async function dispatchLauncherRpc(
         }),
         isCurrent: requestIsCurrent,
       });
-      if (profile && result.terminal_id && route.scope === "connection") {
+      if (
+        profile &&
+        result.terminal_id &&
+        route.scope === "connection" &&
+        requestIsCurrent()
+      ) {
         try {
           publishProfilesChanged(
             profiles().assign({
@@ -124,16 +129,26 @@ async function dispatchLauncherRpc(
             const workspaceIds = await moveWorkspaceIds(call, {
               workspace_id: String(p.workspace_id ?? ""),
             });
+            if (!requestIsCurrent())
+              throw new Error(
+                "Launch runtime changed before saving appearance",
+              );
             publishBoardChanged(
               board().patch([
                 {
-                  op: "card.color",
-                  key: tabCardKey(
-                    route.connectionId,
-                    result.tab_id,
-                    workspaceIds,
-                  ),
-                  color: profile.color,
+                  op: "appearance.set",
+                  target: {
+                    connection_id: route.connectionId,
+                    kind: "tab",
+                    native_id: result.tab_id,
+                    witness: [result.terminal_id],
+                    color_key: tabCardKey(
+                      route.connectionId,
+                      result.tab_id,
+                      workspaceIds,
+                    ),
+                  },
+                  fields: { color: profile.color },
                 },
               ]).revision,
             );

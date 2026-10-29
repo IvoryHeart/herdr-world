@@ -135,7 +135,13 @@ export function fixtureHost(
       snapshotGeneration: 1,
       stale,
       actionable: !stale,
-      snapshot: {},
+      snapshot: {
+        workspaces: builtSpaces.map((space) => space.workspace),
+        tabs: builtSpaces.flatMap((space) => space.tabs),
+        panes: builtSpaces.flatMap((space) =>
+          space.children.map((leaf) => leaf.pane),
+        ),
+      },
     } as unknown as WorldHostObject["connection"],
     spaces: builtSpaces,
     coverage: coverage(
