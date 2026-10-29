@@ -92,3 +92,75 @@ export function provisionalTabLayout(
     splits: [],
   };
 }
+
+type LayoutRect = PaneLayout["area"];
+type LayoutNode =
+  | { kind: "pane"; item: PaneLayout["panes"][number] }
+  | { kind: "split"; item: PaneLayout["splits"][number] };
+
+/**
+ * Herdr sizes a tab that no client shows at a few cells (10×1), so a pane can
+ * be 0 cells tall. Rebuild that geometry from the split tree, which keeps each
+ * split's ratio, so every pane keeps its share. Herdr lists a split before the
+ * splits inside it; a side starts at its split's start or after it. Geometry
+ * that cannot be rebuilt is returned unchanged.
+ */
+export function drawableTabLayout(layout: PaneLayout): PaneLayout {
+  if (layout.panes.every((pane) => pane.rect.width > 0 && pane.rect.height > 0))
+    return layout;
+  const panes = new Map<string, LayoutRect>();
+  const splits = new Map<string, LayoutRect>();
+  const place = (members: LayoutNode[], box: LayoutRect): boolean => {
+    const only = members.length === 1 ? members[0] : undefined;
+    if (only?.kind === "pane") {
+      panes.set(only.item.pane_id, box);
+      return true;
+    }
+    const index = members.findIndex((member) => member.kind === "split");
+    if (index < 0) return false;
+    const split = members[index]!.item as PaneLayout["splits"][number];
+    splits.set(split.id, box);
+    const across = split.direction === "right";
+    const start = (rect: LayoutRect) => (across ? rect.x : rect.y);
+    const rest = members.filter((_, other) => other !== index);
+    const before = rest.filter(
+      (member) => start(member.item.rect) <= start(split.rect),
+    );
+    const after = rest.filter(
+      (member) => start(member.item.rect) > start(split.rect),
+    );
+    const first = across
+      ? { ...box, width: box.width * split.ratio }
+      : { ...box, height: box.height * split.ratio };
+    const second = across
+      ? { ...box, x: box.x + first.width, width: box.width - first.width }
+      : { ...box, y: box.y + first.height, height: box.height - first.height };
+    return (
+      before.length > 0 &&
+      after.length > 0 &&
+      place(before, first) &&
+      place(after, second)
+    );
+  };
+  const area = { x: 0, y: 0, width: 1000, height: 1000 };
+  const placed = place(
+    [
+      ...layout.splits.map((item) => ({ kind: "split" as const, item })),
+      ...layout.panes.map((item) => ({ kind: "pane" as const, item })),
+    ],
+    area,
+  );
+  if (!placed || panes.size !== layout.panes.length) return layout;
+  return {
+    ...layout,
+    area,
+    panes: layout.panes.map((pane) => ({
+      ...pane,
+      rect: panes.get(pane.pane_id)!,
+    })),
+    splits: layout.splits.map((split) => ({
+      ...split,
+      rect: splits.get(split.id)!,
+    })),
+  };
+}

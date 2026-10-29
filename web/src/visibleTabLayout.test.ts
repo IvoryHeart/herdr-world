@@ -177,6 +177,41 @@ describe("visible tab layout fencing", () => {
         snapshot,
       ),
     ).toBe(false);
+    expect(
+      tabLayoutMatchesSnapshot(
+        { ...layout, area: { ...layout.area, height: 0 } },
+        identity,
+        snapshot,
+      ),
+    ).toBe(false);
+  });
+
+  test("accepts a tab no client shows, whose panes can be 0 cells tall", () => {
+    const squeezed: PaneLayout = {
+      ...layout,
+      area: { x: 0, y: 0, width: 10, height: 1 },
+      panes: [
+        { ...layout.panes[0]!, rect: { x: 0, y: 0, width: 5, height: 1 } },
+        { ...layout.panes[1]!, rect: { x: 5, y: 1, width: 5, height: 0 } },
+      ],
+    };
+    expect(tabLayoutMatchesSnapshot(squeezed, identity, snapshot)).toBe(true);
+    expect(
+      tabLayoutMatchesSnapshot(
+        {
+          ...squeezed,
+          panes: [
+            squeezed.panes[0]!,
+            {
+              ...squeezed.panes[1]!,
+              rect: { x: 5, y: 1, width: 5, height: -1 },
+            },
+          ],
+        },
+        identity,
+        snapshot,
+      ),
+    ).toBe(false);
   });
 
   test("rejects a tab or workspace no longer in the observed topology", () => {

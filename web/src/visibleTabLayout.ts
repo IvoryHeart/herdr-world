@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   shallowEqual,
   useOperationalStore,
@@ -6,6 +6,7 @@ import {
   type State,
 } from "./store";
 import {
+  drawableTabLayout,
   provisionalTabLayout,
   rememberTabLayout,
   tabLayoutFor,
@@ -83,21 +84,25 @@ export function tabLayoutMatchesSnapshot(
 ): layout is PaneLayout {
   if (!layout || typeof layout !== "object") return false;
   const candidate = layout as Partial<PaneLayout>;
-  const validRect = (rect: unknown) => {
+  // A tab no client shows can have 0-cell panes and splits (see
+  // drawableTabLayout); only its area must have a size.
+  const validRect = (rect: unknown, sized = false) => {
     if (!rect || typeof rect !== "object") return false;
     const value = rect as Record<string, unknown>;
-    return (
-      ["x", "y", "width", "height"].every(
+    if (
+      !["x", "y", "width", "height"].every(
         (key) => typeof value[key] === "number" && Number.isFinite(value[key]),
-      ) &&
-      (value.width as number) > 0 &&
-      (value.height as number) > 0
-    );
+      )
+    )
+      return false;
+    const width = value.width as number;
+    const height = value.height as number;
+    return sized ? width > 0 && height > 0 : width >= 0 && height >= 0;
   };
   if (
     !Array.isArray(candidate.panes) ||
     !Array.isArray(candidate.splits) ||
-    !validRect(candidate.area) ||
+    !validRect(candidate.area, true) ||
     typeof candidate.focused_pane_id !== "string" ||
     candidate.panes.some(
       (pane) => typeof pane?.pane_id !== "string" || !validRect(pane.rect),
@@ -196,9 +201,17 @@ export function useVisibleTabLayoutState(
       tabId,
     );
   const provisional = provisionalTabLayout(candidate, snapshot.panes, tabId);
-  const layout = tabLayoutMatchesSnapshot(provisional, identity, snapshot)
+  const observedLayout = tabLayoutMatchesSnapshot(
+    provisional,
+    identity,
+    snapshot,
+  )
     ? provisional
     : null;
+  const layout = useMemo(
+    () => (observedLayout ? drawableTabLayout(observedLayout) : null),
+    [observedLayout],
+  );
 
   useEffect(() => {
     if (

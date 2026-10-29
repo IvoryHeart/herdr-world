@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import {
   clearTabLayouts,
+  drawableTabLayout,
   retainTabLayoutOwners,
   forgetTabLayoutsExcept,
   provisionalTabLayout,
@@ -147,4 +148,75 @@ test("same-runtime unavailable owners keep geometry; replaced and removed owners
   retainTabLayoutOwners([{ id: "alpha", generation: 8 }]);
   expect(tabLayoutFor("alpha", 7, "t1")).toBeNull();
   expect(tabLayoutFor("beta", 3, "t1")).toBeNull();
+});
+
+describe("drawable tab layout", () => {
+  // A review round as Herdr reports it while no client shows the tab: the
+  // author on the left, two reviewers stacked right, one of them 0 cells tall.
+  const squeezed: PaneLayout = {
+    workspace_id: "w1",
+    tab_id: "t1",
+    zoomed: false,
+    area: { x: 0, y: 0, width: 10, height: 1 },
+    focused_pane_id: "p1",
+    panes: [
+      {
+        pane_id: "p1",
+        focused: true,
+        rect: { x: 0, y: 0, width: 5, height: 1 },
+      },
+      {
+        pane_id: "p2",
+        focused: false,
+        rect: { x: 5, y: 0, width: 5, height: 1 },
+      },
+      {
+        pane_id: "p3",
+        focused: false,
+        rect: { x: 5, y: 1, width: 5, height: 0 },
+      },
+    ],
+    splits: [
+      {
+        id: "root",
+        direction: "right",
+        ratio: 0.5,
+        rect: { x: 0, y: 0, width: 10, height: 1 },
+      },
+      {
+        id: "reviewers",
+        direction: "down",
+        ratio: 0.5,
+        rect: { x: 5, y: 0, width: 5, height: 1 },
+      },
+    ],
+  };
+
+  test("rebuilds a squeezed split from its ratios", () => {
+    const drawn = drawableTabLayout(squeezed);
+    expect(drawn.area).toEqual({ x: 0, y: 0, width: 1000, height: 1000 });
+    expect(drawn.panes.map((pane) => [pane.pane_id, pane.rect])).toEqual([
+      ["p1", { x: 0, y: 0, width: 500, height: 1000 }],
+      ["p2", { x: 500, y: 0, width: 500, height: 500 }],
+      ["p3", { x: 500, y: 500, width: 500, height: 500 }],
+    ]);
+    expect(drawn.splits.map((split) => split.rect)).toEqual([
+      { x: 0, y: 0, width: 1000, height: 1000 },
+      { x: 500, y: 0, width: 500, height: 1000 },
+    ]);
+    expect(drawn.focused_pane_id).toBe("p1");
+  });
+
+  test("keeps real geometry and geometry it cannot rebuild", () => {
+    const shown = layout("t1", ["p1", "p2"]);
+    expect(drawableTabLayout(shown)).toBe(shown);
+    const collapsed: PaneLayout = {
+      ...squeezed,
+      panes: squeezed.panes.map((pane) => ({
+        ...pane,
+        rect: { x: 0, y: 0, width: 0, height: 0 },
+      })),
+    };
+    expect(drawableTabLayout(collapsed)).toBe(collapsed);
+  });
 });
