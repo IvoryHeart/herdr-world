@@ -3,8 +3,8 @@
  *
  * Hosts become buildings, workspaces become rooms on carpets and tabs become
  * team tables in desk cells. Desk slots follow Herdr's tab order. The
- * placement memory keeps pinned desks and explicitly expanded rooms in place
- * while a scene is live, and every room capacity step contains the previous one.
+ * placement memory keeps pinned desks and room columns in place while a scene
+ * is live, and every room capacity step contains the previous one.
  */
 
 export const TOWN_TILE = 16;
@@ -185,7 +185,7 @@ export type TownLayout = {
 };
 
 export type TownInputRoom = {
-  /** Explicit Fold reserves room controls; Expand keeps the room's capacity. */
+  /** Explicit Fold reserves room controls; expansion keeps Fold available. */
   deskFold?: "folded" | "expanded";
   key: string;
   hostKey: string;
@@ -238,7 +238,7 @@ export function townTierFor(
  * Assign desks to grid coordinates. Desk slots follow Herdr's tab order: the
  * i-th tab takes the i-th cell in reading order, so a reorder in Herdr, Spaces
  * or Town moves desks, and a closed desk leaves no gap. Ordinary room size
- * follows the current desk count; explicit expansion and pinned cells persist.
+ * follows the current desk count; pinned cells persist.
  *
  * A pinned desk keeps its cell whatever the tab order or room size, and the
  * room grows to hold it; the other desks take the free cells in tab order.
@@ -349,7 +349,7 @@ function draftBuilding(
       room.deskKeys,
       previous,
       shape.deskColumns,
-      room.deskFold === "expanded" ? (previous?.tier ?? 0) : 0,
+      0,
       pins,
       !!room.deskFold,
     );

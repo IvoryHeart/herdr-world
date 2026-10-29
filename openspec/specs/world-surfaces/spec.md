@@ -1282,8 +1282,8 @@ building column. There SHALL be no hard expanded desk ceiling: repeated Expand
 actions SHALL eventually reveal every observed desk. While partially expanded,
 the room SHALL offer Fold alongside Expand, with separate non-overlapping targets
 of at least 40 CSS pixels, so one Fold click can restore the folded target at any step.
-An ordinary room's size SHALL follow its current desks and shrink when tabs
-close. An explicitly expanded room SHALL retain its capacity through tab
+An ordinary or explicitly expanded room's size SHALL follow its current desks
+and shrink when tabs close. An expanded room SHALL remain expanded after
 closures, including at or below 24 desks, until the user folds it. A folded
 room SHALL show exactly the first 24 observed tabs
 (or all tabs when fewer exist) in the same native tab order as Spaces. Each
@@ -1309,9 +1309,9 @@ without moving other desks, and a closed tab SHALL leave no gap: the desks after
 it in reading order SHALL close up in their existing order while the desks
 before it keep their spots. A room that reaches a new capacity step MAY shift
 later rooms and rows of the same building without reordering rooms, and its
-desks MAY reflow to the step's columns. Ordinary rooms SHALL resize to their
-current desk count; explicitly expanded rooms SHALL retain their capacity until
-Fold. Room placement SHALL be re-derived from native order when the scene is
+desks MAY reflow to the step's columns. Ordinary and explicitly expanded rooms
+SHALL resize to their current desk count; expanded rooms SHALL retain their
+expanded state until Fold. Room placement SHALL be re-derived from native order when the scene is
 rebuilt. Town SHALL take its shape from its container's size rather than one
 breakpoint: on a phone, rooms SHALL stack in one column and buildings in one
 vertical column; on a portrait screen or a half-width window, rooms SHALL form
@@ -1350,13 +1350,13 @@ waiting for that ambient quiet period.
 - **WHEN** a tab closes in an ordinary room
 - **THEN** the room resizes to fit its remaining desks
 
-#### Scenario: An expanded room keeps capacity through tab closures
+#### Scenario: An expanded room shrinks after tab closures
 
 - **WHEN** tabs close in an explicitly expanded room
-- **THEN** its capacity stays unchanged, even at or below 24 desks, until Fold
+- **THEN** its room resizes to fit its remaining desks and stays expanded
 - **AND WHEN** the user folds the room
-- **THEN** it resizes to fit its folded desks while retaining pinned cells and
-  its building column
+- **THEN** it shows its folded desks while retaining pinned cells and its
+  building column
 
 #### Scenario: A room fills its capacity step
 

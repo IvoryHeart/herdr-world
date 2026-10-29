@@ -28,7 +28,7 @@ changes on desktop or mobile. **Requires a running Herdr server.**
   Board's **Work** lens and on Town desks, with confirmed merge, close and mark
   ready actions.
 - **A clearer Town.** Rooms follow Spaces' tab order and resize as tabs open or close;
-  explicitly expanded rooms keep their size until folded;
+  expanded rooms stay expanded as they shrink when tabs close, until folded;
   pin desks, colour hosts, workspaces and terminals, and open **Summary** for
   everything needing you. Every view opens in Zen.
 - **Herdr setup.** The published 0.2.7 standalone installer installs or upgrades
