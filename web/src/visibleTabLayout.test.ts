@@ -145,6 +145,59 @@ describe("visible tab layout fencing", () => {
     expect(reads).toBe(2);
   });
 
+  test("a queued read reads through a caller that still needs it", async () => {
+    // Other tabs fill the queue, so this tab's read waits its turn.
+    const busy = Promise.withResolvers<void>();
+    const others = Array.from({ length: 4 }, () =>
+      queueVisibleTabLayoutRead(
+        () => busy.promise,
+        () => true,
+      ),
+    );
+    const asked: string[] = [];
+    // The terminal asked through pane p1, which then closed.
+    let p1Open = true;
+    const first = shareVisibleTabLayoutRead(
+      "closing-tab",
+      async () => {
+        asked.push("p1");
+        return "pane not found";
+      },
+      () => p1Open,
+    );
+    p1Open = false;
+    const second = shareVisibleTabLayoutRead(
+      "closing-tab",
+      async () => {
+        asked.push("p2");
+        return "layout";
+      },
+      () => true,
+    );
+    busy.resolve();
+    await Promise.all(others);
+    expect(await second).toEqual({ skipped: false, value: "layout" });
+    expect(await first).toEqual({ skipped: false, value: "layout" });
+    expect(asked).toEqual(["p2"]);
+  });
+
+  test("a read already sent is never shared with a later caller", async () => {
+    const gate = Promise.withResolvers<string>();
+    let reads = 0;
+    const read = () => {
+      reads += 1;
+      return reads === 1 ? gate.promise : Promise.resolve("newer");
+    };
+    const sent = shareVisibleTabLayoutRead("busy-tab", read, () => true);
+    // Let the first read start before the next observation asks.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const later = shareVisibleTabLayoutRead("busy-tab", read, () => true);
+    expect(await later).toEqual({ skipped: false, value: "newer" });
+    gate.resolve("older");
+    expect(await sent).toEqual({ skipped: false, value: "older" });
+    expect(reads).toBe(2);
+  });
+
   test("accepts exactly the current tab split", () => {
     expect(tabLayoutMatchesSnapshot(layout, identity, snapshot)).toBe(true);
   });

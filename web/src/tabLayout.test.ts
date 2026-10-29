@@ -215,18 +215,37 @@ describe("drawable tab layout", () => {
     expect(drawableTabLayout(round)?.area).toEqual(rect(0, 0, 1000, 1000));
   });
 
-  test("rebuilds a split nested in the first side", () => {
+  test("rebuilds an author pair beside a reviewer stack", () => {
+    // Herdr numbers splits by their place in its list, not their depth:
+    // this is exactly how it names this shape.
     const nested = squeezed(
       [
         ["split_0_root", "right", rect(0, 0, 10, 1)],
         ["split_1_0", "right", rect(0, 0, 5, 1)],
-        ["split_1_1", "down", rect(5, 0, 5, 1)],
+        ["split_2_1", "down", rect(5, 0, 5, 1)],
       ],
       [rect(0, 0, 3, 1), rect(3, 0, 2, 1), rect(5, 0, 5, 1), rect(5, 1, 5, 0)],
     );
     expect(drawn(nested)).toEqual([
       ["p1", 0, 0, 250, 1000],
       ["p2", 250, 0, 250, 1000],
+      ["p3", 500, 0, 500, 500],
+      ["p4", 500, 500, 500, 500],
+    ]);
+  });
+
+  test("rebuilds a 2×2 grid", () => {
+    const grid = squeezed(
+      [
+        ["split_0_root", "right", rect(0, 0, 10, 1)],
+        ["split_1_0", "down", rect(0, 0, 5, 1)],
+        ["split_2_1", "down", rect(5, 0, 5, 1)],
+      ],
+      [rect(0, 0, 5, 1), rect(0, 1, 5, 0), rect(5, 0, 5, 1), rect(5, 1, 5, 0)],
+    );
+    expect(drawn(grid)).toEqual([
+      ["p1", 0, 0, 500, 500],
+      ["p2", 0, 500, 500, 500],
       ["p3", 500, 0, 500, 500],
       ["p4", 500, 500, 500, 500],
     ]);
