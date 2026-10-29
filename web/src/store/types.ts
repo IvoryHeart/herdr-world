@@ -91,6 +91,7 @@ export interface Notice {
   actionWorkspaceId?: string;
   actionPaneId?: string;
   actionAgentSessionId?: string;
+  actionTerminalId?: string;
   actionRangerTaskId?: string;
   actionRangerRunId?: string;
   actionClipboardText?: string;
@@ -129,6 +130,7 @@ export interface WorktreeRemovedTarget {
 }
 
 export interface TaskNotificationTarget {
+  terminalId?: string;
   agentSessionId?: string;
   connectionId: string;
   runtimeGeneration: number;
@@ -137,6 +139,7 @@ export interface TaskNotificationTarget {
 }
 
 export interface QualifiedFocusTarget {
+  terminalId?: string;
   /** Browser-only request cancellation; never sent to Herdr. */
   isCurrent?(): boolean;
   /** Browser-local intent captured before asynchronous notification admission. */

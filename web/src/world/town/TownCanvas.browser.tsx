@@ -11,7 +11,7 @@ import { buildWorldObject, type WorldObject } from "../worldObject";
 import TownView from "../TownView";
 import { AgentLauncherDialog } from "../AgentLauncherDialog";
 import { WORLD_AGENT_LAUNCH_EVENT, type LaunchTarget } from "../agentProfiles";
-import type { WorldAsk } from "../worldAsks";
+import { sharedAsksStore, type WorldAsk } from "../worldAsks";
 import { checkTownRoomPlates } from "./townRoomPlates.browser";
 import { checkTownRoomFold, tapTownControl } from "./townRoomFold.browser";
 import type { BoardDocument, BoardOp } from "../board/boardDocument";
@@ -905,6 +905,8 @@ async function run() {
   if (asker)
     Object.assign(ledger.asks[0]!.actor, {
       connection_id: "local",
+      connection_generation: 3,
+      workspace_id: asker.workspace_id,
       pane_id: asker.pane_id,
       terminal_id: asker.terminal_id,
     });
@@ -1588,6 +1590,11 @@ async function run() {
       panelBody.textContent?.includes("No cost data") === true,
       "a summary without metrics says there is no cost data",
     );
+    if (asker)
+      check(
+        Boolean(host.querySelector(".town-reception-question")),
+        "an open ask marks its host's reception with ?",
+      );
     const questionId = ledger.asks[0]!.id;
     panelBody
       .querySelector<HTMLButtonElement>(".town-ask-options button")!
@@ -1602,11 +1609,97 @@ async function run() {
       return counts.every((value) => Number(value) === windowNeeds - 1);
     }, "answering an ask did not update every needs-you count together");
     check(
+      !host.querySelector(".town-reception-question"),
+      "answering removes the question marker from reception",
+    );
+    check(
       askAnswers.some(
         (answer) => answer.id === questionId && answer.answer === "Ship",
       ),
       "the summary answer did not use the question's existing owner action",
     );
+    const watcherPane = base.connections
+      .find((connection) => connection.connectionId === "local")
+      ?.snapshot?.panes.find((pane) => !pane.agent);
+    if (watcherPane) {
+      const finishedScene = base.connections.map((connection) => ({
+        ...connection,
+        snapshot: connection.snapshot && {
+          ...connection.snapshot,
+          panes: connection.snapshot.panes.map((pane) =>
+            connection.connectionId === "local" && pane.agent
+              ? { ...pane, agent_status: "done" }
+              : pane,
+          ),
+        },
+      }));
+      const localFinished = finishedScene[0]!.snapshot!.panes.filter(
+        (pane) => pane.agent,
+      );
+      check(
+        localFinished.length >= 6,
+        "the watcher reception fixture needs at least six finished agents",
+      );
+      setWorld(worldFor(finishedScene));
+      ledger.asks.push({
+        id: "q-watcher-terminal",
+        at: Date.now(),
+        question: "READY #7: ship it?",
+        options: ["Wait"],
+        owner_only: true,
+        actor: {
+          label: "Example watcher",
+          verified: true,
+          connection_id: "local",
+          connection_generation: 3,
+          pane_id: watcherPane.pane_id,
+          workspace_id: watcherPane.workspace_id,
+          terminal_id: watcherPane.terminal_id,
+        },
+      });
+      ledger.revision++;
+      await sharedAsksStore().refresh();
+      await waitFor(
+        () => Boolean(host.querySelector(".town-reception-question")),
+        "a watcher terminal ask must reach reception even without an agent harness",
+      );
+      const watcherId = worldFor(finishedScene).leaves.find(
+        (leaf) =>
+          leaf.connectionId === "local" &&
+          leaf.pane.pane_id === watcherPane.pane_id,
+      )!.id;
+      const watcherEntry = () =>
+        [
+          ...host.querySelectorAll<HTMLButtonElement>(
+            "[data-owner-question-terminal]",
+          ),
+        ].find((entry) => entry.dataset.ownerQuestionTerminal === watcherId);
+      await waitFor(
+        () => Boolean(watcherEntry()),
+        "a watcher question must take a reception entry ahead of six finishes",
+      );
+      const openedBefore = opened.length;
+      watcherEntry()!.click();
+      check(
+        opened.length === openedBefore + 1 &&
+          opened[openedBefore] === watcherId,
+        "the watcher reception entry opens its own original terminal in one action",
+      );
+      opened.splice(openedBefore);
+      await sharedAsksStore().answer("q-watcher-terminal", "Wait");
+      await waitFor(
+        () => !host.querySelector(".town-reception-question"),
+        "answering a watcher terminal ask must clear reception",
+      );
+      setWorld(worldFor(base.connections));
+      await waitFor(
+        () =>
+          host.querySelector(
+            '.world-semantic-targets-overlay[aria-busy="false"]',
+          ) !== null,
+        "the original town must be admitted after the watcher fixture",
+      );
+    }
     panelEntries.find((entry) => entry.id === "panel:town-summary")!.onClose();
     await waitFor(
       () => panelBody.querySelector(".town-summary") === null,

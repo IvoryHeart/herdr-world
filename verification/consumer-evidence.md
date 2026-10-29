@@ -335,3 +335,33 @@ pre-install replies (both available metadata and HTTP errors) cannot replace a
 successful-install state; later checks remain admitted. Persistent-storage denial
 retains only best-effort legacy markers and page-lifetime deduplication, while a
 slow persistent claim fails closed instead of racing a fallback.
+
+## Owner asks extension (#472)
+
+The existing World question ledger remains the system of record. Direct CLI and
+service regressions cover caller-scoped cause keys, withdrawal authority, answer
+preservation and wait cancellation. The watcher consumes it through the CLI and
+uses its existing action ledger only for receipts; crash/retry, one answer read,
+same-head clearing, blocked-seat recovery and held/scoped PR cases are exercised
+through that real seam. Qualified-target and queue/marker tests plus actual Town,
+Board and Desk browser suites cover the presentation. Notification tests bind the
+original terminal/session, reject a reused pane, suppress initial-backlog and
+duplicate announcements, reject obsolete socket replies, and retain local OS
+notices when Web Push is selected. These are finite ledger and direct consumer
+schedules; a separate model would duplicate those rules. Existing endpoint,
+lease, navigation, browser and protected verification gates remain mandatory.
+No OS delivery while every browser is closed is claimed by client announcements.
+
+Review-repair cases cover lost creation or recreation replies followed by a
+cleared cause, successful withdrawal with a lost reply followed by recurrence,
+permanent refusal retired with one feed explanation, and answer read-back once.
+Acknowledged-answer variants cover lost replies, process crashes and withdrawals
+that never reached World. Pending recreation followed by a hold, scope removal or
+head replacement retains its receipt without reading the old answer again.
+Legacy superseded rows without receipts make no CLI call or feed entry; keyed
+not_found cleanup never claims that the old occupant's question was withdrawn.
+These bounded schedules consume the real watcher store and existing CLI seam.
+The real CLI/ledger tests check self-scoped withdrawal by key without creation,
+retained answered repeats and explicit human withdrawal output. A real projection
+with six finishes checks shell-question priority, and the Town browser consumer
+checks its bounded reception entry and single-action original-terminal route.

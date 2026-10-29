@@ -32,6 +32,7 @@ import {
   taskNotificationTargetIsCurrent,
   worktreeRemovalCompletionNotice,
 } from "./store";
+import { notifyWorldAsk } from "./store/notifications";
 import { parseHerdrTaskNotification } from "./herdrTaskNotification";
 import type { Pane } from "./types";
 import { removeTemporaryWorkspaceSafely } from "./worktreeLifecycle";
@@ -3754,6 +3755,48 @@ describe("Herdr task notifications", () => {
       ...overrides,
     };
   }
+
+  test("a new verified ask uses its captured host, runtime and session for Open agent", () => {
+    const ask = {
+      id: "q-example",
+      at: 1,
+      question: "READY #7: ship it?",
+      options: [],
+      owner_only: true,
+      actor: {
+        label: "Example watcher",
+        verified: true,
+        connection_id: "beta",
+        connection_generation: 1,
+        terminal_id: "beta-terminal",
+        workspace_id: "w1",
+        pane_id: "w1:p9",
+        agent: "codex",
+        agent_session_id: "original-session",
+      },
+    };
+    try {
+      __storeTesting.replaceState(enabledState({ notice: null }));
+      notifyWorldAsk(ask);
+      expect(store.get().notice).toMatchObject({
+        actionLabel: "Open agent",
+        actionConnectionId: "beta",
+        actionRuntimeGeneration: 1,
+        actionPaneId: "w1:p9",
+        actionAgentSessionId: "original-session",
+      });
+      __storeTesting.replaceState(enabledState({ notice: null }));
+      notifyWorldAsk({ ...ask, actor: { ...ask.actor, verified: false } });
+      expect(store.get().notice).toBeNull();
+      notifyWorldAsk({
+        ...ask,
+        actor: { ...ask.actor, connection_generation: 0 },
+      });
+      expect(store.get().notice).toBeNull();
+    } finally {
+      __storeTesting.replaceState(partitionState());
+    }
+  });
 
   test("parses relayed events and rejects malformed ones", () => {
     expect(

@@ -1,3 +1,5 @@
+import { bridge } from "../api";
+import { sharedAsksStore, type WorldAsk } from "./worldAsks";
 import { fixturePullRequest as detailedPr } from "./testing/pullRequestFixture";
 // First: the page runs on test time (see testing/testClock.ts).
 import { clock } from "./testing/installTestClock";
@@ -41,6 +43,12 @@ Object.defineProperty(Crypto.prototype, "randomUUID", {
 // A synthetic sources service: one failing pull request on the "login fix"
 // agent's branch, a busy week of 150 merged ones and one ticket.
 const SOURCES_NOW = Date.now();
+// Calendar days can be 23 or 25 hours at daylight-saving boundaries.
+const sourceDay = (daysAgo: number) => {
+  const date = new Date(SOURCES_NOW);
+  date.setDate(date.getDate() - daysAgo);
+  return date.getTime();
+};
 const mergedWeek = Array.from({ length: 150 }, (_, index) => ({
   key: `github:pr:example-org/web-app#${1_000 + index}`,
   source: "github",
@@ -52,7 +60,7 @@ const mergedWeek = Array.from({ length: 150 }, (_, index) => ({
   status: "merged",
   roles: ["author"],
   updatedAt: SOURCES_NOW,
-  finishedAt: SOURCES_NOW - (index % 5) * 86_400_000,
+  finishedAt: sourceDay(index % 5),
   number: 1_000 + index,
   repo: "example-org/web-app",
   checks: "pass",
@@ -237,6 +245,13 @@ const emptyDocument = (): BoardDocument => ({
   strings: [],
   relations: { spawns: [], groups: [] },
 });
+const askLedger = { revision: 0, asks: [] as WorldAsk[] };
+const originalAskCall = bridge.call.bind(bridge);
+bridge.call = (async (method: string, params?: Record<string, unknown>) =>
+  method === "world.asks.get"
+    ? structuredClone(askLedger)
+    : originalAskCall(method, params)) as typeof bridge.call;
+
 let saved: BoardDocument = emptyDocument();
 // `?colors=demo` (for screenshots) starts with chosen workspace and host colours.
 if (params.get("colors") === "demo")
@@ -1122,6 +1137,42 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         "a workspace with a waiting tab is marked",
       );
       check((await rest()) < 120, "the board is still at first sight");
+
+      const asker = world.leaves.find(
+        (leaf) => leaf.tabLabel === "dev server",
+      )!;
+      askLedger.asks = [
+        {
+          id: "q-board",
+          at: Date.now(),
+          question: "Ship the documentation?",
+          options: [],
+          owner_only: true,
+          actor: {
+            label: "Example",
+            verified: true,
+            connection_id: asker.connectionId,
+            connection_generation: asker.generation,
+            pane_id: asker.pane.pane_id,
+            terminal_id: asker.terminalId,
+          },
+        },
+      ];
+      askLedger.revision++;
+      await sharedAsksStore().refresh();
+      await settle(100);
+      check(
+        Boolean(host.querySelector('[data-world-ask="q-board"]')),
+        "Board shows ? on the asking pane's card",
+      );
+      askLedger.asks[0]!.withdrawn = { at: Date.now() };
+      askLedger.revision++;
+      await sharedAsksStore().refresh();
+      await settle(100);
+      check(
+        !host.querySelector('[data-world-ask="q-board"]'),
+        "withdrawal clears Board's question mark",
+      );
 
       // Taller cards (pane rows) are placed by their real size: no overlaps.
       // Only cards on show: the overview hides tab cards (opacity 0).

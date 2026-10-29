@@ -2,9 +2,12 @@ import {
   agentName,
   agentRuntime,
   agentFolder,
-  where,
   matchesQuery,
+  where,
 } from "./deskAgentLabels";
+import { useWorldAsks, type WorldAsk } from "./worldAsks";
+import { asksForWorld } from "./worldAskTargets";
+import { WorldAskMark } from "./WorldAskMark";
 import {
   useCallback,
   useEffect,
@@ -22,7 +25,7 @@ import {
   formatSpan,
   IDLE_WINDOW_MS,
   isRecent,
-  operationalAgents,
+  deskAgents,
   receiptIdentity,
   receiptEndedAt,
   type ReceiptState,
@@ -50,6 +53,7 @@ type Item = {
   /** No receipt has been read for the agent's present state yet. */
   pending: boolean;
   since: number | null;
+  question?: string;
 };
 
 export function partitionDesk(
@@ -59,6 +63,7 @@ export function partitionDesk(
   now: number,
   stops: Map<string, number> = new Map(),
   stopIds: ReadonlyMap<string, string> = new Map(),
+  asks: ReadonlyMap<string, WorldAsk> = new Map(),
 ) {
   const needs: Item[] = [];
   const review: Item[] = [];
@@ -73,15 +78,17 @@ export function partitionDesk(
     const id = handoffId(leaf, stoppedAt, stopIds.get(receiptIdentity(leaf)));
     const since =
       receiptEndedAt(receipt) ?? stoppedAt ?? leaf.lastActivityAt ?? null;
-    if (leaf.status === "blocked") {
+    if (leaf.status === "blocked" || asks.has(leaf.id)) {
       needs.push({
         lane: "needs",
+        question: asks.get(leaf.id)?.question,
         leaf,
         receipt,
         handoffId: id,
         pending,
         handled: false,
-        since,
+        since:
+          leaf.status === "blocked" ? since : (asks.get(leaf.id)?.at ?? since),
       });
     } else if (leaf.status === "working") {
       const started = Date.parse(receipt?.started_at ?? "");
@@ -337,7 +344,9 @@ export function DeskBoard({
   onCloseReading?: () => void;
 }) {
   const now = useNow(10_000);
-  const agents = useMemo(() => operationalAgents(world), [world]);
+  const asks = useWorldAsks();
+  const asking = useMemo(() => asksForWorld(asks, world), [asks, world]);
+  const agents = useMemo(() => deskAgents(world, asking), [world, asking]);
   const {
     handled,
     stops,
@@ -389,9 +398,11 @@ export function DeskBoard({
     now,
     stops,
     stopIds,
+    asking,
   );
   const pendingReview = review.filter((item) => !item.handled);
-  const matches = (item: Item) => matchesQuery(item.leaf, item.receipt, query);
+  const matches = (item: Item) =>
+    matchesQuery(item.leaf, item.receipt, query, item.question);
   const shownNeeds = needs.filter(matches);
   const shownReview = pendingReview.filter(matches);
   const shownWorking = working.filter(matches);
@@ -681,7 +692,10 @@ export function DeskBoard({
         }}
       >
         <div className="desk-card-head">
-          <span className="desk-card-name">{agentName(leaf)}</span>
+          <span className="desk-card-name">
+            {agentName(leaf)}
+            <WorldAskMark ask={asking.get(leaf.id)} />
+          </span>
           <span className="desk-card-where">
             {[agentRuntime(leaf), where(leaf)].filter(Boolean).join(" · ")}
           </span>
@@ -704,11 +718,13 @@ export function DeskBoard({
         {item.lane === "needs" ? (
           <Screen
             lines={
-              screen
-                ? questionFromScreen(screen)
-                : receipt?.report
-                  ? [receipt.report]
-                  : []
+              item.question
+                ? [item.question]
+                : screen
+                  ? questionFromScreen(screen)
+                  : receipt?.report
+                    ? [receipt.report]
+                    : []
             }
             fallback="Waiting for your answer in its terminal."
           />
@@ -821,7 +837,8 @@ export function DeskBoard({
   };
   const row = (leaf: WorldLeafObject, showWorkspace = false) => {
     const { receipt } = receiptFor(leaf);
-    const line = receipt?.ask ?? leaf.taskSummary ?? null;
+    const line =
+      asking.get(leaf.id)?.question ?? receipt?.ask ?? leaf.taskSummary ?? null;
     const at = activeAt(leaf);
     const meta = [
       agentRuntime(leaf),
@@ -843,7 +860,10 @@ export function DeskBoard({
           </span>
           <span className="desk-row-main">
             <span className="desk-row-title">
-              <strong>{agentName(leaf)}</strong>
+              <strong>
+                {agentName(leaf)}
+                <WorldAskMark ask={asking.get(leaf.id)} />
+              </strong>
               <small>{meta.join(" · ")}</small>
             </span>
             {line ? <span className="desk-row-line">{line}</span> : null}

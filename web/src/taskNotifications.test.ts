@@ -10,6 +10,7 @@ import {
 } from "./taskNotifications";
 import { __storeTesting, emptyServerSessionState, store } from "./store";
 import { bridge, type ConnectionClient } from "./api";
+import { notifyWorldAsk } from "./store/notifications";
 
 const origin = "https://herdr-world.example";
 const target = {
@@ -86,6 +87,66 @@ function registration() {
 }
 
 describe("task notification transport", () => {
+  test("a ledger ask raises its local OS notice even when Web Push is selected", async () => {
+    const active = registration();
+    await withBrowser(
+      { navigator: { serviceWorker: { getRegistration: async () => active } } },
+      async () => {
+        __storeTesting.replaceState({
+          ...store.get(),
+          taskNotificationsEnabled: true,
+          taskNotificationBusy: false,
+          taskNotificationTransport: "push",
+          taskNotificationPreferences: { completed: true, blocked: true },
+          activeConnectionId: "alpha",
+          connections: [
+            {
+              id: "beta",
+              label: "Example",
+              source: "test",
+              is_default: false,
+              state: "ready",
+              generation: 2,
+            },
+          ],
+        });
+        notifyWorldAsk({
+          id: "q-example",
+          at: 1,
+          question: "Which design?",
+          options: [],
+          owner_only: true,
+          actor: {
+            label: "Example",
+            verified: true,
+            connection_id: "beta",
+            connection_generation: 2,
+            workspace_id: "w1",
+            pane_id: "w1:p1",
+            terminal_id: "original-terminal",
+            agent: "codex",
+            agent_session_id: "original-session",
+          },
+        });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(active.showNotification).toHaveBeenCalledTimes(1);
+        expect(active.showNotification).toHaveBeenCalledWith(
+          expect.any(String),
+          expect.objectContaining({
+            data: expect.objectContaining({
+              target: expect.objectContaining({
+                connectionId: "beta",
+                runtimeGeneration: 2,
+                terminalId: "original-terminal",
+                agentSessionId: "original-session",
+              }),
+            }),
+          }),
+        );
+      },
+    );
+  });
+
   test("uses an active worker when the mobile page constructor throws", async () => {
     const active = registration();
     const register = mock();

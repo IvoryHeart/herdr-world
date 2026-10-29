@@ -220,6 +220,64 @@ Source: [`scripts/agent/gate.ts`](../scripts/agent/gate.ts) and
 [`scripts/agent/gate/`](../scripts/agent/gate/). The predicate is pure, and its
 acceptance cases live in `cases.ts`.
 
+### Reach the owner with an ask
+
+To reach the owner, use `herdr-world ask` from your own Herdr pane; no other
+channel. The watcher, dispatcher and workers use the same World question ledger.
+Do not prompt the owner's seat, send Herdr custom notifications, change shared
+runbooks or configuration, or post an issue comment as a substitute for asking.
+Record the question, then move on or wait for its answer:
+
+```bash
+herdr-world ask "Which design should I use?" --owner-only --wait
+herdr-world ask "Task 7 has no PR after an hour. What next?" --key dispatch:7:stuck --owner-only --json
+herdr-world ask get q-example --wait --json
+herdr-world ask withdraw q-example --json
+herdr-world ask withdraw --key dispatch:7:stuck --json
+```
+
+`--key` deduplicates a cause for the verified asking occupant, including an
+answered cause. Repeat the same key while that cause persists. Save the returned
+question ID and withdraw it once the cause clears; a later occurrence may then
+create a fresh ask under the same key. Withdrawal is idempotent and restricted
+to the original verified connection, runtime, terminal and agent session. A
+withdrawn ask releases `--wait` with a `withdrawn` field and no invented answer;
+withdrawal preserves an answer that arrived first. The existing ledger retains
+both, and closed questions remain subject to its retention bound. If a creation
+reply is lost, `ask withdraw --key CAUSE` recovers the original occupant's
+retained ask and withdraws it without creating a question. A repeated answered
+key returns its retained answer. Human withdrawal output explicitly names the
+withdrawal, including any answer already recorded.
+
+Open asks appear first in Town's Needs you rail and Summary. Their verified
+agents wait at reception with a quiet **?** until answered or withdrawn; **!**
+remains urgent blocking and **✓** an unchecked finish. Board and Desk use the
+same qualified question mark. A plain watcher terminal receives an asking-seat
+entry too, without being relabelled as an LLM agent. A new ask uses World's usual chime, toast and OS
+notification preferences, with **Open agent** bound to its original terminal and
+session. Browser-local ask events also raise the local OS notice when Web Push
+is selected. A restarted page reads existing asks without replaying their
+announcements; an obsolete socket reply cannot restore a withdrawn ask.
+
+The watcher runs from its own pane, records asks without blocking a pass, and
+reads an answer back once into that pane's output and the crew feed. Pending
+creation/recreation receipts survive supersession, so a cause clearing after a
+lost reply still withdraws its persisted question by key. A withdrawal whose
+reply was lost permits a fresh question when the same cause recurs, even after
+its answer was read. Withdrawal uncertainty is saved before dispatch and settled
+before recreating the cause. Holds and scope changes preserve these receipts and
+answer acknowledgements. Historical superseded notices without receipts are
+ignored; keyed cleanup that finds nothing reports “no recorded ask to withdraw”,
+without claiming the earlier question was withdrawn. If the original occupant
+can no longer withdraw (for example after a runtime-generation
+change or a restart in another pane), the watcher retires the cleared cause and
+records once in the feed that the question is left for the owner to answer; it
+does not retry that permanent refusal. Transient failures still retry. It never
+routes an answer to a different seat. Workers needing an answer use `--wait` in
+their own pane. Deploy the matching World service and CLI before restarting the
+watcher from the merged checkout. Dispatcher runbook changes are applied by the
+owner after merge, as described in the PR handoff.
+
 ### Act on readiness with agent:crew
 
 `agent:crew` is the crew watcher. Agents coordinate through the state on GitHub,
@@ -232,8 +290,8 @@ plans the next step for every PR in scope and takes each step once:
 | A required check fails and no check is still running | `ACT #N ci` prompt | The author's seat |
 | GitHub reports a conflict, or screenshots are missing | `ACT #N conflict` or `ACT #N screenshots` prompt | The author's seat |
 | A required reviewer has no RESULT, or a newer head needs confirming; GitHub reports the head mergeable and its checks are green, or have finished while the owner judges a CI rerun | A fresh reviewer run | That reviewer's model |
-| READY, with every required reviewer confirmed on the head | The `crew/merge-ready` mark and a Herdr notification | The owner |
-| A judgment condition, an unknown author, an unsupported roster model, a stuck author seat or a reviewer run that posted nothing | The `crew/needs-owner` mark, one signed `[crew]` comment and one `NEEDS-OWNER` notification per distinct cause | The owner |
+| READY, with every required reviewer confirmed on the head | The `crew/merge-ready` mark and a World ask with the PR and reason | The owner |
+| A judgment condition, an unknown author, an unsupported roster model, a stuck author seat or a reviewer run that posted nothing | The `crew/needs-owner` mark, one signed `[crew]` state comment and one World ask per distinct cause | The owner |
 
 - **Merge only `crew/merge-ready`.** The watcher marks a PR's head with two
   commit statuses, shown with its checks on GitHub:
@@ -248,7 +306,8 @@ plans the next step for every PR in scope and takes each step once:
     the PR: a CI judgment after reruns, an unknown author, a stuck or missing
     author seat, or a reviewer run that ended without a RESULT. Each cause
     also gets one comment signed `[crew]` saying what it needs, with local
-    paths left out. The mark turns green ("Nothing waits on the owner") once
+    paths left out. That comment describes PR state; the World ask carries the
+    owner's question. The mark turns green ("Nothing waits on the owner") once
     every cause clears.
 
   Only the watcher sets these marks. They are commit statuses rather than
@@ -261,7 +320,7 @@ plans the next step for every PR in scope and takes each step once:
 - **When a seat gets a prompt.** Only when Herdr reports it idle or done and
   it isn't focused, because a prompt types into the seat's input box. Other
   steps wait for a later pass. Seats listed in `neverPrompt` are never
-  prompted; the owner gets a notification instead.
+  prompted; the owner gets an ask instead.
 - **How reviewers run.** Each review or confirmation is a fresh, interactive
   `claude` (in auto permission mode) or `codex` session on the seat's roster
   model, in a detached
@@ -336,9 +395,12 @@ plans the next step for every PR in scope and takes each step once:
 - **When a step repeats.** A CI step is keyed by the failed jobs, so a rerun
   that fails again prompts the author again. Every owner notice is an action
   of its own: READY, NEEDS-OWNER, a seat that is missing or never prompted,
-  and a seat that keeps refusing prompts. Each is shown once, and one that
-  Herdr didn't show is retried on the next pass. A notice about a seat is
-  dropped once its cause clears, for example when the seat takes the prompt.
+  a blocked seat and a seat that keeps refusing prompts. Each records one
+  keyed World ask, retried if the service is unavailable. Answered causes stay
+  acknowledged until they clear. The watcher withdraws both pending and already
+  sent asks when their causes clear, including same-head readiness changes,
+  seats resuming, new heads, PR closure and an on-hold label. Scoped passes leave
+  other PRs' asks alone.
 - **How often it looks.** `watch` reads every open PR once every `--interval`
   seconds (300 by default), counted from the start of one pass to the start
   of the next, so a slow read doesn't stretch the gap. In between, it reads
@@ -517,7 +579,10 @@ same Git hook configuration.
 
 Agents in parallel worktrees share one machine-wide check queue: one browser lane
 and one behavioral verification at a time, two light lanes, and the timed
-(latency) lane alone on the whole machine. Run browser suites through
+(latency) lane alone on the whole machine. Within that lane, the delivery gate
+runs timed World browser files serially, matching CI’s latency shard while
+preserving each fixture’s concurrent-context checks and deadlines. Run browser
+suites through
 `bun run test <path>` or `bun run test:browser`, which queue, rather than a bare
 `bun test` on a browser file, which does not. A queued gate prints
 `[queue] <lane> waiting for <worktree> <lane> (pid, since)`. Do not bypass the

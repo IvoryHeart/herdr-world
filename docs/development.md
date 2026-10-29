@@ -336,7 +336,14 @@ Origin, and a bearer token derived from the session signing secret
 browser in. Wrong tokens get the login throttle, counted apart from logins so
 they never lock the owner out. One call holds at most 20 s for `ask --wait`.
 World's pages fetch only the open questions (`world.asks.get`), and only when
-a ledger notice says a question changed. Behind a reverse proxy on
+a ledger notice says a question changed. `ask --key CAUSE` deduplicates a cause
+for the verified asking occupant, even after an answer; `ask withdraw ID`
+closes that cause and allows recurrence. Only the verified original connection,
+runtime, terminal and session may withdraw it. A waiting CLI returns on answer
+or withdrawal. Withdrawn questions are retained and trimmed like answered ones.
+New verified asks carry their runtime, terminal, workspace and session identity
+into reception and notification targets. World announces newly observed asks
+once, and excludes answered/withdrawn asks from every open-question projection. Behind a reverse proxy on
 loopback every peer looks local, so "loopback only" is a transport rule, not
 proof of locality: the token itself stays in the service's private data
 directory, and attribution still needs the caller's process on this machine.

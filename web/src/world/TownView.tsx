@@ -1,3 +1,4 @@
+import { askingKeysForWorld } from "./worldAskTargets";
 import { inspectTownTerminal, townTargetActionable } from "./town/townOpen";
 import { requestAgentLaunch } from "./agentProfiles";
 import { questMark, useAgentQuests } from "./agentQuests";
@@ -561,6 +562,9 @@ export default function TownView({
     openAgent: (key) => openChat(key),
     showRoom: focusRoom,
   });
+  const askingKeys = useMemo(() => {
+    return askingKeysForWorld(townSummary.summary.asks, world);
+  }, [townSummary.summary.asks, world]);
   const foldedActivity = useMemo(
     () => townFoldedActivity(office, calls, townSummary.summary.asks),
     [office, calls, townSummary.summary.asks],
@@ -1261,6 +1265,10 @@ export default function TownView({
             selectedKey={peek?.key ?? selectedKey}
             completionSeenKeys={completionSeenKeys}
             summonedKeys={summonedKeys}
+            askingKeys={askingKeys}
+            onActivateAsk={(id) => {
+              void onOpenTerminal(id).catch(() => undefined);
+            }}
             quests={questMarks}
             conversationTargets={conversationTargets}
             onSelect={tapTown}

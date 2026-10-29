@@ -19,6 +19,10 @@ export type CliActor = {
   verified: boolean;
   connection_id?: string;
   pane_id?: string;
+  connection_generation?: number;
+  workspace_id?: string;
+  agent_session_id?: string;
+  agent_session_fingerprint?: string;
   terminal_id?: string;
   agent?: string;
 };
@@ -54,6 +58,9 @@ export type LedgerAsk = {
   at: number;
   actor: CliActor;
   question: string;
+  /** Idempotency key, scoped to the verified asking occupant. */
+  key?: string;
+  withdrawn?: { at: number };
   options: string[];
   /** Only the owner, in World, may answer. */
   owner_only: boolean;
@@ -184,7 +191,9 @@ export class WorldLedger {
   openAsks(): { revision: number; asks: LedgerAsk[] } {
     return {
       revision: this.document.revision,
-      asks: structuredClone(this.document.asks.filter((ask) => !ask.answer)),
+      asks: structuredClone(
+        this.document.asks.filter((ask) => !ask.answer && !ask.withdrawn),
+      ),
     };
   }
 
@@ -198,7 +207,9 @@ export class WorldLedger {
     // Keep open questions: only answered ones are dropped, oldest first
     // (`ask` refuses a new question when the open ones fill the list).
     while (next.asks.length > LEDGER_LIMITS.asks) {
-      const answered = next.asks.findIndex((ask) => ask.answer);
+      const answered = next.asks.findIndex(
+        (ask) => ask.answer || ask.withdrawn,
+      );
       if (answered < 0) break;
       next.asks.splice(answered, 1);
     }
