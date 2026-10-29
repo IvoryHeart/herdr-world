@@ -355,6 +355,12 @@ No OS delivery while every browser is closed is claimed by client announcements.
 Review-repair cases cover lost creation or recreation replies followed by a
 cleared cause, successful withdrawal with a lost reply followed by recurrence,
 permanent refusal retired with one feed explanation, and answer read-back once.
+Acknowledged-answer variants cover lost replies, process crashes and withdrawals
+that never reached World. Pending recreation followed by a hold, scope removal or
+head replacement retains its receipt without reading the old answer again.
+Legacy superseded rows without receipts make no CLI call or feed entry; keyed
+not_found cleanup never claims that the old occupant's question was withdrawn.
+These bounded schedules consume the real watcher store and existing CLI seam.
 The real CLI/ledger tests check self-scoped withdrawal by key without creation,
 retained answered repeats and explicit human withdrawal output. A real projection
 with six finishes checks shell-question priority, and the Town browser consumer

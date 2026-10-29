@@ -263,8 +263,13 @@ The watcher runs from its own pane, records asks without blocking a pass, and
 reads an answer back once into that pane's output and the crew feed. Pending
 creation/recreation receipts survive supersession, so a cause clearing after a
 lost reply still withdraws its persisted question by key. A withdrawal whose
-reply was lost permits a fresh question when the same cause recurs. If the
-original occupant can no longer withdraw (for example after a runtime-generation
+reply was lost permits a fresh question when the same cause recurs, even after
+its answer was read. Withdrawal uncertainty is saved before dispatch and settled
+before recreating the cause. Holds and scope changes preserve these receipts and
+answer acknowledgements. Historical superseded notices without receipts are
+ignored; keyed cleanup that finds nothing reports “no recorded ask to withdraw”,
+without claiming the earlier question was withdrawn. If the original occupant
+can no longer withdraw (for example after a runtime-generation
 change or a restart in another pane), the watcher retires the cleared cause and
 records once in the feed that the question is left for the owner to answer; it
 does not retry that permanent refusal. Transient failures still retry. It never

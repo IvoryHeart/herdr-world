@@ -399,7 +399,13 @@ function act(
   for (const waiting of actionsIn(crew, ["pending"])) {
     const why = parked.get(waiting.pr);
     if (!why) continue;
-    setAction(crew, waiting.key, "superseded", now, why);
+    setAction(
+      crew,
+      waiting.key,
+      "superseded",
+      now,
+      waiting.target === "owner" ? waiting.detail : why,
+    );
     say(`#${waiting.pr} retired ${waiting.kind} ${waiting.target}: ${why}`);
   }
 

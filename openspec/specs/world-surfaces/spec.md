@@ -1372,8 +1372,13 @@ the cause clears. Scoped passes SHALL leave other PRs' asks alone, and held PRs
 SHALL produce no new owner asks. A producer SHALL retain creation uncertainty
 before dispatch and recover a persisted ask by occupant-scoped cause key before
 retiring a cleared cause, including when its creation reply was lost. A lost
-withdrawal reply SHALL NOT suppress a recurring active cause. Permanent withdrawal
-refusal SHALL retire the cleared cause and report once that its question is left
+withdrawal reply SHALL NOT suppress a recurring active cause, including one whose
+answer was already read. Withdrawal uncertainty SHALL be retained before dispatch
+and settled before creating the next occurrence. Holding a PR or moving it out of
+scope SHALL preserve owner receipts and answer acknowledgements. Superseded legacy
+notices without receipts SHALL NOT trigger withdrawal or a new feed entry. A keyed
+withdrawal returning not_found SHALL report no recorded ask, never a successful
+withdrawal. Permanent withdrawal refusal SHALL retire the cleared cause and report once that its question is left
 for the owner to answer; transient failures SHALL remain retryable.
 
 The ask command SHALL accept a bounded optional cause key scoped to its verified

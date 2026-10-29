@@ -7,6 +7,7 @@ type Receipt = {
   ask?: string;
   closed?: boolean;
   rearm?: boolean;
+  withdrawing?: boolean;
   retired?: boolean;
 };
 function receipt(detail: string | null): Receipt | null {
@@ -16,6 +17,7 @@ function receipt(detail: string | null): Receipt | null {
       typeof value === "object" &&
       ((typeof value.ask === "string" && value.ask.length > 0) ||
         value.rearm === true ||
+        value.withdrawing === true ||
         value.retired === true)
       ? value
       : null;
@@ -81,7 +83,12 @@ export function reconcileOwnerAsks(
   const create = (entry: StoredAction, prior: Receipt | null) => {
     // Persist uncertainty before dispatch: either a retry or cleanup must use
     // the key if World records the ask but its reply never reaches this process.
-    save(entry, "pending", { ...prior, rearm: true, retired: false }, true);
+    save(
+      entry,
+      "pending",
+      { ...prior, rearm: true, retired: false, withdrawing: false },
+      true,
+    );
     const asked = reply(
       deps.run([
         "herdr-world",
@@ -107,15 +114,25 @@ export function reconcileOwnerAsks(
     if (entry.target !== "owner" || (prs.length && !prs.includes(entry.pr)))
       continue;
     const known = receipt(entry.detail);
-    if (!holds(crew, entry, keys)) {
+    if (entry.state === "superseded" && !known) continue;
+    const active = holds(crew, entry, keys);
+    if (!active || known?.withdrawing) {
       if (known?.retired) continue;
       const knownId = known?.rearm ? undefined : known?.ask;
       const selector = knownId ? [knownId] : ["--key", `crew:${entry.key}`];
+      // Settle an uncertain withdrawal before a recurrence, even if the old
+      // answer was read already. Preserve its acknowledgement before dispatch.
+      save(entry, "superseded", { ...known, withdrawing: true });
       const withdrawn = reply(
         deps.run(["herdr-world", "ask", "withdraw", ...selector, "--json"]),
       );
       if (withdrawn?.code === "refused") {
-        save(entry, "superseded", { ...known, retired: true, rearm: false });
+        save(entry, "superseded", {
+          ...known,
+          retired: true,
+          rearm: false,
+          withdrawing: false,
+        });
         say(
           `#${entry.pr} could not withdraw ${knownId ?? "its keyed ask"}; ${knownId && known?.closed ? "its answer was already read" : "left for the owner to answer"}`,
         );
@@ -125,13 +142,17 @@ export function reconcileOwnerAsks(
       const id = withdrawn?.result?.id ?? known?.ask;
       const answer = withdrawn?.result?.answer;
       const alreadyRead = known?.ask === id && known?.closed;
-      save(entry, "superseded", {
+      const retired: Receipt = {
         ask: id,
         retired: true,
         closed: Boolean(answer) || Boolean(alreadyRead),
-      });
+      };
+      save(entry, "superseded", retired);
       if (answer && id && !alreadyRead) answered(entry, id, answer.text);
-      say(`#${entry.pr} withdrew owner cause: ${entry.text}`);
+      say(
+        `#${entry.pr} ${withdrawn?.code === "not_found" ? "no recorded ask to withdraw for owner cause" : "withdrew owner cause"}: ${entry.text}`,
+      );
+      if (active) create(entry, retired);
       continue;
     }
     if (known?.ask && !known.rearm && !known.retired) {

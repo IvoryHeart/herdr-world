@@ -10,3 +10,6 @@
   a lost withdrawal reply, and explain permanent withdrawal refusals once.
   Shell questions take reception priority over finished agents. Keyed CLI repeats
   retain their answer state and withdrawal output names the preserved answer.
+- Preserve answer acknowledgements through held or out-of-scope causes and
+  uncertain withdrawals. Keep historical owner notices quiet and distinguish
+  missing keyed asks from confirmed withdrawals.
