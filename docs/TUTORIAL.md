@@ -916,7 +916,7 @@ Use its HTTPS URL: `127.0.0.1` on a phone means the phone, not the work computer
    the middle, and Insert, Send and Close on the right.
    Tabs and More live in the shared top app bar. Special-key rows stay visible
    in both modes for arrows, Ctrl and other actions awkward on a touch keyboard.
-   In an ordinary shell pane, **Agent terminals** in the Message toolbar can
+   In an ordinary shell pane, **Agent terminals** beside Message can
    start an agent there. Begin with an empty shell prompt and draft, then choose
    the agent; World types its command and Enter. Use the pencil to customize a
    command for this browser and connection, or **Reset** for the detected default.

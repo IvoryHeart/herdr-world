@@ -65,7 +65,7 @@ launch commands, History Chat terminal input and image uploads, a simpler
 conversation minimap, and PR/MR last-known status through refresh failures and
 paused rebases. World's managed-window tab sheet and top-right More menu receive
 the list chrome while retaining their navigation and positioning. Agent launching
-uses Message's existing toolbar in both Composer and Direct modes, with commands
+sits beside Message and the Direct-mode hint, with commands
 stored in World's per-connection browser namespace. Selecting a command sends it
 once with Enter; opening or editing the picker does not execute it.
 

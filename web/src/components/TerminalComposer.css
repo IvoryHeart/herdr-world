@@ -280,3 +280,9 @@
   > :not(.terminal-composer-mode) {
   display: none;
 }
+
+:where(html[data-layout="mobile"])
+  .terminal-composer[data-surface="terminal"][data-input-mode="direct"]
+  .terminal-composer-input {
+  display: none;
+}

@@ -669,51 +669,6 @@ export function TerminalComposer({
       >
         <AttachmentChips scope={draftKey} />
         <div className="terminal-composer-toolbar" hidden={!accessoriesVisible}>
-          {surface === "terminal" &&
-          workspaceId &&
-          paneId &&
-          tabId &&
-          terminalId &&
-          !agent?.trim() &&
-          isMobileLayout() ? (
-            <AgentLauncher
-              workspaceId={workspaceId}
-              paneId={paneId}
-              tabId={tabId}
-              terminalId={terminalId}
-              disabled={busy || composing || reserved || !!disabledReason}
-              visible={accessoriesOpen}
-              onOpen={() => {
-                dismissCommands();
-                textareaRef.current?.blur();
-                setEditorFocused(false);
-              }}
-              onSelectCommand={(command) => {
-                if (
-                  disabledReason ||
-                  busy ||
-                  composingRef.current ||
-                  reserved ||
-                  !accessoriesOpen
-                )
-                  throw new Error(
-                    "Message input is not ready for an agent command.",
-                  );
-                if (readTerminalComposerDraft(draftKey) || attachments.length)
-                  throw new Error("Clear Message before choosing an agent.");
-                activateMessage(false);
-                void submitTerminalComposerDraft(draftKey, command, (text) =>
-                  onSubmit(text, true),
-                ).catch((error) =>
-                  onError(
-                    error instanceof Error
-                      ? error.message
-                      : "Failed to launch agent",
-                  ),
-                );
-              }}
-            />
-          ) : null}
           <button
             type="button"
             className="terminal-composer-attach"
@@ -972,16 +927,58 @@ export function TerminalComposer({
             }}
           />
         ) : null}
-        <div
-          className="terminal-composer-direct"
-          hidden={surface === "chat" || mode !== "direct"}
-        >
-          Typing goes directly to the terminal. Your Composer draft is saved.
-        </div>
-        <div
-          className="terminal-mobile-input-bar"
-          hidden={surface !== "chat" && mode === "direct"}
-        >
+        <div className="terminal-mobile-input-bar">
+          {surface === "terminal" &&
+          workspaceId &&
+          paneId &&
+          tabId &&
+          terminalId &&
+          !agent?.trim() &&
+          isMobileLayout() ? (
+            <AgentLauncher
+              workspaceId={workspaceId}
+              paneId={paneId}
+              tabId={tabId}
+              terminalId={terminalId}
+              disabled={busy || composing || reserved || !!disabledReason}
+              visible={accessoriesOpen}
+              onOpen={() => {
+                dismissCommands();
+                textareaRef.current?.blur();
+                setEditorFocused(false);
+              }}
+              onSelectCommand={(command) => {
+                if (
+                  disabledReason ||
+                  busy ||
+                  composingRef.current ||
+                  reserved ||
+                  !accessoriesOpen
+                )
+                  throw new Error(
+                    "Message input is not ready for an agent command.",
+                  );
+                if (readTerminalComposerDraft(draftKey) || attachments.length)
+                  throw new Error("Clear Message before choosing an agent.");
+                activateMessage(false);
+                void submitTerminalComposerDraft(draftKey, command, (text) =>
+                  onSubmit(text, true),
+                ).catch((error) =>
+                  onError(
+                    error instanceof Error
+                      ? error.message
+                      : "Failed to launch agent",
+                  ),
+                );
+              }}
+            />
+          ) : null}
+          <div
+            className="terminal-composer-direct"
+            hidden={surface === "chat" || mode !== "direct"}
+          >
+            Typing goes directly to the terminal. Your Composer draft is saved.
+          </div>
           <textarea
             ref={textareaRef}
             className="terminal-composer-input terminal-mobile-message"

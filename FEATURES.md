@@ -1039,7 +1039,7 @@ newer work.
 
 ## Mobile and PWA
 
-- In an ordinary mobile shell terminal, **Agent terminals** in Message's toolbar
+- In an ordinary mobile shell terminal, **Agent terminals** beside Message
   launches an agent in that pane with Enter. Start with an empty shell prompt
   and draft. The pencil edits each command, including arguments or an executable
   not detected on the host; preferences stay in this browser per connection and

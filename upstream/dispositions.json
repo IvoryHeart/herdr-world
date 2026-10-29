@@ -875,7 +875,7 @@
       "commit": "be1ab35877ec58721745c623944c27b3f2e5f835",
       "title": "Launch agents immediately from terminal picker (#477)",
       "status": "adapted",
-      "reason": "Send the selected launch command once with Enter from the captured mobile shell pane, retaining failed commands and existing drafts; place the picker in the World toolbar so both input modes remain usable.",
+      "reason": "Send the selected launch command once with Enter from the captured mobile shell pane, retaining failed commands and existing drafts; place the picker beside Message and the Direct-mode hint so both input modes remain usable.",
       "evidence": [
         "web/src/components/TerminalView.inputMode.test.ts",
         "web/src/components/AgentLauncher.dom.test.ts",

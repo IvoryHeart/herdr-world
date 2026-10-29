@@ -3435,8 +3435,8 @@ Chat's conversation-binding and receipt requirements SHALL remain applicable.
 
 ### Requirement: Mobile shell agent commands require explicit selection
 
-Ordinary mobile shell panes SHALL offer editable agent launch commands in the
-Message toolbar. Preferences SHALL be isolated to this browser, connection and
+Ordinary mobile shell panes SHALL offer editable agent launch commands beside
+Message and the Direct-mode hint. Preferences SHALL be isolated to this browser, connection and
 agent. Selection SHALL require an empty Message draft, validate a single-line
 command and send it once with Enter to the captured pane. Detection or editing
 SHALL NOT execute a command. Failed sends SHALL retain the command for recovery.
