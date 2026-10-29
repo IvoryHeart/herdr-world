@@ -198,6 +198,8 @@ jobs:
             - name: Run affected non-browser tests
               env:
                   HERDR_CI_SELECTION: ${{ needs.validation-scope.outputs.selection }}
+                  HERDR_TEST_PARALLEL: "1"
+                  HERDR_TEST_MAX_CONCURRENCY: "2"
                   HERDR_TEST_EXCLUDE_WORLD_BROWSER: "1"
               run: bun scripts/ci-tests.ts unit ${{ matrix.shard }}/2
 
