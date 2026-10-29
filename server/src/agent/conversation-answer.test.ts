@@ -181,6 +181,74 @@ describe("answering a blocked agent's prompt", () => {
     expect(state.sent).toEqual([{ pane_id: "w1:p1", text: "1", keys: [] }]);
   });
 
+  test("a form's next tab asking the same question is still the agent moving on", async () => {
+    const rule = "─".repeat(60);
+    const tab = (chips: string) =>
+      [
+        rule,
+        chips,
+        "",
+        "Pick one?",
+        "",
+        "❯ 1. Yes",
+        "  2. No",
+        "",
+        "Enter to select · Tab/Arrow keys to navigate · Esc to cancel",
+      ].join("\n");
+    const { state, source } = fakeHerdr();
+    state.screen = tab("←  ☐ Front  ☐ Back  ✔ Submit  →");
+    // Only the header chips change, and Herdr's state stays the same.
+    state.onSend = () => {
+      state.screen = tab("←  ☒ Front  ☐ Back  ✔ Submit  →");
+    };
+    expect(await answer(source, "1")).toMatchObject({
+      status: "sent",
+      acknowledged: true,
+      unconfirmed_reason: null,
+    });
+  });
+
+  test("a form's last answer moving to its review is the agent moving on", async () => {
+    const rule = "─".repeat(60);
+    const { state, source } = fakeHerdr();
+    state.screen = [
+      rule,
+      "←  ☒ Colour  ☐ Sticky  ✔ Submit  →",
+      "",
+      "Should the banner be sticky?",
+      "",
+      "❯ 1. Yes",
+      "  2. No",
+      "",
+      "Enter to select · Tab/Arrow keys to navigate · Esc to cancel",
+    ].join("\n");
+    // Claude Code draws the review with no footer, and Herdr's state stays.
+    state.onSend = () => {
+      state.screen = [
+        rule,
+        "←  ☒ Colour  ☒ Sticky  ✔ Submit  →",
+        "",
+        "Review your answers",
+        "",
+        " ● Should the banner be red?",
+        "   → Yes",
+        " ● Should the banner be sticky?",
+        "   → No",
+        "",
+        "Ready to submit your answers?",
+        "",
+        "❯ 1. Submit answers",
+        "  2. Cancel",
+      ].join("\n");
+    };
+    expect(await answer(source, "2")).toMatchObject({
+      status: "sent",
+      label: "No",
+      acknowledged: true,
+      unconfirmed_reason: null,
+    });
+  });
+
   test("a partial screen while the form redraws is not the next question", async () => {
     const { state, source } = fakeHerdr();
     state.screen = [

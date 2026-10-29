@@ -18,6 +18,28 @@ export type ProcessOptions = {
   onOutput?(text: string): void;
 };
 
+/** Identity probes share the worker's cancellation and report their command. */
+export async function runVerificationMetadata(
+  command: string[],
+  options: Omit<ProcessOptions, "timeoutMs"> = {},
+) {
+  const label = command.join(" ");
+  try {
+    const result = await runVerificationProcess(command, {
+      ...options,
+      timeoutMs: 30_000,
+    });
+    if (result.code !== 0)
+      throw new Error(`exit ${result.code}: ${result.stderr.trim()}`);
+    return result;
+  } catch (cause) {
+    throw new Error(
+      `Verification metadata command ${label} failed: ${String(cause)}`,
+      { cause },
+    );
+  }
+}
+
 /** Own a Unix process group, including checker grandchildren and inherited pipes. */
 export async function runVerificationProcess(
   command: string[],

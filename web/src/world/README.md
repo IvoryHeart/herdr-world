@@ -10,13 +10,23 @@ line numbers and CSS ranges change as components move.
 Desk follows the aggregate host filter. Receipt and screen reads capture each leaf's
 connection and runtime generation; retirement never reroutes a read. Review marks
 and recent opens use qualified session identities across filter and focus changes.
-Reads use fair bounded admission and independent host queues. Pending reads keep
+Stable service stop identities survive expiry of display times. The fresh
+snapshot producer passes existing `agent.list` metadata to the Desk adapter;
+qualified native state-change sequences reveal later completed turns even when
+no browser observed their working phase. Pane rows alone supply the agent harness
+and session identity; only matching `agent.list` sessions may augment status and
+progress. Shared stop IDs participate in receipt refresh and currency, so late
+reads for a preceding stop cannot enable its successor's review mark. Display
+expiry alone does not invalidate a receipt. Shared Desk metadata belongs to agent
+panes; verified asking shells still appear in Needs you and open their original
+terminal without attempting an agent-metadata mutation. Reads use fair bounded admission and
+independent host queues. Pending reads keep
 their admission across refreshes; queued work coalesces to the latest observation.
 
 | Task | Open these owners | Focused evidence |
 | --- | --- | --- |
 | Lane routing, ordering or keyboard triage | `partitionDesk` and `DeskView` in [DeskView.tsx](DeskView.tsx); [DeskView.css](DeskView.css) styles `.desk-*`. | [Desk tests](DeskView.test.ts) |
-| Receipts, review marks, observed stops or polling limits | `useTurnReceipts`, `pollingTargets`, `useHandledTurns` and `useObservedStops` in [handoffs.ts](handoffs.ts); the service side is `latestTurnReceipt` in [turn-receipt.ts](../../../server/src/agent/turn-receipt.ts). Triage always covers every agent; only reads are bounded. | [Desk tests](DeskView.test.ts), [receipt tests](../../../server/src/agent/turn-receipt.test.ts) |
+| Receipts, review marks, observed stops or polling limits | `useTurnReceipts` and `pollingTargets` in [handoffs.ts](handoffs.ts); shared metadata flows through [useDeskState.ts](useDeskState.ts) and `WorldDeskStore` in [deskStateStore.ts](deskStateStore.ts), the service [registry](../../../server/src/world/desk-state.ts), [fresh observations](../../../server/src/world/desk-observation.ts) and [Desk RPC](../../../server/src/rpc/desk.ts). Receipts come from `latestTurnReceipt` in [turn-receipt.ts](../../../server/src/agent/turn-receipt.ts). Triage covers every agent; only reads are bounded. | [Desk tests](DeskView.test.ts), [unequal receipt coverage](deskSharedStops.test.ts), [browser state](deskStateStore.test.ts), [registry](../../../server/src/world/desk-state.test.ts), [observation](../../../server/src/world/desk-observation.test.ts), [RPC](../../../server/src/rpc/desk.test.ts), [receipt tests](../../../server/src/agent/turn-receipt.test.ts) |
 | Questions or live lines read from agent screens | `usePaneScreens`, `screenIdentity`, `questionFromScreen` and `activityFromScreen` in [paneScreen.ts](paneScreen.ts). Excerpts are keyed by pane, runtime generation and session. | [Desk tests](DeskView.test.ts) |
 
 ## Town

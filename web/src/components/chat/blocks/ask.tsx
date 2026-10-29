@@ -67,6 +67,24 @@ export function AskCard({
       }}
     >
       <h3>{agent} is waiting on you</h3>
+      {prompt.steps?.length ? (
+        // A form asks its questions one at a time, then submits them all.
+        <ol
+          className="agent-chat-ask-steps"
+          aria-label="Questions in this form"
+        >
+          {prompt.steps.map((step, index) => (
+            <li
+              key={index}
+              className={step.answered ? "is-answered" : undefined}
+              aria-label={`${step.label}, ${step.answered ? "answered" : "not answered yet"}`}
+            >
+              <span aria-hidden="true">{step.answered ? "☒" : "☐"}</span>{" "}
+              {step.label}
+            </li>
+          ))}
+        </ol>
+      ) : null}
       {prompt.request.length ? <pre>{prompt.request.join("\n")}</pre> : null}
       {prompt.question.map((line, index) => (
         <p key={index}>{line}</p>
