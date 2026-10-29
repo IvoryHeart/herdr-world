@@ -1,4 +1,14 @@
 import { expect, test } from "bun:test";
+import { execFileSync, spawnSync } from "node:child_process";
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   checkSizes,
   LIMIT,
@@ -148,4 +158,48 @@ test("a split ends a deferred exemption by freezing the file at its new size", (
       before,
     )[0],
   ).toContain("new exception");
+});
+
+test("local pre-push catches an exception lowered on main after the branch forked", () => {
+  const root = mkdtempSync(join(tmpdir(), "size-base-"));
+  const git = (...args: string[]) =>
+    execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
+  try {
+    git("init", "-q", "-b", "main");
+    git("config", "user.name", "Example");
+    git("config", "user.email", "example@example.invalid");
+    mkdirSync(join(root, "scripts"));
+    copyFileSync(
+      new URL("./file-size-ratchet.ts", import.meta.url),
+      join(root, "scripts/file-size-ratchet.ts"),
+    );
+    const policy = (limit: number) =>
+      writeFileSync(
+        join(root, "scripts/file-size-exceptions.json"),
+        JSON.stringify({ limits: { "app.ts": limit }, unratcheted: {} }),
+      );
+    writeFileSync(join(root, "app.ts"), "// synthetic\n".repeat(1001));
+    policy(5075);
+    git("add", ".");
+    git("commit", "-qm", "base");
+    git("branch", "topic");
+    policy(5025);
+    git("commit", "-qam", "lower ceiling");
+    git("update-ref", "refs/remotes/origin/main", "HEAD");
+    git("checkout", "-q", "topic");
+    const run = (...args: string[]) =>
+      spawnSync(process.execPath, ["scripts/file-size-ratchet.ts", ...args], {
+        cwd: root,
+        encoding: "utf8",
+      });
+    // CI's shallow checkout compares with the fetched main tip. Local must too.
+    const ci = run("origin/main");
+    expect(ci.status).toBe(1);
+    expect(ci.stderr).toContain("raised from 5025 to 5075");
+    const local = run();
+    expect(local.status).toBe(1);
+    expect(local.stderr).toContain("raised from 5025 to 5075");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

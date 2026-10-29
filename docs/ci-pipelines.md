@@ -9,7 +9,7 @@ for compatibility with branch rules.
 | Entry point | Responsibility | Deliberate boundary |
 | --- | --- | --- |
 | Local pre-commit | `check:commit`: read-only formatting and lint | Quick feedback before a commit; not a delivery gate |
-| Local pre-push | `check:changed`, expanding to the full gate for configuration or tooling changes | Affected tests save local work; CI remains authoritative |
+| Local pre-push | `check:changed`, expanding to the full gate for configuration or gate-policy changes | Affected tests save local work; CI remains authoritative |
 | CI on a PR | Validate the proposed merge; check its description and changelog policy | One shared scope decision; native platforms and browser shards keep separate runners |
 | CI on main | Validate the integrated main tree | PR success cannot prove the result of later merges |
 | Main gate | Classify failed push CI, rerun a recognized infrastructure failure once, or prepare an issue and revert | Does not merge a revert; green main resolves earlier alerts |
@@ -30,6 +30,7 @@ for compatibility with branch rules.
 | `check` | Static lane followed by tests; CI separates browsers through its existing environment selection |
 | `check:changed` | Static lane plus affected tests and behavioral verification when required |
 | `check:delivery` | Static lane plus all test lanes and behavioral verification |
+| `check:pr-body <file>` | CI knowledge-map and changelog policy against a committed PR diff and draft description; optional base ref follows the file |
 | `check:docs` | Notices, fragments, formatting, site and specs for qualifying Markdown changes |
 
 The static lane uses `typecheck:quick` because its production build follows.
@@ -61,6 +62,24 @@ verification under the existing evidence policy. Packaged notices, agent policy,
 OpenSpec, verification and tooling do not qualify for this shortcut. macOS jobs
 still report their protected names in short runs, with their native build and
 lifecycle steps skipped. Their aggregate must succeed in every mode.
+
+Tooling-only PRs use `scripts/validation-scope.ts` in CI and pre-push. The complete
+diff must contain only `scripts/agent/**` (including tests),
+`docs/agent-development.md`, `docs/crew-runbook.md`, `docs/dispatch-runbook.md` and
+`changes/<slug>.md`. Empty diffs and any other code path retain ordinary scope.
+Both sides of renames count. The mode runs the complete static lane and affected
+unit tests (or the agent test inventory for uncovered agent modules), and skips
+World browser/latency, behavioral verification, Windows installation and installer
+upgrades. macOS jobs still report their protected names without native work.
+`Delivery checks` requires repository validation and macOS success, and the exact
+expected skips; failure, cancellation or missing results fail closed. It never
+reuses an earlier tooling result. All other code PRs retain the full matrix.
+Main pushes and explicit full local gates always run everything.
+
+The size ratchet uses the tip of `origin/main` locally and on CI, rather than a
+branch's older merge base. Refresh main before pushing. Draft PR descriptions
+should pass `check:pr-body` before creation, using the same policy functions as
+Validation scope.
 
 Main pushes keep a running check and retain only the newest pending run. Main
 gate accounts for the intervening merges when attributing a later failure.

@@ -119,8 +119,18 @@ Heavy checks from every worktree share one machine-wide queue (one browser lane 
 one verification at a time; the timed latency lane alone); run browser suites via
 `bun run test <path>` so they queue too. A queued gate prints whom it waits for, so wait rather
 than bypass the hook.
-CI runs documentation checks for Markdown-only PR diffs and full checks for code
-changes. Browser tests require Chrome/Chromium or `CHROME_BIN`:
+CI runs documentation checks for ordinary Markdown-only PR diffs. PRs limited
+to `scripts/agent/**`, `docs/agent-development.md`, `docs/crew-runbook.md`,
+`docs/dispatch-runbook.md` and `changes/<slug>.md` use the shared tooling mode:
+static checks and affected unit tests, without World suites, behavioral
+verification or native installers. `Delivery checks` and both protected macOS
+reports remain required. Other code paths retain the full CI matrix; main pushes
+always run it. Pre-push uses the same tooling allowlist against the complete PR.
+After committing, run `bun run check:pr-body <file>` on the exact description
+file passed to `gh pr create --body-file <file>`; append a base ref for a stacked
+PR. This applies CI's knowledge-map and changelog rules before publication.
+The size ratchet compares against `origin/main`'s tip, including ceilings lowered
+since the branch forked. Fetch main before delivery to refresh that baseline. Browser tests require Chrome/Chromium or `CHROME_BIN`:
 
 ```bash
 bun run typecheck:quick

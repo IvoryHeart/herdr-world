@@ -14,7 +14,7 @@ export function assertDeliveryResults(
   const expected =
     mode === "full"
       ? ["success", "success"]
-      : mode === "docs"
+      : mode === "docs" || mode === "tooling"
         ? ["success", "skipped"]
         : mode === "reuse"
           ? ["skipped", "skipped"]
@@ -22,7 +22,8 @@ export function assertDeliveryResults(
   if (
     scope !== "success" ||
     !expected ||
-    behavioral !== (mode === "reuse" ? "skipped" : "success") ||
+    behavioral !==
+      (mode === "reuse" || mode === "tooling" ? "skipped" : "success") ||
     validation !== expected[0] ||
     world !== expected[1] ||
     packaging.length !== 3 ||

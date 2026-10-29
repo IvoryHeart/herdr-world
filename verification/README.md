@@ -100,7 +100,10 @@ required diagnostic control) when a change touches `verification/`, `quint/`,
 `tools/quint/` or a `coverage.json` owner, and otherwise leaves verification to
 CI. `bun run check:delivery` runs every repository check and the gate locally.
 Model, adapter, contract, tooling and consumer changes cannot use the documentation
-shortcut. Ordinary docs still require behavioral CI; metadata-only exact-head reuse
+shortcut. The owner-approved agent-tooling allowlist in
+[the CI guide](../docs/ci-pipelines.md#scope-and-scheduling) skips this dependency;
+application, verification and gate-policy paths cannot qualify. Full CI and
+ordinary docs still require behavioral CI; metadata-only exact-head reuse
 requires a prior successful full Delivery checks result that includes this dependency.
 Failure, missing evidence and cancellation block delivery. No existing integration,
 browser, scheduler, persistence or supported-platform check is replaced.

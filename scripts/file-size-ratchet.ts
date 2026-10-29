@@ -152,10 +152,11 @@ if (import.meta.main) {
       readFileSync(EXCEPTIONS, "utf8"),
       EXCEPTIONS,
     );
-    // CI checks out one commit: compare with main's tip when there is no merge base.
+    // Match CI's proposed-merge baseline, including ceilings lowered since
+    // this branch forked. The merge base can silently allow a restored ceiling.
     const baseRef =
       process.argv[2] ??
-      git(["merge-base", "HEAD", "origin/main"])?.trim() ??
+      git(["rev-parse", "--verify", "origin/main^{commit}"])?.trim() ??
       (mustGit([
         "fetch",
         "--quiet",

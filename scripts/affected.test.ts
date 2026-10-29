@@ -99,9 +99,8 @@ describe("scoped pre-push selection", () => {
   });
 
   test("data files run the tests that read them by name", () => {
-    expect(run([".github/workflows/ci.yml"])).toMatchObject({
-      unit: ["scripts/release.test.ts"],
-    });
+    // Pipeline policy can change which checks run, so it needs the full gate.
+    expect(run([".github/workflows/ci.yml"])).toMatchObject({ full: true });
     expect(run(["CHANGELOG.md"])).toMatchObject({
       unit: ["scripts/release.test.ts"],
     });
