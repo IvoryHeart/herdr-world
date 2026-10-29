@@ -1,4 +1,10 @@
 import type { GroupOp } from "../../../../shared/groupOps";
+
+import type {
+  AppearanceFields,
+  AppearanceTarget,
+  AppearanceRecords,
+} from "../../../../shared/appearance";
 import { useSyncExternalStore } from "react";
 import {
   bridge,
@@ -78,6 +84,7 @@ export type BoardString = {
 export type DeskCell = { col: number; row: number };
 export type DeskPin = { cell: DeskCell | null };
 export type BoardDocument = {
+  appearance?: AppearanceRecords;
   version: 1;
   revision: number;
   layout: {
@@ -221,16 +228,31 @@ export class BoardDocumentStore {
    * local document with the service's and returns its message.
    */
   patch(ops: BoardOp[], revision?: number): Promise<string | null> {
+    return this.write("world.board.patch", {
+      ops,
+      ...(revision === undefined ? {} : { revision }),
+    });
+  }
+  appearance(
+    target: AppearanceTarget & { connection_generation: number },
+    fields: AppearanceFields,
+  ): Promise<string | null> {
+    return this.write("world.appearance.patch", { ...target, fields });
+  }
+  private write(
+    method: string,
+    params: Record<string, unknown>,
+  ): Promise<string | null> {
     const run = this.queue.then(async () => {
       try {
-        const result = (await this.client.call("world.board.patch", {
-          ops,
-          ...(revision === undefined ? {} : { revision }),
-        })) as {
+        const result = (await this.client.call(method, params)) as {
           document?: unknown;
           conflict?: string;
         };
-        if (isDocument(result?.document))
+        if (
+          isDocument(result?.document) &&
+          result.document.revision >= (this.state.document?.revision ?? -1)
+        )
           this.set({
             document: result.document,
             error: result.conflict ?? null,

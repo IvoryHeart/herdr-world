@@ -271,8 +271,10 @@ retired generation is refused before reading another runtime; the existing
 their layout, last-room, rollback and uncertain-step rules. Source colours are
 captured at queue entry.
 
-Board following stays after the serialized move, outside the move queue, as in
-the original RPC implementation. Successful moves follow confirmed replacement
+Native movement and appearance/Board reconciliation finish in the same queue
+slot, matching the shared appearance contract. Both RPC and CLI capture
+colour intent at admission and read the latest fields after asynchronous probes,
+so operator edits survive native close cleanup and movement. Successful moves follow confirmed replacement
 IDs; failed moves reconcile only observed terminal witnesses. Unknown locations
 are not guessed or retried. Board-follow errors are reported separately while
 the real move outcome is preserved. RPC keeps transport replies and synchronous
@@ -486,7 +488,11 @@ withdraws. A waiting CLI returns on answer, dismissal or withdrawal. Closed
 questions are retained and trimmed together. New verified asks carry their
 runtime, terminal, workspace and session identity into reception and
 notification targets; an unverified ask carries them, still marked
-unverified, only when exactly one local Herdr has the pane it claims. Asks
+unverified, only when exactly one local Herdr has the pane it claims and every
+other candidate local Herdr explicitly reports `pane_not_found`. A timeout,
+unavailable or unsupported host, or a malformed pane reply, leaves that ask in
+the question list without a reception or notification target. Remote hosts do
+not participate in this local placement check. Asks
 from agents also carry Herdr's agent name (`agent.get`). World announces newly
 observed asks once, and excludes closed asks from every open-question
 projection. Behind a reverse proxy on

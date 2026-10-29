@@ -23,3 +23,4 @@
 - Keep Group Add, Edit and Roles drafts after conflicting edits, require explicit
   review before resubmission, and refuse replaced or ambiguously named agent selections.
 - Keep reviewed Room/Desk moves valid across incidental status, focus and revision changes.
+- Preserve live appearance edits when RPC or CLI moves a desk.

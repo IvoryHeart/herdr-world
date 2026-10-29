@@ -1,3 +1,4 @@
+import { appearanceFor } from "../../../shared/appearance";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -107,7 +108,12 @@ const inPane = (shell: number): CallerProcess[] => [
 ];
 
 function setup(
-  options: { stale?: boolean; hosts?: CliHost[]; ids?: string[] } = {},
+  options: {
+    stale?: boolean;
+    hosts?: CliHost[];
+    ids?: string[];
+    observe?: () => void;
+  } = {},
 ) {
   const board = new BoardStore(join(root, "board.json"));
   const ledger = new WorldLedger(join(root, "ledger.json"), {
@@ -120,7 +126,11 @@ function setup(
     ledger,
     hosts: () => options.hosts ?? [host()],
     defaultConnectionId: () => "studio",
-    snapshot: async () => snapshot(options.stale, options.ids),
+    snapshot: async () => {
+      const result = snapshot(options.stale, options.ids);
+      options.observe?.();
+      return result;
+    },
     publishBoard: () => (published.board += 1),
     publishLedger: (_revision, asks) => {
       published.ledger += 1;
@@ -228,6 +238,105 @@ describe("caller identity", () => {
 });
 
 describe("Board and colour changes", () => {
+  test("failed ledger persistence restores the previous colour and appearance binding", async () => {
+    const { board, ledger, run } = setup();
+    const target = {
+      connection_id: "studio",
+      kind: "tab" as const,
+      native_id: "w1:t1",
+      color_key: "studio:w1:t1",
+      witness: ["old-terminal"],
+    };
+    board.patch([
+      {
+        op: "appearance.set",
+        target,
+        fields: { color: "pink", status: "Previous occupant" },
+      },
+    ]);
+    const before = board.get();
+    ledger.update = () => {
+      throw new Error("Synthetic ledger write failure");
+    };
+    expect(
+      await run("colour set", { target: "me", colour: "teal" }),
+    ).toMatchObject({ ok: false });
+    expect(board.get().appearance).toEqual(before.appearance);
+    expect(board.get().layout.colors).toEqual(before.layout.colors);
+  });
+
+  test("colour observation from a retired host cannot authorize a binding", async () => {
+    const options: { hosts: CliHost[]; observe?: () => void } = {
+      hosts: [host()],
+    };
+    options.observe = () => {
+      options.hosts = [];
+    };
+    const { board, run } = setup(options);
+    expect(
+      await run(
+        "colour set",
+        { target: "tab:w1:t1", colour: "pink" },
+        null,
+        null,
+      ),
+    ).toMatchObject({ ok: false, code: "unavailable" });
+    expect(board.get().revision).toBe(0);
+  });
+
+  test("CLI colour editing binds the current occupant and undo never restores an old occupant's colour", async () => {
+    const { board, ledger, run } = setup();
+    const target = {
+      connection_id: "studio",
+      kind: "tab" as const,
+      native_id: "w1:t1",
+      color_key: "studio:w1:t1",
+      witness: ["old-terminal"],
+    };
+    board.patch([
+      {
+        op: "appearance.set",
+        target,
+        fields: { color: "pink", status: "Previous occupant" },
+      },
+    ]);
+    expect(
+      await run("colour set", { target: "me", colour: "teal" }),
+    ).toMatchObject({ ok: true });
+    expect(
+      appearanceFor(board.get().appearance, { ...target, witness: ["term_a"] })
+        ?.status,
+    ).toBeUndefined();
+    expect(
+      appearanceFor(board.get().appearance, { ...target, witness: ["term_a"] }),
+    ).not.toBeNull();
+    await run("undo", { id: ledger.get().changes[0]!.id });
+    expect(board.get().layout.colors[target.color_key]).toBeUndefined();
+  });
+  test("an older colour undo cannot erase a replacement occupant's equal-colour edit", async () => {
+    const { board, ledger, run } = setup();
+    await run("colour set", { target: "me", colour: "teal" });
+    const old = ledger.get().changes[0]!.id;
+    board.patch([
+      {
+        op: "appearance.set",
+        target: {
+          connection_id: "studio",
+          kind: "tab",
+          native_id: "w1:t1",
+          color_key: "studio:w1:t1",
+          witness: ["replacement-terminal"],
+        },
+        fields: { color: "teal" },
+      },
+    ]);
+    expect(await run("undo", { id: old })).toMatchObject({
+      ok: false,
+      code: "refused",
+    });
+    expect(board.get().layout.colors["studio:w1:t1"]).toBe("teal");
+  });
+
   test("colour set and reset write the tab's key, recorded and undoable", async () => {
     const { board, ledger, published, run } = setup();
     const set = await run("colour set", { target: "me", colour: "teal" });
@@ -529,6 +638,88 @@ describe("questions and results", () => {
     });
   });
 
+  for (const failure of [
+    "timeout",
+    "unavailable",
+    "unsupported",
+    "misleading-error",
+    "malformed",
+    "wrong-pane",
+    "missing-terminal",
+  ])
+    for (const unknownFirst of [false, true])
+      test(`an unverified ask remains unplaced with a matching host and ${failure}; unknown first=${unknownFirst}`, async () => {
+        const uncertain = naming({
+          connection_id: "second",
+          call: async () => {
+            if (failure === "misleading-error")
+              throw new Error("unavailable: previous pane_not_found response");
+            if (failure === "malformed") return { pane: null };
+            if (failure === "wrong-pane")
+              return { pane: { ...PANES[0], pane_id: "w9:p9" } };
+            if (failure === "missing-terminal")
+              return { pane: { pane_id: "w1:p1" } };
+            throw new Error(
+              failure === "unsupported" ? "method_not_found" : failure,
+            );
+          },
+        });
+        const candidates = unknownFirst
+          ? [uncertain, naming()]
+          : [naming(), uncertain];
+        const { run, ledger } = setup({ hosts: candidates });
+        const asked = await run("ask", { question: "Where?" }, "w1:p1", null);
+        expect(asked).toMatchObject({ ok: true, actor: { verified: false } });
+        expect(
+          ledger.ask((resultOf(asked) as { id: string }).id)?.actor,
+        ).toEqual({
+          label: "unverified w1:p1",
+          verified: false,
+          pane_id: "w1:p1",
+        });
+      });
+
+  test("a malformed sole-local pane reply cannot place an unverified ask", async () => {
+    for (const pane of [
+      { ...PANES[0], pane_id: "w9:p9" },
+      { pane_id: "w1:p1" },
+      [],
+    ]) {
+      const { run, ledger } = setup({
+        hosts: [host({ call: async () => ({ pane }) })],
+      });
+      const asked = await run("ask", { question: "Where?" }, "w1:p1", null);
+      expect(ledger.ask((resultOf(asked) as { id: string }).id)?.actor).toEqual(
+        { label: "unverified w1:p1", verified: false, pane_id: "w1:p1" },
+      );
+    }
+  });
+
+  for (const remote of [false, true])
+    test(`confirmed absence permits unique local placement; other host remote=${remote}`, async () => {
+      let reads = 0;
+      const absent = naming({
+        connection_id: "second",
+        local: !remote,
+        call: async () => {
+          reads++;
+          throw new Error(remote ? "timeout" : "pane_not_found: no such pane");
+        },
+      });
+      const { run, ledger } = setup({ hosts: [naming(), absent] });
+      const asked = await run("ask", { question: "Where?" }, "w1:p1", null);
+      expect(
+        ledger.ask((resultOf(asked) as { id: string }).id)?.actor,
+      ).toMatchObject({
+        verified: false,
+        connection_id: "studio",
+        connection_generation: 2,
+        terminal_id: "term_a",
+        name: "dispatch",
+      });
+      expect(reads).toBe(remote ? 0 : 1);
+    });
+
   test("the owner dismisses without answering: waits end and a keyed cause stays closed until withdrawn", async () => {
     const { run, ledger } = setup();
     const request = {
@@ -588,8 +779,9 @@ describe("questions and results", () => {
     process.env.HERDR_WORLD_LEDGER_PATH = path;
     try {
       const lines: string[] = [];
+      const board = new BoardStore(join(root, "board.json"));
       const service = createWorldCliService({
-        board: new BoardStore(join(root, "board.json")),
+        board: () => board,
         connections: () => ({
           list: () => [],
           readyRuntimeLease: () => null,

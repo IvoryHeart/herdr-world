@@ -120,8 +120,10 @@ queue admission, unchanged rollback/uncertain-step behavior, and Board following
 only from confirmed or positively observed topology. `town-move.test.ts` uses
 the actual RPC adapter and native move functions to check the injected shared
 queue, a retired queued generation, known partial-failure reconciliation,
-unknown topology without retry/anchor guessing, and the original ordering of
-Board following outside the move queue. Existing `desk-move.test.ts` retains
+unknown topology without retry/anchor guessing, and the shared appearance
+contract's reconciliation before the next queued move starts. This supersedes
+the pre-appearance extraction's outside-queue following order.
+Existing `desk-move.test.ts` retains
 the full native move/rollback fixtures. The fixture was moved unchanged to a
 shared test helper. These controlled promise schedules and actual transformations
 are direct bounded adapter evidence, not a general temporal progress proof.
@@ -150,11 +152,14 @@ paths accept status/focus/revision-only changes; changed occupants and missing
 destinations still refuse before a native move. Known partial
 failure reconciles Board anchors from observed terminals; lost replies with
 unreadable topology return Unknown without retry. `town-move.test.ts` retains
-queue-versus-Board-follow ordering checks, while native desk/pane tests retain
+move-and-document serialization checks, while native desk/pane tests retain
 rollback, last-room consent and uncertain-step contracts. Actual native move
 regressions add spawn claims and explicit colours after the preview: the moved
 desk keeps its explicit choice or retains parent inheritance without saving a
-new default override. Source roll-up tests
+new default override.
+A delayed-probe regression changes colour and status during a post-move probe;
+CLI movement preserves both latest fields at the witnessed destination, using
+the same appearance reconciliation as RPC. Source roll-up tests
 distinguish current, stale and unknown work so unavailable counts cannot claim
 a confirmed limit warning.
 
@@ -224,24 +229,6 @@ at all eight actual viewports. Final batch verification and review remain delive
 acceptance. This adds a projection consumer, not
 a new membership, ordering or recovery protocol, so direct consumer evidence is
 appropriate alongside the existing Summary and panel tests.
-
-### Mobile Board Work controls (Q43)
-
-The control policy comes from the owner/PM/design ruling: Work remains first and
-labelled, note strings retain their own action (including zero), and overflow
-removes Notes before Fit and zoom without wrapping. Direct finite tests cover
-every available width from 128 to 800 for phone/desktop and zero/nonzero counts,
-retaining each action exactly once. Production uses actual measured control
-widths on resize and font/count changes, outside the frame/physics loop. The real
-Board browser consumer sets and asserts actual 320/360/390/430/1440 CSS-pixel
-viewports through Chrome device metrics (window-size alone clamps at 500), with
-focus emulation for native note blur, and checks reduced motion:
-label/order/touch height, one-row bounds, Work opening Pull requests, zero-count
-empty tray and a detached string's distinct tray action. Existing Board tests
-retain Tidy/undo and note reattachment. This is a presentation projection over
-existing callbacks, not a new movement/authority protocol. Five-view screenshots
-and the full batch gate remain delivery acceptance; the owner's private mobile
-image and authenticated PR-list contents are not public verification fixtures.
 
 ### Mobile Board Work controls (Q43)
 
@@ -524,7 +511,12 @@ Placed, named and dismissed asks (#493) stay on the same ledger. A caller the
 service cannot verify keeps an unverified actor, no cause keys and the shared
 allowance; the service records its claimed pane's connection, runtime, terminal
 and session only when exactly one local Herdr has that pane, so remote, unknown
-and ambiguous claims stay in the question list. Owner dismissal is a closed
+and ambiguous claims stay in the question list. Every competing local read must
+explicitly prove absence: actual CLI regressions cover a match plus timeout,
+unavailability, unsupported method or malformed reply in both host orders, a
+malformed sole-local reply, confirmed absence, and exclusion of unknown remote
+hosts. The caller stays unverified and retains the shared allowance and cause-key
+restrictions. Owner dismissal is a closed
 state beside answer and withdrawal: service, CLI and watcher cases check that
 waits end, answers are refused, a keyed repeat returns it until the asker
 withdraws, and the watcher does not re-ask a dismissed cause. The service asks
@@ -547,3 +539,73 @@ existing shared model retains quiet backlog loading and one announcement per new
 ask; the existing notification-policy consumers retain runtime/session authority.
 These are direct JavaScript/module and browser consumers, with no abstract-model
 claim about arbitrary import graphs or live external runtimes.
+
+### Captured Chat prompt choices and text destinations (Q25)
+
+The allowed transition is a checked, current prompt selecting its own choice,
+then the same pane/session exposing that choice's empty editor before text is
+submitted. A replaced question, session, agent or terminal, a missing editor,
+already-active native editor, existing native draft, invalid text and concurrent answer to that pane must
+receive no text. Selection can already have happened when the editor check
+fails; the refusal says so. Input text does not acquire command authority.
+
+`pending-prompt-captured.test.ts` uses sanitized real Codex 0.164.0 and Claude
+Code 2.1.312 screens captured in an isolated Herdr 0.9.5 session. It checks
+approval hints, question dialogs without hints, logical-key dispatch rather than
+pasted digits, complete-frame admission,
+wrapped descriptions, inline editor selection and preservation of native drafts,
+including real inline/plan drafts after their cursor moves away. The captured
+empty and multiline composers check the complete frame, not only its first row.
+`prompt-answer.test.ts` drives the real parser and answer implementation across
+inline answer, plan feedback and discussion transitions, including invalid RPC
+text, replacement races, duplicate in-flight submissions and unchanged-screen
+receipts, screen-read state/title/status races, placeholder-prefix drafts and
+post-write discussion progress. The prompt operation leaves status and sequence
+unchanged in the harness; a subsequent bounded wait supplies asynchronous
+working evidence or a completed idle/done turn with two sequence advances.
+Timeouts without evidence, a single idle/done sequence advance and replacement
+owners remain unconfirmed without resending. Existing `conversation-answer.test.ts` retains its complete original
+prompt/session/state admission and acknowledgement matrix after extraction of
+that implementation into `prompt-answer.ts`.
+
+`promptAnswers.test.ts` uses real Chrome at desktop and phone widths to check
+selection without dispatch, exact typed text, editable-digit isolation, disabled
+in-flight controls and draft retirement when the question or owning host changes.
+The full Chat component also verifies that text reaches its answer RPC and that
+the returned literal text appears in its receipt, and that post-selection
+refusals survive question replacement or disappearance without crossing owner
+scopes. The native
+captures verify the external protocol itself; fixtures and controlled transition
+cases test forbidden states that cannot safely be induced against live user work.
+These direct parser, state-transition and browser checks add evidence beyond the
+maintained runtime-lease models; those models do not encode harness screen strings
+or inline editor semantics. No new model or broader native-platform claim is made.
+Herdr still has no atomic conditional input, so a change after the last check
+remains outside the guarantee. A successful input write alone never proves the
+answer was accepted.
+
+## Shared terminal appearance
+
+[The appearance consumer contract](contracts/shared-appearance.md) derives
+admission, continuity, field-preservation and native-name failure properties from
+the approved tab-only scope. A direct 64-case handler matrix, real store reopen
+and move/migration tests, delayed-acknowledgement consumer and two isolated Chrome
+profiles cover the actual service and UI compositions. The existing runtime
+lease model is reused through its captured-currentness consumer obligation;
+no additional abstract model substitutes for the actual native read boundaries.
+The browser fixture's native responses/event stream are synthetic. Existing
+transport, current-generation and window/handoff consumers remain mandatory,
+and neither arbitrary upstream atomicity nor authenticated principals is claimed.
+
+The shared-appearance review regressions additionally drive the actual Spaces
+window adapter and mobile app bar, refusing draft retargeting after a pane move.
+Real handler/store tests cover lost move replies after native close cleanup,
+launch on a reused tab, complete-current absence pruning, held-read edit races,
+cached-live topology, response timing, coalesced native reads and historical
+churn beyond the record cap. These are bounded consumer checks;
+unknown or retired observations still provide no deletion authority.
+
+Move-colour schedules include explicit edits and resets both before and after
+native close cleanup. Closed-tab colour/pin tests interleave unrelated writes at
+both native absence reads, require fresh checks after revision conflicts, preserve
+a replacement tab, and cover runtime retirement and the three-attempt bound.

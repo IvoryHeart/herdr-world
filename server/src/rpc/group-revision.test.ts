@@ -60,3 +60,53 @@ test("browser Group confirmations bind the reviewed Board revision through the r
   expect(client.get().document!.revision).toBe(board.get().revision);
   expect(published).toEqual([1]);
 });
+
+test("revision-bound Group and qualified appearance writes share the browser queue", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "group-appearance-queue-"));
+  directories.push(directory);
+  const board = new BoardStore(join(directory, "board.json"));
+  const held = Promise.withResolvers<unknown>();
+  const calls: { method: string; params?: Record<string, unknown> }[] = [];
+  const client = new BoardDocumentStore({
+    onControl: () => () => {},
+    onStatus: () => () => {},
+    call: async (method, params) => {
+      if (method === "world.board.get") return board.get();
+      calls.push({ method, params });
+      return method === "world.board.patch"
+        ? held.promise
+        : { document: board.get() };
+    },
+  });
+  await client.refresh();
+  const group = client.patch(
+    [{ op: "group.create", id: "chat", kind: "pod", name: "Chat" }],
+    0,
+  );
+  const target = {
+    connection_id: "connection-a",
+    connection_generation: 1,
+    kind: "tab" as const,
+    native_id: "tab-1",
+    witness: ["terminal-1"],
+    color_key: "connection-a:tab-1",
+  };
+  const appearance = client.appearance(target, { status: "Ready" });
+  await Promise.resolve();
+  expect(calls).toHaveLength(1);
+  expect(calls[0]).toMatchObject({
+    method: "world.board.patch",
+    params: { revision: 0 },
+  });
+  held.resolve({
+    document: board.patch([
+      { op: "group.create", id: "chat", kind: "pod", name: "Chat" },
+    ]),
+  });
+  expect(await group).toBeNull();
+  expect(await appearance).toBeNull();
+  expect(calls[1]).toEqual({
+    method: "world.appearance.patch",
+    params: { ...target, fields: { status: "Ready" } },
+  });
+});

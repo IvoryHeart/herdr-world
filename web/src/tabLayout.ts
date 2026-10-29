@@ -92,3 +92,72 @@ export function provisionalTabLayout(
     splits: [],
   };
 }
+
+type LayoutRect = PaneLayout["area"];
+type LayoutSplit = PaneLayout["splits"][number];
+
+/**
+ * A split's place in Herdr's tree from its id, split_<index>_<path>: the
+ * path is root, or its first (0) and second (1) sides from the root, so
+ * "split_2_10" is the root's second side, then that split's first side. The
+ * index is only the split's place in Herdr's list.
+ */
+function splitPath(split: LayoutSplit): string | null {
+  const match = /^split_\d+_(root|[01]+)$/.exec(split.id);
+  if (!match) return null;
+  return match[1] === "root" ? "" : match[1]!;
+}
+
+/**
+ * Herdr sizes a tab that no client shows at a few cells (10×1), so a pane can
+ * be 0 cells tall. Rebuild that geometry from the split tree, which keeps each
+ * split's ratio, so every pane keeps its share. Herdr names each split by its
+ * path from the root and lists the panes in the tree's left-to-right order.
+ * Returns null when a pane still has no size: there is nothing to draw it in.
+ */
+export function drawableTabLayout(layout: PaneLayout): PaneLayout | null {
+  const sized = (rect: LayoutRect) => rect.width > 0 && rect.height > 0;
+  if (layout.panes.every((pane) => sized(pane.rect))) return layout;
+  const byPath = new Map<string, LayoutSplit>();
+  for (const split of layout.splits) {
+    const path = splitPath(split);
+    if (path === null || byPath.has(path)) return null;
+    byPath.set(path, split);
+  }
+  const panes: LayoutRect[] = [];
+  const splits = new Map<string, LayoutRect>();
+  const place = (path: string, box: LayoutRect) => {
+    const split = byPath.get(path);
+    if (!split) {
+      panes.push(box);
+      return;
+    }
+    splits.set(split.id, box);
+    const across = split.direction === "right";
+    const first = across
+      ? { ...box, width: box.width * split.ratio }
+      : { ...box, height: box.height * split.ratio };
+    const second = across
+      ? { ...box, x: box.x + first.width, width: box.width - first.width }
+      : { ...box, y: box.y + first.height, height: box.height - first.height };
+    place(`${path}0`, first);
+    place(`${path}1`, second);
+  };
+  const area = { x: 0, y: 0, width: 1000, height: 1000 };
+  place("", area);
+  // Every split must hang off the root, and each leaf is one listed pane.
+  if (splits.size !== byPath.size || panes.length !== layout.panes.length)
+    return null;
+  return {
+    ...layout,
+    area,
+    panes: layout.panes.map((pane, index) => ({
+      ...pane,
+      rect: panes[index]!,
+    })),
+    splits: layout.splits.map((split) => ({
+      ...split,
+      rect: splits.get(split.id)!,
+    })),
+  };
+}

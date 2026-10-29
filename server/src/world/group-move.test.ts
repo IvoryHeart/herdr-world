@@ -11,6 +11,7 @@ import { fakeHerdr } from "./testing/deskMoveFixture";
 import { CliError } from "./world-cli-errors";
 import { createWorldCliService } from "./world-cli-service";
 import type { WorldSnapshotResult } from "./snapshot";
+import { appearanceFor } from "../../../shared/appearance";
 
 const directories: string[] = [];
 afterEach(() =>
@@ -100,6 +101,57 @@ async function plan(state: ReturnType<typeof setup>) {
   expect(result.status).toBe("preview");
   return (result as { plan: string }).plan;
 }
+
+test("CLI movement carries the latest appearance fields through post-move probes", async () => {
+  const state = setup();
+  const terminal = state.request.terminal_id;
+  const target = {
+    connection_id: state.context.connectionId,
+    kind: "tab" as const,
+    native_id: state.source.tab,
+    color_key: `${state.context.connectionId}:${state.source.tab}`,
+    witness: state.source.ids.map((id) => state.herdr.panes.get(id)!.terminal),
+  };
+  state.board.patch([
+    {
+      op: "appearance.set",
+      target,
+      fields: { status: "Before move", color: "pink" },
+    },
+  ]);
+  const expected_plan = await plan(state);
+  const call = state.context.call;
+  let updated = false;
+  state.context.call = async (method, params) => {
+    if (method === "workspace.list" && state.herdr.moves() > 0 && !updated) {
+      updated = true;
+      state.board.patch([
+        {
+          op: "appearance.set",
+          target,
+          fields: { status: "Edited during move", color: "teal" },
+        },
+      ]);
+    }
+    return call(method, params);
+  };
+  const result = await runGroupMove(state.context, {
+    ...state.request,
+    preview: false,
+    expected_plan,
+  });
+  expect(result).toMatchObject({ status: "moved" });
+  if (result.status !== "moved") throw new Error("Expected the move to finish");
+  expect(updated).toBe(true);
+  const document = state.board.get();
+  const saved = appearanceFor(document.appearance, {
+    ...target,
+    native_id: result.tab_id,
+    witness: [terminal],
+  });
+  expect(saved?.status).toBe("Edited during move");
+  expect(document.layout.colors[saved!.color_key!]).toBe("teal");
+});
 
 test("room preview names the entire desk, then delegates the real move", async () => {
   const state = setup();
@@ -413,8 +465,12 @@ test("the actual CLI service injects the RPC-owned queue and exact lease", async
     ],
   } as unknown as WorldSnapshotResult;
   const selected: string[] = [];
+  let boardReads = 0;
   const service = createWorldCliService({
-    board: state.board,
+    board: () => {
+      boardReads++;
+      return state.board;
+    },
     townMoveQueues: state.context.queues,
     publishBoard: state.context.publishBoard,
     broadcast: () => {},
@@ -435,6 +491,7 @@ test("the actual CLI service injects the RPC-owned queue and exact lease", async
       },
     }),
   });
+  expect(boardReads).toBe(0);
   const send = async (params: object) =>
     (
       await service.http(

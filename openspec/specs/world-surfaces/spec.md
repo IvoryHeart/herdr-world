@@ -1484,7 +1484,9 @@ NOT use cause keys or withdraw, and it SHALL share the unverified allowance.
 When exactly one local Herdr has the pane it claims, the service SHALL record
 that pane's connection, runtime, terminal, workspace and agent session with the
 ask, so World places it as it places a verified ask; otherwise the ask SHALL
-remain in the question list only. The service SHALL record Herdr's name for an
+remain in the question list only. Every other candidate local runtime SHALL
+explicitly report that pane absent; a failed, unsupported or malformed read SHALL
+leave the ask unplaced. The service SHALL record Herdr's name for an
 asking agent. The question list SHALL name each asker as Town names its desk,
 else by that agent name or its pane, mark an unverified asker once, and offer
 Open agent for each placed ask, including every ask from one pane, opening the
@@ -1796,6 +1798,70 @@ existing double-Escape stop SHALL retain their existing scope.
 - **WHEN** a bound Chat sends a slash command and the harness switches sessions
 - **THEN** its slim receipt remains **sent, not checked** without pausing normal sends
   as a misdelivery; no command effect is inferred
+
+### Requirement: Chat answers captured prompt choices and text options
+
+Chat SHALL recognize complete Codex approval menus with key hints and complete
+Codex question dialogs with their question counter, numbered choices, one cursor
+and notes/submit/interrupt footer. Question choices SHALL use their digit shortcut
+without requiring an approval key hint. A waiting Codex pane detected by Herdr
+without turn hooks SHALL use the same bound-conversation admission; an inferred
+or guessed conversation SHALL NOT gain answer authority from a recognized screen.
+
+Claude Code's question and plan menus SHALL expose their recognized text options.
+Selecting one in Chat SHALL open a single-line reply field without sending input.
+Submitting SHALL check the original prompt and session, select its native option,
+wait for the corresponding empty inline editor or discussion composer, and check
+the destination again before submitting text. Missing, stale, replaced or
+unrecognized editors SHALL receive no text. A native editor that was already
+active before Chat selected its option SHALL remain in the Terminal, including
+when it appears empty; it SHALL receive neither menu digits nor text. Text SHALL be nonempty, at most 4000 characters
+and free of terminal control characters. An existing native draft SHALL remain
+in the Terminal after its cursor moves away, including text resembling a
+placeholder or another option. Discussion dispatch SHALL require a complete empty
+composer with no continuation rows and unchanged session, terminal, revision,
+state sequence, title and status across its screen read; discussion text SHALL NOT invoke the
+composer's slash, shell or memory commands. Answers to one pane SHALL NOT
+interleave inside a conversation source.
+
+Digits within the reply input SHALL remain text. A replacement prompt or admitted
+connection, runtime, pane or session SHALL reset its option and draft. An answer receipt SHALL claim acknowledgement only from the
+same session moving on, not merely from successfully writing input. After queuing
+a discussion reply, Chat SHALL wait at most three seconds for working evidence,
+then recheck the same owner. Discussion acknowledgement SHALL require a newer
+working sequence, or an idle/done sequence at least two changes newer than the
+final destination check, covering a completed turn. An unchanged sequence or an
+idle/done sequence only one change newer SHALL remain unconfirmed.
+A post-selection refusal SHALL remain visible across
+question reloads in the same owner scope until the next answer attempt, even
+when the question disappears. Herdr's lack
+of conditional input remains a documented gap between the last check and dispatch.
+
+#### Scenario: Codex waits without hooks
+
+- **WHEN** Herdr reports a bound Codex pane blocked on a complete question dialog
+  whose choices have descriptions but no key hints
+- **THEN** Chat shows those choices and sends the selected digit to that pane
+
+#### Scenario: Submit a Claude text option
+
+- **WHEN** a user chooses a text option and submits a reply from Chat
+- **THEN** Chat verifies the native editor in the same question and session before
+  sending the reply and Enter, or verifies the discussion composer before using
+  the normal agent prompt operation
+
+#### Scenario: The destination changes after selecting a text option
+
+- **WHEN** the native editor cannot be verified or its pane, session or question changes
+- **THEN** Chat sends no text, explains that the option may already be selected,
+  and directs the user to the Terminal
+
+#### Scenario: Discussion progress follows prompt queuing asynchronously
+
+- **WHEN** the prompt operation queues a discussion reply before Herdr reports
+  its new turn, and progress arrives during the bounded wait
+- **THEN** Chat acknowledges only same-owner working progress or a completed
+  turn with at least two sequence advances, and otherwise leaves it unconfirmed
 
 ### Requirement: Town peeks show recent chatter and take replies
 
@@ -2333,6 +2399,76 @@ automatically.
   creates all Pods atomically or none, and refuses existing Pod names
 - **AND** later Markdown export is a rendering; no two-way file synchronization exists
 
+### Requirement: Shared terminal appearance
+
+World SHALL provide a common appearance editor from terminal title bars on desktop
+and phone, reachable from Board, Town, Desk and Spaces. It SHALL edit the native
+tab name, the tab's shared palette colour, a plain-text status message of at most
+160 characters and a fixed-choice avatar for the selected pane. Workspace icons
+and workspace status messages SHALL remain outside this editor. Split panes SHALL
+share tab name/colour/status and retain independently chosen avatars. Reset SHALL
+remove only the chosen override and restore existing colour/profile defaults.
+
+Native names SHALL be changed through the exact connection's current Herdr
+`tab.rename`. The header SHALL display the native tab name; World SHALL NOT keep
+a shadow name. Failed saves SHALL remain visible and SHALL NOT be reported as
+successful. Native rename and World metadata results SHALL remain distinguishable.
+
+Appearance SHALL be saved in the World service and shared across browsers/views.
+The identity SHALL include immutable connection profile ID, entity kind/native ID
+and terminal-ID continuity evidence. Writes SHALL verify the observed target on
+the captured current runtime and refuse conflicting/reused IDs or retired reads.
+Unavailable hosts SHALL NOT authorize writes, rebind metadata or prove deletion.
+Bound choices SHALL be projected only onto matching current terminal evidence.
+Legacy Board colours SHALL migrate without introducing a second colour authority.
+Complete current evidence that all of a record's terminal witnesses are absent
+SHALL reclaim that record and its colour alias. A read admitted before a newer
+metadata edit SHALL NOT prune that edit. A moving terminal that remains present
+SHALL retain its choices, including after a lost move acknowledgement.
+An unsaved editor draft SHALL remain bound to its original native tab and pane;
+moving that pane into another tab SHALL NOT retarget the draft.
+
+Board SHALL show avatar/status on the tab card, Town SHALL use the avatar for the
+agent and show the status near its desk, Spaces SHALL show the avatar and include
+the status in its tab tooltip, and Desk SHALL show the same appearance. Manual
+status/colour SHALL NOT alter runtime state badges, their meanings or colours.
+Avatar choices SHALL use existing bounded assets and SHALL NOT accept uploads.
+
+#### Scenario: Two browsers share one tab's choices
+
+- **WHEN** an operator changes colour and status in a terminal header
+- **THEN** both browsers and all views show the saved values without changing runtime status
+
+#### Scenario: Split panes keep independent avatars
+
+- **WHEN** two panes of one tab choose different avatars and the tab is renamed
+- **THEN** both headers show the same native tab name and colour/status while each pane retains its own avatar
+
+#### Scenario: Reused IDs cannot inherit bound appearance
+
+- **WHEN** a current tab or pane reuses a native ID with no continuing witnessed terminal
+- **THEN** the previous occupant's bound appearance is not projected and a stale editor cannot overwrite the new occupant
+
+#### Scenario: Runtime retires during validation
+
+- **WHEN** the runtime retires while validating an appearance edit
+- **THEN** no document mutation or native rename is authorized by that retired read
+
+#### Scenario: Reset restores existing defaults
+
+- **WHEN** an operator resets a pane avatar or a tab colour/status override
+- **THEN** only that field is removed, restoring its profile/identity or existing colour inheritance and leaving the other pane's choices intact
+
+#### Scenario: Save fails
+
+- **WHEN** native rename or metadata persistence fails
+- **THEN** the editor exposes that operation's failure and does not show a successful shadow name or discard unsaved input
+
+#### Scenario: Stale observation is not deletion
+
+- **WHEN** a host becomes unavailable or observation is incomplete
+- **THEN** saved metadata remains retained without rebinding or becoming actionable
+
 ### Requirement: Terminal colour
 
 Every Herdr tab SHALL have one terminal colour from a fixed palette, shown as
@@ -2345,9 +2481,10 @@ tab ID, so it is the same on every device and after reloads. A colour chosen in 
 SHALL be saved by the World service, keyed by connection and Herdr tab ID (as
 Board keys a tab card, qualified when the tab ID is also a workspace ID),
 SHALL appear in every view and on every device, and MAY be reset; reset is
-offered only for a tab's own colour, not one inherited from its workspace. The
-key carries no terminal witness, so after a Herdr restart a colour follows
-whichever tab holds that ID. A tab World moves to another workspace SHALL keep
+offered only for a tab's own colour, not one inherited from its workspace. The saved choice SHALL carry terminal-ID continuity evidence after migration.
+A conflicting current occupant of a reused tab ID SHALL NOT inherit it. Legacy
+choices without evidence SHALL be adopted only from a complete current
+observation; migration cannot reconstruct their earlier identity. A tab World moves to another workspace SHALL keep
 the colour it showed, whether chosen, inherited or default, saved as its own
 colour, except a colour inherited from its spawning tab, which follows its
 terminals and is not saved. When World observes
@@ -2401,7 +2538,6 @@ own colour MAY be reset.
 
 - **WHEN** the user moves a desk whose tab shows its default colour to another room
 - **THEN** the tab, under its new Herdr tab ID, shows the same colour in every view
-
 
 ### Requirement: Agent interest
 

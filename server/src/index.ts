@@ -502,7 +502,7 @@ const publishBoardChanged = revisionPublisher(
 
 /** The agent CLI (world-cli-service.ts). */
 const worldCli = createWorldCliService({
-  board: { get: () => board().get(), patch: (ops) => board().patch(ops) },
+  board,
   connections: () => connectionManager,
   snapshots: () => worldSnapshots,
   sources: async () => worldSources.current(),

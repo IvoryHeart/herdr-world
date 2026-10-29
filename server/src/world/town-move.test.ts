@@ -180,7 +180,7 @@ test("partial failure reconciles only observed terminal witnesses and preserves 
   expect(state.followErrors).toEqual([]);
 });
 
-test("post-move Board following remains outside the per-connection move queue", async () => {
+test("post-move appearance and Board following finish before the next queued move", async () => {
   const state = setup();
   const following = Promise.withResolvers<void>();
   const release = Promise.withResolvers<void>();
@@ -199,12 +199,20 @@ test("post-move Board following remains outside the per-connection move queue", 
   });
   await following.promise;
   let nextStarted = false;
-  await state.context.queues.get(state.context.connectionId)!(async () => {
-    nextStarted = true;
-  });
-  expect(nextStarted).toBe(true);
-  release.resolve();
+  const next = state.context.queues.get(state.context.connectionId)!(
+    async () => {
+      nextStarted = true;
+    },
+  );
+  try {
+    await Promise.resolve();
+    expect(nextStarted).toBe(false);
+  } finally {
+    release.resolve();
+  }
   expect(await first).toMatchObject({ status: "moved" });
+  await next;
+  expect(nextStarted).toBe(true);
 });
 
 test("unknown partial topology is returned without retrying or guessing anchors", async () => {

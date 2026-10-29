@@ -11,9 +11,14 @@ import {
   moveFollowOps,
   reconcileOps,
   type BoardDocument,
-  type BoardOp,
+  type BoardStore,
 } from "./board-store";
 import { moveWorkspaceIds } from "./move-workspace-ids";
+import {
+  appearanceForMove,
+  capturedMoveColors,
+  reconciledAppearanceOps,
+} from "./appearance-move";
 
 export type TownMoveRequest =
   | (Omit<DeskMoveRequest, "isCurrent"> & {
@@ -29,10 +34,7 @@ export type TownMoveContext = {
   isCurrent(): boolean;
   /** The service-owned map shared by every adapter. */
   queues: Map<string, ReturnType<typeof createMoveQueue>>;
-  board: {
-    get(): BoardDocument;
-    patch(ops: readonly BoardOp[]): BoardDocument;
-  };
+  board: Pick<BoardStore, "get" | "patch" | "captureColorChanges">;
   publishBoard(revision: number): void;
   onFollowError(error: unknown): void;
 };
@@ -51,9 +53,7 @@ export async function executeTownMove(
     queue = createMoveQueue();
     context.queues.set(context.connectionId, queue);
   }
-  let colorsBefore!: BoardDocument["layout"]["colors"];
-  let request: TownMoveRequest;
-  const result = await queue(async (): Promise<MoveOutcome> => {
+  return queue(async (): Promise<MoveOutcome> => {
     if (!context.isCurrent())
       return {
         status: "refused",
@@ -62,49 +62,127 @@ export async function executeTownMove(
       };
     // The move functions reread topology after admission to the queue. Capture
     // colours here too: a preceding move or a close can have changed them.
-    colorsBefore = context.board.get().layout.colors;
+    const before = context.board.get();
+    const colorChanged = context.board.captureColorChanges();
+    const colorsBefore = before.appearance
+      ? appearanceForMove(
+          before,
+          context.connectionId,
+          (
+            (await context.call("pane.list", {})) as {
+              panes: Record<string, unknown>[];
+            }
+          ).panes,
+        ).layout.colors
+      : before.layout.colors;
     const prepared = typeof prepare === "function" ? await prepare() : prepare;
     if ("status" in prepared) return prepared;
-    request = prepared;
+    const request = prepared;
     if (!context.isCurrent())
       return {
         status: "refused",
         reason: "stale",
         message: "The host reconnected. Read Groups again.",
       };
-    return request.kind === "desk"
+    const result = await (request.kind === "desk"
       ? moveDesk(context.call, { ...request, isCurrent: context.isCurrent })
-      : movePane(context.call, { ...request, isCurrent: context.isCurrent });
-  });
-
-  // Preserve the existing ordering: following observed Board anchors is after
-  // move serialization, and must not hold the queue through workspace reads.
-  if (result.status === "moved" || result.status === "failed") {
-    try {
-      const ops =
-        result.status === "moved"
-          ? moveFollowOps(
-              context.board.get(),
-              context.connectionId,
-              request!.kind === "desk" ? request!.tab_id : null,
-              result,
-              request!.kind === "desk"
-                ? {
-                    before: colorsBefore,
-                    workspaceIds: await moveWorkspaceIds(context.call, result),
-                    inherited: request!.inherited_color === true,
-                  }
-                : undefined,
-            )
-          : reconcileOps(
-              context.board.get(),
-              context.connectionId,
-              result.topology ?? [],
-            );
-      if (ops.length) context.publishBoard(context.board.patch(ops).revision);
-    } catch (error) {
-      context.onFollowError(error);
+      : movePane(context.call, { ...request, isCurrent: context.isCurrent }));
+    // Shared appearance requires native movement and its latest
+    // document reconciliation to finish in this slot, for both RPC and CLI.
+    if (result.status === "moved" || result.status === "failed") {
+      try {
+        await followMove(context, request, result, colorsBefore, colorChanged);
+      } catch (error) {
+        context.onFollowError(error);
+      }
     }
-  }
-  return result;
+    return result;
+  });
+}
+
+async function followMove(
+  context: TownMoveContext,
+  request: TownMoveRequest,
+  result: Extract<MoveOutcome, { status: "moved" | "failed" }>,
+  colorsBefore: BoardDocument["layout"]["colors"],
+  colorChanged: ReturnType<BoardStore["captureColorChanges"]>,
+) {
+  const movedTab = request.kind === "desk" ? request.tab_id : null;
+  const workspaceIds =
+    result.status === "moved" && movedTab
+      ? await moveWorkspaceIds(context.call, result)
+      : result.status === "failed" && context.board.get().appearance
+        ? new Set(
+            (
+              (await context.call("workspace.list", {})) as {
+                workspaces: { workspace_id: string }[];
+              }
+            ).workspaces.map((workspace) => workspace.workspace_id),
+          )
+        : new Set<string>();
+  const observed =
+    result.status === "moved" && context.board.get().appearance
+      ? (
+          (await context.call("pane.list", {})) as {
+            panes: Record<string, unknown>[];
+          }
+        ).panes
+      : [];
+  if (!context.isCurrent()) throw new Error("Move runtime changed");
+  // Read after every asynchronous native probe so concurrent field/string edits survive.
+  const current = context.board.get();
+  const following =
+    result.status === "moved" && current.appearance
+      ? appearanceForMove(
+          current,
+          context.connectionId,
+          observed,
+          movedTab,
+          result,
+        )
+      : current;
+  const chosen = capturedMoveColors(
+    colorsBefore,
+    current,
+    context.connectionId,
+    colorChanged,
+  );
+  const carried =
+    result.status === "moved" && current.appearance
+      ? appearanceForMove(
+          { ...current, layout: { ...current.layout, colors: chosen } },
+          context.connectionId,
+          observed,
+          movedTab,
+          result,
+        ).layout.colors
+      : chosen;
+  const ops =
+    result.status === "moved"
+      ? moveFollowOps(
+          following,
+          context.connectionId,
+          movedTab,
+          result,
+          movedTab
+            ? {
+                before: carried,
+                workspaceIds,
+                inherited:
+                  request.kind === "desk" && request.inherited_color === true,
+              }
+            : undefined,
+        )
+      : reconcileOps(current, context.connectionId, result.topology ?? []);
+  if (result.status === "failed" && current.appearance)
+    ops.push(
+      ...reconciledAppearanceOps(
+        { ...current, layout: { ...current.layout, colors: chosen } },
+        context.connectionId,
+        result.topology ?? [],
+        workspaceIds,
+      ),
+    );
+  if (!context.isCurrent()) throw new Error("Move runtime changed");
+  if (ops.length) context.publishBoard(context.board.patch(ops).revision);
 }

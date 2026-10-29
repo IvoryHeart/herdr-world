@@ -1,0 +1,123 @@
+.terminal-appearance-editor {
+  width: min(340px, calc(100vw / var(--ui-scale, 1) - 24px));
+  padding: 12px;
+  max-height: min(
+    640px,
+    calc(var(--radix-popover-content-available-height, 100dvh) - 24px)
+  );
+  overflow: auto;
+}
+.terminal-appearance-editor fieldset {
+  display: grid;
+  gap: 12px;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.terminal-appearance-editor legend {
+  font-weight: 600;
+  padding: 0 0 8px;
+}
+.terminal-appearance-editor form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.terminal-appearance-editor label {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  font-size: 12px;
+}
+.terminal-appearance-editor input {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--input-bg);
+  color: inherit;
+}
+.terminal-appearance-editor button {
+  min-height: 32px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: inherit;
+  background: var(--input-bg);
+}
+.terminal-appearance-editor button[aria-pressed="true"] {
+  outline: 2px solid var(--text);
+}
+.terminal-appearance-editor button:disabled {
+  opacity: 0.5;
+}
+.appearance-avatars {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  margin: 6px 0;
+}
+.appearance-avatars button {
+  display: grid;
+  justify-items: center;
+  font-size: 10px;
+}
+.appearance-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  flex: 0 0 auto;
+  width: 20px;
+  height: 24px;
+  overflow: hidden;
+}
+.appearance-avatar canvas {
+  width: 14px;
+  height: 20px;
+  image-rendering: pixelated;
+}
+.appearance-status {
+  font-size: 11px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.board-tab > .appearance-status {
+  padding: 2px 10px;
+}
+.mobile-appearance-button {
+  border: 0;
+  padding: 4px;
+  background: var(--tab-color);
+  border-radius: 6px;
+  min-width: 30px;
+  min-height: 32px;
+}
+
+.town-appearance-status {
+  position: absolute;
+  top: 70px;
+  left: 0;
+  display: block;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: #242833;
+  color: #f4f1e9;
+  border: 1px solid #5b6577;
+  border-radius: 5px;
+  padding: 2px 5px;
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.workspace-inspector-agent-settings:has(.terminal-appearance-editor) {
+  width: auto;
+  max-width: calc(100vw - 24px);
+}
