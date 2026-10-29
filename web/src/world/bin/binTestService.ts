@@ -15,10 +15,16 @@ export function fakeBinService(countdownMs = 30_000) {
   let next = 1;
   const calls: { method: string; params: Record<string, unknown> }[] = [];
   const controls = new Set<(control: BridgeControlMsg) => void>();
+  /** Each entry's deadline while the bin runs, as the service keeps it. */
+  const deadlines = new Map<string, number>();
+  const left = (entry: BinEntry) =>
+    paused
+      ? entry.remaining_ms
+      : Math.max(0, (deadlines.get(entry.id) ?? 0) - performance.now());
   const state = (): BinState => ({
     revision,
     paused,
-    entries: entries.map((entry) => ({ ...entry })),
+    entries: entries.map((entry) => ({ ...entry, remaining_ms: left(entry) })),
     outcomes: [...outcomes],
   });
   const changed = () => {
@@ -59,15 +65,22 @@ export function fakeBinService(countdownMs = 30_000) {
       calls.push({ method, params });
       if (method === "world.bin.add") {
         const join = entries.find((entry) => entry.id === params.join);
-        entries.push({
+        const entry: BinEntry = {
           ...(params as unknown as BinEntry),
           id: `bin-${next++}`,
           duration_ms: countdownMs,
-          remaining_ms: join?.remaining_ms ?? countdownMs,
-        });
-      } else if (method === "world.bin.pause") paused = true;
-      else if (method === "world.bin.resume") paused = false;
-      else if (method === "world.bin.restore")
+          remaining_ms: join ? left(join) : countdownMs,
+        };
+        entries.push(entry);
+        deadlines.set(entry.id, performance.now() + entry.remaining_ms);
+      } else if (method === "world.bin.pause") {
+        for (const entry of entries) entry.remaining_ms = left(entry);
+        paused = true;
+      } else if (method === "world.bin.resume") {
+        paused = false;
+        for (const entry of entries)
+          deadlines.set(entry.id, performance.now() + entry.remaining_ms);
+      } else if (method === "world.bin.restore")
         entries = entries.filter((entry) => entry.id !== params.id);
       else if (method === "world.bin.close_now") {
         for (const entry of [...entries])

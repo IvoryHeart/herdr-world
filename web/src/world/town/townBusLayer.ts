@@ -144,12 +144,17 @@ export class TownBusLayer implements TownOverlay {
     return this.status;
   }
 
+  /**
+   * Stop waking the renderer. The container stays usable (React may mount the
+   * same layer again); the renderer's own teardown destroys what it holds.
+   */
   dispose() {
     if (this.nextChange) clearTimeout(this.nextChange);
-    this.container.destroy({ children: true });
+    this.nextChange = null;
   }
 
   update(camera: TownCamera, look: (key: string) => TownLook) {
+    if (this.stopSprite.destroyed) return false;
     const bin = this.bin;
     const now = this.heldAt ?? performance.now();
     const z = camera.z;

@@ -65,10 +65,11 @@ export async function checkTownBus(
     "the bus never pulled in and took the agent aboard",
   );
   const timetable = host.querySelector<HTMLElement>(".town-bus-timetable")!;
-  check(
-    !timetable.hidden &&
+  await waitFor(
+    () =>
+      !timetable.hidden &&
       /Bus boarding · \d+s/.test(timetable.textContent ?? ""),
-    `the timetable reads "${timetable.textContent}"`,
+    () => `the timetable reads "${timetable.textContent}"`,
   );
 
   // Press and hold the bus: it stops, opens its doors and pauses the bin.
