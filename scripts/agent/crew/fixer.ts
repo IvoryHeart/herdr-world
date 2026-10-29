@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { shortSha } from "../../../shared/pullRequests";
 import { loadConfig } from "../gate";
 import type { Run } from "../gate/observe";
-import type { Deps } from "./deps";
+import { type Deps, shellLine } from "./deps";
 import { launchRun } from "./launch";
 import { type CrewSettings, loadSettings } from "./plan";
 import { type Options, prMeta, runSession } from "./review";
@@ -72,6 +72,11 @@ Rules:
 - To reach the owner, use \`herdr-world ask "QUESTION" --owner-only --wait\` from your own pane; no other channel.
 - Never merge, approve, use --admin, add labels, prompt or message another agent, or post local paths, hosts, usernames or session links.
 - Finish by printing only the comment's URL. Then stay in this session: the owner may ask you about your fix here; answer, but take no further action unless asked.`;
+}
+
+/** The shell line a fixer runs when it is done; the checkout path may hold spaces. */
+export function doneCommand(script: string, runId: number) {
+  return shellLine(["bun", script, "fixed", "--run", String(runId)]);
 }
 
 /**
@@ -233,7 +238,7 @@ export async function fix(options: Options, dir: string, deps: Deps) {
       url: meta.url,
       branch: meta.headRefName,
       steps,
-      done: `bun ${join(import.meta.dir, "..", "crew.ts")} fixed --run ${runId}`,
+      done: doneCommand(join(import.meta.dir, "..", "crew.ts"), runId),
     });
     show(
       `fixer for ${author} on #${pr} at ${shortSha(head)} (${model.model}), in the PR's worktree; type here to steer it`,

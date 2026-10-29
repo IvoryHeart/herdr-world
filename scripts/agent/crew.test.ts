@@ -34,7 +34,7 @@ import {
   shellLine,
   tabClosed,
 } from "./crew/deps";
-import { finishFixer, fixerPrompt } from "./crew/fixer";
+import { doneCommand, finishFixer, fixerPrompt } from "./crew/fixer";
 import { openChat, runs } from "./crew/review";
 import {
   authorOf,
@@ -3433,6 +3433,10 @@ describe("worker", () => {
     });
     expect(brief).toContain(
       "When you are done, pushed or not, run `bun /x/crew.ts fixed --run 3`",
+    );
+    // A checkout path with spaces stays one argument.
+    expect(doneCommand("/x/my repo/scripts/agent/crew.ts", 3)).toBe(
+      "bun '/x/my repo/scripts/agent/crew.ts' fixed --run 3",
     );
     expect(brief).toContain(
       "- [crew -> towncx] ACT #7 fix @aaaaaaa: findings from rev2",
