@@ -443,7 +443,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   list icon and mobile tab strip are hidden. The outer shell coordinates terminal sizing with the keyboard viewport.
 - A Spaces tab window shows that tab's Herdr split panes. An Inspector in a visual
   view also shows the selected tab's split panes in one window; selecting a sibling
-  pane keeps the same Inspector and updates its pane-specific resources. When the
+  pane keeps the same Inspector and updates its pane-specific resources. A
+  multi-pane tab's window title starts with a drawing of its split (the shown
+  pane in the accent colour, a pane that needs you in yellow); one tap opens a
+  map of Herdr's real layout and tapping a pane switches Chat, Terminal and the
+  rest of the window to it without moving Herdr's own focus. When the
   Spaces Inspector is on Terminal, **Focus tab window** goes to the active tab
   without attaching a second terminal.
 - A failed host may retain its last observed topology as visibly stale,

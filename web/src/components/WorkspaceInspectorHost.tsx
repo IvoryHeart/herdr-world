@@ -145,6 +145,7 @@ export function WorkspaceInspectorHost({
   windowControls,
   terminalColor,
   agentSettings,
+  paneMap,
   onWindowMaximize,
   windowMaximized = false,
   onClose,
@@ -199,6 +200,7 @@ export function WorkspaceInspectorHost({
   /** The terminal's colour: the icon's background, chosen from its settings. */
   terminalColor?: ManagedWindowControls["color"];
   agentSettings?: ReactNode;
+  paneMap?: ReactNode;
   onWindowMaximize?: () => void;
   windowMaximized?: boolean;
   onClose: () => void;
@@ -594,6 +596,7 @@ export function WorkspaceInspectorHost({
             context={agentContext}
             terminalColor={terminalColor}
             agentSettings={agentSettings}
+            paneMap={paneMap}
             location={locationLine(
               <span className="workspace-inspector-where">
                 {agentContext.locationLabel}
