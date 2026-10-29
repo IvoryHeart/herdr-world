@@ -1,12 +1,6 @@
 import type { TurnReceipt } from "./handoffs";
 import type { WorldLeafObject } from "./worldObject";
 
-export function where(leaf: WorldLeafObject) {
-  return [leaf.hostLabel, leaf.spaceLabel, leaf.tabLabel, agentFolder(leaf)]
-    .filter(Boolean)
-    .join(" › ");
-}
-
 /**
  * What the operator recognizes an agent by: the name they gave it, otherwise
  * the harness's own thread title, otherwise the harness.
@@ -33,6 +27,12 @@ export function agentFolder(leaf: WorldLeafObject) {
   return parts[parts.length - 1] || cwd;
 }
 
+export function where(leaf: WorldLeafObject) {
+  return [leaf.hostLabel, leaf.spaceLabel, leaf.tabLabel, agentFolder(leaf)]
+    .filter(Boolean)
+    .join(" › ");
+}
+
 /**
  * Whether an agent matches every word of a search across the things an
  * operator remembers: its name, harness, workspace, tab, folder, request and
@@ -42,6 +42,7 @@ export function matchesQuery(
   leaf: WorldLeafObject,
   receipt: TurnReceipt | null,
   query: string,
+  question = "",
 ) {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
   if (!words.length) return true;
@@ -57,6 +58,7 @@ export function matchesQuery(
     leaf.taskSummary,
     receipt?.ask,
     receipt?.report,
+    question,
   ]
     .filter(Boolean)
     .join("\n")

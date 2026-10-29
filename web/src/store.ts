@@ -1,5 +1,6 @@
 import {
   focusTaskNotification,
+  notificationPaneMatches,
   type NotificationFocusOptions,
 } from "./store/notificationFocus";
 import {
@@ -1467,8 +1468,7 @@ export const store = {
         pane = response?.pane ?? null;
         if (
           !current() ||
-          pane?.pane_id !== target.paneId ||
-          pane.workspace_id !== target.workspaceId ||
+          !notificationPaneMatches(target, pane) ||
           typeof pane.tab_id !== "string"
         )
           return false;

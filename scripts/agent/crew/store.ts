@@ -185,7 +185,8 @@ export function addAction(db: Database, planned: Action, now: number) {
         (key, pr, head, kind, target, text, since, state, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
        ON CONFLICT(key) DO UPDATE SET state = 'pending', attempts = 0,
-         detail = NULL, updated_at = excluded.updated_at
+         detail = CASE WHEN action.target = 'owner' THEN action.detail ELSE NULL END,
+         updated_at = excluded.updated_at
        WHERE action.state = 'superseded'`,
     )
     .run(

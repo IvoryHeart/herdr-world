@@ -1,3 +1,5 @@
+import { bridge } from "../api";
+import { sharedAsksStore, type WorldAsk } from "./worldAsks";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import type { ConnectionClient } from "../api";
@@ -122,6 +124,13 @@ const client = {
   },
 } as unknown as ConnectionClient;
 
+const askLedger = { revision: 0, asks: [] as WorldAsk[] };
+const originalCall = bridge.call.bind(bridge);
+bridge.call = (async (method: string, params?: Record<string, unknown>) =>
+  method === "world.asks.get"
+    ? structuredClone(askLedger)
+    : originalCall(method, params)) as typeof bridge.call;
+
 let revision = 0;
 const deskRecords = new Map<string, DeskRecord>(
   leaves.map((leaf) => {
@@ -140,8 +149,14 @@ const deskRecords = new Map<string, DeskRecord>(
 );
 const deskControls = new Set<(control: BridgeControlMsg) => void>();
 let reviewReply: Promise<void> | undefined;
+const metadataOpens: string[] = [];
 const deskService = {
   async call(method: string, params?: Record<string, unknown>) {
+    if (method === "world.desk.open") {
+      metadataOpens.push(String(params?.terminal_id));
+      if (params?.terminal_id === "asker")
+        throw new Error("Agent metadata requires an agent pane");
+    }
     if (method !== "world.desk.get") {
       const identity = params as unknown as DeskRecord;
       const key = deskKey(identity);
@@ -817,6 +832,79 @@ async function run() {
   );
   releaseSlow();
   await settle(200);
+  const asker = {
+    ...agent("asker", "e"),
+    kind: "terminal",
+    status: "idle",
+    agentSessionFingerprint: undefined,
+    pane: { ...agent("asker", "e").pane, agent: "" },
+  } as WorldLeafObject;
+  askLedger.asks = [
+    {
+      id: "q-desk",
+      at: Date.now(),
+      question: "Which design should I use?",
+      options: [],
+      owner_only: true,
+      actor: {
+        label: "Example asker",
+        verified: true,
+        connection_id: "local",
+        connection_generation: 1,
+        pane_id: asker.pane.pane_id,
+        terminal_id: asker.terminalId,
+        agent_session_fingerprint: asker.agentSessionFingerprint,
+      },
+    },
+  ];
+  askLedger.revision++;
+  await sharedAsksStore().refresh();
+  flushSync(() =>
+    root.render(
+      <DeskBoard
+        key="asks"
+        deskStore={deskStore}
+        world={{ ...world, leaves: [asker] }}
+        client={client}
+        onOpen={async (id) => {
+          opened.push(id);
+        }}
+      />,
+    ),
+  );
+  await settle(300);
+  check(
+    Boolean(
+      document.querySelector('.desk-lane.is-needs [data-world-ask="q-desk"]'),
+    ),
+    "a non-blocked ask shows ? in Desk Needs you",
+  );
+  check(
+    card("asker")?.textContent?.includes("Which design should I use?") === true,
+    "Desk shows the owner's actual question",
+  );
+  card("asker")?.querySelector<HTMLButtonElement>("button.is-primary")?.click();
+  await settle(100);
+  check(
+    opened[opened.length - 1] === "asker",
+    "one action opens the asking agent",
+  );
+  check(
+    !metadataOpens.includes("asker"),
+    "opening an asking shell does not dispatch unsupported agent metadata",
+  );
+  check(
+    !document.querySelector(".desk-error"),
+    "an asking shell opens without an agent-metadata error",
+  );
+  askLedger.asks[0]!.withdrawn = { at: Date.now() };
+  askLedger.revision++;
+  await sharedAsksStore().refresh();
+  await settle(100);
+  check(
+    !document.querySelector('[data-world-ask="q-desk"]'),
+    "withdrawal clears Desk's question mark",
+  );
 }
 
 run()

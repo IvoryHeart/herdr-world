@@ -17,7 +17,9 @@ no browser observed their working phase. Pane rows alone supply the agent harnes
 and session identity; only matching `agent.list` sessions may augment status and
 progress. Shared stop IDs participate in receipt refresh and currency, so late
 reads for a preceding stop cannot enable its successor's review mark. Display
-expiry alone does not invalidate a receipt. Reads use fair bounded admission and
+expiry alone does not invalidate a receipt. Shared Desk metadata belongs to agent
+panes; verified asking shells still appear in Needs you and open their original
+terminal without attempting an agent-metadata mutation. Reads use fair bounded admission and
 independent host queues. Pending reads keep
 their admission across refreshes; queued work coalesces to the latest observation.
 

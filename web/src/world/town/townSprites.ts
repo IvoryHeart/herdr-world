@@ -668,9 +668,14 @@ export function buildTownSprites() {
       R(16, 12, 10, 3, "#fffaf0");
     }),
     bubble: {
-      // A question mark: the agent is asking you something.
+      // An exclamation mark is urgent lifecycle blocking.
       blocked: bubble((R) => {
-        const c = "#e8820c";
+        R(5, 1, 2, 5, "#e8820c");
+        R(5, 8, 2, 1, "#e8820c");
+      }),
+      // A quieter question mark belongs to an open ledger ask.
+      ask: bubble((R) => {
+        const c = "#4f7cc9";
         R(4, 1, 3, 1, c);
         R(3, 2, 1, 2, c);
         R(7, 2, 1, 2, c);

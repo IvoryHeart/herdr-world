@@ -1,3 +1,4 @@
+import { reconcileOwnerAsks } from "./crew/owner-asks";
 import type { Database } from "bun:sqlite";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -372,7 +373,13 @@ function act(
       if (active && active.finishedAt === null)
         stopRun(crew, active.id, -15, now, deps);
     }
-    setAction(crew, waiting.key, "superseded", now);
+    setAction(
+      crew,
+      waiting.key,
+      "superseded",
+      now,
+      waiting.target === "owner" ? waiting.detail : null,
+    );
     say(`#${waiting.pr} superseded ${waiting.kind} ${waiting.target}`);
   }
 
@@ -381,7 +388,13 @@ function act(
   for (const waiting of actionsIn(crew, ["pending"])) {
     const why = parked.get(waiting.pr);
     if (!why) continue;
-    setAction(crew, waiting.key, "superseded", now, why);
+    setAction(
+      crew,
+      waiting.key,
+      "superseded",
+      now,
+      waiting.target === "owner" ? waiting.detail : why,
+    );
     say(`#${waiting.pr} retired ${waiting.kind} ${waiting.target}: ${why}`);
   }
 
@@ -428,6 +441,7 @@ function act(
   const deliverable = (entry: StoredAction) =>
     keys.has(entry.key.split("|")[0]!);
   deliver(crew, settings, live, authors, deliverable, record, context, say);
+  reconcileOwnerAsks(crew, planned, context, say);
 
   // A notice about a seat that still holds keeps the owner's mark on.
   oweHeldNotices(crew, causes, root, parked);
@@ -609,7 +623,11 @@ function deliver(
         if (entry.detail === why) continue;
         setAction(crew, entry.key, "pending", now, why);
         say(`#${entry.pr} waiting for ${name} (${why})`);
-        if (why === "no live seat" || why === "never prompted")
+        if (
+          why === "no live seat" ||
+          why === "never prompted" ||
+          why === "blocked"
+        )
           record(
             notice(
               entry,
@@ -729,40 +747,6 @@ function deliver(
       setAction(crew, entry.key, "pending", now, error, true);
       if (entry.detail !== error) say(`#${entry.pr} comment failed: ${error}`);
     }
-  }
-
-  // Owner notices last, so those raised above go out in this pass. One
-  // Herdr didn't show stays pending and is tried again next pass.
-  for (const entry of pending()) {
-    if (entry.target !== "owner") continue;
-    // A notice about a seat holds only while its step still waits for the
-    // same reason; once the seat takes the prompt or the cause changes, drop it.
-    if (noticeHolds(crew, entry) === false) {
-      setAction(crew, entry.key, "superseded", now);
-      say(`#${entry.pr} dropped notice: its cause has cleared`);
-      continue;
-    }
-    const result = deps.run([
-      "herdr",
-      "notification",
-      "show",
-      entry.kind === "ready"
-        ? `Crew: READY #${entry.pr}`
-        : `Crew: #${entry.pr} needs you`,
-      "--body",
-      entry.text,
-      "--sound",
-      entry.kind === "ready" ? "done" : "request",
-    ]);
-    if (result.code !== 0) {
-      const error = (result.stderr || result.stdout).trim().slice(0, 200);
-      setAction(crew, entry.key, "pending", now, error, true);
-      if (entry.detail !== error)
-        say(`#${entry.pr} notification failed: ${error}`);
-      continue;
-    }
-    setAction(crew, entry.key, "sent", now, null, true);
-    say(`#${entry.pr} told owner: ${entry.text}`);
   }
 }
 

@@ -72,7 +72,7 @@ export function useDeskState(
     });
   };
   const record = async (leaf: WorldLeafObject) => {
-    if (!deskClient(clients, leaf)) return false;
+    if (leaf.kind !== "agent" || !deskClient(clients, leaf)) return false;
     return store.mutate("world.desk.open", deskIdentity(leaf));
   };
   return {

@@ -1,3 +1,5 @@
+import { townReceptionVisitors } from "./townReception";
+import "../worldAsks.css";
 import { TownBuildingSign } from "./TownBuildingSign";
 import { TownBuildingSigns } from "./townBuildingSigns";
 import { ConnectionRecoveryBanner } from "../ConnectionRecoveryBanner";
@@ -210,6 +212,8 @@ export function TownCanvas({
   selectedKey,
   completionSeenKeys,
   summonedKeys = NO_KEYS,
+  askingKeys = NO_KEYS,
+  onActivateAsk,
   quests = NO_QUESTS,
   conversationTargets,
   onSelect,
@@ -260,6 +264,8 @@ export function TownCanvas({
   completionSeenKeys: ReadonlySet<string>;
   /** Agents the user opened, who walk back to their desks. */
   summonedKeys?: ReadonlySet<string>;
+  askingKeys?: ReadonlySet<string>;
+  onActivateAsk?: (nodeId: string) => void;
   /** Quest progress by agent key, marked over each agent's desk. */
   quests?: ReadonlyMap<string, TownQuestMark>;
   conversationTargets: readonly WorldConversationAnchorTarget[];
@@ -427,6 +433,7 @@ export function TownCanvas({
     calm,
     completionSeenKeys,
     summonedKeys,
+    askingKeys,
     quests,
     conversationTargets,
     onSelect,
@@ -447,6 +454,7 @@ export function TownCanvas({
     hover,
     completionSeenKeys,
     summonedKeys,
+    askingKeys,
     quests,
     conversationTargets,
     onSelect,
@@ -689,6 +697,7 @@ export function TownCanvas({
     hoverKey: latest.current.hover,
     completionSeenKeys: latest.current.completionSeenKeys,
     summonedKeys: latest.current.summonedKeys,
+    askingKeys: latest.current.askingKeys,
     openHostKey: null,
     calm: latest.current.calm,
   });
@@ -841,7 +850,7 @@ export function TownCanvas({
   useEffect(() => {
     rendererRef.current?.setState(sceneState());
     scheduleAnchors();
-  }, [selectedKey, hover, completionSeenKeys, summonedKeys, calm]);
+  }, [selectedKey, hover, completionSeenKeys, summonedKeys, askingKeys, calm]);
 
   useEffect(() => {
     scheduleAnchors();
@@ -1479,6 +1488,8 @@ export function TownCanvas({
         <TownTeamsLayer teams={teams} />
         <TownWorldLayer
           foldedActivity={foldedActivity}
+          askingKeys={askingKeys}
+          onActivateAsk={onActivateAsk}
           teams={teams}
           model={model}
           layout={layout}
@@ -1735,6 +1746,8 @@ const TownTeamsLayer = memo(function TownTeamsLayer({
 const TownWorldLayer = memo(function TownWorldLayer({
   model,
   foldedActivity,
+  askingKeys,
+  onActivateAsk,
   layout,
   teams,
   selectedKey,
@@ -1755,6 +1768,8 @@ const TownWorldLayer = memo(function TownWorldLayer({
 }: {
   signs: TownBuildingSigns;
   model: TownModel;
+  askingKeys: ReadonlySet<string>;
+  onActivateAsk?: (nodeId: string) => void;
   foldedActivity: ReadonlyMap<string, TownFoldedActivity>;
   layout: TownLayout;
   teams: TownTeams;
@@ -1780,7 +1795,19 @@ const TownWorldLayer = memo(function TownWorldLayer({
     () => townTargets(model, layout, teams.deskTeams),
     [model, layout, teams.deskTeams],
   );
-  const attention = townAttention(model, blockedSince);
+  const terminalAsksByHost = useMemo(() => {
+    type Device = (typeof model.projection.paneRoster)[number]["device"];
+    const byHost = new Map<string, Device[]>();
+    if (!askingKeys.size) return byHost;
+    for (const { device } of model.projection.paneRoster) {
+      if (device.agentKey || !askingKeys.has(device.nodeId)) continue;
+      const group = byHost.get(device.hostKey) ?? [];
+      group.push(device);
+      byHost.set(device.hostKey, group);
+    }
+    return byHost;
+  }, [model.projection.paneRoster, askingKeys]);
+  const attention = townAttention(model, blockedSince, askingKeys);
   const now = Date.now();
   const [, tick] = useState(0);
   useEffect(() => {
@@ -1812,12 +1839,27 @@ const TownWorldLayer = memo(function TownWorldLayer({
             agent.hostKey === building.hostKey &&
             agent.semanticStatus === "blocked",
         );
-        // Finished agents wait at reception too, after those who need you.
-        const visitors = attention.filter(
+        const questions = attention.filter(
+          (agent) =>
+            agent.hostKey === building.hostKey &&
+            askingKeys.has(agent.key) &&
+            agent.semanticStatus !== "blocked",
+        );
+        const terminalQuestions =
+          terminalAsksByHost.get(building.hostKey) ?? [];
+        const questionCount = questions.length + terminalQuestions.length;
+        // Questions and finished agents wait after urgent blocked agents.
+        const agentVisitors = attention.filter(
           (agent) =>
             agent.hostKey === building.hostKey &&
             (agent.semanticStatus === "blocked" ||
-              agent.semanticStatus === "done"),
+              agent.semanticStatus === "done" ||
+              askingKeys.has(agent.key)),
+        );
+        const visitors = townReceptionVisitors(
+          agentVisitors,
+          terminalQuestions,
+          askingKeys,
         );
         const shown = visitors.slice(0, 6);
         const counts = building.rooms.reduce(
@@ -1858,6 +1900,14 @@ const TownWorldLayer = memo(function TownWorldLayer({
               {queue.length ? (
                 <em aria-label={`${queue.length} need you`}>!{queue.length}</em>
               ) : null}
+              {questionCount ? (
+                <em
+                  className="town-reception-question"
+                  aria-label={`${questionCount} owner questions`}
+                >
+                  ?{questionCount}
+                </em>
+              ) : null}
             </TownBuildingSign>
             <div
               className={`town-reception${queue.length ? " town-reception-busy" : ""}`}
@@ -1891,18 +1941,41 @@ const TownWorldLayer = memo(function TownWorldLayer({
               ) : null}
               {visitors.length ? (
                 <div className="town-reception-queue">
-                  {shown.map((agent) => (
-                    <ReceptionEntry
-                      key={agent.key}
-                      agent={agent}
-                      since={blockedSince.get(agent.key) ?? now}
-                      now={now}
-                      selected={selectedKey === agent.key}
-                      onSelect={onSelect}
-                      onActivate={onActivate}
-                      onHoverEntry={onHoverEntry}
-                    />
-                  ))}
+                  {shown.map((agent) =>
+                    "semanticStatus" in agent ? (
+                      <ReceptionEntry
+                        key={agent.key}
+                        agent={agent}
+                        asking={askingKeys.has(agent.key)}
+                        since={blockedSince.get(agent.key) ?? now}
+                        now={now}
+                        selected={selectedKey === agent.key}
+                        onSelect={onSelect}
+                        onActivate={onActivate}
+                        onHoverEntry={onHoverEntry}
+                      />
+                    ) : (
+                      <button
+                        key={agent.key}
+                        type="button"
+                        className="town-reception-entry"
+                        data-owner-question="true"
+                        data-owner-question-terminal={agent.nodeId}
+                        aria-label={`${agent.displayLabel}, owner question`}
+                        disabled={agent.stale || !agent.canOpenInSpaces}
+                        onClick={() => onActivateAsk?.(agent.nodeId)}
+                      >
+                        <img
+                          src={portrait(agent.key)}
+                          alt=""
+                          width={28}
+                          height={40}
+                        />
+                        <span>{agent.displayLabel}</span>
+                        <small>? Owner wanted</small>
+                      </button>
+                    ),
+                  )}
                   {visitors.length > shown.length ? (
                     <span className="town-reception-more">
                       +{visitors.length - shown.length}
@@ -2415,6 +2488,7 @@ function sameTargetButton(
 
 function ReceptionEntry({
   agent,
+  asking = false,
   since,
   now,
   selected,
@@ -2423,6 +2497,7 @@ function ReceptionEntry({
   onHoverEntry,
 }: {
   agent: OfficeAgent;
+  asking?: boolean;
   since: number;
   now: number;
   selected: boolean;
@@ -2439,16 +2514,19 @@ function ReceptionEntry({
     <button
       ref={ref}
       type="button"
-      className={`town-reception-entry${agent.semanticStatus === "done" ? " town-reception-done" : ""}`}
+      className={`town-reception-entry${!asking && agent.semanticStatus === "done" ? " town-reception-done" : ""}`}
       data-agent-key={agent.key}
+      data-owner-question={asking || undefined}
       disabled={agent.stale || !agent.canOpenInSpaces}
       aria-label={
-        agent.semanticStatus === "done"
-          ? `${agent.displayLabel}, finished`
-          : `${agent.displayLabel}, needs input for ${ago(since, now)}`
+        asking
+          ? `${agent.displayLabel}, owner question`
+          : agent.semanticStatus === "done"
+            ? `${agent.displayLabel}, finished`
+            : `${agent.displayLabel}, needs input for ${ago(since, now)}`
       }
       title={agent.taskSummary ?? agent.displayLabel}
-      onClick={() => onSelect(agent.key)}
+      onClick={() => (asking ? onActivate(agent.key) : onSelect(agent.key))}
       onDoubleClick={() => onActivate(agent.key)}
       onMouseEnter={(event) =>
         onHoverEntry(agent.key, event.currentTarget.getBoundingClientRect())
@@ -2458,7 +2536,11 @@ function ReceptionEntry({
       <img src={portrait(agent.key)} alt="" width={28} height={40} />
       <span>{agent.displayLabel}</span>
       <small>
-        {agent.semanticStatus === "done" ? "done ✓" : ago(since, now)}
+        {asking
+          ? "? Owner wanted"
+          : agent.semanticStatus === "done"
+            ? "done ✓"
+            : ago(since, now)}
       </small>
     </button>
   );
