@@ -68,6 +68,35 @@ export function queueVisibleTabLayoutRead<T>(
   });
 }
 
+type VisibleTabLayoutRead = ReturnType<typeof queueVisibleTabLayoutRead>;
+const sharedVisibleLayoutReads = new Map<
+  string,
+  { needed: Set<() => boolean>; read: VisibleTabLayoutRead }
+>();
+
+/**
+ * One queued read per tab at a time: a window's terminal and its title map
+ * observe the same tab, so the second joins the first instead of reading
+ * again. The read runs while any of them still needs it.
+ */
+export function shareVisibleTabLayoutRead(
+  key: string,
+  read: () => Promise<unknown>,
+  stillNeeded: () => boolean,
+): VisibleTabLayoutRead {
+  const current = sharedVisibleLayoutReads.get(key);
+  if (current) {
+    current.needed.add(stillNeeded);
+    return current.read;
+  }
+  const needed = new Set([stillNeeded]);
+  const shared = queueVisibleTabLayoutRead(read, () =>
+    [...needed].some((check) => check()),
+  ).finally(() => sharedVisibleLayoutReads.delete(key));
+  sharedVisibleLayoutReads.set(key, { needed, read: shared });
+  return shared;
+}
+
 /** Reject a layout after a lease change, pane move, split or close. */
 export function tabLayoutMatchesSnapshot(
   layout: unknown,
@@ -245,13 +274,14 @@ export function useVisibleTabLayoutState(
       tabId,
     };
     let cancelled = false;
-    void queueVisibleTabLayoutRead(
+    void shareVisibleTabLayoutRead(
+      tabIdentityKey(requestIdentity),
       () => client.call("pane.layout", { pane_id: pane.pane_id }),
       () => !cancelled && client.isCurrent(),
     )
       .then((read) => {
         if (read.skipped || cancelled || !client.isCurrent()) return;
-        const result = read.value;
+        const result = read.value as { layout?: unknown } | null;
         const next = (result?.layout ?? null) as PaneLayout | null;
         if (!tabLayoutMatchesSnapshot(next, requestIdentity, store.get())) {
           setError("Tab layout is unavailable.");
@@ -287,7 +317,14 @@ export function useVisibleTabLayoutState(
     snapshot.panes,
     activeLayout,
   ]);
-  return { layout, error: layout ? null : error };
+  return {
+    layout,
+    error: layout
+      ? null
+      : observedLayout
+        ? "Tab layout is unavailable."
+        : error,
+  };
 }
 
 /** Layout-only convenience for an Inspector with its own loading UI. */

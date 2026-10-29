@@ -94,69 +94,62 @@ export function provisionalTabLayout(
 }
 
 type LayoutRect = PaneLayout["area"];
-type LayoutNode =
-  | { kind: "pane"; item: PaneLayout["panes"][number] }
-  | { kind: "split"; item: PaneLayout["splits"][number] };
+type LayoutSplit = PaneLayout["splits"][number];
+
+/** A split's place in Herdr's tree: "split_2_10" is root → after → before. */
+function splitPath(split: LayoutSplit): string | null {
+  const match = /^split_(\d+)_(root|[01]+)$/.exec(split.id);
+  if (!match) return null;
+  const path = match[2] === "root" ? "" : match[2]!;
+  return Number(match[1]) === path.length ? path : null;
+}
 
 /**
  * Herdr sizes a tab that no client shows at a few cells (10×1), so a pane can
  * be 0 cells tall. Rebuild that geometry from the split tree, which keeps each
- * split's ratio, so every pane keeps its share. Herdr lists a split before the
- * splits inside it; a side starts at its split's start or after it. Geometry
- * that cannot be rebuilt is returned unchanged.
+ * split's ratio, so every pane keeps its share. Herdr names each split by its
+ * path from the root and lists the panes in the tree's left-to-right order.
+ * Returns null when a pane still has no size: there is nothing to draw it in.
  */
-export function drawableTabLayout(layout: PaneLayout): PaneLayout {
-  if (layout.panes.every((pane) => pane.rect.width > 0 && pane.rect.height > 0))
-    return layout;
-  const panes = new Map<string, LayoutRect>();
+export function drawableTabLayout(layout: PaneLayout): PaneLayout | null {
+  const sized = (rect: LayoutRect) => rect.width > 0 && rect.height > 0;
+  if (layout.panes.every((pane) => sized(pane.rect))) return layout;
+  const byPath = new Map<string, LayoutSplit>();
+  for (const split of layout.splits) {
+    const path = splitPath(split);
+    if (path === null || byPath.has(path)) return null;
+    byPath.set(path, split);
+  }
+  const panes: LayoutRect[] = [];
   const splits = new Map<string, LayoutRect>();
-  const place = (members: LayoutNode[], box: LayoutRect): boolean => {
-    const only = members.length === 1 ? members[0] : undefined;
-    if (only?.kind === "pane") {
-      panes.set(only.item.pane_id, box);
-      return true;
+  const place = (path: string, box: LayoutRect) => {
+    const split = byPath.get(path);
+    if (!split) {
+      panes.push(box);
+      return;
     }
-    const index = members.findIndex((member) => member.kind === "split");
-    if (index < 0) return false;
-    const split = members[index]!.item as PaneLayout["splits"][number];
     splits.set(split.id, box);
     const across = split.direction === "right";
-    const start = (rect: LayoutRect) => (across ? rect.x : rect.y);
-    const rest = members.filter((_, other) => other !== index);
-    const before = rest.filter(
-      (member) => start(member.item.rect) <= start(split.rect),
-    );
-    const after = rest.filter(
-      (member) => start(member.item.rect) > start(split.rect),
-    );
     const first = across
       ? { ...box, width: box.width * split.ratio }
       : { ...box, height: box.height * split.ratio };
     const second = across
       ? { ...box, x: box.x + first.width, width: box.width - first.width }
       : { ...box, y: box.y + first.height, height: box.height - first.height };
-    return (
-      before.length > 0 &&
-      after.length > 0 &&
-      place(before, first) &&
-      place(after, second)
-    );
+    place(`${path}0`, first);
+    place(`${path}1`, second);
   };
   const area = { x: 0, y: 0, width: 1000, height: 1000 };
-  const placed = place(
-    [
-      ...layout.splits.map((item) => ({ kind: "split" as const, item })),
-      ...layout.panes.map((item) => ({ kind: "pane" as const, item })),
-    ],
-    area,
-  );
-  if (!placed || panes.size !== layout.panes.length) return layout;
+  place("", area);
+  // Every split must hang off the root, and each leaf is one listed pane.
+  if (splits.size !== byPath.size || panes.length !== layout.panes.length)
+    return null;
   return {
     ...layout,
     area,
-    panes: layout.panes.map((pane) => ({
+    panes: layout.panes.map((pane, index) => ({
       ...pane,
-      rect: panes.get(pane.pane_id)!,
+      rect: panes[index]!,
     })),
     splits: layout.splits.map((split) => ({
       ...split,
