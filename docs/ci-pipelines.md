@@ -97,8 +97,11 @@ a separate runner, retaining quiet admission and its single allowed retry.
 
 Three verification runners partition the complete accepted model inventory. Each
 runs the maintained focused workers inside the enforced 4 GiB/no-swap/two-CPU
-envelope with the existing OOM/cancellation and diagnostic controls. Their shard
-artifacts cannot establish canonical success. The aggregate downloads all group
+envelope with the existing OOM/cancellation and diagnostic controls. The
+payload and supervisor occupy separate delegated cgroups: the memory limit and
+peak cover the whole payload, while the surviving supervisor retains accounting
+after payload-wide OOM kills. The service-wide CPU quota covers both siblings.
+Shard artifacts cannot establish canonical success. The aggregate downloads all group
 artifacts, selects each newest attempt, requires complete model coverage and
 current source/tool identity, and verifies every group's retained accounting.
 It publishes one canonical manifest including the three resource records. The

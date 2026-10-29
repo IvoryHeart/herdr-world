@@ -199,6 +199,7 @@ and produces an aggregate requiring all isolated model-case manifests; see the
 Maintained models and replay adapters live in top-level [`quint/`](../quint/README.md).
 Protected delivery includes the [behavioral workflow](../.github/workflows/behavioral-verification.yml),
 [local delivery command](../package.json), [aggregate resource runner](../scripts/verification-resources.ts)
+with its [OOM-isolated supervisor](../scripts/verification-resource-supervisor.ts)
 and [hard Linux envelope](../tools/quint/resources.json); final approval remains separate.
 
 Evidence publication uses [the shared acceptance boundary](../scripts/verification-publication.ts).

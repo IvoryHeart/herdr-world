@@ -114,10 +114,16 @@ Each Linux CI group executes in an isolated cgroup with hard 4 GiB memory,
 zero swap and two CPUs of quota. The explicit local `verification:resources`
 command retains one such envelope; ordinary local canonical execution is unchanged.
 The CI aggregate preserves all three per-runner accounting records rather than
-claiming a single global peak across separate machines. The service subtree's `memory.peak`, enforced
+claiming a single global peak across separate machines. The payload subtree's `memory.peak`, enforced
 limits and OOM events are retained, bound to the canonical manifest. An actual
 64 MiB over-budget control must be OOM-killed and an actual cancellation control
 must drain its worker and descendant before the complete run is accepted.
+The service delegates sibling `payload` and `supervisor` cgroups. The hard memory
+limit, zero swap and measured peak cover the payload and all its descendants;
+the supervisor sits outside that memory envelope so payload-wide OOM kills
+cannot destroy its exit notification or accounting. Both siblings share the
+service's two-CPU quota. The live OOM regression checks their separate membership,
+requires a real OOM kill and retains accounting after the whole payload dies.
 `bun run verification:resources` exercises this through a local systemd user manager;
 CI uses `--system` and its existing passwordless sudo. Missing cgroup accounting or
 unsupported tooling fails rather than silently skipping limits. This establishes

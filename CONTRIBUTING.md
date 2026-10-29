@@ -108,6 +108,10 @@ CI verification groups are partial evidence. The aggregate requires every accept
 model exactly once, the current complete source inventory/revision, matching tool
 identities and successful resource accounting for all three groups. Each runner
 retains the 4 GiB/no-swap/two-CPU limit and its OOM/cancellation controls. The
+bounded payload has a sibling supervisor in the delegated service subtree, so
+even a payload-wide OOM kill preserves exit reporting and resource accounting.
+The supervisor is outside the payload's memory limit and measured peak; the
+service-wide CPU quota also bounds supervision. The
 standalone local `verification:resources` command retains one single-machine
 envelope; ordinary local canonical commands remain unchanged. The aggregate retains each runner's
 accounting. Reruns select the newest artifact attempt for each group and cannot

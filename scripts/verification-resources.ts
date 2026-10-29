@@ -211,7 +211,7 @@ export async function runConstrainedVerification(
             ? [`--uid=${process.getuid!()}`, `--gid=${process.getgid!()}`]
             : []),
           "--property=MemoryAccounting=yes",
-          `--property=MemoryMax=${options.memoryMaxBytes}`,
+          "--property=Delegate=memory cpu",
           `--property=StandardOutput=append:${resolve(directory, "worker.log")}`,
           `--property=StandardError=append:${resolve(directory, "worker.log")}`,
           "--property=MemorySwapMax=0",
@@ -225,10 +225,9 @@ export async function runConstrainedVerification(
           // reported as a timeout.
           `--property=RuntimeMaxSec=${Math.ceil(options.timeoutMs / 1000) + 60}`,
           "--",
-          "/bin/sh",
-          "-c",
-          '"$@"; result=$?; printf "%s\\n" "$result" > "$RESOURCE_EXIT_FILE.tmp"; mv "$RESOURCE_EXIT_FILE.tmp" "$RESOURCE_EXIT_FILE"; exec sleep infinity',
-          "resource-supervisor",
+          process.execPath,
+          resolve(import.meta.dir, "verification-resource-supervisor.ts"),
+          String(options.memoryMaxBytes),
           ...command,
         ],
         {
@@ -253,7 +252,7 @@ export async function runConstrainedVerification(
     } catch (error) {
       failure = error;
     }
-    // Read the service's own subtree, not the runner's lifetime-wide memory peak.
+    // Read the bounded payload, retained by its separately housed supervisor.
     const group = await control("show", "--property=ControlGroup", "--value");
     if (
       !/^\/[a-zA-Z0-9_.@/-]+$/.test(group) ||
@@ -274,13 +273,14 @@ export async function runConstrainedVerification(
         }${output ? `\nUnit output:\n${output}` : ""}`,
       );
     }
-    const base = resolve("/sys/fs/cgroup", `.${group}`);
-    const [peak, events, maximum, swap, cpu] = await Promise.all([
+    const base = resolve("/sys/fs/cgroup", `.${group}`, "payload");
+    const [peak, events, maximum, swap, cpu, oomGroup] = await Promise.all([
       readFile(resolve(base, "memory.peak"), "utf8"),
       readFile(resolve(base, "memory.events"), "utf8"),
       readFile(resolve(base, "memory.max"), "utf8"),
       readFile(resolve(base, "memory.swap.max"), "utf8"),
       readFile(resolve(base, "cpu.max"), "utf8"),
+      readFile(resolve(base, "memory.oom.group"), "utf8"),
     ]);
     evidence = parseCgroupResources(peak, events, maximum);
     assert.equal(
@@ -289,6 +289,7 @@ export async function runConstrainedVerification(
       "Requested memory limit not enforced",
     );
     assert.equal(swap.trim(), "0", "Swap limit not enforced");
+    assert.equal(oomGroup.trim(), "1", "Payload-wide OOM kill not enforced");
     const [quota, period] = cpu.trim().split(/\s+/).map(Number);
     assert.equal(
       (quota! / period!) * 100,
@@ -357,6 +358,52 @@ export async function runConstrainedVerification(
   signal.throwIfAborted();
   assert(evidence, "Missing constrained resource accounting");
   return { code, failure, evidence, directory };
+}
+
+/** Live regression: an entire over-budget payload dies while its observer survives. */
+export async function verifyResourceOOMIsolation(
+  root: string,
+  system: boolean,
+) {
+  const result = await runConstrainedVerification(
+    root,
+    system,
+    [
+      process.execPath,
+      "-e",
+      `const fs = require("node:fs");
+const membership = (pid) => fs.readFileSync("/proc/" + pid + "/cgroup", "utf8").trim();
+fs.writeFileSync(process.env.RESOURCE_EXIT_FILE + ".membership", JSON.stringify({
+  payload: membership("self"), supervisor: membership(process.ppid)
+}));
+const blocks = [];
+setInterval(() => blocks.push(Buffer.alloc(16 * 1024 * 1024, 1)), 10);`,
+    ],
+    {
+      memoryMaxBytes: 64 * 1024 * 1024,
+      cpuQuotaPercent: 200,
+      timeoutMs: 10000,
+    },
+    new AbortController().signal,
+    async (phase, { directory }) => {
+      if (phase !== "exited") return;
+      const groups = JSON.parse(
+        await readFile(resolve(directory, "exit-code.txt.membership"), "utf8"),
+      );
+      assert.notEqual(
+        groups.payload,
+        groups.supervisor,
+        "Supervisor shares the OOM-limited payload group",
+      );
+      assert(groups.payload.endsWith("/payload"));
+      assert(groups.supervisor.endsWith("/supervisor"));
+    },
+  );
+  if (result.failure) throw result.failure;
+  assert(
+    result.evidence.oomKills > 0 && result.code !== 0,
+    "Memory limit control did not kill the over-budget process",
+  );
 }
 
 /** Live regression: a child that outlives its deadline is still measured and reported as a timeout. */
@@ -456,29 +503,7 @@ if (import.meta.main) {
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);
   try {
-    // Prove the hard limit can actually kill an over-budget descendant before
-    // accepting a successful constrained canonical run.
-    const control = await runConstrainedVerification(
-      root,
-      system,
-      [
-        process.execPath,
-        "-e",
-        "const blocks=[]; setInterval(()=>blocks.push(Buffer.alloc(16*1024*1024,1)),10)",
-      ],
-      {
-        memoryMaxBytes: 64 * 1024 * 1024,
-        cpuQuotaPercent: 200,
-        timeoutMs: 10000,
-      },
-      cancellation.signal,
-    );
-    if (control.failure) throw control.failure;
-    assert(
-      control.evidence.oomKills > 0 && control.code !== 0,
-      "Memory limit control did not kill the over-budget process",
-    );
-    await verifyResourceCancellation(root, system);
+    // Real-cgroup regressions include the required over-budget OOM control.
     const regressions = await runVerificationProcess(
       [process.execPath, "test", "scripts/verification-resources.live.test.ts"],
       {
@@ -494,8 +519,9 @@ if (import.meta.main) {
     assert.equal(
       regressions.code,
       0,
-      `Post-exit cancellation regression failed: ${regressions.stderr}`,
+      `Resource boundary regression failed: ${regressions.stderr}`,
     );
+    await verifyResourceCancellation(root, system);
     const result = await runConstrainedVerification(
       root,
       system,
