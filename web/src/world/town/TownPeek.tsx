@@ -1,3 +1,4 @@
+import { agentStateWord } from "../../agentMarks";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { SquareTerminal } from "lucide-react";
 import type { OfficeAgent } from "../herdrOfficeProjection";
@@ -12,18 +13,11 @@ import {
   type TerminalColor,
 } from "../terminalColor";
 
-const STATUS: Record<OfficeAgent["semanticStatus"], string> = {
-  working: "Working",
-  blocked: "Needs your input",
-  done: "Finished",
-  idle: "On a break",
-  unknown: "Unknown",
-};
-
 export function townStatusText(agent: OfficeAgent) {
   return agent.stale
-    ? "Offline · last known state"
-    : (agent.stateLabels[agent.semanticStatus] ?? STATUS[agent.semanticStatus]);
+    ? `${agentStateWord(null, { offline: true })} · last known state`
+    : (agent.stateLabels[agent.semanticStatus] ??
+        agentStateWord(agent.semanticStatus));
 }
 
 /**

@@ -235,7 +235,7 @@
   content: "\2713";
 }
 .board-s-unknown .board-badge::before {
-  content: "?";
+  content: "~";
 }
 
 /* Status pulses: only a working agent, or the selected card, pulses; idle,

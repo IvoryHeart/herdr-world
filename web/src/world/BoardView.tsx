@@ -1,4 +1,5 @@
 import { useWorldAsks } from "./worldAsks";
+import { agentStateWord } from "../agentMarks";
 import { asksForWorld } from "./worldAskTargets";
 import { WorldAskMark } from "./WorldAskMark";
 import { boardObservation } from "./board/boardObservation";
@@ -138,13 +139,12 @@ import {
  * comes to rest within about a second. See openspec/changes/board-view.
  */
 
-const STATUS_LABEL: Record<WorldAgentStatus, string> = {
-  blocked: "Needs you",
-  working: "Working",
-  done: "Finished, not checked",
-  idle: "Idle",
-  unknown: "No signal",
-};
+const STATUS_LABEL = Object.fromEntries(
+  (["blocked", "working", "done", "idle", "unknown"] as const).map((status) => [
+    status,
+    agentStateWord(status),
+  ]),
+) as Record<WorldAgentStatus, string>;
 const OVERVIEW_IN = 0.44;
 const OVERVIEW_OUT = 0.5;
 const MIN_ZOOM = 0.12;

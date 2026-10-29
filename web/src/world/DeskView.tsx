@@ -41,6 +41,8 @@ import {
 import type { WorldLeafObject, WorldObject } from "./worldObject";
 import { useDeskState } from "./useDeskState";
 import type { WorldDeskStore } from "./deskStateStore";
+import { agentMarkKind, agentStateWord } from "../agentMarks";
+import { AgentMark } from "../components/AgentMark";
 import "./DeskView.css";
 
 type Lane = "needs" | "review" | "working";
@@ -828,13 +830,6 @@ export function DeskBoard({
     );
   };
 
-  const statusLabel: Record<string, string> = {
-    blocked: "Needs you",
-    done: "Done",
-    working: "Working",
-    idle: "Idle",
-    unknown: "Unknown",
-  };
   const row = (leaf: WorldLeafObject, showWorkspace = false) => {
     const { receipt } = receiptFor(leaf);
     const line =
@@ -856,7 +851,10 @@ export function DeskBoard({
           onClick={() => open(leaf)}
         >
           <span className="desk-row-status">
-            {statusLabel[leaf.status] ?? leaf.status}
+            <AgentMark
+              kind={agentMarkKind(leaf.status, { asking: asking.has(leaf.id) })}
+            />
+            {agentStateWord(leaf.status, { asking: asking.has(leaf.id) })}
           </span>
           <span className="desk-row-main">
             <span className="desk-row-title">

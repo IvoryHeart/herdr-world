@@ -1,3 +1,5 @@
+import { agentStateWord } from "../../../agentMarks";
+
 /** Harnesses where Esc interrupts the current turn without quitting. */
 export const STOPS_WITH_ESCAPE = new Set(["claude", "codex", "pi"]);
 /** Two presses of Esc this close together stop the agent. */
@@ -17,9 +19,10 @@ export const titleTask = (title: string | null | undefined) =>
     .replace(/^(?:working|needs you|blocked|done|idle)\s*:\s*/iu, "")
     .trim() || null;
 
-export const STATUS_WORDS: Record<string, string> = {
-  working: "Working",
-  blocked: "Needs you",
-  done: "Done",
-  idle: "Idle",
-};
+/** Chat's state words: the shared marks' words (agentMarks.ts). */
+export const STATUS_WORDS: Record<string, string> = Object.fromEntries(
+  ["working", "blocked", "done", "idle"].map((status) => [
+    status,
+    agentStateWord(status),
+  ]),
+);

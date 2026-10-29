@@ -1,3 +1,4 @@
+import { agentStateWord } from "../../agentMarks";
 import type {
   OfficeAgent,
   OfficeDesk,
@@ -17,14 +18,6 @@ export type TownTarget = {
   color?: string;
 };
 
-const STATUS_TEXT: Record<OfficeAgent["semanticStatus"], string> = {
-  working: "working",
-  blocked: "needs input",
-  done: "done",
-  idle: "on a break",
-  unknown: "unknown",
-};
-
 export function townAgentLabel(
   model: TownModel,
   agent: OfficeAgent,
@@ -36,7 +29,7 @@ export function townAgentLabel(
   const state = agent.stale
     ? "stale"
     : (agent.stateLabels[agent.semanticStatus] ??
-      STATUS_TEXT[agent.semanticStatus]);
+      agentStateWord(agent.semanticStatus).toLowerCase());
   const location = desk
     ? `desk ${desk.displayLabel}, ${entry?.roomLabel ?? "Office"}`
     : (entry?.roomLabel ?? "Office");

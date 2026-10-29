@@ -567,6 +567,8 @@ when piped, with stable exit codes:
   for you. It appears first in Town's **Needs you** list and Summary, where you
   pick an option or type an answer; `--wait` returns that answer to the asker.
   Its agent waits at reception with **?**; Board and Desk show the same mark.
+  Every view and Chat use one mark set: • Working, ! Needs you, ? Asks you,
+  ✓ Done, – Idle or Reviewed, ~ No signal, × Offline (`web/src/agentMarks.ts`).
   Each question names its agent as Town labels its desk, with **Open agent**
   (a shell pane without an agent opens its terminal),
   and **Dismiss** closes it without sending an answer (`--wait` then returns

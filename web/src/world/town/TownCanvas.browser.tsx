@@ -2309,7 +2309,7 @@ async function run() {
       '.world-semantic-target[data-kind="agent"]',
     ),
   ].find((target) =>
-    target.getAttribute("aria-label")?.includes(", needs input, desk "),
+    target.getAttribute("aria-label")?.includes(", needs you, desk "),
   );
   check(waitingAgent !== undefined, "no waiting agent has a target");
   const [, , deskName, roomName, hostName] = waitingAgent!

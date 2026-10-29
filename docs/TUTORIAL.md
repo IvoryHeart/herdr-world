@@ -328,8 +328,10 @@ tapping its reception entry opens that agent. Read the question first in
 option or type an answer. The waiting agent receives that answer. **Open agent**
 opens the asker; **Dismiss** closes a stale or mistaken question without
 answering it. A question marked unverified came from a process World could not
-confirm runs in that pane. Board and Desk show the same question mark. **!** means urgent
-blocking, while **✓** means a finish still needs checking.
+confirm runs in that pane. Town, Board, Desk and Chat share one set of marks,
+each with one glyph, colour and word: **•** Working, **!** Needs you (blocked on
+its own question), **?** Asks you, **✓** Done (not reviewed yet), **–** Idle
+or Reviewed, **~** No signal and **×** Offline.
 
 **Mark reviewed** acknowledges that completion in this browser. Opening a finished
 agent's terminal also clears its reception stop; neither action proves the result
