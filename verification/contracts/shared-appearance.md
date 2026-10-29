@@ -61,7 +61,12 @@ ledger write compensates both colour and binding/status to their original values
 The two-profile Chrome test drives the actual editor/header on desktop and phone
 through the actual service handler and persistent store. It checks cross-client
 updates, native failures with retained drafts, independent pane resets and
-viewport bounds. Its native runtime and event stream are synthetic; existing
+viewport bounds. A native rename acknowledgement is distinct from the browser's
+published native-name observation: the failure scenario waits for the successful
+name to be observed before attempting a rejected rename, then checks both the
+header and the authoritative native name remain unchanged. This repairs test
+synchronization without changing the product contract or runtime behavior.
+Its native runtime and event stream are synthetic; existing
 Bridge/WebSocket, live Herdr and native window/handoff browser consumers remain
 responsible for their transport and integration boundaries.
 

@@ -648,6 +648,12 @@ async function run() {
     );
     button("Save name")!.click();
     await saved("Native tab name saved");
+    await waitFor(
+      () =>
+        document.querySelector("[data-native-name]")?.textContent ===
+        "Shared native tab",
+      "successful native rename was not observed",
+    );
     await fetch("/fail-next-name", { method: "POST" });
     input("Tab name", "Rejected name");
     await waitFor(
@@ -668,6 +674,13 @@ async function run() {
       document.querySelector("[data-native-name]")?.textContent ===
         "Shared native tab",
       "native failure created a shadow name",
+    );
+    const nativeAfterFailure = (await fetch("/native").then((reply) =>
+      reply.json(),
+    )) as { label: string };
+    check(
+      nativeAfterFailure.label === "Shared native tab",
+      "failed rename changed the authoritative native name",
     );
     close();
     await waitFor(
