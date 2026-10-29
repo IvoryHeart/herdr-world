@@ -64,7 +64,8 @@ and Delivery checks includes both macOS lifecycle results. See the
 [pipeline ownership guide](docs/ci-pipelines.md) for the job boundaries and
 failure diagnosis.
 
-`check:commit` names the hook's format/lint guard. Release workflows use
+`check:commit` names the hook's guard: it refuses staged files under `.agents/`
+other than the shared skills (`check:agents`), then checks format and lint. Release workflows use
 `check:source` for the guard, asset-building type check and tests; `precommit`
 remains its compatibility alias. `check` delegates static validation to the same
 lane used by local delivery, then runs tests. That lane checks source types and

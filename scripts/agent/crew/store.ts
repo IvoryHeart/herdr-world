@@ -519,6 +519,16 @@ export function latestRun(db: Database, actionKey: string) {
   return row ? run(row) : null;
 }
 
+/** Reviewer runs started at or after `since`. */
+export function runsSince(db: Database, since: number) {
+  return db
+    .query<RunRow, [number]>(
+      "SELECT * FROM run WHERE started_at >= ? ORDER BY id",
+    )
+    .all(since)
+    .map(run);
+}
+
 /** A small value the watcher keeps, such as the last mark it set on a PR. */
 export function getMeta(db: Database, key: string) {
   return (
@@ -528,6 +538,19 @@ export function getMeta(db: Database, key: string) {
       )
       .get(key)?.value ?? null
   );
+}
+
+export function deleteMeta(db: Database, key: string) {
+  db.query("DELETE FROM meta WHERE key = ?").run(key);
+}
+
+/** The values kept under keys that start with `prefix`. */
+export function metaWithPrefix(db: Database, prefix: string) {
+  return db
+    .query<{ key: string; value: string }, [string]>(
+      "SELECT key, value FROM meta WHERE substr(key, 1, length(?1)) = ?1 ORDER BY key",
+    )
+    .all(prefix);
 }
 
 export function setMeta(db: Database, key: string, value: string) {
