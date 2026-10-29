@@ -84,7 +84,10 @@ The three required CI job names remain the same. `bun run check:delivery` runs
 the full gate locally: static checks first (later lanes read the build), then
 behavioral verification alongside unit tests and the untimed World browser
 suites, then Chrome-driven tests and the wall-clock-budget suites once the CPU is
-quieter. Lane logs are kept in `.agents/delivery/lanes/`.
+quieter. Timed World browser files run serially, matching the CI latency shard,
+so independent Chrome renderers do not compete for the measured budget. Each
+fixture still exercises its own concurrent production contexts and deadlines.
+Lane logs are kept in `.agents/delivery/lanes/`.
 
 Heavy local checks share one machine-wide queue (`scripts/check-lock.ts`) across
 all worktrees and clones: one browser lane (World browser suites, Chrome-driven

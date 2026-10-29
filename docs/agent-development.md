@@ -530,7 +530,10 @@ same Git hook configuration.
 
 Agents in parallel worktrees share one machine-wide check queue: one browser lane
 and one behavioral verification at a time, two light lanes, and the timed
-(latency) lane alone on the whole machine. Run browser suites through
+(latency) lane alone on the whole machine. Within that lane, the delivery gate
+runs timed World browser files serially, matching CI’s latency shard while
+preserving each fixture’s concurrent-context checks and deadlines. Run browser
+suites through
 `bun run test <path>` or `bun run test:browser`, which queue, rather than a bare
 `bun test` on a browser file, which does not. A queued gate prints
 `[queue] <lane> waiting for <worktree> <lane> (pid, since)`. Do not bypass the
