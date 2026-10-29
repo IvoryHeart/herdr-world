@@ -414,10 +414,10 @@ test("Delivery checks require the pre-merge installer upgrade matrix", async () 
   expect(workflow.jobs["installer-upgrade"]).toMatchObject({
     uses: "./.github/workflows/installer-upgrade.yml",
     needs: "validation-scope",
-    if: "needs.validation-scope.outputs.mode == 'full'",
+    if: "needs.validation-scope.outputs.packaging == 'true'",
   });
-  // ci-delivery-result requires success for full validation and a skip for
-  // Markdown-only or exact-head reuse.
+  // ci-delivery-result requires success whenever packaging is selected and
+  // accepts a skip only when the shared plan declares it inapplicable.
   const gates = workflow.jobs.delivery.steps.filter(
     (step: any) => step.run === "bun scripts/ci-delivery-result.ts",
   );

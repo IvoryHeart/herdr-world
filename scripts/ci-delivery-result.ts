@@ -1,3 +1,4 @@
+import type { ValidationSelection } from "./validation-scope";
 /**
  * Native results include Windows plugin installation, installer upgrades and
  * both macOS lifecycle jobs. The macOS jobs keep their protected names and
@@ -10,26 +11,38 @@ export function assertDeliveryResults(
   world: string | undefined,
   behavioral: string | undefined,
   packaging: Array<string | undefined>,
+  selection?: ValidationSelection,
 ) {
-  const expected =
-    mode === "full"
-      ? ["success", "success"]
-      : mode === "docs" || mode === "tooling"
-        ? ["success", "skipped"]
-        : mode === "reuse"
-          ? ["skipped", "skipped"]
-          : undefined;
+  if (mode === "scoped" && !selection)
+    throw new Error("Missing scoped selection");
+  const native = mode === "full" || (mode === "scoped" && selection!.packaging);
+  const browser =
+    mode === "full" ||
+    (mode === "scoped" &&
+      !!(
+        selection!.world.length +
+        selection!.web.length +
+        selection!.latency.length
+      ));
+  const verify =
+    mode === "full" || (mode === "scoped" && selection!.verification);
+  const known = ["full", "docs", "tooling", "scoped", "reuse"].includes(
+    mode || "",
+  );
+  const expected = [
+    mode === "reuse" ? "skipped" : "success",
+    browser ? "success" : "skipped",
+  ];
   if (
     scope !== "success" ||
-    !expected ||
-    behavioral !==
-      (mode === "reuse" || mode === "tooling" ? "skipped" : "success") ||
+    !known ||
+    behavioral !== (verify ? "success" : "skipped") ||
     validation !== expected[0] ||
     world !== expected[1] ||
     packaging.length !== 3 ||
     packaging
       .slice(0, 2)
-      .some((result) => result !== (mode === "full" ? "success" : "skipped")) ||
+      .some((result) => result !== (native ? "success" : "skipped")) ||
     packaging[2] !== "success"
   ) {
     throw new Error(
@@ -50,6 +63,9 @@ if (import.meta.main) {
       Bun.env.INSTALLER_RESULT,
       Bun.env.LAUNCHD_RESULT,
     ],
+    Bun.env.HERDR_CI_SELECTION
+      ? (JSON.parse(Bun.env.HERDR_CI_SELECTION) as ValidationSelection)
+      : undefined,
   );
   console.info("Delivery checks passed");
 }
