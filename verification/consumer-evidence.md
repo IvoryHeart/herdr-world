@@ -386,7 +386,7 @@ claim about arbitrary import graphs or live external runtimes.
 The allowed transition is a checked, current prompt selecting its own choice,
 then the same pane/session exposing that choice's empty editor before text is
 submitted. A replaced question, session, agent or terminal, a missing editor,
-existing native draft, invalid text and concurrent answer to that pane must
+already-active native editor, existing native draft, invalid text and concurrent answer to that pane must
 receive no text. Selection can already have happened when the editor check
 fails; the refusal says so. Input text does not acquire command authority.
 

@@ -152,6 +152,36 @@ try {
     "Text controls fit the viewport",
   );
 
+  const beforeNativeEditor = calls.length;
+  const nativeOptions = prompt.options;
+  prompt = {
+    ...prompt,
+    fingerprint: "native-editor",
+    options: nativeOptions.map((option) =>
+      option.key === "3" ? { ...option, active: true } : option,
+    ),
+  };
+  await render();
+  check(
+    !document.querySelector(".agent-chat-ask-options") &&
+      !document.querySelector(".agent-chat-ask-text"),
+    "An already-open native editor stays in the Terminal",
+  );
+  await act(async () =>
+    document
+      .querySelector(".agent-chat-ask")!
+      .dispatchEvent(new KeyboardEvent("keydown", { key: "1", bubbles: true })),
+  );
+  check(
+    calls.length === beforeNativeEditor,
+    "Menu shortcuts cannot type digits into an existing native editor",
+  );
+  prompt = {
+    ...prompt,
+    options: nativeOptions,
+    fingerprint: "full-chat-question",
+  };
+
   // Exercise the complete Chat callback/RPC chain, beyond the isolated card.
   const requests: Record<string, unknown>[] = [];
   let connectionId = "answer-host";

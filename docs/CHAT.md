@@ -118,8 +118,10 @@ that root; stat metadata cannot redirect the read to a different transcript.
   and Enter. "Chat about this" closes the question first and sends the reply
   through Herdr's normal `agent prompt`; discussion replies cannot start with
   `/`, `!` or `#` commands. Digits typed in the reply field remain text.
-  A different question discards that field's draft. Text already being edited
-  in the native Terminal stays there; Chat does not append to or replace it.
+  A different question discards that field's draft. An already-open native
+  editor, even if it appears empty, stays in the Terminal: Chat cannot distinguish
+  a placeholder from identical text already typed there. Chat does not append to
+  or replace it; start a text answer from an untouched menu in Chat instead.
   If the editor cannot be verified after the option was selected, Chat says
   **No text was sent** and offers the Terminal. Another answer to the same pane
   is refused while the first is in progress.

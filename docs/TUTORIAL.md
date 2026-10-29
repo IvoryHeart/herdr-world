@@ -387,8 +387,8 @@ text. It works for any agent you open from Town, Board or Desk.
    cannot hold a prompt between that check and the key, so read the card
    first. For **Type something.**, **Chat about this** or plan feedback, pick
    the option, type a single-line reply and choose **Send text answer**. Chat
-   checks the native text editor before submitting. Text already being edited
-   in the Terminal and unsupported menus stay in the Terminal.
+   checks the native text editor before submitting. Already-open native text
+   editors and unsupported menus stay in the Terminal.
 7. A known pull request named in an agent's **READY** or **opened**
    announcement, or its current work claim, gets a PR card. Open **Details**
    for CI and reviews. **Ask the author to fix** sends a `↳ #N` message when

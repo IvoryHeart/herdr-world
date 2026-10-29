@@ -1765,8 +1765,9 @@ Selecting one in Chat SHALL open a single-line reply field without sending input
 Submitting SHALL check the original prompt and session, select its native option,
 wait for the corresponding empty inline editor or discussion composer, and check
 the destination again before submitting text. Missing, stale, replaced or
-unrecognized editors SHALL receive no text. Native text already being edited
-SHALL remain in the Terminal. Text SHALL be nonempty, at most 4000 characters
+unrecognized editors SHALL receive no text. A native editor that was already
+active before Chat selected its option SHALL remain in the Terminal, including
+when it appears empty; it SHALL receive neither menu digits nor text. Text SHALL be nonempty, at most 4000 characters
 and free of terminal control characters; discussion text SHALL NOT invoke the
 composer's slash, shell or memory commands. Answers to one pane SHALL NOT
 interleave inside a conversation source.

@@ -54,6 +54,12 @@ export function createPromptAnswerer(args: {
         prompt,
       );
     const option = prompt.options.find((candidate) => candidate.key === key);
+    if (prompt.options.some((candidate) => candidate.active))
+      return refuse(
+        "changed",
+        "A native text editor is already open. No input was sent; continue in the Terminal.",
+        prompt,
+      );
     if (!option)
       return refuse(
         "unknown_option",

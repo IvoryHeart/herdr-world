@@ -37,13 +37,13 @@ export function AskCard({
   onAnswer(key: string, text?: string): void;
   onOpenTerminal?: () => void;
 }) {
-  const [textKey, setTextKey] = useState<string | null>(
-    () => prompt.options.find((option) => option.active)?.key ?? null,
-  );
+  const nativeEditor = prompt.options.some((option) => option.active);
+  const options = nativeEditor ? [] : prompt.options;
+  const [textKey, setTextKey] = useState<string | null>(null);
   const [text, setText] = useState("");
-  const textOption = prompt.options.find((option) => option.key === textKey);
+  const textOption = options.find((option) => option.key === textKey);
   const choose = (key: string) => {
-    const option = prompt.options.find((item) => item.key === key);
+    const option = options.find((item) => item.key === key);
     if (option?.input) setTextKey(key);
     else onAnswer(key);
   };
@@ -73,7 +73,7 @@ export function AskCard({
             ))
         )
           return;
-        const option = prompt.options.find(
+        const option = options.find(
           (candidate) => candidate.number === event.key,
         );
         if (!option) return;
@@ -104,14 +104,14 @@ export function AskCard({
       {prompt.question.map((line, index) => (
         <p key={index}>{line}</p>
       ))}
-      {prompt.options.length ? (
+      {options.length ? (
         <>
           <div
             className="agent-chat-ask-options"
             role="group"
             aria-label="Answers"
           >
-            {prompt.options.map((option, index) => (
+            {options.map((option, index) => (
               <button
                 key={option.number}
                 type="button"
@@ -167,8 +167,10 @@ export function AskCard({
         </>
       ) : (
         <p className="agent-chat-ask-fine">
-          Chat cannot read the choices in this prompt safely, so it does not
-          answer it. {terminal}
+          {nativeEditor
+            ? "This text editor is already open in the Terminal. Continue there."
+            : "Chat cannot read the choices in this prompt safely, so it does not answer it."}{" "}
+          {terminal}
         </p>
       )}
       {notice ? (

@@ -120,11 +120,19 @@ test("text answers select the option, verify the inline editor, and submit liter
     },
   ]);
 });
-test("an already active empty editor receives no extra selection digit", async () => {
-  const h = harness("claude-text-entry");
-  expect(await h.submit()).toMatchObject({ status: "sent" });
-  expect(h.writes).toHaveLength(1);
-  expect(h.writes[0]!.params.text).toBe("Magenta fixture");
+test("an already active native editor receives neither a menu digit nor text", async () => {
+  for (const key of ["1", "3"]) {
+    const h = harness("claude-text-entry");
+    expect(
+      await h.answer({
+        pane_id: "w1:p1",
+        key,
+        prompt_fingerprint: h.read()!.fingerprint,
+        ...(key === "3" ? { text: "Magenta fixture" } : {}),
+      }),
+    ).toMatchObject({ status: "refused", reason: "changed" });
+    expect(h.writes).toEqual([]);
+  }
 });
 test("a plan's feedback uses its verified inline editor", async () => {
   const h = harness("claude-plan");
@@ -235,6 +243,7 @@ test("an editor wait failure leaves the text unsent and releases answer admissio
   });
   expect(h.writes).toHaveLength(1);
   h.state.onWait = () => {};
+  h.state.screen = fixture("claude-question");
   expect(await h.submit()).toMatchObject({ status: "sent" });
 });
 test("a fresh blocked question after Chat about this prevents discussion text", async () => {
