@@ -13,8 +13,11 @@ import {
   activeRuns,
   finishRun,
   getRun,
-  lastPromptedPr,
+  holdLock,
+  latestPromptPrs,
   openCrewStore,
+  openLock,
+  setAction,
   runsOf,
   setRunPid,
   type StoredAction,
@@ -44,6 +47,8 @@ export type FixerTask = {
   branch: string;
   /** The watcher's step messages, as the author would have had them. */
   steps: string[];
+  /** The command that tells the watcher this fixer is done. */
+  done: string;
 };
 
 export function fixerPrompt(task: FixerTask) {
@@ -62,7 +67,8 @@ Rules:
 - Follow AGENTS.md and the candidate-delivery skill (.agents/skills/candidate-delivery/SKILL.md): fix every P1–P3 finding in one pass, with tests and docs as the change needs.
 - Push to ${branch} only. The pre-push hook runs the gate; wait for it and never bypass it. If the push is refused because the branch moved, stop and say so here; don't force-push.
 - Never use git stash: its stack is shared with every worktree.
-- After pushing, post one comment on the PR that starts with \`[fixer #${pr}]\`, then one line per finding or step naming its fixing commit.
+- After pushing, post one comment on the PR that starts with \`[fixer #${pr}]\`, then one line per finding or step naming its fixing commit. A step that needs no push, such as rerunning a flaky job, gets the same comment saying what you did.
+- When you are done, pushed or not, run \`${task.done}\` so the watcher hands the PR on.
 - To reach the owner, use \`herdr-world ask "QUESTION" --owner-only --wait\` from your own pane; no other channel.
 - Never merge, approve, use --admin, add labels, prompt or message another agent, or post local paths, hosts, usernames or session links.
 - Finish by printing only the comment's URL. Then stay in this session: the owner may ask you about your fix here; answer, but take no further action unless asked.`;
@@ -100,7 +106,8 @@ export function fixerWorktree(
 
 /**
  * Starts a fixer for each of a busy author's PRs that one may take: the
- * seat is busy, it was last prompted about another PR, no fixer has worked
+ * seat is busy, its latest prompt was only about other PRs (so it is
+ * working on one of those), no fixer has worked
  * on this head yet, a run slot is free and the PR's worktree is clean at
  * its head. Returns the steps handed to a fixer, and why the others wait.
  */
@@ -121,20 +128,22 @@ export function startFixers(
   for (const entry of entries)
     if (FIXER_KINDS.has(entry.kind))
       byPr.set(entry.pr, [...(byPr.get(entry.pr) ?? []), entry]);
-  const on = lastPromptedPr(crew, seat.name);
+  const on = latestPromptPrs(crew, seat.name);
   for (const [pr, steps] of byPr) {
     const head = steps[0]!.head;
     const why = !model
       ? `${seat.name} has no roster model`
       : !harnessOf(model)
         ? `no harness runs ${model.model}`
-        : on === pr
-          ? `${seat.name} is on this PR`
-          : runsOf(crew, pr).some((run) => run.cwd && run.head === head)
-            ? "a fixer already worked on this head"
-            : settings.maxRuns - activeRuns(crew).length <= 0
-              ? "no free run slot"
-              : null;
+        : !on.size
+          ? `nothing shows what ${seat.name} is working on`
+          : on.has(pr)
+            ? `${seat.name} may be on this PR`
+            : runsOf(crew, pr).some((run) => run.cwd && run.head === head)
+              ? "a fixer already worked on this head"
+              : settings.maxRuns - activeRuns(crew).length <= 0
+                ? "no free run slot"
+                : null;
     const place = why
       ? { why }
       : fixerWorktree(
@@ -224,6 +233,7 @@ export async function fix(options: Options, dir: string, deps: Deps) {
       url: meta.url,
       branch: meta.headRefName,
       steps,
+      done: `bun ${join(import.meta.dir, "..", "crew.ts")} fixed --run ${runId}`,
     });
     show(
       `fixer for ${author} on #${pr} at ${shortSha(head)} (${model.model}), in the PR's worktree; type here to steer it`,
@@ -245,4 +255,42 @@ export async function fix(options: Options, dir: string, deps: Deps) {
     crew.close();
   }
   return code;
+}
+
+/**
+ * A fixer saying it is done, pushed or not: its run finishes, freeing its
+ * slot and the PR's other steps, and the steps it took are done. A push
+ * the watcher has already seen finished the run; this changes nothing then.
+ */
+export function finishFixer(
+  crew: Database,
+  runId: number,
+  now: number,
+  deps: Pick<Deps, "usage" | "out">,
+) {
+  const run = getRun(crew, runId);
+  if (!run?.cwd) throw new Error(`run ${runId} isn't a fixer`);
+  finishRun(crew, runId, 0, deps.usage(run, run.cwd), now);
+  const steps = actionsIn(crew, ["running"]).filter(
+    (entry) => entry.detail === `run ${runId}`,
+  );
+  for (const step of steps) setAction(crew, step.key, "done", now);
+  deps.out(
+    `fixer run ${runId} done${steps.length ? `: ${steps.map((step) => step.kind).join(", ")}` : ""}`,
+  );
+  return 0;
+}
+
+/** `fixed --run N`: `finishFixer` under the pass lock. */
+export function fixed(options: Options, dir: string, deps: Deps) {
+  const runId = options.run;
+  if (!runId) throw new Error("fixed needs --run");
+  const crew = openCrewStore(join(dir, "crew.sqlite"));
+  const lock = openLock(join(dir, "crew.lock"));
+  try {
+    return holdLock(lock, () => finishFixer(crew, runId, Date.now(), deps));
+  } finally {
+    lock.close();
+    crew.close();
+  }
 }

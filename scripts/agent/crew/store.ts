@@ -530,15 +530,21 @@ export function runFor(db: Database, entry: StoredAction) {
   return id ? getRun(db, Number(id)) : latestRun(db, entry.key);
 }
 
-/** The PR a seat was last prompted about, if any. */
-export function lastPromptedPr(db: Database, seat: string) {
-  return (
+/**
+ * The PRs a seat's latest prompt was about: one prompt carries every step
+ * waiting for the seat, and marks them all sent at once. Empty when the
+ * crew has never prompted the seat.
+ */
+export function latestPromptPrs(db: Database, seat: string) {
+  return new Set(
     db
       .query<{ pr: number }, [string]>(
-        `SELECT pr FROM action WHERE target = ? AND state = 'sent'
-         ORDER BY updated_at DESC, rowid DESC LIMIT 1`,
+        `SELECT pr FROM action WHERE target = ?1 AND state = 'sent'
+         AND updated_at = (SELECT MAX(updated_at) FROM action
+                           WHERE target = ?1 AND state = 'sent')`,
       )
-      .get(seat)?.pr ?? null
+      .all(seat)
+      .map((row) => row.pr),
   );
 }
 

@@ -406,23 +406,31 @@ plans the next step for every PR in scope and takes each step once:
   `crew/merge-ready` still need green checks, any judgment and the reviews.
 - **A fresh fixer for a busy author.** A seat works on one PR at a time, so
   when a PR's `fix`, `ci` or `conflict` step is due and its author seat is
-  working (or blocked) on something else, the watcher starts a fresh fixer
+  working (or blocked) on another PR, the watcher starts a fresh fixer
   instead of waiting. It runs like a reviewer: a fresh, interactive session
   on the author seat's roster model and harness, in a pane of the PR head's
   round tab named `<seat> fixer`, briefed with the steps' messages, the PR and
   the candidate-delivery skill. It works in the PR's own worktree, pushes to
-  the PR branch through the normal pre-push gate, replies on the PR in one
-  comment signed `[fixer #N]`, and is done: its push makes a new head, which
-  ends the run (its session stays open as a chat, and `open --run` reopens it
-  in that worktree) and starts the next round as usual. The step waits for
-  the author instead when a fixer could clash with them or can't run: the
-  author was last prompted about this same PR, the PR's worktree is missing,
-  has uncommitted changes or isn't at the PR's head, the seat has no roster
-  model, or no run slot is free. At most one fixer works on a PR at a time,
-  and each head gets one: while it works, the PR's other author steps wait
-  for it, and a fixer that ends without pushing leaves its steps to the
-  author. Fixers count against `maxRuns` and `runTimeoutMinutes` like
-  reviewers; screenshots stay with the author.
+  the PR branch through the normal pre-push gate and replies on the PR in one
+  comment signed `[fixer #N]`. It is done when the watcher sees a new head
+  that its worktree is at (its own push), or when it runs the `fixed --run N`
+  command its brief gives, as after rerunning a flaky job without a push.
+  Its session then stays open as a chat, and `open --run` reopens it in that
+  worktree, under the pass lock. A fixer overtaken by someone else's push, or
+  whose PR merges or closes, is stopped like a stale reviewer.
+  - **Only on evidence that the author is elsewhere:** the seat's latest crew
+    prompt was only about other PRs. One prompt carries every waiting step,
+    so a prompt that included this PR means the author may be on it. A seat
+    the crew has never prompted keeps its steps too.
+  - **Only where it can't clash:** the step also waits for the author when the
+    PR's worktree is missing, has uncommitted changes or isn't at the PR's
+    head, the seat has no roster model, or no run slot is free.
+  - **One at a time:** at most one fixer works on a PR, and each head gets
+    one. While it works, the PR's other author steps wait for it; a fixer
+    that ends without being done leaves its steps to the author. Fixers count
+    against `maxRuns` and `runTimeoutMinutes` like reviewers; screenshots stay
+    with the author. A Codex fixer's session is the one created after it
+    started, not the author's older one in the same worktree.
 - **What stops a step.** Only a newer head, a merge or a close supersedes a
   waiting step or stops a running reviewer. On the same head, a CI rerun or
   an unknown mergeable state only pauses steps; they resume when the head is

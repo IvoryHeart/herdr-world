@@ -55,11 +55,6 @@ export type Options = {
 };
 
 /** A run's own detached checkout below the primary checkout's worktrees. */
-/** Where a run works: a fixer in its PR's worktree, a reviewer in its checkout. */
-export function runCwd(dir: string, run: StoredRun) {
-  return run.cwd ?? checkoutOf(dir, run);
-}
-
 export function checkoutOf(
   dir: string,
   run: Pick<StoredRun, "id" | "pr" | "reviewer" | "head">,
@@ -303,19 +298,27 @@ export function openChat(
       `run ${found.id}'s session is still open in its pane, ${found.reviewer} in the PR's round ${found.round ?? "?"} tab; talk to it there`,
     );
   // A fixer worked in its PR's worktree, which stays the author's.
+  // Under the pass lock, as below: a chat opened in a round that is still
+  // open closes with it; one opened after the round closed is the owner's.
   if (found.cwd) {
-    if (!existsSync(found.cwd))
-      throw new Error(`run ${found.id}'s worktree ${found.cwd} is gone`);
-    const line = shellLine(chatArgv(found.harness, found.session, found.model));
-    const label = `#${found.pr} ${found.reviewer} fixer · chat`;
-    const tab = deps.openTab(line, found.cwd, label);
-    if (tab) addChat(crew, tab, found.id);
-    deps.out(
-      tab
-        ? `opened "${label}"`
-        : `Herdr couldn't open a tab; run:\n  cd ${shellLine([found.cwd])} && ${line}`,
-    );
-    return 0;
+    const cwd = found.cwd;
+    if (!existsSync(cwd))
+      throw new Error(`run ${found.id}'s worktree ${cwd} is gone`);
+    return holdLock(lock, () => {
+      const line = shellLine(
+        chatArgv(found.harness!, found.session!, found.model),
+      );
+      const label = `#${found.pr} ${found.reviewer} fixer · chat`;
+      const tab = deps.openTab(line, cwd, label);
+      if (tab && !roundClosed(crew, found.pr, found.round))
+        addChat(crew, tab, found.id);
+      deps.out(
+        tab
+          ? `opened "${label}"`
+          : `Herdr couldn't open a tab; run:\n  cd ${shellLine([cwd])} && ${line}`,
+      );
+      return 0;
+    });
   }
   const primary = dirname(dirname(dir));
   const checkout = checkoutOf(dir, found);

@@ -34,7 +34,7 @@ import {
   shellLine,
   tabClosed,
 } from "./crew/deps";
-import { fixerPrompt } from "./crew/fixer";
+import { finishFixer, fixerPrompt } from "./crew/fixer";
 import { openChat, runs } from "./crew/review";
 import {
   authorOf,
@@ -70,6 +70,7 @@ import {
   claudeUsage,
   codexSessionOf,
   codexUsage,
+  findCodexSession,
   reviewerArgv,
   reviewerPrompt,
   seatArgv,
@@ -787,6 +788,31 @@ describe("delivery", () => {
         seat.name === "towncx" ? { ...seat, status } : seat,
       );
     };
+    // The author's latest prompt, one for all of `prs`: what it is on.
+    const prompted = (prs: number[], at = NOW - 60_000) => {
+      for (const pr of prs) {
+        const key = `earlier-${pr}-${at}`;
+        addAction(
+          crew,
+          {
+            key,
+            pr,
+            head: SHA.reviewed,
+            kind: "ci",
+            target: "towncx",
+            text: `ACT #${pr} ci`,
+          },
+          at,
+        );
+        setAction(crew, key, "sent", at);
+      }
+    };
+    // Busy on PR 8, with PR 7's worktree clean at its head.
+    const busyElsewhere = (status = "working") => {
+      author(status);
+      prompted([8]);
+      checkOut();
+    };
     const findings = (
       head = SHA.reviewed,
       checks: Parameters<typeof town>[0]["checks"] = [],
@@ -805,8 +831,7 @@ describe("delivery", () => {
     const fixes = () => spawned.filter((argv) => argv[2] === "fix");
 
     test("a busy author's fix goes to one fresh fixer in the PR's worktree", () => {
-      author("working");
-      checkOut();
+      busyElsewhere();
       passFixer(findings());
       expect(prompts()).toEqual([]);
       expect(fixes()).toEqual([
@@ -849,6 +874,7 @@ describe("delivery", () => {
       expect(actionsIn(crew, ["pending"]).map((a) => a.kind)).toEqual(["ci"]);
       // Its push ends its job: the run finishes with its usage and its
       // session stays open as a chat, while the new head's round starts.
+      checkedOut = SHA.fixed;
       passFixer(findings(SHA.fixed), NOW + 120_000);
       expect(getRun(crew, 1)).toMatchObject({
         exitCode: 0,
@@ -865,42 +891,59 @@ describe("delivery", () => {
     });
 
     test("a blocked author's steps go to a fixer without asking the owner", () => {
-      author("blocked");
-      checkOut();
+      busyElsewhere("blocked");
       passFixer(findings());
       expect(fixes()).toHaveLength(1);
       expect(notices()).toEqual([]);
     });
 
     test("the step waits for the author when a fixer could clash with them", () => {
-      const waits = (setup: () => void) => {
+      const waits = (setup: () => void, configPath = fixerConfig) => {
         crew = openCrewStore(":memory:");
         spawned = [];
-        author("working");
-        checkOut();
+        busyElsewhere();
         setup();
-        passFixer(findings());
+        passOver([findings()], NOW, { configPath });
         expect(fixes()).toEqual([]);
-        expect(actionsIn(crew, ["pending"]).map((a) => a.detail)).toEqual([
-          "working",
-        ]);
+        expect(
+          actionsIn(crew, ["pending"])
+            .filter((a) => a.pr === 7)
+            .map((a) => a.detail),
+        ).toEqual(["working"]);
       };
-      // Last prompted about this PR: the author may be on it now.
+      // The latest prompt was about this PR, alone or with another one
+      // the author may have started on first: it may be on this one now.
+      waits(() => prompted([7], NOW - 30_000));
+      waits(() => prompted([7, 8], NOW - 30_000));
+      // Nothing shows what the author is working on.
       waits(() => {
-        addAction(
-          crew,
-          {
-            key: "earlier",
-            pr: 7,
-            head: SHA.reviewed,
-            kind: "ci",
-            target: "towncx",
-            text: "ACT #7 ci",
-          },
-          NOW - 60_000,
-        );
-        setAction(crew, "earlier", "sent", NOW - 60_000);
+        crew = openCrewStore(":memory:");
       });
+      // Every run slot is taken.
+      const full = join(root, "fixer-full.json");
+      writeFileSync(
+        full,
+        JSON.stringify({
+          ...config,
+          roster: { ...ROSTER, towncx: { model: "claude-opus-5-5" } },
+          crew: { ...SETTINGS, maxRuns: 1 },
+        }),
+      );
+      waits(
+        () =>
+          addRun(
+            crew,
+            {
+              actionKey: "other",
+              reviewer: "rev2",
+              pr: 9,
+              head: SHA.reviewed,
+              log: "x",
+            },
+            NOW,
+          ),
+        full,
+      );
       // Work in progress in the worktree, or a worktree off the head.
       waits(() => {
         dirty = " M web/src/App.tsx\n";
@@ -925,8 +968,7 @@ describe("delivery", () => {
     });
 
     test("a fixer that ends without pushing leaves the step to the author", () => {
-      author("working");
-      checkOut();
+      busyElsewhere();
       passFixer(findings());
       // Quit cleanly, as when the owner closes its session.
       finishRun(crew, 1, 0, null, NOW + 1000);
@@ -940,9 +982,48 @@ describe("delivery", () => {
       expect(prompts()[0]![4]).toStartWith("[crew -> towncx] ACT #7 fix @");
     });
 
+    test("a fixer that says it is done without pushing frees its slot and the PR", () => {
+      busyElsewhere();
+      passFixer(findings());
+      // It reran a flaky job: no push, so the head doesn't move.
+      finishFixer(crew, 1, NOW + 1000, deps);
+      expect(getRun(crew, 1)).toMatchObject({ exitCode: 0 });
+      expect(actionsIn(crew, ["done"]).map((a) => a.kind)).toEqual(["fix"]);
+      expect(activeRuns(crew)).toEqual([]);
+      // A later step on the same head reaches the idle author at once.
+      author("idle");
+      passFixer(
+        findings(SHA.reviewed, [
+          { name: "Delivery checks", state: "fail", required: true },
+        ]),
+        NOW + 60_000,
+      );
+      expect(prompts().map((argv) => argv[4]!.slice(0, 26))).toEqual([
+        "[crew -> towncx] ACT #7 ci",
+      ]);
+    });
+
+    test("a fixer overtaken by another push, a merge or a close is stopped", () => {
+      // Another push: the worktree is still at the old head.
+      busyElsewhere();
+      passFixer(findings());
+      passFixer(findings(SHA.fixed), NOW + 60_000);
+      expect(killed).toEqual([1001]);
+      expect(getRun(crew, 1)!.exitCode).toBe(-15);
+      // A merge: the PR leaves the open list. This run has no pane to
+      // close with its round, so only its pid stops it.
+      crew = openCrewStore(":memory:");
+      spawned = [];
+      killed = [];
+      busyElsewhere();
+      passFixer(findings());
+      passOver([], NOW + 60_000, { configPath: fixerConfig });
+      expect(killed).toEqual([1001]);
+      expect(activeRuns(crew)).toEqual([]);
+    });
+
     test("a fixer reopens as a chat in its PR's worktree, which it never removes", () => {
-      author("working");
-      checkOut();
+      busyElsewhere();
       mkdirSync(worktree, { recursive: true });
       passFixer(findings());
       setRunSession(crew, 1, "claude", "claude-opus-5-5", "session-1");
@@ -959,6 +1040,18 @@ describe("delivery", () => {
       expect(
         calls.some((argv) => argv[3] === "worktree" && argv[4] !== "list"),
       ).toBe(false);
+      // It waits for a pass that holds the lock, which may close the round.
+      const path = join(root, "fixer-open.lock");
+      const held = openLock(path, 0);
+      const opener = openLock(path, 0);
+      held.exec("BEGIN IMMEDIATE");
+      expect(() =>
+        openChat(crew, { prs: [], run: 1 }, dir, opener, deps),
+      ).toThrow();
+      expect(opened).toHaveLength(1);
+      held.exec("ROLLBACK");
+      held.close();
+      opener.close();
     });
   });
 
@@ -3336,7 +3429,11 @@ describe("worker", () => {
       url: "https://github.com/example-org/widgets/pull/7",
       branch: "agent/towncx-12-plates",
       steps: ["[crew -> towncx] ACT #7 fix @aaaaaaa: findings from rev2"],
+      done: "bun /x/crew.ts fixed --run 3",
     });
+    expect(brief).toContain(
+      "When you are done, pushed or not, run `bun /x/crew.ts fixed --run 3`",
+    );
     expect(brief).toContain(
       "- [crew -> towncx] ACT #7 fix @aaaaaaa: findings from rev2",
     );
@@ -3411,6 +3508,33 @@ describe("worker", () => {
     });
     expect(codexSessionOf(meta, "/x/review-7-rev2")).toBe("c-1");
     expect(codexSessionOf(meta, "/x/other")).toBeNull();
+    // A fixer shares the author's worktree: the author's older session,
+    // still writing there, is not the one the fixer just started.
+    const sessions = mkdtempSync(join(tmpdir(), "codex-"));
+    const day = join(sessions, "2026", "10", "29");
+    mkdirSync(day, { recursive: true });
+    const rollout = (name: string, id: string, created: number) =>
+      writeFileSync(
+        join(day, `rollout-${name}.jsonl`),
+        `${JSON.stringify({
+          type: "session_meta",
+          payload: {
+            id,
+            cwd: "/x/towncx-12",
+            timestamp: new Date(created).toISOString(),
+          },
+        })}\n`,
+      );
+    const started = Date.now();
+    rollout("1-author", "author-1", started - 3_600_000);
+    expect(findCodexSession("/x/towncx-12", started - 5_000, sessions)).toBe(
+      null,
+    );
+    rollout("2-fixer", "fixer-1", started);
+    expect(findCodexSession("/x/towncx-12", started - 5_000, sessions)).toBe(
+      "fixer-1",
+    );
+    rmSync(sessions, { recursive: true, force: true });
     expect(claudeTranscript("/x/.agents/review-7", "s-1", "/h")).toBe(
       "/h/projects/-x--agents-review-7/s-1.jsonl",
     );

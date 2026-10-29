@@ -6,7 +6,7 @@ import { shortSha } from "../../shared/pullRequests";
 import { gateDir, loadConfig, runPass } from "./gate";
 import type { GateInput, Verdict } from "./gate/predicate";
 import { openStore } from "./gate/store";
-import { fix, startFixers } from "./crew/fixer";
+import { fix, fixed, startFixers } from "./crew/fixer";
 import { launchRun } from "./crew/launch";
 import { type Deps, realDeps } from "./crew/deps";
 import {
@@ -95,6 +95,7 @@ const USAGE = `Usage: bun run agent:crew -- <command> [options]
                                  Run one fresh reviewer now (the watcher starts these itself)
   fix --pr N --author SEAT --head SHA --run ID
                                  Run a fresh fixer for a busy author (the watcher starts these)
+  fixed --run ID                 A fixer is done, pushed or not: free its slot and the PR's steps
 
 Settings live under "crew" in the gate config (.agents/crew-gate/config.json).`;
 
@@ -360,10 +361,18 @@ function act(
     if (heads.get(waiting.pr) === waiting.head) continue;
     if (waiting.state === "running") {
       const active = runFor(crew, waiting);
-      // A fixer's push is what makes its head old: it is done, and its
-      // session stays open as a chat. A reviewer's review is stale.
-      if (active?.cwd)
-        finishRun(crew, active.id, 0, deps.usage(active, active.cwd), now);
+      // A fixer whose worktree is at the new head pushed it: it is done,
+      // and its session stays open as a chat. One overtaken by another
+      // push, a merge or a close is stopped, as a stale reviewer is.
+      const head = heads.get(waiting.pr);
+      const pushed =
+        active?.cwd &&
+        head &&
+        deps
+          .run(["git", "-C", active.cwd, "rev-parse", "HEAD"])
+          .stdout.trim() === head;
+      if (pushed)
+        finishRun(crew, active.id, 0, deps.usage(active, active.cwd!), now);
       else if (active && active.finishedAt === null)
         stopRun(crew, active.id, -15, now, deps);
     }
@@ -557,7 +566,7 @@ function settleRuns(
           notice(
             action,
             "overdue",
-            `NEEDS-OWNER #${action.pr} at ${shortSha(action.head)}: ${active.cwd ? `${action.target}'s fixer has worked ${settings.runTimeoutMinutes}+ minutes without pushing` : `${action.target} has worked ${settings.runTimeoutMinutes}+ minutes without posting`}; look at its pane in the round's tab.`,
+            `NEEDS-OWNER #${action.pr} at ${shortSha(action.head)}: ${active.cwd ? `${action.target}'s fixer has worked ${settings.runTimeoutMinutes}+ minutes without saying it is done` : `${action.target} has worked ${settings.runTimeoutMinutes}+ minutes without posting`}; look at its pane in the round's tab.`,
           ),
         );
       continue;
@@ -857,6 +866,7 @@ export async function main(argv: string[], deps: Deps = realDeps) {
   const dir = gateDir();
   if (options.command === "review") return review(options, dir, deps);
   if (options.command === "fix") return fix(options, dir, deps);
+  if (options.command === "fixed") return fixed(options, dir, deps);
   const crew = openCrewStore(join(dir, "crew.sqlite"));
   try {
     if (options.command === "status") {
