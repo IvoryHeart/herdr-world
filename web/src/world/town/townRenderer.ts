@@ -1196,7 +1196,8 @@ export async function createTownRenderer(
     updateActors(Math.max(deskBlend, townBlend(0.35, 0.6, camera.z)));
     updateBubbles();
     drawEffects();
-    const dragging = updateDrag(dt) || !!overlay?.update(camera, lookOf);
+    const overlayMoving = !!overlay?.update(camera, lookOf);
+    const dragging = updateDrag(dt) || overlayMoving;
     app.renderer.render(app.stage);
     stats.level = level;
     stats.zoom = camera.z;
