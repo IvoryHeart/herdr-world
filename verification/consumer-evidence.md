@@ -370,7 +370,12 @@ Placed, named and dismissed asks (#493) stay on the same ledger. A caller the
 service cannot verify keeps an unverified actor, no cause keys and the shared
 allowance; the service records its claimed pane's connection, runtime, terminal
 and session only when exactly one local Herdr has that pane, so remote, unknown
-and ambiguous claims stay in the question list. Owner dismissal is a closed
+and ambiguous claims stay in the question list. Every competing local read must
+explicitly prove absence: actual CLI regressions cover a match plus timeout,
+unavailability, unsupported method or malformed reply in both host orders, a
+malformed sole-local reply, confirmed absence, and exclusion of unknown remote
+hosts. The caller stays unverified and retains the shared allowance and cause-key
+restrictions. Owner dismissal is a closed
 state beside answer and withdrawal: service, CLI and watcher cases check that
 waits end, answers are refused, a keyed repeat returns it until the asker
 withdraws, and the watcher does not re-ask a dismissed cause. The service asks

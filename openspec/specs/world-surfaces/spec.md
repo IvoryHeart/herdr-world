@@ -1469,7 +1469,9 @@ NOT use cause keys or withdraw, and it SHALL share the unverified allowance.
 When exactly one local Herdr has the pane it claims, the service SHALL record
 that pane's connection, runtime, terminal, workspace and agent session with the
 ask, so World places it as it places a verified ask; otherwise the ask SHALL
-remain in the question list only. The service SHALL record Herdr's name for an
+remain in the question list only. Every other candidate local runtime SHALL
+explicitly report that pane absent; a failed, unsupported or malformed read SHALL
+leave the ask unplaced. The service SHALL record Herdr's name for an
 asking agent. The question list SHALL name each asker as Town names its desk,
 else by that agent name or its pane, mark an unverified asker once, and offer
 Open agent for each placed ask, including every ask from one pane, opening the

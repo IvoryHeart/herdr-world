@@ -638,6 +638,88 @@ describe("questions and results", () => {
     });
   });
 
+  for (const failure of [
+    "timeout",
+    "unavailable",
+    "unsupported",
+    "misleading-error",
+    "malformed",
+    "wrong-pane",
+    "missing-terminal",
+  ])
+    for (const unknownFirst of [false, true])
+      test(`an unverified ask remains unplaced with a matching host and ${failure}; unknown first=${unknownFirst}`, async () => {
+        const uncertain = naming({
+          connection_id: "second",
+          call: async () => {
+            if (failure === "misleading-error")
+              throw new Error("unavailable: previous pane_not_found response");
+            if (failure === "malformed") return { pane: null };
+            if (failure === "wrong-pane")
+              return { pane: { ...PANES[0], pane_id: "w9:p9" } };
+            if (failure === "missing-terminal")
+              return { pane: { pane_id: "w1:p1" } };
+            throw new Error(
+              failure === "unsupported" ? "method_not_found" : failure,
+            );
+          },
+        });
+        const candidates = unknownFirst
+          ? [uncertain, naming()]
+          : [naming(), uncertain];
+        const { run, ledger } = setup({ hosts: candidates });
+        const asked = await run("ask", { question: "Where?" }, "w1:p1", null);
+        expect(asked).toMatchObject({ ok: true, actor: { verified: false } });
+        expect(
+          ledger.ask((resultOf(asked) as { id: string }).id)?.actor,
+        ).toEqual({
+          label: "unverified w1:p1",
+          verified: false,
+          pane_id: "w1:p1",
+        });
+      });
+
+  test("a malformed sole-local pane reply cannot place an unverified ask", async () => {
+    for (const pane of [
+      { ...PANES[0], pane_id: "w9:p9" },
+      { pane_id: "w1:p1" },
+      [],
+    ]) {
+      const { run, ledger } = setup({
+        hosts: [host({ call: async () => ({ pane }) })],
+      });
+      const asked = await run("ask", { question: "Where?" }, "w1:p1", null);
+      expect(ledger.ask((resultOf(asked) as { id: string }).id)?.actor).toEqual(
+        { label: "unverified w1:p1", verified: false, pane_id: "w1:p1" },
+      );
+    }
+  });
+
+  for (const remote of [false, true])
+    test(`confirmed absence permits unique local placement; other host remote=${remote}`, async () => {
+      let reads = 0;
+      const absent = naming({
+        connection_id: "second",
+        local: !remote,
+        call: async () => {
+          reads++;
+          throw new Error(remote ? "timeout" : "pane_not_found: no such pane");
+        },
+      });
+      const { run, ledger } = setup({ hosts: [naming(), absent] });
+      const asked = await run("ask", { question: "Where?" }, "w1:p1", null);
+      expect(
+        ledger.ask((resultOf(asked) as { id: string }).id)?.actor,
+      ).toMatchObject({
+        verified: false,
+        connection_id: "studio",
+        connection_generation: 2,
+        terminal_id: "term_a",
+        name: "dispatch",
+      });
+      expect(reads).toBe(remote ? 0 : 1);
+    });
+
   test("the owner dismisses without answering: waits end and a keyed cause stays closed until withdrawn", async () => {
     const { run, ledger } = setup();
     const request = {

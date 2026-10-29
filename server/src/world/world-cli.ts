@@ -169,20 +169,36 @@ export async function identifyCaller(
 
 /**
  * The caller fields Herdr gives for a pane on `host`, as for a verified
- * caller there; `found` is false when the host has no such pane.
+ * caller there. Only an explicit native not-found response proves absence;
+ * failed or malformed reads leave the observation unknown.
  */
 export async function paneActor(
   host: CliHost,
   paneId: string,
-): Promise<{ found: boolean; actor: CliActor }> {
-  const pane = (
-    (await host.call("pane.get", { pane_id: paneId }).catch(() => null)) as {
-      pane?: Record<string, unknown>;
-    } | null
-  )?.pane;
+): Promise<{ state: "present" | "absent" | "unknown"; actor: CliActor }> {
+  let state: "present" | "absent" | "unknown" = "unknown";
+  let pane: Record<string, unknown> | undefined;
+  try {
+    const candidate = (
+      (await host.call("pane.get", { pane_id: paneId })) as {
+        pane?: Record<string, unknown>;
+      } | null
+    )?.pane;
+    if (
+      candidate?.pane_id === paneId &&
+      typeof candidate.terminal_id === "string" &&
+      candidate.terminal_id
+    ) {
+      pane = candidate;
+      state = "present";
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/^pane_not_found(?::|$)/.test(message)) state = "absent";
+  }
   const agent = typeof pane?.agent === "string" ? pane.agent : undefined;
   return {
-    found: Boolean(pane),
+    state,
     actor: {
       label: `${agent ?? "terminal"} in ${paneId}`,
       verified: true,
