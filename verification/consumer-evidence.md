@@ -173,7 +173,9 @@ Requirements supply explicit agent override precedence, Group Focus/Mute/Default
 current unambiguous resolution and effective reachable-focus union. Direct tests
 exhaust all 36 two-group/agent combinations, away/ambiguity exclusion and source
 explanations. The actual reader covers address restart, force-Watch and stable
-consumer identity on unrelated Board edits. Real Board persistence tests cover
+consumer identity on unrelated Board edits. With no effective Focus claim,
+Default/Mute/Watch reader regressions require no runtime-pane enumeration;
+focused claims retain the same current-terminal reachability checks. Real Board persistence tests cover
 separate overlays, atomic deletion/dissolution, promotion identity, projection
 refusal and opaque ID safety. A real browser-store/chime-source installer test
 proves an explicit mute reaches actual chime decisions and force-Watch restores

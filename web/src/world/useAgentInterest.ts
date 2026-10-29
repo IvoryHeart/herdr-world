@@ -122,10 +122,12 @@ export function createAgentInterestReader(
         )
       : [];
     const derived = deriveGroupInterest(stored, intents, groups);
-    const reachable = liveTerminalKeys(world);
-    const anyFocused = [...derived].some(
-      ([key, interest]) => interest.value === "focused" && reachable.has(key),
-    );
+    let reachable: ReadonlySet<string> | undefined;
+    const anyFocused = [...derived].some(([key, interest]) => {
+      if (interest.value !== "focused") return false;
+      reachable ??= liveTerminalKeys(world);
+      return reachable.has(key);
+    });
     const nextSignature = JSON.stringify([
       Object.entries(stored).sort(),
       [...derived].sort(),

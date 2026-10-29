@@ -16,3 +16,7 @@
   Focus follows current resolved members, with unchanged reception counts.
 - Read Pod status, Now and source-qualified PR warnings in Town Summary;
   tap a row to open or restore its Groups detail without changing reception counts.
+
+### Fixed
+
+- Reduce Interest overhead in dense views when there are no effective Focus claims.

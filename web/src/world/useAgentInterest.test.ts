@@ -162,3 +162,38 @@ test("the live reader follows address restarts, effective focus union and explic
   });
   expect(reader.get().anyFocused).toBe(false);
 });
+
+test.each([
+  ["default", undefined, "watching"],
+  ["mute", "muted", "muted"],
+  ["explicit Watch", "watching", "watching"],
+] as const)(
+  "%s without Focus does not enumerate runtime panes",
+  (_label, override, expected) => {
+    let reads = 0;
+    const observed = connection("connection-a", ["terminal-1"]);
+    Object.defineProperty(observed, "snapshot", {
+      get() {
+        reads++;
+        return { panes: [pane("terminal-1")] };
+      },
+    });
+    const document = {
+      layout: {
+        interest: override
+          ? {
+              [interestKey("connection-a", "terminal-1")]: override,
+            }
+          : {},
+      },
+    } as BoardDocument;
+    const reader = createAgentInterestReader(
+      { get: () => ({ document, error: null }), subscribe: () => () => true },
+      { get: () => world(observed), subscribe: () => () => true },
+    );
+    const policy = reader.get();
+    expect(policy.anyFocused).toBe(false);
+    expect(policy.interestOf("connection-a", "terminal-1")).toBe(expected);
+    expect(reads).toBe(0);
+  },
+);
