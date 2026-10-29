@@ -1,4 +1,14 @@
 import {
+  agentName,
+  agentRuntime,
+  agentFolder,
+  matchesQuery,
+  where,
+} from "./deskAgentLabels";
+import { useWorldAsks, type WorldAsk } from "./worldAsks";
+import { asksForWorld } from "./worldAskTargets";
+import { WorldAskMark } from "./WorldAskMark";
+import {
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -10,20 +20,17 @@ import { bridge } from "../api";
 import { worldSessionStorage } from "../browserStorage";
 import {
   fetchFullReport,
-  deskScope,
+  handoffId,
   type DeskClients,
   formatSpan,
   IDLE_WINDOW_MS,
   isRecent,
-  operationalAgents,
+  deskAgents,
   receiptIdentity,
   receiptEndedAt,
   type ReceiptState,
   type TurnReceipt,
-  useHandledTurns,
   useNow,
-  useObservedStops,
-  useRecentOpens,
   useTurnReceipts,
 } from "./handoffs";
 import {
@@ -32,6 +39,8 @@ import {
   usePaneScreens,
 } from "./paneScreen";
 import type { WorldLeafObject, WorldObject } from "./worldObject";
+import { useDeskState } from "./useDeskState";
+import type { WorldDeskStore } from "./deskStateStore";
 import "./DeskView.css";
 
 type Lane = "needs" | "review" | "working";
@@ -44,44 +53,8 @@ type Item = {
   /** No receipt has been read for the agent's present state yet. */
   pending: boolean;
   since: number | null;
+  question?: string;
 };
-
-function handoffId(
-  leaf: WorldLeafObject,
-  receipt: TurnReceipt | null,
-  stoppedAt: number | undefined,
-) {
-  // Scoped to the agent session and runtime, so marking one agent's stop can
-  // never hide another session's stop with a matching turn id.
-  return JSON.stringify([
-    receiptIdentity(leaf),
-    receipt?.turn_id ?? `stop:${stoppedAt ?? leaf.lastActivityAt ?? ""}`,
-  ]);
-}
-
-function where(leaf: WorldLeafObject) {
-  return [leaf.hostLabel, leaf.spaceLabel, leaf.tabLabel, agentFolder(leaf)]
-    .filter(Boolean)
-    .join(" › ");
-}
-
-/**
- * What the operator recognizes an agent by: the name they gave it, otherwise
- * the harness's own thread title, otherwise the harness.
- */
-function agentName(leaf: WorldLeafObject) {
-  return leaf.agentName ?? leaf.terminalTitle ?? leaf.agentLabel ?? leaf.label;
-}
-
-/** Harness and model, so the operator can tell what each agent runs on. */
-function agentRuntime(leaf: WorldLeafObject) {
-  return [
-    leaf.agentName || leaf.terminalTitle ? leaf.agentLabel : null,
-    leaf.modelLabel,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-}
 
 export function partitionDesk(
   agents: WorldLeafObject[],
@@ -89,6 +62,8 @@ export function partitionDesk(
   handled: Set<string>,
   now: number,
   stops: Map<string, number> = new Map(),
+  stopIds: ReadonlyMap<string, string> = new Map(),
+  asks: ReadonlyMap<string, WorldAsk> = new Map(),
 ) {
   const needs: Item[] = [];
   const review: Item[] = [];
@@ -100,18 +75,20 @@ export function partitionDesk(
     const { receipt, current } = receiptFor(leaf);
     const pending = !current;
     const stoppedAt = stops.get(receiptIdentity(leaf));
-    const id = handoffId(leaf, receipt, stoppedAt);
+    const id = handoffId(leaf, stoppedAt, stopIds.get(receiptIdentity(leaf)));
     const since =
       receiptEndedAt(receipt) ?? stoppedAt ?? leaf.lastActivityAt ?? null;
-    if (leaf.status === "blocked") {
+    if (leaf.status === "blocked" || asks.has(leaf.id)) {
       needs.push({
         lane: "needs",
+        question: asks.get(leaf.id)?.question,
         leaf,
         receipt,
         handoffId: id,
         pending,
         handled: false,
-        since,
+        since:
+          leaf.status === "blocked" ? since : (asks.get(leaf.id)?.at ?? since),
       });
     } else if (leaf.status === "working") {
       const started = Date.parse(receipt?.started_at ?? "");
@@ -126,6 +103,7 @@ export function partitionDesk(
       });
     } else if (
       leaf.status === "done" ||
+      (leaf.status === "idle" && handled.has(id)) ||
       isRecent(receipt, now) ||
       (stoppedAt !== undefined && now - stoppedAt <= IDLE_WINDOW_MS)
     ) {
@@ -227,23 +205,7 @@ function Screen({
   );
 }
 
-/** Whether a media query matches, updating as the viewport changes. */
-export function useMediaQuery(query: string) {
-  const [matches, setMatches] = useState(
-    () =>
-      typeof window !== "undefined" &&
-      window.matchMedia?.(query).matches === true,
-  );
-  useEffect(() => {
-    const list = window.matchMedia?.(query);
-    if (!list) return;
-    const update = () => setMatches(list.matches);
-    update();
-    list.addEventListener("change", update);
-    return () => list.removeEventListener("change", update);
-  }, [query]);
-  return matches;
-}
+export { useMediaQuery } from "./deskMediaQuery";
 
 export type DeskMode = "now" | "agents" | "reviewed";
 const DESK_MODES: { mode: DeskMode; label: string }[] = [
@@ -254,44 +216,7 @@ const DESK_MODES: { mode: DeskMode; label: string }[] = [
 const RECENT_LIMIT = 6;
 const PREVIEW_DELAY_MS = 150;
 
-/** The folder an agent works in, which tells same-named tabs apart. */
-export function agentFolder(leaf: WorldLeafObject) {
-  const cwd = leaf.pane.foreground_cwd ?? leaf.pane.cwd;
-  if (!cwd) return null;
-  const parts = cwd.replace(/[\\/]+$/, "").split(/[\\/]/);
-  return parts[parts.length - 1] || cwd;
-}
-
-/**
- * Whether an agent matches every word of a search across the things an
- * operator remembers: its name, harness, workspace, tab, folder, request and
- * report.
- */
-export function matchesQuery(
-  leaf: WorldLeafObject,
-  receipt: TurnReceipt | null,
-  query: string,
-) {
-  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-  if (!words.length) return true;
-  const haystack = [
-    leaf.agentName,
-    leaf.terminalTitle,
-    leaf.agentLabel,
-    leaf.modelLabel,
-    leaf.label,
-    leaf.spaceLabel,
-    leaf.tabLabel,
-    agentFolder(leaf),
-    leaf.taskSummary,
-    receipt?.ask,
-    receipt?.report,
-  ]
-    .filter(Boolean)
-    .join("\n")
-    .toLowerCase();
-  return words.every((word) => haystack.includes(word));
-}
+export { agentFolder, matchesQuery } from "./deskAgentLabels";
 
 export type DirectoryGroup = {
   /** Connection-qualified workspace identity. */
@@ -384,7 +309,7 @@ export function focusIndexOf(
 export function DeskView(props: {
   world: WorldObject;
   aggregate?: WorldObject;
-  onOpenTerminal(id: string): Promise<void>;
+  onOpen(id: string): Promise<void>;
   reading?: string | null;
   onPreview?: ((id: string) => Promise<void>) | null;
   onCloseReading?: () => void;
@@ -402,26 +327,41 @@ export function DeskBoard({
   world,
   aggregate,
   client,
-  onOpenTerminal,
+  onOpen,
   reading = null,
   onPreview = null,
   onCloseReading,
+  deskStore,
 }: {
+  deskStore?: WorldDeskStore;
   world: WorldObject;
   aggregate?: WorldObject;
   client: DeskClients;
-  onOpenTerminal(id: string): Promise<void>;
+  onOpen(id: string): Promise<void>;
   /** The agent shown in the docked reading pane, on wide screens. */
   reading?: string | null;
   onPreview?: ((id: string) => Promise<void>) | null;
   onCloseReading?: () => void;
 }) {
   const now = useNow(10_000);
-  const agents = useMemo(() => operationalAgents(world), [world]);
-  const receiptFor = useTurnReceipts(agents, client);
-  const { handled, mark } = useHandledTurns(deskScope(client));
-  const stops = useObservedStops(deskScope(client), agents);
-  const { opens, record: recordOpen } = useRecentOpens(deskScope(client));
+  const asks = useWorldAsks();
+  const asking = useMemo(() => asksForWorld(asks, world), [asks, world]);
+  const agents = useMemo(() => deskAgents(world, asking), [world, asking]);
+  const {
+    handled,
+    stops,
+    stopIds,
+    opens,
+    mark,
+    record: recordOpen,
+    verified,
+    error: stateError,
+  } = useDeskState(agents, client, deskStore);
+  const receipts = useTurnReceipts(agents, client, stopIds);
+  const receiptFor = (leaf: WorldLeafObject) => {
+    const receipt = receipts(leaf);
+    return { ...receipt, current: receipt.current && verified };
+  };
   const [mode, setModeState] = useState<DeskMode>(() => {
     try {
       // The mode lasts for this browser session; a fresh visit triages first.
@@ -457,9 +397,12 @@ export function DeskBoard({
     handled,
     now,
     stops,
+    stopIds,
+    asking,
   );
   const pendingReview = review.filter((item) => !item.handled);
-  const matches = (item: Item) => matchesQuery(item.leaf, item.receipt, query);
+  const matches = (item: Item) =>
+    matchesQuery(item.leaf, item.receipt, query, item.question);
   const shownNeeds = needs.filter(matches);
   const shownReview = pendingReview.filter(matches);
   const shownWorking = working.filter(matches);
@@ -545,10 +488,10 @@ export function DeskBoard({
   const open = (leaf: WorldLeafObject) => {
     cancelPreview();
     setError(null);
-    recordOpen(leaf);
-    void onOpenTerminal(leaf.id).catch((reason: unknown) =>
+    void recordOpen(leaf);
+    void onOpen(leaf.id).catch((reason: unknown) =>
       setError(
-        reason instanceof Error ? reason.message : "Could not open terminal",
+        reason instanceof Error ? reason.message : "Could not open this agent",
       ),
     );
   };
@@ -585,18 +528,31 @@ export function DeskBoard({
     )
       focusCard(focusedId);
   });
-  const toggleReviewed = (item: Item) => {
-    // Marking (or reopening) moves the item out of the list the operator is
-    // looking at, removing any control in it that held focus. Move focus to
-    // its neighbour explicitly: browsers do not fire blur for removed nodes.
+  const toggleReviewed = async (item: Item) => {
+    const activeBefore = document.activeElement;
+    const hadFocus = rootRef.current?.contains(activeBefore);
     const index = order.findIndex((entry) => entry.leaf.id === item.leaf.id);
     const neighbour =
       index >= 0 ? (order[index + 1] ?? order[index - 1]) : undefined;
-    if (rootRef.current?.contains(document.activeElement)) {
+    if (!(await mark(item.handoffId, !item.handled))) {
+      setError(
+        "Could not save the review mark. Try again when the connection is ready.",
+      );
+      return;
+    }
+    setError(null);
+    // Publication may remove the focused button before mark() resolves.
+    // Restore its captured neighbour without stealing newer focus elsewhere.
+    const activeNow = document.activeElement;
+    if (
+      hadFocus &&
+      (activeNow === activeBefore ||
+        activeNow === document.body ||
+        activeNow === rootRef.current)
+    ) {
       setFocusedId(neighbour?.leaf.id ?? null);
       focusCard(neighbour?.leaf.id ?? null);
     }
-    mark(item.handoffId, !item.handled);
     setToast(
       item.handled ? null : { id: item.handoffId, name: agentName(item.leaf) },
     );
@@ -736,7 +692,10 @@ export function DeskBoard({
         }}
       >
         <div className="desk-card-head">
-          <span className="desk-card-name">{agentName(leaf)}</span>
+          <span className="desk-card-name">
+            {agentName(leaf)}
+            <WorldAskMark ask={asking.get(leaf.id)} />
+          </span>
           <span className="desk-card-where">
             {[agentRuntime(leaf), where(leaf)].filter(Boolean).join(" · ")}
           </span>
@@ -759,11 +718,13 @@ export function DeskBoard({
         {item.lane === "needs" ? (
           <Screen
             lines={
-              screen
-                ? questionFromScreen(screen)
-                : receipt?.report
-                  ? [receipt.report]
-                  : []
+              item.question
+                ? [item.question]
+                : screen
+                  ? questionFromScreen(screen)
+                  : receipt?.report
+                    ? [receipt.report]
+                    : []
             }
             fallback="Waiting for your answer in its terminal."
           />
@@ -876,7 +837,8 @@ export function DeskBoard({
   };
   const row = (leaf: WorldLeafObject, showWorkspace = false) => {
     const { receipt } = receiptFor(leaf);
-    const line = receipt?.ask ?? leaf.taskSummary ?? null;
+    const line =
+      asking.get(leaf.id)?.question ?? receipt?.ask ?? leaf.taskSummary ?? null;
     const at = activeAt(leaf);
     const meta = [
       agentRuntime(leaf),
@@ -898,7 +860,10 @@ export function DeskBoard({
           </span>
           <span className="desk-row-main">
             <span className="desk-row-title">
-              <strong>{agentName(leaf)}</strong>
+              <strong>
+                {agentName(leaf)}
+                <WorldAskMark ask={asking.get(leaf.id)} />
+              </strong>
               <small>{meta.join(" · ")}</small>
             </span>
             {line ? <span className="desk-row-line">{line}</span> : null}
@@ -1038,9 +1003,9 @@ export function DeskBoard({
           </label>
         </div>
       </header>
-      {error ? (
+      {error || stateError ? (
         <p className="desk-error" role="alert">
-          {error}
+          {error ?? stateError}
         </p>
       ) : null}
       {mode === "now" ? (
@@ -1169,8 +1134,10 @@ export function DeskBoard({
           <button
             type="button"
             onClick={() => {
-              mark(toast.id, false);
-              setToast(null);
+              void mark(toast.id, false).then((saved) => {
+                if (saved) setToast(null);
+                else setError("Could not undo this review mark.");
+              });
               // The toast (and this button) leaves the page.
               focusCard(focusedId);
             }}

@@ -4,6 +4,11 @@ import {
   type AgentLook,
   type AgentProfile,
 } from "../../../shared/agentProfile";
+import {
+  parseHarnessReadiness,
+  type HarnessReadiness,
+} from "../../../shared/harnessReadiness";
+export type { HarnessReadiness } from "../../../shared/harnessReadiness";
 import type { ChimeSettings } from "../../../shared/chimes";
 import type { TownLook } from "./town/townSprites";
 
@@ -159,13 +164,6 @@ export const retainedOutcome = (
   ...(result.command ? { command: result.command } : {}),
 });
 
-export type HarnessReadiness = {
-  kind: string;
-  installed: boolean;
-  logged_in: boolean | null;
-  method?: string;
-  can_log_in: boolean;
-};
 export type LauncherCatalog = {
   kinds: string[];
   skills: string[];
@@ -187,14 +185,33 @@ export async function launcherCatalog(
       { workspace_id: target.workspaceId ?? "" },
       30_000,
     )) as Partial<LauncherCatalog> | null;
+  return parseLauncherCatalog(result);
+}
+
+/** An older or malformed reply cannot turn unavailable evidence into absence. */
+export function parseLauncherCatalog(value: unknown): LauncherCatalog {
+  const result =
+    value && typeof value === "object"
+      ? (value as Partial<LauncherCatalog>)
+      : null;
   const strings = (value: unknown) =>
     Array.isArray(value)
       ? value.filter((v): v is string => typeof v === "string")
       : [];
+  const kinds = [...new Set(strings(result?.kinds))].slice(0, 40);
+  const rows = Array.isArray(result?.readiness) ? result.readiness : [];
   return {
-    kinds: strings(result?.kinds),
+    kinds,
     skills: strings(result?.skills),
-    readiness: Array.isArray(result?.readiness) ? result.readiness : [],
+    readiness: kinds.map((kind) => {
+      const matches = rows.filter(
+        (row) => row && typeof row === "object" && row.kind === kind,
+      );
+      return parseHarnessReadiness(
+        kind,
+        matches.length === 1 ? matches[0] : null,
+      );
+    }),
   };
 }
 
@@ -336,10 +353,31 @@ export function readinessNote(
       login: false,
     };
   const ready = catalog.readiness.find((r) => r.kind === kind);
-  if (!ready) return null;
-  if (!ready.installed)
+  if (!ready || ready.installed === null)
+    return {
+      blocked: false,
+      text:
+        ready?.probe.state === "unsupported"
+          ? "Readiness is not checked on Windows"
+          : ready?.probe.reason === "timeout"
+            ? "Readiness unknown (check timed out) — Check again"
+            : ready?.probe.reason === "probe-failed"
+              ? "Readiness unknown (check failed) — Check again"
+              : "Readiness unknown — Check again",
+      login: false,
+    };
+  if (ready.installed === false)
     return { blocked: true, text: "Not installed on this host", login: false };
   if (ready.logged_in === false)
     return { blocked: false, text: "Logged out", login: ready.can_log_in };
+  if (ready.logged_in === null)
+    return {
+      blocked: false,
+      text:
+        ready.probe.reason === "auth-unsupported"
+          ? "Installed; login check not supported"
+          : "Login status unknown — Check again",
+      login: false,
+    };
   return null;
 }

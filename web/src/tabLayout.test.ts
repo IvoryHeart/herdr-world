@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import {
   clearTabLayouts,
+  retainTabLayoutOwners,
   forgetTabLayoutsExcept,
   provisionalTabLayout,
   rememberTabLayout,
@@ -131,4 +132,19 @@ describe("provisional tab layout", () => {
       provisionalTabLayout(layout("t2", ["p1"]), [pane("p1", "t1")], "t1"),
     ).not.toBeNull();
   });
+});
+
+test("same-runtime unavailable owners keep geometry; replaced and removed owners retire it", () => {
+  clearTabLayouts();
+  const retained = layout("t1", ["p1", "p2"]);
+  rememberTabLayout("alpha", 7, retained);
+  rememberTabLayout("beta", 3, layout("t1", ["p3"]));
+  retainTabLayoutOwners([
+    { id: "alpha", generation: 7 },
+    { id: "beta", generation: 3 },
+  ]);
+  expect(tabLayoutFor("alpha", 7, "t1")).toBe(retained);
+  retainTabLayoutOwners([{ id: "alpha", generation: 8 }]);
+  expect(tabLayoutFor("alpha", 7, "t1")).toBeNull();
+  expect(tabLayoutFor("beta", 3, "t1")).toBeNull();
 });

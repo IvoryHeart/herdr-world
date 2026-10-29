@@ -349,16 +349,24 @@ export function parseWorldArgs(
       };
     }
     case "ask": {
-      if (sub === "get" || sub === "answer") {
+      if (sub === "get" || sub === "answer" || sub === "withdraw") {
         const { values, positionals } = parsed(
           rest,
-          { wait: { type: "boolean" }, timeout: { type: "string" } },
-          sub === "get" ? 1 : 2,
+          {
+            wait: { type: "boolean" },
+            timeout: { type: "string" },
+            ...(sub === "withdraw" ? { key: { type: "string" as const } } : {}),
+          },
+          sub === "answer" ? 2 : 1,
         );
+        if (values.key && positionals.length)
+          throw new UsageError("use either a question ID or --key");
         return {
           command: `ask ${sub}`,
           params: {
-            id: need(positionals[0], "question ID"),
+            ...(values.key
+              ? { key: values.key }
+              : { id: need(positionals[0], "question ID") }),
             ...(sub === "answer"
               ? { answer: need(positionals[1], "answer") }
               : {
@@ -374,6 +382,7 @@ export function parseWorldArgs(
         {
           options: { type: "string" },
           "owner-only": { type: "boolean" },
+          key: { type: "string" },
           wait: { type: "boolean" },
           timeout: { type: "string" },
         },
@@ -383,6 +392,7 @@ export function parseWorldArgs(
         command: "ask",
         params: {
           question: need(positionals[0], "question"),
+          ...(values.key ? { key: values.key } : {}),
           options: values.options
             ? String(values.options)
                 .split(",")
@@ -450,6 +460,8 @@ function human(command: string, reply: Reply): string {
   const entry = (result ?? {}) as Record<string, unknown>;
   if (command.startsWith("ask")) {
     const answer = entry.answer as { text?: string } | undefined;
+    if (command === "ask withdraw" || entry.withdrawn)
+      return `${String(entry.id)} withdrawn${answer?.text !== undefined ? ` (answered: ${String(answer.text)})` : ""}`;
     return answer?.text !== undefined
       ? String(answer.text)
       : `${String(entry.id)} waiting for an answer`;
@@ -532,7 +544,12 @@ export async function runWorldCommand(
       const answered = Boolean(
         reply.ok && (reply.result as { answer?: unknown })?.answer,
       );
-      if (!reply.ok || answered) break;
+      if (
+        !reply.ok ||
+        answered ||
+        (reply.result as { withdrawn?: unknown })?.withdrawn
+      )
+        break;
       if (timeoutMs && Date.now() - started >= timeoutMs) {
         (asJson ? context.log : context.error)(
           asJson

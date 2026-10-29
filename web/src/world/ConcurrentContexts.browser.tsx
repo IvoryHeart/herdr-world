@@ -578,7 +578,7 @@ async function run() {
           world={world}
           selectedId={null}
           onSelect={() => {}}
-          onOpenTerminal={() => {}}
+          onOpen={() => {}}
           onSelectedAnchorChange={() => {}}
           onNodeAnchorsChange={() => {}}
         />
@@ -640,7 +640,7 @@ async function run() {
           world={refreshedWorld}
           selectedId={null}
           onSelect={() => {}}
-          onOpenTerminal={() => {}}
+          onOpen={() => {}}
           onSelectedAnchorChange={() => {}}
           onNodeAnchorsChange={() => {}}
         />

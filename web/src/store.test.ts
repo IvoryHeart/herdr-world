@@ -32,6 +32,7 @@ import {
   taskNotificationTargetIsCurrent,
   worktreeRemovalCompletionNotice,
 } from "./store";
+import { notifyWorldAsk } from "./store/notifications";
 import { parseHerdrTaskNotification } from "./herdrTaskNotification";
 import type { Pane } from "./types";
 import { removeTemporaryWorkspaceSafely } from "./worktreeLifecycle";
@@ -499,6 +500,151 @@ describe("automatic update check preference", () => {
       }
     }
   });
+});
+
+describe("available update notification lifetime", () => {
+  test("notifies once per version while dismissal, reload and failure keep the offer", async () => {
+    const previous = store.get();
+    const originalFetch = globalThis.fetch;
+    const storage = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+    const values = new Map<string, string>();
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (key: string) => values.get(key) ?? null,
+        setItem: (key: string, value: string) => values.set(key, value),
+      },
+    });
+    let latest = "1.2.3-notification-test";
+    let available = true;
+    let installFails = true;
+    globalThis.fetch = (async (url: string) =>
+      url === "/api/update/install"
+        ? Response.json(
+            installFails
+              ? { error: "Synthetic install failure" }
+              : { installed: true, installed_version: latest },
+            { status: installFails ? 500 : 200 },
+          )
+        : Response.json({
+            current_version: "1.0.0",
+            latest_version: latest,
+            update_available: available,
+            can_auto_update: true,
+            platform: "linux-x64",
+          })) as typeof fetch;
+    try {
+      __storeTesting.replaceState({
+        ...previous,
+        connectionPaused: false,
+        updateInfo: null,
+        dismissedUpdateVersion: null,
+        updateInstalling: false,
+      });
+      await store.checkForUpdate();
+      expect(store.get().updateInfo?.latest_version).toBe(latest);
+      expect(store.get().dismissedUpdateVersion).toBeNull();
+      await store.checkForUpdate();
+      expect(store.get().dismissedUpdateVersion).toBeNull();
+      store.dismissUpdate();
+      expect(store.get().updateInfo?.latest_version).toBe(latest);
+      expect(store.get().dismissedUpdateVersion).toBe(latest);
+      await store.checkForUpdate();
+      expect(store.get().dismissedUpdateVersion).toBe(latest);
+      // A fresh store reads the same browser-origin notification history.
+      __storeTesting.replaceState({
+        ...store.get(),
+        updateInfo: null,
+        dismissedUpdateVersion: null,
+      });
+      await store.checkForUpdate();
+      expect(store.get().updateInfo?.latest_version).toBe(latest);
+      expect(store.get().dismissedUpdateVersion).toBe(latest);
+      expect(store.get().notice?.message).toBe("Update check complete");
+      expect(store.get().notice?.detail).toContain(latest);
+      store.setAutomaticUpdateChecksEnabled(false);
+      expect(store.get().updateInfo?.latest_version).toBe(latest);
+      await store.installUpdate();
+      expect(store.get().notice?.message).toBe("Update install failed");
+      expect(store.get().updateInfo?.update_available).toBe(true);
+      latest = "1.2.4-notification-test";
+      await store.checkForUpdate();
+      expect(store.get().dismissedUpdateVersion).toBeNull();
+      installFails = false;
+      await store.installUpdate();
+      expect(store.get().updateInfo).toBeNull();
+      available = false;
+      await store.checkForUpdate();
+      expect(store.get().updateInfo).toBeNull();
+    } finally {
+      __storeTesting.replaceState(previous);
+      globalThis.fetch = originalFetch;
+      if (storage) Object.defineProperty(globalThis, "localStorage", storage);
+      else delete (globalThis as { localStorage?: Storage }).localStorage;
+    }
+  });
+});
+
+describe("update checks across installation", () => {
+  test.each([false, true])(
+    "retires a held pre-install reply (error=%s)",
+    async (errorReply) => {
+      const previous = store.get();
+      const originalFetch = globalThis.fetch;
+      const held = Promise.withResolvers<Response>();
+      const offer = {
+        current_version: "1.0.0",
+        latest_version: "2.0.0-held-test",
+        update_available: true,
+        can_auto_update: true,
+        platform: "linux-x64",
+      };
+      let hold = true;
+      globalThis.fetch = (async (url: string) =>
+        url === "/api/update/install"
+          ? Response.json({
+              installed: true,
+              installed_version: offer.latest_version,
+            })
+          : hold
+            ? held.promise
+            : Response.json({
+                ...offer,
+                latest_version: "3.0.0-held-test",
+              })) as typeof fetch;
+      try {
+        __storeTesting.replaceState({
+          ...previous,
+          connectionPaused: false,
+          updateInstalling: false,
+          updateInfo: offer,
+          notice: null,
+        });
+        const checking = store.checkForUpdate();
+        await store.installUpdate();
+        expect(store.get().updateInfo).toBeNull();
+        held.resolve(
+          errorReply
+            ? Response.json(
+                { error: "Obsolete check failure" },
+                { status: 500 },
+              )
+            : Response.json(offer),
+        );
+        await checking;
+        expect(store.get().updateInfo).toBeNull();
+        expect(store.get().notice?.message).toBe(
+          `Herdr World ${offer.latest_version} installed`,
+        );
+        hold = false;
+        await store.checkForUpdate();
+        expect(store.get().updateInfo?.latest_version).toBe("3.0.0-held-test");
+      } finally {
+        __storeTesting.replaceState(previous);
+        globalThis.fetch = originalFetch;
+      }
+    },
+  );
 });
 
 describe("task notification activation", () => {
@@ -1287,7 +1433,11 @@ describe("independent qualified operational sessions", () => {
       held.resolve({});
       const before = structuredClone(store.get().sessionsByConnectionId.alpha);
       const target = taskNotificationTarget("beta", 1, pane("beta", "done"));
-      await store.focusTaskNotificationTarget(target);
+      expect(await store.focusTaskNotificationTarget(target)).toMatchObject({
+        pane_id: target.paneId,
+        workspace_id: target.workspaceId,
+        agent: "beta",
+      });
       expect(
         calls.some(
           (call) => call.host === "beta" && call.method === "pane.get",
@@ -1296,6 +1446,223 @@ describe("independent qualified operational sessions", () => {
       expect(calls.some((call) => call.host === "alpha")).toBe(false);
       expect(store.get().activeConnectionId).toBe("alpha");
       expect(store.get().sessionsByConnectionId.alpha).toEqual(before);
+    });
+  });
+  test("Spaces notification enters only its admitted host after prechecks", async () => {
+    await withIndependentClients(async (calls, held) => {
+      held.resolve({});
+      const original = bridge.setActiveConnection;
+      bridge.setActiveConnection = (() =>
+        10) as typeof bridge.setActiveConnection;
+      let retired = 0;
+      try {
+        const target = taskNotificationTarget("beta", 1, pane("beta", "done"));
+        expect(
+          await store.focusTaskNotificationTarget(target, {
+            activateConnection: true,
+            beforeFocus: () => {
+              retired++;
+              expect(
+                calls.some(
+                  (call) => call.host === "beta" && call.method === "pane.get",
+                ),
+              ).toBe(true);
+              expect(
+                calls.some((call) => call.method === "workspace.focus"),
+              ).toBe(false);
+            },
+          }),
+        ).toMatchObject({ pane_id: target.paneId, agent: "beta" });
+        expect(retired).toBe(1);
+        expect(store.get().activeConnectionId).toBe("beta");
+      } finally {
+        bridge.setActiveConnection = original;
+      }
+    });
+  });
+  test("refused notification prechecks leave the current presentation and Spaces owner alone", async () => {
+    await withIndependentClients(async (_calls, held) => {
+      held.resolve({});
+      let retired = false;
+      const result = await store.focusTaskNotificationTarget(
+        {
+          ...taskNotificationTarget("beta", 1, pane("beta", "done")),
+          agentSessionId: "retired-session",
+        },
+        {
+          activateConnection: true,
+          beforeFocus: () => {
+            retired = true;
+          },
+        },
+      );
+      expect(result).toBeUndefined();
+      expect(retired).toBe(false);
+      expect(store.get().activeConnectionId).toBe("alpha");
+    });
+  });
+  test.each(["resolve", "reject"] as const)(
+    "an older delayed Beta notification cannot leave a newer admitted Gamma host (%s)",
+    async (completion) => {
+      await withIndependentClients(async (calls, held) => {
+        held.resolve({});
+        const state = store.get();
+        __storeTesting.replaceState({
+          ...state,
+          connections: [
+            ...state.connections,
+            {
+              id: "gamma",
+              label: "Gamma",
+              source: "test",
+              is_default: false,
+              state: "ready",
+              generation: 1,
+            },
+          ],
+          sessionsByConnectionId: {
+            ...state.sessionsByConnectionId,
+            gamma: session("gamma"),
+          },
+        });
+        const connection = bridge.connection;
+        const activate = bridge.setActiveConnection;
+        const betaStarted = Promise.withResolvers<void>();
+        const betaLookup = Promise.withResolvers<void>();
+        bridge.setActiveConnection = (() =>
+          10) as typeof bridge.setActiveConnection;
+        bridge.connection = ((id, generation) => {
+          const client = connection(id, generation);
+          return {
+            ...client,
+            call: async (method: string, params?: Record<string, unknown>) => {
+              if (id === "beta" && method === "pane.get") {
+                betaStarted.resolve();
+                await betaLookup.promise;
+              }
+              return client.call(method, params);
+            },
+          };
+        }) as typeof bridge.connection;
+        let request = 1;
+        let obsoleteRetired = false;
+        try {
+          const beta = store.focusTaskNotificationTarget(
+            taskNotificationTarget("beta", 1, pane("beta", "idle")),
+            {
+              activateConnection: true,
+              isCurrent: () => request === 1,
+              beforeFocus: () => {
+                obsoleteRetired = true;
+              },
+            },
+          );
+          await betaStarted.promise;
+          request = 2;
+          expect(
+            await store.focusTaskNotificationTarget(
+              taskNotificationTarget("gamma", 1, pane("gamma", "idle")),
+              {
+                activateConnection: true,
+                isCurrent: () => request === 2,
+              },
+            ),
+          ).toMatchObject({ agent: "gamma" });
+          expect(store.get().activeConnectionId).toBe("gamma");
+          if (completion === "reject")
+            betaLookup.reject(new Error("Superseded lookup failed"));
+          else betaLookup.resolve();
+          expect(await beta).toBe(false);
+          expect(store.get().activeConnectionId).toBe("gamma");
+          expect(obsoleteRetired).toBe(false);
+          expect(store.get().notice).toBeNull();
+          expect(
+            calls.some(
+              (call) =>
+                call.host === "beta" && call.method === "workspace.focus",
+            ),
+          ).toBe(false);
+        } finally {
+          betaLookup.resolve();
+          bridge.setActiveConnection = activate;
+        }
+      });
+    },
+  );
+  test("a superseded notification already queued behind native focus does not dispatch", async () => {
+    await withIndependentClients(async (calls, held) => {
+      const connection = bridge.connection;
+      const alphaStarted = Promise.withResolvers<void>();
+      bridge.connection = ((id, generation) => {
+        const client = connection(id, generation);
+        return {
+          ...client,
+          call: async (method: string, params?: Record<string, unknown>) => {
+            if (id === "alpha" && method === "workspace.focus")
+              alphaStarted.resolve();
+            return client.call(method, params);
+          },
+        };
+      }) as typeof bridge.connection;
+      const first = store.focusQualifiedTarget({
+        connectionId: "alpha",
+        runtimeGeneration: 1,
+        workspaceId: "same-workspace",
+        paneId: null,
+      });
+      await alphaStarted.promise;
+      const beforeFocus = Promise.withResolvers<void>();
+      let current = true;
+      const obsolete = store.focusTaskNotificationTarget(
+        taskNotificationTarget("beta", 1, pane("beta", "idle")),
+        {
+          isCurrent: () => current,
+          beforeFocus: () => beforeFocus.resolve(),
+          activateConnection: true,
+        },
+      );
+      await beforeFocus.promise;
+      current = false;
+      held.resolve({});
+      await first;
+      expect(await obsolete).toBe(false);
+      expect(
+        calls.some(
+          (call) => call.host === "beta" && call.method === "workspace.focus",
+        ),
+      ).toBe(false);
+      expect(store.get().activeConnectionId).toBe("alpha");
+    });
+  });
+  test("supersession after native focus succeeds still prevents host activation", async () => {
+    await withIndependentClients(async (_calls, held) => {
+      held.resolve({});
+      const focus = store.focusQualifiedTarget;
+      const activate = bridge.setActiveConnection;
+      bridge.setActiveConnection = (() =>
+        10) as typeof bridge.setActiveConnection;
+      let current = true;
+      store.focusQualifiedTarget = async (target) => {
+        const admitted = await focus(target);
+        current = false;
+        return admitted;
+      };
+      try {
+        expect(
+          await store.focusTaskNotificationTarget(
+            taskNotificationTarget("beta", 1, pane("beta", "idle")),
+            {
+              activateConnection: true,
+              isCurrent: () => current,
+            },
+          ),
+        ).toBe(false);
+        expect(store.get().activeConnectionId).toBe("alpha");
+        expect(store.get().notice).toBeNull();
+      } finally {
+        store.focusQualifiedTarget = focus;
+        bridge.setActiveConnection = activate;
+      }
     });
   });
   test("a queued notification cannot focus a replacement session after its original lookup was admitted", async () => {
@@ -3388,6 +3755,48 @@ describe("Herdr task notifications", () => {
       ...overrides,
     };
   }
+
+  test("a new verified ask uses its captured host, runtime and session for Open agent", () => {
+    const ask = {
+      id: "q-example",
+      at: 1,
+      question: "READY #7: ship it?",
+      options: [],
+      owner_only: true,
+      actor: {
+        label: "Example watcher",
+        verified: true,
+        connection_id: "beta",
+        connection_generation: 1,
+        terminal_id: "beta-terminal",
+        workspace_id: "w1",
+        pane_id: "w1:p9",
+        agent: "codex",
+        agent_session_id: "original-session",
+      },
+    };
+    try {
+      __storeTesting.replaceState(enabledState({ notice: null }));
+      notifyWorldAsk(ask);
+      expect(store.get().notice).toMatchObject({
+        actionLabel: "Open agent",
+        actionConnectionId: "beta",
+        actionRuntimeGeneration: 1,
+        actionPaneId: "w1:p9",
+        actionAgentSessionId: "original-session",
+      });
+      __storeTesting.replaceState(enabledState({ notice: null }));
+      notifyWorldAsk({ ...ask, actor: { ...ask.actor, verified: false } });
+      expect(store.get().notice).toBeNull();
+      notifyWorldAsk({
+        ...ask,
+        actor: { ...ask.actor, connection_generation: 0 },
+      });
+      expect(store.get().notice).toBeNull();
+    } finally {
+      __storeTesting.replaceState(partitionState());
+    }
+  });
 
   test("parses relayed events and rejects malformed ones", () => {
     expect(

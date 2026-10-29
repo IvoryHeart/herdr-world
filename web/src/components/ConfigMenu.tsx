@@ -28,6 +28,7 @@ import {
   Volume2,
 } from "lucide-react";
 import { APP_VERSION } from "../version";
+import { isStaleBuild, useBuildFreshness } from "../buildFreshness";
 import { worldLocalStorage } from "../browserStorage";
 import { openSounds } from "../chimes/chimeHost";
 import { logoutBrowserSession } from "../api";
@@ -95,6 +96,7 @@ export function ConfigMenu({
   onShowShortcuts,
   ...configuration
 }: ConfigMenuProps) {
+  const build = useBuildFreshness();
   const s = useStoreSelector(
     (state) => ({
       bridgeStatus: state.bridgeStatus,
@@ -245,7 +247,9 @@ export function ConfigMenu({
         >
           <MenuIcon className="menu-button-icon" size={18} aria-hidden="true" />
           <span className="menu-button-label">Menu</span>
-          {updateAvailable ? <span className="menu-update-dot" /> : null}
+          {updateAvailable ? (
+            <span className="menu-update-dot" aria-hidden="true" />
+          ) : null}
         </button>
         {open ? (
           <div
@@ -269,6 +273,14 @@ export function ConfigMenu({
                 <div>
                   <strong>Herdr World</strong>
                   <span>Version {APP_VERSION}</span>
+                  {build.loaded ? (
+                    <span className="config-build" title="Loaded build">
+                      Build {build.loaded}
+                      {isStaleBuild(build)
+                        ? ` · server serves ${build.served}`
+                        : ""}
+                    </span>
+                  ) : null}
                 </div>
                 <span
                   className={`config-connection-summary status-${s.connectionPaused ? "paused" : s.status}`}
@@ -363,12 +375,14 @@ export function ConfigMenu({
                     <MessageSquare size={15} />
                   </span>
                   <span className="config-item-copy">
-                    <strong>Town opens</strong>
-                    <span>What tapping an agent or its desk opens</span>
+                    <strong>Agents open</strong>
+                    <span>
+                      What opening an agent shows: its Chat, or its terminal
+                    </span>
                   </span>
                   <select
                     className="config-preference-select"
-                    aria-label="Town opens"
+                    aria-label="Agents open"
                     value={officePreferences.townOpens}
                     onChange={(event) =>
                       updateOfficePreferences({
@@ -568,28 +582,46 @@ export function ConfigMenu({
                 <ConfigMenuItem
                   icon={<Download size={15} />}
                   label={
-                    canInstallUpdate
+                    updateAvailable
                       ? s.updateInstalling
                         ? "Updating..."
-                        : `Update to ${updateVersion}`
-                      : updateAvailable
-                        ? `Version ${updateVersion} available`
-                        : "Check for updates"
+                        : `Upgrade to ${updateVersion}`
+                      : "Check for updates"
                   }
                   description={
                     canInstallUpdate
                       ? "Install and restart"
                       : updateAvailable
-                        ? "Automatic install unavailable"
+                        ? undefined
                         : "Check the release server"
                   }
                   primary={canInstallUpdate}
-                  disabled={s.updateInstalling}
+                  disabled={
+                    s.updateInstalling || (updateAvailable && !canInstallUpdate)
+                  }
                   onClick={() => {
                     setOpen(false);
                     void store.updateOrCheck();
                   }}
                 />
+                {updateAvailable ? (
+                  <ConfigMenuItem
+                    icon={<RefreshCw size={15} />}
+                    label="Check for updates"
+                    description="Refresh release availability"
+                    disabled={s.updateInstalling}
+                    onClick={() => {
+                      setOpen(false);
+                      void store.checkForUpdate();
+                    }}
+                  />
+                ) : null}
+                {updateAvailable && !canInstallUpdate ? (
+                  <p className="config-update-reason" role="note">
+                    {s.updateInfo?.reason ??
+                      "Automatic installation is unavailable. Use this installation's update channel."}
+                  </p>
+                ) : null}
               </div>
               <div className="config-section">
                 <div className="config-title">Runtime</div>

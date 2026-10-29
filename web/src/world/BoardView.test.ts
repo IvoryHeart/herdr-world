@@ -33,28 +33,47 @@ const unavailableObservability = {
 };
 
 test.skipIf(!chrome).each([
-  [1440, "", ""],
-  [390, "", ""],
+  [1440, 900, "", ""],
+  [390, 844, "", ""],
   // Reduced motion: moves land at once, and still reach their places.
-  [1440, " with reduced motion", ""],
+  [1440, 900, " with reduced motion", ""],
   [
     320,
+    900,
     " controls",
     "Work stays labelled and note actions survive mobile overflow",
   ],
   [
     360,
+    900,
     " controls",
     "Work stays labelled and note actions survive mobile overflow",
   ],
   [
     430,
+    900,
     " controls",
     "Work stays labelled and note actions survive mobile overflow",
   ],
+  ...(
+    [
+      [1512, 982],
+      [1280, 1440],
+      [2560, 1440],
+      [1440, 2560],
+    ] as const
+  ).map(
+    ([width, height]) =>
+      [
+        width,
+        height,
+        " controls",
+        "Work stays labelled and note actions survive mobile overflow",
+      ] as const,
+  ),
 ])(
-  "Board renders, settles, folds, tidies and zooms at %ipx%s",
-  async (width, motion, scenario) => {
+  "Board renders, settles, folds, tidies and zooms at %ix%ipx%s",
+  async (width, height, motion, scenario) => {
     const dir = await mkdtemp(join(tmpdir(), "board-test-"));
     const assets = new Map<string, Blob>();
     const result = Promise.withResolvers<unknown>();
@@ -101,7 +120,7 @@ test.skipIf(!chrome).each([
           chrome!,
           "--headless=new",
           "--remote-debugging-port=0",
-          `--window-size=${width},900`,
+          `--window-size=${width},${height}`,
           ...(motion === " with reduced motion"
             ? ["--force-prefers-reduced-motion"]
             : []),
@@ -167,7 +186,7 @@ test.skipIf(!chrome).each([
           );
         await cdp("Emulation.setDeviceMetricsOverride", {
           width,
-          height: 900,
+          height,
           deviceScaleFactor: 1,
           mobile: width <= 720,
         });
@@ -180,7 +199,7 @@ test.skipIf(!chrome).each([
         // BOARD_SCENARIO="<name>[|<name>…]" selects focused diagnostics.
         const chosen = Bun.env.BOARD_SCENARIO || scenario;
         await cdp("Page.navigate", {
-          url: `${server.url.href}?mode=test&width=${width}${chosen ? `&scenario=${encodeURIComponent(chosen)}` : ""}`,
+          url: `${server.url.href}?mode=test&width=${width}&height=${height}${chosen ? `&scenario=${encodeURIComponent(chosen)}` : ""}`,
         });
         await pageRequested.promise;
       })();
@@ -211,7 +230,7 @@ test.skipIf(!chrome).each([
         await Bun.write(
           join(
             Bun.env.BOARD_CAPTURE_DIR,
-            `board-work-${width}${motion === " with reduced motion" ? "-reduced" : ""}.png`,
+            `board-work-${width}x${height}${motion === " with reduced motion" ? "-reduced" : ""}.png`,
           ),
           Buffer.from(String(capture.data), "base64"),
         );

@@ -1,3 +1,6 @@
+import { bridge } from "../api";
+import { sharedAsksStore, type WorldAsk } from "./worldAsks";
+import { fixturePullRequest as detailedPr } from "./testing/pullRequestFixture";
 // First: the page runs on test time (see testing/testClock.ts).
 import { clock } from "./testing/installTestClock";
 import { StrictMode } from "react";
@@ -40,6 +43,12 @@ Object.defineProperty(Crypto.prototype, "randomUUID", {
 // A synthetic sources service: one failing pull request on the "login fix"
 // agent's branch, a busy week of 150 merged ones and one ticket.
 const SOURCES_NOW = Date.now();
+// Calendar days can be 23 or 25 hours at daylight-saving boundaries.
+const sourceDay = (daysAgo: number) => {
+  const date = new Date(SOURCES_NOW);
+  date.setDate(date.getDate() - daysAgo);
+  return date.getTime();
+};
 const mergedWeek = Array.from({ length: 150 }, (_, index) => ({
   key: `github:pr:example-org/web-app#${1_000 + index}`,
   source: "github",
@@ -51,7 +60,7 @@ const mergedWeek = Array.from({ length: 150 }, (_, index) => ({
   status: "merged",
   roles: ["author"],
   updatedAt: SOURCES_NOW,
-  finishedAt: SOURCES_NOW - (index % 5) * 86_400_000,
+  finishedAt: sourceDay(index % 5),
   number: 1_000 + index,
   repo: "example-org/web-app",
   checks: "pass",
@@ -59,49 +68,6 @@ const mergedWeek = Array.from({ length: 150 }, (_, index) => ({
 // Your own open pull requests, read in detail: one ready to merge, one that
 // GitHub still holds for a review.
 const prHead = (digit: string) => digit.repeat(40);
-const detailedPr = (number: number, fields: Record<string, unknown> = {}) => ({
-  key: `github:pr:example-org/web-app#${number}`,
-  source: "github",
-  kind: "pull_request",
-  ref: `example-org/web-app#${number}`,
-  title: `Synthetic card change ${number}`,
-  url: `https://github.com/example-org/web-app/pull/${number}`,
-  lane: "ready",
-  status: "open",
-  roles: ["author"],
-  updatedAt: 2,
-  number,
-  repo: "example-org/web-app",
-  base: "main",
-  headSha: prHead(String(number % 10)),
-  draft: false,
-  checks: "pass",
-  review: "approved",
-  mergeable: "mergeable",
-  pr: {
-    baseRef: "main",
-    behindBy: 2,
-    checks: [
-      { name: "Unit tests", state: "pass", required: true },
-      { name: "Browser suite", state: "pass", required: false },
-    ],
-    checksTruncated: false,
-    reviewers: [
-      {
-        reviewer: "rev2",
-        url: `https://github.com/example-org/web-app/pull/${number}#issuecomment-1`,
-        at: 1,
-        outcome: "confirmed",
-        line: "2/2 resolved, 0 new.",
-        commit: prHead(String(number % 10)),
-        commitsSince: 0,
-      },
-    ],
-    uiChange: true,
-    images: 5,
-  },
-  ...fields,
-});
 /** #43's head; a scenario moves it to show a push while a sheet is open. */
 let head43 = prHead("3");
 /** Verb requests the cards sent, and GitHub's (synthetic) answer. */
@@ -279,6 +245,13 @@ const emptyDocument = (): BoardDocument => ({
   strings: [],
   relations: { spawns: [], groups: [] },
 });
+const askLedger = { revision: 0, asks: [] as WorldAsk[] };
+const originalAskCall = bridge.call.bind(bridge);
+bridge.call = (async (method: string, params?: Record<string, unknown>) =>
+  method === "world.asks.get"
+    ? structuredClone(askLedger)
+    : originalAskCall(method, params)) as typeof bridge.call;
+
 let saved: BoardDocument = emptyDocument();
 // `?colors=demo` (for screenshots) starts with chosen workspace and host colours.
 if (params.get("colors") === "demo")
@@ -428,7 +401,7 @@ function mount(key: number, shown = world, selectedId: string | null = null) {
           lastAnchors = anchors;
         }}
         onSelect={(id) => selected.push(id)}
-        onOpenTerminal={(id) => opened.push(id)}
+        onOpen={(id) => opened.push(id)}
         store={store}
         sendNote={async (target, note, confirm) => {
           // As the service does: a replacement is sent to only once confirmed.
@@ -757,6 +730,10 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         innerWidth === Number(params.get("width")),
         `CSS viewport ${innerWidth} must match requested width ${params.get("width")}`,
       );
+      check(
+        innerHeight === Number(params.get("height")),
+        `CSS viewport height ${innerHeight} must match requested height ${params.get("height")}`,
+      );
       const work = host.querySelector<HTMLButtonElement>(
         '[aria-label="Work: pull requests and tickets"]',
       )!;
@@ -790,6 +767,16 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
       check(
         work.getBoundingClientRect().height >= (innerWidth <= 720 ? 44 : 36),
         "Work keeps the prescribed touch height",
+      );
+      const workBounds = work.getBoundingClientRect();
+      check(
+        work.contains(
+          document.elementFromPoint(
+            workBounds.left + workBounds.width / 2,
+            workBounds.top + workBounds.height / 2,
+          ),
+        ),
+        "the visible Work pill receives touches at its centre",
       );
       check(
         innerWidth > 720 ||
@@ -854,6 +841,17 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         "closed target produces one detached note string",
       );
       const home = await boardAction(".board-tray-button");
+      const homeBounds = home.getBoundingClientRect();
+      check(
+        homeBounds.height >= (innerWidth <= 720 ? 44 : 36) &&
+          home.contains(
+            document.elementFromPoint(
+              homeBounds.left + homeBounds.width / 2,
+              homeBounds.top + homeBounds.height / 2,
+            ),
+          ),
+        "the distinct note action keeps its touch target inline or in overflow",
+      );
       check(
         home.textContent === "Needs a home · 1" ||
           home.textContent === "Needs a home (1)",
@@ -1059,13 +1057,27 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
       await settle(50);
       check(
         ready.querySelectorAll('[aria-label="Readiness"] li[data-state="pass"]')
-          .length === 5 &&
+          .length === 5,
+        "details show all five readiness rules",
+      );
+      check(
+        ready.textContent?.includes(
+          "Reviewer names are explicit sender claims, not verified identities",
+        ) === true &&
           ready.textContent?.includes(
-            "GitHub doesn't let you approve your own PR.",
-          ) === true &&
-          ready.textContent?.includes("per rev2's comment") === true &&
-          ready.textContent?.includes("2 behind main") === true,
-        "details show each rule, the reviewer's provenance and the head",
+            "a shared GitHub login does not identify a crew reviewer",
+          ) === true,
+        "details distinguish reviewer claims from shared account identity",
+      );
+      check(
+        ready.querySelector(
+          'a[href="https://github.com/example-org/web-app/pull/43#issuecomment-1"]',
+        ) !== null,
+        "details preserve the original reviewer source link",
+      );
+      check(
+        ready.textContent?.includes("2 behind main") === true,
+        "details preserve the head's distance behind main",
       );
       button(ready, "Close…").click();
       await settle(50);
@@ -1128,6 +1140,42 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         "a workspace with a waiting tab is marked",
       );
       check((await rest()) < 120, "the board is still at first sight");
+
+      const asker = world.leaves.find(
+        (leaf) => leaf.tabLabel === "dev server",
+      )!;
+      askLedger.asks = [
+        {
+          id: "q-board",
+          at: Date.now(),
+          question: "Ship the documentation?",
+          options: [],
+          owner_only: true,
+          actor: {
+            label: "Example",
+            verified: true,
+            connection_id: asker.connectionId,
+            connection_generation: asker.generation,
+            pane_id: asker.pane.pane_id,
+            terminal_id: asker.terminalId,
+          },
+        },
+      ];
+      askLedger.revision++;
+      await sharedAsksStore().refresh();
+      await settle(100);
+      check(
+        Boolean(host.querySelector('[data-world-ask="q-board"]')),
+        "Board shows ? on the asking pane's card",
+      );
+      askLedger.asks[0]!.withdrawn = { at: Date.now() };
+      askLedger.revision++;
+      await sharedAsksStore().refresh();
+      await settle(100);
+      check(
+        !host.querySelector('[data-world-ask="q-board"]'),
+        "withdrawal clears Board's question mark",
+      );
 
       // Taller cards (pane rows) are placed by their real size: no overlaps.
       // Only cards on show: the overview hides tab cards (opacity 0).

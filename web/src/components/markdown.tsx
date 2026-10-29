@@ -1,5 +1,14 @@
 import { resolveWorkspaceMarkdownLink } from "../workspaceFileUrl";
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Suspense,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { SourceFileLinkContext, parseSourceFileLink } from "../sourceFileLinks";
+import { decorateSourceFileLinks } from "../sourceFileMarkdown";
 import { createPortal } from "react-dom";
 import { marked } from "marked";
 import { lazyWithReload } from "../lazyWithReload";
@@ -67,6 +76,7 @@ export function isSafeMarkdownUrl(value: string) {
 }
 
 type MarkdownRenderOptions = {
+  sourceFileLinks?: boolean;
   breaks?: boolean;
   imageUrlResolver?: (source: string) => string | null;
   documentPath?: string;
@@ -186,7 +196,14 @@ export function sanitizeMarkdownHtml(
         continue;
       }
       if (name === "href" || name === "src") {
-        if (!isSafeMarkdownUrl(attr.value)) {
+        if (
+          !isSafeMarkdownUrl(attr.value) &&
+          !(
+            options.sourceFileLinks &&
+            name === "href" &&
+            parseSourceFileLink(attr.value)
+          )
+        ) {
           element.removeAttribute(attr.name);
           continue;
         }
@@ -222,6 +239,7 @@ export function sanitizeMarkdownHtml(
     }
   }
 
+  if (options.sourceFileLinks) decorateSourceFileLinks(doc.body);
   const headingIds = new Set<string>();
   for (const heading of doc.body.querySelectorAll("h1, h2, h3, h4, h5, h6")) {
     const base = (heading.textContent ?? "")
@@ -274,6 +292,8 @@ export function MarkdownPreview({
   fragment?: string;
   onSelectionChange?: (target: MarkdownSelectionTarget | null) => void;
 }) {
+  const openSourceFile = useContext(SourceFileLinkContext);
+  const sourceFileLinks = Boolean(openSourceFile) && !documentPath;
   const html = useMemo(
     () =>
       renderMarkdown(text, {
@@ -281,8 +301,16 @@ export function MarkdownPreview({
         imageUrlResolver,
         documentPath,
         linkUrlResolver,
+        sourceFileLinks,
       }),
-    [text, breaks, imageUrlResolver, documentPath, linkUrlResolver],
+    [
+      text,
+      breaks,
+      imageUrlResolver,
+      documentPath,
+      linkUrlResolver,
+      sourceFileLinks,
+    ],
   );
   const articleRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
@@ -293,6 +321,12 @@ export function MarkdownPreview({
     const target =
       event.target instanceof Element ? event.target.closest("a") : null;
     if (!target || !event.currentTarget.contains(target)) return;
+    const source = target.getAttribute("data-source-file");
+    if (source !== null && openSourceFile) {
+      event.preventDefault();
+      openSourceFile(source);
+      return;
+    }
     const path = target.getAttribute("data-document-path");
     if (path && onOpenDocument) {
       event.preventDefault();

@@ -1,6 +1,7 @@
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { bridge, type ConnectionSummary } from "./api";
+import { observeHerdrIdentity } from "../../shared/herdrIdentity";
 import { ConnectionSwitcher } from "./components/ConnectionSwitcher";
 import { __storeTesting, store } from "./store";
 import "./styles/tokens.css";
@@ -57,6 +58,44 @@ bridge.call = async (method, params) => {
   publish();
   return { ok: true };
 };
+const originalFetch = window.fetch.bind(window);
+window.fetch = Object.assign(
+  async (
+    input: Parameters<typeof fetch>[0],
+    init?: Parameters<typeof fetch>[1],
+  ) => {
+    const url = new URL(String(input), location.origin);
+    const match = /^\/api\/connections\/([^/]+)\/herdr-info$/.exec(
+      url.pathname,
+    );
+    if (!match) return originalFetch(input, init);
+    const owner = connections.find((connection) => connection.id === match[1]);
+    return Response.json(
+      observeHerdrIdentity({ version: "0.9.5", protocol: 22 }, Date.now()),
+      {
+        headers: {
+          "X-Herdr-Connection-Id": owner?.id ?? "unknown",
+          "X-Herdr-Connection-Generation": String(owner?.generation),
+        },
+      },
+    );
+  },
+  { preconnect: window.fetch.preconnect },
+);
+bridge.connection = (id = "local", generation) => ({
+  connectionId: id,
+  generation: 1,
+  serverRuntimeGeneration: generation ?? null,
+  isCurrent: () =>
+    connections.some(
+      (owner) =>
+        owner.id === id &&
+        owner.generation === generation &&
+        owner.state === "ready",
+    ),
+  acceptsServerGeneration: (value) => value === generation,
+  call: (method, params) => bridge.call(method, params),
+});
 store.refreshConnections = async () => true;
 
 async function run() {
@@ -126,6 +165,33 @@ async function run() {
     );
     click(button("Manage connections"));
     await waitFor(() => !!document.querySelector(".connection-manager-modal"));
+    await waitFor(
+      () => card("Local").textContent?.includes("Running Herdr 0.9.5") === true,
+    );
+    check(
+      card("Local").textContent?.includes("Installed binary: unknown"),
+      "Running version became installed-binary evidence",
+    );
+    check(
+      card("Failed SSH").textContent?.includes("Running Herdr version unknown"),
+      "Failed SSH invented a version",
+    );
+    check(
+      card("Failed SSH").textContent?.includes("Upgrade unavailable here"),
+      "Unknown SSH exposes an update action",
+    );
+    if (theme === "dark") {
+      await Promise.all(
+        document
+          .getAnimations()
+          .filter(
+            (animation) =>
+              animation.effect?.getTiming().iterations !== Infinity,
+          )
+          .map((animation) => animation.finished.catch(() => {})),
+      );
+      await fetch("/capture/connection-version", { method: "POST" });
+    }
     check(
       !button("Remove", card("Failed SSH")).disabled,
       `${theme}: failed SSH cannot be removed`,

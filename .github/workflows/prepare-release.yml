@@ -44,7 +44,7 @@ jobs:
         env:
           HERDR_TEST_PARALLEL: "1"
           HERDR_TEST_MAX_CONCURRENCY: "2"
-        run: bun run precommit
+        run: bun run check:source
       - name: Create release PR
         env:
           GH_TOKEN: ${{ github.token }}

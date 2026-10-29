@@ -7,10 +7,7 @@ import {
   takeTerminalComposerRequest,
   terminalComposerRequestKey,
 } from "../world/terminalComposerRequest";
-import {
-  readTerminalComposerShortcutsOpen,
-  type TerminalInputMode,
-} from "./TerminalComposer";
+import type { TerminalInputMode } from "./TerminalComposer";
 import {
   filesFromTerminalDrop,
   isNativeFileDrag,
@@ -30,8 +27,7 @@ import {
   type ClipboardSelectionType,
 } from "@xterm/addon-clipboard";
 import { FitAddon } from "@xterm/addon-fit";
-import { UnicodeGraphemesAddon } from "@xterm/addon-unicode-graphemes";
-import { type IBufferRange, type ITheme, Terminal } from "@xterm/xterm";
+import { type ITheme, Terminal } from "@xterm/xterm";
 import { installTerminalCompositionRepair } from "../terminalComposition";
 import {
   Columns2,
@@ -109,6 +105,7 @@ import {
   insertIntoTerminalComposerDraft,
   terminalComposerCloseWarning,
   terminalComposerDraftKey,
+  terminalComposerScopeGeneration,
   terminalComposerDraftPaneIds,
   terminalComposerRequest,
 } from "../terminalComposer";
@@ -133,7 +130,8 @@ import {
   terminalTouchInputAction,
   watchTerminalOverlayPointer,
 } from "../terminalFocus";
-import { TerminalHistorySelection } from "../terminalHistorySelection";
+import type { TerminalHistorySelection } from "../terminalHistorySelection";
+import { createTerminalRenderer } from "../terminalRenderer";
 import { uploadTerminalImage } from "../terminalImageUpload";
 import {
   isTerminalImeCommittedInputType,
@@ -152,21 +150,23 @@ import {
 } from "../terminalKeys";
 import {
   registerTerminalLinkProvider,
+  nextTerminalOscHover,
+  type TerminalOscLinkHover,
   type TerminalResolvedLink,
   type TerminalTouchLink,
 } from "../terminalLinkProvider";
 import { sanitizeTerminalHttpUrl, terminalFileUriPath } from "../terminalLinks";
 import {
   createTerminalPasteRunner,
+  isNativeTerminalPasteShortcut,
   type TerminalPasteTextareaSnapshot,
   terminalPasteInputText,
   terminalPasteRequest,
+  terminalPasteUnavailableMessage,
 } from "../terminalPaste";
 import {
-  readTerminalRecoveryReloadAt,
-  shouldArmTerminalRecoveryResume,
-  shouldReloadTerminalAfterResume,
-  writeTerminalRecoveryReloadAt,
+  TerminalRecoveryBudget,
+  TERMINAL_NO_FRAME_MESSAGE,
 } from "../terminalRecovery";
 import {
   rememberTerminalRelayViewport,
@@ -391,7 +391,9 @@ export function TerminalView({
     s.connections.find(
       (connection) => connection.id === terminalIdentity.connectionId,
     )?.generation ?? null;
+  const [attachRetry, setAttachRetry] = useState(0);
   const connectionClient = useMemo(() => {
+    void attachRetry;
     void s.status;
     void s.terminalAttachEpoch;
     return bridge.connection(
@@ -403,7 +405,10 @@ export function TerminalView({
     terminalIdentity,
     s.status,
     s.terminalAttachEpoch,
+    attachRetry,
   ]);
+  const currentClientRef = useRef(connectionClient);
+  currentClientRef.current = connectionClient;
   const connectionScopeKey = terminalConnectionKey(terminalIdentity);
   const creationSources = useCreationSources();
   const creationDemand = creationSources.find(
@@ -474,7 +479,6 @@ export function TerminalView({
     s.navigationLoading,
     TERMINAL_LOADING_SPINNER_DELAY_MS,
   );
-  const [attachRetry, setAttachRetry] = useState(0);
   const [inputActive, setInputActive] = useState(false);
   const inputActiveRef = useRef(false);
   const inputSessionRef = useRef(0);
@@ -484,9 +488,7 @@ export function TerminalView({
     TerminalTouchSelection["handles"]
   >([]);
   const [mobileKeysOpen, setMobileKeysOpen] = useState(false);
-  const [composerShortcutsOpen, setComposerShortcutsOpen] = useState(
-    readTerminalComposerShortcutsOpen,
-  );
+  const [composerShortcutsOpen, setComposerShortcutsOpen] = useState(false);
   const [localComposerOpen, setLocalComposerOpen] = useState(false);
   const [closePaneRequested, setClosePaneRequested] = useState(false);
   const [localAgentHistoryOpen, setLocalAgentHistoryOpen] = useState(false);
@@ -508,16 +510,14 @@ export function TerminalView({
   const endpointPresentationRef = useRef<TerminalEndpointPresentation | null>(
     null,
   );
-  // Mirrors termRef as state so the attach effect re-runs when the xterm
-  // instance is recreated: the init effect's cleanup resets the attach refs,
-  // and without an instance change in the deps the attach effect would not
-  // fire again, leaving the recreated terminal detached and blank.
+  // Bind clients after the resource renderer is available.
   const [termInstance, setTermInstance] = useState<Terminal | null>(null);
   // Theme changes update xterm in place without recreating the terminal.
   const terminalThemeRef = useRef(terminalTheme);
   const terminalFontFamilyRef = useRef(terminalFontFamily);
   const terminalFontScaleRef = useRef(terminalFontScale);
   const fitRef = useRef<FitAddon | null>(null);
+  const historySelectionRef = useRef<TerminalHistorySelection | null>(null);
   const attachedRef = useRef<string | null>(null);
   const attachingRef = useRef<string | null>(null);
   const desiredTerminalRef = useRef<string | null>(null);
@@ -553,12 +553,8 @@ export function TerminalView({
   if (attachWatchdogRef.current === null) {
     attachWatchdogRef.current = new TerminalAttachFrameWatchdog();
   }
-  const attachTimeoutCountRef = useRef(0);
+  const recoveryBudgetRef = useRef(new TerminalRecoveryBudget());
   const attachTimeoutTerminalRef = useRef<string | null>(null);
-  // Timestamp of the last foreground resume; gates the last-resort reload.
-  const resumedAtRef = useRef<number | null>(null);
-  // When the page last became hidden; measures the suspension length.
-  const hiddenAtRef = useRef<number | null>(null);
   const selectedPaneInLayout =
     s.selectedPaneId &&
     s.layout?.panes.some((p) => p.pane_id === s.selectedPaneId)
@@ -594,7 +590,8 @@ export function TerminalView({
   const composerModeRef = useRef(composerMode);
   composerModeRef.current = composerMode;
   const composerEditingRef = useRef(false);
-  composerEditingRef.current = composerOpen && composerMode === "composer";
+  composerEditingRef.current =
+    isMobileLayout() && composerOpen && composerMode === "composer";
   const pendingExplicitModeRef = useRef<TerminalInputMode | null>(null);
   const closeTerminalInput = useCallback((blurInput = true) => {
     inputActiveRef.current = false;
@@ -620,7 +617,7 @@ export function TerminalView({
     touchSelectionRef.current?.reset();
     setComposerMode("composer");
     composerModeRef.current = "composer";
-    composerEditingRef.current = composerOpen;
+    composerEditingRef.current = isMobileLayout() && composerOpen;
     closeTerminalInput();
   }, [
     closeTerminalInput,
@@ -638,14 +635,13 @@ export function TerminalView({
     termInstance,
   ]);
   useLayoutEffect(() => {
-    // Selecting a split is not new link content: preserve its mouse-down link.
-    // Still end mobile input/selection and dismiss actions on focus changes.
+    // Reset mobile input on split focus changes without invalidating its link.
     setFileLinkMenu(null);
     setWorkspaceDirectory(null);
     touchSelectionRef.current?.reset();
     setComposerMode("composer");
     composerModeRef.current = "composer";
-    composerEditingRef.current = composerOpen;
+    composerEditingRef.current = isMobileLayout() && composerOpen;
     closeTerminalInput();
   }, [closeTerminalInput, isActivePane, composerOpen]);
   const previousComposerOpenRef = useRef(false);
@@ -670,7 +666,7 @@ export function TerminalView({
     const mode = explicitMode ?? readTerminalInputMode();
     setComposerMode(mode);
     composerModeRef.current = mode;
-    composerEditingRef.current = mode === "composer";
+    composerEditingRef.current = isMobileLayout() && mode === "composer";
   }, [composerOpen, directDisabled, termInstance]);
   const setComposerOpen = useCallback(
     (open: boolean) => {
@@ -804,7 +800,7 @@ export function TerminalView({
     const state = store.get();
     const key = terminalComposerDraftKey(
       state.activeConnectionId,
-      state.connectionGeneration,
+      terminalComposerScopeGeneration(state),
       destinationPaneId ?? "",
     );
     // Desktop terminal output stays Direct; the shared editor owns its mode.
@@ -1134,9 +1130,59 @@ export function TerminalView({
     [connectionClient, connectionScopeKey, terminalFileResolutionCache],
   );
 
-  // init xterm once the container element is available
+  // The renderer belongs to the resource; client-bound effects below may rebind.
   useEffect(() => {
     if (!container) return;
+    const renderer = createTerminalRenderer(
+      container,
+      {
+        fontFamily: terminalFontFamilyRef.current,
+        ...terminalDensity(terminalFontScaleRef.current),
+        theme: terminalThemeRef.current,
+        disableStdin:
+          composerEditingRef.current || shouldAvoidVirtualKeyboard(),
+      },
+      {
+        scroll: (direction, lines) => {
+          const client = currentClientRef.current;
+          return client.call("terminal.scroll", {
+            terminal_id: desiredTerminalRef.current,
+            direction,
+            lines,
+            source: "history",
+          });
+        },
+        changed: (message) =>
+          applicationStore.notify({
+            kind: "info",
+            message,
+            autoDismissMs: 8000,
+          }),
+      },
+    );
+    termRef.current = renderer.term;
+    fitRef.current = renderer.fit;
+    endpointPresentationRef.current = renderer.presentation;
+    historySelectionRef.current = renderer.historySelection;
+    setTermInstance(renderer.term);
+    return () => {
+      renderer.dispose();
+      termRef.current = null;
+      fitRef.current = null;
+      endpointPresentationRef.current = null;
+      historySelectionRef.current = null;
+      renderedTerminalRef.current = null;
+      setTermInstance(null);
+    };
+  }, [container, terminalIdentity, pane?.terminal_id]);
+
+  // Rebind transport work and input handlers to one captured client at a time.
+  useEffect(() => {
+    const term = termInstance;
+    const endpointPresentation = endpointPresentationRef.current;
+    const historySelection = historySelectionRef.current;
+    if (!container || !term || !endpointPresentation || !historySelection)
+      return;
     let terminalEffectDisposed = false;
     const retireTouchLink = () => {
       touchLinkIntentRef.current++;
@@ -1145,13 +1191,9 @@ export function TerminalView({
     };
     let latestLinkFrame: string | undefined;
     let latestEndpointText: string | undefined;
-    let oscHover: {
-      text: string;
-      state: string | null;
-      range: IBufferRange;
-      ready: boolean;
-    } | null = null;
-    let oscRefreshRange: IBufferRange | null = null;
+    let oscHover: TerminalOscLinkHover | null = null;
+    let verifiedOscHover: TerminalOscLinkHover | null = null;
+    let oscRefreshRange: TerminalOscLinkHover["range"] | null = null;
     const linkState = () => {
       const presentation = endpointPresentationRef.current;
       if (
@@ -1181,59 +1223,52 @@ export function TerminalView({
           y: event.clientY,
         });
     };
-    const term = new Terminal({
-      cursorBlink: true,
-      // Composer and shortcut keys edit the prompt without ever focusing
-      // xterm, which otherwise hides the cursor until its first focus.
-      showCursorImmediately: true,
-      disableStdin: composerEditingRef.current || shouldAvoidVirtualKeyboard(),
-      fontFamily: terminalFontFamilyRef.current,
-      ...terminalDensity(terminalFontScaleRef.current),
-      theme: terminalThemeRef.current,
-      allowProposedApi: true,
-      linkHandler: {
-        // Opt in only to route local file URIs below; all other schemes stay inert.
-        allowNonHttpProtocols: true,
-        hover(_event, text, range) {
-          oscHover = { text, state: linkState(), range, ready: false };
-          // Native hover can reuse an inactive line cache. A new range object
-          // after a full refresh proves xterm actually reread the OSC8 target.
-          if (!oscRefreshRange) {
-            oscRefreshRange = range;
-            queueMicrotask(() => {
-              if (!terminalEffectDisposed) term.refresh(0, term.rows - 1);
-            });
-          }
-        },
-        leave() {
-          oscHover = null;
-        },
-        activate(event, text) {
-          event.preventDefault();
-          if (
-            !terminalLinkModifierMatches(event) ||
-            !oscHover?.ready ||
-            !oscHover.state ||
-            oscHover.text !== text ||
-            oscHover.state !== linkState()
-          )
-            return;
-          const path = terminalFileUriPath(text);
-          if (path) {
-            term.clearSelection();
-            showFileLinkMenu(path, event);
-            return;
-          }
-          const url = sanitizeTerminalHttpUrl(text);
-          if (url) {
-            term.clearSelection();
-            window.open(url, "_blank", "noopener,noreferrer");
-          }
-        },
+    term.options.linkHandler = {
+      // Opt in only to route local file URIs below; all other schemes stay inert.
+      allowNonHttpProtocols: true,
+      hover(_event, text, range) {
+        oscHover = nextTerminalOscHover(
+          verifiedOscHover,
+          text,
+          range,
+          linkState(),
+        );
+        if (oscHover.ready) return;
+        // Native hover can reuse an inactive line cache. A new range object
+        // after a full refresh proves xterm actually reread the OSC8 target.
+        if (!oscRefreshRange) {
+          oscRefreshRange = range;
+          queueMicrotask(() => {
+            if (!terminalEffectDisposed) term.refresh(0, term.rows - 1);
+          });
+        }
       },
-      scrollbar: { showScrollbar: false },
-      scrollback: 2000,
-    });
+      leave() {
+        oscHover = null;
+      },
+      activate(event, text) {
+        event.preventDefault();
+        if (
+          !terminalLinkModifierMatches(event) ||
+          !oscHover?.ready ||
+          !oscHover.state ||
+          oscHover.text !== text ||
+          oscHover.state !== linkState()
+        )
+          return;
+        const path = terminalFileUriPath(text);
+        if (path) {
+          term.clearSelection();
+          showFileLinkMenu(path, event);
+          return;
+        }
+        const url = sanitizeTerminalHttpUrl(text);
+        if (url) {
+          term.clearSelection();
+          window.open(url, "_blank", "noopener,noreferrer");
+        }
+      },
+    };
     const linkRender = term.onRender(({ start, end }) => {
       // Public onRender fires before xterm's active-link invalidation listener.
       queueMicrotask(() => {
@@ -1248,6 +1283,7 @@ export function TerminalView({
           oscHover.state === linkState()
         ) {
           oscHover.ready = true;
+          verifiedOscHover = oscHover;
           oscRefreshRange = null;
         }
       });
@@ -1265,7 +1301,6 @@ export function TerminalView({
       // link decoration must be invalidated.
       if (redraw || oscHover !== null) term.refresh(0, term.rows - 1);
     };
-    const fit = new FitAddon();
     const clipboardProvider = createTerminalClipboardProvider({
       onWriteStart() {
         if (terminalEffectDisposed || !connectionClient.isCurrent()) return;
@@ -1288,26 +1323,8 @@ export function TerminalView({
     });
     const clipboard = new ClipboardAddon(undefined, clipboardProvider);
     term.loadAddon(clipboard);
-    term.loadAddon(new UnicodeGraphemesAddon());
-    term.loadAddon(fit);
-    term.open(container);
     const compositionRepair = installTerminalCompositionRepair(term);
-    if (isApplePlatform()) {
-      term.element?.classList.add("xterm-apple-row-spacing-fix");
-    }
-    try {
-      fit.fit();
-    } catch {
-      // ResizeObserver will retry after the terminal becomes measurable.
-    }
-    if (term.textarea)
-      term.textarea.readOnly = term.options.disableStdin === true;
-    termRef.current = term;
-    setTermInstance(term);
-    fitRef.current = fit;
-    // A frame is checked when it arrives, before xterm has written it; once
-    // written, a touch link whose row now shows other text is withdrawn.
-    term.onWriteParsed(() => {
+    const writeParsed = term.onWriteParsed(() => {
       if (touchLinkRef.current && !touchLinkRef.current.keep())
         retireTouchLink();
     });
@@ -1389,7 +1406,7 @@ export function TerminalView({
       isActivePaneRef.current &&
       (!shouldAvoidVirtualKeyboard() || inputActiveRef.current);
 
-    term.onData((data) => {
+    const inputData = term.onData((data) => {
       invalidateLinks();
       if (replayingWheel && acceptsEndpointInput()) {
         sendBytes(
@@ -1421,36 +1438,6 @@ export function TerminalView({
       sendBytes(connectionClient, bytes, terminalId).catch(() => {});
     });
 
-    const endpointPresentation: TerminalEndpointPresentation =
-      new TerminalEndpointPresentation(
-        () => term.hasSelection() || historySelection.active,
-        (text, parsed, linksChanged) =>
-          term.write(text, () => {
-            parsed();
-            if (!terminalEffectDisposed && linksChanged)
-              term.refresh(0, term.rows - 1);
-          }),
-        () => ({ cols: term.cols, rows: term.rows }),
-        {
-          accepts: (frame) => historySelection.accepts(frame),
-          presented: (frame) => historySelection.presented(frame),
-          reset: () => historySelection.reset(),
-        },
-      );
-    const historySelection: TerminalHistorySelection =
-      new TerminalHistorySelection(term, {
-        frame: () => endpointPresentation.displayedFrame,
-        scroll: (direction, lines) =>
-          connectionClient.call("terminal.scroll", {
-            terminal_id: desiredTerminalRef.current,
-            direction,
-            lines,
-            source: "history",
-          }),
-        changed: (message) =>
-          store.notify({ kind: "info", message, autoDismissMs: 8000 }),
-      });
-    endpointPresentationRef.current = endpointPresentation;
     const selectionChange = term.onSelectionChange(() => {
       if (
         !endpointPresentation.selectionDrag &&
@@ -1505,7 +1492,7 @@ export function TerminalView({
       latestLinkFrame = t.link_frame;
       // An explicitly chosen path is a stable action target, even as a TUI repaints.
       attachWatchdogRef.current?.markFrame();
-      attachTimeoutCountRef.current = 0;
+      recoveryBudgetRef.current.reset();
       setTerminalLoading(false);
       setTerminalAttachError("");
       if (typeof t.mouse_reporting === "boolean") {
@@ -1849,12 +1836,13 @@ export function TerminalView({
       const destinationPaneId = paneIdRef.current ?? null;
       try {
         await runPasteOperation(async () => {
-          if (!navigator.clipboard) {
-            throw new Error("browser clipboard API is unavailable");
+          const clipboard = navigator.clipboard;
+          if (!clipboard?.read && !clipboard?.readText) {
+            throw new Error(terminalPasteUnavailableMessage(applePlatform));
           }
-          if (navigator.clipboard.read) {
+          if (clipboard.read) {
             const items = await withTimeout(
-              navigator.clipboard.read(),
+              clipboard.read(),
               CLIPBOARD_READ_TIMEOUT_MS,
               "Clipboard read timed out",
             );
@@ -1891,7 +1879,7 @@ export function TerminalView({
             return;
           }
           const text = await withTimeout(
-            navigator.clipboard.readText(),
+            clipboard.readText(),
             CLIPBOARD_READ_TIMEOUT_MS,
             "Clipboard text read timed out",
           );
@@ -1971,14 +1959,14 @@ export function TerminalView({
         return false;
       }
       if (e.type === "keydown" && shortcutMatches(e, "terminal.paste")) {
-        // Native paste events carry clipboard payloads even on insecure LAN URLs.
-        // Keep the platform's native gesture; custom combinations use the API.
-        const nativePaste =
-          !e.altKey &&
-          !e.shiftKey &&
-          (e.key.toLowerCase() === "v" || e.code === "KeyV") &&
-          (applePlatform ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey);
-        if (nativePaste) return false;
+        // Preserve async image reads for Ctrl+Shift+V on secure origins; its
+        // native plain-text fallback works when HTTP LAN clipboard reads do not.
+        if (
+          isNativeTerminalPasteShortcut(e, applePlatform) &&
+          (!e.shiftKey ||
+            (!navigator.clipboard?.read && !navigator.clipboard?.readText))
+        )
+          return false;
         e.preventDefault();
         e.stopPropagation();
         pasteFromBrowserClipboard().catch((err) => {
@@ -3131,8 +3119,7 @@ export function TerminalView({
       cancelRepaint();
       selectionChange.dispose();
       selectionResize.dispose();
-      endpointPresentation.dispose();
-      endpointPresentationRef.current = null;
+      endpointPresentation.reset(true, true);
       offClipboard();
       offClosed();
       unregisterConnectionDisposer();
@@ -3220,16 +3207,15 @@ export function TerminalView({
         detachOwnedTerminal(terminalId);
       }
       compositionRepair.dispose();
-      term.dispose();
-      termRef.current = null;
-      setTermInstance(null);
-      fitRef.current = null;
+      inputData.dispose();
+      writeParsed.dispose();
+      clipboard.dispose();
       attachedRef.current = null;
       attachingRef.current = null;
       desiredTerminalRef.current = null;
-      renderedTerminalRef.current = null;
     };
   }, [
+    termInstance,
     detachOwnedTerminal,
     closeTerminalInput,
     store,
@@ -3246,7 +3232,6 @@ export function TerminalView({
 
   // attach / re-attach when the rendered pane changes
   useEffect(() => {
-    if (!connectionClient.isCurrent()) return;
     const term = termInstance;
     const paneTerminalId = pane?.terminal_id ?? null;
     if (
@@ -3254,15 +3239,16 @@ export function TerminalView({
       s.status !== "connected"
     ) {
       endpointPresentationRef.current?.reset(
-        desiredTerminalRef.current !== paneTerminalId,
+        true,
+        desiredTerminalRef.current === paneTerminalId,
       );
     }
     if (terminalAttachEpochRef.current !== s.terminalAttachEpoch) {
-      endpointPresentationRef.current?.reset();
+      endpointPresentationRef.current?.reset(true, true);
       terminalAttachEpochRef.current = s.terminalAttachEpoch;
       attachedRef.current = null;
       attachingRef.current = null;
-      attachTimeoutCountRef.current = 0;
+      recoveryBudgetRef.current.reset();
       attachTimeoutTerminalRef.current = null;
       attachWatchdogRef.current?.cancel();
     }
@@ -3274,7 +3260,7 @@ export function TerminalView({
       return;
     }
     desiredTerminalRef.current = paneTerminalId;
-    if (s.status !== "connected") {
+    if (s.status !== "connected" || !connectionClient.isCurrent()) {
       attachedRef.current = null;
       attachingRef.current = null;
       attachWatchdogRef.current?.cancel();
@@ -3306,7 +3292,7 @@ export function TerminalView({
     if (document.visibilityState === "hidden") return;
     if (attachTimeoutTerminalRef.current !== terminalId) {
       attachTimeoutTerminalRef.current = terminalId;
-      attachTimeoutCountRef.current = 0;
+      recoveryBudgetRef.current.reset();
     }
     attachingRef.current = terminalId;
     setTerminalLoading(true);
@@ -3392,32 +3378,13 @@ export function TerminalView({
               ) {
                 return;
               }
-              attachTimeoutCountRef.current += 1;
+              const recovery = recoveryBudgetRef.current.fail();
               attachedRef.current = null;
               attachingRef.current = null;
               detachOwnedTerminal(terminalId);
-              if (attachTimeoutCountRef.current > 2) {
+              if (recovery === "unavailable") {
                 setTerminalLoading(false);
-                // Repeated attaches produced no frames right after a
-                // foreground resume: the session is wedged in a way in-place
-                // recovery cannot fix (silently killed socket, wedged
-                // stream). Reload once, rate-limited, replicating the
-                // manual refresh that restores the terminal.
-                const now = Date.now();
-                if (
-                  shouldReloadTerminalAfterResume({
-                    now,
-                    resumedAt: resumedAtRef.current,
-                    lastReloadAt: readTerminalRecoveryReloadAt(),
-                  })
-                ) {
-                  writeTerminalRecoveryReloadAt(now);
-                  window.location.reload();
-                  return;
-                }
-                setTerminalAttachError(
-                  "Terminal stopped receiving frames. Reload the app to reconnect.",
-                );
+                setTerminalAttachError(TERMINAL_NO_FRAME_MESSAGE);
                 return;
               }
               setAttachRetry((value) => value + 1);
@@ -3491,21 +3458,9 @@ export function TerminalView({
   // store-level probe, which flips the status and re-arms the attach epoch.
   useEffect(() => {
     if (typeof document === "undefined") return;
-    const recoverTerminal = (fromResume: boolean) => {
+    const recoverTerminal = () => {
       if (document.visibilityState !== "visible") return;
-      if (fromResume) {
-        // Arm the last-resort reload only after a genuinely long suspension
-        // (mobile lock screen, app backgrounding). Desktop tab switches
-        // fire visibilitychange too; a measured short one keeps the cheap
-        // recovery below but never arms an automatic reload.
-        const now = Date.now();
-        const hiddenAt = hiddenAtRef.current;
-        hiddenAtRef.current = null;
-        if (shouldArmTerminalRecoveryResume({ now, hiddenAt })) {
-          resumedAtRef.current = now;
-        }
-      }
-      attachTimeoutCountRef.current = 0;
+      recoveryBudgetRef.current.reset();
       const term = termRef.current;
       if (term) {
         try {
@@ -3527,14 +3482,8 @@ export function TerminalView({
         return;
       setAttachRetry((value) => value + 1);
     };
-    const onVisibilityChange = () => {
-      if (document.visibilityState === "hidden") {
-        hiddenAtRef.current = Date.now();
-        return;
-      }
-      recoverTerminal(true);
-    };
-    const onForegroundEvent = () => recoverTerminal(false);
+    const onVisibilityChange = recoverTerminal;
+    const onForegroundEvent = recoverTerminal;
     document.addEventListener("visibilitychange", onVisibilityChange);
     window.addEventListener("pageshow", onForegroundEvent);
     window.addEventListener("focus", onForegroundEvent);
@@ -3652,13 +3601,15 @@ export function TerminalView({
 
   const composerDraftKey = terminalComposerDraftKey(
     s.activeConnectionId,
-    s.connectionGeneration,
+    terminalComposerScopeGeneration(s),
     pane.pane_id,
   );
   const composerDraftWarning = terminalComposerCloseWarning(
-    terminalComposerDraftPaneIds(s.activeConnectionId, s.connectionGeneration, [
-      pane.pane_id,
-    ]).length,
+    terminalComposerDraftPaneIds(
+      s.activeConnectionId,
+      terminalComposerScopeGeneration(s),
+      [pane.pane_id],
+    ).length,
   );
 
   const terminalComposer = (
@@ -3677,7 +3628,7 @@ export function TerminalView({
         if (!composerOpen) pendingExplicitModeRef.current = mode;
         onActivateTerminalSurface?.();
         composerModeRef.current = mode;
-        composerEditingRef.current = mode === "composer";
+        composerEditingRef.current = isMobileLayout() && mode === "composer";
         closeTerminalInput();
         setComposerMode(mode);
         setComposerOpen(true);
@@ -4089,7 +4040,9 @@ export function TerminalView({
                 return (
                   <button
                     type="button"
-                    disabled={!!mobileShortcutReason(shortcut)}
+                    disabled={
+                      directDisabled || !!mobileShortcutReason(shortcut)
+                    }
                     title={
                       mobileShortcutReason(shortcut) ??
                       option?.label ??
@@ -4164,7 +4117,9 @@ export function TerminalView({
                       return (
                         <button
                           type="button"
-                          disabled={!!mobileShortcutReason(shortcut)}
+                          disabled={
+                            directDisabled || !!mobileShortcutReason(shortcut)
+                          }
                           title={
                             mobileShortcutReason(shortcut) ??
                             option?.label ??
@@ -4193,7 +4148,16 @@ export function TerminalView({
           : visible && isActivePane && (isMobileLayout() || composerOpen)
             ? terminalComposer
             : null}
-        <div className="terminal-pane-toolbar" aria-label="Pane actions">
+        <div
+          className="terminal-pane-toolbar"
+          aria-label="Pane actions"
+          ref={(element) =>
+            element?.toggleAttribute(
+              "inert",
+              s.status !== "connected" || !connectionClient.isCurrent(),
+            )
+          }
+        >
           {s.endpointAvailability[pane.terminal_id] &&
           store.terminalScrollReason(pane.terminal_id) ? (
             <span
@@ -4263,6 +4227,10 @@ export function TerminalView({
             <span className="terminal-loading-dot" />
             <span>Connection paused</span>
           </div>
+        ) : s.status !== "connected" || !connectionClient.isCurrent() ? (
+          <div className="terminal-loading" role="status" aria-live="polite">
+            <span>Disconnected · Showing last output</span>
+          </div>
         ) : terminalAttachError ? (
           <div
             className="terminal-loading is-error"
@@ -4270,6 +4238,20 @@ export function TerminalView({
             aria-live="assertive"
           >
             <span>{terminalAttachError}</span>
+            <button
+              type="button"
+              onClick={() => {
+                recoveryBudgetRef.current.reset();
+                attachEvictionsRef.current = [];
+                setTerminalAttachError("");
+                setAttachRetry((value) => value + 1);
+              }}
+            >
+              Retry terminal
+            </button>
+            <button type="button" onClick={() => window.location.reload()}>
+              Reload app
+            </button>
           </div>
         ) : terminalLoadingSpinner || pasteLoading ? (
           <div className="terminal-loading" role="status" aria-live="polite">

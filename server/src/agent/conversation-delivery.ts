@@ -26,6 +26,10 @@ import type { ConversationMessage } from "./conversation";
  * them, and a full pane refuses new sends instead.
  */
 export type ConversationDelivery = {
+  /** Commands may intentionally switch sessions; their effects are not checked. */
+  kind?: "command";
+  /** Herdr reported working immediately before native prompt admission. */
+  queued?: boolean;
   id: string;
   text: string;
   sent_at: string;
@@ -207,6 +211,8 @@ export function createDeliveryLedger() {
         endedAt: number;
         /** Herdr's prompt reply named another identified session. */
         switchedTo?: string;
+        kind?: "command";
+        queued?: boolean;
       },
     ): ConversationDelivery {
       const { offsetMs, uncertaintyMs } = send.clock;
@@ -219,10 +225,12 @@ export function createDeliveryLedger() {
         text: send.text,
         sent_at: new Date(send.startedAt).toISOString(),
         transcript_at: new Date(send.startedAt + offsetMs).toISOString(),
-        state: send.switchedTo ? "misdelivered" : "pending",
+        state: send.switchedTo && !send.kind ? "misdelivered" : "pending",
+        ...(send.kind ? { kind: send.kind } : {}),
+        ...(send.queued ? { queued: true } : {}),
         expected: send.expected,
         fingerprint: send.fingerprint,
-        ...(send.switchedTo
+        ...(send.switchedTo && !send.kind
           ? { delivered_to: send.switchedTo, evidence: "herdr" as const }
           : {}),
         typed: typedText(send.text),
@@ -273,6 +281,7 @@ export function createDeliveryLedger() {
       for (const receipt of list) {
         if (!open(receipt, now)) continue;
         if (
+          !receipt.kind &&
           current &&
           current !== receipt.fingerprint &&
           receipt.seen.size < SEEN_PER_RECEIPT
@@ -312,6 +321,7 @@ export function createDeliveryLedger() {
         for (const view of views) {
           // An attachment alone has no words to tell sessions apart.
           if (
+            receipt.kind === "command" ||
             view.fingerprint === receipt.fingerprint ||
             !view.messages ||
             !receipt.typed
@@ -366,7 +376,12 @@ export function createDeliveryLedger() {
       // against an unrelated prompt from elsewhere: until such a turn
       // appears, the send stays pending ("waiting").
       for (const receipt of list) {
-        if (receipt.state !== "pending" || !open(receipt, now)) continue;
+        if (
+          receipt.kind === "command" ||
+          receipt.state !== "pending" ||
+          !open(receipt, now)
+        )
+          continue;
         const own = views.find(
           (view) => view.fingerprint === receipt.fingerprint,
         );
@@ -432,6 +447,8 @@ function publicDelivery(receipt: Receipt): ConversationDelivery {
     state: receipt.state,
     expected: receipt.expected,
     fingerprint: receipt.fingerprint,
+    ...(receipt.kind ? { kind: receipt.kind } : {}),
+    ...(receipt.queued ? { queued: true } : {}),
     ...(receipt.matched_id ? { matched_id: receipt.matched_id } : {}),
     ...(receipt.matched_by ? { matched_by: receipt.matched_by } : {}),
     ...(receipt.delivered_to ? { delivered_to: receipt.delivered_to } : {}),

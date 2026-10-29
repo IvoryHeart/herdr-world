@@ -4,18 +4,18 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
-  rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { withNativePluginFixture } from "./plugin-native-fixture";
 
 for (const tls of [false, true]) {
   test.skipIf(tls && !Bun.which("openssl"))(
     `native compatibility launcher preserves cached verbs over ${tls ? "HTTPS" : "HTTP"} without Bun and delegates only to World`,
-    () => {
+    async () => {
       const root = mkdtempSync(join(tmpdir(), "world native plugin "));
-      try {
+      await withNativePluginFixture(root, () => {
         const config = join(root, ".config", "herdr-world");
         mkdirSync(config, { recursive: true });
         const cert = join(root, "cert.pem");
@@ -165,14 +165,7 @@ process.exit(2);
           );
           expect(result.stdout.toString()).not.toContain("token=");
         }
-      } finally {
-        rmSync(root, {
-          recursive: true,
-          force: true,
-          maxRetries: 5,
-          retryDelay: 100,
-        });
-      }
+      });
     },
     60_000,
   );

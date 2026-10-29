@@ -34,6 +34,7 @@ import {
 } from "./WorldFoundationApp";
 import { resolveTerminalWindowArrangement } from "./terminalWindowArrangement";
 import { buildWorldObject } from "./worldObject";
+import { worldNodeOpenView } from "./worldInspectorSelection";
 import { worldPathNeedsCanonical } from "./worldViewRouting";
 import {
   reconcileWorldInspectorConversation,
@@ -73,6 +74,24 @@ function inspectorConversation(index: number): WorldInspectorConversation {
 }
 
 describe("independent multi-host Inspector leases", () => {
+  test("observations preserve opening focus intent and focus-neutral previews", () => {
+    const intent = { focus: () => false, cancel() {} };
+    const current = { ...inspectorConversation(1), chatFocusIntent: intent };
+    const observed = {
+      ...current,
+      agentSessionFingerprint: "new-session",
+      chatFocusIntent: undefined,
+    };
+    expect(
+      reconcileWorldInspectorConversation(current, observed).chatFocusIntent,
+    ).toBe(intent);
+    expect(
+      reconcileWorldInspectorConversation(
+        { ...current, chatFocusIntent: null },
+        observed,
+      ).chatFocusIntent,
+    ).toBeNull();
+  });
   test("retains both hosts and removes only a replaced generation, preserving resource tabs and geometry", () => {
     const alpha = {
       ...inspectorConversation(1),
@@ -703,6 +722,40 @@ describe("World view preference", () => {
     expect(worldIntentInitialView(agent, null)).toBe("terminal");
     expect(worldIntentInitialView(agent, "changes")).toBe("changes");
     expect(worldIntentInitialView(terminal, "history")).toBe("terminal");
+    // Opening a node anywhere: an agent Chat can read opens on Chat unless
+    // Agents open says Terminal; a shell, or a harness Chat cannot read,
+    // opens its terminal; a workspace opens its files.
+    expect(worldNodeOpenView(agent, "chat")).toBe("history");
+    expect(worldNodeOpenView(agent, "terminal")).toBe("terminal");
+    for (const harness of [
+      "claude-code",
+      "Claude",
+      "pi-agent",
+      "pi-coding-agent",
+      " Pi-Coding-Agent ",
+      "antigravity",
+      "antigravity-cli",
+      "antigravity cli",
+      "muse-code",
+      "muse code",
+      "kimi-code",
+      "kimi code",
+      "grok-build",
+      "grok build",
+    ]) {
+      const alias = { ...agent, pane: { ...agent.pane, agent: harness } };
+      expect(worldNodeOpenView(alias, "chat")).toBe("history");
+      expect(worldNodeOpenView(alias, "terminal")).toBe("terminal");
+    }
+    expect(worldNodeOpenView(terminal, "chat")).toBe("terminal");
+    expect(
+      worldNodeOpenView(
+        { ...agent, pane: { ...agent.pane, agent: "gemini" } },
+        "chat",
+      ),
+    ).toBe("terminal");
+    expect(worldNodeOpenView(world.spaces[0], "chat")).toBe("files");
+    expect(worldNodeOpenView(world.hosts[0], "chat")).toBeNull();
     expect(worldInspectorContext(agent)).toMatchObject({
       kind: "agent",
       label: "codex",
@@ -1655,4 +1708,19 @@ test("observation reconciliation preserves concurrently admitted and explicitly 
     added,
   ]);
   expect(reconcileObservedInspectors([old, added], [old], [])).toEqual([added]);
+});
+
+test("presentation retention follows exact catalogue owners regardless of host readiness", () => {
+  const alpha = { ...inspectorConversation(1), connectionId: "alpha" };
+  const beta = { ...inspectorConversation(2), connectionId: "beta" };
+  const owners = [
+    { connectionId: "alpha", runtimeGeneration: 4, state: "failed" },
+    { connectionId: "beta", runtimeGeneration: 4, state: "ready" },
+  ];
+  const retained = retainWorldInspectorConversations([alpha, beta], owners);
+  expect(retained[0]).toBe(alpha);
+  expect(retained[1]).toBe(beta);
+  expect(retainWorldInspectorConversations(retained, owners.slice(1))).toEqual([
+    beta,
+  ]);
 });

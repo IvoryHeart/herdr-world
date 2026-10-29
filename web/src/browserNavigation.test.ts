@@ -934,13 +934,18 @@ describe("store browser-local navigation", () => {
       await Bun.sleep(1);
       Object.assign(topology.panes[0], { workspace_id: "b", tab_id: "b1" });
       const publishedTabs: Array<string | undefined> = [];
-      const unsubscribe = store.subscribe(() =>
-        publishedTabs.push(store.get().layout?.tab_id),
-      );
-      resolve();
-      await refresh;
-      await Bun.sleep(5);
-      unsubscribe();
+      const recovered = Promise.withResolvers<void>();
+      const unsubscribe = store.subscribe(() => {
+        publishedTabs.push(store.get().layout?.tab_id);
+        if (store.get().layout?.tab_id === "a1") recovered.resolve();
+      });
+      try {
+        resolve();
+        await refresh;
+        await recovered.promise;
+      } finally {
+        unsubscribe();
+      }
       expect(publishedTabs).not.toContain("b1");
       expect(store.get().selectedPaneId).toBe("a1q");
       expect(store.get().layout?.tab_id).toBe("a1");

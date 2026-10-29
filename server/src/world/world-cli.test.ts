@@ -355,6 +355,158 @@ describe("Herdr changes", () => {
 });
 
 describe("questions and results", () => {
+  test("withdrawal releases an already held service read without an answer", async () => {
+    const { run, ledger } = setup();
+    const asked = await run("ask", { question: "Wait for a decision?" });
+    const id = (resultOf(asked) as { id: string }).id;
+    const observed = Promise.withResolvers<void>();
+    const original = ledger.ask.bind(ledger);
+    ledger.ask = (key) => {
+      const entry = original(key);
+      if (entry && !entry.withdrawn) observed.resolve();
+      return entry;
+    };
+    const waiting = run("ask get", { id, wait_ms: 1000 });
+    await observed.promise;
+    await run("ask withdraw", { id });
+    expect(await waiting).toMatchObject({
+      ok: true,
+      result: { withdrawn: { at: 1000 } },
+    });
+    expect(
+      (resultOf(await run("ask get", { id })) as { answer?: unknown }).answer,
+    ).toBeUndefined();
+  });
+
+  test("withdrawal refuses another agent session in the same verified terminal", async () => {
+    const current = host();
+    const originalCall = current.call.bind(current);
+    let session = "original-session";
+    current.call = async (method, params) => {
+      const result = await originalCall(method, params);
+      return method === "pane.get"
+        ? {
+            pane: {
+              ...(result as { pane: object }).pane,
+              agent_session: {
+                source: "reported",
+                agent: "claude",
+                kind: "id",
+                value: session,
+              },
+            },
+          }
+        : result;
+    };
+    const { run, ledger } = setup({ hosts: [current] });
+    const asked = await run("ask", {
+      question: "Which design?",
+      key: "example:design",
+    });
+    const id = (resultOf(asked) as { id: string }).id;
+    expect(ledger.ask(id)?.actor).toMatchObject({
+      connection_generation: 2,
+      workspace_id: "w1",
+      agent_session_id: "original-session",
+      agent_session_fingerprint: expect.any(String),
+    });
+    session = "replacement-session";
+    expect(await run("ask withdraw", { id })).toMatchObject({
+      ok: false,
+      code: "refused",
+    });
+    expect(ledger.openAsks().asks).toHaveLength(1);
+  });
+
+  test("a cause is asked once, only its verified asker can withdraw, and recurrence is fresh", async () => {
+    const { run, ledger, published } = setup();
+    const request = {
+      question: "READY #7: should this ship?",
+      key: "crew:7:ready",
+      owner_only: true,
+    };
+    const first = await run("ask", request);
+    const id = (resultOf(first) as { id: string }).id;
+    expect(await run("ask", request)).toMatchObject({
+      ok: true,
+      result: { id },
+    });
+    expect(ledger.openAsks().asks).toHaveLength(1);
+    expect(published.asks).toBe(1);
+    expect(
+      await run("ask withdraw", { id }, "w1:p2", inPane(200)),
+    ).toMatchObject({ ok: false, code: "refused" });
+    expect(await run("ask withdraw", { id }, null, null)).toMatchObject({
+      ok: false,
+      code: "refused",
+    });
+    expect(await run("ask withdraw", { id })).toMatchObject({
+      ok: true,
+      result: { withdrawn: { at: 1000 } },
+    });
+    expect(ledger.openAsks().asks).toEqual([]);
+    const revision = ledger.get().revision;
+    await run("ask withdraw", { id });
+    expect(ledger.get().revision).toBe(revision);
+    expect(
+      await run("ask answer", { id, answer: "yes" }, "w1:p2", inPane(200)),
+    ).toMatchObject({ ok: false, code: "refused" });
+    const next = await run("ask", request);
+    expect((resultOf(next) as { id: string }).id).not.toBe(id);
+  });
+
+  test("withdraw by cause key recovers only the asking occupant's retained question", async () => {
+    const { run, ledger } = setup();
+    const request = { question: "Ship?", key: "demo:ready", owner_only: true };
+    const first = await run("ask", request);
+    const id = (resultOf(first) as { id: string }).id;
+    const sibling = await run("ask", request, "w1:p2", inPane(200));
+    const other = (resultOf(sibling) as { id: string }).id;
+    expect(await run("ask withdraw", { key: request.key })).toMatchObject({
+      ok: true,
+      result: { id, withdrawn: { at: 1000 } },
+    });
+    expect(ledger.openAsks().asks.map((ask) => ask.id)).toEqual([other]);
+    const revision = ledger.get().revision;
+    expect(await run("ask withdraw", { key: request.key })).toMatchObject({
+      ok: true,
+      result: { id },
+    });
+    expect(await run("ask withdraw", { key: "absent" })).toMatchObject({
+      ok: false,
+      code: "not_found",
+    });
+    expect(ledger.get().revision).toBe(revision);
+    expect(
+      await run("ask withdraw", { key: request.key }, null, null),
+    ).toMatchObject({ ok: false, code: "refused" });
+    const next = await run("ask", request);
+    const nextId = (resultOf(next) as { id: string }).id;
+    expect(nextId).not.toBe(id);
+    expect(await run("ask withdraw", { key: request.key })).toMatchObject({
+      ok: true,
+      result: { id: nextId },
+    });
+    expect(ledger.ask(other)!.withdrawn).toBeUndefined();
+  });
+
+  test("a keyed repeat returns its retained answer without reopening the question", async () => {
+    const { run, ledger, published } = setup();
+    const request = { question: "Ship?", key: "demo:ready", owner_only: true };
+    const first = await run("ask", request);
+    const id = (resultOf(first) as { id: string }).id;
+    ledger.update((document) => {
+      document.asks[0]!.answer = { text: "Wait", at: 1000, by: "owner" };
+    });
+    const before = published.asks;
+    expect(await run("ask", request)).toMatchObject({
+      ok: true,
+      result: { id, answer: { text: "Wait" } },
+    });
+    expect(published.asks).toBe(before);
+    expect(ledger.openAsks().asks).toEqual([]);
+  });
+
   test("an ask waits for its answer; owner-only questions refuse agents", async () => {
     const { ledger, published, run } = setup();
     const ask = await run("ask", {
@@ -387,6 +539,21 @@ describe("questions and results", () => {
     // Pages fetch only the open questions, and only when one changed.
     expect(ledger.openAsks().asks.map((entry) => entry.id)).toEqual([id]);
     expect(published.asks).toBe(3);
+  });
+
+  test("answers survive cause withdrawal and keyed repeats do not ask the owner twice", async () => {
+    const { run, ledger } = setup();
+    const request = { question: "Which host?", key: "example:host" };
+    const first = await run("ask", request);
+    const id = (resultOf(first) as { id: string }).id;
+    await run("ask answer", { id, answer: "studio" }, "w1:p2", inPane(200));
+    expect(await run("ask", request)).toMatchObject({ result: { id } });
+    expect(ledger.get().asks).toHaveLength(1);
+    await run("ask withdraw", { id });
+    expect(ledger.ask(id)).toMatchObject({
+      answer: { text: "studio" },
+      withdrawn: { at: 1000 },
+    });
   });
 
   test("results are kept with their task, status and PR", async () => {

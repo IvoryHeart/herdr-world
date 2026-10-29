@@ -5,7 +5,7 @@ import { groupRuntimeObservations } from "../groupObservations";
 import { useWorldRuntime } from "../runtimeStore";
 import { useWorldSources } from "../worldSources";
 
-/** One read model shared by the roster and spatial signs. */
+/** One read model shared by the roster and Town Summary. */
 export function useGroups() {
   const boardStore = sharedBoardStore();
   const board = useBoardDocument(boardStore);

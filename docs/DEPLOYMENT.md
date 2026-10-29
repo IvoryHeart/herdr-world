@@ -35,6 +35,24 @@ World also retains the verified legacy codecs for protocols 14-20. Protocol 21
 and future protocols are rejected; use a World release explicitly supporting
 the server rather than downgrading a running Herdr server.
 
+In **Manage connections**, each host has its own running Herdr version and
+protocol check. **Check version again** reads that exact connected host; the
+result expires after one minute. Disconnected, unreadable or malformed results
+stay **unknown**. A timeout does not mean Herdr is too old. An unavailable or
+expired identity cannot establish compatibility, and a running server's version
+does not identify the installed executable.
+
+This connection view explicitly leaves upgrades **unavailable**: it has not
+verified the installed binary, a strictly newer compatible update target or safe
+handoff/supervision. It offers no remote update command and performs no update.
+An exact socket or session scope alone does not establish update safety. Herdr
+0.9.5's [native updater](https://github.com/herdrdev/herdr/blob/v0.9.5/src/update.rs)
+has no pinned-target/dry-run command and stable/preview selection is not a
+strictly-newer guarantee. Existing local installation controls
+below retain their separate verified-target and supervision checks. Never use the
+local updater as a fallback for a remote host or downgrade a newer running server.
+See the [synthetic reference views](images/herdr-compatibility.md) at five sizes.
+
 Herdr 0.9.0 provides **Local navigation** per browser and connection. Older
 connections use **Shared navigation**. Pane topology, terminal sizes, and
 same-tab pane focus remain shared even with Local navigation. Workspace/tab
@@ -48,6 +66,12 @@ terminal context still apply; do not treat clipboard delivery as pane isolation.
 ## Install a release
 
 On Linux or macOS:
+
+The published 0.2.7 standalone script installs or upgrades Herdr to its verified
+release and refreshes harness integrations and the plugin. To leave your Herdr
+untouched, add `HERDR_WORLD_SKIP_HERDR=1` before `sh` in the command below.
+Homebrew already installs Herdr only when missing; the matching standalone fix
+is merged in source for a future release.
 
 ```bash
 curl -fsSL \
@@ -75,9 +99,12 @@ npm install --global @ivoryheart/herdr-world
 
 Choose one channel. Homebrew uses the published platform archive; npm installs a
 small launcher and the matching platform binary. npm needs Node.js 22.14.0 or newer
-and optional dependencies enabled. `brew install` and `brew upgrade` install and
-upgrade Herdr too (Homebrew's bottle, or the verified prebuilt binary on Intel
-Macs); npm leaves Herdr to you (see [Herdr installation and upgrades](#herdr-installation-and-upgrades)).
+and optional dependencies enabled. Homebrew installs only World into its keg,
+without a mandatory `herdr` formula dependency. On first normal World launch, the
+launcher reuses an existing Herdr; if missing, it installs the verified prebuilt
+Herdr in its own default location. This applies to Apple Silicon, Intel and Linux.
+No Intel source build is needed. Add `~/.local/bin` to `PATH` for direct `herdr` use.
+npm leaves Herdr to you (see [Herdr installation and upgrades](#herdr-installation-and-upgrades)).
 Neither starts Herdr. For an existing installation, stop the old World process
 before upgrading the channel.
 
@@ -166,10 +193,17 @@ continues to use the same World profiles, settings, token, and browser namespace
 
 ## Herdr installation and upgrades
 
+**Published 0.2.7:** the downloaded standalone installer runs
+`herdr-world herdr upgrade --install`, including upgrades of an older unmanaged
+Herdr and integration/plugin refresh. Set `HERDR_WORLD_SKIP_HERDR=1` to skip that
+step. Homebrew already uses missing-only setup. The source installer behavior
+described below is merged but has not shipped in a standalone release yet.
+
 Each Herdr World release verifies one Herdr release (currently 0.9.5) and pins its
-SHA-256 checksums. World installs and upgrades Herdr to that release, and installs
-the Herdr integrations for the harnesses it supports, so it works with a Herdr it was
-tested with:
+SHA-256 checksums. Missing-only bootstrap installs the runtime without configuring
+harness integrations or the plugin. Run `herdr-world herdr upgrade` to refresh
+those integrations explicitly; it also upgrades an older unmanaged Herdr to the
+verified release:
 
 ```bash
 herdr-world herdr status
@@ -186,9 +220,18 @@ lands there, so `herdr` and `herdr update` find it afterwards.
 
 When it runs:
 
-- **Standalone installer** (`install-herdr-world.sh`): after installing World it runs
-  `herdr-world herdr upgrade --install`. Set `HERDR_WORLD_SKIP_HERDR=1` to install only
-  World. A Herdr problem prints a warning and leaves World installed.
+- **Standalone installer in source** (`install-herdr-world.sh`): after installing World it runs
+  a read-only Herdr status check, then uses the Unix `--install --only-if-missing`
+  operation when the selected World binary supports it. Pinned older releases
+  use the same checksum/version-verified compatibility bootstrap as Homebrew,
+  without passing unsupported options or calling an unrestricted upgrade.
+  A reachable Herdr server is reused even when its executable is not discoverable.
+  A selected local entry must be a regular executable file before installation
+  reports success. A runtime appearing during download is preserved by atomic publication.
+  Existing versions and installation owners are preserved. Set
+  `HERDR_WORLD_SKIP_HERDR=1` to install only World. A Herdr problem prints a warning
+  and leaves World installed. Fresh installs leave harness integrations and the
+  plugin to `herdr-world herdr upgrade` (or **Runtime → Update Herdr integrations**).
 - **`herdr-world update` and the in-app update**: once the new World is in place, the
   new release runs the Herdr step, even when it keeps the same Herdr version, because
   the harness integrations and the plugin follow the World release. In the browser it
@@ -197,12 +240,23 @@ When it runs:
 - **Menu**: **Runtime → Upgrade Herdr** appears when Herdr or its running server is
   older than the verified release. **Runtime → Update Herdr integrations** appears
   when only harness integrations or the plugin are behind.
-- **Homebrew**: on Apple Silicon and Linux the Formula depends on Homebrew's `herdr`
-  bottle, so Homebrew decides that version. Homebrew has no Intel Mac bottle, so on
-  Intel Macs the Formula installs Herdr's own prebuilt `herdr-macos-x86_64` binary
-  for the verified release (pinned by the same checksum), not a source build. If
-  Homebrew's `herdr` is already installed there, `brew link` reports the conflict;
-  uninstall one of them.
+- **Homebrew**: the launcher checks for Herdr before normal local World startup,
+  using the same `HERDR_BIN_PATH`, `PATH` and default-location lookup. It reuses any
+  existing installation, including standalone, version-managed and Homebrew-owned
+  runtimes. If missing, it installs the verified prebuilt release outside the World
+  keg, without starting a Herdr service or refreshing integrations. Downloads must
+  match the pinned checksum and version; atomic publication never replaces a runtime
+  appearing during setup. Existing
+  versions are never automatically upgraded by this bootstrap. Metadata and
+  management commands do not bootstrap; remote/custom endpoints also skip it.
+  A failed check or download prints a warning and World still starts, so SSH
+  profiles and in-app setup remain available; retry with
+  `herdr-world herdr upgrade --install`.
+  A broken symlink or another non-executable entry at Herdr's default path is left
+  intact and reported before downloading; repair that entry before retrying.
+  Set `HERDR_WORLD_SKIP_HERDR=1` to skip the automatic check. An incompatible existing
+  runtime needs an explicit upgrade through its owner (`brew upgrade herdr` for a
+  Homebrew runtime, `herdr update` for Herdr's own installation).
 - **npm and Windows archives**: run `herdr-world herdr upgrade --install` once
   yourself, or use the menu.
 
@@ -679,7 +733,29 @@ Use explicit socket paths if the server has a non-default configuration.
 Run `ssh workbox true` as the same user that runs World. Resolve any host-key prompt,
 agent/key problem, jump-host rule, or remote socket absence there. World reports
 bounded diagnostics and deliberately does not retry authentication and host-key
-failures.
+failures. Classified transient tunnel exits and timeouts, including exit 255
+during initial remote HOME discovery, use the existing
+per-profile exponential backoff with jitter. By default recovery continues while
+the connection is enabled; each delay is capped at 30 seconds (15–30 seconds
+once capped), rather than stopping permanently after six failures. Disconnect,
+removal, replacement and service shutdown cancel or retire pending recovery.
+Unclassified, authentication, permission, host-key and unsupported failures do
+not acquire an endless retry policy. An explicitly supplied finite retry budget
+remains finite.
+
+Cached topology stays stale and non-actionable. Town's building and reception,
+and Board's host label, show **Disconnected · Reconnect** for a failed runtime.
+Use **Reconnect** to reset that profile's existing recovery flow; healthy sibling
+hosts keep their own runtimes. A completed connection alone does not promote old
+cached topology: a current-generation snapshot is needed. See
+[connection recovery](world-connection-recovery.md).
+
+A non-interactive SSH shell can omit `herdr` from PATH even when it is installed.
+POSIX World forwarding resolves the remote home and connects to the saved/inferred
+Herdr sockets; it does not require a bare `herdr` command. For separate CLI
+version/status diagnostics, resolve the actual native executable or its standard
+installation path. PATH lookup failure is not proof of absence or version skew.
+This recovery fix changes no remote installation or server.
 
 ### Another device cannot open World
 

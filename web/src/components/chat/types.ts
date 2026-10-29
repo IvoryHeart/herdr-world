@@ -59,6 +59,11 @@ export type PendingPrompt = {
     key: string;
     description?: string;
   }[];
+  /**
+   * A multi-question form's questions by their headers, in order: the agent
+   * shows one at a time, then a review that submits them all.
+   */
+  steps?: { label: string; answered: boolean }[];
   fingerprint: string;
 };
 
@@ -82,6 +87,8 @@ export type UnconfirmedReason =
   | "still_showing";
 
 export type ConversationDelivery = {
+  kind?: "command";
+  queued?: boolean;
   id: string;
   text: string;
   sent_at: string;

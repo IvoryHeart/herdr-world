@@ -22,11 +22,12 @@ export type InterestChoice = {
   description?: string;
 };
 
-const CHOICES: { id: Interest; label: string; hint: string }[] = [
-  { id: "watching", label: "Watching", hint: "Chimes as usual" },
-  { id: "muted", label: "Muted", hint: "No chimes; still in reception" },
-  { id: "focused", label: "Focused", hint: "Only focused agents chime" },
-];
+export const INTEREST_CHOICES: { id: Interest; label: string; hint: string }[] =
+  [
+    { id: "watching", label: "Watching", hint: "Chimes as usual" },
+    { id: "muted", label: "Muted", hint: "No chimes; still in reception" },
+    { id: "focused", label: "Focused", hint: "Only focused agents chime" },
+  ];
 
 const ICONS = { watching: Eye, muted: BellOff, focused: Crosshair };
 
@@ -42,7 +43,7 @@ export function InterestButton({
   const [open, setOpen] = useState(false);
   const Icon = ICONS[current];
   const held = quiet && current === "watching";
-  const label = `${description ?? CHOICES.find((choice) => choice.id === current)!.label}${held ? ", quiet while an agent is focused" : ""}`;
+  const label = `${description ?? INTEREST_CHOICES.find((choice) => choice.id === current)!.label}${held ? ", quiet while an agent is focused" : ""}`;
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -81,7 +82,7 @@ export function InterestButton({
               </span>
             </button>
           )}
-          {CHOICES.map((choice) => {
+          {INTEREST_CHOICES.map((choice) => {
             const ChoiceIcon = ICONS[choice.id];
             return (
               <button

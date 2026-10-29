@@ -42,7 +42,8 @@ bun run test:world --shard=1/6 # reproduce one CI shard, one browser at a time
 bun run test:world --shard=latency # the latency-budget suites, as CI's quiet job runs them
 bun run test --web-browser    # Chrome-driven suites outside World, as CI's web job runs them
 bun run build:site            # landing page/tutorial
-bun run check                 # complete PR candidate
+bun run check                 # repository checks and tests
+bun run check:delivery        # full local gate, including behavioral verification
 ```
 
 The test wrapper runs ordinary files in parallel using up to eight available CPUs.
@@ -174,6 +175,14 @@ files; use `test:world` for the complete World browser matrix.
 `bun run check` validates dependency notices, formatting, lint, all types/tests,
 production frontend/server builds and OpenSpec contracts. Generated output belongs in
 ignored directories and must not be committed.
+
+Its static checks come from the same lane as `check:delivery` and `check:changed`.
+That lane checks source types without invoking server's asset-building
+`pretypecheck`, then builds and validates production assets once. `check:commit`
+is the read-only format/lint guard used by the Git hook; `check:source` adds the
+asset-building type check and tests for release preparation and tag validation.
+`precommit` remains a compatibility alias for `check:source`. See the
+[pipeline ownership guide](ci-pipelines.md) for the full command matrix.
 
 ## Architecture while developing
 
@@ -360,8 +369,8 @@ counts; only current counts produce a limit warning. The Now
 list is the stored ordered queue. This read model copies no source facts into
 the Board and grants no downstream operation lease.
 
-The Groups CLI uses this read model; the roster and frames consume the same
-facts rather than duplicating topology or source ownership.
+The Groups CLI, roster and Town Summary use this read model rather than
+duplicating topology or source ownership.
 
 ### Group CLI and Herdr membership moves
 
@@ -380,8 +389,8 @@ Group changes use bounded `relations.group_changes`, outside Board CLI undo.
 characters, at most 32 rows), with Lead/Builders/Reviewers and optional Now. It
 resolves names under the selected connection or accepts a caller-supplied JSON
 name-to-address mapping for away/annotated names. All creates are one Board
-transaction; existing Pod names, unresolved names, caps or exclusivity conflicts
-refuse the entire import. No existing Group is overwritten and no background
+transaction; duplicate role/Now columns, mismatched table columns, existing Pod
+names, unresolved names, caps or exclusivity conflicts refuse the entire import. No existing Group is overwritten and no background
 file watcher or synchronization exists. `group list --kind pod --markdown`
 renders qualified role refs and ordered Now items with escaped table content.
 Derived PR counts are display-only; this rendering is not a full Board backup.
@@ -453,7 +462,14 @@ Origin, and a bearer token derived from the session signing secret
 browser in. Wrong tokens get the login throttle, counted apart from logins so
 they never lock the owner out. One call holds at most 20 s for `ask --wait`.
 World's pages fetch only the open questions (`world.asks.get`), and only when
-a ledger notice says a question changed. Behind a reverse proxy on
+a ledger notice says a question changed. `ask --key CAUSE` deduplicates a cause
+for the verified asking occupant, even after an answer; `ask withdraw ID`
+closes that cause and allows recurrence. Only the verified original connection,
+runtime, terminal and session may withdraw it. A waiting CLI returns on answer
+or withdrawal. Withdrawn questions are retained and trimmed like answered ones.
+New verified asks carry their runtime, terminal, workspace and session identity
+into reception and notification targets. World announces newly observed asks
+once, and excludes answered/withdrawn asks from every open-question projection. Behind a reverse proxy on
 loopback every peer looks local, so "loopback only" is a transport rule, not
 proof of locality: the token itself stays in the service's private data
 directory, and attribution still needs the caller's process on this machine.

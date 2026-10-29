@@ -289,6 +289,7 @@ export async function checkAnnotationUX(
   __storeTesting.replaceState({
     ...store.get(),
     status: "connected",
+    catalogueReady: true,
     activeConnectionId: client.connectionId,
     connectionGeneration: 1,
     serverRuntimeGeneration: 1,
@@ -1006,7 +1007,7 @@ export async function checkAnnotationUX(
       () => document.querySelector(".workspace-inspector-slot"),
       "Inspector did not remain independently openable",
     );
-    click(".workspace-inspector-tabs button:nth-child(2)");
+    click('.workspace-inspector-tabs button[aria-label="Changes"]');
     const inspectorBefore = document
       .querySelector(".workspace-inspector")!
       .getAttribute("data-view");

@@ -1,0 +1,102 @@
+{
+  "browser": "Chrome/153.0.8010.52",
+  "deviceScaleFactor": 1,
+  "scene": "Synthetic production World tree; Studio and Reviewer terminal; phone shows Unsent synthetic Message",
+  "capturedDate": "2026-10-25",
+  "capturedAt": {
+    "disconnected": "2026-10-25T18:34:49.924Z",
+    "recovery": "2026-10-25T18:34:53.938Z"
+  },
+  "captures": [
+    {
+      "name": "phone",
+      "label": "Phone",
+      "width": 390,
+      "height": 844,
+      "state": "disconnected",
+      "filename": "disconnected-phone.png",
+      "sha256": "401723c87dd9d21114c292994a08edc729611382752e36992dd666913ee17709"
+    },
+    {
+      "name": "mac-laptop",
+      "label": "Mac laptop",
+      "width": 1512,
+      "height": 982,
+      "state": "disconnected",
+      "filename": "disconnected-mac-laptop.png",
+      "sha256": "5890c0f012ae85e07bb8b4c441df382e5f46b947d14a08ddce6c52ff7d205174"
+    },
+    {
+      "name": "linux-half",
+      "label": "Half-width Linux window",
+      "width": 1280,
+      "height": 1440,
+      "state": "disconnected",
+      "filename": "disconnected-linux-half.png",
+      "sha256": "5874f0b4cba13bf92cb02738b3451eea231b12eb6e4cb0ff9aee3a7aa5b07b9b"
+    },
+    {
+      "name": "linux-wide",
+      "label": "Wide Linux monitor",
+      "width": 2560,
+      "height": 1440,
+      "state": "disconnected",
+      "filename": "disconnected-linux-wide.png",
+      "sha256": "4a983e0642b716bc76be08b3ab664477d5defdd8e29ba2c70af2367f7f4dba72"
+    },
+    {
+      "name": "portrait",
+      "label": "Portrait monitor",
+      "width": 1440,
+      "height": 2560,
+      "state": "disconnected",
+      "filename": "disconnected-portrait.png",
+      "sha256": "feb9079cbec0fd25fb4b7fd97c29c1ed90f5b00b802a0a186b4004bd6fd4d70b"
+    },
+    {
+      "name": "phone",
+      "label": "Phone",
+      "width": 390,
+      "height": 844,
+      "state": "recovery",
+      "filename": "recovery-phone.png",
+      "sha256": "0d3eafb772c4d387afeb04c7b48bc53b067e097c320061eb1e2be9fafaf36f71"
+    },
+    {
+      "name": "mac-laptop",
+      "label": "Mac laptop",
+      "width": 1512,
+      "height": 982,
+      "state": "recovery",
+      "filename": "recovery-mac-laptop.png",
+      "sha256": "7408a5321c7aad9ca351c021f311330a83a19f03726301dcefe220450a5119a5"
+    },
+    {
+      "name": "linux-half",
+      "label": "Half-width Linux window",
+      "width": 1280,
+      "height": 1440,
+      "state": "recovery",
+      "filename": "recovery-linux-half.png",
+      "sha256": "3227bd875cf79d17de0f0a8d05bde1b3de690f1b36f9c2856ea0102e29eb3760"
+    },
+    {
+      "name": "linux-wide",
+      "label": "Wide Linux monitor",
+      "width": 2560,
+      "height": 1440,
+      "state": "recovery",
+      "filename": "recovery-linux-wide.png",
+      "sha256": "f6e5814ae26f832c641b34210ca7db9eb51b70c92b14d87dc6eee8e284aee66e"
+    },
+    {
+      "name": "portrait",
+      "label": "Portrait monitor",
+      "width": 1440,
+      "height": 2560,
+      "state": "recovery",
+      "filename": "recovery-portrait.png",
+      "sha256": "88c58d0090c256ab16b17883575fa8a9b07dd54cdd7d490da2848749e690c3f4"
+    }
+  ]
+}

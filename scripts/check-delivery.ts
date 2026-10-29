@@ -16,6 +16,7 @@ import {
   heldEnv,
 } from "./check-lock";
 import { guardDiskSpace } from "./disk-guard";
+import { isToolingOnlyChange } from "./validation-scope";
 import { worldBrowserSuites, worldTimedSuites } from "./world-browser-suites";
 
 /**
@@ -54,6 +55,10 @@ const browserOnly = args.includes("--browser");
 const staticOnly = args.includes("--static");
 const full = args.includes("--full") || browserOnly || staticOnly;
 const base = args.find((arg) => arg.startsWith("--base="))?.slice(7);
+const scopeBase = args
+  .find((arg) => arg.startsWith("--scope-base="))
+  ?.slice(13);
+let tooling = false;
 const root = process.cwd();
 const logs = join(root, ".agents/delivery/lanes");
 
@@ -61,16 +66,33 @@ function scope(): Affected & { why: string } {
   if (staticOnly)
     return { full: true, reason: "requested", why: "static checks only" };
   if (full) return { full: true, reason: "requested", why: "full gate" };
-  const from = base || mergeBase();
+  const common = mergeBase(scopeBase);
+  const from = base || common;
   if (!from)
     return { full: true, reason: "no base", why: "no base to compare" };
   const { tracked, changed, deleted } = gitChanges(root, from);
+  // Classify the complete PR, even on an incremental push after a code gate.
+  tooling =
+    common !== null && isToolingOnlyChange(gitChanges(root, common).changed);
   const result = affected(
     buildGraph(root, tracked, deleted),
     changed,
     worldBrowserSuites,
     coverageOwners(root),
   );
+  if (tooling)
+    return {
+      full: false,
+      // An uncovered agent module still exercises the agent test inventory.
+      unit: result.full
+        ? tracked.filter(
+            (path) => path.startsWith("scripts/agent/") && TEST.test(path),
+          )
+        : result.unit,
+      browser: [],
+      verification: false,
+      why: `tooling-only; ${changed.length} changed files`,
+    };
   return {
     ...result,
     why: result.full
@@ -79,8 +101,8 @@ function scope(): Affected & { why: string } {
   };
 }
 
-function mergeBase() {
-  const result = Bun.spawnSync(["git", "merge-base", "HEAD", "origin/main"], {
+function mergeBase(ref = "origin/main") {
+  const result = Bun.spawnSync(["git", "merge-base", "HEAD", ref], {
     cwd: root,
   });
   return result.exitCode === 0 ? result.stdout.toString().trim() : null;
@@ -90,9 +112,10 @@ const STATIC = [
   "notices:check",
   "changelog:check",
   "check:size",
-  "format:check",
-  "lint",
-  "typecheck",
+  "check:commit",
+  // `build` below generates and validates production assets. Avoid the extra
+  // web build in server's pretypecheck while checking all three TS projects.
+  "typecheck:quick",
   "typecheck:bun",
   "build",
   "build:site",
@@ -149,7 +172,9 @@ function plan(selection: Affected) {
                 "bun",
                 "scripts/run-world-tests.ts",
                 ...timedSuites,
-                "--parallel=2",
+                // Match the latency shard: independent Chrome/renderer loads
+                // must not compete inside the exclusive timed lane.
+                "--parallel=1",
               ],
             ]
           : []),
@@ -228,7 +253,7 @@ const { busy, quiet, verification } = plan(selection);
 const lanes = [...verification, ...busy, ...quiet];
 mkdirSync(logs, { recursive: true });
 console.info(
-  `[gate] ${staticOnly ? "static" : browserOnly ? "browser" : selection.full ? "full" : "changed"}: ${selection.why}; lanes: ${[...(browserOnly ? [] : ["static"]), ...lanes.map((lane) => lane.name)].join(", ")}`,
+  `[gate] ${staticOnly ? "static" : browserOnly ? "browser" : tooling ? "tooling" : selection.full ? "full" : "changed"}: ${selection.why}; lanes: ${[...(browserOnly ? [] : ["static"]), ...lanes.map((lane) => lane.name)].join(", ")}`,
 );
 if (!selection.full)
   console.info(

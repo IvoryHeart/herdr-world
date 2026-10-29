@@ -216,6 +216,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
     previewTerminalById,
     closeDeskReading,
     openTerminalById,
+    openNodeById,
     closeInspector,
     focusFloatingInspector,
     retireInspectors,
@@ -314,7 +315,8 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
             );
         }}
       />
-      {connectionSelection.connections.length === 0 ? (
+      {connectionSelection.connections.length === 0 &&
+      inspectorConversations.length === 0 ? (
         <WorldConnectionRequired status={connectionSelection.status} />
       ) : (
         <div
@@ -333,7 +335,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                     <DeskView
                       world={world}
                       aggregate={aggregateWorld}
-                      onOpenTerminal={openTerminalById}
+                      onOpen={openNodeById}
                       reading={
                         deskReadingPane && contextRailInspector
                           ? contextRailInspector.nodeId
@@ -379,7 +381,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                         selectedId={selectedId}
                         conversationNodeIds={conversationNodeIds}
                         onSelect={selectNode}
-                        onOpenTerminal={openTerminalById}
+                        onOpen={openNodeById}
                         onSelectedAnchorChange={setSelectedVisualAnchor}
                         onNodeAnchorsChange={setVisualConversationAnchors}
                       />

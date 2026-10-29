@@ -2,7 +2,11 @@ import { useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { bridge } from "../../api";
-import { AgentInterestButton } from "../../components/AgentInterestButton";
+import {
+  AgentInterestButton,
+  useAgentInterestChoice,
+} from "../../components/AgentInterestButton";
+import { WindowControls } from "../windows/WindowControls";
 import {
   WorldPanelsContext,
   useWorldPanelRegistry,
@@ -55,6 +59,10 @@ function Fixture({ world }: { world: WorldObject }) {
   const [summaryOpen, setSummaryOpen] = useState(false);
   useWorldPanelFocus(registry, state, dispatch);
   const compact = innerWidth < 700;
+  const attention = useAgentInterestChoice(
+    "connection-a",
+    world.leaves[0]?.pane,
+  );
   return (
     <WorldPanelsContext.Provider value={registry}>
       <p data-inspected={inspected}>Example crew</p>
@@ -87,6 +95,19 @@ function Fixture({ world }: { world: WorldObject }) {
       <AgentInterestButton
         connectionId="connection-a"
         pane={world.leaves[0]?.pane}
+      />
+      <WindowControls
+        label="fixture agent"
+        controls={{
+          compact: true,
+          maximized: false,
+          attention,
+          onClose() {},
+          onMinimize() {},
+          onMaximize() {},
+          onSnap() {},
+          onFloat() {},
+        }}
       />
       <GroupsWindow world={world} onOpenTerminal={setInspected} />
       <WindowSurface
@@ -190,6 +211,11 @@ async function run() {
     check(
       innerWidth === Number(params.get("width")),
       `Expected ${params.get("width")} CSS px, got ${innerWidth}`,
+    );
+  if (params.has("height"))
+    check(
+      innerHeight === Number(params.get("height")),
+      `Expected ${params.get("height")} CSS px height, got ${innerHeight}`,
     );
   const payload = await (await fetch("/snapshot")).json();
   const observed = parseWorldSnapshotResult(payload)!;
@@ -360,6 +386,58 @@ async function run() {
       ?.textContent?.includes("1 needs you"),
     "interest never removes needs-you status/counts",
   );
+  document
+    .querySelector<HTMLButtonElement>(
+      '[aria-label="More actions for fixture agent"]',
+    )!
+    .click();
+  await waitFor(() => document.querySelector('[role="menu"]'));
+  const defaultChoice = [
+    ...document.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]'),
+  ].find((button) => button.textContent?.startsWith("Default (from groups)"));
+  const watchChoice = [
+    ...document.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]'),
+  ].find(
+    (button) =>
+      button.textContent?.startsWith("Watch") &&
+      !button.textContent?.startsWith("Watching"),
+  );
+  check(
+    Boolean(
+      defaultChoice && watchChoice?.getAttribute("aria-checked") === "true",
+    ),
+    "mobile Attention offers Default separately from the explicit Watch override",
+  );
+  if (defaultChoice) {
+    defaultChoice.click();
+    await waitFor(() =>
+      document.querySelector('[aria-label^="Interest: Focused · via"]'),
+    );
+    document
+      .querySelector<HTMLButtonElement>(
+        '[aria-label="More actions for fixture agent"]',
+      )!
+      .click();
+    await waitFor(() => document.querySelector('[role="menu"]'));
+    const inherited = [
+      ...document.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]'),
+    ].find((button) => button.textContent?.startsWith("Default (from groups)"));
+    check(
+      inherited?.getAttribute("aria-checked") === "true",
+      "mobile Default resumes group Focus and is the only checked Attention choice",
+    );
+    document
+      .querySelector<HTMLButtonElement>(
+        '[aria-label="More actions for fixture agent"]',
+      )!
+      .click();
+  } else {
+    document
+      .querySelector<HTMLButtonElement>(
+        '[aria-label="More actions for fixture agent"]',
+      )!
+      .click();
+  }
   await waitFor(() => document.querySelector(".group-pr-pill.is-warning"));
   check(
     document.querySelectorAll(".group-detail .pr-card").length === 3,

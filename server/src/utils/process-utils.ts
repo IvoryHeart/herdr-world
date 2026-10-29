@@ -1,12 +1,32 @@
+export class ProcessExitError extends Error {
+  declare readonly exitCode: number;
+  declare readonly stdout: string;
+  declare readonly stderr: string;
+
+  constructor(
+    command: string,
+    exitCode: number,
+    stdout: string,
+    stderr: string,
+  ) {
+    super(`${command} exited ${exitCode}: ${stderr.trim() || stdout.trim()}`);
+    this.name = "ProcessExitError";
+    // Retain structured exit facts without adding captured output to JSON logs.
+    Object.defineProperties(this, {
+      exitCode: { value: exitCode },
+      stdout: { value: stdout },
+      stderr: { value: stderr },
+    });
+  }
+}
+
 export async function runProcess(
   argv: string[],
   input?: string,
 ): Promise<{ stdout: string; stderr: string }> {
   const { code, stdout, stderr } = await runProcessWithCode(argv, input);
   if (code !== 0) {
-    throw new Error(
-      `${argv[0]} exited ${code}: ${stderr.trim() || stdout.trim()}`,
-    );
+    throw new ProcessExitError(argv[0]!, code, stdout, stderr);
   }
   return { stdout, stderr };
 }

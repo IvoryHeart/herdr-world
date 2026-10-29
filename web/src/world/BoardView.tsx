@@ -1,3 +1,8 @@
+import { useWorldAsks } from "./worldAsks";
+import { asksForWorld } from "./worldAskTargets";
+import { WorldAskMark } from "./WorldAskMark";
+import { boardObservation } from "./board/boardObservation";
+import { ConnectionRecoveryBanner } from "./ConnectionRecoveryBanner";
 import { ChevronDown, ChevronUp, Pin, Plus, Trash2 } from "lucide-react";
 import {
   type CSSProperties,
@@ -424,7 +429,7 @@ export default function BoardView({
   toolbarPortal = null,
   selectedId,
   onSelect,
-  onOpenTerminal,
+  onOpen,
   store,
   sendNote = sendNoteThroughService,
   checkAnchor = checkAnchorThroughService,
@@ -439,7 +444,8 @@ export default function BoardView({
   toolbarPortal?: Element | null;
   selectedId: string | null;
   onSelect(id: string): unknown;
-  onOpenTerminal(id: string): unknown;
+  /** Open a pane as the user opens it: an agent's Chat, else its terminal. */
+  onOpen(id: string): unknown;
   /** Board's saved state; World's own service store by default. */
   store?: BoardDocumentStore;
   /** Send a note to an agent's pane; World's service by default. */
@@ -482,10 +488,13 @@ export default function BoardView({
 }) {
   // Topology updates render at low priority and in slices, so a large board
   // never holds up typing in a terminal.
-  const shownWorld = useDeferredValue(world);
+  const deferredWorld = useDeferredValue(world);
+  const shownWorld = boardObservation(world, deferredWorld);
   const fullModel = useMemo(() => projectBoard(shownWorld), [shownWorld]);
   // Each agent's quest, as a progress chip on its card.
   const quests = useAgentQuests(shownWorld.leaves);
+  const asks = useWorldAsks();
+  const asking = useMemo(() => asksForWorld(asks, world), [asks, world]);
   // A large board's first render is only the frame; its cards follow in a
   // transition, which yields to input while it builds.
   const [built, setBuilt] = useState(
@@ -668,7 +677,7 @@ export default function BoardView({
     model,
     collapsed,
     onSelect,
-    onOpenTerminal,
+    onOpen,
     saved,
     picked,
     noteSelected,
@@ -679,7 +688,7 @@ export default function BoardView({
     model,
     collapsed,
     onSelect,
-    onOpenTerminal,
+    onOpen,
     saved,
     picked,
     noteSelected,
@@ -2187,7 +2196,7 @@ export default function BoardView({
     const pane =
       tab.panes.find((candidate) => candidate.key === paneKey) ??
       primaryPane(tab);
-    if (pane && tab.actionable) void onOpenTerminal(pane.leaf.id);
+    if (pane && tab.actionable) void onOpen(pane.leaf.id);
   };
   /** Center a workspace and zoom in until its tabs show; unfold it if folded. */
   function focusWorkspace(key: string) {
@@ -3259,7 +3268,11 @@ export default function BoardView({
                   />
                   {host.label}
                   {host.stale ? (
-                    <small>offline</small>
+                    <ConnectionRecoveryBanner
+                      connectionId={host.connectionId}
+                      label={host.label}
+                      state={host.connectionState}
+                    />
                   ) : (
                     <button
                       type="button"
@@ -3436,6 +3449,9 @@ export default function BoardView({
                       <span className="board-dot" />
                     )}
                     <span className="board-label">{tab.label}</span>
+                    {!multi && pane ? (
+                      <WorldAskMark ask={asking.get(pane.leaf.id)} />
+                    ) : null}
                     {pinnedKeys.has(tab.key) ? <PinBadge /> : null}
                     {!multi && pane?.isAgent && quests.get(pane.leaf.id) ? (
                       <QuestChip quest={quests.get(pane.leaf.id)!} />
@@ -3469,6 +3485,7 @@ export default function BoardView({
                           )}
                           <span className="board-pane-name">
                             {paneName(row)}
+                            <WorldAskMark ask={asking.get(row.leaf.id)} />
                           </span>
                           {row.isAgent && quests.get(row.leaf.id) ? (
                             <QuestChip quest={quests.get(row.leaf.id)!} />
@@ -3882,7 +3899,7 @@ export default function BoardView({
                     !chooser.stringFrom &&
                     model.tabByKey.get(chooser.tabKey)!.actionable
                   )
-                    void onOpenTerminal(row.leaf.id);
+                    void onOpen(row.leaf.id);
                 }}
               >
                 {row.isAgent ? (

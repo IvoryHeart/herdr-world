@@ -1,3 +1,4 @@
+import { handleDeskRpc } from "./desk";
 import { profileWrite } from "../agent/profile-store";
 import { recordSpawnClaims } from "../world/relations";
 import { WorldSnapshotAdmission } from "../bridge/world-snapshot-admission";
@@ -33,6 +34,7 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
     worldWatchlist,
     worldCli,
   } = rpc.services;
+  if (method.startsWith("world.desk.")) return handleDeskRpc(rpc);
   if (method === "world.snapshot") {
     let transfer: ReturnType<WorldSnapshotAdmission["open"]> | undefined;
     try {

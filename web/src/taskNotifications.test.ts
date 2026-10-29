@@ -6,9 +6,11 @@ import {
   prepareTaskNotifications,
   showTaskNotification,
   TASK_NOTIFICATION_ACTIVATE_EVENT,
+  taskNotificationView,
 } from "./taskNotifications";
 import { __storeTesting, emptyServerSessionState, store } from "./store";
 import { bridge, type ConnectionClient } from "./api";
+import { notifyWorldAsk } from "./store/notifications";
 
 const origin = "https://herdr-world.example";
 const target = {
@@ -17,6 +19,28 @@ const target = {
   workspaceId: "w1",
   paneId: "p1",
 };
+
+test.each([
+  "codex",
+  "claude-code",
+  "Pi-Coding-Agent",
+  "antigravity cli",
+  "kimi code",
+  "grok build",
+  "muse-code",
+])(
+  "notification Open agent follows the Chat/Terminal preference for %s",
+  (agent) => {
+    expect(taskNotificationView({ agent }, "chat")).toBe("history");
+    expect(taskNotificationView({ agent }, "terminal")).toBe("terminal");
+  },
+);
+test.each([undefined, "", " ", "gemini", "unknown-harness"])(
+  "notification Open agent falls back to Terminal for %s",
+  (agent) => {
+    expect(taskNotificationView({ agent }, "chat")).toBe("terminal");
+  },
+);
 
 async function withBrowser(
   overrides: Record<string, unknown>,
@@ -63,6 +87,66 @@ function registration() {
 }
 
 describe("task notification transport", () => {
+  test("a ledger ask raises its local OS notice even when Web Push is selected", async () => {
+    const active = registration();
+    await withBrowser(
+      { navigator: { serviceWorker: { getRegistration: async () => active } } },
+      async () => {
+        __storeTesting.replaceState({
+          ...store.get(),
+          taskNotificationsEnabled: true,
+          taskNotificationBusy: false,
+          taskNotificationTransport: "push",
+          taskNotificationPreferences: { completed: true, blocked: true },
+          activeConnectionId: "alpha",
+          connections: [
+            {
+              id: "beta",
+              label: "Example",
+              source: "test",
+              is_default: false,
+              state: "ready",
+              generation: 2,
+            },
+          ],
+        });
+        notifyWorldAsk({
+          id: "q-example",
+          at: 1,
+          question: "Which design?",
+          options: [],
+          owner_only: true,
+          actor: {
+            label: "Example",
+            verified: true,
+            connection_id: "beta",
+            connection_generation: 2,
+            workspace_id: "w1",
+            pane_id: "w1:p1",
+            terminal_id: "original-terminal",
+            agent: "codex",
+            agent_session_id: "original-session",
+          },
+        });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(active.showNotification).toHaveBeenCalledTimes(1);
+        expect(active.showNotification).toHaveBeenCalledWith(
+          expect.any(String),
+          expect.objectContaining({
+            data: expect.objectContaining({
+              target: expect.objectContaining({
+                connectionId: "beta",
+                runtimeGeneration: 2,
+                terminalId: "original-terminal",
+                agentSessionId: "original-session",
+              }),
+            }),
+          }),
+        );
+      },
+    );
+  });
+
   test("uses an active worker when the mobile page constructor throws", async () => {
     const active = registration();
     const register = mock();

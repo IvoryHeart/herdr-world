@@ -52,6 +52,11 @@
   font-size: 11px;
 }
 
+.config-summary .config-build {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .config-connection-summary {
   display: inline-flex;
   align-items: center;
@@ -608,4 +613,13 @@
   .config-scale-control .config-scale-value {
     min-width: 40px;
   }
+}
+
+.config-update-reason {
+  grid-column: 1 / -1;
+  margin: 4px 6px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }

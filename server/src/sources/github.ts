@@ -1,5 +1,6 @@
 import {
   DETAIL_BATCH,
+  DETAIL_MAX_AGE_MS,
   detailQuery,
   detailsDue,
   detailStamp,
@@ -50,11 +51,14 @@ export const GITHUB_SIGNED_OUT =
 const GITHUB_FAILED =
   "GitHub did not answer. World keeps the last pull requests and tries again shortly.";
 
-const PR_FIELDS = `
+/** Contexts read with each PR's rollup, to leave the crew's marks out of it. */
+const ROLLUP_CONTEXTS = 100;
+
+export const PR_FIELDS = `
   number title url isDraft state updatedAt mergedAt headRefName headRefOid baseRefName reviewDecision mergeable
   repository { nameWithOwner }
   headRepository { nameWithOwner }
-  commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }`;
+  commits(last: 1) { nodes { commit { statusCheckRollup { state contexts(first: ${ROLLUP_CONTEXTS}) { totalCount nodes { __typename ... on CheckRun { status conclusion } ... on StatusContext { context state } } } } } } }`;
 
 export function normalizeMergedDays(value: unknown) {
   if (
@@ -144,7 +148,10 @@ export async function refreshGitHub(
     );
     if (result.code !== 0 || result.stdout.length > MAX_OUTPUT)
       throw new Error("GitHub request failed");
-    return record(record(JSON.parse(result.stdout)).data);
+    const response = record(JSON.parse(result.stdout));
+    if (Array.isArray(response.errors) && response.errors.length)
+      throw new Error("GitHub returned a partial response");
+    return record(response.data);
   };
   try {
     const data = await query(githubQuery(now, mergedDays));
@@ -176,8 +183,8 @@ export async function refreshGitHub(
 
 /**
  * Read your open pull requests in detail where due, then attach each detail
- * that still describes the pull request. A failed batch leaves its pull
- * requests without detail (their rules show unknown); the list stands.
+ * that still describes the pull request. A failed batch retains matching
+ * display evidence with stale health; it never refreshes its authority.
  */
 async function readDetails(
   items: WorkItem[],
@@ -194,23 +201,43 @@ async function readDetails(
   const keys = new Set(own.map((item) => item.key));
   for (const key of cache.keys()) if (!keys.has(key)) cache.delete(key);
   const due = detailsDue(own, cache, now);
+  const failed = (item: WorkItem) => {
+    const known = cache.get(item.key);
+    if (known) cache.set(item.key, { ...known, failed: true });
+  };
   for (let index = 0; index < due.length; index += DETAIL_BATCH) {
     const batch = due.slice(index, index + DETAIL_BATCH);
     let parsed: ReturnType<typeof parseDetails>;
     try {
       parsed = parseDetails(batch, await query(detailQuery(batch)));
     } catch {
+      batch.forEach(failed);
       break;
     }
     for (const item of batch) {
       const detail = parsed.get(item.key);
       if (detail)
         cache.set(item.key, { stamp: detailStamp(item), readAt: now, detail });
+      else failed(item);
     }
   }
   for (const item of own) {
     const known = cache.get(item.key);
-    if (known && known.stamp === detailStamp(item)) item.pr = known.detail;
+    const matching = known?.stamp === detailStamp(item) ? known : undefined;
+    if (matching) item.pr = matching.detail;
+    item.prObservation = {
+      source: "github",
+      headSha: item.headSha ?? "",
+      state: matching
+        ? !matching.failed &&
+          now >= matching.readAt &&
+          now - matching.readAt < DETAIL_MAX_AGE_MS
+          ? "fresh"
+          : "stale"
+        : "unavailable",
+      readAt: matching?.readAt ?? null,
+      expiresAt: matching ? matching.readAt + DETAIL_MAX_AGE_MS : null,
+    };
   }
 }
 
@@ -319,9 +346,55 @@ function issueItem(node: Record<string, unknown>): WorkItem | null {
   };
 }
 
+/**
+ * A `crew/…` commit status: the crew watcher's mark on a head, which reports
+ * on the checks and never counts as one (see docs/agent-development.md).
+ */
+export function crewMark(node: Record<string, unknown>) {
+  return (
+    node.__typename !== "CheckRun" &&
+    !("conclusion" in node) &&
+    typeof node.context === "string" &&
+    node.context.startsWith("crew/")
+  );
+}
+
+/**
+ * The head's checks, as GitHub's combined state, except that the crew's own
+ * marks don't count: when a complete read of the contexts holds any, the
+ * state comes from the others. An incomplete read keeps GitHub's state.
+ */
 function rollup(commits: unknown): WorkChecks {
   const last = nodes(commits).at(-1);
-  const state = record(record(record(last?.commit).statusCheckRollup)).state;
+  const summary = record(record(last?.commit).statusCheckRollup);
+  const contexts = record(summary.contexts);
+  const all = nodes(contexts);
+  const own = all.filter(crewMark);
+  if (
+    own.length &&
+    summary.state !== "EXPECTED" &&
+    Number(contexts.totalCount) === all.length
+  ) {
+    const states = all
+      .filter((node) => !crewMark(node))
+      .map((node) =>
+        node.__typename === "CheckRun"
+          ? node.status !== "COMPLETED"
+            ? "PENDING"
+            : ["SUCCESS", "SKIPPED", "NEUTRAL"].includes(
+                  String(node.conclusion),
+                )
+              ? "SUCCESS"
+              : "FAILURE"
+          : String(node.state),
+      );
+    if (states.some((state) => state === "FAILURE" || state === "ERROR"))
+      return "fail";
+    if (states.some((state) => state === "PENDING" || state === "EXPECTED"))
+      return "pending";
+    return states.length ? "pass" : "none";
+  }
+  const state = summary.state;
   if (state === "SUCCESS") return "pass";
   if (state === "FAILURE" || state === "ERROR") return "fail";
   if (state === "PENDING" || state === "EXPECTED") return "pending";

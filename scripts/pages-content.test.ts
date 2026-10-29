@@ -236,12 +236,17 @@ describe("Pages references", () => {
     );
     const screenshotPattern = /herdr-world-(?:desktop|mobile)-[a-z-]+\.png/g;
     const screenshots = [...new Set(readme.match(screenshotPattern))].sort();
-    expect(screenshots).toHaveLength(9);
+    expect(screenshots).toHaveLength(10);
     expect([...new Set(build.match(screenshotPattern))].sort()).toEqual(
       screenshots,
     );
-    expect([...new Set(site.match(screenshotPattern))].sort()).toEqual(
-      screenshots,
+    // The site's phone row has three slots; every desktop view still appears.
+    const siteScreenshots = [...new Set(site.match(screenshotPattern))].sort();
+    for (const image of siteScreenshots) expect(screenshots).toContain(image);
+    expect(siteScreenshots).toEqual(
+      expect.arrayContaining(
+        screenshots.filter((s) => s.includes("-desktop-")),
+      ),
     );
     for (const source of [site, tutorial, build]) {
       expect(source).not.toMatch(/herdr-studio-(?:desktop|mobile)-/);

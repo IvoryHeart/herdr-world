@@ -5,6 +5,39 @@ import { AgentHistoryChat } from "./AgentHistoryChat";
 import { HISTORY_PREVIEW_CHARS } from "./AgentHistoryCard";
 import type { HistoryEntry } from "./agentHistory";
 import { groupHistoryChatItems } from "./agentHistoryView";
+import type { HistoryDecorator } from "./historyDecoration";
+
+test("decorates a bubble and a paired tool step while the plain History drawer stays undecorated", () => {
+  const messages = [
+    entry("user", "user"),
+    entry("call", "tool", { source_call_id: "run", tool_name: "Bash" }),
+    entry("result", "tool", { kind: "tool_result", source_call_id: "run" }),
+  ];
+  const decorate: HistoryDecorator = (target, token) =>
+    target.type === "message" && token === "message-token"
+      ? { after: createElement("span", {}, "PR decoration") }
+      : target.type === "step" && token === "step-token"
+        ? { state: "error", row: "row evidence", detail: "detail evidence" }
+        : undefined;
+  const markup = renderToStaticMarkup(
+    createElement(AgentHistoryChat, {
+      items: groupHistoryChatItems(messages),
+      listRef: createRef<HTMLDivElement>(),
+      contentRef: createRef<HTMLDivElement>(),
+      onOpen() {},
+      decorate,
+      decorationTokens: new Map([
+        ["entry:user", "message-token"],
+        ["step:run", "step-token"],
+      ]),
+    }),
+  );
+  expect(markup).toContain("PR decoration");
+  expect(markup).toContain("1 error");
+  const plain = renderChat(messages);
+  expect(plain).not.toContain("PR decoration");
+  expect(plain).not.toContain("1 error");
+});
 
 function entry(
   id: string,

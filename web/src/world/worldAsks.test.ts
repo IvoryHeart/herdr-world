@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import type { BridgeControlMsg } from "../api";
-import { WorldAsksStore, type WorldAsk } from "./worldAsks";
+import { bridge, type BridgeControlMsg } from "../api";
+import { WorldAsksStore, sharedAsksStore, type WorldAsk } from "./worldAsks";
 
 const ask = (id: string, answered = false): WorldAsk => ({
   id,
@@ -54,3 +54,79 @@ test("open questions follow the ledger; the owner's answer goes to the service",
   });
   store.stop();
 });
+
+test("new asks announce once, withdrawn asks disappear, and old socket replies cannot resurrect them", async () => {
+  let status: (value: "connecting" | "connected" | "disconnected") => void =
+    () => {};
+  let ledger = { revision: 1, asks: [ask("q-old")] };
+  let held: ((value: unknown) => void) | null = null;
+  let hold = false;
+  const announced: string[] = [];
+  const store = new WorldAsksStore(
+    {
+      call: () =>
+        hold
+          ? new Promise((resolve) => {
+              held = resolve;
+            })
+          : Promise.resolve(ledger),
+      onControl: () => () => {},
+      onStatus: (callback) => {
+        status = callback;
+        return () => {};
+      },
+    },
+    (entry) => announced.push(entry.id),
+  );
+  store.start();
+  await store.refresh();
+  expect(announced).toEqual([]);
+  ledger = { revision: 2, asks: [ask("q-old"), ask("q-new")] };
+  await store.refresh();
+  await store.refresh();
+  expect(announced).toEqual(["q-new"]);
+  ledger = {
+    revision: 3,
+    asks: [{ ...ask("q-new"), withdrawn: { at: 2 } } as WorldAsk],
+  };
+  await store.refresh();
+  expect(store.get()).toEqual([]);
+  hold = true;
+  const old = store.refresh();
+  const finish = held! as (value: unknown) => void;
+  status("disconnected");
+  hold = false;
+  ledger = { revision: 0, asks: [] };
+  status("connected");
+  await store.refresh();
+  finish({ revision: 4, asks: [ask("q-new")] });
+  await old;
+  expect(store.get()).toEqual([]);
+  expect(announced).toEqual(["q-new"]);
+  store.stop();
+});
+
+test.serial(
+  "the application can attach its notifier after the shared asks model exists",
+  async () => {
+    const original = bridge.call;
+    let ledger = { revision: 1, asks: [ask("q-backlog")] };
+    const announced: string[] = [];
+    bridge.call = (async () => ledger) as typeof bridge.call;
+    try {
+      const shared = sharedAsksStore();
+      await shared.refresh();
+      expect(sharedAsksStore((entry) => announced.push(entry.id))).toBe(shared);
+      ledger = {
+        revision: 2,
+        asks: [ask("q-backlog"), ask("q-new-after-bootstrap")],
+      };
+      await shared.refresh();
+      await shared.refresh();
+      expect(announced).toEqual(["q-new-after-bootstrap"]);
+    } finally {
+      bridge.call = original;
+      sharedAsksStore(() => {});
+    }
+  },
+);

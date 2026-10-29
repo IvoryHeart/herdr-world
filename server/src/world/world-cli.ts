@@ -1,3 +1,6 @@
+import { askSessionFingerprint } from "./world-cli-asks";
+import { handleWorldAsk } from "./world-cli-asks";
+export { answerAsk, ASK_WAIT_MAX_MS } from "./world-cli-asks";
 import { teamMembers, type GroupSender } from "../../../shared/groups";
 import { isGroupOp } from "./board-groups";
 import {
@@ -119,6 +122,7 @@ export const WORLD_CLI_COMMANDS = [
   "ask",
   "ask get",
   "ask answer",
+  "ask withdraw",
   "result",
   "result ls",
   "spawned-by",
@@ -172,9 +176,29 @@ export async function identifyCaller(
           label: `${agent ?? "terminal"} in ${paneId}`,
           verified: true,
           connection_id: host.connection_id,
+          connection_generation: host.generation,
           pane_id: paneId,
           ...(typeof pane?.terminal_id === "string"
             ? { terminal_id: pane.terminal_id }
+            : {}),
+          ...(typeof pane?.workspace_id === "string"
+            ? { workspace_id: pane.workspace_id }
+            : {}),
+          ...(typeof pane?.agent_session === "object" &&
+          pane.agent_session !== null
+            ? {
+                agent_session_fingerprint: askSessionFingerprint(
+                  pane.agent_session,
+                ),
+                ...(typeof (pane.agent_session as { value?: unknown }).value ===
+                "string"
+                  ? {
+                      agent_session_id: (
+                        pane.agent_session as { value: string }
+                      ).value,
+                    }
+                  : {}),
+              }
             : {}),
           ...(agent ? { agent } : {}),
         },
@@ -478,9 +502,6 @@ const BOARD_COMMANDS = new Set<WorldCliCommand>([
   "colour reset",
 ]);
 
-/** How long one `ask get` call may hold; the CLI's --wait asks again. */
-export const ASK_WAIT_MAX_MS = 20_000;
-
 export function createWorldCli(deps: WorldCliDeps) {
   const now = deps.now ?? Date.now;
 
@@ -747,84 +768,11 @@ export function createWorldCli(deps: WorldCliDeps) {
           null,
         );
       }
-      case "ask": {
-        const question = text(params.question, "the question");
-        const options = Array.isArray(params.options)
-          ? params.options.map((option) =>
-              text(option, "an option", LEDGER_LIMITS.option),
-            )
-          : [];
-        if (options.length > LEDGER_LIMITS.options)
-          usage(`at most ${LEDGER_LIMITS.options} options`);
-        const open = deps.ledger.openAsks().asks;
-        if (open.length >= LEDGER_LIMITS.asks)
-          refused("too many open questions; wait for answers");
-        // Verified panes each have their own allowance; unverified callers,
-        // whatever they claim, share one.
-        const bucket = (entry: CliActor) =>
-          entry.verified
-            ? `${entry.connection_id}\u0000${entry.pane_id}`
-            : "unverified";
-        if (
-          open.filter((entry) => bucket(entry.actor) === bucket(actor))
-            .length >= LEDGER_LIMITS.asksPerActor
-        )
-          refused(
-            `you have ${LEDGER_LIMITS.asksPerActor} open questions; wait for answers`,
-          );
-        const id = deps.ledger.nextId("q");
-        deps.publishLedger(
-          deps.ledger.update((document) =>
-            document.asks.push({
-              id,
-              at: now(),
-              actor,
-              question,
-              options,
-              owner_only: params.owner_only === true,
-            }),
-          ),
-          true,
-        );
-        return { id };
-      }
-      case "ask get": {
-        const id = text(params.id, "the question ID");
-        const wait = Math.min(
-          ASK_WAIT_MAX_MS,
-          Math.max(0, Number(params.wait_ms) || 0),
-        );
-        const until = now() + wait;
-        let ask = deps.ledger.ask(id);
-        // Hold the call a while (the CLI's --wait asks again), not forever.
-        while (ask && !ask.answer && now() < until) {
-          await new Promise((resolve) => setTimeout(resolve, 500));
-          ask = deps.ledger.ask(id);
-        }
-        return ask ?? notFound(`no question ${id}`);
-      }
-      case "ask answer": {
-        const id = text(params.id, "the question ID");
-        const answer = text(params.answer, "the answer");
-        const ask = deps.ledger.ask(id);
-        if (!ask) notFound(`no question ${id}`);
-        if (ask!.owner_only) refused("only the owner answers this, in World");
-        // An answer from an agent must come from a pane World has placed,
-        // and never from the agent that asked.
-        if (!actor.verified)
-          refused("only the owner or a verified agent answers questions");
-        if (
-          ask!.actor.connection_id === actor.connection_id &&
-          ask!.actor.pane_id === actor.pane_id
-        )
-          refused("an agent cannot answer its own question");
-        if (ask!.answer) refused(`${id} is already answered`);
-        deps.publishLedger(
-          answerAsk(deps.ledger, id, answer, actor.label, now()),
-          true,
-        );
-        return deps.ledger.ask(id);
-      }
+      case "ask":
+      case "ask get":
+      case "ask answer":
+      case "ask withdraw":
+        return handleWorldAsk(deps, command, params, actor, now);
       case "result": {
         const status = (params.status ?? "done") as ResultStatus;
         if (!RESULT_STATUSES.includes(status))
@@ -944,20 +892,4 @@ function text(value: unknown, what: string, max = LEDGER_LIMITS.text): string {
   if (typeof value !== "string" || !value.trim() || value.length > max)
     usage(`${what} must be text of at most ${max} characters`);
   return (value as string).trim();
-}
-
-/** Record an answer; returns the ledger revision. Used by the CLI and by World. */
-export function answerAsk(
-  ledger: WorldLedger,
-  id: string,
-  answer: string,
-  by: string,
-  at: number,
-) {
-  return ledger.update((document) => {
-    const ask = document.asks.find((entry) => entry.id === id);
-    if (!ask) throw new CliError("not_found", `no question ${id}`);
-    if (ask.answer) throw new CliError("refused", `${id} is already answered`);
-    ask.answer = { text: answer, at, by };
-  });
 }

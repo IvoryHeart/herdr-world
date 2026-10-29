@@ -37,6 +37,29 @@ const failing: WorkItem = {
 };
 
 describe("pull request attention in the browser", () => {
+  test("decoding retains source-keyed unknowns across the bounded GitHub evidence window", () => {
+    const reviewers = Array.from({ length: 50 }, (_, id) => ({
+      reviewer: null,
+      sourceId: `review-${id}`,
+      url: `https://github.com/example-org/widgets/pull/7#pullrequestreview-${id}`,
+      at: id,
+      outcome: "confirmed",
+      line: "0/0 resolved, 0 new",
+      commit: HEAD,
+      commitsSince: 0,
+    }));
+    const [decoded] = parseWorldSources({
+      items: [{ ...failing, pr: { ...failing.pr, reviewers } }],
+    }).items;
+    expect(decoded!.pr!.reviewers).toHaveLength(50);
+    expect(decoded!.pr!.reviewers[49]).toMatchObject({
+      reviewer: null,
+      sourceId: "review-49",
+      outcome: "unknown",
+      url: reviewers[49]!.url,
+    });
+  });
+
   test("stalled only once it has held for a moment, and forgotten when it clears", () => {
     const seen = new Map<string, number>();
     const idle = [{ item: failing, authors: [{ label: "teams", idle: true }] }];

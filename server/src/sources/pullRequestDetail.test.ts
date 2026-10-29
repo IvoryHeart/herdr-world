@@ -148,6 +148,36 @@ const detailNode = (fields: Record<string, unknown> = {}) => ({
 });
 
 describe("pull request detail", () => {
+  test("formal RESULT-only reviews keep GitHub IDs, source links and commit metadata", () => {
+    const detail = parseDetail(
+      item(7),
+      detailNode({
+        reviews: {
+          nodes: [
+            post("RESULT #7: 0/0 resolved, 0 new", {
+              id: "formal-review-1",
+              submittedAt: "2026-01-01T12:30:00Z",
+              commit: { oid: HEAD },
+              url: "https://github.com/example-org/widgets/pull/7#pullrequestreview-1",
+            }),
+          ],
+        },
+        comments: { nodes: [] },
+      }),
+    );
+    expect(detail.reviewers).toMatchObject([
+      {
+        reviewer: null,
+        sourceId: "formal-review-1",
+        outcome: "unknown",
+        commit: HEAD,
+        commitsSince: 0,
+        url: "https://github.com/example-org/widgets/pull/7#pullrequestreview-1",
+      },
+    ]);
+    expect(detailQuery([item(7)])).toContain("nodes { id author");
+  });
+
   test("reads checks, reviewer results, files and images from GitHub's answer", () => {
     const detail = parseDetail(item(7), detailNode());
     expect(detail.behindBy).toBe(4);
@@ -185,6 +215,50 @@ describe("pull request detail", () => {
       // rev4 names the commit it confirmed: two commits ago.
       ["rev4", "confirmed", OLDEST, 2],
     ]);
+  });
+
+  test("the crew watcher's crew/ statuses are marks, not checks", () => {
+    const base = detailNode();
+    const rollup = (
+      base.latest as {
+        nodes: {
+          commit: { statusCheckRollup: { contexts: { nodes: unknown[] } } };
+        }[];
+      }
+    ).nodes[0]!.commit.statusCheckRollup.contexts;
+    const marked = detailNode({
+      latest: {
+        nodes: [
+          {
+            commit: {
+              oid: HEAD,
+              statusCheckRollup: {
+                contexts: {
+                  totalCount: 4,
+                  nodes: [
+                    ...rollup.nodes,
+                    {
+                      __typename: "StatusContext",
+                      context: "crew/needs-owner",
+                      state: "PENDING",
+                      createdAt: "2026-01-01T12:20:00Z",
+                      isRequired: false,
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        ],
+      },
+    });
+    const detail = parseDetail(item(7), marked);
+    expect(detail.checks.map((check) => check.name)).toEqual([
+      "Unit tests",
+      "Browser suite",
+      "external/lint",
+    ]);
+    expect(detail.checksTruncated).toBe(false);
   });
 
   test("a change outside the files World read is unknown, not a non-UI change", () => {

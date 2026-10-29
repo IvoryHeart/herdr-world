@@ -220,9 +220,12 @@ export function townModelFromProjection(
   const admit = (agent: OfficeAgent) => {
     const counts = roomCounts.get(agent.roomKey);
     if (!counts || agents.has(agent.key)) return;
-    agents.set(agent.key, agent);
+    const shown = agent.stale
+      ? { ...agent, semanticStatus: "unknown" as const }
+      : agent;
+    agents.set(agent.key, shown);
     counts.agents += 1;
-    counts[agent.semanticStatus] += 1;
+    counts[shown.semanticStatus] += 1;
   };
   for (const entry of projection.roster) admit(entry.agent);
   for (const room of projection.rooms)
@@ -283,15 +286,30 @@ export function townRoomCounts(
 export function townAttention(
   model: TownModel,
   since: ReadonlyMap<string, number>,
+  asking: ReadonlySet<string> = new Set(),
 ): OfficeAgent[] {
   const at = (agent: OfficeAgent) => since.get(agent.key) ?? 0;
-  const agents = [...model.agents.values()];
+  const agents = asking.size
+    ? [
+        ...new Map([
+          ...model.agents,
+          ...(model.projection?.roster ?? [])
+            .filter((entry) => asking.has(entry.agent.key))
+            .map((entry) => [entry.agent.key, entry.agent] as const),
+        ]).values(),
+      ]
+    : [...model.agents.values()];
   return [
     ...agents
       .filter((agent) => agent.semanticStatus === "blocked")
       .sort((a, b) => at(a) - at(b) || a.key.localeCompare(b.key)),
+    ...agents.filter(
+      (agent) => agent.semanticStatus !== "blocked" && asking.has(agent.key),
+    ),
     ...agents
-      .filter((agent) => agent.semanticStatus === "done")
+      .filter(
+        (agent) => agent.semanticStatus === "done" && !asking.has(agent.key),
+      )
       .sort((a, b) => at(b) - at(a) || a.key.localeCompare(b.key)),
   ];
 }

@@ -226,30 +226,52 @@ not embed or launch a separately branded Roamgate application.
 - **THEN** only that runtime reconnects and newly opened resources require current target admission,
   without retiring other hosts or replaying the stale action
 
-### Requirement: Agent checkout source-control context
+### Requirement: Agent worktree source-control context
 
-For an actionable agent Inspector, World SHALL read Agent checkout context only from
-a complete versioned report whose session fingerprint matches the exact active pane
-session on the Inspector's connection and generation. It SHALL use a bounded
-read-only Git query on that reported checkout, show its branch and changed files,
-and keep Workspace changes as an explicit separate choice. World SHALL NOT infer
-the checkout from workspace or terminal CWD, another session, or another host. A
-reported HTTPS PR link SHALL be labelled Reported PR. Agent checkout SHALL expose no
-Git mutations. Reports omit TTL and Clear; they become unavailable on session
-replacement, pane closure, or Herdr restart.
+An agent Inspector's Files and Changes SHALL share one selected worktree,
+independently of its workspace launch directory. World SHALL rank evidenced
+candidates from live Herdr pane foreground_cwd, then that exact occupant's own
+session/transcript/Codex rollout cwd or session-bound checkout report, then its
+branch matched within an explicitly known repository's Git worktree list.
+Roots SHALL be canonicalized on the target runtime, including SSH. Detached HEAD
+SHALL remain a valid root with null branch. An outside-Git or unreadable cwd SHALL
+remain attributed unconfirmed evidence, without guessed sibling repositories.
 
-#### Scenario: Agent checkout differs from workspace changes
+The observation SHALL carry connection, generation, pane/terminal and session,
+revision/time, source/reference/basis and resolved, ambiguous, unavailable or
+stale state. A client SHALL submit a candidate identity plus qualified subject
+and revision; the service SHALL resolve and revalidate it for RPC and HTTP file
+reads, previews, downloads and actions. Old occupants, moved/replaced roots or
+retired generations SHALL NOT fall back to another root or host.
 
-- **WHEN** two agents in one workspace report different current-session worktrees
-- **THEN** each Inspector shows its own reported branch and changed files, while
-  Workspace changes remains separately labelled and selectable
+The existing location line SHALL show the selected tree/branch and source mark.
+Its popover SHALL offer Worktree radio choices and Refresh, with phone tap
+rows at least 44px. Equal-rank ambiguity SHALL require an explicit choice.
+Stale evidence SHALL remain visible but SHALL NOT admit resources. The empty
+Files/Changes state SHALL open the same chooser. Other entries from that scoped
+worktree list MAY be offered as worktree_list viewer choices; they SHALL NOT
+become automatic bindings or claims of agent/branch ownership. Selection SHALL
+apply to Files and Changes together and remain separate from observed claims.
 
-#### Scenario: Checkout report is absent or replaced
+Existing explicit checkout reports SHALL retain versioned session guards and
+Reported PR attribution; viewing another root SHALL NOT rewrite those reports.
+Observers SHALL refresh from events or explicit demand rather than polling.
+Unchanged source bindings MAY reuse a bounded observation; selected roots and
+inferred branch ambiguity SHALL still be revalidated at operation boundaries.
 
-- **WHEN** metadata is absent, malformed, lost after restart, or its session or
-  generation changes while a request is pending
-- **THEN** Agent checkout shows an unavailable reason and a Workspace changes
-  choice, and no old checkout, PR, or changed files enter that Inspector
+#### Scenario: Agent changes directory or uses another linked checkout
+
+- **WHEN** an agent launched in the main checkout has stronger live/session
+  evidence for a linked worktree, or the user deliberately chooses a listed tree
+- **THEN** Files, Changes and HTTP previews use that same qualified selected root,
+  and the location popover explains the source without asserting ownership
+
+#### Scenario: Worktree evidence conflicts or expires
+
+- **WHEN** equal-rank candidates conflict, a source/root changes while a request
+  is pending, or the occupant/generation is replaced
+- **THEN** no stale or guessed default admits access; the chooser retains
+  attributable evidence and resource access waits for a current selection
 
 ### Requirement: Terminal file links use the originating Inspector
 
@@ -272,6 +294,64 @@ retain its single-Inspector behavior.
   a file-link request is admitted
 - **THEN** the request does not open the file in another Inspector or on another host, and the user
   receives an unavailable indication
+
+### Requirement: Chat source links use the admitted Inspector worktree
+
+In Town, Board and Desk, local source references in an agent conversation SHALL
+open Files in that same Inspector at the referenced line or Markdown heading.
+Supported references SHALL
+include absolute paths with an optional line number, root-level filenames,
+complete inline-code paths (including spaces) and Markdown file links. Escaped
+filename delimiters SHALL remain filename content; version-number prose SHALL
+NOT become automatic source links. Automatic basename recognition SHALL require
+both a known source/document format and a filename context (inline code, a line
+location or a standard document name). A code command or list of references
+SHALL retain individual source-path links and line locations rather than become
+one combined filename. Automatic recognition of a spaced inline-code filename
+SHALL require a qualified path prefix; explicit Markdown links SHALL remain
+available for ambiguous names or unrecognized automatic formats. Relative references SHALL resolve within the
+selected agent
+worktree. HTTP and HTTPS links SHALL remain web links. Inspectors without an
+admitted agent-worktree integration, including Spaces, SHALL retain ordinary
+Markdown navigation and SHALL NOT offer a nonfunctional worktree chooser.
+
+Source navigation SHALL preserve the originating connection, runtime generation,
+pane/session and the shared Files/Changes worktree binding. It SHALL NOT admit a
+path outside that selected root, use a workspace default, change another
+Inspector or accept a delayed result from a replaced binding. Missing or stale
+bindings and unresolved local paths SHALL show an explicit unavailable or
+choose-worktree state, without browser navigation to a local-path URL.
+
+#### Scenario: Open a source reference on desktop or phone
+
+- **WHEN** a user activates a local source link with a line in Chat
+- **THEN** that Inspector selects Files and reveals the file and line using its
+  admitted agent worktree, including when opening the same file at another line
+
+#### Scenario: Source link cannot use its originating worktree
+
+- **WHEN** the binding is stale or belongs to another host, generation or session,
+  or the path is outside the selected worktree
+- **THEN** no fallback file read or browser navigation occurs, and the Inspector
+  offers an explicit unavailable notice or worktree choice
+
+#### Scenario: Refresh equivalent evidence while a source read is pending
+
+- **WHEN** opening Files refreshes worktree evidence with identical connection,
+  runtime, subject, revision, candidate and root values before the read completes
+- **THEN** the successful read still reveals its requested line, genuine binding
+  replacements continue to retire old work, and notices follow their binding
+
+#### Scenario: Code lists and executable-led commands preserve source items
+
+- **WHEN** inline code contains comma/semicolon-separated references, mixed
+  qualified paths and basenames, or a command led by an executable directly in
+  `bin`, `sbin` or `.bin` at any relative or absolute installation prefix, or in
+  virtualenv `Scripts`
+- **THEN** each source item retains its own file link and line location, including
+  lists without spaces after commas; a single qualified filename containing
+  spaces or a literal comma remains whole when it is unambiguous; spaced names
+  directly in these executable directories remain available as explicit Markdown links
 
 ### Requirement: Exact visual terminal input focus
 
@@ -728,7 +808,7 @@ cannot be opened without resolving to a colliding entity on another runtime or s
 Desk SHALL present every current actionable agent within the host filter by what it needs from the
 operator. Needs you SHALL list blocked agents, oldest wait first, with the question read from the
 bottom of the agent's visible screen. To review SHALL list done agents, idle agents whose latest turn
-ended within 12 hours, and agents this browser observed stop working within 12 hours, each with its
+ended within 12 hours, and agents the World service observed stop working within 12 hours, each with its
 turn receipt or, without one, its latest screen lines. In flight SHALL list working agents with their
 current request and a live screen line. Remaining agents SHALL collapse into a quiet list. Cards and
 rows SHALL name each agent by the name the operator gave Herdr, otherwise the thread title its harness
@@ -806,6 +886,66 @@ to another session or a same-named pane on another host.
 - **WHEN** two filtered hosts expose the same native pane ID
 - **THEN** Desk triages both agents and reads each host's own receipt and screen, and reviewing one
   stop does not mark the other host's stop reviewed
+
+### Requirement: Shared bounded Desk state
+
+The World service SHALL hold review marks, observed stop times and recent Desk
+opens in process-local memory, shared by every connected browser. It SHALL retain
+at most 500 qualified metadata records, 40 recent-open timestamps and 4,096 prior
+agent-status observations. Each record SHALL belong to one connection ID, runtime
+generation, terminal ID and agent-session fingerprint (or the explicit unknown
+session identity). Review marks SHALL store only the latest marked stop per agent
+session; Reviewed SHALL retain its existing latest-stop presentation for idle or
+done agents. Exact Undo SHALL remove only the stop it names, preserving any newer
+mark from another browser. Metadata SHALL survive browser reloads and host-filter
+changes, clear on service restart and retire on runtime or observed session
+replacement. Browser-local Desk metadata SHALL NOT be imported.
+A shared stop identity SHALL be independent of a browser's receipt polling or
+read failures: the same service stop and native activity observation SHALL have
+one identity with or without a receipt. A later observed stop or native activity
+SHALL invalidate the older mark. Receipt content SHALL remain presentation data.
+The service SHALL assign a stable observed-stop identity separate from the
+12-hour display timestamp. Retained review marks SHALL keep that identity when
+only the timestamp expires. Qualified native `state_change_seq` progress in an
+already stopped state SHALL reveal a subsequent stop even if no browser observed
+the intervening working state. Native progress checkpoints on retained metadata
+SHALL survive display/observation expiry. Equal, older, malformed or ambiguous
+native progress SHALL NOT invalidate a mark. Without a native sequence, a known
+idle/blocked-to-done transition SHALL still advance the stop.
+The stable observed-stop identity SHALL participate in receipt refresh and
+currency admission. A read started for a preceding stop SHALL NOT become current
+for its successor. While a new stop's receipt is pending or failing, the previous
+report SHALL NOT enable marking; an unreadable stop may settle without a report
+under the existing bounded retry policy. Pane rows alone SHALL supply the observed
+agent harness and session identity. Matched agent.list status and sequence data
+SHALL be used only when its session fingerprint agrees with the pane's; metadata
+SHALL NOT fill in a missing pane identity.
+
+Mutations SHALL validate the exact live terminal and session through a current
+runtime lease and revalidate that lease after the read. Observed stops SHALL come
+only from fresh admitted host reads; cached, failed, invalidated or retired reads
+SHALL NOT record transitions. A host read begun before a newer metadata mutation
+SHALL NOT replace its session identity. A metadata admission started before a
+newer session observation or mutation SHALL NOT restore its replaced session,
+even if the original fingerprint subsequently reappears. Status observations
+of an already-known same session SHALL NOT retire a valid metadata admission.
+Observed-stop display times SHALL expire after 12 hours; expiry alone SHALL NOT
+reopen an unchanged reviewed idle/done stop.
+The service SHALL notify all browsers on real metadata changes. Browsers SHALL
+reject replies from an older socket epoch or service revision, treat disconnected
+state as unverified, and accept a restarted service's empty revision-zero state.
+
+#### Scenario: Review on a phone and undo on a desktop
+
+- **WHEN** one browser marks an agent's current stop reviewed
+- **THEN** another browser connected to the same service sees it reviewed, and
+  Undo from either browser restores that exact stop without removing a newer mark
+
+#### Scenario: Reload a browser or restart the service
+
+- **WHEN** a browser reloads while the World service still runs
+- **THEN** it reads the same qualified marks, stop times and recent opens; after
+  a service restart, reconnect replaces them with the new process's empty state
 
 ### Requirement: Bounded turn receipts
 
@@ -1071,6 +1211,29 @@ contain a lounge and a reception, and the reception SHALL show the user behind
 its counter. Scene position SHALL NOT change an entity's authoritative host,
 workspace, tab or pane ancestry.
 
+A room's nameplate SHALL fit within its projected room width with padding.
+Only the name SHALL truncate, at its end, with the full name available as a
+tooltip and accessible label. The leading editable colour swatch, ACTIVE/TOTAL
+agent count and trailing blocked badge SHALL retain their contents. ACTIVE SHALL
+sum the room's existing per-agent working and blocked semantic status counts,
+as used by the Town board. TOTAL SHALL count its canonical observed agents,
+including done, idle and unknown reports, and exclude plain terminals. Done or
+finished agents (seen or unseen), idle agents and unknown agents SHALL NOT count
+as active. Needs-you items such as open asks SHALL NOT add to either agent count.
+The counter SHALL explain its working/waiting breakdown in a tooltip and accessible
+label. Its numerals SHALL be tabular, its total fraction muted, and its whole count
+muted when ACTIVE is zero; it SHALL stay fixed ahead of the blocked badge while
+only the room name truncates. Rename and Close SHALL
+appear below the plate on hover or keyboard focus, and on a touch of the plate,
+with targets at least 40 CSS pixels wide and tall. These controls SHALL NOT
+reserve name width while hidden. The dashed empty-seat **+** inside a room
+SHALL open the existing launcher with that qualified room selected; Terminal
+SHALL be its first choice for a plain tab, alongside profiles and agent kinds.
+The plate SHALL NOT contain a separate New agent text button. If the selected
+room or captured generation is unavailable, the launcher SHALL require a deliberate
+choice of a current room before creation; an unqualified launcher entry MAY default
+to an available room.
+
 A building for a host whose topology is cached after failure SHALL be visibly
 stale and its entities SHALL be non-actionable. Town SHALL NOT invent activity,
 cost, completion or project data when no authoritative state or optional provider
@@ -1107,25 +1270,37 @@ from Herdr's tab list order within each workspace, which Herdr keeps when a tab
 moves (a tab's number is not its position). Desk slot i of a room SHALL be the
 room's i-th drawn tab, in reading order, so a reorder in Herdr, Spaces or Town
 moves desks. A room's capacity SHALL step through a
-bounded set of grid sizes that always leaves at least one free desk spot: a room
-grows square until it reaches its shape's width (four desks on a phone, six on
+bounded set of grid sizes that always leaves at least one free desk spot, or two
+adjacent action spots while Fold is available: a room grows square until it
+reaches its shape's width (four desks on a phone, six on
 portrait and mid-width screens, eight on wide screens) and then extends
-downward, and its building grows around it. A folded room SHALL use a default
-bound of 24 desks, and an expanded room a default bound of 127; Fold SHALL
-restore the 24-desk bound and allow the room to shrink, while retaining pinned
-cells and its building column. Ordinary tab closures SHALL keep the live size
-step. An expanded room SHALL retain its Fold control after closures, including
-at or below 24 desks, until the user folds it. Selected and pinned desks, every desk represented
-by the shared Town call list (blocked agents and unreviewed finishes), and the
-desk of a verified, qualified asking agent with an open question SHALL remain
-visible past either bound. Admission SHALL consume desk keys from that shared
-attention source after its finished/seen overlay, without independently inferring
-attention from projection status or matching question actors by label. A room
-with more tabs than it draws SHALL keep these protected desks, then the three
-newest tabs, then working or unknown agents, then finished ones, hiding idle and
-empty desks first. No protected desk SHALL contribute to the hidden count. Town
-SHALL count every hidden desk on the room, and SHALL offer Expand on its plaque
-while it is folded. Zooming into a room taller or wider than the usable view, from its
+downward, and its building grows around it. A folded room SHALL use a native-order
+prefix of 24 desks. Each Expand action SHALL raise the room's target by about 20
+desks, up to all observed desks; Fold SHALL restore the 24-desk target in one
+action and allow the room to shrink, while retaining pinned cells and its
+building column. There SHALL be no hard expanded desk ceiling: repeated Expand
+actions SHALL eventually reveal every observed desk. While partially expanded,
+the room SHALL offer Fold alongside Expand, with separate non-overlapping targets
+of at least 40 CSS pixels, so one Fold click can restore the folded target at any step.
+Ordinary tab closures SHALL keep the live size step. An expanded room SHALL
+retain its Fold control after closures, including at or below 24 desks, until
+the user folds it. A folded room SHALL show exactly the first 24 observed tabs
+(or all tabs when fewer exist) in the same native tab order as Spaces. Each
+expansion SHALL append the next native-order prefix of up to 20 tabs. Activity,
+selection, pins and recent tabs SHALL NOT promote later tabs across this boundary.
+Changing agent status SHALL NOT change which tabs are shown. Existing pins MAY
+retain the cells of admitted desks, but SHALL NOT admit hidden tabs.
+Town SHALL count every currently hidden desk on its bottom-right **» +N** tile,
+beside the same-height new-seat tile, using two reserved cells without overlap.
+The tile SHALL show a red exclamation at its top-left when hidden desks have
+blocked calls or open questions from verified, qualified asking identities, and
+a green tick at its top-right when hidden desks have unreviewed completions.
+These indicators SHALL use the shared rail calls after the finished/seen overlay
+and the indexed qualified Ask source, not raw done status or actor labels. They
+SHALL have accessible descriptions and no extra visible numbers, and SHALL clear
+when those desks are revealed or their attention items are removed or reviewed.
+The room plaque SHALL continue to count agents across all tabs, including hidden ones.
+Zooming into a room taller or wider than the usable view, from its
 card or with Zoom in, SHALL open at its first desks. While a
 scene is live, a topology change SHALL NOT reorder rooms or move a desk to
 another room: a tab Herdr adds last SHALL take the first free spot of its room
@@ -1144,9 +1319,17 @@ SHALL share one street. Rooms SHALL fill their building's columns in workspace
 order, and while a scene is live each room SHALL keep its column, so a room
 that grows moves only the rooms below it in that column. The lounge SHALL stay
 above the rooms, and the lobby and reception below them. A reflow that would move rooms
-or buildings SHALL wait while the user presses, scrolls or zooms and until a
-short pause after, and the camera SHALL then follow the room in view so it
-stays where it was.
+or buildings due to background topology changes SHALL wait while the user
+presses, scrolls or zooms and until a short pause after, and the camera SHALL
+then follow the room in view so it stays where it was. An explicit Fold or
+Expand request SHALL apply its admitted desks and layout immediately, without
+waiting for that ambient quiet period.
+
+#### Scenario: A user expands while the reflow guard is active
+
+- **WHEN** the user taps Expand or Fold during the interaction quiet period
+- **THEN** the requested room layout updates without waiting for that period
+- **AND** a subsequent background topology change still waits for a pause
 
 #### Scenario: A tab is created while the user watches
 
@@ -1237,9 +1420,64 @@ remain available as visible buttons.
 - **THEN** roofs cover the buildings and each roof shows its host's room and desk
   counts while the reception boards keep showing waiting agents
 
+### Requirement: Durable owner asks from crew panes
+
+The watcher, dispatcher and workers SHALL reach the owner through the existing
+World ask ledger from their own panes. They SHALL NOT substitute custom Herdr
+notifications, owner-seat prompts, shared-runbook/configuration edits or issue
+comments for asking. A worker awaiting a decision SHALL use the existing ask
+wait path; the watcher SHALL keep passes nonblocking, record one ask per cause,
+read an owner answer once into its own output/feed and withdraw the ask when
+the cause clears. Scoped passes SHALL leave other PRs' asks alone, and held PRs
+SHALL produce no new owner asks. A producer SHALL retain creation uncertainty
+before dispatch and recover a persisted ask by occupant-scoped cause key before
+retiring a cleared cause, including when its creation reply was lost. A lost
+withdrawal reply SHALL NOT suppress a recurring active cause, including one whose
+answer was already read. Withdrawal uncertainty SHALL be retained before dispatch
+and settled before creating the next occurrence. Holding a PR or moving it out of
+scope SHALL preserve owner receipts and answer acknowledgements. Superseded legacy
+notices without receipts SHALL NOT trigger withdrawal or a new feed entry. A keyed
+withdrawal returning not_found SHALL report no recorded ask, never a successful
+withdrawal. Permanent withdrawal refusal SHALL retire the cleared cause and report once that its question is left
+for the owner to answer; transient failures SHALL remain retryable.
+
+The ask command SHALL accept a bounded optional cause key scoped to its verified
+asking occupant, return the same retained ask for repeated causes including
+answered ones, and allow a new occurrence after withdrawal. Only the original
+verified connection, runtime, terminal and session SHALL withdraw an ask.
+Withdrawal SHALL be idempotent, preserve an answer already recorded, release
+waiting reads without inventing an answer, and remove the question from every
+open-ask projection. Withdrawn questions SHALL share the existing ledger's
+closed-question retention bound. A withdrawn ask SHALL reject later answers. Withdrawal by cause key SHALL resolve
+only the original verified asking occupant's retained question, prefer its active
+occurrence, remain idempotent and never create a question. A keyed repeat SHALL
+return its retained answer state. Human withdrawal output SHALL name both its
+withdrawn state and any answer preserved before withdrawal.
+
+World SHALL announce newly observed verified asks through its existing chime,
+toast and OS-notification preferences. One page SHALL announce an ask ID only
+once while retained in its bounded seen set, without replaying the initial
+backlog. The common shell SHALL observe asks in every view. A local ask event
+SHALL retain its local OS-notification path when Web Push is selected. Open
+agent SHALL carry the original runtime, terminal and agent-session identity,
+refuse replacement targets and preserve the host filter. Obsolete socket or
+revision replies SHALL NOT restore answered or withdrawn asks.
+
+#### Scenario: A crew cause needs an owner decision
+
+- **WHEN** a blocked author, READY PR or stuck dispatch is observed in one pass
+- **THEN** its producer records one durable owner ask from its own verified pane,
+  World shows its question and announcement, and the owner can open and answer it
+
+#### Scenario: A cause clears after its ask was delivered
+
+- **WHEN** a producer's cause clears, including readiness changing on the same head
+- **THEN** the original asker withdraws the ask and all open-question markers clear,
+  while any answer recorded first remains on the same ledger question
+
 ### Requirement: Town agent locations
 
-Town SHALL seat working and unknown agents at their pane's seat. A blocked agent
+Town SHALL seat working and unknown agents at their pane's seat unless they have an open verified owner ask. A blocked agent
 SHALL move to its host's reception and queue in order of when it became blocked,
 oldest first, within a bounded number of queue positions; further blocked agents
 SHALL stay at their seat with a waiting cue and the reception SHALL show the exact
@@ -1259,6 +1497,20 @@ agent's status changes, it SHALL move to its new location, and an answered agent
 SHALL return to its seat. Location and movement SHALL be presentation only: they
 SHALL NOT delay operational state, and every agent SHALL keep its exact qualified
 pane target wherever it stands.
+
+An agent with an open ask verified against its current connection, runtime,
+terminal and agent session SHALL wait at reception with a quiet question mark.
+Urgent blocking SHALL keep its exclamation mark and priority over quiet asks;
+unchecked finishes SHALL follow both. Opening the asking agent SHALL preserve
+the ask. Answering or withdrawal SHALL remove its question marker and restore
+its normal status-based location. These cues SHALL respect existing scene and
+queue bounds without changing the native-order desk prefix. Hidden asking
+agents SHALL remain represented by reception counts and the existing question
+rail. Board and Desk SHALL show the same qualified question mark, and Desk
+SHALL include a current asking agent in Needs you regardless of working/idle
+status. A reception question entry SHALL open its original pane in one action. A
+verified asking shell pane, such as the watcher, SHALL receive a reception entry
+and Board/Desk marks without inventing an agent harness or changing Herdr status.
 
 #### Scenario: An agent asks for input and is answered
 
@@ -1293,10 +1545,10 @@ a pinned desk SHALL NOT go to the lounge: it SHALL leave its seat only for
 reception, when blocked or done and not yet checked, and SHALL return to its
 seat once checked or answered. A pin SHALL follow its tab to another workspace
 and SHALL be dropped when its tab closes. When a room has more desks than Town
-presents, its pinned desks and the selected desk, with their agents, SHALL
-still be presented, even past the bound, and other desks SHALL be omitted
-instead. Layout SHALL extend for every admitted pinned or selected desk,
-even beyond the normal 127-desk expanded target.
+presents, admission SHALL remain the native tab-order prefix. A pin or selection
+SHALL NOT promote a hidden tab across the fold boundary. A saved pin cell SHALL
+apply only while its tab is admitted; expanding SHALL reveal the next tabs in
+order, including any hidden pinned or selected tab.
 
 #### Scenario: A pinned agent finishes and is seen
 
@@ -1306,10 +1558,10 @@ even beyond the normal 127-desk expanded target.
 
 #### Scenario: A pinned desk in a crowded room
 
-- **WHEN** a room's tabs exceed Town's desk bound and more of its tabs are
-  pinned than the bound, with another desk selected
-- **THEN** every pinned desk, the selected desk and their agents stay
-  presented, and only unpinned desks are omitted
+- **WHEN** a pinned or selected tab lies outside a crowded room's visible prefix
+- **THEN** it remains hidden without displacing an earlier tab, and successive
+  expansions reveal it in native tab order
+- **AND** refolding restores the first 24 tabs without pin or selection promotion
 
 #### Scenario: A room reflows around a pinned desk
 
@@ -1391,10 +1643,12 @@ when it is waiting), answer options only when the pane's latest lines present a
 numbered menu or a yes/no prompt, and actions to reply, open the Inspector, open
 the terminal from the peek's header and go to the next waiting agent. Tapping an
 agent, or the table of an agent away at reception or in the lounge, SHALL open
-what the Town opens preference names: the agent's one window, World's
-Inspector, on its Chat view (the default), or its terminal; tapping a room SHALL
-only zoom to it. Activating an agent or its table, the needs-you list, N and
-Next SHALL open the same window on Chat; no separate peek chat window SHALL
+what the Agents open preference names: the agent's one window, World's
+Inspector, on its Chat view (the default) when Chat reads the agent's harness,
+otherwise its terminal; tapping a room SHALL only zoom to it. Activating an
+agent or its table, the needs-you list, N and Next SHALL open the agent the same
+way, and so SHALL opening an agent's card or pane row in Board and an agent in
+Desk; a plain shell SHALL open its terminal. No separate peek chat window SHALL
 exist, and the peek card SHALL only preview an agent on hover. In Town the
 Inspector SHALL dock right by default and keep the dock each window was left
 with. Its top selector SHALL list Chat, Terminal, Changes and Files (Commits
@@ -1438,14 +1692,21 @@ Opening the terminal from a peek SHALL follow the Inspector presentation prefere
 
 #### Scenario: Tap the table of an agent waiting at reception
 
-- **WHEN** Town opens Chat and the user taps the table of an agent that is
+- **WHEN** Agents open names Chat and the user taps the table of an agent that is
   waiting at reception
 - **THEN** that agent's window opens on Chat, the agent walks back to its desk,
   and no terminal or peek card opens
 
+#### Scenario: Board opens an agent on Chat
+
+- **WHEN** Agents open names Chat and the user opens an agent's tab in Board
+  whose harness Chat reads, then a plain shell's tab and an agent whose harness
+  Chat cannot read
+- **THEN** the first window opens on Chat and the other two on their terminals
+
 #### Scenario: Town opens Terminal
 
-- **WHEN** the user sets Town opens to Terminal and taps the table of a
+- **WHEN** the user sets Agents open to Terminal and taps the table of a
   finished agent waiting at reception
 - **THEN** that agent's terminal opens, no peek opens, the agent walks back to
   its desk, and its completion is not marked reviewed
@@ -1455,6 +1716,40 @@ Opening the terminal from a peek SHALL follow the Inspector presentation prefere
 - **WHEN** a blocked agent's latest lines contain neither a numbered menu nor a
   yes/no prompt
 - **THEN** the peek offers Reply and the terminal without answer buttons
+
+### Requirement: Shared Chat composer and honest send receipts
+
+Chat SHALL reuse TerminalComposer, its harness command palette, editing and uploads,
+with a separate draft qualified by connection, runtime, terminal, pane and session.
+Chat SHALL hide Direct mode, Insert draft and the terminal key bar. Enter SHALL
+insert a new line. Ctrl+Enter, Cmd+Enter and the paper-plane Send button SHALL send.
+The paperclip SHALL attach files. Typing `/` or choosing Browse commands in the
+vertical-ellipsis controls menu SHALL open the shared harness command palette.
+Submissions SHALL use the bound conversation's
+agent prompt rather than terminal insertion. Every slash command SHALL be allowed.
+
+Native working-state admission SHALL show a queued bubble with recipient and send
+time until transcript evidence arrives. World SHALL NOT add a second send queue.
+Blocked sends SHALL preserve the draft and show the refusal. Commands without a
+literal own-transcript receipt SHALL say **sent, not checked**; neither a session
+switch nor a rewritten user turn SHALL claim their effect was checked or misdelivered.
+
+The current quest SHALL appear at the start of its section inside the scrolling
+conversation, collapsed to a title/progress row. Its keyboard-reachable expand
+button SHALL expose aria-expanded and reveal objectives inline. The row SHALL
+repeat no agent identity or status and SHALL NOT be sticky.
+
+While the reader is scrolled away, the existing floating catch-up button SHALL
+count only new agent messages, excluding own sends, queued bubbles, tool activity
+and transcript notices. Reaching the bottom or changing sessions SHALL clear it.
+Older-page loading SHALL NOT increment the count. Focused answer keys and the
+existing double-Escape stop SHALL retain their existing scope.
+
+#### Scenario: A command intentionally switches sessions
+
+- **WHEN** a bound Chat sends a slash command and the harness switches sessions
+- **THEN** its slim receipt remains **sent, not checked** without pausing normal sends
+  as a misdelivery; no command effect is inferred
 
 ### Requirement: Town peeks show recent chatter and take replies
 
@@ -2273,12 +2568,18 @@ string whose agent could not be confirmed that way (no session shown, a
 replacement before the read, no answer) SHALL stay unbound. Only the service
 SHALL set a recipient, qualified by the anchor's connection, pane and terminal;
 a re-witnessed anchor (after Herdr restarts) SHALL drop it. At Send the service SHALL compare the pane's agent
-with the recipient: they are the same agent when their kinds match and their
-sessions match, or, when either has no session, their process groups match.
+with the expected recipient: their kinds SHALL match, and an expected session
+SHALL remain present and equal in the observation. Only a group-only expected
+recipient MAY match by process group and learn its first session that way.
+If the expected session disappears while the agent kind and process group
+still match, World SHALL report that Herdr no longer reports the session,
+not claim that a replacement is known, and SHALL ask for confirmation.
 Another agent in the same pane and terminal, or a string whose recipient was
 never recorded, SHALL be refused with that agent named, and the note SHALL go
 to it only when the user confirms that agent; the confirmed agent becomes the
-string's recipient. Herdr cannot hold a pane between a check and the prompt, so
+string's recipient. An explicit confirmation SHALL select the expected recipient
+for that attempt; a match with the saved recipient SHALL NOT override it.
+Herdr cannot hold a pane between a check and the prompt, so
 the service SHALL read the pane's agent again after the prompt and report a
 change as possibly delivered to another agent, never as sent. A note SHALL offer to
 start a new agent in a chosen workspace, which creates a tab, starts the agent
@@ -2302,6 +2603,21 @@ shown on the note when they are reported; World SHALL NOT invent them.
 
 - **WHEN** the pane's agent is replaced between the service's last check and the prompt
 - **THEN** World reports that the note may have reached another agent and does not report it as sent
+
+#### Scenario: A captured session becomes unavailable
+
+- **WHEN** Herdr stops reporting the session captured for a note or an explicit confirmation, while the pane, terminal, agent kind and process group stay the same
+- **THEN** Send submits no prompt, reports the missing session without claiming a known replacement, and asks the user to confirm the current recipient
+
+#### Scenario: The original agent returns before a replacement confirmation
+
+- **WHEN** a note was bound to A, World offers Send to B, and A returns before that confirmation is submitted
+- **THEN** confirmation of B is refused and no prompt is submitted, even if A still matches the saved recipient or its group-only evidence
+
+#### Scenario: A group-only recipient reports its first session
+
+- **WHEN** the expected recipient has only process-group evidence and the observed agent has the same kind and group plus its first session
+- **THEN** the observation matches and a successful Send records the newly reported session
 
 #### Scenario: String to a tab with two agents
 
@@ -3123,6 +3439,18 @@ History SHALL offer Chat and Timeline over the same bounded loaded transcript.
 Chat SHALL pair tool calls with their results and offer a conversation minimap
 without implying older records have been fetched. Switching presentation SHALL
 retain the selected runtime and pane lease.
+
+On Unix SSH connections, a Herdr-reported Claude session UUID SHALL resolve
+against that host's `~/.claude/projects/<project>/<UUID>.jsonl`. Exactly one
+project transcript SHALL match; duplicate matches and lookup/read errors SHALL
+NOT fall back to this machine's files. History and Chat SHALL read the resolved
+file through the captured connection's file adapter. A readable reported session
+MAY use Chat Send under the existing session and native admission checks;
+remote discovery SHALL NOT grant authority to a guessed session.
+The projects root SHALL be canonicalised on the selected host, including a
+symlinked root. The returned transcript path SHALL match the requested UUID and
+one immediate project beneath that canonical root before stat/read admission;
+stat metadata SHALL NOT redirect the validated path.
 
 A manual Codex session link SHALL require a full session UUID, readable metadata
 from the selected runtime, a preview and explicit confirmation. The one-shot

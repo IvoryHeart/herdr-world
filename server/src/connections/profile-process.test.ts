@@ -12,6 +12,7 @@ import * as net from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { BinReader, BinWriter, encodeFrame } from "../bridge/bincode";
+import { deskSessionFingerprint } from "../world/desk-observation";
 import type { LocalConnectionProfile } from "./profiles";
 
 const password = "profile-test-password";
@@ -122,7 +123,7 @@ async function fakeHerdr(
         const result =
           (await respond?.(request)) ??
           (request.method === "ping"
-            ? { version: `fake-${id}`, protocol }
+            ? { version: `0.0.0+${id}`, protocol }
             : request.method === "workspace.list"
               ? {
                   workspaces: [
@@ -350,6 +351,13 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
               {
                 pane_id: "alpha-pane",
                 terminal_id: "alpha-terminal",
+                agent: "codex",
+                agent_session: {
+                  source: "reported",
+                  agent: "codex",
+                  kind: "id",
+                  value: "synthetic-alpha-session",
+                },
                 workspace_id: "shared-workspace",
                 tab_id: "shared-tab",
               },
@@ -587,7 +595,7 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
     );
     expect(await htmlPreview.text()).toBe("<h1>HTML marker</h1>");
     expect((await rpc("connections.test", { id: "beta" })).version).toBe(
-      "fake-beta",
+      "0.0.0+beta",
     );
     await rpc("connections.connect", { id: "beta" });
     const connectedCatalog = await rpc("connections.list");
@@ -748,6 +756,41 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
       ),
     ).toBe(true);
 
+    const deskIdentity = {
+      connection_id: "alpha",
+      connection_generation: oldAlphaGeneration,
+      terminal_id: "alpha-terminal",
+      agent_session_fingerprint: deskSessionFingerprint({
+        source: "reported",
+        agent: "codex",
+        kind: "id",
+        value: "synthetic-alpha-session",
+      }),
+    };
+    await browserA.rpc("world.desk.review", {
+      ...deskIdentity,
+      stop_id: "synthetic-turn",
+      reviewed: true,
+    });
+    expect(await browserB.rpc("world.desk.get")).toMatchObject({
+      records: [{ ...deskIdentity, reviewed_stop: "synthetic-turn" }],
+    });
+    expect(
+      browserB.controls.some(
+        (control) => control.type === "world_desk_changed",
+      ),
+    ).toBe(true);
+    await browserB.rpc("world.desk.review", {
+      ...deskIdentity,
+      stop_id: "synthetic-turn",
+      reviewed: false,
+    });
+    expect(await browserA.rpc("world.desk.get")).toMatchObject({ records: [] });
+    await browserB.rpc("world.desk.open", deskIdentity);
+    expect(await browserA.rpc("world.desk.get")).toMatchObject({
+      records: [{ ...deskIdentity, opened_at: expect.any(Number) }],
+    });
+
     const replacementAlpha = {
       ...beta,
       id: "alpha",
@@ -763,6 +806,7 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
       ({ id }: { id: string }) => id === "alpha",
     ).generation as number;
     expect(newAlphaGeneration).not.toBe(oldAlphaGeneration);
+    expect(await browserA.rpc("world.desk.get")).toMatchObject({ records: [] });
 
     const betaPaneCloseCalls = () =>
       (controlCalls.get("beta") ?? []).filter(
@@ -845,7 +889,14 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
     expect(legacyHttp.headers.get("X-Herdr-Connection-Generation")).toBe(
       String(newAlphaGeneration),
     );
-    expect(await legacyHttp.json()).toMatchObject({ version: "fake-beta" });
+    const observedHerdr = await legacyHttp.json();
+    expect(observedHerdr).toMatchObject({
+      version: "0.0.0+beta",
+      protocol: 14,
+      source: "running-server",
+      installedBinary: null,
+    });
+    expect(observedHerdr.expiresAt - observedHerdr.readAt).toBe(60_000);
     expect(betaPingCalls()).toBe(beforeLegacyHttp + 1);
     const currentAlpha = await browserB.raw(
       "workspace.list",

@@ -7,7 +7,7 @@ hosts, usernames, paths, sessions, and repository contents out of public assets.
 
 ## Prepare a reproducible scene
 
-1. Use the World release or branch being documented and a compatible Herdr runtime (current Town/Board captures use 0.9.3 / protocol 22).
+1. Use the World release or branch being documented and a compatible Herdr runtime (current captures use 0.9.3 / protocol 22).
    Record their exact versions and source revisions with the untracked capture
    originals. See [development](development.md) for a source build.
 2. Create disposable demo repositories with synthetic project names, source,
@@ -19,9 +19,19 @@ hosts, usernames, paths, sessions, and repository contents out of public assets.
    open resource's owning host before photographing any view.
 4. Follow the [tutorial's review task](TUTORIAL.md#daily) in a demo
    repository. Run actual supported agents in separate panes, including multiple
-   agents in one workspace. Review their diffs, and capture Terminal, Files,
-   Changes, and Agent History from panes in that synthetic workspace.
+   agents in one workspace. Review their diffs, and capture Chat, Terminal,
+   Files and Changes from panes in that synthetic workspace.
    Show completed work only when the captured session actually completed it.
+   Keep demo repositories at a path without user names (such as `/tmp/demo`),
+   because Chat shows the paths an agent's tools used. Agent terminals can show
+   private details that the page-text privacy scan cannot see: Claude Code's
+   status line (start it with a `--settings` status line of your own) and its
+   remote-control session link. Do not photograph an agent's Terminal view. If
+   World runs with a separate `HOME`, give it the agents' transcripts there. In
+   the 0.2.7 capture, a symlink to one project folder inside a real
+   `.claude/projects` folder was not found, while moving that project folder
+   into the capture `HOME` worked; symlinking the whole `.claude/projects`
+   folder also resolves.
 5. For mobile capture, use a reachable private World URL and the
    [remote-access guidance](DEPLOYMENT.md#private-remote-access). Do not photograph
    login tokens, URLs containing credentials, or certificate/private-key content.
@@ -34,38 +44,31 @@ PNG originals without adding fictional UI or agent conversations.
 
 | View | Shared file under `docs/images/` | Scene |
 | --- | --- | --- |
-| Desktop Town | `herdr-world-desktop-town.png` | Four disposable workspace rooms and live shell tables |
-| Desktop Board | `herdr-world-desktop-board.png` | The same workspaces as cards, terminal tabs and synthetic planning notes |
-| Desktop Spaces | `herdr-world-desktop-spaces.png` | Focused workspace and live terminal |
-| Desktop Files | `herdr-world-desktop-files.png` | Board Inspector previewing the restored Lantern Notes guide |
-| Desktop Changes | `herdr-world-desktop-changes.png` | Board Inspector with a seeded tag-filter working-tree diff |
-| Desktop History | `herdr-world-desktop-history.png` | Board Inspector with the genuine recorded Pi review |
-| Mobile Town | `herdr-world-mobile-town.png` | Town at phone width |
-| Mobile Board | `herdr-world-mobile-board.png` | Readable close-up of one workspace, two shell tabs and a strung planning note |
-| Mobile Spaces | `herdr-world-mobile-spaces.png` | Focused terminal and mobile controls |
+| Desktop Town | `herdr-world-desktop-town.png` | Four rooms; one agent waiting at reception, one finished, one in the lounge |
+| Desktop Board | `herdr-world-desktop-board.png` | The same workspaces as cards, with a synthetic note strung to an agent |
+| Desktop Spaces | `herdr-world-desktop-spaces.png` | Workspace list with agent states, Zen off, and a shell running `bun test` |
+| Desktop Chat | `herdr-world-desktop-chat.png` | Town with the agent window docked on Chat: request, tool rows and the agent's report |
+| Desktop Files | `herdr-world-desktop-files.png` | Board Inspector previewing `docs/guide.md` with its Mermaid diagram |
+| Desktop Changes | `herdr-world-desktop-changes.png` | Board Inspector with the README section the agent added (unified diff) |
+| Mobile Town | `herdr-world-mobile-town.png` | Town at phone width with the Needs you tray |
+| Mobile Chat | `herdr-world-mobile-chat.png` | An agent's Chat with its answer and the composer |
+| Mobile Board | `herdr-world-mobile-board.png` | Close-up of a note strung to an agent and its workspace |
+| Mobile Spaces | `herdr-world-mobile-spaces.png` | Focused terminal with the Composer/Direct controls |
 
-The current Town/Board captures follow main after the Board merge, using Herdr
-0.9.3 with disposable projects, real shell panes and synthetic planning notes.
-The mobile Board close-up uses a separate single-workspace scene with two tabs
-and a strung note, so its text remains readable at the native phone width.
-Their empty attention counts reflect the runtime; notes do not imply completed
-agent work. The README and tutorial identify these layouts with releases
-0.2.5–0.2.6; retain the exact capture revisions as provenance rather than claiming
-the images were recaptured for each release. Office, Tree and Graph have been retired from the
-application. Their images remain historical assets outside the shared site set;
-old `/office` addresses open Town, and `/graph` and `/tree` open Board. Their
-view implementations and dedicated tests have been removed, while the shared
-model modules used by Town remain. The Pages release badge follows GitHub's
-latest stable release rather than a hardcoded version.
-
-The Files, Changes and History captures use Board behind the same Inspector.
-They follow main at `4f8a079f` with Herdr 0.9.3 / protocol 22. The disposable
-Lantern Notes files were restored from the original demo session's read results;
-a reconstructed Git baseline supplies the sample tag-filter diff. History is the
-genuine Pi review recorded on 2 October 2026, resumed offline for display without
-new model turns. The sample diff is not a claim of newly completed agent work.
-Capture Files, Changes and History with Town or Board behind the Inspector.
-Refresh the resource content and its background together.
+The current set was captured for 0.2.7 from `main` at `2bd28f2f`, after the
+v0.2.7 release (only documentation commits sit above it, so the Spaces version
+badge reads `v0.2.7-11-g54bb8ac8`), with Herdr 0.9.3 / protocol 22, in the
+default Zen layout except desktop Spaces. Three real Claude Code agents ran in
+the demo workspaces: lantern-notes added a first-run section to its README (the
+Chat, Changes and Files captures), orbit-api suggested a unit test (mobile Chat)
+and tide-charts waited on a permission prompt (Town). The note on Board is
+synthetic. One Chat path the agent ran (`/tmp/…/try`) is elided because its
+original contained a session identifier; nothing else in the captures is edited.
+Office, Tree and Graph images, and the earlier History capture, remain
+historical assets outside the shared site set; old `/office` addresses open
+Town, and `/graph` and `/tree` open Board. The Pages release badge follows
+GitHub's latest stable release rather than a hardcoded version. The website's
+phone row shows three of the four mobile captures.
 
 Inspect every image for private data, clipped controls, stale host indicators,
 and misleading agent status before adding it to Git. Preserve raw capture

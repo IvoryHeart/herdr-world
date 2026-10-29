@@ -61,8 +61,17 @@ export function parsePodMarkdown(markdown: string): PodMarkdownRow[] {
       !headers.includes("reviewers")
     )
       continue;
-    if (!cells(lines[index + 1]!).every((cell) => /^:?-{3,}:?$/.test(cell)))
-      throw new Error("Pod table needs a Markdown separator row");
+    const columns = headers.map((header) =>
+      header.startsWith("now (") ? "now" : header,
+    );
+    if (new Set(columns).size !== columns.length)
+      throw new Error("Pod table has duplicate or ambiguous columns");
+    const separators = cells(lines[index + 1]!);
+    if (
+      separators.length !== headers.length ||
+      !separators.every((cell) => /^:?-{3,}:?$/.test(cell))
+    )
+      throw new Error("Pod table needs a matching Markdown separator row");
     if (++tables !== 1)
       throw new Error("import exactly one Pod table at a time");
     const nowColumn = headers.findIndex(

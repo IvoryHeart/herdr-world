@@ -388,6 +388,7 @@ async function run() {
   __storeTesting.replaceState({
     ...store.get(),
     status: "connected",
+    catalogueReady: true,
     activeConnectionId: client.connectionId,
     connectionGeneration: 1,
     serverRuntimeGeneration: 1,

@@ -199,7 +199,7 @@ describe("installVerifiedHerdr", () => {
     const homeDir = scratch();
     const binaryPath = herdrDefaultBinaryPath({ platform: "linux", homeDir });
     mkdirSync(dirname(binaryPath), { recursive: true });
-    writeFileSync(binaryPath, "already-here");
+    writeFileSync(binaryPath, "already-here", { mode: 0o755 });
     let downloads = 0;
     const result = await installVerifiedHerdr({
       platform: "linux",

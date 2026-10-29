@@ -1,3 +1,4 @@
+import { useWorldAsks } from "./worldAsks";
 import "./world.css";
 import "./windows/WorldLayout.css";
 
@@ -94,6 +95,7 @@ export const SourcesDialog = lazyWithReload("world-sources", () =>
 );
 
 export default function WorldFoundationApp() {
+  useWorldAsks();
   const [view, setViewState] = useState<WorldView>(initialView);
   const { mobile } = useLayoutPreferences();
   const creationIntentRevision = useRef(0);
@@ -206,15 +208,11 @@ export default function WorldFoundationApp() {
   );
 
   useLayoutEffect(() => {
-    const lease =
-      conversationStatus === "connected"
-        ? conversationConnections
-            .filter((connection) => connection.state === "ready")
-            .map((connection) => ({
-              connectionId: connection.id,
-              runtimeGeneration: connection.generation,
-            }))
-        : [];
+    if (conversationStatus !== "connected" || !catalogueReady) return;
+    const lease = conversationConnections.map((connection) => ({
+      connectionId: connection.id,
+      runtimeGeneration: connection.generation,
+    }));
     const retained = retainWorldInspectorConversations(
       inspectorConversations,
       lease,
@@ -230,7 +228,12 @@ export default function WorldFoundationApp() {
         Object.entries(current).filter(([nodeId]) => retainedIds.has(nodeId)),
       ),
     );
-  }, [conversationConnections, conversationStatus, inspectorConversations]);
+  }, [
+    catalogueReady,
+    conversationConnections,
+    conversationStatus,
+    inspectorConversations,
+  ]);
 
   useEffect(() => {
     worldRuntimeStore.start();

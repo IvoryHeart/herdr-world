@@ -14,9 +14,18 @@ import { groupsBrowserServer } from "./testing/groupsBrowserServer";
 
 const chrome =
   Bun.env.CHROME_BIN || Bun.which("google-chrome") || Bun.which("chromium");
-test.skipIf(!chrome).each([1440, 390, 320, 360, 430])(
-  "Groups panel uses current membership and refuses stale role confirmation at %ipx",
-  async (width: number) => {
+test.skipIf(!chrome).each([
+  [1440, 900],
+  [390, 844],
+  [320, 900],
+  [360, 900],
+  [430, 900],
+  [2560, 1440],
+  [1280, 1440],
+  [1080, 1920],
+])(
+  "Groups panel uses current membership and refuses stale role confirmation at %ix%ipx",
+  async (width: number, height: number) => {
     const directory = await mkdtemp(join(tmpdir(), "groups-browser-"));
     const fixture = await groupsBrowserServer(directory);
     let child: ReturnType<typeof Bun.spawn> | undefined;
@@ -34,7 +43,7 @@ test.skipIf(!chrome).each([1440, 390, 320, 360, 430])(
           "--disable-gpu",
           "--no-first-run",
           "--no-default-browser-check",
-          `--window-size=${width},900`,
+          `--window-size=${width},${height}`,
           `--user-data-dir=${join(directory, "profile")}`,
           "about:blank",
         ],
@@ -90,7 +99,7 @@ test.skipIf(!chrome).each([1440, 390, 320, 360, 430])(
           );
         await cdp("Emulation.setDeviceMetricsOverride", {
           width,
-          height: 900,
+          height,
           deviceScaleFactor: 1,
           mobile: width <= 720,
         });
@@ -101,7 +110,7 @@ test.skipIf(!chrome).each([1440, 390, 320, 360, 430])(
             maxTouchPoints: 1,
           });
         await cdp("Page.navigate", {
-          url: `${fixture.server.url.href}?width=${width}${Bun.env.GROUPS_CAPTURE_DIR ? "&capture=1" : ""}`,
+          url: `${fixture.server.url.href}?width=${width}&height=${height}${Bun.env.GROUPS_CAPTURE_DIR ? "&capture=1" : ""}`,
         });
         await fixture.requested;
       })();
@@ -125,7 +134,10 @@ test.skipIf(!chrome).each([1440, 390, 320, 360, 430])(
             captureBeyondViewport: false,
           });
           await Bun.write(
-            join(Bun.env.GROUPS_CAPTURE_DIR!, `groups-${name}-${width}.png`),
+            join(
+              Bun.env.GROUPS_CAPTURE_DIR!,
+              `groups-${name}-${width}x${height}.png`,
+            ),
             Buffer.from(String(shot.data), "base64"),
           );
         };

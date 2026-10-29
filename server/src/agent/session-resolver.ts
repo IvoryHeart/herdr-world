@@ -25,6 +25,7 @@ import {
   findAntigravitySessionForCwd,
 } from "./antigravity-session";
 import { findMuseSession, type MuseMetadataCache } from "./muse-session";
+import { normalizeAgentName, SESSION_AGENTS } from "./chat-harnesses";
 import {
   codexPanes,
   inferCodexDaemonThread,
@@ -37,20 +38,10 @@ import {
 import {
   integrationInstallCommand,
   isRecord,
-  normalizeAgentName,
   stringValue,
 } from "./session-utils";
 
-/** Harnesses with a transcript reader; Herdr can detect more than these. */
-export const SESSION_AGENTS: ReadonlySet<string> = new Set([
-  "codex",
-  "claude",
-  "kimi",
-  "grok",
-  "pi",
-  "muse",
-  "agy",
-]);
+export { SESSION_AGENTS };
 
 export type AgentSessionResolverContext = {
   pathCache: Map<string, string>;
@@ -282,7 +273,7 @@ async function codexThreadFromTitle(
 }
 
 const CODEX_FULL_ID =
-  /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?=\.jsonl$)/i;
+  /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?=\.jsonl(?:\.zst)?$)/i;
 
 async function findClaudeSession(
   id: string,
@@ -373,6 +364,9 @@ async function sessionFileFor(
   }
   if (agent === "pi" && files.remote) {
     return files.findPiSessionById(session.value);
+  }
+  if (agent === "claude" && files.remote) {
+    return files.findClaudeSessionById?.(session.value) ?? null;
   }
   if (agent === "codex") return findCodexSession(session.value, files, context);
   let path: string | null = null;

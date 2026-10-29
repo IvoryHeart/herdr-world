@@ -133,6 +133,7 @@ function room(connectionId: string, workspaceId: string): OfficeRoom {
     omittedAgentCount: 0,
     observedDeskCount: 0,
     observedAgentCount: 0,
+    deskRenderLimit: 24,
   };
 }
 

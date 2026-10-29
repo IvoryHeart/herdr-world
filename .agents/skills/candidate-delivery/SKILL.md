@@ -17,13 +17,15 @@ the whole repository for a scoped change.
 
 Commit with the existing read-only pre-commit format/lint guard when committing
 is part of the requested handoff. For PR delivery, push
-the complete candidate once and let the pre-push hook run the full
-`bun run check` for code. A Markdown-only follow-up may use
-`bun run check:docs` when this worktree has a successful full gate on an ancestor. CI
-runs the applicable gate on the PR head, and reuses exact-head full results for
-description edits. Do not run a separate final full check
+the complete candidate once and let the pre-push hook run
+`bun run check:changed` for code (gate or configuration changes select the full
+gate; the explicit agent-tooling allowlist shares CI's shorter path). A
+Markdown-only follow-up may use
+`bun run check:docs` when this worktree has a successful code gate on an ancestor. CI
+runs the applicable gate on the PR head, and reuses successful full results on
+the exact PR, base and head for description edits and label changes. Do not run a separate final full check
 immediately before that push. For an explicitly local-only handoff, run one
-explicit full check instead. If a later repair changes code, begin a new
+explicit `bun run check:delivery` instead. If a later repair changes code, begin a new
 candidate cycle.
 
 In Codex, when a command returns a running session, call `write_stdin` on that
@@ -39,8 +41,12 @@ with nothing user-facing, put `Changelog: none — <specific reason>` in the
 description instead. Do not edit `CHANGELOG.md` directly. The PR URL supplies the
 link; do not amend the branch solely to rename the fragment after the PR number
 or require a self-link in the description.
-Prepare the PR body before opening one ready PR, then preserve independent
-review and CI. For a local-only handoff, finish after the requested artifacts
+Prepare the PR body in a local file after committing the candidate. Run
+`bun run check:pr-body <file>` (append the base ref for a stacked PR), then use
+that same file with `gh pr create --body-file <file>` to open one ready PR.
+The check uses CI's knowledge-map and changelog policies against committed HEAD.
+Preserve independent review and CI. For a local-only handoff, finish after the
+requested artifacts
 and one explicit full check; a PR is not required to count the work as delivered.
 Keep later usage and process measurements in workflow output or artifacts
 instead of editing the PR body solely for totals.

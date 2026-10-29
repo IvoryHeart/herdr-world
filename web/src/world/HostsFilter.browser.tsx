@@ -5,6 +5,7 @@ import { createRoot } from "react-dom/client";
 import { bridge, type ConnectionClient } from "../api";
 import { worldLocalStorage } from "../browserStorage";
 import {
+  DEFAULT_OFFICE_PREFERENCES,
   readOfficePreferences,
   writeOfficePreferences,
 } from "./officePreferences";
@@ -44,6 +45,11 @@ import "../styles/base.css";
 import "./world.css";
 
 const failures: string[] = [];
+window.addEventListener("error", (event) => {
+  failures.push(
+    `Uncaught browser error: ${event.error?.stack ?? event.message}`,
+  );
+});
 const check = (value: boolean, message: string) => {
   if (!value) failures.push(message);
 };
@@ -176,7 +182,15 @@ const session = () => ({
   selectedPaneId: "shared",
   layout,
 });
-let catalogue = ["alpha", "beta", "offline"];
+let catalogue =
+  operation === "spaces-notifications"
+    ? ["alpha", "beta", "gamma", "offline"]
+    : ["alpha", "beta", "offline"];
+let heldNotificationGet: {
+  host: string;
+  started(): void;
+  wait: Promise<void>;
+} | null = null;
 let offline = false;
 let dense = false;
 const densePanes: Pane[] = Array.from({ length: 40 }, (_, index) => ({
@@ -395,6 +409,13 @@ function leaf(id: string) {
       worldObjectId(id, "terminal", "shared"),
   );
 }
+function inspectorForHost(element: Element | null, id: string) {
+  const value =
+    element?.closest<HTMLElement>("[data-window-id]")?.dataset.windowId;
+  if (!value) return false;
+  const identity = JSON.parse(value) as unknown[];
+  return identity[0] === id && identity[1] === 7;
+}
 async function float(id: string) {
   const target = leaf(id);
   if (!target) throw new Error(`Missing admitted ${id} target`);
@@ -407,7 +428,7 @@ async function float(id: string) {
     () =>
       !![
         ...document.querySelectorAll<HTMLElement>(".world-floating-terminal"),
-      ].find((window) => window.textContent?.includes(`Synthetic ${id}`)),
+      ].find((window) => inspectorForHost(window, id)),
     `The ${id} Inspector did not open`,
   );
   await frame();
@@ -703,7 +724,7 @@ async function operationalScenario(unmount: () => void) {
         ),
       ].some(
         (inspector) =>
-          inspector.textContent?.includes("Synthetic beta") &&
+          inspectorForHost(inspector, "beta") &&
           !!inspector.getBoundingClientRect().width,
       );
     await waitFor(
@@ -1326,7 +1347,7 @@ async function operationalScenario(unmount: () => void) {
       () =>
         [
           ...document.querySelectorAll<HTMLElement>(".world-floating-terminal"),
-        ].some((element) => element.textContent?.includes("Synthetic alpha")),
+        ].some((element) => inspectorForHost(element, "alpha")),
       "Returning from Spaces lost the retained alpha Inspector",
     );
     return;
@@ -1349,7 +1370,7 @@ async function operationalScenario(unmount: () => void) {
     check(
       [
         ...document.querySelectorAll<HTMLElement>(".workspace-inspector-head"),
-      ].some((header) => header.textContent?.includes("Synthetic alpha")),
+      ].some((header) => inspectorForHost(header, "alpha")),
       "Filtering retired the selected Inspector rather than its visual menu capture",
     );
     check(
@@ -1876,6 +1897,142 @@ async function operationalScenario(unmount: () => void) {
     );
     return;
   }
+  if (operation === "spaces-notifications") {
+    check(
+      store.get().activeConnectionId === "alpha",
+      "Spaces notification starts on Alpha",
+    );
+    const before = dispatches.length;
+    window.dispatchEvent(
+      new CustomEvent(TASK_NOTIFICATION_ACTIVATE_EVENT, {
+        detail: {
+          connectionId: "beta",
+          runtimeGeneration: 7,
+          workspaceId: "shared",
+          paneId: "shared",
+        },
+      }),
+    );
+    await waitFor(
+      () =>
+        store.get().activeConnectionId === "beta" &&
+        [
+          ...document.querySelectorAll(
+            '.workspace-inspector[data-view="history"]',
+          ),
+        ].some((element) => element.getBoundingClientRect().width > 0) &&
+        dispatches
+          .slice(before)
+          .some(
+            (call) =>
+              call.connectionId === "beta" &&
+              call.method === "agent_conversation.latest",
+          ),
+      "Spaces sibling-host notification opens Beta Chat using Beta client",
+    );
+    check(
+      !dispatches
+        .slice(before)
+        .some(
+          (call) =>
+            call.connectionId === "alpha" &&
+            call.method === "agent_conversation.latest",
+        ),
+      "Beta notification never opens Alpha's colliding Chat",
+    );
+    check(
+      store
+        .get()
+        .sessionsByConnectionId.alpha?.panes.some(
+          (pane) => pane.pane_id === "shared",
+        ) === true,
+      "Spaces notification retains Alpha's session",
+    );
+    const notifyHost = (connectionId: string) =>
+      window.dispatchEvent(
+        new CustomEvent(TASK_NOTIFICATION_ACTIVATE_EVENT, {
+          detail: {
+            connectionId,
+            runtimeGeneration: 7,
+            workspaceId: "shared",
+            paneId: "shared",
+          },
+        }),
+      );
+    notifyHost("alpha");
+    await waitFor(
+      () =>
+        store.get().activeConnectionId === "alpha" &&
+        dispatches.some(
+          (call) =>
+            call.connectionId === "alpha" &&
+            call.method === "agent_conversation.latest",
+        ),
+      "race starts from Alpha Chat",
+    );
+    const olderStarted = Promise.withResolvers<void>();
+    const olderRelease = Promise.withResolvers<void>();
+    const olderFinished = Promise.withResolvers<unknown>();
+    heldNotificationGet = {
+      host: "beta",
+      started: () => olderStarted.resolve(),
+      wait: olderRelease.promise,
+    };
+    const focus = store.focusTaskNotificationTarget;
+    store.focusTaskNotificationTarget = async (target, options) => {
+      const result = await focus(target, options);
+      if (target.connectionId === "beta") olderFinished.resolve(result);
+      return result;
+    };
+    try {
+      notifyHost("beta");
+      await olderStarted.promise;
+      notifyHost("gamma");
+      await waitFor(
+        () =>
+          store.get().activeConnectionId === "gamma" &&
+          dispatches.some(
+            (call) =>
+              call.connectionId === "gamma" &&
+              call.method === "agent_conversation.latest",
+          ),
+        "newer Gamma notification completes while Beta lookup is delayed",
+      );
+      const gammaChat = [
+        ...document.querySelectorAll<HTMLElement>(
+          '.workspace-inspector[data-view="history"]',
+        ),
+      ].find((element) => element.getBoundingClientRect().width > 0)!;
+      const mutations = dispatches.length;
+      olderRelease.resolve();
+      check(
+        (await olderFinished.promise) === false,
+        "superseded delayed Beta notification is refused",
+      );
+      await frame();
+      check(
+        store.get().activeConnectionId === "gamma" &&
+          gammaChat.isConnected &&
+          gammaChat.getBoundingClientRect().width > 0,
+        "obsolete Beta leaves the newer Gamma Chat visible",
+      );
+      check(
+        !dispatches
+          .slice(mutations)
+          .some(
+            (call) =>
+              call.connectionId === "beta" &&
+              ["workspace.focus", "tab.focus"].includes(call.method),
+          ),
+        "obsolete Beta dispatches no native focus after Gamma",
+      );
+    } finally {
+      olderRelease.resolve();
+      store.focusTaskNotificationTarget = focus;
+      heldNotificationGet = null;
+    }
+    return;
+  }
   if (operation === "notifications") {
     writeHostsFilter(["alpha"]);
     // Board renders topology changes at low priority, a few frames later:
@@ -1902,7 +2059,7 @@ async function operationalScenario(unmount: () => void) {
           ),
         ].some(
           (element) =>
-            element.textContent?.includes("Synthetic beta") &&
+            inspectorForHost(element, "beta") &&
             element.textContent?.includes("Outside Hosts filter"),
         ),
       "A qualified out-of-filter notification did not open its own labelled Inspector",
@@ -1951,14 +2108,12 @@ async function operationalScenario(unmount: () => void) {
       "Open all did not cover every filtered qualified tab exactly once",
     );
     check(
-      windows.some((window) => window.textContent?.includes("Synthetic beta")),
+      windows.some((window) => inspectorForHost(window, "beta")),
       "Open all omitted the admitted sibling host",
     );
     check(
       operation === "open-all" ||
-        !windows.some((window) =>
-          window.textContent?.includes("Synthetic alpha"),
-        ),
+        !windows.some((window) => inspectorForHost(window, "alpha")),
       "Filtered Open all used the ambient host",
     );
     check(
@@ -1982,7 +2137,7 @@ async function operationalScenario(unmount: () => void) {
             ...document.querySelectorAll<HTMLElement>(
               ".world-floating-terminal",
             ),
-          ].some((element) => element.textContent?.includes("Synthetic alpha")),
+          ].some((element) => inspectorForHost(element, "alpha")),
         "Compact Open all did not preserve independently selectable alpha",
       );
       check(
@@ -1998,7 +2153,7 @@ async function operationalScenario(unmount: () => void) {
     const currentBetaWindow = () =>
       [
         ...document.querySelectorAll<HTMLElement>(".world-floating-terminal"),
-      ].find((element) => element.textContent?.includes("Synthetic beta"))!;
+      ].find((element) => inspectorForHost(element, "beta"))!;
     currentBetaWindow().focus();
     await frame();
     const keys = defaultShortcutBindings(detectShortcutPlatform())[
@@ -2170,6 +2325,12 @@ async function run() {
   localStorage.clear();
   // The legacy operational preference must not become an overview filter.
   worldLocalStorage.setItem("worldSelectedConnection", "beta");
+  // These cases check which host owns a terminal, so opening an agent opens
+  // its terminal, as Agents open set to Terminal does.
+  writeOfficePreferences(worldLocalStorage, {
+    ...DEFAULT_OFFICE_PREFERENCES,
+    townOpens: operation === "spaces-notifications" ? "chat" : "terminal",
+  });
   if (coldMaster)
     writeOfficePreferences(worldLocalStorage, {
       ...readOfficePreferences(worldLocalStorage),
@@ -2491,6 +2652,28 @@ async function run() {
         };
       if (method === "git.pull" && operation === "context-menu-pull-failure")
         return gitPull.promise;
+      if (method === "agent_worktree.get")
+        return {
+          subject: params.subject,
+          revision: `synthetic-${id}-${generation}`,
+          observedAt: "2026-01-01T00:00:00Z",
+          state: "resolved",
+          selectedCandidateId: "synthetic-root",
+          candidates: [
+            {
+              candidateId: "synthetic-root",
+              canonicalRoot: "/synthetic",
+              gitCommonDir: "/synthetic/.git",
+              branch: "main",
+              source: "foreground_cwd",
+              evidence: {
+                sourceRef: "Synthetic pane foreground_cwd",
+                observedAt: "2026-01-01T00:00:00Z",
+                basis: "reported",
+              },
+            },
+          ],
+        };
       if (method === "file.list") {
         calls.push(`resource:${id}`);
         if (id === "alpha") {
@@ -2520,7 +2703,7 @@ async function run() {
       if (method === "pane.layout")
         return {
           layout:
-            params.tab_id === "second"
+            params.tab_id === "second" || params.pane_id === "second"
               ? {
                   ...layout,
                   tab_id: "second",
@@ -2530,6 +2713,12 @@ async function run() {
               : layout,
         };
       if (method === "pane.get") {
+        if (heldNotificationGet?.host === id) {
+          const held = heldNotificationGet;
+          heldNotificationGet = null;
+          held.started();
+          await held.wait;
+        }
         const target = (dense ? densePanes : fixturePanes).find(
           (value) => value.pane_id === params.pane_id,
         );
@@ -2608,6 +2797,7 @@ async function run() {
     sessionsByConnectionId: {
       alpha: session(),
       beta: coldHost ? emptyServerSessionState(7) : session(),
+      ...(operation === "spaces-notifications" ? { gamma: session() } : {}),
     },
   });
   await worldRuntimeStore.refresh();
@@ -2789,7 +2979,7 @@ async function run() {
             ...document.querySelectorAll<HTMLElement>(
               ".world-floating-terminal",
             ),
-          ].some((element) => element.textContent?.includes(`Synthetic ${id}`)),
+          ].some((element) => inspectorForHost(element, id)),
         `Independent ${id} Inspector did not open`,
       );
     }
@@ -2806,15 +2996,16 @@ async function run() {
         .dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
       await waitFor(
         () =>
-          document
-            .querySelector(".world-floating-terminal")
-            ?.textContent?.includes("Synthetic alpha") ?? false,
+          inspectorForHost(
+            document.querySelector(".world-floating-terminal"),
+            "alpha",
+          ),
         "Compact switch back to the retained alpha Inspector",
       );
     }
     const alphaInspector = [
       ...document.querySelectorAll<HTMLElement>(".world-floating-terminal"),
-    ].find((element) => element.textContent?.includes("Synthetic alpha"))!;
+    ].find((element) => inspectorForHost(element, "alpha"))!;
     await waitFor(
       () =>
         !![

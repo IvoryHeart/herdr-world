@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 import { assertDeliveryResults } from "./ci-delivery-result";
 
-const ok = ["success", "success"];
-const skip = ["skipped", "skipped"];
+const ok = ["success", "success", "success"];
+const skip = ["skipped", "skipped", "success"];
 
 test("full delivery requires both repository validation and every World shard to succeed", () => {
   expect(() =>
@@ -127,12 +127,11 @@ test("behavioral failure, cancellation and missing evidence block full and docs 
   }
 });
 
-test("full delivery requires Windows plugin and installer evidence; shorter paths require them skipped", () => {
+test("every native result is required, including macOS jobs that skip native steps", () => {
   for (const result of ["failure", "cancelled", "skipped", undefined]) {
-    for (const packaging of [
-      ["success", result],
-      [result, "success"],
-    ])
+    for (const index of [0, 1, 2]) {
+      const packaging: Array<string | undefined> = [...ok];
+      packaging[index] = result;
       expect(() =>
         assertDeliveryResults(
           "full",
@@ -143,32 +142,71 @@ test("full delivery requires Windows plugin and installer evidence; shorter path
           packaging,
         ),
       ).toThrow();
+    }
   }
   expect(() =>
     assertDeliveryResults("full", "success", "success", "success", "success", [
       "success",
     ]),
   ).toThrow();
-  for (const result of ["success", "failure", "cancelled", undefined]) {
-    expect(() =>
-      assertDeliveryResults(
-        "docs",
-        "success",
-        "success",
-        "skipped",
-        "success",
-        ["skipped", result],
-      ),
-    ).toThrow();
-    expect(() =>
-      assertDeliveryResults(
-        "reuse",
-        "success",
-        "skipped",
-        "skipped",
-        "skipped",
-        [result, "skipped"],
-      ),
-    ).toThrow();
+  for (const result of [
+    "success",
+    "failure",
+    "cancelled",
+    "skipped",
+    undefined,
+  ]) {
+    for (const index of [0, 1, 2]) {
+      if (result === skip[index]) continue;
+      const packaging: Array<string | undefined> = [...skip];
+      packaging[index] = result;
+      expect(() =>
+        assertDeliveryResults(
+          "docs",
+          "success",
+          "success",
+          "skipped",
+          "success",
+          packaging,
+        ),
+      ).toThrow();
+      expect(() =>
+        assertDeliveryResults(
+          "reuse",
+          "success",
+          "skipped",
+          "skipped",
+          "skipped",
+          packaging,
+        ),
+      ).toThrow();
+    }
+  }
+});
+
+test("tooling delivery requires validation and protected macOS reports, with heavy jobs skipped", () => {
+  const results = [
+    "success",
+    "success",
+    "skipped",
+    "skipped",
+    "skipped",
+    "skipped",
+    "success",
+  ];
+  const check = (r: Array<string | undefined>) =>
+    assertDeliveryResults("tooling", r[0], r[1], r[2], r[3], r.slice(4));
+  expect(() => check(results)).not.toThrow();
+  for (let index = 0; index < results.length; index++) {
+    for (const result of [
+      "failure",
+      "cancelled",
+      undefined,
+      results[index] === "success" ? "skipped" : "success",
+    ]) {
+      const changed = [...results] as Array<string | undefined>;
+      changed[index] = result;
+      expect(() => check(changed)).toThrow();
+    }
   }
 });

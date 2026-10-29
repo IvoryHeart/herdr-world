@@ -32,8 +32,8 @@ function readWorkflow(name: string): Workflow {
 
 test.each([
   ["ci.yml", "validation", "bun run check", true],
-  ["release.yml", "validate", "bun run precommit", true],
-  ["prepare-release.yml", "prepare", "bun run precommit", false],
+  ["release.yml", "validate", "bun run check:source", true],
+  ["prepare-release.yml", "prepare", "bun run check:source", false],
 ] as const)(
   "%s uses conservative file concurrency and preserves its World coverage",
   (name, jobName, command, separateWorld) => {
@@ -119,4 +119,27 @@ test("release packages and labeled previews share one verification and image", (
   // A floating image label changed file(1) between two releases (#247).
   expect(release["runs-on"]).toMatch(/^ubuntu-\d+\.\d+$/);
   expect(preview["runs-on"]).toBe(release["runs-on"]);
+});
+
+function homebrewInstallScript(): string {
+  const job = readWorkflow("release.yml").jobs["homebrew-smoke"];
+  const script = job?.steps?.find((step) =>
+    step.run?.includes("brew install --formula"),
+  )?.run;
+  if (!script) throw new Error("Missing native Homebrew installation consumer");
+  return script;
+}
+
+test("Release checks missing and existing external Herdr through the installed launcher", () => {
+  const script = homebrewInstallScript();
+  expect(script.indexOf("brew update")).toBeLessThan(
+    script.indexOf("brew install --formula"),
+  );
+  expect(script).not.toContain("brew info --json=v2 herdr");
+  const before = script.indexOf("ruby scripts/check-homebrew-runtime.rb");
+  const reinstall = script.indexOf("brew reinstall --formula");
+  const after = script.lastIndexOf("ruby scripts/check-homebrew-runtime.rb");
+  expect(before).toBeGreaterThan(script.indexOf("brew install --formula"));
+  expect(reinstall).toBeGreaterThan(before);
+  expect(after).toBeGreaterThan(reinstall);
 });

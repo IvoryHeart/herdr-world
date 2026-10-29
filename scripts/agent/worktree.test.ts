@@ -10,12 +10,20 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, parse } from "node:path";
 
 type Action = { path: string; action: string; reason: string };
-type Use = { cwds: string[]; uses: string[]; commands: string[] };
+type Use = {
+  cwds: string[];
+  uses: string[];
+  commands: string[];
+  unknown?: boolean;
+};
 const modulePath: string = "./worktree.mjs";
-const { pruneWorktrees, processUse } = (await import(modulePath)) as {
+const { pruneWorktrees, processUse, commandUses } = (await import(
+  modulePath
+)) as {
+  commandUses: (command: string, directory: string) => boolean;
   processUse: () => Use;
   pruneWorktrees: (options: {
     cwd: string;
@@ -136,9 +144,10 @@ test("prune removes merged clean worktrees and spares everything else", () => {
       pruneWorktrees({
         cwd: repo.primary,
         live: {
+          // Root and ancestor paths are real process use, not a wildcard.
           // An idle shell sits in one; a server outside names another.
-          cwds: [join(repo.live, "web")],
-          uses: [],
+          cwds: [repo.primary, join(repo.live, "web")],
+          uses: [parse(repo.primary).root, repo.primary],
           commands: [
             `python3 -m http.server --directory ${repo.served}/.pages-dist`,
           ],
@@ -215,15 +224,98 @@ test("an executable or open file inside a worktree keeps it", () => {
       (item) => item.path === repo.merged,
     );
   for (const live of [
+    { ...idle, uses: [repo.merged] },
     { ...idle, uses: [join(repo.merged, "server/herdr-world")] },
     { ...idle, uses: [join(repo.merged, "web/dist/index.html")] },
-    // No process listing at all: assume everything is in use.
-    { ...idle, uses: ["/"] },
   ])
     expect(decide(live)).toMatchObject({
       action: "keep",
       reason: "merged into origin/main; a running process uses it",
     });
+});
+
+test("root, ancestor and sibling process paths do not keep a worktree", () => {
+  const repo = fixture();
+  const outside = [
+    parse(repo.primary).root,
+    repo.root,
+    repo.primary,
+    dirname(repo.merged),
+    `${repo.merged}-other`,
+    join(`${repo.merged}-other`, "file.txt"),
+  ];
+  const actions = pruneWorktrees({
+    cwd: repo.primary,
+    dryRun: true,
+    live: { cwds: outside, uses: outside, commands: [] },
+  });
+  expect(actions.find((item) => item.path === repo.merged)).toMatchObject({
+    action: "remove",
+    reason: "merged into origin/main",
+  });
+});
+
+test("command paths require a boundary after the worktree name", () => {
+  // Exercise the boundary predicate directly. Repeating the complete Git
+  // prune scan per case makes this finite test exceed its deadline under load.
+  // The pruning tests above retain real-worktree liveness integration coverage.
+  const directory = join("/", "example", "worktrees", "merged");
+  const cases = [
+    [`preview --directory ${directory}6/.pages-dist`, "remove"],
+    [`preview --directory ${directory}-other`, "remove"],
+    ...["a", "_", ".", "+", "@", "~"].map((suffix) => [
+      `preview --directory ${directory}${suffix}other`,
+      "remove",
+    ]),
+    [`preview --directory ${directory}`, "keep"],
+    [`preview --directory ${directory}/.pages-dist`, "keep"],
+    [`preview --directory ${join(directory, ".pages-dist")}`, "keep"],
+    [`preview --directory ${directory} --flag`, "keep"],
+    [`preview --directory ${directory}\t--flag`, "keep"],
+    [`preview --directory "${directory}"`, "keep"],
+    [`preview --directory '${directory}'`, "keep"],
+    [`preview ${directory}=directory`, "keep"],
+    [`docker run --volume ${directory}:/work example`, "keep"],
+    [
+      `docker run --mount type=bind,source=${directory},target=/work example`,
+      "keep",
+    ],
+    ...[";", "&&", "|", "&", ")", "`", "]"].map((suffix) => [
+      `preview ${directory}${suffix}`,
+      "keep",
+    ]),
+    // An earlier sibling reference must not hide a later genuine reference.
+    [`preview ${directory}6 --directory ${directory}`, "keep"],
+  ];
+  for (const [command, action] of cases) {
+    expect(commandUses(command, directory)).toBe(action === "keep");
+  }
+});
+
+test("unknown process inspection keeps worktrees", () => {
+  const repo = fixture();
+  const actions = pruneWorktrees({
+    cwd: repo.primary,
+    dryRun: true,
+    live: { ...idle, unknown: true },
+  });
+  expect(actions.find((item) => item.path === repo.merged)).toMatchObject({
+    action: "keep",
+    reason: "merged into origin/main; a running process uses it",
+  });
+});
+
+test("failed process inspection reports an unknown snapshot", () => {
+  const root = mkdtempSync(join(tmpdir(), "worktree-use-"));
+  roots.push(root);
+  const previousPath = process.env.PATH;
+  try {
+    process.env.PATH = root;
+    expect(processUse().unknown).toBe(true);
+  } finally {
+    if (previousPath === undefined) delete process.env.PATH;
+    else process.env.PATH = previousPath;
+  }
 });
 
 test("paths are compared after resolving symlinks", () => {
@@ -255,6 +347,17 @@ test("paths are compared after resolving symlinks", () => {
   });
   expect(actions.find((item) => item.path.endsWith("/linked"))).toMatchObject({
     action: "strip",
+  });
+  const fileLink = join(repo.root, "open-file");
+  symlinkSync(join(repo.merged, "merged.ts"), fileLink);
+  const used = pruneWorktrees({
+    cwd: repo.primary,
+    dryRun: true,
+    live: { ...idle, uses: [fileLink] },
+  });
+  expect(used.find((item) => item.path === repo.merged)).toMatchObject({
+    action: "keep",
+    reason: "merged into origin/main; a running process uses it",
   });
 });
 

@@ -269,10 +269,16 @@ async function registerDomTests() {
   mock.module("./AnnotationComposerPopover", () => ({
     AnnotationComposerPopover: () => null,
   }));
+  const { nextTerminalOscHover } = await import("../terminalLinkProvider");
   mock.module("../terminalLinkProvider", () => ({
+    nextTerminalOscHover,
     registerTerminalLinkProvider: disposable,
   }));
-  mock.module("@xterm/addon-clipboard", () => ({ ClipboardAddon: class {} }));
+  mock.module("@xterm/addon-clipboard", () => ({
+    ClipboardAddon: class {
+      dispose = noop;
+    },
+  }));
   mock.module("@xterm/addon-unicode-graphemes", () => ({
     UnicodeGraphemesAddon: class {},
   }));
@@ -365,6 +371,9 @@ async function registerDomTests() {
   );
   const { normalizeTerminalFontScale } = await import("../appearance");
   const { activeTerminalInput } = await import("../activeTerminalInput");
+  const { selectShortcutPreset, updateShortcut } = await import(
+    "../shortcutPreferences"
+  );
   const {
     clearTerminalComposerDraft,
     readTerminalComposerDraft,
@@ -1412,10 +1421,9 @@ async function registerDomTests() {
     expect(document.activeElement).toBe(editor);
     const tools = [
       ...container.querySelectorAll(".terminal-composer-toolbar > button"),
-    ].slice(0, 3);
+    ].slice(0, 2);
     expect(tools.map((button) => button.className)).toEqual([
       "terminal-composer-attach",
-      "terminal-composer-shortcuts-toggle",
       "terminal-composer-commands-toggle",
     ]);
     expectInputBlocked();
@@ -1495,7 +1503,7 @@ async function registerDomTests() {
       await back();
       expect(filesOpen).toBe(false);
       expect(open).toBe(initiallyOpen); // Back closes the page, not its background dock.
-      expect(toolbar.hidden).toBe(!initiallyOpen);
+      expect(toolbar.hidden).toBe(false); // Mode entry points remain available while the dock is closed.
       expect(shortcuts.hidden).toBe(shortcutsWereHidden);
       expect(editor.value).toBe("keep\nthis draft");
       expect([editor.selectionStart, editor.selectionEnd]).toEqual([2, 7]);
@@ -1506,13 +1514,13 @@ async function registerDomTests() {
       // More/Tabs in the terminal must NOT hide accessories.
       for (const entry of [".mobile-appbar-more", ".mobile-appbar-tabs"]) {
         await click(entry);
-        expect(toolbar.hidden).toBe(!initiallyOpen);
+        expect(toolbar.hidden).toBe(false); // Mode entry points remain available while the dock is closed.
         await back();
       }
     },
   );
 
-  test("secondary presentation preserves hidden shortcuts and commands without exposing stale combobox ARIA", async () => {
+  test("secondary presentation hides its toolbar and keys without exposing stale command ARIA", async () => {
     mobileShortcuts = [
       [
         {
@@ -1533,8 +1541,8 @@ async function registerDomTests() {
     const editor = container.querySelector<HTMLTextAreaElement>(
       ".terminal-composer-input",
     )!;
-    // Explicitly turn shortcuts off; presentation must not overwrite that choice.
-    if (!shortcuts.hidden) await click(".terminal-composer-shortcuts-toggle");
+    // Keys stay visible with commands while this surface is presented.
+    expect(shortcuts.hidden).toBe(false);
     await click(".terminal-composer-commands-toggle");
     expect(editor.getAttribute("aria-expanded")).toBe("true");
     expect(
@@ -1572,12 +1580,10 @@ async function registerDomTests() {
       container.querySelector(".terminal-composer-commands"),
     ).not.toBeNull();
     await click('[aria-label="Dismiss commands"]');
-    expect(shortcuts.hidden).toBe(true);
+    expect(shortcuts.hidden).toBe(false);
     expect(
-      container
-        .querySelector(".terminal-composer-shortcuts-toggle")
-        ?.getAttribute("aria-expanded"),
-    ).toBe("false");
+      container.querySelector(".terminal-composer-shortcuts-toggle"),
+    ).toBeNull();
     expectInputBlocked();
   });
 
@@ -2038,6 +2044,255 @@ async function registerDomTests() {
   }
   const pathCalls = () =>
     calls.filter((call) => call.method === "pane.send_input");
+  async function withPastePlatform(
+    platform: "linux" | "windows" | "mac",
+    clipboard: unknown,
+    run: () => Promise<void>,
+  ) {
+    const platformDescriptor = Object.getOwnPropertyDescriptor(
+      navigator,
+      "platform",
+    );
+    const clipboardDescriptor = Object.getOwnPropertyDescriptor(
+      navigator,
+      "clipboard",
+    );
+    Object.defineProperty(navigator, "platform", {
+      configurable: true,
+      value:
+        platform === "mac"
+          ? "MacIntel"
+          : platform === "windows"
+            ? "Win32"
+            : "Linux x86_64",
+    });
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: clipboard,
+    });
+    selectShortcutPreset(platform);
+    try {
+      await run();
+    } finally {
+      if (platformDescriptor)
+        Object.defineProperty(navigator, "platform", platformDescriptor);
+      else Reflect.deleteProperty(navigator, "platform");
+      if (clipboardDescriptor)
+        Object.defineProperty(navigator, "clipboard", clipboardDescriptor);
+      else Reflect.deleteProperty(navigator, "clipboard");
+      selectShortcutPreset("auto");
+    }
+  }
+  test.each(["linux", "windows", "mac"] as const)(
+    "%s native paste shortcut keeps the browser event when Clipboard API is absent",
+    async (platform) => {
+      await withPastePlatform(platform, undefined, async () => {
+        const shifted = platform !== "mac";
+        if (platform === "windows")
+          updateShortcut("terminal.paste", ["Ctrl+Shift+V"]);
+        await mount(true);
+        await choose("direct");
+        const term = currentTerminal();
+        const event = new browser.KeyboardEvent("keydown", {
+          key: shifted ? "V" : "v",
+          code: "KeyV",
+          ctrlKey: platform !== "mac",
+          metaKey: platform === "mac",
+          shiftKey: shifted,
+          cancelable: true,
+        }) as unknown as KeyboardEvent;
+        await act(async () => expect(term.keyHandler(event)).toBe(false));
+        expect(event.defaultPrevented).toBe(false);
+        expect(pathCalls()).toHaveLength(0);
+        await act(async () => {
+          const paste = new browser.Event("paste", {
+            bubbles: true,
+            cancelable: true,
+          });
+          Object.defineProperty(paste, "clipboardData", {
+            value: {
+              items: [],
+              getData: (type: string) =>
+                type === "text/plain" ? "hello\nworld" : "",
+            },
+          });
+          term.textarea.dispatchEvent(paste as unknown as Event);
+        });
+        expect(pathCalls()).toEqual([
+          {
+            method: "pane.send_input",
+            params: { pane_id: "pane-a", text: "hello\rworld", keys: [] },
+          },
+        ]);
+        expect(document.body.textContent).not.toContain("Paste failed:");
+      });
+    },
+  );
+  test("Ctrl+Shift+V preserves plain-text paste when clipboard reads are absent", async () => {
+    await withPastePlatform("linux", {}, async () => {
+      await mount(true);
+      await choose("direct");
+      const event = new browser.KeyboardEvent("keydown", {
+        key: "V",
+        code: "KeyV",
+        ctrlKey: true,
+        shiftKey: true,
+        cancelable: true,
+      }) as unknown as KeyboardEvent;
+      await act(async () => {
+        currentTerminal().keyHandler(event);
+      });
+      expect(event.defaultPrevented).toBe(false);
+      await act(async () => {
+        const paste = new browser.Event("paste", {
+          bubbles: true,
+          cancelable: true,
+        });
+        Object.defineProperty(paste, "clipboardData", {
+          value: {
+            items: [],
+            getData: (type: string) =>
+              type === "text/plain" ? "plain text" : "",
+          },
+        });
+        currentTerminal().textarea.dispatchEvent(paste as unknown as Event);
+      });
+      expect(uploads).toHaveLength(0);
+      expect(pathCalls()).toEqual([
+        {
+          method: "pane.send_input",
+          params: {
+            pane_id: "pane-a",
+            text: "plain text",
+            keys: [],
+          },
+        },
+      ]);
+      expect(document.body.textContent).not.toContain("Paste failed:");
+    });
+  });
+  test.each(["linux", "windows"] as const)(
+    "%s Ctrl+Shift+V reads clipboard images when the async API is available",
+    async (platform) => {
+      const image = new Blob(["image"], { type: "image/png" });
+      const read = mock(async () => [
+        { types: ["image/png"], getType: async () => image },
+      ]);
+      await withPastePlatform(platform, { read }, async () => {
+        updateShortcut("terminal.paste", ["Ctrl+Shift+V"]);
+        await mount(true);
+        await choose("direct");
+        const event = new browser.KeyboardEvent("keydown", {
+          key: "V",
+          code: "KeyV",
+          ctrlKey: true,
+          shiftKey: true,
+          cancelable: true,
+        }) as unknown as KeyboardEvent;
+        await act(async () => {
+          currentTerminal().keyHandler(event);
+        });
+        expect(event.defaultPrevented).toBe(true);
+        expect(read).toHaveBeenCalledTimes(1);
+        expect(uploads).toHaveLength(1);
+        await act(async () => uploads[0]!.resolve("/tmp/clipboard-image.png"));
+        expect(pathCalls()).toEqual([
+          {
+            method: "pane.send_input",
+            params: {
+              pane_id: "pane-a",
+              text: "/tmp/clipboard-image.png ",
+              keys: [],
+            },
+          },
+        ]);
+      });
+    },
+  );
+  test.each(["linux", "windows"] as const)(
+    "%s Ctrl+Shift+V keeps the async text path when only readText is available",
+    async (platform) => {
+      const readText = mock(async () => "async text");
+      await withPastePlatform(platform, { readText }, async () => {
+        updateShortcut("terminal.paste", ["Ctrl+Shift+V"]);
+        await mount(true);
+        await choose("direct");
+        const event = new browser.KeyboardEvent("keydown", {
+          key: "V",
+          code: "KeyV",
+          ctrlKey: true,
+          shiftKey: true,
+          cancelable: true,
+        }) as unknown as KeyboardEvent;
+        await act(async () => {
+          currentTerminal().keyHandler(event);
+        });
+        expect(event.defaultPrevented).toBe(true);
+        expect(readText).toHaveBeenCalledTimes(1);
+        expect(pathCalls()).toEqual([
+          {
+            method: "pane.send_input",
+            params: { pane_id: "pane-a", text: "async text", keys: [] },
+          },
+        ]);
+      });
+    },
+  );
+  test.each(["linux", "mac"] as const)(
+    "%s custom shortcut gives native-paste guidance when clipboard reads are unavailable",
+    async (platform) => {
+      await withPastePlatform(platform, undefined, async () => {
+        updateShortcut("terminal.paste", ["Ctrl+Alt+V"]);
+        await mount(true);
+        await choose("direct");
+        const event = new browser.KeyboardEvent("keydown", {
+          key: "v",
+          code: "KeyV",
+          ctrlKey: true,
+          altKey: true,
+          cancelable: true,
+        }) as unknown as KeyboardEvent;
+        await act(async () => {
+          currentTerminal().keyHandler(event);
+        });
+        expect(event.defaultPrevented).toBe(true);
+        expect(document.body.textContent).toContain(
+          "This paste shortcut needs HTTPS or localhost.",
+        );
+        expect(document.body.textContent).toContain(
+          platform === "mac" ? "Use ⌘V" : "Use Ctrl+V",
+        );
+        expect(document.body.textContent).toContain("drag and drop files");
+        expect(pathCalls()).toHaveLength(0);
+      });
+    },
+  );
+  test("custom shortcut keeps the async text path when clipboard reads are available", async () => {
+    const readText = mock(async () => "async paste");
+    await withPastePlatform("linux", { readText }, async () => {
+      updateShortcut("terminal.paste", ["Ctrl+Alt+V"]);
+      await mount(true);
+      await choose("direct");
+      const event = new browser.KeyboardEvent("keydown", {
+        key: "v",
+        code: "KeyV",
+        ctrlKey: true,
+        altKey: true,
+        cancelable: true,
+      }) as unknown as KeyboardEvent;
+      await act(async () => {
+        currentTerminal().keyHandler(event);
+      });
+      expect(event.defaultPrevented).toBe(true);
+      expect(readText).toHaveBeenCalledTimes(1);
+      expect(pathCalls()).toEqual([
+        {
+          method: "pane.send_input",
+          params: { pane_id: "pane-a", text: "async paste", keys: [] },
+        },
+      ]);
+    });
+  });
   test("desktop file paste keeps its existing terminal destination without a mobile mode choice", async () => {
     mobileLayout = false;
     const media = browser.matchMedia;
@@ -2248,7 +2503,7 @@ async function registerDomTests() {
     expect(readTerminalComposerDraft(draftKey)).toBe("");
   });
 
-  test("closing Composer shortcuts or opening Commands reveals the upper-right shortcut capsule and coordinates focus", async () => {
+  test("Composer special keys stay visible across modes and commands without duplicate capsules", async () => {
     showMobileKeys = true;
     mobileShortcuts = [
       [
@@ -2264,105 +2519,41 @@ async function registerDomTests() {
     const editor = container.querySelector<HTMLTextAreaElement>(
       ".terminal-composer-input",
     )!;
-    const composerShortcuts = container.querySelector<HTMLElement>(
+    const keys = container.querySelector<HTMLElement>(
       ".terminal-composer-shortcuts",
     )!;
-    // While the Composer dock is closed, the upper-right shortcut capsule is visible.
-    expect(composerShortcuts.hidden).toBe(true);
+    expect(keys.hidden).toBe(true);
     expect(container.querySelector(".terminal-mobile-keys")).not.toBeNull();
-
-    // Opening the Composer dock with shortcuts open hides the upper-right capsule.
     await setOpen(true);
-    expect(composerShortcuts.hidden).toBe(false);
+    expect(keys.hidden).toBe(false);
     expect(container.querySelector(".terminal-mobile-keys")).toBeNull();
-
-    // Closing the Composer shortcut keyboard reveals the upper-right capsule.
-    await click(".terminal-composer-shortcuts-toggle");
-    expect(composerShortcuts.hidden).toBe(true);
-    const mobileKeys = container.querySelector<HTMLElement>(
-      ".terminal-mobile-keys",
-    );
-    expect(mobileKeys).not.toBeNull();
-    expect(mobileKeys?.classList.contains("is-open")).toBe(false);
-
-    // Focus multiline Composer draft and use upper-right capsule without losing focus or expanded state.
     await act(async () => {
       writeTerminalComposerDraft(draftKey, "line 1\nline 2");
       editor.focus();
     });
-    expect(document.activeElement).toBe(editor);
-    expect(
-      container
-        .querySelector(".terminal-composer")
-        ?.hasAttribute("data-expanded"),
-    ).toBe(true);
-
-    await click(".terminal-mobile-keys-toggle");
-    expect(
-      container
-        .querySelector(".terminal-mobile-keys")
-        ?.classList.contains("is-open"),
-    ).toBe(true);
-    expect(document.activeElement).toBe(editor);
-    expect(
-      container
-        .querySelector(".terminal-composer")
-        ?.hasAttribute("data-expanded"),
-    ).toBe(true);
-
-    const beforeEsc = calls.filter(
+    const before = calls.filter(
       (call) => call.method === "terminal.input",
     ).length;
     await click('[aria-label="Send Escape"]');
     expect(
       calls.filter((call) => call.method === "terminal.input"),
-    ).toHaveLength(beforeEsc + 1);
+    ).toHaveLength(before + 1);
     expect(document.activeElement).toBe(editor);
     expect(readTerminalComposerDraft(draftKey)).toBe("line 1\nline 2");
-
-    // Switching to Direct mode while Composer shortcuts are closed keeps the upper-right capsule interactive and preserves Direct focus.
     await click(".terminal-mobile-direct");
     expect(selectedMode()).toBe("direct");
-    expect(document.activeElement).toBe(currentTerminal().textarea);
-    expect(
-      container
-        .querySelector(".terminal-composer")
-        ?.hasAttribute("data-expanded"),
-    ).toBe(false);
+    expect(keys.hidden).toBe(false);
+    expect(container.querySelector(".terminal-mobile-keys")).toBeNull();
     await click('[aria-label="Send Escape"]');
     expect(
       calls.filter((call) => call.method === "terminal.input"),
-    ).toHaveLength(beforeEsc + 2);
+    ).toHaveLength(before + 2);
     expect(document.activeElement).toBe(currentTerminal().textarea);
-
-    // Re-opening Composer shortcuts hides the upper-right capsule and resets its open state.
-    await click(".terminal-composer-shortcuts-toggle");
-    expect(composerShortcuts.hidden).toBe(false);
-    expect(container.querySelector(".terminal-mobile-keys")).toBeNull();
-
-    // Opening the command picker covers Composer shortcuts and reveals the upper-right capsule.
     await click(".terminal-composer-commands-toggle");
-    expect(composerShortcuts.hidden).toBe(true);
-    expect(
-      container
-        .querySelector(".terminal-composer-shortcuts-toggle")
-        ?.getAttribute("aria-label"),
-    ).toBe("Show terminal shortcuts");
-    expect(container.querySelector(".terminal-mobile-keys")).not.toBeNull();
-    expect(
-      container
-        .querySelector(".terminal-mobile-keys")
-        ?.classList.contains("is-open"),
-    ).toBe(false);
-
-    // Closing the command picker restores Composer shortcuts and hides the upper-right capsule.
+    expect(keys.hidden).toBe(false);
+    expect(container.querySelector(".terminal-mobile-keys")).toBeNull();
     await click('[aria-label="Dismiss commands"]');
-    expect(composerShortcuts.hidden).toBe(false);
-    expect(
-      container
-        .querySelector(".terminal-composer-shortcuts-toggle")
-        ?.getAttribute("aria-label"),
-    ).toBe("Hide terminal shortcuts");
+    expect(keys.hidden).toBe(false);
     expect(container.querySelector(".terminal-mobile-keys")).toBeNull();
   });
 

@@ -1,3 +1,5 @@
+import { serializeWorldInvalidation } from "./world/invalidation";
+import { workspaceFileParams } from "./http/workspace-file-params";
 import type { BridgeRpcContext, ConnectionRpcContext } from "./rpc/context";
 import { handleAgentRpc } from "./rpc/agent";
 import { handleBoardTownRpc } from "./rpc/board-town";
@@ -139,6 +141,7 @@ import { runProcessWithCodeTimeout, shQuote } from "./utils/process-utils";
 import { rpcLogLevel, shouldLogRpc } from "./utils/rpc-logging";
 import { DOWNLOAD_TIMEOUT_MS } from "./workspace/file-constants";
 import { WorldSnapshotService } from "./world/snapshot";
+import { createWorldDeskService } from "./world/desk-service";
 import { WorldWatchlistRegistry } from "./world/watchlist";
 import { BoardStore, type BoardOp } from "./world/board-store";
 import { afterHerdrClose } from "./world/board-closing";
@@ -438,6 +441,9 @@ const connectionFailureReporters = new Map<string, RecoveryReporter>();
 const readyConnectionGenerations = new Map<string, number>();
 let worldSnapshots: WorldSnapshotService<LegacyConnectionRuntime> | null = null;
 const worldWatchlist = new WorldWatchlistRegistry();
+const deskService = createWorldDeskService((line) => {
+  for (const ws of clients) safeSend(ws, line, "world-desk");
+});
 let boardStore: BoardStore | null = null;
 function board() {
   boardStore ??= new BoardStore(undefined, {
@@ -521,14 +527,12 @@ function publishWorldInvalidation(
     observedLate ? undefined : connectionId,
   );
   if (revision === undefined) return;
-  const line = JSON.stringify({
-    control: {
-      type: "world_invalidated",
-      connection_id: connectionId,
-      connection_generation: connectionGeneration,
-      revision,
-    },
-  });
+  const line = serializeWorldInvalidation(
+    connectionId,
+    connectionGeneration,
+    revision,
+    connectionManager,
+  );
   for (const ws of clients) safeSend(ws, line, "world-invalidation");
 }
 
@@ -548,6 +552,7 @@ function connectionFailureReporter(connectionId: string): RecoveryReporter {
 const connectionManager = new ConnectionManager<LegacyConnectionRuntime>(
   connectionBootstrap.defaultConnectionId,
   (status) => {
+    deskService.retire(status.id, status.generation);
     const retired = worldWatchlist.retireConnectionGeneration(
       status.id,
       status.generation,
@@ -596,6 +601,7 @@ worldSnapshots = new WorldSnapshotService(
     publishWorldInvalidation(connectionId, generation, true),
   undefined,
   () => worldWatchlist.list(),
+  deskService.observe,
 );
 
 const assistantContext = createAssistantContext({
@@ -925,6 +931,8 @@ const rpcServices = {
   snapshotAdmission,
   townMoveQueues,
   worldWatchlist,
+  worldDesk: deskService.registry,
+  publishDeskChanged: deskService.publish,
   worldCli,
   get worldSnapshots() {
     return worldSnapshots;
@@ -1308,10 +1316,7 @@ async function handleConnectionHttpRequest(
     } else if (endpoint === "file-download") {
       try {
         response = await connection.files.downloadWorkspaceFile({
-          workspace_id: url.searchParams.get("workspace_id"),
-          path: url.searchParams.get("path"),
-          scope: url.searchParams.get("scope"),
-          inline: url.searchParams.get("inline") === "1",
+          ...workspaceFileParams(url),
           range: req.headers.get("range") ?? undefined,
           if_range: req.headers.get("if-range") ?? undefined,
         });
@@ -1321,11 +1326,7 @@ async function handleConnectionHttpRequest(
     } else if (endpoint === "file-upload") {
       try {
         const result = await connection.files.uploadWorkspaceFile(
-          {
-            workspace_id: url.searchParams.get("workspace_id"),
-            directory: url.searchParams.get("directory"),
-            filename: url.searchParams.get("filename"),
-          },
+          workspaceFileParams(url),
           req,
         );
         response = Response.json(result);
@@ -1337,10 +1338,9 @@ async function handleConnectionHttpRequest(
       }
     } else {
       try {
-        const result = await connection.files.deleteWorkspaceFile({
-          workspace_id: url.searchParams.get("workspace_id"),
-          path: url.searchParams.get("path"),
-        });
+        const result = await connection.files.deleteWorkspaceFile(
+          workspaceFileParams(url),
+        );
         response = Response.json(result);
       } catch (error) {
         response = Response.json(

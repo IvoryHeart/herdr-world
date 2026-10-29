@@ -1,3 +1,6 @@
+import { AppToasts } from "./components/AppToasts";
+import { useTaskNotificationTarget } from "./useTaskNotificationTarget";
+import { useTerminalComposerDraftScopes } from "./useTerminalComposerDraftScopes";
 import {
   isNotificationTarget,
   type NotificationTarget,
@@ -42,18 +45,14 @@ import {
 import { SHORTCUT_NUMBERS } from "./shortcutBindings";
 import { activeTerminalInput } from "./activeTerminalInput";
 import {
-  CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  CircleAlert,
   Command,
   Compass,
   FileDiff,
   FolderTree,
   GitBranch,
   History,
-  Info,
-  LoaderCircle,
   MessageSquareText,
   Minimize2,
   MoreHorizontal,
@@ -99,7 +98,6 @@ import {
 import { AgentIcon } from "./components/AgentIcon";
 import { agentStateKind, paneHasAgentHistory } from "./components/agentSession";
 import { CloseButton } from "./components/CloseButton";
-import { Toast } from "./components/Toast";
 import { focusIfUnchanged } from "./components/dialogFocus";
 import { CommandCombobox } from "./components/CommandCombobox";
 import { measuredFixedPositionScale } from "./fixedPositionScale";
@@ -193,7 +191,6 @@ import { orderTabsForDisplay, tabPinsFor } from "./tabPins";
 import { copyTextFromUserGesture } from "./terminalClipboard";
 import { terminalPasteRequest } from "./terminalPaste";
 import {
-  activateTerminalComposerDraftScope,
   readTerminalComposerDraft,
   subscribeTerminalComposerDraft,
   terminalComposerDraftKey,
@@ -353,43 +350,6 @@ function TerminalView(props: TerminalViewProps) {
     <Suspense fallback={<TerminalLoadingFallback />}>
       <LazyTerminalView {...props} />
     </Suspense>
-  );
-}
-
-function NoticeDetail({ notice }: { notice: Notice }) {
-  if (!notice.detail) return null;
-  if (notice.detailMode === "output") {
-    return (
-      <div className="toast-output">
-        {notice.detailTitle ? (
-          <div className="toast-output-title">{notice.detailTitle}</div>
-        ) : null}
-        <pre>{notice.detail}</pre>
-      </div>
-    );
-  }
-  return <p>{notice.detail}</p>;
-}
-
-function ToastMark({
-  kind,
-  loading = false,
-}: {
-  kind: Notice["kind"];
-  loading?: boolean;
-}) {
-  const Mark = loading
-    ? LoaderCircle
-    : kind === "success"
-      ? CheckCircle2
-      : kind === "error"
-        ? CircleAlert
-        : Info;
-
-  return (
-    <span className="toast-mark" aria-hidden="true">
-      <Mark size={16} strokeWidth={2.1} />
-    </span>
   );
 }
 
@@ -1037,6 +997,7 @@ export default function App({
     (state) => ({
       activeConnectionId: state.activeConnectionId,
       connections: state.connections,
+      catalogueReady: state.catalogueReady,
       connectionGeneration:
         state.serverRuntimeGeneration ?? state.connectionGeneration,
       serverRuntimeGeneration: state.serverRuntimeGeneration,
@@ -1052,6 +1013,7 @@ export default function App({
       status: state.status,
       tabs: state.tabs,
       updateInfo: state.updateInfo,
+      dismissedUpdateVersion: state.dismissedUpdateVersion,
       updateInstalling: state.updateInstalling,
       workspaces: state.workspaces,
     }),
@@ -1059,16 +1021,7 @@ export default function App({
   );
   const connectionClient = useConnectionClient();
   const { mobile, preferences: layoutPreferences } = useLayoutPreferences();
-  useEffect(() => {
-    activateTerminalComposerDraftScope(
-      s.activeConnectionId,
-      s.connectionGeneration,
-      s.connections.map((connection) => ({
-        connectionId: connection.id,
-        connectionGeneration: connection.generation,
-      })),
-    );
-  }, [operations, s.activeConnectionId, s.connectionGeneration, s.connections]);
+  useTerminalComposerDraftScopes(s);
   const [sidebarWidth, setSidebarWidth] = useState(loadSidebarWidth);
   const [mobileView, setMobileView] = useState<MobileView>("session");
   const [assistantOpen, setAssistantOpen] = useState(false);
@@ -2627,6 +2580,17 @@ export default function App({
     },
     [connectionClient, openFileExplorerFile],
   );
+  const openPaneNotification = useTaskNotificationTarget({
+    client: connectionClient,
+    inspector: inspectorStateRef,
+    setInspector: commitInspectorState,
+    openChat: (pane) =>
+      openInspector("history", pane.workspace_id, {
+        originPaneId: pane.pane_id,
+      }),
+    openTerminal: activateTerminalSurface,
+    onOpened: () => setSidebarHidden(false),
+  });
   const openNotificationTarget = useCallback(
     (target: NotificationTarget) => {
       if (isRangerTaskNotificationTarget(target)) {
@@ -2643,11 +2607,9 @@ export default function App({
         );
         return;
       }
-      if (!inspectorStateRef.current?.open) activateTerminalSurface();
-      setSidebarHidden(false);
-      void store.focusTaskNotificationTarget(target);
+      void openPaneNotification(target);
     },
-    [activateTerminalSurface, operationalShortcutsEnabled, mobile],
+    [operationalShortcutsEnabled, mobile, openPaneNotification],
   );
   const handleNoticeAction = useCallback(
     (notice: Notice) => {
@@ -3379,7 +3341,10 @@ export default function App({
         }
         const current = operations.get();
         const canDismissUpdate =
-          current.updateInfo?.update_available && !current.updateInstalling;
+          current.updateInfo?.update_available &&
+          current.dismissedUpdateVersion !==
+            current.updateInfo.latest_version &&
+          !current.updateInstalling;
         if (current.notice || canDismissUpdate) {
           e.preventDefault();
           e.stopPropagation();
@@ -4702,107 +4667,14 @@ export default function App({
         </button>
       ) : null}
 
-      {s.updateInfo?.update_available || s.notice
-        ? createPortal(
-            <div className="toast-viewport" aria-live="polite">
-              {s.updateInfo?.update_available ? (
-                <Toast
-                  className={`toast toast-info ${
-                    s.updateInstalling ? "toast-loading" : ""
-                  }`}
-                  role="status"
-                  onDismiss={() => store.dismissUpdate()}
-                  notificationKey={s.updateInfo.latest_version}
-                  dismissDisabled={s.updateInstalling}
-                >
-                  <ToastMark kind="info" loading={s.updateInstalling} />
-                  <div className="toast-content">
-                    <strong>
-                      Herdr World {s.updateInfo.latest_version} is available
-                    </strong>
-                    <p>
-                      Current {s.updateInfo.current_version}
-                      {s.updateInfo.can_auto_update
-                        ? " · ready to update and restart"
-                        : s.updateInfo.reason
-                          ? ` · ${s.updateInfo.reason}`
-                          : ""}
-                    </p>
-                    <div className="toast-actions">
-                      {s.updateInfo.can_auto_update ? (
-                        <button
-                          type="button"
-                          className="toast-action primary"
-                          onClick={() => store.installUpdate()}
-                          disabled={s.updateInstalling}
-                        >
-                          {s.updateInstalling
-                            ? "Updating..."
-                            : "Update & restart"}
-                        </button>
-                      ) : null}
-                      <button
-                        type="button"
-                        className="toast-action"
-                        onClick={() => store.dismissUpdate()}
-                        disabled={s.updateInstalling}
-                      >
-                        Dismiss
-                      </button>
-                    </div>
-                  </div>
-                  <CloseButton
-                    variant="toast"
-                    label="Dismiss update notification"
-                    onClick={() => store.dismissUpdate()}
-                    disabled={s.updateInstalling}
-                  />
-                </Toast>
-              ) : null}
-              {s.notice ? (
-                <Toast
-                  className={`toast toast-${s.notice.kind} ${
-                    s.notice.loading ? "toast-loading" : ""
-                  }`}
-                  role={s.notice.kind === "error" ? "alert" : "status"}
-                  notificationKey={s.notice.id}
-                  onDismiss={() => {
-                    // Swipes dismiss after their exit animation; keep any
-                    // newer notice that replaced this one meanwhile.
-                    if (store.get().notice?.id === s.notice?.id)
-                      store.clearNotice();
-                  }}
-                >
-                  <ToastMark kind={s.notice.kind} loading={s.notice.loading} />
-                  <div className="toast-content">
-                    <strong>{s.notice.message}</strong>
-                    <NoticeDetail notice={s.notice} />
-                    {s.notice.actionLabel &&
-                    (s.notice.actionPaneId ||
-                      s.notice.actionWorkspaceId ||
-                      s.notice.actionClipboardText !== undefined) ? (
-                      <div className="toast-actions">
-                        <button
-                          type="button"
-                          className="toast-action primary"
-                          onClick={() => handleNoticeAction(s.notice!)}
-                        >
-                          {s.notice.actionLabel}
-                        </button>
-                      </div>
-                    ) : null}
-                  </div>
-                  <CloseButton
-                    variant="toast"
-                    label="Dismiss notification"
-                    onClick={() => store.clearNotice()}
-                  />
-                </Toast>
-              ) : null}
-            </div>,
-            document.body,
-          )
-        : null}
+      <AppToasts
+        status={s.status}
+        updateInfo={s.updateInfo}
+        dismissedUpdateVersion={s.dismissedUpdateVersion}
+        updateInstalling={s.updateInstalling}
+        notice={s.notice}
+        onNoticeAction={handleNoticeAction}
+      />
 
       <div
         className={`body mobile-view-${mobileView} ${

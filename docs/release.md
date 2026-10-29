@@ -32,6 +32,16 @@ binary versions, launcher and runtime checks still run. Other baseline failures,
 newer baselines and every candidate installation remain strict. The published
 installer and general CI rerun policy are unchanged.
 
+Before deriving installer working directories, the harness resolves its newly
+created fixture root with native `realpath`. Command failures report their
+requested and canonical working directory, with `null` when canonicalization is
+unavailable; they do not include an environment snapshot. These diagnostics help
+distinguish Windows directory aliases from an unrecognized cleanup record.
+Both Windows installer matrix jobs run the focused harness regressions through
+`bun run test` after dependency installation and before building the candidate.
+Native path coverage reports which case and 8.3 aliases the filesystem supports;
+short-path coverage is conditional on an available 8.3 alias.
+
 The matrix verifies fresh plugin installation, latest-stable plugin upgrade, frozen
 cached action argv, executable versions, HTTP health, login, embedded browser assets,
 configuration and session migration, runtime restart, and checksum
@@ -134,8 +144,20 @@ Each release pins the Herdr it installs and upgrades to
    the upgrade step reinstalls the Codex, Claude and Pi harness integrations after every
    Herdr upgrade.
 
-The Homebrew Formula's Intel Mac Herdr resource reads the same table, so it moves
-with the bump. Users receive the new Herdr with the World release that declares it.
+After changing the verified Herdr table, run `bun scripts/herdr-bootstrap.ts` to
+refresh the standalone installer's checked-in compatibility block. Its parity
+regression ensures the self-contained download script and Homebrew use the same
+canonical shell and verified metadata.
+
+Standalone installers and World updates read that table. Homebrew generates a
+launcher with no mandatory `herdr` dependency: normal local startup reuses an
+existing runtime or installs the verified prebuilt release only when missing.
+The compatibility bootstrap embeds the current verified Herdr checksums and uses
+atomic no-replace publication; it does not call older World's upgrade command.
+Metadata/management commands and remote/custom endpoints do not bootstrap. The
+native smoke check exercises missing installation and preservation across World
+reinstallation on Apple Silicon and Intel; it must not compile a core dependency.
+Run the generated Ruby formula/launcher regressions when changing this policy.
 
 ## Publishing a candidate or stable release
 

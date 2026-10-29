@@ -1,3 +1,9 @@
+import {
+  normalizeAgentName,
+  SESSION_AGENTS,
+} from "../../server/src/agent/chat-harnesses";
+import type { Pane } from "./types";
+
 export const TASK_NOTIFICATION_ACTIVATE_EVENT =
   "herdr-world:task-notification-activate";
 // Bump when the notification payload contract changes.
@@ -5,6 +11,7 @@ const NOTIFICATION_WORKER = "/task-notifications-sw.js?v=4";
 const NOTIFICATION_HASH = "#herdr-world-task=";
 
 export interface TaskNotificationTarget {
+  terminalId?: string;
   connectionId: string;
   runtimeGeneration: number;
   workspaceId: string;
@@ -21,6 +28,17 @@ export interface RangerTaskNotificationTarget {
 export type NotificationTarget =
   | TaskNotificationTarget
   | RangerTaskNotificationTarget;
+
+/** Chat uses the legacy Inspector view name, history. Unsupported harnesses stay on Terminal. */
+export function taskNotificationView(
+  pane: Pick<Pane, "agent">,
+  opens: "chat" | "terminal",
+): "history" | "terminal" {
+  return opens === "chat" &&
+    SESSION_AGENTS.has(normalizeAgentName(pane.agent ?? ""))
+    ? "history"
+    : "terminal";
+}
 
 export function isRangerTaskNotificationTarget(
   value: unknown,
@@ -61,6 +79,9 @@ export function isTaskNotificationTarget(
     target.workspaceId.length > 0 &&
     typeof target.paneId === "string" &&
     target.paneId.length > 0 &&
+    (target.terminalId === undefined ||
+      (typeof target.terminalId === "string" &&
+        target.terminalId.length > 0)) &&
     (target.agentSessionId === undefined ||
       (typeof target.agentSessionId === "string" &&
         target.agentSessionId.length > 0))

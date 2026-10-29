@@ -100,7 +100,10 @@ required diagnostic control) when a change touches `verification/`, `quint/`,
 `tools/quint/` or a `coverage.json` owner, and otherwise leaves verification to
 CI. `bun run check:delivery` runs every repository check and the gate locally.
 Model, adapter, contract, tooling and consumer changes cannot use the documentation
-shortcut. Ordinary docs still require behavioral CI; metadata-only exact-head reuse
+shortcut. The owner-approved agent-tooling allowlist in
+[the CI guide](../docs/ci-pipelines.md#scope-and-scheduling) skips this dependency;
+application, verification and gate-policy paths cannot qualify. Full CI and
+ordinary docs still require behavioral CI; metadata-only exact-head reuse
 requires a prior successful full Delivery checks result that includes this dependency.
 Failure, missing evidence and cancellation block delivery. No existing integration,
 browser, scheduler, persistence or supported-platform check is replaced.
@@ -124,6 +127,11 @@ to recover a green build. Tool caches and generated traces are ignored and may
 be recreated through `verification:setup`; production code does not depend on Quint.
 
 ## Failure diagnostics and progress review
+
+Node, Java and Git identity probes have a bounded 30-second startup allowance,
+share their worker's cancellation, and name the failed command in diagnostics.
+This tolerates cold tooling under the enforced two-CPU quota without changing
+model deadlines, the complete-run deadline or the hard memory/CPU limits.
 
 Failed runs retain completed command progress and the failing model/phase in the
 incomplete manifest. A curated diagnostic directory contains failure metadata,

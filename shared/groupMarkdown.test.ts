@@ -57,3 +57,27 @@ test("ambiguous/duplicate or malformed table input is refused instead of clipped
     parsePodMarkdown((header + "| Chat | a | b | c | Ship |\n\n").repeat(2)),
   ).toThrow("one");
 });
+
+test("refuses ambiguous role/Now columns and mismatched separator columns", () => {
+  for (const [header, separator, row] of [
+    [
+      "Pod | Lead | Lead | Builders | Reviewers",
+      "---|---|---|---|---",
+      "Chat | one | two | builder | reviewer",
+    ],
+    [
+      "Pod | Lead | Builders | Reviewers | Now | Now (in order)",
+      "---|---|---|---|---|---",
+      "Chat | one | builder | reviewer | first | second",
+    ],
+    [
+      "Pod | Lead | Builders | Reviewers",
+      "---|---|---",
+      "Chat | one | builder | reviewer",
+    ],
+  ]) {
+    expect(() =>
+      parsePodMarkdown(`| ${header} |\n|${separator}|\n| ${row} |`),
+    ).toThrow();
+  }
+});

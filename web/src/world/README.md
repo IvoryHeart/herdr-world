@@ -5,18 +5,38 @@ and service ownership. This file routes visual and terminal tasks to the small s
 browser owners and focused tests. Search the **symbols** below inside large files;
 line numbers and CSS ranges change as components move.
 
+## Application startup and owner questions
+
+The asks read model in [worldAsks.ts](worldAsks.ts) takes an announcement callback
+installed by the notification-policy module during application initialization.
+It does not import notification policy or the application store. Late callback
+configuration also updates an existing shared asks model, preserving quiet backlog loading and one
+announcement for each new ask. [Import-order coverage](../storeImportOrder.test.ts)
+and the [real Vite entry check](../appStartup.browser.test.ts) exercise fresh
+startup; notification-policy tests retain the captured host/runtime/session rules.
+
 ## Desk
 
 Desk follows the aggregate host filter. Receipt and screen reads capture each leaf's
 connection and runtime generation; retirement never reroutes a read. Review marks
 and recent opens use qualified session identities across filter and focus changes.
-Reads use fair bounded admission and independent host queues. Pending reads keep
+Stable service stop identities survive expiry of display times. The fresh
+snapshot producer passes existing `agent.list` metadata to the Desk adapter;
+qualified native state-change sequences reveal later completed turns even when
+no browser observed their working phase. Pane rows alone supply the agent harness
+and session identity; only matching `agent.list` sessions may augment status and
+progress. Shared stop IDs participate in receipt refresh and currency, so late
+reads for a preceding stop cannot enable its successor's review mark. Display
+expiry alone does not invalidate a receipt. Shared Desk metadata belongs to agent
+panes; verified asking shells still appear in Needs you and open their original
+terminal without attempting an agent-metadata mutation. Reads use fair bounded admission and
+independent host queues. Pending reads keep
 their admission across refreshes; queued work coalesces to the latest observation.
 
 | Task | Open these owners | Focused evidence |
 | --- | --- | --- |
 | Lane routing, ordering or keyboard triage | `partitionDesk` and `DeskView` in [DeskView.tsx](DeskView.tsx); [DeskView.css](DeskView.css) styles `.desk-*`. | [Desk tests](DeskView.test.ts) |
-| Receipts, review marks, observed stops or polling limits | `useTurnReceipts`, `pollingTargets`, `useHandledTurns` and `useObservedStops` in [handoffs.ts](handoffs.ts); the service side is `latestTurnReceipt` in [turn-receipt.ts](../../../server/src/agent/turn-receipt.ts). Triage always covers every agent; only reads are bounded. | [Desk tests](DeskView.test.ts), [receipt tests](../../../server/src/agent/turn-receipt.test.ts) |
+| Receipts, review marks, observed stops or polling limits | `useTurnReceipts` and `pollingTargets` in [handoffs.ts](handoffs.ts); shared metadata flows through [useDeskState.ts](useDeskState.ts) and `WorldDeskStore` in [deskStateStore.ts](deskStateStore.ts), the service [registry](../../../server/src/world/desk-state.ts), [fresh observations](../../../server/src/world/desk-observation.ts) and [Desk RPC](../../../server/src/rpc/desk.ts). Receipts come from `latestTurnReceipt` in [turn-receipt.ts](../../../server/src/agent/turn-receipt.ts). Triage covers every agent; only reads are bounded. | [Desk tests](DeskView.test.ts), [unequal receipt coverage](deskSharedStops.test.ts), [browser state](deskStateStore.test.ts), [registry](../../../server/src/world/desk-state.test.ts), [observation](../../../server/src/world/desk-observation.test.ts), [RPC](../../../server/src/rpc/desk.test.ts), [receipt tests](../../../server/src/agent/turn-receipt.test.ts) |
 | Questions or live lines read from agent screens | `usePaneScreens`, `screenIdentity`, `questionFromScreen` and `activityFromScreen` in [paneScreen.ts](paneScreen.ts). Excerpts are keyed by pane, runtime generation and session. | [Desk tests](DeskView.test.ts) |
 
 ## Town
@@ -35,9 +55,9 @@ Office view (`herdrOfficeProjection.ts`, `officeRoomActions.ts`,
 | Town placement | [townLayout.ts](town/townLayout.ts) places buildings, rooms, desk cells, lounge and reception from native order, keeping desks in place while a scene is live. | [Layout tests](town/townLayout.test.ts) |
 | Pointer input | `TownCanvas` hit-tests the canvas and feeds World's shared gesture machine; [townGesture.ts](town/townGesture.ts) holds Town's targets (a hit, and the desk or agent a drag would carry) and thresholds. | [Shared cases](interaction/gesture.test.ts), [Town browser test](town/TownCanvas.test.ts) |
 | Camera and zoom levels | [townCamera.ts](town/townCamera.ts) owns pan, zoom about a point, flights and the town/overview/room/desk thresholds. | [Camera tests](town/townCamera.test.ts) |
-| Agent locations and movement | [townActors.ts](town/townActors.ts) seats, queues and walks agents (presentation only) with per-building pathfinding. | [Actor tests](town/townActors.test.ts) |
+| Agent locations and movement | [townActors.ts](town/townActors.ts) seats, queues and walks agents (presentation only) with per-building pathfinding. Reflow translates occupants and their in-flight paths/tweens with their building, keeping them inside its navigation grid; if a shrinking floor invalidates a current position, tween or path, the actor settles at its current assigned goal immediately; resting lounge occupants retain their building-local slot without walking across town. Lounge reservations follow building-local slot order across reflows; agents finishing a stand-up animation resolve their walking destination from the latest snapshot layout. | [Actor tests](town/townActors.test.ts) |
 | Pixi drawing and art | [townRenderer.ts](town/townRenderer.ts) owns renderer lifetime and per-frame updates; [townPaint.ts](town/townPaint.ts) bakes ground, interiors, façades and roofs; [townSprites.ts](town/townSprites.ts) holds the generated pixel art. See [world asset provenance](../../../docs/world-assets.md). | [Town browser test](town/TownCanvas.test.ts) |
-| Room cards, receptions, targets and room actions | The DOM world layer in [TownCanvas.tsx](town/TownCanvas.tsx) follows the camera; [townTargets.ts](town/townTargets.ts) builds accessible targets and [townHitTest.ts](town/townHitTest.ts) maps pointer hits to keys. Styles live in [town.css](town/town.css). | [Town browser test](town/TownCanvas.test.ts) |
+| Room cards, receptions, targets and room actions | The DOM world layer in [TownCanvas.tsx](town/TownCanvas.tsx) follows the camera; [townTargets.ts](town/townTargets.ts) builds accessible targets and [townHitTest.ts](town/townHitTest.ts) maps pointer hits to keys. Room plates use [TownRoomPlaque.tsx](town/TownRoomPlaque.tsx) and [their styles](town/townRoomPlaque.css) to fit the projected room width; only names truncate, the fixed active/total agent count reuses the room's `working + blocked` and `agents` counts (excluding plain terminals and asks), and management actions reveal below on hover, focus or touch. The dashed seat opens the room-qualified launcher (Terminal first). Other scene styles live in [town.css](town/town.css). | [Town browser test](town/TownCanvas.test.ts) |
 | New agent and agent profiles | [agentProfiles.ts](agentProfiles.ts) holds the profiles store, launcher calls and the events that open [AgentLauncherDialog.tsx](AgentLauncherDialog.tsx) and [ProfileEditor.tsx](ProfileEditor.tsx), which [WorldControlPlane.tsx](WorldControlPlane.tsx) mounts for every view; [ProfileSprite.tsx](ProfileSprite.tsx) draws a profile's look with Town's sprites, and `townRenderer` dresses agents launched from a profile. | [Browser helper tests](agentProfiles.test.ts) |
 | Town settings or the Town board's cost line | [officePreferences.ts](officePreferences.ts) (shared Inspector opening, Town calm motion), [officeObservability.ts](officeObservability.ts) and [OfficeObservabilityDialog.tsx](OfficeObservabilityDialog.tsx) (the optional Prometheus cost metrics). | [Preference tests](officePreferences.test.ts), [metrics tests](officeObservability.test.ts) |
 
@@ -50,9 +70,17 @@ room contributions and groups room links by host.
 Finish/seen overlays change only the affected room totals. Ask, metrics and clock
 updates reuse that topology. Asking identities resolve through the snapshot's
 generation-qualified pane and agent indexes, without scanning the roster. The
-canvas reuses semantic admission when its attention desks are already visible;
-otherwise its separate presentation cache admits the protected desks. These
-paths retain the fixed production input-latency budgets in the browser tests.
+canvas uses the same native-order tab prefix as Spaces: 24 tabs folded, then
+20 more per expansion. Attention never changes this admission. Explicit fold
+requests carry a local revision alongside their admission state, so TownCanvas
+applies that requested layout immediately; background topology changes retain
+the interaction quiet-period guard.
+[townFoldedActivity.ts](town/townFoldedActivity.ts) maps shared rail calls and
+qualified asking identities onto hidden desks; [TownFoldIndicators.tsx](town/TownFoldIndicators.tsx)
+shows red needs-you and green unreviewed-completion corner icons without extra
+counts. It reads prepared identity indexes and visible desk sets, avoiding a
+second projection or a full-roster scan on Ask changes. The fixed production
+input-latency budgets remain binding in the browser tests.
 
 The renderer draws through the shared World frame scheduler: state frames for
 camera, roof and walking changes, motion frames for ambient animation, which
@@ -95,7 +123,7 @@ only fills in cards it has not placed before.
 | Placement and Tidy | `placeNew` and `freeSpots` in [board/boardPlacement.ts](board/boardPlacement.ts) place new cards around their parents through a spatial index; [board/boardPhysics.ts](board/boardPhysics.ts) settles overlaps. | [Placement tests](board/boardPlacement.test.ts), [physics tests](board/boardPhysics.test.ts) |
 | Pointer gestures | World's shared machine in [interaction/gesture.ts](interaction/gesture.ts) turns pointer events into press, pan and fling, pinch, drag (a touch hold lifts; a mouse drags past 6 px), lines, taps and double taps. Board's targets and thresholds are in [board/boardGesture.ts](board/boardGesture.ts). | [Shared cases (Town's config)](interaction/gesture.test.ts), [Board cases](board/boardGesture.test.ts) |
 | Inspector line anchors | [board/boardAnchors.ts](board/boardAnchors.ts) resolves an Inspector's node to a card, pane row or folded workspace. | [Anchor tests](board/boardAnchors.test.ts) |
-| Notes, strings and Send | [board/boardDrafts.ts](board/boardDrafts.ts) keeps unsent text; the service stores the board and sends notes in [board-store.ts](../../../server/src/world/board-store.ts) and [board-send.ts](../../../server/src/world/board-send.ts); a note's Start an agent uses the shared launcher ([launch.ts](../../../server/src/agent/launch.ts)). | [Draft tests](board/boardDrafts.test.ts), [store](../../../server/src/world/board-store.test.ts), [send](../../../server/src/world/board-send.test.ts) and [launch](../../../server/src/agent/launch-readiness.test.ts) tests |
+| Notes, strings and Send | [board/boardDrafts.ts](board/boardDrafts.ts) keeps unsent text; the service stores the board and sends notes in [board-store.ts](../../../server/src/world/board-store.ts) and [board-send.ts](../../../server/src/world/board-send.ts); [board-recipient.ts](../../../server/src/world/board-recipient.ts) requires observed agents to retain any session already witnessed (group-only evidence may learn a session); a note's Start an agent uses the shared launcher ([launch.ts](../../../server/src/agent/launch.ts)). | [Draft tests](board/boardDrafts.test.ts), [store](../../../server/src/world/board-store.test.ts), [recipient](../../../server/src/world/board-recipient.test.ts), [send](../../../server/src/world/board-send.test.ts) and [launch](../../../server/src/agent/launch-readiness.test.ts) tests |
 | Frames | [board/boardScheduler.ts](board/boardScheduler.ts) is Board's client of World's frame scheduler: a state frame per batch of invalidation reasons, motion frames while cards glide. | [Scheduler tests](board/boardScheduler.test.ts) |
 
 ### Board at scale
@@ -198,10 +226,11 @@ advances and waits ride on it. The clock also owns `scheduler.postTask`, which
 World's model preparation yields through, and reports a callback that throws
 without stopping. [HostsFilter.browser.tsx](HostsFilter.browser.tsx) runs this way
 through [testing/installHostsFilterClock.ts](testing/installHostsFilterClock.ts).
-Its ten suites take about 32 s locally, down from roughly 330 s on CI.
-`spaces-navigator` still runs on real time, listed there with its issue (#238):
-on test time `WorldControlPlane` re-renders without end. The latency-budget suites
-above stay on real time, because real time is what they measure.
+All Hosts filter cases, including the desktop and phone Spaces navigator, use
+test time and fail on uncaught browser errors. Frame cancellation remains effective
+until each callback runs, including when an earlier callback disposes a terminal.
+The latency-budget suites above stay on real time, because real time is what they
+measure.
 
 When a fixture models a healthy terminal with a real `TerminalView`, emit a
 qualified full `TerminalPush` for each successful `terminal.attach`, using its

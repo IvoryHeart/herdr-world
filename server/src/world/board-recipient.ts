@@ -6,10 +6,10 @@
  * carried silently to a replacement.
  *
  * A recipient is the agent's kind, the agent session Herdr reports (hashed)
- * and its foreground process group. Two recipients are the same agent when
- * their kinds match and their sessions match, or, when either has no
- * session (an agent may report one only after it starts), their process
- * groups match.
+ * and its foreground process group. An observed recipient must retain the
+ * kind and session already witnessed. A group-only witness may learn a
+ * session (an agent may report one only after it starts), but a witnessed
+ * session must never fall back to a process group if the session disappears.
  */
 
 import { createHash } from "node:crypto";
@@ -64,12 +64,15 @@ export function decodeRecipient(token: unknown): Recipient | null {
   }
 }
 
-/** Whether two recipient tokens name the same agent. */
-export function sameRecipient(a: unknown, b: unknown): boolean {
-  const x = decodeRecipient(a),
-    y = decodeRecipient(b);
+/** Whether the observed agent continues the expected recipient's identity. */
+export function matchesRecipient(
+  expected: unknown,
+  observed: unknown,
+): boolean {
+  const x = decodeRecipient(expected),
+    y = decodeRecipient(observed);
   if (!x || !y || x.agent !== y.agent) return false;
-  if (x.session && y.session) return x.session === y.session;
+  if (x.session) return x.session === y.session;
   return x.group !== undefined && x.group === y.group;
 }
 

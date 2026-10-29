@@ -220,6 +220,7 @@ export class TownActors {
   private world: TownActorWorld | null = null;
   private clock = 0;
   private summoned: ReadonlySet<string> = new Set();
+  private asking: ReadonlySet<string> = new Set();
 
   get time() {
     return this.clock;
@@ -233,9 +234,12 @@ export class TownActors {
     world: TownActorWorld,
     instant: boolean,
     summoned: ReadonlySet<string> = this.summoned,
+    asking: ReadonlySet<string> = this.asking,
   ) {
+    const previousWorld = this.world;
     this.world = world;
     this.summoned = summoned;
+    this.asking = asking;
     const { model } = world;
     const seen = new Set<string>();
     const fresh = new Set<string>();
@@ -267,6 +271,42 @@ export class TownActors {
         this.actors.set(agent.key, actor);
         fresh.add(agent.key);
       }
+      const previousBuilding = previousWorld?.buildings.get(actor.hostKey);
+      if (
+        previousBuilding &&
+        !fresh.has(actor.key) &&
+        actor.hostKey === agent.hostKey
+      ) {
+        // Reflow moves the building and its occupants together. Keeping old
+        // world coordinates can put a walker outside the new navigation grid.
+        const dx = (building.x - previousBuilding.x) * T;
+        const dy = (building.y - previousBuilding.y) * T;
+        actor.x += dx;
+        actor.y += dy;
+        if (dx || dy) actor.path = actor.path.map(([x, y]) => [x + dx, y + dy]);
+        if (actor.tween) {
+          actor.tween.x0 += dx;
+          actor.tween.y0 += dy;
+          actor.tween.x += dx;
+          actor.tween.y += dy;
+        }
+      }
+      if (actor.spot) {
+        // Lounge slots belong to a building, not to absolute world tiles.
+        // Preserve the slot through reflow, then resolve its current position.
+        const previousSpots = previousWorld?.buildings.get(actor.hostKey)
+          ?.lounge.spots;
+        const index =
+          previousSpots?.findIndex(
+            (spot) => spotKey(spot) === spotKey(actor.spot!),
+          ) ?? -1;
+        actor.spot =
+          actor.hostKey === agent.hostKey && index >= 0
+            ? (building.lounge.spots[index] ?? null)
+            : null;
+        if (actor.spot && actor.goal?.kind === "lounge")
+          actor.goal = { kind: "lounge", spot: actor.spot };
+      }
       actor.hostKey = agent.hostKey;
       if (agent.semanticStatus === "blocked" && actor.blockedSince === 0)
         actor.blockedSince = this.clock || 1e-6;
@@ -281,10 +321,14 @@ export class TownActors {
         if (actor.spot) actor.spot = null;
         this.actors.delete(key);
       }
-    this.assignGoals(instant, fresh);
+    this.assignGoals(instant, fresh, world.layout !== previousWorld?.layout);
   }
 
-  private assignGoals(instantAll: boolean, fresh: ReadonlySet<string>) {
+  private assignGoals(
+    instantAll: boolean,
+    fresh: ReadonlySet<string>,
+    layoutChanged: boolean,
+  ) {
     const world = this.world;
     if (!world) return;
     const { model } = world;
@@ -300,8 +344,9 @@ export class TownActors {
       const agent = model.agents.get(actor.key)!;
       if (
         (agent.semanticStatus !== "blocked" &&
-          agent.semanticStatus !== "done") ||
-        this.summoned.has(actor.key)
+          agent.semanticStatus !== "done" &&
+          !this.asking.has(actor.key)) ||
+        (this.summoned.has(actor.key) && !this.asking.has(actor.key))
       )
         continue;
       const list = queues.get(actor.hostKey) ?? [];
@@ -312,9 +357,11 @@ export class TownActors {
     for (const [hostKey, list] of queues) {
       // Waiting agents first, oldest first; finished agents after them.
       const waiting = (actor: TownActor) => actor.blockedSince > 0;
+      const rank = (actor: TownActor) =>
+        waiting(actor) ? 0 : this.asking.has(actor.key) ? 1 : 2;
       list.sort(
         (a, b) =>
-          Number(waiting(b)) - Number(waiting(a)) ||
+          rank(a) - rank(b) ||
           (waiting(a)
             ? a.blockedSince - b.blockedSince
             : a.doneSince - b.doneSince) ||
@@ -339,6 +386,7 @@ export class TownActors {
       else if (
         agent.semanticStatus === "idle" &&
         !this.summoned.has(actor.key) &&
+        !this.asking.has(actor.key) &&
         !model.deskPins.has(seat.deskKey)
       ) {
         if (actor.spot) goal = { kind: "lounge", spot: actor.spot };
@@ -357,7 +405,20 @@ export class TownActors {
       if (goal.kind !== "lounge" && actor.spot) actor.spot = null;
       if (goal.kind === "lounge") actor.spot = goal.spot;
       actor.queueSlot = goal.kind === "queue" ? goal.slot : null;
-      const instant = instantAll || fresh.has(actor.key);
+      // A shrink can remove the floor under an in-flight actor even when the
+      // building origin is unchanged. Settle invalid motion at its new goal;
+      // never use a straight fallback path through the removed floor.
+      const outside = (x: number, y: number) =>
+        x < building.x * T ||
+        x >= (building.x + building.w) * T ||
+        y < building.y * T ||
+        y >= (building.y + building.h) * T;
+      const invalidMotion =
+        layoutChanged &&
+        (outside(actor.x, actor.y) ||
+          (actor.tween !== null && outside(actor.tween.x, actor.tween.y)) ||
+          actor.path.some(([x, y]) => outside(x, y)));
+      const instant = instantAll || fresh.has(actor.key) || invalidMotion;
       if (sameGoal(actor.goal, goal) && !instant) {
         if (actor.mode === "seat" || actor.mode === "stand")
           this.travel(actor, true, true);
@@ -407,6 +468,7 @@ export class TownActors {
       return;
     }
     if (instant) {
+      this.afterTween.delete(actor.key);
       actor.path = [];
       actor.tween = null;
       if (target.seat) {
@@ -422,6 +484,10 @@ export class TownActors {
       return;
     }
     const begin = () => {
+      // A snapshot may move reception while this actor is standing up.
+      // Resolve the destination when walking starts, not before the tween.
+      const target = this.destination(actor);
+      if (!target) return;
       const navigation = this.world!.navigation.get(actor.hostKey)!;
       const path = navigation.path(
         Math.floor(actor.x / T),
@@ -495,6 +561,7 @@ export class TownActors {
     this.clock += dt;
     let moved = false;
     for (const actor of this.actors.values()) {
+      if (this.world?.model.agents.get(actor.key)?.stale) continue;
       if (actor.mode === "walk") {
         moved = true;
         let remaining = WALK_SPEED * dt;
@@ -576,7 +643,11 @@ export class TownActors {
   /** Whether any actor is still moving. */
   get busy() {
     for (const actor of this.actors.values())
-      if (actor.mode === "walk" || actor.mode === "tween") return true;
+      if (
+        !this.world?.model.agents.get(actor.key)?.stale &&
+        (actor.mode === "walk" || actor.mode === "tween")
+      )
+        return true;
     return false;
   }
 }
