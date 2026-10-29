@@ -1,3 +1,18 @@
+import {
+  affected,
+  buildGraph,
+  coverageOwners,
+  gitChanges,
+  TEST,
+  type Graph,
+} from "./affected";
+import {
+  worldBrowserSuites,
+  worldBrowserShards,
+  worldTimedSuites,
+  webBrowserSuites,
+} from "./world-browser-suites";
+
 /** One conservative allowlist shared by CI and the local delivery gate. */
 export function isToolingPath(path: string): boolean {
   // No normalization: git paths are canonical; ambiguous inputs fail closed.
@@ -19,4 +34,177 @@ export function isToolingPath(path: string): boolean {
 
 export function isToolingOnlyChange(paths: readonly string[]): boolean {
   return paths.length > 0 && paths.every(isToolingPath);
+}
+
+export function isDocumentationPath(path: string): boolean {
+  return (
+    path.endsWith(".md") &&
+    ![
+      "verification/",
+      "quint/",
+      "tools/quint/",
+      "openspec/",
+      ".agents/",
+      ".github/",
+    ].some((prefix) => path.startsWith(prefix)) &&
+    ![
+      "AGENTS.md",
+      "CONTRIBUTING.md",
+      // Copied into every release package by scripts/package-release.sh.
+      "THIRD_PARTY_NOTICES.md",
+      "DEPENDENCY_NOTICES.md",
+      "DEPENDENCY_LICENSES.md",
+      "UPSTREAM.md",
+    ].includes(path)
+  );
+}
+
+export type ValidationSelection = {
+  full: boolean;
+  tooling: boolean;
+  documentation: boolean;
+  reason: string;
+  unit: string[];
+  world: string[];
+  worldShards: number[];
+  web: string[];
+  latency: string[];
+  verification: boolean;
+  packaging: boolean;
+};
+
+const NATIVE =
+  /^(?:server\/|shared\/|scripts\/(?:install|installer|package|release|prepare-release|build-version|publish|world-plugin|plugin|homebrew|verify-release|check-(?:binary|homebrew))|herdr-plugin\.toml$)/;
+const WORLD_RUNTIME =
+  /^(?:web\/src\/world\/|server\/src\/(?:world|connections|bridge)\/|server\/src\/index\.ts$|web\/src\/(?:store(?:\/|\.ts$)|api\.ts$|worldSnapshotDecode\.ts$)|shared\/world)/;
+
+export function ordinaryDocumentation(
+  paths: readonly string[],
+  owns: (path: string) => boolean,
+): boolean {
+  return (
+    paths.length > 0 &&
+    paths.every(isDocumentationPath) &&
+    !paths.some(isToolingPath) &&
+    !paths.some(owns)
+  );
+}
+
+/** Whole-PR policy; optional incremental paths narrow tests only. */
+export function selectValidation(
+  graph: Graph,
+  paths: readonly string[],
+  owns: (path: string) => boolean = () => false,
+  testPaths = paths,
+): ValidationSelection {
+  const completeTooling = isToolingOnlyChange(paths);
+  // The accepted agent-tooling exception uses unit evidence, not Q41's broad
+  // scripts owner. Uncovered agent modules therefore still need the fallback.
+  const relevantOwner = completeTooling ? () => false : owns;
+  const complete = affected(graph, paths, worldBrowserSuites, relevantOwner);
+  const tests = affected(graph, testPaths, worldBrowserSuites, relevantOwner);
+  // A reverted gate/configuration edit can exist only in the incremental diff.
+  // Preserve the tooling exception only when that diff is also tooling-only.
+  const tooling =
+    completeTooling && !(tests.full && !isToolingOnlyChange(testPaths));
+  if (ordinaryDocumentation(paths, owns) && !tests.full)
+    return {
+      full: false,
+      tooling: false,
+      documentation: true,
+      reason: "ordinary documentation",
+      unit: [],
+      world: [],
+      worldShards: [],
+      web: [],
+      latency: [],
+      verification: false,
+      packaging: false,
+    };
+  const allTests = [...graph.files]
+    .filter((path) => TEST.test(path) && !graph.gone.has(path))
+    .sort();
+  const full = !tooling && (paths.length === 0 || complete.full || tests.full);
+  const fallback = tooling && (complete.full || tests.full);
+  const chosen = full
+    ? allTests
+    : fallback
+      ? allTests.filter((path) => path.startsWith("scripts/agent/"))
+      : tests.full
+        ? allTests
+        : tests.unit;
+  const timed = new Set(worldTimedSuites);
+  const world = new Set(worldBrowserSuites);
+  const web = new Set(webBrowserSuites);
+  const latency =
+    !tooling &&
+    (full ||
+      paths.some((path) => WORLD_RUNTIME.test(path)) ||
+      (!complete.full && complete.browser.some((path) => timed.has(path))));
+  const chosenWorld = (
+    full ? worldBrowserSuites : tooling || tests.full ? [] : tests.browser
+  ).filter((path) => !timed.has(path));
+  return {
+    full,
+    tooling,
+    documentation: false,
+    reason: full
+      ? tests.full
+        ? tests.reason
+        : complete.full
+          ? complete.reason
+          : "empty or unknown change"
+      : tooling
+        ? "agent tooling"
+        : "affected contracts and consumers",
+    unit: chosen.filter((path) => !world.has(path) && !web.has(path)),
+    web: chosen.filter((path) => web.has(path)),
+    world: chosenWorld,
+    worldShards: worldBrowserShards.flatMap((shard, index) =>
+      chosenWorld.some((path) => shard.includes(path)) ? [index + 1] : [],
+    ),
+    latency: latency ? [...worldTimedSuites] : [],
+    verification:
+      !tooling && (full || (!complete.full && complete.verification)),
+    packaging:
+      !tooling &&
+      (full ||
+        paths.some((path) => NATIVE.test(path) && !TEST.test(path)) ||
+        chosen.some((path) =>
+          /^scripts\/(?:install|plugin|package|homebrew)/.test(path),
+        )),
+  };
+}
+
+export function repositorySelection(
+  root: string,
+  base: string,
+  head = "HEAD",
+  testBase = base,
+): ValidationSelection {
+  const complete = gitChanges(root, base, head);
+  const tests = testBase === base ? complete : gitChanges(root, testBase, head);
+  return selectValidation(
+    buildGraph(root, complete.tracked, [...complete.deleted, ...tests.deleted]),
+    complete.changed,
+    coverageOwners(root),
+    tests.changed,
+  );
+}
+
+export function fullValidationSelection(root: string): ValidationSelection {
+  const files = gitChanges(root, "HEAD");
+  return selectValidation(buildGraph(root, files.tracked, files.deleted), []);
+}
+
+if (import.meta.main) {
+  const base = process.argv[2]?.match(/^--docs-since=([0-9a-f]{40})$/)?.[1];
+  if (!base) throw new Error("Use validation-scope.ts --docs-since=<commit>");
+  const root = process.cwd();
+  process.exitCode = ordinaryDocumentation(
+    gitChanges(root, base).changed,
+    coverageOwners(root),
+  )
+    ? 0
+    : 1;
 }

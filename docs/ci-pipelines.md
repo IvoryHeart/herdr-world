@@ -57,8 +57,8 @@ The release-preview label can therefore request archives without repeating a
 successful full check. Other label changes still create workflow runs, but can
 take this same short path.
 
-Ordinary Markdown-only diffs receive documentation checks and behavioral
-verification under the existing evidence policy. Packaged notices, agent policy,
+Ordinary Markdown-only diffs receive documentation checks. Verification inputs or
+contract owners still require behavioral verification, even when their edits are Markdown. Packaged notices, agent policy,
 OpenSpec, verification and tooling do not qualify for this shortcut. macOS jobs
 still report their protected names in short runs, with their native build and
 lifecycle steps skipped. Their aggregate must succeed in every mode.
@@ -73,8 +73,46 @@ World browser/latency, behavioral verification, Windows installation and install
 upgrades. macOS jobs still report their protected names without native work.
 `Delivery checks` requires repository validation and macOS success, and the exact
 expected skips; failure, cancellation or missing results fail closed. It never
-reuses an earlier tooling result. All other code PRs retain the full matrix.
+reuses an earlier tooling result. Other classified PRs use the suite rules below; unknown paths retain the full matrix.
 Main pushes and explicit full local gates always run everything.
+
+### Shared suite plan and sharding
+
+`validation-scope.ts` applies the affected import graph to the complete PR; unknown
+paths, workflow/gate policy and configuration select every suite. A full-gate
+incremental delta also escalates all suite families, including World and latency,
+even when the triggering input was reverted out of the net PR diff. Verification
+runs for model/tooling/OpenSpec inputs or an inventory owner. World browser suites
+are the nearest consumers; web suites come from their maintained inventory.
+World runtime/UI changes or a nearest timed World consumer select latency suites.
+Native checks cover install/plugin/package inputs, server/shared binary sources,
+compiled `scripts/build-version.ts` metadata and installation consumers. The
+agent-tooling exception remains explicit.
+
+Main and non-PR dispatches force the full plan. Code receives all static checks;
+ordinary docs receive `check:docs`. Non-browser tests and web suites are partitioned
+into two disjoint inventories. Six World shards keep their maintained membership,
+while only relevant shards/suites run. Each of the six latency files runs alone on
+a separate runner, retaining quiet admission and its single allowed retry.
+
+Three verification runners partition the complete accepted model inventory. Each
+runs the maintained focused workers inside the enforced 4 GiB/no-swap/two-CPU
+envelope with the existing OOM/cancellation and diagnostic controls. The
+payload and supervisor occupy separate delegated cgroups: the memory limit and
+peak cover the whole payload, while the surviving supervisor retains accounting
+after payload-wide OOM kills. The service-wide CPU quota covers both siblings.
+Shard artifacts cannot establish canonical success. The aggregate downloads all group
+artifacts, selects each newest attempt, requires complete model coverage and
+current source/tool identity, and verifies every group's retained accounting.
+It publishes one canonical manifest including the three resource records. The
+single-machine canonical gate is unchanged and still rejects filters.
+
+`Repository validation`, `Web browser tests`, `World latency budgets`, `Behavioral
+verification`, `Delivery checks` and both macOS report names remain. Leaf jobs
+report their check results immediately on completion; aggregate jobs require
+success from all applicable leaves. No crew automation or branch protection is
+changed. Actual elapsed CI times come from workflow runs, rather than from a
+claimed bound on shared hosted runners.
 
 The size ratchet evaluates the proposed merge into the target against main's
 ratchet policy. A branch behind main inherits main's lowered ceilings, while a
