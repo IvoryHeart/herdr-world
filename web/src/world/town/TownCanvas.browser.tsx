@@ -2510,8 +2510,10 @@ async function run() {
   // Room card activation still has to zoom into the room from that overview.
   const zoomBefore = diagnostics.zoom;
   host.querySelector<HTMLButtonElement>(".town-room-card")!.click();
+  // Without the old rail inset a tall overview already fits wide, so the
+  // room zoom is a smaller step there; it still has to zoom in.
   await waitFor(
-    () => window.__HERDR_TOWN_RENDERER__!.zoom > zoomBefore * 1.3,
+    () => window.__HERDR_TOWN_RENDERER__!.zoom > zoomBefore * 1.1,
     "room card did not zoom in",
   );
   await waitFor(
