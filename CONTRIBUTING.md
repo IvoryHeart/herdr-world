@@ -44,8 +44,13 @@ only for a specific question while developing. For a code push, the hook runs
 `bun run check:changed` against the remote branch (or `origin/main` for a new
 branch). It always runs notices, changelog validation, the size ratchet, formatting,
 lint, type checks, the build, the site and OpenSpec validation. The size ratchet
-compares with `origin/main`'s tip rather than the branch's merge base, so a ceiling
-lowered on main cannot pass locally and fail on CI. Fetch main before delivery. It then runs the unit tests that import or read a changed
+checks the proposed merge tree against main's ceilings, so an unchanged branch
+behind main passes while a restored ceiling fails. Tracked working edits and
+newly staged sources are included without changing HEAD or staged contents.
+Merge conflicts block the check. Fetch main to refresh the proposed merge input.
+For a stacked PR, run `bun run check:size origin/main <target-ref>` or set
+`HERDR_WORLD_RATCHET_TARGET=<target-ref>` for pre-push; CI supplies the exact PR
+base SHA. The gate then runs the unit tests that import or read a changed
 file, the World browser suites nearest to each changed file, and behavioral
 verification when a change touches its models, adapters, contracts or a
 `verification/coverage.json` owner. A deleted file runs the tests that still

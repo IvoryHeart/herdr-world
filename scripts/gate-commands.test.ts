@@ -18,6 +18,7 @@ function exercise(
   failOn = "",
   paths?: string[],
   incremental = false,
+  ciMerge = false,
 ) {
   const directory = mkdtempSync(join(tmpdir(), "gate-commands-"));
   const record = join(directory, "commands");
@@ -54,6 +55,10 @@ function exercise(
         join(directory, "scripts/agent/example.test.ts"),
         'import { value } from "./example";\n',
       );
+      writeFileSync(
+        join(directory, "scripts/agent/other.test.ts"),
+        "// another agent regression\n",
+      );
       git("add", ".");
       git("commit", "-qm", "base");
       git("update-ref", "refs/remotes/origin/main", "HEAD");
@@ -63,6 +68,19 @@ function exercise(
       }
       git("add", ".");
       git("commit", "-qm", "change");
+      if (ciMerge) {
+        const topic = git("rev-parse", "HEAD");
+        git("checkout", "-q", "--detach", "origin/main");
+        writeFileSync(join(directory, "main-only.md"), "main advance\n");
+        git("add", ".");
+        git("commit", "-qm", "main advance");
+        const baseSha = git("rev-parse", "HEAD");
+        git("merge", "-q", "--no-ff", "--no-edit", topic);
+        expect(
+          git("rev-list", "--parents", "-n", "1", "HEAD").split(" "),
+        ).toHaveLength(3);
+        args = [...args, `--scope-base=${baseSha}`];
+      }
       if (incremental) {
         const remote = git("rev-parse", "HEAD");
         writeFileSync(
@@ -195,4 +213,27 @@ test("tooling classification includes earlier PR commits on an incremental push"
   expect(
     full.commands.some((cmd) => cmd.startsWith("scripts/run-world-tests.ts")),
   ).toBe(true);
+});
+
+test("an uncovered agent module runs the entire agent test inventory without heavy lanes", () => {
+  for (const ciMerge of [false, true]) {
+    const result = exercise(
+      ["scripts/check-delivery.ts"],
+      "",
+      ["scripts/agent/untested.ts"],
+      false,
+      ciMerge,
+    );
+    expect(result.status).toBe(0);
+    expect(result.commands).toContain("run check:size");
+    expect(result.commands).toContain("run typecheck:quick");
+    expect(result.commands).toContain(
+      "scripts/run-tests.ts scripts/agent/example.test.ts scripts/agent/other.test.ts",
+    );
+    expect(
+      result.commands.some((cmd) =>
+        /run-world-tests|verification:gate/.test(cmd),
+      ),
+    ).toBe(false);
+  }
 });

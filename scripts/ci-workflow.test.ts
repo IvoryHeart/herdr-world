@@ -510,3 +510,11 @@ test("tooling CI retains static validation and delivery while heavy jobs keep fu
     )?.if,
   ).toBe("needs.validation-scope.outputs.mode != 'full'");
 });
+
+test("the ratchet checks the proposed merge into the exact PR target", () => {
+  expect(workflow.jobs.validation).toMatchObject({
+    env: {
+      HERDR_WORLD_RATCHET_TARGET: "${{ github.event.pull_request.base.sha }}",
+    },
+  });
+});

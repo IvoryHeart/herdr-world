@@ -129,8 +129,12 @@ always run it. Pre-push uses the same tooling allowlist against the complete PR.
 After committing, run `bun run check:pr-body <file>` on the exact description
 file passed to `gh pr create --body-file <file>`; append a base ref for a stacked
 PR. This applies CI's knowledge-map and changelog rules before publication.
-The size ratchet compares against `origin/main`'s tip, including ceilings lowered
-since the branch forked. Fetch main before delivery to refresh that baseline. Browser tests require Chrome/Chromium or `CHROME_BIN`:
+The size ratchet checks the proposed merge into `origin/main`, so branches behind
+main inherit its lower ceilings without requiring a merge first. It compares
+that tree with main's ratchet policy and rejects merge conflicts. Fetch main to
+refresh the proposed merge input. For stacked PRs, use
+`bun run check:size origin/main <target-ref>`, or set
+`HERDR_WORLD_RATCHET_TARGET=<target-ref>` for pre-push; CI sets the exact PR base. Browser tests require Chrome/Chromium or `CHROME_BIN`:
 
 ```bash
 bun run typecheck:quick

@@ -76,10 +76,17 @@ expected skips; failure, cancellation or missing results fail closed. It never
 reuses an earlier tooling result. All other code PRs retain the full matrix.
 Main pushes and explicit full local gates always run everything.
 
-The size ratchet uses the tip of `origin/main` locally and on CI, rather than a
-branch's older merge base. Refresh main before pushing. Draft PR descriptions
-should pass `check:pr-body` before creation, using the same policy functions as
-Validation scope.
+The size ratchet evaluates the proposed merge into the target against main's
+ratchet policy. A branch behind main inherits main's lowered ceilings, while a
+branch that restores a ceiling fails. Conflicts fail the check. Tracked working
+edits are included through a temporary index; HEAD and staged contents stay intact.
+Refresh main before pushing to update the proposed merge input. For stacked PRs,
+`bun run check:size origin/main <target-ref>` or
+`HERDR_WORLD_RATCHET_TARGET=<target-ref>` selects the actual target independently
+of the main policy baseline. CI passes the event's exact base SHA, so a merge into
+a stale stack is checked as that merge, rather than silently integrating main.
+Draft PR descriptions should pass `check:pr-body` before creation, using the same
+policy functions as Validation scope.
 
 Main pushes keep a running check and retain only the newest pending run. Main
 gate accounts for the intervening merges when attributing a later failure.

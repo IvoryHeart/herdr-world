@@ -6,8 +6,9 @@
  * `unratcheted` (owner decision, pending their splits) are exempt until
  * removed from that list, which also only shrinks.
  */
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 
 export const LIMIT = 1000;
 export const EXCEPTIONS = "scripts/file-size-exceptions.json";
@@ -114,17 +115,18 @@ export function slack(
     );
 }
 
-function git(args: string[]) {
+function git(args: string[], env: Record<string, string> = {}) {
   const result = Bun.spawnSync(["git", ...args], {
     stdout: "pipe",
     stderr: "pipe",
+    env: { ...process.env, ...env },
   });
   return result.exitCode === 0 ? result.stdout.toString() : undefined;
 }
 
 /** Like git(), but a failure stops the check. */
-function mustGit(args: string[]) {
-  const out = git(args);
+function mustGit(args: string[], env: Record<string, string> = {}) {
+  const out = git(args, env);
   if (out === undefined) throw new Error(`git ${args.join(" ")} failed`);
   return out;
 }
@@ -135,25 +137,49 @@ function countLines(text: string) {
     : text.split("\n").length - (text.endsWith("\n") ? 1 : 0);
 }
 
+/** Snapshot tracked working edits without changing HEAD or the real index. */
+function candidateCommit(): string {
+  if (!mustGit(["diff", "--name-only", "HEAD", "--"]).length) return "HEAD";
+  const directory = mkdtempSync(join(tmpdir(), "size-index-"));
+  const env = { GIT_INDEX_FILE: join(directory, "index") };
+  try {
+    // Start with the real index's tree so newly staged files are included too.
+    mustGit(["read-tree", mustGit(["write-tree"]).trim()], env);
+    mustGit(["add", "--update", "--", "."], env);
+    const tree = mustGit(["write-tree"], env).trim();
+    return mustGit([
+      "-c",
+      "user.name=Ratchet",
+      "-c",
+      "user.email=ratchet@example.invalid",
+      "commit-tree",
+      tree,
+      "-p",
+      "HEAD",
+      "-m",
+      "Ratchet tracked working snapshot",
+    ]).trim();
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+}
+
+function proposedTree(target: string): string {
+  const merged = git(["merge-tree", "--write-tree", target, candidateCommit()]);
+  if (!merged)
+    throw new Error(
+      "Cannot check the proposed merge: resolve merge conflicts or fetch the target's history first",
+    );
+  return merged.trim();
+}
+
 if (import.meta.main) {
   try {
     const root = resolve(import.meta.dir, "..");
     process.chdir(root);
-    const lines: Record<string, number> = {};
-    for (const path of mustGit(["ls-files"]).split("\n"))
-      if (path && ratcheted(path)) {
-        try {
-          lines[path] = countLines(readFileSync(path, "utf8"));
-        } catch {
-          // Deleted in the working tree.
-        }
-      }
-    const current = parseExceptions(
-      readFileSync(EXCEPTIONS, "utf8"),
-      EXCEPTIONS,
-    );
-    // Match CI's proposed-merge baseline, including ceilings lowered since
-    // this branch forked. The merge base can silently allow a restored ceiling.
+    // Compare the proposed integration tree, not stale files on a branch
+    // behind main. A stacked PR can select its real target independently of
+    // the main ratchet baseline; CI supplies the event's exact base SHA.
     const baseRef =
       process.argv[2] ??
       git(["rev-parse", "--verify", "origin/main^{commit}"])?.trim() ??
@@ -167,6 +193,23 @@ if (import.meta.main) {
       ]),
       "FETCH_HEAD");
     mustGit(["rev-parse", "--verify", "--quiet", `${baseRef}^{commit}`]);
+    const target =
+      process.argv[3] || process.env.HERDR_WORLD_RATCHET_TARGET || baseRef;
+    const tree = proposedTree(target);
+    const lines: Record<string, number> = {};
+    for (const path of mustGit([
+      "ls-tree",
+      "-r",
+      "--name-only",
+      "-z",
+      tree,
+    ]).split("\0"))
+      if (path && ratcheted(path))
+        lines[path] = countLines(mustGit(["show", `${tree}:${path}`]));
+    const current = parseExceptions(
+      mustGit(["show", `${tree}:${EXCEPTIONS}`]),
+      EXCEPTIONS,
+    );
     // Absent only before this ratchet existed on the base.
     const baseText = git(["show", `${baseRef}:${EXCEPTIONS}`]);
     const base = baseText

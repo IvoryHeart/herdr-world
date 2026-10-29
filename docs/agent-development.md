@@ -130,8 +130,11 @@ including all source type checks, and skips World browser/latency, behavioral
 verification and native installation work. `Delivery checks` and the protected
 macOS reports still run. Other code paths keep the full CI matrix, as do all main
 pushes. See [pipeline ownership](ci-pipelines.md) for result requirements.
-Fetch main before pushing: `check:size` uses the tip of `origin/main`, so it catches
-ratchet ceilings lowered since the branch forked.
+Fetch main before pushing: `check:size` evaluates the proposed merge against
+main's ceilings, allowing an unchanged branch behind main and rejecting restored
+ceilings or merge conflicts. For a stacked PR, use
+`bun run check:size origin/main <target-ref>` or set
+`HERDR_WORLD_RATCHET_TARGET=<target-ref>` for pre-push. CI uses its exact PR base.
 
 ### Post review results
 

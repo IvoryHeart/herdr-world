@@ -1,5 +1,9 @@
 import { expect, test } from "bun:test";
-import { execFileSync, spawnSync } from "node:child_process";
+import {
+  execFileSync,
+  spawnSync,
+  type SpawnSyncReturns,
+} from "node:child_process";
 import {
   copyFileSync,
   mkdirSync,
@@ -160,7 +164,14 @@ test("a split ends a deferred exemption by freezing the file at its new size", (
   ).toContain("new exception");
 });
 
-test("local pre-push catches an exception lowered on main after the branch forked", () => {
+function withRatchetRepo(
+  check: (repo: {
+    root: string;
+    git: (...args: string[]) => string;
+    policy: (limit: number) => void;
+    run: (...args: string[]) => SpawnSyncReturns<string>;
+  }) => void,
+) {
   const root = mkdtempSync(join(tmpdir(), "size-base-"));
   const git = (...args: string[]) =>
     execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
@@ -178,28 +189,125 @@ test("local pre-push catches an exception lowered on main after the branch forke
         join(root, "scripts/file-size-exceptions.json"),
         JSON.stringify({ limits: { "app.ts": limit }, unratcheted: {} }),
       );
-    writeFileSync(join(root, "app.ts"), "// synthetic\n".repeat(1001));
-    policy(5075);
+    writeFileSync(join(root, "app.ts"), "// synthetic\n".repeat(1050));
+    policy(1100);
     git("add", ".");
     git("commit", "-qm", "base");
-    git("branch", "topic");
-    policy(5025);
-    git("commit", "-qam", "lower ceiling");
-    git("update-ref", "refs/remotes/origin/main", "HEAD");
-    git("checkout", "-q", "topic");
     const run = (...args: string[]) =>
       spawnSync(process.execPath, ["scripts/file-size-ratchet.ts", ...args], {
         cwd: root,
         encoding: "utf8",
+        env: { ...process.env, HERDR_WORLD_RATCHET_TARGET: "" },
       });
-    // CI's shallow checkout compares with the fetched main tip. Local must too.
-    const ci = run("origin/main");
-    expect(ci.status).toBe(1);
-    expect(ci.stderr).toContain("raised from 5025 to 5075");
-    const local = run();
-    expect(local.status).toBe(1);
-    expect(local.stderr).toContain("raised from 5025 to 5075");
+    check({ root, git, policy, run });
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+}
+
+test("a branch behind main passes locally and in the actual CI merge tree", () => {
+  withRatchetRepo(({ root, git, policy, run }) => {
+    git("branch", "topic");
+    policy(1050);
+    writeFileSync(join(root, "app.ts"), "// synthetic\n".repeat(1025));
+    git("commit", "-qam", "lower ceiling and source size");
+    git("update-ref", "refs/remotes/origin/main", "HEAD");
+    git("checkout", "-q", "topic");
+    writeFileSync(join(root, "unrelated.md"), "unrelated\n");
+    git("add", ".");
+    git("commit", "-qm", "unrelated change");
+    expect(run().status).toBe(0);
+    const topic = git("rev-parse", "HEAD");
+    git("checkout", "-q", "main");
+    git("merge", "-q", "--no-ff", "--no-edit", topic);
+    expect(
+      git("rev-list", "--parents", "-n", "1", "HEAD").split(" "),
+    ).toHaveLength(3);
+    expect(run().status).toBe(0);
+  });
+});
+
+test("a branch that restores a lowered ceiling fails in the proposed merge", () => {
+  withRatchetRepo(({ git, policy, run }) => {
+    policy(1050);
+    git("commit", "-qam", "lower ceiling");
+    git("update-ref", "refs/remotes/origin/main", "HEAD");
+    git("checkout", "-qb", "topic");
+    policy(1100);
+    git("commit", "-qam", "restore ceiling");
+    const result = run();
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("raised from 1050 to 1100");
+  });
+});
+
+test("a stale stacked base is checked against main, including CI's actual merge commit", () => {
+  withRatchetRepo(({ root, git, policy, run }) => {
+    git("checkout", "-qb", "stack");
+    writeFileSync(join(root, "stack.md"), "stack base\n");
+    git("add", ".");
+    git("commit", "-qm", "stack base");
+    git("branch", "topic");
+    git("checkout", "-q", "main");
+    policy(1050);
+    git("commit", "-qam", "lower ceiling");
+    git("update-ref", "refs/remotes/origin/main", "HEAD");
+    git("checkout", "-q", "topic");
+    writeFileSync(join(root, "topic.md"), "topic\n");
+    git("add", ".");
+    git("commit", "-qm", "topic change");
+    git("checkout", "-q", "stack");
+    writeFileSync(join(root, "base.md"), "base advance\n");
+    git("add", ".");
+    git("commit", "-qm", "stack advance");
+    git("checkout", "-q", "topic");
+    expect(run("origin/main", "stack").status).toBe(1);
+    // Reproduce refs/pull/N/merge: the first parent is the stale stack, not main.
+    const topic = git("rev-parse", "HEAD");
+    git("checkout", "-q", "stack");
+    git("merge", "-q", "--no-ff", "--no-edit", topic);
+    expect(
+      git("rev-list", "--parents", "-n", "1", "HEAD").split(" "),
+    ).toHaveLength(3);
+    const ci = run("origin/main", "stack");
+    expect(ci.status).toBe(1);
+    expect(ci.stderr).toContain("raised from 1050 to 1100");
+  });
+});
+
+test("tracked working edits and staged new sources are checked without changing HEAD or the index", () => {
+  withRatchetRepo(({ root, git, run }) => {
+    git("update-ref", "refs/remotes/origin/main", "HEAD");
+    const head = git("rev-parse", "HEAD");
+    writeFileSync(join(root, "new.ts"), "// new\n".repeat(1001));
+    git("add", "new.ts");
+    const index = git("write-tree");
+    const staged = run();
+    expect(staged.status).toBe(1);
+    expect(staged.stderr).toContain("new.ts has 1001 lines");
+    expect(git("write-tree")).toBe(index);
+    expect(git("rev-parse", "HEAD")).toBe(head);
+    git("reset", "-q", "HEAD", "new.ts");
+    // Untracked files are outside the ratchet, just as before this change.
+    writeFileSync(join(root, "app.ts"), "// growth\n".repeat(1101));
+    const unstaged = run();
+    expect(unstaged.status).toBe(1);
+    expect(unstaged.stderr).toContain("app.ts has 1101 lines");
+    expect(git("diff", "--cached", "--name-only")).toBe("");
+  });
+});
+
+test("a conflict in the proposed merge blocks the ratchet", () => {
+  withRatchetRepo(({ git, policy, run }) => {
+    git("branch", "topic");
+    policy(1050);
+    git("commit", "-qam", "lower ceiling");
+    git("update-ref", "refs/remotes/origin/main", "HEAD");
+    git("checkout", "-q", "topic");
+    policy(1150);
+    git("commit", "-qam", "conflicting ceiling");
+    const result = run();
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("resolve merge conflicts");
+  });
 });

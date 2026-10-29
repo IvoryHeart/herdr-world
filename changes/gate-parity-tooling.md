@@ -1,7 +1,8 @@
 ### Fixed
 
-- Catch file-size ratchet ceilings lowered on main before pushing, and validate
-  PR descriptions locally with `bun run check:pr-body <file>`.
+- Check the proposed merge against main's file-size ratchet before pushing,
+  including stacked targets, and validate PR descriptions locally with
+  `bun run check:pr-body <file>`.
 
 ### Changed
 
