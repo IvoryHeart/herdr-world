@@ -24,7 +24,7 @@ import { visibleWindowIds } from "./windows/windowManager";
 import { WindowSurface } from "./windows/WindowSurface";
 import { WindowFrame } from "./windows/WindowFrame";
 import { WindowControls } from "./windows/WindowControls";
-import { ColorSwatchButton } from "../components/ColorSwatch";
+import { SpacesTerminalAppearance } from "./SpacesTerminalAppearance";
 import { useTerminalColorChoices } from "./useTerminalColors";
 
 const ignoreLayer = () => {};
@@ -289,12 +289,11 @@ export function useSpacesTabWindowArrangement(active: boolean): {
                   }}
                 >
                   <header className="world-window-header">
-                    <ColorSwatchButton
-                      className="world-window-swatch"
-                      label={`${label} colour`}
-                      palette={color.palette}
-                      current={color.current}
-                      onColor={color.onColor}
+                    <SpacesTerminalAppearance
+                      connectionId={snapshot.activeConnectionId}
+                      generation={snapshot.serverRuntimeGeneration ?? -1}
+                      tab={tab}
+                      color={color}
                     />
                     <button
                       type="button"
