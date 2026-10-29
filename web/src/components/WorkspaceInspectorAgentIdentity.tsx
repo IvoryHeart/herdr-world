@@ -1,3 +1,4 @@
+import { AppearanceAvatar } from "../world/AppearanceAvatar";
 import type { CSSProperties, ReactNode } from "react";
 import { Check, FolderTree, SquareTerminal } from "lucide-react";
 import type { ManagedWindowControls } from "../world/windows/WindowControls";
@@ -26,7 +27,7 @@ export function WorkspaceInspectorAgentIdentity({
   /** The location line under the name. */
   location: ReactNode;
 }) {
-  const name = agentName(context);
+  const name = context.tabName ?? agentName(context);
   // The state is a badge on the icon; the word stays in its label and title.
   const badge = context.statusTone ? (
     <span
@@ -41,7 +42,9 @@ export function WorkspaceInspectorAgentIdentity({
       ) : null}
     </span>
   ) : null;
-  const icon = context.portrait ? (
+  const icon = context.appearanceAvatar ? (
+    <AppearanceAvatar id={context.appearanceAvatar} />
+  ) : context.portrait ? (
     <img
       className="workspace-inspector-portrait"
       src={context.portrait}
@@ -66,28 +69,33 @@ export function WorkspaceInspectorAgentIdentity({
               type="button"
               className="workspace-inspector-agent-avatar is-settings"
               style={avatarColour(terminalColor)}
-              aria-label={`Agent settings for ${name}, ${context.stateLabel}`}
-              title={`${context.stateLabel} · colour and agent settings`}
+              aria-label={`Appearance for ${name}, ${context.stateLabel}`}
+              title={`${context.stateLabel} · terminal appearance`}
             >
               {icon}
               {badge}
             </button>
           </PopoverTrigger>
           <PopoverContent
+            collisionPadding={8}
             className="workspace-inspector-agent-settings"
             align="start"
             aria-label={`Agent settings for ${context.label}`}
           >
             <strong>{name}</strong>
-            <span className="workspace-inspector-agent-settings-label">
-              Colour
-            </span>
-            <ColorSwatches
-              label="Terminal colour"
-              palette={terminalColor.palette}
-              current={terminalColor.current}
-              onColor={terminalColor.onColor}
-            />
+            {!agentSettings ? (
+              <>
+                <span className="workspace-inspector-agent-settings-label">
+                  Colour
+                </span>
+                <ColorSwatches
+                  label="Terminal colour"
+                  palette={terminalColor.palette}
+                  current={terminalColor.current}
+                  onColor={terminalColor.onColor}
+                />
+              </>
+            ) : null}
             {agentSettings}
           </PopoverContent>
         </Popover>

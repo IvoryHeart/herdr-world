@@ -1,3 +1,8 @@
+import {
+  appearanceFor,
+  appearanceKey,
+  parseAppearanceTarget,
+} from "../../../shared/appearance";
 import { askSessionFingerprint } from "./world-cli-asks";
 import { CliError, type CliErrorCode } from "./world-cli-errors";
 import { handleWorldAsk } from "./world-cli-asks";
@@ -17,7 +22,12 @@ import {
   tabCardKey,
   TERMINAL_COLOR_NAMES,
 } from "../../../shared/terminalColor";
-import type { BoardDocument, BoardOp, BoardPoint } from "./board-store";
+import type {
+  BoardDocument,
+  BoardOp,
+  BoardPoint,
+  CardColor,
+} from "./board-store";
 import {
   paneRoots,
   runsInPane,
@@ -320,8 +330,24 @@ export function probeValue(document: BoardDocument, probe: LedgerProbe) {
       return JSON.stringify(document.layout.pinned[probe.key] ?? null);
     case "offset":
       return JSON.stringify(document.layout.offsets[probe.key] ?? null);
-    case "colour":
-      return JSON.stringify(document.layout.colors[probe.key] ?? null);
+    case "colour": {
+      const binding = Object.values(document.appearance ?? {}).find(
+        (record) => record.kind === "tab" && record.color_key === probe.key,
+      );
+      const color = document.layout.colors[probe.key] ?? null;
+      return JSON.stringify(
+        binding
+          ? {
+              color,
+              owner: [
+                binding.connection_id,
+                binding.native_id,
+                [...binding.witness].sort(),
+              ],
+            }
+          : color,
+      );
+    }
     case "group": {
       const group = probe.ref
         ? groupOf(document.relations.groups, probe.ref)
@@ -363,6 +389,7 @@ function regroupOps(
 type Planned = {
   ops: BoardOp[];
   undo: BoardOp[];
+  revert?: BoardOp[];
   summary: string;
   probe: LedgerProbe;
   regroup?: LedgerChange["regroup"];
@@ -427,9 +454,54 @@ function planBoard(
       const colour = command === "colour set" ? params.colour : null;
       if (colour !== null && !TERMINAL_COLOR_NAMES.includes(colour as never))
         usage(`colour: one of ${TERMINAL_COLOR_NAMES.join(", ")}`);
-      const before = document.layout.colors[key] ?? null;
+      let before: CardColor | null = document.layout.colors[key] ?? null;
+      let ops: BoardOp[] = [{ op: "card.color", key, color: colour as never }];
+      let revert: BoardOp[] | undefined;
+      if (target.kind !== "workspace") {
+        const native_id = target.kind === "tab" ? target.id : target.tab_id;
+        const witness = topology.panes
+          .filter((pane) => pane.tab_id === native_id)
+          .map((pane) => str(pane.terminal_id));
+        const identity = parseAppearanceTarget({
+          connection_id: topology.host.connection_id,
+          kind: "tab",
+          native_id,
+          witness,
+          color_key: key,
+        });
+        const previous = document.appearance?.[appearanceKey(identity)] ?? null;
+        if (previous)
+          before = appearanceFor(document.appearance, identity)
+            ? (document.layout.colors[previous.color_key ?? key] ?? null)
+            : null;
+        revert = [
+          ...new Set([
+            key,
+            ...(previous?.color_key ? [previous.color_key] : []),
+          ]),
+        ].map(
+          (key): BoardOp => ({
+            op: "card.color",
+            key,
+            color: document.layout.colors[key] ?? null,
+          }),
+        );
+        revert.push({
+          op: "appearance.restore",
+          key: appearanceKey(identity),
+          record: previous,
+        });
+        ops = [
+          {
+            op: "appearance.set",
+            target: identity,
+            fields: { color: colour as CardColor | null },
+          },
+        ];
+      }
       return {
-        ops: [{ op: "card.color", key, color: colour as never }],
+        ops,
+        ...(revert ? { revert } : {}),
         undo: [{ op: "card.color", key, color: before }],
         summary: colour ? `coloured ${key} ${colour}` : `reset ${key}'s colour`,
         probe: { aspect: "colour", key },
@@ -521,8 +593,22 @@ export function createWorldCli(deps: WorldCliDeps) {
       basis: actor.verified ? "inferred" : "reported",
       via: "cli",
     };
+    const bindings = Object.values(deps.board.get().appearance ?? {});
     const document = deps.board.patch(
-      ops.map((op) => (isGroupOp(op) ? { ...op, sender } : op)),
+      ops.map((op) => {
+        if (op.op === "card.color") {
+          const binding = bindings.find(
+            (record) => record.color_key === op.key,
+          );
+          if (binding)
+            return {
+              op: "appearance.set" as const,
+              target: parseAppearanceTarget(binding),
+              fields: { color: op.color },
+            };
+        }
+        return isGroupOp(op) ? { ...op, sender } : op;
+      }),
     );
     deps.publishBoard(document.revision);
     return document;
@@ -574,7 +660,14 @@ export function createWorldCli(deps: WorldCliDeps) {
       !snapshot?.snapshot ||
       snapshot.stale ||
       !snapshot.actionable ||
-      snapshot.snapshot_generation !== chosen.generation
+      snapshot.snapshot_generation !== chosen.generation ||
+      !deps
+        .hosts()
+        .some(
+          (host) =>
+            host.connection_id === chosen.connection_id &&
+            host.generation === chosen.generation,
+        )
     )
       throw new CliError(
         "unavailable",
@@ -603,9 +696,9 @@ export function createWorldCli(deps: WorldCliDeps) {
         topology,
         actor,
       );
-      const revert = plan.regroup
-        ? regroupOps(deps.board.get(), plan.regroup)
-        : plan.undo;
+      const revert =
+        plan.revert ??
+        (plan.regroup ? regroupOps(deps.board.get(), plan.regroup) : plan.undo);
       return changeBoard(actor, plan.ops, revert, (document) =>
         record(actor, command, plan.summary, plan.undo, {
           expect: {

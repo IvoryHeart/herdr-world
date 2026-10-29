@@ -379,3 +379,16 @@ existing shared model retains quiet backlog loading and one announcement per new
 ask; the existing notification-policy consumers retain runtime/session authority.
 These are direct JavaScript/module and browser consumers, with no abstract-model
 claim about arbitrary import graphs or live external runtimes.
+
+## Shared terminal appearance
+
+[The appearance consumer contract](contracts/shared-appearance.md) derives
+admission, continuity, field-preservation and native-name failure properties from
+the approved tab-only scope. A direct 64-case handler matrix, real store reopen
+and move/migration tests, delayed-acknowledgement consumer and two isolated Chrome
+profiles cover the actual service and UI compositions. The existing runtime
+lease model is reused through its captured-currentness consumer obligation;
+no additional abstract model substitutes for the actual native read boundaries.
+The browser fixture's native responses/event stream are synthetic. Existing
+transport, current-generation and window/handoff consumers remain mandatory,
+and neither arbitrary upstream atomicity nor authenticated principals is claimed.

@@ -1,3 +1,5 @@
+import { legacyAppearanceOps } from "../world/appearance-observation";
+import { handleAppearanceRpc } from "./appearance";
 import { handleDeskRpc } from "./desk";
 import { profileWrite } from "../agent/profile-store";
 import { recordSpawnClaims } from "../world/relations";
@@ -34,6 +36,7 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
     worldWatchlist,
     worldCli,
   } = rpc.services;
+  if (method.startsWith("world.appearance.")) return handleAppearanceRpc(rpc);
   if (method.startsWith("world.desk.")) return handleDeskRpc(rpc);
   if (method === "world.snapshot") {
     let transfer: ReturnType<WorldSnapshotAdmission["open"]> | undefined;
@@ -47,6 +50,24 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
         transfer = snapshotAdmission.open(ws, id);
       const snapshot = await snapshots.snapshot(params);
       recordSpawnClaims(board(), snapshot, publishBoardChanged, logger);
+      try {
+        const appearanceOps = legacyAppearanceOps(
+          board().get(),
+          snapshot,
+          (connectionId, generation) => {
+            const lease = connectionManager.readyRuntimeLease(connectionId);
+            return Boolean(
+              lease && lease.generation === generation && lease.isCurrent(),
+            );
+          },
+        );
+        if (appearanceOps.length)
+          publishBoardChanged(board().patch(appearanceOps).revision);
+      } catch (error) {
+        logger.warn("World could not bind legacy tab colours", {
+          detail: String(error),
+        });
+      }
       await sendWorldSnapshotReply(
         id,
         snapshot,
@@ -82,6 +103,7 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
     try {
       const { ops, observed } = clientBoardOps(
         (params as { ops?: unknown } | undefined)?.ops,
+        board().get(),
       );
       const result = board().patch(ops);
       publishBoardChanged(result.revision);

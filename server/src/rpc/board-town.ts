@@ -1,3 +1,8 @@
+import {
+  appearanceForMove,
+  capturedMoveColors,
+  reconciledAppearanceOps,
+} from "../world/appearance-move";
 import { moveWorkspaceIds } from "../world/move-workspace-ids";
 import { checkAnchor } from "../world/board-anchor";
 import { linkedNoteText, sendNote } from "../world/board-send";
@@ -133,12 +138,23 @@ async function dispatchBoardTownRpc(
     }
     try {
       const p = params ?? {};
-      // The colours as the move starts: a close of the old tab seen during
-      // the move must not lose the colour it carries over.
-      let colorsBefore = board().get().layout.colors;
-      const result = await queue(() => {
-        colorsBefore = board().get().layout.colors;
-        return method === "town.move_desk"
+      await queue(async () => {
+        const before = board().get();
+        const colorChanged = board().captureColorChanges();
+        // Preserve a captured choice if Herdr closes the old tab during relocation.
+        const colorsBefore = before.appearance
+          ? appearanceForMove(
+              before,
+              route.connectionId,
+              (
+                (await call("pane.list", {})) as {
+                  panes: Record<string, unknown>[];
+                }
+              ).panes,
+            ).layout.colors
+          : before.layout.colors;
+        if (!requestIsCurrent()) throw new Error("Move runtime changed");
+        const result = await (method === "town.move_desk"
           ? moveDesk(call, {
               tab_id: String(p.tab_id ?? ""),
               workspace_id: String(p.workspace_id ?? ""),
@@ -150,44 +166,103 @@ async function dispatchBoardTownRpc(
               tab_id: String(p.tab_id ?? ""),
               allow_close_room: p.allow_close_room === true,
               isCurrent: requestIsCurrent,
-            });
-      });
-      // Board's strings follow the move whichever view or client made it.
-      if (
-        (result.status === "moved" || result.status === "failed") &&
-        route.scope === "connection"
-      ) {
-        try {
-          // A failed move may have left (or put back) panes under new IDs:
-          // reconcile from what it positively observed.
-          const ops =
-            result.status === "moved"
-              ? moveFollowOps(
-                  board().get(),
-                  route.connectionId,
-                  method === "town.move_desk" ? String(p.tab_id ?? "") : null,
-                  result,
-                  method === "town.move_desk"
-                    ? {
-                        before: colorsBefore,
-                        workspaceIds: await moveWorkspaceIds(call, result),
-                        inherited: p.inherited_color === true,
-                      }
-                    : undefined,
-                )
-              : reconcileOps(
-                  board().get(),
+            }));
+        // Keep native movement and its document reconciliation in the same queue slot.
+        if (result.status === "moved" || result.status === "failed") {
+          try {
+            const movedTab =
+              method === "town.move_desk" ? String(p.tab_id ?? "") : null;
+            const workspaceIds =
+              result.status === "moved" && movedTab
+                ? await moveWorkspaceIds(call, result)
+                : result.status === "failed" && board().get().appearance
+                  ? new Set(
+                      (
+                        (await call("workspace.list", {})) as {
+                          workspaces: { workspace_id: string }[];
+                        }
+                      ).workspaces.map((workspace) => workspace.workspace_id),
+                    )
+                  : new Set<string>();
+            const observed =
+              result.status === "moved" && board().get().appearance
+                ? (
+                    (await call("pane.list", {})) as {
+                      panes: Record<string, unknown>[];
+                    }
+                  ).panes
+                : [];
+            if (!requestIsCurrent()) throw new Error("Move runtime changed");
+            // Re-read after every asynchronous native probe so concurrent field/string edits survive.
+            const current = board().get();
+            const following =
+              result.status === "moved" && current.appearance
+                ? appearanceForMove(
+                    current,
+                    route.connectionId,
+                    observed,
+                    movedTab,
+                    result,
+                  )
+                : current;
+            const chosen = capturedMoveColors(
+              colorsBefore,
+              current,
+              route.connectionId,
+              colorChanged,
+            );
+            const carried =
+              result.status === "moved" && current.appearance
+                ? appearanceForMove(
+                    {
+                      ...current,
+                      layout: { ...current.layout, colors: chosen },
+                    },
+                    route.connectionId,
+                    observed,
+                    movedTab,
+                    result,
+                  ).layout.colors
+                : chosen;
+            const ops =
+              result.status === "moved"
+                ? moveFollowOps(
+                    following,
+                    route.connectionId,
+                    movedTab,
+                    result,
+                    movedTab
+                      ? {
+                          before: carried,
+                          workspaceIds,
+                          inherited: p.inherited_color === true,
+                        }
+                      : undefined,
+                  )
+                : reconcileOps(
+                    current,
+                    route.connectionId,
+                    result.topology ?? [],
+                  );
+            if (result.status === "failed" && current.appearance)
+              ops.push(
+                ...reconciledAppearanceOps(
+                  current,
                   route.connectionId,
                   result.topology ?? [],
-                );
-          if (ops.length) publishBoardChanged(board().patch(ops).revision);
-        } catch (error) {
-          logger.warn("Board strings did not follow a move", {
-            detail: String(error),
-          });
+                  workspaceIds,
+                ),
+              );
+            if (!requestIsCurrent()) throw new Error("Move runtime changed");
+            if (ops.length) publishBoardChanged(board().patch(ops).revision);
+          } catch (error) {
+            logger.warn("Board strings did not follow a move", {
+              detail: String(error),
+            });
+          }
         }
-      }
-      sendReply({ id, result }, method);
+        sendReply({ id, result }, method);
+      });
     } catch (error) {
       sendError(`${method}-error`, error);
     }

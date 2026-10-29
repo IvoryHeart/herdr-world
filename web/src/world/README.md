@@ -15,6 +15,48 @@ announcement for each new ask. [Import-order coverage](../storeImportOrder.test.
 and the [real Vite entry check](../appStartup.browser.test.ts) exercise fresh
 startup; notification-policy tests retain the captured host/runtime/session rules.
 
+## Shared terminal appearance
+
+[TerminalAppearanceEditor](TerminalAppearanceEditor.tsx) is composed into the
+Inspector title bar and the phone's [appearance button](TerminalAppearanceButton.tsx).
+Native tab labels come from Herdr; renaming uses qualified
+`world.appearance.rename`, with no saved shadow name. The [appearance adapter](appearance.ts)
+projects shared tab status and per-pane avatars into World, then Board, Town,
+Desk and Spaces consume those choices independently of runtime status badges.
+Town's [look resolver](town/townAppearance.ts) retains a stable per-agent look
+between frames and restores the live profile/default on reset.
+
+The shared [schema](../../../shared/appearance.ts) extends the existing Board
+document and revision notifications. `layout.colors` remains the only colour
+source. Bound records identify immutable connection, entity kind/native ID and
+terminal witnesses; they never copy the colour value. The service
+[RPC admission](../../../server/src/rpc/appearance.ts) verifies that target on
+its captured current runtime before saving a field patch. New browser tab-colour
+writes use this admission, including the Board picker; legacy browser colour
+operations cannot bypass an established binding. The existing CLI colour command
+also binds its current target; Undo compares the bound occupant as well as the
+colour, refusing old or replacement-occupant history rather than guessing.
+Native name and World metadata
+saves report their errors separately.
+
+Complete current [observations](../../../server/src/world/appearance-observation.ts)
+bind legacy colours once and learn additional continuing split terminals. They
+never rebind conflicting IDs or use offline/partial absence as deletion. Legacy
+colours have no reconstructable earlier witness; initial adoption preserves
+that existing colour on the currently observed tab. Confirmed moves and positive
+compensation evidence carry bindings with their terminals. Unknown topology
+remains unresolved. Limits are 2,048 records, 64 terminal witnesses per target,
+160 status/name characters and the existing fixed colour/avatar palettes.
+
+[Service identity tests](../../../server/src/rpc/appearance.test.ts),
+[persistence/move tests](../../../server/src/world/appearance.test.ts),
+[browser consumers](appearance.test.ts) and the
+[two-profile Chrome test](../../../server/src/world/appearance.browser.test.ts)
+cover admission, two clients, native rename failures and independent resets.
+The Chrome fixture uses the actual service handler/document store with synthetic
+Herdr responses and a test event stream; existing bridge/transport consumers
+retain responsibility for WebSocket and live Herdr behavior.
+
 ## Desk
 
 Desk follows the aggregate host filter. Receipt and screen reads capture each leaf's

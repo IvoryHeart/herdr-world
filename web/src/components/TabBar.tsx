@@ -1,3 +1,5 @@
+import { useAppearanceDocument, leafAppearance } from "../world/appearance";
+import { AppearanceAvatar } from "../world/AppearanceAvatar";
 import { shortcutTitle, useShortcutPreferences } from "../shortcutPreferences";
 import {
   shallowEqual,
@@ -134,6 +136,8 @@ export function TabBar({
       activeConnectionId: state.activeConnectionId,
       connectionGeneration: state.connectionGeneration,
       serverRuntimeGeneration: state.serverRuntimeGeneration,
+      status: state.status,
+      catalogueReady: state.catalogueReady,
       tabMoveSupported: state.tabMoveSupported,
       panes: state.panes,
       tabs: state.tabs,
@@ -149,6 +153,7 @@ export function TabBar({
   );
   const [pendingRenameTab, setPendingRenameTab] = useState<Tab | null>(null);
   const [menu, setMenu] = useState<TabMenuState | null>(null);
+  const appearance = useAppearanceDocument();
   const pinnedTabIds = useTabPins(s.activeConnectionId);
   const focusedWs = s.workspaces.find((w) => w.focused);
   const createReason = useEndpointCreationReason(
@@ -390,6 +395,26 @@ export function TabBar({
                   ? t.label
                   : `Tab ${t.number}`;
               const agentSummary = summarizeTabAgents(s.panes, t.tab_id);
+              const selectedPane =
+                s.panes.find(
+                  (pane) => pane.tab_id === t.tab_id && pane.focused,
+                ) ?? s.panes.find((pane) => pane.tab_id === t.tab_id);
+              const custom = selectedPane
+                ? leafAppearance(
+                    appearance,
+                    {
+                      connectionId: s.activeConnectionId,
+                      tabId: t.tab_id,
+                      nativeId: selectedPane.pane_id,
+                      terminalId: selectedPane.terminal_id,
+                      stale: s.status !== "connected" || !s.catalogueReady,
+                      actionable: s.status === "connected" && s.catalogueReady,
+                    },
+                    s.panes
+                      .filter((pane) => pane.tab_id === t.tab_id)
+                      .map((pane) => pane.terminal_id),
+                  )
+                : undefined;
               const pinned = pinnedTabIds.has(t.tab_id);
               const reorderHandlers = reorder.handlers(t.tab_id);
               const color = colorOf(t);
@@ -429,8 +454,11 @@ export function TabBar({
                     e.preventDefault();
                     setMenu({ tab: t, x: e.clientX, y: e.clientY });
                   }}
-                  title={t.tab_id}
+                  title={[tabName(t), custom?.status]
+                    .filter(Boolean)
+                    .join(" · ")}
                 >
+                  <AppearanceAvatar id={custom?.avatar} />
                   {agentSummary ? (
                     <span
                       className="tabbar-agent-marker"
