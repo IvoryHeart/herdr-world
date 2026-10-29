@@ -1,3 +1,6 @@
+import { pruneSnapshotAppearance } from "../world/appearance-prune";
+import { legacyAppearanceOps } from "../world/appearance-observation";
+import { handleAppearanceRpc } from "./appearance";
 import { handleBinRpc } from "./bin";
 import { handleDeskRpc } from "./desk";
 import { profileWrite } from "../agent/profile-store";
@@ -35,6 +38,7 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
     worldWatchlist,
     worldCli,
   } = rpc.services;
+  if (method.startsWith("world.appearance.")) return handleAppearanceRpc(rpc);
   if (method.startsWith("world.desk.")) return handleDeskRpc(rpc);
   if (method.startsWith("world.bin.")) return handleBinRpc(rpc);
   if (method === "world.snapshot") {
@@ -47,8 +51,47 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
         req.accept_world_snapshot_chunk_admission === true
       )
         transfer = snapshotAdmission.open(ws, id);
+      const beforeAppearanceRead = board().get();
       const snapshot = await snapshots.snapshot(params);
+      void pruneSnapshotAppearance(
+        board(),
+        beforeAppearanceRead,
+        snapshot,
+        (connectionId, generation) => {
+          const lease = connectionManager.readyRuntimeLease(connectionId);
+          return lease && lease.generation === generation && lease.isCurrent()
+            ? {
+                call: (method, params) =>
+                  lease.runtime.herdr.call(method, params, 10_000),
+                isCurrent: () => lease.isCurrent(),
+              }
+            : null;
+        },
+        publishBoardChanged,
+      ).catch((error) =>
+        logger.warn("World could not prune absent appearance", {
+          detail: String(error),
+        }),
+      );
       recordSpawnClaims(board(), snapshot, publishBoardChanged, logger);
+      try {
+        const appearanceOps = legacyAppearanceOps(
+          board().get(),
+          snapshot,
+          (connectionId, generation) => {
+            const lease = connectionManager.readyRuntimeLease(connectionId);
+            return Boolean(
+              lease && lease.generation === generation && lease.isCurrent(),
+            );
+          },
+        );
+        if (appearanceOps.length)
+          publishBoardChanged(board().patch(appearanceOps).revision);
+      } catch (error) {
+        logger.warn("World could not bind legacy tab colours", {
+          detail: String(error),
+        });
+      }
       await sendWorldSnapshotReply(
         id,
         snapshot,
@@ -88,6 +131,7 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
     try {
       const { ops, observed } = clientBoardOps(
         (params as { ops?: unknown } | undefined)?.ops,
+        board().get(),
       );
       const result = board().patch(ops);
       publishBoardChanged(result.revision);

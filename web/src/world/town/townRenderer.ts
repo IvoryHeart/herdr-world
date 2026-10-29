@@ -54,8 +54,9 @@ import {
 } from "./townLayout";
 import type { TownModel } from "./townModel";
 import { TERMINAL_COLOR_HEX, type TerminalColor } from "../terminalColor";
-import { textureOf, townLooks } from "./townTextures";
+import { textureOf } from "./townTextures";
 import type { TownOverlay } from "./townBusLayer";
+import { createTownLookResolver } from "./townAppearance";
 import {
   paintTownFacade,
   paintTownGround,
@@ -771,8 +772,8 @@ export async function createTownRenderer(
     };
   };
 
-  // A profile's look, else one derived from the agent's identity.
-  const lookOf = townLooks(() => model?.agents);
+  const resolveLook = createTownLookResolver();
+  const lookOf = (key: string) => resolveLook(model?.agents.get(key), key);
 
   const resting = (agent: { semanticStatus: string }) =>
     agent.semanticStatus === "idle" || agent.semanticStatus === "unknown";

@@ -28,7 +28,10 @@ test("a closed tab drops its colour and pin; a closed pane drops gone terminals'
   ]);
   const revisions: number[] = [];
   const host = {
-    call: async () => ({ panes: [] }),
+    call: async (method: string) => {
+      if (method === "tab.get") throw new Error("tab_not_found: closed");
+      return { panes: [] };
+    },
     isCurrent: () => true,
     changed: (revision: number) => revisions.push(revision),
   };
@@ -50,3 +53,134 @@ test("a closed tab drops its colour and pin; a closed pane drops gone terminals'
   await settle();
   expect(revisions.length).toBe(2);
 });
+
+test("a delayed close cannot erase a reused tab's current colour or pin", async () => {
+  const board = new BoardStore(join(root, "board.json"));
+  board.patch([
+    { op: "card.color", key: "conn-a:tab:w1", color: "teal" },
+    { op: "desk.pin", key: "conn-a:tab:w1", cell: null },
+  ]);
+  const before = board.get();
+  await afterHerdrClose(
+    board,
+    "conn-a",
+    "tab_closed",
+    { data: { tab_id: "w1" } },
+    {
+      call: async (method: string) =>
+        method === "tab.get" ? { tab: { tab_id: "w1" } } : { panes: [] },
+      isCurrent: () => true,
+      changed: () => {
+        throw new Error("a reused tab must retain its settings");
+      },
+    },
+  );
+  expect(board.get()).toEqual(before);
+});
+
+for (const concurrentRead of ["tab.get", "workspace.get"])
+  test(`closed tab cleanup rechecks after an unrelated write during ${concurrentRead}`, async () => {
+    const board = new BoardStore(join(root, "board.json"));
+    const key = concurrentRead === "tab.get" ? "conn-a:tab:w1" : "conn-a:w1";
+    board.patch([
+      { op: "card.color", key, color: "green" },
+      { op: "desk.pin", key, cell: null },
+    ]);
+    let wrote = false;
+    await afterHerdrClose(
+      board,
+      "conn-a",
+      "tab_closed",
+      { data: { tab_id: "w1" } },
+      {
+        call: async (method) => {
+          if (method === concurrentRead && !wrote) {
+            wrote = true;
+            board.patch([
+              { op: "desk.pin", key: "conn-a:tab:other", cell: null },
+            ]);
+          }
+          if (method === "tab.get") throw new Error("tab_not_found: closed");
+          if (method === "workspace.get")
+            throw new Error("workspace_not_found: closed");
+          return { panes: [] };
+        },
+        isCurrent: () => true,
+        changed: () => {},
+      },
+    );
+    expect(wrote).toBe(true);
+    expect(board.get().layout.colors[key]).toBeUndefined();
+    expect(board.get().layout.desk_pins[key]).toBeUndefined();
+    expect(board.get().layout.desk_pins["conn-a:tab:other"]).toBeDefined();
+  });
+
+test("a close retry preserves a replacement tab and its newer settings", async () => {
+  const board = new BoardStore(join(root, "board.json"));
+  const key = "conn-a:tab:w1";
+  board.patch([
+    { op: "card.color", key, color: "green" },
+    { op: "desk.pin", key, cell: null },
+  ]);
+  let reads = 0;
+  await afterHerdrClose(
+    board,
+    "conn-a",
+    "tab_closed",
+    { data: { tab_id: "w1" } },
+    {
+      call: async (method) => {
+        if (method === "tab.get") {
+          reads++;
+          if (reads === 1) {
+            board.patch([{ op: "card.color", key, color: "teal" }]);
+            throw new Error("tab_not_found: closed");
+          }
+          return { tab: { tab_id: "w1" } };
+        }
+        return { panes: [] };
+      },
+      isCurrent: () => true,
+      changed: () => {},
+    },
+  );
+  expect(reads).toBe(2);
+  expect(board.get().layout.colors[key]).toBe("teal");
+  expect(board.get().layout.desk_pins[key]).toBeDefined();
+});
+
+for (const mode of ["contention", "retirement"])
+  test(`close retries stay bounded and preserve settings on ${mode}`, async () => {
+    const board = new BoardStore(join(root, "board.json"));
+    const key = "conn-a:tab:w1";
+    board.patch([
+      { op: "card.color", key, color: "green" },
+      { op: "desk.pin", key, cell: null },
+    ]);
+    let reads = 0,
+      current = true;
+    await afterHerdrClose(
+      board,
+      "conn-a",
+      "tab_closed",
+      { data: { tab_id: "w1" } },
+      {
+        call: async (method) => {
+          if (method === "tab.get") {
+            reads++;
+            board.patch([
+              { op: "desk.pin", key: `conn-a:tab:other-${reads}`, cell: null },
+            ]);
+            if (mode === "retirement") current = false;
+            throw new Error("tab_not_found: closed");
+          }
+          return { panes: [] };
+        },
+        isCurrent: () => current,
+        changed: () => {},
+      },
+    );
+    expect(reads).toBe(mode === "contention" ? 3 : 1);
+    expect(board.get().layout.colors[key]).toBe("green");
+    expect(board.get().layout.desk_pins[key]).toBeDefined();
+  });

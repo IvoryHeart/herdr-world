@@ -1,3 +1,6 @@
+import { AppearanceAvatar } from "./AppearanceAvatar";
+import { visibleAppearanceColors, saveAppearance } from "./appearance";
+import { tabCardKey } from "../../../shared/terminalColor";
 import { useWorldAsks } from "./worldAsks";
 import { asksForWorld } from "./worldAskTargets";
 import { WorldAskMark } from "./WorldAskMark";
@@ -3204,7 +3207,16 @@ export default function BoardView({
    * Colours the user chose. A tab is a terminal and always has its terminal
    * colour (terminalColor.ts): its own, its workspace's, or the default.
    */
-  const cardColors = saved?.layout.colors ?? NO_CARD_COLORS;
+  const cardColors = useMemo(
+    () =>
+      saved
+        ? visibleAppearanceColors(
+            saved,
+            world.hosts.map((host) => host.connection),
+          )
+        : NO_CARD_COLORS,
+    [saved, world.hosts],
+  );
   const shownColors = useMemo(
     () => withInheritedColors(cardColors, related.relations, related.places),
     [cardColors, related],
@@ -3227,8 +3239,38 @@ export default function BoardView({
   useEffect(() => {
     invalidate("bar");
   }, [noteSelected, colorKey]);
-  const setCardColor = (key: string, color: CardColor | null) =>
-    void report(boardStore.patch([{ op: "card.color", key, color }]));
+  const setCardColor = (key: string, color: CardColor | null) => {
+    const tab = model.tabByKey.get(key),
+      leaf = tab?.panes[0]?.leaf;
+    if (tab && !leaf) {
+      void report(Promise.resolve("Terminal appearance is unavailable"));
+      return;
+    }
+    void report(
+      leaf && tab
+        ? saveAppearance(
+            {
+              connection_id: leaf.connectionId,
+              connection_generation: leaf.generation,
+              kind: "tab",
+              native_id: leaf.tabId,
+              witness: tab.panes.map((pane) => pane.leaf.terminalId),
+              color_key: tabCardKey(
+                leaf.connectionId,
+                leaf.tabId,
+                new Set(
+                  world.spaces
+                    .filter((space) => space.connectionId === leaf.connectionId)
+                    .map((space) => space.nativeId),
+                ),
+              ),
+            },
+            { color },
+            boardStore,
+          )
+        : boardStore.patch([{ op: "card.color", key, color }]),
+    );
+  };
   // Stable, so zones whose colour is unchanged skip rendering their pickers.
   const setCardColorRef = useRef(setCardColor);
   setCardColorRef.current = setCardColor;
@@ -3570,6 +3612,7 @@ export default function BoardView({
                     ) : (
                       <span className="board-dot" />
                     )}
+                    <AppearanceAvatar id={pane?.leaf.appearance?.avatar} />
                     <span className="board-label">{tab.label}</span>
                     {!multi && pane ? (
                       <WorldAskMark ask={asking.get(pane.leaf.id)} />
@@ -3606,6 +3649,9 @@ export default function BoardView({
                             </span>
                           )}
                           <span className="board-pane-name">
+                            <AppearanceAvatar
+                              id={row.leaf.appearance?.avatar}
+                            />
                             {paneName(row)}
                             <WorldAskMark ask={asking.get(row.leaf.id)} />
                           </span>
@@ -3636,6 +3682,14 @@ export default function BoardView({
                         : STATUS_LABEL[tab.status]}
                     </div>
                   )}
+                  {pane?.leaf.appearance?.status ? (
+                    <div
+                      className="appearance-status"
+                      title={pane.leaf.appearance.status}
+                    >
+                      {pane.leaf.appearance.status}
+                    </div>
+                  ) : null}
                   <span className="board-badge" aria-hidden="true" />
                   <span
                     className="board-handle"
