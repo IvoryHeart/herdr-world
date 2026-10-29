@@ -58,6 +58,11 @@ export type BinOutcome = {
 };
 
 export type BinState = {
+  /**
+   * This service run. A restart starts revisions and entries again, so a
+   * browser takes the new run's state whatever its revision.
+   */
+  epoch: string;
   revision: number;
   /** Opening the bin, or holding the bus, pauses every timer in it. */
   paused: boolean;
@@ -67,6 +72,7 @@ export type BinState = {
 };
 
 export const EMPTY_BIN: BinState = {
+  epoch: "",
   revision: 0,
   paused: false,
   entries: [],

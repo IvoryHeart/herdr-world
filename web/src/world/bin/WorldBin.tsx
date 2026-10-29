@@ -141,7 +141,11 @@ export function WorldBin({
       );
     } else {
       setOpen(true);
-      void pauseBin().catch((error) => report(String(error?.message ?? error)));
+      // The timers run on until the service confirms the pause.
+      void pauseBin().catch((error) => {
+        setOpen(false);
+        report(String(error?.message ?? error));
+      });
     }
   };
   const putBack = (entry: BinEntry, at: { x: number; y: number } | null) => {
@@ -235,6 +239,7 @@ export function WorldBin({
       {open && holding && (
         <BinTray
           entries={bin.entries}
+          paused={bin.paused}
           timeLeft={(entry) => binTimeLeft(entry, current)}
           onShut={toggle}
           onPutBack={putBack}
@@ -257,6 +262,7 @@ export function WorldBin({
 
 function BinTray({
   entries,
+  paused,
   timeLeft,
   onShut,
   onPutBack,
@@ -265,6 +271,8 @@ function BinTray({
   className,
 }: {
   entries: readonly BinEntry[];
+  /** The service's pause, not this click's wish. */
+  paused: boolean;
   timeLeft: (entry: BinEntry) => number;
   onShut: () => void;
   onPutBack: (entry: BinEntry, at: { x: number; y: number } | null) => void;
@@ -314,7 +322,7 @@ function BinTray({
       aria-label="Bin contents"
     >
       <header>
-        <b>Bin · paused</b>
+        <b>{paused ? "Bin · paused" : "Bin · pausing…"}</b>
         <small>{entries.length} inside</small>
         <button type="button" className="world-bin-button" onClick={onShut}>
           Close lid

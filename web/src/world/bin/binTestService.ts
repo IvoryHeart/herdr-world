@@ -14,6 +14,8 @@ export function fakeBinService(countdownMs = 30_000) {
   let outcomes: BinState["outcomes"] = [];
   let next = 1;
   const calls: { method: string; params: Record<string, unknown> }[] = [];
+  /** Methods whose next call fails before reaching the service. */
+  const failing = new Set<string>();
   const controls = new Set<(control: BridgeControlMsg) => void>();
   /** Each entry's deadline while the bin runs, as the service keeps it. */
   const deadlines = new Map<string, number>();
@@ -22,6 +24,7 @@ export function fakeBinService(countdownMs = 30_000) {
       ? entry.remaining_ms
       : Math.max(0, (deadlines.get(entry.id) ?? 0) - performance.now());
   const state = (): BinState => ({
+    epoch: "fake",
     revision,
     paused,
     entries: entries.map((entry) => ({ ...entry, remaining_ms: left(entry) })),
@@ -59,9 +62,15 @@ export function fakeBinService(countdownMs = 30_000) {
       entries = [];
       outcomes = [];
       calls.length = 0;
+      failing.clear();
       void refreshBin();
     },
+    failNext(method: string) {
+      failing.add(method);
+    },
     async call(method: string, params: Record<string, unknown> = {}) {
+      if (failing.delete(method))
+        throw new Error("The World service is not reachable");
       calls.push({ method, params });
       if (method === "world.bin.add") {
         const join = entries.find((entry) => entry.id === params.join);

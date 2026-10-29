@@ -39,6 +39,8 @@ let state: WorldBinState = {
 const listeners = new Set<() => void>();
 const outcomeListeners = new Set<(outcome: BinOutcome) => void>();
 const seenOutcomes = new Set<string>();
+/** Service runs that have ended: a late reply from one is never shown again. */
+const retiredEpochs = new Set<string>();
 let users = 0;
 let unlisten: (() => void)[] = [];
 let clientOverride: BinClient | null = null;
@@ -46,6 +48,13 @@ let clientOverride: BinClient | null = null;
 /** Tests (and harness pages) supply their own bridge. */
 export function configureBinClient(client: BinClient | null) {
   clientOverride = client;
+}
+
+/** Forget everything heard (tests). */
+export function resetBinStore() {
+  state = { bin: EMPTY_BIN, receivedAt: 0, loaded: false, error: null };
+  seenOutcomes.clear();
+  retiredEpochs.clear();
 }
 
 async function client(): Promise<BinClient> {
@@ -62,6 +71,7 @@ function parse(value: unknown): BinState | null {
   )
     return null;
   return {
+    epoch: typeof v.epoch === "string" ? v.epoch : "",
     revision: v.revision as number,
     paused: v.paused,
     entries: v.entries.filter(
@@ -77,7 +87,14 @@ function parse(value: unknown): BinState | null {
 
 function accept(value: unknown) {
   const bin = parse(value);
-  if (!bin || (state.loaded && bin.revision < state.bin.revision)) return;
+  if (!bin || retiredEpochs.has(bin.epoch)) return;
+  // A restarted service counts revisions and names entries afresh: take its
+  // state whatever its revision, and never the old run's again.
+  const restarted = state.loaded && bin.epoch !== state.bin.epoch;
+  if (restarted) {
+    retiredEpochs.add(state.bin.epoch);
+    seenOutcomes.clear();
+  } else if (state.loaded && bin.revision < state.bin.revision) return;
   const first = !state.loaded;
   state = { bin, receivedAt: performance.now(), loaded: true, error: null };
   for (const outcome of bin.outcomes) {
@@ -116,9 +133,10 @@ export function useWorldBin() {
         if (!users || unlisten.length) return;
         unlisten = [
           b.onControl((control) => {
+            // A lower revision is a restarted service, not an old change.
             if (
               control.type === "world_bin_changed" &&
-              (control.revision ?? 0) > state.bin.revision
+              control.revision !== state.bin.revision
             )
               void refreshBin();
           }),

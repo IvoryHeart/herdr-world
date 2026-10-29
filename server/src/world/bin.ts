@@ -48,12 +48,16 @@ const realClock: BinClock = {
  * waits for the earliest deadline; the close itself is `close`.
  */
 export class WorldBinRegistry {
+  /** Names this service run; entry IDs carry it, so no stale ID names a later agent. */
+  private readonly epoch = crypto.randomUUID().slice(0, 8);
   private revision = 0;
   private paused = false;
   private entries = new Map<string, Pending>();
   private outcomes: BinOutcome[] = [];
   private timer: unknown = null;
   private nextId = 1;
+  /** Closes run one at a time, so each reads the panes the previous close left. */
+  private closing: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly close: BinClose,
@@ -64,6 +68,7 @@ export class WorldBinRegistry {
   list(): BinState {
     const now = this.clock.now();
     return {
+      epoch: this.epoch,
       revision: this.revision,
       paused: this.paused,
       entries: [...this.entries.values()].map(({ deadline, ...entry }) => ({
@@ -97,7 +102,7 @@ export class WorldBinRegistry {
       : 0;
     const remaining =
       joined && joinedLeft >= MIN_JOIN_MS ? joinedLeft : durationMs;
-    const id = `bin-${this.nextId++}`;
+    const id = `bin-${this.epoch}-${this.nextId++}`;
     this.entries.set(id, {
       ...target,
       id,
@@ -150,7 +155,7 @@ export class WorldBinRegistry {
     for (const entry of due) this.entries.delete(entry.id);
     if (!this.entries.size) this.paused = false;
     this.changed();
-    for (const entry of due) void this.run(entry);
+    for (const entry of due) this.queue(entry);
     return this.list();
   }
 
@@ -216,7 +221,21 @@ export class WorldBinRegistry {
     if (!due.length) return this.schedule();
     for (const entry of due) this.entries.delete(entry.id);
     this.changed();
-    for (const entry of due) void this.run(entry);
+    for (const entry of due) this.queue(entry);
+  }
+
+  /**
+   * Two panes of one workspace closing together must not both see two panes
+   * and both send pane.close: the second is the workspace's last pane.
+   */
+  private queue(entry: Pending) {
+    // run records its own failures; nothing may stop later closes.
+    this.closing = this.closing.then(() => this.run(entry)).catch(() => {});
+  }
+
+  /** Settles once every queued close has finished (tests). */
+  settled() {
+    return this.closing;
   }
 
   private async run(entry: Pending) {

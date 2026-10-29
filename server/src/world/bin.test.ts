@@ -158,6 +158,16 @@ describe("WorldBinRegistry", () => {
     expect(closed.map((entry) => entry.pane_id)).toEqual(["p2"]);
   });
 
+  test("entry IDs name this service run, so a restart never reuses one", () => {
+    const first = setup().bin;
+    const second = setup().bin;
+    const a = first.add(target("p1"), 30_000);
+    const b = second.add(target("p1"), 30_000);
+    expect(a.epoch).not.toBe(b.epoch);
+    expect(a.entries[0]!.id).not.toBe(b.entries[0]!.id);
+    expect(a.entries[0]!.id.startsWith(`bin-${a.epoch}-`)).toBe(true);
+  });
+
   test("rejects an unqualified target", () => {
     const { bin } = setup();
     expect(() => bin.add({ ...target("p1"), pane_id: "" }, 10_000)).toThrow(
@@ -212,6 +222,37 @@ describe("closeBinEntry", () => {
     });
     expect(calls.filter(([method]) => method !== "pane.list")).toEqual([
       ["pane.close", { pane_id: "p2" }],
+    ]);
+  });
+
+  test("closes due together run one at a time, so the last pane closes its workspace", async () => {
+    const { lease, calls } = herdr([pane("p1"), pane("p2")]);
+    const slow = {
+      ...lease,
+      // Herdr answers a moment later, as it does for a real close.
+      call: async (method: string, params: Record<string, unknown>) => {
+        await new Promise((resolve) => setTimeout(resolve, 1));
+        return lease.call(method, params);
+      },
+    };
+    const bin = new WorldBinRegistry(
+      (entry) => closeBinEntry(entry, slow),
+      () => {},
+      fakeClock().clock,
+    );
+    bin.add(target("p1"), 30_000);
+    bin.add(target("p2"), 30_000);
+    bin.closeNow("all");
+    await bin.settled();
+    expect(calls.filter(([method]) => method !== "pane.list")).toEqual([
+      ["pane.close", { pane_id: "p1" }],
+      ["workspace.close", { workspace_id: "w1" }],
+    ]);
+    expect(
+      bin.list().outcomes.map(({ result, closed_tab }) => [result, closed_tab]),
+    ).toEqual([
+      ["closed", false],
+      ["closed", true],
     ]);
   });
 

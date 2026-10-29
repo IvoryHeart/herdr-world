@@ -2184,9 +2184,14 @@ and dragging a card out of it SHALL put the agent back. A selected tab card's
 bar SHALL offer Close agent… with the same countdown. Town SHALL use a London bus
 stop: an agent dropped there, or sent from its peek, waits at the stop; a bus
 drawn in screen space enters at one edge, collects everyone at the stop, and
-leaves by the other edge when the countdown ends. Pressing and holding the bus
-SHALL stop it with its doors open, and dragging a passenger off SHALL put them
-back at their desk; an empty bus SHALL leave at once. Drops, closes and returns
+leaves by the other edge when the countdown ends. A bus seats five; more
+riders SHALL take more buses, and parked buses SHALL stand apart so every
+passenger stays visible. Pressing and holding the bus SHALL stop it with its
+doors open in every open World until one of them lets it go, and dragging a
+passenger off SHALL put them back at their desk; an empty bus SHALL leave at
+once. Countdowns belong to one service run: after a restart, World SHALL show
+only the new run's bin, and no control from before it SHALL act on an agent
+added after it. Closes that fall due together SHALL run one at a time. Drops, closes and returns
 SHALL play World's sounds under this device's sound setting, and motion SHALL
 stop under reduced motion.
 

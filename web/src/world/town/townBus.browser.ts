@@ -150,4 +150,96 @@ export async function checkTownBus(
       ),
     "the close never showed its receipt",
   );
+
+  const parked = () =>
+    (renderer.bus?.buses ?? []).filter((item) => !item.departing);
+  const holdBus = async (index = 0) => {
+    const target = parked()[index]!;
+    point("pointerdown", target.x + target.w / 2, target.y + target.h * 0.75);
+    await pause(500);
+    point("pointerup", target.x + target.w / 2, target.y + target.h * 0.75);
+    await waitFor(() => renderer.bus!.held, "the bus was not held");
+  };
+
+  // Another World resumes the bin: the bus held here drives on too.
+  sendToBusStop(agentKey);
+  await waitFor(
+    () => parked()[0]?.passengers === 1,
+    "the agent never boarded a third time",
+  );
+  await holdBus();
+  await waitFor(() => bin.state().paused, "the hold never paused the bin");
+  await bin.call("world.bin.resume");
+  await waitFor(
+    () => !renderer.bus!.held && !host.querySelector(".town-bus-held"),
+    "a resume from another World left this bus held",
+  );
+  bin.expire(bin.entries()[0]!.id);
+  await waitFor(() => parked().length === 0, "the third bus never left");
+
+  // More passengers than a bus seats, and a second, later trip: every
+  // passenger has a seat, no bus hides another, and the one pressed is the
+  // one that gets off.
+  const rider = (index: number, join?: string) =>
+    bin.call("world.bin.add", {
+      connection_id: "local",
+      connection_generation: 1,
+      workspace_id: "w-bus",
+      tab_id: `t-bus-${index}`,
+      pane_id: `p-bus-${index}`,
+      terminal_id: `term-bus-${index}`,
+      label: `rider ${index}`,
+      view: "board",
+      join,
+    });
+  const riders = phone ? 1 : 6;
+  await rider(0);
+  const first = bin.entries()[0]!.id;
+  for (let i = 1; i < riders; i += 1) await rider(i, first);
+  await waitFor(
+    () =>
+      parked().reduce((sum, item) => sum + item.passengers, 0) === riders &&
+      parked().every((item) => item.passengers <= 5),
+    () =>
+      `${riders} riders sat ${JSON.stringify(parked().map((item) => item.passengers))}`,
+  );
+  await rider(riders);
+  const late = bin.entries()[bin.entries().length - 1]!.id;
+  await waitFor(
+    () => parked().length === (phone ? 2 : 3),
+    () => `the later trip ran ${parked().length} buses`,
+  );
+  const boxes = parked();
+  check(
+    boxes.every((a, i) =>
+      boxes.every((b, j) => i === j || a.x + a.w <= b.x || b.x + b.w <= a.x),
+    ),
+    `parked buses overlap: ${JSON.stringify(boxes.map((item) => [item.x, item.w]))}`,
+  );
+  const lateBus = parked().length - 1;
+  await waitFor(
+    () => parked()[lateBus]?.passengers === 1,
+    "the later bus never took its rider aboard",
+  );
+  await holdBus(0);
+  const lateSeat = parked()[lateBus]!.seats[0]!;
+  const restores = calls("world.bin.restore");
+  point("pointerdown", lateSeat.x, lateSeat.y);
+  for (let i = 1; i <= 8; i++) {
+    point("pointermove", lateSeat.x - i * 10, lateSeat.y - i * 30);
+    await pause(16);
+  }
+  point("pointerup", lateSeat.x - 80, lateSeat.y - 240);
+  await waitFor(
+    () => calls("world.bin.restore") === restores + 1,
+    "the later rider never got off",
+  );
+  const restored = bin.calls.filter(
+    (call) => call.method === "world.bin.restore",
+  );
+  check(
+    restored[restored.length - 1]!.params.id === late,
+    "dragging the later rider off restored a different agent",
+  );
+  bin.reset();
 }

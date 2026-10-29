@@ -76,6 +76,8 @@ export class TownBusLayer implements TownOverlay {
   private bin: WorldBinState | null = null;
   private agentOf = new Map<string, string>();
   private heldAt: number | null = null;
+  /** Held here, and the service has not yet confirmed the pause. */
+  private holdPending = false;
   private trips: BusTrip[] = [];
   private nextChange: ReturnType<typeof setTimeout> | null = null;
   private status = { x: 0, y: 0, text: "", visible: false, bus: "" };
@@ -94,8 +96,13 @@ export class TownBusLayer implements TownOverlay {
   setBin(bin: WorldBinState, agentOf: Map<string, string>) {
     this.bin = bin;
     this.agentOf = agentOf;
-    if (!bin.bin.paused && this.heldAt !== null && !bin.bin.entries.length)
+    // The service's pause decides: once confirmed, a resume from any World
+    // (or an empty bin) lets the bus go here too.
+    if (bin.bin.paused) this.holdPending = false;
+    else if (!this.holdPending || !bin.bin.entries.length) {
       this.heldAt = null;
+      this.holdPending = false;
+    }
     this.hidden = new Set(
       bin.bin.entries.flatMap((entry) => agentOf.get(entry.id) ?? []),
     );
@@ -104,11 +111,14 @@ export class TownBusLayer implements TownOverlay {
 
   /** Press and hold: freeze the bus at once, before the service pauses. */
   hold() {
+    if (this.heldAt === null && !this.bin?.bin.paused) this.holdPending = true;
     this.heldAt ??= performance.now();
     this.invalidate();
   }
+  /** Let the bus go, or undo a hold the service refused. */
   release() {
     this.heldAt = null;
+    this.holdPending = false;
     this.invalidate();
   }
   get held() {
@@ -134,7 +144,8 @@ export class TownBusLayer implements TownOverlay {
     for (const item of this.waiting)
       if (inside(item.rect, x, y)) return item.entry;
     if (!this.held) return null;
-    for (const bus of this.buses)
+    // The bus drawn last is on top.
+    for (const bus of [...this.buses].reverse())
       for (const seat of bus.seats)
         if (inside(seat.rect, x, y)) return seat.entry;
     return null;
@@ -204,32 +215,50 @@ export class TownBusLayer implements TownOverlay {
     let moving = false;
     const kept: BusView[] = [];
     const waiting: BinEntry[] = [];
+    // Parked buses stand side by side from the stop, right while there is
+    // room and then left, so none hides another or its passengers.
+    const pitch = BUS_W * z + 6;
+    const rightSlots = Math.max(
+      1,
+      Math.floor((width - BUS_W * z - 8 - stopLeft) / pitch) + 1,
+    );
+    const slotX = (slot: number) =>
+      slot < rightSlots
+        ? stopLeft + slot * pitch
+        : stopLeft - (slot - rightSlots + 1) * pitch;
+    let slot = 0;
     for (const trip of this.trips) {
       const pose = quiet
         ? { phase: "wait" as BusPhase, t: 0 }
         : busPhase(trip.durationMs, trip.leftMs);
       if (pose.phase === "arrive") waiting.push(...trip.entries);
-      const view =
-        this.buses.find(
-          (bus) =>
-            !bus.departing &&
-            trip.entries.some((entry) => bus.ids.has(entry.id)),
-        ) ?? this.newBus();
-      view.ids = new Set(trip.entries.map((entry) => entry.id));
-      view.x = busX(pose, from, stopLeft, to);
       const open = pose.phase === "wait" || this.held;
       const driving = pose.phase !== "wait" && !this.held;
       moving ||= driving && !bin?.bin.paused;
-      this.drawBus(
-        view,
-        open,
-        driving,
-        road,
-        z,
-        pose.phase === "arrive" ? [] : trip.entries,
-        look,
-      );
-      kept.push(view);
+      // A bus seats five: a bigger trip runs as many buses as it needs.
+      for (let i = 0; i < trip.entries.length; i += BUS_WINDOWS.length) {
+        const load = trip.entries.slice(i, i + BUS_WINDOWS.length);
+        const view =
+          this.buses.find(
+            (bus) =>
+              !bus.departing &&
+              !kept.includes(bus) &&
+              load.some((entry) => bus.ids.has(entry.id)),
+          ) ?? this.newBus();
+        view.ids = new Set(load.map((entry) => entry.id));
+        view.x = busX(pose, from, slotX(slot), to);
+        slot += 1;
+        this.drawBus(
+          view,
+          open,
+          driving,
+          road,
+          z,
+          pose.phase === "arrive" ? [] : load,
+          look,
+        );
+        kept.push(view);
+      }
     }
     for (const bus of this.buses) {
       if (kept.includes(bus)) continue;

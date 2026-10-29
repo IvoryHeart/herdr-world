@@ -2594,10 +2594,22 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         Boolean(host.querySelector(".world-bin-holding .world-bin-seconds")),
         "the bin stays out with its countdown while it holds anything",
       );
+      // A pause the service never confirms leaves the bin shut and running.
+      bin.failNext("world.bin.pause");
       host.querySelector<HTMLButtonElement>(".world-bin-can")!.click();
       await waitFor(
-        () => Boolean(host.querySelector(".world-bin-tray")),
-        "clicking the bin opens it",
+        () =>
+          !host.querySelector(".world-bin-tray") &&
+          Boolean(host.querySelector(".world-bin-toast")) &&
+          !bin.state().paused,
+        "a rejected pause still showed a paused bin",
+      );
+      host.querySelector<HTMLButtonElement>(".world-bin-can")!.click();
+      await waitFor(
+        () =>
+          host.querySelector(".world-bin-tray b")?.textContent ===
+          "Bin · paused",
+        "clicking the bin opens it, paused",
       );
       check(
         bin.calls.some((c) => c.method === "world.bin.pause"),
