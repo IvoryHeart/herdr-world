@@ -38,7 +38,9 @@ Inspector through the existing session-checked focus queue. Stale or replaced
 occupants remain explained and disabled; existing Inspector ownership is unchanged.
 Desktop and phone shell consumers run in [HostsFilter.test.ts](HostsFilter.test.ts)
 with the [reveal acceptance](testing/deskRevealAcceptance.ts); finite admission
-and retirement cases run in [deskReveal.test.ts](deskReveal.test.ts). Pending reads keep
+and retirement cases run in [deskReveal.test.ts](deskReveal.test.ts). Shell reveal
+cases minimize the phone Inspector through its menu and check actual viewport
+bounds and pointer hits for host chips and expanded reveal actions. Pending reads keep
 their admission across refreshes; queued work coalesces to the latest observation.
 
 | Task | Open these owners | Focused evidence |

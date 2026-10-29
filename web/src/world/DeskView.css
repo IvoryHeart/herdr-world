@@ -728,9 +728,6 @@ button.desk-host {
 .desk.has-reading .desk-lane ol {
   overflow: visible;
 }
-.desk.has-reading .desk-hosts {
-  display: none;
-}
 .desk.has-reading .desk-summary {
   flex-wrap: nowrap;
 }
@@ -780,8 +777,8 @@ button.desk-host {
     font-size: 20px;
   }
   .desk-hosts {
-    flex: 0 0 auto;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
+    justify-content: flex-start;
   }
   .desk-modes {
     width: 100%;

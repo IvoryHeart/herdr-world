@@ -379,7 +379,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     answer, review, or watch. Expand an outside-filter host's summary chip to see
     its agents. **Reveal & open [agent] on [host]** explicitly adds that host to
     Hosts and opens that exact agent's Inspector while preserving existing open
-    resources. Cached, unavailable or replaced agents explain why they cannot open.
+    resources. Host controls remain visible beside a reading pane and wrap below
+    the counts on phones. Cached, unavailable or replaced agents explain why they
+    cannot open.
 - **Spaces** is the focused operational workspace: terminals, files, changes,
   annotations, worktrees, and Agent History for one selected connection.
 - **Town**, **Board** and **Desk** show the aggregate of local and SSH hosts.

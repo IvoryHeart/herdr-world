@@ -2540,7 +2540,15 @@ async function run() {
   };
   bridge.onControl = () => () => {};
   bridge.onEvent = () => () => {};
-  bridge.onTerminal = () => () => {};
+  const terminalListeners = new Set<
+    (push: import("../api").TerminalPush) => void
+  >();
+  bridge.onTerminal = (listener) => {
+    terminalListeners.add(listener);
+    return () => {
+      terminalListeners.delete(listener);
+    };
+  };
   bridge.onTerminalClipboard = () => () => {};
   bridge.onTerminalClosed = () => () => {};
   const client: ConnectionClient = {
@@ -2552,6 +2560,8 @@ async function run() {
     call: async (method, params = {}) => {
       calls.push(method);
       globals.push({ method, params });
+      if (operation === "desk-reveal" && method.startsWith("world.desk."))
+        return { revision: 0, records: [] };
       if (method === "world.snapshot")
         return operation === "worktree-resource-cold" && resourceWorkspaceOpen
           ? coldObservation.promise
@@ -2766,6 +2776,19 @@ async function run() {
         };
       if (method === "terminal.attach") {
         calls.push(`attached:${id}`);
+        if (operation === "desk-reveal")
+          for (const listener of terminalListeners)
+            listener({
+              connection_id: id,
+              connection_generation: generation ?? undefined,
+              terminal_id: String(params.terminal_id ?? "shared"),
+              width: Number(params.cols ?? 80),
+              height: Number(params.rows ?? 24),
+              full: true,
+              bytes: btoa(
+                `Synthetic ${id} fixture terminal\r\nNo live agent output.\r\n`,
+              ),
+            });
         return {
           endpoint: {
             methods: [

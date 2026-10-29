@@ -907,21 +907,21 @@ export function DeskBoard({
             <strong>{quiet.length}</strong>
             <span>quiet</span>
           </button>
-          <DeskOtherHosts
-            world={aggregate ?? world}
-            filtered={world}
-            label={hostLabel}
-            onReveal={
-              onReveal
-                ? async (leaf) => {
-                    cancelPreview();
-                    await onReveal(leaf);
-                    void recordOpen(leaf);
-                  }
-                : undefined
-            }
-          />
         </div>
+        <DeskOtherHosts
+          world={aggregate ?? world}
+          filtered={world}
+          label={hostLabel}
+          onReveal={
+            onReveal
+              ? async (leaf) => {
+                  cancelPreview();
+                  await onReveal(leaf);
+                  void recordOpen(leaf);
+                }
+              : undefined
+          }
+        />
         <div className="desk-controls">
           <div className="desk-modes" role="tablist" aria-label="Desk views">
             {DESK_MODES.map((candidate) => (

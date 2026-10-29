@@ -656,7 +656,9 @@ that exact stop across those browsers. **Agents** lists all agents in your Hosts
 filter, with recently opened agents shared too. **Reviewed** shows each agent's
 latest marked stop while it remains idle or done; older stops are not retained.
 
-Hosts outside the filter appear as summary chips. Select a host chip to see its
+Hosts outside the filter appear as summary chips, including beside an open Desk
+reading pane. On phones, the host chips and expanded list wrap below the counts.
+Select a host chip to see its
 observed agents, then choose **Reveal & open [agent] on [host]**. This explicitly
 adds that host to your current Hosts selection and opens the selected agent's
 Inspector; previously opened Inspectors keep their own hosts and resources.

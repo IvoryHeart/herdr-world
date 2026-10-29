@@ -25,6 +25,23 @@ export async function runDeskRevealAcceptance({
     [...document.querySelectorAll<HTMLButtonElement>("button")].find((value) =>
       value.textContent?.includes(text),
     );
+  const reachable = (element: HTMLButtonElement | undefined | null) => {
+    if (!element) return false;
+    const bounds = element.getBoundingClientRect();
+    const hit = document.elementFromPoint(
+      bounds.left + bounds.width / 2,
+      bounds.top + bounds.height / 2,
+    );
+    return (
+      bounds.width > 0 &&
+      bounds.height > 0 &&
+      bounds.left >= 0 &&
+      bounds.right <= innerWidth &&
+      bounds.top >= 0 &&
+      bounds.bottom <= innerHeight &&
+      (hit === element || element.contains(hit))
+    );
+  };
   button("Agents")!.click();
   await frame();
   document
@@ -36,11 +53,13 @@ export async function runDeskRevealAcceptance({
     () => calls.includes("attached:alpha"),
     "Desk did not open the original alpha Inspector",
   );
-  // Return from the full-screen phone Inspector to Desk without closing it.
+  // Minimize the phone Inspector through its real menu, keeping its resource alive.
   if (window.innerWidth <= 720) {
     document
-      .querySelector<HTMLButtonElement>('button[aria-label="Back to Desk"]')
-      ?.click();
+      .querySelector<HTMLButtonElement>('button[title="More window actions"]')!
+      .click();
+    await frame();
+    button("Minimize")!.click();
     await frame();
   }
   writeHostsFilter(["alpha"]);
@@ -48,12 +67,20 @@ export async function runDeskRevealAcceptance({
     () => !!button("Synthetic beta · quiet"),
     "Outside-filter beta summary is missing",
   );
+  check(
+    !document.querySelector(".desk-error"),
+    "Desk fixture metadata is unavailable",
+  );
   const alphaAttachments = calls.filter(
     (value) => value === "attached:alpha",
   ).length;
   const betaReadsBefore = dispatches.filter(
     (value) => value.connectionId === "beta" && value.method === "pane.get",
   ).length;
+  check(
+    reachable(button("Synthetic beta · quiet")),
+    "Outside-filter summary is not reachable beside an Inspector or on a phone",
+  );
   button("Synthetic offline")!.click();
   await frame();
   check(
@@ -91,6 +118,7 @@ export async function runDeskRevealAcceptance({
     ).length === betaReadsBefore,
     "Reading a summary admitted the hidden agent",
   );
+  check(reachable(reveal), "Expanded reveal action is clipped or obscured");
   reveal!.click();
   await waitFor(
     () => calls.includes("attached:beta"),
