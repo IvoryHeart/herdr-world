@@ -6,7 +6,7 @@ import { bridge, type BridgeControlMsg, type ConnectionStatus } from "../api";
  * ledger, server/src/world/world-ledger.ts). Town's attention list shows the
  * open ones, fetched alone (`world.asks.get`) only when a change notice
  * carries a newer revision, and the owner's answer goes back through
- * `world.ask.answer`.
+ * `world.ask.answer`, or a dismissal without one through `world.ask.dismiss`.
  */
 
 export type WorldAsk = {
@@ -23,13 +23,33 @@ export type WorldAsk = {
     agent_session_id?: string;
     agent_session_fingerprint?: string;
     agent?: string;
+    /** Herdr's name for the asking agent when it asked. */
+    name?: string;
   };
   question: string;
   options: string[];
   owner_only: boolean;
   withdrawn?: { at: number };
   answer?: { text: string; at: number; by: string };
+  dismissed?: { at: number; by: string };
 };
+
+/**
+ * Who asked, without World's places: Herdr's agent name, else how the
+ * service identified the caller, else the pane it claimed. Surfaces add
+ * the unverified mark themselves.
+ */
+export function askerName(ask: WorldAsk) {
+  const actor = ask.actor;
+  return (
+    actor.name ??
+    (actor.verified ? actor.label : (actor.pane_id ?? actor.label))
+  );
+}
+
+/** An answered, dismissed or withdrawn question is closed. */
+export const askClosed = (ask: WorldAsk) =>
+  Boolean(ask.answer || ask.dismissed || ask.withdrawn);
 
 /** The open questions at a ledger revision (`world.asks.get`). */
 type OpenAsks = { revision: number; asks: WorldAsk[] };
@@ -107,7 +127,7 @@ export class WorldAsksStore {
     if (!next || !Array.isArray(next.asks) || next.revision < this.revision)
       return;
     this.revision = next.revision;
-    this.open = next.asks.filter((ask) => !ask.answer && !ask.withdrawn);
+    this.open = next.asks.filter((ask) => !askClosed(ask));
     const newlyAsked = this.initialized
       ? this.open.filter((ask) => !this.seen.has(ask.id))
       : [];
@@ -133,13 +153,19 @@ export class WorldAsksStore {
   }
 
   /** Answer as the owner; resolves to an error message, or null. */
-  async answer(id: string, text: string): Promise<string | null> {
+  answer(id: string, text: string): Promise<string | null> {
+    return this.close("world.ask.answer", { id, answer: text });
+  }
+
+  /** Close a question as the owner without answering it. */
+  dismiss(id: string): Promise<string | null> {
+    return this.close("world.ask.dismiss", { id });
+  }
+
+  private async close(method: string, params: Record<string, unknown>) {
     const epoch = this.epoch;
     try {
-      const result = await this.client.call("world.ask.answer", {
-        id,
-        answer: text,
-      });
+      const result = await this.client.call(method, params);
       if (epoch === this.epoch) this.take(result);
       return null;
     } catch (error) {

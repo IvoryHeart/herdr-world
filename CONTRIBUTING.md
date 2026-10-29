@@ -56,9 +56,10 @@ verification when a change touches its models, adapters, contracts or a
 `verification/coverage.json` owner. A deleted file runs the tests that still
 import or name it. Toolchain, lockfile, configuration and gate changes, code that
 no test, build or verification model reaches, and pushes of anything but the
-worktree's HEAD (another branch, several refs) get the full gate. CI's full gate
-stays the authority: the scoped gate trades local completeness for speed, so a
-broad acceptance suite may first fail on CI. The hook uses `bun run check:docs`
+worktree's HEAD (another branch, several refs) get the full gate. CI and pre-push share the complete-PR classification in
+`scripts/validation-scope.ts`. Unknown paths and gate/configuration changes select
+every suite. Main always runs the full matrix; its integrated result remains the
+broader acceptance boundary. The hook uses `bun run check:docs`
 only if its local report proves a passed code gate on an ancestor and every
 change since then is ordinary Markdown documentation. Behavioral contracts,
 OpenSpec, tooling and agent/contributor policy receive the code gate even when
@@ -71,17 +72,53 @@ and Delivery checks includes both macOS lifecycle results. See the
 [pipeline ownership guide](docs/ci-pipelines.md) for the job boundaries and
 failure diagnosis.
 
-The tooling-only mode is shared by CI and pre-push. Every path in the complete PR
-diff must be under `scripts/agent/**` (including its tests), or exactly
-`docs/agent-development.md`, `docs/crew-runbook.md`, `docs/dispatch-runbook.md`, or
-`changes/<slug>.md`. It runs the complete static lane, including all source type
-checks, and affected unit tests. An agent module without known test coverage runs
-the agent test inventory. World browser/latency suites, behavioral verification,
-Windows installation and installer upgrades are skipped. Both protected macOS
-jobs still report success with native steps skipped; `Delivery checks` validates
-all expected results. Any other code path retains the full CI matrix. Main pushes
-and explicit `check:delivery` always run the full gate. Renames are classified as
-both their old and new paths, and incremental pushes classify the entire PR.
+PR CI and pre-push use the same suite rules. Static checks always run for code;
+ordinary Markdown uses `check:docs`. The complete PR determines applicability,
+including both rename paths; a local incremental push may narrow unit consumers.
+The graph retains deletions from both diffs, so adding then removing an unused
+file across pushes does not widen the remaining change's scope.
+A reverted gate/configuration edit in the incremental delta still selects the
+full gate, even when that input is absent from the net PR diff.
+
+| Suite | PR selection | Full/main execution |
+| --- | --- | --- |
+| Non-browser tests | Tests reaching changed inputs | All tests, across two CI runners |
+| Behavioral verification | Verification/OpenSpec inputs or `verification/coverage.json` owners | All accepted models, across three CI groups |
+| World browser tests | Nearest consumer suites in the import graph | All six World shards |
+| Web browser tests | Affected registered browser suites | All suites, across two runners |
+| World latency | World runtime/UI paths or a nearest timed World consumer | Six suites, each alone on its own runner |
+| Native installation | Install/plugin/package inputs, server/shared binary sources, build-version metadata or affected installation consumers | Installer upgrades, Windows plugin and both macOS architectures |
+
+The agent-tooling exception from #484 still covers `scripts/agent/**`, the named
+agent/crew/dispatch runbooks and `changes/<slug>.md`: static checks and affected
+unit tests, with the agent test inventory for uncovered modules. It skips heavy
+suites even though the inventory's broad scripts owner would otherwise apply.
+Ordinary docs skip behavioral verification unless they are verification inputs or
+contract owners. Agent/contributor policy, workflows and gate configuration run
+all checks. Browser Chat changes can skip verification/platform work; server
+agent changes remain contract owners.
+
+`Delivery checks`, `Repository validation`, browser/latency/behavioral aggregates
+and the two protected macOS report names remain. macOS reports succeed without
+native steps when installation is inapplicable. Aggregate checks require every
+selected job to succeed and only accept skips declared by scope. Leaf job checks
+report failure as soon as their job ends; `Delivery checks` waits for the aggregate.
+The crew's reaction to those early failures is maintained separately. Main pushes
+and explicit `check:delivery` always run everything.
+
+CI verification groups are partial evidence. The aggregate requires every accepted
+model exactly once, the current complete source inventory/revision, matching tool
+identities and successful resource accounting for all three groups. Each runner
+retains the 4 GiB/no-swap/two-CPU limit and its OOM/cancellation controls. The
+bounded payload has a sibling supervisor in the delegated service subtree, so
+even a payload-wide OOM kill preserves exit reporting and resource accounting.
+The supervisor is outside the payload's memory limit and measured peak; the
+service-wide CPU quota also bounds supervision. The
+standalone local `verification:resources` command retains one single-machine
+envelope; ordinary local canonical commands remain unchanged. The aggregate retains each runner's
+accounting. Reruns select the newest artifact attempt for each group and cannot
+fall back from incomplete newer evidence. The canonical local gate still accepts
+no model filters.
 
 Prepare the final PR description in a file after committing, then run:
 
@@ -194,10 +231,10 @@ the complete required run. The canonical command uses two isolated case workers
 by default, as configured in `tools/quint/execution.json`, and requires complete
 source-consistent aggregate evidence. The Behavioral verification
 workflow runs all models without case filtering and is a protected Delivery
-checks dependency in full and ordinary documentation modes. The narrow tooling
-mode above skips it; application, verification and gate-policy changes cannot
-qualify. Full CI runs every repository check and the full `verification:gate`,
-including the diagnostic control. Pre-push runs
+checks dependency whenever the shared scope selects it. Verification inputs,
+contract owners and full changes require all accepted models; the agent-tooling
+exception and unrelated ordinary docs skip it. Full CI covers every repository
+check, accepted model and diagnostic/resource control across its workers. Pre-push runs
 `bun run check:changed`, which runs the full `verification:gate` (never `--case`)
 when a change touches verification inputs or a contract owner, and leaves the
 rest to CI; `bun run check:delivery` runs everything locally. Linux CI additionally enforces the aggregate resource envelope described

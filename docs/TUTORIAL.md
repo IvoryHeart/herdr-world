@@ -275,8 +275,10 @@ hosts stay usable.
    To change the order, drag a table onto another table in the same room: it
    takes that table's place, and the tables in between shift along. Drop it on
    the room's free spot to put it last of the tables shown. A room grows as
-   tabs open, up to eight tables wide on a wide screen, six on a portrait or
-   half-width screen and four on a phone, then row by row. A folded room normally
+   tabs open and ordinary rooms shrink to fit when tabs close. An expanded room
+   keeps its capacity through closures until you use **« Fold**. Rooms grow up
+   to eight tables wide on a wide screen, six on a portrait or half-width screen
+   and four on a phone, then row by row. A folded room normally
    shows the first 24 tabs in the same order as Spaces. Use the room's bottom-right
    **» +N** tile beside the dashed **+** seat to reveal the next 20 tables per
    click until the whole room is shown. **+N** counts currently hidden tabs;
@@ -320,10 +322,13 @@ narrow the work you are following. The **Town calm motion** setting reduces
 ambient animation.
 
 A quiet **?** at reception means an agent has asked you a question with
-`herdr-world ask`. It stays there until answered or withdrawn; tapping its
-reception entry opens that agent. Read the question first in **Needs you** or
-**Summary**, then choose an option or type an answer. The waiting agent receives
-that answer. Board and Desk show the same question mark. **!** means urgent
+`herdr-world ask`. It stays there until answered, dismissed or withdrawn;
+tapping its reception entry opens that agent. Read the question first in
+**Needs you** or **Summary**, where it names the asking agent, then choose an
+option or type an answer. The waiting agent receives that answer. **Open agent**
+opens the asker; **Dismiss** closes a stale or mistaken question without
+answering it. A question marked unverified came from a process World could not
+confirm runs in that pane. Board and Desk show the same question mark. **!** means urgent
 blocking, while **✓** means a finish still needs checking.
 
 **Mark reviewed** acknowledges that completion in this browser. Opening a finished

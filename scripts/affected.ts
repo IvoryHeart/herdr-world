@@ -21,11 +21,13 @@ const RESOLVE = ["", ".ts", ".tsx", ".js", ".mjs", "/index.ts", "/index.tsx"];
 /** Changes that can alter any result: run the full gate. */
 const FULL = [
   /^package\.json$/,
+  /^(?:AGENTS|CONTRIBUTING)\.md$/,
+  /^\.agents\//,
   /^(?:web|server)\/package\.json$/,
   /^bun\.lockb?$/,
   /^bunfig\.toml$/,
   /^\.github\/workflows\//,
-  /^scripts\/(?:validation-scope|ci-reuse-full-check|ci-delivery-result|check-pr-body|file-size-ratchet)\.ts$/,
+  /^scripts\/(?:validation-scope|ci-tests|ci-verification|ci-reuse-full-check|ci-delivery-result|check-pr-body|file-size-ratchet)\.ts$/,
   /(?:^|\/)tsconfig[^/]*\.json$/,
   /^web\/vite\.config\.ts$/,
   /^web\/index\.html$/,
@@ -36,7 +38,12 @@ const FULL = [
 ];
 
 /** Inputs of behavioral verification besides the adapters' imports. */
-const VERIFICATION = [/^verification\//, /^quint\//, /^tools\/quint\//];
+const VERIFICATION = [
+  /^verification\//,
+  /^quint\//,
+  /^tools\/quint\//,
+  /^openspec\//,
+];
 
 /** Text that cannot change a test result. */
 const INERT = [

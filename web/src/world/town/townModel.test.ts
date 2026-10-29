@@ -9,31 +9,34 @@ import { buildWorldObject } from "../worldObject";
 import {
   keepPlaceColors,
   NO_PLACE_COLORS,
+  townModelFromProjection,
   townPlaceColors,
   townRoomColorKey,
 } from "./townModel";
 
 /** One synthetic host with the given workspaces of one tab each. */
-function projection(ids = ["w1", "w2"]) {
+function projection(ids = ["w1", "w2"], tabsPerWorkspace = 1) {
   const workspaces: Workspace[] = ids.map((id, index) => ({
     workspace_id: id,
     number: index + 1,
     label: id,
     focused: index === 0,
-    pane_count: 1,
-    tab_count: 1,
+    pane_count: tabsPerWorkspace,
+    tab_count: tabsPerWorkspace,
     active_tab_id: `${id}:t1`,
     agent_status: "working",
   }));
-  const tabs: Tab[] = workspaces.map((w) => ({
-    tab_id: `${w.workspace_id}:t1`,
-    workspace_id: w.workspace_id,
-    number: 1,
-    label: "Tab 1",
-    focused: true,
-    pane_count: 1,
-    agent_status: "working",
-  }));
+  const tabs: Tab[] = workspaces.flatMap((w) =>
+    Array.from({ length: tabsPerWorkspace }, (_, index) => ({
+      tab_id: `${w.workspace_id}:t${index + 1}`,
+      workspace_id: w.workspace_id,
+      number: index + 1,
+      label: `Tab ${index + 1}`,
+      focused: index === 0,
+      pane_count: 1,
+      agent_status: "working",
+    })),
+  );
   const panes: Pane[] = tabs.map((t) => ({
     pane_id: `${t.tab_id}:p1`,
     terminal_id: `term-${t.tab_id}`,
@@ -77,6 +80,16 @@ test("rooms and buildings show their workspace's and host's chosen colours", () 
   expect(colors.hosts.get(office.hosts[0]!.key)).toBe("pink");
   // Nothing chosen: the shared empty value, so nothing repaints.
   expect(townPlaceColors(office, {})).toBe(NO_PLACE_COLORS);
+});
+
+test("Town layout input reflects tabs removed from a workspace", () => {
+  const before = townModelFromProjection(projection(["w1"], 10));
+  const after = townModelFromProjection(projection(["w1"], 2));
+  expect(before.input.rooms[0]!.deskKeys).toHaveLength(10);
+  expect(after.input.rooms[0]!.deskKeys).toHaveLength(2);
+  expect(after.input.rooms[0]!.deskKeys).toEqual(
+    before.input.rooms[0]!.deskKeys.slice(0, 2),
+  );
 });
 
 test("a building with no rooms shown still shows its host's colour", () => {

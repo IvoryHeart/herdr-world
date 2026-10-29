@@ -10,6 +10,10 @@ Current synchronization points:
   (20 October 2026; five unreleased commits after v0.8.7). This integration records
   the exact head as a Git merge
   parent, following `5ce1d8d620549226de76321303e7bffa911ae371`.
+- Security dependency updates cherry-picked after that source head:
+  [DOMPurify 3.4.17](https://github.com/powerfooI/roamgate/commit/2c67731651ade2592c798687636cd0a486547fb4)
+  and [undici 8.12.3](https://github.com/powerfooI/roamgate/commit/f428337b9ed6b85687d030a60a03adfab32651d8).
+  These focused dependency updates do not advance the full source synchronization point.
 - Herdr compatibility: Herdr 0.9.5, terminal protocol 22. Windows SSH hosts
   additionally require a running Herdr 0.9.1+ session and Windows PowerShell.
 
