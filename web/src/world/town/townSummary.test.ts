@@ -585,7 +585,13 @@ test("the summary panel reads in attention order and never shows zero spend", as
       now: 500 + 12 * 60_000,
       onOpenAgent: () => {},
       onShowRoom: () => {},
-      onAnswer: async () => null,
+      askActions: {
+        askers: new Map([
+          ["question-one", { name: "Synthetic seat", key: "agent-one" }],
+        ]),
+        answer: async () => null,
+        dismiss: async () => null,
+      },
     }),
   );
   const order = [
@@ -598,10 +604,15 @@ test("the summary panel reads in attention order and never shows zero spend", as
   expect(at.every((index) => index >= 0)).toBe(true);
   expect([...at].sort((a, b) => a - b)).toEqual(at);
   expect(html).toContain("waiting 12 m");
-  expect(html).toContain("Synthetic worker");
   expect(html).toContain("asks: Ship the synthetic change?");
   expect(html).toContain("blocked: needs input");
-  expect(html).toContain('aria-label="Your answer to Synthetic worker"');
+  // The asker reads as Town names its desk, with Open agent and Dismiss.
+  expect(html).toContain("<b>Synthetic seat</b> asks:");
+  expect(html).toContain('aria-label="Your answer to Synthetic seat"');
+  expect(html).toContain('aria-label="Open Synthetic seat"');
+  expect(html).toContain(
+    'aria-label="Dismiss the question from Synthetic seat without answering"',
+  );
   // A finish's time is its last activity, never claimed as the finish.
   expect(html).toContain("last active");
   expect(html).not.toContain("finished 1");
@@ -625,7 +636,11 @@ test("blocked rows show supplied reasons and fall back for missing or blank labe
       now: 1000,
       onOpenAgent: () => {},
       onShowRoom: () => {},
-      onAnswer: async () => null,
+      askActions: {
+        askers: new Map(),
+        answer: async () => null,
+        dismiss: async () => null,
+      },
     }),
   );
   expect(html).toContain("blocked: Approve the synthetic change");

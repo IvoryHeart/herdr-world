@@ -1147,7 +1147,7 @@ export default function TownView({
         <TownRail
           needsYouCount={townSummary.summary.counts.needsYou}
           asks={townSummary.summary.asks}
-          onAnswer={townSummary.answerAsk}
+          askActions={townSummary.askActions}
           collapsed={railCollapsed}
           onCollapsedChange={setRailCollapsed}
           calls={calls}

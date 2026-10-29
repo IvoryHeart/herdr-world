@@ -1,13 +1,16 @@
-import type { WorldAsk } from "./worldAsks";
+import { askClosed, type WorldAsk } from "./worldAsks";
 import type { WorldLeafObject, WorldObject } from "./worldObject";
 
-/** An ask is attention for its original verified occupant, never a replacement. */
+/**
+ * An ask is attention for its original occupant, never a replacement: the
+ * verified caller's terminal, or the one an unverified caller's pane held
+ * when it asked (the service records that only when one local Herdr has the
+ * pane). Surfaces mark the unverified ones.
+ */
 export function askMatchesLeaf(ask: WorldAsk, leaf: WorldLeafObject) {
   const actor = ask.actor;
   return (
-    !ask.answer &&
-    !ask.withdrawn &&
-    actor.verified &&
+    !askClosed(ask) &&
     !leaf.stale &&
     leaf.actionable &&
     actor.connection_id === leaf.connectionId &&

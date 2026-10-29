@@ -1,7 +1,8 @@
 import { useId, useState } from "react";
 import { worldLocalStorage } from "../../browserStorage";
 import type { OfficeAgent, OfficeRosterEntry } from "../herdrOfficeProjection";
-import type { WorldAsk } from "../worldAsks";
+import { askerName, type WorldAsk } from "../worldAsks";
+import type { TownAsker } from "./townAskers";
 import { townPortrait } from "./townSprites";
 import "./townAsks.css";
 
@@ -55,31 +56,55 @@ export function townAgo(since: number, now: number) {
   return minutes < 60 ? `${minutes}m` : `${Math.floor(minutes / 60)}h`;
 }
 
+/** The owner's ways to handle questions, shared by the rail and Summary. */
+export type TownAskActions = {
+  /** Each question's asker, by question ID (townAskers). */
+  askers: ReadonlyMap<string, TownAsker>;
+  answer(id: string, text: string): Promise<string | null>;
+  /** Close a question without answering it. */
+  dismiss(id: string): Promise<string | null>;
+};
+
+const NO_ASK_ACTIONS: TownAskActions = {
+  askers: new Map(),
+  answer: async () => null,
+  dismiss: async () => null,
+};
+
 /** One open question from an agent (`herdr-world ask`), answered here. */
 export function TownAsk({
   ask,
   now,
-  onAnswer,
+  actions,
+  onOpen,
 }: {
   ask: WorldAsk;
   now: number;
-  onAnswer(id: string, text: string): Promise<string | null>;
+  actions: TownAskActions;
+  onOpen?(key: string): void;
 }) {
   const questionId = useId();
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const send = async (text: string) => {
-    if (!text.trim() || busy) return;
+  const asker = actions.askers.get(ask.id);
+  const name = asker?.name ?? askerName(ask);
+  const who = `${name}${ask.actor.verified ? "" : " (unverified)"}`;
+  const act = async (close: () => Promise<string | null>) => {
+    if (busy) return;
     setBusy(true);
-    const problem = await onAnswer(ask.id, text.trim());
+    const problem = await close();
     setBusy(false);
     setError(problem);
   };
+  const send = (text: string) =>
+    text.trim()
+      ? act(() => actions.answer(ask.id, text.trim()))
+      : Promise.resolve();
   return (
     <form
       className="town-ask"
-      aria-label={`Question from ${ask.actor.label}`}
+      aria-label={`Question from ${who}`}
       onSubmit={(event) => {
         event.preventDefault();
         void send(draft);
@@ -87,7 +112,7 @@ export function TownAsk({
     >
       <small>{townAgo(ask.at, now)}</small>
       <p id={questionId}>
-        <b>{ask.actor.label}</b>
+        <b>{name}</b>
         {ask.actor.verified ? "" : " (unverified)"} asks: {ask.question}
       </p>
       {ask.options.length ? (
@@ -108,13 +133,32 @@ export function TownAsk({
       <div className="town-ask-reply">
         <input
           value={draft}
-          aria-label={`Your answer to ${ask.actor.label}`}
+          aria-label={`Your answer to ${who}`}
           aria-describedby={questionId}
           placeholder={ask.options.length ? "Or type an answer" : "Your answer"}
           onChange={(event) => setDraft(event.target.value)}
         />
         <button type="submit" disabled={busy || !draft.trim()}>
           Answer
+        </button>
+      </div>
+      <div className="town-ask-actions">
+        {asker?.key && onOpen ? (
+          <button
+            type="button"
+            aria-label={`Open ${name}`}
+            onClick={() => onOpen(asker.key!)}
+          >
+            Open agent
+          </button>
+        ) : null}
+        <button
+          type="button"
+          aria-label={`Dismiss the question from ${who} without answering`}
+          disabled={busy}
+          onClick={() => void act(() => actions.dismiss(ask.id))}
+        >
+          Dismiss
         </button>
       </div>
       {error ? <small role="alert">{error}</small> : null}
@@ -137,11 +181,11 @@ export function TownRail({
   collapsed,
   onCollapsedChange,
   asks = [],
-  onAnswer = async () => null,
+  askActions = NO_ASK_ACTIONS,
 }: {
   needsYouCount: number;
   asks?: readonly WorldAsk[];
-  onAnswer?(id: string, text: string): Promise<string | null>;
+  askActions?: TownAskActions;
   collapsed: boolean;
   onCollapsedChange(collapsed: boolean): void;
   calls: readonly TownCall[];
@@ -236,7 +280,13 @@ export function TownRail({
           aria-live="polite"
         >
           {asks.map((ask) => (
-            <TownAsk key={ask.id} ask={ask} now={now} onAnswer={onAnswer} />
+            <TownAsk
+              key={ask.id}
+              ask={ask}
+              now={now}
+              actions={askActions}
+              onOpen={onOpen}
+            />
           ))}
         </div>
       ) : null}

@@ -591,8 +591,16 @@ const ledger = {
     } as WorldAsk,
   ],
 };
+const askDismissals: string[] = [];
 worldBridge.call = async (method, params) => {
   if (method === "world.asks.get") return structuredClone(ledger);
+  if (method === "world.ask.dismiss") {
+    const id = String(params?.id);
+    askDismissals.push(id);
+    ledger.asks = ledger.asks.filter((ask) => ask.id !== id);
+    ledger.revision += 1;
+    return structuredClone({ revision: ledger.revision, asks: ledger.asks });
+  }
   if (method === "world.ask.answer") {
     const id = String(params?.id);
     askAnswers.push({ id, answer: String(params?.answer) });
@@ -1690,6 +1698,53 @@ async function run() {
       await waitFor(
         () => !host.querySelector(".town-reception-question"),
         "answering a watcher terminal ask must clear reception",
+      );
+      // An unverified caller's ask that the service placed on this pane
+      // reaches reception too; the rail marks it, and Dismiss closes it.
+      ledger.asks.push({
+        id: "q-watcher-unverified",
+        at: Date.now(),
+        question: "Which brief next?",
+        options: [],
+        owner_only: true,
+        actor: {
+          label: `unverified ${watcherPane.pane_id}`,
+          verified: false,
+          connection_id: "local",
+          connection_generation: 3,
+          pane_id: watcherPane.pane_id,
+          workspace_id: watcherPane.workspace_id,
+          terminal_id: watcherPane.terminal_id,
+        },
+      });
+      ledger.revision++;
+      await sharedAsksStore().refresh();
+      await waitFor(
+        () => Boolean(watcherEntry()),
+        "an unverified ask placed on its pane must reach reception",
+      );
+      const unverifiedAsk = [
+        ...host.querySelectorAll<HTMLElement>(".town-ask"),
+      ].find((entry) => entry.textContent?.includes("Which brief next?"));
+      check(
+        Boolean(
+          unverifiedAsk?.textContent?.includes(
+            "(unverified) asks: Which brief next?",
+          ),
+        ) && !unverifiedAsk?.textContent?.includes("unverified unverified"),
+        "the rail must mark an unverified ask once, naming its asker",
+      );
+      unverifiedAsk!
+        .querySelector<HTMLButtonElement>('button[aria-label^="Dismiss"]')!
+        .click();
+      await waitFor(
+        () => !host.querySelector(".town-reception-question"),
+        "dismissing an ask must clear reception",
+      );
+      check(
+        askDismissals.includes("q-watcher-unverified") &&
+          !askAnswers.some((answer) => answer.id === "q-watcher-unverified"),
+        "Dismiss must close the ask without sending an answer",
       );
       setWorld(worldFor(base.connections));
       await waitFor(

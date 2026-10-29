@@ -11,8 +11,10 @@ import {
   TownAsk,
   townRailInset,
   townLocation,
+  type TownAskActions,
   type TownCall,
 } from "./TownRail";
+import { townAskers } from "./townAskers";
 import { sharedAsksStore, useWorldAsks } from "../worldAsks";
 import {
   townSummary,
@@ -33,7 +35,7 @@ export function TownSummaryPanel({
   now,
   onOpenAgent,
   onShowRoom,
-  onAnswer,
+  askActions,
 }: {
   summary: TownSummaryModel;
   now: number;
@@ -41,7 +43,7 @@ export function TownSummaryPanel({
   onOpenAgent(agentKey: string): void;
   /** Move the Town camera to a room. */
   onShowRoom(roomKey: string): void;
-  onAnswer(id: string, text: string): Promise<string | null>;
+  askActions: TownAskActions;
 }) {
   return (
     <div className="town-summary">
@@ -52,7 +54,13 @@ export function TownSummaryPanel({
         {summary.asks.length > 0 ? (
           <div className="town-asks">
             {summary.asks.map((ask) => (
-              <TownAsk key={ask.id} ask={ask} now={now} onAnswer={onAnswer} />
+              <TownAsk
+                key={ask.id}
+                ask={ask}
+                now={now}
+                actions={askActions}
+                onOpen={onOpenAgent}
+              />
             ))}
           </div>
         ) : null}
@@ -242,7 +250,7 @@ export function useTownSummary({
 }): {
   summary: TownSummaryModel;
   railInset: number;
-  answerAsk(id: string, text: string): Promise<string | null>;
+  askActions: TownAskActions;
   open(): void;
   window: ReactNode;
 } {
@@ -254,7 +262,18 @@ export function useTownSummary({
   }, []);
   const asksStore = sharedAsksStore();
   const asks = useWorldAsks(asksStore);
-  const answerAsk = (id: string, text: string) => asksStore.answer(id, text);
+  const askers = useMemo(
+    () => townAskers(asks, world, office),
+    [asks, world, office],
+  );
+  const askActions = useMemo<TownAskActions>(
+    () => ({
+      askers,
+      answer: (id, text) => asksStore.answer(id, text),
+      dismiss: (id) => asksStore.dismiss(id),
+    }),
+    [askers, asksStore],
+  );
   const summary = useMemo(
     () =>
       townSummary(
@@ -280,7 +299,7 @@ export function useTownSummary({
       railCollapsed,
       summary.counts.needsYou,
     ),
-    answerAsk,
+    askActions,
     open: () => {
       setOpen(true);
       setFocusKey((key) => key + 1);
@@ -296,7 +315,7 @@ export function useTownSummary({
           summary={summary}
           now={now}
           onOpenAgent={openAgent}
-          onAnswer={answerAsk}
+          askActions={askActions}
           onShowRoom={(roomKey) => {
             if (viewportWidth <= 640) setOpen(false);
             showRoom(roomKey);
