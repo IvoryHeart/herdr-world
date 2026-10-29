@@ -204,9 +204,12 @@ const densePanes: Pane[] = Array.from({ length: 40 }, (_, index) => ({
 let revision = 0;
 const statusCounts = {
   working: 0,
-  idle: fixturePanes.filter((value) => value.agent_status === "idle").length,
-  blocked: fixturePanes.filter((value) => value.agent_status === "blocked")
-    .length,
+  idle: fixturePanes.filter(
+    (value) => value.agent && value.agent_status === "idle",
+  ).length,
+  blocked: fixturePanes.filter(
+    (value) => value.agent && value.agent_status === "blocked",
+  ).length,
   done: 0,
   unknown: 0,
 };
