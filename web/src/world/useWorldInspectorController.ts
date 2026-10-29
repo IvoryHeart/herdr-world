@@ -391,30 +391,28 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
     )
       windowCommand({ type: "raise", id: pending.keep });
   }, [managedWindows, activeInspectorId, windowCommand]);
+  /** Show another pane of a window's tab: a terminal cell or the title map. */
+  const focusInspectorPane = (windowId: string, paneId: string) => {
+    const conversation = inspectorConversationsRef.current.find(
+      (candidate) => worldInspectorWindowId(candidate) === windowId,
+    );
+    if (!conversation) return;
+    const sibling = worldNodeForInspectorPaneFocus(
+      aggregateWorld,
+      conversation,
+      paneId,
+    );
+    if (!sibling) return;
+    if (windowId === dockedInspectorIdRef.current) {
+      void applySelection(sibling.id, null, true, aggregateWorld);
+    } else {
+      void focusFloatingInspector(conversation, true, undefined, sibling).catch(
+        () => undefined,
+      );
+    }
+  };
   useLayoutEffect(() => {
-    const focusPane = (windowId: string, paneId: string) => {
-      const conversation = inspectorConversationsRef.current.find(
-        (candidate) => worldInspectorWindowId(candidate) === windowId,
-      );
-      if (!conversation) return;
-      const sibling = worldNodeForInspectorPaneFocus(
-        aggregateWorld,
-        conversation,
-        paneId,
-      );
-      if (!sibling) return;
-      if (windowId === dockedInspectorIdRef.current) {
-        void applySelection(sibling.id, null, true, aggregateWorld);
-      } else {
-        void focusFloatingInspector(
-          conversation,
-          true,
-          undefined,
-          sibling,
-        ).catch(() => undefined);
-      }
-    };
-    onInspectorPaneFocusReady(focusPane);
+    onInspectorPaneFocusReady(focusInspectorPane);
     return () => onInspectorPaneFocusReady(null);
   });
   const notificationHandlerRef = useRef<
@@ -1053,6 +1051,7 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
   return {
     ...props,
     openInBackground,
+    focusInspectorPane,
     watchlistStore,
     watchlist,
     pinnedOnly,
