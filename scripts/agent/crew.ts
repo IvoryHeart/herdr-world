@@ -17,6 +17,7 @@ import {
   reviewClaimCounts,
 } from "./crew/round-policy";
 import { startReviewers } from "./crew/reviewer-delivery";
+import { REVIEW_KINDS } from "./crew/round-actions";
 import { type Deps, realDeps } from "./crew/deps";
 import {
   type Action,
@@ -192,8 +193,8 @@ export function crewPass(context: PassContext) {
         minutes: Math.floor((now - (since.get(check.url!) ?? now)) / 60_000),
       }));
       const actions = plan(verdict, input, settings, names, stalls);
-      planned.push(
-        ...(input.state === "OPEN" &&
+      let due =
+        input.state === "OPEN" &&
         !isOnHold(input) &&
         !input.hold &&
         !input.item?.draft
@@ -212,20 +213,17 @@ export function crewPass(context: PassContext) {
                 .filter((entry) => entry.id.startsWith("review:"))
                 .map((entry) => entry.id.slice(7)),
             })
-          : actions),
-      );
+          : actions;
       const effective = crewVerdict(crew, verdict, input);
-      if (
-        effective.state === "READY" &&
-        !planned.some(
-          (entry) => entry.pr === input.number && entry.kind === "ready",
-        )
-      )
-        planned.push(
+      if (effective.state !== "READY")
+        due = due.filter((entry) => entry.kind !== "ready");
+      else if (!due.some((entry) => entry.kind === "ready"))
+        due.push(
           ...plan(effective, input, settings, names).filter(
             (entry) => entry.kind === "ready",
           ),
         );
+      planned.push(...due);
     }
     if (dryRun) {
       deps.out(`plan: ${planned.length} action(s) for ${authors.size} PR(s)`);
@@ -353,7 +351,7 @@ function act(
     "failed",
     "done",
   ])) {
-    const claim = RUN_KINDS.has(entry.kind)
+    const claim = REVIEW_KINDS.has(entry.kind)
       ? authors.get(entry.pr)?.posted.get(`${entry.target}:${entry.head}`)
       : undefined;
     if (

@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import type { Action } from "./plan";
 
 export type Finding = {
   id: string;
@@ -10,6 +11,8 @@ export type Finding = {
   url: string;
   source?: string;
   reply?: string;
+  /** Latest RESULT retaining this finding, even when not restated. */
+  respondAfter?: number;
 };
 
 export type ReviewCycle = {
@@ -19,6 +22,8 @@ export type ReviewCycle = {
   head: string;
   since?: string;
   reviewers: string[];
+  /** Preserve queued legacy keys and each reviewer's full/scoped assignment. */
+  reviewActions?: Action[];
   ignoredSources?: string[];
   trigger: { replies: string[]; quietSince: number; reason: string };
   /** Set by a go verdict; an empty list means no mandatory findings. */
@@ -33,6 +38,7 @@ export type Evaluation = {
   findings: Finding[];
   status: "evaluating" | "go" | "process" | "reported";
   verdict?: string;
+  verdictAt?: number;
   required?: string[];
   followups?: string[];
   process?: "splitter" | "fresh-fixer" | "visionary" | "restart" | "owner";

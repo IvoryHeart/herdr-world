@@ -35,9 +35,8 @@ describe("review round admission", () => {
     expect(reviewCycles(f.db, 7)).toHaveLength(1);
   });
 
-  test("a push touching no finding's file is skipped, including after replies and quiet", () => {
+  test("an unrelated push is skipped until every finding is answered, then confirmed after quiet", () => {
     const f = fixture();
-    f.reply();
     f.setFiles(["src/unrelated.ts"]);
     f.pass();
     f.pass(undefined, NOW + QUIET_MS);
@@ -45,11 +44,16 @@ describe("review round admission", () => {
     expect(skippedPushes(f.db, 7)[0]!.reason).toContain(
       "no open finding's files",
     );
+    f.reply();
+    expect(
+      f
+        .pass(undefined, NOW + QUIET_MS)
+        .some((action) => action.kind === "confirm"),
+    ).toBe(true);
   });
 
-  test("CI and test-harness repairs wait for checks without a round", () => {
+  test("unanswered CI pushes wait; replies can trigger their scoped confirmation", () => {
     const f = fixture();
-    f.reply();
     f.setFiles([
       ".github/workflows/ci.yml",
       "web/src/world/testing/fixture.ts",
@@ -58,6 +62,12 @@ describe("review round admission", () => {
     f.pass(undefined, NOW + QUIET_MS);
     expect(skippedPushes(f.db, 7)[0]!.reason).toContain("CI or test-harness");
     expect(reviewCycles(f.db, 7)).toHaveLength(1);
+    f.reply();
+    expect(
+      f
+        .pass(undefined, NOW + QUIET_MS)
+        .some((action) => action.kind === "confirm"),
+    ).toBe(true);
   });
 
   test("round 2 requires all finding replies and ten quiet minutes, with a durable trigger", () => {
@@ -117,8 +127,12 @@ describe("review round admission", () => {
 
   test("incomplete GitHub replies cannot open a new round", () => {
     const f = fixture();
-    f.deps.run = () => ({ code: 1, stdout: "", stderr: "unavailable" });
-    expect(f.pass().some((action) => action.kind === "judgment")).toBe(true);
+    const original = f.deps.run;
+    f.deps.run = (argv) =>
+      argv[0] === "gh"
+        ? { code: 1, stdout: "", stderr: "unavailable" }
+        : original(argv);
+    expect(f.pass().some((action) => action.kind === "judgment")).toBe(false);
     expect(reviewCycles(f.db, 7)).toHaveLength(1);
   });
 

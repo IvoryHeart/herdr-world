@@ -4,7 +4,8 @@ import {
   reviewCycles,
   saveCycle,
 } from "./round-policy-store";
-import { getAction, openRounds, roundFor, runsOf } from "./store";
+import { actionsIn, getAction, openRounds, roundFor, runsOf } from "./store";
+import type { Action } from "./plan";
 
 /** Upgrade old stores from real reviewer runs, excluding fixer/auxiliary runs. */
 export function adoptCycles(context: RoundContext) {
@@ -12,22 +13,37 @@ export function adoptCycles(context: RoundContext) {
   let cycles = reviewCycles(crew, input.number);
   if (cycles.length) return cycles;
   const runs = runsOf(crew, input.number);
+  const actions = actionsIn(crew, [
+    "pending",
+    "running",
+    "sent",
+    "done",
+    "failed",
+  ]);
   for (const round of openRounds(crew).filter(
     (round) => round.pr === input.number,
   )) {
+    const assigned = actions.filter(
+      (action) =>
+        action.pr === input.number &&
+        action.head === round.head &&
+        ["review", "confirm"].includes(action.kind),
+    );
+    const started = runs.filter(
+      (run) =>
+        run.round === round.round &&
+        !run.cwd &&
+        ["review", "confirm"].includes(
+          getAction(crew, run.actionKey)?.kind ?? "review",
+        ),
+    );
+    if (!started.length && !assigned.length) continue;
     const reviewers = [
-      ...new Set(
-        runs
-          .filter(
-            (run) =>
-              run.round === round.round &&
-              !run.cwd &&
-              ["review", "confirm"].includes(
-                getAction(crew, run.actionKey)?.kind ?? "review",
-              ),
-          )
-          .map((run) => run.reviewer),
-      ),
+      ...new Set([
+        ...started.map((run) => run.reviewer),
+        ...assigned.map((action) => action.target),
+        ...context.requiredReviewers,
+      ]),
     ];
     if (!reviewers.length) continue;
     const cycle: ReviewCycle = {
@@ -37,6 +53,29 @@ export function adoptCycles(context: RoundContext) {
       head: round.head,
       ...(cycles.length ? { since: cycles.at(-1)!.head } : {}),
       reviewers,
+      reviewActions: reviewers.map((target): Action => {
+        const original = assigned.find((action) => action.target === target);
+        if (original) {
+          const { key, pr, head, kind, text, since } = original;
+          return {
+            key,
+            pr,
+            head,
+            kind,
+            target,
+            text,
+            ...(since ? { since } : {}),
+          };
+        }
+        return {
+          pr: input.number,
+          head: round.head,
+          kind: "review",
+          target,
+          key: `${input.number}:${round.head}:review:${target}`,
+          text: `${target} reviews #${input.number} in full`,
+        };
+      }),
       trigger: {
         replies: [],
         quietSince: now,

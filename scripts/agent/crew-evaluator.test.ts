@@ -54,12 +54,17 @@ describe("evaluator and process holds", () => {
     const evaluation = evaluations(f.db, 7)[0]!;
     f.setPosts([
       reviewPost,
-      { id: "102", body: "[builder]\nrev2:101:1 fixed", at: NOW, url: "reply" },
+      {
+        id: "102",
+        body: "[builder]\nrev2:101:1 fixed",
+        at: NOW + 2,
+        url: "reply",
+      },
       verdict(evaluation, "go", "Required: rev2:101:1"),
     ]);
     expect(
       f
-        .pass(undefined, NOW + QUIET_MS)
+        .pass(undefined, NOW + QUIET_MS + 1)
         .some((action) => action.kind === "confirm"),
     ).toBe(true);
     expect(evaluations(f.db, 7)[0]!.status).toBe("go");

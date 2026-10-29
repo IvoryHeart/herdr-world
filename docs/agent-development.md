@@ -412,9 +412,12 @@ plans the next step for every PR in scope and takes each step once:
   opened after the PR has closed removes its checkout when you exit it. Until
   then, `open` refuses a second chat on that run.
 - **Review rounds.** Round 1 starts when GitHub reports the head mergeable,
-  in parallel with checks. Later rounds require replies to every open finding
+  in parallel with checks. Later rounds require fresh replies to every open finding
   and ten observed minutes without a push. Main-only merges, CI/test-harness
-  repairs and pushes outside findings' files are skipped with recorded reasons.
+  repairs and pushes outside findings' files are skipped while replies are
+  missing; answered findings proceed to scoped confirmation after quiet time.
+  Gate/workflow policy changes require scoped review, and every admitted round
+  needs all fresh results before merge readiness.
   After every two non-converging rounds a fresh evaluator weighs the whole PR.
   Its go names mandatory findings and follow-up issues; no-go starts a named
   process and holds reviews and merge readiness until it reports back. See the

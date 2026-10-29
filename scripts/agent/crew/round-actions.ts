@@ -36,19 +36,21 @@ export function outstanding(input: GateInput, cycle: ReviewCycle): Action[] {
             !cycle.ignoredSources?.includes(claim.url),
         ),
     )
-    .map((name) =>
-      scopeAction(
-        {
-          pr: input.number,
-          head: cycle.head,
-          kind: "review",
-          target: name,
-          key: `${input.number}:${cycle.head}:review:${name}`,
-          text: `${name} reviews #${input.number} @${cycle.head.slice(0, 7)}`,
-        },
-        cycle.since,
-        cycle.ordinal,
-      ),
+    .map(
+      (name) =>
+        cycle.reviewActions?.find((action) => action.target === name) ??
+        scopeAction(
+          {
+            pr: input.number,
+            head: cycle.head,
+            kind: "review",
+            target: name,
+            key: `${input.number}:${cycle.head}:review:${name}`,
+            text: `${name} reviews #${input.number} @${cycle.head.slice(0, 7)}`,
+          },
+          cycle.since,
+          cycle.ordinal,
+        ),
     );
 }
 

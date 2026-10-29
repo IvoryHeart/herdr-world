@@ -47,6 +47,7 @@ export function evaluationVerdict(post: CrewPost, evaluation: Evaluation) {
       followups: followups.map((entry) => `${entry[1]} -> ${entry[2]}`),
       next: line[2]!,
       source: post.url || post.id,
+      verdictAt: post.at,
     };
   }
   const process = /^Process: (.+)$/mu.exec(post.body)?.[1];
@@ -59,6 +60,7 @@ export function evaluationVerdict(post: CrewPost, evaluation: Evaluation) {
     seat,
     next: line[2]!,
     source: post.url || post.id,
+    verdictAt: post.at,
   };
 }
 
@@ -105,6 +107,8 @@ export function processPrompt(repo: string, evaluation: Evaluation) {
 
 Read AGENTS.md, the linked issue, the whole PR, every review/reply, and evaluator verdict ${evaluation.source}. Process decision: ${evaluation.next}
 Carry out that process, explaining its outcome. For fresh-fixer, fix the evaluator's identified findings in this PR's clean worktree and push normally. For splitter or restart, prepare and publish replacement PRs on branches in separate worktrees below .agents/worktrees; close the old PR only after replacements are reviewable and linked. For visionary, post the revised design on the linked issue and the PR. Follow candidate-delivery for code changes; preserve hooks, independent review and owner merge authority. Never force-push, merge, edit live crew config or restart the watcher.
+
+For fresh-fixer, after pushing post per-finding replies in a separate comment signed [fixer #${evaluation.pr}], one line per finding ID or exact file:line naming the fixing commit. Use that accepted fixer signature for the replies even though your process report is signed [${evaluation.seat}].
 
 When the requested process is complete, post one PR comment with gh pr comment ${evaluation.pr} --repo ${repo} --body-file <file>. Start with:
 [${evaluation.seat}]

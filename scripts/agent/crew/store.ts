@@ -192,10 +192,12 @@ export function addAction(db: Database, planned: Action, now: number) {
       `INSERT INTO action
         (key, pr, head, kind, target, text, since, state, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
-       ON CONFLICT(key) DO UPDATE SET state = 'pending', attempts = 0,
-         detail = CASE WHEN action.target = 'owner' THEN action.detail ELSE NULL END,
+       ON CONFLICT(key) DO UPDATE SET state = 'pending',
+         attempts = CASE WHEN action.state = 'superseded' THEN 0 ELSE action.attempts END,
+         head = excluded.head, text = excluded.text, since = excluded.since,
+         detail = CASE WHEN action.target = 'owner' OR action.state = 'pending' THEN action.detail ELSE NULL END,
          updated_at = excluded.updated_at
-       WHERE action.state = 'superseded'`,
+       WHERE action.state = 'superseded' OR (action.state = 'pending' AND action.head != excluded.head)`,
     )
     .run(
       planned.key,

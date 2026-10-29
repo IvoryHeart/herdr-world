@@ -21,7 +21,17 @@ export type ReviewFacts = {
   commits: string[];
   onlyMain: boolean;
   onlyHarness: boolean;
+  carrySafe: boolean;
 };
+
+export class ReviewFactsError extends Error {
+  constructor(
+    message: string,
+    readonly permanent = false,
+  ) {
+    super(message);
+  }
+}
 
 function pages(run: Run, path: string): Record<string, unknown>[] {
   const result = run(["gh", "api", "--paginate", "--slurp", path]);
@@ -85,8 +95,9 @@ export function authoredDelta(
     head,
   ]);
   if (ancestor.code !== 0)
-    throw new Error(
+    throw new ReviewFactsError(
       "reviewed head is not an ancestor; owner must reconcile rewritten history",
+      ancestor.code === 1,
     );
   const path = git(
     "rev-list",
@@ -127,7 +138,8 @@ export function authoredDelta(
       );
       if (!changed.trim()) continue;
     } else {
-      if (others.length) throw new Error("merge is not a merge of main");
+      if (others.length)
+        throw new ReviewFactsError("merge is not a merge of main", true);
       changed = git(
         "diff",
         "--no-renames",
@@ -159,6 +171,11 @@ export function harnessFile(file: string) {
   );
 }
 
+/** Synthetic PR data cannot replace workflow, verification or gate policy. */
+export function reviewCarryFile(file: string) {
+  return file === "web/src/world/testing/pullRequestFixture.ts";
+}
+
 export function observeReviewFacts(
   run: Run,
   dir: string,
@@ -176,6 +193,7 @@ export function observeReviewFacts(
     ...delta,
     posts: readCrewPosts(run, repo, input.number),
     onlyHarness: delta.files.length > 0 && delta.files.every(harnessFile),
+    carrySafe: delta.files.length > 0 && delta.files.every(reviewCarryFile),
   };
 }
 
@@ -203,6 +221,7 @@ export function openFindings(input: GateInput, posts: CrewPost[]): Finding[] {
         })(),
     );
     const active = own.slice(lastClear + 1);
+    const respondAfter = Math.max(claim.at, own.at(-1)?.at ?? claim.at);
     const seen = new Set<string>();
     for (const post of active) {
       let index = 0;
@@ -223,6 +242,7 @@ export function openFindings(input: GateInput, posts: CrewPost[]): Finding[] {
           at: comment.at,
           url: comment.url,
           source: comment.id,
+          respondAfter,
         });
       for (const line of post.body.split("\n")) {
         if (!/\bP[123]\b/u.test(line)) continue;
@@ -248,6 +268,7 @@ export function openFindings(input: GateInput, posts: CrewPost[]): Finding[] {
           text: line.trim(),
           at: post.at,
           url: post.url,
+          respondAfter,
         });
       }
     }
@@ -261,6 +282,7 @@ export function openFindings(input: GateInput, posts: CrewPost[]): Finding[] {
         text: claim.line,
         at: claim.at,
         url: claim.url,
+        respondAfter,
       });
   }
   return findings;
@@ -271,6 +293,7 @@ export function withReplies(
   posts: CrewPost[],
   author: string | null,
   pr: number,
+  after = 0,
 ) {
   const mentions = (line: string, token: string) =>
     new RegExp(
@@ -286,7 +309,7 @@ export function withReplies(
     ).length;
     const reply = posts.find(
       (post) =>
-        post.at >= finding.at &&
+        post.at > Math.max(finding.at, finding.respondAfter ?? 0, after) &&
         (post.body.startsWith(`[${author}]`) ||
           post.body.startsWith(`[fixer #${pr}]`)) &&
         ((finding.source && post.replyTo === finding.source) ||
@@ -305,6 +328,6 @@ export function withReplies(
                       mentions(line, `${finding.file}:${finding.line}`))),
             )),
     );
-    return { ...finding, ...(reply ? { reply: reply.url || reply.id } : {}) };
+    return { ...finding, reply: reply ? reply.url || reply.id : undefined };
   });
 }

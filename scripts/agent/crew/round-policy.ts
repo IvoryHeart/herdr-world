@@ -17,11 +17,13 @@ import { evaluationVerdict, processReport } from "./evaluator";
 import { type Action, type CrewSettings } from "./plan";
 import { harnessOf } from "./worker";
 import { saveReviewCarry } from "./round-readiness";
+import { findingFix } from "./round-fixes";
 import {
   observeReviewFacts,
   openFindings,
   type ReviewFacts,
   withReplies,
+  ReviewFactsError,
 } from "./review-facts";
 import {
   type Evaluation,
@@ -39,6 +41,7 @@ import {
   setAction,
   setMeta,
   setRunResult,
+  deleteMeta,
 } from "./store";
 
 export const QUIET_MS = 10 * 60_000;
@@ -82,15 +85,15 @@ export function roundPolicy(context: RoundContext): Action[] {
   const reviews = context.actions.filter((action) =>
     REVIEW_KINDS.has(action.kind),
   );
-  let other = context.actions.filter(
-    (action) => !REVIEW_KINDS.has(action.kind),
+  const other = context.actions.filter(
+    (action) => !REVIEW_KINDS.has(action.kind) && action.kind !== "fix",
   );
   const observeKey = `review-observation:${input.number}`;
   const prior = getMeta(crew, observeKey);
   const observed = prior
     ? (JSON.parse(prior) as { head: string; at: number })
     : null;
-  const quietSince = observed?.head === head ? observed.at : now;
+  let quietSince = observed?.head === head ? observed.at : now;
   if (!dryRun && observed?.head !== head) {
     setMeta(crew, observeKey, JSON.stringify({ head, at: now }));
     recordPush(crew, input.number, head, now, null);
@@ -98,7 +101,7 @@ export function roundPolicy(context: RoundContext): Action[] {
   const skip = (reason: string, carry = false) => {
     if (!dryRun) {
       recordPush(crew, input.number, head, now, reason);
-      if (carry && last) saveReviewCarry(crew, input, last);
+      if (carry && last) saveReviewCarry(crew, input, last, facts.files);
     }
     return other;
   };
@@ -136,6 +139,7 @@ export function roundPolicy(context: RoundContext): Action[] {
   )
     return [...other, ...outstanding(input, last)];
   let facts: ReviewFacts;
+  const failureKey = `review-facts-errors:${input.number}`;
   try {
     facts = observeReviewFacts(
       deps.run,
@@ -147,24 +151,27 @@ export function roundPolicy(context: RoundContext): Action[] {
   } catch (error) {
     // An in-flight round can still finish on its pinned head. Incomplete
     // evidence must not open another round or release an evaluator hold.
+    const prior = getMeta(crew, failureKey);
+    const failure = prior
+      ? (JSON.parse(prior) as { head: string; count: number })
+      : null;
+    const count = failure?.head === head ? failure.count + 1 : 1;
+    if (!dryRun) setMeta(crew, failureKey, JSON.stringify({ head, count }));
+    const escalate =
+      (error instanceof ReviewFactsError && error.permanent) || count >= 3;
     return [
-      ...judgment(error instanceof Error ? error.message : String(error)),
+      ...(escalate
+        ? judgment(error instanceof Error ? error.message : String(error))
+        : other),
       ...outstanding(input, last),
     ];
   }
+  if (!dryRun) deleteMeta(crew, failureKey);
   const findings = withReplies(
     openFindings(input, facts.posts),
     facts.posts,
     author,
     input.number,
-  );
-  other = other.map((action) =>
-    action.kind === "fix"
-      ? {
-          ...action,
-          text: `${action.text}\nReply to each finding using its ID (or exact file:line):\n${findings.map((finding) => `${finding.id}: ${finding.text}`).join("\n")}`,
-        }
-      : action,
   );
   let evaluation = evaluations(crew, input.number).at(-1);
   const claims = completed(input, last);
@@ -279,34 +286,19 @@ export function roundPolicy(context: RoundContext): Action[] {
   }
   const awaitingGoRound =
     evaluation?.status === "go" && last.ordinal === evaluation.checkpoint;
-  const repliedOnSameHead =
-    last.head === head &&
-    claims &&
-    findings.length > 0 &&
-    findings.every((finding) => finding.reply);
-  if (awaitingGoRound && evaluation) {
-    other = other.filter((action) => action.kind !== "fix");
-    const required = evaluation.findings.filter((finding) =>
-      evaluation!.required?.includes(finding.id),
-    );
-    if (
-      author &&
-      required.length &&
-      claims?.some((claim) => claim?.outcome === "open")
-    )
-      other.push({
-        pr: input.number,
-        head,
-        kind: "fix",
-        target: author,
-        key: `${input.number}:${head}:fix:${author}:evaluation-${evaluation.checkpoint}`,
-        text: `[crew -> ${author}] Fix ONLY these evaluator-mandatory findings for #${input.number}, push, then reply signed by your seat, one line per finding ID and fixing commit: ${required.map((finding) => `${finding.id}: ${finding.text}`).join("; ")}. Follow-up issues are outside this fix pass.`,
-      });
+  if (awaitingGoRound && evaluation && evaluation.verdictAt === undefined) {
+    evaluation = {
+      ...evaluation,
+      verdictAt:
+        facts.posts.find(
+          (post) =>
+            post.url === evaluation!.source || post.id === evaluation!.source,
+        )?.at ?? now,
+    };
+    if (!dryRun) saveEvaluation(crew, evaluation);
   }
-  if (last.head === head && !awaitingGoRound && !repliedOnSameHead)
-    return [...other, ...outstanding(input, last)];
-  // Do not interrupt an earlier round on any push. It supplies the findings
-  // and accepted baseline that the subsequent scoped round must use.
+  // A scoped round's old findings cannot request author work while fresh
+  // confirmations are outstanding, even if the head has not changed.
   if (!claims)
     return [
       ...skip(
@@ -316,49 +308,75 @@ export function roundPolicy(context: RoundContext): Action[] {
       ),
       ...outstanding(input, last),
     ];
-  if (facts.onlyMain)
-    return skip("only a merge of origin/main; wait for checks");
-  if (facts.onlyHarness)
-    return skip("only CI or test-harness repairs; wait for checks", true);
   const mandatory = awaitingGoRound ? evaluation!.required : undefined;
+  const deferred =
+    evaluation?.status === "go"
+      ? new Set(
+          evaluation.findings
+            .filter((finding) => !evaluation!.required?.includes(finding.id))
+            .map((finding) => finding.id),
+        )
+      : new Set<string>();
   const selected = mandatory
     ? withReplies(
-        evaluation!.findings.filter((finding) =>
-          mandatory.includes(finding.id),
-        ),
+        evaluation!.findings
+          .filter((finding) => mandatory.includes(finding.id))
+          .map((finding) => ({
+            ...finding,
+            respondAfter: Math.max(
+              finding.respondAfter ?? finding.at,
+              findings.find((current) => current.id === finding.id)
+                ?.respondAfter ?? 0,
+            ),
+          })),
         facts.posts,
         author,
         input.number,
+        evaluation!.verdictAt,
       )
-    : findings;
-  if (
-    !mandatory &&
-    author &&
-    selected.length &&
-    !other.some((action) => action.kind === "fix")
-  )
-    other.push({
-      pr: input.number,
-      head,
-      kind: "fix",
-      target: author,
-      key: `${input.number}:${head}:fix:${author}:round-${last.ordinal}`,
-      text: `[crew -> ${author}] Address every finding for #${input.number}, push fixes and reply signed by your seat, one line per finding ID and fixing commit: ${selected.map((finding) => `${finding.id}: ${finding.text}`).join("; ")}. Reviews wait for every reply and 10 minutes without a push.`,
-    });
-  if (
-    last.head !== head &&
-    selected.length &&
-    selected.every((finding) => finding.file !== null) &&
-    !selected.some((finding) => facts.files.includes(finding.file!))
-  )
-    return skip("push touches no open finding's files; wait for checks");
-  if (selected.some((finding) => !finding.reply))
-    return skip("waiting for a reply to every open finding");
+    : findings.filter((finding) => !deferred.has(finding.id));
+  if (awaitingGoRound)
+    quietSince = Math.max(quietSince, evaluation!.verdictAt!);
+  const fix = findingFix(
+    context,
+    last,
+    selected,
+    awaitingGoRound ? evaluation : undefined,
+  );
+  if (fix) other.push(fix);
+  const answered = selected.every((finding) => finding.reply);
+  const touchesFinding = selected.some(
+    (finding) => finding.file && facts.files.includes(finding.file),
+  );
+  if (!answered) {
+    if (facts.onlyMain)
+      return skip("only a merge of origin/main; wait for replies and checks");
+    if (facts.onlyHarness && !touchesFinding)
+      return skip(
+        "only CI or test-harness repairs; wait for replies and checks",
+      );
+    if (
+      last.head !== head &&
+      selected.every((finding) => finding.file !== null) &&
+      !touchesFinding
+    )
+      return skip(
+        "push touches no open finding's files; wait for replies and checks",
+      );
+    return skip("waiting for a fresh reply to every open finding");
+  }
+  if (!selected.length && facts.onlyMain)
+    return skip("only a merge of origin/main; wait for checks");
+  if (!selected.length && facts.carrySafe)
+    return skip("only synthetic test fixtures; wait for checks", true);
+  if (last.head === head && !awaitingGoRound && !selected.length) return other;
   if (now - quietSince < QUIET_MS)
-    return skip("waiting for 10 minutes without a push");
+    return skip(
+      "waiting for 10 quiet minutes after the latest push or evaluator verdict",
+    );
   const nextReviews = reviews.length
     ? reviews
-    : awaitingGoRound || repliedOnSameHead
+    : awaitingGoRound || selected.length
       ? last.reviewers.map(
           (name): Action => ({
             pr: input.number,

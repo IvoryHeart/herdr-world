@@ -18,17 +18,25 @@ confirm earlier findings and review only the author's changes since the last
 reviewed head. Changes imported from main are excluded; manual merge conflict
 resolutions remain in scope. Previously accepted code is not reviewed again.
 
-A push alone does not start the next round. A push consisting only of a clean
-merge of `origin/main`, known CI/test-harness files, or changes outside every
-open finding's files is recorded as skipped while checks settle. CI/harness
-classification uses paths, never commit messages: workflow files, World test
-fixtures and the maintained CI/check/browser runner scripts. An unknown delta
-or rewritten ancestry waits for the owner rather than silently admitting a round.
-After a fully confirmed round, a proven CI/harness-only delta carries those
-exact confirmations to the new head for crew readiness once checks pass. New
-findings or changed reviewer evidence invalidate that carry. The report-only
-`agent:gate` keeps its conservative copy rule; the crew mark also uses this
-recorded workflow evidence.
+A push alone does not start the next round. While findings await fresh replies,
+main-only merges, unrelated CI/harness repairs and pushes outside findings' files
+are recorded as skipped. Once every finding is answered, the scoped confirmation
+can proceed after quiet time even when the fix belongs in another file. Findings
+in CI or harness files follow the same rule; their fixes do not get stuck behind
+the CI-only skip.
+
+After a fully confirmed round, only changes to the synthetic PR data fixture
+`web/src/world/testing/pullRequestFixture.ts` can carry those exact confirmations
+for crew readiness once checks pass. Workflow files and CI, verification, check
+or policy scripts require a scoped confirmation. New findings or changed reviewer
+evidence invalidate a carry. The report-only `agent:gate` keeps its conservative
+copy rule; the crew mark also uses this recorded workflow evidence. Every admitted
+round must receive all of its fresh results before readiness or an owner merge
+notice, including when an earlier round reviewed the same head.
+
+Read failures hold admission and retry silently. Three consecutive failed reads
+on a head escalate to the owner; a successful read resets that count. Rewritten
+ancestry or a merge outside main escalates immediately.
 The watcher never kills a running round for a merge of main; its reviewers finish
 on their pinned head. Waiting reviewers from that round retain their slots in
 the queue across pushes.
@@ -38,15 +46,22 @@ The author pushes fixes and replies to **every** open finding, signed with
 Use the finding's stable ID, such as `rev2:123:1`, or its exact `file:line`.
 A bare filename suffices only when there is one finding on that file. Two
 findings on a file require separate identifiers. A reviewer RESULT that cannot
-be mapped to a file still needs an explicit reply using its ID. After all
-replies, the watcher waits until it has observed ten minutes without a new push.
+be mapped to a file still needs an explicit reply using its ID. Replies must
+follow the latest reviewer RESULT retaining the finding, even if it only repeats
+an unresolved fraction. A prior rejected fix reply cannot start
+another round. Fix prompts are sent once per review cycle while replies are
+missing, rather than again for each push. After all replies, the watcher waits
+until it has observed ten minutes without a new push.
 An explanatory reply that needs no code change can trigger a fresh confirmation
 round on the same head after that quiet period.
 Each admitted round records its finding replies, quiet-period start and trigger
 in `review_cycle`; each observed push and each skip reason are retained in
 `review_push` and `review_skip` in the local crew SQLite store. These records
 survive watcher restarts. Existing stores adopt their recorded reviewer rounds;
-fixer and evaluator sessions do not count as review rounds.
+fixer and evaluator sessions do not count as review rounds. Migration preserves
+queued reviewers, their existing action keys, and their full first reviews. Only
+review/confirm actions consume RESULT evidence; auxiliary seats require their
+checkpoint-specific verdict or process report.
 
 After round 2, any unresolved earlier finding or new finding starts a fresh
 `evaluator` instead of round 3. The roster entry is:
@@ -68,15 +83,19 @@ For **go**, `Required: <comma-separated finding IDs>` (or `Required: none`)
 names what must be fixed for the next round. Each other finding has a real
 follow-up issue, on its own `Follow-up: <ID> -> <issue URL>` line. Every finding
 must be dispositioned once. The next fresh round checks only the mandatory
-findings and their fixes; it does not reopen follow-up issues. Normal replies
-and quiet-period admission still apply. A go with no mandatory findings can
-start a confirmation round on the same head, with distinct reviewer actions.
+findings and their fixes; it does not reopen follow-up issues. Mandatory findings
+require replies after the evaluator verdict; its timestamp also restarts the
+ten-minute quiet period. Follow-up dispositions remain in force
+throughout the scoped round, including later passes before its results arrive.
+A go with no mandatory findings can start a confirmation round on the same head, with distinct reviewer actions.
 
 For **no-go**, `Process: splitter|fresh-fixer|visionary|restart|owner` selects
 one process, with reasons and a concrete next step. `Seat: <roster seat>` names
 the fresh process session, except for an owner decision. A fresh fixer must use
-a different persona from the author and a clean PR worktree. Split/restart
-processes prepare reviewable replacement PRs before closing the original;
+a different persona from the author and a clean PR worktree. After pushing, it
+posts per-finding replies signed `[fixer #<PR>]` before its separately signed
+process report; this lets the next confirmation use its actual fixing replies.
+Split/restart processes prepare reviewable replacement PRs before closing the original;
 visionary reports a design on the linked issue. The watcher starts the selected
 process, holds further reviews and the merge-ready mark, and tells the owner at
 reception through `herdr-world ask`. The process reports back in a signed PR
