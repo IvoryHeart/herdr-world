@@ -99,7 +99,7 @@
   background: var(--accent-soft);
   color: var(--text);
 }
-.world-window-controls > button:last-of-type:hover {
+.world-window-controls > .world-window-close:hover {
   background: var(--danger-soft);
   color: var(--danger-text);
 }
@@ -377,6 +377,24 @@
   width: 32px;
   height: 32px;
   padding: 0;
+}
+.world-managed-window.is-compact
+  :is(.world-window-controls > button, .world-window-back) {
+  min-width: 44px;
+  min-height: 44px;
+}
+[data-layout="mobile"] .world-window-switcher-trigger {
+  min-width: 44px;
+  min-height: 44px;
+}
+@media (max-width: 760px), (pointer: coarse) {
+  .world-window-switcher-trigger {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .world-window-switcher-menu > button {
+    min-height: 44px;
+  }
 }
 /* Town draws the agent's window as the Town prototype's chat panel: a dark
    translucent panel with a 2px edge, chunky targets and a pixel name. The

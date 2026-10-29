@@ -155,6 +155,10 @@ async function run() {
   const root = createRoot(document.getElementById("root")!);
   flushSync(() => root.render(<Fixture />));
   await settle();
+  check(
+    Boolean(frame().querySelector('button[aria-label="Minimize A"]')),
+    "desktop minimize requires opening a menu",
+  );
   const before = geometry();
   frame("B").focus();
   await settle();
@@ -323,6 +327,38 @@ async function run() {
   );
   flushSync(() => item!.click());
   check(harness.pins.A === false, "compact window menu did not unpin the desk");
+  const minimize = frame().querySelector<HTMLButtonElement>(
+    'button[aria-label="Minimize A"]',
+  );
+  check(Boolean(minimize), "compact minimize requires opening a menu");
+  if (minimize) {
+    const target = minimize.getBoundingClientRect();
+    check(
+      target.width >= 44 && target.height >= 44,
+      "compact minimize touch target is smaller than 44px",
+    );
+    const close = frame()
+      .querySelector('[aria-label="Close A"]')!
+      .getBoundingClientRect();
+    check(
+      close.width >= 44 && close.height >= 44,
+      "compact close touch target is smaller than 44px",
+    );
+    flushSync(() => minimize.click());
+    check(!frame(), "compact minimize left the window visible");
+    flushSync(() =>
+      document
+        .querySelector<HTMLButtonElement>(".world-window-switcher-trigger")!
+        .click(),
+    );
+    const restore = [
+      ...document.querySelectorAll<HTMLButtonElement>(
+        ".world-window-switcher-menu button",
+      ),
+    ].find((button) => button.textContent === "A")!;
+    flushSync(() => restore.click());
+    check(Boolean(frame()), "compact switcher did not restore the window");
+  }
   flushSync(() => harness.setCompact(false));
   check(
     JSON.stringify(harness.state.windows) === desktop,

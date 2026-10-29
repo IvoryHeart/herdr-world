@@ -6,6 +6,7 @@ import {
   ChevronLeft,
   Maximize2,
   Minimize2,
+  Minus,
   MoreHorizontal,
   Pin,
   X,
@@ -105,8 +106,8 @@ type MenuItem = {
 };
 
 /**
- * The window bar keeps maximise and close as buttons. The rarer actions
- * (minimise, snap, float and the colour) share ⋯.
+ * The window bar keeps minimise, maximise and close as buttons. Additional
+ * actions and the existing menu shortcut for minimise share ⋯.
  */
 export function WindowControls({
   controls,
@@ -272,6 +273,14 @@ export function WindowControls({
       >
         <MoreHorizontal size={16} />
       </button>
+      <button
+        type="button"
+        aria-label={`Minimize ${label}`}
+        title="Minimize window"
+        onClick={controls.onMinimize}
+      >
+        <Minus size={16} aria-hidden="true" />
+      </button>
       {!controls.compact && !controls.narrow && (
         <button
           type="button"
@@ -289,6 +298,7 @@ export function WindowControls({
       {controls.back ? null : (
         <button
           type="button"
+          className="world-window-close"
           aria-label={`Close ${label}`}
           title="Close window"
           onClick={controls.onClose}

@@ -2,6 +2,7 @@ const resumeGallery = new URLSearchParams(location.search).has(
   "resume-gallery",
 );
 import { TerminalAttachFrameWatchdog } from "../terminalResize";
+import { windowMinimizeAcceptance } from "./testing/windowMinimizeAcceptance";
 import { requestTerminalComposer } from "./terminalComposerRequest";
 import {
   readTerminalComposerDraft,
@@ -1302,19 +1303,8 @@ async function run() {
   await until(() => summaryWindow(), "Town summary opens as a panel window");
   summaryWindow()!
     .querySelector<HTMLButtonElement>(
-      '[aria-label="More actions for Town summary window"]',
+      '[aria-label="Minimize Town summary window"]',
     )!
-    .click();
-  await until(
-    () => document.querySelector(".world-window-snap-menu"),
-    "Town summary window menu",
-  );
-  [
-    ...document.querySelectorAll<HTMLButtonElement>(
-      '.world-window-snap-menu [role^="menuitem"]',
-    ),
-  ]
-    .find((button) => button.textContent?.trim() === "Minimize")!
     .click();
   await until(
     () =>
@@ -2126,10 +2116,16 @@ async function run() {
       }))
       .sort((a, b) => a.label!.localeCompare(b.label!));
   const beforeCompact = desktopInspectorBounds();
-  const builderArrangedWindow = document.querySelector<HTMLElement>(
+  let builderArrangedWindow = document.querySelector<HTMLElement>(
     '[role="dialog"][aria-label="Builder Inspector"]',
   )!;
   const builderBeforeMaximize = builderArrangedWindow.getBoundingClientRect();
+  builderArrangedWindow = await windowMinimizeAcceptance({
+    frame: builderArrangedWindow,
+    calls,
+    until,
+    check,
+  });
   const sessionCallsBeforeMaximize = calls.filter(({ method }) =>
     ["terminal.attach", "terminal.detach", "tab.close", "pane.close"].includes(
       method,
@@ -2211,9 +2207,17 @@ async function run() {
         .length === 1,
     "compact visual presentation showed one Inspector",
   );
-  const mobileInspector = [
+  let mobileInspector = [
     ...document.querySelectorAll<HTMLElement>(".workspace-inspector"),
   ].find((inspector) => inspector.getBoundingClientRect().width > 0)!;
+  mobileInspector = (
+    await windowMinimizeAcceptance({
+      frame: mobileInspector.closest<HTMLElement>(".world-managed-window")!,
+      calls,
+      until,
+      check,
+    })
+  ).querySelector<HTMLElement>(".workspace-inspector")!;
   // On a phone, the Chat view shows one composer, Chat's own: no terminal
   // key bar and no terminal composer (those belong to the Terminal view).
   const shown = (element: Element) => element.getClientRects().length > 0;
