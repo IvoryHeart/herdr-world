@@ -119,6 +119,7 @@ import type { WorldCanvasAnchor } from "./worldConnectorGeometry";
 import { worldMotionPreference } from "./worldFrameScheduler";
 import type { WorldAgentStatus, WorldObject } from "./worldObject";
 import "./board/board.css";
+import "./board/boardBadge.css";
 import "./board/boardRelations.css";
 import {
   relationTeams,
