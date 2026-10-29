@@ -562,15 +562,9 @@ when piped, with stable exit codes:
   for you. It appears first in Town's **Needs you** list and Summary, where you
   pick an option or type an answer; `--wait` returns that answer to the asker.
   Its agent waits at reception with **?**; Board and Desk show the same mark.
-  Each question names its agent as Town labels its desk, with **Open agent**
-  (a shell pane without an agent opens its terminal),
-  and **Dismiss** closes it without sending an answer (`--wait` then returns
-  `dismissed`). A caller World cannot verify is marked unverified; it still
-  reaches reception when exactly one local Herdr has the pane it names. A new
-  ask follows your chime, toast and OS notification preferences, naming its
-  agent with the question's first line and **Open agent** for its exact
-  original seat. Another verified agent (never the asker) may answer a
-  question that is not owner-only.
+  A new verified ask follows your chime, toast and OS notification preferences,
+  with **Open agent** for its exact original seat. Another verified agent
+  (never the asker) may answer a question that is not owner-only.
 - `ask withdraw ID` or `ask withdraw --key CAUSE`: the original verified asker
   withdraws a cleared cause, including when a creation reply lost its ask ID.
   Answering or withdrawing removes its question marks. `--key` keeps repeated

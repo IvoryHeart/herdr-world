@@ -1,12 +1,7 @@
 import { createHash } from "node:crypto";
 import { CliError } from "./world-cli-errors";
-import { paneActor, type CliHost, type WorldCliDeps } from "./world-cli";
-import {
-  askClosed,
-  LEDGER_LIMITS,
-  type CliActor,
-  type WorldLedger,
-} from "./world-ledger";
+import type { WorldCliDeps } from "./world-cli";
+import { LEDGER_LIMITS, type CliActor, type WorldLedger } from "./world-ledger";
 
 export const ASK_WAIT_MAX_MS = 20_000;
 const usage = (message: string): never => {
@@ -50,45 +45,6 @@ function sameAsker(left: CliActor, right: CliActor) {
     left.agent_session_fingerprint === right.agent_session_fingerprint &&
     left.agent_session_id === right.agent_session_id
   );
-}
-
-/**
- * The asker as World shows it: a verified caller as identified, and an
- * unverified caller's claimed pane where exactly one local Herdr has it,
- * still marked unverified. Either way, Herdr's name for the agent there.
- */
-async function placeAsker(
-  hosts: readonly CliHost[],
-  actor: CliActor,
-): Promise<CliActor> {
-  const paneId = actor.pane_id;
-  if (!paneId) return actor;
-  let host = hosts.find(
-    (entry) =>
-      entry.connection_id === actor.connection_id &&
-      entry.generation === actor.connection_generation,
-  );
-  let placed = actor;
-  if (!actor.verified) {
-    const found: { host: CliHost; actor: CliActor }[] = [];
-    for (const entry of hosts) {
-      if (!entry.local) continue;
-      const pane = await paneActor(entry, paneId);
-      if (pane.found) found.push({ host: entry, actor: pane.actor });
-    }
-    if (found.length !== 1) return actor;
-    host = found[0]!.host;
-    placed = { ...found[0]!.actor, label: actor.label, verified: false };
-  }
-  if (!host || !placed.agent) return placed;
-  const agent = (
-    (await host.call("agent.get", { target: paneId }).catch(() => null)) as {
-      agent?: { name?: unknown };
-    } | null
-  )?.agent;
-  return typeof agent?.name === "string" && agent.name.trim()
-    ? { ...placed, name: agent.name.trim().slice(0, 100) }
-    : placed;
 }
 
 export async function handleWorldAsk(
@@ -145,16 +101,6 @@ export async function handleWorldAsk(
           : text(params.key, "the cause key", 512);
       if (key && !actor.verified)
         refused("cause keys require a verified asking pane");
-      const options = Array.isArray(params.options)
-        ? params.options.map((option) =>
-            text(option, "an option", LEDGER_LIMITS.option),
-          )
-        : [];
-      if (options.length > LEDGER_LIMITS.options)
-        usage(`at most ${LEDGER_LIMITS.options} options`);
-      // Herdr is asked first: from here to the insertion nothing waits, so
-      // concurrent asks cannot all pass the cause and allowance checks.
-      const asker = await placeAsker(deps.hosts(), actor);
       if (key) {
         const known = deps.ledger
           .get()
@@ -164,6 +110,13 @@ export async function handleWorldAsk(
           );
         if (known) return known;
       }
+      const options = Array.isArray(params.options)
+        ? params.options.map((option) =>
+            text(option, "an option", LEDGER_LIMITS.option),
+          )
+        : [];
+      if (options.length > LEDGER_LIMITS.options)
+        usage(`at most ${LEDGER_LIMITS.options} options`);
       const open = deps.ledger.openAsks().asks;
       if (open.length >= LEDGER_LIMITS.asks)
         refused("too many open questions; wait for answers");
@@ -186,7 +139,7 @@ export async function handleWorldAsk(
           document.asks.push({
             id,
             at: now(),
-            actor: asker,
+            actor,
             question,
             ...(key ? { key } : {}),
             options,
@@ -206,7 +159,7 @@ export async function handleWorldAsk(
       const until = now() + wait;
       let ask = deps.ledger.ask(id);
       // Hold the call a while (the CLI's --wait asks again), not forever.
-      while (ask && !askClosed(ask) && now() < until) {
+      while (ask && !ask.answer && !ask.withdrawn && now() < until) {
         await new Promise((resolve) => setTimeout(resolve, 500));
         ask = deps.ledger.ask(id);
       }
@@ -218,7 +171,6 @@ export async function handleWorldAsk(
       const ask = deps.ledger.ask(id);
       if (!ask) notFound(`no question ${id}`);
       if (ask!.withdrawn) refused(`${id} was withdrawn`);
-      if (ask!.dismissed) refused(`${id} was dismissed by the owner`);
       if (ask!.owner_only) refused("only the owner answers this, in World");
       // An answer from an agent must come from a pane World has placed,
       // and never from the agent that asked.
@@ -251,29 +203,7 @@ export function answerAsk(
     const ask = document.asks.find((entry) => entry.id === id);
     if (!ask) throw new CliError("not_found", `no question ${id}`);
     if (ask.withdrawn) throw new CliError("refused", `${id} was withdrawn`);
-    if (ask.dismissed)
-      throw new CliError("refused", `${id} was dismissed by the owner`);
     if (ask.answer) throw new CliError("refused", `${id} is already answered`);
     ask.answer = { text: answer, at, by };
-  });
-}
-
-/**
- * The owner closes an open question without answering it; returns the
- * ledger revision. The asker's `--wait` ends with `dismissed`, and a keyed
- * cause stays closed, as an answered one does, until the asker withdraws it.
- */
-export function dismissAsk(
-  ledger: WorldLedger,
-  id: string,
-  by: string,
-  at: number,
-) {
-  return ledger.update((document) => {
-    const ask = document.asks.find((entry) => entry.id === id);
-    if (!ask) throw new CliError("not_found", `no question ${id}`);
-    if (ask.withdrawn) throw new CliError("refused", `${id} was withdrawn`);
-    if (ask.answer) throw new CliError("refused", `${id} is already answered`);
-    ask.dismissed ??= { at, by };
   });
 }

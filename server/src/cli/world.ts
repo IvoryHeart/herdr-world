@@ -454,9 +454,7 @@ function human(command: string, reply: Reply): string {
   if (command.startsWith("ask")) {
     const answer = entry.answer as { text?: string } | undefined;
     if (command === "ask withdraw" || entry.withdrawn)
-      return `${String(entry.id)} withdrawn${answer?.text !== undefined ? ` (answered: ${String(answer.text)})` : entry.dismissed ? " (dismissed by the owner)" : ""}`;
-    if (entry.dismissed)
-      return `${String(entry.id)} dismissed by the owner, without an answer`;
+      return `${String(entry.id)} withdrawn${answer?.text !== undefined ? ` (answered: ${String(answer.text)})` : ""}`;
     return answer?.text !== undefined
       ? String(answer.text)
       : `${String(entry.id)} waiting for an answer`;
@@ -497,11 +495,11 @@ export async function runWorldCommand(
       const answered = Boolean(
         reply.ok && (reply.result as { answer?: unknown })?.answer,
       );
-      const closed = reply.result as {
-        withdrawn?: unknown;
-        dismissed?: unknown;
-      };
-      if (!reply.ok || answered || closed?.withdrawn || closed?.dismissed)
+      if (
+        !reply.ok ||
+        answered ||
+        (reply.result as { withdrawn?: unknown })?.withdrawn
+      )
         break;
       if (timeoutMs && Date.now() - started >= timeoutMs) {
         (asJson ? context.log : context.error)(

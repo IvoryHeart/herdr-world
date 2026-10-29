@@ -179,26 +179,6 @@ describe("running", () => {
     });
   });
 
-  test("a dismissed ask releases --wait and says so, without an answer", async () => {
-    const { context: ctx, out } = context();
-    let calls = 0;
-    const transport: WorldCliTransport = async () => ({
-      ok: true,
-      actor: { label: "Example", verified: true },
-      result:
-        ++calls === 1
-          ? { id: "q-example" }
-          : { id: "q-example", dismissed: { at: 1, by: "owner" } },
-    });
-    expect(
-      await runWorldCommand("ask", ["Ship?", "--wait"], ctx, transport, true),
-    ).toBe(0);
-    expect(calls).toBe(2);
-    expect(out).toEqual([
-      "q-example dismissed by the owner, without an answer",
-    ]);
-  });
-
   test("JSON out when piped, and exit codes from the service's answer", async () => {
     const { context: ctx, out } = context();
     const sent: unknown[] = [];

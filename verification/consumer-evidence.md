@@ -366,20 +366,6 @@ retained answered repeats and explicit human withdrawal output. A real projectio
 with six finishes checks shell-question priority, and the Town browser consumer
 checks its bounded reception entry and single-action original-terminal route.
 
-Placed, named and dismissed asks (#493) stay on the same ledger. A caller the
-service cannot verify keeps an unverified actor, no cause keys and the shared
-allowance; the service records its claimed pane's connection, runtime, terminal
-and session only when exactly one local Herdr has that pane, so remote, unknown
-and ambiguous claims stay in the question list. Owner dismissal is a closed
-state beside answer and withdrawal: service, CLI and watcher cases check that
-waits end, answers are refused, a keyed repeat returns it until the asker
-withdraws, and the watcher does not re-ask a dismissed cause. The service asks
-Herdr before its synchronous cause, allowance and insertion step, and a
-slow-Herdr case checks concurrent keyed repeats and the shared allowance. Rail markup, pure
-naming and the Town browser consumer check one unverified mark, Open agent, and
-reception clearing on Dismiss without an answer. These are finite ledger states
-in the existing consumers; no model or new authority is claimed.
-
 
 ### Browser startup and ask notification composition
 

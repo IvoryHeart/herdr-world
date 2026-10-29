@@ -49,15 +49,10 @@
 }
 
 .town-ask-options,
-.town-ask-reply,
-.town-ask-actions {
+.town-ask-reply {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-}
-
-.town-ask-actions {
-  justify-content: flex-end;
 }
 
 .town-ask-reply input {

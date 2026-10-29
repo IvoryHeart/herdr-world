@@ -4,12 +4,7 @@ import {
   type State,
   type StoreConnectionLease,
 } from "./types";
-import {
-  askClosed,
-  askerName,
-  sharedAsksStore,
-  type WorldAsk,
-} from "../world/worldAsks";
+import { sharedAsksStore, type WorldAsk } from "../world/worldAsks";
 import { worldLocalStorage } from "../browserStorage";
 import { type TaskNotificationPreferences } from "../taskPush";
 import { type Pane, type Workspace, type Tab } from "../types";
@@ -369,32 +364,28 @@ function documentIsVisible() {
   );
 }
 
-/**
- * New ledger asks use the existing chime, toast and OS-notification policy,
- * naming the asker (marked when unverified) with the question's first line.
- * An ask World cannot place on a terminal stays in the Needs you list only.
- */
+/** New ledger asks use the existing chime, toast and OS-notification policy. */
 export function notifyWorldAsk(ask: WorldAsk) {
   const actor = ask.actor;
   if (
+    !actor.verified ||
     !actor.connection_id ||
     !actor.pane_id ||
     !actor.workspace_id ||
     !actor.terminal_id ||
     !Number.isSafeInteger(actor.connection_generation) ||
-    askClosed(ask)
+    ask.answer ||
+    ask.withdrawn
   )
     return;
-  const line = ask.question.split("\n", 1)[0]!.trim();
-  const question = line.length > 200 ? `${line.slice(0, 199)}…` : line;
   notifyHerdrTask(
     actor.connection_id,
     {
       kind: "message",
-      title: question,
-      body: question,
-      agent: `${askerName(ask)}${actor.verified ? "" : " (unverified)"}`,
-      agentKnown: true,
+      title: ask.question,
+      body: ask.question,
+      agent: actor.agent ?? actor.label,
+      agentKnown: Boolean(actor.agent),
       sender: actor.agent
         ? { known: true, agent: actor.agent }
         : { known: false },

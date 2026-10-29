@@ -1293,7 +1293,7 @@ retain the cells of admitted desks, but SHALL NOT admit hidden tabs.
 Town SHALL count every currently hidden desk on its bottom-right **» +N** tile,
 beside the same-height new-seat tile, using two reserved cells without overlap.
 The tile SHALL show a red exclamation at its top-left when hidden desks have
-blocked calls or open questions from placed, qualified asking identities, and
+blocked calls or open questions from verified, qualified asking identities, and
 a green tick at its top-right when hidden desks have unreviewed completions.
 These indicators SHALL use the shared rail calls after the finished/seen overlay
 and the indexed qualified Ask source, not raw done status or actor labels. They
@@ -1454,33 +1454,14 @@ occurrence, remain idempotent and never create a question. A keyed repeat SHALL
 return its retained answer state. Human withdrawal output SHALL name both its
 withdrawn state and any answer preserved before withdrawal.
 
-World SHALL announce newly observed placed asks through its existing chime,
-toast and OS-notification preferences, naming the asker with an unverified
-mark when it applies and quoting the question's first line. One page SHALL announce an ask ID only
+World SHALL announce newly observed verified asks through its existing chime,
+toast and OS-notification preferences. One page SHALL announce an ask ID only
 once while retained in its bounded seen set, without replaying the initial
 backlog. The common shell SHALL observe asks in every view. A local ask event
 SHALL retain its local OS-notification path when Web Push is selected. Open
 agent SHALL carry the original runtime, terminal and agent-session identity,
 refuse replacement targets and preserve the host filter. Obsolete socket or
-revision replies SHALL NOT restore answered, dismissed or withdrawn asks.
-
-An ask from a caller the service cannot verify SHALL stay unverified: it SHALL
-NOT use cause keys or withdraw, and it SHALL share the unverified allowance.
-When exactly one local Herdr has the pane it claims, the service SHALL record
-that pane's connection, runtime, terminal, workspace and agent session with the
-ask, so World places it as it places a verified ask; otherwise the ask SHALL
-remain in the question list only. The service SHALL record Herdr's name for an
-asking agent. The question list SHALL name each asker as Town names its desk,
-else by that agent name or its pane, mark an unverified asker once, and offer
-Open agent for each placed ask, including every ask from one pane, opening the
-asking agent, or the terminal of an asking pane without one.
-
-The owner SHALL be able to dismiss any open ask in World. Dismissal SHALL close
-the question without an answer, release waiting reads with a dismissed state,
-remove it from every open-ask projection and reject later answers. A keyed
-repeat SHALL return the dismissed question, as it returns an answered one,
-until the asker withdraws it, and the watcher SHALL NOT ask again for a
-dismissed cause while that cause holds.
+revision replies SHALL NOT restore answered or withdrawn asks.
 
 #### Scenario: A crew cause needs an owner decision
 
@@ -1494,21 +1475,9 @@ dismissed cause while that cause holds.
 - **THEN** the original asker withdraws the ask and all open-question markers clear,
   while any answer recorded first remains on the same ledger question
 
-#### Scenario: The owner dismisses an ask
-
-- **WHEN** the owner dismisses an open ask in World
-- **THEN** every open-question marker clears, the asker's wait ends with dismissed
-  and no answer, and its keyed cause is not asked again until it clears
-
-#### Scenario: A caller World cannot verify asks from a known pane
-
-- **WHEN** a caller the service cannot verify claims a pane that one local Herdr has
-- **THEN** that pane's agent or terminal waits at reception with a question mark,
-  and the question list and announcement name it with an unverified mark
-
 ### Requirement: Town agent locations
 
-Town SHALL seat working and unknown agents at their pane's seat unless they have an open owner ask placed on their terminal. A blocked agent
+Town SHALL seat working and unknown agents at their pane's seat unless they have an open verified owner ask. A blocked agent
 SHALL move to its host's reception and queue in order of when it became blocked,
 oldest first, within a bounded number of queue positions; further blocked agents
 SHALL stay at their seat with a waiting cue and the reception SHALL show the exact
@@ -1529,7 +1498,7 @@ SHALL return to its seat. Location and movement SHALL be presentation only: they
 SHALL NOT delay operational state, and every agent SHALL keep its exact qualified
 pane target wherever it stands.
 
-An agent with an open ask placed against its current connection, runtime,
+An agent with an open ask verified against its current connection, runtime,
 terminal and agent session SHALL wait at reception with a quiet question mark.
 Urgent blocking SHALL keep its exclamation mark and priority over quiet asks;
 unchecked finishes SHALL follow both. Opening the asking agent SHALL preserve
@@ -1539,8 +1508,8 @@ queue bounds without changing the native-order desk prefix. Hidden asking
 agents SHALL remain represented by reception counts and the existing question
 rail. Board and Desk SHALL show the same qualified question mark, and Desk
 SHALL include a current asking agent in Needs you regardless of working/idle
-status. A reception question entry SHALL open its original pane in one action. An
-asking shell pane, such as the watcher, SHALL receive a reception entry
+status. A reception question entry SHALL open its original pane in one action. A
+verified asking shell pane, such as the watcher, SHALL receive a reception entry
 and Board/Desk marks without inventing an agent harness or changing Herdr status.
 
 #### Scenario: An agent asks for input and is answered

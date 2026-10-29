@@ -67,53 +67,6 @@ test("questions from agents open the rail, with their options", () => {
   expect(html).not.toContain("Nobody is waiting on you.");
 });
 
-test("a question names its asker once, marks it unverified, and offers Open agent and Dismiss", () => {
-  const question = (id: string, label: string, verified: boolean) => ({
-    id,
-    at: 0,
-    actor: { label, verified, pane_id: "w1:p6" },
-    question: "Which brief next?",
-    options: [],
-    owner_only: true,
-  });
-  const html = renderToStaticMarkup(
-    createElement(TownRail, {
-      needsYouCount: 2,
-      asks: [
-        question("q-placed", "unverified w1:p6", false),
-        question("q-bare", "unverified w1:p6", false),
-      ],
-      askActions: {
-        // Only the placed one has a Town agent, named as its desk is.
-        askers: new Map([
-          [
-            "q-placed",
-            { name: "dispatch", key: "agent-dispatch", terminal: false },
-          ],
-        ]),
-        answer: async () => null,
-        dismiss: async () => null,
-        open: () => {},
-      },
-      calls: [],
-      activeKey: null,
-      now: 60_000,
-      onPeek: () => {},
-      onOpen: () => {},
-      collapsed: false,
-      onCollapsedChange: () => {},
-    }),
-  );
-  expect(html).toContain(
-    "<b>dispatch</b> (unverified) asks: Which brief next?",
-  );
-  expect(html).toContain("<b>w1:p6</b> (unverified) asks: Which brief next?");
-  expect(html).not.toContain("unverified w1:p6");
-  expect(html.match(/>Open agent</g)).toHaveLength(1);
-  expect(html).toContain('aria-label="Open dispatch"');
-  expect(html.match(/>Dismiss</g)).toHaveLength(2);
-});
-
 test("camera reserves the rail for open questions and respects tray/collapse boundaries", () => {
   expect(townRailInset(960, false, 1)).toBe(252);
   expect(townRailInset(960, false, 0)).toBe(0);
