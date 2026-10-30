@@ -30,38 +30,61 @@ const canBind = (port: number) =>
     socket.listen(port, "0.0.0.0", () => socket.close(() => resolve(true)));
   });
 
+/** How the checker's ports are chosen; tests supply both. */
+export type CheckerPortChoice = {
+  range?: [number, number];
+  free?: (port: number) => Promise<boolean>;
+};
+
 /**
- * A free port for the checker, chosen below the ephemeral range. Apalache
- * takes a port number, not a socket, so it binds about a second after we
- * choose; a port taken from the ephemeral range could meanwhile go to any
- * process binding port 0 (a browser, a test server, another worker). Below
- * that range only a process asking for that exact number can collide, and
- * each worker starts its search at its own offset.
+ * The unprivileged ports outside the ephemeral range, in search order:
+ * 1024 up to the range, then above it. Apalache takes a port number, not a
+ * socket, so it binds about a second after we choose; a port from the
+ * ephemeral range could meanwhile go to any process binding port 0 (a
+ * browser, a test server, another worker). Outside it only a process asking
+ * for that exact number can collide.
+ */
+export function checkerPortPool([low, high]: [number, number]) {
+  const below = Math.max(0, low - 1024);
+  const above = Math.max(0, 65535 - Math.max(high, 1023));
+  if (!below && !above)
+    throw new Error(
+      `No unprivileged port lies outside the ephemeral range ${low}-${high}; narrow net.ipv4.ip_local_port_range to give the verification checker one`,
+    );
+  return {
+    size: below + above,
+    port: (index: number) =>
+      index < below ? 1024 + index : Math.max(high, 1023) + 1 + index - below,
+    index: (port: number) =>
+      port < low ? port - 1024 : below + port - Math.max(high, 1023) - 1,
+  };
+}
+
+/**
+ * The first free pool port from `start` (wrapping at the end). Each worker
+ * starts at its own pid-derived offset; a relaunch continues after the port
+ * that was taken.
  */
 export async function privateCheckerPort(
-  options: {
-    range?: [number, number];
-    free?: (port: number) => Promise<boolean>;
-    start?: number;
-  } = {},
+  options: CheckerPortChoice & { start?: number; after?: number } = {},
 ) {
-  const [ephemeralLow] = options.range ?? ephemeralPortRange();
-  const low = 10_000;
-  const span = Math.max(1, ephemeralLow - low);
+  const pool = checkerPortPool(options.range ?? ephemeralPortRange());
   const free = options.free ?? canBind;
-  const start = options.start ?? (process.pid * 7919) % span;
-  for (let step = 0; step < Math.min(span, 1000); step++) {
-    const port = low + ((start + step) % span);
+  const start =
+    options.after !== undefined
+      ? pool.index(options.after) + 1
+      : (options.start ?? process.pid * 7919);
+  for (let step = 0; step < Math.min(pool.size, 1000); step++) {
+    const port = pool.port((start + step) % pool.size);
     if (await free(port)) return port;
   }
-  throw new Error("No free private checker port below the ephemeral range");
+  throw new Error("No free private checker port outside the ephemeral range");
 }
 
 type CheckerOptions = {
   launch?: (port: number, temporary: string) => string[];
   readiness?: (port: number, pid: number, signal: AbortSignal) => Promise<void>;
-  /** The first candidate port; defaults to privateCheckerPort(). */
-  port?: () => Promise<number>;
+  ports?: CheckerPortChoice & { start?: number };
 };
 
 /** The checker could not bind its port: another process took it first. */
@@ -97,7 +120,7 @@ export async function withPrivateChecker<T>(
   diagnostic?: (text: string) => void,
   options: CheckerOptions = {},
 ) {
-  let port = await (options.port ?? privateCheckerPort)();
+  let port = await privateCheckerPort(options.ports);
   for (let attempt = 1; ; attempt++) {
     try {
       return await runPrivateChecker(
@@ -111,7 +134,11 @@ export async function withPrivateChecker<T>(
     } catch (error) {
       if (!(error instanceof CheckerPortTaken)) throw error;
       if (attempt >= CHECKER_PORT_ATTEMPTS) throw error;
-      const next = await privateCheckerPort({ start: port - 10_000 + 1 });
+      const next = await privateCheckerPort({
+        range: options.ports?.range,
+        free: options.ports?.free,
+        after: port,
+      });
       const notice = `[checker] port ${port} was taken before the checker bound it; starting it on port ${next}`;
       console.warn(notice);
       diagnostic?.(`${notice}\n`);
@@ -176,9 +203,13 @@ async function runPrivateChecker<T>(
       onOutput: (text) => {
         diagnostic?.(text);
         startup = (startup + text).slice(-65536);
+        // Only another process holding this port is worth a new port; any
+        // other startup failure is final and keeps its cause.
         if (
           failure === undefined &&
-          /Failed to bind|already in use/.test(startup)
+          new RegExp(
+            `Failed to bind to address \\S*:${port}: Address already in use`,
+          ).test(startup)
         ) {
           failure = new CheckerPortTaken(port);
           readyReject(failure);
@@ -189,7 +220,14 @@ async function runPrivateChecker<T>(
   )
     .then(() => {
       if (!retiring) {
-        failure ??= new Error("Owned checker server exited unexpectedly");
+        const cause = startup
+          .split("\n")
+          .reverse()
+          .find((line) => /error|failed|exception/i.test(line))
+          ?.trim();
+        failure ??= new Error(
+          `Owned checker server exited unexpectedly${cause ? `: ${cause}` : ""}`,
+        );
         readyReject(failure);
         control.abort();
       }
