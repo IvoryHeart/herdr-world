@@ -627,7 +627,21 @@ describe("delivery", () => {
       if (argv[1] === "whoami")
         return {
           code: 0,
-          stdout: JSON.stringify({ ok: true, result: {} }),
+          stdout: JSON.stringify({
+            ok: true,
+            actor: { label: "crew in w1:p9", verified: !refuse.has("verify") },
+            result: {},
+          }),
+          stderr: "",
+        };
+      if (refuse.has("verify") && argv[1] === "ask" && argv.includes("--key"))
+        return {
+          code: 3,
+          stdout: JSON.stringify({
+            ok: false,
+            code: "refused",
+            error: "cause keys require a verified asking pane",
+          }),
           stderr: "",
         };
       const verb = argv[2];
@@ -2663,6 +2677,26 @@ describe("delivery", () => {
     expect(actionsIn(crew, ["pending", "running"])).toEqual([]);
     pass(town({ head: SHA.reviewed, posts: [] }), NOW + 120_000);
     expect(spawned).toHaveLength(6);
+  });
+
+  test("an ask refused while World can't verify the pane is sent once it can", () => {
+    const ready = town({
+      head: SHA.reviewed,
+      posts: ["rev2", "rev-astra", "rev-opus"].map((name) =>
+        confirm(name, SHA.reviewed),
+      ),
+    });
+    // Only the ask is refused; `--version` and `whoami` still answer.
+    refuse.add("verify");
+    pass(ready);
+    pass(ready, NOW + 60_000);
+    expect(notices()).toHaveLength(1);
+    expect(actionsIn(crew, ["failed"])).toHaveLength(1);
+    refuse.clear();
+    pass(ready, NOW + 120_000);
+    pass(ready, NOW + 180_000);
+    expect(notices()).toHaveLength(2);
+    expect(actionsIn(crew, ["pending", "failed"])).toEqual([]);
   });
 
   test("an ask World recorded but nobody saw is kept, said and told once", () => {

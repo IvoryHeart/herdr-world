@@ -19,7 +19,8 @@ type Receipt = {
 
 /**
  * What a failed ask depended on, read without asking: the CLI's version and
- * whether World answers it. `whoami` records nothing and alerts no one.
+ * World's answer to `whoami`, including whether it verified this pane (keyed
+ * asks need that). `whoami` records nothing and alerts no one.
  */
 function failureInputs(deps: Deps) {
   const version = deps.run(["herdr-world", "--version"]);
@@ -28,7 +29,7 @@ function failureInputs(deps: Deps) {
   return [
     `${version.code} ${version.stdout.trim()}`,
     answer?.ok
-      ? "ok"
+      ? `ok ${answer.actor?.verified === true ? "verified" : "unverified"} ${answer.actor?.label ?? ""}`
       : `${world.code} ${answer?.code ?? ""} ${answer?.error ?? (world.stderr || world.stdout).trim().slice(0, 200)}`,
   ].join(" | ");
 }
@@ -54,6 +55,7 @@ function reply(result: ReturnType<Deps["run"]>) {
       ok: boolean;
       code?: string;
       error?: string;
+      actor?: { label?: string; verified?: boolean };
       result?: {
         id?: string;
         answer?: { text: string };
