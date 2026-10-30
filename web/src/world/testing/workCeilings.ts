@@ -63,6 +63,11 @@ export const TOWN_IDLE_WORK_CEILINGS: WorkByPhase = {
   idle: { "commit-frames": 2 },
 };
 
+/** A settled, roof-covered Town has no visible animated pixels. Per test second. */
+export const TOWN_STATIC_WORK_CEILINGS: WorkByPhase = {
+  idle: { draws: 0 },
+};
+
 export type ConcurrentWork = {
   worldWorkByPhase: WorkByPhase;
   terminalWorkByPhase: WorkByPhase;
