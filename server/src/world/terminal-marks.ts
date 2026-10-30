@@ -1,7 +1,7 @@
 import type { createRevisionPublisher } from "./revision-publisher";
 import { WorldCompletionSeenRegistry } from "./completion-seen";
 import { WorldWatchlistRegistry } from "./watchlist";
-import { observedAgentStatus } from "./desk-observation";
+import { admittedAgentPanes } from "./desk-observation";
 
 type HostObservation = (
   connectionId: string,
@@ -43,29 +43,17 @@ export function createTerminalMarks(
     publishCompletionSeenChanged,
     observe: ((connectionId, generation, panes, at, agents = []) => {
       observeDesk(connectionId, generation, panes, at, agents);
-      const statusByPane = new Map<string, unknown>();
-      for (const agent of agents)
-        statusByPane.set(
-          JSON.stringify([agent.pane_id, agent.terminal_id]),
-          agent.agent_status,
-        );
       let changed = false;
-      for (const pane of panes) {
-        if (typeof pane.terminal_id !== "string" || !pane.agent) continue;
-        const status =
-          statusByPane.get(JSON.stringify([pane.pane_id, pane.terminal_id])) ??
-          pane.agent_status;
-        const observed = observedAgentStatus(status);
+      for (const { terminalId, status } of admittedAgentPanes(panes, agents))
         changed =
           worldCompletionSeen.observe(
             {
               connection_id: connectionId,
               connection_generation: generation,
-              terminal_id: pane.terminal_id,
+              terminal_id: terminalId,
             },
-            observed === "working" || observed === "blocked",
+            status === "working" || status === "blocked",
           ).changed || changed;
-      }
       if (changed)
         publishCompletionSeenChanged(worldCompletionSeen.list().revision);
     }) satisfies HostObservation,

@@ -29,13 +29,14 @@ export function observedAgentStatus(status: unknown) {
           : "unknown";
 }
 
-/** Called only for a successfully admitted fresh host read, never cached topology. */
-export function observeDeskPanes(
-  desk: WorldDeskRegistry,
-  connectionId: string,
-  generation: number,
+/**
+ * Each agent pane of one fresh host read, with the status and sequence World
+ * admits for it: an agent.list row counts only when it is the pane's one row
+ * and names the pane's current session; otherwise the pane's own status
+ * stands. Panes sharing a terminal are ambiguous and left out.
+ */
+export function admittedAgentPanes(
   panes: readonly Record<string, unknown>[],
-  observedAt: number,
   agents: readonly Record<string, unknown>[] = [],
 ) {
   const agentByPane = new Map<string, Record<string, unknown> | null>();
@@ -55,6 +56,12 @@ export function observeDeskPanes(
     if (seen.has(pane.terminal_id)) duplicates.add(pane.terminal_id);
     seen.add(pane.terminal_id);
   }
+  const admitted: {
+    terminalId: string;
+    session: string | null;
+    status: ReturnType<typeof observedAgentStatus>;
+    sequence: unknown;
+  }[] = [];
   for (const pane of panes) {
     if (
       typeof pane.agent !== "string" ||
@@ -70,21 +77,43 @@ export function observeDeskPanes(
     const agentSession = deskSessionFingerprint(candidate?.agent_session);
     const agent =
       candidate && agentSession === paneSession ? candidate : undefined;
-    const status =
-      typeof agent?.agent_status === "string" && agent.agent_status
-        ? agent.agent_status
-        : pane.agent_status;
-    const sequence = agent?.state_change_seq ?? pane.state_change_seq;
+    admitted.push({
+      terminalId: pane.terminal_id,
+      session: paneSession,
+      status: observedAgentStatus(
+        typeof agent?.agent_status === "string" && agent.agent_status
+          ? agent.agent_status
+          : pane.agent_status,
+      ),
+      sequence: agent?.state_change_seq ?? pane.state_change_seq,
+    });
+  }
+  return admitted;
+}
+
+/** Called only for a successfully admitted fresh host read, never cached topology. */
+export function observeDeskPanes(
+  desk: WorldDeskRegistry,
+  connectionId: string,
+  generation: number,
+  panes: readonly Record<string, unknown>[],
+  observedAt: number,
+  agents: readonly Record<string, unknown>[] = [],
+) {
+  for (const { terminalId, session, status, sequence } of admittedAgentPanes(
+    panes,
+    agents,
+  )) {
     const identity: DeskIdentity = {
       connection_id: connectionId,
       connection_generation: generation,
-      terminal_id: pane.terminal_id,
-      agent_session_fingerprint: paneSession,
+      terminal_id: terminalId,
+      agent_session_fingerprint: session,
     };
     if (validDeskIdentity(identity))
       desk.observeAgent(
         identity,
-        observedAgentStatus(status),
+        status,
         observedAt,
         Number.isSafeInteger(sequence) && (sequence as number) >= 0
           ? (sequence as number)
