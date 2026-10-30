@@ -30,9 +30,10 @@ session; verified against the
   connection. World turns re-acknowledgement into `session.resync_required`, which
   invalidates the host.
 - Payloads cover different subsets, and `pane.moved` changes the pane ID.
-- The safe baseline is: subscribe, wait for the ACK, then read while draining events.
-  An event during a read makes the read dirty and forces another read. Four separate
-  lists are not an atomic host snapshot.
+- The inventory recommends a stricter discipline: subscribe, wait for the ACK, read
+  while draining, and treat an event during a read as dirty. World today reads before
+  the ACK, reconciles after every ACK and publishes dirty reads before reading again
+  (§4). Four separate lists are not an atomic host snapshot.
 - No event carries World's agent recency (session-file times), its connection
   catalogue or its endpoint availability. `PaneInfo` has no activity time, so recency
   has one source: World.
@@ -224,14 +225,26 @@ host has no snapshot).
 
 ### 4. The Herdr observation baseline
 
-The service follows the inventory's baseline, which is today's behaviour made explicit:
-- Subscribe, wait for the ACK, then read while draining events.
-- An event during a read makes the read dirty and forces another serialized read. A
-  dirty read is never published as current.
-- Subscription loss, `events_lost`, re-acknowledgement, unknown membership or runtime
-  replacement retire actionability and re-list that runtime.
-- Every event invalidates its host for a re-list. Event payloads are never applied to
-  the model.
+The baseline is today's behaviour, written down:
+- **Events invalidate.** Every event invalidates its host for a re-list. Event payloads
+  are never applied to the model.
+- **Reads before the ACK.** Reads may start before the subscription's ACK, and every
+  ACK, including after a reconnect, forces a reconciling re-list
+  (`session.resync_required`, `server/src/connections/runtime.ts`).
+- **Dirty reads.** A read with an event during it is still published; it is cached as
+  dirty, and a late invalidation queues another read (`server/src/world/snapshot.ts`).
+  Continuing events therefore never starve a host of current readings.
+- **Loss and re-acknowledgement.** Subscription loss, `events_lost` and
+  re-acknowledgement invalidate and re-list the host. They do not retire actionability.
+  A host whose subscription keeps failing stays readable and actionable through the 15 s
+  fallback. Runtime replacement and connection loss retire actionability, under the
+  existing qualified-admission rules.
+
+The inventory's stricter discipline would change behaviour: wait for the ACK before
+reading, never publish a dirty read, retire actionability on loss. A ready host whose
+subscription keeps failing would then get no reads, and a busy SSH host could starve.
+Adopting any part of it needs its own requirement and a progress bound; it is not
+proposed here.
 
 Patching the model from event payloads (for example renames, order lists, one tab's
 layout or one pane's status) is **deferred**. The measured cost is browsers × events,
@@ -398,9 +411,11 @@ IDs before inserting it.
 - A global name, when one is needed, is an `agent+local` URI under the owner's agent URI
   draft, composed of the instance and the local ID. It is not built here.
 
-**A binding** links a World record to a source entity:
-`{ record, adapter, instance, kind, native_id, evidence, state, checked_at }`. For
-Herdr, `instance` is the connection ID.
+**A binding** links a World record that claims identity with a source entity to that
+entity: `{ record, adapter, instance, kind, native_id, evidence, state, checked_at }`.
+For Herdr, `instance` is the connection ID. Layout preferences claim no identity
+(`world-surfaces`, "Board persistence and identity"), so they are not bindings. They
+stay keyed by native ID, and a reused ID inherits them.
 
 **Evidence kinds** (Herdr, verified facts):
 
@@ -467,6 +482,7 @@ the explicit unknown identity bind to the terminal instead.
 | Per-terminal settings (§11) | stored on the terminal in Herdr; `world_terminal` witness | the terminal itself | the terminal ends | gone with the terminal |
 | Watchlist pin | connection, generation and terminal (memory) | none | runtime replacement or service restart | cleared (current contract) |
 | Desk marks | connection, generation, terminal and session, or the explicit unknown session (memory) | none | runtime or session replacement, or service restart | cleared (current contract) |
+| Layout preference (Board card position, pin and fold; workspace and host colour) | **not a binding**: connection profile and native ID only, with no evidence | none; inherited when an ID is reused | none | kept (current contract) |
 
 Whether Board strings should also follow moves made outside World, through C1, is an
 optional owner decision. It would be a MODIFIED Board requirement; this change keeps
@@ -716,10 +732,17 @@ the first outbox in `world.sqlite`:
   ID, and the terminal or session evidence. It never captures a bare runtime
   generation as its target.
 - Each attempt records its own fences when it is claimed and checks them at dispatch.
-- After an incarnation change, the intent re-resolves its target from those fields to
-  a current qualified target. If it cannot, it is marked not sent.
 - A target with no pane resource, such as an owner alert, captures only the connection
   ID. Each retry binds to that connection's current runtime lease.
+
+**Resolution.** Before every dispatch, including the first after an incarnation change,
+targets resolve by binding state (§7):
+- **attached:** dispatch, under the recovery matrix;
+- **unresolved:** wait and stay pending, with no time limit. This covers right after a
+  restart, before any host is observed; an offline host; and a partial listing;
+- **ended or unconfirmed:** record "not sent", but only when no attempt reached
+  `dispatching`. Otherwise the recovery matrix decides, so an opaque intent whose pane
+  closed after a possible send becomes `uncertain`, never a false "not sent".
 
 **Outbox.** An intent is committed in the same transaction as the domain change that
 needs it. Only durable work goes through the outbox: work that must survive a restart,
@@ -761,9 +784,23 @@ for a signal belongs to the authoring model.
 
 **Queued, state-conditioned intents** (owner rule). Only verbs that declare
 `queueable` can be queued. Such an intent captures the target state it was made
-against. On reconnect it is dispatched if that state is unchanged, whatever its age,
-and recorded as not sent if the state has changed. There is no expiry timer. Terminal
-input and Chat sends are never queueable, so there is never a second send queue.
+against. On reconnect it is dispatched if that state is unchanged, whatever its age. If
+the state has changed, it is recorded as not sent, provided no attempt reached
+`dispatching`. There is no expiry timer.
+
+The generic terminal input and Chat send verbs are never queueable, so there is never a
+second send queue. A declared verb that delivers one stored record to its bound
+recipient may be queueable. For example, `world.ask.deliver-answer` in the
+ask-answer delivery change delivers an ask's answer to its asker. Such a verb must
+meet four conditions:
+- it reads the record's text at dispatch and copies none of it into the intent;
+- it is conditioned on the recipient's binding and on the record still awaiting
+  delivery;
+- it is `opaque`;
+- it dispatches through Chat's guarded send checks: current lease, session fence and
+  input admission.
+
+The answering actor's policy is rechecked at dispatch.
 
 **Time.**
 - Core code reads time and defers work only through `Clock` and `Scheduler`. A lint

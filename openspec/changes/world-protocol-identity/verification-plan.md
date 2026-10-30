@@ -185,7 +185,9 @@ two policies:
   - `crashBeforeClaimCommit`, `crashAfterClaim`, `crashAfterDispatch`;
   - restart (a new incarnation, generation 1 again) and recover;
   - reconcile and reattach;
-  - `targetGone`: the captured target no longer resolves;
+  - `hostOffline`: the target's binding becomes unresolved;
+  - `targetGoneBeforeDispatch` and `targetGoneAfterDispatch`: the binding ends with or
+    without an attempt that reached `dispatching`;
   - cancel and revoke;
   - `ownerDecide`;
   - `upgradeWithoutVersion` and `migrate`.
@@ -201,16 +203,24 @@ two policies:
   - `completedNeverReplayed`.
   - `noGenerationCapture`: after a restart, dispatch uses a re-resolved target and never
     the creation generation.
+  - `unresolvedWaits`: an intent whose binding is unresolved is neither dispatched nor
+    recorded as not sent.
+  - `noFalseNotSent`: "not sent" is recorded only when no attempt reached
+    `dispatching`.
 - **Witnesses:** one per row of the recovery matrix in `design.md` §12, plus:
   - `ownerAlertRetried`;
-  - `restartReResolved`;
-  - `restartNotSent`, when the target is gone.
+  - `restartWaitsThenDispatches`;
+  - `offlineWaits`;
+  - `endedBeforeDispatchNotSent`;
+  - `goneAfterDispatchUncertain`.
 - **Controls.**
   - Model: `BROKEN` retries opaque intents after a crash.
   - Code: the authorization recheck is skipped, which must fail `effect.authorized`.
   - Code: the idempotency key is dropped on retry, which must fail `effect.receipt`.
   - Code: the creation generation is reused after a restart, which must fail
     `effect.target`.
+  - Code: "not sent" is recorded after `dispatching`, which must fail
+    `effect.notSent`.
 - **Adapter.** The real outbox runs on a temporary `world.sqlite`, closed and reopened
   at named crash points. A scripted adapter implements each recovery class. This is
   committee test stage T4.
@@ -244,7 +254,7 @@ changes are additive.
 | Q18 Watchlists | `runtime-leases`, `browser-refresh` | unchanged | M2: the watchlist becomes a replaceable query; a service restart is an incarnation reset |
 | Q20 Shared entity identity | `browser-preparation`, `space-admission` | adds a regression: identity reuse never aliases hosts or generations | M2 keys plus `space-admission` |
 | Q32 File search and drafts | `browser-preparation`, `runtime-leases` | unchanged | M2 |
-| Q04 Herdr subscriptions | `runtime-leases`, `runtime-drain` | adds direct tests for the observation baseline (dirty read, lost events, re-acknowledgement, payloads never applied) | unchanged |
+| Q04 Herdr subscriptions | `runtime-leases`, `runtime-drain` | adds direct tests for today's baseline: reads before the ACK; a reconcile after every ACK; dirty reads published and then re-read; loss invalidating without retirement; payloads never applied | unchanged |
 | Q10, Q11 Aggregate observation and scheduling | direct scheduler tests | adds direct tests: token stability and the confirmation rule | adds P2's delivery-path equivalence |
 | Q24 Desk receipts and marks | direct tests | unchanged | unchanged, unless the owner approves durable marks |
 

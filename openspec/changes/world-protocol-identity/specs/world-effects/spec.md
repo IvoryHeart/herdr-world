@@ -31,11 +31,18 @@ and the terminal or session evidence. A target SHALL NOT be a bare runtime gener
 A target with no pane resource, such as an owner alert, SHALL capture only the
 connection ID.
 
-**Dispatch.** Each attempt SHALL record its own fences when it is claimed. After a
-service incarnation change, an intent SHALL re-resolve its targets to current qualified
-targets, or be recorded as not sent. Dispatch SHALL happen only from committed intents.
-Interactive commands that need not outlive the request SHALL keep their direct path
-and existing uncertainty rules.
+**Dispatch.** Each attempt SHALL record its own fences when it is claimed. Dispatch
+SHALL happen only from committed intents. Interactive commands that need not outlive
+the request SHALL keep their direct path and existing uncertainty rules.
+
+**Resolution.** Before every dispatch, including the first after a service incarnation
+change, an intent's targets SHALL be resolved by their binding state:
+- **attached:** dispatch may proceed, under the recovery rules;
+- **unresolved:** the intent SHALL wait and stay pending, with no time limit. This
+  covers a host not yet observed after a restart, an offline host and a partial
+  listing;
+- **ended or unconfirmed:** the intent SHALL be recorded as not sent, but only when none
+  of its attempts reached dispatching. Otherwise its recovery class decides the outcome.
 
 #### Scenario: Crash after commit
 - **WHEN** World commits a domain change and its intent, then stops before dispatching
@@ -49,8 +56,23 @@ and existing uncertainty rules.
 #### Scenario: Intent from before a restart
 - **WHEN** an intent captured a pane target under one service incarnation and World
   restarts at the same runtime generation number
-- **THEN** the intent re-resolves the target from its captured fields and evidence, and
-  is recorded as not sent if the target no longer resolves
+- **THEN** the intent waits while its host is not yet observed, and is dispatched once
+  its binding is attached again from the captured fields and evidence. It never
+  dispatches against the creation generation
+
+#### Scenario: Host offline when the intent is due
+- **WHEN** an intent's target host is offline
+- **THEN** the intent stays pending, whatever the time, and is resolved when the host is
+  observed again
+
+#### Scenario: Target gone before any dispatch
+- **WHEN** an intent's target binding ends and none of its attempts reached dispatching
+- **THEN** the intent is recorded as not sent
+
+#### Scenario: Target gone after a possible dispatch
+- **WHEN** an opaque intent's attempt reached dispatching and its pane then closes
+- **THEN** the intent is marked uncertain, not "not sent", and is never re-sent
+  automatically
 
 #### Scenario: Owner alert after a restart
 - **WHEN** an owner alert's intent is pending when World restarts
@@ -160,10 +182,18 @@ Only verbs that declare themselves queueable SHALL be queued for later dispatch.
 queued intent SHALL capture the target state it was made against. When it can next be
 dispatched, World SHALL:
 - dispatch it if that state is unchanged, however much time has passed;
-- otherwise record it as not sent because the target changed.
+- otherwise record it as not sent because the target changed, provided no attempt
+  reached dispatching.
 
-No expiry timer SHALL remove a queued intent. Terminal input and Chat sends SHALL NOT be
-queueable.
+No expiry timer SHALL remove a queued intent.
+
+The generic terminal input and Chat send verbs SHALL NOT be queueable, so there is
+never a second send queue. A declared verb that delivers one stored record to its bound
+recipient, such as an ask's answer to its asker, MAY be queueable only when it:
+- reads the record's text at dispatch and copies none of it into the intent;
+- is conditioned on the recipient's binding and on the record still awaiting delivery;
+- uses the opaque recovery class;
+- dispatches through the same guarded send checks as an interactive send.
 
 #### Scenario: Unchanged target on reconnect
 - **WHEN** a host reconnects after a long outage and a queued intent's target state is
@@ -173,6 +203,17 @@ queueable.
 #### Scenario: Changed target on reconnect
 - **WHEN** a host reconnects and a queued intent's target state has changed
 - **THEN** the intent is not sent, and records that its target changed
+
+#### Scenario: An ask's answer after a reconnect
+- **WHEN** the owner answers an ask while the asker's host is offline, and the asker's
+  session is unchanged when the host returns
+- **THEN** the stored answer is delivered once through the guarded send path. If the
+  session changed instead, the delivery is recorded as not sent and the answer stays
+  readable on the ask
+
+#### Scenario: A Chat message while offline
+- **WHEN** the owner types a Chat message to an agent whose host is offline
+- **THEN** the message is not queued for later delivery
 
 ### Requirement: Durable deadlines and injected time
 

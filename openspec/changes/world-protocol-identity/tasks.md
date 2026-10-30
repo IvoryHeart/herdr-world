@@ -58,9 +58,13 @@ with the `openspec-sync-specs` skill.
 
 ## 4. Herdr observation baseline
 
-- [ ] 4.1 Add direct tests for the baseline, and map them to Q04:
-  - a read during events is read again, and never published while dirty;
-  - lost events and re-acknowledgement retire and re-list;
+- [ ] 4.1 Add direct tests for today's baseline, and map them to Q04:
+  - a read may start before the acknowledgement, and every acknowledgement forces a
+    reconciling re-list;
+  - a dirty read is published and followed by another read, so continuing events don't
+    starve the host;
+  - loss and re-acknowledgement invalidate and re-list without retiring actionability;
+  - a ready host with a failing subscription stays readable and actionable;
   - event payloads are never applied.
 
   Sync the baseline requirement with stage 3's docs. Event payload patching stays an
@@ -102,9 +106,13 @@ with the `openspec-sync-specs` skill.
   - new IDs don't collide with imported ones;
   - a restored copy of the data folder doesn't reissue IDs.
 - [ ] 6.2 Build the binding resolver with per-kind declarations. Write Board strings,
-  appearance, colour and interest down with today's rules, and move them onto it
-  without changing their visible states. Verify with M4 replay for both policies and
-  the existing Board and appearance witness tests, unchanged.
+  appearance, tab colour and interest down with today's rules, and move them onto it
+  without changing their visible states. Layout preferences stay off the resolver:
+  Board card positions, pins and folds, and workspace and host colours stay keyed by
+  native ID and are inherited on reuse. Verify with:
+  - M4 replay for both policies;
+  - the existing Board and appearance witness tests, unchanged;
+  - a test that a reused workspace ID still inherits its card layout and colour.
 - [ ] 6.3 Add claims for the multi-source fields, agent status and PR links, each with
   its display rule. Verify each field: claims coexist, silence doesn't remove a claim,
   and authority is declared by the verb.
@@ -144,9 +152,13 @@ with the `openspec-sync-specs` skill.
 - [ ] 8.2 Check in the recovery-matrix tests, red (committee item 15 exit). Verify that
   every row of the matrix in `design.md` §12 has a named test, including `repeatable`.
 - [ ] 8.3 Apply the target rule to the `world.sqlite` outbox: binding fields captured
-  inline, no bare generation, re-resolution or "not sent" after an incarnation change,
-  and connection-only targets for owner alerts. Verify with a restart test at the same
-  generation number.
+  inline, no bare generation, and connection-only targets for owner alerts. Resolution
+  follows the binding state: attached dispatches, unresolved waits, and ended or
+  unconfirmed is "not sent" only before any dispatching. Verify with tests:
+  - a restart at the same generation number waits, then dispatches once the binding
+    is attached;
+  - an offline host keeps the intent pending;
+  - a pane that closes after `dispatching` yields `uncertain`.
 - [ ] 8.4 Build the outbox, attempts, version pinning and durable deadlines on a
   temporary `world.sqlite`. Verify with the matrix tests green and M5 replay with crash
   points.

@@ -22,10 +22,14 @@ and the workflow authoring model stays undecided.
   watched once per pane. This change only fixes the owner key that change uses for
   interests: the connection ID and runtime generation, plus the agent session when the
   resource is session-scoped.
-- **The Herdr observation baseline.** Herdr events only invalidate. The service
-  subscribes, waits for the acknowledgement, reads while draining, reads again after a
-  dirty read, and retires and re-lists on loss. Patching from event payloads is
-  deferred until it is measured after v1 and shared acquisition.
+- **The Herdr observation baseline**, as today. Herdr events only invalidate.
+  - Reads may start before the subscription is acknowledged, and every acknowledgement
+    forces a reconciling re-list.
+  - A dirty read may be published, and another read follows.
+  - Loss or re-acknowledgement invalidates and re-lists the host.
+
+  Patching from event payloads is deferred until it is measured after v1 and shared
+  acquisition.
 - **Observation v2: World subscriptions,** gated on evidence from Herdr and World's own
   consumers. They have:
   - named queries;
@@ -39,6 +43,8 @@ and the workflow authoring model stays undecided.
   short World-issued IDs and verified source bindings.
   - Each record kind declares its continuity and absence rules. Board strings and
     appearance keep their current rules exactly.
+  - Layout preferences claim no identity, so they stay keyed by native ID, and a
+    reused ID inherits them.
   - An ambiguous match never attaches.
   - Fields with several sources carry per-field claims with provenance.
   - Desk marks, the watchlist and "seen" can later persist against these bindings.

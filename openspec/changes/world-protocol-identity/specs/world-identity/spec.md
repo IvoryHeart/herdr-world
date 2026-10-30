@@ -39,7 +39,8 @@ SHALL change when World, Herdr or a connection restarts.
 
 ### Requirement: Verified source bindings
 
-A World record SHALL refer to a source entity only through a binding that names:
+A World record that claims identity with a source entity SHALL refer to it only through
+a binding that names:
 - the adapter;
 - the source instance, which for Herdr is the connection ID;
 - the entity kind;
@@ -96,6 +97,15 @@ Rules for each state:
 - **Agent interest:** follows its terminal and is dropped only by a complete pane
   listing of the current runtime that omits it.
 
+**Layout preferences are not bindings.** This covers Board card positions, pins and
+folds, and the workspace and host colours saved under card keys. They claim no
+identity. Each SHALL:
+- key on the connection profile and native ID only;
+- carry no continuity evidence;
+- be inherited when a native ID is reused.
+
+Tab colours stay terminal appearance, under the Terminal colour requirement.
+
 #### Scenario: Host offline
 - **WHEN** a bound entity's host is offline or its listing is partial
 - **THEN** the binding is unresolved, keeps its saved target, authorizes nothing and is
@@ -130,6 +140,12 @@ Rules for each state:
 #### Scenario: Duplicate native identity
 - **WHEN** one current observation shows the same session or terminal in two panes
 - **THEN** the binding stays unresolved, authorizes nothing and is not ended
+
+#### Scenario: A workspace ID is reused
+- **WHEN** Herdr restarts and a new workspace reuses a workspace ID that had a Board card
+  position and a workspace colour
+- **THEN** the new workspace inherits that position and colour, as today. A Board string
+  to the old workspace becomes unconfirmed, not attached
 
 #### Scenario: Look-alike entity
 - **WHEN** a new pane has the same label, directory and agent kind as an ended one

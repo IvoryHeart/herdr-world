@@ -134,14 +134,16 @@ Preparation rules:
 
 ### Requirement: Herdr observation baseline
 
-The service SHALL treat Herdr events as invalidation, not as an authoritative replica.
-- It SHALL subscribe and wait for the subscription's acknowledgement before reading.
-- It SHALL mark a host read dirty when a relevant event arrives during it, SHALL NOT
-  publish a dirty read as current, and SHALL read again.
-- On subscription loss, lost events, re-acknowledgement, unknown membership or runtime
-  replacement, it SHALL retire actionability and re-list the affected runtime.
+The service SHALL treat Herdr events as invalidation, not as an authoritative replica,
+and SHALL NOT apply event payloads, buffered or live, to the observed model.
 - Every event SHALL invalidate its host for a complete re-list.
-- The service SHALL NOT apply event payloads, buffered or live, to the observed model.
+- Reads MAY start before the event subscription is acknowledged. Every acknowledgement,
+  including one after a reconnect, SHALL force a reconciling re-list of that host.
+- A read during which a relevant event arrived MAY be published, and another read SHALL
+  follow it.
+- Subscription loss, lost events and re-acknowledgement SHALL invalidate the host and
+  re-list it. They SHALL NOT by themselves retire actionability. Runtime replacement
+  and connection loss retire it, under the existing qualified-admission rules.
 
 #### Scenario: A pane moves
 - **WHEN** Herdr reports a pane move, which can change the pane's ID
@@ -149,12 +151,18 @@ The service SHALL treat Herdr events as invalidation, not as an authoritative re
 
 #### Scenario: Events were lost
 - **WHEN** Herdr reports lost events or the subscription is re-acknowledged
-- **THEN** the host's observations become non-actionable until a complete re-list of the
-  current runtime is admitted
+- **THEN** the service invalidates and re-lists that host, and its controls stay
+  available unless its runtime was replaced
 
 #### Scenario: Event during a read
 - **WHEN** a relevant event arrives while a host read is in progress
-- **THEN** that read is not published as current, and another serialized read follows
+- **THEN** that read may be published and another read follows, so continuing events
+  never starve the host of current readings
+
+#### Scenario: Event subscription keeps failing
+- **WHEN** a ready host's event subscription keeps failing
+- **THEN** the host stays readable and actionable through the existing fallback refresh,
+  and each later acknowledgement forces a reconciling re-list
 
 ### Requirement: World subscriptions with cursors
 
