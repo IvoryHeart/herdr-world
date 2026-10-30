@@ -64,6 +64,16 @@ per run; each case retains its own server, fixture and fresh browser profile.
 Focused test files build a bundle once per file. Production responsiveness cases
 are serial within each file so their global diagnostic instrumentation cannot overlap.
 
+Keep policy checks headless once a replacement test and its mapping in
+`verification/coverage.json` exist. Retained browser cases name the behavior that
+requires a browser: geometry, trusted input, focus, rendering, renderer lifecycle
+or visual comparison. For example, `useWorldCreatedTerminal.test.ts` mounts the
+production creation hook and the Inspector selection-lease effect on the test
+clock to check admission retries, deadline cancellation and stale observations. `WorldTerminalHandoff.test.ts` and
+`SharedViewCreation.test.ts` retain launcher wiring, focus, rendered Inspectors and
+real terminal ownership. Controlled opener tests do not replace browser evidence
+that the actual opener honors cancellation.
+
 **Known limitation: native sequential World browser runs.** Direct `bun test` runs
 across multiple `HostsFilter*.test.ts` or `ProductionContexts*.test.ts` files,
 without `--parallel` or runner-prepared assets, can serve missing browser assets

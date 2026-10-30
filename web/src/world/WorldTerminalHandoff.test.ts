@@ -18,7 +18,7 @@ const chrome =
     : Bun.which("google-chrome") || Bun.which("chromium"));
 
 test.skipIf(!chrome)(
-  "World keeps navigator, managed windows, and terminal identities aligned",
+  "rendering, focus, geometry and terminal lifecycle: World navigator and managed windows",
   async () => {
     const dir = await mkdtemp(join(tmpdir(), "world-terminal-handoff-"));
     const assets = new Map<string, Blob>();
@@ -170,8 +170,8 @@ test.skipIf(!chrome)(
                       "Created-pane deadline declaration changed",
                     );
                   }
-                  // The real 21-second policy is covered by officeRoomActions.test.ts.
-                  // This browser case verifies deadline cleanup without a real wait.
+                  // The full deadline policy runs on the headless test clock.
+                  // Browser coverage retains actual opener/focus cancellation wiring.
                   return {
                     contents: source.replace(
                       declaration,

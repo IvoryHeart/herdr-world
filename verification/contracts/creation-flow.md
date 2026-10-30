@@ -49,6 +49,18 @@ executes the actual hook: held creation after explicit Inspector close must not
 reopen it, and view changes retain presentation. Existing terminal-handoff browser
 tests check the real opener. These consumer assumptions remain reviewable evidence.
 
+`useWorldCreatedTerminal.test.ts` also mounts the actual hook with the real creation
+coordinator, admission transition and the selection-lease effect extracted from
+the Inspector controller, with synthetic World observations and a deferred opener. The fixture test clock advances the full production admission window. It
+replaces terminal-handoff browser policy assertions for overlapping opens,
+transient retry and deadline/late completion, and shared-view stale-observation
+admission. It checks the signal supplied to the opener, subscription cleanup and
+notice settlement. Stale observations run through the actual lease effect while
+creation is pending; disconnected, replaced and removed owners retire intent.
+Its controlled opener does not establish actual browser focus
+or cancellation wiring. The browser keeps launcher-to-Inspector rendering,
+explicit Close-button supersession, view handoff and terminal lifecycle checks.
+
 ## Properties, witnesses and negative controls
 
 `safety` requires source retention exactly through preparation/dispatch, current

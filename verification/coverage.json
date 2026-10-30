@@ -645,13 +645,14 @@
         "web/src/worldCreation.test.ts",
         "web/src/world/SharedViewCreation.test.ts",
         "web/src/world/createdTerminalAdmission.test.ts",
+        "web/src/world/useWorldCreatedTerminal.test.ts",
         "web/src/components/ModalDialogs.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/175",
       "technique": "creation-composition",
       "assessment": "prepare, source acquisition, dispatch, result admission and newer user intent",
       "status": "modeled",
-      "remaining": "Workspace/shared/bootstrap branches, real UI wiring, opener cancellation and deadlines retain existing store/browser evidence.",
+      "remaining": "Workspace/shared/bootstrap branches retain existing store evidence. The real hook on the test clock covers observation retry, deadline cancellation and stale topology; real UI wiring and opener/terminal lifecycle retain the required browser consumers.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
       "partialEvidence": {
         "models": ["quint/creation-flow.qnt"],
@@ -663,6 +664,7 @@
           "quint/creation-flow.test.ts",
           "web/src/worldCreation.test.ts",
           "web/src/world/SharedViewCreation.test.ts",
+          "web/src/world/useWorldCreatedTerminal.test.ts",
           "web/src/world/WorldTerminalHandoff.test.ts"
         ],
         "checks": [
@@ -671,6 +673,7 @@
         ],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
       },
+      "evidenceDecision": "useWorldCreatedTerminal.test.ts replaces the WorldTerminalHandoff browser policy checks for overlapping created-seat focus, transient retry and the admission deadline/late completion, and SharedViewCreation stale-observation admission. It mounts the production creation hook and the Inspector controller’s extracted selection-lease effect, drives real coordinateCreation and admitCreatedTerminal with controlled time, and supplies deferred opener outcomes. Stale observations preserve intent while disconnect, replacement and removal retire it. Browser consumers still cover launcher wiring, actual opener cancellation, focus, layout, rendering and terminal ownership; no Q39/Q43 input or latency claim moves.",
       "promotion": {
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
@@ -879,7 +882,8 @@
         "web/src/world/inspectorTerminalHandoff.test.ts",
         "web/src/browserNavigation.test.ts",
         "web/src/store/refresh.test.ts",
-        "web/src/world/WorldTerminalHandoff.test.ts"
+        "web/src/world/WorldTerminalHandoff.test.ts",
+        "web/src/world/useWorldCreatedTerminal.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/175",
       "technique": "creation-composition",
