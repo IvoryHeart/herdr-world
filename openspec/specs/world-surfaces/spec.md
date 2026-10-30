@@ -1537,9 +1537,10 @@ Because Herdr may report a finished agent as idle, Town SHALL also treat an
 agent it observes going from working or blocked to idle as done until checked.
 A check covers one completion: when the agent works, asks or finishes again,
 its next completion SHALL be unchecked. This browser-local state SHALL NOT
-represent approval or mutate Herdr. Desks
-SHALL carry their tab's name from the room level, and each seat its agent's or
-terminal's name at the desk level. An idle agent SHALL move to a lounge spot in its
+represent approval or mutate Herdr. A desk SHALL show its sole agent's Herdr
+name when exactly one named agent occupies the tab; otherwise it SHALL show
+the tab label, or `Tab N` when the tab has no label. Each seat SHALL show its
+agent's or terminal's name at the desk level. An idle agent SHALL move to a lounge spot in its
 building, or remain seated with an idle cue when no spot is free. When an
 agent's status changes, it SHALL move to its new location, and an answered agent
 SHALL return to its seat. Location and movement SHALL be presentation only: they
@@ -1559,6 +1560,27 @@ SHALL include a current asking agent in Needs you regardless of working/idle
 status. A reception question entry SHALL open its original pane in one action. An
 asking shell pane, such as the watcher, SHALL receive a reception entry
 and Board/Desk marks without inventing an agent harness or changing Herdr status.
+
+#### Scenario: A desk has one named agent
+
+- **WHEN** a tab named `Claude` contains exactly one agent named `example-seat`
+- **THEN** its desk nameplate shows `example-seat`
+
+#### Scenario: A desk's agent has no Herdr name
+
+- **WHEN** a tab named `Claude` contains one agent with no Herdr name
+- **THEN** its desk nameplate shows `Claude`
+
+#### Scenario: A tab contains multiple agents
+
+- **WHEN** a tab named `Claude` contains more than one agent, even if one has a
+  Herdr name
+- **THEN** its desk nameplate shows `Claude`
+
+#### Scenario: A tab has no name to fall back to
+
+- **WHEN** a tab has no name and does not contain exactly one named agent
+- **THEN** its desk nameplate shows `Tab N` using the tab's number
 
 #### Scenario: An agent asks for input and is answered
 

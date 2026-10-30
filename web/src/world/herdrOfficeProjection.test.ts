@@ -150,14 +150,15 @@ describe("Pixel Office projection", () => {
     expect(agent.harness).toBe("claude");
   });
 
-  test("a desk uses its sole named agent's name and otherwise keeps the tab label", () => {
+  test("a desk prefers its sole named agent, then the tab label, then its number", () => {
     const projectionFor = (
       paneCount: number,
       names: Array<string | undefined>,
+      tabLabel = "Claude",
     ) => {
       const source = connection(
         "alpha",
-        [{ ...tab("shared", 1), label: "Claude", pane_count: paneCount }],
+        [{ ...tab("shared", 1), label: tabLabel, pane_count: paneCount }],
         Array.from({ length: paneCount }, (_, index) =>
           pane("shared", "working", `claude-${index}`, index),
         ),
@@ -181,6 +182,7 @@ describe("Pixel Office projection", () => {
     expect(projectionFor(1, ["example-seat"])).toBe("example-seat");
     expect(projectionFor(1, [undefined])).toBe("Claude");
     expect(projectionFor(2, ["first-seat", "second-seat"])).toBe("Claude");
+    expect(projectionFor(1, [undefined], "")).toBe("Tab 1");
   });
 
   test("a reception chip names the waiting agent by its Herdr name", () => {
