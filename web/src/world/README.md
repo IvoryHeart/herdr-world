@@ -264,7 +264,13 @@ World preparation and one view projection per snapshot, however much typing and
 output run alongside. Dev-only counters in the production modules
 (`countWorldWork` in [devtools/renderer.ts](devtools/renderer.ts), absent from
 release builds) supply the World counts; construction is counted in units, not
-in its time-bounded slices. A change that does more work per event fails there.
+in its time-bounded slices. `world.sync-build` counts a `buildWorldObject` that
+render had to build because preparation had not (preparation builds the
+focused host's variant, so a refresh needs none), and `colors.derive` counts
+terminal-colour derivations (once per colour hook per changed input, never per
+render). Unit tests read the same counters through
+[testing/countedWorldWork.ts](testing/countedWorldWork.ts). A change that does
+more work per event fails there.
 Raise a ceiling only in a reviewed change that explains the new work.
 The Hosts filter fixture's `town-idle` case holds idle Town, with an
 Inspector and its line open, to the same file's idle ceiling: React commits in

@@ -1,4 +1,3 @@
-import { projectAgent, target } from "./officeAgent";
 import type { OfficeHost } from "./officeHost";
 export type { OfficeHost } from "./officeHost";
 import type {
@@ -6,7 +5,6 @@ import type {
   OfficeCoverage,
   OfficeDesk,
   OfficeDeskRosterEntry,
-  OfficePaneDevice,
   OfficePaneRosterEntry,
   OfficeReception,
   OfficeRoom,
@@ -30,7 +28,6 @@ export type {
 } from "./officeProjectionTypes";
 import type {
   WorldAgentStatus,
-  WorldLeafObject,
   WorldObject,
   WorldSpaceObject,
 } from "./worldObject";
@@ -47,8 +44,16 @@ import {
   withOfficeReadModel,
 } from "./officeReadModel";
 import { stableNumber } from "./stableNumber";
-import { boundedOptionalText, yieldWorldTask } from "./worldObject";
+import { yieldWorldTask } from "./worldObject";
 import { tabCardKey } from "../../../shared/terminalColor";
+import {
+  buildRoom,
+  compareAgents,
+  compareDeskCandidates,
+  constructRoom,
+  projectPaneDevices,
+  type ProjectedRoom,
+} from "./officeRoom";
 
 export const OFFICE_PRESENTATION_BOUNDS = Object.freeze({
   rooms: 128,
@@ -109,24 +114,6 @@ export type HerdrOfficeProjection = {
     totalBarAgents: number;
     renderedBarAgents: number;
   };
-};
-
-type ProjectedRoom = {
-  host: OfficeHost;
-  source: WorldSpaceObject;
-  room: Omit<
-    OfficeRoom,
-    | "desks"
-    | "roomAgents"
-    | "omittedDeskCount"
-    | "omittedAgentCount"
-    | "observedDeskCount"
-    | "observedAgentCount"
-    | "deskFold"
-    | "deskRenderLimit"
-  >;
-  desks: OfficeDesk[];
-  agents: OfficeAgent[];
 };
 
 const projectionInputs = new WeakMap<
@@ -895,7 +882,23 @@ export async function prepareWorldOffice(
   for (let index = 0; index < orderedSpaces.length; index++) {
     if (!isCurrent()) return;
     const space = orderedSpaces[index]!;
-    const room = buildRoom(space, hosts.get(space.parentId)!);
+    // A large room is not one indivisible slice: construction yields per
+    // pane, desk and agent, and nothing is published until it completes.
+    const construction = constructRoom(
+      space,
+      hosts.get(space.parentId)!,
+      OFFICE_PRESENTATION_BOUNDS.paneDevicesPerDesk,
+    );
+    let step = construction.next();
+    while (!step.done) {
+      if (performance.now() - sliceStart >= OFFICE_PREPARATION_SLICE_MS) {
+        await yieldTask();
+        if (!isCurrent()) return;
+        sliceStart = performance.now();
+      }
+      step = construction.next();
+    }
+    const room = step.value;
     preparedRooms.set(space, room);
     const canonical = canonicalRoomRoster(room);
     observation.readModel.addRoom(room.room.key, canonical.agents);
@@ -958,125 +961,9 @@ export async function prepareWorldOffice(
 
 function projectRoom(space: WorldSpaceObject, host: OfficeHost): ProjectedRoom {
   const prepared = preparedRooms.get(space);
-  return prepared ? { ...prepared, host } : buildRoom(space, host);
-}
-
-function buildRoom(space: WorldSpaceObject, host: OfficeHost): ProjectedRoom {
-  const operational = space.capabilities.openSpaces;
-  const roomKey = space.id;
-  // Desks keep Herdr's tab order: tab.list order is the source of truth, and
-  // a moved tab keeps the number it had.
-  const desks = space.tabs.map(
-    (tab, index): OfficeDesk => ({
-      key: JSON.stringify([space.connectionId, "tab", tab.tab_id]),
-      hostKey: host.key,
-      roomKey,
-      tabRef: target(space, "tab", tab.tab_id),
-      terminalSelectionKeys: space.children
-        .filter(({ tabId }) => tabId === tab.tab_id)
-        .map(({ id }) => id)
-        .sort(),
-      observedGeneration: space.generation,
-      displayLabel: boundedOptionalText(tab.label, 100) ?? `Tab ${tab.number}`,
-      appearanceStatus: space.children.find((leaf) => leaf.tabId === tab.tab_id)
-        ?.appearance?.status,
-      order: index,
-      stale: space.stale,
-      canOpenInSpaces: operational,
-      completionAgentKeys: [],
-      paneDevices: [],
-      observedPaneCount: Math.max(
-        tab.pane_count,
-        space.children.filter(({ tabId }) => tabId === tab.tab_id).length,
-      ),
-      omittedPaneCount: 0,
-    }),
-  );
-  const deskKeys = new Map(
-    desks.map((desk) => [desk.tabRef.nativeId, desk.key]),
-  );
-  const agents = space.children
-    .filter((leaf): leaf is WorldLeafObject & { kind: "agent" } =>
-      Boolean(leaf.kind === "agent"),
-    )
-    .map((leaf) => projectAgent(leaf, roomKey, host.key, deskKeys))
-    .sort(compareAgents);
-  for (const desk of desks) {
-    desk.paneDevices = projectPaneDevices(space.children, desk).slice(
-      0,
-      OFFICE_PRESENTATION_BOUNDS.paneDevicesPerDesk,
-    );
-    desk.omittedPaneCount = Math.max(
-      0,
-      desk.observedPaneCount - desk.paneDevices.length,
-    );
-    const candidates = agents
-      .filter(
-        (agent) => agent.destination === "room" && agent.deskKey === desk.key,
-      )
-      .sort(compareDeskCandidates);
-    if (candidates[0]) desk.occupantAgentKey = candidates[0].key;
-    desk.completionAgentKeys = agents
-      .filter(
-        (agent) =>
-          agent.semanticStatus === "done" && agent.deskKey === desk.key,
-      )
-      .map(({ key }) => key)
-      .sort();
-  }
-  return {
-    host,
-    source: space,
-    room: {
-      key: roomKey,
-      hostKey: host.key,
-      workspaceRef: target(space, "workspace", space.nativeId),
-      observedGeneration: space.generation,
-      displayLabel: space.label,
-      accessibleLabel: space.label,
-      order: space.workspace.number,
-      stale: space.stale,
-      canOpenInSpaces: operational,
-    },
-    desks,
-    agents,
-  };
-}
-
-const preparedPaneDevices = new WeakMap<OfficeDesk, OfficePaneDevice[]>();
-function projectPaneDevices(
-  leaves: readonly WorldLeafObject[],
-  desk: OfficeDesk,
-): OfficePaneDevice[] {
-  const previous = preparedPaneDevices.get(desk);
-  if (previous) return previous;
-  const devices = leaves
-    .filter(({ tabId }) => tabId === desk.tabRef.nativeId)
-    .sort((left, right) => left.nativeId.localeCompare(right.nativeId))
-    .map((leaf, order) => ({
-      key: JSON.stringify([
-        leaf.connectionId,
-        leaf.generation,
-        "pane-device",
-        leaf.nativeId,
-      ]),
-      nodeId: leaf.id,
-      paneRef: target(leaf, "pane", leaf.nativeId),
-      terminalRef: target(leaf, "terminal", leaf.terminalId),
-      deskKey: desk.key,
-      hostKey: desk.hostKey,
-      roomKey: desk.roomKey,
-      displayLabel: `Pane ${order + 1}${leaf.agentName || leaf.agentLabel ? ` · ${leaf.agentName || leaf.agentLabel}` : ""}`,
-      order,
-      stale: leaf.stale,
-      canOpenInSpaces: leaf.capabilities.openSpaces,
-      ...(leaf.kind === "agent" ? { agentKey: leaf.id } : {}),
-      ...(leaf.agentSessionFingerprint
-        ? { agentSessionFingerprint: leaf.agentSessionFingerprint }
-        : {}),
-    }));
-  preparedPaneDevices.set(desk, devices);
-  return devices;
+  return prepared
+    ? { ...prepared, host }
+    : buildRoom(space, host, OFFICE_PRESENTATION_BOUNDS.paneDevicesPerDesk);
 }
 
 function compareRooms(left: ProjectedRoom, right: ProjectedRoom) {
@@ -1088,19 +975,6 @@ function compareRooms(left: ProjectedRoom, right: ProjectedRoom) {
 }
 
 const NO_EXPANDED_ROOMS: ReadonlySet<string> = new Set();
-
-function compareAgents(left: OfficeAgent, right: OfficeAgent) {
-  return left.key.localeCompare(right.key);
-}
-
-function compareDeskCandidates(left: OfficeAgent, right: OfficeAgent) {
-  return (
-    roomStatusOrder(left.semanticStatus) -
-      roomStatusOrder(right.semanticStatus) ||
-    Number(right.focused) - Number(left.focused) ||
-    left.key.localeCompare(right.key)
-  );
-}
 
 function compareRoomAgents(
   left: OfficeAgent,
@@ -1123,8 +997,4 @@ function compareBarAgents(left: OfficeAgent, right: OfficeAgent) {
     rank(left.semanticStatus) - rank(right.semanticStatus) ||
     left.key.localeCompare(right.key)
   );
-}
-
-function roomStatusOrder(status: WorldAgentStatus) {
-  return status === "working" ? 0 : status === "unknown" ? 1 : 2;
 }

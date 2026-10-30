@@ -376,6 +376,7 @@ export class WorldRuntimeStore {
   private priorityVersion = 0;
   private appliedPriorityVersion = 0;
   private selectedConnectionId: string | null = null;
+  private presentedSelection: () => string | null = () => null;
   private visibleConnectionIds: string[] = [];
   private openConnectionIds: string[] = [];
 
@@ -476,6 +477,16 @@ export class WorldRuntimeStore {
     return this.priorityVersion;
   }
 
+  /**
+   * The focused host as views present it (buildWorldObject's
+   * selectedConnectionId). Preparation builds that variant of the World
+   * object in the background, so render finds it ready instead of building
+   * it synchronously.
+   */
+  presentSelectionFrom(read: () => string | null) {
+    this.presentedSelection = read;
+  }
+
   setSelectedConnectionId(connectionId: string | null) {
     if (this.selectedConnectionId === connectionId) return;
     this.selectedConnectionId = connectionId;
@@ -558,7 +569,9 @@ export class WorldRuntimeStore {
           this.withConnectionHealth(c),
         );
         if (DEVTOOLS) countWorldWork("world.prepare");
+        const selected = this.presentedSelection();
         const world = await prepareWorldObject(parsed.connections, current, {
+          selectedConnectionId: selected,
           yieldTask: () => this.preparationYield("object"),
           // Units, not slices: a construction slice also ends after 8 ms.
           onWorkSlice: DEVTOOLS
@@ -595,7 +608,9 @@ export class WorldRuntimeStore {
             actionable: false,
           };
         });
-        if (!changed) break;
+        // A host focused during preparation is prepared too (only its
+        // host and the index are built again).
+        if (!changed && this.presentedSelection() === selected) break;
         parsed.connections = connections;
       }
       this.appliedPriorityVersion = Math.max(

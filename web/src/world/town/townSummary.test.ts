@@ -9,7 +9,8 @@ import {
 import type { OfficeAgent } from "../herdrOfficeProjection";
 import type { OfficeObservability } from "../officeObservability";
 import type { WorldRuntimeConnection } from "../runtimeStore";
-import { buildWorldObject, worldObjectForHosts } from "../worldObject";
+import { buildWorldObject } from "../worldObject";
+import { worldObjectForHosts } from "../worldFilters";
 import { officeReadModel } from "../officeReadModel";
 import { withTownFinished } from "./townFinished";
 import { townFoldedActivity } from "./townFoldedActivity";
