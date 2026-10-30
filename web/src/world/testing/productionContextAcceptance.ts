@@ -24,6 +24,7 @@ import {
 import { worldBrowserBundle } from "./worldBrowserBundle";
 import { chromeRenderingFlags } from "./chromeRendering";
 import { recordLatency } from "./latencyTrend";
+import { productionWorkCeilings, workViolations } from "./workCeilings";
 
 const chrome =
   Bun.env.CHROME_BIN || Bun.which("google-chrome") || Bun.which("chromium");
@@ -206,6 +207,7 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
         notices: number;
         receivedFrames: number;
         presentedFrames: number;
+        worldWork?: Record<string, Record<string, number>>;
       }>();
       const send = (
         ws: any,
@@ -649,6 +651,7 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
                 paints: observed.paints,
                 receivedFrames: observed.receivedFrames,
                 presentedFrames: observed.presentedFrames,
+                worldWork: observed.worldWork,
               }),
           );
           // Input delays depend on the runner, so they go to the latency
@@ -670,6 +673,17 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
             observed.receivedFrames / 2,
           );
           expect(observed.paints).toBeGreaterThan(view === "board" ? -1 : 2);
+          // Work, not time: one preparation and one view projection per
+          // snapshot, whatever the typing and terminal output alongside.
+          const work = observed.worldWork ?? {};
+          expect(
+            ["initial", "refresh"].map(
+              (stage) => work[stage]?.["world.prepare"],
+            ),
+          ).toEqual([1, 1]);
+          expect(
+            workViolations(work, productionWorkCeilings(view), "production"),
+          ).toEqual([]);
         }
       } finally {
         clearInterval(loopMonitor);

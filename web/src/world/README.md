@@ -246,10 +246,15 @@ two mounted runtimes through dense projection, rendering, refresh and noisy
 output. Keep native key scheduling, cold initialization and aggregate refresh in
 them. They assert only what does not depend on the runner's speed: every input
 reaches the qualified host and generation and is acknowledged once, frames are
-coalesced, and the work per phase stays within ceilings (no terminal mount or
-card observer registration during dense load; Board commits and world-build
-slices at most what CI has measured). A change that does more work per event
-fails there. Raise a ceiling only in a reviewed change that explains the new work.
+coalesced, and the work per phase stays within the ceilings in
+[testing/workCeilings.ts](testing/workCeilings.ts): no terminal mount, card
+observer registration, Board commit or World work during terminal output; one
+World preparation and one view projection per snapshot, however much typing and
+output run alongside. Dev-only counters in the production modules
+(`countWorldWork` in [devtools/renderer.ts](devtools/renderer.ts), absent from
+release builds) supply the World counts; construction is counted in units, not
+in its time-bounded slices. A change that does more work per event fails there.
+Raise a ceiling only in a reviewed change that explains the new work.
 
 Input delays (p95 and worst acknowledgement, worst input during dense load) are
 not asserted: they depend on the runner's CPU and Chrome build, and fixed budgets

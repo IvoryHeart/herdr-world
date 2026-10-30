@@ -1834,7 +1834,7 @@
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
       "technique": "alternative",
-      "assessment": "actual rendering/search/counts/site evidence, with performance as runner-independent work ceilings (renders, observer registrations, terminal mounts, build slices per phase); observation/authority modeled elsewhere",
+      "assessment": "actual rendering/search/counts/site evidence, with performance as runner-independent work ceilings (Board commits, observer registrations, terminal mounts, World preparations, construction units and projections per phase); observation/authority modeled elsewhere",
       "status": "alternative-evidence",
       "remaining": "Pixel/layout/device outcomes require real rendering and supported browser/site checks; wall-clock responsiveness is not asserted on shared CI runners (it varies by CPU model and Chrome build) and is tracked by the non-blocking World latency trend, so no timing SLA is claimed; no model of every device or accessibility event schedule. Board: live Herdr restart and ID reuse are checked in throwaway sessions only; cross-tab storage interleaving relies on per-draft keys, not an executed schedule.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],

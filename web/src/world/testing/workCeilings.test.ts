@@ -1,0 +1,87 @@
+import { expect, test } from "bun:test";
+import {
+  concurrentWorkViolations,
+  productionWorkCeilings,
+  workViolations,
+  type ConcurrentWork,
+} from "./workCeilings";
+
+const boardHosts = { "board.host-project": 64 };
+const snapshot = {
+  "world.prepare": 1,
+  "world.build-units": 917_568,
+  ...boardHosts,
+};
+// As measured at 1440 px on 2026-10-30.
+const measured = (): ConcurrentWork => ({
+  worldWorkByPhase: {
+    projection: { ...boardHosts, "tree.project": 1, "board.project": 1 },
+    render: { "board.project": 1 },
+    refresh: { ...boardHosts, "board.project": 1 },
+    "noisy-output": {},
+  },
+  terminalWorkByPhase: { "outside-stress": { open: 4, fit: 17, dispose: 4 } },
+  boardObserverWorkByPhase: {
+    render: { observe: 1280 },
+    "outside-stress": { unobserve: 1280 },
+  },
+  boardRenderByPhase: { render: { commits: 6 }, refresh: { commits: 2 } },
+  worldBuildUnits: 1_835_136,
+  worldBuildMaxSliceNodes: 256,
+});
+
+test("the measured dense workload is within every ceiling", () => {
+  expect(concurrentWorkViolations(measured(), 1440)).toEqual([]);
+  const stage = { ...snapshot, "board.project": 1 };
+  expect(
+    workViolations(
+      { initial: stage, refresh: stage },
+      productionWorkCeilings("board"),
+      "production",
+    ),
+  ).toEqual([]);
+});
+
+test("a render storm during terminal output fails", () => {
+  const storm = measured();
+  storm.boardRenderByPhase["noisy-output"] = { commits: 10_000 };
+  storm.worldWorkByPhase["noisy-output"] = { "board.project": 10_000 };
+  expect(concurrentWorkViolations(storm, 1440)).toEqual([
+    "world work noisy-output: board.project 10000 > 0",
+    "Board noisy-output: commits 10000 > 0",
+  ]);
+  const projectionCommits = measured();
+  projectionCommits.boardRenderByPhase.projection = { commits: 1 };
+  expect(concurrentWorkViolations(projectionCommits, 1440)).toEqual([
+    "Board projection: commits 1 > 0",
+  ]);
+});
+
+test("repeated preparation or projection fails, in either suite", () => {
+  const repeated = measured();
+  repeated.worldWorkByPhase.refresh!["board.project"] = 2;
+  repeated.worldWorkByPhase.refresh!["board.host-project"] = 128;
+  expect(concurrentWorkViolations(repeated, 1440)).toEqual([
+    "world work refresh: board.host-project 128 > 64",
+    "world work refresh: board.project 2 > 1",
+  ]);
+  // Production: a projection per keystroke, or one per terminal push.
+  const typed = { ...snapshot, "office.project": 380 };
+  expect(
+    workViolations(
+      { initial: typed, refresh: { ...snapshot, "office.project": 1 } },
+      productionWorkCeilings("town"),
+      "production",
+    ),
+  ).toEqual(["production initial: office.project 380 > 1"]);
+});
+
+test("a slower runner cuts more slices but does no more work, so it passes", () => {
+  // Slices are not counted: a slice also ends after 8 ms. Units are counted.
+  const slow = measured();
+  expect(concurrentWorkViolations(slow, 1440)).toEqual([]);
+  slow.worldBuildUnits += 1;
+  expect(concurrentWorkViolations(slow, 1440)).toEqual([
+    "world build units 1835137 > 1835136",
+  ]);
+});

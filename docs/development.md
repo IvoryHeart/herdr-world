@@ -107,7 +107,9 @@ No World test asserts a wall-clock number. The dense suites (production and
 concurrent contexts) assert what does not depend on the runner's speed: routing
 and generation of every input, one acknowledgement per input, frame coalescing,
 and ceilings on the work done per phase (terminal mounts, card observer
-registrations, Board commits, world-build slices). Their input delays go to the
+registrations, Board commits, World preparations, construction units and
+projections, counted by dev-only counters in the production modules; see
+`web/src/world/testing/workCeilings.ts`). Their input delays go to the
 non-blocking [World latency trend](../.github/workflows/world-latency-trend.yml):
 on every main push, and on a pull request labelled `latency-trend`, it runs each
 of those suites alone on a quiet runner (`scripts/wait-for-quiet.ts`: three

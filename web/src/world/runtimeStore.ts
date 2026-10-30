@@ -9,6 +9,8 @@ import type { Pane, Tab, Workspace } from "../types";
 import { prepareWorldBoard } from "./board/boardModel";
 import { prepareWorldOffice } from "./herdrOfficeProjection";
 import { prepareWorldObject, yieldWorldTask } from "./worldObject";
+import { DEVTOOLS } from "./devtools/flag";
+import { countWorldWork } from "./devtools/renderer";
 
 const INVALIDATION_DEBOUNCE_MS = 80;
 const FALLBACK_REFRESH_MS = 15_000;
@@ -555,8 +557,13 @@ export class WorldRuntimeStore {
         parsed.connections = parsed.connections.map((c) =>
           this.withConnectionHealth(c),
         );
+        if (DEVTOOLS) countWorldWork("world.prepare");
         const world = await prepareWorldObject(parsed.connections, current, {
           yieldTask: () => this.preparationYield("object"),
+          // Units, not slices: a construction slice also ends after 8 ms.
+          onWorkSlice: DEVTOOLS
+            ? (_checkpoint, units) => countWorldWork("world.build-units", units)
+            : undefined,
         });
         if (!world) return;
         await prepareWorldOffice(world, current, () =>

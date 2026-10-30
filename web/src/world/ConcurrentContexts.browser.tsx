@@ -66,6 +66,8 @@ const measurements = {
   validationMs: 0,
   worldBuildMs: 0,
   worldBuildSliceCount: 0,
+  /** Construction units: slices end on time as well, units do not. */
+  worldBuildUnits: 0,
   worldBuildMaxSliceNodes: 0,
   worldBuildMaxSliceDurationMs: 0,
   worldBuildCheckpoints: {} as Record<
@@ -75,7 +77,12 @@ const measurements = {
   treeProjectionMs: 0,
   boardProjectionMs: 0,
   officeProjectionMs: 0,
+  /** Production World work (devtools counters) during each stress phase. */
+  worldWorkByPhase: {} as Record<string, Record<string, number>>,
 };
+// Count World model work in the production modules (devtools/renderer.ts).
+window.__HERDR_WORLD_RENDERER_DEBUG__ = "counters";
+let workAtPhaseStart: Record<string, number> = {};
 let stressPhase: string | null = null;
 function recordBoardRender(_id: string, _phase: string, duration: number) {
   const counts = (measurements.boardRenderByPhase[
@@ -152,6 +159,7 @@ const longTasks = new PerformanceObserver((list) => {
 longTasks.observe({ type: "longtask", buffered: true });
 async function beginStress(phase: string) {
   stressPhase = phase;
+  workAtPhaseStart = { ...window.__HERDR_WORLD_WORK__ };
   performance.mark(`stress:${phase}:begin`);
   await fetch(`/input-ready?phase=${phase}`);
 }
@@ -166,6 +174,11 @@ async function finishStress() {
     `${stressPhase} input receipts`,
   );
   performance.mark(`stress:${stressPhase}:end`);
+  const work: Record<string, number> = {};
+  for (const [kind, total] of Object.entries(window.__HERDR_WORLD_WORK__ ?? {}))
+    if (total !== (workAtPhaseStart[kind] ?? 0))
+      work[kind] = total - (workAtPhaseStart[kind] ?? 0);
+  measurements.worldWorkByPhase[stressPhase!] = work;
   stressPhase = null;
 }
 const check = (condition: unknown, message: string) => {
@@ -530,6 +543,7 @@ async function run() {
     }
     measurements.worldBuildCheckpoints[checkpoint] = record;
     measurements.worldBuildSliceCount += 1;
+    measurements.worldBuildUnits += count;
     measurements.worldBuildMaxSliceNodes = Math.max(
       measurements.worldBuildMaxSliceNodes,
       count,
