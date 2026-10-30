@@ -3,6 +3,7 @@ import type { CliContext } from "./command";
 import { runCli } from "./index";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { createServer } from "node:net";
 import { join } from "node:path";
 import { loadOrCreateSessionSecret } from "../config/session-secret";
 import {
@@ -525,17 +526,25 @@ describe("endpoint diagnostics", () => {
       expect(garbled.error).toBe(
         `World service at ${answering} (token from ${secret}) answered 500 without JSON`,
       );
-      const stopped = Bun.serve({
-        hostname: "127.0.0.1",
-        port: 0,
-        fetch: () => new Response(),
-      });
-      const gone = `http://127.0.0.1:${stopped.port}`;
-      stopped.stop(true);
-      const unreachable = await transport(gone)("whoami", {});
-      expect(unreachable.error).toStartWith(
-        `World service not reachable at ${gone} (token from ${secret}): `,
+      // Unreachable by construction: the test keeps this port bound for its
+      // whole life and closes every connection before any reply. A freed port
+      // could be bound again by another process before the request.
+      const refusing = createServer((socket) => socket.destroy());
+      await new Promise<void>((resolve) =>
+        refusing.listen(0, "127.0.0.1", resolve),
       );
+      try {
+        const address = refusing.address();
+        if (!address || typeof address === "string")
+          throw new Error("missing refusing listener port");
+        const gone = `http://127.0.0.1:${address.port}`;
+        const unreachable = await transport(gone)("whoami", {});
+        expect(unreachable.error).toStartWith(
+          `World service not reachable at ${gone} (token from ${secret}): `,
+        );
+      } finally {
+        await new Promise((resolve) => refusing.close(resolve));
+      }
     } finally {
       server.stop(true);
       rmSync(home, { recursive: true, force: true });
