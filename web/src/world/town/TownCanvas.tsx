@@ -587,7 +587,28 @@ export function TownCanvas({
   // Only on-screen buildings keep DOM cards, plaques and receptions.
   const [visible, setVisible] = useState<TownVisible>(NOTHING_VISIBLE);
   const visibleKey = useRef(NOTHING_VISIBLE.key);
+  // The camera as last drawn. The canvas and its targets show this one until
+  // the next frame, so presses are hit-tested against it: a pan not yet drawn
+  // (an arrow key, an edge pan during a carry) must not move what is pressed.
+  const drawnCamera = useRef({ x: 0, y: 0, z: 0, width: 0, height: 0 });
+  /** Aims a carried desk or agent again at the frame just drawn. */
+  const reaimCarry = useRef<(() => void) | null>(null);
   const onFrame = (camera: TownRendererHandle["camera"], level: TownLevel) => {
+    const drawn = drawnCamera.current;
+    const moved =
+      drawn.x !== camera.x ||
+      drawn.y !== camera.y ||
+      drawn.z !== camera.z ||
+      drawn.width !== camera.viewport.width ||
+      drawn.height !== camera.viewport.height;
+    drawn.x = camera.x;
+    drawn.y = camera.y;
+    drawn.z = camera.z;
+    drawn.width = camera.viewport.width;
+    drawn.height = camera.viewport.height;
+    // A camera that moved under a still carry (an edge pan, an arrow key)
+    // puts something else under it: the target follows what is now drawn.
+    if (moved) reaimCarry.current?.();
     const layer = worldRef.current;
     const nextVisible = townVisibleHosts(camera, latest.current.layout, level);
     if (nextVisible.key !== visibleKey.current) {
@@ -904,13 +925,20 @@ export function TownCanvas({
       const renderer = rendererRef.current;
       if (!renderer) return null;
       const { layout: l, model: m } = latest.current;
-      const world = renderer.camera.toWorld(x, y);
+      // Before the first frame nothing is drawn; the live camera is all there is.
+      const shown = drawnCamera.current.z ? drawnCamera.current : null;
+      const world = shown
+        ? {
+            x: shown.x + (x - shown.width / 2) / shown.z,
+            y: shown.y + (y - shown.height / 2) / shown.z,
+          }
+        : renderer.camera.toWorld(x, y);
       return townHitTest(
         {
           layout: l,
           model: m,
           level: renderer.level,
-          zoom: renderer.camera.z,
+          zoom: shown?.z ?? renderer.camera.z,
           roofAlpha: (hostKey) => renderer.roofAlpha(hostKey),
           standing: function* () {
             for (const agent of m.agents.values()) {
@@ -951,6 +979,9 @@ export function TownCanvas({
           };
       }
       aim(hit, at);
+    };
+    reaimCarry.current = () => {
+      if (carryAt) carryTo(carryAt);
     };
     const EDGE = 56;
     const EDGE_SPEED = 14;
@@ -1093,6 +1124,8 @@ export function TownCanvas({
           carryTo(effect.at);
           return;
         case "dropCard": {
+          // Judge the drop where it is released, against the frame drawn now.
+          carryTo(effect.at);
           const drag = endDrag();
           const targetKey = drag?.target?.key;
           if (!drag || !targetKey) {
@@ -1269,6 +1302,7 @@ export function TownCanvas({
     host.addEventListener("pointerleave", leave);
     host.addEventListener("wheel", wheel, { passive: false });
     return () => {
+      reaimCarry.current = null;
       window.clearTimeout(holdTimer);
       cancelAnimationFrame(edgeFrame);
       ghost.remove();
