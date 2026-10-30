@@ -49,26 +49,6 @@ export async function ownsCheckerPort(pid, port) {
   throw new Error("Checker ownership probing requires Linux or macOS");
 }
 
-/**
- * Wait until the verified daemon itself listens on the port. Another process
- * can hold it until the daemon's own bind fails, and that failure ends this
- * probe (its launcher then starts the checker on another port); until then a
- * foreign listener means "not ready yet", never "ready".
- */
-export async function waitForOwnership(
-  pid,
-  port,
-  deadline,
-  owns = ownsCheckerPort,
-  pause = () => new Promise((resolve) => setTimeout(resolve, 50)),
-) {
-  while (!(await owns(pid, port))) {
-    if (Date.now() >= deadline)
-      throw new Error("Checker listener is not owned by the verified daemon");
-    await pause();
-  }
-}
-
 async function ready(port, pid) {
   const require = createRequire(
     new URL("../tools/quint/package.json", import.meta.url),
@@ -93,7 +73,6 @@ async function ready(port, pid) {
   let call;
   const deadline = Date.now() + 30_000;
   try {
-    await waitForOwnership(pid, port, deadline);
     await new Promise((resolve, reject) =>
       client.waitForReady(deadline, (error) =>
         error ? reject(error) : resolve(),

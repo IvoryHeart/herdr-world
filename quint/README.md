@@ -27,15 +27,6 @@ implementation divergence and unsuccessful negative controls. Checker and replay
 workers have deadlines, bounded output and owned process groups. Cancellation
 terminates and drains their descendants before deleting their temporary files.
 Verification starts its own checker server rather than reusing another process.
-The checker takes a port number rather than a socket, so its port is chosen from
-the unprivileged ports outside the kernel's ephemeral range, where other
-programs' port-0 binds never land, and each worker starts its search at its own
-offset. It is ready only when the verified process itself owns the listener and
-answers a protocol request; a listener held by another process is not ready. If
-the checker reports that another process holds its port ("Address already in
-use"), verification logs `[checker] port … was taken` and starts it on the next
-free port, at most three times. Any other startup failure is final and keeps its
-cause.
 
 Each run has a fresh ignored `.agents/verification/runs/<run-time>/` directory
 with logs, traces, counterexamples and a completion manifest. The manifest records
