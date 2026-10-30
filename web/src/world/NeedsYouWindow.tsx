@@ -33,9 +33,9 @@ const leafWhere = (leaf: WorldLeafObject) =>
   [leaf.tabLabel, leaf.spaceLabel, leaf.hostLabel].filter(Boolean).join(" · ");
 
 /**
- * The window shows this many items at a time (each blocked or finished one
- * watches its conversation); Show more adds as many again, and an item an
- * opener asks for is always shown.
+ * The window shows one page of this many items (each blocked or finished one
+ * watches its conversation, so a page bounds the watches); it opens at the
+ * page holding the item an opener asks for.
  */
 const ITEM_LIMIT = 30;
 
@@ -147,30 +147,47 @@ export function NeedsYouWindow({
   const asks = useWorldAsks(asksStore);
   const work = useReviewedWork(deskStore);
   const all = needsYouItems(world, asks, (leaf) => work.toReview(leaf, now));
-  const [limit, setLimit] = useState(ITEM_LIMIT);
+  // The page shown: the opener's item's page until the user turns the page.
+  const [page, setPage] = useState<{ start: number; follow: boolean }>({
+    start: 0,
+    follow: true,
+  });
+  const [pagedFor, setPagedFor] = useState(focusKey);
+  if (pagedFor !== focusKey) {
+    setPagedFor(focusKey);
+    setPage({ start: 0, follow: true });
+  }
   // Answers given here, shown folded until the window closes.
   const [answered, setAnswered] = useState<
     readonly { key: string; name: string; text: string }[]
   >([]);
   const body = useRef<HTMLDivElement | null>(null);
-  // An opener names an item, or an agent (needsYouLeafKey) for its item;
-  // it is shown even past the limit.
-  const target = focusKey
-    ? all.find(
+  // An opener names an item, or an agent (needsYouLeafKey) for its item.
+  const targetIndex = focusKey
+    ? all.findIndex(
         (item) =>
           item.key === focusKey ||
           (item.leaf && needsYouLeafKey(item.leaf.id) === focusKey),
       )
-    : undefined;
-  const items = all.slice(0, limit);
-  if (target && !items.includes(target)) items.push(target);
-  const focused = target?.key;
+    : -1;
+  const lastPage = Math.max(0, Math.ceil(all.length / ITEM_LIMIT) - 1);
+  const start =
+    page.follow && targetIndex >= 0
+      ? Math.floor(targetIndex / ITEM_LIMIT) * ITEM_LIMIT
+      : Math.min(page.start, lastPage * ITEM_LIMIT);
+  const items = all.slice(start, start + ITEM_LIMIT);
+  const later = all.length - start - items.length;
+  const focused = targetIndex >= 0 ? all[targetIndex]!.key : undefined;
   useEffect(() => {
     if (!focused) return;
     body.current
       ?.querySelector(`[data-needs-you-item="${CSS.escape(focused)}"]`)
       ?.scrollIntoView({ block: "nearest" });
   }, [focused, focusKey]);
+  const turn = (to: number) => {
+    setPage({ start: to, follow: false });
+    body.current?.scrollIntoView({ block: "start" });
+  };
   const shown = new Set(items.map((item) => item.key));
   const folded = answered.filter((entry) => !shown.has(entry.key));
   const count = needsYouCount(all);
@@ -183,6 +200,15 @@ export function NeedsYouWindow({
             ? "Nothing blocked; finished work to review below."
             : "Nobody is waiting on you."}
       </p>
+      {start > 0 ? (
+        <button
+          type="button"
+          className="needs-you-more"
+          onClick={() => turn(Math.max(0, start - ITEM_LIMIT))}
+        >
+          Show the {Math.min(ITEM_LIMIT, start)} before
+        </button>
+      ) : null}
       {items.map((item) => (
         <NeedsYouMessage
           key={item.key}
@@ -214,14 +240,13 @@ export function NeedsYouWindow({
           }
         />
       ))}
-      {all.length > items.length ? (
+      {later > 0 ? (
         <button
           type="button"
           className="needs-you-more"
-          onClick={() => setLimit(limit + ITEM_LIMIT)}
+          onClick={() => turn(start + ITEM_LIMIT)}
         >
-          Show {Math.min(ITEM_LIMIT, all.length - items.length)} more of{" "}
-          {all.length - items.length}
+          Show {Math.min(ITEM_LIMIT, later)} more of {later}
         </button>
       ) : null}
       {folded.map((entry) => (
@@ -446,6 +471,14 @@ function NeedsYouAgent({
       > & { question: string[]; fingerprint: string })
     | null
   >(null);
+  // A different question replaces the last answer's receipt, as in Chat, so
+  // returning to an earlier question shows its answers again.
+  useEffect(() => {
+    if (prompt && prompt.fingerprint !== answered?.fingerprint)
+      setAnswered(null);
+    // Only a new question resets the receipt.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prompt?.fingerprint]);
   const [marking, setMarking] = useState(false);
   const [markError, setMarkError] = useState(false);
   const answer = async (key: string, text?: string) => {
@@ -478,7 +511,9 @@ function NeedsYouAgent({
     }
   };
   // The report on screen belongs to the current stop only once read for it.
-  const current = stop !== null && read.readFor === stop && conversation;
+  const stale = !conversation || read.readFor !== stop;
+  const current = stop !== null && !stale;
+  const unread = read.failed && stale;
   return (
     <>
       {latest ? (
@@ -493,9 +528,19 @@ function NeedsYouAgent({
             ? (conversation.unavailable?.detail ?? "No conversation.")
             : conversation
               ? (leaf.taskSummary ?? "No messages yet.")
-              : "Loading conversation…"}
+              : read.failed
+                ? "Could not read the conversation."
+                : "Loading conversation…"}
         </p>
       )}
+      {unread ? (
+        <div className="needs-you-options">
+          <small role="alert">Could not read the latest report.</small>
+          <button type="button" onClick={read.retry}>
+            Retry
+          </button>
+        </div>
+      ) : null}
       <ChatAfterBlocks
         running={null}
         clock={0}
@@ -527,7 +572,13 @@ function NeedsYouAgent({
             type="button"
             className="is-primary"
             disabled={marking || !current}
-            title={current ? undefined : "Reading the latest report…"}
+            title={
+              current
+                ? undefined
+                : unread
+                  ? "The latest report could not be read"
+                  : "Reading the latest report…"
+            }
             onClick={() => {
               if (!current || stop === null) return;
               setMarking(true);

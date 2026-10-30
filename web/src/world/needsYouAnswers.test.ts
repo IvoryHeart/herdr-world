@@ -93,10 +93,24 @@ async function registerDomTest() {
     fingerprint,
   });
 
-  // Conversations by pane; a held read answers when the test releases it.
+  // Conversations by pane; a held read answers when the test releases it,
+  // and a failing one throws as a timed-out read does.
   const reports = new Map<string, unknown>();
   let held: { promise: Promise<void>; resolve(): void } | null = null;
+  let failRead = false;
   const answers: Record<string, unknown>[] = [];
+  // The panes whose conversations the service is asked to watch now.
+  const watched = new Set<string>();
+  const controls = new Set<(control: Record<string, unknown>) => void>();
+  const changed = async (pane: string) => {
+    for (const listener of [...controls])
+      listener({
+        type: "agent_conversation_changed",
+        connection_id: "local",
+        pane_id: pane,
+      });
+    await settle();
+  };
   const client = {
     connectionId: "local",
     generation: 1,
@@ -106,8 +120,14 @@ async function registerDomTest() {
       if (method === "agent_conversation.latest") {
         const pane = String(params.pane_id);
         if (pane === "w1:done" && held) await held.promise;
+        if (pane === "w1:done" && failRead)
+          throw new Error("Herdr request timed out");
         return { status: "ok", ...(reports.get(pane) as object) };
       }
+      if (method === "agent_conversation.watch")
+        watched.add(String(params.pane_id));
+      if (method === "agent_conversation.unwatch")
+        watched.delete(String(params.pane_id));
       if (method === "agent_conversation.answer") {
         answers.push(params);
         return {
@@ -124,7 +144,10 @@ async function registerDomTest() {
   };
   Object.assign(bridge, {
     connection: () => client,
-    onControl: () => () => {},
+    onControl: (listener: (control: Record<string, unknown>) => void) => {
+      controls.add(listener);
+      return () => controls.delete(listener);
+    },
     onStatus: () => () => {},
   });
 
@@ -139,7 +162,7 @@ async function registerDomTest() {
   const marks: Record<string, unknown>[] = [];
   let deskChanged: (() => void) | null = null;
   const deskState = () => ({
-    revision: stopId === "s1" ? 1 : 2,
+    revision: Number(stopId.slice(1)),
     records: [
       {
         ...deskIdentity(done),
@@ -268,7 +291,86 @@ async function registerDomTest() {
     await act(async () => mark().click());
     await settle();
     expect(item("done").querySelector('[role="alert"]')).toBeNull();
+  });
+
+  test("a different question brings back an earlier question's answers", async () => {
+    // Picky was answered on picky-1 (unconfirmed); the menu cursor moves, so
+    // Herdr reports another question, then the first one again.
+    reports.set("w1:picky", {
+      latest: { text: "Pick a colour" },
+      pending_prompt: prompt("picky-2", ["Green", "Yellow"]),
+    });
+    await changed("w1:picky");
+    expect(button(item("picky"), "Green")).toBeDefined();
+    expect(item("picky").textContent).not.toContain("another session now");
+    reports.set("w1:picky", {
+      latest: { text: "Pick a colour" },
+      pending_prompt: prompt("picky-1", ["Red", "Blue"]),
+    });
+    await changed("w1:picky");
+    expect(button(item("picky"), "Red").disabled).toBe(false);
+    expect(item("picky").textContent).not.toContain("another session now");
+  });
+
+  test("a report that cannot be read says so and can be read again", async () => {
+    const mark = () => button(item("done"), "Mark reviewed");
+    failRead = true;
+    stopId = "s3";
+    await act(async () => deskChanged!());
+    await settle();
+    expect(mark().disabled).toBe(true);
+    expect(item("done").querySelector('[role="alert"]')?.textContent).toBe(
+      "Could not read the latest report.",
+    );
+    // The finished agent's conversation never changes; Retry reads again.
+    failRead = false;
+    reports.set("w1:done", { latest: { text: "Report for stop three" } });
+    await act(async () => button(item("done"), "Retry").click());
+    await settle();
+    expect(item("done").textContent).toContain("Report for stop three");
+    expect(mark().disabled).toBe(false);
+    expect(item("done").querySelector('[role="alert"]')).toBeNull();
     await act(async () => root.unmount());
+    expect(watched.size).toBe(0);
+  });
+
+  test("pages bound the conversations watched in a dense World", async () => {
+    const crowd = Array.from({ length: 70 }, (_, index) =>
+      leaf(`p${index + 1}`, "blocked"),
+    );
+    const dense = { leaves: crowd, nodeById: new Map() };
+    const host = document.createElement("div");
+    document.body.append(host);
+    const pages = createRoot(host);
+    await act(async () =>
+      pages.render(
+        createElement(NeedsYouWindow, {
+          world: dense,
+          now: 2_000,
+          onOpenAgent: () => {},
+          onOpenTerminal: () => {},
+          asksStore,
+          deskStore,
+        }),
+      ),
+    );
+    await settle();
+    const turn = async (text: string) => {
+      await act(async () => button(host, text).click());
+      await settle();
+    };
+    const first = new Set(watched);
+    expect(first.size).toBe(30);
+    await turn("Show 30 more of 40");
+    const second = new Set(watched);
+    expect(second.size).toBe(30);
+    expect([...second].some((pane) => first.has(pane))).toBe(false);
+    await turn("Show 10 more of 10");
+    expect(watched.size).toBe(10);
+    await turn("Show the 30 before");
+    expect(watched).toEqual(second);
+    await act(async () => pages.unmount());
+    expect(watched.size).toBe(0);
   });
 
   test("Town's reviewed view ignores stop observations and follows review marks", async () => {

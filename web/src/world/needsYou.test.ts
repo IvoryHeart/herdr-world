@@ -143,7 +143,7 @@ test("each item names its agent, marks unverified asks and answers in place", ()
   expect(html).toContain('data-mark="done"');
 });
 
-test("an item an opener asks for is shown past the limit, and the rest can be shown", () => {
+test("an opener's item past the limit opens at its page, and the others stay a page away", () => {
   const blocked = Array.from({ length: 32 }, (_, index) =>
     leaf(`b${index + 1}`, "blocked", index + 1),
   );
@@ -172,10 +172,11 @@ test("an item an opener asks for is shown past the limit, and the rest can be sh
     }),
   );
   expect(html).toContain("32 waiting on you");
-  // The first 30, then the one asked for; the 31st waits behind Show more.
-  expect(html).toContain('data-needs-you-item="leaf:b30"');
-  expect(html).not.toContain('data-needs-you-item="leaf:b31"');
+  // The page holding the one asked for; the first 30 are a page before.
+  expect(html).not.toContain('data-needs-you-item="leaf:b30"');
+  expect(html).toContain('data-needs-you-item="leaf:b31"');
   expect(html).toContain('data-needs-you-item="leaf:b32"');
   expect(html).toContain("needs-you-item is-needs is-focused");
-  expect(html).toContain("Show 1 more of 1</button>");
+  expect(html).toContain("Show the 30 before</button>");
+  expect(html).not.toContain("more of");
 });

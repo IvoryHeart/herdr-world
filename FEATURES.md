@@ -410,9 +410,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   blocked agents (the agent's own question, answered and confirmed as Chat does,
   with **Open Terminal** when the answer could not be confirmed) and **✓**
   finished work, as Desk's To review lane counts it (**Mark reviewed** marks the
-  report shown, and says so if the mark could not be saved). Every item names its
-  agent, marks an unverified asker and has **Open agent**. It shows 30 items at a
-  time with **Show more**. Town's reception letters, Desk's **Answer** and the
+  report shown, says so if the mark could not be saved, and offers **Retry** if the
+  report could not be read). Every item names its agent, marks an unverified asker
+  and has **Open agent**. It shows a page of 30 items; **Show … more** and **Show
+  the … before** turn the page. Town's reception letters, Desk's **Answer** and the
   **!**/**✓** badge on a Board card open it at that item. It replaces Town's
   Needs you rail.
 - Inspectors and terminals capture their own host, runtime generation and resource

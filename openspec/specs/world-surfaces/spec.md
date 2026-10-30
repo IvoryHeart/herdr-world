@@ -1634,13 +1634,15 @@ answered with Chat's checked answer and show Chat's receipt, including an
 unconfirmed answer's warning and the agent's Terminal; a prompt Chat cannot
 answer SHALL offer the Terminal, never Chat. Finished work SHALL offer Mark
 reviewed for the stop whose report is shown, unavailable while the current
-stop's report is being read, and SHALL report a mark the service did not save.
+stop's report is being read, SHALL say when that report could not be read and
+offer to read it again, and SHALL report a mark the service did not save.
 Blocked and finished items SHALL come from the hosts the Hosts filter admits,
 and Open agent SHALL open that exact agent. A Needs you counter beside the view
 picker SHALL count open questions and the admitted blocked agents and open the
 window; Town's reception letters, Desk's Answer and Board's attention badges
-SHALL open it at their item. The window SHALL show a bounded number of items with
-an action to show more, and SHALL always show an item an opener asked for. A
+SHALL open it at their item. The window SHALL show and observe one bounded page
+of items at a time, with actions to show the next and earlier pages, and SHALL
+open at the page holding an item an opener asked for. A
 keyboard command in Town SHALL open the next agent that needs the user.
 
 #### Scenario: Work through waiting agents on desktop
@@ -1652,12 +1654,13 @@ keyboard command in Town SHALL open the next agent that needs the user.
 #### Scenario: Open Needs you at an agent past the limit
 
 - **WHEN** more agents are blocked than the window shows and the user uses Desk's Answer on the newest
-- **THEN** the window opens showing that agent's item, and the others stay reachable with Show more
+- **THEN** the window opens at the page showing that agent's item, the others stay a page away, and turning pages never observes more than one page of agents
 
 #### Scenario: Review where the report is shown
 
 - **WHEN** the service observes a new stop for a finished agent while Needs you still shows the earlier report
 - **THEN** Mark reviewed stays unavailable until the new report is read, and then marks the new stop
+- **AND** a read that fails says so and offers Retry instead of waiting for a change that a finished agent never makes
 
 ### Requirement: Town summary
 
