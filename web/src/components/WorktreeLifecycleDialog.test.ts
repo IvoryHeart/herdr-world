@@ -118,7 +118,8 @@ if (process.env.WORLD_WORKTREE_LIFECYCLE_TEST !== "1") {
     opened = false,
     closed = 0,
     rejectValidation = false,
-    metadata = true;
+    metadata = true,
+    acceptAdmission = false;
   let openGate: ReturnType<typeof Promise.withResolvers<void>> | null = null;
   let openEntered: ReturnType<typeof Promise.withResolvers<void>>;
   let root: ReturnType<typeof createRoot> | null;
@@ -157,7 +158,7 @@ if (process.env.WORLD_WORKTREE_LIFECYCLE_TEST !== "1") {
     event.preventDefault();
     const request = (event as CustomEvent<Request>).detail;
     requests.push(request);
-    request.onAdmission?.(false);
+    request.onAdmission?.(acceptAdmission);
   };
   const frame = () => act(() => clock.frame());
   const targetRow = () =>
@@ -211,6 +212,7 @@ if (process.env.WORLD_WORKTREE_LIFECYCLE_TEST !== "1") {
     closed = 0;
     rejectValidation = false;
     metadata = true;
+    acceptAdmission = false;
     openGate = null;
     openEntered = Promise.withResolvers<void>();
     calls.length = 0;
@@ -310,11 +312,18 @@ if (process.env.WORLD_WORKTREE_LIFECYCLE_TEST !== "1") {
           targetRow().querySelector(".lifecycle-open-state")?.textContent,
         ).toBe("Closed");
       }
+      acceptAdmission = true;
       await click("Files");
       expect(opens()).toHaveLength(2);
       expect(requests).toHaveLength(2);
-      expect(requests[1]!.workspaceId).toBe(checkout.workspace_id);
-      expect(closed).toBe(0);
+      expect(requests[1]).toMatchObject({
+        connectionId: "beta",
+        generation: 1,
+        runtimeGeneration: 7,
+        workspaceId: checkout.workspace_id,
+        view: "files",
+      });
+      expect(closed).toBe(1);
     },
   );
 
@@ -333,10 +342,11 @@ if (process.env.WORLD_WORKTREE_LIFECYCLE_TEST !== "1") {
   test("a live remembered target retries only the Inspector when checkout metadata still lags", async () => {
     metadata = false;
     await firstFailure();
+    acceptAdmission = true;
     await click("Files");
     expect(opens()).toHaveLength(1);
     expect(requests).toHaveLength(2);
     expect(requests[1]!.workspaceId).toBe(checkout.workspace_id);
-    expect(closed).toBe(0);
+    expect(closed).toBe(1);
   });
 }

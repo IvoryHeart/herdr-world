@@ -54,6 +54,9 @@ on the fixture clock. Synthetic service/operational ports deliberately return
 late results without fencing, so the dialog's own cancellation/current-client
 checks must prevent an Inspector request. Explicit admission rejection exercises
 its recoverable opened-workspace state, target validation and retry decisions.
+Accepting the retried admission after both Refresh and direct validation must
+close the dialog exactly once after two checkout opens; accepting a remembered
+live target closes it without another checkout open.
 Each moved scenario has a production-code negative control.
 
 The controlled receiver does not publish a real Inspector or prove RPC binding.
