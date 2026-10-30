@@ -1,4 +1,4 @@
-import { projectAgent, target } from "./officeAgent";
+import { officeDeskLabel, projectAgent, target } from "./officeAgent";
 import type { OfficeHost } from "./officeHost";
 export type { OfficeHost } from "./officeHost";
 import type {
@@ -47,7 +47,7 @@ import {
   withOfficeReadModel,
 } from "./officeReadModel";
 import { stableNumber } from "./stableNumber";
-import { boundedOptionalText, yieldWorldTask } from "./worldObject";
+import { yieldWorldTask } from "./worldObject";
 import { tabCardKey } from "../../../shared/terminalColor";
 
 export const OFFICE_PRESENTATION_BOUNDS = Object.freeze({
@@ -977,7 +977,7 @@ function buildRoom(space: WorldSpaceObject, host: OfficeHost): ProjectedRoom {
         .map(({ id }) => id)
         .sort(),
       observedGeneration: space.generation,
-      displayLabel: boundedOptionalText(tab.label, 100) ?? `Tab ${tab.number}`,
+      displayLabel: officeDeskLabel(space.children, tab),
       appearanceStatus: space.children.find((leaf) => leaf.tabId === tab.tab_id)
         ?.appearance?.status,
       order: index,

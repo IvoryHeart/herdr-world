@@ -108,6 +108,8 @@ carpet and each tab a team table with one seat per pane. Its contract is in the
 World surfaces spec. Town still reuses a few modules named after the retired
 Office view (`herdrOfficeProjection.ts`, `officeRoomActions.ts`,
 `officePreferences.ts`, `officeObservability.ts`); the names are historical.
+A desk shows its agent's Herdr name when exactly one agent occupies the tab and
+has a name; unnamed and multi-agent tabs keep the tab label.
 
 | Task | Open these owners | Focused evidence |
 | --- | --- | --- |
