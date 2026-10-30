@@ -372,7 +372,8 @@ export function openWorldWriter(
         )
           return null;
         const due = request.due_at ?? at + attentionRetryDelay(entry.attempt);
-        if (!Number.isSafeInteger(due) || due < at)
+        // A suspended batch may resume after this persisted deadline is due.
+        if (!Number.isSafeInteger(due))
           throw new Error("invalid attention retry deadline");
         db.query(
           "UPDATE outbox SET state=?,evidence=?,resolved_at=?,due_at=? WHERE id=? AND attempt=? AND state='dispatching'",

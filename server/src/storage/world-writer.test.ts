@@ -306,6 +306,45 @@ test("attempt receipts are fenced; closure cancels atomically and trim removes f
   expect(request(writer, { type: "outbox", id: entry.id }).result).toBeNull();
 });
 
+test("a retry deadline elapsed during a delayed commit remains immediately claimable", () => {
+  const writer = open();
+  const mutation = write("delayed-finish", 0);
+  mutation.effects = [
+    {
+      kind: "ask.created",
+      record_id: "q-delay",
+      recovery: "repeatable",
+      target: null,
+    },
+  ];
+  mutation.asks.put.push(ask("q-delay"));
+  request(writer, { type: "write", write: mutation });
+  const [entry] = request(writer, { type: "outbox", record_id: "q-delay" })
+    .result as AttentionEntry[];
+  const first = request(writer, { type: "claim", id: entry!.id })
+    .result as AttentionEntry;
+  const finished = request(
+    writer,
+    {
+      type: "finish",
+      id: first.id,
+      attempt: first.attempt,
+      state: "pending",
+      reason: "Temporarily unavailable",
+      due_at: 1500,
+    },
+    2000,
+  );
+  expect(finished.error).toBeUndefined();
+  expect((finished.result as AttentionEntry).state).toBe("pending");
+  expect(
+    (
+      request(writer, { type: "claim", id: first.id }, 2000)
+        .result as AttentionEntry
+    ).attempt,
+  ).toBe(2);
+});
+
 test("migrations preserve a private consistent snapshot and refuse future/foreign databases", () => {
   const paths = fixture();
   const db = new Database(paths.database);
