@@ -85,6 +85,7 @@ import {
 } from "./DiffViewerPanel";
 import { FileExplorerPanel } from "./FileExplorerDialog";
 import type { ActiveFilePreviewSelection } from "./FilePreviewContent";
+import { InspectorFilePreview } from "./LazyFilePreviewContent";
 import { FilePreviewTabs } from "./FilePreviewTabs";
 import { workspaceInspectorLayout } from "./workspaceInspectorLayout";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
@@ -103,11 +104,6 @@ const DiffContentView = lazyWithReload("diff-content-view", () =>
 const GitCommitHistory = lazyWithReload("git-commit-history", () =>
   import("./GitCommitHistory").then((module) => ({
     default: module.GitCommitHistory,
-  })),
-);
-const FilePreviewContent = lazyWithReload("file-preview", () =>
-  import("./FilePreviewContent").then((module) => ({
-    default: module.FilePreviewContent,
   })),
 );
 
@@ -1033,108 +1029,95 @@ export function WorkspaceInspectorHost({
                     )?.focus()
                   }
                 />
-                <Suspense
-                  fallback={
-                    <div className="file-preview-state">
-                      <span className="file-loading-spinner" />
-                      Loading preview
-                    </div>
+                <InspectorFilePreview
+                  entry={fileSelection.entry}
+                  preview={fileSelection.preview}
+                  loading={fileSelection.loading}
+                  error={fileSelection.error}
+                  fragment={fileSelection.fragment}
+                  line={fileSelection.line}
+                  snippet={fileSelection.snippet}
+                  onOpenFile={onOpenDocument}
+                  onRefresh={onRefreshFile}
+                  backAction={
+                    compact && drillInByView.files && fileSelection.entry
+                      ? {
+                          label: "Files",
+                          onClick: () => {
+                            setDrillInByView((current) => ({
+                              ...current,
+                              files: false,
+                            }));
+                            onBack();
+                          },
+                        }
+                      : undefined
                   }
-                >
-                  <FilePreviewContent
-                    entry={fileSelection.entry}
-                    preview={fileSelection.preview}
-                    loading={fileSelection.loading}
-                    error={fileSelection.error}
-                    fragment={fileSelection.fragment}
-                    line={fileSelection.line}
-                    snippet={fileSelection.snippet}
-                    onOpenFile={onOpenDocument}
-                    onRefresh={onRefreshFile}
-                    backAction={
-                      compact && drillInByView.files && fileSelection.entry
-                        ? {
-                            label: "Files",
-                            onClick: () => {
-                              setDrillInByView((current) => ({
-                                ...current,
-                                files: false,
-                              }));
-                              onBack();
-                            },
+                  annotations={annotations}
+                  onCreateAnnotation={onCreateAnnotation}
+                  onReanchorAnnotations={onReanchorFileAnnotations}
+                  onOpenChanges={
+                    primaryFileChangesEntry
+                      ? () =>
+                          diffViewerRef.current?.selectWorkingEntries(
+                            fileChangesEntries,
+                          )
+                      : undefined
+                  }
+                  changesKey={fileChangesKey || undefined}
+                  changesContent={
+                    primaryFileChangesEntry ? (
+                      <Suspense
+                        fallback={
+                          <div className="diff-content-state">
+                            <span className="file-loading-spinner" />
+                            Loading diff viewer
+                          </div>
+                        }
+                      >
+                        <DiffContentView
+                          key={`${contentResourceKey}:file-changes`}
+                          entry={
+                            fileDiffSelectionMatches
+                              ? diffSelection.entry
+                              : primaryFileChangesEntry
                           }
-                        : undefined
-                    }
-                    annotations={annotations}
-                    onCreateAnnotation={onCreateAnnotation}
-                    onReanchorAnnotations={onReanchorFileAnnotations}
-                    onOpenChanges={
-                      primaryFileChangesEntry
-                        ? () =>
-                            diffViewerRef.current?.selectWorkingEntries(
-                              fileChangesEntries,
-                            )
-                        : undefined
-                    }
-                    changesKey={fileChangesKey || undefined}
-                    changesContent={
-                      primaryFileChangesEntry ? (
-                        <Suspense
-                          fallback={
-                            <div className="diff-content-state">
-                              <span className="file-loading-spinner" />
-                              Loading diff viewer
-                            </div>
+                          file={
+                            fileDiffSelectionMatches ? diffSelection.file : null
                           }
-                        >
-                          <DiffContentView
-                            key={`${contentResourceKey}:file-changes`}
-                            entry={
-                              fileDiffSelectionMatches
-                                ? diffSelection.entry
-                                : primaryFileChangesEntry
-                            }
-                            file={
-                              fileDiffSelectionMatches
-                                ? diffSelection.file
-                                : null
-                            }
-                            loading={
-                              !fileDiffSelectionMatches || diffSelection.loading
-                            }
-                            error={
-                              fileDiffSelectionMatches
-                                ? diffSelection.error
-                                : null
-                            }
-                            entries={fileChangesEntries}
-                            files={
-                              fileDiffSelectionMatches
-                                ? diffSelection.files
-                                : {}
-                            }
-                            fileErrors={
-                              fileDiffSelectionMatches
-                                ? diffSelection.fileErrors
-                                : {}
-                            }
-                            resourceKey={`${contentResourceKey}:file:${fileChangesKey}`}
-                            mobile={compact}
-                            connectionClient={connectionClient}
-                            annotations={annotations}
-                            onCreateAnnotation={onCreateAnnotation}
-                            onReanchorAnnotations={onReanchorDiffAnnotations}
-                            onEditAnnotation={onEditAnnotation}
-                            onSelectFile={(entry) =>
-                              diffViewerRef.current?.selectWorkingEntry(entry)
-                            }
-                            embedded
-                          />
-                        </Suspense>
-                      ) : undefined
-                    }
-                  />
-                </Suspense>
+                          loading={
+                            !fileDiffSelectionMatches || diffSelection.loading
+                          }
+                          error={
+                            fileDiffSelectionMatches
+                              ? diffSelection.error
+                              : null
+                          }
+                          entries={fileChangesEntries}
+                          files={
+                            fileDiffSelectionMatches ? diffSelection.files : {}
+                          }
+                          fileErrors={
+                            fileDiffSelectionMatches
+                              ? diffSelection.fileErrors
+                              : {}
+                          }
+                          resourceKey={`${contentResourceKey}:file:${fileChangesKey}`}
+                          mobile={compact}
+                          connectionClient={connectionClient}
+                          annotations={annotations}
+                          onCreateAnnotation={onCreateAnnotation}
+                          onReanchorAnnotations={onReanchorDiffAnnotations}
+                          onEditAnnotation={onEditAnnotation}
+                          onSelectFile={(entry) =>
+                            diffViewerRef.current?.selectWorkingEntry(entry)
+                          }
+                          embedded
+                        />
+                      </Suspense>
+                    ) : undefined
+                  }
+                />
               </div>
             </AgentWorktreeGate>
           </div>
