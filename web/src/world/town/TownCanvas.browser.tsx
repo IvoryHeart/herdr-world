@@ -609,7 +609,6 @@ worldBridge.call = async (method, params) => {
       connection_id: string;
       connection_generation: number;
       terminal_id: string;
-      seen_revision?: number;
     };
     const index = completionSeen.records.findIndex(
       (record) =>
@@ -624,14 +623,6 @@ worldBridge.call = async (method, params) => {
         terminal_id: identity.terminal_id,
         revision: ++completionSeen.revision,
       });
-    if (
-      method === "world.completion_seen.clear" &&
-      index >= 0 &&
-      completionSeen.records[index]!.revision <= identity.seen_revision!
-    ) {
-      completionSeen.records.splice(index, 1);
-      completionSeen.revision += 1;
-    }
     return structuredClone(completionSeen);
   }
   if (method === "world.asks.get") return structuredClone(ledger);

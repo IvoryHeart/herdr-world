@@ -28,21 +28,29 @@ describe("World completion seen registry", () => {
     ]);
   });
 
-  test("clears only a mark the caller had already seen", () => {
+  test("a host read showing the agent busy ends its check", () => {
     const registry = new WorldCompletionSeenRegistry();
     registry.mark(identity("t1"));
-    registry.clear(identity("t1"), 1);
-    registry.mark(identity("t1"));
-    expect(registry.list().revision).toBe(3);
-
-    expect(registry.clear(identity("t1"), 2).changed).toBe(false);
+    // A late read of the same completion keeps the check.
+    expect(registry.observe(identity("t1"), false).changed).toBe(false);
     expect(registry.list().records).toHaveLength(1);
-    expect(registry.clear(identity("t1"), 3)).toEqual({
+
+    expect(registry.observe(identity("t1"), true)).toEqual({
       changed: true,
-      revision: 4,
+      revision: 2,
     });
-    expect(registry.clear(identity("t1"), 4).changed).toBe(false);
-    expect(() => registry.clear(identity("t1"), -1)).toThrow("revision");
+    expect(registry.list().records).toEqual([]);
+    // While busy, a mark from a browser still showing the old finish is
+    // ignored; once the next completion is observed, it applies.
+    expect(registry.mark(identity("t1")).changed).toBe(false);
+    registry.observe(identity("t1"), false);
+    expect(registry.mark(identity("t1"))).toEqual({
+      changed: true,
+      revision: 3,
+    });
+    // Another terminal's work does not touch it.
+    expect(registry.observe(identity("t2"), true).changed).toBe(false);
+    expect(registry.list().records).toHaveLength(1);
   });
 
   test("a new runtime generation retires only its connection's older marks", () => {
@@ -50,6 +58,7 @@ describe("World completion seen registry", () => {
     registry.mark(identity("t1", 7));
     registry.mark(identity("t2", 8));
     registry.mark(identity("t1", 7, "beta"));
+    registry.observe(identity("t9", 7), true);
 
     expect(registry.retireConnectionGeneration("alpha", 8)).toEqual({
       changed: true,
@@ -59,6 +68,8 @@ describe("World completion seen registry", () => {
       ["t2", "t1"],
     );
     expect(registry.retireConnectionGeneration("alpha", 8).changed).toBe(false);
+    // The retired generation's busy terminal no longer blocks a mark.
+    expect(registry.mark(identity("t9", 7)).changed).toBe(true);
   });
 
   test("rejects malformed identities and keeps the newest 4096 marks", () => {

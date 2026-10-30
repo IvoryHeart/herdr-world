@@ -15,6 +15,20 @@ export function deskSessionFingerprint(value: unknown): string | null {
   return createHash("sha256").update(JSON.stringify(fields)).digest("hex");
 }
 
+/** Herdr's and harnesses' status words, as the states World observes. */
+export function observedAgentStatus(status: unknown) {
+  const word = String(status);
+  return ["working", "busy", "running"].includes(word)
+    ? "working"
+    : ["idle", "waiting"].includes(word)
+      ? "idle"
+      : ["blocked", "error"].includes(word)
+        ? "blocked"
+        : ["done", "completed"].includes(word)
+          ? "done"
+          : "unknown";
+}
+
 /** Called only for a successfully admitted fresh host read, never cached topology. */
 export function observeDeskPanes(
   desk: WorldDeskRegistry,
@@ -70,15 +84,7 @@ export function observeDeskPanes(
     if (validDeskIdentity(identity))
       desk.observeAgent(
         identity,
-        ["working", "busy", "running"].includes(String(status))
-          ? "working"
-          : ["idle", "waiting"].includes(String(status))
-            ? "idle"
-            : ["blocked", "error"].includes(String(status))
-              ? "blocked"
-              : ["done", "completed"].includes(String(status))
-                ? "done"
-                : "unknown",
+        observedAgentStatus(status),
         observedAt,
         Number.isSafeInteger(sequence) && (sequence as number) >= 0
           ? (sequence as number)

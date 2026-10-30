@@ -21,7 +21,11 @@ type CompletionSeenRpc = {
   };
 };
 
-/** Town's checked completions, shared by every browser; presentation state only. */
+/**
+ * Town's checked completions, shared by every browser; presentation state
+ * only. Browsers only mark: the service ends a check when its host reads show
+ * the agent busy again (see WorldCompletionSeenRegistry).
+ */
 export async function handleCompletionSeenRpc(
   rpc: CompletionSeenRpc,
 ): Promise<void> {
@@ -44,14 +48,6 @@ export async function handleCompletionSeenRpc(
       )
         throw new Error("completion seen target is unavailable");
       const result = worldCompletionSeen.mark(params);
-      if (result.changed) publishCompletionSeenChanged(result.revision);
-    } else if (method === "world.completion_seen.clear") {
-      if (!validCompletionSeenIdentity(params))
-        throw new Error("invalid completion seen identity");
-      const result = worldCompletionSeen.clear(
-        params,
-        (params as { seen_revision?: unknown }).seen_revision as number,
-      );
       if (result.changed) publishCompletionSeenChanged(result.revision);
     } else if (method !== "world.completion_seen.list")
       throw new Error(`unknown completion seen method: ${method}`);

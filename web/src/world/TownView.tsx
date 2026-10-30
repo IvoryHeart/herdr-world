@@ -106,7 +106,7 @@ import {
   type OfficeCreationActionState,
 } from "./officeRoomActions";
 import {
-  completionSeenIdentity,
+  checkedAgentKeys,
   completionSeenStore,
   useCompletionSeen,
 } from "./completionSeenState";
@@ -245,25 +245,10 @@ export default function TownView({
       );
   }, []);
 
-  // Only agents on a marked terminal need their full identity checked, not
-  // the whole roster.
-  const completionSeenKeys = useMemo(() => {
-    const keys = new Set<string>();
-    if (completionSeen.terminals.size)
-      for (const { agent } of observedOffice.roster)
-        if (
-          completionSeen.terminals.has(agent.currentTerminalRef.nativeId) &&
-          completionSeen.identities.has(completionSeenIdentity(agent))
-        )
-          keys.add(agent.key);
-    return keys;
-  }, [completionSeen, observedOffice]);
-  // Seen marks belong to one completion: an agent that works again, or
-  // finishes again, has new work to check.
-  useEffect(() => {
-    for (const agent of townFinished.fresh)
-      void completionSeenStore.renew(agent);
-  }, [townFinished.fresh]);
+  const completionSeenKeys = useMemo(
+    () => checkedAgentKeys(completionSeen, observedOffice.roster),
+    [completionSeen, observedOffice],
+  );
   const office = useMemo(
     () =>
       withTownFinished(
@@ -456,7 +441,8 @@ export default function TownView({
     onSelect(key);
   };
   const markCompletionSeen = (agent: OfficeAgent) => {
-    townFinished.dismiss(agent.key);
+    // The service's check, shared by every browser, ends it; the service
+    // also ends the check when the agent works or asks again.
     void completionSeenStore.mark(agent);
   };
   /**

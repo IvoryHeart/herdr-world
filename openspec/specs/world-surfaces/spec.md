@@ -1562,10 +1562,11 @@ agent it observes going from working or blocked to idle as done until checked.
 A check covers one completion: when the agent works, asks or finishes again,
 its next completion SHALL be unchecked. The World service SHALL hold checks in
 memory, keyed by connection, runtime generation and terminal, so every browser
-of that World shows the same checks. A browser that notices new work SHALL
-clear only a check it had already received, never a newer one from another
-browser. A World restart, or a new runtime generation for that connection,
-SHALL forget the checks. Checks SHALL NOT represent approval or mutate Herdr. Desks
+of that World shows the same checks, including for a finish Town inferred. The
+service SHALL end a check when its own host reads show that agent working or
+blocked, and SHALL ignore a check made while they do, so no browser's late
+view can end or create a check for the wrong completion. A World restart, or a
+new runtime generation for that connection, SHALL forget the checks. Checks SHALL NOT represent approval or mutate Herdr. Desks
 SHALL carry their tab's name from the room level, and each seat its agent's or
 terminal's name at the desk level. An idle agent SHALL move to a lounge spot in its
 building, or remain seated with an idle cue when no spot is free. When an
@@ -1612,8 +1613,7 @@ and Board/Desk marks without inventing an agent harness or changing Herdr status
 - **WHEN** the user checks a finished agent's completion on a phone while the
   same World is open on a desktop
 - **THEN** the desktop shows that agent as checked too, and when the agent
-  works again either device's notice of the new work clears the check without
-  erasing a newer check made on the other device
+  works or asks again both devices show its next completion unchecked
 
 #### Scenario: World restarts with checked completions
 

@@ -502,8 +502,11 @@ const worldCli = createWorldCliService({
   },
 });
 
-const { retire: retireTerminalMarks, ...terminalMarks } =
-  createTerminalMarks(revisionPublisher);
+const {
+  retire: retireTerminalMarks,
+  observe: observeHost,
+  ...terminalMarks
+} = createTerminalMarks(revisionPublisher, deskService.observe);
 
 function publishWorldInvalidation(
   connectionId: string,
@@ -584,7 +587,7 @@ worldSnapshots = new WorldSnapshotService(
     publishWorldInvalidation(connectionId, generation, true),
   undefined,
   () => terminalMarks.worldWatchlist.list(),
-  deskService.observe,
+  observeHost,
 );
 
 const assistantContext = createAssistantContext({

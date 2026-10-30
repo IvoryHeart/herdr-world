@@ -1,23 +1,30 @@
 import { describe, expect, test } from "bun:test";
 import type { BridgeControlMsg, ConnectionStatus } from "../api";
 import { handleCompletionSeenRpc } from "../../../server/src/rpc/completion-seen";
-import { WorldCompletionSeenRegistry } from "../../../server/src/world/completion-seen";
+import { createTerminalMarks } from "../../../server/src/world/terminal-marks";
 import {
   CompletionSeenStore,
+  checkedAgentKeys,
   completionSeenIdentity,
   parseCompletionSeen,
+  type CompletionSeenState,
 } from "./completionSeenState";
+import { nextTownFinished, withTownFinished } from "./town/townFinished";
+import type { HerdrOfficeProjection } from "./herdrOfficeProjection";
 
 /** One World service, in memory, as every browser of it reaches it. */
 function service() {
-  const world = {
-    registry: new WorldCompletionSeenRegistry(),
-    controls: new Set<(control: BridgeControlMsg) => void>(),
-    statuses: new Set<(status: ConnectionStatus) => void>(),
-    generation: 7,
-    /** Notices held back, as for a browser on a slow link. */
-    held: null as BridgeControlMsg[] | null,
-  };
+  const controls = new Set<(control: BridgeControlMsg) => void>();
+  const statuses = new Set<(status: ConnectionStatus) => void>();
+  const start = () =>
+    createTerminalMarks(
+      () => (revision) => {
+        for (const listener of controls)
+          listener({ type: "world_completion_seen_changed", revision });
+      },
+      () => {},
+    );
+  let marks = start();
   const call = async (method: string, params?: Record<string, unknown>) => {
     const reply = Promise.withResolvers<unknown>();
     await handleCompletionSeenRpc({
@@ -30,49 +37,72 @@ function service() {
       },
       sendError: (_kind: string, error: unknown) => reply.reject(error),
       services: {
-        worldCompletionSeen: world.registry,
-        publishCompletionSeenChanged: (revision: number) => {
-          const control = {
-            type: "world_completion_seen_changed" as const,
-            revision,
-          };
-          if (world.held) world.held.push(control);
-          else for (const listener of world.controls) listener(control);
-        },
+        worldCompletionSeen: marks.worldCompletionSeen,
+        publishCompletionSeenChanged: marks.publishCompletionSeenChanged,
         connectionManager: {
           readyRuntimeLease: (id: string) =>
-            id === "alpha"
-              ? { generation: world.generation, isCurrent: () => true }
-              : null,
+            id === "alpha" ? { generation: 7, isCurrent: () => true } : null,
         },
       },
     });
     return reply.promise;
   };
-  const browser = () => {
+  /** Opens a browser and resolves once it holds the service's list. */
+  const browser = async () => {
     const store = new CompletionSeenStore({
       call,
       onControl(listener) {
-        world.controls.add(listener);
-        return () => world.controls.delete(listener);
+        controls.add(listener);
+        return () => controls.delete(listener);
       },
       onStatus(listener) {
-        world.statuses.add(listener);
-        return () => world.statuses.delete(listener);
+        statuses.add(listener);
+        return () => statuses.delete(listener);
       },
     });
+    const ready = until(store, (state) => state.verified);
     store.retain();
+    await ready;
     return store;
   };
+  /** A fresh host read reports this terminal's agent status. */
+  const hostRead = (terminal: string, status: string) =>
+    marks.observe(
+      "alpha",
+      7,
+      [{ pane_id: `p-${terminal}`, terminal_id: terminal, agent: "codex" }],
+      Date.now(),
+      [
+        {
+          pane_id: `p-${terminal}`,
+          terminal_id: terminal,
+          agent_status: status,
+        },
+      ],
+    );
   /** The service restarts; every browser reconnects to an empty one. */
   const restart = () => {
-    world.registry = new WorldCompletionSeenRegistry();
-    for (const listener of world.statuses) listener("connected");
+    marks = start();
+    for (const listener of statuses) listener("connected");
   };
-  return { world, browser, restart };
+  return { browser, hostRead, restart };
+}
+
+/** Resolves on the store's first state that satisfies `ready`. */
+function until(
+  store: CompletionSeenStore,
+  ready: (state: CompletionSeenState) => boolean,
+) {
+  const reached = Promise.withResolvers<CompletionSeenState>();
+  if (ready(store.get())) reached.resolve(store.get());
+  const off = store.subscribe(() => {
+    if (ready(store.get())) reached.resolve(store.get());
+  });
+  return reached.promise.finally(off);
 }
 
 const agent = (terminal: string, generation = 7) => ({
+  key: `agent-${terminal}`,
   currentTerminalRef: {
     connectionId: "alpha",
     generation,
@@ -81,98 +111,123 @@ const agent = (terminal: string, generation = 7) => ({
     worldId: `alpha:${terminal}`,
   },
 });
-
-const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+const checked = (store: CompletionSeenStore, terminal: string) =>
+  store.get().identities.has(completionSeenIdentity(agent(terminal)));
 
 describe("completion seen on the service", () => {
   test("a mark from one browser shows in every other browser", async () => {
     const { browser } = service();
-    const phone = browser();
-    const desktop = browser();
-    await settle();
+    const phone = await browser();
+    const desktop = await browser();
 
+    const seen = until(desktop, (state) => state.revision === 1);
     await phone.mark(agent("t1"));
-    await settle();
+    await seen;
 
-    const id = completionSeenIdentity(agent("t1"));
-    expect(phone.get().identities.has(id)).toBe(true);
-    expect(desktop.get().identities.has(id)).toBe(true);
+    expect(checked(phone, "t1")).toBe(true);
+    expect(checked(desktop, "t1")).toBe(true);
     expect([...desktop.get().terminals]).toEqual(["t1"]);
-    expect(desktop.get().revision).toBe(phone.get().revision);
   });
 
-  test("a browser that saw new work late cannot erase a newer mark", async () => {
-    const { world, browser } = service();
-    const phone = browser();
-    const desktop = browser();
-    await settle();
-    await phone.mark(agent("t1"));
-    await settle();
+  test("a late read of the checked completion keeps the check, in either order", async () => {
+    const { browser, hostRead } = service();
+    const phone = await browser();
+    const desktop = await browser();
 
-    // The agent worked and finished again. The phone clears its old mark and
-    // the person checks the new completion there, while the desktop has not
-    // heard of either change yet.
-    world.held = [];
-    await phone.renew(agent("t1"));
+    // The read that shows the finish arrives after the check...
     await phone.mark(agent("t1"));
-    await desktop.renew(agent("t1"));
-    const held = world.held;
-    world.held = null;
-    for (const control of held)
-      for (const listener of world.controls) listener(control);
-    await settle();
+    hostRead("t1", "idle");
+    // ...or before it.
+    hostRead("t2", "idle");
+    await phone.mark(agent("t2"));
+    await until(desktop, (state) => state.revision === 2);
 
-    const id = completionSeenIdentity(agent("t1"));
-    expect(phone.get().identities.has(id)).toBe(true);
-    expect(desktop.get().identities.has(id)).toBe(true);
-    expect(desktop.get().revision).toBe(phone.get().revision);
+    for (const store of [phone, desktop]) {
+      expect(checked(store, "t1")).toBe(true);
+      expect(checked(store, "t2")).toBe(true);
+    }
   });
 
-  test("renewing clears the mark in every browser", async () => {
-    const { browser } = service();
-    const phone = browser();
-    const desktop = browser();
-    await settle();
+  test("new work ends the check in every browser, and a check while busy is ignored", async () => {
+    const { browser, hostRead } = service();
+    const phone = await browser();
+    const desktop = await browser();
     await phone.mark(agent("t1"));
-    await settle();
+    await until(desktop, (state) => state.revision === 1);
 
-    await desktop.renew(agent("t1"));
-    await settle();
+    const ended = until(desktop, (state) => state.revision === 2);
+    hostRead("t1", "working");
+    await ended;
+    expect(checked(phone, "t1")).toBe(false);
+    expect(checked(desktop, "t1")).toBe(false);
 
-    expect(phone.get().identities.size).toBe(0);
-    expect(desktop.get().identities.size).toBe(0);
+    // A browser still showing the old finish cannot check the new work.
+    await desktop.mark(agent("t1"));
+    expect(checked(desktop, "t1")).toBe(false);
+    hostRead("t1", "blocked");
+    hostRead("t1", "idle");
+    await desktop.mark(agent("t1"));
+    expect(checked(desktop, "t1")).toBe(true);
   });
 
   test("a service restart forgets every mark, as documented", async () => {
     const { browser, restart } = service();
-    const phone = browser();
-    const desktop = browser();
-    await settle();
+    const phone = await browser();
+    const desktop = await browser();
     await phone.mark(agent("t1"));
     await phone.mark(agent("t2"));
-    await settle();
-    expect(desktop.get().revision).toBe(2);
+    await until(desktop, (state) => state.revision === 2);
 
+    const phoneEmpty = until(phone, (state) => state.revision === 0);
+    const desktopEmpty = until(desktop, (state) => state.revision === 0);
     restart();
-    await settle();
-
     // The restarted service's revision starts again at 0.
-    for (const store of [phone, desktop]) {
-      expect(store.get().identities.size).toBe(0);
-      expect(store.get().revision).toBe(0);
-      expect(store.get().verified).toBe(true);
+    for (const state of await Promise.all([phoneEmpty, desktopEmpty])) {
+      expect(state.identities.size).toBe(0);
+      expect(state.verified).toBe(true);
     }
   });
 
   test("marks belong to the current runtime generation", async () => {
     const { browser } = service();
-    const phone = browser();
-    await settle();
+    const phone = await browser();
 
     await phone.mark(agent("t1", 6));
-    await settle();
 
     expect(phone.get().identities.size).toBe(0);
+  });
+
+  test("Town on two devices agrees on an inferred finish checked on one", async () => {
+    const { browser, restart } = service();
+    const devices = await Promise.all([browser(), browser()]);
+    const [phone, desktop] = devices;
+    // Both saw the agent go from working to idle, so both infer a finish.
+    const town = devices.map(
+      () =>
+        nextTownFinished(
+          new Map([["agent-t1", "working"]]),
+          [{ key: "agent-t1", semanticStatus: "idle" as const }],
+          new Set<string>(),
+        ).finished,
+    );
+    const shown = () =>
+      devices.map((store, index) =>
+        presented(town[index]!, checkedAgentKeys(store.get(), office.roster)),
+      );
+    expect(shown()).toEqual(["done", "done"]);
+
+    const seen = until(desktop!, (state) => state.revision === 1);
+    await phone!.mark(agent("t1"));
+    await seen;
+    expect(shown()).toEqual(["idle", "idle"]);
+
+    // After a restart the finish is unchecked again on both.
+    const emptied = devices.map((store) =>
+      until(store, (state) => state.revision === 0),
+    );
+    restart();
+    await Promise.all(emptied);
+    expect(shown()).toEqual(["done", "done"]);
   });
 
   test("lists drop malformed records", () => {
@@ -202,3 +257,16 @@ describe("completion seen on the service", () => {
     expect(parseCompletionSeen({ revision: -1, records: [] })).toBeNull();
   });
 });
+
+const office = {
+  rooms: [],
+  receptions: [],
+  barAgents: [],
+  roster: [{ agent: { ...agent("t1"), semanticStatus: "idle" } }],
+} as unknown as HerdrOfficeProjection;
+
+/** How Town presents the agent for these finishes and checks. */
+function presented(finished: ReadonlySet<string>, checks: ReadonlySet<string>) {
+  return withTownFinished(office, finished, checks).roster[0]!.agent
+    .semanticStatus;
+}

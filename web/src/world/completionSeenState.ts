@@ -4,8 +4,9 @@ import type { OfficeAgent } from "./herdrOfficeProjection";
 
 /**
  * Town's checked completions live in the World service, so every browser of
- * this World agrees. The service keeps them in memory only: a restart forgets
- * them, and so does a new runtime generation of the host.
+ * this World agrees. Browsers only mark; the service ends a check when it
+ * sees the agent working or asking again. It keeps checks in memory only: a
+ * restart forgets them, and so does a new runtime generation of the host.
  */
 export type CompletionSeenState = {
   revision: number;
@@ -38,6 +39,24 @@ export function completionSeenIdentity(agent: SeenAgent) {
     terminal.generation,
     terminal.nativeId,
   ]);
+}
+
+/** Keys of the roster's agents that have a check. */
+export function checkedAgentKeys(
+  state: Pick<CompletionSeenState, "identities" | "terminals">,
+  roster: Iterable<{ agent: SeenAgent & Pick<OfficeAgent, "key"> }>,
+): ReadonlySet<string> {
+  const keys = new Set<string>();
+  // Only agents on a checked terminal need their full identity built, not the
+  // whole roster.
+  if (state.terminals.size)
+    for (const { agent } of roster)
+      if (
+        state.terminals.has(agent.currentTerminalRef.nativeId) &&
+        state.identities.has(completionSeenIdentity(agent))
+      )
+        keys.add(agent.key);
+  return keys;
 }
 
 function wireIdentity(agent: SeenAgent) {
@@ -147,19 +166,6 @@ export class CompletionSeenStore {
   /** The person checked this agent's finished work. */
   mark(agent: SeenAgent) {
     return this.mutate("world.completion_seen.mark", wireIdentity(agent));
-  }
-
-  /**
-   * The agent has new work to check. Only a mark this browser already knew
-   * of is cleared, never a newer one from another browser.
-   */
-  renew(agent: SeenAgent) {
-    if (!this.state.identities.has(completionSeenIdentity(agent)))
-      return Promise.resolve();
-    return this.mutate("world.completion_seen.clear", {
-      ...wireIdentity(agent),
-      seen_revision: this.state.revision,
-    });
   }
 
   private async mutate(method: string, params: Record<string, unknown>) {

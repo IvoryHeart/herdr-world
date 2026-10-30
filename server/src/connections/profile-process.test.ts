@@ -424,10 +424,19 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
       let sequence = 0;
       const pending = new Map<string, (message: any) => void>();
       const controls: Array<Record<string, unknown>> = [];
+      const waiters = new Set<{
+        matches(control: Record<string, unknown>): boolean;
+        resolve(control: Record<string, unknown>): void;
+      }>();
       socket.onmessage = (event) => {
         const message = JSON.parse(String(event.data));
         if (message.control) {
           controls.push(message.control);
+          for (const waiter of waiters)
+            if (waiter.matches(message.control)) {
+              waiters.delete(waiter);
+              waiter.resolve(message.control);
+            }
           return;
         }
         if (typeof message.id === "string") pending.get(message.id)?.(message);
@@ -477,7 +486,21 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
         if (message.error) throw new Error(message.error.message);
         return message.result;
       };
-      return { raw, rpc, controls };
+      /** The next matching notice; register before the triggering call. */
+      const nextControl = (
+        matches: (control: Record<string, unknown>) => boolean,
+      ) => {
+        const notice = Promise.withResolvers<Record<string, unknown>>();
+        const waiter = { matches, resolve: notice.resolve };
+        waiters.add(waiter);
+        // Real time only guards against a hang.
+        const timer = setTimeout(() => {
+          waiters.delete(waiter);
+          notice.reject(new Error("control notice timeout"));
+        }, 5_000);
+        return notice.promise.finally(() => clearTimeout(timer));
+      };
+      return { raw, rpc, controls, nextControl };
     };
     const browserA = rpcFor(wsA, "a");
     const browserB = rpcFor(wsB, "b");
@@ -767,33 +790,23 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
       connection_generation: oldAlphaGeneration,
       terminal_id: "alpha-terminal",
     };
+    const seenNotice = browserB.nextControl(
+      (control) => control.type === "world_completion_seen_changed",
+    );
     expect(
       await browserA.rpc("world.completion_seen.mark", seenIdentity),
     ).toMatchObject({
       revision: 1,
       records: [{ ...seenIdentity, revision: 1 }],
     });
-    for (
-      let attempt = 0;
-      attempt < 20 &&
-      !browserB.controls.some(
-        (control) => control.type === "world_completion_seen_changed",
-      );
-      attempt++
-    ) {
-      await Bun.sleep(10);
-    }
+    expect(await seenNotice).toEqual({
+      type: "world_completion_seen_changed",
+      revision: 1,
+    });
     expect(await browserB.rpc("world.completion_seen.list")).toMatchObject({
       revision: 1,
       records: [seenIdentity],
     });
-    // A browser that noticed new work before that mark cannot clear it.
-    expect(
-      await browserB.rpc("world.completion_seen.clear", {
-        ...seenIdentity,
-        seen_revision: 0,
-      }),
-    ).toMatchObject({ revision: 1, records: [seenIdentity] });
 
     const deskIdentity = {
       connection_id: "alpha",

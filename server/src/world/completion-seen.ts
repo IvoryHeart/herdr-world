@@ -1,4 +1,5 @@
 const MAX_SEEN = 4_096;
+const MAX_OBSERVED = 8_192;
 const MAX_ID_LENGTH = 512;
 
 /** One terminal's checked completion, in the generation that ran it. */
@@ -23,22 +24,30 @@ export type CompletionSeen = {
  * World. Process memory only: a restart forgets every mark, and a new runtime
  * generation retires its connection's marks, because terminal IDs are not
  * durable identities.
+ *
+ * A check covers one completion. The service, not a browser, decides when it
+ * ends: the host reads that every browser's view comes from show the agent
+ * working or asking again. A browser's late view of the same completion
+ * therefore cannot erase a newer check from another browser.
  */
 export class WorldCompletionSeenRegistry {
   private revision = 0;
   private records = new Map<string, CompletionSeenRecord>();
+  /** Terminals last observed working or blocked. */
+  private busy = new Set<string>();
 
   list(): CompletionSeen {
     return { revision: this.revision, records: [...this.records.values()] };
   }
 
+  /** Check the terminal's current completion; ignored while it is busy. */
   mark(identity: CompletionSeenIdentity): {
     changed: boolean;
     revision: number;
   } {
     const normalized = normalize(identity);
     const key = completionSeenKey(normalized);
-    if (this.records.has(key))
+    if (this.records.has(key) || this.busy.has(key))
       return { changed: false, revision: this.revision };
     this.revision += 1;
     this.records.set(key, { ...normalized, revision: this.revision });
@@ -47,22 +56,19 @@ export class WorldCompletionSeenRegistry {
     return { changed: true, revision: this.revision };
   }
 
-  /**
-   * The agent has new work to check. Only marks the caller had already seen
-   * (at or below `seenRevision`) are cleared, so a browser that noticed the new
-   * work late cannot erase a newer mark another browser just made.
-   */
-  clear(
+  /** A fresh host read saw this terminal's agent busy or not. */
+  observe(
     identity: CompletionSeenIdentity,
-    seenRevision: number,
+    busy: boolean,
   ): { changed: boolean; revision: number } {
-    if (!Number.isSafeInteger(seenRevision) || seenRevision < 0)
-      throw new Error("invalid completion seen revision");
     const key = completionSeenKey(normalize(identity));
-    const record = this.records.get(key);
-    if (!record || record.revision > seenRevision)
+    this.busy.delete(key);
+    if (!busy) return { changed: false, revision: this.revision };
+    this.busy.add(key);
+    while (this.busy.size > MAX_OBSERVED)
+      this.busy.delete(this.busy.keys().next().value!);
+    if (!this.records.delete(key))
       return { changed: false, revision: this.revision };
-    this.records.delete(key);
     this.revision += 1;
     return { changed: true, revision: this.revision };
   }
@@ -71,16 +77,17 @@ export class WorldCompletionSeenRegistry {
     connectionId: string,
     generation: number,
   ): { changed: boolean; revision: number } {
+    const retired = (key: string) => {
+      const [connection, keyGeneration] = JSON.parse(key) as [string, number];
+      return connection === connectionId && keyGeneration !== generation;
+    };
+    for (const key of this.busy) if (retired(key)) this.busy.delete(key);
     let changed = false;
-    for (const [key, record] of this.records) {
-      if (
-        record.connection_id === connectionId &&
-        record.connection_generation !== generation
-      ) {
+    for (const key of this.records.keys())
+      if (retired(key)) {
         this.records.delete(key);
         changed = true;
       }
-    }
     if (changed) this.revision += 1;
     return { changed, revision: this.revision };
   }
