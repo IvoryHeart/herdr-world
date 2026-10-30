@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { test as bunTest, expect } from "bun:test";
 import { execFileSync } from "node:child_process";
 import {
   cpSync,
@@ -15,6 +15,10 @@ const helper = resolve(import.meta.dir, "upstream-sync.ts");
 const realGit = Bun.which("git")!;
 const repo = "example/world";
 const actor = "github-actions[bot]";
+// Each test drives the helper through ~30 Bun and ~120 git processes: about
+// 1 s on a healthy runner and up to 6x that on a slow CI host. The helper's
+// children have no timeout of their own, so this bound also catches a hang.
+const test = (name: string, body: () => void) => bunTest(name, body, 15_000);
 
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), "world-upstream-cli-"));
@@ -122,8 +126,24 @@ function fixture() {
   save();
   writeFileSync(callsPath, "");
   const prelude = `#!${process.execPath}\nimport {readFileSync,writeFileSync,appendFileSync} from 'node:fs';\nimport {execFileSync} from 'node:child_process';\nconst statePath=process.env.FAKE_STATE; const state=JSON.parse(readFileSync(statePath,'utf8')); const args=process.argv.slice(2);\nconst save=()=>writeFileSync(statePath,JSON.stringify(state)); const record=(body)=>appendFileSync(process.env.FAKE_CALLS,JSON.stringify({tool:process.argv[1].endsWith('/git')?'git':'gh',args,body})+'\\n');\n`;
+  // A Bun start costs ~20 ms per call, and the helper issues dozens of plain
+  // git commands per test. Only the remote operations need the fake, so the
+  // PATH git is a shell dispatcher that sends everything else to real git.
+  mkdirSync(join(bin, "fake"));
+  const fakeGit = join(bin, "fake", "git");
   writeFileSync(
     join(bin, "git"),
+    `#!/bin/sh
+for arg in "$@"; do
+  case "$arg" in fetch|ls-remote) exec "${fakeGit}" "$@" ;; esac
+done
+[ "$1" = push ] && exec "${fakeGit}" "$@"
+exec "$REAL_GIT" "$@"
+`,
+    { mode: 0o755 },
+  );
+  writeFileSync(
+    fakeGit,
     prelude +
       `
 const at=args.indexOf('fetch');
