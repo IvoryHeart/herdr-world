@@ -188,7 +188,6 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
     setFloatingInspectorPortals,
     intentOpening,
     intentError,
-    setSelectedVisualAnchor,
     visualConversationAnchors,
     setVisualConversationAnchors,
     floatingWindowAnchors,
@@ -367,7 +366,6 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                           setVisualConversationAnchors
                         }
                         onOpenTerminal={openTerminalById}
-                        onSelectedAnchorChange={setSelectedVisualAnchor}
                       />
                     </Suspense>
                   ) : (
@@ -383,7 +381,6 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                         conversationNodeIds={conversationNodeIds}
                         onSelect={selectNode}
                         onOpen={openNodeById}
-                        onSelectedAnchorChange={setSelectedVisualAnchor}
                         onNodeAnchorsChange={setVisualConversationAnchors}
                       />
                     </Suspense>
