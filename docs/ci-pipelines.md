@@ -44,22 +44,31 @@ commands to verify coverage, ordering and failure propagation without rebuilding
 
 Code events (`opened`, `synchronize`, `reopened`) receive fresh validation.
 Description edits and labels queue behind a running check instead of cancelling
-it. They may reuse only a successful full Delivery checks job for the same PR,
-base commit and head commit. GitHub's historical PR association can change, so
-it is not proof of the tested base. Reuse binds the selected full Delivery job
+it. They may reuse a successful full Delivery checks job, or a scoped job with the
+identical selection, for the same PR, base commit and head commit. GitHub's historical PR association can change, so
+it is not proof of the tested base. Reuse binds the selected Delivery job
 to its run and attempt, reads the full checkout SHA only from that job's checkout
 action log, and resolves the immutable merge commit. Its returned SHA must match
 the checkout SHA and its two ordered parents must match the requested base/head.
-Default leaf checkouts retain the original event's `GITHUB_SHA`. A newer failed
-full result prevents reuse of an older success; missing, ambiguous or expired
-logs and API errors fall back to full validation.
+Scoped jobs publish one `[delivery-proof]` record only after all applicable
+results pass. Reuse compares every selection field, including ordered test arrays
+(the order determines shards), and requires the scoped acceptance step to pass.
+A reused result is never fresh evidence. Default leaf checkouts retain the
+original event's `GITHUB_SHA`. A newer failed or cancelled candidate prevents
+reuse of an older success, even when its Delivery job was never created. A
+matching workflow must have succeeded before its job proof is considered;
+unfinished or other unsuccessful runs also fail closed. Missing, ambiguous or
+expired logs and API errors
+fall back to fresh validation for the current scope.
 The release-preview label can therefore request archives without repeating a
-successful full check. Other label changes still create workflow runs, but can
+successful applicable check. Other label changes still create workflow runs, but can
 take this same short path.
 
 Ordinary Markdown-only diffs receive documentation checks. Verification inputs or
-contract owners still require behavioral verification, even when their edits are Markdown. Packaged notices, agent policy,
-OpenSpec, verification and tooling do not qualify for this shortcut. macOS jobs
+model-backed contract owners still require behavioral verification, even when
+their edits are Markdown. Contributor instructions and skill Markdown receive
+documentation checks or their named consumer tests. Packaged notices, OpenSpec,
+verification and executable workflow policy do not qualify for this shortcut. macOS jobs
 still report both protected architecture names in short runs. When native
 packaging is not selected, those reports run on Ubuntu with native build and
 lifecycle steps skipped, so metadata reuse does not wait for a macOS runner.
@@ -86,7 +95,12 @@ Main pushes and explicit full local gates always run everything.
 paths, workflow/gate policy and configuration select every suite. A full-gate
 incremental delta also escalates all suite families, including World,
 even when the triggering input was reverted out of the net PR diff. Verification
-runs for model/tooling/OpenSpec inputs or an inventory owner. World browser suites
+runs for model/tooling/OpenSpec inputs or an owner with a maintained model.
+Model-free alternative-evidence owners retain affected consumer tests and the
+cheap `scripts/verification-coverage.test.ts` inventory check. Coverage inventory
+edits limited to explicitly model-free areas use that check; changed model
+mappings, transitions out of a modeled status, changed schema metadata and an
+unavailable baseline retain the model gate. World browser suites
 are the nearest consumers; web suites come from their maintained inventory.
 World runtime changes also select the dense end-to-end World suites
 (`worldRuntimeSuites`: production and concurrent contexts, terminal handoff).
@@ -96,14 +110,23 @@ agent-tooling exception remains explicit.
 
 Main and non-PR dispatches force the full plan. Code receives all static checks;
 ordinary docs receive `check:docs`. Non-browser tests and web suites are partitioned
-into two disjoint inventories. Six World shards keep their maintained membership,
-while only relevant shards/suites run. Browser jobs use the pinned test Chrome
+into two disjoint inventories. Six World shards use longest-first assignment
+from `scripts/world-browser-timings.json`; only relevant shards/suites run.
+TownCanvas retains all 22 parameter cases across five files sharing one harness.
+A browser shard-table edit runs the browser inventory tests and all registered
+World/web suites, without escalating to native or model work. Executable gate
+policy still selects the full matrix. Browser jobs use the pinned test Chrome
 (`tools/chrome/test-chrome.json`) and never retry. Timing is not a CI check: the
 separate, non-blocking World latency trend workflow measures the dense suites on
 quiet runners for main pushes and `latency-trend`-labelled PRs and reports them
 beside main's recent runs on the same CPU model.
 
-Three verification runners partition the complete accepted model inventory. Each
+Three verification runners partition the complete accepted model inventory by
+longest-first measured work (`scripts/verification-timings.json`). Both tables
+name their source CI run; update weights from retained JUnit/manifest durations
+when rebalancing, with each original case/model retained exactly once. Weights
+are planning estimates, not timing assertions; new model inputs require a weight.
+Changes to the shared assignment algorithm or model weights run verification. Each
 runs the maintained focused workers inside the enforced 4 GiB/no-swap/two-CPU
 envelope with the existing OOM/cancellation and diagnostic controls. The
 payload and supervisor occupy separate delegated cgroups: the memory limit and

@@ -171,6 +171,15 @@ acceptance. [Command regressions](../scripts/gate-commands.test.ts) cover scope,
 log reset, disk-guard removal and queue isolation; [queue tests](../scripts/check-lock.test.ts)
 cover slot ownership and recovery.
 
+CI selection distinguishes model-backed and model-free owners through
+[coverage scope](../scripts/coverage-scope.ts) ([tests](../scripts/coverage-scope.test.ts)).
+Metadata reuse requires [source and selection proof](../scripts/ci-validation-proof.ts)
+([tests](../scripts/ci-validation-proof.test.ts)). [Measured assignment](../scripts/balance-shards.ts)
+([tests](../scripts/balance-shards.test.ts)) partitions World suites and verification
+models; [the CI guide](ci-pipelines.md#shared-suite-plan-and-sharding) describes
+weights and full-main coverage. Town's 22 browser cases share [one harness](../web/src/world/testing/TownCanvas.ts)
+and [one parameter inventory](../web/src/world/town/TownCanvas.cases.ts).
+
 Repository workflow lives in [AGENTS.md](../AGENTS.md) and
 [agent development](agent-development.md). The optional visible-team recipe is
 under [`.hwf/workflows/`](../.hwf/workflows/). Per-PR contributor token accounting
