@@ -11,6 +11,7 @@ import {
 } from "../testing/workCeilings";
 import { layoutTown, townShapeFor, TOWN_TILE } from "./townLayout";
 import { townModelFromProjection } from "./townModel";
+import { checkTownContextRecovery } from "./townContextRecovery.browser";
 import { createTownRenderer } from "./townRenderer";
 import {
   advancePixiSystemTicker,
@@ -52,6 +53,7 @@ export async function checkTownIdleDraws(
     advancePixiSystemTicker(),
   );
   holdPixiSystemTicker();
+  const canvas = element.querySelector("canvas")!;
   try {
     const camera = renderer.camera;
     const state = {
@@ -95,6 +97,11 @@ export async function checkTownIdleDraws(
         ),
       );
     }
+    await checkTownContextRecovery(canvas, clock, () => town().frames, check);
+    check(
+      town().lastError === null,
+      `Context recovery draw failed: ${town().lastError}`,
+    );
     const stateBefore = town().frames;
     renderer.invalidate("test-state");
     renderer.invalidate("test-state-coalesced");
@@ -147,6 +154,7 @@ export async function checkTownIdleDraws(
   } finally {
     renderer.destroy();
     const frames = window.__HERDR_TOWN_RENDERER__!.frames;
+    canvas.dispatchEvent(new Event("webglcontextrestored"));
     await clock.advance(1000);
     check(
       window.__HERDR_TOWN_RENDERER__!.frames === frames,

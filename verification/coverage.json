@@ -1620,8 +1620,9 @@
       "area": "Renderer and lazy-module lifetime",
       "owner": "web/src/world/town/townRenderer.ts",
       "requirement": "openspec/specs/world-surfaces/spec.md",
-      "properties": "Unmount disposes one renderer; late initialization cannot resurrect it; reload attempts stay bounded",
+      "properties": "Unmount disposes one renderer; late initialization cannot resurrect it; reload attempts stay bounded; GPU restoration repaints a sleeping renderer and defers while hidden",
       "existingTests": [
+        "web/src/world/HostsFilter.test.ts",
         "web/src/world/town/TownCanvas.test.ts",
         "web/src/world/town/TownCanvas.extended.test.ts",
         "web/src/world/town/TownCanvas.portrait.test.ts",
@@ -1637,11 +1638,12 @@
       "status": "alternative-evidence",
       "remaining": "GPU/browser/URL behavior requires the actual implementation; arbitrary device/driver failure schedules are excluded.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
-      "evidenceDecision": "The Town renderer browser test (StrictMode double mount leaves one renderer and canvas; unmount leaves none) and the lazy-module tests exercise graphics destruction and reload/lifetime behavior. Committed building-sign lifecycle fixtures cover cold commit, ref stability across status renders, cull/remount, suspended uncommitted nodes and replacement-safe cleanup. Maintained phone/wide browser cases require visible building/reception recovery after cold mount and camera culling with normal roof fading; their execution and the production suites' runner-independent work ceilings remain closing browser acceptance; input-delay timing is reported by the non-blocking World latency trend (same-CPU comparison with main) and is not a pass/fail claim.",
+      "evidenceDecision": "The HostsFilter town-idle-draws case exercises native WEBGL_lose_context loss/restoration on the production Pixi renderer at desktop and phone widths with controlled visibility and the test clock: recovery paints once after sleep, remains pending while hidden, resumes once when visible and returns to zero idle draws; a restoration event after disposal cannot draw. The Town renderer browser test (StrictMode double mount leaves one renderer and canvas; unmount leaves none) and the lazy-module tests exercise graphics destruction and reload/lifetime behavior. Committed building-sign lifecycle fixtures cover cold commit, ref stability across status renders, cull/remount, suspended uncommitted nodes and replacement-safe cleanup. Maintained phone/wide browser cases require visible building/reception recovery after cold mount and camera culling with normal roof fading; their execution and the production suites' runner-independent work ceilings remain closing browser acceptance; input-delay timing is reported by the non-blocking World latency trend (same-CPU comparison with main) and is not a pass/fail claim.",
       "partialEvidence": {
         "models": [],
         "contracts": ["verification/consumer-evidence.md"],
         "tests": [
+          "web/src/world/HostsFilter.test.ts",
           "web/src/world/town/TownCanvas.test.ts",
           "web/src/world/town/TownCanvas.extended.test.ts",
           "web/src/world/town/TownCanvas.portrait.test.ts",

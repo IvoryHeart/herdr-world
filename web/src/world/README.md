@@ -154,13 +154,16 @@ sprites do not keep ambient drawing alive. A settled scene with no visible
 motion sleeps until a state change, input, preference or viewport invalidation.
 The animation clock uses elapsed time even between sparse draws; simulation
 steps retain their bounded delta. Pending ambient wake-ups are cancelled on
-redraw and renderer destruction.
+redraw and renderer destruction. [townFrameLifecycle.ts](town/townFrameLifecycle.ts)
+requests a state paint after GPU context restoration and removes that listener
+on disposal. A restore while hidden remains pending until visibility returns.
 
 `town-idle-draws` in the Hosts filter suite uses the test clock and
 `TOWN_STATIC_WORK_CEILINGS` to require zero draws per second in a settled,
 roof-covered scene at 1440 and 390 px. It first proves renderer readiness, then
 checks a coalesced state paint, smooth camera flight and visible pulses, return
-to sleep, and destruction. The existing idle React-commit and moving-Inspector
+to sleep, native GPU context loss/restoration while sleeping and hidden, and
+destruction. The existing idle React-commit and moving-Inspector
 anchor cases remain. See the [idle-frame audit](../../../docs/town-idle-frames.md)
 for measured busy time, residual callback owners and paired synthetic captures.
 

@@ -95,10 +95,51 @@ animation phase can differ. No live world identifiers or content are present.
 | 1440 | ![Synthetic Town before, desktop](https://raw.githubusercontent.com/IvoryHeart/herdr-world/pr-assets/town-idle-frames/town-before-1440.png) | ![Synthetic Town after, desktop](https://raw.githubusercontent.com/IvoryHeart/herdr-world/pr-assets/town-idle-frames/town-after-1440.png) |
 | 390 | ![Synthetic Town before, phone](https://raw.githubusercontent.com/IvoryHeart/herdr-world/pr-assets/town-idle-frames/town-before-390.png) | ![Synthetic Town after, phone](https://raw.githubusercontent.com/IvoryHeart/herdr-world/pr-assets/town-idle-frames/town-after-390.png) |
 
+GPU context restoration is also a state-frame invalidation owned by the
+renderer registration in `townFrameLifecycle.ts`. The listener is removed on
+disposal. Both viewport cases use native `WEBGL_lose_context` events to lose
+and restore the actual Pixi context after proving zero idle draws. They require
+one recovery repaint, no repeated idle draws, no paint during controlled hidden
+visibility, one paint when visibility returns, and no draw after disposal.
+The context-loss event is allowed to finish a test-clock frame before requesting
+restoration; there are no wall-clock sleeps or increased acceptance deadlines.
+Without the listener, both cases fail with missing sleeping and visibility-return
+repaints. Pixi draw errors also fail the check.
+
+### Paired motion captures
+
+These 14-second before/after captures use the same four-desk synthetic scene,
+DPR 1, own headless Chrome over CDP and verified hardware ANGLE/Vulkan. Desktop
+is 1440×900 at normal CPU speed; phone is 390×844 with 4× CPU throttle. They use
+native browser time, with the original `488682bc` renderer as the baseline and
+the context-restoration repair as the after renderer.
+
+| Viewport | Side-by-side capture | Individual captures |
+| --- | --- | --- |
+| Desktop | [Before / after](https://raw.githubusercontent.com/IvoryHeart/herdr-world/pr-assets/town-idle-frames-motion/motion-paired-1440.mp4) | [Before](https://raw.githubusercontent.com/IvoryHeart/herdr-world/pr-assets/town-idle-frames-motion/motion-before-1440.mp4), [after](https://raw.githubusercontent.com/IvoryHeart/herdr-world/pr-assets/town-idle-frames-motion/motion-after-1440.mp4) |
+| Phone, 4× CPU | [Before / after](https://raw.githubusercontent.com/IvoryHeart/herdr-world/pr-assets/town-idle-frames-motion/motion-paired-390.mp4) | [Before](https://raw.githubusercontent.com/IvoryHeart/herdr-world/pr-assets/town-idle-frames-motion/motion-before-390.mp4), [after](https://raw.githubusercontent.com/IvoryHeart/herdr-world/pr-assets/town-idle-frames-motion/motion-after-390.mp4) |
+
+The sequence shows working/blocked glows, bouncing/typing bubbles and blinks for
+0–5 s; camera flight out and back at 5–8 s; a desk carry at 8–10 s; cancel/shake
+and spring return at 10–11.3 s; then ambient motion until 14 s. The fixture calls
+production renderer camera/drag APIs; trusted pointer and presented-camera
+behavior remain covered by the retained full TownCanvas suites.
+
+[Capture metadata](https://raw.githubusercontent.com/IvoryHeart/herdr-world/pr-assets/town-idle-frames-motion/motion-evidence.json)
+records per-phase draw counts and intervals. Desktop drew 841 before versus 840
+after; phone drew 812 in each. Median draw intervals are 16.7 ms on desktop and
+17.0–17.4 ms on the throttled phone in both builds. CDP source-frame timestamps
+are preserved when encoding into 60 fps video containers; the container rate is
+not a claim that the renderer drew 60 frames each second. These are observed
+capture results, not timing gates or proof for every device/load. Blink/bubble
+phase and dust can differ; the recordings supply motion evidence alongside the
+static-view work ceiling.
+
 The rendering/lifetime boundary remains Q39 in `verification/coverage.json`.
 Actual browser rendering, frame counts and destruction are the appropriate
 evidence here; no ordering, authority, runtime ownership or recovery contract
-changes, so a new Quint model would not establish the claim. Existing user
+changes, so a new Quint model would not establish the claim. Q39 now maps the
+HostsFilter recovery consumer and records its native context-restoration evidence. Existing user
 steps, controls, art and preferences remain accurate in README, FEATURES and
 the tutorial. Contributor rendering guidance is updated in
 `web/src/world/README.md`.

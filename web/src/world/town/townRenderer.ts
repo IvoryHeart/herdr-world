@@ -25,10 +25,10 @@ import {
 } from "pixi.js";
 import type { OfficeAgent, OfficeDesk } from "../herdrOfficeProjection";
 import {
-  registerWorldFrames,
   worldMotionPreference,
   type WorldFrames,
 } from "../worldFrameScheduler";
+import { registerTownFrames } from "./townFrameLifecycle";
 import { diagnostics, type TownFrameTrace } from "./townDiagnostics";
 export type { TownFrameTrace } from "./townDiagnostics";
 import { DEVTOOLS } from "../devtools/flag";
@@ -1252,7 +1252,7 @@ export async function createTownRenderer(
       }
     }
   };
-  frames = registerWorldFrames(element, draw, (paused) => {
+  frames = registerTownFrames(element, canvas, draw, (paused) => {
     stats.interactionPaused = paused;
     if (paused) last = 0;
   });
