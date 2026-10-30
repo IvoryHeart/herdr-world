@@ -10,6 +10,8 @@ on:
     branches: [main]
 
 permissions:
+  # Dispatches CI on the prepared revert branch (gh workflow run).
+  actions: write
   contents: write
   issues: write
   pull-requests: write

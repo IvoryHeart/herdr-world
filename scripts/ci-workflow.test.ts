@@ -494,6 +494,7 @@ test("red main runs open one alert and an unmerged revert; green runs resolve it
       };
     };
     jobs: Record<string, WorkflowJob>;
+    permissions?: Record<string, string>;
   };
   expect(gate.on.workflow_run).toEqual({
     workflows: ["CI"],
@@ -508,6 +509,14 @@ test("red main runs open one alert and an unmerged revert; green runs resolve it
   const script = alert.steps.at(-1)!;
   expect(script.run).toContain("bun scripts/main-gate.ts");
   expect(script.run).not.toContain("gh pr merge");
+  // The gate dispatches CI on the revert it prepares, which needs Actions write.
+  const gateSource = await Bun.file(
+    new URL("./main-gate.ts", import.meta.url),
+  ).text();
+  expect(gateSource).toContain('"workflow", "run", "CI"');
+  expect(gate.permissions?.actions).toBe("write");
+  // Nothing reruns a red run.
+  expect(gateSource).not.toContain('"run", "rerun"');
 });
 
 test("the shared plan controls scoped jobs and always preserves protected delivery", () => {
