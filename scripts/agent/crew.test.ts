@@ -35,6 +35,7 @@ import {
   tabClosed,
 } from "./crew/deps";
 import { doneCommand, finishFixer, fixerPrompt } from "./crew/fixer";
+import { ASK_RETRY_MS } from "./crew/owner-asks";
 import { openChat, runs } from "./crew/review";
 import {
   authorOf,
@@ -647,6 +648,17 @@ describe("delivery", () => {
           ownerAsks.set(key, ask);
         }
       }
+      if (ask && verb !== "get" && verb !== "withdraw" && refuse.has("alert"))
+        return {
+          code: 6,
+          stdout: JSON.stringify({
+            ok: false,
+            code: "not_delivered",
+            error: `recorded ${ask.id}, but Herdr showed the owner no alert: disabled`,
+            result: ask,
+          }),
+          stderr: "",
+        };
       return {
         code: 0,
         stdout: JSON.stringify({
@@ -2536,12 +2548,26 @@ describe("delivery", () => {
         confirm(name, SHA.reviewed),
       ),
     });
+    const feed = () =>
+      existsSync(join(dir, "feed.log"))
+        ? readFileSync(join(dir, "feed.log"), "utf8")
+        : "";
+    const before = feed().length;
     refuse.add("ask");
     pass(ready);
-    expect(actionsIn(crew, ["pending"])).toHaveLength(1);
-    refuse.clear();
     pass(ready, NOW + 60_000);
-    pass(ready, NOW + 120_000);
+    expect(actionsIn(crew, ["pending"])).toHaveLength(1);
+    // Said once, with the CLI's error, then left alone until the retry delay.
+    const failures = feed()
+      .slice(before)
+      .split("\n")
+      .filter((line) => line.includes("couldn't ask the owner"));
+    expect(failures).toHaveLength(1);
+    expect(failures[0]).toContain("herdr-world exited 1: World unavailable");
+    expect(notices()).toHaveLength(1);
+    refuse.clear();
+    pass(ready, NOW + ASK_RETRY_MS);
+    pass(ready, NOW + ASK_RETRY_MS + 60_000);
     expect(notices()).toHaveLength(2);
     expect(actionsIn(crew, ["pending"])).toEqual([]);
   });
@@ -2612,6 +2638,29 @@ describe("delivery", () => {
     expect(spawned).toHaveLength(6);
   });
 
+  test("an ask World recorded but nobody saw is kept and said once", () => {
+    const ready = town({
+      head: SHA.reviewed,
+      posts: ["rev2", "rev-astra", "rev-opus"].map((name) =>
+        confirm(name, SHA.reviewed),
+      ),
+    });
+    const feed = () =>
+      existsSync(join(dir, "feed.log"))
+        ? readFileSync(join(dir, "feed.log"), "utf8")
+        : "";
+    const before = feed().length;
+    refuse.add("alert");
+    pass(ready);
+    refuse.clear();
+    pass(ready, NOW + 60_000);
+    expect(notices()).toHaveLength(1);
+    expect(feed().slice(before)).toContain(
+      "but Herdr showed the owner no alert: disabled",
+    );
+    expect(actionsIn(crew, ["pending"])).toEqual([]);
+  });
+
   test("an owner notice Herdr couldn't show is retried for every kind", () => {
     const value = trioPosted();
     const desk = {
@@ -2621,8 +2670,8 @@ describe("delivery", () => {
     refuse.add("ask");
     pass(desk);
     refuse.clear();
-    pass(desk, NOW + 60_000);
-    pass(desk, NOW + 120_000);
+    pass(desk, NOW + ASK_RETRY_MS);
+    pass(desk, NOW + ASK_RETRY_MS + 60_000);
     const waits = notices().filter((argv) =>
       argv.join(" ").includes("waits for firstmate (never prompted)"),
     );

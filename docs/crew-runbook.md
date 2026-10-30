@@ -107,6 +107,13 @@ comment carrying the same `Evaluation: <checkpoint>`, ending with:
 PROCESS #<PR>: done — <outcome and next step>
 ```
 
+The watcher runs this checkout's own agent CLI (`server/src/index.ts`), never
+an older `herdr-world` on PATH. A failed owner ask is written to the feed once
+with the CLI's error and asked again 30 minutes later, because the CLI alerts
+the owner through Herdr even when World cannot record the question. An ask
+World recorded but nobody was alerted to (exit 6, `not_delivered`) stays
+recorded and is reported once.
+
 Only that report releases the hold. For `Process: owner`, the owner's answer at
 reception supplies the decision and releases it. An unavailable process seat,
 invalid verdict or failed process remains held for the owner. After every two

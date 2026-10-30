@@ -1,4 +1,5 @@
 import { closeSync, openSync } from "node:fs";
+import { join } from "node:path";
 import { runProcess, type Run } from "../gate/observe";
 import type { StoredRun } from "./store";
 import { readUsage } from "./worker";
@@ -43,8 +44,17 @@ export type Deps = {
   out: (text: string) => void;
 };
 
+/** The repository's own agent CLI, never an older `herdr-world` on PATH. */
+const WORLD_CLI = [
+  process.execPath,
+  join(import.meta.dir, "../../../server/src/index.ts"),
+];
+
 export const realDeps: Deps = {
-  run: runProcess,
+  run: (argv) =>
+    runProcess(
+      argv[0] === "herdr-world" ? [...WORLD_CLI, ...argv.slice(1)] : argv,
+    ),
   spawn(argv, log, place) {
     // Join the round's tab beside its newest pane; a new round, or a tab
     // the owner has closed, gets a new tab.

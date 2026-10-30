@@ -10,13 +10,23 @@ type Receipt = {
   rearm?: boolean;
   withdrawing?: boolean;
   retired?: boolean;
+  /** The last failed ask: its error, reported once, and when it failed. */
+  failed?: { reason: string; at: number };
 };
+
+/**
+ * A failed ask is retried this long after. The World CLI alerts the owner
+ * through Herdr even when World cannot record a question, so retrying every
+ * pass would repeat that alert.
+ */
+export const ASK_RETRY_MS = 30 * 60_000;
 function receipt(detail: string | null): Receipt | null {
   try {
     const value = JSON.parse(detail ?? "null") as Receipt | null;
     return value &&
       typeof value === "object" &&
       ((typeof value.ask === "string" && value.ask.length > 0) ||
+        typeof value.failed === "object" ||
         value.rearm === true ||
         value.withdrawing === true ||
         value.retired === true)
@@ -31,6 +41,7 @@ function reply(result: ReturnType<Deps["run"]>) {
     const value = JSON.parse(result.stdout) as {
       ok: boolean;
       code?: string;
+      error?: string;
       result?: {
         id?: string;
         answer?: { text: string };
@@ -96,21 +107,38 @@ export function reconcileOwnerAsks(
       { ...prior, rearm: true, retired: false, withdrawing: false },
       true,
     );
-    const asked = reply(
-      deps.run([
-        "herdr-world",
-        "ask",
-        entry.text,
-        "--key",
-        `crew:${entry.key}`,
-        "--owner-only",
-        "--json",
-      ]),
-    );
-    if (!asked?.ok || !asked.result?.id) {
-      say(`#${entry.pr} couldn't record its owner ask; retrying next pass`);
+    const run = deps.run([
+      "herdr-world",
+      "ask",
+      entry.text,
+      "--key",
+      `crew:${entry.key}`,
+      "--owner-only",
+      "--json",
+    ]);
+    const asked = reply(run);
+    if (!asked?.result?.id) {
+      const reason =
+        asked?.error ??
+        `herdr-world exited ${run.code}: ${(run.stderr || run.stdout).trim().slice(0, 200)}`;
+      // Say each distinct failure once, with its error, and wait before
+      // asking again (ASK_RETRY_MS).
+      if (prior?.failed?.reason !== reason)
+        say(`#${entry.pr} couldn't ask the owner: ${reason}`);
+      save(entry, "pending", {
+        ...prior,
+        rearm: true,
+        retired: false,
+        withdrawing: false,
+        failed: { reason, at: now },
+      });
       return;
     }
+    // Recorded, but no one was alerted (exit 6): the question waits in World.
+    if (asked.code === "not_delivered")
+      say(
+        `#${entry.pr} owner ask ${asked.result.id} reached no one: ${asked.error}`,
+      );
     const id = asked.result.id;
     const dismissed = Boolean(asked.result.dismissed);
     save(entry, "sent", {
@@ -195,6 +223,7 @@ export function reconcileOwnerAsks(
       }
       continue;
     }
+    if (known?.failed && now - known.failed.at < ASK_RETRY_MS) continue;
     create(entry, known);
   }
 }
