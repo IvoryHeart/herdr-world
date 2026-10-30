@@ -5,6 +5,7 @@ import { basename, dirname, join } from "node:path";
 import {
   BROWSER_STARTUP_TIMEOUT_MS,
   waitForBrowserFixture,
+  waitForChromePort,
 } from "../browserChrome";
 import { InputDriver, denseSnapshot } from "./browserAcceptanceFixture";
 import { startIndependentInput } from "./independentInputSchedule";
@@ -20,13 +21,6 @@ test.skipIf(!chrome).each([1440, 390])(
     const dir = await mkdtemp(join(tmpdir(), "world-concurrent-contexts-"));
     const assets = new Map<string, Blob>();
     const payload = await denseSnapshot();
-    const portReservation = Bun.serve({
-      hostname: "127.0.0.1",
-      port: 0,
-      fetch: () => new Response("reserved"),
-    });
-    const debuggingPort = portReservation.port;
-    portReservation.stop(true);
     let driver: InputDriver | undefined;
     const inputRuns = new Map<
       string,
@@ -75,7 +69,14 @@ test.skipIf(!chrome).each([1440, 390])(
         if (path === "/input-ready") {
           const phase = new URL(request.url).searchParams.get("phase")!;
           if (!driver) {
-            // The page's readiness request proves Chrome has started; no status polling.
+            // The page's readiness request proves Chrome has started. Chrome
+            // chose its own DevTools port (no reserved number another server
+            // could be handed) and wrote it to the profile.
+            const debuggingPort = await waitForChromePort(
+              browser!,
+              join(dir, "profile"),
+              join(dir, "browser.log"),
+            );
             const targets = (await (
               await fetch(`http://127.0.0.1:${debuggingPort}/json/list`)
             ).json()) as { type: string; webSocketDebuggerUrl: string }[];
@@ -188,7 +189,7 @@ test.skipIf(!chrome).each([1440, 390])(
         [
           chrome!,
           "--headless=new",
-          `--remote-debugging-port=${debuggingPort}`,
+          "--remote-debugging-port=0",
           `--window-size=${width},1000`,
           "--disable-dev-shm-usage",
           "--disable-background-networking",

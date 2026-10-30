@@ -20,6 +20,7 @@ import {
 import {
   BROWSER_STARTUP_TIMEOUT_MS,
   waitForBrowserFixture,
+  waitForChromePort,
 } from "../../browserChrome";
 import { worldBrowserBundle } from "./worldBrowserBundle";
 import { chromeRenderingFlags } from "./chromeRendering";
@@ -114,13 +115,6 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
           );
         return text;
       } as typeof JSON.stringify;
-      const reserve = Bun.serve({
-        hostname: "127.0.0.1",
-        port: 0,
-        fetch: () => new Response(),
-      });
-      const debuggingPort = reserve.port;
-      reserve.stop(true);
       const calls: {
         id: string;
         host: string;
@@ -277,6 +271,13 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
           }
           if (url.pathname === "/input-ready") {
             const phase = url.searchParams.get("phase")!;
+            // Chrome chose its own DevTools port (no reserved number another
+            // server could be handed) and wrote it to the profile.
+            const debuggingPort = await waitForChromePort(
+              browser!,
+              dir + "/profile",
+              dir + "/browser.log",
+            );
             const pages = (await (
               await fetch("http://127.0.0.1:" + debuggingPort + "/json/list")
             ).json()) as { type: string; webSocketDebuggerUrl: string }[];
@@ -512,7 +513,7 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
             "--disable-background-timer-throttling",
             "--disable-renderer-backgrounding",
             "--disable-backgrounding-occluded-windows",
-            "--remote-debugging-port=" + debuggingPort,
+            "--remote-debugging-port=0",
             "--user-data-dir=" + dir + "/profile",
             "--window-size=" + width + ",1100",
             server.url +
@@ -522,7 +523,7 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
               entry +
               (Bun.env.WORLD_TRACE_PREFIX ? "&trace=1" : ""),
           ],
-          { stdout: "ignore", stderr: "ignore" },
+          { stdout: "ignore", stderr: Bun.file(dir + "/browser.log") },
         );
         // Keep both observation/render phases and the deliberate 20-second stall
         // in the original fixture budget. Input latency has separate budgets.
