@@ -3026,6 +3026,75 @@ async function run() {
       moved,
       `no room took a carried desk (${rooms.length} visible; ${tried.join("; ")})`,
     );
+
+    // A press lands on what Town last drew: an arrow-key pan not yet drawn
+    // (as an edge pan can be when a carry ends) leaves the drawn desk under
+    // the finger. Pan and press in one task, so no frame comes between; the
+    // press's target is read from Town's gesture trace and the press is then
+    // cancelled, before a hold could lift (and edge-pan) anything.
+    const shownDesk = [
+      ...host.querySelectorAll<HTMLElement>(
+        '.world-semantic-target[data-kind="desk"]',
+      ),
+    ].find((target) => {
+      const box = target.getBoundingClientRect();
+      return (
+        box.width > 0 &&
+        box.left > 0 &&
+        box.top > 0 &&
+        box.right < window.innerWidth &&
+        box.bottom < window.innerHeight
+      );
+    });
+    if (shownDesk && townTrace && traced) {
+      const arrow = (key: string) =>
+        canvasHost.dispatchEvent(
+          new KeyboardEvent("keydown", { key, bubbles: true }),
+        );
+      const pressed: unknown[] = [];
+      townTrace.enabled = true;
+      townTrace.record = (kind, detail) => {
+        if (kind === "input") pressed.push(detail);
+      };
+      // A camera at its bound does not pan one way; it then pans the other.
+      let panned = 0;
+      for (const [pan, back] of [
+        ["ArrowLeft", "ArrowRight"],
+        ["ArrowRight", "ArrowLeft"],
+      ] as const) {
+        const pressedAt = at(shownDesk);
+        pressed.length = 0;
+        arrow(pan);
+        press("pointerdown", pressedAt);
+        press("pointercancel", pressedAt);
+        const down = pressed[0] as
+          | { type?: string; target?: { key?: string } }
+          | undefined;
+        check(
+          down?.type === "down" &&
+            down.target?.key === shownDesk.dataset.targetKey,
+          `a press after an undrawn ${pan} pan hit the desk drawn under it (${JSON.stringify(down?.target)}, expected ${shownDesk.dataset.targetKey})`,
+        );
+        const framesBefore = window.__HERDR_TOWN_RENDERER__?.frames ?? 0;
+        await waitFor(
+          () =>
+            (window.__HERDR_TOWN_RENDERER__?.frames ?? 0) >= framesBefore + 2,
+          "Town drew no frame after the pan",
+        );
+        panned = at(shownDesk)[0] - pressedAt[0];
+        if (Math.abs(panned) > 30) {
+          arrow(back);
+          break;
+        }
+      }
+      townTrace.enabled = traced.enabled;
+      townTrace.record = traced.record;
+      // Drawn, the pan moved the desk well away from the pressed point.
+      check(
+        Math.abs(panned) > 30,
+        `neither arrow-key pan moved the drawn desk (${panned} px)`,
+      );
+    } else check(false, "no desk is drawn in view, or no Town trace");
   } else check(false, "no two visible desks share a room");
 
   // Town shows no move icons; moving is by drag, hold or the keyboard.

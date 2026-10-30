@@ -583,7 +583,17 @@ export function TownCanvas({
   // Only on-screen buildings keep DOM cards, plaques and receptions.
   const [visible, setVisible] = useState<TownVisible>(NOTHING_VISIBLE);
   const visibleKey = useRef(NOTHING_VISIBLE.key);
+  // The camera as last drawn. The canvas and its targets show this one until
+  // the next frame, so presses are hit-tested against it: a pan not yet drawn
+  // (an arrow key, an edge pan during a carry) must not move what is pressed.
+  const drawnCamera = useRef({ x: 0, y: 0, z: 0, width: 0, height: 0 });
   const onFrame = (camera: TownRendererHandle["camera"], level: TownLevel) => {
+    const drawn = drawnCamera.current;
+    drawn.x = camera.x;
+    drawn.y = camera.y;
+    drawn.z = camera.z;
+    drawn.width = camera.viewport.width;
+    drawn.height = camera.viewport.height;
     const layer = worldRef.current;
     const nextVisible = townVisibleHosts(camera, latest.current.layout, level);
     if (nextVisible.key !== visibleKey.current) {
@@ -890,13 +900,20 @@ export function TownCanvas({
       const renderer = rendererRef.current;
       if (!renderer) return null;
       const { layout: l, model: m } = latest.current;
-      const world = renderer.camera.toWorld(x, y);
+      // Before the first frame nothing is drawn; the live camera is all there is.
+      const shown = drawnCamera.current.z ? drawnCamera.current : null;
+      const world = shown
+        ? {
+            x: shown.x + (x - shown.width / 2) / shown.z,
+            y: shown.y + (y - shown.height / 2) / shown.z,
+          }
+        : renderer.camera.toWorld(x, y);
       return townHitTest(
         {
           layout: l,
           model: m,
           level: renderer.level,
-          zoom: renderer.camera.z,
+          zoom: shown?.z ?? renderer.camera.z,
           roofAlpha: (hostKey) => renderer.roofAlpha(hostKey),
           standing: function* () {
             for (const agent of m.agents.values()) {
