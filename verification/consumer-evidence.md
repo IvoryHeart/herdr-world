@@ -551,3 +551,15 @@ add no connection authority or new abstract ordering protocol. Production-contex
 animated Town browser tests at desktop and phone widths retain their complete
 synthetic workload, live animation and native-input acknowledgement budgets;
 controlled scheduler evidence alone makes no latency or native-platform claim.
+
+## Inspector popup focus (Q21)
+
+The real Chrome pane-map consumer queues the actual qualified Inspector terminal
+focuser before keyboard opening, then releases its animation frame while the map
+is open. The map and its focus must survive; a later handoff after dismissal must
+still focus the admitted terminal. The unguarded implementation fails this
+controlled schedule. Full terminal-handoff browser acceptance retains split-pane
+selection and terminal identity checks. These DOM/animation-frame consumers add
+evidence beyond the maintained window-ordering model, whose membership and
+restore rules do not encode Radix focus dismissal. No new authority or arbitrary
+browser-scheduling claim is introduced.

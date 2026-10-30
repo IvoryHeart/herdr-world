@@ -321,6 +321,12 @@ coordinates the outer shell with the Roamgate-derived App. Mobile retains floati
 controls and hides the tab strip. The inherited keyboard viewport adapter, native
 pane layouts and terminal transport remain the compatibility boundary.
 
+Queued Inspector terminal focus yields to open transient layers, including the
+title's pane-map popover. The handoff checks the shared layer stack and open
+popover DOM before focusing, so delayed animation frames cannot dismiss a
+keyboard-opened map. Existing pane, terminal and runtime admission checks still
+apply after the layer closes.
+
 To capture the synthetic desktop and 390 px mobile fixture, set
 `WORLD_WINDOW_CAPTURE_DIR=/tmp/world-window-captures` when running
 `bun run test web/src/world/WorldTerminalHandoff.test.ts`.

@@ -13,3 +13,5 @@
   maximum scale, preserving each pane's status and the status-pulse controls.
 - Keep animated Town input responsive in dense snapshots by skipping empty
   question lookups and yielding automatic Town-master name searches between batches.
+- Keep the Inspector pane map open when a delayed terminal-focus handoff runs
+  after keyboard opening.
