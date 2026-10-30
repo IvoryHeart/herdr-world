@@ -46,6 +46,16 @@ export function productionWorkCeilings(view: string): WorkByPhase {
   return { initial: stage, refresh: stage };
 }
 
+/**
+ * Hosts filter fixture, idle Town with an Inspector open: frames of 2 s of
+ * test time in which the World app committed. Town keeps animating without
+ * React; only its periodic data polls (4 s and 5 s in the fixture) commit,
+ * and each lands at most once in the window.
+ */
+export const TOWN_IDLE_WORK_CEILINGS: WorkByPhase = {
+  idle: { "commit-frames": 2 },
+};
+
 export type ConcurrentWork = {
   worldWorkByPhase: WorkByPhase;
   terminalWorkByPhase: WorkByPhase;

@@ -95,6 +95,10 @@ import {
   nextTownTask,
   type TownRendererHandle,
 } from "./townRenderer";
+import {
+  advancePixiSystemTicker,
+  holdPixiSystemTicker,
+} from "./pixiSystemTicker";
 import { townPortrait } from "./townSprites";
 import { townTargets, type TownTarget } from "./townTargets";
 import { yieldWorldTask } from "../worldObject";
@@ -709,7 +713,10 @@ export function TownCanvas({
     const abort = new AbortController();
     void createTownRenderer(
       host,
-      (camera, level) => onFrameRef.current(camera, level),
+      (camera, level) => {
+        advancePixiSystemTicker();
+        onFrameRef.current(camera, level);
+      },
       abort.signal,
       DEVTOOLS
         ? (error) =>
@@ -721,6 +728,7 @@ export function TownCanvas({
       DEVTOOLS ? (frame) => traceRef.current.record("frame", frame) : undefined,
     )
       .then(async (renderer) => {
+        holdPixiSystemTicker();
         // Building the scene is its own task, after the renderer's setup.
         if (!disposed) await nextTownTask();
         if (disposed) {
@@ -852,9 +860,11 @@ export function TownCanvas({
     scheduleAnchors();
   }, [selectedKey, hover, completionSeenKeys, summonedKeys, askingKeys, calm]);
 
+  // Re-report after any render, so anchors World cleared come back. World
+  // keeps unchanged anchors, so a report alone never renders again.
   useEffect(() => {
     scheduleAnchors();
-  }, [conversationTargets]);
+  });
 
   /* ---------- pointer input ---------- */
   useEffect(() => {

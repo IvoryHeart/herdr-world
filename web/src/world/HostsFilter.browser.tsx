@@ -1,5 +1,6 @@
 // First: the page runs on test time (see testing/testClock.ts).
 import { clock } from "./testing/installHostsFilterClock";
+import { Profiler } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { bridge, type ConnectionClient } from "../api";
@@ -37,6 +38,10 @@ import { TASK_NOTIFICATION_ACTIVATE_EVENT } from "../taskNotifications";
 import type { Pane, Tab, Workspace } from "../types";
 import { writeHostsFilter } from "./hostsFilter";
 import { worldRuntimeStore } from "./runtimeStore";
+import {
+  TOWN_IDLE_WORK_CEILINGS,
+  workViolations,
+} from "./testing/workCeilings";
 import WorldFoundationApp from "./WorldFoundationApp";
 import WorldInspectorConversationView from "./WorldInspectorConversation";
 import { worldObjectId } from "./worldObject";
@@ -52,6 +57,11 @@ window.addEventListener("error", (event) => {
 });
 const check = (value: boolean, message: string) => {
   if (!value) failures.push(message);
+};
+// The test-time frames in which the World app committed.
+const commitFrames = new Set<number>();
+const countWorldCommit = () => {
+  commitFrames.add(clock.now());
 };
 const calls: string[] = [];
 const globals: Array<{ method: string; params: Record<string, unknown> }> = [];
@@ -434,6 +444,32 @@ async function float(id: string) {
   await frame();
 }
 async function operationalScenario(unmount: () => void) {
+  if (operation === "town-idle") {
+    await float("alpha");
+    // The opening flight and walks finish first; ambient motion goes on.
+    await clock.advance(6000);
+    const desktop = document.documentElement.dataset.layout !== "mobile";
+    if (desktop)
+      check(
+        !!document.querySelector(".world-intent-connector"),
+        "Town drew no line from the open Inspector to its agent",
+      );
+    commitFrames.clear();
+    await clock.advance(2000);
+    failures.push(
+      ...workViolations(
+        { idle: { "commit-frames": commitFrames.size } },
+        TOWN_IDLE_WORK_CEILINGS,
+        "Town",
+      ),
+    );
+    if (desktop)
+      check(
+        !!document.querySelector(".world-intent-connector"),
+        "Idle Town lost the open Inspector's line",
+      );
+    return;
+  }
   if (operation.startsWith("pending-inspector-")) {
     const client = bridge.connection("alpha", 7);
     const request = {
@@ -2815,7 +2851,13 @@ async function run() {
   const host = document.createElement("div");
   document.body.append(host);
   let root = createRoot(host);
-  flushSync(() => root.render(<WorldFoundationApp />));
+  flushSync(() =>
+    root.render(
+      <Profiler id="world" onRender={countWorldCommit}>
+        <WorldFoundationApp />
+      </Profiler>,
+    ),
+  );
   try {
     if (admissionScenario) {
       await clock.advance(150);

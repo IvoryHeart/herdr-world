@@ -300,18 +300,14 @@ export default function TownView({
     [completionSeenKeys, office.roster],
   );
   const selectedRoomKey = officeRoomKeyForSelection(world, selectedId);
-  const conversationTargets = floatingTerminals.flatMap((terminal) => {
-    const targetKey = officePresentationKey(office, terminal.nodeId);
-    return targetKey
-      ? [
-          {
-            id: terminal.nodeId,
-            selectedKey: targetKey,
-            targetKey,
-          },
-        ]
-      : [];
-  });
+  const conversationTargets = useMemo(
+    () =>
+      floatingTerminals.flatMap(({ nodeId: id }) => {
+        const targetKey = officePresentationKey(office, id);
+        return targetKey ? [{ id, selectedKey: targetKey, targetKey }] : [];
+      }),
+    [floatingTerminals, office],
+  );
 
   const roomForKey = (roomKey: string | null) =>
     roomKey
