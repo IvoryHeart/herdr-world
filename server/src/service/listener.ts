@@ -1,4 +1,5 @@
 import type { Server, ServerWebSocket } from "bun";
+import { productionAdapterDescriptors } from "../adapters/registry";
 import { isHtmlPath } from "../../../shared/filePreview";
 import {
   flushCoalescedMessages,
@@ -444,6 +445,7 @@ export function listen(deps: ListenerDeps) {
             socket: config.socketPath,
             bridge_protocol_version: 2,
             default_connection_id: connectionManager.defaultId(),
+            adapters: productionAdapterDescriptors(),
             capabilities: {
               connection_id: true,
               connection_scoped_http: true,

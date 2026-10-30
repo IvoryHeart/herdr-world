@@ -60,6 +60,20 @@ bun run check                 # repository checks and tests
 bun run check:delivery        # full local gate, including behavioral verification
 ```
 
+Process fixtures run fake behavior in the test process where practical. The
+[diagnostics adapter](../scripts/browser-diagnostics.ts) and
+[native plugin dispatch](../server/src/config/plugin-command.ts) accept narrow
+process doubles with production defaults. Launcher and hook fixtures call the
+real status/scope producers in-process and retain CLI conformance cases.
+The [SSH process fixture](../server/src/connections/testing/inProcessSsh.ts) keeps
+forwarding in-process, with a private Unix-socket transport through `curl` and
+small shell shims so real PID death, reconnect isolation and socket cleanup stay
+covered. It requires `curl` on Unix. Real inherited-pipe and argv/exit regressions
+also keep lightweight shell children; Windows retains Bun for these OS-boundary
+fixtures because it has no required POSIX shell. Keep those boundary checks,
+assertions and deadlines when optimizing fake startup. Measure alternating
+baseline/candidate runs and report negligible or negative results honestly.
+
 The test wrapper runs ordinary files in parallel using up to eight available CPUs.
 Set `HERDR_TEST_PARALLEL`
 to choose a default worker count and `HERDR_TEST_MAX_CONCURRENCY` to cap concurrent

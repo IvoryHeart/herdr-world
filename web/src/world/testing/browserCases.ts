@@ -9,6 +9,7 @@ export const hostFilterCases = [
     { width, operation: "spaces-navigator", view: "spaces" },
     { width, operation: "spaces-notifications", view: "spaces" },
     { width, operation: "bare-navigator", view: "town" },
+    { width, operation: "town-idle", view: "town" },
   ]),
   ...[1440, 390].flatMap((width) =>
     // Town's room tap only zooms (it never opens an Inspector), so the
@@ -64,6 +65,7 @@ export const hostFilterCases = [
     "arrangement-retirement",
     "close-all",
   ].map((operation) => ({ width: 1440, operation, view: "board" })),
+  { width: 1440, operation: "town-walk-anchor", view: "town" },
   { width: 1440, operation: "cold-master", view: "town" },
   { width: 1440, operation: "cold-master-connect", view: "town" },
   ...[1440, 390].flatMap((width) =>

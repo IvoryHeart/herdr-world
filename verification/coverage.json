@@ -141,7 +141,11 @@
       "properties": "Single owned subscription; cancellation prevents old events; recovery does not overlap owners",
       "existingTests": [
         "server/src/connections/subscription-loop.test.ts",
-        "server/src/connections/agent-status-subscription.test.ts"
+        "server/src/connections/agent-status-subscription.test.ts",
+        "server/src/world/focused-acquisition.test.ts",
+        "server/src/world/focused-lists.test.ts",
+        "server/src/service/focused-acquisition.test.ts",
+        "server/src/connections/profile-notices.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/145",
       "technique": "subscription",
@@ -153,16 +157,21 @@
         "models": ["quint/runtime-leases.qnt", "quint/runtime-drain.qnt"],
         "contracts": [
           "verification/consumer-evidence.md",
-          "verification/composition.md"
+          "verification/composition.md",
+          "verification/contracts/shared-acquisition.md"
         ],
         "tests": [
           "server/src/connections/subscription-loop.test.ts",
-          "server/src/connections/agent-status-subscription.test.ts"
+          "server/src/connections/agent-status-subscription.test.ts",
+          "server/src/world/focused-acquisition.test.ts",
+          "server/src/world/focused-lists.test.ts",
+          "server/src/service/focused-acquisition.test.ts",
+          "server/src/connections/profile-notices.test.ts"
         ],
         "checks": ["bun run check", "bun run verification:check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
       },
-      "evidenceDecision": "Retired manager owners cannot publish readiness. Subscription tests independently exercise stop-before-ready, stop-during-retry, coalesced drain and callback suppression.",
+      "evidenceDecision": "Retired manager owners cannot publish readiness. Subscription tests independently exercise stop-before-ready, stop-during-retry, coalesced drain and callback suppression. Focused acquisition adds direct exhaustive two-socket/two-owner interest traces plus deferred read, real dispatcher, reply-send and cleanup consumers; their bounded claims and exclusions are in verification/contracts/shared-acquisition.md.",
       "promotion": {
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
@@ -1937,6 +1946,50 @@
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
         "scope": "Accepted documented bounds, mandatory consumers and excluded claims; final implementation/gate/resource acceptance is recorded in review 5517420140."
+      }
+    },
+    {
+      "id": "Q44",
+      "area": "Adapter descriptors and conformance",
+      "owner": "server/src/adapters/",
+      "requirement": "openspec/specs/world-adapters/spec.md",
+      "properties": "Instance-qualified opaque IDs; complete-list absence only; reset and evidence fences; event payloads never publish; declared verbs and acquisition limits; retired and disabled owners cannot acquire or publish; synthetic code excluded from the production bundle",
+      "existingTests": [
+        "server/src/adapters/conformance.test.ts",
+        "server/src/adapters/session.test.ts",
+        "server/src/adapters/registry.test.ts",
+        "server/src/adapters/herdr.live.test.ts",
+        "server/src/world/snapshot.test.ts"
+      ],
+      "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/549",
+      "technique": "direct-conformance",
+      "assessment": "One provider-neutral admission suite exercised by native Herdr fixtures and a deterministic paginated terminal-less source, with malformed-source controls, production-entrypoint bundling and an opt-in disposable Herdr session",
+      "status": "alternative-evidence",
+      "remaining": "Durable World binding resolution, cross-source claim display rules and legacy verb policy belong to later identity/verb work. Synthetic subscription crossing remains a named pending v2 gate. Live Herdr evidence requires HERDR_WORLD_LIVE_ADAPTERS=1 and the installed Herdr binary.",
+      "requiredChecks": [
+        "bun run check",
+        "bun run test server/src/adapters/",
+        "HERDR_WORLD_LIVE_ADAPTERS=1 bun run test server/src/adapters/herdr.live.test.ts"
+      ],
+      "partialEvidence": {
+        "models": [],
+        "contracts": ["verification/contracts/adapter-conformance.md"],
+        "tests": [
+          "server/src/adapters/conformance.test.ts",
+          "server/src/adapters/session.test.ts",
+          "server/src/adapters/registry.test.ts",
+          "server/src/adapters/herdr.live.test.ts"
+        ],
+        "checks": [
+          "bun run test server/src/adapters/",
+          "bun run test server/src/world/snapshot.test.ts"
+        ],
+        "review": "The accepted delivery link records the merged design contract, not implementation acceptance. This adapter implementation awaits independent PR review."
+      },
+      "evidenceDecision": "P3 selects direct external-source conformance rather than a finite model. Existing runtime/snapshot models remain required for their unchanged owner fences; these tests establish the new adapter boundary, not durable identity, effect recovery or v2 delivery.",
+      "promotion": {
+        "decision": "pending",
+        "scope": "New adapter boundary only; independent implementation review and CI required."
       }
     }
   ],

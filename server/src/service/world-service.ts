@@ -1,5 +1,5 @@
 import { rmSync } from "node:fs";
-import type { Server } from "bun";
+import type { Server, ServerWebSocket } from "bun";
 import { createAssistantContext } from "../assistant/context";
 import { HerdrClient } from "../bridge/herdr-client";
 import type { SshTunnelConfig } from "../bridge/ssh-tunnel";
@@ -78,6 +78,8 @@ import { createRevisionPublisher } from "../world/revision-publisher";
 import { WorldSnapshotService } from "../world/snapshot";
 import { createTerminalMarks } from "../world/terminal-marks";
 import { createWorldCliService } from "../world/world-cli-service";
+import { FocusedAcquisition } from "../world/focused-acquisition";
+import { readFocusedLists } from "../world/focused-lists";
 import { createBrowserClients, logDetail } from "./clients";
 import { listen } from "./listener";
 import type { Clock, Scheduler, WorldAdapters } from "./ports";
@@ -209,10 +211,25 @@ async function compose(
     shQuote,
     scheduleProcessExit: deps.scheduleProcessExit,
   });
+  let connectionRevision = 0;
+  function publishConnectionsChanged() {
+    if (stopping) return;
+    broadcast(
+      JSON.stringify({
+        control: {
+          type: "world_connections_changed",
+          revision: ++connectionRevision,
+        },
+      }),
+      "world-connections-changed",
+    );
+  }
   const browsers = createBrowserClients({
     logger,
     clock,
     forEachRuntime: (visit) => connectionManager.forEachCurrentRuntime(visit),
+    closed: (socket) => focusedAcquisition.release(socket),
+    countChanged: publishConnectionsChanged,
   });
   const { clients, safeSend, broadcast, clientLabel, markRpcError } = browsers;
   const legacyRoutingLogger = createLegacyRoutingLogger({
@@ -360,6 +377,8 @@ async function compose(
   const connectionManager = new ConnectionManager<LegacyConnectionRuntime>(
     connectionBootstrap.defaultConnectionId,
     (status) => {
+      focusedAcquisition.reconcile();
+      publishConnectionsChanged();
       deskService.retire(status.id, status.generation);
       retireTerminalMarks(status.id, status.generation);
       publishWorldInvalidation(status.id, status.generation);
@@ -398,6 +417,24 @@ async function compose(
     },
     logger.child("connections"),
   );
+  const focusedAcquisition = new FocusedAcquisition<ServerWebSocket<unknown>>({
+    scheduler,
+    lease(owner) {
+      const lease = connectionManager.readyRuntimeLease(owner.connection_id);
+      if (
+        !lease ||
+        lease.generation !== owner.connection_generation ||
+        !lease.isCurrent()
+      )
+        return null;
+      return {
+        isCurrent: lease.isCurrent,
+        read: () => readFocusedLists(lease.runtime),
+      };
+    },
+    send: (socket, control) =>
+      safeSend(socket, JSON.stringify({ control }), "world-focused-changed"),
+  });
   worldSnapshots = new WorldSnapshotService(
     connectionManager,
     () => clock.now(),
@@ -614,6 +651,7 @@ async function compose(
   const connectionProfiles = new ConnectionProfileService({
     manager: connectionManager,
     store: storage.connections,
+    changed: publishConnectionsChanged,
     bootstrap: connectionBootstrap,
     createRuntime: runtimeFactoryForProfile,
     retry: {
@@ -678,6 +716,7 @@ async function compose(
     clients,
     connectionManager,
     connectionProfiles,
+    focusedAcquisition,
     conversationWatchers: browsers.conversationWatchers,
     getAssistantService,
     logger,
@@ -833,6 +872,7 @@ async function compose(
     // Admit nothing new: requests get 503 while the port stays bound, and no
     // reconnect, push, Ranger start or wait for an answer begins.
     stopping = true;
+    focusedAcquisition.stop();
     connectionProfiles.stopSupervision();
     webPush.stop();
     worldCli.stop();

@@ -1,3 +1,4 @@
+import { productionAdapters } from "../adapters/registry";
 import { testConnectionSockets } from "../connections/profile-service";
 import {
   createLegacyConnectionRuntime,
@@ -48,7 +49,7 @@ export type WorldAdapters = { herdr: HerdrAdapter };
 
 export const herdrAdapter: HerdrAdapter = {
   createRuntime(options) {
-    const runtime = createLegacyConnectionRuntime(options);
+    const runtime = productionAdapters.herdr.createRuntime(options);
     return {
       ...runtime,
       async startTransport() {

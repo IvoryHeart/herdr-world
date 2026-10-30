@@ -1,6 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
 import {
-  chmodSync,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -11,6 +10,7 @@ import * as net from "node:net";
 import { join } from "node:path";
 import { BinReader, BinWriter, encodeFrame } from "../bridge/bincode";
 import type { SshConnectionProfile } from "./profiles";
+import { createInProcessSsh } from "./testing/inProcessSsh";
 
 const password = "profile-test-password";
 // Bun supports authentication headers on WebSocket handshakes.
@@ -86,6 +86,7 @@ test("RPC fixture dispatches only registered string reply IDs", () => {
 const roots: string[] = [];
 const servers: net.Server[] = [];
 const sockets = new Set<net.Socket>();
+const sshFakes: ReturnType<typeof createInProcessSsh>[] = [];
 
 function worldServerCommand(): string[] {
   return Bun.env.HERDR_WORLD_TEST_BINARY
@@ -94,6 +95,7 @@ function worldServerCommand(): string[] {
 }
 
 afterEach(async () => {
+  await Promise.all(sshFakes.splice(0).map((fake) => fake.stop()));
   for (const socket of sockets) socket.destroy();
   sockets.clear();
   await Promise.all(
@@ -291,79 +293,8 @@ test("production bridge supervises two independent SSH profile tunnels", async (
     renderPath: join(legacyConfig, "herdr-client.sock"),
   });
 
-  const fakeSshPath = join(bin, "ssh");
-  writeFileSync(
-    fakeSshPath,
-    `#!/usr/bin/env bun
-import { appendFileSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
-import * as net from "node:net";
-import { join } from "node:path";
-const args = process.argv.slice(2);
-const separator = args.lastIndexOf("--");
-const destination = separator >= 0 ? args[separator + 1] : "unknown";
-const stateDir = process.env.HERDR_WORLD_FAKE_SSH_STATE_DIR;
-if (!stateDir) process.exit(70);
-mkdirSync(stateDir, { recursive: true });
-if (!args.includes("-L") && (args.at(-1) || "").includes("printf %s")) {
-  console.log(process.env.HERDR_WORLD_FAKE_SSH_HOME || "");
-  process.exit(0);
-}
-// Background upload cleanup is a one-shot SSH command, not a tunnel.
-if (!args.includes("-L") && (args.at(-1) || "").includes("herdr-world-uploads-")) {
-  process.exit(0);
-}
-appendFileSync(join(stateDir, destination + ".attempts"), String(process.pid) + "\\n");
-if (destination === "auth-fail") {
-  console.error("Permission denied (publickey).");
-  process.exit(255);
-}
-const forwards = [];
-for (let index = 0; index < args.length; index += 1) {
-  if (args[index] !== "-L") continue;
-  const spec = args[index + 1] || "";
-  const colon = spec.indexOf(":");
-  if (colon <= 0) process.exit(71);
-  forwards.push({ local: spec.slice(0, colon), remote: spec.slice(colon + 1) });
-}
-const servers = [];
-const connections = new Set();
-for (const forward of forwards) {
-  rmSync(forward.local, { force: true });
-  const server = net.createServer((client) => {
-    const upstream = net.createConnection(forward.remote);
-    connections.add(client);
-    connections.add(upstream);
-    client.on("close", () => connections.delete(client));
-    upstream.on("close", () => connections.delete(upstream));
-    client.on("error", () => upstream.destroy());
-    upstream.on("error", () => client.destroy());
-    client.pipe(upstream).pipe(client);
-  });
-  await new Promise((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(forward.local, resolve);
-  });
-  servers.push(server);
-}
-writeFileSync(
-  join(stateDir, destination + ".json"),
-  JSON.stringify({ pid: process.pid, forwards }),
-);
-let stopping = false;
-async function stop() {
-  if (stopping) return;
-  stopping = true;
-  for (const connection of connections) connection.destroy();
-  await Promise.all(servers.map((server) => new Promise((resolve) => server.close(resolve))));
-  for (const forward of forwards) rmSync(forward.local, { force: true });
-  process.exit(0);
-}
-process.on("SIGTERM", () => void stop());
-process.on("SIGINT", () => void stop());
-`,
-    { mode: 0o700 },
-  );
-  chmodSync(fakeSshPath, 0o700);
+  const fakeSsh = createInProcessSsh(bin, state, fakeHome);
+  sshFakes.push(fakeSsh);
 
   const profiles = [
     sshProfile("ssh-alpha", "alpha-host", alphaRemote, true),
@@ -394,8 +325,7 @@ process.on("SIGINT", () => void stop());
       HERDR_WORLD_PASSWORD: password,
       PORT: "0",
       HERDR_WORLD_CONNECTIONS_PATH: registryPath,
-      HERDR_WORLD_FAKE_SSH_STATE_DIR: state,
-      HERDR_WORLD_FAKE_SSH_HOME: fakeHome,
+      ...fakeSsh.env,
       HERDR_WORLD_NOTIFICATION_SOURCE: "status",
       HERDR_SOCKET_PATH: undefined,
       HERDR_CLIENT_SOCKET_PATH: undefined,
@@ -631,5 +561,6 @@ process.on("SIGINT", () => void stop());
     ws?.close();
     if (child.exitCode === null) child.kill("SIGTERM");
     await child.exited;
+    await fakeSsh.stop();
   }
 }, 40_000);
