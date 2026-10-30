@@ -54,10 +54,9 @@ if (process.env.HERDR_INSPECTOR_FOCUS_DOM_TEST !== "1") {
     // Hold animation frames, as a busy page does, and release them on demand.
     const frames: FrameRequestCallback[] = [];
     globalThis.requestAnimationFrame = (callback) => frames.push(callback);
-    const releaseFrames = async () => {
+    // The panes' inputs exist, so the focuser acts inside the frame itself.
+    const releaseFrames = () => {
       for (const callback of frames.splice(0)) callback(0);
-      // The focuser retries on zero-delay timers.
-      await new Promise((resolve) => setTimeout(resolve, 5));
     };
     const { createInspectorTerminalFocuser } = await import(
       "./inspectorTerminalFocus"
@@ -120,7 +119,7 @@ if (process.env.HERDR_INSPECTOR_FOCUS_DOM_TEST !== "1") {
     map.innerHTML = '<div role="dialog"><button>sibling</button></div>';
     document.body.append(map);
     map.querySelector("button")!.focus();
-    await releaseFrames();
+    releaseFrames();
     expect(document.activeElement).toBe(map.querySelector("button"));
 
     // Picking sibling closes the map; its own deferred focus still lands.
@@ -128,7 +127,7 @@ if (process.env.HERDR_INSPECTOR_FOCUS_DOM_TEST !== "1") {
     select("sibling");
     conversations.current = [conversation("sibling")];
     focus(windowId);
-    await releaseFrames();
+    releaseFrames();
     expect(document.activeElement).toBe(textarea("sibling"));
   });
 }

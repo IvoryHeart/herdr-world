@@ -1,5 +1,5 @@
 import { expect, mock, test } from "bun:test";
-import { useLayoutEffect } from "react";
+import { act, useLayoutEffect } from "react";
 import { applyAppearance } from "../../../shared/appearance";
 import { tabCardKey } from "../../../shared/terminalColor";
 import { TERMINAL_COLOR_PALETTE } from "./terminalColor";
@@ -32,6 +32,7 @@ if (process.env.HERDR_APPEARANCE_EDITOR_DOM_TEST !== "1") {
       Element: browser.Element,
       Node: browser.Node,
       Event: browser.Event,
+      IS_REACT_ACT_ENVIRONMENT: true,
     }))
       Object.defineProperty(globalThis, key, {
         value,
@@ -81,48 +82,48 @@ if (process.env.HERDR_APPEARANCE_EDITOR_DOM_TEST !== "1") {
     const container = document.createElement("div");
     document.body.append(container);
     const root = createRoot(container);
+    // act completes each render, its effects and the updates they cause.
     const render = (tabName: string, typing: boolean) =>
-      root.render(
-        <>
-          <TerminalAppearanceEditor
-            connectionId="alpha"
-            generation={3}
-            tabId="tab-1"
-            paneId="pane-1"
-            terminalId="terminal-1"
-            workspaceIds={["space-1"]}
-            tabName={tabName}
-            color={{
-              palette: TERMINAL_COLOR_PALETTE,
-              current: { id: "blue", custom: false },
-              onColor: () => {},
-            }}
-          />
-          <TypeDuringCommit when={typing} />
-        </>,
+      act(() =>
+        root.render(
+          <>
+            <TerminalAppearanceEditor
+              connectionId="alpha"
+              generation={3}
+              tabId="tab-1"
+              paneId="pane-1"
+              terminalId="terminal-1"
+              workspaceIds={["space-1"]}
+              tabName={tabName}
+              color={{
+                palette: TERMINAL_COLOR_PALETTE,
+                current: { id: "blue", custom: false },
+                onColor: () => {},
+              }}
+            />
+            <TypeDuringCommit when={typing} />
+          </>,
+        ),
       );
-    const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
-    render("Native name", false);
-    await settle();
+    await render("Native name", false);
     expect(field("Tab name").value).toBe("Native name");
 
     const document_ = { layout: {}, appearance: {} };
     applyAppearance(document_ as never, tab, { status: "Shared status" });
     shared.document = document_;
-    render("Shared native name", true);
-    await settle();
+    await render("Shared native name", true);
     expect(field("Tab name").value).toBe("Typed name");
     expect(field("Tab status message").value).toBe("Typed status");
 
     const save = [...document.querySelectorAll("button")].find(
       (button) => button.textContent === "Save name",
     )!;
-    save.click();
-    await settle();
+    // The refused rename settles inside the awaited act scope.
+    await act(async () => save.click());
     expect(document.querySelector('[role="alert"]')?.textContent).toContain(
       "Synthetic native rename refused",
     );
     expect(field("Tab name").value).toBe("Typed name");
-    root.unmount();
+    await act(() => root.unmount());
   });
 }
