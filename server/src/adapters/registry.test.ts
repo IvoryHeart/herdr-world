@@ -7,6 +7,10 @@ test("production registration is static and descriptor transport is data only", 
   expect(Object.hasOwn(productionAdapters, "synthetic-test-only")).toBe(false);
   const data = JSON.parse(JSON.stringify(productionAdapterDescriptors()));
   expect(data).toEqual(productionAdapterDescriptors());
+  expect(data[0]).toHaveProperty("version", 1);
+  for (const verb of Object.values(productionAdapters.herdr.descriptor.verbs)) {
+    expect(verb.recovery).toBe("read");
+  }
   expect(data[0]).not.toHaveProperty("createRuntime");
   expect(data[0].configuration).toEqual(
     expect.objectContaining({ additionalProperties: false }),

@@ -7,10 +7,15 @@ and no setting that enables test adapters. The WebSocket hello carries cloned
 descriptors as data, without factories, configuration values or private credentials.
 No browser presentation module is imported by the registry.
 
-Descriptors declare capabilities, object payload schemas, native key fields,
+Descriptors identify the adapter kind and contract version (initially `1`), and
+declare capabilities, object payload schemas, native key fields,
 continuity fields, terminal support, verb input/output schemas and recovery classes,
 an empty configuration schema, and acquisition limits. Secrets belong to the
 existing private runtime configuration, outside this descriptor and observation port.
+Increase the descriptor version when its advertised contract changes. Verb recovery
+classes use the protocol vocabulary: `read`, `keyed`, `reconcilable`, `reattachable`,
+`repeatable` and `opaque`. The four Herdr list verbs and synthetic `inspect` use
+`read`; the registry preserves the descriptor version in the data sent by the hello.
 
 ## Herdr today
 

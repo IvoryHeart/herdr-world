@@ -71,6 +71,7 @@ export class SyntheticSource {
 export const syntheticAdapter: AdapterDefinition<SyntheticSource> = {
   descriptor: {
     kind: "synthetic-test-only",
+    version: 1,
     capabilities: {
       completeListings: true,
       events: true,
@@ -94,7 +95,7 @@ export const syntheticAdapter: AdapterDefinition<SyntheticSource> = {
       inspect: {
         input: Type.Object({}, { additionalProperties: false }),
         output: Type.Object({ ok: Type.Boolean() }),
-        recovery: "read-only",
+        recovery: "read",
       },
     },
     configuration: Type.Object({}, { additionalProperties: false }),

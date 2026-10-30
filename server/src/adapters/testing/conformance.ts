@@ -24,6 +24,21 @@ export function adapterConformance(
   fixture: () => ConformanceFixture,
 ) {
   describe(name + " adapter conformance", () => {
+    test("descriptor identifies its contract version and uses protocol recovery classes", () => {
+      const { descriptor } = fixture().definition;
+      expect(descriptor).toHaveProperty("version", 1);
+      for (const verb of Object.values(descriptor.verbs)) {
+        expect([
+          "read",
+          "keyed",
+          "reconcilable",
+          "reattachable",
+          "repeatable",
+          "opaque",
+        ]).toContain(verb.recovery);
+      }
+    });
+
     function setup(enabled = true, instanceId = "source:a/b") {
       const f = fixture();
       let current = true;

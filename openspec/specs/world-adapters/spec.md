@@ -15,10 +15,12 @@ below is a future v2 consumer gate, with an explicit pending test.
 
 Every source of observations or effects SHALL be an adapter with a descriptor that
 declares:
+- the adapter kind and contract version;
 - **capabilities**, including whether its listings are complete, whether it emits
   events, supports get-by-ID or reports source revisions;
 - **kinds**, with payload schemas, key derivation and continuity evidence;
-- **verbs**, with schemas and recovery classes;
+- **verbs**, with schemas and the protocol recovery classes: `read`, `keyed`,
+  `reconcilable`, `reattachable`, `repeatable` or `opaque`;
 - a configuration schema;
 - **limits** on concurrency, page size, rate, entities and bytes.
 

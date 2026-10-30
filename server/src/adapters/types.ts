@@ -3,6 +3,7 @@ import type { TObject, TSchema } from "typebox";
 /** Data only: safe to serialize to clients. Configuration contains no secrets. */
 export type AdapterDescriptor = {
   kind: string;
+  version: number;
   capabilities: {
     completeListings: boolean;
     events: boolean;
@@ -23,7 +24,13 @@ export type AdapterDescriptor = {
     {
       input: TSchema;
       output: TSchema;
-      recovery: "read-only" | "idempotent" | "repeatable" | "non-repeatable";
+      recovery:
+        | "read"
+        | "keyed"
+        | "reconcilable"
+        | "reattachable"
+        | "repeatable"
+        | "opaque";
     }
   >;
   configuration: TSchema;

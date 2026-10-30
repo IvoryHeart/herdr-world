@@ -82,6 +82,7 @@ export async function readHerdrSnapshot(
 export const herdrAdapter: AdapterDefinition<HerdrObservationContext> = {
   descriptor: {
     kind: "herdr",
+    version: 1,
     capabilities: {
       completeListings: true,
       events: true,
@@ -99,7 +100,7 @@ export const herdrAdapter: AdapterDefinition<HerdrObservationContext> = {
           output: Type.Object({
             [nativeKeys[i]]: Type.Array(Type.Unknown(), { maxItems: 10752 }),
           }),
-          recovery: "read-only" as const,
+          recovery: "read" as const,
         },
       ]),
     ),

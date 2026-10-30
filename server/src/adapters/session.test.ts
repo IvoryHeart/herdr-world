@@ -27,6 +27,7 @@ function setup() {
 }
 
 test("seeded source is deterministic, terminal-less, and actually paginates", async () => {
+  expect(syntheticAdapter.descriptor.verbs.inspect.recovery).toBe("read");
   const { source, session } = setup();
   expect(await source.list({ limit: 2 })).toEqual(
     await new SyntheticSource(97).list({ limit: 2 }),
