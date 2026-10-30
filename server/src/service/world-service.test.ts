@@ -7,10 +7,11 @@ import {
   readFileSync,
   rmSync,
   statSync,
+  writeFileSync,
 } from "node:fs";
 import * as net from "node:net";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { readWorldCliToken } from "../config/session-secret";
 import { createLegacyConnectionRuntime } from "../connections/runtime";
 import { configureServerLogger } from "../utils/logger";
@@ -22,6 +23,7 @@ import {
   holdingHerdr,
   login,
   startTestService,
+  type TestService,
 } from "./testing/services";
 import {
   MARKERS,
@@ -462,13 +464,15 @@ test("the service's clock times questions, answers and observations", async () =
   rmSync(top, { recursive: true, force: true });
 });
 
-test("a request admitted before stop cannot write once storage has closed", async () => {
-  const { top, root } = scratch("world-service-held-body-");
-  // The drain budget runs out at once, so stop does not wait for the body.
-  const started = await startTestService(root, {}, {}, { scheduler: expired });
-  await started.connected;
-  const cookie = await login(started.base, "world-service-test-password");
-  const body = JSON.stringify({ title_suffix: "after-close" });
+/**
+ * Send a request, let the service admit it, stop the service as the entry
+ * point does (the port stays bound), then send the body. Returns the reply.
+ */
+async function finishAfterStop(
+  started: TestService,
+  head: string[],
+  body: string,
+): Promise<string> {
   const socket = net.createConnection({
     host: "127.0.0.1",
     port: Number(new URL(started.base).port),
@@ -487,11 +491,9 @@ test("a request admitted before stop cannot write once storage has closed", asyn
     await new Promise<void>((resolve) => socket.once("connect", resolve));
     socket.write(
       [
-        "PUT /api/instance-settings HTTP/1.1",
+        ...head,
         `Host: ${new URL(started.base).host}`,
-        `Cookie: ${cookie}`,
         "Content-Type: application/json",
-        "X-Herdr-World-Settings: 1",
         `Content-Length: ${Buffer.byteLength(body)}`,
         "Expect: 100-continue",
         "Connection: close",
@@ -500,16 +502,63 @@ test("a request admitted before stop cannot write once storage has closed", asyn
       ].join("\r\n"),
     );
     await admitted.promise;
-    // The entry point's stop: the port stays bound.
     await started.service.stop({ keepListener: true });
-    expect(existsSync(join(root, "instance.lock"))).toBeFalse();
+    expect(
+      existsSync(join(started.service.paths.root, "instance.lock")),
+    ).toBeFalse();
     socket.write(body);
-    const response = await answered.promise;
+    return await answered.promise;
+  } finally {
+    socket.destroy();
+  }
+}
+
+test("a request admitted before stop cannot write once storage has closed", async () => {
+  const { top, root } = scratch("world-service-held-body-");
+  // The drain budget runs out at once, so stop does not wait for the body.
+  const started = await startTestService(root, {}, {}, { scheduler: expired });
+  try {
+    await started.connected;
+    const cookie = await login(started.base, "world-service-test-password");
+    const response = await finishAfterStop(
+      started,
+      [
+        "PUT /api/instance-settings HTTP/1.1",
+        `Cookie: ${cookie}`,
+        "X-Herdr-World-Settings: 1",
+      ],
+      JSON.stringify({ title_suffix: "after-close" }),
+    );
     expect(response).toContain("HTTP/1.1 500");
     expect(response).not.toContain("HTTP/1.1 200");
     expect(existsSync(join(root, "settings.json"))).toBeFalse();
   } finally {
-    socket.destroy();
+    await started.service.stop();
+    rmSync(top, { recursive: true, force: true });
+  }
+});
+
+test("a request admitted before stop cannot open a store and set its file aside", async () => {
+  const { top, root } = scratch("world-service-held-ledger-");
+  const started = await startTestService(root, {}, {}, { scheduler: expired });
+  // Unreadable and not yet open: opening the ledger would set it aside.
+  const ledger = started.service.paths.ledger;
+  mkdirSync(dirname(ledger), { recursive: true });
+  writeFileSync(ledger, "{ invalid");
+  try {
+    await started.connected;
+    const response = await finishAfterStop(
+      started,
+      [
+        "POST /api/world/cli HTTP/1.1",
+        `Authorization: Bearer ${readWorldCliToken(started.service.paths.sessionSecret)}`,
+      ],
+      JSON.stringify({ command: "history", params: {} }),
+    );
+    expect(response).not.toContain("HTTP/1.1 200");
+    expect(readFileSync(ledger, "utf8")).toBe("{ invalid");
+    expect(readdirSync(dirname(ledger))).toEqual(["world-ledger.json"]);
+  } finally {
     await started.service.stop();
     rmSync(top, { recursive: true, force: true });
   }

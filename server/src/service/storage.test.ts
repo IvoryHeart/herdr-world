@@ -1,7 +1,14 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { resolveDataPaths } from "../config/data-paths";
 import { systemClock, systemScheduler } from "./ports";
 import { openStorage } from "./storage";
@@ -66,20 +73,30 @@ test("closed storage refuses every family's writes and keeps its files", async (
   }
 });
 
-test("a family first opened after close refuses writes", async () => {
+test("a family not opened before close stays closed and sets nothing aside", async () => {
   const root = mkdtempSync(join(tmpdir(), "world-storage-late-"));
+  const paths = resolveDataPaths({ HERDR_WORLD_DATA_DIR: root });
+  // Unreadable files: opening a family would set each one aside.
+  const families = [
+    ["board", paths.board],
+    ["ledger", paths.ledger],
+    ["profiles", paths.agentProfiles],
+  ] as const;
+  for (const [, path] of families) {
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, "{ invalid");
+  }
+  const listing = () =>
+    families.map(([, path]) => readdirSync(dirname(path)).sort());
   try {
-    const storage = await openStorage(
-      resolveDataPaths({ HERDR_WORLD_DATA_DIR: root }),
-      ports,
-    );
+    const storage = await openStorage(paths, ports);
+    const before = listing();
     await storage.close();
-    expect(() => storage.board().patch([note("late")])).toThrow(
-      "World storage is closed",
-    );
-    expect(() => storage.ledger().update(() => {})).toThrow(
-      "World storage is closed",
-    );
+    for (const [family] of families)
+      expect(() => storage[family]()).toThrow("World storage is closed");
+    expect(listing()).toEqual(before);
+    for (const [, path] of families)
+      expect(readFileSync(path, "utf8")).toBe("{ invalid");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

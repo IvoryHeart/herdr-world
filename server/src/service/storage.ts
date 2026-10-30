@@ -23,8 +23,8 @@ export type WorldStorage = {
   /** Opened on first use. */
   profiles(): ProfileStore;
   /**
-   * Called last in stop: every family refuses later writes, then queued
-   * writes settle.
+   * Called last in stop: every family refuses later writes, a family never
+   * opened can no longer open, and queued writes settle.
    */
   close(): Promise<void>;
 };
@@ -46,18 +46,25 @@ export const openStorage: OpenStorage = async (paths, { clock }) => {
   let ledger: WorldLedger | null = null;
   let profiles: ProfileStore | null = null;
   let closed = false;
-  // A store first opened after close comes up closed: reads only.
-  const opened = <T extends { close(): unknown }>(store: T) => {
-    if (closed) store.close();
-    return store;
+  // Opening a family may set an unreadable file aside, which is a write, so
+  // a family not yet open stays closed for good once storage closes.
+  const open = <T>(store: T | null, create: () => T): T => {
+    if (store) return store;
+    if (closed) throw new Error("World storage is closed");
+    return create();
   };
   return {
     settings,
     connections,
-    board: () => (board ??= opened(new BoardStore(paths.board, options))),
-    ledger: () => (ledger ??= opened(new WorldLedger(paths.ledger, options))),
+    board: () =>
+      (board = open(board, () => new BoardStore(paths.board, options))),
+    ledger: () =>
+      (ledger = open(ledger, () => new WorldLedger(paths.ledger, options))),
     profiles: () =>
-      (profiles ??= opened(new ProfileStore(paths.agentProfiles, options))),
+      (profiles = open(
+        profiles,
+        () => new ProfileStore(paths.agentProfiles, options),
+      )),
     // Every store refuses writes from here on, even from work that outlived
     // the drain; a later owner of the folder opens stores of its own.
     async close() {
