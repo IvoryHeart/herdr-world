@@ -7,6 +7,9 @@ import { loadConfig } from "../gate";
 import type { Deps } from "./deps";
 import { shellLine } from "./deps";
 import { loadSettings, type RosterEntry } from "./plan";
+import { evaluatorPrompt, processPrompt } from "./evaluator";
+import { evaluations, cycleForRun } from "./round-policy-store";
+import { fixerWorktree } from "./fixer";
 import {
   addChat,
   addRun,
@@ -18,6 +21,7 @@ import {
   roundClosed,
   runsOf,
   setRunPid,
+  setRunCwd,
   setRunSession,
   type StoredRun,
 } from "./store";
@@ -48,6 +52,7 @@ export type Options = {
   author?: string;
   run?: number;
   round?: number;
+  evaluation?: number;
   /** Words after the command, as in `seat start <seat>`. */
   args: string[];
   /** `status`: the window, in hours, for reviewer token totals. */
@@ -105,10 +110,23 @@ export async function review(options: Options, dir: string, deps: Deps) {
     if (logged) appendFileSync(logged, `${text}\n`);
   };
   const primary = dirname(dirname(dir));
-  const checkout = checkoutOf(dir, { id: runId, pr, reviewer, head });
+  const evaluation = options.evaluation
+    ? evaluations(crew, pr).find(
+        (entry) => entry.checkpoint === options.evaluation,
+      )
+    : undefined;
+  if (
+    (options.command === "evaluate" || options.command === "process") &&
+    !evaluation
+  )
+    throw new Error("missing evaluation checkpoint");
+  const inAuthorWorktree =
+    options.command === "process" && evaluation?.process === "fresh-fixer";
+  let checkout = checkoutOf(dir, { id: runId, pr, reviewer, head });
   const git = (...args: string[]) => deps.run(["git", "-C", primary, ...args]);
   const cleanup = () => {
-    if (existsSync(checkout)) git("worktree", "remove", "--force", checkout);
+    if (!inAuthorWorktree && existsSync(checkout))
+      git("worktree", "remove", "--force", checkout);
   };
   // Report the pid first: a pass that supersedes the run from then on stops
   // this process, and one that came before has already marked it finished.
@@ -131,20 +149,62 @@ export async function review(options: Options, dir: string, deps: Deps) {
   try {
     const fetched = git("fetch", "--quiet", "origin", `pull/${pr}/head`);
     if (fetched.code !== 0) throw new Error(`fetch failed: ${fetched.stderr}`);
-    const added = git("worktree", "add", "--detach", checkout, head);
-    if (added.code !== 0) throw new Error(`worktree failed: ${added.stderr}`);
     const meta = prMeta(pr, config.repo, deps);
-    const prompt = reviewerPrompt({
-      repo: config.repo,
+    if (inAuthorWorktree) {
+      const current = deps.run([
+        "gh",
+        "pr",
+        "view",
+        String(pr),
+        "--repo",
+        config.repo,
+        "--json",
+        "headRefOid",
+      ]);
+      if (current.code !== 0)
+        throw new Error("could not read the process's current head");
+      const currentHead = (JSON.parse(current.stdout) as { headRefOid: string })
+        .headRefOid;
+      const place = fixerWorktree(
+        deps.run,
+        primary,
+        meta.headRefName,
+        currentHead,
+      );
+      if ("why" in place) throw new Error(place.why);
+      checkout = place.path;
+      setRunCwd(crew, runId, checkout);
+    } else {
+      const added = git("worktree", "add", "--detach", checkout, head);
+      if (added.code !== 0) throw new Error(`worktree failed: ${added.stderr}`);
+    }
+    const cycle = cycleForRun(
+      crew,
       pr,
       head,
-      reviewer,
-      ...(options.since ? { since: options.since } : {}),
-      title: meta.title,
-      url: meta.url,
-      branch: meta.headRefName,
-      author: options.author ?? null,
-    });
+      getRun(crew, runId)?.round ?? null,
+    );
+    const prompt =
+      options.command === "evaluate"
+        ? evaluatorPrompt(
+            config.repo,
+            evaluation!,
+            Object.keys(settings.roster),
+          )
+        : options.command === "process"
+          ? processPrompt(config.repo, evaluation!)
+          : reviewerPrompt({
+              repo: config.repo,
+              pr,
+              head,
+              reviewer,
+              ...(options.since ? { since: options.since } : {}),
+              title: meta.title,
+              url: meta.url,
+              branch: meta.headRefName,
+              author: options.author ?? null,
+              ...(cycle?.scope ? { scope: cycle.scope } : {}),
+            });
     show(
       `${reviewer} ${options.since ? "confirms" : "reviews"} #${pr} at ${shortSha(head)} (${model.model}); type here to steer it`,
     );

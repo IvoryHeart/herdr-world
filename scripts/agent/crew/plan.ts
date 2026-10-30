@@ -53,6 +53,8 @@ export type ActionKind =
   | "screenshots"
   | "review"
   | "confirm"
+  | "evaluate"
+  | "process"
   | "ready"
   | "judgment";
 
@@ -342,7 +344,7 @@ export function plan(
   if (fixes.length && !runs.length)
     toAuthor(
       "fix",
-      `ACT #${pr} fix @${at}: findings from ${fixes.join(", ")}. Fix every finding in one pass, reply on the PR with one line per finding naming its fixing commit, and push. Reviewers rerun by themselves on your push; no need to tell anyone.`,
+      `ACT #${pr} fix @${at}: findings from ${fixes.join(", ")}. Fix every finding in one pass, push, then reply on the PR signed by your seat with one line per finding naming its ID or exact file:line and fixing commit. The next round waits for every reply and 10 minutes without a push.`,
     );
   const failing = verdict.conditions.find(
     (entry) => entry.id === "checks" && entry.state === "unmet",
