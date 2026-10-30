@@ -53,6 +53,8 @@ export type ConcurrentWork = {
   boardRenderByPhase: Record<string, { commits: number }>;
   worldBuildUnits: number;
   worldBuildMaxSliceNodes: number;
+  /** observe calls on a card its observer already watched. */
+  repeatedCardRegistrations: number;
   /** Card observations still live after Board unmounts (-1: not recorded). */
   liveCardObservations: number;
 };
@@ -122,6 +124,11 @@ export function concurrentWorkViolations(
   // ceiling; none at all means the counters stopped reporting.
   if (registered === 0)
     violations.push("card observers: none registered while rendering");
+  // Per card, independent of how many cards the layout mounted.
+  if (measured.repeatedCardRegistrations !== 0)
+    violations.push(
+      `card observers: ${measured.repeatedCardRegistrations} cards registered again while still observed`,
+    );
 
   // Whichever path teardown takes, nothing may stay observed.
   if (measured.liveCardObservations !== 0)

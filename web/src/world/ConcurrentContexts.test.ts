@@ -47,6 +47,7 @@ test.skipIf(!chrome).each([1440, 390])(
         worldBuildSliceCount: number;
         worldBuildUnits: number;
         liveCardObservations: number;
+        repeatedCardRegistrations: number;
         worldBuildMaxSliceNodes: number;
         worldWorkByPhase: Record<string, Record<string, number>>;
       };

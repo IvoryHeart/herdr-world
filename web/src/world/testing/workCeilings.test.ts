@@ -29,6 +29,7 @@ const measured = (): ConcurrentWork => ({
   worldBuildUnits: 1_835_136,
   worldBuildMaxSliceNodes: 256,
   liveCardObservations: 0,
+  repeatedCardRegistrations: 0,
 });
 
 test("the measured dense workload is within every ceiling", () => {
@@ -100,10 +101,24 @@ test("cards must register once each and all be released, whichever way teardown 
   const fewer = measured();
   fewer.boardObserverWorkByPhase.render = { observe: 1248 };
   expect(concurrentWorkViolations(fewer, 1440)).toEqual([]);
-  // ...registering a card twice, or none at all, is not.
+  // ...registering a card twice, or none at all, is not, even while the
+  // total stays under the theoretical ceiling.
   const twice = measured();
-  twice.boardObserverWorkByPhase.render = { observe: 1281 };
+  twice.boardObserverWorkByPhase.render = { observe: 1253 };
+  twice.repeatedCardRegistrations = 5;
   expect(concurrentWorkViolations(twice, 1440)).toEqual([
+    "card observers: 5 cards registered again while still observed",
+  ]);
+  const phone = measured();
+  phone.boardObserverWorkByPhase.render = { observe: 80 };
+  phone.boardObserverWorkByPhase["outside-stress"] = { unobserve: 78 };
+  phone.repeatedCardRegistrations = 2;
+  expect(concurrentWorkViolations(phone, 390)).toEqual([
+    "card observers: 2 cards registered again while still observed",
+  ]);
+  const overTotal = measured();
+  overTotal.boardObserverWorkByPhase.render = { observe: 1281 };
+  expect(concurrentWorkViolations(overTotal, 1440)).toEqual([
     "card observers render: observe 1281 > 1280",
   ]);
   const silent = measured();

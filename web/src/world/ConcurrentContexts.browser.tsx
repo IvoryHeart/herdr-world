@@ -77,6 +77,8 @@ const measurements = {
   treeProjectionMs: 0,
   boardProjectionMs: 0,
   officeProjectionMs: 0,
+  /** observe calls on a card the same observer already watched. */
+  repeatedCardRegistrations: 0,
   /** Card observations still live after Board unmounts; must be none. */
   liveCardObservations: -1,
   /** Production World work (devtools counters) during each stress phase. */
@@ -128,6 +130,9 @@ ResizeObserver.prototype.observe = function (...args) {
   if (args[0].classList.contains("board-card")) {
     let cards = liveCards.get(this);
     if (!cards) liveCards.set(this, (cards = new Set()));
+    // Observing a card this observer already watches is a repeat, however
+    // many cards the browser's layout mounted.
+    if (cards.has(args[0])) measurements.repeatedCardRegistrations++;
     cards.add(args[0]);
     const counts = (measurements.boardObserverWorkByPhase[
       stressPhase ?? "outside-stress"
