@@ -9,9 +9,7 @@ import {
   busX,
   catchableTrip,
   departX,
-  townBusStop,
 } from "./townBus";
-import type { TownLayout } from "./townLayout";
 
 const entry = (id: string, left: number, duration = 30_000): BinEntry => ({
   id,
@@ -77,22 +75,6 @@ describe("Town bus", () => {
     expect(catchableTrip(busTrips([entry("a", 4_000)], left))).toBeUndefined();
   });
 
-  test("the stop stands by the first building's door, clear of the lamps", () => {
-    const layout = {
-      width: 60,
-      buildings: [
-        { x: 30, y: 40, doorX: 40, roadY: 50 },
-        { x: 3, y: 3, doorX: 4, roadY: 20 },
-      ],
-      lamps: [{ x: 12, y: 20 }],
-      verticalRoads: [{ x: 13, y0: 0, y1: 40 }],
-    } as unknown as TownLayout;
-    expect(townBusStop(layout)).toEqual({ x: 14 * 16 + 8, y: 20 * 16 + 14 });
-    expect(
-      townBusStop({ ...layout, buildings: [] } as unknown as TownLayout),
-    ).toBeNull();
-  });
-
   test("a held bus follows the service, even when a resume overtakes the pause", () => {
     const hold = new BusHold();
     hold.hold(100, false);
@@ -121,30 +103,25 @@ describe("Town bus", () => {
   });
 
   test("every parked bus stays on screen, at a phone's widest zoom too", () => {
-    const sizes = { busW: 62, busH: 42, doorX: 37 };
+    const sizes = { busW: 62, busH: 42 };
     for (const [width, zoom, count] of [
       [390, 4, 2],
       [390, 4, 13],
-      [390, 1, 13],
+      [390, 1.5, 13],
       [1440, 2, 3],
       [1440, 4, 13],
     ] as const) {
-      const left = 8;
-      const right = width - 8;
-      const { scale, slots } = busParking({
-        ...sizes,
-        count,
-        zoom,
-        stopX: width / 3,
-        road: 700,
-        left,
-        right,
-        top: 60,
-      });
+      const area = { left: 8, right: width - 60, top: 40, bottom: 700 };
+      const { scale, slots } = busParking({ ...sizes, ...area, count, zoom });
       for (const [i, slot] of slots.entries()) {
-        expect(slot.x).toBeGreaterThanOrEqual(left);
-        expect(slot.x + sizes.busW * scale).toBeLessThanOrEqual(right + 0.01);
-        expect(slot.bottom - sizes.busH * scale).toBeGreaterThanOrEqual(59.99);
+        expect(slot.x).toBeGreaterThanOrEqual(area.left - 0.01);
+        expect(slot.x + sizes.busW * scale).toBeLessThanOrEqual(
+          area.right + 0.01,
+        );
+        expect(slot.bottom - sizes.busH * scale).toBeGreaterThanOrEqual(
+          area.top - 0.01,
+        );
+        expect(slot.bottom).toBeLessThanOrEqual(area.bottom + 0.01);
         for (const other of slots.slice(i + 1))
           expect(
             other.bottom !== slot.bottom ||
@@ -153,20 +130,17 @@ describe("Town bus", () => {
           ).toBe(true);
       }
     }
-    // One bus that fits keeps its door at the stop and the camera's zoom.
-    const one = busParking({
-      ...sizes,
-      count: 1,
-      zoom: 2,
-      stopX: 500,
-      road: 700,
-      left: 8,
-      right: 1432,
-      top: 60,
-    });
-    expect(one).toEqual({
-      scale: 2,
-      slots: [{ x: 500 - 41 * 2, bottom: 700 }],
-    });
+    // One bus that fits stands right next to the stop, at full size.
+    expect(
+      busParking({
+        ...sizes,
+        count: 1,
+        zoom: 2,
+        left: 8,
+        right: 1300,
+        top: 40,
+        bottom: 700,
+      }),
+    ).toEqual({ scale: 2, slots: [{ x: 1300 - 124, bottom: 40 + 84 }] });
   });
 });

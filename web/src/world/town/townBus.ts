@@ -1,10 +1,9 @@
 import type { BinEntry } from "../../../../shared/bin";
-import { TOWN_TILE, type TownLayout, type TownPoint } from "./townLayout";
 
 /**
- * Town's bin is the London bus stop. One bus collects everyone at the stop
- * before it leaves; its journey across the screen is the countdown, and the
- * close runs as it leaves. Positions here are pure functions of the time left,
+ * Town's bin is the London bus stop, in the screen's top-right corner. A bus
+ * collects everyone at the stop before it leaves; its journey across the
+ * screen is the countdown, and the close runs as it leaves. Positions here are pure functions of the time left,
  * so the motion is the same at any frame rate and pauses exactly with the bin.
  */
 
@@ -93,30 +92,6 @@ export function catchableTrip(trips: readonly BusTrip[]) {
 }
 
 /**
- * The stop stands on the pavement a few tiles along from the first building's
- * door, clear of its reception card and the street lamps (every 11 tiles from
- * the sixth). World pixels, at its foot.
- */
-export function townBusStop(layout: TownLayout): TownPoint | null {
-  const building = [...layout.buildings].sort(
-    (a, b) => a.y - b.y || a.x - b.x,
-  )[0];
-  if (!building) return null;
-  let tx = building.doorX + 8;
-  const taken = (x: number) =>
-    layout.lamps.some((lamp) => lamp.x === x && lamp.y === building.roadY) ||
-    layout.verticalRoads.some((road) => road.x === x);
-  while (taken(tx) && tx < layout.width - 2) tx += 1;
-  return {
-    x: tx * TOWN_TILE + TOWN_TILE / 2,
-    y: building.roadY * TOWN_TILE + TOWN_TILE - 2,
-  };
-}
-
-/** Where the bus's wheels run: the middle of the road below the stop. */
-export const BUS_ROAD_OFFSET = TOWN_TILE * 2;
-
-/**
  * A press-and-hold on the bus: it freezes at once, before the service pauses,
  * and then follows the service. Once the service has answered the pause, a
  * resume from any World (or an empty bin) lets it go; a refused pause, or a
@@ -154,31 +129,28 @@ export class BusHold {
 export type BusParkingInput = {
   /** Buses waiting at the stop at once. */
   count: number;
-  /** The camera's zoom: buses are drawn at it when they fit. */
+  /** The largest scale to draw them at. */
   zoom: number;
-  /** The stop's screen x, and the bottom of the first row (the road). */
-  stopX: number;
-  road: number;
-  /** The usable screen area, in canvas pixels. */
+  /** The usable area beside the stop, in canvas pixels: rows start at its
+   * right edge (the stop) and its top, and go left and down. */
   left: number;
   right: number;
   top: number;
-  /** One bus at scale 1, and where its door is. */
+  bottom: number;
+  /** One bus at scale 1. */
   busW: number;
   busH: number;
-  doorX: number;
 };
 
 const BUS_GAP = 6;
 
 /**
  * Where parked buses stand, so every one is on screen: side by side from the
- * stop, the first with its door at the stop, in rows rising above the road
- * when one row is not enough, and smaller (never below scale 1) when even the
- * rows run out.
+ * stop, the first next to it, in rows below when one row is not enough, and
+ * smaller (never below scale 1) when even the rows run out.
  */
 export function busParking(input: BusParkingInput) {
-  const { count, left, right, top, road, busW, busH } = input;
+  const { count, left, right, top, bottom, busW, busH } = input;
   const fits = (scale: number) => {
     const cols = Math.max(
       1,
@@ -186,29 +158,19 @@ export function busParking(input: BusParkingInput) {
     );
     const rows = Math.max(
       1,
-      Math.floor((road - top + BUS_GAP) / (busH * scale + BUS_GAP)),
+      Math.floor((bottom - top + BUS_GAP) / (busH * scale + BUS_GAP)),
     );
     return { cols, ok: cols * rows >= count };
   };
   let scale = input.zoom;
   while (scale > 1 && !fits(scale).ok) scale = Math.max(1, scale * 0.85);
   const { cols } = fits(scale);
-  const pitch = busW * scale + BUS_GAP;
-  const atStop = Math.min(
-    right - busW * scale,
-    Math.max(left, input.stopX - (input.doorX + 4) * scale),
-  );
   const slots = Array.from({ length: count }, (_, index) => {
     const row = Math.floor(index / cols);
-    const inRow = Math.min(cols, count - row * cols);
-    // A row starts at the stop when it fits there, else as far right as fits.
-    const start = Math.max(
-      left,
-      Math.min(atStop, right - inRow * pitch + BUS_GAP),
-    );
+    const col = index % cols;
     return {
-      x: start + (index % cols) * pitch,
-      bottom: road - row * (busH * scale + BUS_GAP),
+      x: right - (col + 1) * busW * scale - col * BUS_GAP,
+      bottom: top + (row + 1) * busH * scale + row * BUS_GAP,
     };
   });
   return { scale, slots };

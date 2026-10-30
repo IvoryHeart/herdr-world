@@ -46,10 +46,86 @@ export async function checkTownBus(
   const calls = (method: string) =>
     bin.calls.filter((call) => call.method === method).length;
 
-  sendToBusStop(agentKey);
+  // The stop keeps the screen's top-right corner.
+  const { width: screenW } = origin();
+  const stop = renderer.bus!.stop;
+  check(
+    stop.x > screenW * 0.75 && stop.y < 200,
+    `the bus stop is not in the top-right corner: ${JSON.stringify(stop)}`,
+  );
+
+  // Carry the agent from its desk to the stop: it goes, and the town holds
+  // still while it hovers there, so the drop lands.
+  const figure = host.querySelector<HTMLElement>(
+    `.world-semantic-target[data-kind="agent"][data-target-key="${CSS.escape(agentKey)}"]`,
+  );
+  check(figure !== null, "the agent has no target to carry");
+  if (figure) {
+    // Agents are carried at room or desk level: tap the agent's room card
+    // (the nearest to it), as a person zooms in, then focus the agent.
+    const centre = (element: Element) => {
+      const r = element.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    };
+    const at = centre(figure);
+    const cards = [...host.querySelectorAll<HTMLElement>(".town-room-card")];
+    const card = cards.sort((a, b) => {
+      const da = centre(a);
+      const db = centre(b);
+      return (
+        Math.hypot(da.x - at.x, da.y - at.y) -
+        Math.hypot(db.x - at.x, db.y - at.y)
+      );
+    })[0];
+    if (renderer.level !== "room" && renderer.level !== "desk") card?.click();
+    figure.focus();
+    await waitFor(
+      () =>
+        !renderer.flying &&
+        (renderer.level === "room" || renderer.level === "desk"),
+      () => `focusing the agent left the camera at ${renderer.level}`,
+    );
+    await pause(100);
+    const box = figure.getBoundingClientRect();
+    const from = {
+      x: box.left + box.width / 2 - origin().left,
+      y: box.top + box.height / 2 - origin().top,
+    };
+    const to = { x: stop.x - 10, y: stop.y - 30 };
+    point("pointerdown", from.x, from.y);
+    if (phone) await pause(700);
+    for (let i = 1; i <= 12; i++) {
+      point(
+        "pointermove",
+        from.x + ((to.x - from.x) * i) / 12,
+        from.y + ((to.y - from.y) * i) / 12,
+      );
+      await pause(16);
+    }
+    await waitFor(
+      () => {
+        const ghost = host.querySelector<HTMLElement>(".town-drag-ghost");
+        return (
+          ghost?.dataset.action === "bin" && ghost.dataset.valid === "true"
+        );
+      },
+      () =>
+        `a carried agent over the stop is not aimed at it: ${host.querySelector<HTMLElement>(".town-drag-ghost")?.textContent ?? "no ghost"}`,
+    );
+    // The agent's target sits on the map: it moves if the camera pans.
+    const before = figure.getBoundingClientRect();
+    await pause(300);
+    const after = figure.getBoundingClientRect();
+    check(
+      Math.abs(after.left - before.left) < 1 &&
+        Math.abs(after.top - before.top) < 1,
+      "the town panned while the agent hovered over the stop",
+    );
+    point("pointerup", to.x, to.y);
+  }
   await waitFor(
     () => calls("world.bin.add") === 1,
-    "the stop never took the agent",
+    "dropping the agent on the stop never took it",
   );
   const added = bin.calls.find((call) => call.method === "world.bin.add")!;
   check(
@@ -191,6 +267,8 @@ export async function checkTownBus(
       label: `rider ${index}`,
       view: "board",
       join,
+      // Long enough that no bus starts to leave while the suite looks.
+      duration_ms: 120_000,
     });
   const riders = 6;
   await rider(0);
@@ -217,14 +295,18 @@ export async function checkTownBus(
     `parked buses overlap: ${JSON.stringify(boxes.map((item) => [item.x, item.w]))}`,
   );
   const { width, height } = origin();
-  check(
-    parked().every((item) =>
-      item.seats.every(
-        (seat) =>
-          seat.x >= 0 && seat.x <= width && seat.y >= 0 && seat.y <= height,
-      ),
-    ) && parked().every((item) => item.x >= 0 && item.x + item.w <= width + 1),
-    `a parked bus or passenger left the screen: ${JSON.stringify(parked().map((item) => [item.x, item.y, item.w]))}`,
+  // Once the later bus has pulled in, every bus and passenger is on screen.
+  await waitFor(
+    () =>
+      parked().every((item) =>
+        item.seats.every(
+          (seat) =>
+            seat.x >= 0 && seat.x <= width && seat.y >= 0 && seat.y <= height,
+        ),
+      ) &&
+      parked().every((item) => item.x >= 0 && item.x + item.w <= width + 1),
+    () =>
+      `a parked bus or passenger left the screen: ${JSON.stringify(parked().map((item) => [item.x, item.y, item.w]))}`,
   );
   const lateBus = parked().length - 1;
   await waitFor(

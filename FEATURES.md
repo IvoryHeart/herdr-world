@@ -141,11 +141,12 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     pointer and end with a short fade. The live panes move, agents keep running, a failed
     move attempts rollback and reports partial or unknown results. Moving a
     room's last table asks first because the room closes. When a table closes, the tables after it close up.
-  - **The bus stop** is Town's bin: a London bus stop on the pavement by the
-    first building. Drag an agent there (or **Send to the bus stop** in its
-    peek) and it waits with a box while a red double-decker drives in from the
-    edge of the screen, picks up everyone at the stop, and leaves by the other
-    edge when the countdown ends; that is when the agent closes. Press and hold
+  - **The bus stop** is Town's bin: a London bus stop that keeps the screen's
+    top-right corner wherever the camera is. Drag an agent there (or **Send to
+    the bus stop** in its peek); the town holds still while you hover over it.
+    The agent waits with a box while a red double-decker drives in from the
+    edge of the screen, picks up everyone at the stop (five to a bus; more
+    take more buses), and leaves by the other edge when the countdown ends; that is when the agent closes. Press and hold
     the bus to stop it with its doors open (the countdown pauses), then drag a
     passenger off to send them back to their desk; an empty bus leaves at once,
     and **Let it go** (or a tap elsewhere) drives on. It shares the bin's

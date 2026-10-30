@@ -955,8 +955,12 @@ export function TownCanvas({
           : p > high - EDGE
             ? -Math.min(1, (p - high + EDGE) / EDGE) * EDGE_SPEED
             : 0;
-      const dx = push(carryAt.x, inset.left, width - inset.right);
-      const dy = push(carryAt.y, inset.top, height - inset.bottom);
+      // Over the bus stop, in its corner, the town holds still for the drop.
+      const atStop =
+        carrying.kind === "agent" &&
+        busRef.current.layer.stopAt(carryAt.x, carryAt.y);
+      const dx = atStop ? 0 : push(carryAt.x, inset.left, width - inset.right);
+      const dy = atStop ? 0 : push(carryAt.y, inset.top, height - inset.bottom);
       if (dx || dy) {
         renderer.camera.panBy(dx, dy);
         renderer.invalidate("edge-pan");

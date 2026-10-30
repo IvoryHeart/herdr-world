@@ -2,7 +2,6 @@ import { Container, Sprite, Texture } from "pixi.js";
 import type { BinEntry } from "../../../../shared/bin";
 import { binTimeLeft, type WorldBinState } from "../bin/binStore";
 import {
-  BUS_ROAD_OFFSET,
   busParking,
   busPhase,
   busTimes,
@@ -11,12 +10,10 @@ import {
   busX,
   catchableTrip,
   departX,
-  townBusStop,
   type BusPhase,
   type BusTrip,
 } from "./townBus";
 import {
-  BUS_DOOR_X,
   BUS_H,
   BUS_W,
   BUS_WINDOWS,
@@ -28,11 +25,7 @@ import {
 } from "./townBusSprites";
 import type { TownCamera } from "./townCamera";
 import { diagnostics } from "./townDiagnostics";
-import {
-  TOWN_AGENT_SCALE,
-  type TownLayout,
-  type TownPoint,
-} from "./townLayout";
+import { TOWN_AGENT_SCALE, type TownLayout } from "./townLayout";
 import { townCharacter, type TownLook } from "./townSprites";
 import { textureOf } from "./townTextures";
 
@@ -73,7 +66,7 @@ const inside = (r: Rect, x: number, y: number) =>
 export class TownBusLayer implements TownOverlay {
   readonly container = new Container();
   hidden = new Set<string>();
-  private stop: TownPoint | null = null;
+  private stop = false;
   private stopSprite = new Sprite(Texture.EMPTY);
   private stopRect: Rect | null = null;
   private waiting: { entry: BinEntry; sprite: Sprite; rect: Rect }[] = [];
@@ -90,8 +83,9 @@ export class TownBusLayer implements TownOverlay {
     this.container.addChild(this.stopSprite);
   }
 
+  /** The stop stands while there is a town to leave. */
   setLayout(layout: TownLayout | null) {
-    this.stop = layout ? townBusStop(layout) : null;
+    this.stop = !!layout;
     this.invalidate();
   }
 
@@ -129,11 +123,13 @@ export class TownBusLayer implements TownOverlay {
   joinable() {
     return catchableTrip(this.trips)?.entries[0]?.id;
   }
+  /** Over the stop, near it, or over a parked bus: a carried agent goes to the stop. */
   stopAt(x: number, y: number) {
     const r = this.stopRect;
     return (
-      !!r &&
-      inside({ x: r.x - 28, y: r.y - 20, w: r.w + 56, h: r.h + 40 }, x, y)
+      (!!r &&
+        inside({ x: r.x - 48, y: r.y - 24, w: r.w + 72, h: r.h + 72 }, x, y)) ||
+      this.busAt(x, y)
     );
   }
   busAt(x: number, y: number) {
@@ -168,7 +164,6 @@ export class TownBusLayer implements TownOverlay {
     if (this.stopSprite.destroyed) return false;
     const bin = this.bin;
     const now = this.grip.at ?? performance.now();
-    const z = camera.z;
     const { width, height, inset } = camera.viewport;
     const quiet = camera.reducedMotion;
     this.trips = bin
@@ -183,45 +178,37 @@ export class TownBusLayer implements TownOverlay {
       this.buses = [];
       return false;
     }
-    // The world layer is placed at whole pixels (townRenderer), and so is the stop.
-    const ox = Math.round(width / 2 - camera.x * z);
-    const oy = Math.round(height / 2 - camera.y * z);
-    const sx = stop.x * z + ox;
-    const sy = stop.y * z + oy;
+    // The stop keeps the screen's top-right corner at one size, whatever the
+    // camera shows, so it is always there to drop an agent on.
+    const s = width < 640 ? 1.5 : 2;
+    const sx = Math.round(width - inset.right - (STOP_W / 2) * s);
+    const sy = Math.round(inset.top + STOP_H * s);
     this.stopSprite.texture = textureOf(busStopSprite());
-    this.stopSprite.scale.set(z);
-    this.stopSprite.position.set(Math.round(sx), Math.round(sy));
+    this.stopSprite.scale.set(s);
+    this.stopSprite.position.set(sx, sy);
     this.stopRect = {
-      x: sx - (STOP_W / 2) * z,
-      y: sy - STOP_H * z,
-      w: STOP_W * z,
-      h: STOP_H * z,
+      x: sx - (STOP_W / 2) * s,
+      y: sy - STOP_H * s,
+      w: STOP_W * s,
+      h: STOP_H * s,
     };
 
-    // The road the bus runs on, kept on screen when the stop is not (on a
-    // phone, above the attention rail docked along the bottom).
-    const busH = BUS_H * z;
-    const road = Math.min(
-      height - inset.bottom - (width < 640 ? 110 : 6),
-      Math.max(inset.top + busH + 6, sy + BUS_ROAD_OFFSET * z),
-    );
-    // A bus seats five: a bigger trip runs as many buses as it needs, and
-    // every parked bus stands on screen (busParking).
+    // A bus seats five: a bigger trip runs as many buses as it needs. Parked
+    // buses stand beside the stop in rows going down (on a phone, above the
+    // attention rail docked along the bottom), all on screen (busParking).
     const parking = busParking({
       count: this.trips.reduce(
         (sum, trip) =>
           sum + Math.ceil(trip.entries.length / BUS_WINDOWS.length),
         0,
       ),
-      zoom: z,
-      stopX: sx,
-      road,
+      zoom: s,
       left: inset.left + 8,
-      right: width - 8,
-      top: inset.top + 6,
+      right: this.stopRect.x - 6,
+      top: sy - BUS_H * s,
+      bottom: height - inset.bottom - (width < 640 ? 110 : 6),
       busW: BUS_W,
       busH: BUS_H,
-      doorX: BUS_DOOR_X,
     });
     const scale = parking.scale;
     const from = -BUS_W * scale - 16;
@@ -288,15 +275,15 @@ export class TownBusLayer implements TownOverlay {
       kept.push(bus);
     }
     this.buses = kept;
-    this.drawWaiting(waiting, sx, sy, z, look);
+    this.drawWaiting(waiting, sx, sy, s, look);
     this.scheduleChange(quiet);
 
     const next = this.trips[0];
     const parked = this.buses.find((bus) => !bus.departing)?.rect;
     this.status = {
-      // Over the stop, but kept on screen.
+      // Under the stop, kept on screen (it hangs above this point).
       x: Math.min(width - 96, Math.max(96, sx)),
-      y: sy - STOP_H * z - 6,
+      y: sy + 30,
       visible: !!next,
       // The bus's box (canvas pixels), so a press can find it without the canvas.
       bus: parked

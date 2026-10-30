@@ -2184,7 +2184,8 @@ dragged and stays while it holds anything, showing the next countdown on it.
 Clicking it SHALL open it with Put back, Close now, Close all now and Close lid,
 and dragging a card out of it SHALL put the agent back. A selected tab card's
 bar SHALL offer Close agent… with the same countdown. Town SHALL use a London bus
-stop: an agent dropped there, or sent from its peek, waits at the stop; a bus
+stop that keeps the screen's top-right corner whatever the camera shows, and
+the town SHALL hold still while a carried agent hovers over it: an agent dropped there, or sent from its peek, waits at the stop; a bus
 drawn in screen space enters at one edge, collects everyone at the stop, and
 leaves by the other edge when the countdown ends. A bus seats five; more
 riders SHALL take more buses, and parked buses SHALL stand apart so every

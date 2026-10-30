@@ -77,8 +77,11 @@ export function fakeBinService(countdownMs = 30_000) {
         const entry: BinEntry = {
           ...(params as unknown as BinEntry),
           id: `bin-${next++}`,
-          duration_ms: countdownMs,
-          remaining_ms: join ? left(join) : countdownMs,
+          // A suite may ask for a longer countdown than the service's.
+          duration_ms: Number(params.duration_ms ?? countdownMs),
+          remaining_ms: join
+            ? left(join)
+            : Number(params.duration_ms ?? countdownMs),
         };
         entries.push(entry);
         deadlines.set(entry.id, performance.now() + entry.remaining_ms);

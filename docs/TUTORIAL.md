@@ -633,9 +633,9 @@ every timer pauses and the bin opens. Drag the card out, or choose **Put back**,
 and it returns to its place. **Close now** skips the wait; **Close lid** resumes
 the timers. A pinned tab is refused until you unpin it.
 
-In Town the bin is a London bus stop on the pavement by the first building.
-Zoom in to a room, drag an agent to the stop (or use **Send to the bus stop** in
-its peek) and watch the bus pull in. Press and hold the bus to stop it with its
+In Town the bin is a London bus stop in the screen's top-right corner. Drag an
+agent to the stop (or use **Send to the bus stop** in its peek) and watch the
+bus pull in. Press and hold the bus to stop it with its
 doors open, then drag the agent back off to return them to their desk.
 
 **You are done when:** you have dropped an agent in the bin or at the bus stop
