@@ -117,22 +117,17 @@
   font-size: 8px;
 }
 
-.workspace-inspector-tabs,
-.workspace-inspector-actions {
+.workspace-inspector-tabs {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-}
-
-.workspace-inspector-tabs {
   padding: 2px;
   border: 1px solid var(--viewer-border);
   border-radius: 8px;
   background: var(--viewer-content-bg);
 }
 
-.workspace-inspector-tabs button,
-.workspace-inspector-actions button {
+.workspace-inspector-tabs button {
   min-height: 28px;
   display: inline-flex;
   align-items: center;
@@ -145,14 +140,8 @@
   font-size: 11px;
 }
 
-.workspace-inspector-actions button {
-  width: 28px;
-  padding: 0;
-}
-
 .workspace-inspector-tabs button:hover,
-.workspace-inspector-tabs button.is-active,
-.workspace-inspector-actions button:hover {
+.workspace-inspector-tabs button.is-active {
   border-color: transparent;
   background: var(--accent-soft);
   color: var(--text-strong);

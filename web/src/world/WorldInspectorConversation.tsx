@@ -24,7 +24,7 @@ import { worldLocalStorage } from "../browserStorage";
 import { type ActiveDiffSelection } from "../components/DiffViewerPanel";
 import { requestFilePreview } from "../components/fileExplorerResources";
 import type { ActiveFilePreviewSelection } from "../components/FilePreviewContent";
-import { WorkspaceInspectorHost } from "../components/WorkspaceInspectorHost";
+import { lazyWithReload } from "../lazyWithReload";
 import { ThemeScope } from "../themeScope";
 import { AgentProfileLink } from "./AgentProfileLink";
 import { InspectorPaneMap } from "../components/InspectorPaneMap";
@@ -64,6 +64,12 @@ import {
   type InspectorTerminalFileRequest,
 } from "./inspectorTerminalHandoff";
 import { townPortrait } from "./town/townSprites";
+
+const WorkspaceInspectorHost = lazyWithReload("workspace-inspector", () =>
+  import("../components/WorkspaceInspectorHost").then((module) => ({
+    default: module.WorkspaceInspectorHost,
+  })),
+);
 
 const emptyDiff = (): ActiveDiffSelection => ({
   entry: null,
