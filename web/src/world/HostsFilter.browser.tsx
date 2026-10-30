@@ -90,6 +90,9 @@ const operation =
   new URLSearchParams(location.search).get("operation") ?? "filters";
 const requestedView =
   new URLSearchParams(location.search).get("view") ?? "board";
+// Idle Town proves it is drawing through the renderer's frame counters.
+if (operation === "town-idle")
+  window.__HERDR_WORLD_RENDERER_DEBUG__ = "counters";
 const coldMaster = operation === "cold-master";
 const coldHost =
   operation === "cold-host" ||
@@ -448,6 +451,12 @@ async function float(id: string) {
 async function operationalScenario(unmount: () => void) {
   if (operation === "town-idle") {
     await float("alpha");
+    // Town must be drawing, so a quiet World below is idle, not broken.
+    const town = () => window.__HERDR_TOWN_RENDERER__;
+    await clock.until(
+      () => town()?.ready === true && town()!.frames > 0,
+      "Town never drew a frame",
+    );
     // The opening flight and walks finish first, once World has not committed
     // for half a second; ambient motion goes on. Each step draws a frame, so
     // settling no longer than that keeps the case cheap on software GL.
@@ -463,7 +472,11 @@ async function operationalScenario(unmount: () => void) {
         "Town drew no line from the open Inspector to its agent",
       );
     commitFrames.clear();
+    const drawn = town()?.frames ?? 0;
     await clock.advance(2000);
+    // Ambient motion keeps drawing, at least one frame per 100 ms.
+    const idleFrames = (town()?.frames ?? 0) - drawn;
+    check(idleFrames >= 20, `Idle Town drew ${idleFrames} frames in 2 s`);
     failures.push(
       ...workViolations(
         { idle: { "commit-frames": commitFrames.size } },
