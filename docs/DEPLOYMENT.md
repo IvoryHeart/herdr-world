@@ -203,6 +203,26 @@ origin, so opening the same service through a different hostname or port shows t
 browser's separate state. Saved connection profiles and service settings remain in
 the service user's config directory.
 
+### Terminal profile settings migration
+
+Profile definitions and chimes remain in `agent-profiles.json`. Profile
+assignments and the Town master role now live in four Herdr terminal tokens
+(`world_terminal`, `world_profile`, `world_profile_name`, `world_master`),
+readable by other clients of that Herdr. They survive pane moves and end with
+the terminal, including a Herdr restart. Each World resolves profile IDs
+against its own profiles; a missing profile keeps its recorded name and the
+default look.
+
+On the first complete current observation of each connection, World imports
+its matching legacy assignments once. Offline hosts wait until observed;
+absent terminals are dropped from the active projection. Existing valid token
+assignments take precedence. World keeps `agent-profiles.json.before-terminal-settings`
+as a backup and leaves legacy assignment/role fields for one rollback release.
+The per-connection import markers and highest Town master revision are saved
+with the profiles; do not remove these markers when restoring a World backup,
+or old assignments could be imported again. Restoring the pre-migration backup
+is for rollback to an older World.
+
 ### Replacing Herdr World 0.1.1 or earlier
 
 Stop the old World process before upgrading so it does not retain port 8787. Do not

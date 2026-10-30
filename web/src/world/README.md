@@ -200,7 +200,13 @@ slices (`prepareWorldBoard`), and the projection stays with the host object, so
 Board's render reuses it; the watch overlay keeps untouched hosts so that reuse
 survives. A large board's first placement runs in a task of its own, outside
 React's commit. Tab placement waits until the overview ends. Paint never reads
-layout mid-frame. Sizes come from a ResizeObserver, zones are measured before they
+layout mid-frame. Until initial placement fits the camera, an early frame keeps
+the dense Board's initial overview and does not publish an empty set of visible
+cards. Placement requests the first frame that can publish them.
+`BoardView.mount.test.ts` controls frames before the dense transition, between
+the transition and placement, and after placement, with immediate and deferred
+Board read failures; each order must retain the phone render ceiling.
+Sizes come from a ResizeObserver, zones are measured before they
 are written, and Inspector anchors and the board's box come from geometry and a
 cache. Cards mount in their own container, so React appends them as one subtree.
 Mounted cards also keep their callback refs and resize-observer registrations
@@ -209,6 +215,11 @@ would force fresh resize notifications and another drawing pass.
 `ConcurrentContexts.test.ts` records Board render time and observer work by phase
 at 1440 and 390 pixels. Its refresh also updates the mounted terminal stores and
 checks that no terminals open, dispose or fit, and no retained cards re-register.
+Board controls compare measured layouts before dispatching a state update:
+returning unchanged state from an updater can still add a React commit after the
+initial layout effect. `board/BoardControls.dom.test.ts` delivers that initial
+ResizeObserver notification after layout and checks that repeated measurements
+add no commits, while narrower and wider layouts still update the controls.
 `ProductionContexts.board.test.ts` holds this path to the 200 ms p95 / 500 ms
 maximum input budget at 64 hosts.
 
@@ -253,8 +264,21 @@ World preparation and one view projection per snapshot, however much typing and
 output run alongside. Dev-only counters in the production modules
 (`countWorldWork` in [devtools/renderer.ts](devtools/renderer.ts), absent from
 release builds) supply the World counts; construction is counted in units, not
-in its time-bounded slices. A change that does more work per event fails there.
+in its time-bounded slices. `world.sync-build` counts a `buildWorldObject` that
+render had to build because preparation had not (preparation builds the
+focused host's variant, so a refresh needs none), and `colors.derive` counts
+terminal-colour derivations (once per colour hook per changed input, never per
+render). Unit tests read the same counters through
+[testing/countedWorldWork.ts](testing/countedWorldWork.ts). A change that does
+more work per event fails there.
 Raise a ceiling only in a reviewed change that explains the new work.
+The Hosts filter fixture's `town-idle` case holds idle Town, with an
+Inspector and its line open, to the same file's idle ceiling: React commits in
+at most two frames of 2 s of test time. Town animates through Pixi alone; only
+its data polls render React, and views keep an unchanged anchor set. Its
+`town-walk-anchor` case mounts a bare Town whose host never renders again, so
+the Inspector line follows a walking agent under a still camera only through
+the anchors Town reports from its own drawn frames.
 
 Input delays (p95 and worst acknowledgement, worst input during dense load) are
 not asserted: they depend on the runner's CPU and Chrome build, and fixed budgets
@@ -308,6 +332,16 @@ test time and fail on uncaught browser errors. Frame cancellation remains effect
 until each callback runs, including when an earlier callback disposes a terminal.
 The dense production suites above stay on real time, because the latency trend
 measures real time.
+
+The terminal-handoff fixture retains real browser frames for Inspector rendering
+and focus. It imports [testing/handoffAdmissionClock.ts](testing/handoffAdmissionClock.ts)
+before the app; its bundle plugin connects the production admission timer port
+to that clock without shortening the deadline. The cancellation probe advances
+the full admission window, then awaits a completion registered before creation
+and emitted after the actual controller opener settles. Native painted frames
+settle the rendering assertion. The browser-local pending-focus probe holds the
+real focus request and asserts that no terminal Inspector has rendered; the
+headless fixture's controlled opener cannot establish that boundary.
 
 When a fixture models a healthy terminal with a real `TerminalView`, emit a
 qualified full `TerminalPush` for each successful `terminal.attach`, using its

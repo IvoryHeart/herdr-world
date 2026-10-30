@@ -388,7 +388,10 @@
       "owner": "server/src/world/snapshot.ts",
       "requirement": "openspec/specs/runtime-federation/spec.md",
       "properties": "Four-slot bound; deadline yields full catalogue; late result requires current lease; requests coalesce",
-      "existingTests": ["server/src/world/snapshot.test.ts"],
+      "existingTests": [
+        "server/src/world/snapshot.test.ts",
+        "server/src/world/snapshot-terminal-settings.test.ts"
+      ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/145",
       "technique": "observation",
       "assessment": "late host lease admission, four-slot bound and independent sibling progress",
@@ -402,7 +405,10 @@
           "verification/consumer-evidence.md",
           "verification/contracts/observation-progress.md"
         ],
-        "tests": ["server/src/world/snapshot.test.ts"],
+        "tests": [
+          "server/src/world/snapshot.test.ts",
+          "server/src/world/snapshot-terminal-settings.test.ts"
+        ],
         "checks": ["bun run check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
       },
@@ -418,7 +424,10 @@
       "owner": "server/src/world/snapshot.ts",
       "requirement": "openspec/specs/runtime-federation/spec.md",
       "properties": "Priority hosts cannot permanently displace background hosts",
-      "existingTests": ["server/src/world/snapshot.test.ts"],
+      "existingTests": [
+        "server/src/world/snapshot.test.ts",
+        "server/src/world/snapshot-terminal-settings.test.ts"
+      ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/145",
       "technique": "observation",
       "assessment": "priority/background progress under explicit completion assumptions; real deadline evidence retained",
@@ -432,7 +441,10 @@
           "verification/consumer-evidence.md",
           "verification/contracts/observation-progress.md"
         ],
-        "tests": ["server/src/world/snapshot.test.ts"],
+        "tests": [
+          "server/src/world/snapshot.test.ts",
+          "server/src/world/snapshot-terminal-settings.test.ts"
+        ],
         "checks": ["bun run check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
       },
@@ -645,13 +657,14 @@
         "web/src/worldCreation.test.ts",
         "web/src/world/SharedViewCreation.test.ts",
         "web/src/world/createdTerminalAdmission.test.ts",
+        "web/src/world/useWorldCreatedTerminal.test.ts",
         "web/src/components/ModalDialogs.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/175",
       "technique": "creation-composition",
       "assessment": "prepare, source acquisition, dispatch, result admission and newer user intent",
       "status": "modeled",
-      "remaining": "Workspace/shared/bootstrap branches, real UI wiring, opener cancellation and deadlines retain existing store/browser evidence.",
+      "remaining": "Workspace/shared/bootstrap branches retain existing store evidence. The real hook on the test clock covers observation retry, deadline cancellation and stale topology; real UI wiring and opener/terminal lifecycle retain the required browser consumers.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
       "partialEvidence": {
         "models": ["quint/creation-flow.qnt"],
@@ -663,6 +676,7 @@
           "quint/creation-flow.test.ts",
           "web/src/worldCreation.test.ts",
           "web/src/world/SharedViewCreation.test.ts",
+          "web/src/world/useWorldCreatedTerminal.test.ts",
           "web/src/world/WorldTerminalHandoff.test.ts"
         ],
         "checks": [
@@ -671,12 +685,12 @@
         ],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
       },
+      "evidenceDecision": "useWorldCreatedTerminal.test.ts replaces the WorldTerminalHandoff browser policy checks for overlapping created-seat focus, transient retry and the admission deadline/late completion, and SharedViewCreation stale-observation admission. It mounts the production creation hook and the Inspector controller’s extracted selection-lease effect, drives real coordinateCreation and admitCreatedTerminal with controlled time, and supplies deferred opener outcomes. Stale observations preserve intent while disconnect, replacement and removal retire it. Browser consumers still cover launcher wiring, actual opener cancellation, focus, layout, rendering and terminal ownership; no Q39/Q43 input or latency claim moves. v0.8.5: Asynchronous naming remains a presentation input to qualified creation. DOM schedules exercise editing before suggestion, close/reopen, obsolete results and rejected loading; existing creation models and consumer gates remain mandatory.",
       "promotion": {
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
         "scope": "Accepted documented bounds, mandatory consumers and excluded claims; final implementation/gate/resource acceptance is recorded in review 5517420140."
-      },
-      "evidenceDecision": "v0.8.5: Asynchronous naming remains a presentation input to qualified creation. DOM schedules exercise editing before suggestion, close/reopen, obsolete results and rejected loading; existing creation models and consumer gates remain mandatory."
+      }
     },
     {
       "id": "Q18",
@@ -879,7 +893,8 @@
         "web/src/world/inspectorTerminalHandoff.test.ts",
         "web/src/browserNavigation.test.ts",
         "web/src/store/refresh.test.ts",
-        "web/src/world/WorldTerminalHandoff.test.ts"
+        "web/src/world/WorldTerminalHandoff.test.ts",
+        "web/src/world/useWorldCreatedTerminal.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/175",
       "technique": "creation-composition",
@@ -923,6 +938,7 @@
         "server/src/world/desk-state.test.ts",
         "server/src/world/desk-observation.test.ts",
         "server/src/world/snapshot.test.ts",
+        "server/src/world/snapshot-terminal-settings.test.ts",
         "server/src/rpc/desk.test.ts",
         "server/src/connections/profile-process.test.ts",
         "web/src/world/deskStateStore.test.ts",
@@ -947,6 +963,7 @@
           "server/src/world/desk-state.test.ts",
           "server/src/world/desk-observation.test.ts",
           "server/src/world/snapshot.test.ts",
+          "server/src/world/snapshot-terminal-settings.test.ts",
           "server/src/rpc/desk.test.ts",
           "server/src/connections/profile-process.test.ts",
           "web/src/world/deskStateStore.test.ts",
@@ -969,9 +986,14 @@
       "area": "History/task/checkout reports",
       "owner": "server/src/agent/",
       "requirement": "openspec/specs/world-surfaces/spec.md",
-      "properties": "Atomic publication and session identity; old reports cannot overwrite newer state",
+      "properties": "Atomic publication and session identity; old reports cannot overwrite newer state; terminal settings require current terminal/lease witnesses, one-time import and convergent master revisions",
       "existingTests": [
         "server/src/agent/worktree.test.ts",
+        "server/src/agent/terminal-settings.test.ts",
+        "server/src/agent/terminal-tokens.test.ts",
+        "server/src/agent/terminal-settings.live.test.ts",
+        "server/src/rpc/launcher-appearance.test.ts",
+        "web/src/world/profileLink.test.ts",
         "server/src/agent/worktree-session.test.ts",
         "server/src/workspace/agent-worktree-files.test.ts",
         "server/src/agent/session-history.test.ts",
@@ -1011,10 +1033,16 @@
         "models": ["quint/runtime-leases.qnt"],
         "contracts": [
           "verification/consumer-evidence.md",
-          "verification/composition.md"
+          "verification/composition.md",
+          "verification/contracts/terminal-settings.md"
         ],
         "tests": [
           "server/src/agent/worktree.test.ts",
+          "server/src/agent/terminal-settings.test.ts",
+          "server/src/agent/terminal-tokens.test.ts",
+          "server/src/agent/terminal-settings.live.test.ts",
+          "server/src/rpc/launcher-appearance.test.ts",
+          "web/src/world/profileLink.test.ts",
           "server/src/agent/worktree-session.test.ts",
           "server/src/workspace/agent-worktree-files.test.ts",
           "server/src/agent/session-history.test.ts",
@@ -1034,7 +1062,7 @@
         "checks": ["bun run check", "bun run verification:check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
       },
-      "evidenceDecision": "Captured runtime authority applies to checkout report reads. Real history/task parsers and checkout tests check transcript order and exact live session identity. Direct Codex protocol and inference fixtures check bounded complete discovery, title precedence, contradictory reports, two-sided uniqueness, freshness, changing evidence, connection isolation and refusal of guessed message/answer input; inferred evidence never establishes client identity. Claude SSH fixtures execute the production POSIX lookup/stat/read payloads against a disposable filesystem with a synthetic Herdr source, checking remote read/send/receipt, duplicate and malformed IDs, missing files, stale-session refusal and connection isolation; native SSH/Claude acceptance is not claimed. Repository popover consumers also verify that retained PR/MR reports stay within the complete connection/runtime/workspace/checkout/cwd/branch/worktree association: a failed read after target replacement cannot reuse the former request, while same-association refresh failures retain it. This is direct React consumer evidence for a read-only report cache, not an abstract model of provider or Git semantics.",
+      "evidenceDecision": "Captured runtime authority applies to checkout report reads. Real history/task parsers and checkout tests check transcript order and exact live session identity. Direct Codex protocol and inference fixtures check bounded complete discovery, title precedence, contradictory reports, two-sided uniqueness, freshness, changing evidence, connection isolation and refusal of guessed message/answer input; inferred evidence never establishes client identity. Claude SSH fixtures execute the production POSIX lookup/stat/read payloads against a disposable filesystem with a synthetic Herdr source, checking remote read/send/receipt, duplicate and malformed IDs, missing files, stale-session refusal and connection isolation; native SSH/Claude acceptance is not claimed. Repository popover consumers also verify that retained PR/MR reports stay within the complete connection/runtime/workspace/checkout/cwd/branch/worktree association: a failed read after target replacement cannot reuse the former request, while same-association refresh failures retain it. This is direct React consumer evidence for a read-only report cache, not an abstract model of provider or Git semantics. Per-terminal settings add direct P5 platform checks and P7 finite exhaustive convergence evidence; the unchanged runtime-leases model supplies only lease authority, not token atomicity or HLC convergence. See the terminal-settings contract for the finite domain, migration and platform limits.",
       "promotion": {
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
@@ -2007,6 +2035,50 @@
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
         "scope": "Accepted documented bounds, mandatory consumers and excluded claims; final implementation/gate/resource acceptance is recorded in review 5517420140."
+      }
+    },
+    {
+      "id": "Q44",
+      "area": "Adapter descriptors and conformance",
+      "owner": "server/src/adapters/",
+      "requirement": "openspec/specs/world-adapters/spec.md",
+      "properties": "Instance-qualified opaque IDs; complete-list absence only; reset and evidence fences; event payloads never publish; declared verbs and acquisition limits; retired and disabled owners cannot acquire or publish; synthetic code excluded from the production bundle",
+      "existingTests": [
+        "server/src/adapters/conformance.test.ts",
+        "server/src/adapters/session.test.ts",
+        "server/src/adapters/registry.test.ts",
+        "server/src/adapters/herdr.live.test.ts",
+        "server/src/world/snapshot.test.ts"
+      ],
+      "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/549",
+      "technique": "direct-conformance",
+      "assessment": "One provider-neutral admission suite exercised by native Herdr fixtures and a deterministic paginated terminal-less source, with malformed-source controls, production-entrypoint bundling and an opt-in disposable Herdr session",
+      "status": "alternative-evidence",
+      "remaining": "Durable World binding resolution, cross-source claim display rules and legacy verb policy belong to later identity/verb work. Synthetic subscription crossing remains a named pending v2 gate. Live Herdr evidence requires HERDR_WORLD_LIVE_ADAPTERS=1 and the installed Herdr binary.",
+      "requiredChecks": [
+        "bun run check",
+        "bun run test server/src/adapters/",
+        "HERDR_WORLD_LIVE_ADAPTERS=1 bun run test server/src/adapters/herdr.live.test.ts"
+      ],
+      "partialEvidence": {
+        "models": [],
+        "contracts": ["verification/contracts/adapter-conformance.md"],
+        "tests": [
+          "server/src/adapters/conformance.test.ts",
+          "server/src/adapters/session.test.ts",
+          "server/src/adapters/registry.test.ts",
+          "server/src/adapters/herdr.live.test.ts"
+        ],
+        "checks": [
+          "bun run test server/src/adapters/",
+          "bun run test server/src/world/snapshot.test.ts"
+        ],
+        "review": "The accepted delivery link records the merged design contract, not implementation acceptance. This adapter implementation awaits independent PR review."
+      },
+      "evidenceDecision": "P3 selects direct external-source conformance rather than a finite model. Existing runtime/snapshot models remain required for their unchanged owner fences; these tests establish the new adapter boundary, not durable identity, effect recovery or v2 delivery.",
+      "promotion": {
+        "decision": "pending",
+        "scope": "New adapter boundary only; independent implementation review and CI required."
       }
     }
   ],

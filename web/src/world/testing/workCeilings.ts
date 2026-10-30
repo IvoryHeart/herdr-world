@@ -43,8 +43,25 @@ export function productionWorkCeilings(view: string): WorkByPhase {
     ...ONE_SNAPSHOT,
     ...(view === "board" ? { "board.project": 1 } : { "office.project": 1 }),
   };
-  return { initial: stage, refresh: stage };
+  if (view === "board") return { initial: stage, refresh: stage };
+  // Terminal colours are derived once per colour hook when its inputs change
+  // (useTerminalColors.ts), never per render: Town's two hooks on mount, and
+  // on refresh only the one whose connections come from the refreshed World.
+  return {
+    initial: { ...stage, "colors.derive": 2 },
+    refresh: { ...stage, "colors.derive": 1 },
+  };
 }
+
+/**
+ * Hosts filter fixture, idle Town with an Inspector open: frames of 2 s of
+ * test time in which the World app committed. Town keeps animating without
+ * React; only its periodic data polls (4 s and 5 s in the fixture) commit,
+ * and each lands at most once in the window.
+ */
+export const TOWN_IDLE_WORK_CEILINGS: WorkByPhase = {
+  idle: { "commit-frames": 2 },
+};
 
 export type ConcurrentWork = {
   worldWorkByPhase: WorkByPhase;

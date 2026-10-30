@@ -72,27 +72,27 @@ with the `openspec-sync-specs` skill.
 
 ## 5. Per-terminal settings
 
-- [ ] 5.1 On a disposable `herdr --session`, confirm and record in the PR that:
+- [x] 5.1 On a disposable `herdr --session`, confirm and record in the PR that:
   - tokens follow `pane.move`;
   - tokens are gone after a Herdr restart;
   - a write past the 32-key limit is refused;
   - values are trimmed, stripped and truncated as the design states.
-- [ ] 5.2 Write and read `world_terminal`, `world_profile`, `world_profile_name` and
+- [x] 5.2 Write and read `world_terminal`, `world_profile`, `world_profile_name` and
   `world_master`. Writes go through the exact current lease, with the terminal witness
   and validation of every value before writing. Verify with P5, including a refused
   write that is shown as failed.
-- [ ] 5.3 Add the Town master hybrid-clock revision, its highest-seen value kept with
+- [x] 5.3 Add the Town master hybrid-clock revision, its highest-seen value kept with
   the profiles, and the clearing of superseded claims. Verify with:
   - P7's exhaustive convergence check;
   - a test of two in-process Worlds on one disposable Herdr, covering an offline
     holder returning after a newer assignment.
-- [ ] 5.4 Add the import from `agent-profiles.json`, recorded as done per connection in
+- [x] 5.4 Add the import from `agent-profiles.json`, recorded as done per connection in
   the profiles document. Leave the legacy fields unread for one release. Verify that:
   - the import runs once per connection;
   - an offline host's assignments wait for its first observation;
   - a restart after a newer token assignment does not import again;
   - a rollback keeps today's behaviour.
-- [ ] 5.5 Sync the per-terminal settings requirement into `world-surfaces`. Reconcile
+- [x] 5.5 Sync the per-terminal settings requirement into `world-surfaces`. Reconcile
   the Town master storage text in the `chimes` and `agent-profiles` changes in the same
   PR, so the current specs never keep "kept by the service". Update `FEATURES.md` and
   `docs/TUTORIAL.md` if the shared Town master is visible to users, plus the knowledge
@@ -131,10 +131,10 @@ with the `openspec-sync-specs` skill.
 - [ ] 7.2 Add staged command evidence. "Stored" appears only after a durable commit;
   coordinate with the grey-tick wording fix in the ui-fixes seat. Verify with a test
   that memory-only acceptance shows `accepted`.
-- [ ] 7.3 Add adapter descriptors and the registry in the composition root. The Herdr
+- [x] 7.3 Add adapter descriptors and the registry in the composition root. The Herdr
   adapter wraps today's runtime. Verify with a test that a disabled adapter makes no
   requests, holds no timers and loads no browser code.
-- [ ] 7.4 Add the conformance suite (P3) and the test-only synthetic source. Verify
+- [x] 7.4 Add the conformance suite (P3) and the test-only synthetic source. Verify
   that the suite passes for the Herdr fixtures and for the synthetic source, and that a
   production build cannot register the synthetic source.
 - [ ] 7.5 Add the provider-name lint for shared code, then move harness specifics
@@ -142,6 +142,12 @@ with the `openspec-sync-specs` skill.
   registry exempt.
 - [ ] 7.6 Sync the `bridge-access` and `world-adapters` requirements, and add the verb
   and adapter areas to `verification/coverage.json`. Verify with `bun run check:docs`.
+
+- [x] 7.6a Sync the implemented runtime-observation adapter requirements into
+  `world-adapters`, document the admission boundary and add Q44 adapter conformance
+  to `verification/coverage.json`. The bridge-access/verb migration in 7.6 and
+  provider-name lint in 7.5 remain separate. The spec-required synthetic v2 crossing
+  is a named pending test until v2 exists.
 
 ## 8. Workflow substrate (item 15, then stage 5)
 

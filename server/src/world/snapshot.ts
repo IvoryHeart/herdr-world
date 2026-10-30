@@ -1,4 +1,6 @@
+import * as observation from "./snapshot-observers";
 import { nativeId, priorityKey } from "./snapshot-identity";
+import { readHerdrSnapshot } from "../adapters/herdr";
 import { createHash } from "node:crypto";
 import { sanitizeConnectionError } from "../connections/manager";
 import type { ConnectionId, ConnectionStatus } from "../connections/types";
@@ -421,13 +423,8 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
       revision: 0,
       records: [],
     }),
-    private readonly onFreshObservation?: (
-      connectionId: string,
-      generation: number,
-      panes: readonly Record<string, unknown>[],
-      observedAt: number,
-      agents: readonly Record<string, unknown>[],
-    ) => void,
+    private readonly onFreshObservation?: observation.Fresh,
+    private readonly onCompleteObservation?: observation.Complete,
   ) {}
 
   invalidate(connectionId?: string): number {
@@ -689,21 +686,9 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
     const observedAt = this.now();
     let outcome: HostOutcome;
     try {
-      const [workspace, tabs, panes, agents] = await Promise.allSettled([
-        work.lease.runtime.herdr.call("workspace.list", {}, 5_000),
-        work.lease.runtime.herdr.call("tab.list", {}, 5_000),
-        work.lease.runtime.herdr.call("pane.list", {}, 5_000),
-        work.lease.runtime.herdr.call("agent.list", {}, 5_000),
-      ]);
-      if (workspace.status === "rejected") throw workspace.reason;
-      if (tabs.status === "rejected") throw tabs.reason;
-      if (panes.status === "rejected") throw panes.reason;
-      const raw: RawHostSnapshot = [
-        workspace.value,
-        tabs.value,
-        panes.value,
-        agents.status === "fulfilled" ? agents.value : null,
-      ];
+      const raw: RawHostSnapshot = await readHerdrSnapshot(
+        work.lease.runtime.herdr,
+      );
       // An expired catalogue can complete every downstream read immediately.
       // Break that microtask chain before host projection/digest work so native
       // terminal input and socket replies get an ordinary event-loop turn.
@@ -735,6 +720,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
           dirty: this.wasInvalidatedSinceStart(work),
         });
         if (!this.wasInvalidatedSinceStart(work)) {
+          observation.complete(this.onCompleteObservation, work.lease, raw[2]);
           this.onFreshObservation?.(
             work.status.id,
             work.lease.generation,

@@ -6,6 +6,13 @@ This document describes Herdr World's current system contracts. See
 
 ## System overview
 
+Runtime adapter registration and its data-only hello descriptors live in the
+[adapter registry](../server/src/adapters/registry.ts). Herdr remains the sole
+production runtime; its raw topology reads preserve today's snapshot behavior.
+See [runtime observation adapters](world-adapters.md) for declared schemas,
+limits, the provider-neutral admission boundary, conformance and production
+exclusion of the test-only synthetic source.
+
 Browsers cannot open Unix domain sockets or Windows named pipes directly. A
 Bun bridge serves the frontend, authenticates browsers, and connects to Herdr:
 
@@ -266,6 +273,29 @@ completion so callers check Herdr before retrying.
 Subscription acknowledgements, including reconnects, trigger fresh snapshots;
 events during refresh queue another refresh. This reconciles missed changes,
 not an atomic or replayable event log.
+
+## Per-terminal profile settings
+
+Herdr owns profile assignments and Town master claims as four namespaced
+metadata tokens on the terminal. `server/src/agent/terminal-tokens.ts` validates
+the terminal witness and all values, writes through the exact current lease,
+and checks that lease again after dispatch. The shared Town move path checks
+the moved terminal and restores keys only if Herdr dropped them.
+
+`server/src/agent/terminal-settings.ts` projects these tokens for browsers.
+After complete clean host observations, its separate reconciliation work
+imports legacy assignments once per connection and clears superseded master
+claims; it never delays snapshot delivery for those writes. Unreachable
+hosts retain unresolved observations; removing a connection retires its cached
+assignments and claims without changing the terminal tokens. Import eligibility
+is rechecked against the current terminal read, so a stale list cannot replace
+a newer assignment. Every valid revision learned through a current write or
+guarded cleanup read advances the clock watermark before the next allocation.
+The highest claim revision is durable
+with the profiles; assignments use `max(now, highest seen + 1)`, with ties
+broken by the greater terminal ID. Cross-machine clock skew remains a limit.
+Profiles and chimes stay World-local. Migration backup and rollback details
+are in [deployment](DEPLOYMENT.md#terminal-profile-settings-migration).
 
 ## Connection isolation
 

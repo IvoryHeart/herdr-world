@@ -1,4 +1,10 @@
-import { existsSync, readFileSync, renameSync } from "node:fs";
+import {
+  constants,
+  copyFileSync,
+  existsSync,
+  readFileSync,
+  renameSync,
+} from "node:fs";
 import { replaceDataFile } from "../config/data-paths";
 import {
   type AgentProfile,
@@ -17,8 +23,9 @@ import {
 
 /**
  * The World service's agent profiles, plus which launched terminal came from
- * which profile so Town can dress it, the owner's chime settings and who
- * holds the Town master role. One revisioned document, bounded and written
+ * which profile for rollback, plus chimes, the settings import ledger and
+ * the highest master revision. Live terminal settings belong to Herdr.
+ * One revisioned document, bounded and written
  * atomically. Starter profiles are seeded once and are then the owner's to
  * edit or delete.
  */
@@ -27,6 +34,7 @@ export type ProfileAssignment = {
   connection_id: string;
   terminal_id: string;
   profile_id: string;
+  profile_name?: string;
 };
 /** A terminal on a host, as assignments key it. */
 export type TerminalKey = { connection_id: string; terminal_id: string };
@@ -37,11 +45,14 @@ export type ProfilesDocument = {
   assignments: ProfileAssignment[];
   chimes: ChimeSettings;
   /**
-   * The one agent holding the Town master role, or null. Only the owner
-   * assigns it; like assignments it names a terminal, so it ends with the
-   * terminal (a Herdr restart).
+   * Legacy role, retained only for one-time import and rollback. Live roles
+   * are projected from Herdr by TerminalSettings.
    */
   town_master: TerminalKey | null;
+  terminal_settings?: {
+    imported_connections: string[];
+    highest_master_revision: number;
+  };
 };
 
 export const MAX_ASSIGNMENTS = 256;
@@ -97,6 +108,26 @@ function checkChimes(document: ProfilesDocument) {
     );
 }
 
+function parseSettingsState(value: unknown) {
+  const v = value as Record<string, unknown> | null;
+  return {
+    imported_connections: Array.isArray(v?.imported_connections)
+      ? [
+          ...new Set(
+            v.imported_connections.filter(
+              (id): id is string => typeof id === "string" && ID.test(id),
+            ),
+          ),
+        ]
+      : [],
+    highest_master_revision:
+      Number.isSafeInteger(v?.highest_master_revision) &&
+      Number(v?.highest_master_revision) >= 0
+        ? Number(v?.highest_master_revision)
+        : 0,
+  };
+}
+
 export function parseProfilesDocument(value: unknown): ProfilesDocument {
   const v = value as Record<string, unknown> | null;
   if (!v || v.version !== 1 || !Array.isArray(v.profiles))
@@ -122,6 +153,7 @@ export function parseProfilesDocument(value: unknown): ProfilesDocument {
       .slice(-MAX_ASSIGNMENTS),
     chimes,
     town_master: parseTerminalKey(v.town_master),
+    terminal_settings: parseSettingsState(v.terminal_settings),
   };
   // A profile that took the master's chime before falls back to its class's.
   const master = chimes.timbres.town_master;
@@ -169,6 +201,48 @@ export class ProfileStore {
   profile(id: string): AgentProfile | undefined {
     const found = this.document.profiles.find((p) => p.id === id);
     return found && structuredClone(found);
+  }
+
+  settingsState() {
+    return structuredClone(
+      this.document.terminal_settings ?? parseSettingsState(null),
+    );
+  }
+
+  rememberMaster(revision: number) {
+    const state = this.settingsState();
+    if (!Number.isSafeInteger(revision) || revision < 0)
+      throw new ProfileError("invalid Town master revision");
+    if (revision <= state.highest_master_revision) return;
+    state.highest_master_revision = revision;
+    this.commit({
+      ...structuredClone(this.document),
+      terminal_settings: state,
+    });
+  }
+
+  backupLegacySettings() {
+    if (this.#closed) throw new Error("World storage is closed");
+    if (!existsSync(this.path)) return;
+    try {
+      copyFileSync(
+        this.path,
+        `${this.path}.before-terminal-settings`,
+        constants.COPYFILE_EXCL,
+      );
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    }
+  }
+
+  finishSettingsImport(connectionId: string) {
+    const state = this.settingsState();
+    if (state.imported_connections.includes(connectionId)) return;
+    state.imported_connections.push(connectionId);
+    this.commit({
+      ...structuredClone(this.document),
+      terminal_settings: state,
+    });
   }
 
   /** Refuse every later change: the service that owns this file stopped. */
@@ -250,7 +324,7 @@ export class ProfileStore {
     return this.commit(next);
   }
 
-  /** Remember that a launched terminal is this profile's agent. */
+  /** Legacy-format assignment; retained for import/rollback fixtures. */
   assign(assignment: ProfileAssignment): ProfilesDocument {
     const parsed = parseAssignment(assignment);
     if (!parsed) throw new ProfileError("assignment is not valid");
@@ -271,13 +345,11 @@ type Write = (
   store: ProfileStore,
   p: Record<string, unknown>,
 ) => ProfilesDocument;
-/** The RPCs that write the profiles document, which also holds the chimes and the Town master. */
+/** Profile/chime writes. Terminal settings use the current Herdr lease. */
 const WRITES: Record<string, Write> = {
   "world.profiles.save": (store, p) => store.save(p.profile),
   "world.profiles.delete": (store, p) => store.delete(String(p.id ?? "")),
   "world.chimes.save": (store, p) => store.saveChimes(p.chimes),
-  "world.town_master.set": (store, p) =>
-    store.setTownMaster(p.terminal ?? null, { replace: p.replace === true }),
 };
 
 /** The write an RPC method performs on the profiles document, if any. */

@@ -1,7 +1,8 @@
+import { productionAdapters } from "../adapters/registry";
 import { testConnectionSockets } from "../connections/profile-service";
-import {
+import type {
   createLegacyConnectionRuntime,
-  type LegacyConnectionRuntime,
+  LegacyConnectionRuntime,
 } from "../connections/runtime";
 
 /** Time for everything the composition root constructs. */
@@ -46,9 +47,10 @@ export type HerdrAdapter = {
 /** Adapters by kind, registered once by the composition root. */
 export type WorldAdapters = { herdr: HerdrAdapter };
 
+/** The registry's Herdr adapter; its runtimes check both sockets once started. */
 export const herdrAdapter: HerdrAdapter = {
   createRuntime(options) {
-    const runtime = createLegacyConnectionRuntime(options);
+    const runtime = productionAdapters.herdr.createRuntime(options);
     return {
       ...runtime,
       async startTransport() {

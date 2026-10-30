@@ -60,6 +60,20 @@ bun run check                 # repository checks and tests
 bun run check:delivery        # full local gate, including behavioral verification
 ```
 
+Process fixtures run fake behavior in the test process where practical. The
+[diagnostics adapter](../scripts/browser-diagnostics.ts) and
+[native plugin dispatch](../server/src/config/plugin-command.ts) accept narrow
+process doubles with production defaults. Launcher and hook fixtures call the
+real status/scope producers in-process and retain CLI conformance cases.
+The [SSH process fixture](../server/src/connections/testing/inProcessSsh.ts) keeps
+forwarding in-process, with a private Unix-socket transport through `curl` and
+small shell shims so real PID death, reconnect isolation and socket cleanup stay
+covered. It requires `curl` on Unix. Real inherited-pipe and argv/exit regressions
+also keep lightweight shell children; Windows retains Bun for these OS-boundary
+fixtures because it has no required POSIX shell. Keep those boundary checks,
+assertions and deadlines when optimizing fake startup. Measure alternating
+baseline/candidate runs and report negligible or negative results honestly.
+
 The test wrapper runs ordinary files in parallel using up to eight available CPUs.
 Set `HERDR_TEST_PARALLEL`
 to choose a default worker count and `HERDR_TEST_MAX_CONCURRENCY` to cap concurrent
@@ -69,6 +83,20 @@ tests with up to four file workers and one case per worker. World bundles are bu
 per run; each case retains its own server, fixture and fresh browser profile.
 Focused test files build a bundle once per file. Production responsiveness cases
 are serial within each file so their global diagnostic instrumentation cannot overlap.
+
+Keep policy checks headless once a replacement test and its mapping in
+`verification/coverage.json` exist. Retained browser cases name the behavior that
+requires a browser: geometry, trusted input, focus, rendering, renderer lifecycle
+or visual comparison. For example, `useWorldCreatedTerminal.test.ts` mounts the
+production creation hook and the Inspector selection-lease effect on the test
+clock to check admission retries, deadline cancellation and stale observations.
+`WorldTerminalHandoff.test.ts` and
+`SharedViewCreation.test.ts` retain launcher wiring, focus, rendered Inspectors and
+real terminal ownership. Controlled opener tests do not replace browser evidence
+that the actual opener honors cancellation.
+The handoff browser probe holds the real browser-local focus request, then uses
+controlled admission time and named opener completion for its cancellation
+check; see [the fixture clock guide](../web/src/world/README.md#browser-fixtures-on-test-time).
 
 **Known limitation: native sequential World browser runs.** Direct `bun test` runs
 across multiple `HostsFilter*.test.ts` or `ProductionContexts*.test.ts` files,

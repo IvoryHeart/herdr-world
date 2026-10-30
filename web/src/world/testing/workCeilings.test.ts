@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import {
   concurrentWorkViolations,
   productionWorkCeilings,
+  TOWN_IDLE_WORK_CEILINGS,
   workViolations,
   type ConcurrentWork,
 } from "./workCeilings";
@@ -141,4 +142,16 @@ test("a slower runner cuts more slices but does no more work, so it passes", () 
   expect(concurrentWorkViolations(slow, 1440)).toEqual([
     "world build units 1835137 > 1835136",
   ]);
+});
+
+test("idle Town commits only for its data polls, never per frame", () => {
+  const idle = (frames: number) =>
+    workViolations(
+      { idle: { "commit-frames": frames } },
+      TOWN_IDLE_WORK_CEILINGS,
+      "Town",
+    );
+  expect(idle(2)).toEqual([]);
+  // The frame-rate loop committed in every frame: 126 in 2 s.
+  expect(idle(126)).toEqual(["Town idle: commit-frames 126 > 2"]);
 });

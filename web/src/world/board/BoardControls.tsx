@@ -84,6 +84,7 @@ export function BoardControls(props: {
       chrome: 10,
     }),
   );
+  const measuredLayout = useRef(layout);
   useLayer(open, () => setOpen(false), {
     element: () => menu.current,
     anchors: () => [trigger.current],
@@ -131,12 +132,17 @@ export function BoardControls(props: {
           number(style.borderLeftWidth) +
           number(style.borderRightWidth),
       });
-      setLayout((before) =>
+      const before = measuredLayout.current;
+      if (
         before.inline.join() === next.inline.join() &&
         before.overflow.join() === next.overflow.join()
-          ? before
-          : next,
-      );
+      )
+        return;
+      // A no-op updater after the layout-effect update can still commit in
+      // React. Compare before dispatch, including observer deliveries that
+      // arrive before the previous measurement has rendered.
+      measuredLayout.current = next;
+      setLayout(next);
     };
     measure();
     const observer = new ResizeObserver(measure);

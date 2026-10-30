@@ -1,5 +1,6 @@
 import { rmSync } from "node:fs";
 import type { Server } from "bun";
+import { createProfileServices } from "../agent/profile-service";
 import { createAssistantContext } from "../assistant/context";
 import { HerdrClient } from "../bridge/herdr-client";
 import type { SshTunnelConfig } from "../bridge/ssh-tunnel";
@@ -266,11 +267,18 @@ async function compose(
     broadcast(line, "world-desk"),
   );
   const board = () => storage.board();
-  const profiles = () => storage.profiles();
   const revisionPublisher = createRevisionPublisher(clients, safeSend);
-  const publishProfilesChanged = revisionPublisher(
-    "world_profiles_changed",
-    "world-profiles",
+  // Profiles stay World's; per-terminal settings live in Herdr pane metadata.
+  const {
+    profiles,
+    terminalSettings,
+    publishProfilesChanged,
+    observeTerminalSettings,
+  } = createProfileServices(
+    revisionPublisher,
+    () => connectionManager,
+    () => storage.profiles(),
+    () => clock.now(),
   );
 
   /**
@@ -410,6 +418,7 @@ async function compose(
     undefined,
     () => terminalMarks.worldWatchlist.list(),
     observeHost,
+    observeTerminalSettings,
   );
 
   const assistantContext = createAssistantContext({
@@ -687,6 +696,7 @@ async function compose(
     logger,
     markRpcError,
     profiles,
+    terminalSettings,
     publishBoardChanged,
     publishProfilesChanged,
     publishWorldInvalidation,

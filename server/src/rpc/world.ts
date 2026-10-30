@@ -28,6 +28,7 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
     connectionManager,
     logger,
     profiles,
+    terminalSettings,
     publishBoardChanged,
     publishProfilesChanged,
     publishWatchlistChanged,
@@ -168,16 +169,29 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
   }
   if (method === "world.profiles.get") {
     try {
-      sendReply({ id, result: profiles().get() }, "world-profiles-get");
+      sendReply(
+        { id, result: await terminalSettings().settled() },
+        "world-profiles-get",
+      );
     } catch (error) {
       sendError("world-profiles-get-error", error);
+    }
+    return;
+  }
+  if (method === "world.town_master.set") {
+    try {
+      const result = await terminalSettings().setMaster(params ?? {});
+      sendReply({ id, result }, "world-town-master-set");
+    } catch (error) {
+      sendError("world-town-master-set-error", error);
     }
     return;
   }
   const profilesWrite = profileWrite(method);
   if (profilesWrite) {
     try {
-      const result = profilesWrite(profiles(), params);
+      profilesWrite(profiles(), params);
+      const result = terminalSettings().get();
       publishProfilesChanged(result.revision);
       sendReply({ id, result }, "world-profiles-write");
     } catch (error) {

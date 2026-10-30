@@ -21,6 +21,7 @@ import {
   moveAppearanceEditOps,
 } from "./appearance-move";
 import type { AppearanceChanges } from "./appearance-edits";
+import { terminalSettingsMoveCall } from "../agent/terminal-tokens";
 
 export type TownMoveRequest =
   | (Omit<DeskMoveRequest, "isCurrent"> & {
@@ -53,6 +54,10 @@ export async function executeTownMove(
         TownMoveRequest | Extract<MoveOutcome, { status: "refused" }>
       >),
 ): Promise<MoveOutcome> {
+  context = {
+    ...context,
+    call: terminalSettingsMoveCall(context.call, context.isCurrent),
+  };
   let queue = context.queues.get(context.connectionId);
   if (!queue) {
     queue = createMoveQueue();

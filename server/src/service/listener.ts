@@ -4,6 +4,7 @@ import {
   flushCoalescedMessages,
   WS_PER_MESSAGE_DEFLATE,
 } from "../bridge/websocket-send";
+import { productionAdapterDescriptors } from "../adapters/registry";
 import type { WorldSnapshotAdmission } from "../bridge/world-snapshot-admission";
 import type { GuiSettingsStore } from "../config/gui-settings";
 import type { ServerConfig } from "../config/server-config";
@@ -443,6 +444,7 @@ export function listen(deps: ListenerDeps) {
             hello: true,
             socket: config.socketPath,
             bridge_protocol_version: 2,
+            adapters: productionAdapterDescriptors(),
             default_connection_id: connectionManager.defaultId(),
             capabilities: {
               connection_id: true,
