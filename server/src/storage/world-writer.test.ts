@@ -1,12 +1,19 @@
 import { afterEach, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
-import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
+import {
+  copyFileSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openWorldWriter } from "./world-writer";
 import { migrateWorldDatabase, worldMigrations } from "./world-schema";
 import type {
   AttentionEntry,
+  EffectRecovery,
   LedgerCommit,
   LedgerWrite,
   ReplayPage,
@@ -114,6 +121,50 @@ test("declared effects are atomic and unique per record; results and answers cre
   expect(
     request(writer, { type: "outbox", record_id: "r-result" }).result,
   ).toEqual([]);
+});
+
+test("the outbox accepts all five protocol recovery classes without granting uncertain retries", () => {
+  const writer = open();
+  const recoveries: EffectRecovery[] = [
+    "keyed",
+    "reconcilable",
+    "reattachable",
+    "repeatable",
+    "opaque",
+  ];
+  for (const [revision, recovery] of recoveries.entries()) {
+    const mutation = write(recovery, revision);
+    mutation.effects = [
+      {
+        kind: "synthetic.recovery",
+        record_id: recovery,
+        recovery,
+        target: null,
+      },
+    ];
+    expect(
+      request(writer, { type: "write", write: mutation }).error,
+    ).toBeUndefined();
+    const [entry] = request(writer, { type: "outbox", record_id: recovery })
+      .result as AttentionEntry[];
+    expect(entry!.recovery).toBe(recovery);
+    const claimed = request(writer, { type: "claim", id: entry!.id })
+      .result as AttentionEntry;
+    request(writer, {
+      type: "finish",
+      id: entry!.id,
+      attempt: claimed.attempt,
+      state: "uncertain",
+      reason: "No receipt",
+      due_at: 2000,
+    });
+    const retried = request(
+      writer,
+      { type: "claim", id: entry!.id },
+      2000,
+    ).result;
+    expect(Boolean(retried)).toBe(recovery === "repeatable");
+  }
 });
 
 test("savepoint refusal preserves neighboring operations in a committed group", () => {
@@ -261,11 +312,14 @@ test("migrations preserve a private consistent snapshot and refuse future/foreig
   try {
     db.exec("PRAGMA journal_mode=WAL");
     migrateWorldDatabase(db, paths.database);
-    migrateWorldDatabase(db, paths.database, [
+    const backupPath = migrateWorldDatabase(db, paths.database, [
       ...worldMigrations,
       "CREATE TABLE extension(value TEXT)",
     ]);
-    const backup = new Database(`${paths.database}.v1.bak`, { readonly: true });
+    expect(backupPath).toMatch(
+      /world\.sqlite\.v1\.[0-9a-hjkmnp-tv-z]{8}\.bak$/,
+    );
+    const backup = new Database(backupPath!, { readonly: true });
     try {
       expect(
         (backup.query("PRAGMA user_version").get() as { user_version: number })
@@ -275,7 +329,7 @@ test("migrations preserve a private consistent snapshot and refuse future/foreig
       backup.close();
     }
     if (process.platform !== "win32")
-      expect(statSync(`${paths.database}.v1.bak`).mode & 0o777).toBe(0o600);
+      expect(statSync(backupPath!).mode & 0o777).toBe(0o600);
   } finally {
     db.close();
   }
@@ -295,6 +349,29 @@ test("migrations preserve a private consistent snapshot and refuse future/foreig
   expect(statSync(foreign.database).mode).toBe(foreignMode);
 });
 
+test("restoring a migration snapshot can upgrade again without replacing the prior snapshot", () => {
+  const paths = fixture();
+  const migrations = [...worldMigrations, "CREATE TABLE extension(value TEXT)"];
+  const db = new Database(paths.database);
+  migrateWorldDatabase(db, paths.database);
+  const first = migrateWorldDatabase(db, paths.database, migrations)!;
+  db.close();
+  const before = readFileSync(first);
+  copyFileSync(first, paths.database);
+  const restored = new Database(paths.database);
+  try {
+    const second = migrateWorldDatabase(restored, paths.database, migrations)!;
+    expect(second).not.toBe(first);
+    expect(readFileSync(first)).toEqual(before);
+    expect(
+      (restored.query("PRAGMA user_version").get() as { user_version: number })
+        .user_version,
+    ).toBe(2);
+  } finally {
+    restored.close();
+  }
+});
+
 test("a failed migration leaves the original version and a usable backup", () => {
   const paths = fixture();
   const db = new Database(paths.database);
@@ -305,7 +382,9 @@ test("a failed migration leaves the original version and a usable backup", () =>
         ...worldMigrations,
         "CREATE TABLE partial(value TEXT); INVALID SQL",
       ]),
-    ).toThrow();
+    ).toThrow(
+      /snapshot preserved at .*world\.sqlite\.v1\.[0-9a-hjkmnp-tv-z]{8}\.bak/,
+    );
     expect(
       (db.query("PRAGMA user_version").get() as { user_version: number })
         .user_version,

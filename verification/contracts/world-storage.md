@@ -19,7 +19,8 @@ executable requiring adjacent worker source; unused answer-send backlogs.
 Finite schedules in `world-storage-crash.test.ts` kill real
 source and standalone compiled processes before/after COMMIT, after a worker
 acknowledgement, and around a synthetic external effect/receipt. These schedules and the partial-queue drain are maintained acceptance evidence. `world-writer.test.ts` must cover operation/savepoint isolation,
-both history bounds, service-incarnation cursor reset and attempt fencing.
+both history bounds, service-incarnation cursor reset, attempt fencing, all five
+protocol recovery classes and safe re-upgrade after restoring a migration snapshot.
 `world-storage.test.ts` must cover exclusive ownership, isolated roots, reopen,
 hash-named private import backup, changed-source missing-ID merge, malformed
 legacy input and recovered uncertainty.

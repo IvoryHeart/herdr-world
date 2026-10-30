@@ -29,7 +29,12 @@ export type AttentionTarget =
       native_id: string;
       evidence: { terminal_id?: string; session_fingerprint?: string };
     };
-export type EffectRecovery = "repeatable" | "opaque";
+export type EffectRecovery =
+  | "keyed"
+  | "reconcilable"
+  | "reattachable"
+  | "repeatable"
+  | "opaque";
 export type OutboxEffect = {
   kind: string;
   record_id: string;

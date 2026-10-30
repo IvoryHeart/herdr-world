@@ -1,5 +1,13 @@
 import type { Database } from "bun:sqlite";
-import { closeSync, constants, fsyncSync, openSync, rmSync } from "node:fs";
+import {
+  closeSync,
+  constants,
+  existsSync,
+  fsyncSync,
+  openSync,
+  rmSync,
+} from "node:fs";
+import { newWorldId } from "./world-identifiers";
 import { assertSafeDataPath } from "../config/data-paths";
 
 export const WORLD_APPLICATION_ID = 0x574f524c;
@@ -14,7 +22,7 @@ CREATE TABLE results (id TEXT PRIMARY KEY, created_at INTEGER NOT NULL, body TEX
 CREATE TABLE ledger_changes (id TEXT PRIMARY KEY, created_at INTEGER NOT NULL, body TEXT NOT NULL CHECK(json_valid(body)));
 CREATE TABLE outbox (
  id TEXT PRIMARY KEY, operation_id TEXT NOT NULL, kind TEXT NOT NULL, record_id TEXT NOT NULL,
- target TEXT CHECK(target IS NULL OR json_valid(target)), recovery TEXT NOT NULL CHECK(recovery IN ('repeatable','opaque')),
+ target TEXT CHECK(target IS NULL OR json_valid(target)), recovery TEXT NOT NULL CHECK(recovery IN ('keyed','reconcilable','reattachable','repeatable','opaque')),
  state TEXT NOT NULL CHECK(state IN ('pending','dispatching','delivered','uncertain','refused','cancelled')),
  due_at INTEGER NOT NULL, attempt INTEGER NOT NULL DEFAULT 0 CHECK(attempt>=0),
  evidence TEXT CHECK(evidence IS NULL OR json_valid(evidence)), created_at INTEGER NOT NULL, resolved_at INTEGER,
@@ -30,7 +38,10 @@ export const worldMigrations = [migration1] as const;
 
 /** A consistent private rollback copy before any noninitial migration. */
 function backupMigration(db: Database, path: string, version: number) {
-  const backup = `${path}.v${version}.bak`;
+  const snapshotPath = (id: string) => `${path}.v${version}.${id.slice(2)}.bak`;
+  const backup = snapshotPath(
+    newWorldId("b", (id) => existsSync(snapshotPath(id))),
+  );
   assertSafeDataPath(backup);
   const fd = openSync(
     backup,
@@ -53,6 +64,7 @@ function backupMigration(db: Database, path: string, version: number) {
     rmSync(backup, { force: true });
     throw error;
   }
+  return backup;
 }
 
 /** Validate ownership/version before changing journaling or file permissions. */
@@ -70,7 +82,7 @@ export function worldDatabaseVersion(
   ).user_version;
   if (version > migrations.length)
     throw new Error(
-      `world.sqlite schema ${version} is newer than this service supports; stop World, preserve the data directory, and restore its matching world.sqlite.v<version>.bak before downgrading`,
+      `world.sqlite schema ${version} is newer than this service supports; stop World, preserve the data directory, and restore its matching world.sqlite.v<version>.<snapshot>.bak before downgrading`,
     );
   return version;
 }
@@ -81,8 +93,10 @@ export function migrateWorldDatabase(
   migrations: readonly string[] = worldMigrations,
 ) {
   const version = worldDatabaseVersion(db, migrations);
-  if (version > 0 && version < migrations.length)
-    backupMigration(db, path, version);
+  const backup =
+    version > 0 && version < migrations.length
+      ? backupMigration(db, path, version)
+      : undefined;
   db.exec("BEGIN EXCLUSIVE");
   try {
     for (let index = version; index < migrations.length; index++)
@@ -93,6 +107,12 @@ export function migrateWorldDatabase(
     db.exec("COMMIT");
   } catch (error) {
     db.exec("ROLLBACK");
+    if (backup)
+      throw new Error(
+        `World schema upgrade failed; snapshot preserved at ${backup}: ${(error as Error).message}`,
+        { cause: error },
+      );
     throw error;
   }
+  return backup;
 }

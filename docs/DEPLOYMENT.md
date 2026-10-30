@@ -47,7 +47,8 @@ data directory, including any SQLite WAL files and the configuration/secrets it
 needs. Back up an overridden legacy import source separately while migrating.
 Never copy only a live `world.sqlite`: committed data can still be in its WAL.
 Restore into a private directory with the service stopped. Before a future
-schema upgrade, World makes a private `world.sqlite.v<old-version>.bak` snapshot.
+schema upgrade, World makes a private `world.sqlite.v<old-version>.<8-random-base32>.bak` snapshot. Each upgrade
+keeps a new snapshot, so restoring and upgrading again preserves earlier copies.
 An older binary refuses an unsupported newer schema. Restore that matching
 snapshot with the service stopped, after preserving the current whole-directory
 backup. Never overwrite a live database or mix WAL files from different copies.

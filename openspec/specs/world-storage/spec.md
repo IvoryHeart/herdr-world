@@ -27,7 +27,9 @@ Acknowledgement SHALL follow COMMIT. Time and scheduling SHALL be injected.
 ### Requirement: Atomic records and declared attention
 
 An ask/result mutation, ordered change reference and any declared attention
-intent SHALL commit atomically. One owner-alert intent SHALL exist per ask;
+intent SHALL commit atomically. The outbox SHALL accept the declared recovery
+classes keyed, reconcilable, reattachable, repeatable and opaque without
+granting replay merely by storing a class. One owner-alert intent SHALL exist per ask;
 retries SHALL be attempts on that row. Result recording SHALL retain its existing
 behavior without introducing owner notifications. A database worker failure SHALL
 reject pending outcomes as unknown and fail-stop the service for restart.
