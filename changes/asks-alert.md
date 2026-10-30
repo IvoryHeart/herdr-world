@@ -4,7 +4,7 @@
   question reaches Herdr's toasts, every connected World and phone
   notifications even with no World tab open. An ask nobody was alerted to
   exits 6 (`not_delivered`) with its recorded ID, and one World could not
-  record still sends the alert and names the failure.
+  record still sends the alert, names the failure and exits 1.
 - `HERDR_WORLD_DATA_DIR` gives a World instance its own data folder.
 
 ### Changed

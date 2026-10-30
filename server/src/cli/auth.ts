@@ -1,5 +1,4 @@
 import { existsSync } from "node:fs";
-import { dirname, join } from "node:path";
 import { rotateAuthToken } from "../config/auth-token";
 import {
   revokeSessionSecret,
@@ -19,6 +18,7 @@ import {
 } from "./command";
 import {
   accessUrls,
+  generatedTokenPath,
   readServiceAccess,
   readServiceSetup,
   restartRunningService,
@@ -148,7 +148,7 @@ export const authCommand: CliCommand = {
         return EXIT_FAILURE;
       }
       // The server reads the current location and migrates only when it is absent.
-      const tokenPath = join(dirname(setup.paths.config), "auth-token");
+      const tokenPath = generatedTokenPath(setup);
       const token = rotateAuthToken(tokenPath);
       context.log(
         `Rotated the login token in ${displayPath(tokenPath, context.runtime)}.`,

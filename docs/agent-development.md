@@ -280,10 +280,12 @@ herdr-world ask withdraw --key dispatch:7:stuck --json
 
 A new question also alerts the owner through the asking pane's Herdr
 (`herdr notification show --sound request`): Herdr's toasts, every World
-connected to that Herdr and Web Push. The JSON reply's `notified` field says
-what Herdr reported. Exit 6 (`not_delivered`) means World recorded the question
-but no one was alerted; a failure to record still sends the alert and names
-the failure. Report either failure once with its error text; never retry it
+connected to that Herdr and Web Push. The JSON reply's `recorded` field says
+whether World recorded it and `notified` what Herdr reported (`null` when a
+repeated `--key` returned the recorded question without a new alert); both stay
+on the final `--wait` reply. Exit 6 (`not_delivered`) means World recorded the
+question but no one was alerted; a failure to record still sends the alert,
+names the failure and exits 1 (`unavailable`). Report either failure once with its error text; never retry it
 silently.
 
 `--key` deduplicates a cause for the verified asking occupant, including an

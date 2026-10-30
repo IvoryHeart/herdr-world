@@ -5,7 +5,6 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
-  utimesSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -61,16 +60,41 @@ test("takes over the lock of a World that is gone, or its own after a restart", 
   expect(JSON.parse(readFileSync(path, "utf8")).port).toBe(8789);
 });
 
-test("waits out a startup that has not written its holder yet", () => {
+test("takes over a lock a crashed startup left unreadable", () => {
   const root = folder();
   mkdirSync(root, { recursive: true });
   const path = join(root, "instance.lock");
   writeFileSync(path, "");
-  expect(() => acquireInstanceLock(root, 8788, () => true)).toThrow(
-    "another World is starting",
-  );
-  const old = new Date(Date.now() - 60_000);
-  utimesSync(path, old, old);
   acquireInstanceLock(root, 8788, () => true);
   expect(JSON.parse(readFileSync(path, "utf8")).pid).toBe(process.pid);
+});
+
+test("two starts taking over a dead holder's lock take turns", () => {
+  const root = folder();
+  mkdirSync(root, { recursive: true });
+  const path = join(root, "instance.lock");
+  writeFileSync(path, JSON.stringify({ pid: 424242, port: 8787 }));
+  // A second start runs while this one checks the dead holder: it must
+  // wait for the check, not remove the lock this start is about to take.
+  let second: ReturnType<typeof Bun.spawnSync> | undefined;
+  acquireInstanceLock(root, 8788, () => {
+    second = Bun.spawnSync(
+      [
+        process.execPath,
+        "-e",
+        `import { acquireInstanceLock } from ${JSON.stringify(join(import.meta.dir, "instance-lock.ts"))};
+           acquireInstanceLock(${JSON.stringify(root)}, 8789, () => false, 300);
+           console.log("took it");`,
+      ],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    return false;
+  });
+  expect(second?.exitCode).not.toBe(0);
+  expect(String(second?.stdout)).not.toContain("took it");
+  expect(String(second?.stderr)).toContain("another World is starting");
+  expect(JSON.parse(readFileSync(path, "utf8"))).toEqual({
+    pid: process.pid,
+    port: 8788,
+  });
 });

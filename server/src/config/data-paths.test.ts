@@ -67,8 +67,18 @@ test("HERDR_WORLD_DATA_DIR gives an instance its own folder", () => {
   );
 });
 
-test("tests never default to the user's data folder", () => {
-  expect(dataRoot()).toBe(join(tmpdir(), "herdr-world-data"));
+test("tests never default to the user's data folder, nor do their children", async () => {
+  const own = join(tmpdir(), "herdr-world-data");
+  expect(dataRoot()).toBe(own);
+  const script = `import { dataRoot } from ${JSON.stringify(join(import.meta.dir, "data-paths.ts"))}; console.log(dataRoot());`;
+  // Spawned without an explicit environment, as a test may start a server.
+  const sync = Bun.spawnSync([process.execPath, "-e", script]);
+  expect(sync.stdout.toString().trim()).toBe(own);
+  const child = Bun.spawn({
+    cmd: [process.execPath, "-e", script],
+    stdout: "pipe",
+  });
+  expect((await new Response(child.stdout).text()).trim()).toBe(own);
 });
 
 test("existing settings from another product are left untouched and unread", () => {

@@ -1504,10 +1504,13 @@ through the asking pane's Herdr with a request-sound notification naming the
 asker, the question and its ID, so the alert reaches Herdr's clients, every
 World connected to that Herdr and Web Push. A repeated cause that returns a
 retained ask SHALL NOT alert again. When the service cannot record a question,
-the command SHALL still send the alert, naming that failure, and keep the
-failure's exit status. When Herdr reports that no client was shown the alert,
-the command SHALL exit with `not_delivered` (6) and the recorded question ID
-instead of waiting, and SHALL NOT report success.
+the command SHALL still send the alert, naming that failure, and SHALL exit
+`unavailable` (1) with the service's reason. When Herdr reports that no client
+was shown the alert, the command SHALL exit with `not_delivered` (6) and the
+recorded question ID instead of waiting, and SHALL NOT report success. Every
+ask reply SHALL state whether the question was recorded and what the alert
+reported, or that no alert was sent for a retained question, and a waiting
+reply SHALL keep that outcome through its answer, closure or timeout.
 
 #### Scenario: An ask alerts the owner through Herdr
 - **WHEN** an agent records a new question and its Herdr shows the alert

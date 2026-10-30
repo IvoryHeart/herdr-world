@@ -17,7 +17,9 @@ a development or preview World, give it its own directory with
 unless a per-file override below names another path. Copy `connections.json`
 and `settings.json` into the new folder if the instance should reach the same
 Herdr hosts; never share the auth token, signing key, `web-push.json`, Board or
-ledger between running instances. The lock is `instance.lock` in the data
+ledger between running instances. Set it in the service's environment file to
+move the managed service: `herdr-world auth`, `url` and `service install` then
+use the login token in that folder. The lock is `instance.lock` in the data
 directory; a lock left by a World that is no longer running is taken over.
 
 Optionally set `HERDR_WORLD_PIN` to 6–12 ASCII digits for convenience login on a

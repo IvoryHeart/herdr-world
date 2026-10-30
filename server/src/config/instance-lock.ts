@@ -5,14 +5,17 @@ import {
   openSync,
   readFileSync,
   rmSync,
-  statSync,
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
+import { lockSync } from "proper-lockfile";
 import { assertSafeDataPath, dataRoot } from "./data-paths";
 
-/** A lock still unreadable after this long was left by a crashed startup. */
-const UNREADABLE_STALE_MS = 10_000;
+/** How long a starting World waits for another one's startup check. */
+const CLAIM_WAIT_MS = 5_000;
+/** A claim this old was left by a startup that crashed mid-check. */
+const CLAIM_STALE_MS = 10_000;
+const claimWait = new Int32Array(new SharedArrayBuffer(4));
 
 type Holder = { pid: number; port: number };
 
@@ -25,7 +28,8 @@ function processAlive(pid: number): boolean {
   }
 }
 
-function readHolder(path: string): Holder | "unreadable" | null {
+/** The lock's holder, or null when there is none or it cannot be read. */
+function readHolder(path: string): Holder | null {
   let text: string;
   try {
     text = readFileSync(path, "utf8");
@@ -38,9 +42,36 @@ function readHolder(path: string): Holder | "unreadable" | null {
     if (Number.isInteger(holder.pid) && Number(holder.pid) > 0)
       return { pid: Number(holder.pid), port: Number(holder.port) };
   } catch {
-    // A concurrent startup may not have written its holder yet.
+    // Written only under the claim, so unreadable means a crashed startup.
   }
-  return "unreadable";
+  return null;
+}
+
+/**
+ * Starting Worlds take turns: the check, a dead holder's removal and the new
+ * lock happen under one short claim, so two starts cannot both take over.
+ */
+function claimStartup(path: string, root: string, waitMs: number): () => void {
+  const deadline = performance.now() + waitMs;
+  for (;;) {
+    try {
+      return lockSync(path, {
+        realpath: false,
+        lockfilePath: `${path}.claim`,
+        retries: 0,
+        stale: CLAIM_STALE_MS,
+        update: 1_000,
+      });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ELOCKED") throw error;
+      if (performance.now() >= deadline)
+        throw new Error(
+          `another World is starting with the data folder ${root}; give this instance its own folder with HERDR_WORLD_DATA_DIR`,
+          { cause: error },
+        );
+      Atomics.wait(claimWait, 0, 0, 25);
+    }
+  }
 }
 
 /**
@@ -53,51 +84,39 @@ export function acquireInstanceLock(
   root: string,
   port: number,
   alive: (pid: number) => boolean = processAlive,
+  waitMs = CLAIM_WAIT_MS,
 ): () => void {
   const path = join(root, "instance.lock");
   assertSafeDataPath(path);
   mkdirSync(root, { recursive: true, mode: 0o700 });
-  for (let attempt = 0; attempt < 3; attempt++) {
-    let fd: number;
-    try {
-      fd = openSync(
-        path,
-        constants.O_CREAT |
-          constants.O_EXCL |
-          constants.O_WRONLY |
-          (constants.O_NOFOLLOW ?? 0),
-        0o600,
+  const releaseClaim = claimStartup(path, root, waitMs);
+  try {
+    const holder = readHolder(path);
+    if (holder && holder.pid !== process.pid && alive(holder.pid))
+      throw new Error(
+        `the data folder ${root} is in use by World (pid ${holder.pid}, port ${holder.port}); give this instance its own folder with HERDR_WORLD_DATA_DIR`,
       );
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-      const holder = readHolder(path);
-      if (holder === "unreadable") {
-        if (Date.now() - statSync(path).mtimeMs < UNREADABLE_STALE_MS)
-          throw new Error(
-            `another World is starting with the data folder ${root}; give this instance its own folder with HERDR_WORLD_DATA_DIR`,
-            { cause: error },
-          );
-      } else if (holder && holder.pid !== process.pid && alive(holder.pid)) {
-        throw new Error(
-          `the data folder ${root} is in use by World (pid ${holder.pid}, port ${holder.port}); give this instance its own folder with HERDR_WORLD_DATA_DIR`,
-          { cause: error },
-        );
-      }
-      rmSync(path, { force: true });
-      continue;
-    }
+    rmSync(path, { force: true });
+    const fd = openSync(
+      path,
+      constants.O_CREAT |
+        constants.O_EXCL |
+        constants.O_WRONLY |
+        (constants.O_NOFOLLOW ?? 0),
+      0o600,
+    );
     try {
       writeFileSync(fd, `${JSON.stringify({ pid: process.pid, port })}\n`);
     } finally {
       closeSync(fd);
     }
-    return () => {
-      const holder = readHolder(path);
-      if (holder !== "unreadable" && holder?.pid === process.pid)
-        rmSync(path, { force: true });
-    };
+  } finally {
+    releaseClaim();
   }
-  throw new Error(`could not take the instance lock ${path}`);
+  // Only this live process could replace its own lock, so no claim is needed.
+  return () => {
+    if (readHolder(path)?.pid === process.pid) rmSync(path, { force: true });
+  };
 }
 
 /**

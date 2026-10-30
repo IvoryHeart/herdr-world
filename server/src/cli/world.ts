@@ -57,8 +57,13 @@ type Reply = {
   error?: string;
   actor?: { label: string; verified: boolean };
   result?: unknown;
-  /** `ask` only: what Herdr's alert to the owner reported. */
-  notified?: { shown: boolean; reason: string };
+  /** `ask` only: whether World recorded the question. */
+  recorded?: boolean;
+  /**
+   * `ask` only: what Herdr's alert to the owner reported; null when none was
+   * sent, as for a repeated cause that returns its recorded question.
+   */
+  notified?: { shown: boolean; reason: string } | null;
 };
 
 /** Shows the owner an alert; `shown` is false when no Herdr client got it. */
@@ -120,7 +125,10 @@ function alertOwner(
   alert: OwnerAlert,
 ): Reply {
   const asked = (reply.result ?? {}) as { id?: unknown; created?: unknown };
-  if (reply.ok ? asked.created !== true : reply.code === "usage") return reply;
+  if (reply.ok && asked.created !== true)
+    return { ...reply, recorded: true, notified: null };
+  if (!reply.ok && reply.code === "usage")
+    return { ...reply, recorded: false, notified: null };
   const who =
     reply.actor?.label ??
     (context.runtime.env.HERDR_PANE_ID
@@ -132,17 +140,21 @@ function alertOwner(
       ? `${question} (${String(asked.id)})`
       : `${question} (not recorded in World: ${reply.error ?? "failed"})`,
   );
+  // Not recorded, whatever World's reason: the ask is unavailable (exit 1).
   if (!reply.ok)
     return {
       ...reply,
+      code: "unavailable",
+      recorded: false,
       notified,
-      error: `${reply.error ?? "failed"}; ${notified.shown ? "the owner was alerted through Herdr" : `Herdr alert also failed: ${notified.reason}`}`,
+      error: `World did not record the question: ${reply.error ?? "failed"}; ${notified.shown ? "the owner was alerted through Herdr" : `Herdr alert also failed: ${notified.reason}`}`,
     };
-  if (notified.shown) return { ...reply, notified };
+  if (notified.shown) return { ...reply, recorded: true, notified };
   return {
     ...reply,
     ok: false,
     code: "not_delivered",
+    recorded: true,
     notified,
     error: `recorded ${String(asked.id)}, but Herdr showed the owner no alert: ${notified.reason}`,
   };
@@ -186,7 +198,7 @@ function serviceEndpoint(context: CliContext) {
     );
   if (!token)
     throw new Error(
-      `no World CLI token in ${secretPath}: start the World service once, or set HERDR_WORLD_TOKEN`,
+      `no World CLI token in ${secretPath} for ${base}: start the World service once, or set HERDR_WORLD_TOKEN`,
     );
   return { url: `${base}/api/world/cli`, token, secretPath };
 }
@@ -204,6 +216,9 @@ export function httpTransport(context: CliContext): WorldCliTransport {
       };
     }
     const { url, token, secretPath } = endpoint;
+    // Every endpoint error names the service and the token it used, so a
+    // mismatched instance can be found.
+    const where = `${new URL(url).origin} (token from ${secretPath ?? "HERDR_WORLD_TOKEN"})`;
     const paneId = context.runtime.env.HERDR_PANE_ID;
     let response: Response;
     try {
@@ -226,20 +241,20 @@ export function httpTransport(context: CliContext): WorldCliTransport {
       return {
         ok: false,
         code: "unavailable",
-        error: `World service not reachable at ${new URL(url).origin}: ${(error as Error).message}`,
+        error: `World service not reachable at ${where}: ${(error as Error).message}`,
       };
     }
     try {
       const reply = (await response.json()) as Reply;
       // Say which service refused which token, so a mismatch can be found.
       if (response.status === 401 && reply.code === "refused")
-        reply.error = `${reply.error ?? "refused"} from ${new URL(url).origin} (token ${secretPath ? `from ${secretPath}` : "from HERDR_WORLD_TOKEN"})`;
+        reply.error = `${reply.error ?? "refused"} from ${where}`;
       return reply;
     } catch {
       return {
         ok: false,
         code: "unavailable",
-        error: `World service answered ${response.status} without JSON`,
+        error: `World service at ${where} answered ${response.status} without JSON`,
       };
     }
   };
@@ -631,18 +646,25 @@ export async function runWorldCommand(
       }
     }
   } else reply = await transport(command, params);
-  if (command === "ask")
+  // The ask's recording and alert outcome, kept through --wait.
+  let outcome: Pick<Reply, "recorded" | "notified"> = {};
+  if (command === "ask") {
     reply = alertOwner(reply, String(params.question), context, alert);
+    outcome = { recorded: reply.recorded, notified: reply.notified };
+  }
   // --wait: ask again until the owner (or an agent) answers.
   if (reply.ok && wait && (command === "ask" || command === "ask get")) {
     const id = String((reply.result as { id?: unknown }).id);
     const started = Date.now();
     for (;;) {
       const left = timeoutMs ? timeoutMs - (Date.now() - started) : POLL_MS;
-      reply = await transport("ask get", {
-        id,
-        wait_ms: Math.max(0, Math.min(POLL_MS, left)),
-      });
+      reply = {
+        ...(await transport("ask get", {
+          id,
+          wait_ms: Math.max(0, Math.min(POLL_MS, left)),
+        })),
+        ...outcome,
+      };
       const answered = Boolean(
         reply.ok && (reply.result as { answer?: unknown })?.answer,
       );
