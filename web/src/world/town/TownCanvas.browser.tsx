@@ -47,6 +47,7 @@ import {
   WORLD_OFFICE_PREFERENCES_CHANGED_EVENT,
   writeOfficePreferences,
 } from "../officePreferences";
+import { waitForElement } from "../testing/waitForElement";
 
 /*
  * Synthetic Office town fixture. `?mode=test` runs checks and posts them to
@@ -1276,12 +1277,13 @@ async function run() {
         (candidate) => candidate.textContent?.includes("all-protected-room"),
       );
     // Renderer readiness and completed target admission can precede this DOM
-    // commit, as in checkTownRoomFold.
-    await waitFor(
-      () => protectedRoomCard() !== undefined,
+    // commit (cards show only after the first frame's setVisible commits), so
+    // wait on the commit itself.
+    const card = await waitForElement(
+      host,
+      protectedRoomCard,
       "the all-protected room overview card never mounted",
     );
-    const card = protectedRoomCard();
     check(card !== undefined, "all-protected room has no overview card");
     if (card) {
       const room = card.closest<HTMLElement>(".town-room");
