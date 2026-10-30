@@ -64,6 +64,23 @@ This is a partial-response measurement, not a maximum payload size. Each fully
 observed host still has its existing 512-workspace, 2,048-tab and 4,096-pane/agent
 record caps, so payload size grows with actual topology across the 64-profile limit.
 
+The service also supports explicit focused interest through
+`world.focused.observe`: each socket replaces up to 64 connection/generation
+owners, and an empty declaration releases them. One observer per held runtime
+reads the enriched workspace, tab, pane and agent lists 5 seconds after the
+previous read settles. Only successful replies to list requests marked
+`focused_observation: true` record what that socket received. An observation
+sends `world_focused_changed` to holders whose received lists differ, excluding
+agent activity timestamps and pane scroll positions. Last release, socket close,
+service stop and runtime retirement fence pending results. Profile changes,
+connection state/generation changes and browser count changes publish
+`world_connections_changed` with a service-local revision.
+
+This service substrate does not yet advertise `world_shared_acquisition`; the
+browser retains its existing focused timer until recency, Desk watches and the
+browser consumers are delivered together. Spaces remains mounted and the
+aggregate refresh and 15-second fallback retain their existing behavior.
+
 Large aggregate replies negotiate bounded chunks on the same World WebSocket.
 Scoped acknowledgements can interleave between chunks; partial responses belong to
 the pending global request and are discarded on transport retirement. Older clients

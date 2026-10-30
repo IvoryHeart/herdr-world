@@ -29,6 +29,11 @@ import { handleGitRpc } from "../rpc/git";
 import { handleLauncherRpc } from "../rpc/launcher";
 import { handleWorldRpc } from "../rpc/world";
 import { inspectWorkspacePath } from "../workspace/path";
+import { readFocusedList } from "../world/focused-lists";
+import {
+  FOCUSED_METHODS,
+  type FocusedMethod,
+} from "../world/focused-acquisition";
 
 type RpcRequest = ConnectionRpcRequest;
 type LegacyRoutingLogger = ReturnType<typeof createLegacyRoutingLogger>;
@@ -174,10 +179,29 @@ async function handleRpc(
   const sendReply = (
     message: Record<string, unknown>,
     context: string,
-  ): boolean =>
-    replyPublisher
+  ): boolean => {
+    const sent = replyPublisher
       ? replyPublisher.send(message, context)
       : safeSend(ws, encode(message), context);
+    if (
+      sent &&
+      route.scope === "connection" &&
+      route.isCurrent() &&
+      !message.error &&
+      Object.hasOwn(message, "result")
+    )
+      services.focusedAcquisition.recordReply(
+        ws,
+        {
+          connection_id: route.connectionId,
+          connection_generation: route.generation,
+        },
+        method,
+        message.result,
+        req.focused_observation === true,
+      );
+    return sent;
+  };
   const sendError = (context: string, error: unknown) => {
     const message = (error as Error).message;
     markRpcError(ws, id, message);
@@ -225,10 +249,7 @@ async function handleRpc(
     );
     return;
   }
-  const { sshHost, herdr, worktreeParents, handleSettingsRpc, terminalBridge } =
-    connection;
-
-  const { enrichWorkspacesWithGitStatus } = connection.status;
+  const { sshHost, herdr, handleSettingsRpc, terminalBridge } = connection;
 
   if (
     method === "workspace.path" ||
@@ -316,6 +337,15 @@ async function handleRpc(
     return handleSettingsRpc(ws, id, method, params ?? {}, requestIsCurrent);
   }
   try {
+    if (FOCUSED_METHODS.includes(method as FocusedMethod)) {
+      const result = await readFocusedList(
+        connection,
+        method as FocusedMethod,
+        params ?? {},
+      );
+      sendReply({ id, result }, method);
+      return;
+    }
     const rawResult = await herdr.call(method, params ?? {});
     let result = rawResult;
     if (
@@ -327,25 +357,6 @@ async function handleRpc(
         ping: () => herdr.ping(),
       });
     }
-    if (method === "workspace.list") {
-      if (connection.remotePlatform !== "windows") {
-        result = await worktreeParents.enrichWorkspaceList(result);
-        result = await enrichWorkspacesWithGitStatus(result);
-      }
-      result = {
-        ...result,
-        navigation_mode: await terminalBridge.navigationMode(),
-        tab_move_supported: await terminalBridge.tabMoveSupported(),
-        endpoint_availability: terminalBridge.endpointAvailability(),
-      };
-    }
-    // Town reads a room's order with tab.list before reordering, and refuses
-    // plainly where this Herdr has no tab.move.
-    if (method === "tab.list")
-      result = {
-        ...result,
-        tab_move_supported: await terminalBridge.tabMoveSupported(),
-      };
     sendReply({ id, result }, method);
   } catch (e) {
     sendError(`${method}-error`, e);
