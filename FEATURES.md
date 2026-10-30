@@ -306,6 +306,17 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   pans the board, as in Town) and settle within a second; workspaces fold into a count and open
   into free space; Tidy (with Undo) rearranges a workspace or the board and
   carries strung notes along. Zoomed out, workspaces show a square per pane.
+  - **Next** cycles waiting agents and shared questions placed on their panes,
+    including shell questions, while skipping stale hosts and shells without
+    questions. It stays reachable in the Board menu when the controls need more space.
+  - The Board **⋯** menu offers **Surface** (Follow theme, Whiteboard or
+    Blackboard), **Status colours…** and **Help**. Surface and status choices
+    persist in this browser and stay separate from shared card colours;
+    **Reset status colours** restores the chosen surface's defaults.
+  - Drag a pane row or the grip on a single-pane tab onto another tab on the
+    same host to move only that pane, or hold the row or grip first on a phone.
+    The move keeps its terminal running and its strings attached; cancelling sends nothing. Moving the
+    old room's last pane asks before closing that room.
   - Tapping or double-clicking a tab or pane row opens an agent on Chat (as in
     Town, by **Agents open**), and a plain shell, or an agent without Chat, on
     its terminal.

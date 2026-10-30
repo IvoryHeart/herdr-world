@@ -508,7 +508,8 @@ describe("worktree removal checkout inspection", () => {
     }
   });
 
-  // Three scans and a signal each allow 10 seconds under concurrent load.
+  // Cleanup can run six separately bounded 10s commands plus signal grace.
+  // Let the fixture outlive that aggregate budget while retaining each limit.
   test("stops a stable process whose cwd is inside the checkout", async () => {
     const root = await mkdtemp(join(tmpdir(), "herdr-gui-process-"));
     const sleeper = Bun.spawn(["sleep", "120"], {
@@ -526,7 +527,8 @@ describe("worktree removal checkout inspection", () => {
       expect(await sleeper.exited).not.toBe(0);
     } finally {
       if (sleeper.exitCode === null) sleeper.kill();
+      await sleeper.exited;
       await rm(root, { recursive: true, force: true });
     }
-  }, 45_000);
+  }, 70_000);
 });

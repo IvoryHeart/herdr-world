@@ -1,0 +1,36 @@
+.board-pane-drag {
+  position: fixed;
+  z-index: 1800;
+  max-width: 220px;
+  padding: 10px 14px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 6px 20px #0006;
+  pointer-events: none;
+}
+.board-pane-lifted {
+  opacity: 0.45;
+}
+.board-tab.board-pane-move-target {
+  outline: 2px solid var(--board-accent);
+  outline-offset: 3px;
+}
+
+.board-pane-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  color: var(--board-soft);
+  cursor: grab;
+}
+@media (hover: none) {
+  .board-pane-handle {
+    width: 44px;
+    height: 44px;
+  }
+}

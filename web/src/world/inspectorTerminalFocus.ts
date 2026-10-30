@@ -1,5 +1,6 @@
 import type { MutableRefObject } from "react";
 import { connectionSnapshot, store } from "../store";
+import { openLayerCount } from "../layerStack";
 import { inspectorPaneInput } from "./inspectorTerminalHandoff";
 import {
   worldInspectorWindowId,
@@ -30,9 +31,11 @@ export function createInspectorTerminalFocuser(
     }
     const attempt = (remaining: number) => {
       if (inspectorFocusIntentRef.current !== focusIntent) return;
+      // A queued terminal handoff must not dismiss a newly opened picker.
       if (
+        openLayerCount() > 0 ||
         document.querySelector(
-          '.world-hosts-menu, .command-popover, .modal-backdrop, [role="menu"]',
+          '.world-hosts-menu, .command-popover, .modal-backdrop, [role="menu"], .popover-content[data-state="open"]',
         )
       )
         return;

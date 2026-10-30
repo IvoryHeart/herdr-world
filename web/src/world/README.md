@@ -130,11 +130,17 @@ agent roster during cooperative World preparation; aggregate coverage can includ
 agents outside that roster and remains separate. Summary memoises those immutable
 room contributions and groups room links by host.
 Finish/seen overlays change only the affected room totals. Ask, metrics and clock
-updates reuse that topology. Asking identities resolve through the snapshot's
-generation-qualified pane and agent indexes, without scanning the roster. The
-canvas uses the same native-order tab prefix as Spaces: 24 tabs folded, then
-20 more per expansion. Attention never changes this admission. Explicit fold
-requests carry a local revision alongside their admission state, so TownCanvas
+updates reuse that topology. An empty question list skips the roster and pane
+lookups entirely. Asking identities resolve through the snapshot's
+generation-qualified pane and agent indexes, without scanning the roster.
+Automatic Town-master docking skips name lookup on mobile; on wide screens its
+lookup runs outside render in batches of 256 agents, yielding through the shared
+background task scheduler. Native names still take priority over display labels,
+and the first matching agent in roster order wins. A newer roster, name, mobile
+layout or unmount retires pending lookup work; closing a docked master still
+keeps it closed for the page visit. The canvas uses the same native-order tab
+prefix as Spaces: 24 tabs folded, then 20 more per expansion. Attention never
+changes this admission. Explicit fold requests carry a local revision alongside their admission state, so TownCanvas
 applies that requested layout immediately; background topology changes retain
 the interaction quiet-period guard.
 [townFoldedActivity.ts](town/townFoldedActivity.ts) maps shared rail calls and
@@ -206,9 +212,17 @@ cache. Cards mount in their own container, so React appends them as one subtree.
 Mounted cards also keep their callback refs and resize-observer registrations
 across status refreshes; removal releases both. Re-registering unchanged cards
 would force fresh resize notifications and another drawing pass.
+Large boards batch every nonempty workspace's status squares into SVG paths,
+including small rooms; a room's own size is not enough to bound drawing work
+across many rooms. Each agent keeps its square and each shell its hollow contour,
+with the same status colours, pulse controls and close-up/overview geometry.
+Empty rooms add no drawing surface. Smaller boards keep individual squares up to
+64 panes, then use the same batching.
 `ConcurrentContexts.test.ts` records Board render time and observer work by phase
 at 1440 and 390 pixels. Its refresh also updates the mounted terminal stores and
 checks that no terminals open, dispose or fit, and no retained cards re-register.
+It also bounds summary drawing nodes and retains its worst-input budget below
+200 ms for the complete concurrent workload.
 `ProductionContexts.board.test.ts` holds this path to the 200 ms p95 / 500 ms
 maximum input budget at 64 hosts.
 
@@ -314,6 +328,12 @@ World window behavior stays in `windows/`; [WorldLayout.css](windows/WorldLayout
 coordinates the outer shell with the Roamgate-derived App. Mobile retains floating
 controls and hides the tab strip. The inherited keyboard viewport adapter, native
 pane layouts and terminal transport remain the compatibility boundary.
+
+Queued Inspector terminal focus yields to open transient layers, including the
+title's pane-map popover. The handoff checks the shared layer stack and open
+popover DOM before focusing, so delayed animation frames cannot dismiss a
+keyboard-opened map. Existing pane, terminal and runtime admission checks still
+apply after the layer closes.
 
 To capture the synthetic desktop and 390 px mobile fixture, set
 `WORLD_WINDOW_CAPTURE_DIR=/tmp/world-window-captures` when running

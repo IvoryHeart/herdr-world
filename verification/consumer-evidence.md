@@ -555,6 +555,52 @@ ask; the existing notification-policy consumers retain runtime/session authority
 These are direct JavaScript/module and browser consumers, with no abstract-model
 claim about arbitrary import graphs or live external runtimes.
 
+### Board attention, appearance and pane moves
+
+Board's Next selector consumes the existing qualified aggregate and shared
+questions placed on their pane, including shell questions. Direct fixtures cover
+native order, wrapping, shells and stale hosts. Appearance fixtures validate the
+surface and five independent status colours; the real Board browser checks
+palette changes, reset and persistence without modifying shared card colours,
+plus the Help entry point.
+
+The pane-drag consumer uses the existing shared gesture machine and qualified
+`town.move_pane` service. Its direct request tests reject foreign, stale and
+replacement-runtime targets before dispatch and preserve uncertain outcomes.
+The Board browser checks mouse and touch hold, cancellation, stationary source
+cards, refusal of tabs hidden by overlays and last-room confirmation. Existing
+service move, rollback and string remapping checks remain mandatory; these
+consumer checks add no model claim
+about native Herdr execution or arbitrary pointer schedules.
+
+The native-input/CDP production harness also runs the documented owner maximum:
+three hosts, eight workspaces per host, fifteen tabs per workspace, using its
+existing seventeen-pane tab load. Board and the Town baseline run at 1440 px and
+390 px with the same p95 acknowledgement budget below 150 ms and maximum below
+450 ms. Initial projection and a fresh observation with two stalled hosts are
+included; every input retains its original host and runtime. This is a repeatable
+synthetic Chrome workload, not a network or runtime latency guarantee. Existing
+larger dense cases and their budgets remain unchanged.
+
+Board review repair (#222): the direct Next tests retain native position after an
+answered pane and include shared questions placed on shells. The appearance test
+compares every default with the CSS palette for both themes and surface overrides.
+The Board browser scenario uses a real single-pane source in another room, derives
+the fake service's last-room refusal from that topology, and checks the separate
+card gesture, mouse/touch pane gestures, cancellation and explicit confirmation.
+These extend Q22/Q42/Q43's existing direct consumer evidence; no new authority or
+ordering state machine is introduced.
+The maximum-scale Board input acceptance retains its existing 150ms p95 / 450ms
+worst-event limits. Dense room summaries batch same-status squares into SVG paths;
+direct rendering tests check every agent/shell contour in 17- and 255-pane rooms,
+both zoom geometries and a bounded path count. The same batching covers small
+nonempty rooms on large boards, while empty rooms draw no surface. The actual
+concurrent-context consumer bounds each summary's drawing nodes and retains its
+complete workload and 200 ms worst-input budget at desktop and phone widths.
+This preserves status and pulse presentation without thousands of independently
+animated DOM nodes. CPU-throttled before/after runs
+supplement the unchanged native-input consumer instead of changing its budget.
+
 ### History input and mobile shell launches (Q09)
 
 History Details Chat shares the terminal's in-memory runtime-qualified draft and
@@ -653,3 +699,27 @@ Move-colour schedules include explicit edits and resets both before and after
 native close cleanup. Closed-tab colour/pin tests interleave unrelated writes at
 both native absence reads, require fresh checks after revision conflicts, preserve
 a replacement tab, and cover runtime retirement and the three-attempt bound.
+
+## Town render-time lookups (Q43)
+
+Direct fixtures preserve native-name priority, first-match roster order and label
+fallback across cooperative search batches. Controlled scheduler tests drive the
+actual docking hook through replacement rosters, name/mobile changes and unmount,
+refusing stale results and preserving once-per-visit docking. Mobile lookup and
+empty-question tests reject any roster access. These bounded presentation checks
+add no connection authority or new abstract ordering protocol. Production-context
+animated Town browser tests at desktop and phone widths retain their complete
+synthetic workload, live animation and native-input acknowledgement budgets;
+controlled scheduler evidence alone makes no latency or native-platform claim.
+
+## Inspector popup focus (Q21)
+
+The real Chrome pane-map consumer queues the actual qualified Inspector terminal
+focuser before keyboard opening, then releases its animation frame while the map
+is open. The map and its focus must survive; a later handoff after dismissal must
+still focus the admitted terminal. The unguarded implementation fails this
+controlled schedule. Full terminal-handoff browser acceptance retains split-pane
+selection and terminal identity checks. These DOM/animation-frame consumers add
+evidence beyond the maintained window-ordering model, whose membership and
+restore rules do not encode Radix focus dismissal. No new authority or arbitrary
+browser-scheduling claim is introduced.

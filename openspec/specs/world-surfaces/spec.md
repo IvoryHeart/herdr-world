@@ -2136,6 +2136,15 @@ zoom in/out; Work SHALL retain its visible slot and text. The bar SHALL NOT wrap
 A full-screen Inspector SHALL continue to cover Board until closed by X/Back;
 Work SHALL NOT be duplicated inside it.
 
+Next SHALL cycle through actionable panes needing the user: waiting agents or
+shared questions placed on their pane, including shell questions. It SHALL use
+Board's native order, retaining the selected pane's position after it stops
+qualifying, and open the pane's shared Inspector. It SHALL skip stale hosts and
+shells without questions and be unavailable when none qualify. Next SHALL remain reachable through overflow when the row
+cannot fit it. The Board menu SHALL also offer Help and a surface override:
+Follow theme, Whiteboard or Blackboard, saved in this browser when storage is
+available. A surface override SHALL NOT change the application's theme.
+
 A workspace card SHALL count its agents by status and its shells. The user MAY
 give any workspace or tab card a colour from a fixed palette, saved with the
 board; a tab card SHALL show its terminal colour (see Terminal colour), so a tab
@@ -2144,6 +2153,18 @@ SHALL never stand for or hide a status: status keeps its own colours on the dot,
 ring, badge and overview squares. From an actionable workspace card the user MAY
 open a plain terminal tab or start an agent in a new tab without a note, and
 from a live host's label MAY open World's New workspace dialog.
+
+#### Scenario: Next needs attention
+
+- **WHEN** the user chooses Next with waiting agents or shared questions placed on their pane
+- **THEN** Board opens the next qualifying pane on its exact host, wraps after
+  the last, and does not select a stale card or a shell without a question
+
+#### Scenario: Choose Board's surface
+
+- **WHEN** the user chooses Whiteboard or Blackboard from the Board menu
+- **THEN** that palette overrides the theme for Board alone and remains chosen
+  after reopening Board in this browser; Follow theme removes the override
 
 #### Scenario: Find Work and detached notes on a narrow phone
 
@@ -2681,6 +2702,34 @@ will close. A tab SHALL NOT be dropped on another host.
 - **WHEN** the user drops a workspace's only tab onto another workspace, even with "Don't ask again" chosen
 - **THEN** Board asks first and says the workspace will close
 
+A single-pane tab SHALL expose a distinct pane-drag grip, while the rest of
+its card SHALL retain whole-card arrangement. Dragging that grip or a pane row
+onto another tab SHALL move only that pane through Town's
+qualified pane-move service, leaving the source card and its other panes in
+place. A touch hold SHALL lift the pane; a quick swipe SHALL remain a pan.
+Cancellation or a drop on empty board SHALL send no move. A tab covered by
+another window or overlay SHALL NOT be a drop target. Host/runtime changes
+or a stale/foreign destination SHALL refuse the move. A move that would close
+the source room SHALL require explicit confirmation and revalidate the captured
+pane before retrying. Strings to that pane SHALL follow the service's move result.
+
+#### Scenario: Move one pane and preserve its peers
+
+- **WHEN** the user drags one pane row onto another tab of the same current host
+- **THEN** only that pane is moved with its terminal running and strings attached;
+  other panes and the source card retain their position
+
+#### Scenario: Move a single-pane tab's last room pane
+
+- **WHEN** the user drags a single-pane tab's grip onto a tab in another room
+- **THEN** Board moves only that pane and asks for confirmation before closing
+  its source room; dragging the rest of the card still arranges the whole card
+
+#### Scenario: Cancel a pane move
+
+- **WHEN** a pane drag is cancelled, or the last-room warning is dismissed
+- **THEN** no further native move is sent and the old room remains open
+
 ### Requirement: Board semantic zoom
 
 Board SHALL zoom with the mouse wheel around the pointer, with pinch on touch
@@ -2704,6 +2753,18 @@ working, and the selected tab, SHALL pulse; idle, finished, waiting and
 no-signal tabs SHALL stay still, with needs you marked by its border and badge.
 Pulses SHALL be switchable from the view's ⋯ menu and SHALL stop under reduced
 motion; status SHALL remain visible by colour and badge without them.
+
+The Board menu SHALL offer separate status colours for working, needs you,
+finished, idle and no signal, saved in this browser when storage is available.
+Those choices SHALL affect status dots, rings, badges and overview squares
+without changing shared card colours. Reset status colours SHALL restore the
+current surface's defaults.
+
+#### Scenario: Set a status colour without recolouring a card
+
+- **WHEN** the user changes Needs you in Status colours
+- **THEN** its status marks use the chosen colour, the card's own colour remains
+  unchanged, and Reset status colours restores the selected surface's default
 
 #### Scenario: Turn pulses off
 
