@@ -1,74 +1,44 @@
-import { expect, test } from "bun:test";
+import { afterAll, beforeAll, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { ServerConfig } from "../config/server-config";
+import { startTestService } from "../service/testing/services";
+import { configureServerLogger } from "../utils/logger";
+
+beforeAll(() => configureServerLogger("error"));
+afterAll(() => configureServerLogger("info"));
 
 const password = "logout-test-secret";
+
+type ServiceOptions = {
+  /** The data folder; a fresh one when omitted. */
+  root?: string;
+  config?: Partial<ServerConfig>;
+  /** Per-file data paths, as the service environment names them. */
+  environment?: Record<string, string>;
+};
 
 // Exercise the real HTTP router and socket cleanup, not a second test router.
 async function withAuthServer(
   run: (base: string, sockets: WebSocket[]) => Promise<void>,
-  environment: NodeJS.ProcessEnv = {},
+  options: ServiceOptions = {},
 ) {
-  const root = await mkdtemp(join(tmpdir(), "roamgate-logout-"));
+  const root =
+    options.root ?? (await mkdtemp(join(tmpdir(), "roamgate-logout-")));
   const sockets: WebSocket[] = [];
-  const child = Bun.spawn([process.execPath, "server/src/index.ts"], {
-    cwd: join(import.meta.dir, "../../.."),
-    env: {
-      ...process.env,
-      NODE_ENV: "production",
-      HOME: root,
-      APPDATA: root,
-      XDG_CONFIG_HOME: root,
-      HERDR_WORLD_DATA_DIR: undefined,
-      HOST: "127.0.0.1",
-      PORT: "0",
-      OPEN_BROWSER: "0",
-      HERDR_WORLD_PASSWORD: password,
-      HERDR_WORLD_PIN: "",
-      HERDR_GUI_PIN: "",
-      HERDR_WORLD_CONNECTIONS_PATH: join(root, "connections.json"),
-      HERDR_WORLD_SETTINGS_PATH: join(root, "settings.json"),
-      HERDR_SOCKET_PATH: join(root, "missing-control.sock"),
-      HERDR_CLIENT_SOCKET_PATH: join(root, "missing-render.sock"),
-      HERDR_SSH_HOST: "",
-      HERDR_SESSION: "",
-      HERDR_WORLD_TLS_CERT: "",
-      HERDR_WORLD_TLS_KEY: "",
-      ...environment,
-    },
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  const errors = new Response(child.stderr).text();
-  const ready = Promise.withResolvers<string>();
-  const output = (async () => {
-    let text = "";
-    for await (const chunk of child.stdout) {
-      text += new TextDecoder().decode(chunk);
-      const port = text.match(/\bINFO bridge listening\b[^\r\n]*:(\d+)\b/)?.[1];
-      if (port) ready.resolve(`http://127.0.0.1:${port}`);
-    }
-    ready.reject(
-      new Error(`Server exited before listening: ${text}\n${await errors}`),
-    );
-  })();
-  const deadline = setTimeout(
-    () => ready.reject(new Error("Server startup timed out")),
-    10_000,
+  const { service, base } = await startTestService(
+    root,
+    { password, ...options.config },
+    options.environment,
   );
   try {
-    const base = await ready.promise;
-    clearTimeout(deadline);
     await run(base, sockets);
   } finally {
-    clearTimeout(deadline);
     for (const socket of sockets) socket.close();
-    child.kill();
-    await child.exited;
-    await output;
-    await rm(root, { recursive: true, force: true });
+    await service.stop();
+    if (!options.root) await rm(root, { recursive: true, force: true });
   }
 }
 
@@ -224,7 +194,7 @@ test("development non-loopback binding still requires login", async () => {
         ).status,
       ).toBe(401);
     },
-    { NODE_ENV: "development", HOST: "0.0.0.0" },
+    { config: { host: "0.0.0.0" } },
   );
 }, 20_000);
 
@@ -319,9 +289,9 @@ test("instance naming is authenticated, persistent, and isolated from other inst
           );
         });
       },
-      { HERDR_WORLD_SETTINGS_PATH: settingsPath },
+      { environment: { HERDR_WORLD_SETTINGS_PATH: settingsPath } },
     );
-    // A new process reads the same persisted name before serving its first page.
+    // A new service reads the same persisted name before serving its first page.
     await withAuthServer(
       async (base) => {
         const cookie = await login(base);
@@ -331,7 +301,7 @@ test("instance naming is authenticated, persistent, and isolated from other inst
         expect((await save(base, cookie, "")).status).toBe(200);
         expect((await manifest(base, cookie)).name).toBe("Herdr World");
       },
-      { HERDR_WORLD_SETTINGS_PATH: settingsPath },
+      { environment: { HERDR_WORLD_SETTINGS_PATH: settingsPath } },
     );
     expect((await Bun.file(settingsPath).json()).title_suffix).toBe("");
   } finally {
@@ -378,7 +348,7 @@ test("instance name save failures preserve the current name and permit retry", a
         expect((await save()).status).toBe(200);
         expect(await get()).toEqual({ title_suffix: "Retry" });
       },
-      { HERDR_WORLD_SETTINGS_PATH: blockedPath },
+      { environment: { HERDR_WORLD_SETTINGS_PATH: blockedPath } },
     );
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -416,42 +386,34 @@ test("PIN login uses a separate endpoint and preserves password recovery during 
       expect(recovered.headers.has("set-cookie")).toBe(true);
       expect((await pinLogin("012345")).status).toBe(429);
     },
-    { HERDR_WORLD_PIN: "012345" },
+    { config: { pin: "012345" } },
   );
 });
 
 test("PIN endpoint is disabled by default", async () => {
-  await withAuthServer(
-    async (base) => {
-      const response = await fetch(`${base}/api/login/pin`, {
-        method: "POST",
-        body: JSON.stringify({ pin: "012345" }),
-        signal: AbortSignal.timeout(5000),
-      });
-      expect(response.status).toBe(404);
-      expect(response.headers.has("set-cookie")).toBe(false);
-      expect(await (await fetch(`${base}/login`)).text()).not.toContain(
-        'inputmode="numeric"',
-      );
-    },
-    { HERDR_WORLD_PIN: "", HERDR_GUI_PIN: "" },
-  );
+  await withAuthServer(async (base) => {
+    const response = await fetch(`${base}/api/login/pin`, {
+      method: "POST",
+      body: JSON.stringify({ pin: "012345" }),
+      signal: AbortSignal.timeout(5000),
+    });
+    expect(response.status).toBe(404);
+    expect(response.headers.has("set-cookie")).toBe(false);
+    expect(await (await fetch(`${base}/login`)).text()).not.toContain(
+      'inputmode="numeric"',
+    );
+  }, {});
 });
 
 test("instances with their own data folders on one home preserve independent sessions across restarts and credential rotations", async () => {
   const root = await mkdtemp(join(tmpdir(), "roamgate-instance-sessions-"));
-  const shared = { HOME: root, APPDATA: root, XDG_CONFIG_HOME: root };
   const first = {
-    ...shared,
-    HERDR_WORLD_DATA_DIR: join(root, "first-data"),
-    HERDR_WORLD_PASSWORD: "first-instance-password",
-    HERDR_WORLD_PIN: "012345",
+    root: join(root, "first-data"),
+    config: { password: "first-instance-password", pin: "012345" },
   };
   const second = {
-    ...shared,
-    HERDR_WORLD_DATA_DIR: join(root, "second-data"),
-    HERDR_WORLD_PASSWORD: "second-instance-password",
-    HERDR_WORLD_PIN: "654321",
+    root: join(root, "second-data"),
+    config: { password: "second-instance-password", pin: "654321" },
   };
   const login = async (base: string, loginPassword: string) => {
     const response = await fetch(`${base}/api/login`, {
@@ -474,9 +436,9 @@ test("instances with their own data folders on one home preserve independent ses
   let rotatedCookie = "";
   try {
     await withAuthServer(async (firstBase) => {
-      firstCookie = await login(firstBase, first.HERDR_WORLD_PASSWORD);
+      firstCookie = await login(firstBase, first.config.password);
       await withAuthServer(async (secondBase) => {
-        secondCookie = await login(secondBase, second.HERDR_WORLD_PASSWORD);
+        secondCookie = await login(secondBase, second.config.password);
         expect(await status(firstBase, firstCookie)).toBe(200);
         expect(await status(secondBase, secondCookie)).toBe(200);
         expect(await status(firstBase, secondCookie)).toBe(401);
@@ -499,12 +461,15 @@ test("instances with their own data folders on one home preserve independent ses
           expect(await status(firstBase, rotatedCookie)).toBe(200);
         }, second);
       },
-      { ...first, HERDR_WORLD_PASSWORD: "changed-instance-password" },
+      {
+        ...first,
+        config: { ...first.config, password: "changed-instance-password" },
+      },
     );
     await withAuthServer(async (firstBase) => {
       expect(await status(firstBase, firstCookie)).toBe(401);
       expect(await status(firstBase, rotatedCookie)).toBe(401);
-      const restoredCookie = await login(firstBase, first.HERDR_WORLD_PASSWORD);
+      const restoredCookie = await login(firstBase, first.config.password);
       expect(await status(firstBase, restoredCookie)).toBe(200);
       await withAuthServer(async (secondBase) => {
         expect(await status(secondBase, secondCookie)).toBe(200);
@@ -543,7 +508,7 @@ test("a second World on the same data folder refuses to start", async () => {
         );
         expect(existsSync(join(data, "instance.lock"))).toBeTrue();
       },
-      { HERDR_WORLD_DATA_DIR: data },
+      { root: data },
     );
     // The first World released its folder when it stopped.
     expect(existsSync(join(data, "instance.lock"))).toBeFalse();

@@ -24,7 +24,13 @@ same Herdr hosts. A second World on an occupied folder refuses to start. Point
 its agent CLI at it with `HERDR_WORLD_URL` and the same `HERDR_WORLD_DATA_DIR`,
 which locates the CLI token. Tests never use your data folder: the test preload
 sets `HERDR_WORLD_DATA_DIR` under the run's temporary directory, and a test that
-starts World with its own `HOME` unsets it.
+starts World with its own `HOME` unsets it. To test the service end to end, start
+it in the test's own process with `startTestService`
+([test services](../server/src/service/testing/services.ts)), which gives it its own
+folder. Spawn `server/src/index.ts` only for what needs a real process: signals and
+exit codes, the lock between processes, a home folder of its own, or fakes on
+`PATH`. A test that saves source settings should switch the GitHub source off
+first, because `gh` keeps its own state in the process's home folder.
 
 ## Development tools
 

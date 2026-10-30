@@ -43,20 +43,30 @@ see [History guidance](HISTORY.md#pane-scoped-codex-launches).
 ```text
 server/src/index.ts
   -> service, harness, or Herdr CLI command (when requested)
-  -> server configuration and World-owned persistence
-  -> Bun HTTP/WebSocket listener
-      -> origin and authentication admission
-      -> bridge-global RPC/HTTP or qualified connection route
-      -> one ConnectionRuntime -> Herdr control/render sockets
+  -> server configuration and the data folder's paths
+  -> createWorldService(deps): instance lock, signing secret, storage
+      -> Bun HTTP/WebSocket listener
+          -> origin and authentication admission
+          -> bridge-global RPC/HTTP or qualified connection route
+          -> one ConnectionRuntime -> Herdr control/render sockets
 
 web/src/main.tsx -> WorldFoundationApp -> mounted Spaces App
                           |                 -> focused connection store
                           -> aggregate runtime store -> WorldObject -> visual views
 ```
 
-The [service entry](../server/src/index.ts) dispatches service and harness commands
-before starting the listener. It composes authentication, profile management, Web
-Push, optional cost metrics, World snapshots and per-connection runtimes. The
+The [service entry](../server/src/index.ts) dispatches service and harness commands,
+loads the configuration and resolves the data folder's paths once. It owns the
+process: the logger level, the CPU profile, signals and exit. The
+[composition root](../server/src/service/world-service.ts), `createWorldService(deps)`,
+builds the service from explicit dependencies: configuration, data paths, a clock,
+a scheduler, storage and adapters (Herdr only). It composes authentication, profile
+management, Web Push, optional cost metrics, World snapshots and per-connection
+runtimes. `start()` binds the listener, then starts connections and Ranger. `stop()`
+closes the listener, stops Ranger and the connections, waits for in-flight
+requests, closes storage and releases the folder. The service never resolves a data
+path from the environment or the home folder, so tests run several services in one
+process. The
 [browser entry](../web/src/main.tsx) initializes preferences and mounts the World
 shell; [WorldFoundationApp](../web/src/world/WorldFoundationApp.tsx) keeps the
 [Spaces application](../web/src/App.tsx) mounted while Town, Board or Desk is
@@ -75,16 +85,18 @@ lifetime; Board draws DOM cards from [BoardView](../web/src/world/BoardView.tsx)
 identify each owner and its regression evidence. Shared styles load through the
 ordered [World style manifest](../web/src/world/world.css).
 
-Browser RPC admission and routing stay in `server/src/index.ts`. After those
+Browser RPC admission and routing live in [rpc-dispatch](../server/src/service/rpc-dispatch.ts),
+and the [listener](../server/src/service/listener.ts) owns HTTP routes and the browser
+socket. After those
 checks, [namespace handlers](../server/src/rpc/) handle bridge, connection profile,
 World, launcher, Board/Town, agent, file and Git/worktree methods. They receive the
 captured request and service dependencies through [context.ts](../server/src/rpc/context.ts);
-no handler imports service startup at runtime. The entry retains Windows guards,
+no handler imports service startup at runtime. The dispatcher retains Windows guards,
 workspace/tab creation pre-steps, terminal/settings forwarding and Herdr pass-through.
 `rpc/world.ts` reuses the CLI service for asks; `rpc/agent.ts` reuses the conversation
 dispatcher. PR actions retain their existing Sources HTTP path. Add RPC branches to
 the owning namespace and keep admission, lifetime and response publication in the
-entry. Existing [routing tests](../server/src/connections/protocol.test.ts) and
+dispatcher. Existing [routing tests](../server/src/connections/protocol.test.ts) and
 [session-link tests](../server/src/connections/session-link-routing.test.ts) cover
 captured connection identity and stale-generation rejection.
 
@@ -92,7 +104,8 @@ captured connection identity and stale-generation rejection.
 
 | Area | Owner and responsibility | Focused evidence |
 | --- | --- | --- |
-| Configuration and private state | [server-config](../server/src/config/server-config.ts) parses listener, sockets, TLS and auth options; [data-paths](../server/src/config/data-paths.ts) owns World data paths and private-file publication; [gui-settings](../server/src/config/gui-settings.ts) stores service settings. | [Config tests](../server/src/config/server-config.test.ts), [data-path tests](../server/src/config/data-paths.test.ts), [settings tests](../server/src/config/gui-settings.test.ts) |
+| Service composition | [world-service](../server/src/service/world-service.ts) builds one service and owns its start, stop and drain; [ports](../server/src/service/ports.ts) define the clock, scheduler and adapter ports; [storage](../server/src/service/storage.ts) is the port for World-owned stores, with today's JSON files behind it; [instance-lock](../server/src/config/instance-lock.ts) gives each live service its own folder. | [Service tests](../server/src/service/world-service.test.ts), [lock tests](../server/src/config/instance-lock.test.ts) |
+| Configuration and private state | [server-config](../server/src/config/server-config.ts) parses listener, sockets, TLS and auth options; [data-paths](../server/src/config/data-paths.ts) resolves the data folder's paths once and owns private-file publication; [gui-settings](../server/src/config/gui-settings.ts) stores each service's settings. | [Config tests](../server/src/config/server-config.test.ts), [data-path tests](../server/src/config/data-paths.test.ts), [settings tests](../server/src/config/gui-settings.test.ts) |
 | Saved connections | [profiles](../server/src/connections/profiles.ts) validates and persists local/SSH profiles; [profile-service](../server/src/connections/profile-service.ts) applies startup overrides, profile operations and retry policy. | [Profile tests](../server/src/connections/profiles.test.ts), [service tests](../server/src/connections/profile-service.test.ts) |
 | Runtime lifetime | [manager](../server/src/connections/manager.ts) owns independent runtime generations and ready leases; [runtime](../server/src/connections/runtime.ts) composes one Herdr control client, terminal bridge, file/session handlers, subscriptions and caches per connection. | [Manager tests](../server/src/connections/manager.test.ts), [runtime tests](../server/src/connections/runtime.test.ts), [shutdown tests](../server/src/connections/shutdown.test.ts) |
 | SSH transport | [ssh-profile-runtime](../server/src/connections/ssh-profile-runtime.ts), [ssh-tunnel](../server/src/bridge/ssh-tunnel.ts) and [ssh-command](../server/src/bridge/ssh-command.ts) validate one OpenSSH destination and supervise its socket forwarding. | [SSH runtime tests](../server/src/connections/ssh-profile-runtime.test.ts), [tunnel tests](../server/src/bridge/ssh-tunnel.test.ts) |
