@@ -448,8 +448,14 @@ async function float(id: string) {
 async function operationalScenario(unmount: () => void) {
   if (operation === "town-idle") {
     await float("alpha");
-    // The opening flight and walks finish first; ambient motion goes on.
-    await clock.advance(6000);
+    // The opening flight and walks finish first, once World has not committed
+    // for half a second; ambient motion goes on. Each step draws a frame, so
+    // settling no longer than that keeps the case cheap on software GL.
+    const lastCommit = () => Math.max(0, ...commitFrames);
+    for (let waited = 0; waited < 6000; waited += 100) {
+      if (clock.now() - lastCommit() >= 500) break;
+      await clock.advance(100);
+    }
     const desktop = document.documentElement.dataset.layout !== "mobile";
     if (desktop)
       check(
@@ -2433,6 +2439,9 @@ async function run() {
   writeOfficePreferences(worldLocalStorage, {
     ...DEFAULT_OFFICE_PREFERENCES,
     townOpens: operation === "spaces-notifications" ? "chat" : "terminal",
+    // Calm Town draws only while something moves, so the walk case spends
+    // its test time on the walk rather than on ambient frames.
+    townCalm: operation === "town-walk-anchor",
   });
   if (coldMaster)
     writeOfficePreferences(worldLocalStorage, {
