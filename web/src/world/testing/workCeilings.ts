@@ -96,6 +96,9 @@ export function concurrentWorkViolations(
       "terminals",
     ),
     // Cards register once when rendered; refresh and output re-register none.
+    // Teardown releases them per card (unobserve) or all at once (Board's
+    // disconnect), in an order React does not fix, so releases are bounded,
+    // not counted exactly.
     ...workViolations(
       measured.boardObserverWorkByPhase,
       {
@@ -111,13 +114,10 @@ export function concurrentWorkViolations(
   const terminals = measured.terminalWorkByPhase["outside-stress"] ?? {};
   if ((terminals.dispose ?? 0) !== (terminals.open ?? 0))
     violations.push("terminals: every opened terminal must be disposed");
-  const observers = measured.boardObserverWorkByPhase;
-  if (
-    observers.render?.observe !== cards ||
-    observers["outside-stress"]?.unobserve !== cards
-  )
+  const registered = measured.boardObserverWorkByPhase.render?.observe ?? 0;
+  if (registered !== cards)
     violations.push(
-      `card observers: expected ${cards} registered and released`,
+      `card observers: ${registered} registered while rendering, expected ${cards}`,
     );
   if (measured.worldBuildUnits > 1_835_136)
     violations.push(`world build units ${measured.worldBuildUnits} > 1835136`);

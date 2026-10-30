@@ -76,6 +76,23 @@ test("repeated preparation or projection fails, in either suite", () => {
   ).toEqual(["production initial: office.project 380 > 1"]);
 });
 
+test("cards must register once each; releases are bounded, whichever way teardown releases them", () => {
+  const disconnected = measured();
+  // Board's disconnect released most cards before their own unobserve.
+  disconnected.boardObserverWorkByPhase["outside-stress"] = { unobserve: 12 };
+  expect(concurrentWorkViolations(disconnected, 1440)).toEqual([]);
+  const missing = measured();
+  missing.boardObserverWorkByPhase.render = { observe: 1279 };
+  expect(concurrentWorkViolations(missing, 1440)).toEqual([
+    "card observers: 1279 registered while rendering, expected 1280",
+  ]);
+  const late = measured();
+  late.boardObserverWorkByPhase.refresh = { observe: 1280 };
+  expect(concurrentWorkViolations(late, 1440)).toEqual([
+    "card observers refresh: observe 1280 > 0",
+  ]);
+});
+
 test("a slower runner cuts more slices but does no more work, so it passes", () => {
   // Slices are not counted: a slice also ends after 8 ms. Units are counted.
   const slow = measured();
