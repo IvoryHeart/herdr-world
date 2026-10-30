@@ -2876,8 +2876,35 @@ async function run() {
     const tried: string[] = [];
     for (const room of phone && scale === "extended" ? [] : rooms) {
       const ghost = () => host.querySelector<HTMLElement>(".town-drag-ghost");
-      press("pointerdown", at(fromDesk));
-      await waitFor(() => ghost() !== null, "holding a desk did not lift it");
+      // On failure, say why: where the press landed against where the desk is
+      // now, and the camera at the press and after the wait. Diagnostic only:
+      // the wait is unchanged.
+      const camera = () => {
+        const renderer = window.__HERDR_TOWN_RENDERER__;
+        return {
+          level: renderer?.level,
+          zoom: Number(renderer?.zoom.toFixed(3)),
+          flying: renderer?.flying,
+          frames: renderer?.frames,
+        };
+      };
+      const pressedAt = at(fromDesk);
+      const cameraAtPress = camera();
+      const pressedTime = performance.now();
+      press("pointerdown", pressedAt);
+      await waitFor(
+        () => ghost() !== null,
+        () =>
+          `holding a desk did not lift it ${JSON.stringify({
+            room: room.dataset.id ?? room.getAttribute("aria-label"),
+            tried,
+            pressedAt,
+            deskNow: fromDesk.isConnected ? at(fromDesk) : "detached",
+            heldMs: Math.round(performance.now() - pressedTime),
+            cameraAtPress,
+            cameraNow: camera(),
+          })}`,
+      );
       press("pointermove", floor(room));
       // The ghost judges the drop target on a later frame, whose timing
       // depends on the renderer (SwiftShader or the GPU); give it a few.
