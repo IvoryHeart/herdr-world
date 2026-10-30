@@ -69,10 +69,8 @@ space fail halfway and leave debris. These rules keep each worktree small:
   `bun test` gets the same treatment through `bunfig.toml`. Runs killed outright
   are swept by the next run once their owner process is gone. Other programs'
   scratch directories, such as a desktop Chrome's, are never touched.
-- `check:changed`, `check:delivery`, `test:browser` and the World browser suites
-  refuse to start, with a message, when the worktree's filesystem or the temporary
-  directory has less than 3 GB free. Set `HERDR_WORLD_MIN_FREE_GB` to change the
-  floor (`0` turns it off); CI skips the guard.
+- Disk capacity is managed by the owner. Checks do not enforce a free-space
+  floor; `HERDR_WORLD_MIN_FREE_GB` has no effect.
 
 ## Deliver a change
 
@@ -129,7 +127,7 @@ include both paths. This mode runs the full static lane and affected unit tests,
 including all source type checks, and skips World browser suites, behavioral
 verification and native installation work. `Delivery checks` and the protected
 macOS reports still run. Other classified changes run their affected contracts and consumers under the
-same rules as pre-push; unknown paths and every main push keep the full matrix.
+shared selection rules, with pre-push limited to non-browser units; unknown paths and every main push keep the full matrix.
 Unit/web tests use two CI runners, behavioral models three groups with complete
 source-bound aggregation. Model-free owners use affected consumer tests and the
 cheap coverage inventory check. Contributor/skill Markdown and browser shard-table
@@ -677,27 +675,24 @@ multi-step handoffs and review repairs. Use
 
 Run `bun run install-hooks` once per clone. The pre-commit hook checks format and
 lint, and the pre-push hook checks the candidate. Code changes get
-`bun run check:changed` (static checks and the affected tests; CI runs the full
-gate), and `HERDR_WORLD_PREPUSH=full` runs `bun run check:delivery` instead. A
+`bun run check:changed` (static checks and affected non-browser units; browser
+and behavioral acceptance run in CI under required `Delivery checks`), and `HERDR_WORLD_PREPUSH=full` runs `bun run check:delivery` instead. A
 Markdown-only follow-up may use `bun run check:docs` after this worktree has a
 passed code gate on an ancestor, and a push that only merges `origin/main` runs
 `bun run check:static` (see CONTRIBUTING for the exact rule). Worktrees share the
 same Git hook configuration.
 
 Agents in parallel worktrees share one machine-wide check queue: one browser lane
-and one behavioral verification at a time, two light lanes, and the delivery
-gate's quiet lane (Chrome-driven tests outside World) alone on the whole
-machine. Run browser suites through
-`bun run test <path>` or `bun run test:browser`, which queue, rather than a bare
-`bun test` on a browser file, which does not. A queued gate prints
-`[queue] <lane> waiting for <worktree> <lane> (pid, since)`. Do not bypass the
-hook because a gate is queued; the wait is shorter than the contention it avoids.
+for both World and other Chrome tests, one behavioral verification lane, and two
+light lanes for non-browser units. Static checks bypass the queue, so failures
+report without waiting for heavy work. No delivery lane takes the whole machine.
+Run browser suites through `bun run test <path>` or `bun run test:browser`, which
+queue, rather than a bare `bun test` on a browser file. A queued gate prints
+`[queue] <lane> waiting for <worktree> <lane> (pid, since)`. Wait for its result.
+Each run clears its lane logs, including skipped lanes, before starting checks.
 
 Direct test runs recognise canonical file and directory paths, including `./`,
-absolute paths and symlinks. A pending whole-machine lane reserves admission before
-waiting for running work, so later ordinary arrivals cannot continually overtake
-it. This reserves admission before heavy slots drain: light work also waits,
-even with free light slots, and can wait minutes behind a running heavy lane.
+absolute paths and symlinks.
 Direct runs that may include a browser suite, including the default full test
 run and unknown selections, take the browser slot.
 Known value-taking flags such as `-t` and `--timeout` do not widen an explicit

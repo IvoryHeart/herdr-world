@@ -101,8 +101,9 @@ model mappings or schema metadata retain verification; unavailable baseline
 information fails closed.
 The explicit agent-tooling exception and unrelated ordinary docs skip it. See
 [the CI guide](../docs/ci-pipelines.md#shared-suite-plan-and-sharding). Local
-pre-push uses the same complete-PR classification and runs the complete
-`verification:gate` when selected; `check:delivery` always runs it.
+pre-push uses the same complete-PR classification for non-browser units only;
+browser suites and behavioral verification run in CI. The explicit local
+`check:delivery` always runs the complete `verification:gate`.
 
 CI partitions all accepted models across three runners by measured work
 (`scripts/verification-timings.json`), retaining the same model inventory and bounds. Every model still runs

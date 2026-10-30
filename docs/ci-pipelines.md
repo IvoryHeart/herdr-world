@@ -9,7 +9,7 @@ for compatibility with branch rules.
 | Entry point | Responsibility | Deliberate boundary |
 | --- | --- | --- |
 | Local pre-commit | `check:commit`: no live `.agents/` files, read-only formatting and lint | Quick feedback before a commit; not a delivery gate |
-| Local pre-push | `check:changed`, expanding to the full gate for configuration or gate-policy changes | Affected tests save local work; CI remains authoritative |
+| Local pre-push | `check:changed`: static checks and affected non-browser units; gate/configuration changes run all non-browser units | Affected tests save local work; CI remains authoritative |
 | CI on a PR | Validate the proposed merge; check its description and changelog policy | One shared scope decision; native platforms and browser shards keep separate runners |
 | CI on main | Validate the integrated main tree | PR success cannot prove the result of later merges |
 | Main gate | Classify failed push CI, rerun a recognized infrastructure failure once, or prepare an issue and revert | Does not merge a revert; green main resolves earlier alerts |
@@ -28,7 +28,7 @@ for compatibility with branch rules.
 | `precommit` | Compatibility alias for `check:source`; not the Git pre-commit hook |
 | `check:static` | Notices, fragments, size, commit guard, all three source type checks, Bun type checks, production build, site and specs; defined once in `scripts/check-delivery.ts` |
 | `check` | Static lane followed by tests; CI separates browsers through its existing environment selection |
-| `check:changed` | Static lane plus affected tests and behavioral verification when required |
+| `check:changed` | Unqueued static lane plus affected non-browser units; browsers and verification run in CI |
 | `check:delivery` | Static lane plus all test lanes and behavioral verification |
 | `check:pr-body <file>` | CI knowledge-map and changelog policy against a committed PR diff and draft description; optional base ref follows the file |
 | `check:docs` | Notices, fragments, formatting, site and specs for qualifying Markdown changes |

@@ -165,6 +165,12 @@ The persisted `hostsFilter.ts` affects visibility only;
 `spaceAdmission.ts` shares the navigator's capacity fairly and `WorldSearchResults.tsx`
 pages full-observation matches beyond renderer bounds.
 
+Local pre-push runs unqueued static checks and affected non-browser units through
+[the lane runner](../scripts/check-delivery.ts); CI owns browser and behavioral
+acceptance. [Command regressions](../scripts/gate-commands.test.ts) cover scope,
+log reset, disk-guard removal and queue isolation; [queue tests](../scripts/check-lock.test.ts)
+cover slot ownership and recovery.
+
 CI selection distinguishes model-backed and model-free owners through
 [coverage scope](../scripts/coverage-scope.ts) ([tests](../scripts/coverage-scope.test.ts)).
 Metadata reuse requires [source and selection proof](../scripts/ci-validation-proof.ts)

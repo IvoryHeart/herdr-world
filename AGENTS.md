@@ -110,13 +110,15 @@ bun install --frozen-lockfile
 Use focused tests and type checks when they answer a specific question. The
 pre-commit hook checks formatting and lint without writing files; the pre-push
 hook runs `bun run check:changed` for code changes: static checks, the affected
-unit tests and nearest World browser suites, and the unfiltered verification
-gate when its inputs change. CI shares the suite-selection rules and runs the full
+non-browser unit tests only. Browser suites and behavioral verification run in
+CI, where required `Delivery checks` blocks merges. Gate/configuration changes
+expand the local unit inventory; `HERDR_WORLD_PREPUSH=full` opts into all local lanes.
+CI shares the suite-selection rules and runs the full
 matrix on every main commit; `bun run check:delivery` runs it locally in parallel lanes. A Markdown-only follow-up uses `bun run check:docs`
 only when a passed code gate already covers its code, and a push that only merges
 `origin/main` (no edits beyond changelog fragments) runs `bun run check:static`.
 Heavy checks from every worktree share one machine-wide queue (one browser lane and
-one verification at a time; the gate's quiet lane alone); run browser suites via
+one verification at a time, two unit lanes; static checks bypass the queue); run browser suites via
 `bun run test <path>` so they queue too. A queued gate prints whom it waits for, so wait rather
 than bypass the hook.
 CI runs documentation checks for ordinary Markdown-only PR diffs. PRs limited
@@ -130,7 +132,8 @@ jobs for installation or binary inputs. Unknown paths, executable gate/workflow
 policy, configuration and main pushes run everything. Contributor docs and skill
 Markdown use documentation checks or named consumers; browser shard-table edits
 retain all browser suites and inventory evidence. Model-free coverage owners run
-consumer tests and the cheap coverage check; model-backed owners select models. Pre-push uses the same complete-PR classification.
+consumer tests and the cheap coverage check; model-backed owners select models. Pre-push uses the same complete-PR classification
+to select non-browser units only.
 CI splits units/web suites across two runners and verification across three model
 groups balanced by measured work; no CI test asserts a wall-clock budget (the non-blocking World latency
 trend reports timing). Verification aggregates require all
