@@ -129,7 +129,14 @@ verification and native installation work. `Delivery checks` and the protected
 macOS reports still run. Other classified changes run their affected contracts and consumers under the
 shared selection rules, with pre-push limited to non-browser units; unknown paths and every main push keep the full matrix.
 Unit/web tests use two CI runners, behavioral models three groups with complete
-source-bound aggregation; no CI test asserts a wall-clock budget (the World
+source-bound aggregation. Model-free owners use affected consumer tests and the
+cheap coverage inventory check. Contributor/skill Markdown and browser shard-table
+edits avoid the full matrix; executable gate policy and every main push keep it.
+Metadata events can reuse a passing scoped run only with the same ordered
+selection and exact PR/base/head; missing proof validates afresh.
+World and model shards balance measured work; TownCanvas's 22 cases span five
+files with the same harness. See [the CI guide](ci-pipelines.md#shared-suite-plan-and-sharding)
+for timing sources and evidence boundaries. No CI test asserts a wall-clock budget (the World
 latency trend reports timing without gating).
 Leaf failures are visible before `Delivery checks` finishes; the crew's reaction
 to a first failure is a separate workflow concern. See [pipeline ownership](ci-pipelines.md) for result requirements.
@@ -708,9 +715,9 @@ failure it prints a concise summary and the path to the complete retained log.
 Inspect that log only when needed, preserving the check's exit status. For
 review-only work, inspect exact-head CI evidence first. CI uses
 `bun run check:docs` for Markdown-only PR diffs and skips the macOS lifecycle
-on those diffs. On PR-description edits, a code PR can reuse successful full jobs on
-the exact base and head; if that proof is missing or failed, CI runs the full
-gate. The existing three required status names stay in place.
+on those diffs. On PR-description edits, a code PR can reuse a successful full
+job or an identically selected scoped job on the exact PR/base/head. Missing
+or failed proof runs fresh validation for the current scope. The existing three required status names stay in place.
 Run a local check only to investigate a specific gap or reproduce a finding; do
 not repeat a successful full gate on the same commit. When a command returns a
 running session, call `write_stdin` on that session with empty `chars` and

@@ -1,4 +1,6 @@
 import { existsSync, realpathSync } from "node:fs";
+import { balanceShards } from "./balance-shards";
+import timings from "./world-browser-timings.json";
 import { join, relative, resolve, sep } from "node:path";
 
 /**
@@ -25,43 +27,15 @@ export const worldRuntimeSuites = [
   "web/src/world/WorldTerminalHandoff.test.ts",
 ];
 
-// The suites spread across six machines, balanced by CI test seconds per file
-// (run 41083467325, 2026-10-30, pinned Chrome). The slowest file bounds the
-// slowest shard, so more machines would not finish sooner. TownCanvas, the
-// slowest and the most load-sensitive, shares its machine with no dense
-// snapshot suite (none did before the latency lane moved into the shards).
-// Per-file timings in CI artifacts guide later rebalancing.
-export const worldBrowserShards = [
-  ["SharedViewCreation", "WorldViewErrorBoundary", "ProductionContexts.town"], // 141
-  [
-    "HostsFilter.resources",
-    "HostsFilter.inspector-timeout",
-    "ProductionContexts.board",
-  ], // 143
-  [
-    "HostsFilter",
-    "HostsFilter.cold",
-    "HostsFilter.timeouts",
-    "ProductionContexts.animated",
-  ], // 191
-  [
-    "HostsFilter.actions",
-    "DeskView.browser",
-    "BoardView",
-    "useSpacesTabWindowArrangement.browser",
-    "WorldTerminalHandoff",
-  ], // 227
-  [
-    "HostsFilter.creation",
-    "HostsFilter.arrangement",
-    "windows/WindowFrame",
-    "windows/WorldPanel",
-    "groups/GroupsWindow",
-    "ProductionContexts",
-    "ConcurrentContexts",
-  ], // 116
-  ["HostsFilter.navigation", "town/TownCanvas", "HostsFilter.pending"], // 504
-].map((shard) => shard.map((name) => `web/src/world/${name}.test.ts`));
+// Six runners, longest-first by measured CI seconds (source recorded in JSON).
+// TownCanvas's original 22 cases now span five files; the inventory assertion
+// still rejects missing or duplicated suites. These weights are estimates of
+// future work, not test deadlines or runner-speed assertions.
+export const worldBrowserShards = balanceShards(
+  Object.keys(timings.seconds) as Array<keyof typeof timings.seconds>,
+  timings.seconds,
+  6,
+).map((shard) => shard.map((name) => `web/src/world/${name}.test.ts`));
 
 export const worldBrowserSuites = worldBrowserShards.flat();
 export const worldBrowserIgnorePattern = ignorePattern(worldBrowserSuites);

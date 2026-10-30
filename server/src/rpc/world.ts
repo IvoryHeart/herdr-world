@@ -2,6 +2,7 @@ import { pruneSnapshotAppearance } from "../world/appearance-prune";
 import { legacyAppearanceOps } from "../world/appearance-observation";
 import { handleAppearanceRpc } from "./appearance";
 import { handleDeskRpc } from "./desk";
+import { handleCompletionSeenRpc } from "./completion-seen";
 import { profileWrite } from "../agent/profile-store";
 import { recordSpawnClaims } from "../world/relations";
 import { WorldSnapshotAdmission } from "../bridge/world-snapshot-admission";
@@ -9,7 +10,7 @@ import { sendWorldSnapshotReply } from "../bridge/world-snapshot-reply";
 import { BoardConflictError, clientBoardOps } from "../world/board-store";
 import type { BridgeRpcContext } from "./context";
 
-/** Aggregate World methods: snapshot, board document, profiles and watchlist (world.*). */
+/** Aggregate World methods: snapshot, board document, profiles, watchlist and completion seen (world.*). */
 export function handleWorldRpc(
   rpc: BridgeRpcContext,
 ): false | Promise<false | void> {
@@ -39,6 +40,8 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
   } = rpc.services;
   if (method.startsWith("world.appearance.")) return handleAppearanceRpc(rpc);
   if (method.startsWith("world.desk.")) return handleDeskRpc(rpc);
+  if (method.startsWith("world.completion_seen."))
+    return handleCompletionSeenRpc(rpc);
   if (method === "world.snapshot") {
     let transfer: ReturnType<WorldSnapshotAdmission["open"]> | undefined;
     try {

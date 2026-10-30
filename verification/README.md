@@ -94,14 +94,19 @@ No supplemental exploration substitutes for real consumer/platform/browser check
 
 CI calls the maintained behavioral workflow as a protected Delivery checks
 dependency whenever the shared scope selects verification: verification/tooling
-and OpenSpec inputs, an inventory owner, an unknown path or a full main push.
+and OpenSpec inputs, a model-backed inventory owner, an unknown path or a full
+main push. Model-free alternative-evidence owners retain consumer tests and the
+cheap coverage inventory check instead of every model. Coverage edits affecting
+model mappings or schema metadata retain verification; unavailable baseline
+information fails closed.
 The explicit agent-tooling exception and unrelated ordinary docs skip it. See
 [the CI guide](../docs/ci-pipelines.md#shared-suite-plan-and-sharding). Local
 pre-push uses the same complete-PR classification for non-browser units only;
 browser suites and behavioral verification run in CI. The explicit local
 `check:delivery` always runs the complete `verification:gate`.
 
-CI partitions all accepted models across three runners. Every model still runs
+CI partitions all accepted models across three runners by measured work
+(`scripts/verification-timings.json`), retaining the same model inventory and bounds. Every model still runs
 its maintained bounds, replay and sensitivity checks. Partial `ci-shard` artifacts
 are not canonical evidence. The final aggregate requires all groups and every
 model exactly once, current source/revision and matching tool identities, plus

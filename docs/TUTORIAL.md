@@ -348,8 +348,10 @@ answering it. A question marked unverified came from a process World could not
 confirm runs in that pane. Board and Desk show the same question mark. **!** means urgent
 blocking, while **✓** means a finish still needs checking.
 
-**Mark reviewed** acknowledges that completion in this browser. Opening a finished
-agent's terminal also clears its reception stop; neither action proves the result
+**Mark reviewed** acknowledges that completion in every browser connected to
+this World service, so your phone and desktop agree. The service keeps the mark
+in memory: restarting World, or Herdr starting a new runtime on that host,
+forgets it. Opening a finished agent's terminal also clears its reception stop; neither action proves the result
 is correct. A later completion can need review again. Read the explanation and
 check the diff using chapter 2 before treating the work as complete.
 

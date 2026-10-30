@@ -6,6 +6,7 @@ import { asksForWorld } from "./worldAskTargets";
 import { WorldAskMark } from "./WorldAskMark";
 import { boardObservation } from "./board/boardObservation";
 import { ConnectionRecoveryBanner } from "./ConnectionRecoveryBanner";
+import { bridge } from "../api";
 import { ChevronDown, ChevronUp, Pin, Plus, Trash2 } from "lucide-react";
 import {
   type CSSProperties,
@@ -207,7 +208,6 @@ async function moveTabThroughService(
   space: BoardWorkspace,
   allowClose: boolean,
 ) {
-  const { bridge } = await import("../api");
   return (await bridge.connection(space.connectionId, space.generation).call(
     "town.move_desk",
     {
@@ -259,7 +259,6 @@ async function createTabThroughStore(
   if (typeof tabId !== "string")
     return { namingProblem: "Herdr did not say which tab it created" };
   try {
-    const { bridge } = await import("../api");
     await bridge
       .connection(space.connectionId, space.generation)
       .call("tab.rename", { tab_id: tabId, label: name });
@@ -308,7 +307,6 @@ function startLabel(kind: string) {
 const FALLBACK_KINDS = ["claude", "codex"];
 const NO_CARD_COLORS: Readonly<Record<string, CardColor>> = {};
 async function checkAnchorThroughService(host: BoardHost, anchor: BoardAnchor) {
-  const { bridge } = await import("../api");
   return (await bridge
     .connection(host.connectionId, host.generation)
     .call(
@@ -323,7 +321,6 @@ async function sendNoteThroughService(
   note: BoardNote,
   confirmRecipient?: string,
 ) {
-  const { bridge } = await import("../api");
   return (await bridge.connection(target.connectionId, target.generation).call(
     "board.send_note",
     {
