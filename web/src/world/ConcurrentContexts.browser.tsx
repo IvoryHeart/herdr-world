@@ -77,6 +77,8 @@ const measurements = {
   treeProjectionMs: 0,
   boardProjectionMs: 0,
   officeProjectionMs: 0,
+  /** Card observations still live after Board unmounts; must be none. */
+  liveCardObservations: -1,
   /** Production World work (devtools counters) during each stress phase. */
   worldWorkByPhase: {} as Record<string, Record<string, number>>,
 };
@@ -113,9 +115,20 @@ FitAddon.prototype.fit = function () {
   recordTerminalWork("fit");
   return fitTerminal.call(this);
 };
+// Card targets each observer still watches: observe adds, unobserve removes
+// one, disconnect releases all. Teardown may use either release path.
+const liveCards = new Map<ResizeObserver, Set<Element>>();
+const disconnectObserver = ResizeObserver.prototype.disconnect;
+ResizeObserver.prototype.disconnect = function () {
+  liveCards.delete(this);
+  return disconnectObserver.call(this);
+};
 const observeCard = ResizeObserver.prototype.observe;
 ResizeObserver.prototype.observe = function (...args) {
   if (args[0].classList.contains("board-card")) {
+    let cards = liveCards.get(this);
+    if (!cards) liveCards.set(this, (cards = new Set()));
+    cards.add(args[0]);
     const counts = (measurements.boardObserverWorkByPhase[
       stressPhase ?? "outside-stress"
     ] ??= {});
@@ -126,6 +139,7 @@ ResizeObserver.prototype.observe = function (...args) {
 const unobserveCard = ResizeObserver.prototype.unobserve;
 ResizeObserver.prototype.unobserve = function (...args) {
   if (args[0].classList.contains("board-card")) {
+    liveCards.get(this)?.delete(args[0]);
     const counts = (measurements.boardObserverWorkByPhase[
       stressPhase ?? "outside-stress"
     ] ??= {});
@@ -902,6 +916,10 @@ async function run() {
   );
   root.unmount();
   denseRoot.unmount();
+  measurements.liveCardObservations = [...liveCards.values()].reduce(
+    (total, cards) => total + cards.size,
+    0,
+  );
   scene.remove();
   fileHost.remove();
 }

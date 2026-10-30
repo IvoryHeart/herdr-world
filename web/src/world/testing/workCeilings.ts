@@ -53,6 +53,8 @@ export type ConcurrentWork = {
   boardRenderByPhase: Record<string, { commits: number }>;
   worldBuildUnits: number;
   worldBuildMaxSliceNodes: number;
+  /** Card observations still live after Board unmounts (-1: not recorded). */
+  liveCardObservations: number;
 };
 
 /** ConcurrentContexts: dense load at either width, per stress phase. */
@@ -118,6 +120,13 @@ export function concurrentWorkViolations(
   if (registered !== cards)
     violations.push(
       `card observers: ${registered} registered while rendering, expected ${cards}`,
+    );
+  // Whichever path teardown takes, nothing may stay observed.
+  if (measured.liveCardObservations !== 0)
+    violations.push(
+      measured.liveCardObservations < 0
+        ? "card observers: live observations after unmount were not recorded"
+        : `card observers: ${measured.liveCardObservations} still observed after unmount`,
     );
   if (measured.worldBuildUnits > 1_835_136)
     violations.push(`world build units ${measured.worldBuildUnits} > 1835136`);

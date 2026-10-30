@@ -28,6 +28,7 @@ const measured = (): ConcurrentWork => ({
   boardRenderByPhase: { render: { commits: 6 }, refresh: { commits: 2 } },
   worldBuildUnits: 1_835_136,
   worldBuildMaxSliceNodes: 256,
+  liveCardObservations: 0,
 });
 
 test("the measured dense workload is within every ceiling", () => {
@@ -76,11 +77,25 @@ test("repeated preparation or projection fails, in either suite", () => {
   ).toEqual(["production initial: office.project 380 > 1"]);
 });
 
-test("cards must register once each; releases are bounded, whichever way teardown releases them", () => {
+test("cards must register once each and all be released, whichever way teardown releases them", () => {
   const disconnected = measured();
   // Board's disconnect released most cards before their own unobserve.
   disconnected.boardObserverWorkByPhase["outside-stress"] = { unobserve: 12 };
   expect(concurrentWorkViolations(disconnected, 1440)).toEqual([]);
+  const perCard = measured();
+  perCard.boardObserverWorkByPhase["outside-stress"] = { unobserve: 1280 };
+  expect(concurrentWorkViolations(perCard, 1440)).toEqual([]);
+  const leaked = measured();
+  leaked.boardObserverWorkByPhase["outside-stress"] = {};
+  leaked.liveCardObservations = 1280;
+  expect(concurrentWorkViolations(leaked, 1440)).toEqual([
+    "card observers: 1280 still observed after unmount",
+  ]);
+  const unrecorded = measured();
+  unrecorded.liveCardObservations = -1;
+  expect(concurrentWorkViolations(unrecorded, 1440)).toEqual([
+    "card observers: live observations after unmount were not recorded",
+  ]);
   const missing = measured();
   missing.boardObserverWorkByPhase.render = { observe: 1279 };
   expect(concurrentWorkViolations(missing, 1440)).toEqual([
