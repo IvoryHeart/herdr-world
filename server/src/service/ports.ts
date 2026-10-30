@@ -14,7 +14,9 @@ export type Clock = {
 
 /**
  * Deferred work. A durable deadline is persisted wall time: schedule
- * `max(0, deadline - clock.now())` and re-arm a wake that comes early.
+ * `min(60_000, max(0, deadline - clock.now()))` and re-arm on each wake until
+ * `clock.now() >= deadline`. Timers stop while the machine sleeps; the cap
+ * bounds lateness to 60 s.
  */
 export type Scheduler = {
   schedule(callback: () => void, delayMs: number): { cancel(): void };
