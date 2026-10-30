@@ -110,7 +110,12 @@ try {
 
 let stopTask: Promise<void> | null = null;
 function stopOnce(): Promise<void> {
-  stopTask ??= Promise.all([service.stop(), cpuProfile?.stop()]).then(() => {});
+  // The port stays bound until exit: a launchd restart waits for it to free
+  // before starting the next process (service-manager.ts).
+  stopTask ??= Promise.all([
+    service.stop({ keepListener: true }),
+    cpuProfile?.stop(),
+  ]).then(() => {});
   return stopTask;
 }
 

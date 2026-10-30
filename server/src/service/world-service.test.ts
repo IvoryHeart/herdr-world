@@ -10,9 +10,18 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { readWorldCliToken } from "../config/session-secret";
+import { createLegacyConnectionRuntime } from "../connections/runtime";
 import { configureServerLogger } from "../utils/logger";
-import { openStorage } from "./storage";
-import { startTestService } from "./testing/services";
+import type { Scheduler } from "./ports";
+import { type OpenStorage, openStorage } from "./storage";
+import {
+  askThroughCli,
+  browserSocket,
+  holdingHerdr,
+  login,
+  startTestService,
+} from "./testing/services";
 import {
   MARKERS,
   runTwoServices,
@@ -193,37 +202,261 @@ test("a service whose storage cannot open releases its folder", async () => {
   rmSync(join(root, ".."), { recursive: true, force: true });
 });
 
-test("stop closes the listener before storage and releases the folder last", async () => {
-  const root = join(mkdtempSync(join(tmpdir(), "world-service-stop-")), "data");
-  const seen: { listening: boolean; locked: boolean }[] = [];
+/** Fires every timer at once, as if each budget had run out. */
+const expired: Scheduler = {
+  schedule(callback) {
+    queueMicrotask(callback);
+    return { cancel() {} };
+  },
+};
+
+/** Never fires: a stop that waits must be released by the work itself. */
+const never: Scheduler = { schedule: () => ({ cancel() {} }) };
+
+/** Today's storage, recording what `record` sees as it closes. */
+function storageClosing(record: () => unknown): OpenStorage {
+  return async (paths, ports) => {
+    const storage = await openStorage(paths, ports);
+    return {
+      ...storage,
+      close: async () => {
+        await record();
+        await storage.close();
+      },
+    };
+  };
+}
+
+function scratch(prefix: string) {
+  const top = mkdtempSync(join(tmpdir(), prefix));
+  return { top, root: join(top, "data") };
+}
+
+test("stop refuses new work and closes storage and the folder before the listener", async () => {
+  const { top, root } = scratch("world-service-stop-");
+  const lock = join(root, "instance.lock");
+  const seen: { health: number; locked: boolean }[] = [];
   let base = "";
   const started = await startTestService(
     root,
     {},
     {},
     {
+      storage: storageClosing(async () =>
+        seen.push({
+          health: (await fetch(`${base}/healthz`)).status,
+          locked: existsSync(lock),
+        }),
+      ),
+    },
+  );
+  base = started.base;
+  expect((await fetch(`${base}/healthz`)).status).toBe(200);
+  // A process about to exit keeps its port bound until it exits.
+  await started.service.stop({ keepListener: true });
+  expect(seen).toEqual([{ health: 503, locked: true }]);
+  expect(existsSync(lock)).toBeFalse();
+  expect((await fetch(`${base}/healthz`)).status).toBe(503);
+  await Promise.all([started.service.stop(), started.service.stop()]);
+  await expect(fetch(`${base}/healthz`)).rejects.toThrow();
+  rmSync(top, { recursive: true, force: true });
+});
+
+test("stopping during startup keeps Ranger from starting and waits for startup", async () => {
+  const { top, root } = scratch("world-service-startup-");
+  const entered = Promise.withResolvers<void>();
+  const gate = Promise.withResolvers<void>();
+  const events: string[] = [];
+  const started = await startTestService(
+    root,
+    {},
+    {},
+    {
+      adapters: {
+        herdr: {
+          createRuntime(options) {
+            const runtime = createLegacyConnectionRuntime(options);
+            return {
+              ...runtime,
+              startTransport: async () => {
+                entered.resolve();
+                await gate.promise;
+                return runtime.startTransport();
+              },
+              // Stopping the connection unblocks startup, a turn later.
+              stop: async () => {
+                await runtime.stop();
+                setImmediate(gate.resolve);
+              },
+            };
+          },
+        },
+      },
+      storage: storageClosing(() => events.push("storage closed")),
+    },
+  );
+  void started.connected.then(() => events.push("startup settled"));
+  await entered.promise;
+  await started.service.stop();
+  await started.connected;
+  expect(events).toEqual(["startup settled", "storage closed"]);
+  // Ranger never started, so it wrote nothing.
+  expect(existsSync(join(root, "assistant"))).toBeFalse();
+  rmSync(top, { recursive: true, force: true });
+});
+
+test("stop fails a Herdr call still waiting before storage closes, whatever the drain budget", async () => {
+  const { top, root } = scratch("wsh-");
+  const control = join(top, "c.sock");
+  const herdr = await holdingHerdr(control, "workspace.list");
+  const events: string[] = [];
+  const started = await startTestService(
+    root,
+    { socketPath: control, clientSocketPath: join(top, "r.sock") },
+    {},
+    {
+      // Runtimes without the production probe of the render socket.
+      adapters: {
+        herdr: {
+          createRuntime(options) {
+            const runtime = createLegacyConnectionRuntime(options);
+            const call = runtime.herdr.call.bind(runtime.herdr);
+            runtime.herdr.call = (method, ...rest) => {
+              const reply = call(method, ...rest);
+              if (method === "workspace.list")
+                void reply.then(
+                  () => events.push("held call answered"),
+                  () => events.push("held call failed"),
+                );
+              return reply;
+            };
+            return runtime;
+          },
+        },
+      },
+      scheduler: expired,
+      storage: storageClosing(() =>
+        events.push(
+          `storage closed (locked: ${existsSync(join(root, "instance.lock"))})`,
+        ),
+      ),
+    },
+  );
+  await started.connected;
+  const socket = await browserSocket(
+    started.base,
+    await login(started.base, "world-service-test-password"),
+  );
+  void socket.call("workspace.list", {}).catch(() => {});
+  await herdr.arrived;
+  await started.service.stop();
+  expect(events).toEqual(["held call failed", "storage closed (locked: true)"]);
+  await herdr.released;
+  socket.close();
+  await herdr.close();
+  rmSync(top, { recursive: true, force: true });
+});
+
+test("stop ends a wait for an answer before storage closes", async () => {
+  const { top, root } = scratch("world-service-wait-");
+  let closed = false;
+  let armed = false;
+  const waiting = Promise.withResolvers<void>();
+  const readsAfterClose: string[] = [];
+  const started = await startTestService(
+    root,
+    {},
+    {},
+    {
+      // A frozen clock: only stop can end the wait.
+      clock: { now: () => 1_000, monotonic: () => performance.now() },
+      scheduler: never,
       storage: async (paths, ports) => {
         const storage = await openStorage(paths, ports);
         return {
           ...storage,
+          ledger: () => {
+            const ledger = storage.ledger();
+            const ask = ledger.ask.bind(ledger);
+            ledger.ask = (id) => {
+              if (armed) waiting.resolve();
+              if (closed) readsAfterClose.push(id);
+              return ask(id);
+            };
+            return ledger;
+          },
           close: async () => {
-            seen.push({
-              listening: await fetch(`${base}/healthz`).then(
-                () => true,
-                () => false,
-              ),
-              locked: existsSync(join(root, "instance.lock")),
-            });
+            closed = true;
             await storage.close();
           },
         };
       },
     },
   );
-  base = started.base;
-  expect((await fetch(`${base}/healthz`)).status).toBe(200);
-  await Promise.all([started.service.stop(), started.service.stop()]);
-  expect(seen).toEqual([{ listening: false, locked: true }]);
-  expect(existsSync(join(root, "instance.lock"))).toBeFalse();
-  rmSync(join(root, ".."), { recursive: true, force: true });
+  await started.connected;
+  const { result } = (await (
+    await askThroughCli(started, "Ship it?")
+  ).json()) as { result: { id: string } };
+  armed = true;
+  const answer = fetch(`${started.base}/api/world/cli`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${readWorldCliToken(started.service.paths.sessionSecret)}`,
+    },
+    body: JSON.stringify({
+      command: "ask get",
+      params: { id: result.id, wait_ms: 20_000 },
+    }),
+  });
+  await waiting.promise;
+  await started.service.stop();
+  expect(readsAfterClose).toEqual([]);
+  expect(await (await answer).json()).toMatchObject({
+    ok: true,
+    result: { id: result.id, question: "Ship it?" },
+  });
+  rmSync(top, { recursive: true, force: true });
+});
+
+test("the service's clock times questions, answers and observations", async () => {
+  const { top, root } = scratch("world-service-clock-");
+  const at = 1_700_000_000_000;
+  const started = await startTestService(
+    root,
+    {},
+    {},
+    { clock: { now: () => at, monotonic: () => performance.now() } },
+  );
+  await started.connected;
+  const { result } = (await (
+    await askThroughCli(started, "Clocked?")
+  ).json()) as { result: { id: string } };
+  const cookie = await login(started.base, "world-service-test-password");
+  const socket = await browserSocket(started.base, cookie);
+  const open = (await socket.call("world.asks.get")) as {
+    asks: { id: string; at: number }[];
+  };
+  expect(open.asks.find((ask) => ask.id === result.id)?.at).toBe(at);
+  await socket.call("world.ask.answer", { id: result.id, answer: "Yes" });
+  socket.close();
+  expect(started.service.storage.ledger().ask(result.id)?.answer?.at).toBe(at);
+  const json = { cookie, "content-type": "application/json" };
+  // Nothing listens on port 9, so the refresh fails, but it is still timed.
+  expect(
+    (
+      await fetch(`${started.base}/api/world/observability/configuration`, {
+        method: "PUT",
+        headers: json,
+        body: JSON.stringify({ prometheus_url: "http://127.0.0.1:9" }),
+      })
+    ).status,
+  ).toBe(200);
+  const snapshot = (await (
+    await fetch(`${started.base}/api/world/observability/snapshot`, {
+      headers: { cookie },
+    })
+  ).json()) as { observedAt: number };
+  expect(snapshot.observedAt).toBe(at);
+  await started.service.stop();
+  rmSync(top, { recursive: true, force: true });
 });

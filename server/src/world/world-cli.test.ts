@@ -781,6 +781,7 @@ describe("questions and results", () => {
     const service = createWorldCliService({
       board: () => board,
       ledger: () => serviceLedger,
+      now: Date.now,
       connections: () => ({
         list: () => [],
         readyRuntimeLease: () => null,

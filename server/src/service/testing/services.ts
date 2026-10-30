@@ -1,3 +1,4 @@
+import * as net from "node:net";
 import { join } from "node:path";
 import { resolveDataPaths } from "../../config/data-paths";
 import type { ServerConfig } from "../../config/server-config";
@@ -37,7 +38,9 @@ export async function startTestService(
   root: string,
   overrides: Partial<ServerConfig> = {},
   environment: Record<string, string> = {},
-  deps: Partial<Pick<WorldServiceDeps, "storage">> = {},
+  deps: Partial<
+    Pick<WorldServiceDeps, "storage" | "adapters" | "clock" | "scheduler">
+  > = {},
 ) {
   const service = await createWorldService({
     config: testServerConfig(root, overrides),
@@ -115,4 +118,55 @@ export async function askThroughCli(
     },
     body: JSON.stringify({ command: "ask", params: { question } }),
   });
+}
+
+/**
+ * A Herdr control socket that answers startup requests and holds every
+ * `held` call open until its caller closes it.
+ */
+export async function holdingHerdr(path: string, held: string) {
+  const arrived = Promise.withResolvers<void>();
+  const released = Promise.withResolvers<void>();
+  const sockets = new Set<net.Socket>();
+  const server = net.createServer((socket) => {
+    sockets.add(socket);
+    socket.on("close", () => sockets.delete(socket));
+    socket.on("error", () => {});
+    let input = "";
+    socket.on("data", (chunk) => {
+      input += chunk.toString();
+      const newline = input.indexOf("\n");
+      if (newline < 0) return;
+      const request = JSON.parse(input.slice(0, newline)) as {
+        id: string;
+        method: string;
+      };
+      input = input.slice(newline + 1);
+      if (request.method === held) {
+        socket.on("close", () => released.resolve());
+        arrived.resolve();
+        return;
+      }
+      const result =
+        request.method === "ping"
+          ? { version: "0.0.0-test", protocol: 14 }
+          : {};
+      socket.write(`${JSON.stringify({ id: request.id, result })}\n`);
+      if (request.method !== "events.subscribe") socket.end();
+    });
+  });
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(path, resolve);
+  });
+  return {
+    /** A held call reached this Herdr. */
+    arrived: arrived.promise,
+    /** Its caller closed the held call's socket. */
+    released: released.promise,
+    close() {
+      for (const socket of sockets) socket.destroy();
+      return new Promise<void>((resolve) => server.close(() => resolve()));
+    },
+  };
 }

@@ -474,6 +474,7 @@ test("the actual CLI service injects the RPC-owned queue and exact lease", async
       return state.board;
     },
     ledger: () => ledger,
+    now: Date.now,
     townMoveQueues: state.context.queues,
     publishBoard: state.context.publishBoard,
     broadcast: () => {},

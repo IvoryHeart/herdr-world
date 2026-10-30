@@ -63,8 +63,11 @@ builds the service from explicit dependencies: configuration, data paths, a cloc
 a scheduler, storage and adapters (Herdr only). It composes authentication, profile
 management, Web Push, optional cost metrics, World snapshots and per-connection
 runtimes. `start()` binds the listener, then starts connections and Ranger. `stop()`
-closes the listener, stops Ranger and the connections, waits for in-flight
-requests, closes storage and releases the folder. The service never resolves a data
+admits nothing new (requests get 503 while the port stays bound), stops Ranger and
+the connections (failing Herdr calls still waiting), waits for in-flight requests,
+closes storage, releases the folder and closes the listener last. The entry keeps
+the listener until the process exits, because launchd's restart waits for the
+port to free before it starts the next process. The service never resolves a data
 path from the environment or the home folder, so tests run several services in one
 process. The
 [browser entry](../web/src/main.tsx) initializes preferences and mounts the World

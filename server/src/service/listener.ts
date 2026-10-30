@@ -76,6 +76,8 @@ export type ListenerDeps = {
   sources: ReturnType<typeof createSourcesHttpHandler>;
   /** Counts a request or message as in flight until it settles. */
   track<T>(work: Promise<T>): Promise<T>;
+  /** True once the service is stopping: nothing new is admitted. */
+  stopping(): boolean;
 };
 
 /** Bind the service's one origin: login, HTTP routes and the browser socket. */
@@ -93,6 +95,7 @@ export function listen(deps: ListenerDeps) {
     worldCli,
     settings,
     track,
+    stopping,
   } = deps;
   const {
     clients,
@@ -416,7 +419,13 @@ export function listen(deps: ListenerDeps) {
     hostname: config.host,
     tls: config.tls,
     maxRequestBodySize: terminalUploadRequestBodyLimit(),
-    fetch: (req, server) => track(respond(req, server)),
+    fetch: (req, server) =>
+      stopping()
+        ? new Response("World is stopping", {
+            status: 503,
+            headers: { "cache-control": "no-store", "retry-after": "1" },
+          })
+        : track(respond(req, server)),
     websocket: {
       perMessageDeflate: WS_PER_MESSAGE_DEFLATE,
       open(ws) {
@@ -464,7 +473,7 @@ export function listen(deps: ListenerDeps) {
         });
       },
       message(ws, message) {
-        if (!clients.has(ws)) return;
+        if (!clients.has(ws) || stopping()) return;
         const text = typeof message === "string" ? message : message.toString();
         const { id, method, connectionId, connectionGeneration } =
           parseRpcMeta(text);

@@ -154,6 +154,8 @@ async function compose(
   const { config, paths, clock, scheduler, adapters } = deps;
   const logger = serverLogger;
   const settings = storage.settings;
+  // Set when stop begins: nothing new is admitted or started after it.
+  let stopping = false;
   const snapshotAdmission = new WorldSnapshotAdmission();
   /** Town moves run one at a time per connection (see world/desk-move). */
   const townMoveQueues = new Map<string, ReturnType<typeof createMoveQueue>>();
@@ -168,9 +170,10 @@ async function compose(
       logger.warn("invalid Office observability configuration was disabled");
       return { endpoint: null, source: "none" as const };
     });
-  const officeObservability = new OfficeObservabilityService(
-    officeObservabilityBootstrap,
-  );
+  const officeObservability = new OfficeObservabilityService({
+    ...officeObservabilityBootstrap,
+    now: () => clock.now(),
+  });
   const handleOfficeObservability = createOfficeObservabilityHttpHandler({
     service: officeObservability,
     persist: async (endpoint) => {
@@ -307,6 +310,7 @@ async function compose(
   const worldCli = createWorldCliService({
     board,
     ledger: () => storage.ledger(),
+    now: () => clock.now(),
     connections: () => connectionManager,
     snapshots: () => worldSnapshots,
     sources: async () => worldSources.current(),
@@ -433,6 +437,8 @@ async function compose(
     >
   > | null = null;
   function getAssistantService() {
+    // Ranger started now would outlive stop and its data folder.
+    if (stopping) return Promise.reject(new Error("World is stopping"));
     assistantServiceTask ??= import("../assistant/service")
       .then(({ createAssistantService }) =>
         createAssistantService({
@@ -462,6 +468,7 @@ async function compose(
   }
 
   function resumeAssistantIfLoaded() {
+    if (stopping) return;
     void assistantServiceTask
       ?.then((service) => service.resume())
       .catch(() => {
@@ -703,7 +710,12 @@ async function compose(
   function drained(): Promise<void> {
     if (!inFlight.size) return Promise.resolve();
     return new Promise((resolve) => {
-      const timer = scheduler.schedule(resolve, DRAIN_TIMEOUT_MS);
+      const timer = scheduler.schedule(() => {
+        logger.warn("World stopped with requests still running", {
+          requests: inFlight.size,
+        });
+        resolve();
+      }, DRAIN_TIMEOUT_MS);
       void Promise.allSettled([...inFlight]).then(() => {
         timer.cancel();
         resolve();
@@ -711,7 +723,15 @@ async function compose(
     });
   }
 
+  /** Dispose Ranger if it was started; stopping keeps a new one from starting. */
+  async function disposeAssistant() {
+    const task = assistantServiceTask;
+    assistantServiceTask = null;
+    await task?.then((service) => service.dispose()).catch(() => {});
+  }
+
   let server: Server<{ sessionToken: string | null }> | null = null;
+  let startTask: Promise<void> | null = null;
   let stopTask: Promise<void> | null = null;
 
   return {
@@ -728,7 +748,6 @@ async function compose(
     start(): { port: number; connected: Promise<void> } {
       if (stopTask) throw new Error("World service is stopped");
       if (server) throw new Error("World service already started");
-      let connected!: Promise<void>;
       server = bindListenerBeforeConnectionStart({
         bindListener: () =>
           listen({
@@ -749,10 +768,11 @@ async function compose(
             officeObservability: handleOfficeObservability,
             sources: handleWorldSources,
             track,
+            stopping: () => stopping,
           }),
         startConnection: () => {
-          connected = startConnections();
-          return connected;
+          startTask = startConnections();
+          return startTask;
         },
         onConnectionError: (error) => {
           logger.warn("default connection startup failed", {
@@ -762,13 +782,19 @@ async function compose(
       });
       return {
         port: server.port ?? config.port,
-        connected: connected.catch(() => {}),
+        connected: startTask!.catch(() => {}),
       };
     },
-    /** Drain and release everything; safe to call more than once. */
-    stop(): Promise<void> {
+    /**
+     * Drain and release everything, closing the listener last; safe to call
+     * more than once. A process about to exit passes `keepListener`, so the
+     * port stays bound until its exit: launchd's restart waits for the port
+     * to free before it starts the next process (service-manager.ts).
+     */
+    async stop(options: { keepListener?: boolean } = {}): Promise<void> {
       stopTask ??= stopService();
-      return stopTask;
+      await stopTask;
+      if (!options.keepListener) await server?.stop(true);
     },
     /** For a dying process: release the data folder without draining. */
     releaseDataFolder,
@@ -776,12 +802,15 @@ async function compose(
 
   async function startConnections() {
     await connectionProfiles.startConfigured();
+    // Stopping fences startup: Ranger must not start after stop began.
+    if (stopping) return;
     // Resume saved work even when no browser has opened Ranger yet.
     await getAssistantService();
     resumeAssistantIfLoaded();
     browsers.notifyBrowserClientCount();
     const runtime = connectionManager.defaultReadyRuntime();
-    void runtime?.herdr
+    // Stopping the runtime fails this call, so stop can wait for it.
+    await runtime?.herdr
       .ping()
       .then((ping) =>
         logger.info("Herdr reachable", {
@@ -790,27 +819,35 @@ async function compose(
           protocol: ping.protocol,
         }),
       )
-      .catch((error) =>
+      .catch((error) => {
+        if (stopping) return;
         logger.warn("Herdr not reachable yet", {
           connection: runtime.identity.id,
           error: sanitizeConnectionError(error),
           action: "run `herdr-world herdr setup`; RPCs retry per request",
-        }),
-      );
+        });
+      });
   }
 
   async function stopService() {
-    // Admit nothing new: no reconnects, no pushes, no requests or sockets.
+    // Admit nothing new: requests get 503 while the port stays bound, and no
+    // reconnect, push, Ranger start or wait for an answer begins.
+    stopping = true;
     connectionProfiles.stopSupervision();
     webPush.stop();
+    worldCli.stop();
+    // Drop browser sockets as a process exit does; pages reconnect.
+    for (const ws of [...browsers.clients]) ws.terminate();
     try {
-      await server?.stop(true);
+      // Stop what in-flight work waits on: Ranger, then every runtime, which
+      // also fails the Herdr calls still waiting. Startup then settles
+      // fenced, and so does every request, within a bound.
+      await disposeAssistant();
+      await connectionManager.stopAll();
+      await startTask?.catch(() => {});
+      await disposeAssistant();
+      await drained();
     } finally {
-      // Stop what in-flight work waits on, then let that work settle.
-      await assistantServiceTask
-        ?.then((service) => service.dispose())
-        .catch(() => {});
-      await connectionManager.stopAll().finally(drained);
       try {
         await storage.close();
       } finally {

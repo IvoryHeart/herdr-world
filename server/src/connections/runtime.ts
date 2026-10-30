@@ -742,6 +742,9 @@ export function createLegacyConnectionRuntime(args: {
     if (disposed) return Promise.resolve();
     disposed = true;
     backgroundStarted = false;
+    // Calls still waiting on Herdr belong to this retired runtime: fail them
+    // now rather than at their timeout, so their callers can settle.
+    herdr.close();
     handleTerminalUpload.stopCleanup();
     herdr.off("event", onHerdrEvent);
     herdr.off("error", onHerdrError);
