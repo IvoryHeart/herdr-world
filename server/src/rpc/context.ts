@@ -15,6 +15,7 @@ import type { BoardOp, BoardStore } from "../world/board-store";
 import type { createMoveQueue } from "../world/desk-move";
 import type { createWorldDeskService } from "../world/desk-service";
 import type { WorldSnapshotService } from "../world/snapshot";
+import type { WorldCompletionSeenRegistry } from "../world/completion-seen";
 import type { WorldWatchlistRegistry } from "../world/watchlist";
 import type { createWorldCliService } from "../world/world-cli-service";
 
@@ -45,6 +46,7 @@ export type RpcServices = {
   publishBoardChanged(revision: number): void;
   publishProfilesChanged(revision: number): void;
   publishWatchlistChanged(revision: number): void;
+  publishCompletionSeenChanged(revision: number): void;
   publishWorldInvalidation(
     connectionId: string,
     connectionGeneration: number,
@@ -59,6 +61,7 @@ export type RpcServices = {
   snapshotAdmission: WorldSnapshotAdmission;
   townMoveQueues: Map<string, ReturnType<typeof createMoveQueue>>;
   worldWatchlist: WorldWatchlistRegistry;
+  worldCompletionSeen: WorldCompletionSeenRegistry;
   worldDesk: DeskService["registry"];
   publishDeskChanged: DeskService["publish"];
   worldCli: ReturnType<typeof createWorldCliService>;

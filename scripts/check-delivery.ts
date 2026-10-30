@@ -1,42 +1,25 @@
-import { mkdirSync, readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { CHROME, TEST, type Affected } from "./affected";
-import {
-  acquireAllCheckSlots,
-  acquireCheckSlot,
-  type CheckClass,
-  heldEnv,
-} from "./check-lock";
-import { guardDiskSpace } from "./disk-guard";
+import { acquireCheckSlot, type CheckClass, heldEnv } from "./check-lock";
 import { repositorySelection } from "./validation-scope";
 import { worldBrowserSuites } from "./world-browser-suites";
 
 /**
- * The local delivery gate, in lanes.
+ * Local checks in lanes. Static checks run first, outside the heavy queue.
+ * The default (`check:changed`, used by pre-push) runs static checks and
+ * affected non-browser units. A full selection expands only the unit inventory.
+ * CI owns browser and behavioral acceptance before merge.
  *
- *   static         format, lint, types, build, site, specs; serial and first,
- *                  because later lanes read the build
- *   verification   behavioral verification, from then on ────────────────┐
- *   unit, browser  alongside it: unit tests, and World browser suites    │
- *   quiet          once unit and browser finish: Chrome-driven tests     │
- *                  outside World, which fail when the CPU is contended   │
- *                  (verification alone leaves room) ─────────────────────┘
- *
- * `--full` runs everything (`check:delivery`). Without it (`check:changed`,
- * the pre-push default) only what the change affects runs (see affected.ts);
- * CI's full gate stays the authority. `--browser` runs only the Chrome lanes
- * (`test:browser`), and `--static` only the static lane (`check:static`, the
- * pre-push check for a push that only merges main). Each lane writes its own
- * log; the summary and any failing lane's output come last. Each lane waits
- * for its slot in the machine-wide check queue (check-lock.ts), so gates in
- * other worktrees share the CPU instead of competing: one browser lane and
- * one verification at a time, two light lanes.
+ * `--full` (`check:delivery`) additionally runs every World/web browser test and
+ * behavioral model. `--browser` runs the Chrome lanes; `--static` runs static
+ * checks only. Heavy lanes share the machine-wide browser/verification slots;
+ * non-browser units use a light slot. Logs are reset at the start of each run.
  */
 
 type Lane = {
   name: string;
-  /** "all": the lane needs the whole machine (contention-sensitive Chrome tests). */
-  queue: CheckClass | "all";
+  queue: CheckClass | null;
   commands: string[][];
   env?: Record<string, string>;
 };
@@ -56,7 +39,12 @@ const logs = join(root, ".agents/delivery/lanes");
 function scope(): Affected & { why: string } {
   if (staticOnly)
     return { full: true, reason: "requested", why: "static checks only" };
-  if (full) return { full: true, reason: "requested", why: "full gate" };
+  if (full || args.includes("--all-units"))
+    return {
+      full: true,
+      reason: "requested",
+      why: full ? "full gate" : "all non-browser units",
+    };
   const common = mergeBase(scopeBase);
   const from = base || common;
   if (!from)
@@ -120,7 +108,7 @@ function plan(selection: Affected) {
       queue: "light",
       commands: [["bun", "scripts/run-tests.ts", ...unit]],
     });
-  if (browser.length)
+  if (browser.length && (full || browserOnly))
     busy.push({
       name: "browser",
       queue: "browser",
@@ -128,14 +116,14 @@ function plan(selection: Affected) {
       env: { HERDR_WORLD_TEST_LABEL: "browser" },
     });
   const quiet: Lane[] = [];
-  if (chrome.length)
+  if (chrome.length && (full || browserOnly))
     quiet.push({
       name: "quiet",
-      queue: "all",
+      queue: "browser",
       commands: [["bun", "scripts/run-tests.ts", ...chrome, "--parallel=2"]],
     });
   const verification: Lane[] =
-    !browserOnly && (selection.full || selection.verification)
+    full && !browserOnly
       ? [
           {
             name: "verification",
@@ -155,8 +143,8 @@ async function runLane(lane: Lane): Promise<Result> {
   const log = join(logs, `${lane.name}.log`);
   const options = { lane: lane.name, worktree: basename(root) };
   const release =
-    lane.queue === "all"
-      ? await acquireAllCheckSlots(options)
+    lane.queue === null
+      ? () => {}
       : await acquireCheckSlot(lane.queue, options);
   try {
     return await runLaneCommands(lane, log);
@@ -178,7 +166,7 @@ async function runLaneCommands(lane: Lane, log: string): Promise<Result> {
       env: {
         ...process.env,
         ...lane.env,
-        ...heldEnv(lane.queue === "all" ? "browser" : lane.queue),
+        ...(lane.queue ? heldEnv(lane.queue) : {}),
       },
     });
     const pump = async (stream: ReadableStream<Uint8Array>) => {
@@ -197,32 +185,30 @@ async function runLaneCommands(lane: Lane, log: string): Promise<Result> {
   };
 }
 
-guardDiskSpace(
-  browserOnly ? "the browser checks" : full ? "the full gate" : "the gate",
-  root,
-);
 const selection = scope();
 const { busy, quiet, verification } = plan(selection);
 const lanes = [...verification, ...busy, ...quiet];
 mkdirSync(logs, { recursive: true });
+for (const name of ["static", "unit", "browser", "quiet", "verification"])
+  writeFileSync(join(logs, `${name}.log`), "");
 console.info(
-  `[gate] ${staticOnly ? "static" : browserOnly ? "browser" : tooling ? "tooling" : selection.full ? "full" : "changed"}: ${selection.why}; lanes: ${[...(browserOnly ? [] : ["static"]), ...lanes.map((lane) => lane.name)].join(", ")}`,
+  `[gate] ${staticOnly ? "static" : browserOnly ? "browser" : full ? "full" : tooling ? "tooling" : "changed"}: ${selection.why}; lanes: ${[...(browserOnly ? [] : ["static"]), ...lanes.map((lane) => lane.name)].join(", ")}`,
 );
 if (!selection.full)
   console.info(
-    `[gate] unit ${selection.unit.length}, browser ${selection.browser.length}, verification ${selection.verification ? "yes" : "no"}`,
+    `[gate] unit ${selection.unit.length}, browser 0, verification ${verification.length ? "yes" : "no"}`,
   );
 const results: Result[] = [];
 if (!browserOnly)
   results.push(
-    await runLane({ name: "static", queue: "light", commands: STATIC }),
+    await runLane({ name: "static", queue: null, commands: STATIC }),
   );
 if (results.every((result) => result.code === 0)) {
   const ok = (list: Result[]) => list.every((result) => result.code === 0);
   const tests = (async () => {
     const done = await Promise.all(busy.map(runLane));
-    // Quiet lanes need the CPU: they start once the busy lanes finish,
-    // and only if those passed.
+    // Chrome tests outside World use the same browser slot after the busy
+    // lanes finish, and only if those passed.
     return ok(done)
       ? [...done, ...(await Promise.all(quiet.map(runLane)))]
       : done;

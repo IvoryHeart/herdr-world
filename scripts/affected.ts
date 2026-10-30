@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { dirname, join, normalize } from "node:path";
+import { readCoverageScope } from "./coverage-scope";
 
 /**
  * What a change affects, for the scoped pre-push gate: the unit tests and
@@ -21,24 +22,24 @@ const RESOLVE = ["", ".ts", ".tsx", ".js", ".mjs", "/index.ts", "/index.tsx"];
 /** Changes that can alter any result: run the full gate. */
 const FULL = [
   /^package\.json$/,
-  /^(?:AGENTS|CONTRIBUTING)\.md$/,
-  /^\.agents\//,
+  /^\.agents\/(?!skills\/.*\.md$)/,
   /^(?:web|server)\/package\.json$/,
   /^bun\.lockb?$/,
   /^bunfig\.toml$/,
   /^\.github\/workflows\//,
-  /^scripts\/(?:validation-scope|ci-tests|ci-verification|ci-reuse-full-check|ci-delivery-result|check-pr-body|file-size-ratchet)\.ts$/,
+  /^scripts\/(?:validation-scope|coverage-scope|ci-validation-proof|ci-tests|ci-verification|ci-reuse-full-check|ci-delivery-result|check-pr-body|file-size-ratchet)\.ts$/,
   /(?:^|\/)tsconfig[^/]*\.json$/,
   /^web\/vite\.config\.ts$/,
   /^web\/index\.html$/,
   /^biome\.json$/,
   /^\.oxlintrc\.json$/,
   /^\.githooks\//,
-  /^scripts\/(?:affected|check-delivery|run-tests|run-world-tests|world-browser-suites)\.ts$/,
+  /^scripts\/(?:affected|check-delivery|run-tests|run-world-tests)\.ts$/,
 ];
 
 /** Inputs of behavioral verification besides the adapters' imports. */
 const VERIFICATION = [
+  /^scripts\/(?:balance-shards\.ts|verification-timings\.json)$/,
   /^verification\//,
   /^quint\//,
   /^tools\/quint\//,
@@ -194,12 +195,17 @@ export function affected(
   changed: readonly string[],
   browserSuites: readonly string[],
   owns: (path: string) => boolean = () => false,
+  models: (path: string) => boolean = owns,
 ): Affected {
   let verification = false;
   for (const path of changed) {
     if (FULL.some((rule) => rule.test(path)))
       return { full: true, reason: `${path} affects every check` };
-    if (VERIFICATION.some((rule) => rule.test(path)) || owns(path))
+    if (
+      (path !== "verification/coverage.json" &&
+        VERIFICATION.some((rule) => rule.test(path))) ||
+      models(path)
+    )
       verification = true;
   }
   const reverse = reverseOf(graph);
@@ -223,14 +229,18 @@ export function affected(
     if (tested) continue;
     // The build, which always runs, uses it (a release alias, say).
     if ([...reach.keys()].some((file) => BUILT.has(file))) continue;
-    // Code no test reaches is covered only by verification, when its
-    // adapters reach it or it is one of verification's own inputs.
-    const modeled =
+    // Unreached owners still have declared evidence: a model gate for modeled
+    // owners, or the cheap inventory check for explicit alternative evidence.
+    const covered =
       owns(path) ||
       VERIFICATION.some((rule) => rule.test(path)) ||
       [...reach.keys()].some((file) => file.startsWith("quint/"));
-    if (modeled) {
-      verification = true;
+    if (covered) {
+      verification ||=
+        models(path) ||
+        (path !== "verification/coverage.json" &&
+          VERIFICATION.some((rule) => rule.test(path))) ||
+        [...reach.keys()].some((file) => file.startsWith("quint/"));
       continue;
     }
     // A deleted file nothing still refers to cannot break anything left.
@@ -251,16 +261,7 @@ export function affected(
  * file, or a directory written with a trailing slash.
  */
 export function coverageOwners(root: string) {
-  const coverage = JSON.parse(
-    readFileSync(join(root, "verification/coverage.json"), "utf8"),
-  ) as { areas: { owner?: string }[] };
-  const owners = coverage.areas.flatMap((area) =>
-    area.owner ? [area.owner] : [],
-  );
-  return (path: string) =>
-    owners.some((owner) =>
-      owner.endsWith("/") ? path.startsWith(owner) : path === owner,
-    );
+  return readCoverageScope(root).owns;
 }
 
 /** Tracked files, and the files changed since `base` (committed or not). */
@@ -293,11 +294,13 @@ if (import.meta.main) {
   const root = process.cwd();
   const base = process.argv[2] ?? "origin/main";
   const { tracked, changed, deleted } = gitChanges(root, base, process.argv[3]);
+  const coverage = readCoverageScope(root, base);
   const result = affected(
     buildGraph(root, tracked, deleted),
     changed,
     worldBrowserSuites,
-    coverageOwners(root),
+    coverage.owns,
+    coverage.models,
   );
   console.log(JSON.stringify({ base, changed, ...result }, null, 2));
 }

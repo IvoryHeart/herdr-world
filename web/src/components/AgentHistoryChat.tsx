@@ -49,6 +49,7 @@ import {
   type HistoryDecoration,
 } from "./historyDecoration";
 import { useHistoryCatchUp } from "./useHistoryCatchUp";
+import { RECEIPT_MEMORY_NOTE } from "./chat/pendingSends";
 import "./AgentHistoryChat.css";
 
 // Treat the list as pinned while the reader is within this distance of the
@@ -145,8 +146,8 @@ const ChatBubble = memo(function ChatBubble({
             className="agent-history-chat-read"
             title={
               matched === "words"
-                ? "Chat sent the same words just before this appeared; it cannot prove this is that message."
-                : "Inferred: the first message here after Chat sent one, in a form its harness rewrites (a paste or image placeholder, or added words)."
+                ? `Chat sent the same words just before this appeared; it cannot prove this is that message. ${RECEIPT_MEMORY_NOTE}`
+                : `Inferred: the first message here after Chat sent one, in a form its harness rewrites (a paste or image placeholder, or added words). ${RECEIPT_MEMORY_NOTE}`
             }
           >
             <CheckCheck size={13} aria-hidden="true" />

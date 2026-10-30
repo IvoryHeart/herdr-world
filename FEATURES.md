@@ -121,8 +121,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     **Next** opens the next waiting agent's window,
     then finished agents' if none wait.
     The needs-you list becomes a bottom tray on phones and hides when no agent
-    is blocked. Review marks acknowledge a specific completion in this browser,
-    without certifying its correctness.
+    is blocked. Review marks acknowledge a specific completion in every browser
+    of this World, without certifying its correctness; a World restart
+    forgets them.
   - **+**, **−** and **ALL** navigate between town, building, room and desk
     detail. Drag to pan; focused arrow keys pan too. Tap a room to zoom in.
     Phones stack buildings vertically; large towns can initially show roofs.

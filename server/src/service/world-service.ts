@@ -76,7 +76,7 @@ import {
 } from "../world/observability-http";
 import { createRevisionPublisher } from "../world/revision-publisher";
 import { WorldSnapshotService } from "../world/snapshot";
-import { WorldWatchlistRegistry } from "../world/watchlist";
+import { createTerminalMarks } from "../world/terminal-marks";
 import { createWorldCliService } from "../world/world-cli-service";
 import { createBrowserClients, logDetail } from "./clients";
 import { listen } from "./listener";
@@ -262,7 +262,6 @@ async function compose(
   const readyConnectionGenerations = new Map<string, number>();
   let worldSnapshots: WorldSnapshotService<LegacyConnectionRuntime> | null =
     null;
-  const worldWatchlist = new WorldWatchlistRegistry();
   const deskService = createWorldDeskService((line) =>
     broadcast(line, "world-desk"),
   );
@@ -321,10 +320,11 @@ async function compose(
     broadcast: (line) => broadcast(line, "world-ledger"),
   });
 
-  const publishWatchlistChanged = revisionPublisher(
-    "world_watchlist_changed",
-    "world-watchlist",
-  );
+  const {
+    retire: retireTerminalMarks,
+    observe: observeHost,
+    ...terminalMarks
+  } = createTerminalMarks(revisionPublisher, deskService.observe);
 
   function publishWorldInvalidation(
     connectionId: string,
@@ -361,11 +361,7 @@ async function compose(
     connectionBootstrap.defaultConnectionId,
     (status) => {
       deskService.retire(status.id, status.generation);
-      const retired = worldWatchlist.retireConnectionGeneration(
-        status.id,
-        status.generation,
-      );
-      if (retired.changed) publishWatchlistChanged(retired.revision);
+      retireTerminalMarks(status.id, status.generation);
       publishWorldInvalidation(status.id, status.generation);
       const fields = {
         connection: status.id,
@@ -408,8 +404,8 @@ async function compose(
     (connectionId, generation) =>
       publishWorldInvalidation(connectionId, generation, true),
     undefined,
-    () => worldWatchlist.list(),
-    deskService.observe,
+    () => terminalMarks.worldWatchlist.list(),
+    observeHost,
   );
 
   const assistantContext = createAssistantContext({
@@ -689,12 +685,11 @@ async function compose(
     profiles,
     publishBoardChanged,
     publishProfilesChanged,
-    publishWatchlistChanged,
     publishWorldInvalidation,
     safeSend,
     snapshotAdmission,
     townMoveQueues,
-    worldWatchlist,
+    ...terminalMarks,
     worldDesk: deskService.registry,
     publishDeskChanged: deskService.publish,
     worldCli,

@@ -1,4 +1,4 @@
-/** The three revision-only controls; invalidations and ledger notices differ. */
+/** The revision-only controls; invalidations and ledger notices differ. */
 export function createRevisionPublisher<Client>(
   clients: Iterable<Client>,
   safeSend: (client: Client, line: string, context: string) => unknown,
@@ -7,7 +7,8 @@ export function createRevisionPublisher<Client>(
     type:
       | "world_board_changed"
       | "world_profiles_changed"
-      | "world_watchlist_changed",
+      | "world_watchlist_changed"
+      | "world_completion_seen_changed",
     context: string,
   ) =>
     (revision: number) => {

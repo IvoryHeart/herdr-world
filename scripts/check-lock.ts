@@ -16,13 +16,12 @@ import { basename, join } from "node:path";
  *
  *   browser       1   World browser suites and Chrome-driven tests
  *   verification  1   behavioral verification
- *   light         2   static checks and unit tests
+ *   light         2   non-browser unit tests
  *
- * The local gate's quiet lane (contention-sensitive Chrome tests outside
- * World) needs the whole machine, so it takes every slot of every class
- * (acquireAllCheckSlots), in one fixed order: it waits for the running
- * heavy lanes to finish, and nothing heavy starts beside it. An
- * exclusive admission lock prevents later ordinary arrivals overtaking them.
+ * Static checks bypass this queue. Chrome tests outside World use the same
+ * browser slot as World suites. The exclusive API remains available to callers
+ * that require all slots; its admission lock prevents later arrivals overtaking
+ * them while they wait in one fixed order.
  *
  * The kernel releases a lock when its holder exits, however it exits, so a
  * dead process never leaves a stale lock behind; the holder note beside each
