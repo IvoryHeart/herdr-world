@@ -274,8 +274,16 @@ captured at queue entry.
 Native movement and appearance/Board reconciliation finish in the same queue
 slot, matching the shared appearance contract. Both RPC and CLI capture
 colour intent at admission and read the latest fields after asynchronous probes,
-so operator edits survive native close cleanup and movement. Successful moves follow confirmed replacement
-IDs; failed moves reconcile only observed terminal witnesses. Unknown locations
+so operator edits survive native close cleanup and movement. Per-field edit
+revisions, bounded by current saved appearance bindings,
+distinguish an explicit reset from an untouched field during a move. After
+relocation, reconciliation replays the latest committed source/destination
+field values, preserving qualified saves addressed to the new native IDs as
+well as saves admitted against the old IDs. Compensation compares every alias
+that converges onto a restored native ID. Explicit colour intent survives
+native-close cleanup; a colour restoration supersedes that intent. This bookkeeping is transient;
+the persisted appearance schema stays the same. Successful moves follow confirmed
+replacement IDs; failed moves reconcile only observed terminal witnesses. Unknown locations
 are not guessed or retried. Board-follow errors are reported separately while
 the real move outcome is preserved. RPC keeps transport replies and synchronous
 unmatched-method decline. This extraction adds no user controls or camera policy.

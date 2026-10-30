@@ -159,7 +159,22 @@ desk keeps its explicit choice or retains parent inheritance without saving a
 new default override.
 A delayed-probe regression changes colour and status during a post-move probe;
 CLI movement preserves both latest fields at the witnessed destination, using
-the same appearance reconciliation as RPC. Source roll-up tests
+the same appearance reconciliation as RPC.
+Real appearance-RPC schedules in `town-move.test.ts` admit saves against the new
+native tab/pane IDs while moves are pending, then retain destination status,
+colour and avatar updates/resets through reconciliation. Partial patches keep
+untouched source fields, and a first destination save needs no source record.
+`appearance-edits.test.ts` checks per-field commit ordering, reset versus no
+write, effective compensation values, both alias insertion orders converging
+onto a third rollback ID, identity replacement/pruning and history
+bounded by live bindings. These extend the existing direct move/RPC evidence;
+they do not add a persisted schema or authenticated-principal protocol.
+Field ordering is a finite choice within the existing atomic Board writes;
+commit-order permutations and the actual RPC schedule exercise that choice
+without duplicating its reducer in a separate model.
+The Group conflict consumer also checks an unrelated Group's edit: the hint
+identifies the whole Board, retains the current Group values and still requires
+explicit review. Source roll-up tests
 distinguish current, stale and unknown work so unavailable counts cannot claim
 a confirmed limit warning.
 

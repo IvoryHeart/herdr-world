@@ -50,6 +50,7 @@ export function createWorldCliService(deps: {
     get: () => deps.board().get(),
     patch: (ops) => deps.board().patch(ops),
     captureColorChanges: () => deps.board().captureColorChanges(),
+    captureAppearanceChanges: () => deps.board().captureAppearanceChanges(),
   };
   let ledgerStore: WorldLedger | null = null;
   const ledger = () =>

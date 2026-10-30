@@ -10,6 +10,11 @@ import {
   trackColorEdits,
   type ColorEdit,
 } from "./board-color-moves";
+import {
+  captureAppearanceChanges,
+  trackAppearanceEdits,
+  type AppearanceEdits,
+} from "./appearance-edits";
 import { movedAppearanceOps } from "./appearance-observation";
 import {
   restoreAppearance,
@@ -594,6 +599,7 @@ function checkBounds(document: BoardDocument) {
 export class BoardStore {
   private document: BoardDocument;
   private readonly colorEdits = new Map<string, ColorEdit>();
+  private readonly appearanceEdits: AppearanceEdits = new Map();
 
   constructor(
     private readonly path: string = defaultBoardPath(),
@@ -639,6 +645,14 @@ export class BoardStore {
     };
   }
 
+  captureAppearanceChanges() {
+    return captureAppearanceChanges(
+      this.appearanceEdits,
+      this.document.revision,
+      () => this.document,
+    );
+  }
+
   /**
    * Apply every operation or none. A note edit made against an older note
    * revision is refused with the current document, so a second client never
@@ -658,6 +672,7 @@ export class BoardStore {
     replaceDataFile(this.path, payload);
     this.document = next;
     trackColorEdits(this.colorEdits, ops, next);
+    trackAppearanceEdits(this.appearanceEdits, ops, next);
     return this.get();
   }
   /**

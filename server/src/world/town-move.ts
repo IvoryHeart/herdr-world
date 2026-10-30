@@ -18,7 +18,9 @@ import {
   appearanceForMove,
   capturedMoveColors,
   reconciledAppearanceOps,
+  moveAppearanceEditOps,
 } from "./appearance-move";
+import type { AppearanceChanges } from "./appearance-edits";
 
 export type TownMoveRequest =
   | (Omit<DeskMoveRequest, "isCurrent"> & {
@@ -34,7 +36,10 @@ export type TownMoveContext = {
   isCurrent(): boolean;
   /** The service-owned map shared by every adapter. */
   queues: Map<string, ReturnType<typeof createMoveQueue>>;
-  board: Pick<BoardStore, "get" | "patch" | "captureColorChanges">;
+  board: Pick<
+    BoardStore,
+    "get" | "patch" | "captureColorChanges" | "captureAppearanceChanges"
+  >;
   publishBoard(revision: number): void;
   onFollowError(error: unknown): void;
 };
@@ -64,6 +69,7 @@ export async function executeTownMove(
     // colours here too: a preceding move or a close can have changed them.
     const before = context.board.get();
     const colorChanged = context.board.captureColorChanges();
+    const appearanceChanged = context.board.captureAppearanceChanges();
     const colorsBefore = before.appearance
       ? appearanceForMove(
           before,
@@ -91,7 +97,14 @@ export async function executeTownMove(
     // document reconciliation to finish in this slot, for both RPC and CLI.
     if (result.status === "moved" || result.status === "failed") {
       try {
-        await followMove(context, request, result, colorsBefore, colorChanged);
+        await followMove(
+          context,
+          request,
+          result,
+          colorsBefore,
+          colorChanged,
+          appearanceChanged,
+        );
       } catch (error) {
         context.onFollowError(error);
       }
@@ -106,6 +119,7 @@ async function followMove(
   result: Extract<MoveOutcome, { status: "moved" | "failed" }>,
   colorsBefore: BoardDocument["layout"]["colors"],
   colorChanged: ReturnType<BoardStore["captureColorChanges"]>,
+  appearanceChanged: AppearanceChanges,
 ) {
   const movedTab = request.kind === "desk" ? request.tab_id : null;
   const workspaceIds =
@@ -183,6 +197,21 @@ async function followMove(
         workspaceIds,
       ),
     );
+  ops.push(
+    ...moveAppearanceEditOps(
+      following,
+      ops,
+      appearanceChanged,
+      result.status === "moved" && movedTab
+        ? {
+            connectionId: context.connectionId,
+            from: movedTab,
+            to: result.tab_id,
+            workspaceIds,
+          }
+        : null,
+    ),
+  );
   if (!context.isCurrent()) throw new Error("Move runtime changed");
   if (ops.length) context.publishBoard(context.board.patch(ops).revision);
 }

@@ -24,3 +24,5 @@
   review before resubmission, and refuse replaced or ambiguously named agent selections.
 - Keep reviewed Room/Desk moves valid across incidental status, focus and revision changes.
 - Preserve live appearance edits when RPC or CLI moves a desk.
+- Preserve appearance edits and resets saved at a move's new destination, and
+  describe whole-Board form conflicts without claiming that the current Group changed.

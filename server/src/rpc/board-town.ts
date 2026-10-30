@@ -135,6 +135,7 @@ async function dispatchBoardTownRpc(
             get: () => board().get(),
             patch: (ops) => board().patch(ops),
             captureColorChanges: () => board().captureColorChanges(),
+            captureAppearanceChanges: () => board().captureAppearanceChanges(),
           },
           publishBoard: publishBoardChanged,
           onFollowError: (error) =>

@@ -18,7 +18,7 @@ export function GroupEditFeedback({
       )}
       {changed && (
         <div className="group-hint">
-          <p>The Group changed while this form was open. {current}</p>
+          <p>The Board changed while this form was open. {current}</p>
           <button type="button" onClick={onReview}>
             Use current version
           </button>

@@ -164,6 +164,12 @@ export async function verifyGroupEdits(
   );
   if (roles.isConnected) {
     check(
+      roles.textContent?.includes(
+        "The Board changed while this form was open",
+      ) && !roles.textContent.includes("The Group changed"),
+      "an unrelated Group edit is described as a whole-Board conflict",
+    );
+    check(
       roles.querySelector('[role="alert"]'),
       "Roles shows its conflict inside the form",
     );
