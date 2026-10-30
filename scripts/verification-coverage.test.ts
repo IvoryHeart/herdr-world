@@ -5,8 +5,10 @@ import coverage from "../verification/coverage.json";
 
 test("all reviewed inventory areas have explicit existing evidence and coverage decisions", () => {
   expect(coverage.schemaVersion).toBe(1);
-  expect(coverage.areas).toHaveLength(43);
-  expect(new Set(coverage.areas.map((area) => area.id)).size).toBe(43);
+  expect(coverage.areas.length).toBeGreaterThanOrEqual(43);
+  expect(new Set(coverage.areas.map((area) => area.id)).size).toBe(
+    coverage.areas.length,
+  );
   const root = resolve(import.meta.dir, "..");
   for (const [index, area] of coverage.areas.entries()) {
     expect(area.id).toBe(`Q${String(index + 1).padStart(2, "0")}`);

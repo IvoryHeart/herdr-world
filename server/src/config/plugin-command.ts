@@ -159,6 +159,11 @@ export async function runPluginCommand(
   args: string[],
   version: string,
   binary = process.execPath,
+  runNative: (
+    binary: string,
+    args: string[],
+  ) => { status: number | null; error?: Error } = (file, argv) =>
+    spawnSync(file, argv, { stdio: "inherit" }),
 ): Promise<number | null> {
   // Existing Herdr installations cache this filename and direct verb argv.
   // Keep the native binary usable as their compatibility launcher, while all
@@ -202,9 +207,7 @@ export async function runPluginCommand(
               ? ["uninstall"]
               : null;
     if (serviceArgs) {
-      const result = spawnSync(binary, ["service", ...serviceArgs], {
-        stdio: "inherit",
-      });
+      const result = runNative(binary, ["service", ...serviceArgs]);
       if (result.error)
         console.error(`herdr-world plugin: ${result.error.message}`);
       return result.status ?? 1;

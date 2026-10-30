@@ -1,7 +1,7 @@
 # Behavioral evidence
 
-`coverage.json` is the maintained assessment of the 43 areas identified by the
-[reviewed spike](../docs/quint-adoption-spike.md). IDs are stable. Source ownership,
+`coverage.json` maintains the original 43 areas identified by the
+[reviewed spike](../docs/quint-adoption-spike.md). IDs are stable; later areas are appended (Q44 covers adapter conformance). Source ownership,
 current requirements, real tests, accepted source-delivery PRs and the uncovered
 transition or evidence boundary are recorded before choosing additional models.
 An accepted source PR establishes delivery history, not a proof of every property

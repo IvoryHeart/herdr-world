@@ -21,6 +21,7 @@ Notification wiring is described in the [World startup guide](../web/src/world/R
 
 | When changing | Current contract | Start in source | Focused evidence or runbook |
 | --- | --- | --- | --- |
+| Runtime adapter descriptors, registration and conformance | [World adapters](../openspec/specs/world-adapters/spec.md) | [Static production registry](../server/src/adapters/registry.ts), [Herdr observation wrapper](../server/src/adapters/herdr.ts), [provider-neutral admission](../server/src/adapters/session.ts) | [Shared conformance](../server/src/adapters/conformance.test.ts), [synthetic source](../server/src/adapters/testing/synthetic.ts), [production exclusion](../server/src/adapters/registry.test.ts), [live Herdr check](../server/src/adapters/herdr.live.test.ts), [adapter guide](world-adapters.md), [Q44 evidence](../verification/contracts/adapter-conformance.md) |
 | Saved local/SSH profiles, runtime leases, reconnects | [Runtime federation](../openspec/specs/runtime-federation/spec.md) | [Connection manager](../server/src/connections/manager.ts), [running-server identity](../shared/herdrIdentity.ts), [per-host version view](../web/src/components/ConnectionHerdrInfo.tsx), [profile recovery](../server/src/connections/profile-service.ts), [runtime](../server/src/connections/runtime.ts), [SSH runtime](../server/src/connections/ssh-profile-runtime.ts), [Windows bridge](../server/src/bridge/ssh-windows.ts) | [Manager tests](../server/src/connections/manager.test.ts), [SSH tests](../server/src/connections/ssh-profile-runtime.test.ts), [HOME preflight recovery tests](../server/src/connections/ssh-preflight-recovery.test.ts), [Windows bridge tests](../server/src/bridge/ssh-windows.test.ts), [deployment](DEPLOYMENT.md), [failed-host recovery](world-connection-recovery.md) |
 | Browser RPC admission, origin, login, HTTP resources | [Bridge access](../openspec/specs/bridge-access/spec.md) | [Service entry](../server/src/index.ts), [RPC namespace handlers](../server/src/rpc/), [management CLI](../server/src/cli/index.ts), [browser admission](../server/src/http/browser-admission.ts), [auth](../server/src/http/auth.ts), [private signing state](../server/src/config/session-secret.ts), [browser API](../web/src/api.ts) | [Admission tests](../server/src/http/browser-admission.test.ts), [PIN tests](../server/src/http/auth-pin.test.ts), [signing-state tests](../server/src/config/session-secret.test.ts), [API tests](../web/src/api.test.ts), [security](../SECURITY.md) |
 | Planned: observation v1/v2, service incarnation, durable identity and bindings, verbs with actor policy, adapters, per-terminal settings in Herdr metadata, the effect substrate | [Protocol and identity change](../openspec/changes/world-protocol-identity/design.md) (deltas apply as each stage ships) | [Snapshot service](../server/src/world/snapshot.ts), [runtime store](../web/src/world/runtimeStore.ts), [profile store](../server/src/agent/profile-store.ts), [spawn-stamp metadata writer](../server/src/herdr/spawn-stamp.ts), [Sources verbs](../server/src/sources/http.ts) | [Verification plan](../openspec/changes/world-protocol-identity/verification-plan.md), [coverage inventory](../verification/coverage.json) |
@@ -181,6 +182,14 @@ Metadata reuse requires [source and selection proof](../scripts/ci-validation-pr
 models; [the CI guide](ci-pipelines.md#shared-suite-plan-and-sharding) describes
 weights and full-main coverage. Town's 22 browser cases share [one harness](../web/src/world/testing/TownCanvas.ts)
 and [one parameter inventory](../web/src/world/town/TownCanvas.cases.ts).
+
+Process-fixture startup and lifetime guidance is in
+[development verification](development.md#verification). The
+[diagnostics core](../scripts/browser-diagnostics.ts) and
+[plugin dispatcher](../server/src/config/plugin-command.ts) expose process seams;
+[SSH fixture forwarding](../server/src/connections/testing/inProcessSsh.ts) runs in
+the test process while preserving real child PIDs and Unix sockets. Consumer tests
+remain beside their owners; launcher and hook tests retain real CLI boundaries.
 
 Repository workflow lives in [AGENTS.md](../AGENTS.md) and
 [agent development](agent-development.md). The optional visible-team recipe is

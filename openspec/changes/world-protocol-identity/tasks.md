@@ -131,10 +131,10 @@ with the `openspec-sync-specs` skill.
 - [ ] 7.2 Add staged command evidence. "Stored" appears only after a durable commit;
   coordinate with the grey-tick wording fix in the ui-fixes seat. Verify with a test
   that memory-only acceptance shows `accepted`.
-- [ ] 7.3 Add adapter descriptors and the registry in the composition root. The Herdr
+- [x] 7.3 Add adapter descriptors and the registry in the composition root. The Herdr
   adapter wraps today's runtime. Verify with a test that a disabled adapter makes no
   requests, holds no timers and loads no browser code.
-- [ ] 7.4 Add the conformance suite (P3) and the test-only synthetic source. Verify
+- [x] 7.4 Add the conformance suite (P3) and the test-only synthetic source. Verify
   that the suite passes for the Herdr fixtures and for the synthetic source, and that a
   production build cannot register the synthetic source.
 - [ ] 7.5 Add the provider-name lint for shared code, then move harness specifics
@@ -142,6 +142,12 @@ with the `openspec-sync-specs` skill.
   registry exempt.
 - [ ] 7.6 Sync the `bridge-access` and `world-adapters` requirements, and add the verb
   and adapter areas to `verification/coverage.json`. Verify with `bun run check:docs`.
+
+- [x] 7.6a Sync the implemented runtime-observation adapter requirements into
+  `world-adapters`, document the admission boundary and add Q44 adapter conformance
+  to `verification/coverage.json`. The bridge-access/verb migration in 7.6 and
+  provider-name lint in 7.5 remain separate. The spec-required synthetic v2 crossing
+  is a named pending test until v2 exists.
 
 ## 8. Workflow substrate (item 15, then stage 5)
 

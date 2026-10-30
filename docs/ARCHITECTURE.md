@@ -6,6 +6,13 @@ This document describes Herdr World's current system contracts. See
 
 ## System overview
 
+Runtime adapter registration and its data-only hello descriptors live in the
+[adapter registry](../server/src/adapters/registry.ts). Herdr remains the sole
+production runtime; its raw topology reads preserve today's snapshot behavior.
+See [runtime observation adapters](world-adapters.md) for declared schemas,
+limits, the provider-neutral admission boundary, conformance and production
+exclusion of the test-only synthetic source.
+
 Browsers cannot open Unix domain sockets or Windows named pipes directly. A
 Bun bridge serves the frontend, authenticates browsers, and connects to Herdr:
 

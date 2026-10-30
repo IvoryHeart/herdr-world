@@ -1,5 +1,6 @@
 // First: the page runs on test time (see testing/testClock.ts).
 import { clock } from "./testing/installHostsFilterClock";
+import { Profiler } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { bridge, type ConnectionClient } from "../api";
@@ -36,10 +37,16 @@ import {
 import { TASK_NOTIFICATION_ACTIVATE_EVENT } from "../taskNotifications";
 import type { Pane, Tab, Workspace } from "../types";
 import { writeHostsFilter } from "./hostsFilter";
-import { worldRuntimeStore } from "./runtimeStore";
+import { parseWorldSnapshotResult, worldRuntimeStore } from "./runtimeStore";
+import {
+  TOWN_IDLE_WORK_CEILINGS,
+  workViolations,
+} from "./testing/workCeilings";
 import WorldFoundationApp from "./WorldFoundationApp";
+import TownView from "./TownView";
 import WorldInspectorConversationView from "./WorldInspectorConversation";
-import { worldObjectId } from "./worldObject";
+import { buildWorldObject, worldObjectId } from "./worldObject";
+import type { WorldCanvasAnchor } from "./worldConnectorGeometry";
 import "../styles/tokens.css";
 import "../styles/base.css";
 import "./world.css";
@@ -52,6 +59,11 @@ window.addEventListener("error", (event) => {
 });
 const check = (value: boolean, message: string) => {
   if (!value) failures.push(message);
+};
+// The test-time frames in which the World app committed.
+const commitFrames = new Set<number>();
+const countWorldCommit = () => {
+  commitFrames.add(clock.now());
 };
 const calls: string[] = [];
 const globals: Array<{ method: string; params: Record<string, unknown> }> = [];
@@ -78,6 +90,9 @@ const operation =
   new URLSearchParams(location.search).get("operation") ?? "filters";
 const requestedView =
   new URLSearchParams(location.search).get("view") ?? "board";
+// Idle Town proves it is drawing through the renderer's frame counters.
+if (operation === "town-idle")
+  window.__HERDR_WORLD_RENDERER_DEBUG__ = "counters";
 const coldMaster = operation === "cold-master";
 const coldHost =
   operation === "cold-host" ||
@@ -434,6 +449,113 @@ async function float(id: string) {
   await frame();
 }
 async function operationalScenario(unmount: () => void) {
+  if (operation === "town-idle") {
+    await float("alpha");
+    // Town must be drawing, so a quiet World below is idle, not broken.
+    const town = () => window.__HERDR_TOWN_RENDERER__;
+    await clock.until(
+      () => town()?.ready === true && town()!.frames > 0,
+      "Town never drew a frame",
+    );
+    // The opening flight and walks finish first, once World has not committed
+    // for half a second; ambient motion goes on. Each step draws a frame, so
+    // settling no longer than that keeps the case cheap on software GL.
+    const lastCommit = () => Math.max(0, ...commitFrames);
+    for (let waited = 0; waited < 6000; waited += 100) {
+      if (clock.now() - lastCommit() >= 500) break;
+      await clock.advance(100);
+    }
+    const desktop = document.documentElement.dataset.layout !== "mobile";
+    if (desktop)
+      check(
+        !!document.querySelector(".world-intent-connector"),
+        "Town drew no line from the open Inspector to its agent",
+      );
+    commitFrames.clear();
+    const drawn = town()?.frames ?? 0;
+    await clock.advance(2000);
+    // Ambient motion keeps drawing, at least one frame per 100 ms.
+    const idleFrames = (town()?.frames ?? 0) - drawn;
+    check(idleFrames >= 20, `Idle Town drew ${idleFrames} frames in 2 s`);
+    failures.push(
+      ...workViolations(
+        { idle: { "commit-frames": commitFrames.size } },
+        TOWN_IDLE_WORK_CEILINGS,
+        "Town",
+      ),
+    );
+    if (desktop)
+      check(
+        !!document.querySelector(".world-intent-connector"),
+        "Idle Town lost the open Inspector's line",
+      );
+    return;
+  }
+  if (operation === "town-walk-anchor") {
+    // A bare Town whose host records anchors without rendering again, so only
+    // Town's own frames can move the line while an inspected agent walks.
+    unmount();
+    const nodeId = worldObjectId("alpha", "terminal", "shared");
+    const target = document.createElement("div");
+    target.style.cssText =
+      "position:fixed;inset:0;display:flex;flex-direction:column";
+    document.body.append(target);
+    const town = createRoot(target);
+    let anchor: WorldCanvasAnchor | undefined;
+    const render = () =>
+      town.render(
+        <TownView
+          world={buildWorldObject(
+            parseWorldSnapshotResult(snapshot())!.connections,
+            "alpha",
+          )}
+          selectedId={null}
+          floatingTerminals={[{ nodeId }]}
+          onSelect={() => {}}
+          onOpenTerminal={async () => {}}
+          onConversationNodeAnchorsChange={(anchors) => {
+            anchor = anchors?.[nodeId];
+          }}
+        />,
+      );
+    render();
+    await clock.advance(6000);
+    const end = () => (anchor ? `${anchor.x},${anchor.y}` : "");
+    const start = end();
+    check(!!start, "Town reported no anchor for the Inspector's agent");
+    // The agent leaves the lounge for its desk; the camera stays still.
+    pane.agent_status = "working";
+    pane.revision += 1;
+    render();
+    const samples = [start];
+    const resting = () =>
+      samples.length > 10 &&
+      samples
+        .slice(-10)
+        .every((value) => value === samples[samples.length - 1]);
+    for (
+      let step = 0;
+      step < 600 && !(samples.some((value) => value !== start) && resting());
+      step += 1
+    ) {
+      await clock.advance(100);
+      samples.push(end());
+    }
+    const moves = samples.filter(
+      (value, i) => i > 0 && value !== samples[i - 1],
+    );
+    check(
+      moves.length >= 10,
+      `The Inspector's line moved ${moves.length} times while its agent walked`,
+    );
+    check(
+      resting() && samples[samples.length - 1] !== start,
+      `The Inspector's line did not rest on the arrived agent (${start} → ${samples.slice(-3).join(" ")})`,
+    );
+    flushSync(() => town.unmount());
+    target.remove();
+    return;
+  }
   if (operation.startsWith("pending-inspector-")) {
     const client = bridge.connection("alpha", 7);
     const request = {
@@ -2330,6 +2452,9 @@ async function run() {
   writeOfficePreferences(worldLocalStorage, {
     ...DEFAULT_OFFICE_PREFERENCES,
     townOpens: operation === "spaces-notifications" ? "chat" : "terminal",
+    // Calm Town draws only while something moves, so the walk case spends
+    // its test time on the walk rather than on ambient frames.
+    townCalm: operation === "town-walk-anchor",
   });
   if (coldMaster)
     writeOfficePreferences(worldLocalStorage, {
@@ -2815,7 +2940,13 @@ async function run() {
   const host = document.createElement("div");
   document.body.append(host);
   let root = createRoot(host);
-  flushSync(() => root.render(<WorldFoundationApp />));
+  flushSync(() =>
+    root.render(
+      <Profiler id="world" onRender={countWorldCommit}>
+        <WorldFoundationApp />
+      </Profiler>,
+    ),
+  );
   try {
     if (admissionScenario) {
       await clock.advance(150);
