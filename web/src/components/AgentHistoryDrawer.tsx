@@ -24,7 +24,6 @@ import {
   connectionClientScopeKey,
   useConnectionClient,
 } from "../useConnectionClient";
-import { CodexSessionLink } from "./CodexSessionLink";
 import type { Pane } from "../types";
 import {
   DEFAULT_INSPECTOR_NAVIGATION_RATIO,
@@ -33,13 +32,12 @@ import {
 import { formatUiDateTime, formatUiRelativeTime } from "../uiLocale";
 import { prefersReducedMotion, shortId } from "../utils";
 import { AgentIcon } from "./AgentIcon";
+import { CodexSessionLink } from "./CodexSessionLink";
 import { AgentMessageContent } from "./AgentMessageContent";
 import { AgentMessageDialog } from "./AgentMessageDialog";
 import { AgentHistoryCard } from "./AgentHistoryCard";
 import { AgentHistoryChat } from "./AgentHistoryChat";
 import { useAgentHistoryWindow } from "./useAgentHistoryWindow";
-import { HistoryDetailRow as DetailRow } from "./HistoryDetailRow";
-import { HistoryTerminalComposer } from "./HistoryTerminalComposer";
 import { AgentHistoryFilters } from "./AgentHistoryFilters";
 import { ConversationMinimap } from "./ConversationMinimap";
 import {
@@ -288,10 +286,8 @@ export function AgentHistoryDrawer({
     const timer = window.setInterval(() => {
       if (document.visibilityState === "visible") loadSession();
     }, 4000);
-    return () => {
-      window.clearInterval(timer);
-    };
-  }, [loadSession, open, pane.terminal_id]);
+    return () => window.clearInterval(timer);
+  }, [loadSession, open]);
 
   useEffect(() => {
     if (!open) {
@@ -655,16 +651,6 @@ export function AgentHistoryDrawer({
           {historyMinimap("auto")}
         </div>
       )}
-      <HistoryTerminalComposer
-        key={connectionClientScopeKey(
-          connectionClient,
-          pane.pane_id,
-          pane.terminal_id,
-        )}
-        pane={pane}
-        open={open}
-        onSent={refreshAll}
-      />
     </div>
   );
   const changeView = (next: AgentHistoryView) => {
@@ -751,7 +737,6 @@ export function AgentHistoryDrawer({
         } ${wide ? "is-wide" : ""}`}
         aria-label="Agent session"
         aria-hidden={!open}
-        ref={(node) => node?.toggleAttribute("inert", !open)}
       >
         <div className="agent-history-drawer-head">
           <div className="agent-history-identity">
@@ -982,5 +967,33 @@ export function AgentHistoryDrawer({
         onClose={closeSessionPreview}
       />
     </>
+  );
+}
+
+function DetailRow({
+  label,
+  value,
+  copyable = false,
+}: {
+  label: string;
+  value: string;
+  copyable?: boolean;
+}) {
+  return (
+    <div className="agent-history-detail-row">
+      <span>{label}</span>
+      <code title={value}>{value}</code>
+      {copyable ? (
+        <button
+          type="button"
+          className="agent-history-icon"
+          onClick={() => void copyTextWithFeedback(value)}
+          aria-label={`Copy ${label.toLowerCase()}`}
+          title={`Copy ${label.toLowerCase()}`}
+        >
+          <Copy size={13} />
+        </button>
+      ) : null}
+    </div>
   );
 }

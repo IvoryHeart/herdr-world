@@ -43,10 +43,6 @@ async function registerDomTests() {
     document: browser.document,
     navigator: browser.navigator,
     HTMLElement: browser.HTMLElement,
-    HTMLInputElement: browser.HTMLInputElement,
-    NodeFilter: browser.NodeFilter,
-    MutationObserver: browser.MutationObserver,
-    getComputedStyle: browser.getComputedStyle.bind(browser),
     Element: browser.Element,
     Node: browser.Node,
     Event: browser.Event,
@@ -76,9 +72,7 @@ async function registerDomTests() {
     dispatchEvent: () => true,
     onchange: null,
   })) as unknown as typeof browser.matchMedia;
-  const { act, createContext, createElement, StrictMode } = await import(
-    "react"
-  );
+  const { act, createElement, StrictMode } = await import("react");
   const { createRoot } = await import("react-dom/client");
   const { flushSync } = await import("react-dom");
   // Event-driven session history: happy-dom does not model traversal reliably.
@@ -151,8 +145,7 @@ async function registerDomTests() {
     terminal_id: string;
     workspace_id: string;
     tab_id: string;
-    agent?: string;
-    agent_status?: string;
+    agent: string;
   };
   const paneA: Pane = {
     pane_id: "pane-a",
@@ -199,9 +192,6 @@ async function registerDomTests() {
   }[] = [];
   const notices: { detail?: string; message: string }[] = [];
   let failPathInput = false;
-  let integrationResult: Promise<unknown> = Promise.resolve({
-    integrations: [],
-  });
   const upload = () =>
     new Promise<string>((resolve, reject) => uploads.push({ resolve, reject }));
   mock.module("../terminalImageUpload", () => ({
@@ -223,16 +213,13 @@ async function registerDomTests() {
     revokeTerminalAttachment: noop,
     subscribe: () => noop,
   };
-  const OperationalContext = createContext(null);
   mock.module("../store", () => ({
-    OperationalContext,
     useOperationalStore: () => mockStore,
     store: mockStore,
     useStoreSelector: (selector: (value: typeof state) => unknown) =>
       selector(state),
     shallowEqual: Object.is,
     terminalNavigationLoading: () => false,
-    useEndpointCreationReason: () => null,
   }));
   mock.module("../api", () => ({
     UncertainRequestError: class extends Error {},
@@ -242,8 +229,6 @@ async function registerDomTests() {
         const key = `${id}:${generation}:${runtime}`;
         if (!clients.has(key)) {
           clients.set(key, {
-            connectionId: id,
-            serverRuntimeGeneration: runtime,
             generation,
             isCurrent: () =>
               state.activeConnectionId === id &&
@@ -253,13 +238,6 @@ async function registerDomTests() {
             acceptsServerGeneration: () => true,
             call: async (method: string, params: Record<string, unknown>) => {
               calls.push({ method, params });
-              if (method === "integration.list") return integrationResult;
-              if (method === "pane.get")
-                return {
-                  pane: state.panes.find(
-                    (pane) => pane.pane_id === params.pane_id,
-                  ),
-                };
               if (method === "pane.send_input" && failPathInput)
                 throw new Error("uncertain write");
               return {};
@@ -426,7 +404,6 @@ async function registerDomTests() {
     uploads.length = 0;
     notices.length = 0;
     failPathInput = false;
-    integrationResult = Promise.resolve({ integrations: [] });
     terminalListeners.clear();
     scrollDisabledReason = null;
     scrollReason.mockClear();
@@ -602,155 +579,6 @@ async function registerDomTests() {
     state = { ...state, ...values };
     await act(async () => render());
   }
-  async function setLauncherPane(agent?: string, workspaceId = "workspace-a") {
-    const update = <T extends Pane>(pane: T): T =>
-      pane.pane_id === "pane-a"
-        ? { ...pane, agent, agent_status: "unknown", workspace_id: workspaceId }
-        : pane;
-    state = {
-      ...state,
-      panes: state.panes.map(update),
-      layout: { ...state.layout, panes: state.layout.panes.map(update) },
-    };
-    if (root) await act(async () => render());
-  }
-
-  test.each([undefined, "", "   ", "claude", "pi", "pad", "future-agent"])(
-    "launcher is shell-only with agent=%s, regardless of unknown status",
-    async (agent) => {
-      await setLauncherPane(agent);
-      await mount(true);
-      expect(!!container.querySelector(".agent-launcher-trigger")).toBe(
-        !agent?.trim(),
-      );
-      await setLauncherPane(agent, "");
-      expect(container.querySelector(".agent-launcher-trigger")).toBeNull();
-    },
-  );
-
-  test("shell-to-agent updates unmount an open launcher and ignore late detection without replacing the editor", async () => {
-    let finishDetection!: (value: unknown) => void;
-    integrationResult = new Promise((resolve) => {
-      finishDetection = resolve;
-    });
-    await setLauncherPane();
-    await mount(true);
-    await choose("composer");
-    await act(async () => writeTerminalComposerDraft(draftKey, "keep draft"));
-    const editor = container.querySelector<HTMLTextAreaElement>(
-      "textarea.terminal-composer-input",
-    )!;
-    editor.setSelectionRange(1, 4);
-    await click(".agent-launcher-trigger");
-    expect(document.querySelector(".agent-launcher-panel")).not.toBeNull();
-    expect(
-      calls.filter((call) => call.method === "integration.list"),
-    ).toHaveLength(1);
-    await setLauncherPane("pad");
-    expect(container.querySelector(".agent-launcher-trigger")).toBeNull();
-    expect(document.querySelector(".agent-launcher-panel")).toBeNull();
-    expect(container.querySelector("textarea.terminal-composer-input")).toBe(
-      editor,
-    );
-    expect(editor.value).toBe("keep draft");
-    expect(editor.selectionStart).toBe(1);
-    expect(editor.selectionEnd).toBe(4);
-    await act(async () => finishDetection({ integrations: [] }));
-    expect(document.querySelector(".agent-launcher-panel")).toBeNull();
-    expect(
-      calls.some((call) =>
-        ["tab.create", "pane.send_input"].includes(call.method),
-      ),
-    ).toBe(false);
-  });
-
-  test.each(["composer", "direct", "existing-draft", "send-failure"])(
-    "agent selection sends once with Enter from %s and retains unsent text",
-    async (initial) => {
-      integrationResult = Promise.resolve({
-        integrations: [
-          {
-            target: "pi",
-            label: "Pi",
-            command: "pi",
-            available: true,
-            state: "current",
-          },
-        ],
-      });
-      await setLauncherPane();
-      await mount(true);
-      await choose(initial === "direct" ? "direct" : "composer");
-      const draft =
-        initial === "existing-draft" ? "keep my draft\nwith another line" : "";
-      await act(async () => writeTerminalComposerDraft(draftKey, draft));
-      const editor = container.querySelector<HTMLTextAreaElement>(
-        "textarea.terminal-composer-input",
-      )!;
-      editor.setSelectionRange(1, 5);
-      const before = calls.length;
-      failPathInput = initial === "send-failure";
-      await click(".agent-launcher-trigger");
-      const pi = document.querySelector<HTMLButtonElement>(
-        'button[aria-label="Pi"]',
-      )!;
-      expect(pi).not.toBeNull();
-      await act(async () => {
-        pi.click();
-        pi.click();
-      });
-      expect(calls.slice(before).map((call) => call.method)).toEqual([
-        "integration.list",
-        ...(draft ? [] : ["pane.send_input"]),
-      ]);
-      if (!draft)
-        expect(calls[calls.length - 1]?.params).toEqual({
-          pane_id: "pane-a",
-          text: "pi",
-          keys: ["enter"],
-        });
-      expect(state.selectedPaneId).toBe("pane-a");
-      expect(state.layout.tab_id).toBe("tab-a");
-      expect(container.querySelector("textarea.terminal-composer-input")).toBe(
-        editor,
-      );
-      const expected = draft || (failPathInput ? "pi" : "");
-      expect(editor.value).toBe(expected);
-      expect(readTerminalComposerDraft(draftKey)).toBe(expected);
-      if (draft) {
-        expect(editor.selectionStart).toBe(1);
-        expect(editor.selectionEnd).toBe(5);
-      }
-      expect(document.activeElement).not.toBe(editor);
-      expect(
-        container
-          .querySelector(".terminal-composer")
-          ?.getAttribute("data-input-mode"),
-      ).toBe("composer");
-      if (draft)
-        expect(document.querySelector('[role="alert"]')?.textContent).toContain(
-          "Clear Message",
-        );
-      else {
-        expect(document.querySelector(".agent-launcher-panel")).toBeNull();
-        expect(notices.map((notice) => notice.detail)).toEqual(
-          failPathInput ? ["uncertain write"] : [],
-        );
-      }
-    },
-  );
-
-  test("desktop open shell composer never mounts the mobile launcher", async () => {
-    mobileLayout = false;
-    await setLauncherPane();
-    await mount(true);
-    expect(container.querySelector(".terminal-composer")).not.toBeNull();
-    expect(container.querySelector(".agent-launcher-trigger")).toBeNull();
-    expect(calls.some((call) => call.method === "integration.list")).toBe(
-      false,
-    );
-  });
-
   function expectInputBlocked(term = currentTerminal()) {
     const before = calls.filter(
       (call) => call.method === "terminal.input",

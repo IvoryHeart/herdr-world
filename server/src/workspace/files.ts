@@ -637,17 +637,8 @@ export function createFileHandlers({
       const worktree = listed.worktrees?.find(
         (entry) => entry.path === params.worktree_path,
       );
-      // A definite answer, unlike transport failures: the browser must not
-      // keep showing this target's previous request as last known.
       if (!worktree)
-        return {
-          state: "error" as const,
-          root: "",
-          branch: "",
-          remotes: [],
-          refreshedAt: new Date().toISOString(),
-          message: "Worktree is unavailable in this repository.",
-        };
+        throw new Error("Worktree is unavailable in this repository.");
       if (worktree.is_bare || worktree.is_prunable)
         return {
           state: "unsupported" as const,

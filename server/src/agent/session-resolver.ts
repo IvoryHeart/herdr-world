@@ -612,10 +612,10 @@ export async function resolveAgentSessionInfo(
                   ? `No local Antigravity session was found for ${cwd}. Start Antigravity in this directory, then refresh.`
                   : "Herdr did not report a working directory for this Antigravity pane."
                 : agent === "codex"
-                  ? "Herdr has not received this pane's Codex session. Install or update the Codex integration on the agent's machine, then start or resume Codex with --no-daemon so its hooks use this pane's environment. For an existing conversation, use /title and add Thread ID to identify it without restarting."
+                  ? "This pane isn't linked to a Codex session. In Codex, run /title and add Thread ID, or link the session by ID."
                   : "Herdr has not received an agent session id for this pane. Install the Herdr integration for this agent and start a new agent session.",
       command:
-        agent === "grok" || agent === "muse"
+        agent === "grok" || agent === "muse" || agent === "codex"
           ? undefined
           : integrationInstallCommand(agent),
       updated_at: new Date(0).toISOString(),

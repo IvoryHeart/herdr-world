@@ -108,17 +108,3 @@ are adapted to 18, and qualified focus/browser regressions remain required.
 The release-only v0.8.7 version and upstream asset-budget bump are adapted to
 World's own release lifecycle and existing enforced budgets. These outstanding
 workflow and React divergences remain proposals for owner approval.
-
-## Assessment for source b84ccd53 (22 October 2026)
-
-The eight commits from 1a81c5da through v0.8.8 contain no workflow/action edits or
-React dependency changes. No new action security fix or platform requirement in
-this range changes the existing workflow-control decisions. World controls and
-U1's DOMPurify 3.4.17 / undici 8.12.3 security updates remain unchanged. The React
-18 compatibility condition still applies: History's inert attribute is set through
-the DOM, PR refresh callbacks use World's effect-callback adapter, and new composer
-and launcher consumers run on 18.3.1. No major migration is proposed or accepted.
-The existing action and React follow-up owners, acceptance and revisit triggers
-remain unchanged; their unmet acceptance stays visible. World release identity,
-asset budgets, top app bar, tab-window restoration and session binding are retained
-through compatible adaptations recorded in UPSTREAM.md and the disposition ledger.

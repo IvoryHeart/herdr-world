@@ -4,11 +4,10 @@
 
 .worktree-list {
   display: grid;
-  gap: 0;
+  gap: 8px;
   max-height: min(420px, calc(100vh - 280px));
   margin-top: 10px;
   overflow: auto;
-  padding: 4px;
 }
 
 .worktree-search-field {
@@ -17,9 +16,9 @@
 
 .worktree-option {
   padding: 9px 10px;
-  background: transparent;
-  border: 0;
-  border-radius: 7px;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
 }
 
 .worktree-option-open {
@@ -31,12 +30,12 @@
   min-height: 56px;
   padding: 0;
   text-align: left;
-  background: transparent;
+  background: var(--input-bg);
   border: 0;
 }
 
-.worktree-option:hover,
-.worktree-option:focus-within {
+.worktree-option:hover {
+  border-color: var(--accent);
   background: var(--accent-soft);
 }
 

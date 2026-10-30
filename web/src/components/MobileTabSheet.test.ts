@@ -29,7 +29,7 @@ test.skipIf(!chrome)(
         const asset = assets.get(path);
         if (asset) return new Response(asset);
         return new Response(
-          '<head><link rel="stylesheet" href="/MobileTabSheet.browser.css"><script type="module" src="/MobileTabSheet.browser.js"></script></head><body></body>',
+          '<head><script type="module" src="/MobileTabSheet.browser.js"></script></head><body></body>',
           { headers: { "Content-Type": "text/html" } },
         );
       },
@@ -92,8 +92,6 @@ test.skipIf(!chrome)(
         ),
       ]);
       expect(observed).toEqual({
-        touchRows: true,
-        flatRows: true,
         button: true,
         events: [
           "restore:alpha",

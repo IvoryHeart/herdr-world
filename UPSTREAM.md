@@ -6,9 +6,10 @@ separately installed [`herdrdev/herdr`](https://github.com/herdrdev/herdr) runti
 
 Current synchronization points:
 
-- Roamgate source: v0.8.8, `b84ccd53db19701308a8bfb4a7002db1e4559490`
-  (22 October 2026). This integration records the exact release commit as a Git
-  merge parent, following `1a81c5daa49fe49e55a5eafbe88e5d8ce94a4376`.
+- Roamgate source: main after v0.8.7, `1a81c5daa49fe49e55a5eafbe88e5d8ce94a4376`
+  (20 October 2026; five unreleased commits after v0.8.7). This integration records
+  the exact head as a Git merge
+  parent, following `5ce1d8d620549226de76321303e7bffa911ae371`.
 - Security dependency updates cherry-picked after that source head:
   [DOMPurify 3.4.17](https://github.com/powerfooI/roamgate/commit/2c67731651ade2592c798687636cd0a486547fb4)
   and [undici 8.12.3](https://github.com/powerfooI/roamgate/commit/f428337b9ed6b85687d030a60a03adfab32651d8).
@@ -59,35 +60,6 @@ native blur. Herdr setup now pins 0.9.5 with the official five-platform checksum
 its protocol remains 22 and endpoint generation remains 1. Herdr's hotfixes belong
 to the external runtime, including its Codex integration migration; World does not
 install or restart a user's existing runtime during source integration.
-
-The v0.8.8 refresh adopts command-picker list styling, editable mobile shell-agent
-launch commands, History Chat terminal input and image uploads, a simpler
-conversation minimap, and PR/MR last-known status through refresh failures and
-paused rebases. World's managed-window tab sheet and top-right More menu receive
-the list chrome while retaining their navigation and positioning. Agent launching
-sits beside Message and the Direct-mode hint, with commands
-stored in World's per-connection browser namespace. Selecting a command sends it
-once with Enter; opening or editing the picker does not execute it.
-
-History keeps World's bounded cursor/window hook and captured connection client.
-Its terminal input shares the pane's runtime-qualified draft and submission lock;
-retired sends restore the draft, and successful late uploads retain paths in the
-original draft. Busy/unknown agents require explicit confirmation. World's primary
-Chat keeps its session-fingerprint authority, attachments and receipts.
-Codex launches default to `--no-daemon` so each pane's hooks inherit its environment;
-the attributed optional Bash/Zsh helper supports typed commands too. World retains
-explicit linking, title precedence and read-only daemon inference for compatibility.
-Missing-session guidance now offers the integration install command and pane-scoped
-launch instructions alongside existing `/title` thread-ID recovery. This does not
-install or restart an external runtime.
-
-All eight incoming commits, including release metadata, are classified in the
-ledger. The upstream version-only release commit is adapted to World's existing
-0.2.7 identity; React 18, asset budgets and U1's DOMPurify/undici updates remain.
-There are no incoming workflow/control edits or React dependency changes. The
-three outstanding workflow/React decisions are reassessed for this frozen source
-in [the follow-up assessment](docs/upstream-follow-ups.md#assessment-for-source-b84ccd53-22-october-2026);
-this integration introduces no new deferral or policy exception.
 
 World retains its identity, local/SSH connection ownership, same-origin access,
 session-bound push revocation, aggregate visual views, isolated browser storage,

@@ -4,7 +4,6 @@ import { useLayoutPreferences } from "../layoutPreferences";
 import { WorkspaceInspectorLocationSheet } from "./WorkspaceInspectorLocationSheet";
 import { ChevronDown } from "lucide-react";
 import type { ConnectionClient } from "../api";
-import { connectionClientScopeKey } from "../useConnectionClient";
 import type { Workspace } from "../types";
 import type { AgentWorktreeView } from "../useAgentWorktree";
 import { AgentWorktreeLine, AgentWorktreePicker } from "./AgentWorktreePicker";
@@ -67,18 +66,6 @@ export function WorkspaceInspectorLocation({
       {worktree ? <AgentWorktreePicker view={worktree} /> : null}
       {!worktree || worktree.target ? (
         <PullRequestCard
-          key={connectionClientScopeKey(
-            client,
-            client.serverRuntimeGeneration,
-            workspace.workspace_id,
-            worktree?.selected?.canonicalRoot ??
-              workspace.worktree?.checkout_path,
-            workspace.cwd,
-            worktree
-              ? worktree.selected?.branch
-              : workspace.worktree?.git_status?.branch,
-            worktree?.target,
-          )}
           client={client}
           workspaceId={workspace.workspace_id}
           branch={

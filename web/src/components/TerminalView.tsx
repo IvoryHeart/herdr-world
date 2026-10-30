@@ -107,7 +107,7 @@ import {
   terminalComposerDraftKey,
   terminalComposerScopeGeneration,
   terminalComposerDraftPaneIds,
-  sendTerminalComposerText,
+  terminalComposerRequest,
 } from "../terminalComposer";
 import {
   registerTerminalConnectionDisposer,
@@ -3494,8 +3494,12 @@ export function TerminalView({
     };
   }, [store]);
 
-  const submitTerminalComposer = (text: string, submit: boolean) =>
-    sendTerminalComposerText(connectionClient, paneIdRef.current, text, submit);
+  const submitTerminalComposer = async (text: string, submit: boolean) => {
+    const targetPaneId = paneIdRef.current;
+    if (!targetPaneId) throw new Error("No active pane");
+    const request = terminalComposerRequest(targetPaneId, text, submit);
+    await connectionClient.call(request.method, request.params);
+  };
   const uploadComposerImage = (file: File, onProgress?: UploadProgress) =>
     uploadTerminalImage(connectionClient, file, onProgress);
   const uploadComposerFile = (file: File, onProgress?: UploadProgress) =>
@@ -3613,9 +3617,6 @@ export function TerminalView({
       key={composerDraftKey}
       draftKey={composerDraftKey}
       paneId={pane.pane_id}
-      workspaceId={pane.workspace_id}
-      tabId={pane.tab_id}
-      terminalId={pane.terminal_id}
       open={composerOpen}
       accessoriesVisible={visible}
       reserved={visible && touchHandles.length > 0}

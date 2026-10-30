@@ -28,16 +28,6 @@ The
 [binding tests](../server/src/agent/codex-daemon-binding.test.ts) cover transport
 failure, collisions, connection isolation and refusal of inferred input authority.
 
-History's Details Chat input is separate from the primary session-bound Chat
-composer. [HistoryTerminalComposer](../web/src/components/HistoryTerminalComposer.tsx)
-adapts the shared [History composer](../web/src/components/AgentHistoryComposer.tsx)
-to World clients and runtime-qualified drafts. The
-[mobile agent launcher](../web/src/components/AgentLauncher.tsx) resolves integrations
-on the captured connection; [command preferences](../web/src/agentLauncher.ts) use
-the World storage namespace per connection and agent. The optional attributed
-[Codex shell helper](../scripts/codex-herdr.sh) applies pane-scoped launch flags;
-see [History guidance](HISTORY.md#pane-scoped-codex-launches).
-
 ## Process and request path
 
 ```text

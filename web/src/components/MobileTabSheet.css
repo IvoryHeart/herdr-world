@@ -9,13 +9,13 @@
   .mobile-tab-sheet {
     display: flex;
     flex-direction: column;
-    gap: 0;
+    gap: 8px;
     width: 100%;
     max-height: min(62dvh, 430px);
-    padding: 0 0 calc(4px + env(safe-area-inset-bottom, 0px));
+    padding: 12px 12px calc(12px + env(safe-area-inset-bottom, 0px));
     background: var(--panel);
-    border: 1px solid var(--viewer-border);
-    border-radius: 10px 10px 0 0;
+    border-top: 1px solid var(--border);
+    border-radius: 16px 16px 0 0;
     box-shadow: var(--shadow-lg);
     outline: none;
   }
@@ -25,44 +25,26 @@
     flex: 0 0 auto;
     align-items: center;
     justify-content: space-between;
-    min-height: 44px;
-    padding: 0 4px 0 12px;
-    border-bottom: 1px solid var(--viewer-border);
-    color: var(--muted);
-    font-size: 11px;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
-  }
-
-  .mobile-tab-sheet-head .close-button {
-    width: max(44px, calc(44px / var(--ui-scale, 1)));
-    height: max(44px, calc(44px / var(--ui-scale, 1)));
-    border: 0;
-    border-radius: 7px;
-    background: transparent;
-    color: var(--muted);
   }
 
   .mobile-tab-sheet-head h3 {
     margin: 0;
-    font-size: inherit;
+    font-size: 14px;
   }
 
   .mobile-tab-sheet-list {
     display: flex;
     flex: 1 1 auto;
     flex-direction: column;
-    gap: 0;
+    gap: 4px;
     min-height: 0;
     overflow-y: auto;
-    overscroll-behavior-y: contain;
-    padding: 4px;
   }
 
   .mobile-tab-sheet-row {
     display: flex;
     align-items: center;
-    gap: 0;
+    gap: 4px;
   }
 
   .mobile-tab-sheet-focus {
@@ -71,17 +53,17 @@
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    min-height: max(44px, calc(44px / var(--ui-scale, 1)));
     padding: 9px 10px;
-    border: 0;
-    border-radius: 7px;
-    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg);
     color: var(--text);
     font-size: 13px;
     text-align: left;
   }
 
   .mobile-tab-sheet-row.is-active .mobile-tab-sheet-focus {
+    border-color: var(--accent);
     background: var(--accent-soft);
     color: var(--text-strong);
   }
@@ -94,14 +76,14 @@
   }
 
   .mobile-tab-sheet-close {
-    width: max(44px, calc(44px / var(--ui-scale, 1)));
-    height: max(44px, calc(44px / var(--ui-scale, 1)));
+    width: 34px;
+    height: 34px;
     flex: 0 0 auto;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border: 0;
-    border-radius: 7px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
     background: transparent;
     color: var(--muted);
   }
@@ -110,13 +92,11 @@
     flex: 0 0 auto;
     display: inline-flex;
     align-items: center;
-    justify-content: flex-start;
+    justify-content: center;
     gap: 6px;
-    margin: 0 4px;
-    min-height: max(44px, calc(44px / var(--ui-scale, 1)));
     padding: 10px;
-    border: 0;
-    border-radius: 7px;
+    border: 1px dashed var(--border);
+    border-radius: 10px;
     background: transparent;
     color: var(--text-strong);
     font-size: 13px;
@@ -131,12 +111,4 @@
 .mobile-tab-sheet-focus > small {
   margin-left: auto;
   color: var(--muted);
-}
-
-:where(html[data-layout="mobile"]) {
-  .mobile-tab-sheet-focus:hover:not(:disabled),
-  .mobile-tab-sheet-close:hover:not(:disabled),
-  .mobile-tab-sheet-new:hover:not(:disabled) {
-    background: var(--accent-soft);
-  }
 }

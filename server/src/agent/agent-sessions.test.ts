@@ -252,8 +252,7 @@ describe("Pi agent sessions", () => {
 
     expect(result.status).toBe("missing_session");
     expect(result.detail).toContain("/title");
-    expect(result.detail).toContain("--no-daemon");
-    expect(result.command).toBe("herdr integration install codex");
+    expect(result.command).toBeUndefined();
   });
 
   test("binds Herdr and file access inside each runtime handler bundle", async () => {

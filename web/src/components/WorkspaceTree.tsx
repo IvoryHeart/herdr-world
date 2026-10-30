@@ -1,4 +1,3 @@
-import { WorkspacePullRequestBadge as PullRequestBadge } from "./WorktreePullRequestBadge";
 import { subscribeLocalStorage } from "../browserStorage";
 import { worldLocalStorage } from "../browserStorage";
 import { shallowEqual, useOperationalStore, useStoreSelector } from "../store";
@@ -22,6 +21,10 @@ import {
   ChevronDown,
   ChevronRight,
   GitBranch,
+  GitMerge,
+  GitPullRequest,
+  GitPullRequestClosed,
+  GitPullRequestDraft,
   Layers,
   Pin,
   Plus,
@@ -197,6 +200,31 @@ function GitStatusBadges({
       {status.behind > 0 ? (
         <span className="git-badge git-behind">↓{status.behind}</span>
       ) : null}
+    </span>
+  );
+}
+
+function PullRequestBadge({
+  review,
+}: {
+  review: NonNullable<ReturnType<typeof workspacePullRequest>>;
+}) {
+  const Icon = {
+    open: GitPullRequest,
+    draft: GitPullRequestDraft,
+    merged: GitMerge,
+    closed: GitPullRequestClosed,
+  }[review.state];
+  return (
+    <span
+      className="git-badge workspace-review"
+      data-state={review.state}
+      title={review.title}
+      aria-label={review.title}
+      role="img"
+    >
+      <Icon size={12} aria-hidden="true" />
+      {review.id}
     </span>
   );
 }

@@ -249,8 +249,7 @@ describe("Codex thread from the pane title", () => {
     const resolved = await resolveTitle("project");
     expect(resolved.status).toBe("missing_session");
     expect(resolved.detail).toContain("/title");
-    expect(resolved.detail).toContain("--no-daemon");
-    expect(resolved.command).toBe("herdr integration install codex");
+    expect(resolved.command).toBeUndefined();
   });
 
   test("searches the remote host, not this machine, over SSH", async () => {

@@ -66,9 +66,9 @@ export default defineConfig(({ mode }) => {
           codeSplitting: {
             groups: [
               {
-                // Share startup transport and small agent RPC helpers without extra requests.
+                // Global assistant and workspace clients share this startup transport.
                 name: "bridge-client",
-                test: /src[\\/](?:api|connectionHttp|useConnectionClient|agentIntegrations|agentLauncher)\.tsx?$/,
+                test: /src[\\/](?:api|connectionHttp|useConnectionClient)\.tsx?$/,
               },
               {
                 // These startup preferences share storage; keep their small
@@ -77,9 +77,9 @@ export default defineConfig(({ mode }) => {
                 test: /src[\\/](?:browserStorage|layoutPreferences|shortcutPreferences)\.ts$/,
               },
               {
-                // Keep startup UI primitives together without loading feature-only icons.
+                // Share startup React and icons without loading feature-only icons.
                 name: "ui-runtime",
-                test: /(?:node_modules[\\/](?:lucide-react|react|react-dom|scheduler|@radix-ui|@floating-ui)[\\/]|src[\\/](?:utils\.ts|components[\\/]ui[\\/]popover\.tsx)$)/,
+                test: /node_modules[\\/](?:lucide-react|react|react-dom|scheduler)[\\/]/,
                 tags: ["$initial"],
               },
               {

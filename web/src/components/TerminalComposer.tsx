@@ -19,7 +19,10 @@ import {
   mobileTerminalShortcutOption,
 } from "../mobileTerminalShortcuts";
 import {
+  beginTerminalComposerSubmission,
   beginTerminalComposerUpload,
+  clearTerminalComposerDraft,
+  finishTerminalComposerSubmission,
   finishTerminalComposerUpload,
   insertIntoTerminalComposerDraft,
   readTerminalComposerDraft,
@@ -27,7 +30,6 @@ import {
   readTerminalComposerSelection,
   subscribeTerminalComposerDraft,
   subscribeTerminalComposerSubmission,
-  submitTerminalComposerDraft,
   subscribeTerminalComposerUpload,
   terminalComposerSubmissionPending,
   terminalComposerUploadCount,
@@ -57,9 +59,6 @@ import {
 } from "../attachmentUploads";
 import type { UploadProgress } from "../terminalImageUpload";
 import { AttachmentChips } from "./AttachmentChips";
-import { isMobileLayout } from "../layoutPreferences";
-import { AgentLauncher } from "./AgentLauncher";
-import { useTouchReleaseSubmit } from "./useTouchReleaseSubmit";
 import "./TerminalComposer.css";
 import "./TerminalComposer.chat.css";
 import { TerminalComposerPalette } from "./TerminalComposerPalette";
@@ -86,9 +85,6 @@ export type ComposerUpload = (
 export function TerminalComposer({
   draftKey,
   paneId,
-  workspaceId,
-  tabId,
-  terminalId,
   open = true,
   accessoriesVisible = true,
   reserved = false,
@@ -115,9 +111,6 @@ export function TerminalComposer({
 }: {
   draftKey: string;
   paneId?: string;
-  workspaceId?: string;
-  tabId?: string;
-  terminalId?: string;
   open?: boolean;
   // Presentation only: secondary App surfaces keep the editor and input session.
   accessoriesVisible?: boolean;
@@ -471,20 +464,36 @@ export function TerminalComposer({
       !draft ||
       terminalComposerUploadCount(submittedDraftKey) > 0 ||
       attachmentUploading(submittedDraftKey) ||
-      composingRef.current
+      composingRef.current ||
+      !beginTerminalComposerSubmission(submittedDraftKey)
     ) {
       return;
     }
 
+    dismissCommands();
+
+    // Remove the submitted prefix before the request so an unmount/remount
+    // cannot expose it as a second send while the first request is pending.
+    // New text remains in the shared draft and is restored with the submitted
+    // text if the request fails.
+    const current = readTerminalComposerDraft(submittedDraftKey);
+    const next = current.startsWith(draft)
+      ? current.slice(draft.length)
+      : current;
+    if (next) {
+      writeTerminalComposerDraft(submittedDraftKey, next);
+    } else {
+      clearTerminalComposerDraft(submittedDraftKey);
+    }
+
     try {
-      await submitTerminalComposerDraft(
-        submittedDraftKey,
-        draft,
-        (submitted) => onSubmit(submitted, sendEnter),
-        dismissCommands,
-      );
+      await onSubmit(draft, sendEnter);
     } catch (error) {
+      const pendingText = readTerminalComposerDraft(submittedDraftKey);
+      writeTerminalComposerDraft(submittedDraftKey, `${draft}${pendingText}`);
       onError(error instanceof Error ? error.message : "Failed to send input");
+    } finally {
+      finishTerminalComposerSubmission(submittedDraftKey);
     }
   };
 
@@ -494,24 +503,151 @@ export function TerminalComposer({
     e.preventDefault();
   };
 
-  // Only the two destructive actions need the touch release fallback.
-  const touchSubmit = useTouchReleaseSubmit({
-    submitKey: draftKey,
-    resetKey: JSON.stringify([
-      draftKey,
-      paneId,
-      mode,
-      open,
-      accessoriesVisible,
-    ]),
-    canStart: () =>
-      !composingRef.current &&
-      terminalComposerUploadCount(draftKey) === 0 &&
-      !attachmentUploading(draftKey) &&
-      !terminalComposerSubmissionPending(draftKey),
-    canFinish: () => accessoriesOpen && mode === "composer",
-  });
-  const cancelSubmitTouch = touchSubmit.cancel;
+  // Only these two destructive actions need a touch release fallback. Native
+  // focus transfer can close the keyboard and move the button before click;
+  // cancelling pointerdown protects focus but some WebKit versions then omit
+  // click. Never send on down, and consume the later compatibility click even
+  // if the request has already completed (or failed and restored the draft).
+  const submitTouchRef = useRef<{
+    id: number;
+    button: HTMLButtonElement;
+    key: string;
+    x: number;
+    y: number;
+    bounds: DOMRect;
+    time: number;
+    cancelled: boolean;
+  } | null>(null);
+  const submitClickTouchRef = useRef<{
+    id: number;
+    button: HTMLButtonElement;
+    x: number;
+    y: number;
+  } | null>(null);
+  useEffect(() => {
+    const cancelAdditionalPointer = (event: PointerEvent) => {
+      const touch = submitTouchRef.current;
+      if (touch && event.pointerId !== touch.id) touch.cancelled = true;
+    };
+    document.addEventListener("pointerdown", cancelAdditionalPointer, true);
+    return () =>
+      document.removeEventListener(
+        "pointerdown",
+        cancelAdditionalPointer,
+        true,
+      );
+  }, []);
+  useEffect(() => {
+    // Invalidate even an away-and-back transition before the finger lifts.
+    submitTouchRef.current = null;
+  }, [draftKey, paneId, mode, open, accessoriesVisible]);
+  const submitPointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (event.pointerType !== "touch") {
+      submitTouchRef.current = null;
+      submitClickTouchRef.current = null;
+      return;
+    }
+    event.preventDefault();
+    // A second finger cannot replace the first press with a fresh tap.
+    if (!event.isPrimary) {
+      cancelSubmitTouch();
+      return;
+    }
+    submitTouchRef.current = null;
+    submitClickTouchRef.current = {
+      id: event.pointerId,
+      button: event.currentTarget,
+      x: event.clientX,
+      y: event.clientY,
+    };
+    // Do not focus the textarea: a keyboard dismissed by Back stays dismissed.
+    if (
+      event.currentTarget.disabled ||
+      composingRef.current ||
+      terminalComposerUploadCount(draftKey) > 0 ||
+      attachmentUploading(draftKey) ||
+      terminalComposerSubmissionPending(draftKey)
+    )
+      return;
+    submitTouchRef.current = {
+      id: event.pointerId,
+      button: event.currentTarget,
+      key: draftKey,
+      x: event.clientX,
+      y: event.clientY,
+      bounds: event.currentTarget.getBoundingClientRect(),
+      time: event.timeStamp,
+      cancelled: false,
+    };
+  };
+  const submitPointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const touch = submitTouchRef.current;
+    if (!touch || touch.id !== event.pointerId) return;
+    const { left, right, top, bottom } = touch.bounds;
+    // Latch cancellation: moving out and back is not a completed tap. Use the
+    // press-time bounds so a viewport resize alone is not mistaken for a drag.
+    if (
+      Math.hypot(event.clientX - touch.x, event.clientY - touch.y) > 10 ||
+      event.clientX < left ||
+      event.clientX > right ||
+      event.clientY < top ||
+      event.clientY > bottom
+    )
+      touch.cancelled = true;
+  };
+  const cancelSubmitTouch = () => {
+    if (submitTouchRef.current) submitTouchRef.current.cancelled = true;
+  };
+  const submitPointerUp = (
+    event: React.PointerEvent<HTMLButtonElement>,
+    sendEnter: boolean,
+  ) => {
+    const touch = submitTouchRef.current;
+    if (!touch || touch.id !== event.pointerId) return;
+    submitPointerMove(event);
+    if (submitClickTouchRef.current) {
+      submitClickTouchRef.current.x = event.clientX;
+      submitClickTouchRef.current.y = event.clientY;
+    }
+    submitTouchRef.current = null;
+    if (
+      touch.cancelled ||
+      event.timeStamp - touch.time >= 500 ||
+      touch.button !== event.currentTarget ||
+      touch.key !== draftKey ||
+      event.currentTarget.disabled ||
+      !accessoriesOpen ||
+      mode !== "composer"
+    )
+      return;
+    void submit(sendEnter);
+  };
+  const submitClick = (
+    event: React.MouseEvent<HTMLButtonElement>,
+    sendEnter: boolean,
+  ) => {
+    const touch = submitClickTouchRef.current;
+    const native = event.nativeEvent;
+    // Modern touch clicks carry their pointer identity. Older WebKit emits a
+    // MouseEvent instead; match its button and coordinates. A known touch ID
+    // is consumed even if layout retargets click to the other submit button.
+    // A fresh mouse/pen pointerdown clears the association.
+    const duplicate =
+      touch &&
+      (("pointerType" in native &&
+        native.pointerType === "touch" &&
+        "pointerId" in native &&
+        native.pointerId === touch.id) ||
+        (!("pointerType" in native) &&
+          touch.button === event.currentTarget &&
+          event.detail > 0 &&
+          Math.hypot(event.clientX - touch.x, event.clientY - touch.y) < 1));
+    if (duplicate) {
+      event.preventDefault();
+      return;
+    }
+    void submit(sendEnter);
+  };
 
   const dismissCommands = () => {
     setPickerMode(null);
@@ -626,7 +762,7 @@ export function TerminalComposer({
   const busy = submissionPending || uploading;
   useEffect(() => {
     if (busy || composing) cancelSubmitTouch();
-  }, [busy, composing, cancelSubmitTouch]);
+  }, [busy, composing]);
   const submitDisabled = !text || busy || composing || !!disabledReason;
   const hasShortcuts =
     surface !== "chat" &&
@@ -806,7 +942,13 @@ export function TerminalComposer({
               hidden={surface === "chat"}
               disabled={submitDisabled}
               onMouseDown={keepTextareaFocus}
-              {...touchSubmit.buttonProps(() => void submit(false))}
+              onPointerDown={submitPointerDown}
+              onPointerMove={submitPointerMove}
+              onPointerCancel={cancelSubmitTouch}
+              onLostPointerCapture={cancelSubmitTouch}
+              onContextMenu={cancelSubmitTouch}
+              onPointerUp={(event) => submitPointerUp(event, false)}
+              onClick={(event) => submitClick(event, false)}
             >
               <TextCursorInput size={14} />
               Insert
@@ -827,7 +969,13 @@ export function TerminalComposer({
               }
               disabled={submitDisabled}
               onMouseDown={keepTextareaFocus}
-              {...touchSubmit.buttonProps(() => void submit(true))}
+              onPointerDown={submitPointerDown}
+              onPointerMove={submitPointerMove}
+              onPointerCancel={cancelSubmitTouch}
+              onLostPointerCapture={cancelSubmitTouch}
+              onContextMenu={cancelSubmitTouch}
+              onPointerUp={(event) => submitPointerUp(event, true)}
+              onClick={(event) => submitClick(event, true)}
             >
               {surface === "chat" ? (
                 <Send size={18} aria-hidden="true" />
@@ -927,58 +1075,16 @@ export function TerminalComposer({
             }}
           />
         ) : null}
-        <div className="terminal-mobile-input-bar">
-          {surface === "terminal" &&
-          workspaceId &&
-          paneId &&
-          tabId &&
-          terminalId &&
-          !agent?.trim() &&
-          isMobileLayout() ? (
-            <AgentLauncher
-              workspaceId={workspaceId}
-              paneId={paneId}
-              tabId={tabId}
-              terminalId={terminalId}
-              disabled={busy || composing || reserved || !!disabledReason}
-              visible={accessoriesOpen}
-              onOpen={() => {
-                dismissCommands();
-                textareaRef.current?.blur();
-                setEditorFocused(false);
-              }}
-              onSelectCommand={(command) => {
-                if (
-                  disabledReason ||
-                  busy ||
-                  composingRef.current ||
-                  reserved ||
-                  !accessoriesOpen
-                )
-                  throw new Error(
-                    "Message input is not ready for an agent command.",
-                  );
-                if (readTerminalComposerDraft(draftKey) || attachments.length)
-                  throw new Error("Clear Message before choosing an agent.");
-                activateMessage(false);
-                void submitTerminalComposerDraft(draftKey, command, (text) =>
-                  onSubmit(text, true),
-                ).catch((error) =>
-                  onError(
-                    error instanceof Error
-                      ? error.message
-                      : "Failed to launch agent",
-                  ),
-                );
-              }}
-            />
-          ) : null}
-          <div
-            className="terminal-composer-direct"
-            hidden={surface === "chat" || mode !== "direct"}
-          >
-            Typing goes directly to the terminal. Your Composer draft is saved.
-          </div>
+        <div
+          className="terminal-composer-direct"
+          hidden={surface === "chat" || mode !== "direct"}
+        >
+          Typing goes directly to the terminal. Your Composer draft is saved.
+        </div>
+        <div
+          className="terminal-mobile-input-bar"
+          hidden={surface !== "chat" && mode === "direct"}
+        >
           <textarea
             ref={textareaRef}
             className="terminal-composer-input terminal-mobile-message"

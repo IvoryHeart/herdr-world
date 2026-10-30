@@ -1,10 +1,3 @@
-import {
-  GitPullRequest,
-  GitPullRequestDraft,
-  GitMerge,
-  GitPullRequestClosed,
-} from "lucide-react";
-import type { workspacePullRequest } from "../workspaceTreeBadges";
 import type { PullRequestSummary } from "../../../shared/pullRequest";
 import "./WorktreePullRequestBadge.css";
 
@@ -44,28 +37,14 @@ export function WorktreePullRequestBadge({
       ? "PR"
       : "MR"
     : "PR/MR";
-  const stale = request ? status?.stale : undefined;
-  const text = `${provider}${request ? ` #${request.number}` : ""}: ${label}${stale ? " (last known)" : ""}`;
+  const text = `${provider}${request ? ` #${request.number}` : ""}: ${label}`;
   return (
     <details className="worktree-review">
-      <summary
-        className="badge worktree-review-badge"
-        data-state={state}
-        data-stale={stale ? true : undefined}
-      >
+      <summary className="badge worktree-review-badge" data-state={state}>
         {text}
       </summary>
       <div className="worktree-review-detail">
         {request?.title ?? status?.message ?? label}
-        {stale ? (
-          <span>
-            Refresh failed at{" "}
-            <time dateTime={stale.failedAt}>
-              {new Date(stale.failedAt).toLocaleString()}
-            </time>
-            ; showing the last known status.
-          </span>
-        ) : null}
         {request ? (
           <a href={request.url} target="_blank" rel="noopener noreferrer">
             Open {provider} #{request.number}
@@ -73,37 +52,10 @@ export function WorktreePullRequestBadge({
         ) : null}
         {status ? (
           <time dateTime={status.refreshedAt}>
-            {stale ? "Last successful check" : "Last checked"}:{" "}
-            {new Date(status.refreshedAt).toLocaleString()}
+            Last checked: {new Date(status.refreshedAt).toLocaleString()}
           </time>
         ) : null}
       </div>
     </details>
-  );
-}
-
-export function WorkspacePullRequestBadge({
-  review,
-}: {
-  review: NonNullable<ReturnType<typeof workspacePullRequest>>;
-}) {
-  const Icon = {
-    open: GitPullRequest,
-    draft: GitPullRequestDraft,
-    merged: GitMerge,
-    closed: GitPullRequestClosed,
-  }[review.state];
-  return (
-    <span
-      className="git-badge workspace-review"
-      data-state={review.state}
-      data-stale={review.stale || undefined}
-      title={review.title}
-      aria-label={review.title}
-      role="img"
-    >
-      <Icon size={12} aria-hidden="true" />
-      {review.id}
-    </span>
   );
 }

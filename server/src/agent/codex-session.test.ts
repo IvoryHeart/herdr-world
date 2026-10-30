@@ -149,14 +149,12 @@ describe("Codex transcript lookup", () => {
     expect(await files.findCodexSessionById(id)).toBeNull();
   });
 
-  test("missing association explains the pane-scoped Codex launch", async () => {
+  test("missing association does not claim the integration is uninstalled", async () => {
     const result = await resolveAgentSession({ pane_id: "p1" }, async () => ({
       agent: { agent: "codex" },
     }));
     expect(result.status).toBe("missing_session");
-    expect(result.detail).toContain("--no-daemon");
-    expect(result.detail).toContain("/title");
-    expect(result.detail).not.toContain("not installed");
-    expect(result.command).toBe("herdr integration install codex");
+    expect(result.detail).toContain("isn't linked");
+    expect(result.command).toBeUndefined();
   });
 });

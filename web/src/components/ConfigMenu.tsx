@@ -525,7 +525,7 @@ export function ConfigMenu({
                   />
                 ) : null}
               </div>
-              <div className="config-section">
+              <div className="config-section config-section-tiles-3">
                 <div className="config-title">Help & updates</div>
                 {[
                   {
