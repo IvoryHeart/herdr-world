@@ -19,5 +19,9 @@ export function profileLinkFor(
     : undefined;
   return profile
     ? { profileId: profile.id, label: `Edit profile · ${profile.name}` }
-    : { label: "Profiles…" };
+    : {
+        label: assignment?.profile_name
+          ? `Profile · ${assignment.profile_name}`
+          : "Profiles…",
+      };
 }

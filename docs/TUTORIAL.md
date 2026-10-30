@@ -501,6 +501,11 @@ a starting brief and a look in Town. World starts it in a new tab for you.
    first (for example Claude asking whether to trust a new folder), the
    launcher says so and **Open its tab** lets you answer.
 
+The profile assignment follows its terminal when you move it and is shared
+with other Worlds connected to that Herdr. Each World uses its own profile
+of that ID; without one, it shows the recorded name with the default look.
+Closing the terminal or restarting Herdr ends the assignment.
+
 **You are done when:** an agent you started from a profile is answering in its
 own tab, dressed as you chose in Town.
 
@@ -516,6 +521,10 @@ own tab, dressed as you chose in Town.
    follow your latest sound choices.
 2. Under **Town master**, choose your coordinating agent (for example
    FirstMate) and tap **Make Town master**. Its chime is a sound of its own.
+   Worlds connected to the same Herdr share this role. The newest assignment
+   wins, and moving it from another live agent asks first. It ends when its
+   terminal closes or Herdr restarts. Offline claims wait for reconnection;
+   clearing the role requires every observed claimant to be reachable.
 3. Tap anywhere in World once (browsers start sound only after a tap). When an
    agent finishes or needs you, World chimes and a toast says who and why.
 

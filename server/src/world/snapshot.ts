@@ -1,3 +1,4 @@
+import * as observation from "./snapshot-observers";
 import { nativeId, priorityKey } from "./snapshot-identity";
 import { readHerdrSnapshot } from "../adapters/herdr";
 import { createHash } from "node:crypto";
@@ -422,13 +423,8 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
       revision: 0,
       records: [],
     }),
-    private readonly onFreshObservation?: (
-      connectionId: string,
-      generation: number,
-      panes: readonly Record<string, unknown>[],
-      observedAt: number,
-      agents: readonly Record<string, unknown>[],
-    ) => void,
+    private readonly onFreshObservation?: observation.Fresh,
+    private readonly onCompleteObservation?: observation.Complete,
   ) {}
 
   invalidate(connectionId?: string): number {
@@ -724,6 +720,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
           dirty: this.wasInvalidatedSinceStart(work),
         });
         if (!this.wasInvalidatedSinceStart(work)) {
+          observation.complete(this.onCompleteObservation, work.lease, raw[2]);
           this.onFreshObservation?.(
             work.status.id,
             work.lease.generation,

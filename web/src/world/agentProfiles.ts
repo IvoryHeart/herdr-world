@@ -23,8 +23,13 @@ export type ProfileAssignment = {
   connection_id: string;
   terminal_id: string;
   profile_id: string;
+  profile_name?: string;
 };
 export type TerminalKey = { connection_id: string; terminal_id: string };
+export type TerminalTarget = TerminalKey & {
+  connection_generation: number;
+  pane_id: string;
+};
 export type ProfilesDocument = {
   version: 1;
   revision: number;
@@ -109,8 +114,10 @@ export const deleteProfile = (id: string) =>
 export const saveChimes = (chimes: ChimeSettings) =>
   write("world.chimes.save", { chimes });
 /** Give the Town master role to a terminal (null clears it). */
-export const setTownMaster = (terminal: TerminalKey | null, replace = false) =>
-  write("world.town_master.set", { terminal, replace });
+export const setTownMaster = (
+  terminal: TerminalTarget | null,
+  replace = false,
+) => write("world.town_master.set", { terminal, replace });
 
 /** Where a new agent starts: one workspace on one host's current runtime. */
 export type LaunchTarget = {
