@@ -33,6 +33,8 @@ import {
   plan,
 } from "./crew/plan";
 import { checkoutOf, openChat, review, runs } from "./crew/review";
+import { postedResult } from "./crew/run-results";
+import { evaluations } from "./crew/round-policy-store";
 import { markDue, markHeads } from "./crew/marks";
 import {
   crewCodeVersion,
@@ -180,7 +182,12 @@ export function crewPass(context: PassContext) {
         ...input.history,
         ...(input.item?.pr?.reviewers ?? []),
       ])
-        if (claim.reviewer && claim.commit && claim.line.trim())
+        if (
+          claim.reviewer &&
+          claim.commit &&
+          claim.line.trim() &&
+          claim.outcome !== "unknown"
+        )
           posted.set(`${claim.reviewer}:${claim.commit}`, {
             commit: claim.commit,
             source: claim.url,
@@ -320,7 +327,9 @@ function act(
     if (!RUN_KINDS.has(entry.kind)) continue;
     const known = getAction(crew, entry.key)!;
     const stuck =
-      (known.state === "done" && now - known.updatedAt > STUCK_MS) ||
+      (known.state === "done" &&
+        now - known.updatedAt > STUCK_MS &&
+        !latestRun(crew, entry.key)?.result) ||
       known.state === "failed";
     if (stuck)
       record(
@@ -347,23 +356,41 @@ function act(
   );
   // A review is done once its RESULT is on GitHub for the head it was
   // given, whatever its session has done since: it may have posted just
-  // before a newer push, or ended before this pass saw the post. A session
-  // still open stays in its pane as a chat until the PR closes.
+  // before a newer push, or ended before this pass saw the post. Finishing
+  // its recorded run also tells the worker to exit its harness session.
+  const byNumber = new Map(inputs.map((input) => [input.number, input]));
   for (const entry of actionsIn(crew, [
     "pending",
     "running",
     "failed",
     "done",
   ])) {
-    const claim = REVIEW_KINDS.has(entry.kind)
+    if (!REVIEW_KINDS.has(entry.kind) && entry.kind !== "evaluate") continue;
+    const run = latestRun(crew, entry.key);
+    if (entry.state === "done" && run?.result && run.finishedAt !== null)
+      continue;
+    const parsed = REVIEW_KINDS.has(entry.kind)
       ? authors.get(entry.pr)?.posted.get(`${entry.target}:${entry.head}`)
       : undefined;
+    const claim =
+      parsed && reviewClaimCounts(crew, entry, parsed.source)
+        ? parsed
+        : postedResult(
+            entry,
+            byNumber.get(entry.pr)?.reviewPosts ?? [],
+            entry.kind === "evaluate"
+              ? evaluations(crew, entry.pr).find(
+                  (evaluation) =>
+                    evaluation.head === entry.head &&
+                    entry.key.endsWith(`:evaluation-${evaluation.checkpoint}`),
+                )
+              : undefined,
+          );
     if (
       claim?.commit !== entry.head ||
       !reviewClaimCounts(crew, entry, claim.source)
     )
       continue;
-    const run = latestRun(crew, entry.key);
     if (run && run.result === null) setRunResult(crew, run.id, claim.line);
     if (run && run.finishedAt === null)
       finishRun(
@@ -376,7 +403,7 @@ function act(
     if (entry.state === "done") continue;
     setAction(crew, entry.key, "done", now);
     say(
-      `#${entry.pr} ${entry.target} posted ${claim.line}; its session stays open as a chat`,
+      `#${entry.pr} ${entry.target} posted ${claim.line}; its worker can exit`,
     );
   }
 

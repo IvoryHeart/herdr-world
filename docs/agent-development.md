@@ -386,7 +386,9 @@ plans the next step for every PR in scope and takes each step once:
   in Herdr. It posts one review with the canonical header. The review is done
   once that RESULT is on GitHub: the watcher then records the result and the
   token usage (read from the harness's session files) and frees the slot. The
-  session stays open in its pane as a chat. A confirmation reviews the delta
+  worker then exits the interactive harness, retaining its saved session for
+  `open --run`. Its pane keeps the transcript and reopening command. Evaluators
+  exit after posting their checkpoint's verdict in the same way. A confirmation reviews the delta
   from the last reviewed round's head, excluding imports from main and preserving
   manual conflict resolutions. Every prompt checks the linked issue for scope drift.
   At most `maxRuns` reviewers work
@@ -395,12 +397,15 @@ plans the next step for every PR in scope and takes each step once:
   posting is retried once. One that is quit, or exits cleanly, without a
   RESULT on the head goes to the owner after 15 minutes. A post without a
   RESULT line doesn't count. A RESULT counts for the head it was given, even
-  if the session has ended or a newer head has arrived since.
+  if the session has ended or a newer head has arrived since. Completion uses
+  the task's explicit reviewed/evaluated commit, even when GitHub's submission
+  commit differs or the new head's ancestry cannot be reconciled. Finishing
+  the task does not carry its review to the new head or release a policy hold.
 - **Where reviewers show.** A PR is a pod, and each head it reviews is a
   round. A round has its own Herdr tab, named like `#7 towncx-12-plates · r2`,
-  with one pane per reviewer, named after the reviewer. Every reviewer stays
-  in its pane until the PR merges or closes, so the owner can read and
-  question every round before merging. A newer head leaves the running round
+  with one pane per reviewer, named after the reviewer. Each pane keeps its
+  transcript until the PR merges or closes; use `open --run` to ask a completed
+  reviewer questions. A newer head leaves the running round
   pinned to its reviewed commit; a merge of main never stops it. A merge or
   close of the PR stops outstanding runs. If you quit a session yourself, its pane
   gives the same command. A tab the owner closes is reopened for that round's

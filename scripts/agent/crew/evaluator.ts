@@ -99,7 +99,7 @@ EVALUATION #${pr}: go — <next step>
 For no-go, name a concrete process and its reasons. Include Process: splitter|fresh-fixer|visionary|restart|owner (choose ONE). Unless owner, include Seat: <roster seat> from ${roster.join(", ")}; fresh-fixer must use another persona from the author. The watcher starts a FRESH session for that seat and holds reviews until it reports back. Splitter splits the PR; visionary reconsiders its design; restart closes/restarts from main; owner requests an owner decision. End with:
 EVALUATION #${pr}: no-go — <process change and next step>
 
-Use gh pr comment ${pr} --repo ${repo} --body-file <file>. Never approve, merge, change shared configuration, prompt another agent or restart the watcher. Owner questions use herdr-world ask "QUESTION" --owner-only --wait at reception. Keep output bounded. Finish with the verdict line and comment URL, then stay for owner questions.`;
+Use gh pr comment ${pr} --repo ${repo} --body-file <file>. Never approve, merge, change shared configuration, prompt another agent or restart the watcher. Owner questions use herdr-world ask "QUESTION" --owner-only --wait at reception. Keep output bounded. After posting, finish with the verdict line and comment URL, then end your turn. The worker exits this session once the watcher records your result; the owner can reopen the saved session for questions.`;
 }
 
 export function processPrompt(repo: string, evaluation: Evaluation) {
