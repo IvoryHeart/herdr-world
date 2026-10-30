@@ -1204,6 +1204,7 @@ export async function createTownRenderer(
     updateActors(Math.max(deskBlend, townBlend(0.35, 0.6, camera.z)));
     updateBubbles();
     drawEffects();
+    onFrame(camera, level); // before the drag, so a carry aims at this frame
     const dragging = updateDrag(dt);
     app.renderer.render(app.stage);
     stats.level = level;
@@ -1221,7 +1222,6 @@ export async function createTownRenderer(
       ),
       statuses: bubbles.size,
     };
-    onFrame(camera, level);
     if (!stats.ready) stats.ready = true;
     const moving =
       cameraMoved ||
