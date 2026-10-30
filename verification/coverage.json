@@ -1547,13 +1547,14 @@
     {
       "id": "Q37",
       "area": "Whole-service startup/shutdown",
-      "owner": "server/src/index.ts",
+      "owner": "server/src/service/",
       "requirement": "openspec/specs/distribution-boundaries/spec.md",
       "properties": "Listener and background resources have one owner; shutdown blocks admission before draining; partial startup releases resources",
       "existingTests": [
         "server/src/connections/startup.test.ts",
         "server/src/connections/shutdown.test.ts",
-        "server/src/config/service-manager.test.ts"
+        "server/src/config/service-manager.test.ts",
+        "server/src/service/world-service.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/145",
       "technique": "shared-lifecycle",
@@ -1570,12 +1571,13 @@
         "tests": [
           "server/src/connections/startup.test.ts",
           "server/src/connections/shutdown.test.ts",
-          "server/src/config/service-manager.test.ts"
+          "server/src/config/service-manager.test.ts",
+          "server/src/service/world-service.test.ts"
         ],
         "checks": ["bun run check", "bun run verification:check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
       },
-      "evidenceDecision": "Manager shutdown prevents new starts and drains retained owners. Startup/shutdown tests verify listener availability, one shared drain and forced exit deadline.",
+      "evidenceDecision": "Manager shutdown prevents new starts and drains retained owners. Startup/shutdown tests verify listener availability, one shared drain and forced exit deadline. The composition root's stop admits nothing new while the port stays bound, stops Ranger and the connections (failing Herdr calls still waiting) and waits for startup and in-flight requests, then closes storage, whose stores refuse every later write, and releases the data folder; the listener closes last, and a process about to exit keeps it until exit. In-process service tests verify that order, a stop during startup, a held Herdr call, a held wait for an answer, a request admitted before stop that cannot write after storage closes, that a failed start releases the folder, and that another live service's folder is refused.",
       "promotion": {
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",

@@ -180,3 +180,20 @@ describe("HerdrClient subscription lifecycle", () => {
     await expect(subscription.closed).resolves.toBeUndefined();
   });
 });
+
+test("close fails the calls still waiting and refuses new ones", async () => {
+  const arrived = Promise.withResolvers<void>();
+  const closed = Promise.withResolvers<void>();
+  const socketPath = await startServer((socket) => {
+    // Hold the reply; only the client's close may end this call.
+    socket.on("close", () => closed.resolve());
+    arrived.resolve();
+  });
+  const client = new HerdrClient(socketPath);
+  const held = client.call("workspace.list", {}, 60_000);
+  await arrived.promise;
+  client.close();
+  await expect(held).rejects.toThrow("Herdr connection stopped");
+  await closed.promise;
+  await expect(client.call("ping")).rejects.toThrow("Herdr connection stopped");
+});

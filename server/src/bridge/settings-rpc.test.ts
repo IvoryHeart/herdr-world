@@ -5,6 +5,25 @@ import type { HerdrClient } from "./herdr-client";
 import { WorktreeHookConfigError } from "../worktree/worktree-hooks";
 import { createSettingsRpcHandler } from "./settings-rpc";
 
+/** A settings file that lives only in memory, as a fresh service sees one. */
+function memorySettings() {
+  let settings: GuiSettings = {
+    version: 1,
+    title_suffix: "",
+    repositories: {},
+    workspace_auto_sync: {},
+    terminal_transport: {},
+    custom: {},
+  };
+  return {
+    path: "/settings.json",
+    read: async () => settings,
+    update: async (
+      update: (current: GuiSettings) => GuiSettings | Promise<GuiSettings>,
+    ) => (settings = await update(settings)),
+  };
+}
+
 function deferred<T>() {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((res) => {
@@ -30,14 +49,17 @@ test("terminal transport settings validate input, persist by connection, and rec
   const handler = createSettingsRpcHandler({
     connectionId: "alpha",
     connectionGeneration: 3,
-    readSettings: async () => settings,
-    updateSettings: async (update, isCurrent) => {
-      expect(isCurrent?.()).toBe(true);
-      if (failWrite) throw new Error("write failed");
-      settings = await update(settings);
-      writes++;
-      if (cancelAfterWrite) valid = false;
-      return settings;
+    settings: {
+      path: "/settings.json",
+      read: async () => settings,
+      update: async (update, isCurrent) => {
+        expect(isCurrent?.()).toBe(true);
+        if (failWrite) throw new Error("write failed");
+        settings = await update(settings);
+        writes++;
+        if (cancelAfterWrite) valid = false;
+        return settings;
+      },
     },
     onTerminalTransportSettingsChanged: (value) => {
       expect(settings.terminal_transport?.alpha.surface_codecs).toBe(value);
@@ -109,6 +131,7 @@ test("terminal transport settings validate input, persist by connection, and rec
 test("settings RPC errors carry their runtime connection identity", async () => {
   const messages: string[] = [];
   const handler = createSettingsRpcHandler({
+    settings: memorySettings(),
     connectionId: "remote-dev",
     connectionGeneration: 6,
     herdr: {} as HerdrClient,
@@ -165,10 +188,13 @@ test("settings RPC lists and mutates only its connection namespace", async () =>
   const messages: any[] = [];
   const handler = createSettingsRpcHandler({
     connectionId: "alpha",
-    readSettings: async () => settings,
-    updateSettings: async (update) => {
-      settings = await update(settings);
-      return settings;
+    settings: {
+      path: "/settings.json",
+      read: async () => settings,
+      update: async (update) => {
+        settings = await update(settings);
+        return settings;
+      },
     },
     herdr: {} as HerdrClient,
     sshHost: () => undefined,
@@ -226,6 +252,7 @@ test("settings RPC suppresses a delayed result after replacement", async () => {
   const messages: string[] = [];
   let current = true;
   const handler = createSettingsRpcHandler({
+    settings: memorySettings(),
     connectionId: "remote-dev",
     herdr: {
       call: () => workspace.promise,
@@ -281,12 +308,15 @@ test("settings RPC cancels a queued mutation after replacement", async () => {
   const messages: string[] = [];
   const handler = createSettingsRpcHandler({
     connectionId: "alpha",
-    readSettings: async () => settings,
-    updateSettings: async (update, shouldCommit = () => true) => {
-      await mutationGate.promise;
-      if (!shouldCommit()) throw new Error("settings update cancelled");
-      settings = await update(settings);
-      return settings;
+    settings: {
+      path: "/settings.json",
+      read: async () => settings,
+      update: async (update, shouldCommit = () => true) => {
+        await mutationGate.promise;
+        if (!shouldCommit()) throw new Error("settings update cancelled");
+        settings = await update(settings);
+        return settings;
+      },
     },
     herdr: {} as HerdrClient,
     sshHost: () => undefined,
@@ -333,6 +363,7 @@ test("hook settings expose selected config and errors without mislabeling native
   let invalid = false;
   const messages: any[] = [];
   const handler = createSettingsRpcHandler({
+    settings: memorySettings(),
     herdr: {
       call: async () => ({
         workspace: {

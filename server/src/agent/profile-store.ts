@@ -5,9 +5,7 @@ import {
   readFileSync,
   renameSync,
 } from "node:fs";
-import { join } from "node:path";
-import { dataRoot, replaceDataFile } from "../config/data-paths";
-import { worldEnv } from "../config/environment";
+import { replaceDataFile } from "../config/data-paths";
 import {
   type AgentProfile,
   PROFILE_LIMITS,
@@ -58,12 +56,6 @@ export type ProfilesDocument = {
 };
 
 export const MAX_ASSIGNMENTS = 256;
-
-export function defaultProfilesPath() {
-  return (
-    worldEnv("AGENT_PROFILES_PATH") ?? join(dataRoot(), "agent-profiles.json")
-  );
-}
 
 function seeded(): ProfilesDocument {
   return {
@@ -172,9 +164,10 @@ export function parseProfilesDocument(value: unknown): ProfilesDocument {
 
 export class ProfileStore {
   private document: ProfilesDocument;
+  #closed = false;
 
   constructor(
-    private readonly path: string = defaultProfilesPath(),
+    private readonly path: string,
     private readonly options: {
       now?: () => number;
       log?: (message: string) => void;
@@ -229,6 +222,7 @@ export class ProfileStore {
   }
 
   backupLegacySettings() {
+    if (this.#closed) throw new Error("World storage is closed");
     if (!existsSync(this.path)) return;
     try {
       copyFileSync(
@@ -251,7 +245,13 @@ export class ProfileStore {
     });
   }
 
+  /** Refuse every later change: the service that owns this file stopped. */
+  close(): void {
+    this.#closed = true;
+  }
+
   private commit(next: ProfilesDocument) {
+    if (this.#closed) throw new Error("World storage is closed");
     next.revision = this.document.revision + 1;
     replaceDataFile(this.path, JSON.stringify(next));
     this.document = next;

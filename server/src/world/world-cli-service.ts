@@ -1,6 +1,6 @@
 import { handleWorldCliEndpoint } from "../http/world-cli-endpoint";
 import { answerAsk, CliError, createWorldCli, dismissAsk } from "./world-cli";
-import { WorldLedger } from "./world-ledger";
+import type { WorldLedger } from "./world-ledger";
 import type { WorldSnapshotResult } from "./snapshot";
 import type { WorldSourcesSnapshot } from "../../../shared/worldSources";
 import { runGroupMove } from "./group-move";
@@ -31,6 +31,10 @@ type Lease = {
 
 export function createWorldCliService(deps: {
   board(): TownMoveContext["board"];
+  /** The service's own ledger, opened on first use. */
+  ledger(): WorldLedger;
+  /** The service's wall clock: question times and wait deadlines. */
+  now(): number;
   /** Read when a call arrives, so the service may be built first. */
   connections(): {
     list(): { id: string }[];
@@ -52,11 +56,10 @@ export function createWorldCliService(deps: {
     captureColorChanges: () => deps.board().captureColorChanges(),
     captureAppearanceChanges: () => deps.board().captureAppearanceChanges(),
   };
-  let ledgerStore: WorldLedger | null = null;
-  const ledger = () =>
-    (ledgerStore ??= new WorldLedger(undefined, {
-      log: (message) => console.warn(message),
-    }));
+  const ledger = () => deps.ledger();
+  const now = () => deps.now();
+  // Ends the calls that wait for an answer, so the service can stop.
+  const stopped = new AbortController();
   /** Pages fetch the open questions only when `asks` says they changed. */
   const publishLedger = (revision: number, asks = false) =>
     deps.broadcast(
@@ -129,6 +132,8 @@ export function createWorldCliService(deps: {
     },
     publishBoard: deps.publishBoard,
     publishLedger,
+    now,
+    signal: stopped.signal,
   });
   return {
     /** A page's question method; undefined when `method` is not one. */
@@ -150,8 +155,8 @@ export function createWorldCliService(deps: {
       try {
         publishLedger(
           method === "world.ask.answer"
-            ? answerAsk(ledger(), p.id, answer, "owner", Date.now())
-            : dismissAsk(ledger(), p.id, "owner", Date.now()),
+            ? answerAsk(ledger(), p.id, answer, "owner", now())
+            : dismissAsk(ledger(), p.id, "owner", now()),
           true,
         );
       } catch (error) {
@@ -171,6 +176,10 @@ export function createWorldCliService(deps: {
         bearerAuth,
         handle: (body, locate) => cli.handle(body as never, locate),
       });
+    },
+    /** End every wait for an answer now; the service is stopping. */
+    stop() {
+      stopped.abort();
     },
   };
 }

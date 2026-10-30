@@ -775,52 +775,48 @@ describe("questions and results", () => {
 
   test("World's pages dismiss a question through world.ask.dismiss", async () => {
     const path = join(root, "service-ledger.json");
-    const previous = process.env.HERDR_WORLD_LEDGER_PATH;
-    process.env.HERDR_WORLD_LEDGER_PATH = path;
-    try {
-      const lines: string[] = [];
-      const board = new BoardStore(join(root, "board.json"));
-      const service = createWorldCliService({
-        board: () => board,
-        connections: () => ({
-          list: () => [],
-          readyRuntimeLease: () => null,
-          defaultId: () => null,
+    const serviceLedger = new WorldLedger(path);
+    const lines: string[] = [];
+    const board = new BoardStore(join(root, "board.json"));
+    const service = createWorldCliService({
+      board: () => board,
+      ledger: () => serviceLedger,
+      now: Date.now,
+      connections: () => ({
+        list: () => [],
+        readyRuntimeLease: () => null,
+        defaultId: () => null,
+      }),
+      snapshots: () => null,
+      townMoveQueues: new Map(),
+      publishBoard: () => {},
+      broadcast: (line) => lines.push(line),
+    });
+    const ledger = new WorldLedger(path, { persist: false });
+    expect(ledger.openAsks().asks).toEqual([]);
+    const asked = await service.http(
+      new Request("http://127.0.0.1/api/world/cli", {
+        method: "POST",
+        body: JSON.stringify({
+          command: "ask",
+          params: { question: "Ship?" },
         }),
-        snapshots: () => null,
-        townMoveQueues: new Map(),
-        publishBoard: () => {},
-        broadcast: (line) => lines.push(line),
-      });
-      const ledger = new WorldLedger(path, { persist: false });
-      expect(ledger.openAsks().asks).toEqual([]);
-      const asked = await service.http(
-        new Request("http://127.0.0.1/api/world/cli", {
-          method: "POST",
-          body: JSON.stringify({
-            command: "ask",
-            params: { question: "Ship?" },
-          }),
-        }),
-        { address: "127.0.0.1", port: 40000 },
-        8787,
-        () => true,
-      );
-      const { result } = (await asked.json()) as { result: { id: string } };
-      expect(service.rpc("world.ask.dismiss", { id: result.id })).toMatchObject(
-        { asks: [] },
-      );
-      expect(lines.at(-1)).toContain('"asks":true');
-      expect(() => service.rpc("world.ask.dismiss", {})).toThrow(
-        "a dismissal needs a question ID",
-      );
-      expect(() =>
-        service.rpc("world.ask.answer", { id: result.id, answer: "Ship" }),
-      ).toThrow("dismissed by the owner");
-    } finally {
-      if (previous === undefined) delete process.env.HERDR_WORLD_LEDGER_PATH;
-      else process.env.HERDR_WORLD_LEDGER_PATH = previous;
-    }
+      }),
+      { address: "127.0.0.1", port: 40000 },
+      8787,
+      () => true,
+    );
+    const { result } = (await asked.json()) as { result: { id: string } };
+    expect(service.rpc("world.ask.dismiss", { id: result.id })).toMatchObject({
+      asks: [],
+    });
+    expect(lines.at(-1)).toContain('"asks":true');
+    expect(() => service.rpc("world.ask.dismiss", {})).toThrow(
+      "a dismissal needs a question ID",
+    );
+    expect(() =>
+      service.rpc("world.ask.answer", { id: result.id, answer: "Ship" }),
+    ).toThrow("dismissed by the owner");
   });
 
   test("a cause is asked once, only its verified asker can withdraw, and recurrence is fresh", async () => {

@@ -93,6 +93,19 @@ async function placeAsker(
     : placed;
 }
 
+/** Wait `ms`, or less when `signal` aborts. */
+function pause(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", done);
+      resolve();
+    };
+    const timer = setTimeout(done, ms);
+    signal?.addEventListener("abort", done, { once: true });
+  });
+}
+
 export async function handleWorldAsk(
   deps: WorldCliDeps,
   command: string,
@@ -209,9 +222,10 @@ export async function handleWorldAsk(
       );
       const until = now() + wait;
       let ask = deps.ledger.ask(id);
-      // Hold the call a while (the CLI's --wait asks again), not forever.
-      while (ask && !askClosed(ask) && now() < until) {
-        await new Promise((resolve) => setTimeout(resolve, 500));
+      // Hold the call a while (the CLI's --wait asks again), not forever,
+      // and not past the service's stop.
+      while (ask && !askClosed(ask) && now() < until && !deps.signal?.aborted) {
+        await pause(500, deps.signal);
         ask = deps.ledger.ask(id);
       }
       return ask ?? notFound(`no question ${id}`);

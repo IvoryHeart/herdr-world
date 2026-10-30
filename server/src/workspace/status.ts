@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { sshCommandArgv } from "../bridge/ssh-command";
 import {
-  readGuiSettings,
+  type GuiSettings,
   workspaceRepoSettingsKey,
 } from "../config/gui-settings";
 
@@ -34,6 +34,7 @@ const GIT_STATUS_TIMEOUT_MS = 8000;
 export function createStatusEnricher(args: {
   connectionId?: string;
   sshHost: () => string | undefined;
+  readSettings: () => Promise<GuiSettings>;
   runProcessWithCodeTimeout: RunProcessWithCodeTimeout;
   shQuote: (value: string) => string;
 }) {
@@ -297,7 +298,7 @@ printf '${marker}END ${index} %s\\n' "$code"
       return typeof checkoutPath === "string" && checkoutPath;
     });
     const host = args.sshHost();
-    const settings = await readGuiSettings();
+    const settings = await args.readSettings();
     for (const workspace of worktreeWorkspaces) {
       const key = workspaceRepoSettingsKey(workspace, host, args.connectionId);
       if (!key) continue;

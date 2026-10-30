@@ -239,7 +239,7 @@ function fixture(paneId = "w1:p1") {
   const runtime = {
     herdr: { call },
     files: { resolveWorkspaceGitRoot },
-    worktreeHooks: { readWorktreeHooks },
+    worktreeHooks: { readWorktreeHooks, hooksEnabled: async () => true },
     sshHost: () => undefined,
   } as unknown as LegacyConnectionRuntime;
   const createWorktree = mock(
