@@ -6,7 +6,10 @@ import {
 } from "../config/gui-settings";
 import { ConnectionProfileStore } from "../connections/profiles";
 import { BoardStore } from "../world/board-store";
-import { WorldLedger } from "../world/world-ledger";
+import type { LedgerStore } from "../world/world-ledger";
+import { openWorldLedger } from "../storage/world-storage";
+import type { AttentionOutbox } from "../storage/world-protocol";
+import { join } from "node:path";
 import type { Clock, Scheduler } from "./ports";
 
 /**
@@ -18,8 +21,11 @@ export type WorldStorage = {
   connections: ConnectionProfileStore;
   /** Opened on first use. */
   board(): BoardStore;
-  /** Opened on first use. */
-  ledger(): WorldLedger;
+  /** Committed reads; SQLite is opened before the listener can bind. */
+  ledger(): LedgerStore;
+  attention(): AttentionOutbox;
+  failed?: Promise<Error>;
+  incarnation?: string;
   /** Opened on first use. */
   profiles(): ProfileStore;
   /**
@@ -34,8 +40,8 @@ export type OpenStorage = (
   ports: { clock: Clock; scheduler: Scheduler },
 ) => Promise<WorldStorage>;
 
-/** Today's JSON files, each rewritten whole on change. */
-export const openStorage: OpenStorage = async (paths, { clock }) => {
+/** Private JSON configuration/Board/profiles and the worker-owned SQLite ledger. */
+export const openStorage: OpenStorage = async (paths, { clock, scheduler }) => {
   const options = {
     now: () => clock.now(),
     log: (message: string) => console.warn(message),
@@ -43,10 +49,12 @@ export const openStorage: OpenStorage = async (paths, { clock }) => {
   const settings = createGuiSettingsStore(paths.settings);
   const connections = new ConnectionProfileStore({ path: paths.connections });
   let board: BoardStore | null = null;
-  let ledger: WorldLedger | null = null;
+  const world = await openWorldLedger(
+    { database: join(paths.root, "world.sqlite"), ledger: paths.ledger },
+    { clock, scheduler },
+  );
   let profiles: ProfileStore | null = null;
   let closed = false;
-  // A store first opened after close comes up closed: reads only.
   const opened = <T extends { close(): unknown }>(store: T) => {
     if (closed) store.close();
     return store;
@@ -55,17 +63,23 @@ export const openStorage: OpenStorage = async (paths, { clock }) => {
     settings,
     connections,
     board: () => (board ??= opened(new BoardStore(paths.board, options))),
-    ledger: () => (ledger ??= opened(new WorldLedger(paths.ledger, options))),
+    ledger: () => world.ledger,
+    attention: () => world.outbox,
+    failed: world.failed,
+    incarnation: world.incarnation,
     profiles: () =>
       (profiles ??= opened(new ProfileStore(paths.agentProfiles, options))),
-    // Every store refuses writes from here on, even from work that outlived
-    // the drain; a later owner of the folder opens stores of its own.
     async close() {
       closed = true;
       board?.close();
-      ledger?.close();
       profiles?.close();
-      await Promise.all([settings.close(), connections.close()]);
+      // Fence every family now, including a write from a late request body.
+      const worldClosing = world.close();
+      try {
+        await Promise.all([settings.close(), connections.close()]);
+      } finally {
+        await worldClosing;
+      }
     },
   };
 };

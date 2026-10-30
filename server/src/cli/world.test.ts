@@ -7,9 +7,7 @@ import { createServer } from "node:net";
 import { join } from "node:path";
 import { loadOrCreateSessionSecret } from "../config/session-secret";
 import {
-  herdrAlert,
   httpTransport,
-  type OwnerAlert,
   parseWorldArgs,
   runWorldCommand,
   WORLD_EXIT,
@@ -275,227 +273,222 @@ test("--skill prints the agent guide", async () => {
   expect(WORLD_SKILL).toMatchSnapshot();
 });
 
-describe("owner alert", () => {
-  const alerts: [string, string][] = [];
-  const shown =
-    (value: boolean, reason = value ? "shown" : "disabled"): OwnerAlert =>
-    (title, body) => {
-      alerts.push([title, body]);
-      return { shown: value, reason };
-    };
-  const asked: WorldCliTransport = async () => ({
-    ok: true,
-    actor: { label: "claude in w1:p1", verified: true },
-    result: { id: "q-1", created: true },
-  });
-
-  test("a new question alerts the owner through Herdr once", async () => {
-    alerts.length = 0;
+describe("service owner alert", () => {
+  test("uses the service outcome without starting a CLI-side Herdr send", async () => {
     const { context: ctx, out } = context();
+    ctx.captureCommand = () => {
+      throw new Error("CLI must not send notifications");
+    };
+    const transport: WorldCliTransport = async () => ({
+      ok: true,
+      recorded: true,
+      notified: { shown: true, reason: "shown" },
+      result: { id: "q-1", created: true },
+    });
+    expect(
+      await runWorldCommand("ask", ["Ship?", "--json"], ctx, transport, false),
+    ).toBe(0);
+    expect(JSON.parse(out[0]!)).toMatchObject({
+      recorded: true,
+      notified: { shown: true },
+    });
+  });
+  test("a stored question with no confirmed alert exits not_delivered without waiting", async () => {
+    const { context: ctx, err } = context();
+    let calls = 0;
+    const transport: WorldCliTransport = async () => {
+      calls++;
+      return {
+        ok: true,
+        recorded: true,
+        notified: { shown: false, reason: "pending" },
+        result: { id: "q-1", created: true },
+      };
+    };
+    expect(
+      await runWorldCommand("ask", ["Ship?", "--wait"], ctx, transport, true),
+    ).toBe(WORLD_EXIT.not_delivered);
+    expect(calls).toBe(1);
+    expect(err).toEqual([
+      "herdr-world ask: recorded q-1, but Herdr showed the owner no alert: pending",
+    ]);
+  });
+  test("failed recording retains the single CLI fallback and exits unavailable", async () => {
+    const { context: ctx, out } = context();
+    const alerts: string[] = [];
+    const transport: WorldCliTransport = async () => ({
+      ok: false,
+      code: "refused",
+      recorded: false,
+      notified: null,
+      error: "wrong World CLI token",
+    });
     expect(
       await runWorldCommand(
         "ask",
         ["Ship?", "--json"],
         ctx,
-        asked,
+        transport,
         false,
-        shown(true),
+        (_title, body) => {
+          alerts.push(body);
+          return { shown: true, reason: "shown" };
+        },
       ),
-    ).toBe(0);
-    expect(alerts).toEqual([["claude in w1:p1 asks", "Ship? (q-1)"]]);
+    ).toBe(WORLD_EXIT.failure);
+    expect(alerts).toEqual([
+      "Ship? (not recorded in World: wrong World CLI token)",
+    ]);
     expect(JSON.parse(out[0]!)).toMatchObject({
-      ok: true,
-      result: { id: "q-1" },
-      notified: { shown: true, reason: "shown" },
+      recorded: false,
+      notified: { shown: true },
+      code: "unavailable",
     });
   });
-
-  test("a known cause is not alerted again", async () => {
-    alerts.length = 0;
+  test("an unknown recording outcome can alert once but a confirmed stored ask never falls back", async () => {
     const { context: ctx } = context();
-    const known: WorldCliTransport = async () => ({
-      ok: true,
-      result: { id: "q-1", question: "Ship?", at: 1 },
-    });
-    expect(
-      await runWorldCommand(
-        "ask",
-        ["Ship?", "--key", "crew:7"],
-        ctx,
-        known,
-        true,
-        shown(true),
-      ),
-    ).toBe(0);
-    expect(alerts).toEqual([]);
+    let alerts = 0;
+    const fallback = () => {
+      alerts++;
+      return { shown: true, reason: "shown" };
+    };
+    await runWorldCommand(
+      "ask",
+      ["Lost reply", "--json"],
+      ctx,
+      async () => ({ ok: false, code: "unavailable", error: "reply lost" }),
+      false,
+      fallback,
+    );
+    expect(alerts).toBe(1);
+    await runWorldCommand(
+      "ask",
+      ["Stored", "--json"],
+      ctx,
+      async () => ({
+        ok: false,
+        code: "not_delivered",
+        recorded: true,
+        notified: { shown: false, reason: "busy" },
+        result: { id: "q-stored" },
+      }),
+      false,
+      fallback,
+    );
+    expect(alerts).toBe(1);
   });
-
-  test("an alert nobody saw fails loudly, keeps the record and does not wait", async () => {
-    alerts.length = 0;
-    const { context: ctx, err } = context();
-    let calls = 0;
-    const transport: WorldCliTransport = async (...args) => {
-      calls += 1;
-      return asked(...args);
+  test("default fallback uses the asking pane's Herdr command and reports the recording failure", async () => {
+    const { context: ctx, out } = context();
+    const calls: string[][] = [];
+    ctx.runtime.env.HERDR_BIN_PATH = "herdr-fixture";
+    ctx.captureCommand = (argv) => {
+      calls.push(argv);
+      return {
+        code: 0,
+        stdout: JSON.stringify({ result: { shown: true, reason: "shown" } }),
+      };
     };
     expect(
       await runWorldCommand(
         "ask",
-        ["Ship?", "--wait"],
+        ["Reach the owner?", "--json"],
         ctx,
-        transport,
-        true,
-        shown(false),
+        async () => ({
+          ok: false,
+          code: "unavailable",
+          recorded: false,
+          error: "service is stopped",
+        }),
+        false,
+      ),
+    ).toBe(WORLD_EXIT.failure);
+    expect(calls[0]).toEqual([
+      "herdr-fixture",
+      "notification",
+      "show",
+      "pane w1:p1 asks",
+      "--body",
+      "Reach the owner? (not recorded in World: service is stopped)",
+      "--sound",
+      "request",
+    ]);
+    expect(JSON.parse(out[0]!)).toMatchObject({
+      recorded: false,
+      notified: { shown: true },
+    });
+  });
+  test("temporary service alert failure preserves its retrying evidence without a CLI duplicate", async () => {
+    const { context: ctx, out } = context();
+    expect(
+      await runWorldCommand(
+        "ask",
+        ["Deferred?", "--json"],
+        ctx,
+        async () => ({
+          ok: true,
+          recorded: true,
+          retrying: true,
+          notified: { shown: false, reason: "busy" },
+          result: { id: "q-deferred" },
+        }),
+        false,
+        () => {
+          throw new Error("A stored ask must use its service intent");
+        },
       ),
     ).toBe(WORLD_EXIT.not_delivered);
-    expect(calls).toBe(1);
-    expect(err).toEqual([
-      "herdr-world ask: recorded q-1, but Herdr showed the owner no alert: disabled",
-    ]);
-  });
-
-  test("a question World could not record still reaches the owner and exits unavailable", async () => {
-    const down: WorldCliTransport = async () => ({
-      ok: false,
-      code: "refused",
-      error: "wrong World CLI token",
+    expect(JSON.parse(out[0]!)).toMatchObject({
+      recorded: true,
+      retrying: true,
+      code: "not_delivered",
     });
-    for (const [delivered, said] of [
-      [true, "the owner was alerted through Herdr"],
-      [false, "Herdr alert also failed: disabled"],
-    ] as const) {
-      alerts.length = 0;
-      const { context: ctx, out } = context();
-      expect(
-        await runWorldCommand(
-          "ask",
-          ["Ship?", "--json"],
-          ctx,
-          down,
-          false,
-          shown(delivered),
-        ),
-      ).toBe(WORLD_EXIT.failure);
-      expect(alerts).toEqual([
-        [
-          "pane w1:p1 asks",
-          "Ship? (not recorded in World: wrong World CLI token)",
-        ],
-      ]);
-      expect(JSON.parse(out[0]!)).toMatchObject({
-        ok: false,
-        code: "unavailable",
-        recorded: false,
-        notified: { shown: delivered },
-        error: `World did not record the question: wrong World CLI token; ${said}`,
-      });
-    }
   });
-
-  test("a repeated cause says it was recorded and sent no alert", async () => {
-    alerts.length = 0;
+  test("a repeated cause uses its retained service record", async () => {
     const { context: ctx, out } = context();
-    const known: WorldCliTransport = async () => ({
+    const transport: WorldCliTransport = async () => ({
       ok: true,
+      recorded: true,
+      notified: null,
       result: { id: "q-1", question: "Ship?", at: 1 },
     });
     expect(
       await runWorldCommand(
         "ask",
-        ["Ship?", "--key", "crew:7", "--json"],
+        ["Ship?", "--key", "fixture", "--json"],
         ctx,
-        known,
+        transport,
         false,
-        shown(true),
       ),
     ).toBe(0);
-    expect(alerts).toEqual([]);
     expect(JSON.parse(out[0]!)).toMatchObject({
-      ok: true,
       recorded: true,
       notified: null,
     });
   });
-
-  test("--wait keeps the recording and alert outcome, answered or timed out", async () => {
-    for (const answered of [true, false]) {
-      alerts.length = 0;
-      const { context: ctx, out, err } = context();
-      const transport: WorldCliTransport = async (command) =>
-        command === "ask"
-          ? {
-              ok: true,
-              actor: { label: "claude in w1:p1", verified: true },
-              result: { id: "q-1", created: true },
-            }
-          : {
-              ok: true,
-              result: answered
-                ? { id: "q-1", answer: { text: "Yes" } }
-                : { id: "q-1" },
-            };
-      const code = await runWorldCommand(
+  test("--wait retains the service's stored and notified outcomes", async () => {
+    const { context: ctx, out } = context();
+    const transport: WorldCliTransport = async (command) =>
+      command === "ask"
+        ? {
+            ok: true,
+            recorded: true,
+            notified: { shown: true, reason: "shown" },
+            result: { id: "q-1", created: true },
+          }
+        : { ok: true, result: { id: "q-1", answer: { text: "Yes" } } };
+    expect(
+      await runWorldCommand(
         "ask",
-        ["Ship?", "--json", "--wait", "--timeout", "0.001"],
+        ["Ship?", "--json", "--wait"],
         ctx,
         transport,
         false,
-        shown(true),
-      );
-      expect(code).toBe(answered ? 0 : WORLD_EXIT.timeout);
-      const printed = JSON.parse((answered ? out : [...out, ...err])[0]!);
-      expect(printed).toMatchObject({
-        recorded: true,
-        notified: { shown: true, reason: "shown" },
-        ...(answered
-          ? { result: { answer: { text: "Yes" } } }
-          : { timed_out: true }),
-      });
-    }
-  });
-
-  test("reads Herdr's notification reply and its failures", () => {
-    const { context: ctx } = context();
-    const argv: string[][] = [];
-    const reply = (code: number, stdout: string) => {
-      ctx.captureCommand = (command: string[]) => {
-        argv.push(command);
-        return { code, stdout };
-      };
-      return herdrAlert(ctx)("claude asks", "Ship? (q-1)");
-    };
-    expect(
-      reply(
-        0,
-        '{"id":"cli:notification:show","result":{"type":"notification_show","shown":true,"reason":"shown"}}',
       ),
-    ).toEqual({ shown: true, reason: "shown" });
-    expect(argv[0]).toEqual([
-      "herdr",
-      "notification",
-      "show",
-      "claude asks",
-      "--body",
-      "Ship? (q-1)",
-      "--sound",
-      "request",
-    ]);
-    expect(
-      reply(
-        1,
-        '{"id":"cli:notification:show","error":{"code":"server_not_running","message":"no herdr server is running"}}',
-      ),
-    ).toEqual({ shown: false, reason: "no herdr server is running" });
-    expect(reply(127, "")).toEqual({
-      shown: false,
-      reason: "herdr notification show exited 127",
-    });
-    ctx.captureCommand = () => {
-      throw new Error("ENOENT");
-    };
-    expect(herdrAlert(ctx)("t", "b")).toEqual({
-      shown: false,
-      reason: "could not run herdr: ENOENT",
+    ).toBe(0);
+    expect(JSON.parse(out[0]!)).toMatchObject({
+      recorded: true,
+      notified: { shown: true },
+      result: { answer: { text: "Yes" } },
     });
   });
 });

@@ -284,15 +284,24 @@ herdr-world ask withdraw q-example --json
 herdr-world ask withdraw --key dispatch:7:stuck --json
 ```
 
-A new question also alerts the owner through the asking pane's Herdr
-(`herdr notification show --sound request`): Herdr's toasts, every World
+A new question is committed to the instance's `world.sqlite` with its attention
+outbox entry. The service then alerts the owner through the captured Herdr
+connection (`notification.show`, sound `request`): Herdr's toasts, every World
 connected to that Herdr and Web Push. The JSON reply's `recorded` field says
 whether World recorded it and `notified` what Herdr reported (`null` when a
 repeated `--key` returned the recorded question without a new alert); both stay
 on the final `--wait` reply. Exit 6 (`not_delivered`) means World recorded the
-question but no one was alerted; a failure to record still sends the alert,
-names the failure and exits 1 (`unavailable`). Report either failure once with its error text; never retry it
-silently.
+question but no alert was confirmed yet. `retrying: true` means the service
+will retry a temporary failure with bounded backoff; an eventual alert may still
+arrive. Closing the ask cancels a pending alert. A failure to record retains the
+CLI's fallback through the asking pane's Herdr, names the recording failure and
+exits 1. A lost service reply can therefore produce duplicate owner alerts.
+Report failures once; do not add a caller-side retry loop. Interrupted dispatch
+is recorded as `uncertain`; inspect `ask get ID --json` for its evidence. An
+answer is durable before acknowledgement and remains retrievable with `ask get`
+or `--wait`. [Automatic pane-answer delivery](ask-answer-delivery.md) is PR 2;
+an uncertain pane send must never auto-replay.
+See [data and backups](DEPLOYMENT.md#durable-questions-results-and-backups).
 
 `--key` deduplicates a cause for the verified asking occupant, including an
 answered cause. Repeat the same key while that cause persists. Save the returned

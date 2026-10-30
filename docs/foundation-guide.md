@@ -107,6 +107,20 @@ captured connection identity and stale-generation rejection.
 
 ## Service ownership
 
+World-owned asks, results and attention use the asynchronous
+[SQLite ledger family](../server/src/storage/world-storage.ts). Its sole
+[worker](../server/src/storage/world-worker.ts) owns database access and grouped
+FULL commits; [the dispatcher](../server/src/world/attention-dispatch.ts) records
+dispatch before external effects. The [recovery contract](../verification/contracts/world-storage.md)
+maps finite crash schedules, compiled acceptance, import, replay retention and
+the effect-specific uncertainty rules. Configuration and secrets stay files;
+see [location and backups](DEPLOYMENT.md#durable-questions-results-and-backups).
+
+[Answer delivery without `--wait`](ask-answer-delivery.md) is a planned second
+slice. It specifies the original-session binding, Chat send-path reuse, verified
+asker acknowledgement, explicit uncertainty and owner recovery. Its acceptance
+cases are planned work, not evidence of shipped automatic pane delivery.
+
 | Area | Owner and responsibility | Focused evidence |
 | --- | --- | --- |
 | Service composition | [world-service](../server/src/service/world-service.ts) builds one service and owns its start, stop and drain; [ports](../server/src/service/ports.ts) define the clock, scheduler and adapter ports; [storage](../server/src/service/storage.ts) is the port for World-owned stores, with today's JSON files behind it; [instance-lock](../server/src/config/instance-lock.ts) gives each live service its own folder. | [Service tests](../server/src/service/world-service.test.ts), [lock tests](../server/src/config/instance-lock.test.ts) |

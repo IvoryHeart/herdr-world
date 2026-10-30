@@ -1,3 +1,4 @@
+import type { OutboxEffect } from "../storage/world-protocol";
 import { existsSync, readFileSync, renameSync } from "node:fs";
 import { replaceDataFile } from "../config/data-paths";
 import type { TerminalRef } from "../../../shared/relations";
@@ -67,6 +68,10 @@ export type LedgerAsk = {
   answer?: { text: string; at: number; by: string };
   /** Closed by the owner without an answer; the asker's `--wait` ends. */
   dismissed?: { at: number; by: string };
+  /** Durable attention evidence; an uncertain answer is always retrievable. */
+  delivery?: {
+    notification?: { state: string; reason?: string };
+  };
 };
 
 /** An answered, dismissed or withdrawn question is closed. */
@@ -97,6 +102,19 @@ export type LedgerDocument = {
   asks: LedgerAsk[];
   results: LedgerResult[];
 };
+
+/** Committed reads; writes may cross the asynchronous persistence boundary. */
+export interface LedgerStore {
+  nextId(kind: "c" | "q" | "r"): string;
+  get(): LedgerDocument;
+  ask(id: string): LedgerAsk | undefined;
+  change(id: string): LedgerChange | undefined;
+  openAsks(): { revision: number; asks: LedgerAsk[] };
+  update(
+    change: (document: LedgerDocument) => void,
+    effects?: readonly OutboxEffect[] | (() => readonly OutboxEffect[]),
+  ): number | Promise<number>;
+}
 
 export const LEDGER_LIMITS = {
   changes: 2000,

@@ -8,7 +8,7 @@ export type WorldCliRequest = {
   caller?: { pane_id?: unknown };
 };
 
-export type WorldCliResponse =
+export type WorldCliResponse = (
   | { ok: true; actor: CliActor; result: unknown }
   | {
       ok: false;
@@ -16,4 +16,9 @@ export type WorldCliResponse =
       error: string;
       actor?: CliActor;
       result?: unknown;
-    };
+    }
+) & {
+  recorded?: boolean;
+  retrying?: boolean;
+  notified?: { shown: boolean; reason: string } | null;
+};

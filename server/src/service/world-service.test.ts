@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
+import { Database } from "bun:sqlite";
 import {
   existsSync,
   mkdirSync,
@@ -14,7 +15,7 @@ import { join } from "node:path";
 import { readWorldCliToken } from "../config/session-secret";
 import { createLegacyConnectionRuntime } from "../connections/runtime";
 import { configureServerLogger } from "../utils/logger";
-import type { Scheduler } from "./ports";
+import { systemScheduler, type Scheduler } from "./ports";
 import { type OpenStorage, openStorage } from "./storage";
 import {
   askThroughCli,
@@ -80,7 +81,25 @@ function expectOwnFolders(
     const marker = MARKERS[name];
     expect(JSON.parse(read("settings.json")).title_suffix).toBe(marker);
     expect(read("boards/board.json")).toContain(`${marker} note`);
-    expect(read("boards/world-ledger.json")).toContain(`${marker} question?`);
+    // runTwoServices has closed both workers, so read the persisted family.
+    const database = new Database(join(root, "world.sqlite"), {
+      readonly: true,
+    });
+    try {
+      const asks = database.query("SELECT body FROM asks").all() as {
+        body: string;
+      }[];
+      expect(
+        asks.some(
+          (row) => JSON.parse(row.body).question === `${marker} question?`,
+        ),
+      ).toBeTrue();
+      expect(
+        asks.every((row) => !row.body.includes(MARKERS[other])),
+      ).toBeTrue();
+    } finally {
+      database.close();
+    }
     expect(read("agent-profiles.json")).toContain(`${marker} profile`);
     expect(read("connections.json")).toContain(marker);
     expect(read("source-secrets.json")).toContain(`${marker}-jira-token`);
@@ -373,7 +392,11 @@ test("stop ends a wait for an answer before storage closes", async () => {
       clock: { now: () => 1_000, monotonic: () => performance.now() },
       scheduler: never,
       storage: async (paths, ports) => {
-        const storage = await openStorage(paths, ports);
+        // Freeze shutdown budgets, while allowing SQLite's group-commit timer.
+        const storage = await openStorage(paths, {
+          ...ports,
+          scheduler: systemScheduler,
+        });
         return {
           ...storage,
           ledger: () => {

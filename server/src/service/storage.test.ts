@@ -33,32 +33,34 @@ test("closed storage refuses every family's writes and keeps its files", async (
     const storage = await openStorage(paths, ports);
     await storage.settings.update((s) => ({ ...s, title_suffix: "before" }));
     storage.board().patch([note("before")]);
-    storage.ledger().update(() => {});
+    await storage.ledger().update(() => {});
     const [profile] = storage.profiles().get().profiles;
     storage.profiles().save(profile);
     await storage.connections.save(registry("before"));
     const files = [
       paths.settings,
       paths.board,
-      paths.ledger,
       paths.agentProfiles,
       paths.connections,
     ];
     const before = files.map((path) => readFileSync(path, "utf8"));
 
     await storage.close();
+    const database = join(root, "world.sqlite");
+    const sqliteBefore = readFileSync(database);
     const closed = "World storage is closed";
     await expect(
       storage.settings.update((s) => ({ ...s, title_suffix: "after" })),
     ).rejects.toThrow(closed);
     expect(() => storage.board().patch([note("after")])).toThrow(closed);
-    expect(() => storage.ledger().update(() => {})).toThrow(closed);
+    await expect(storage.ledger().update(() => {})).rejects.toThrow("closing");
     expect(() => storage.profiles().save(profile)).toThrow(closed);
     await expect(storage.connections.save(registry("after"))).rejects.toThrow(
       closed,
     );
     await expect(storage.connections.clear()).rejects.toThrow(closed);
     expect(files.map((path) => readFileSync(path, "utf8"))).toEqual(before);
+    expect(readFileSync(database)).toEqual(sqliteBefore);
     // Reads still answer from what was saved.
     expect((await storage.settings.read()).title_suffix).toBe("before");
   } finally {
@@ -77,9 +79,7 @@ test("a family first opened after close refuses writes", async () => {
     expect(() => storage.board().patch([note("late")])).toThrow(
       "World storage is closed",
     );
-    expect(() => storage.ledger().update(() => {})).toThrow(
-      "World storage is closed",
-    );
+    await expect(storage.ledger().update(() => {})).rejects.toThrow("closing");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

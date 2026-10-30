@@ -1,6 +1,12 @@
+import { randomBytes } from "node:crypto";
 import { handleWorldCliEndpoint } from "../http/world-cli-endpoint";
 import { answerAsk, CliError, createWorldCli, dismissAsk } from "./world-cli";
-import type { WorldLedger } from "./world-ledger";
+import { type LedgerStore } from "./world-ledger";
+import { createAttentionDispatcher } from "./attention-dispatch";
+import type {
+  StoragePorts,
+  WorldLedgerStorage,
+} from "../storage/world-protocol";
 import type { WorldSnapshotResult } from "./snapshot";
 import type { WorldSourcesSnapshot } from "../../../shared/worldSources";
 import { runGroupMove } from "./group-move";
@@ -30,11 +36,13 @@ type Lease = {
 };
 
 export function createWorldCliService(deps: {
-  board(): TownMoveContext["board"];
-  /** The service's own ledger, opened on first use. */
-  ledger(): WorldLedger;
-  /** The service's wall clock: question times and wait deadlines. */
+  ledger(): LedgerStore;
+  attention?(): WorldLedgerStorage["outbox"];
+  scheduler?: StoragePorts["scheduler"];
   now(): number;
+  incarnation?: string;
+  clock?: StoragePorts["clock"];
+  board(): TownMoveContext["board"];
   /** Read when a call arrives, so the service may be built first. */
   connections(): {
     list(): { id: string }[];
@@ -60,17 +68,58 @@ export function createWorldCliService(deps: {
   const now = () => deps.now();
   // Ends the calls that wait for an answer, so the service can stop.
   const stopped = new AbortController();
+  const incarnation = deps.incarnation ?? randomBytes(16).toString("base64url");
+  let dispatcher: ReturnType<typeof createAttentionDispatcher> | undefined;
+  // This query includes attention evidence as well as domain mutations.
+  let queryRevision = ledger().get().revision;
+  const openAsks = () => ({ ...ledger().openAsks(), revision: queryRevision });
   /** Pages fetch the open questions only when `asks` says they changed. */
-  const publishLedger = (revision: number, asks = false) =>
+  const publishLedger = (revision: number, asks = false, wake = true) => {
+    queryRevision = Math.max(queryRevision + 1, revision);
     deps.broadcast(
       JSON.stringify({
         control: {
           type: "world_ledger_changed",
-          revision,
+          revision: queryRevision,
           ...(asks ? { asks: true } : {}),
         },
       }),
     );
+    if (wake) void dispatcher?.wake();
+  };
+  if (deps.attention) {
+    if (!deps.scheduler)
+      throw new Error("Attention storage needs the service scheduler");
+    dispatcher = createAttentionDispatcher({
+      outbox: deps.attention,
+      scheduler: deps.scheduler,
+      clock: deps.clock ?? {
+        now,
+        monotonic: () => performance.now(),
+      },
+      incarnation,
+      ledger,
+      hasConnection: (id) =>
+        deps
+          .connections()
+          .list()
+          .some((entry) => entry.id === id),
+      lease: (id) => {
+        const lease = deps.connections().readyRuntimeLease(id);
+        return (
+          lease && {
+            connectionId: lease.connectionId,
+            generation: lease.generation,
+            isCurrent: () => lease.isCurrent(),
+            call: (method, params) =>
+              lease.runtime.herdr.call(method, params, 5000),
+          }
+        );
+      },
+      changed: () => publishLedger(ledger().get().revision, true, false),
+      log: (message) => console.warn(message),
+    });
+  }
   const cli = createWorldCli({
     board,
     get ledger() {
@@ -134,11 +183,12 @@ export function createWorldCliService(deps: {
     publishLedger,
     now,
     signal: stopped.signal,
+    incarnation,
   });
   return {
     /** A page's question method; undefined when `method` is not one. */
-    rpc(method: string, params: unknown): unknown {
-      if (method === "world.asks.get") return ledger().openAsks();
+    async rpc(method: string, params: unknown): Promise<unknown> {
+      if (method === "world.asks.get") return openAsks();
       if (method !== "world.ask.answer" && method !== "world.ask.dismiss")
         return undefined;
       const p = (params ?? {}) as Record<string, unknown>;
@@ -154,15 +204,15 @@ export function createWorldCliService(deps: {
         );
       try {
         publishLedger(
-          method === "world.ask.answer"
+          await (method === "world.ask.answer"
             ? answerAsk(ledger(), p.id, answer, "owner", now())
-            : dismissAsk(ledger(), p.id, "owner", now()),
+            : dismissAsk(ledger(), p.id, "owner", now())),
           true,
         );
       } catch (error) {
         throw error instanceof CliError ? new Error(error.message) : error;
       }
-      return ledger().openAsks();
+      return openAsks();
     },
     /** `/api/world/cli`, for `herdr-world` on this machine. */
     http(
@@ -174,12 +224,36 @@ export function createWorldCliService(deps: {
       return handleWorldCliEndpoint(req, peer, {
         serverPort,
         bearerAuth,
-        handle: (body, locate) => cli.handle(body as never, locate),
+        handle: async (body, locate) => {
+          const reply = await cli.handle(body as never, locate);
+          if ((body as { command?: unknown })?.command !== "ask") return reply;
+          if (!reply.ok) return { ...reply, recorded: false, notified: null };
+          const result = reply.result as { id: string; created?: boolean };
+          if (!result.created)
+            return { ...reply, recorded: true, notified: null };
+          const notification = (await dispatcher?.notify(result.id)) ?? {
+            shown: false,
+            reason: "Owner-alert dispatcher is unavailable",
+          };
+          return {
+            ...reply,
+            recorded: true,
+            notified: {
+              shown: notification.shown,
+              reason: notification.reason,
+            },
+            ...(notification.retrying ? { retrying: true } : {}),
+          };
+        },
       });
     },
-    /** End every wait for an answer now; the service is stopping. */
-    stop() {
+    start: () => {
+      void dispatcher?.wake();
+    },
+    /** Cancel held reads immediately, then drain already-started alerts. */
+    async stop() {
       stopped.abort();
+      await dispatcher?.stop();
     },
   };
 }

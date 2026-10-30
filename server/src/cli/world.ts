@@ -59,6 +59,7 @@ type Reply = {
   result?: unknown;
   /** `ask` only: whether World recorded the question. */
   recorded?: boolean;
+  retrying?: boolean;
   /**
    * `ask` only: what Herdr's alert to the owner reported; null when none was
    * sent, as for a repeated cause that returns its recorded question.
@@ -124,39 +125,28 @@ function alertOwner(
   context: CliContext,
   alert: OwnerAlert,
 ): Reply {
-  const asked = (reply.result ?? {}) as { id?: unknown; created?: unknown };
-  if (reply.ok && asked.created !== true)
-    return { ...reply, recorded: true, notified: null };
-  if (!reply.ok && reply.code === "usage")
+  if (reply.ok || reply.recorded === true) return reply;
+  if (reply.code === "usage")
     return { ...reply, recorded: false, notified: null };
   const who =
     reply.actor?.label ??
     (context.runtime.env.HERDR_PANE_ID
       ? `pane ${context.runtime.env.HERDR_PANE_ID}`
       : "An agent");
+  const status =
+    reply.recorded === false
+      ? "not recorded in World"
+      : "recording not confirmed in World";
   const notified = alert(
     `${who} asks`,
-    reply.ok
-      ? `${question} (${String(asked.id)})`
-      : `${question} (not recorded in World: ${reply.error ?? "failed"})`,
+    `${question} (${status}: ${reply.error ?? "failed"})`,
   );
-  // Not recorded, whatever World's reason: the ask is unavailable (exit 1).
-  if (!reply.ok)
-    return {
-      ...reply,
-      code: "unavailable",
-      recorded: false,
-      notified,
-      error: `World did not record the question: ${reply.error ?? "failed"}; ${notified.shown ? "the owner was alerted through Herdr" : `Herdr alert also failed: ${notified.reason}`}`,
-    };
-  if (notified.shown) return { ...reply, recorded: true, notified };
   return {
     ...reply,
-    ok: false,
-    code: "not_delivered",
-    recorded: true,
+    code: "unavailable",
+    recorded: false,
     notified,
-    error: `recorded ${String(asked.id)}, but Herdr showed the owner no alert: ${notified.reason}`,
+    error: `World did not confirm recording the question: ${reply.error ?? "failed"}; ${notified.shown ? "the owner was alerted through Herdr" : `Herdr alert also failed: ${notified.reason}`}`,
   };
 }
 
@@ -647,10 +637,24 @@ export async function runWorldCommand(
     }
   } else reply = await transport(command, params);
   // The ask's recording and alert outcome, kept through --wait.
-  let outcome: Pick<Reply, "recorded" | "notified"> = {};
+  let outcome: Pick<Reply, "recorded" | "notified" | "retrying"> = {};
   if (command === "ask") {
-    reply = alertOwner(reply, String(params.question), context, alert);
-    outcome = { recorded: reply.recorded, notified: reply.notified };
+    if (!reply.ok && reply.recorded !== true)
+      reply = alertOwner(reply, String(params.question), context, alert);
+    if (reply.ok && reply.notified?.shown === false) {
+      const id = String((reply.result as { id?: unknown }).id);
+      reply = {
+        ...reply,
+        ok: false,
+        code: "not_delivered",
+        error: `recorded ${id}, but Herdr showed the owner no alert: ${reply.notified.reason}`,
+      };
+    }
+    outcome = {
+      recorded: reply.recorded,
+      notified: reply.notified,
+      ...(reply.retrying ? { retrying: true } : {}),
+    };
   }
   // --wait: ask again until the owner (or an agent) answers.
   if (reply.ok && wait && (command === "ask" || command === "ask get")) {

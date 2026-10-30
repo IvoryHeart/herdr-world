@@ -22,6 +22,67 @@ move the managed service: `herdr-world auth`, `url` and `service install` then
 use the login token in that folder. The lock is `instance.lock` in the data
 directory; a lock left by a World that is no longer running is taken over.
 
+### Durable questions, results and backups
+
+`world.sqlite` in that instance's data directory holds agent questions, answers,
+task-result notices, undo history and the attention outbox. One in-process worker
+owns it; SQLite uses WAL and `synchronous=FULL`. Responses acknowledge a durable
+commit. Grouping up to 32 operations or 5 ms reduces synchronization frequency;
+these settings do not promise a particular response latency on every platform.
+Configuration, connections and secrets remain private files.
+
+At startup, World checks `boards/world-ledger.json` (or the configured
+`HERDR_WORLD_LEDGER_PATH`). Before importing a changed file, it makes a private,
+byte-identical `<ledger>.<content-hash>.sqlite-import.bak` beside it. An unchanged
+file causes no import writes. Changed legacy files contribute only missing IDs;
+existing SQLite records take precedence. Historical imports create no alerts.
+The original remains untouched. An unreadable legacy file is reported in the
+local service log and left alone; World uses its current store, and checks again
+after the file is repaired.
+The database location always follows the instance data directory; the legacy
+ledger override selects the import source.
+
+For a consistent backup, stop this World service, then copy its entire private
+data directory, including any SQLite WAL files and the configuration/secrets it
+needs. Back up an overridden legacy import source separately while migrating.
+Never copy only a live `world.sqlite`: committed data can still be in its WAL.
+Restore into a private directory with the service stopped. Before a future
+schema upgrade, World makes a private `world.sqlite.v<old-version>.bak` snapshot.
+An older binary refuses an unsupported newer schema. Restore that matching
+snapshot with the service stopped, after preserving the current whole-directory
+backup. Never overwrite a live database or mix WAL files from different copies.
+
+A binary predating SQLite uses the retained JSON and cannot see newer SQLite
+answers. On upgrading again, World merges missing legacy IDs; it never overwrites
+an existing SQLite record. Conflicting edits to the same record require explicit
+reconciliation from the preserved backups. Keep the JSON, content-hash import
+backups, schema snapshots and owner backups private. Remove migration backups
+only after verifying the upgrade and deciding that their rollback/reconciliation
+history is no longer needed.
+
+The change log retains at most 10,000 change references and expires them after
+24 hours on writes; an expired cursor or one from a previous service start must reset. It records IDs
+and tombstones, rather than another copy of question text. Open questions and
+unresolved attention intents survive independently. Finished attention entries
+are removed with their retained domain records.
+
+The service commits a dispatch claim before showing an owner alert on its
+captured connection's current runtime. No alternate connection is selected.
+`shown: true` finishes delivery. Definite `disabled`, `no_foreground_client` or
+unknown refusals finish without retry. `busy`, `rate_limited` and a missing
+current lease defer the alert with backoff from 30 seconds to 30 minutes. Each wait is armed for at most 60 seconds
+and rechecks wall time on wake, including after sleep. A removed connection is refused. Closing an ask cancels its pending alert.
+Timeouts and interrupted dispatch become visible `uncertain`; owner alerts may
+retry under the same backoff because duplicates are harmless. Reception shows
+failed/uncertain delivery on the saved question; `ask get ID --json` includes its
+evidence. Alert updates refresh that evidence without announcing the question
+again or changing its attention count.
+
+An answer is stored before acknowledgement and remains retrievable with
+`herdr-world ask get ID`; use `--wait` to wait for it. No pane-answer sends are queued by this foundation. Pane delivery without `--wait`, including visible uncertainty and owner
+resend/close decisions, is the [planned PR 2](ask-answer-delivery.md). An uncertain
+pane-answer attempt must never automatically replay.
+
 Optionally set `HERDR_WORLD_PIN` to 6–12 ASCII digits for convenience login on a
 trusted private network or VPN. Keep password/token recovery available. PIN login
 has separate per-client throttling and a global cooldown after ten failures;

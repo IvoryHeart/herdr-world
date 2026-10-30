@@ -3,6 +3,11 @@
 A Web/PWA client for a running [Herdr](https://herdr.dev) server.
 [Install it](./docs/DEPLOYMENT.md) or follow the [tutorial](./docs/TUTORIAL.md).
 
+Agent questions, answers and task results survive service restarts in the
+instance's private `world.sqlite`. The service sends owner alerts from a durable
+outbox; an interrupted send retains explicit uncertainty. Retrieve answers with
+`herdr-world ask get ID` or `--wait`. See [migration and backups](./docs/DEPLOYMENT.md#durable-questions-results-and-backups).
+
 ## World update notifications
 
 - An available release notifies once per version in each browser profile and World
@@ -621,14 +626,17 @@ when piped, with stable exit codes:
   reaches reception when exactly one local Herdr has the pane it names. A new
   ask follows your chime, toast and OS notification preferences, naming its
   agent with the question's first line and **Open agent** for its exact
-  original seat. The CLI also alerts you through the asking pane's Herdr
-  (`herdr notification show --sound request`), so the question reaches Herdr's
-  toasts, every World connected to that Herdr and phone notifications even
-  when no World tab is open. When no one was alerted the ask exits 6
-  (`not_delivered`) with its recorded ID; when World could not record it, the
-  alert still goes out, names the failure and the ask exits 1. Its JSON says
-  `recorded` and what Herdr reported in `notified` (`null` for a repeated
-  cause, which is not alerted again), kept through `--wait`. Another verified agent (never
+  original seat. Reception shows failed or uncertain owner-alert delivery while
+  keeping the saved question answerable. World commits a new ask and its attention intent together in
+  `world.sqlite`, then sends the owner alert through its captured Herdr connection.
+  Herdr's toasts, connected Worlds and phone notifications can receive it even
+  when no World tab is open. The CLI retains a fallback alert through the asking
+  pane's Herdr if World could not record it; it names the failure and exits 1.
+  When no alert is confirmed yet, exit 6 (`not_delivered`) carries the recorded ID;
+  `retrying: true` means the service will retry a temporary failure with backoff.
+  Closing the ask cancels a pending alert. Duplicates are possible after a lost
+  reply or restart. JSON preserves `recorded` and Herdr's `notified` evidence
+  (`null` for a repeated cause), including through `--wait`. Another verified agent (never
   the asker) may answer a question that is not owner-only.
 - `ask withdraw ID` or `ask withdraw --key CAUSE`: the original verified asker
   withdraws a cleared cause, including when a creation reply lost its ask ID.

@@ -69,14 +69,20 @@ Targets are on your own host; add --connection ID for another one.
          A withdrawn --wait returns withdrawn, not an invented answer;
          one the owner dismissed returns dismissed, and its --key stays
          closed, like an answered one, until you withdraw it.
-         A new question also alerts the owner through your Herdr
-         (herdr notification show --sound request): Herdr toasts, every
-         World connected to it and phone notifications. JSON "recorded"
-         says whether World kept it, "notified" what Herdr reported (null
-         when a repeated --key sent no new alert). If no one was alerted
-         the ask exits 6 with code not_delivered and its ID; if World could
-         not record it, the alert still goes out, says so, and the ask
-         exits 1. Tell your operator; don't loop.
+         The service commits a question and its owner-alert intent to
+         world.sqlite, then sends through the captured Herdr connection.
+         JSON "recorded" says whether World kept it; "notified" carries
+         Herdr's reply (null when a repeated cause sent no new alert).
+         Exit 6 (not_delivered) keeps the ID: no alert is confirmed yet.
+         "retrying": true means World scheduled a temporary-failure retry
+         with backoff; don't add a retry loop. Closing the ask cancels it.
+         If World could not record the question, the CLI still alerts via
+         your Herdr, names the failure, and exits 1. A lost service reply
+         can therefore produce a harmless duplicate owner alert.
+         ask get ID --json exposes delivery evidence, including uncertain
+         interrupted alerts. Retrieve answers with ask get or --wait.
+         Automatic pane delivery without --wait is a planned follow-up;
+         uncertain pane sends must never auto-replay.
   result --task ID "SUMMARY" [--pr N] [--status done|blocked|failed]
   result ls [--task ID]
   spawned-by PARENT_PANE   stamp your pane as spawned by PARENT_PANE
