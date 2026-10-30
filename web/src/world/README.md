@@ -209,6 +209,11 @@ would force fresh resize notifications and another drawing pass.
 `ConcurrentContexts.test.ts` records Board render time and observer work by phase
 at 1440 and 390 pixels. Its refresh also updates the mounted terminal stores and
 checks that no terminals open, dispose or fit, and no retained cards re-register.
+Board controls compare measured layouts before dispatching a state update:
+returning unchanged state from an updater can still add a React commit after the
+initial layout effect. `board/BoardControls.dom.test.ts` delivers that initial
+ResizeObserver notification after layout and checks that repeated measurements
+add no commits, while narrower and wider layouts still update the controls.
 `ProductionContexts.board.test.ts` holds this path to the 200 ms p95 / 500 ms
 maximum input budget at 64 hosts.
 
