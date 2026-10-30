@@ -1,11 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { readAuthToken } from "../config/auth-token";
-import {
-  assertSafeDataPath,
-  dataRoot,
-  defaultDataFile,
-} from "../config/data-paths";
+import { assertSafeDataPath, dataRoot } from "../config/data-paths";
 import { worldEnv } from "../config/environment";
 import {
   browserUrlFor,
@@ -49,9 +45,18 @@ export interface ServiceSetup extends ServiceConfigFile {
   env: Record<string, string>;
 }
 
-/** The private data directory of the runtime's user, never the test runner's. */
-export function runtimeDataRoot(runtime: CliRuntime): string {
-  return dataRoot(runtime.homeDir, runtime.platform, runtime.appDataDir);
+/**
+ * The private data directory of the runtime's user, never the test runner's:
+ * the CLI's own HERDR_WORLD_DATA_DIR, then the service environment's.
+ */
+export function runtimeDataRoot(
+  runtime: CliRuntime,
+  serviceEnv: Record<string, string> = {},
+): string {
+  return dataRoot(runtime.homeDir, runtime.platform, runtime.appDataDir, {
+    HERDR_WORLD_DATA_DIR:
+      worldEnv("DATA_DIR", runtime.env) ?? worldEnv("DATA_DIR", serviceEnv),
+  });
 }
 
 export function connectionRegistryPath(
@@ -60,12 +65,7 @@ export function connectionRegistryPath(
 ): string {
   return (
     worldEnv("CONNECTIONS_PATH", env) ??
-    defaultDataFile(
-      "connections.json",
-      runtime.homeDir,
-      runtime.platform,
-      runtime.appDataDir,
-    )
+    join(runtimeDataRoot(runtime, env), "connections.json")
   );
 }
 

@@ -90,6 +90,7 @@ process.exit(2);
               ...process.env,
               PATH: "",
               HOME: root,
+              HERDR_WORLD_DATA_DIR: undefined,
               USERPROFILE: root,
               APPDATA: join(root, ".config"),
             },

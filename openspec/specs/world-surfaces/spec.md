@@ -1499,6 +1499,27 @@ repeat SHALL return the dismissed question, as it returns an answered one,
 until the asker withdraws it, and the watcher SHALL NOT ask again for a
 dismissed cause while that cause holds.
 
+The ask command SHALL alert the owner about each newly recorded question
+through the asking pane's Herdr with a request-sound notification naming the
+asker, the question and its ID, so the alert reaches Herdr's clients, every
+World connected to that Herdr and Web Push. A repeated cause that returns a
+retained ask SHALL NOT alert again. When the service cannot record a question,
+the command SHALL still send the alert, naming that failure, and keep the
+failure's exit status. When Herdr reports that no client was shown the alert,
+the command SHALL exit with `not_delivered` (6) and the recorded question ID
+instead of waiting, and SHALL NOT report success.
+
+#### Scenario: An ask alerts the owner through Herdr
+- **WHEN** an agent records a new question and its Herdr shows the alert
+- **THEN** the command succeeds and reports what Herdr showed
+- **AND** repeating the same cause key does not alert again
+
+#### Scenario: Nobody receives the alert
+- **WHEN** World records a question but Herdr reports that no client was shown
+  the alert
+- **THEN** the command exits `not_delivered` with the question ID and does not
+  wait for an answer
+
 #### Scenario: A crew cause needs an owner decision
 
 - **WHEN** a blocked author, READY PR or stuck dispatch is observed in one pass

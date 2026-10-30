@@ -8,11 +8,13 @@ import {
   UsageError,
   wantsHelp,
 } from "./command";
-import { dataRoot } from "../config/data-paths";
-import { worldEnv } from "../config/environment";
 import { readWorldCliToken, sessionSecretPath } from "../config/session-secret";
 import { isLoopbackAddress } from "../workspace/file-manager";
-import { readServiceAccess, readServiceSetup } from "./service-context";
+import {
+  readServiceAccess,
+  readServiceSetup,
+  runtimeDataRoot,
+} from "./service-context";
 import { WORLD_SKILL } from "./world-skill";
 import { GROUP_ACTIONS, groupHuman, parseGroupArgs } from "./world-groups";
 import { renderGroupMarkdown } from "../../../shared/groupMarkdown";
@@ -34,6 +36,8 @@ export const WORLD_EXIT = {
   refused: 3,
   not_found: 4,
   timeout: 5,
+  /** The question is recorded, but Herdr showed no alert to anyone. */
+  not_delivered: 6,
 } as const;
 
 /** One held `ask get` call; the service holds at most 20 s. */
@@ -44,6 +48,7 @@ const CODE_EXIT: Record<string, number> = {
   refused: WORLD_EXIT.refused,
   not_found: WORLD_EXIT.not_found,
   unavailable: WORLD_EXIT.failure,
+  not_delivered: WORLD_EXIT.not_delivered,
 };
 
 type Reply = {
@@ -52,7 +57,96 @@ type Reply = {
   error?: string;
   actor?: { label: string; verified: boolean };
   result?: unknown;
+  /** `ask` only: what Herdr's alert to the owner reported. */
+  notified?: { shown: boolean; reason: string };
 };
+
+/** Shows the owner an alert; `shown` is false when no Herdr client got it. */
+export type OwnerAlert = (
+  title: string,
+  body: string,
+) => { shown: boolean; reason: string };
+
+/**
+ * Herdr's own path to the owner: `herdr notification show` in the asking
+ * pane's Herdr reaches its clients, every World connected to it and Web Push.
+ */
+export function herdrAlert(context: CliContext): OwnerAlert {
+  return (title, body) => {
+    const herdr = context.runtime.env.HERDR_BIN_PATH?.trim() || "herdr";
+    let output: { code: number; stdout: string };
+    try {
+      output = context.captureCommand([
+        herdr,
+        "notification",
+        "show",
+        title,
+        "--body",
+        body,
+        "--sound",
+        "request",
+      ]);
+    } catch (error) {
+      return {
+        shown: false,
+        reason: `could not run ${herdr}: ${(error as Error).message}`,
+      };
+    }
+    let reply: {
+      result?: { shown?: unknown; reason?: unknown };
+      error?: { message?: unknown };
+    } = {};
+    try {
+      reply = JSON.parse(output.stdout);
+    } catch {
+      // Reported below with the exit code.
+    }
+    const reason =
+      reply.result?.reason ??
+      reply.error?.message ??
+      `${herdr} notification show exited ${output.code}`;
+    return { shown: reply.result?.shown === true, reason: String(reason) };
+  };
+}
+
+/**
+ * Alert the owner about a new question, or about one World could not record,
+ * so an ask reaches the owner whenever Herdr does. Fails loudly otherwise.
+ */
+function alertOwner(
+  reply: Reply,
+  question: string,
+  context: CliContext,
+  alert: OwnerAlert,
+): Reply {
+  const asked = (reply.result ?? {}) as { id?: unknown; created?: unknown };
+  if (reply.ok ? asked.created !== true : reply.code === "usage") return reply;
+  const who =
+    reply.actor?.label ??
+    (context.runtime.env.HERDR_PANE_ID
+      ? `pane ${context.runtime.env.HERDR_PANE_ID}`
+      : "An agent");
+  const notified = alert(
+    `${who} asks`,
+    reply.ok
+      ? `${question} (${String(asked.id)})`
+      : `${question} (not recorded in World: ${reply.error ?? "failed"})`,
+  );
+  if (!reply.ok)
+    return {
+      ...reply,
+      notified,
+      error: `${reply.error ?? "failed"}; ${notified.shown ? "the owner was alerted through Herdr" : `Herdr alert also failed: ${notified.reason}`}`,
+    };
+  if (notified.shown) return { ...reply, notified };
+  return {
+    ...reply,
+    ok: false,
+    code: "not_delivered",
+    notified,
+    error: `recorded ${String(asked.id)}, but Herdr showed the owner no alert: ${notified.reason}`,
+  };
+}
 
 export type WorldCliTransport = (
   command: string,
@@ -64,6 +158,7 @@ function serviceEndpoint(context: CliContext) {
   const env = context.runtime.env;
   let base = env.HERDR_WORLD_URL?.replace(/\/+$/, "");
   let token = env.HERDR_WORLD_TOKEN;
+  let secretPath: string | undefined;
   if (!base || !token) {
     const setup = readServiceSetup(context.runtime);
     const access = readServiceAccess(setup);
@@ -76,14 +171,12 @@ function serviceEndpoint(context: CliContext) {
           : access.host;
       base = `${access.tls ? "https" : "http"}://${host}:${access.port}`;
     }
-    token ??=
-      readWorldCliToken(
-        sessionSecretPath(
-          worldEnv("SETTINGS_PATH", env) ??
-            worldEnv("SETTINGS_PATH", setup.env),
-          dataRoot(context.runtime.homeDir, context.runtime.platform),
-        ),
-      ) ?? undefined;
+    if (!token) {
+      secretPath = sessionSecretPath(
+        runtimeDataRoot(context.runtime, setup.env),
+      );
+      token = readWorldCliToken(secretPath) ?? undefined;
+    }
   }
   // The token stays on this machine: the endpoint answers loopback only.
   const host = new URL(base).hostname.replace(/^\[|\]$/g, "");
@@ -93,9 +186,9 @@ function serviceEndpoint(context: CliContext) {
     );
   if (!token)
     throw new Error(
-      "no World CLI token: start the World service once, or set HERDR_WORLD_TOKEN",
+      `no World CLI token in ${secretPath}: start the World service once, or set HERDR_WORLD_TOKEN`,
     );
-  return { url: `${base}/api/world/cli`, token };
+  return { url: `${base}/api/world/cli`, token, secretPath };
 }
 
 export function httpTransport(context: CliContext): WorldCliTransport {
@@ -110,7 +203,7 @@ export function httpTransport(context: CliContext): WorldCliTransport {
         error: (error as Error).message,
       };
     }
-    const { url, token } = endpoint;
+    const { url, token, secretPath } = endpoint;
     const paneId = context.runtime.env.HERDR_PANE_ID;
     let response: Response;
     try {
@@ -137,7 +230,11 @@ export function httpTransport(context: CliContext): WorldCliTransport {
       };
     }
     try {
-      return (await response.json()) as Reply;
+      const reply = (await response.json()) as Reply;
+      // Say which service refused which token, so a mismatch can be found.
+      if (response.status === 401 && reply.code === "refused")
+        reply.error = `${reply.error ?? "refused"} from ${new URL(url).origin} (token ${secretPath ? `from ${secretPath}` : "from HERDR_WORLD_TOKEN"})`;
+      return reply;
     } catch {
       return {
         ok: false,
@@ -479,6 +576,7 @@ export async function runWorldCommand(
   context: CliContext,
   transport: WorldCliTransport = httpTransport(context),
   isTty = Boolean(process.stdout.isTTY),
+  alert: OwnerAlert = herdrAlert(context),
 ): Promise<number> {
   if (wantsHelp(args)) {
     context.log(WORLD_SKILL);
@@ -533,6 +631,8 @@ export async function runWorldCommand(
       }
     }
   } else reply = await transport(command, params);
+  if (command === "ask")
+    reply = alertOwner(reply, String(params.question), context, alert);
   // --wait: ask again until the owner (or an agent) answers.
   if (reply.ok && wait && (command === "ask" || command === "ask get")) {
     const id = String((reply.result as { id?: unknown }).id);

@@ -1,7 +1,6 @@
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { rotateAuthToken } from "../config/auth-token";
-import { worldEnv } from "../config/environment";
 import {
   revokeSessionSecret,
   sessionSecretPath,
@@ -87,8 +86,7 @@ export const authCommand: CliCommand = {
     const rest = args.slice(1);
     const setup = readServiceSetup(context.runtime);
     const secretPath = sessionSecretPath(
-      worldEnv("SETTINGS_PATH", setup.env),
-      runtimeDataRoot(context.runtime),
+      runtimeDataRoot(context.runtime, setup.env),
     );
 
     if (action === "show") {

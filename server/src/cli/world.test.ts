@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import type { CliContext } from "./command";
 import { runCli } from "./index";
 import {
+  herdrAlert,
+  type OwnerAlert,
   parseWorldArgs,
   runWorldCommand,
   WORLD_EXIT,
@@ -265,4 +267,158 @@ test("--skill prints the agent guide", async () => {
   expect(await runCli(["--skill"], ctx)).toBe(0);
   expect(out[0]).toBe(WORLD_SKILL);
   expect(WORLD_SKILL).toMatchSnapshot();
+});
+
+describe("owner alert", () => {
+  const alerts: [string, string][] = [];
+  const shown =
+    (value: boolean, reason = value ? "shown" : "disabled"): OwnerAlert =>
+    (title, body) => {
+      alerts.push([title, body]);
+      return { shown: value, reason };
+    };
+  const asked: WorldCliTransport = async () => ({
+    ok: true,
+    actor: { label: "claude in w1:p1", verified: true },
+    result: { id: "q-1", created: true },
+  });
+
+  test("a new question alerts the owner through Herdr once", async () => {
+    alerts.length = 0;
+    const { context: ctx, out } = context();
+    expect(
+      await runWorldCommand(
+        "ask",
+        ["Ship?", "--json"],
+        ctx,
+        asked,
+        false,
+        shown(true),
+      ),
+    ).toBe(0);
+    expect(alerts).toEqual([["claude in w1:p1 asks", "Ship? (q-1)"]]);
+    expect(JSON.parse(out[0]!)).toMatchObject({
+      ok: true,
+      result: { id: "q-1" },
+      notified: { shown: true, reason: "shown" },
+    });
+  });
+
+  test("a known cause is not alerted again", async () => {
+    alerts.length = 0;
+    const { context: ctx } = context();
+    const known: WorldCliTransport = async () => ({
+      ok: true,
+      result: { id: "q-1", question: "Ship?", at: 1 },
+    });
+    expect(
+      await runWorldCommand(
+        "ask",
+        ["Ship?", "--key", "crew:7"],
+        ctx,
+        known,
+        true,
+        shown(true),
+      ),
+    ).toBe(0);
+    expect(alerts).toEqual([]);
+  });
+
+  test("an alert nobody saw fails loudly, keeps the record and does not wait", async () => {
+    alerts.length = 0;
+    const { context: ctx, err } = context();
+    let calls = 0;
+    const transport: WorldCliTransport = async (...args) => {
+      calls += 1;
+      return asked(...args);
+    };
+    expect(
+      await runWorldCommand(
+        "ask",
+        ["Ship?", "--wait"],
+        ctx,
+        transport,
+        true,
+        shown(false),
+      ),
+    ).toBe(WORLD_EXIT.not_delivered);
+    expect(calls).toBe(1);
+    expect(err).toEqual([
+      "herdr-world ask: recorded q-1, but Herdr showed the owner no alert: disabled",
+    ]);
+  });
+
+  test("a question World could not record still reaches the owner", async () => {
+    alerts.length = 0;
+    const { context: ctx, out } = context();
+    const down: WorldCliTransport = async () => ({
+      ok: false,
+      code: "refused",
+      error: "wrong World CLI token",
+    });
+    expect(
+      await runWorldCommand(
+        "ask",
+        ["Ship?", "--json"],
+        ctx,
+        down,
+        false,
+        shown(true),
+      ),
+    ).toBe(WORLD_EXIT.refused);
+    expect(alerts).toEqual([
+      [
+        "pane w1:p1 asks",
+        "Ship? (not recorded in World: wrong World CLI token)",
+      ],
+    ]);
+    expect(JSON.parse(out[0]!).error).toBe(
+      "wrong World CLI token; the owner was alerted through Herdr",
+    );
+  });
+
+  test("reads Herdr's notification reply and its failures", () => {
+    const { context: ctx } = context();
+    const argv: string[][] = [];
+    const reply = (code: number, stdout: string) => {
+      ctx.captureCommand = (command: string[]) => {
+        argv.push(command);
+        return { code, stdout };
+      };
+      return herdrAlert(ctx)("claude asks", "Ship? (q-1)");
+    };
+    expect(
+      reply(
+        0,
+        '{"id":"cli:notification:show","result":{"type":"notification_show","shown":true,"reason":"shown"}}',
+      ),
+    ).toEqual({ shown: true, reason: "shown" });
+    expect(argv[0]).toEqual([
+      "herdr",
+      "notification",
+      "show",
+      "claude asks",
+      "--body",
+      "Ship? (q-1)",
+      "--sound",
+      "request",
+    ]);
+    expect(
+      reply(
+        1,
+        '{"id":"cli:notification:show","error":{"code":"server_not_running","message":"no herdr server is running"}}',
+      ),
+    ).toEqual({ shown: false, reason: "no herdr server is running" });
+    expect(reply(127, "")).toEqual({
+      shown: false,
+      reason: "herdr notification show exited 127",
+    });
+    ctx.captureCommand = () => {
+      throw new Error("ENOENT");
+    };
+    expect(herdrAlert(ctx)("t", "b")).toEqual({
+      shown: false,
+      reason: "could not run herdr: ENOENT",
+    });
+  });
 });

@@ -4,10 +4,21 @@ Herdr World is one Bun-compiled service and same-origin Web/PWA application. It
 connects to one or more separately running Herdr servers through local sockets or
 OpenSSH. Users do not install Roamgate or a remote World bridge.
 
-Session cookies use a private random signing key under the World data directory.
-It persists across restarts and rotates when the configured credentials change,
-invalidating existing sessions. An instance-specific settings path isolates its
-signing state. Management commands do not create or rotate signing keys.
+Session cookies use a private random signing key, `session-secret.json` in the
+World data directory. It persists across restarts and rotates when the
+configured credentials change, invalidating existing sessions. Management
+commands do not create or rotate signing keys.
+
+One running World owns its data directory. A second World started on the same
+directory stops with `the data folder … is in use by World (pid …, port …)`
+instead of overwriting the first one's files. To run another instance, such as
+a development or preview World, give it its own directory with
+`HERDR_WORLD_DATA_DIR=/path/to/folder`. Every World data file then lives there
+unless a per-file override below names another path. Copy `connections.json`
+and `settings.json` into the new folder if the instance should reach the same
+Herdr hosts; never share the auth token, signing key, `web-push.json`, Board or
+ledger between running instances. The lock is `instance.lock` in the data
+directory; a lock left by a World that is no longer running is taken over.
 
 Optionally set `HERDR_WORLD_PIN` to 6–12 ASCII digits for convenience login on a
 trusted private network or VPN. Keep password/token recovery available. PIN login
@@ -117,7 +128,8 @@ installing the RC. Candidates do not replace the stable GitHub Latest release or
 npm `latest` tag.
 
 This foundation starts with fresh World state. It uses
-`~/.config/herdr-world` (or `%APPDATA%\herdr-world`) and browser keys under
+`~/.config/herdr-world` (or `%APPDATA%\herdr-world`, or `HERDR_WORLD_DATA_DIR`
+when set) and browser keys under
 `herdr-world:foundation-v2:`. It does not read old Herdr World bridge profiles,
 Roamgate settings, or their browser preferences. Those files remain untouched for
 rollback. These World paths are stable across 0.2.x versions: an upgrade does not

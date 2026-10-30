@@ -1,9 +1,4 @@
-import {
-  createHash,
-  createHmac,
-  randomBytes,
-  timingSafeEqual,
-} from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import {
   chmodSync,
   closeSync,
@@ -19,7 +14,6 @@ import {
 import { dirname, join, resolve } from "node:path";
 import { lockSync } from "proper-lockfile";
 import { assertSafeDataPath, dataRoot, replaceDataFile } from "./data-paths";
-import { worldEnv } from "./environment";
 
 const SECRET_PATTERN = /^[a-f0-9]{64}$/;
 const LOCK_WAIT_MS = 5_000;
@@ -151,15 +145,9 @@ export function readWorldCliToken(path = sessionSecretPath()): string | null {
     : null;
 }
 
-export function sessionSecretPath(
-  settingsPath = worldEnv("SETTINGS_PATH"),
-  root = dataRoot(),
-): string {
-  // Settings identify the instance; signing material stays in private storage.
-  const filename = settingsPath
-    ? `session-secret-${createHash("sha256").update(resolve(settingsPath)).digest("hex")}.json`
-    : "session-secret.json";
-  return resolve(join(root, filename));
+/** One signing secret per data folder, which one listener owns at a time. */
+export function sessionSecretPath(root = dataRoot()): string {
+  return resolve(join(root, "session-secret.json"));
 }
 
 /**
@@ -217,5 +205,28 @@ export function loadOrCreateSessionSecret(
     return secret;
   } finally {
     release();
+  }
+}
+
+/**
+ * The listener's signing secret, or exit. Only a listener startup may rotate
+ * sessions; the secret is empty when login is not required.
+ */
+export function listenerSessionSecret(config: {
+  authRequired: boolean;
+  password: string;
+  pin?: string;
+}): string {
+  if (!config.authRequired) return "";
+  try {
+    return loadOrCreateSessionSecret([
+      config.password,
+      ...(config.pin ? [config.pin] : []),
+    ]);
+  } catch (cause) {
+    console.error(
+      `[bridge] FATAL: could not load the session signing secret: ${(cause as Error).message}`,
+    );
+    process.exit(1);
   }
 }

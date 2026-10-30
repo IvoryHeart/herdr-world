@@ -40,16 +40,35 @@ afterEach(() => {
 
 test("fresh Unix and Windows data roots use only the World namespace", () => {
   const root = home();
-  expect(dataRoot(root, "linux")).toBe(join(root, ".config", "herdr-world"));
-  expect(dataRoot(root, "win32", join(root, "custom"))).toBe(
+  expect(dataRoot(root, "linux", undefined, {})).toBe(
+    join(root, ".config", "herdr-world"),
+  );
+  expect(dataRoot(root, "win32", join(root, "custom"), {})).toBe(
     join(root, "custom", "herdr-world"),
   );
-  expect(dataRoot(root, "win32", undefined)).toBe(
+  expect(dataRoot(root, "win32", undefined, {})).toBe(
     join(root, "AppData", "Roaming", "herdr-world"),
   );
-  expect(defaultDataFile("settings.json", root, "linux")).toBe(
+  expect(defaultDataFile("settings.json", root, "linux", undefined, {})).toBe(
     join(root, ".config", "herdr-world", "settings.json"),
   );
+});
+
+test("HERDR_WORLD_DATA_DIR gives an instance its own folder", () => {
+  const root = home();
+  const own = { HERDR_WORLD_DATA_DIR: join(root, "dev", "..", "dev-data") };
+  expect(dataRoot(root, "linux", undefined, own)).toBe(join(root, "dev-data"));
+  expect(dataRoot(root, "win32", undefined, own)).toBe(join(root, "dev-data"));
+  expect(defaultDataFile("auth-token", root, "linux", undefined, own)).toBe(
+    join(root, "dev-data", "auth-token"),
+  );
+  expect(dataRoot(root, "linux", undefined, { HERDR_WORLD_DATA_DIR: "" })).toBe(
+    join(root, ".config", "herdr-world"),
+  );
+});
+
+test("tests never default to the user's data folder", () => {
+  expect(dataRoot()).toBe(join(tmpdir(), "herdr-world-data"));
 });
 
 test("existing settings from another product are left untouched and unread", () => {
@@ -59,7 +78,7 @@ test("existing settings from another product are left untouched and unread", () 
   write(upstream, '{"source":"upstream"}');
   write(legacy, '{"source":"legacy"}');
 
-  const target = defaultDataFile("settings.json", root, "linux");
+  const target = defaultDataFile("settings.json", root, "linux", undefined, {});
   expect(target).toBe(join(root, ".config", "herdr-world", "settings.json"));
   expect(existsSync(target)).toBeFalse();
   expect(readFileSync(upstream, "utf8")).toContain("upstream");
@@ -125,7 +144,12 @@ test("follows a symlinked user config root but not World's own links", async () 
   `;
   const run = async () => {
     const child = Bun.spawn([process.execPath, "-e", script], {
-      env: { ...process.env, HOME: root, USERPROFILE: root },
+      env: {
+        ...process.env,
+        HOME: root,
+        USERPROFILE: root,
+        HERDR_WORLD_DATA_DIR: undefined,
+      },
       stdout: "pipe",
       stderr: "pipe",
     });

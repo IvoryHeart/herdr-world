@@ -389,6 +389,7 @@ process.on("SIGINT", () => void stop());
       HOME: root,
       APPDATA: root,
       XDG_CONFIG_HOME: root,
+      HERDR_WORLD_DATA_DIR: undefined,
       HOST: "127.0.0.1",
       HERDR_WORLD_PASSWORD: password,
       PORT: "0",
