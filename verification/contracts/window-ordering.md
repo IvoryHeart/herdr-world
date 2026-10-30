@@ -5,7 +5,8 @@ Requirement: `openspec/specs/world-surfaces/spec.md`; owner:
 arrangement restore and removal must preserve each window's identity and intent.
 
 `windowOrdering.test.ts` explores the real pure reducer/reconciliation functions.
-Its 21 commands include two owners' focus/raise/minimize/dismiss/maximize,
+Its 25 commands include two owners' focus/raise/minimize/dismiss/maximize and
+Fit left/Fit right,
 four arrangements, Open all, restore, dismiss-all and all four catalogue subsets.
 Breadth-first exploration checks every outgoing command from states reachable
 within four steps, so all histories of up to five commands are represented.

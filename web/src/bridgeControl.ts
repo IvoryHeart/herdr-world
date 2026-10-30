@@ -9,6 +9,7 @@ export interface BridgeControlMsg {
     | "world_board_changed"
     | "world_ledger_changed"
     | "world_profiles_changed"
+    | "world_bin_changed"
     | "agent_conversation_changed";
   connection_state?: ConnectionLifecycleState;
   reason?: string;

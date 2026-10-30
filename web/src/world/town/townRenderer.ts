@@ -54,6 +54,8 @@ import {
 } from "./townLayout";
 import type { TownModel } from "./townModel";
 import { TERMINAL_COLOR_HEX, type TerminalColor } from "../terminalColor";
+import { textureOf } from "./townTextures";
+import type { TownOverlay } from "./townBusLayer";
 import { createTownLookResolver } from "./townAppearance";
 import {
   paintTownFacade,
@@ -96,6 +98,8 @@ export type TownRendererHandle = {
   setScene(model: TownModel, layout: TownLayout, state: TownSceneState): void;
   setState(state: TownSceneState): void;
   setViewport(viewport: TownViewport): void;
+  /** Draw something over the town in screen space (the bus stop). */
+  setOverlay(overlay: TownOverlay | null): void;
   /** Ask for a redraw after camera input; the reason is traced. */
   invalidate(reason?: string): void;
   actorPosition(key: string): { x: number; y: number; seated: boolean } | null;
@@ -123,18 +127,6 @@ const BLOCK_COLORS: Record<string, number> = {
   done: 0x7be08f,
   shell: 0x7fbf7a,
 };
-
-const textureCache = new WeakMap<TownCanvas, Texture>();
-function textureOf(canvas: TownCanvas) {
-  let texture = textureCache.get(canvas);
-  if (!texture) {
-    texture = new Texture({
-      source: new CanvasSource({ resource: canvas, scaleMode: "nearest" }),
-    });
-    textureCache.set(canvas, texture);
-  }
-  return texture;
-}
 
 let glowCanvas: TownCanvas | null = null;
 function glowTexture() {
@@ -292,6 +284,7 @@ export async function createTownRenderer(
     calm: false,
   };
   let buildings: BuildingView[] = [];
+  let overlay: TownOverlay | null = null;
   const actorViews = new Map<string, ActorView>();
   const bubbles = new Map<string, Sprite>();
   let ownedTextures: Texture[] = [];
@@ -769,7 +762,7 @@ export async function createTownRenderer(
     const agent = model!.agents.get(device.agentKey) ?? null;
     if (!agent) return { state: "shell" as const, agent: null };
     const actor = actors.actors.get(agent.key);
-    const seated = actor?.mode === "seat";
+    const seated = actor?.mode === "seat" && !overlay?.hidden.has(agent.key);
     const status = agent.semanticStatus;
     return {
       state:
@@ -887,7 +880,7 @@ export async function createTownRenderer(
   const updateActors = (standingAlpha: number) => {
     const live = new Set<string>();
     for (const actor of actors.actors.values()) {
-      if (actor.mode === "seat") continue;
+      if (actor.mode === "seat" || overlay?.hidden.has(actor.key)) continue;
       const building = buildingByHost.get(actor.hostKey);
       if (!building || !building.container.visible) continue;
       live.add(actor.key);
@@ -1204,7 +1197,8 @@ export async function createTownRenderer(
     updateActors(Math.max(deskBlend, townBlend(0.35, 0.6, camera.z)));
     updateBubbles();
     drawEffects();
-    const dragging = updateDrag(dt);
+    const overlayMoving = !!overlay?.update(camera, lookOf);
+    const dragging = updateDrag(dt) || overlayMoving;
     app.renderer.render(app.stage);
     stats.level = level;
     stats.zoom = camera.z;
@@ -1614,6 +1608,12 @@ export async function createTownRenderer(
       camera.calm = nextState.calm;
       if (summonedChanged) syncActors(false);
       request("scene-state");
+    },
+    setOverlay(next) {
+      if (overlay) app.stage.removeChild(overlay.container);
+      overlay = next;
+      if (next) app.stage.addChild(next.container);
+      request("overlay");
     },
     setViewport(viewport) {
       app.renderer.resize(

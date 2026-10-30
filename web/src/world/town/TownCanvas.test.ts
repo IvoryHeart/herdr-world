@@ -49,6 +49,9 @@ test.skipIf(!chrome).each([
   [390, 844, "incremental", 0],
   [1440, 900, "plates", 0],
   [390, 844, "plates", 0],
+  // The bin's London bus: catch it, hold it, get off, let it go.
+  [1440, 900, "bus", 0],
+  [390, 844, "bus", 0],
   // The 26-tab fixture proves a native-order prefix and hidden-attention corners.
   [390, 844, "fold", 0],
   [960, 1080, "fold", 0],

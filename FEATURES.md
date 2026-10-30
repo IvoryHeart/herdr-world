@@ -141,6 +141,16 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     pointer and end with a short fade. The live panes move, agents keep running, a failed
     move attempts rollback and reports partial or unknown results. Moving a
     room's last table asks first because the room closes. When a table closes, the tables after it close up.
+  - **The bus stop** is Town's bin: a London bus stop that keeps the screen's
+    top-right corner wherever the camera is. Drag an agent there (or **Send to
+    the bus stop** in its peek); the town holds still while you hover over it.
+    The agent waits with a box while a red double-decker drives in from the
+    edge of the screen, picks up everyone at the stop (five to a bus; more
+    take more buses), and leaves by the other edge when the countdown ends; that is when the agent closes. Press and hold
+    the bus to stop it with its doors open (the countdown pauses), then drag a
+    passenger off to send them back to their desk; an empty bus leaves at once,
+    and **Let it go** (or a tap elsewhere) drives on. It shares the bin's
+    countdown, refusals and sounds, and stays parked under reduced motion.
   - Tables sit in Herdr's tab order, left to right and row by row, so moving a
     tab in Spaces or Herdr moves its table. Drag a table onto another table in
     its room to put it in that place, or onto the room's free spot to put it
@@ -337,6 +347,19 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     possibly delivered to another agent. Check the pane before sending again.
     A note offers **Start an agent** in a chosen workspace: World starts the
     agent in a new tab and sends the note once it is ready.
+  - **The bin** closes an agent after a countdown. Drag a card towards the
+    bottom-right corner (bottom-left on a phone) and the bin rises; drop it in
+    and the card waits there while a ring drains (**Bin countdown** in the menu:
+    10 s, 30 s by default, 1 min or 2 min). Dragging from a pane row closes that
+    pane; the header closes the tab's main agent. The countdown runs on the World
+    service, so it carries on if you reload or leave, and nothing reaches Herdr
+    until it ends. Click the bin to pause every timer and open it: drag a card
+    out (or **Put back**) to return it to its place, or **Close now** / **Close
+    all now**; **Close lid** resumes. A pinned tab and a host that can't be
+    reached are refused. The selected card's bar has **Close agent…**, which
+    does the same without dragging. Desk shows the bin while it holds anything. The close works like the command menu's Close pane,
+    so the tab (or workspace) closes with its last pane. Sounds follow
+    this device's chime setting; motion stops under reduced motion.
   - Drag a tab onto another workspace of its host to move it (asks first).
     On phones, hold a card still before dragging; adding a second finger switches
     to pinch zoom without committing a move. Settling pauses while you type in
@@ -426,7 +449,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   named `<name>-<harness>` (for example `otter-claude`), shortened in the middle
   past 14 characters, and its state is a badge on its icon: a tick when done, a
   spinner while working, **!** when it needs you and a grey dot when idle. **⋯** holds
-  minimize, the snap choices and float. Tapping the location line under the name
+  minimize, the snap choices and float. **Fit left** and **Fit right**, under
+  **Default size**, restore the normal window size against that edge; hover or
+  focus a snap choice to preview it. Tapping the location line under the name
   shows the branch, worktree and PR status, replacing the card above Changes. In
   Town the window takes the Town look (portrait, pixel name, chunky buttons,
   **‹ Back**). On a phone the window fills the screen like the

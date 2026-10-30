@@ -90,6 +90,7 @@ import {
 import type { TownSummary } from "./townSummary";
 import { townCarpetFor, townCarpetOf } from "./townPaint";
 import { ColorSwatchButton } from "../../components/ColorSwatch";
+import { TownBusChrome, useTownBus } from "./useTownBus";
 import {
   createTownRenderer,
   nextTownTask,
@@ -105,6 +106,7 @@ import {
 } from "../terminalColor";
 import { townTeams, type TownTeams } from "./townTeams";
 import type { Relation } from "../../../../shared/relations";
+import type { BinEntry } from "../../../../shared/bin";
 import type { TerminalPlace } from "../relations";
 import { placeDeskPin, type DeskPins } from "../useDeskPins";
 import { useWorldSources } from "../worldSources";
@@ -396,6 +398,10 @@ export function TownCanvas({
     );
   const layout = holding ? held : placed;
   shownLayout.current = layout;
+  // The bin is the London bus stop (useTownBus.tsx).
+  const { bus, receipt } = useTownBus(rendererRef, ready, model, layout);
+  const busRef = useRef(bus);
+  busRef.current = bus;
   useEffect(() => {
     if (!holding) return;
     const timer = window.setTimeout(
@@ -949,8 +955,12 @@ export function TownCanvas({
           : p > high - EDGE
             ? -Math.min(1, (p - high + EDGE) / EDGE) * EDGE_SPEED
             : 0;
-      const dx = push(carryAt.x, inset.left, width - inset.right);
-      const dy = push(carryAt.y, inset.top, height - inset.bottom);
+      // Over the bus stop, in its corner, the town holds still for the drop.
+      const atStop =
+        carrying.kind === "agent" &&
+        busRef.current.layer.stopAt(carryAt.x, carryAt.y);
+      const dx = atStop ? 0 : push(carryAt.x, inset.left, width - inset.right);
+      const dy = atStop ? 0 : push(carryAt.y, inset.top, height - inset.bottom);
       if (dx || dy) {
         renderer.camera.panBy(dx, dy);
         renderer.invalidate("edge-pan");
@@ -988,6 +998,26 @@ export function TownCanvas({
     const aim = (hit: TownHit | null, at: { x: number; y: number }) => {
       const renderer = rendererRef.current;
       if (!carrying || !renderer) return;
+      if (
+        carrying.kind === "agent" &&
+        busRef.current.layer.stopAt(at.x, at.y)
+      ) {
+        // The bus stop: the agent waits there for the bus out of town.
+        const candidate = busRef.current.candidate(carrying.key);
+        const refusal = candidate?.drag.refusal ?? null;
+        carrying.target = {
+          key: refusal || !candidate ? null : "bus-stop",
+          label: refusal ?? `Bus stop: close ${candidate?.drag.label ?? ""}`,
+          action: "bin",
+        };
+        ghost.textContent = carrying.target.label;
+        ghost.dataset.valid = String(!refusal && !!candidate);
+        ghost.dataset.action = "bin";
+        ghost.style.transform = `translate(${at.x}px, ${at.y}px)`;
+        const world = renderer.camera.toWorld(at.x, at.y);
+        renderer.moveDrag(world.x, world.y, null);
+        return;
+      }
       const target = townDropTarget(
         carrying,
         hit,
@@ -1079,6 +1109,12 @@ export function TownCanvas({
         case "dropCard": {
           const drag = endDrag();
           const targetKey = drag?.target?.key;
+          if (drag?.target?.action === "bin") {
+            // Refused or not, the agent springs home; one that goes waits at the stop.
+            renderer.endDrag("cancel");
+            busRef.current.drop(drag.key);
+            return;
+          }
           if (!drag || !targetKey) {
             renderer.endDrag("cancel");
             return;
@@ -1154,6 +1190,36 @@ export function TownCanvas({
       if (gesture.mode.name !== "pinching") pinch = null;
       for (const effect of result.effects) apply(effect);
     };
+    /** A passenger (or an agent at the stop) being dragged back to their desk. */
+    let passenger: { id: number; entry: BinEntry } | null = null;
+    let busHold = 0;
+    const offBus = (at: { x: number; y: number }) =>
+      !busRef.current.layer.busAt(at.x, at.y) &&
+      !busRef.current.layer.stopAt(at.x, at.y);
+    /**
+     * The bus takes the press first: a passenger lifts at once, a press on
+     * the bus holds it after a moment, and a press elsewhere lets a held bus go.
+     */
+    const busPress = (event: PointerEvent, at: { x: number; y: number }) => {
+      const layer = busRef.current.layer;
+      const entry = layer.passengerAt(at.x, at.y);
+      if (entry) {
+        passenger = { id: event.pointerId, entry };
+        ghost.textContent = entry.label;
+        ghost.dataset.valid = "false";
+        ghost.dataset.action = "bin";
+        ghost.style.transform = `translate(${at.x}px, ${at.y}px)`;
+        host.append(ghost);
+        return true;
+      }
+      if (layer.busAt(at.x, at.y)) {
+        window.clearTimeout(busHold);
+        busHold = window.setTimeout(() => busRef.current.hold(), TOWN_HOLD_MS);
+        return true;
+      }
+      if (layer.held) busRef.current.release();
+      return false;
+    };
     const down = (event: PointerEvent) => {
       const renderer = rendererRef.current;
       if (!renderer) return;
@@ -1163,6 +1229,7 @@ export function TownCanvas({
         // A pointer the browser no longer tracks cannot be captured.
       }
       const point = local(event);
+      if (busPress(event, point)) return;
       const hit = hitAt(point.x, point.y);
       const target: TownGestureTarget = {
         hit,
@@ -1192,6 +1259,15 @@ export function TownCanvas({
       const renderer = rendererRef.current;
       if (!renderer) return;
       const point = local(event);
+      if (passenger && event.pointerId === passenger.id) {
+        const off = offBus(point);
+        ghost.dataset.valid = String(off);
+        ghost.textContent = off
+          ? `Back to ${passenger.entry.label}'s desk`
+          : passenger.entry.label;
+        ghost.style.transform = `translate(${point.x}px, ${point.y}px)`;
+        return;
+      }
       if (gesture.pointers.has(event.pointerId)) {
         feed({
           type: "move",
@@ -1217,6 +1293,15 @@ export function TownCanvas({
     };
     const up = (event: PointerEvent) => {
       window.clearTimeout(holdTimer);
+      window.clearTimeout(busHold);
+      if (passenger && event.pointerId === passenger.id) {
+        const { entry } = passenger;
+        passenger = null;
+        ghost.remove();
+        if (event.type !== "pointercancel" && offBus(local(event)))
+          busRef.current.restore(entry);
+        return;
+      }
       if (!gesture.pointers.has(event.pointerId)) return;
       if (event.type === "pointercancel")
         feed({ type: "cancel", id: event.pointerId });
@@ -1254,6 +1339,7 @@ export function TownCanvas({
     host.addEventListener("wheel", wheel, { passive: false });
     return () => {
       window.clearTimeout(holdTimer);
+      window.clearTimeout(busHold);
       cancelAnimationFrame(edgeFrame);
       ghost.remove();
       host.removeEventListener("pointerdown", down);
@@ -1479,6 +1565,11 @@ export function TownCanvas({
         aria-label="Office town. Arrow keys pan, plus and minus zoom."
         onKeyDown={keyboard}
       />
+      {ready && !failure ? (
+        <div className="town-bus-chrome">
+          <TownBusChrome bus={bus} receipt={receipt} />
+        </div>
+      ) : null}
       <div
         className="town-world"
         ref={worldRef}

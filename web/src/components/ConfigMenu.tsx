@@ -1,4 +1,5 @@
 import { useCloseGlobalMenuForDialog } from "./useCloseGlobalMenuForDialog";
+import { BinCountdownSetting } from "../world/bin/BinCountdownSetting";
 import { lazyWithReload } from "../lazyWithReload";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -395,6 +396,7 @@ export function ConfigMenu({
                     <option value="terminal">Terminal</option>
                   </select>
                 </label>
+                <BinCountdownSetting />
                 <label className="config-preference-row">
                   <span className="config-item-icon">
                     <MessageSquare size={15} />

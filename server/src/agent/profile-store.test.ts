@@ -29,6 +29,16 @@ describe("Profile store", () => {
     expect(reopened.get().revision).toBe(2);
   });
 
+  test("the bin countdown defaults to 30 s and takes only the offered lengths", () => {
+    const path = fresh();
+    const store = new ProfileStore(path);
+    expect(store.get().bin_countdown_s).toBe(30);
+    profileWrite("world.bin_countdown.save")!(store, { seconds: 120 });
+    expect(new ProfileStore(path).get().bin_countdown_s).toBe(120);
+    expect(() => store.saveBinCountdown(45)).toThrow("bin countdown");
+    expect(store.get().bin_countdown_s).toBe(120);
+  });
+
   test("a new profile cannot claim to be a starter", () => {
     const store = new ProfileStore(fresh());
     store.save({ ...store.profile("builder")!, id: "otter", name: "otter" });

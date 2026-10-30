@@ -2,10 +2,15 @@ import {
   resolveTerminalWindowArrangement,
   type TerminalWindowArrangementPreset,
 } from "../terminalWindowArrangement";
-import type { FloatingTerminalGeometry as Rect } from "../floatingTerminalGeometry";
+import {
+  FLOATING_TERMINAL_DEFAULT_SIZE,
+  type FloatingTerminalGeometry as Rect,
+} from "../floatingTerminalGeometry";
 
 export type Size = { width: number; height: number };
 export type SnapTarget =
+  | "fit-left"
+  | "fit-right"
   | "left"
   | "right"
   | "top"
@@ -121,8 +126,7 @@ export function initialWindowRect(index: number, size: Size): Rect {
     {
       left: 24 + (index % 8) * 28,
       top: 24 + (index % 8) * 28,
-      width: 760,
-      height: 520,
+      ...FLOATING_TERMINAL_DEFAULT_SIZE,
     },
     size,
   );
@@ -208,6 +212,15 @@ export function snapGeometry(
   size: Size,
   dock?: SnapDock,
 ): Rect {
+  if (target === "fit-left" || target === "fit-right") {
+    const width = Math.min(size.width, FLOATING_TERMINAL_DEFAULT_SIZE.width);
+    return {
+      left: target === "fit-right" ? size.width - width : 0,
+      top: 0,
+      width,
+      height: Math.min(size.height, FLOATING_TERMINAL_DEFAULT_SIZE.height),
+    };
+  }
   const halfWidth = Math.max(0, (size.width - GAP) / 2);
   const halfHeight = Math.max(0, (size.height - GAP) / 2);
   if (dock && (target === "left" || target === "right")) {

@@ -2163,6 +2163,65 @@ from a live host's label MAY open World's New workspace dialog.
 - **WHEN** a host's topology is cached after a failure
 - **THEN** its zone and cards are shown as stale and offer no actions
 
+### Requirement: Agent bin
+
+World SHALL let the user close an agent's pane by dropping it in a bin, after a
+countdown the user chooses (10 s, 30 s by default, 1 min or 2 min, saved on the
+World service). The service SHALL keep the countdown, so it survives reloading
+or leaving World, and SHALL send nothing to Herdr before it ends or the user
+chooses Close now. Each agent SHALL have its own countdown. Opening the bin, or
+holding Town's bus, SHALL pause every countdown in it until the lid is closed or
+the bus is let go. Taking an agent out SHALL close nothing and return it to its
+place. The close SHALL be the command menu's Close pane, qualified by connection
+and runtime generation and checked against the pane and terminal recorded when
+the agent went in: `pane.close`, or `workspace.close` for the workspace's last
+pane. An entry whose runtime generation was replaced, or whose pane closed or
+changed, SHALL be dropped without a close. A pinned tab and a host whose
+topology is cached after failure SHALL be refused before anything is sent.
+
+Board and the other views SHALL use a plain bin that appears while a card is
+dragged and stays while it holds anything, showing the next countdown on it.
+Clicking it SHALL open it with Put back, Close now, Close all now and Close lid,
+and dragging a card out of it SHALL put the agent back. A selected tab card's
+bar SHALL offer Close agent… with the same countdown. Town SHALL use a London bus
+stop that keeps the screen's top-right corner whatever the camera shows, and
+the town SHALL hold still while a carried agent hovers over it: an agent dropped there, or sent from its peek, waits at the stop; a bus
+drawn in screen space enters at one edge, collects everyone at the stop, and
+leaves by the other edge when the countdown ends. A bus seats five; more
+riders SHALL take more buses, and parked buses SHALL stand apart so every
+passenger stays visible. Pressing and holding the bus SHALL stop it with its
+doors open in every open World until one of them lets it go, and dragging a
+passenger off SHALL put them back at their desk; an empty bus SHALL leave at
+once. Countdowns belong to one service run: after a restart, World SHALL show
+only the new run's bin, and no control from before it SHALL act on an agent
+added after it. Closes that fall due together SHALL run one at a time. Drops, closes and returns
+SHALL play World's sounds under this device's sound setting, and motion SHALL
+stop under reduced motion.
+
+#### Scenario: Change of mind
+
+- **WHEN** the user drops an agent in the bin, then opens the bin and puts it back
+- **THEN** the countdown paused while the bin was open, the agent is back in its
+  place, and Herdr received no close
+
+#### Scenario: The countdown ends after a reload
+
+- **WHEN** the user drops an agent in the bin and reloads World before the countdown ends
+- **THEN** the countdown continues on the service, and when it ends exactly that
+  pane closes on its original runtime, with its tab if it was the tab's last pane
+
+#### Scenario: Pinned tab
+
+- **WHEN** the user drags a card from a pinned tab over the bin
+- **THEN** the bin says to unpin the tab first, and dropping sends nothing
+
+#### Scenario: Hold the bus
+
+- **WHEN** the user presses and holds the bus carrying an agent in Town, then
+  drags the agent off it
+- **THEN** the countdown pauses with the bus's doors open, the agent returns to
+  their desk, and the empty bus leaves without closing anything
+
 ### Requirement: Agent relations
 
 World SHALL relate two terminals of one connection when either a spawn or a
@@ -3181,6 +3240,20 @@ Columns SHALL place the current windows side by side, and Rows SHALL place them 
 At the first arrangement of an eligible window set, World SHALL capture its previous presentation and each window's available prior geometry, including the Spaces Single state or an Inspector's dock state. Restore positions SHALL return every still-open participating instance to that captured presentation and geometry without reopening a closed instance, changing the current active tab/pane or moving an instance that has never participated. Restoring Spaces' original Single presentation SHALL show its currently active tab unless that workspace remains suspended by Close all terminal windows. Explicit drag, resize, dock and close actions SHALL continue to work after arranging. Viewport changes SHALL keep title controls reachable; a compact layout SHALL keep only one active usable window and preserve desktop arrangement positions for return to desktop. A runtime-generation change SHALL remove only that runtime's retired windows from the arrangement and restore snapshot; other participants SHALL remain recoverable. A host filter change SHALL preserve the arrangement and restore snapshot. Spaces and visual views SHALL retain their respective window placement while inactive without arranging each other's hidden windows. Spaces SHALL keep tab-window placement separate for each focused workspace and SHALL detach the old workspace's terminal presentations when focus changes to another workspace.
 
 Maximize SHALL temporarily present a window over the available stage while preserving its other arrangement participants. It SHALL capture the complete prior presentation context and geometry, including dock placement, arrangement membership, tile geometry and order. The window's Restore control SHALL return it to that captured presentation. If Restore positions is invoked while a window is maximized, all still-open participants SHALL return to the captured arrangement baseline and the maximize snapshot SHALL be cleared; an individual Restore action SHALL NOT reapply superseded geometry.
+
+Fit left and Fit right SHALL place a window against the selected edge at the
+normal default floating size, clamped to the available stage below shell controls.
+They SHALL remain distinct from half-screen snaps. Hovering or keyboard-focusing
+a snap choice SHALL preview its destination without changing placement; leaving
+or closing the menu SHALL remove the preview. Minimize and maximize/restore SHALL
+preserve the selected fit placement.
+
+#### Scenario: Fit a window to its default size
+
+- **WHEN** the user selects Fit left or Fit right in a desktop window's snap menu
+- **THEN** the window returns to the viewport-clamped default size at that edge,
+  other windows keep their placements, and half-screen snap choices keep their
+  existing dimensions
 
 #### Scenario: Compact visual layout preserves desktop positions
 

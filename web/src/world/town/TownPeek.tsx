@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { sendToBusStop } from "./useTownBus";
 import { SquareTerminal } from "lucide-react";
 import type { OfficeAgent } from "../herdrOfficeProjection";
 import { MarkdownPreview } from "../../components/markdown";
@@ -248,6 +249,11 @@ export function TownPeek({
         ) : null}
       </div>
       <div className="town-peek-foot">
+        {!agent.stale ? (
+          <button type="button" onClick={() => sendToBusStop(agent.key)}>
+            Send to the bus stop
+          </button>
+        ) : null}
         {onNext ? (
           <button type="button" onClick={onNext}>
             Next ›

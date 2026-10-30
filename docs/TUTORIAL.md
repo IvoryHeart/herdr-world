@@ -634,6 +634,25 @@ there in a bug report.
 **You are done when:** you can find your workspace card, pin a note and string it
 to the intended workspace or pane. Read the target before using **Send**.
 
+#### Close an agent with the bin
+
+Drag an agent's card towards the bottom-right corner (bottom-left on a phone,
+after holding the card still). A bin rises; drop the card in. The card leaves
+the board and the bin counts down (30 seconds unless you change **Menu → Bin
+countdown**). Nothing reaches Herdr until the countdown ends, and it keeps
+running on the World service if you reload. To change your mind, click the bin:
+every timer pauses and the bin opens. Drag the card out, or choose **Put back**,
+and it returns to its place. **Close now** skips the wait; **Close lid** resumes
+the timers. A pinned tab is refused until you unpin it.
+
+In Town the bin is a London bus stop in the screen's top-right corner. Drag an
+agent to the stop (or use **Send to the bus stop** in its peek) and watch the
+bus pull in. Press and hold the bus to stop it with its
+doors open, then drag the agent back off to return them to their desk.
+
+**You are done when:** you have dropped an agent in the bin or at the bus stop
+and taken it back out before the countdown ended.
+
 ![Board with four workspace cards, terminal tabs and a note strung to an agent](./images/herdr-world-desktop-board.png)
 
 ![Board close-up of a note strung to an agent](./images/herdr-world-mobile-board.png)
@@ -704,7 +723,10 @@ it does not verify the work for you.
 **You are done when:** you can find the same agent in Town, Board or Desk and
 open its terminal on the expected host.
 
-On desktop, **Arrange windows** can tile or cascade open Inspectors; use **Open
+On desktop, a window's **⋯ → Default size → Fit left / Fit right** restores its
+normal size against that edge. Hover or focus a snap choice to preview the
+placement; half-screen snaps remain separate.
+**Arrange windows** can tile or cascade open Inspectors; use **Open
 windows** to restore minimized ones. On mobile, one Inspector fills the screen:
 use the on-screen **Back** to return straight to the visual view, including
 when Composer is open. The phone's own Back closes Composer first, then the

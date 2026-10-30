@@ -7,7 +7,9 @@ import {
   visibleWindowIds,
   windowCanvas,
   windowDividers,
+  snapGeometry,
 } from "./windowManager";
+import { FLOATING_TERMINAL_DEFAULT_SIZE } from "../floatingTerminalGeometry";
 
 const stage = { width: 1200, height: 800 };
 const inputs = ["a", "b"].map((id) => ({ id, label: id }));
@@ -18,6 +20,33 @@ const command = (
 ) => reduceWindowManager(state, action, stage);
 
 describe("coordinated windows", () => {
+  test("fit snaps restore default size at either edge without stretching", () => {
+    for (const size of [stage, { width: 400, height: 300 }]) {
+      const expected = {
+        width: Math.min(size.width, FLOATING_TERMINAL_DEFAULT_SIZE.width),
+        height: Math.min(size.height, FLOATING_TERMINAL_DEFAULT_SIZE.height),
+      };
+      for (const target of ["fit-left", "fit-right"] as const) {
+        const rect = snapGeometry(target, size);
+        expect(rect).toEqual({
+          ...expected,
+          left: target === "fit-left" ? 0 : size.width - expected.width,
+          top: 0,
+        });
+        let state = reconcileWindows(createWindowManager(), inputs, size);
+        state = reduceWindowManager(
+          state,
+          { type: "snap", id: "a", target },
+          size,
+        );
+        state = reduceWindowManager(state, { type: "minimize", id: "a" }, size);
+        state = reduceWindowManager(state, { type: "focus", id: "a" }, size);
+        expect(windowGeometry(state, "a", size)).toEqual(rect);
+      }
+      expect(snapGeometry("right", size).height).toBe(size.height);
+      expect(snapGeometry("left", size).width).toBe((size.width - 8) / 2);
+    }
+  });
   test("focus and later admission never move an existing snapped window", () => {
     let state = command(initial(), { type: "snap", id: "a", target: "left" });
     const before = windowGeometry(state, "a", stage);

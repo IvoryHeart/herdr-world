@@ -50,6 +50,23 @@ export type TownRendererDiagnostics = {
   };
   /** Drag outcomes as drawn: lifts, landings (each with its dust), returns. */
   drags: { lifts: number; landings: number; returns: number; dust: number };
+  /** The bus stop and its buses (townBusLayer.ts), once Town has drawn them. */
+  bus?: {
+    stop: { x: number; y: number };
+    held: boolean;
+    /** Canvas pixels; seats are the passengers' windows, for tests to press. */
+    buses: {
+      x: number;
+      y: number;
+      w: number;
+      h: number;
+      departing: boolean;
+      passengers: number;
+      seats: { x: number; y: number }[];
+    }[];
+    waiting: number;
+    hidden: string[];
+  };
 };
 
 declare global {
