@@ -104,6 +104,16 @@ import {
   type TerminalColors,
 } from "../terminalColor";
 import { townTeams, type TownTeams } from "./townTeams";
+import { worldPods, type WorldPod } from "../pods";
+import {
+  NO_TOWN_POD_STACKS,
+  townPodStacks,
+  townPodTabs,
+  townPodsKey,
+  townStackedInput,
+  type TownPodStacks,
+} from "./townPods";
+import { TownPodPlaque } from "./TownPodPlaque";
 import type { Relation } from "../../../../shared/relations";
 import type { TerminalPlace } from "../relations";
 import { placeDeskPin, type DeskPins } from "../useDeskPins";
@@ -298,6 +308,17 @@ export function TownCanvas({
     if (!sameTownBadges(next, badgesRef.current)) badgesRef.current = next;
     return badgesRef.current;
   }, [projection, sources]);
+  // Pods (pods.ts): a source refresh that changes none of them keeps them.
+  const podsRef = useRef<{ key: string; pods: WorldPod[] }>({
+    key: "",
+    pods: [],
+  });
+  const pods = useMemo(() => {
+    const next = worldPods(townPodTabs(projection), sources);
+    const key = townPodsKey(next);
+    if (key !== podsRef.current.key) podsRef.current = { key, pods: next };
+    return podsRef.current.pods;
+  }, [projection, sources]);
   // The town's shape follows its container, measured on every resize.
   const [shape, setShape] = useState<TownShape>(() =>
     typeof window !== "undefined"
@@ -337,7 +358,7 @@ export function TownCanvas({
   }, [topology, projection, terminalColors]);
   // Pins ride on the model too; the same pins keep the same map.
   const lastDeskPins = useRef<ReadonlyMap<string, TownDeskPin>>(new Map());
-  const model = useMemo(() => {
+  const pinnedModel = useMemo(() => {
     const next = townDeskPins(projection, deskPins);
     const last = lastDeskPins.current;
     if (
@@ -355,6 +376,30 @@ export function TownCanvas({
       lastDeskPins.current = next;
     return { ...colouredModel, deskPins: lastDeskPins.current };
   }, [colouredModel, projection, deskPins]);
+  // A pod's earlier rounds stack behind its current round's table; the same
+  // stacks keep the same layout input.
+  const stacksRef = useRef<{ key: string; stacks: TownPodStacks }>({
+    key: "",
+    stacks: NO_TOWN_POD_STACKS,
+  });
+  const podStacks = useMemo(() => {
+    const next = townPodStacks(pinnedModel, pods, askingKeys);
+    const key = `${[...next.stacks].join(",")}|${[...next.stacked].join(",")}`;
+    if (key !== stacksRef.current.key)
+      stacksRef.current = { key, stacks: next };
+    return stacksRef.current.stacks;
+  }, [pinnedModel, pods, askingKeys]);
+  const stackedInput = useMemo(
+    () => townStackedInput(pinnedModel.input, podStacks.stacked),
+    [pinnedModel.input, podStacks],
+  );
+  const model = useMemo(
+    () =>
+      podStacks.stacks.size
+        ? { ...pinnedModel, input: stackedInput, deskStacks: podStacks.stacks }
+        : pinnedModel,
+    [pinnedModel, stackedInput, podStacks],
+  );
   const pinnedCells = useMemo(
     () => townPinnedCells(model.deskPins),
     [model.deskPins],
@@ -405,8 +450,8 @@ export function TownCanvas({
     return () => window.clearTimeout(timer);
   });
   const teams = useMemo(
-    () => townTeams(model, layout, relations.relations, relations.places),
-    [model, layout, relations],
+    () => townTeams(model, layout, relations.relations, relations.places, pods),
+    [model, layout, relations, pods],
   );
   // A desk just pinned keeps the cell it has; save it so it stays there.
   const placing = useRef(new Set<string>());
@@ -1713,21 +1758,28 @@ const TownTeamsLayer = memo(function TownTeamsLayer({
   if (!teams.walls.length && !teams.links.length) return null;
   return (
     <svg className="town-teams" aria-hidden="true" data-testid="town-teams">
-      {teams.walls.map((wall) => (
-        <rect
-          key={wall.key}
-          className="town-team-wall"
-          data-team={wall.team}
-          data-current={String(wall.current)}
-          data-desks={wall.desks}
-          x={wall.x}
-          y={wall.y}
-          width={wall.w}
-          height={wall.h}
-          rx={10}
-          style={{ stroke: TERMINAL_COLOR_HEX[wall.color] }}
-        />
-      ))}
+      {teams.walls.map((wall) => {
+        const props = {
+          className: "town-team-wall",
+          "data-team": wall.team,
+          "data-current": String(wall.current),
+          "data-desks": wall.desks,
+          style: { stroke: TERMINAL_COLOR_HEX[wall.color] },
+        };
+        return wall.outline ? (
+          <path key={wall.key} {...props} d={wall.outline} />
+        ) : (
+          <rect
+            key={wall.key}
+            {...props}
+            x={wall.x}
+            y={wall.y}
+            width={wall.w}
+            height={wall.h}
+            rx={10}
+          />
+        );
+      })}
       {teams.links.map((link) => (
         <line
           key={link.key}
@@ -2145,6 +2197,18 @@ const TownWorldLayer = memo(function TownWorldLayer({
                           </div>
                         );
                       })
+                    : null}
+                  {visible.tagRooms.has(room.key)
+                    ? teams.plaques.map((plaque) =>
+                        plaque.roomKey === room.key ? (
+                          <TownPodPlaque
+                            key={plaque.key}
+                            plaque={plaque}
+                            left={plaque.x - placed.x * T}
+                            top={plaque.y - placed.y * T}
+                          />
+                        ) : null,
+                      )
                     : null}
                   <TownRoomPlaque
                     room={room}

@@ -160,8 +160,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     only the rooms below it, and never
     while you hold the town. Town asks Herdr to move the tab and
     shows the new order when Herdr reports it; agents stay with their table.
-  - **Teams.** Tables whose agents know each other are drawn inside one wall
-    with a connector: a spawned agent is joined to the agent that started it,
+  - **Teams.** Tables whose agents know each other share one wall where they
+    sit side by side or one above another; the wall bends around another
+    team's table inside it. A connector joins a team's tables across walls:
+    a spawned agent is joined to the agent that started it,
     and a manual group with dotted lines; stale links are faded while a host
     is offline, and dropped once its agents have closed.
     Drag a table onto another table and hold it there a moment: it snaps to
@@ -173,6 +175,20 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     **M** on a focused table offers the same as **Group with…** and **Leave
     the team**, and the table's accessible name lists its teammates. A
     pinned table joins a team only in its own room, and keeps its place.
+  - **Pods.** A pull request's review rounds, the tabs the crew watcher
+    names `#<N> <slug> · r<K>`, and the author's table (the agent World
+    sources link to that pull request) share one wall; two pull requests
+    never share one, even when their authors are in one team. The pull
+    request is the one a round's agent is linked to, or the one whose branch
+    the label names. Its plaque gives the pull request number, its state
+    from the pull request card (Reviewing; Fixes requested, including a
+    reviewer's open findings; READY) and its rounds (`r2 +1`: round 2, one
+    earlier), with the branch and title in its tooltip; the number opens the
+    pull request card. A plaque hangs just inside its wall's bottom-left
+    table and stays within it. Earlier rounds stack as faded tables behind
+    the current one once every agent there is idle or done, unless one asks
+    you something or the table is pinned. The pod leaves when the watcher
+    closes its round tabs.
   - **Pin a desk** from the first item in its mobile agent window's **⋯** menu
     (**Pin desk in Town**), or from the desktop window’s **⋯** menu. A
     pinned table wears a pin and keeps its place: tab reorders, a room growing

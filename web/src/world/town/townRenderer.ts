@@ -52,7 +52,7 @@ import {
   type TownCell,
   type TownLayout,
 } from "./townLayout";
-import type { TownModel } from "./townModel";
+import { townPodStack, type TownModel } from "./townModel";
 import { TERMINAL_COLOR_HEX, type TerminalColor } from "../terminalColor";
 import { createTownLookResolver } from "./townAppearance";
 import {
@@ -669,6 +669,10 @@ export async function createTownRenderer(
       return sprite;
     };
     const place = townDeskTable(cell.seats);
+    const table = (cell.seats <= 2 ? sprites.tableSmall : sprites.table)[wood]!;
+    // A pod's earlier rounds: faded tables stacked behind this one.
+    for (const at of townPodStack(model!.deskStacks?.get(desk.key)))
+      make(table, X + place.x + at.dx, Y + 17 + at.dy).alpha = at.alpha;
     const shadow = new Graphics()
       .rect(X + place.x + 4, Y + 50, place.w - 2, 4)
       .fill({ color: 0x000000, alpha: 0.2 });
@@ -688,11 +692,7 @@ export async function createTownRenderer(
     const people = slots.map((slot) =>
       slot.top ? seated(make(null, 0, 0), X + slot.chairX, Y + 5, true) : null,
     );
-    make(
-      (cell.seats <= 2 ? sprites.tableSmall : sprites.table)[wood]!,
-      X + place.x,
-      Y + 17,
-    );
+    make(table, X + place.x, Y + 17);
     const devices = slots.map((slot) =>
       make(
         slot.top ? sprites.lidOff : null,
@@ -1596,7 +1596,7 @@ export async function createTownRenderer(
         return;
       }
       const places = nextModel.placeColors;
-      const key = `${[...places.rooms].join(",")}/${[...places.hosts].join(",")}/${nextLayout.width}x${nextLayout.height}:${nextLayout.buildings.map((b) => `${b.hostKey}@${b.x},${b.y},${b.w},${b.h}:${b.rooms.map((r) => r.cells.map((c) => (c.deskKey ? `${c.deskKey}#${c.seats}#${deskColor(c.deskKey)}${model!.deskPins.has(c.deskKey) ? "#pin" : ""}` : "-")).join(",")).join("|")}`).join(";")}`;
+      const key = `${[...places.rooms].join(",")}/${[...places.hosts].join(",")}/${nextLayout.width}x${nextLayout.height}:${nextLayout.buildings.map((b) => `${b.hostKey}@${b.x},${b.y},${b.w},${b.h}:${b.rooms.map((r) => r.cells.map((c) => (c.deskKey ? `${c.deskKey}#${c.seats}#${deskColor(c.deskKey)}${model!.deskPins.has(c.deskKey) ? "#pin" : ""}${model!.deskStacks?.get(c.deskKey) ? `#stack${model!.deskStacks.get(c.deskKey)}` : ""}` : "-")).join(",")).join("|")}`).join(";")}`;
       if (key !== sceneKey) {
         sceneKey = key;
         buildScene();

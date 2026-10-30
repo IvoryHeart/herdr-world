@@ -49,6 +49,8 @@ test.skipIf(!chrome).each([
   [390, 844, "incremental", 0],
   [1440, 900, "plates", 0],
   [390, 844, "plates", 0],
+  // Adjacent pods' plaques stay within their own walls, even zoomed out.
+  [1440, 900, "pods", 0],
   // The 26-tab fixture proves a native-order prefix and hidden-attention corners.
   [390, 844, "fold", 0],
   [960, 1080, "fold", 0],
