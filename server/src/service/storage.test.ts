@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -61,6 +62,11 @@ test("closed storage refuses every family's writes and keeps its files", async (
     expect(() => storage.board().patch([note("after")])).toThrow(closed);
     expect(() => storage.ledger().update(() => {})).toThrow(closed);
     expect(() => storage.profiles().save(profile)).toThrow(closed);
+    // Backing up the legacy terminal settings copies the file: also a write.
+    expect(() => storage.profiles().backupLegacySettings()).toThrow(closed);
+    expect(existsSync(`${paths.agentProfiles}.before-terminal-settings`)).toBe(
+      false,
+    );
     await expect(storage.connections.save(registry("after"))).rejects.toThrow(
       closed,
     );

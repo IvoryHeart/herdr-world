@@ -2,6 +2,9 @@ import { describe, expect, test } from "bun:test";
 import type { BridgeControlMsg } from "../api";
 import { WorldSnapshotService } from "../../../server/src/world/snapshot";
 import { parseWorldSnapshotResult, WorldRuntimeStore } from "./runtimeStore";
+import { countedWorldWork } from "./testing/countedWorldWork";
+import { workViolations } from "./testing/workCeilings";
+import { buildWorldObject, type WorldObject } from "./worldObject";
 
 function admittedRevision(runtime: WorldRuntimeStore, revision: number) {
   if (runtime.get().revision === revision) return Promise.resolve();
@@ -84,6 +87,47 @@ function result(label: string, generation = 1) {
 }
 
 describe("World aggregate runtime store", () => {
+  test("refresh prepares the focused host's World, even one focused while preparing", async () => {
+    const response = result("Synthetic presented selection");
+    response.connections = ["host-a", "host-b"].map((id) => ({
+      ...response.connections[0]!,
+      connection_id: id,
+    }));
+    let focused = "host-a";
+    let refocused = false;
+    const runtime = new WorldRuntimeStore(
+      {
+        call: async () => response,
+        onControl: () => () => {},
+        onStatus: () => () => {},
+      },
+      async (stage) => {
+        // The user focuses another host while the World is being prepared.
+        if (stage === "office" && !refocused) {
+          refocused = true;
+          focused = "host-b";
+        }
+      },
+    );
+    runtime.presentSelectionFrom(() => focused);
+    await runtime.refresh();
+    expect(refocused).toBe(true);
+    let world: WorldObject | undefined;
+    const render = await countedWorldWork(() => {
+      world = buildWorldObject(runtime.get().connections, focused);
+    });
+    expect(workViolations({ render }, { render: {} }, "World")).toEqual([]);
+    expect(
+      world!.hosts.map(({ connectionId, hostState }) => [
+        connectionId,
+        hostState,
+      ]),
+    ).toEqual([
+      ["host-a", "ready-inactive"],
+      ["host-b", "active"],
+    ]);
+  });
+
   test("disconnect at a controlled decode yield cannot admit unfinished observation", async () => {
     const paused = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();

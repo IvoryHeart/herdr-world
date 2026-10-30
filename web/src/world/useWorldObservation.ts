@@ -4,12 +4,8 @@ import { bridge } from "../api";
 import { worldLocalStorage } from "../browserStorage";
 import { shallowEqual, useStoreSelector } from "../store";
 import { useWorldRuntime } from "./runtimeStore";
-import {
-  buildWorldObject,
-  worldObjectForHosts,
-  worldObjectForWatches,
-  worldObjectWithWatches,
-} from "./worldObject";
+import { buildWorldObject, worldObjectWithWatches } from "./worldObject";
+import { worldObjectForHosts, worldObjectForWatches } from "./worldFilters";
 import { useWorldWatchlist, WorldWatchlistStore } from "./watchlistStore";
 import { useHostsFilter } from "./hostsFilter";
 import {

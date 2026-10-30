@@ -32,11 +32,10 @@
     "web/src/world/DeskView.tsx": 1139,
     "web/src/world/TownView.tsx": 1450,
     "web/src/world/board/board.css": 1419,
-    "web/src/world/herdrOfficeProjection.ts": 1130,
     "web/src/world/town/town.css": 1383,
     "web/src/world/town/townRenderer.ts": 1654,
     "web/src/world/useWorldInspectorController.ts": 1136,
-    "web/src/world/worldObject.ts": 1171
+    "web/src/world/worldObject.ts": 1052
   },
   "unratcheted": {
     "web/src/world/BoardView.tsx": "Until split B (pm decision 2026-10-23, so the open Board PRs can land): split B removes this entry and records the post-split size under limits.",

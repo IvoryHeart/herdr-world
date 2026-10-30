@@ -27,9 +27,13 @@ Queued escalations SHALL recheck the current sound and interest policy before
 playing. Intentionally suppressed page notifications SHALL stay silent when
 Web Audio is unavailable.
 
-The owner's class timbres and motif switches, each profile's chime and the
-Town master SHALL be kept by the service and shared by every browser. The
-Town master's timbre SHALL NOT be given to the crew or a profile. Exactly one
+The owner's class timbres and motif switches and each profile's chime SHALL
+be kept by each World service and shared by its browsers. The Town master
+role SHALL live with the terminal in Herdr metadata, shared by every World
+on that Herdr and ending with the terminal. The newest claim SHALL win,
+with revision ties broken by the greater terminal ID, as specified by
+Per-terminal settings live with the terminal in the current world-surfaces
+spec. The Town master's timbre SHALL NOT be given to the crew or a profile. Exactly one
 agent MAY hold the Town master role; only the owner SHALL assign it, and moving
 it from another live agent SHALL ask first. A terminal launched from a profile
 that offers the role SHALL be suggested, never assigned. Whether this device

@@ -45,7 +45,6 @@ import {
   worldInspectorContext,
   worldIntentInitialView,
   defaultOpenView,
-  ownerReady,
   selectionShowsProfile,
   snapshotPriorityForConversation,
   snapshotPriorityForSurface,
@@ -56,6 +55,7 @@ import { type WorldControlPlaneProps } from "./worldControlPlaneContract";
 import { useWorldObservation } from "./useWorldObservation";
 import { useWorldInspectorWindows } from "./useWorldInspectorWindows";
 import { useWorldCreatedTerminal } from "./useWorldCreatedTerminal";
+import { useWorldInspectorIntentLease } from "./useWorldInspectorIntentLease";
 
 export function useWorldInspectorController(props: WorldControlPlaneProps) {
   const {
@@ -1053,17 +1053,16 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
     onDockedInspectorIdChange(null);
   };
 
-  const selectedLeaseCurrent = ownerReady(selected, connectionSelection);
   // Only a host that disconnects or restarts cancels opening. A snapshot taken
   // while Herdr changes (a tab being created, for example) is briefly stale and
   // not actionable; treating that as new intent would cancel the new tab's
   // terminal opening, and admission already waits for an actionable snapshot.
-  useEffect(() => {
-    if (selected && !selectedLeaseCurrent) {
-      intentRequestRef.current += 1;
-      setIntentOpening(false);
-    }
-  }, [selectedLeaseCurrent, selected, intentRequestRef]);
+  useWorldInspectorIntentLease(
+    selected,
+    connectionSelection.connections,
+    intentRequestRef,
+    setIntentOpening,
+  );
 
   return {
     ...props,
