@@ -551,6 +551,8 @@ function InspectorResources({
             fallback={
               <InspectorLoadingShell
                 title={conversation.label}
+                dock={conversation.dock}
+                floating={floating}
                 windowControls={windowControls}
                 onClose={onClose}
               />

@@ -94,6 +94,7 @@ import { useAgentInterestChoice } from "./AgentInterestButton";
 import { InterestButton } from "./InterestButton";
 import { InspectorSplitResizer } from "./InspectorSplitResizer";
 import "./WorkspaceInspectorActions.css";
+import "./WorkspaceInspectorFrame.css";
 import "./WorkspaceInspectorHost.css";
 
 const DiffContentView = lazyWithReload("diff-content-view", () =>

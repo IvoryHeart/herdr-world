@@ -4,7 +4,7 @@ import {
   WindowControls,
   type ManagedWindowControls,
 } from "../world/windows/WindowControls";
-import "./InspectorLoadingShell.css";
+import "./WorkspaceInspectorFrame.css";
 
 /**
  * The Inspector's frame and bar while its code downloads: its name, Back and
@@ -13,27 +13,39 @@ import "./InspectorLoadingShell.css";
  */
 export function InspectorLoadingShell({
   title,
+  dock,
+  floating,
   windowControls,
   onClose,
 }: {
   title: string;
+  dock: string;
+  floating: boolean;
   windowControls?: ManagedWindowControls;
   onClose: () => void;
 }) {
+  // The Inspector's own frame and bar classes, so World's managed-window,
+  // Town and phone styles apply to the shell exactly as to the Inspector.
   return (
     <aside
-      className="inspector-loading-shell"
+      className={`workspace-inspector workspace-inspector-${dock}`}
       aria-label="Workspace Inspector"
       aria-busy="true"
     >
-      <header className="inspector-loading-shell-head">
+      <header
+        className={`workspace-inspector-head ${
+          floating ? "is-window-drag-handle" : ""
+        }`}
+      >
         {windowControls ? (
           <WindowBackButton
             controls={windowControls}
             label="Inspector window"
           />
         ) : null}
-        <span className="inspector-loading-shell-title">{title}</span>
+        <div className="workspace-inspector-identity">
+          <span className="workspace-inspector-repo">{title}</span>
+        </div>
         {windowControls ? (
           <WindowControls controls={windowControls} label="Inspector window" />
         ) : (

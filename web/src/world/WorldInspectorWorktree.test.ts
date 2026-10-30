@@ -198,10 +198,18 @@ if (process.env.INSPECTOR_WORKTREE_DOM_TEST !== "1") {
     };
     try {
       await act(async () => root.render(createElement(View, props)));
-      const shell = document.querySelector(".inspector-loading-shell");
-      expect(shell?.getAttribute("aria-busy")).toBe("true");
+      // The shell is the Inspector's own frame and bar, so World's window,
+      // Town and phone styles apply before and after the code arrives.
+      const shell = document.querySelector(
+        'aside.workspace-inspector.workspace-inspector-right[aria-busy="true"]',
+      );
       expect(
-        shell?.querySelector(".inspector-loading-shell-title")?.textContent,
+        shell?.querySelector(":scope > header.workspace-inspector-head"),
+      ).not.toBeNull();
+      expect(
+        shell?.querySelector(
+          ".workspace-inspector-identity > .workspace-inspector-repo",
+        )?.textContent,
       ).toBe("Example");
       shell
         ?.querySelector<HTMLElement>('[aria-label="Close Workspace Inspector"]')
@@ -211,7 +219,7 @@ if (process.env.INSPECTOR_WORKTREE_DOM_TEST !== "1") {
         hostLoaded.resolve();
         await hostLoaded.promise;
       });
-      expect(document.querySelector(".inspector-loading-shell")).toBeNull();
+      expect(document.querySelector('[aria-busy="true"]')).toBeNull();
       expect(shown.agentWorktree?.target?.candidateId).toBe("old-root");
       await act(async () => shown.onSelectFileTab("same.txt"));
       expect(shown.fileSelection.loading).toBe(true);
