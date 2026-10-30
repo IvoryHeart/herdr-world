@@ -1,5 +1,11 @@
 import { useCreationProgress } from "../creationRequests";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { type WorkspaceSurfaceSelection } from "../App";
 import { worldLocalStorage } from "../browserStorage";
 import { paneShortcutAction } from "../paneShortcuts";
@@ -16,7 +22,10 @@ import {
 } from "../workspaceResource";
 import { worldRuntimeStore, type WorldRuntimePriority } from "./runtimeStore";
 import { buildWorldObject, type WorldObjectNode } from "./worldObject";
-import type { WorldCanvasAnchor } from "./worldConnectorGeometry";
+import {
+  sameCanvasAnchors,
+  type WorldCanvasAnchor,
+} from "./worldConnectorGeometry";
 import type { WorldConnectorTargetBounds } from "./worldConnectorGeometry";
 import {
   reconcileWorldInspectorConversation,
@@ -93,9 +102,19 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
   >({});
   const [intentOpening, setIntentOpening] = useState(false);
   const [intentError, setIntentError] = useState<string | null>(null);
-  const [, setSelectedVisualAnchor] = useState<WorldCanvasAnchor | null>(null);
-  const [visualConversationAnchors, setVisualConversationAnchors] =
-    useState<Record<string, WorldCanvasAnchor> | null>(null);
+  const [visualConversationAnchors, setVisualAnchorState] = useState<Record<
+    string,
+    WorldCanvasAnchor
+  > | null>(null);
+  // Views report anchors after every render and frame; keeping an unchanged
+  // set keeps an idle view from rendering World again.
+  const setVisualConversationAnchors = useCallback(
+    (next: Record<string, WorldCanvasAnchor> | null) =>
+      setVisualAnchorState((current) =>
+        sameCanvasAnchors(current, next) ? current : next,
+      ),
+    [],
+  );
   const [floatingWindowAnchors, setFloatingWindowAnchors] = useState<
     Record<string, WorldConnectorTargetBounds | null>
   >({});
@@ -234,7 +253,6 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
     const requestId = intentRequestRef.current + 1;
     intentRequestRef.current = requestId;
     setIntentError(null);
-    setSelectedVisualAnchor(null);
     setVisualConversationAnchors(null);
     if (!next || next.kind === "host" || !next.actionable) {
       setSelection(next);
@@ -648,7 +666,6 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
     setIntentOpening(false);
     setIntentError(null);
     setSelection(null);
-    setSelectedVisualAnchor(null);
     setVisualConversationAnchors(null);
   };
 
@@ -753,7 +770,6 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
         setIntentOpening(false);
         setIntentError(null);
         setSelection(null);
-        setSelectedVisualAnchor(null);
         setVisualConversationAnchors(null);
       } else if (selectedWindowId) {
         const replacement = retained.find(
@@ -775,6 +791,7 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
     onInspectorConversationsChange,
     onInspectorTerminalPortal,
     selection,
+    setVisualConversationAnchors,
     world,
   ]);
 
@@ -1074,7 +1091,6 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
     setIntentOpening,
     intentError,
     setIntentError,
-    setSelectedVisualAnchor,
     visualConversationAnchors,
     setVisualConversationAnchors,
     floatingWindowAnchors,

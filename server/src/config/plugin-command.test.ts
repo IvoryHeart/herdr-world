@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test, spyOn } from "bun:test";
 import {
+  appendFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -10,6 +11,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { computeUrl, readServiceEnv, runPluginCommand } from "./plugin-command";
+import { runServiceCommand } from "./service-manager";
 
 describe("readServiceEnv", () => {
   test("reads plain values", () => {
@@ -163,31 +165,41 @@ for (const [verb, exitCode, definitionType] of [
         const token = "a".repeat(64);
         writeFileSync(join(configDir, "herdr-world.env"), config);
         writeFileSync(join(configDir, "auth-token"), token);
-        const fixture = join(root, "service-fixture.ts");
-        writeFileSync(
-          binary,
-          `#!/bin/sh\nexec '${process.execPath.replaceAll("'", "'\\''")}' '${fixture.replaceAll("'", "'\\''")}' "$0" "$@"\n`,
-          { mode: 0o755 },
-        );
-        writeFileSync(
-          fixture,
-          `import { appendFileSync } from "node:fs";
-import { runServiceCommand } from ${JSON.stringify(join(import.meta.dir, "service-manager.ts"))};
-const [binary, ...args] = process.argv.slice(2);
-const result = runServiceCommand(args, {
- runtime: { platform: "linux", homeDir: ${JSON.stringify(homeDir)}, execPath: binary, argv: [binary, ...args] },
- runCommand: argv => {
-  if (argv.includes("herdr-gui.service")) return 4;
-  appendFileSync(${JSON.stringify(join(root, "service.log"))}, JSON.stringify(argv) + "\\n");
-  return argv.includes("daemon-reload") ? ${exitCode} : 0;
- }, getLanIPs: () => [], log: () => {}, error: () => {},
-});
-process.exit(typeof result === "number" ? result : 1);
-`,
-        );
-        expect(await runPluginCommand(["plugin", verb], "9.8.7", binary)).toBe(
-          exitCode,
-        );
+        const calls: string[][] = [];
+        const runNative = (file: string, args: string[]) => {
+          calls.push([file, ...args]);
+          const result = runServiceCommand(args, {
+            runtime: {
+              platform: "linux",
+              homeDir,
+              execPath: file,
+              argv: [file, ...args],
+            },
+            runCommand: (argv) => {
+              if (argv.includes("herdr-gui.service")) return 4;
+              appendFileSync(
+                join(root, "service.log"),
+                JSON.stringify(argv) + "\n",
+              );
+              return argv.includes("daemon-reload") ? exitCode : 0;
+            },
+            getLanIPs: () => [],
+            log: () => {},
+            error: () => {},
+          });
+          return { status: typeof result === "number" ? result : 1 };
+        };
+        expect(
+          await runPluginCommand(["plugin", verb], "9.8.7", binary, runNative),
+        ).toBe(exitCode);
+        expect(calls).toEqual([
+          [
+            binary,
+            "service",
+            "install",
+            ...(verb === "start" ? ["--force"] : []),
+          ],
+        ]);
         expect(readFileSync(join(configDir, "herdr-world.env"), "utf8")).toBe(
           config,
         );
@@ -212,3 +224,27 @@ process.exit(typeof result === "number" ? result : 1);
     },
   );
 }
+
+test.skipIf(process.platform === "win32")(
+  "default native dispatch preserves argv boundaries and child exit status",
+  async () => {
+    const root = mkdtempSync(join(tmpdir(), "native-plugin-dispatch-"));
+    try {
+      const binary = join(root, "native world");
+      const record = join(root, "arguments");
+      const quote = (value: string) =>
+        "'" + value.replaceAll("'", "'\\''") + "'";
+      writeFileSync(
+        binary,
+        "#!/bin/sh\nprintf '%s\\n' \"$@\" > " + quote(record) + "\nexit 23\n",
+        { mode: 0o755 },
+      );
+      expect(
+        await runPluginCommand(["plugin", "restart"], "9.8.7", binary),
+      ).toBe(23);
+      expect(readFileSync(record, "utf8")).toBe("service\ninstall\n");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
