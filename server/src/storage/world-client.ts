@@ -16,10 +16,18 @@ export async function openWorldClient(
   path: string,
   legacy: string,
   ports: StoragePorts,
-  createWorker: (url: URL) => Worker = (url) => new Worker(url),
+  createWorker?: (url: URL) => Worker,
   incarnation = randomBytes(16).toString("base64url"),
 ) {
-  const worker = createWorker(new URL("./world-worker.ts", import.meta.url));
+  // Bun bundles import.meta.url relative to the executable's main entry, whose
+  // sibling storage/ directory contains the separately embedded worker entry.
+  const workerUrl = new URL(
+    Bun.isStandaloneExecutable
+      ? "./storage/world-worker.ts"
+      : "./world-worker.ts",
+    import.meta.url,
+  );
+  const worker = createWorker ? createWorker(workerUrl) : new Worker(workerUrl);
   let serial = 0;
   let accepting = true;
   let failure: Error | undefined;

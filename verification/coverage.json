@@ -1223,6 +1223,8 @@
           "owners": [
             "server/src/storage/world-storage.ts",
             "server/src/storage/world-writer.ts",
+            "server/src/storage/world-client.ts",
+            "server/src/storage/world-schema.ts",
             "server/src/world/attention-dispatch.ts",
             "server/src/world/world-cli-service.ts",
             "server/src/service/world-service.ts",

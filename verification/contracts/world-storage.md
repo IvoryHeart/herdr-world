@@ -21,6 +21,11 @@ source and standalone compiled processes before/after COMMIT, after a worker
 acknowledgement, and around a synthetic external effect/receipt. These schedules and the partial-queue drain are maintained acceptance evidence. `world-writer.test.ts` must cover operation/savepoint isolation,
 both history bounds, service-incarnation cursor reset, attempt fencing, all five
 protocol recovery classes and safe re-upgrade after restoring a migration snapshot.
+The snapshot VACUUM destination must be absent inside a private directory,
+including on native macOS SQLite; publication must preserve prior snapshots.
+The compiled crash entry is outside storage/ and uses the release minify and
+source-map flags, preserving the production worker's embedded path. The large
+real-FULL-sync history fixture has an explicit watchdog, not a latency claim.
 `world-storage.test.ts` must cover exclusive ownership, isolated roots, reopen,
 hash-named private import backup, changed-source missing-ID merge, malformed
 legacy input and recovered uncertainty.
@@ -31,7 +36,10 @@ notification rebinding only on the original connection and own-ask response
 isolation. CLI `world.test.ts` must preserve fallback when recording fails and
 report the service's actual alert outcome and retry status when recording
 succeeds. Integrated root tests must fail when dispatch outlives storage or a
-worker fault leaves a service running with a dead ledger.
+worker fault leaves a service running with a dead ledger. Failure-driven close
+must be observed before assertions; calling explicit stop cannot supply that
+evidence. Own-ask isolation uses a deferred unrelated send, without an elapsed-
+time assertion.
 
 Run the complete maintained test files, not filtered cases, and the full
 applicable delivery/behavioral gate. Native installer CI repeats storage recovery

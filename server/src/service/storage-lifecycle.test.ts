@@ -91,23 +91,33 @@ test("a real worker termination signals unknown outcomes and releases exclusive 
 test("root fail-stops on storage failure rather than keeping a service with a dead ledger", async () => {
   const directory = root();
   const failure = Promise.withResolvers<Error>();
+  const closed = Promise.withResolvers<void>();
   const { service, base } = await startTestService(
     directory,
     {},
     {},
     {
-      storage: async (paths, injected) => ({
-        ...(await openStorage(paths, injected)),
-        failed: failure.promise,
-      }),
+      storage: async (paths, injected) => {
+        const storage = await openStorage(paths, injected);
+        return {
+          ...storage,
+          failed: failure.promise,
+          async close() {
+            await storage.close();
+            // Observe after stopService's close continuation releases the lock.
+            setImmediate(closed.resolve);
+          },
+        };
+      },
     },
   );
   expect((await fetch(`${base}/api/health`)).status).toBe(401);
   services.push(service);
   failure.resolve(new StorageOutcomeUnknown("Synthetic worker loss"));
   expect(await service.failed).toBeInstanceOf(StorageOutcomeUnknown);
-  await service.stop();
-  await expect(fetch(`${base}/api/health`)).rejects.toThrow();
+  await closed.promise;
+  // Automatic stop keeps the listener fenced until the process exits.
+  expect((await fetch(`${base}/api/health`)).status).toBe(503);
   expect(existsSync(join(directory, "instance.lock"))).toBe(false);
   await expect(
     Promise.resolve().then(() => service.storage.ledger().update(() => {})),

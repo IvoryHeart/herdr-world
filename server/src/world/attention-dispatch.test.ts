@@ -298,14 +298,19 @@ test("service replies for this ask without waiting for an unrelated alert drain"
       }),
     }),
   });
-  dispatchers.push(service);
+  // Teardown also releases the deferred send if the normal test watchdog fires.
+  dispatchers.push({
+    async stop() {
+      blocked.resolve({ shown: true, reason: "shown" });
+      await service.stop();
+    },
+  });
+  let unrelatedSettled = false;
+  void blocked.promise.then(() => {
+    unrelatedSettled = true;
+  });
   service.start();
   await entered.promise;
-  let guarded = false;
-  const guard = setTimeout(() => {
-    guarded = true;
-    blocked.resolve({ shown: false, reason: "busy" });
-  }, 2000);
   try {
     const response = await service.http(
       new Request("http://world.example/api/world/cli", {
@@ -320,7 +325,7 @@ test("service replies for this ask without waiting for an unrelated alert drain"
       () => true,
     );
     const reply = (await response.json()) as { result: { id: string } };
-    expect(guarded).toBe(false);
+    expect(unrelatedSettled).toBe(false);
     expect(reply).toMatchObject({
       ok: true,
       recorded: true,
@@ -337,7 +342,6 @@ test("service replies for this ask without waiting for an unrelated alert drain"
     });
     expect(f.storage.ledger.ask(reply.result.id)?.answer?.text).toBe("Durable");
   } finally {
-    clearTimeout(guard);
     blocked.resolve({ shown: true, reason: "shown" });
     await service.stop();
   }

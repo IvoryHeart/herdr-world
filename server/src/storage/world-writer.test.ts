@@ -2,13 +2,14 @@ import { afterEach, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import {
   copyFileSync,
+  existsSync,
   mkdtempSync,
   readFileSync,
   rmSync,
   statSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { openWorldWriter } from "./world-writer";
 import { migrateWorldDatabase, worldMigrations } from "./world-schema";
 import type {
@@ -248,7 +249,7 @@ test("row cap and service incarnation reject old and foreign cursors", () => {
       }).result as ReplayPage
     ).reset,
   ).toBe(true);
-});
+}, 60_000);
 
 test("attempt receipts are fenced; closure cancels atomically and trim removes finished effects", () => {
   const writer = open();
@@ -386,6 +387,43 @@ test("migrations preserve a private consistent snapshot and refuse future/foreig
   );
   expect(readFileSync(foreign.database)).toEqual(foreignBytes);
   expect(statSync(foreign.database).mode).toBe(foreignMode);
+});
+
+test("snapshot VACUUM receives an absent destination inside private staging", () => {
+  const paths = fixture();
+  const db = new Database(paths.database);
+  let checked = false;
+  const nativeCompatible = new Proxy(db, {
+    get(target, key) {
+      if (key === "query")
+        return (sql: string) => {
+          if (sql !== "VACUUM INTO ?") return target.query(sql);
+          return {
+            run(destination: string) {
+              // SQLite 3.43 on macOS rejects an already-created output file.
+              expect(existsSync(destination)).toBe(false);
+              if (process.platform !== "win32")
+                expect(statSync(dirname(destination)).mode & 0o777).toBe(0o700);
+              checked = true;
+              return target.query(sql).run(destination);
+            },
+          };
+        };
+      const value = Reflect.get(target, key, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+  try {
+    migrateWorldDatabase(db, paths.database);
+    const backup = migrateWorldDatabase(nativeCompatible, paths.database, [
+      ...worldMigrations,
+      "CREATE TABLE extension(value TEXT)",
+    ])!;
+    expect(checked).toBe(true);
+    expect(statSync(backup).nlink).toBe(1);
+  } finally {
+    db.close();
+  }
 });
 
 test("restoring a migration snapshot can upgrade again without replacing the prior snapshot", () => {

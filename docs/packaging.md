@@ -14,7 +14,11 @@ when missing, outside the keg. This avoids source builds on Intel Macs. See
 
 The executable also embeds the SQLite writer worker. Every compile target lists
 `server/src/storage/world-worker.ts` as an additional entry point; no adjacent
-worker source file or external Bun installation is required. The native installer
+worker source file or external Bun installation is required. The compiled client
+resolves `storage/world-worker.ts` relative to the bundled main entry; source
+execution resolves the sibling module. The crash fixture deliberately places
+its entry outside `storage/` and uses release minify/source-map flags, so it
+exercises that packaged layout with the production worker. The native installer
 matrix runs the storage crash suite on all six release targets when CI runs, including a
 standalone compiled fixture copied away from its source. It records the SQLite
 version actually linked by each platform; a Bun version alone does not establish

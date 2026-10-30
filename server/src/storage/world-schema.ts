@@ -1,12 +1,16 @@
 import type { Database } from "bun:sqlite";
 import {
+  chmodSync,
   closeSync,
   constants,
   existsSync,
   fsyncSync,
+  linkSync,
+  mkdtempSync,
   openSync,
   rmSync,
 } from "node:fs";
+import { dirname, join } from "node:path";
 import { newWorldId } from "./world-identifiers";
 import { assertSafeDataPath } from "../config/data-paths";
 
@@ -43,26 +47,43 @@ function backupMigration(db: Database, path: string, version: number) {
     newWorldId("b", (id) => existsSync(snapshotPath(id))),
   );
   assertSafeDataPath(backup);
-  const fd = openSync(
-    backup,
-    constants.O_CREAT |
-      constants.O_EXCL |
-      constants.O_WRONLY |
-      (constants.O_NOFOLLOW ?? 0),
-    0o600,
-  );
-  closeSync(fd);
+  // Native macOS SQLite requires VACUUM's destination not to exist. A private
+  // staging directory keeps it private until chmod/fsync and atomic publication.
+  const staging = mkdtempSync(join(dirname(path), ".world-snapshot-"));
+  const staged = join(staging, "snapshot.sqlite");
   try {
-    db.query("VACUUM INTO ?").run(backup);
-    const sync = openSync(backup, constants.O_RDWR);
+    db.query("VACUUM INTO ?").run(staged);
+    chmodSync(staged, 0o600);
+    const sync = openSync(staged, constants.O_RDWR);
     try {
       fsyncSync(sync);
     } finally {
       closeSync(sync);
     }
+    // Hard-link publication never replaces an earlier snapshot or a racer.
+    linkSync(staged, backup);
   } catch (error) {
-    rmSync(backup, { force: true });
-    throw error;
+    throw new Error(
+      `Cannot preserve World schema ${version} snapshot at ${backup}: ${(error as Error).message}`,
+      { cause: error },
+    );
+  } finally {
+    rmSync(staging, { recursive: true, force: true });
+  }
+  if (process.platform !== "win32") {
+    try {
+      const directory = openSync(
+        dirname(path),
+        constants.O_RDONLY | (constants.O_DIRECTORY ?? 0),
+      );
+      try {
+        fsyncSync(directory);
+      } finally {
+        closeSync(directory);
+      }
+    } catch {
+      /* Directory fsync is best effort, as for other private data files. */
+    }
   }
   return backup;
 }
