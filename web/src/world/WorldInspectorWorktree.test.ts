@@ -31,6 +31,7 @@ if (process.env.INSPECTOR_WORKTREE_DOM_TEST !== "1") {
       Element: browser.Element,
       Node: browser.Node,
       localStorage: browser.localStorage,
+      sessionStorage: browser.sessionStorage,
       IS_REACT_ACT_ENVIRONMENT: true,
     }))
       Object.defineProperty(globalThis, key, {
