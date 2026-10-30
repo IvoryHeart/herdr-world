@@ -11,3 +11,5 @@
 
 - Batch dense rooms' overview squares to keep terminal input responsive at
   maximum scale, preserving each pane's status and the status-pulse controls.
+- Keep animated Town input responsive in dense snapshots by skipping empty
+  question lookups and yielding automatic Town-master name searches between batches.

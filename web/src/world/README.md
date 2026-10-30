@@ -130,11 +130,17 @@ agent roster during cooperative World preparation; aggregate coverage can includ
 agents outside that roster and remains separate. Summary memoises those immutable
 room contributions and groups room links by host.
 Finish/seen overlays change only the affected room totals. Ask, metrics and clock
-updates reuse that topology. Asking identities resolve through the snapshot's
-generation-qualified pane and agent indexes, without scanning the roster. The
-canvas uses the same native-order tab prefix as Spaces: 24 tabs folded, then
-20 more per expansion. Attention never changes this admission. Explicit fold
-requests carry a local revision alongside their admission state, so TownCanvas
+updates reuse that topology. An empty question list skips the roster and pane
+lookups entirely. Asking identities resolve through the snapshot's
+generation-qualified pane and agent indexes, without scanning the roster.
+Automatic Town-master docking skips name lookup on mobile; on wide screens its
+lookup runs outside render in batches of 256 agents, yielding through the shared
+background task scheduler. Native names still take priority over display labels,
+and the first matching agent in roster order wins. A newer roster, name, mobile
+layout or unmount retires pending lookup work; closing a docked master still
+keeps it closed for the page visit. The canvas uses the same native-order tab
+prefix as Spaces: 24 tabs folded, then 20 more per expansion. Attention never
+changes this admission. Explicit fold requests carry a local revision alongside their admission state, so TownCanvas
 applies that requested layout immediately; background topology changes retain
 the interaction quiet-period guard.
 [townFoldedActivity.ts](town/townFoldedActivity.ts) maps shared rail calls and

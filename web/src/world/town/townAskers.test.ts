@@ -36,6 +36,24 @@ const asked = (id: string, pane: string, terminal?: string): WorldAsk => ({
   },
 });
 
+test("no questions require no topology or roster lookup", () => {
+  const unused = new Proxy(
+    {},
+    {
+      get() {
+        throw new Error("read unrelated topology for an empty question list");
+      },
+    },
+  );
+  expect(
+    townAskers(
+      [],
+      unused as Parameters<typeof townAskers>[1],
+      unused as Parameters<typeof townAskers>[2],
+    ).size,
+  ).toBe(0);
+});
+
 test("every placed asker is named as Town labels its desk, others by what they carry", () => {
   const office = {
     roster: [{ agent: { key: "agent-leaf", displayLabel: "dispatch" } }],

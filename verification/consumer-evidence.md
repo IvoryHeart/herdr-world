@@ -539,3 +539,15 @@ Move-colour schedules include explicit edits and resets both before and after
 native close cleanup. Closed-tab colour/pin tests interleave unrelated writes at
 both native absence reads, require fresh checks after revision conflicts, preserve
 a replacement tab, and cover runtime retirement and the three-attempt bound.
+
+## Town render-time lookups (Q43)
+
+Direct fixtures preserve native-name priority, first-match roster order and label
+fallback across cooperative search batches. Controlled scheduler tests drive the
+actual docking hook through replacement rosters, name/mobile changes and unmount,
+refusing stale results and preserving once-per-visit docking. Mobile lookup and
+empty-question tests reject any roster access. These bounded presentation checks
+add no connection authority or new abstract ordering protocol. Production-context
+animated Town browser tests at desktop and phone widths retain their complete
+synthetic workload, live animation and native-input acknowledgement budgets;
+controlled scheduler evidence alone makes no latency or native-platform claim.

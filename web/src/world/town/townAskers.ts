@@ -19,6 +19,7 @@ export function townAskers(
   world: Pick<WorldObject, "leaves">,
   office: Pick<HerdrOfficeProjection, "roster" | "paneRoster">,
 ): ReadonlyMap<string, TownAsker> {
+  if (asks.length === 0) return new Map();
   const leaves = askLeaves(asks, world);
   const agents = new Map(
     office.roster.map((entry) => [entry.agent.key, entry.agent.displayLabel]),
