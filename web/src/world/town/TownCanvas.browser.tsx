@@ -1271,11 +1271,17 @@ async function run() {
 
   if (scale === "fold-protected" && mode === "test") {
     const rendered = window.__HERDR_TOWN_RENDERER__!;
-    const card = [
-      ...host.querySelectorAll<HTMLButtonElement>(".town-room-card"),
-    ].find((candidate) =>
-      candidate.textContent?.includes("all-protected-room"),
+    const protectedRoomCard = () =>
+      [...host.querySelectorAll<HTMLButtonElement>(".town-room-card")].find(
+        (candidate) => candidate.textContent?.includes("all-protected-room"),
+      );
+    // Renderer readiness and completed target admission can precede this DOM
+    // commit, as in checkTownRoomFold.
+    await waitFor(
+      () => protectedRoomCard() !== undefined,
+      "the all-protected room overview card never mounted",
     );
+    const card = protectedRoomCard();
     check(card !== undefined, "all-protected room has no overview card");
     if (card) {
       const room = card.closest<HTMLElement>(".town-room");
