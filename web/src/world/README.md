@@ -371,6 +371,17 @@ retries, resetting terminal input. [The pane-switcher fixture](../paneJump.brows
 provides those frames and checks that its terminals finished loading. Wait for a
 dialog's focused control before sending its next keyboard command.
 
+`components/WorktreeLifecycleDialog.test.ts` mounts the actual lifecycle dialog
+in an isolated DOM with timers and frames installed before React DOM loads.
+Synthetic operational/service ports and explicit Inspector admission outcomes
+exercise retirement/disposal, remembered-workspace validation, refresh and retry.
+Those ports are deliberately unfenced so the dialog must reject a late result
+itself. This is dialog policy evidence: real qualified RPC routing, Files/Changes
+publication, focus and browser file input/download behavior stay in
+`HostsFilter.resources.test.ts` and the existing store/runtime consumers. The
+resource inventory removes the five policy scenarios at both viewport widths;
+retained cases name their browser rendering, focus and file-input boundary.
+
 ## Inspector and windows
 
 | Task | Open these owners | Focused evidence |

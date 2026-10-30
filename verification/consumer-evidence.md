@@ -44,6 +44,28 @@ a new model would not establish Markdown parsing or CodeMirror line targeting.
 Filesystem containment and symlink admission remain the existing service adapter's
 responsibility and retain their current real filesystem tests.
 
+### Worktree resource handoff (Q16, Q34)
+
+`WorktreeLifecycleDialog.test.ts` replaces the HostsFilter resource scenarios for
+runtime retirement/disposal during `worktree.open`, closed-target refresh/retry
+and failed workspace validation, plus the remembered-live-target retry count.
+It mounts the production dialog and uses the real `requestWorkspaceInspector`
+on the fixture clock. Synthetic service/operational ports deliberately return
+late results without fencing, so the dialog's own cancellation/current-client
+checks must prevent an Inspector request. Explicit admission rejection exercises
+its recoverable opened-workspace state, target validation and retry decisions.
+Accepting the retried admission after both Refresh and direct validation must
+close the dialog exactly once after two checkout opens; accepting a remembered
+live target closes it without another checkout open.
+Each moved scenario has a production-code negative control.
+
+The controlled receiver does not publish a real Inspector or prove RPC binding.
+The retained desktop/phone Files and Changes routes, rejection rendering/focus,
+native file input and download lifecycle stay in `HostsFilter.resources.test.ts`;
+existing store/lease consumers remain required. These finite component policies
+add direct evidence to the existing runtime/cache boundary without a new model
+or a claim about arbitrary concurrent workspace/transport schedules.
+
 ## Direct implementation, browser and platform alternatives
 
 | Area | Selected evidence and reason | Limits |
