@@ -21,15 +21,23 @@ The actors SHALL be:
 - automation under an owner grant.
 
 Each policy SHALL be one of:
-- allow;
-- confirm, meaning a fresh confirmation by the owner in a browser;
-- deny.
+- **allow**;
+- **acknowledge:** the caller passes an explicit flag that names the effect;
+- **confirm:** a fresh confirmation by the owner in a browser;
+- **deny**.
 
-The recovery class SHALL be one of read, keyed, reconcilable, reattachable or opaque.
+The recovery class SHALL be one of:
+- **read**;
+- **keyed:** the receiver honours a stable idempotency key;
+- **reconcilable:** a decisive read shows whether the effect happened;
+- **reattachable:** an external run handle can be found;
+- **repeatable:** a duplicate is harmless. It SHALL NOT be used for terminal input,
+  Chat sends or pane answers;
+- **opaque**.
 
 Admission and checks:
-- The service SHALL refuse an unregistered verb, invalid parameters or a denied actor
-  before any acquisition or dispatch.
+- The service SHALL refuse an unregistered verb, invalid parameters, a denied actor or a
+  missing acknowledgement before any acquisition or dispatch.
 - It SHALL recheck capabilities, preconditions and the actor's current authorization
   immediately before dispatch.
 - An adapter SHALL NOT grant itself an actor policy.
@@ -40,6 +48,11 @@ Admission and checks:
 - **WHEN** the agent CLI, verified or not, requests a pull request merge, close or ready
 - **THEN** the service refuses it before contacting the forge, and the same verb from
   the owner's browser runs only after the owner's confirmation
+
+#### Scenario: A layout change without its flag
+- **WHEN** the agent CLI requests a desk move without `--herdr`
+- **THEN** the service refuses it before contacting Herdr, and the same request with
+  `--herdr` runs without any browser step
 
 #### Scenario: Unregistered method
 - **WHEN** a browser or the agent CLI sends a method that is not a registered verb
@@ -52,8 +65,12 @@ Admission and checks:
 
 #### Scenario: Migration keeps today's policy
 - **WHEN** existing operations move into the registry
-- **THEN** a table check shows each operation's actor policy is unchanged, including CLI
-  confirmation for Herdr layout changes and refusal of merges and deletions from the CLI
+- **THEN** a table check shows that each operation's actor policy is unchanged:
+  - the CLI's `--herdr` flag for Herdr layout changes stays an acknowledgement;
+  - `--replace --yes` for exclusive role transfers and `--yes` for one-time imports
+    stay acknowledgements;
+  - pull request merge, close and ready keep the owner's browser confirmation;
+  - merges and deletions from the CLI stay refused
 
 ### Requirement: Staged command evidence
 
@@ -83,7 +100,7 @@ showed the effect. A client can then await that observation instead of polling.
   that observation sees the new name
 
 #### Scenario: Outcome unknown
-- **WHEN** a command's dispatch may have reached the source but no acknowledgement or
-  decisive read exists
+- **WHEN** an interactive command's dispatch may have reached the source but no
+  acknowledgement or decisive read exists
 - **THEN** the command shows uncertain, naming its owning host, and is not retried
   automatically

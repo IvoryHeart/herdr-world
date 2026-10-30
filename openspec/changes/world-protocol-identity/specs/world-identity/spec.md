@@ -1,21 +1,24 @@
 ## Purpose
 
 Give World-owned records stable identity that survives World and Herdr restarts. Bind
-records to source entities only by verified evidence, keep runtime fences apart from
-identity, and let several sources make claims about one field.
+records to source entities only by evidence that each record kind declares, keep
+runtime fences apart from identity, and let several sources make claims about one field.
 
 ## ADDED Requirements
 
 ### Requirement: World IDs
 
 Every World-owned record SHALL have a World ID that is unique within its instance's
-data folder and never reused. A record imported from an earlier World store SHALL keep
-its existing ID as its World ID. Every new World ID SHALL be short and issued by the
-instance's store.
+data folder. A record imported from an earlier World store SHALL keep its existing ID
+as its World ID. Every new World ID SHALL be:
+- short;
+- issued by the instance's store;
+- checked against existing IDs before use.
 
-A new World ID SHALL NOT be derived from a source's native ID, a label, a path or a
-runtime generation. No World ID SHALL change when World, Herdr or a connection
-restarts.
+A new World ID SHALL NOT come from a counter or clock that restoring a backup could roll
+back, so a restored data folder does not reissue IDs. A new World ID SHALL NOT be
+derived from a source's native ID, a label, a path or a runtime generation. No World ID
+SHALL change when World, Herdr or a connection restarts.
 
 #### Scenario: Herdr reuses a workspace ID
 - **WHEN** Herdr restarts and a new workspace reuses the ID of one a World note
@@ -28,6 +31,12 @@ restarts.
 - **THEN** each record keeps its existing ID and new records receive IDs that collide
   with none of them
 
+#### Scenario: Restored backup
+- **WHEN** the owner restores a stopped World's data folder from an earlier copy and
+  World then creates new records
+- **THEN** the new records do not receive IDs that the restored copy's later records
+  had been given
+
 ### Requirement: Verified source bindings
 
 A World record SHALL refer to a source entity only through a binding that names:
@@ -37,17 +46,35 @@ A World record SHALL refer to a source entity only through a binding that names:
 - the native ID;
 - the continuity evidence for that kind.
 
-A binding SHALL be in one of four states:
-- **attached**: a current, complete observation shows the native ID with matching
-  evidence;
-- **unresolved**: the source is offline, stale, filtered or partially listed, or the
-  record has not been observed since World started;
-- **unconfirmed**: the native ID is present in a current observation, but the evidence
+**Per-kind declarations.** Each record kind SHALL declare its evidence, the continuity
+paths it accepts, its absence rule and its lifetime. No general rule SHALL override a
+kind's declaration.
+
+**Continuity paths.** The only ways a binding moves to another native ID SHALL be:
+- a witnessed terminal ID appearing under a new native ID in a current, complete
+  listing of the same runtime;
+- the result of a move World itself performed, naming the new native ID for the
+  witnessed terminal;
+- explicit user action.
+
+Source events, labels, working directories, agent kinds, reused pane IDs and runtime
+generations SHALL NOT prove continuity.
+
+**Absence.** The only authoritative absences SHALL be:
+- a close observed on the current runtime generation for the bound target;
+- a qualified not-found on the current runtime generation;
+- a current, complete listing in which every witnessed terminal is absent.
+
+**States.** A binding SHALL be in one of four states:
+- **attached:** a current, complete observation shows the native ID exactly once with
+  matching evidence;
+- **unresolved:** the source is offline, stale, filtered or partially listed; the
+  record has not been observed since World started; or the native ID, terminal or
+  session appears more than once in one current observation;
+- **unconfirmed:** the native ID is present in a current observation, but the evidence
   does not match;
-- **ended**: authoritative absence, while the binding still names the checked target.
-  Authoritative absence is a complete current listing without the entity, a qualified
-  not-found on the current runtime generation, or a close observed on the current
-  runtime generation.
+- **ended:** an absence the kind declares has occurred, while the binding still names
+  the checked target.
 
 Rules for each state:
 - Only attached bindings SHALL authorize actions, and only through a freshly qualified
@@ -55,17 +82,19 @@ Rules for each state:
 - An unresolved binding SHALL keep its saved native ID and evidence unchanged.
 - An unconfirmed binding SHALL become attached only by explicit user action or a rule
   its record kind declares.
+- A record whose agent session is the explicit unknown identity SHALL bind to its
+  terminal.
 
-A binding SHALL move to another native ID only by verified continuity or by explicit
-user action. Verified continuity is a move result or move event that names the previous
-and new IDs for the witnessed terminal. Labels, working directories, agent kinds,
-reused pane IDs and runtime generations SHALL NOT prove continuity.
-
-For Herdr:
-- a terminal ID is its own evidence;
-- a pane, tab or workspace is evidenced by a terminal ID witnessed in it;
-- an agent session is evidenced by its session fingerprint;
-- forge and tracker items use their source's durable IDs.
+**Existing kinds keep their current rules:**
+- **Board strings:** follow only moves World performs. They end only on an observed
+  close or a qualified not-found, and stay unresolved while their target is missing
+  from the topology.
+- **Terminal appearance:** stays with its record while any witnessed terminal is
+  present, including after a lost move acknowledgement. It is reclaimed only when a
+  current, complete listing shows every witnessed terminal absent.
+- **Tab colour:** follows appearance, and is also dropped on an observed tab close.
+- **Agent interest:** follows its terminal and is dropped only by a complete pane
+  listing of the current runtime that omits it.
 
 #### Scenario: Host offline
 - **WHEN** a bound entity's host is offline or its listing is partial
@@ -82,9 +111,25 @@ For Herdr:
   the user
 
 #### Scenario: Move performed by World
-- **WHEN** World moves a pane, and the move result names its previous and new pane IDs
-  for the witnessed terminal
-- **THEN** the binding follows the pane to its new ID and stays attached
+- **WHEN** World moves a pane, and the move result names its new pane ID for the
+  witnessed terminal
+- **THEN** a Board string and an appearance record bound to that pane follow it and
+  stay attached
+
+#### Scenario: Move reply lost
+- **WHEN** World moves a coloured pane, the move reply is lost, and a later complete
+  listing of the same runtime shows the witnessed terminal under a new pane ID
+- **THEN** the appearance record and its colour follow the terminal, and nothing is
+  reclaimed
+
+#### Scenario: Pane moved outside World
+- **WHEN** a pane with a Board string is moved in Herdr's own interface
+- **THEN** the string stays unresolved until a qualified not-found or an observed close,
+  as today, and is never ended by the old pane ID's absence alone
+
+#### Scenario: Duplicate native identity
+- **WHEN** one current observation shows the same session or terminal in two panes
+- **THEN** the binding stays unresolved, authorizes nothing and is not ended
 
 #### Scenario: Look-alike entity
 - **WHEN** a new pane has the same label, directory and agent kind as an ended one

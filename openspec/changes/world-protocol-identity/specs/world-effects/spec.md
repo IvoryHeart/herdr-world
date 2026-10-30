@@ -4,7 +4,6 @@ Provide the paradigm-neutral substrate that durable work needs, without choosing
 workflow authoring model:
 - intents and effects through a transactional outbox;
 - fenced attempts and recovery by effect class;
-- a durable inbox for signals;
 - pinned operation versions;
 - durable deadlines, read through injected clock and scheduler ports.
 
@@ -19,15 +18,24 @@ requires it.
 
 An intent SHALL record:
 - its verb and validated parameters;
-- its targets, as bindings rather than runtime fences;
+- its targets;
 - its actor and authorization evidence;
 - an idempotency key;
 - its operation version;
 - its preconditions;
 - an opaque origin supplied by its creator.
 
-Dispatch SHALL happen only from committed intents. Interactive commands that need not
-outlive the request SHALL keep their direct path and existing uncertainty rules.
+**Targets.** Targets SHALL be bindings. Where bindings do not exist yet, a target SHALL
+capture the binding's fields inline: adapter, connection ID, entity kind, native ID,
+and the terminal or session evidence. A target SHALL NOT be a bare runtime generation.
+A target with no pane resource, such as an owner alert, SHALL capture only the
+connection ID.
+
+**Dispatch.** Each attempt SHALL record its own fences when it is claimed. After a
+service incarnation change, an intent SHALL re-resolve its targets to current qualified
+targets, or be recorded as not sent. Dispatch SHALL happen only from committed intents.
+Interactive commands that need not outlive the request SHALL keep their direct path
+and existing uncertainty rules.
 
 #### Scenario: Crash after commit
 - **WHEN** World commits a domain change and its intent, then stops before dispatching
@@ -38,6 +46,17 @@ outlive the request SHALL keep their direct path and existing uncertainty rules.
 - **WHEN** the transaction holding a domain change and its intent fails
 - **THEN** neither the change nor the intent exists, and nothing is dispatched
 
+#### Scenario: Intent from before a restart
+- **WHEN** an intent captured a pane target under one service incarnation and World
+  restarts at the same runtime generation number
+- **THEN** the intent re-resolves the target from its captured fields and evidence, and
+  is recorded as not sent if the target no longer resolves
+
+#### Scenario: Owner alert after a restart
+- **WHEN** an owner alert's intent is pending when World restarts
+- **THEN** its retry binds to its connection's current runtime, not to the generation
+  it was created under
+
 ### Requirement: Fenced dispatch attempts
 
 At most one attempt per intent SHALL be active. An attempt SHALL be claimed with a
@@ -45,7 +64,7 @@ fence naming the service incarnation and an attempt number. Immediately before
 dispatch, World SHALL recheck all of these:
 - the actor's current authorization;
 - the intent's preconditions;
-- the attached state of its bindings, resolved to a fresh qualified target;
+- its targets, resolved to fresh qualified targets;
 - support for its operation version.
 
 A committed intent or a claimed attempt SHALL NOT preserve a permission that has since
@@ -70,6 +89,8 @@ its verb's recovery class:
   happened; dispatch again only if it did not;
 - **reattachable**: find the existing run by its external handle, and reattach and
   observe it. Never relaunch it;
+- **repeatable**: retry, because a duplicate is harmless. This class SHALL NOT be used
+  for terminal input, Chat sends or pane answers;
 - **opaque**: mark the intent uncertain and show it. Never retry it automatically, and
   wait for an authorized decision.
 
@@ -81,6 +102,10 @@ until it is resolved. World SHALL NOT claim exactly-once delivery for any class.
   outcome
 - **THEN** after restart the intent is shown as uncertain and is not dispatched again
   without an authorized decision
+
+#### Scenario: Owner alert after a crash
+- **WHEN** World crashes after dispatching an owner alert and before recording it
+- **THEN** after restart the alert is sent again, and the owner may see it twice
 
 #### Scenario: Reattachable run
 - **WHEN** World crashes after starting an external run whose handle it recorded
@@ -115,35 +140,19 @@ undone.
 - **THEN** World records the effect's actual outcome and offers only supported,
   authorized cleanup
 
-### Requirement: Durable inbox for correlated signals
-
-World SHALL store each incoming signal, such as an answer or an observed external event,
-durably and exactly once by its dedupe key, before acknowledging its sender. It SHALL
-correlate the signal to one exact occurrence. It SHALL keep the signal until a consumer
-resolves it, including a signal that arrives before anything waits for it. A duplicate
-signal SHALL be acknowledged without being stored or acted on again.
-
-#### Scenario: Answer before the wait
-- **WHEN** an answer arrives before the work that needs it has registered its wait
-- **THEN** the answer is kept and is delivered when the wait is registered
-
-#### Scenario: Duplicate answer
-- **WHEN** the same answer is delivered twice
-- **THEN** it is stored once and acted on once
-
 ### Requirement: Pinned operation versions
 
 Each intent SHALL name the version of the operation contract it was created against. A
 service that does not support that version SHALL mark the intent as needing migration
-and SHALL NOT dispatch it. The intent SHALL keep its inbox signals and receipts. A
-migration SHALL be an explicit, recorded transition. It SHALL NOT replay an effect that
-already completed, and SHALL NOT lose an external handle.
+and SHALL NOT dispatch it. The intent SHALL keep its receipts. A migration SHALL be an
+explicit, recorded transition. It SHALL NOT replay an effect that already completed,
+and SHALL NOT lose an external handle.
 
 #### Scenario: Old intent, new binary
 - **WHEN** an upgraded World finds a pending intent whose operation version it no
   longer supports
 - **THEN** the intent is marked as needing migration, nothing is dispatched, and its
-  signals and receipts are kept
+  receipts are kept
 
 ### Requirement: State-conditioned queued intents
 
@@ -173,8 +182,9 @@ monotonic time for in-process waits.
 
 **Durable deadlines.**
 - A deadline SHALL persist its wall time.
-- It SHALL fire only once the wall clock has reached it. A wait that wakes early SHALL
-  be re-armed.
+- It SHALL fire only once the wall clock has reached it.
+- A wait SHALL check the wall clock again at least every 60 seconds, so a deadline
+  fires at most 60 seconds late even when the machine sleeps.
 - A deadline that passed while World was stopped SHALL fire once on start, after its
   authorization is rechecked.
 
@@ -190,11 +200,15 @@ behaviour without real time.
   change
 - **THEN** the deadline does not fire and the wait is re-armed
 
+#### Scenario: Machine sleeps across a deadline
+- **WHEN** the machine sleeps through a durable deadline and wakes later
+- **THEN** the deadline fires within 60 seconds of waking, not after the full original
+  delay
+
 ### Requirement: Retention of pending work
 
 World SHALL keep each of these until its explicit resolution, whatever its age:
 - unanswered asks;
-- unmatched early signals;
 - pending and uncertain intents;
 - the receipts needed for idempotency or uncertainty recovery.
 

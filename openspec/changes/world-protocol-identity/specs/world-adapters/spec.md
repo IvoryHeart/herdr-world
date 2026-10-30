@@ -94,7 +94,12 @@ deterministic. It SHALL behave unlike Herdr:
 - events without full payloads.
 
 The conformance suite, binding resolution, per-field claims and verb refusal SHALL be
-exercised against it.
+exercised against it. Before any consumer moves to World subscriptions, its entities
+SHALL also be served through a World subscription query. That run SHALL cover:
+- terminal-less rows;
+- a reset that ends lifetimes;
+- ID reuse as a new lifetime;
+- a partial listing that emits no deletes.
 
 #### Scenario: Production build
 - **WHEN** World is built for release
@@ -104,3 +109,9 @@ exercised against it.
 - **WHEN** the synthetic source reports entities that have no pane or terminal
 - **THEN** they are observed, bound and claimed without a terminal, and no terminal
   operation is offered for them
+
+#### Scenario: Synthetic rows through a subscription
+- **WHEN** the synthetic source resets and reuses an earlier ID while a client is
+  subscribed to its entities
+- **THEN** the client sees the old entity's lifetime end and a new lifetime begin. A
+  partial listing during the run deletes nothing.

@@ -90,12 +90,18 @@ that socket.
 
 ### Requirement: Incremental observation preparation
 
-An admitted observation SHALL prepare only what its changes affect.
-- **All unchanged.** A reply whose hosts are all unchanged, with identical state, SHALL
-  rebuild no host, room or view model and SHALL NOT publish.
-- **One room changed.** When a replaced host differs from the admitted host only within
-  one room, World SHALL prepare that room and the counts, attention and summaries that
-  depend on it. It SHALL reuse every other room's prepared presentation.
+An admitted observation, or a change to a World document or mark that a view reads,
+SHALL prepare only what reads the change. A room's inputs SHALL be:
+- its slice of the observation;
+- the Board appearance and relations, profile looks, watch entries, seen marks and Town
+  master that touch it.
+
+Preparation rules:
+- **All unchanged.** A reply whose hosts are all unchanged, with identical state and
+  unchanged documents, SHALL rebuild no host, room or view model and SHALL NOT publish.
+- **One room changed.** When only one room's inputs change, World SHALL prepare that
+  room and the counts, attention and summaries that depend on it. It SHALL reuse every
+  other room's prepared presentation.
 - **Consumed views only.** World SHALL prepare a view's model only while a consumer of
   that model is mounted.
 - **Board document.** World SHALL keep the Board document available to appearance and
@@ -103,7 +109,8 @@ An admitted observation SHALL prepare only what its changes affect.
 - **View switch.** World SHALL finish a newly selected view's preparation before
   presenting it.
 - **Equivalence.** Incremental preparation SHALL produce the same presentation as a
-  complete preparation of the same observation.
+  complete preparation of the same inputs: the observation and every document and
+  mark the rooms read.
 
 #### Scenario: One status change in a large host
 - **WHEN** one agent's status changes in a host with ten rooms
@@ -115,33 +122,30 @@ An admitted observation SHALL prepare only what its changes affect.
 - **THEN** World prepares no Board topology, Board's document still serves appearance
   and relations, and switching to Board prepares Board topology before Board is presented
 
-#### Scenario: Equivalence with complete preparation
-- **WHEN** any sequence of observations is prepared incrementally
-- **THEN** the result equals a complete preparation of the last observation
+#### Scenario: A profile's Town look is edited
+- **WHEN** the owner edits a profile's look and no observation changes
+- **THEN** every room showing an agent with that profile is prepared again with the new
+  look, and no other room is prepared
 
-### Requirement: Herdr observation repair by event class
+#### Scenario: Equivalence with complete preparation
+- **WHEN** any sequence of observations and document changes is prepared incrementally
+- **THEN** the result equals a complete preparation of the latest observation and
+  documents
+
+### Requirement: Herdr observation baseline
 
 The service SHALL treat Herdr events as invalidation, not as an authoritative replica.
-- It SHALL subscribe before reading.
-- It SHALL mark a host read dirty when a relevant event arrives during it, and read
-  again.
+- It SHALL subscribe and wait for the subscription's acknowledgement before reading.
+- It SHALL mark a host read dirty when a relevant event arrives during it, SHALL NOT
+  publish a dirty read as current, and SHALL read again.
 - On subscription loss, lost events, re-acknowledgement, unknown membership or runtime
   replacement, it SHALL retire actionability and re-list the affected runtime.
-- It SHALL NOT apply buffered event payloads over a read.
-
-An event class MAY patch the observed model directly only when all of these hold:
-- its payload is complete for the fields it patches;
-- its target is present in the current runtime's model;
-- a drift check, comparing the patched model with a fresh complete listing, has found
-  no difference for that class over its evaluation period.
-
-Every other event SHALL invalidate the host for a complete re-list. Drift SHALL be
-counted and repaired by replacing the host model, without logging payloads, and SHALL
-withdraw that class's permission to patch.
+- Every event SHALL invalidate its host for a complete re-list.
+- The service SHALL NOT apply event payloads, buffered or live, to the observed model.
 
 #### Scenario: A pane moves
 - **WHEN** Herdr reports a pane move, which can change the pane's ID
-- **THEN** the service re-lists the host instead of patching the pane
+- **THEN** the service re-lists the host and does not apply the event's payload
 
 #### Scenario: Events were lost
 - **WHEN** Herdr reports lost events or the subscription is re-acknowledged
@@ -151,11 +155,6 @@ withdraw that class's permission to patch.
 #### Scenario: Event during a read
 - **WHEN** a relevant event arrives while a host read is in progress
 - **THEN** that read is not published as current, and another serialized read follows
-
-#### Scenario: Drift found
-- **WHEN** a drift check finds the patched model differs from a fresh listing
-- **THEN** the host model is replaced by the listing, the drift is counted, and that
-  event class re-lists instead of patching until it is reviewed
 
 ### Requirement: World subscriptions with cursors
 
@@ -245,7 +244,7 @@ reviewed replacement closes the same claims.
 World SHALL deliver three lanes over the one World socket, beside the unchanged terminal
 path:
 - **Interactive** replies;
-- **Durable ordered** items: asks, notices, receipts and workflow signals;
+- **Durable ordered** items: asks, notices, receipts and intent status;
 - **Replaceable** state rows.
 
 Lane rules:

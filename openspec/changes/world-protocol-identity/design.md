@@ -29,25 +29,30 @@ session; verified against the
 - History is a 512-event ring. An overrun sends `events_lost` and closes the
   connection. World turns re-acknowledgement into `session.resync_required`, which
   invalidates the host.
-- Payloads cover different subsets. Renames, order lists, one tab's layout and one
-  pane's status are complete for what they carry. Creates, closes, moves and exits
-  need a re-list, and `pane.moved` changes the pane ID.
+- Payloads cover different subsets, and `pane.moved` changes the pane ID.
 - The safe baseline is: subscribe, wait for the ACK, then read while draining events.
   An event during a read makes the read dirty and forces another read. Four separate
   lists are not an atomic host snapshot.
 - No event carries World's agent recency (session-file times), its connection
-  catalogue or its endpoint availability.
+  catalogue or its endpoint availability. `PaneInfo` has no activity time, so recency
+  has one source: World.
 - Terminal IDs are allocated as `term_` plus wall-clock microseconds and a counter
   ([`terminal/id.rs`](https://github.com/herdrdev/herdr/blob/v0.9.3/src/terminal/id.rs)).
   They survive pane and tab moves.
 - A restored session keeps pane IDs and each pane's agent session, but not terminal
   IDs or metadata tokens
   ([`persist/snapshot.rs`](https://github.com/herdrdev/herdr/blob/v0.9.3/src/persist/snapshot.rs)).
-- `pane.report_metadata` tokens are stored on the terminal (`TerminalState`), not the
-  pane ([`terminal/state.rs`](https://github.com/herdrdev/herdr/blob/v0.9.3/src/terminal/state.rs)).
-  Limits ([`app/api_helpers.rs`](https://github.com/herdrdev/herdr/blob/v0.9.3/src/app/api_helpers.rs)):
-  32 keys per terminal, 16 per request, keys of at most 32 characters and values of
-  at most 80. `pane.list` returns the merged token map without each token's reporter.
+- `pane.report_metadata` tokens form one flat map per terminal (`TerminalState`),
+  patched key by key, and listed without each token's reporter
+  ([`terminal/state.rs`](https://github.com/herdrdev/herdr/blob/v0.9.3/src/terminal/state.rs)).
+  - **Limits**
+    ([`app/api_helpers.rs`](https://github.com/herdrdev/herdr/blob/v0.9.3/src/app/api_helpers.rs)):
+    32 keys per terminal across all sources, 16 per request, keys of at most 32
+    characters.
+  - **Values** are trimmed, stripped of control characters and silently truncated to
+    80 characters. An empty value clears the key.
+  - **Refusals:** only key-shape and key-count violations are refused.
+  - **Events:** a write emits `pane.updated` only when a value changes.
 - World already writes up to 19 keys per terminal: 15 for checkout reports, 2 for spawn
   stamps and 2 for task summaries.
 
@@ -69,14 +74,17 @@ session; verified against the
 - Per-terminal settings live in Herdr pane metadata.
 
 **Sibling changes.**
-- `shared-acquisition` (committee item 14) owns stage 2: poll replacement, pushed
-  recency and catalogue, and shared Desk acquisition.
-- The composition root (item 9) names the ports this design uses:
+- `shared-acquisition` (committee item 14, PR #551) owns stage 2: poll replacement,
+  pushed recency and catalogue, and shared Desk acquisition.
+- The composition root (item 9) builds the service with `createWorldService` and
+  these deps: `{ config, paths, clock, scheduler, storage, adapters,
+  scheduleProcessExit }`. This design uses its port names:
   - `Clock { now(), monotonic() }`;
   - `Scheduler { schedule(callback, delayMs) → { cancel() } }`;
   - `WorldStorage`, opened by `openStorage(paths, { clock, scheduler })`;
-  - an adapter record keyed by kind, with deps
-    `{ config, paths, clock, scheduler, storage, adapters }`.
+  - an adapter record keyed by kind.
+- `world.sqlite` (committee item 10) ships the first outbox: asks, results and owner
+  alerts.
 
 ## Goals / Non-Goals
 
@@ -89,12 +97,15 @@ session; verified against the
 - A verification plan that keeps Q12–Q14 and their consumers mapped at every stage.
 
 **Non-Goals**
-- A workflow authoring model: definitions, steps, waits, composition or a DSL.
+- A workflow authoring model: definitions, runs, steps, waits, composition or a DSL.
+- A general signal inbox. It is added with its first consumer.
 - A second real runtime, or building for one.
 - Shared acquisition and the poll replacement (`shared-acquisition`).
-- The `world.sqlite` schema (committee item 10). This design names only what the
-  substrate needs from storage.
-- Changing any current lifetime: the watchlist, Desk marks and "seen" stay as specified.
+- The `world.sqlite` schema. This design names only what the substrate needs from
+  storage.
+- Changing any current lifetime or binding rule: the watchlist, Desk marks, "seen",
+  Board strings, appearance, colour and interest stay as specified.
+- Applying Herdr event payloads to the model.
 - Town scene model, level-of-detail subscriptions, worker placement and React upgrades.
 - Plug-ins loaded at runtime.
 
@@ -181,9 +192,18 @@ host has no snapshot).
 ### 3. Incremental preparation
 
 1. Unchanged hosts keep their prepared objects by identity.
-2. For a replaced host, each room's inputs are fingerprinted: its workspace, tabs,
-   panes, agents and the tokens it reads. A room with an unchanged fingerprint reuses
-   its prepared room. This builds on the tab-membership index (committee item 4).
+2. Each room's inputs are fingerprinted. The fingerprint covers **every input the room
+   reads**:
+   - its slice of the observation: workspace, tabs, panes, agents, and the tokens it
+     reads;
+   - the World documents and marks it reads:
+     - the Board document's appearance and relations for its tabs and panes;
+     - the profiles document's looks for its agents;
+     - the watchlist entries, seen marks and Town master that touch it.
+
+   A room with an unchanged fingerprint reuses its prepared room. A change to a
+   document re-prepares only the rooms whose fingerprints include it. This builds on
+   the tab-membership index (committee item 4).
 3. Host and world counts, attention and summaries are derived from per-room aggregates,
    not whole-world scans. This builds on the prepared shell summaries (item 3).
 4. View models are prepared only for interested consumers (item 11, with the consumer
@@ -194,45 +214,32 @@ host has no snapshot).
 
    A newly selected view is prepared before it is presented.
 5. **Work counts, blocking in tests.**
-   - An all-unchanged reply with identical metadata rebuilds no host, room or view
-     model and publishes nothing.
+   - An all-unchanged reply with identical metadata and unchanged documents rebuilds no
+     host, room or view model and publishes nothing.
    - One status change prepares one room, its host's aggregates and the world summary,
      and no other room.
-   - Incremental output equals a complete preparation of the same observation, checked
-     as a property test.
+   - Incremental output equals a complete preparation of the same inputs: observation,
+     documents and marks. This is a property test, and P6 varies the documents as well
+     as the observation.
 
-### 4. Herdr observation and repair by event class
+### 4. The Herdr observation baseline
 
-The service follows the inventory's baseline: subscribe, ACK, then read while
-draining. An event during a read makes it dirty and forces another serialized read.
-Subscription loss, `events_lost`, re-acknowledgement, unknown membership or runtime
-replacement retire actionability and re-list that runtime. Buffered payloads are never
-applied over a read.
+The service follows the inventory's baseline, which is today's behaviour made explicit:
+- Subscribe, wait for the ACK, then read while draining events.
+- An event during a read makes the read dirty and forces another serialized read. A
+  dirty read is never published as current.
+- Subscription loss, `events_lost`, re-acknowledgement, unknown membership or runtime
+  replacement retire actionability and re-list that runtime.
+- Every event invalidates its host for a re-list. Event payloads are never applied to
+  the model.
 
-An event class may **patch** the host model only when all three hold:
-- its payload is complete for the fields it patches;
-- its target is in the current runtime's model;
-- a drift check has found no difference for that class over the evaluation period.
-
-The drift check compares the patched model with a fresh complete listing on a timer
-while patching is active. Every other event invalidates the host for a re-list, which
-is today's behaviour and the default.
-
-| Class (inventory) | Patch candidate | Otherwise |
-|---|---|---|
-| `workspace.renamed`, `tab.renamed` | label | re-list |
-| `workspace.moved`, `workspace.reordered`, `tab.moved` | complete order list | re-list |
-| `layout.updated` | that tab's layout | re-list |
-| `pane.agent_status_changed` | that pane's status and presentation, after membership registration | re-list |
-| `pane.updated` | that pane's record, when its workspace and tab are unchanged | re-list |
-| focus classes | shared focus hint only | none |
-| creates, closes, `pane.moved`, `pane.exited`, worktree and agent detection classes, unknown classes | none | re-list |
-
-Drift is counted and repaired by replacing the host model, with no payload logging. A
-class with drift loses its patch permission until reviewed. Patching is optional: the
-cost the committee measured comes from browsers × events, which v1 and shared
-acquisition already remove. Upstream requests A (snapshot boundary and resumable
-observation) and B (output revisions) from the inventory remain drafts for the owner.
+Patching the model from event payloads (for example renames, order lists, one tab's
+layout or one pane's status) is **deferred**. The measured cost is browsers × events,
+which v1 and shared acquisition already remove. Payload patching would add a second
+model-update path, with drift checks and per-class permissions, for no measured
+payoff. Revisit it with a measurement after v1 and shared acquisition (Open
+Questions). Upstream requests A (snapshot boundary and resumable observation) and B
+(output revisions) from the inventory remain drafts for the owner.
 
 ### 5. World subscriptions (v2)
 
@@ -286,7 +293,7 @@ Otherwise the service sends `reset` and bootstraps.
 | Lane | Carries | Rule |
 |---|---|---|
 | Interactive | RPC replies, command acknowledgements | sent before subscription traffic that hasn't begun transmitting |
-| Durable ordered | asks, notices, receipts, workflow signals | never coalesced or dropped; a subscription that can't keep up is reset and re-bootstrapped from durable state |
+| Durable ordered | asks, notices, receipts, intents | never coalesced or dropped; a subscription that can't keep up is reset and re-bootstrapped from durable state |
 | Replaceable | observation rows, World-owned state rows | may coalesce by the composition rules |
 | Terminal (unchanged) | terminal frames | existing rules |
 
@@ -320,9 +327,10 @@ The terminal rules are unchanged:
 - **Memory ring:** per incarnation, bounded by count and bytes. The v2 PR sizes it by
   measurement against the scale vector; it is not fixed here. A resume below the
   horizon resets.
-- **World-owned change history:** kept 24 hours or 10,000 revisions in `world.sqlite`,
-  whichever is longer (owner decision 2 default). It serves "what changed since" and
-  replay. It is not a resume source across restarts, because the incarnation resets.
+- **World-owned change history:** kept in `world.sqlite` for at most 24 hours and at
+  most 10,000 revisions, whichever limit is reached first, matching `world.sqlite`'s
+  replay cap. It serves "what changed since" and replay. It is not a resume source
+  across restarts, because the incarnation resets.
 - **Pending durable work** (§12) is never subject to either limit.
 
 **Initial query map** (from the consumer inventory; the v2 PRs refine it):
@@ -339,6 +347,7 @@ The terminal rules are unchanged:
 | `agent_conversation_changed` | Chat, peeks | `conversation(pane)` | replaceable (message rows) |
 | task notifications | notifications | `notices` | durable ordered |
 | sources refresh | Work lens, Town badges | `work_items` | replaceable |
+| (new, substrate) | intent and receipt status | `intents` | durable ordered |
 
 Navigation stays browser-local, and completion tracking keeps its identity rules
 (inventory). Once its consumers move, the six whole-document channels retire. The
@@ -348,74 +357,134 @@ complete snapshot stays for repair until the paged bootstrap closes the same cla
 
 v2 implementation PRs may start behind a disabled capability. No consumer may move to
 v2 until all four of these hold:
-1. **Herdr evidence.** The event-class inventory is published (done, 2026-10-30). The
-   service's keyed per-entity diff then runs in shadow beside v1 and shows zero
-   mismatches between delta-applied state and the fresh projection over a working day
-   on 8788.
+1. **Herdr evidence.**
+   - The event-class inventory is published (done, 2026-10-30).
+   - A shadow then runs on 8788 through the **real delivery path**: keyed per-entity
+     diff, change ring and composition, then a shadow client applying the batches.
+     After every observation, its state is compared with the fresh projection.
+   - The run includes a simulated disconnect and resume, and one slow-consumer reset.
+   - It meets a **minimum workload**, recorded with the evidence:
+     - per-class event counts, including `pane.moved` and closes;
+     - at least one World-to-Herdr reconnect;
+     - at least one runtime replacement.
+
+     A quiet day does not count.
+   - It ends with zero mismatches.
 2. **Consumer evidence.** The consumer inventory is published (done, 2026-10-30), and
-   the query map above is approved in the first v2 PR. The workflow substrate's ask,
-   notice and run queries are defined (committee item 15).
+   the query map above is approved in the first v2 PR. The substrate's own queries are
+   defined: asks, notices, intents and receipts. Queries over workflow runs belong to
+   the authoring model; they are added when it is chosen, outside this gate.
 3. **Synthetic source.** The adapter conformance suite passes with the synthetic
-   source: partial listings, resets with ID reuse, out-of-order and duplicate events.
-4. **Verification.** The resume model and composition properties pass against the
-   implementation. The owner approves the Q12–Q14 and consumer re-mapping
-   (`verification-plan.md`).
+   source, and the synthetic source's entities are served through a v2 query. That run
+   covers:
+   - terminal-less rows;
+   - a reset that ends lifetimes;
+   - ID reuse as a new lifetime;
+   - a partial listing that emits no deletes.
+4. **Verification.** The resume model, the page credits and the composition properties
+   (M2, M3, P1) pass against the implementation. The owner approves the Q12–Q14 and
+   consumer re-mapping (`verification-plan.md`).
 
 ### 7. Durable identity and bindings
 
-**World IDs** are short, issued by the instance's store and never reused within its
-data folder: a kind prefix and a persisted counter, such as `n12` or `a7`. Records from
-the JSON stores keep the IDs they already have. World IDs are not UUIDs and carry no
-source identity, label or path. A global name, when one is needed, is an `agent+local`
-URI under the owner's agent URI draft, composed of the instance and the local ID. It is
-not built here.
+**World IDs** are short and issued by the instance's store: a kind prefix and 8 random
+base32 characters, such as `n-7k2m9q4x`. The store checks each new ID against existing
+IDs before inserting it.
+- They are not counters or clocks, because restoring a stop-and-copy backup would roll
+  those back and issue the same ID twice. A late `ask answer` could then reach a
+  different ask.
+- Records from the JSON stores keep the IDs they already have.
+- World IDs are not UUIDs and carry no source identity, label or path.
+- A global name, when one is needed, is an `agent+local` URI under the owner's agent URI
+  draft, composed of the instance and the local ID. It is not built here.
 
 **A binding** links a World record to a source entity:
 `{ record, adapter, instance, kind, native_id, evidence, state, checked_at }`. For
 Herdr, `instance` is the connection ID.
 
-| Kind | Native ID | Continuity evidence | Survives |
-|---|---|---|---|
-| terminal | terminal ID | the ID itself (fresh per terminal, never restored) | moves, World restart, reconnect; not a Herdr restart |
-| pane (seat) | pane ID | a witnessed terminal ID in it | moves, through the move result or `pane.moved` naming the same terminal |
-| tab, workspace | tab or workspace ID | witnessed terminal IDs inside, or Board's weak evidence when bound while empty | IDs are reused after a Herdr restart, so they become unconfirmed |
-| agent session (occupant) | harness session `{source, agent, kind, value}` | its fingerprint, seen in a terminal | a Herdr restart that resumes the session |
-| work item | forge or tracker durable ID | the source's own identity | always |
-| synthetic | its own IDs | its declared rule | per its descriptor |
+**Evidence kinds** (Herdr, verified facts):
 
-**States** generalise Board's string states:
-
-| State | When | Actionable |
+| Kind | Native ID | Continuity evidence |
 |---|---|---|
-| attached | a current, complete observation shows the native ID with matching evidence | yes, through a fresh qualified target |
-| unresolved | the host is offline, stale, filtered or partially listed, or the record isn't yet observed (after a World restart) | no; the binding is kept unchanged |
-| unconfirmed | the native ID exists currently, but the evidence doesn't match (ID reuse) | no; the user keeps or detaches it, or the kind's rule applies |
-| ended | authoritative absence: a complete current listing omits it, a qualified get on the current generation says not found, or a close is observed on the current generation, and the binding still names that target | no; the record follows its lifetime |
+| terminal | terminal ID | the ID itself (fresh per terminal, never restored, survives moves) |
+| pane (seat) | pane ID | a witnessed terminal ID in it |
+| tab, workspace | tab or workspace ID | witnessed terminal IDs inside, or Board's weak evidence when bound while empty |
+| agent session (occupant) | harness session `{source, agent, kind, value}` | its fingerprint, seen in a terminal |
+| work item | forge or tracker durable ID | the source's own identity |
+| synthetic | its own IDs | its declared rule |
 
-**Re-resolution.** A binding moves to another native ID only by verified continuity or
-by explicit user action. Verified continuity is World's own move result naming the
-previous and new IDs, or a `pane.moved` event whose pane holds the witnessed terminal.
-Labels, cwd, reused pane IDs, agent kinds and runtime generations never prove
-continuity.
+**States:**
+- **attached:** a current, complete observation shows the native ID once, with matching
+  evidence. Actions go through a fresh qualified target.
+- **unresolved:** the source is offline, stale, filtered or partially listed; the record
+  isn't yet observed (after a World restart); or the match is ambiguous. The saved
+  binding is kept unchanged.
+- **unconfirmed:** the native ID is present in a current observation, but the evidence
+  doesn't match (ID reuse). The user keeps or detaches it, or the kind's declared rule
+  applies.
+- **ended:** the kind's absence rule is met, while the binding still names the checked
+  target.
 
-**Lifetimes** are declared per record kind:
-- archive;
-- clear;
-- keep unresolved;
-- move to "Needs a home".
+**Per-kind rules.** Each record kind declares four things:
+- its evidence;
+- the continuity paths it accepts, from a closed set;
+- its absence rule, from a closed set;
+- its lifetime.
 
-Current lifetimes stay. The watchlist, Desk marks and "seen" are memory-only and clear
-on restart or replacement as specified. Board strings, interest and colour keep their
-current rules.
+There is no general rule that overrides a kind's declaration.
+
+**Continuity**, the only ways a binding moves to another native ID:
+- **C1.** A witnessed terminal ID appears under a new native ID in a current complete
+  listing of the same runtime. Terminal IDs are fresh and never restored, so this is
+  verified.
+- **C2.** A result of World's own move names the new native ID for the witnessed
+  terminal.
+- **The user** moves it explicitly.
+
+Herdr events, labels, working directories, agent kinds, reused pane IDs and runtime
+generations never prove continuity. Events are lossy invalidation and can fall into an
+`events_lost` window.
+
+**Absence**, the only ways a binding ends:
+- **A1.** A close is observed on the current runtime generation for the bound target.
+- **A2.** A qualified get on the current generation answers not found.
+- **A3.** A complete current listing omits every witnessed terminal.
+
+**Ambiguity.** When a native ID, terminal or session appears more than once in one
+current observation, the binding stays unresolved: never attached and never ended. This
+matches today's watchlist rule (a duplicate terminal is never admitted or guessed) and
+Codex thread binding (bind only on an exact single match). Records whose session is
+the explicit unknown identity bind to the terminal instead.
+
+**Today's rules, written down unchanged:**
+
+| Record kind | Evidence | Continuity | Absence | When ended |
+|---|---|---|---|---|
+| Board string (pane, tab or workspace anchor) | witnessed terminals; weak evidence when bound while empty | C2 only. After a failed or rolled-back move, only the terminals the outcome positively observed | A1, A2; a target missing from the topology is unresolved | moves to "Needs a home" |
+| Terminal appearance (a tab's colour and status message, a pane's avatar) | witnessed terminals | C1 and C2: kept while any witnessed terminal is present, including after a lost move acknowledgement | A3 | record and colour alias reclaimed |
+| Tab colour | as appearance | as appearance; a tab World moves keeps the colour it showed | A1 (an observed tab close), or A3 | dropped |
+| Agent interest | terminal on its host, without generation | the terminal itself | A3; never on a failed, stale or partial listing | dropped |
+| Per-terminal settings (§11) | stored on the terminal in Herdr; `world_terminal` witness | the terminal itself | the terminal ends | gone with the terminal |
+| Watchlist pin | connection, generation and terminal (memory) | none | runtime replacement or service restart | cleared (current contract) |
+| Desk marks | connection, generation, terminal and session, or the explicit unknown session (memory) | none | runtime or session replacement, or service restart | cleared (current contract) |
+
+Whether Board strings should also follow moves made outside World, through C1, is an
+optional owner decision. It would be a MODIFIED Board requirement; this change keeps
+today's rule.
 
 **What later persistence would bind to** (owner approval required):
 - a watch → a terminal binding;
-- a Desk review mark → an agent-session binding plus the observed stop identity;
+- a Desk review mark → an agent-session binding plus the observed stop identity, or a
+  terminal binding when the session is unknown;
 - completion "seen" → an agent-session binding plus the completion identity.
 
 **Rejected alternatives.**
 - UUIDs: contrary to the owner's identity direction.
+- Counters: a restored backup issues them again.
 - Keying World records by runtime IDs: this is today's stale-on-restart defect.
+- One general continuity and absence rule for every kind: it contradicts Board's and
+  appearance's current contracts.
+- `pane.moved` events as evidence: they are lossy.
 - Automatic retargeting by matching names: it silently attaches records to the wrong
   agent.
 
@@ -426,10 +495,18 @@ A field that more than one source can report carries claims:
 `source` is the channel and `author` is who asserted it, when known and different. For
 example, an agent reports its PR through Herdr metadata.
 
+**The multi-source fields today:**
+- **Agent status:** Herdr's reported status, and World's status inferred from the
+  transcript.
+- **PR links:** the link an agent reports with `agent-checkout --pr`, and the link
+  inferred from its checkout branch.
+
+Agent recency is not one of them. Herdr reports no activity time, so recency stays a
+plain World value.
+
 **Rules.**
 - Single-source fields stay plain values.
-- Each field declares a display rule. For example, agent recency is the latest of
-  World's session-file time and Herdr's reports, and a PR link shows both the reported
+- Each field declares a display rule. For example, a PR link shows both the reported
   and the inferred link with provenance.
 - A claim is removed only by its own source's complete listing or by an explicit
   retraction. Another source's silence never removes it.
@@ -450,8 +527,9 @@ example, an agent reports its PR through Herdr metadata.
 - `queueable` (default false);
 - the evidence stages it reports.
 
-The registry replaces string dispatch with hand-checked parameters. An unregistered
-method is refused before any acquisition or dispatch.
+Every browser RPC method, resource operation, agent CLI command and assistant action is
+registered, including reads, which have the `read` class. An unregistered method is
+refused before any acquisition or dispatch.
 
 **Actors.**
 - the owner's browser;
@@ -462,8 +540,14 @@ method is refused before any acquisition or dispatch.
 - automation (a future owner grant). The registry knows only "automation with grant G";
   how grants are made belongs to the authoring model.
 
-**Policy values.** `allow`, `confirm` (a fresh owner confirmation in a browser) and
-`deny`.
+**Policy values.**
+
+| Value | Meaning | Today's examples |
+|---|---|---|
+| `allow` | runs | reads; Board edits from the browser |
+| `acknowledge` | runs only when the caller passes an explicit flag that names the effect | CLI `--herdr` for Herdr layout changes (desk moves, room and desk adds); `--replace --yes` for exclusive role transfers; `--yes` for a one-time pod import; `--allow-close-room` |
+| `confirm` | runs only after a fresh confirmation by the owner in a browser | PR merge, close and ready |
+| `deny` | refused | merges and Herdr deletions from the CLI |
 
 **Recovery classes.**
 
@@ -473,6 +557,7 @@ method is refused before any acquisition or dispatch.
 | `keyed` | the receiver honours a stable idempotency key |
 | `reconcilable` | a decisive read tells whether the effect happened |
 | `reattachable` | an external run handle can be found and observed |
+| `repeatable` | a duplicate is harmless, so a retry is allowed, as for owner alerts (`notification.show`). Never used for terminal input, Chat sends or pane answers |
 | `opaque` | none of these |
 
 These feed the recovery matrix (§12).
@@ -488,11 +573,11 @@ These feed the recovery matrix (§12).
 The UI claims only stages it has evidence for. "Stored" requires a durable commit.
 
 **Migration.** The registry is built from today's dispatch tables. A table test fixes
-every method's current effective policy, for example:
-- PR merge, close and ready: owner browser with confirmation only;
-- the CLI never merges or deletes Herdr objects;
-- CLI layout changes need confirmation;
-- an undo is refused when what it would restore has changed.
+every method's current effective policy, including:
+- `acknowledge` for each CLI flag above;
+- `confirm` for PR merge, close and ready;
+- `deny` for CLI merges and deletions;
+- undo refused when what it would restore has changed.
 
 Widening a policy is a reviewed registry change, never a side effect.
 
@@ -539,7 +624,8 @@ It behaves unlike Herdr:
 - events without full payloads.
 
 It is seeded and deterministic. It exercises the observation contract, bindings,
-claims and verb refusal. It never ships enabled.
+claims and verb refusal. Once v2 exists, it is also served through a v2 query, for the
+v2 gate (§6). It never ships enabled.
 
 ### 11. Per-terminal settings in Herdr pane metadata
 
@@ -550,11 +636,20 @@ writes.
 | Key | Value |
 |---|---|
 | `world_terminal` | the terminal ID the settings were written for |
-| `world_profile_0`, `world_profile_1` | the profile ID, split into 80-character parts (profile IDs are at most 128 characters) |
-| `world_profile_name` | the profile's name, at most 80 characters, for Worlds that lack the profile |
-| `world_master` | the Town master claim revision, present only on the holder |
+| `world_profile` | the profile ID: Herdr's agent-name rule, at most 32 characters |
+| `world_profile_name` | the profile's name, for Worlds that lack the profile |
+| `world_master` | the Town master claim revision (decimal), present only on the holder |
 
-That is at most 5 keys, so World's total stays at 24 of Herdr's 32 per terminal.
+That is at most 4 keys, so World's total stays at 23 of Herdr's 32 per terminal.
+
+**Values.** World validates every value before writing, because Herdr changes values
+silently. Each value must already be:
+- trimmed;
+- free of control characters;
+- non-empty;
+- at most 80 characters.
+
+A profile name is shortened at a character boundary to fit. Clearing writes `null`.
 
 **Read.** Settings come from each pane row's `tokens`. They are honoured only when
 `world_terminal` equals the pane's current terminal ID. This guards Herdr versions that
@@ -567,35 +662,43 @@ keep tokens per pane or restore them. Writes from another World arrive as
 3. Call `pane.report_metadata`.
 4. Revalidate the lease after the write.
 
-A failure is shown and never reported as saved. Clearing writes `null` for the keys.
-After its own moves World checks the tokens, and re-reports them only if a Herdr
+A failure is shown and never reported as saved. This includes Herdr's refusal past 32
+keys. After its own moves World checks the tokens, and re-reports them only if a Herdr
 version dropped them.
 
 **Lifetime.** The tokens end with the terminal: a Herdr restart doesn't restore them,
 and a closed terminal takes them with it. An unreachable host's settings are unresolved
 and kept, never cleared.
 
-**Town master.**
-- A claim's revision is one more than the highest revision among the current claims the
-  assigning World observes.
-- The holder is the highest revision across all current observed claims. A tie goes to
-  the greatest terminal ID, because Herdr issues terminal IDs while connection IDs are
-  per World.
+**Town master: the newest assignment wins.**
+- A claim's revision is a hybrid logical clock: `max(clock.now(), highest seen + 1)`.
+  "Highest seen" is the largest revision this World has observed or written. It is kept
+  with this World's profiles, so it survives a restart.
+- The holder is the claim with the highest revision across all current observed claims.
+  A tie goes to the greater terminal ID, because Herdr issues terminal IDs while
+  connection IDs are per World.
+- An offline holder that returns after a newer assignment loses, because its revision
+  is older. This also holds when no World saw its claim at assignment time, or a World
+  restarted meanwhile.
 - World clears superseded claims wherever it holds a current lease.
 - Moving the role from another live agent asks first, as today.
+- **Residual risk:** clock skew between machines larger than the gap between two
+  assignments. Within one World, the revision is monotonic.
 
 **Profiles** stay per World. An assignment resolves against this World's profiles; an
 unknown ID shows the recorded name with the default look. Profiles and chimes stay
 World-owned.
 
 **Migration.**
-- An idempotent import writes each assignment's tokens when its connection is first
-  observed complete on a ready runtime. An assignment whose terminal is absent from
-  that observation is already stale under today's contract and is dropped. The
-  assignments of hosts that are offline at first start wait until those hosts are
-  observed.
-- The legacy fields in `agent-profiles.json` are left in place, unread, for one release
-  so a rollback keeps today's behaviour.
+- Each assignment in `agent-profiles.json` is imported once, when its connection is
+  first observed complete on a ready runtime. An assignment whose terminal is absent
+  then is already stale under today's contract and is dropped. The assignments of hosts
+  that are offline at first start wait until those hosts are observed.
+- Import completion is recorded per connection in the profiles document. A later start
+  never re-imports, so it cannot overwrite a newer assignment made through tokens by
+  either World.
+- The legacy fields are left in place, unread after import, for one release so a
+  rollback keeps today's behaviour.
 
 **Privacy.** Any client of that Herdr can read the tokens. They hold only IDs, a profile
 name and a revision.
@@ -603,10 +706,20 @@ name and a revision.
 ### 12. The workflow substrate (paradigm-neutral)
 
 **Intent.**
-`{ id, verb, params, targets (bindings, never fences), actor, authorization evidence,
-idempotency_key, operation_version, preconditions, created_at, origin }`. `origin` is an
-opaque reference from the creator (owner, CLI, a future workflow) and has no semantics
-here.
+`{ id, verb, params, targets, actor, authorization evidence, idempotency_key,
+operation_version, preconditions, created_at, origin }`. `origin` is an opaque reference
+from the creator (owner, CLI, a future workflow) and has no semantics here.
+
+**Targets.** An intent's targets are bindings. Until bindings exist (stage 4), and for
+the first outbox in `world.sqlite`:
+- The intent captures the binding's fields inline: adapter, connection ID, kind, native
+  ID, and the terminal or session evidence. It never captures a bare runtime
+  generation as its target.
+- Each attempt records its own fences when it is claimed and checks them at dispatch.
+- After an incarnation change, the intent re-resolves its target from those fields to
+  a current qualified target. If it cannot, it is marked not sent.
+- A target with no pane resource, such as an owner alert, captures only the connection
+  ID. Each retry binds to that connection's current runtime lease.
 
 **Outbox.** An intent is committed in the same transaction as the domain change that
 needs it. Only durable work goes through the outbox: work that must survive a restart,
@@ -620,7 +733,7 @@ existing uncertainty rules.
    - the current authorization (a committed intent never preserves a revoked
      permission);
    - the preconditions;
-   - binding verification, resolved to a fresh qualified target;
+   - the target, resolved to a fresh qualified target;
    - support for the operation version.
 3. It writes `dispatching` durably before calling the adapter.
 4. It records the receipt, the refusal or uncertainty.
@@ -632,18 +745,19 @@ existing uncertainty rules.
 | `keyed` | retry with the same key; record the receipt | automatic, within the provider's availability |
 | `reconcilable` | decisive read first; done → receipt; not done → re-dispatch | automatic |
 | `reattachable` | find the run by its handle; reattach and observe; never relaunch | automatic continuation |
+| `repeatable` | retry, accepting a possible duplicate | automatic |
 | `opaque` after possible dispatch | `uncertain`, visible; no automatic retry; an authorized decision resolves it | safety only |
 | claimed, not dispatched (crash) | the fence expires with the incarnation; re-claim after the authorization recheck | automatic |
 | permanent refusal | record and explain | none until resolved |
-| unsupported operation version | `needs-migration`: no dispatch, inbox and receipts kept; explicit recorded migration that never replays a completed effect | none until migrated |
+| unsupported operation version | `needs-migration`: no dispatch, receipts kept; explicit recorded migration that never replays a completed effect | none until migrated |
 | cancel before dispatch | fence the queued attempt; release reservations | no forbidden effect starts |
 | cancel after dispatch | record the real outcome; only supported, authorized cleanup | no promise it was undone |
 | authorization revoked before dispatch | prevent, record why, release reservations; if already dispatched, record the outcome and allow only currently authorized cleanup | no forbidden effect starts |
 
-**Inbox.** A signal (an answer, an observed external event) is stored once by its dedupe
-key and correlated to one exact occurrence, before its sender is acknowledged. It is
-kept until a consumer resolves it, and early signals wait. How a consumer waits for a
-signal belongs to the authoring model.
+**Signals.** World's one durable signal today, an ask's answer, is stored on the ask
+by `world.sqlite`. A general signal inbox (dedupe, correlation, early arrival) is
+added with its first consumer, together with its model witnesses. How a consumer waits
+for a signal belongs to the authoring model.
 
 **Queued, state-conditioned intents** (owner rule). Only verbs that declare
 `queueable` can be queued. Such an intent captures the target state it was made
@@ -655,63 +769,73 @@ input and Chat sends are never queueable, so there is never a second send queue.
 - Core code reads time and defers work only through `Clock` and `Scheduler`. A lint
   rule restricts `Date.now`, `performance.now`, `setTimeout` and
   `requestAnimationFrame` in core folders.
-- A durable deadline persists its wall time and is armed with
-  `schedule(callback, max(0, deadline − clock.now()))`. A wake that finds
-  `now() < deadline` re-arms.
+- A durable deadline persists its wall time. It is armed with
+  `schedule(callback, min(60_000, max(0, deadline − clock.now())))` and re-armed on
+  every wake until `now() ≥ deadline`. Monotonic timers stop while a machine sleeps, so
+  this bounds the lateness after sleep to 60 seconds.
 - A deadline that passed while World was stopped fires once on start, after the
   authorization recheck.
-- Deterministic test clocks and schedulers drive all of this without real time.
+- Deterministic test clocks and schedulers drive all of this without real time,
+  including sleep across a deadline.
 
-**Retention.** Unanswered asks, unmatched early signals, pending intents and the
-receipts needed for idempotency or uncertainty are kept until their explicit
-resolution. No age-only rule removes them.
+**Retention.** Unanswered asks, pending and uncertain intents, and the receipts needed
+for idempotency or uncertainty are kept until their explicit resolution. No age-only
+rule removes them.
 
-**Not here.** How workflows are defined, how steps compose, and how waits and
+**Not here.** How workflows are defined, how runs and steps compose, and how waits and
 compensation are declared. Ranger keeps its own durable execution and task storage;
 moving it later keeps its scope, confirmation, recovery and held-queue contracts.
 
 ### 13. Verification
 
 See `verification-plan.md` for the models, property suites and coverage re-mapping per
-stage. Every implementation PR updates its contracts, adapters, consumer tests and
-`verification/coverage.json` and runs the complete gate. This PR changes no current
-contract, so it changes no evidence.
+stage. Every implementation PR does three things:
+- updates its contracts, adapters, consumer tests and `verification/coverage.json`;
+- runs the complete gate;
+- syncs its own deltas into the current specs.
+
+This PR changes no current contract, so it changes no evidence.
 
 ## Risks / Trade-offs
 
 - [Digesting projected hosts on dense worlds costs server time] → cache the digest per
   cache entry and projection key, measure in the v1 PR, and use the composite key only
   with its purity test.
+- [A room fingerprint misses an input and shows a stale look] → the fingerprint covers
+  every input the room reads, and P6 varies documents as well as observations.
 - [v2 grows before its evidence] → no consumer moves to v2 until the four gate items
-  hold.
-- [Other writers exhaust a terminal's 32 token keys] → World stays at 24 or fewer. A
+  hold, including a recorded minimum workload.
+- [Other writers exhaust a terminal's 32 token keys] → World stays at 23 or fewer. A
   full terminal makes Herdr refuse the write, which is shown. Raise it upstream if
   harness integrations grow.
-- [Two Worlds race to assign the Town master] → the deterministic winner rule converges
-  once both observe the same claims.
+- [Clock skew between Worlds reorders two Town master assignments] → the hybrid
+  logical clock orders them correctly within the skew. Larger skew is a documented
+  residual risk for a single shared role.
 - [A future Herdr stores tokens differently] → the `world_terminal` witness, plus a
   disposable-session conformance check on each Herdr upgrade.
 - [Opaque effects block a workflow] → intended: honest non-progress and an owner
   decision, never a blind retry.
-- [One long-lived change spans stages 3–7] → if v1 ships long before the v2 gate, the
-  owner may split v2 into its own change.
+- [One long-lived change spans stages 3–7] → each stage syncs its own deltas when it
+  ships. If v1 ships long before the v2 gate, the owner may split v2 into its own change.
 - [New Quint models lengthen the gate] → each is sized like the existing models. The
   plan names domains and measures them against the 15-minute deadline.
 
 ## Migration Plan
 
 Each part ships alone, in committee stage order, with one active effect path. Shadow
-reads are allowed; dual dispatch is not.
+reads are allowed; dual dispatch is not. Each stage syncs its own deltas into the
+current specs.
 1. **Incarnation and v1** (stage 3). Negotiated, so old clients keep complete replies.
    Rollback: stop advertising `world_observation_v1`.
-2. **Per-terminal settings** (queue item). One-way import; legacy fields kept unread
-   for one release.
+2. **Per-terminal settings** (queue item). The import is recorded per connection;
+   legacy fields are kept unread for one release.
 3. **Identity bindings** with `world.sqlite` (stage 4). JSON import with a backup;
-   lifetimes unchanged.
+   per-kind rules and lifetimes unchanged.
 4. **Verb registry, adapters and synthetic source** (stage 6). Table tests prove the
    policy is unchanged.
-5. **Effect substrate** (item 15, then stage 5). Matrix tests come first, red, and then
-   the outbox goes green.
+5. **Effect substrate** (item 15, then stage 5). The first outbox in `world.sqlite`
+   follows §12's rule for targets before bindings exist. Matrix tests come first, red,
+   and then the outbox goes green.
 6. **v2** (stage 7). Behind a capability until the gate. The complete snapshot stays
    for repair; rollback means consumers return to v1.
 
@@ -720,6 +844,10 @@ reads are allowed; dual dispatch is not.
 These are deferrable; none changes the specs or the task breakdown.
 - Page byte bound, ring size and per-subscription queue bound: measured in the v2 PR.
 - Topology detail-level parameters (stage 9).
+- Patching from Herdr event payloads: revisit with a measurement after v1 and shared
+  acquisition (§4).
+- Whether Board strings should follow moves made outside World (§7): an optional owner
+  decision that would modify the Board requirement.
 - Whether completion identity can use Herdr's completion sequence (`TerminalState` has
   `last_agent_completion_seq`, but the API inventory doesn't list it). Decide in the
   "seen" change.
