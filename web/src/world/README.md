@@ -212,9 +212,17 @@ cache. Cards mount in their own container, so React appends them as one subtree.
 Mounted cards also keep their callback refs and resize-observer registrations
 across status refreshes; removal releases both. Re-registering unchanged cards
 would force fresh resize notifications and another drawing pass.
+Large boards batch every nonempty workspace's status squares into SVG paths,
+including small rooms; a room's own size is not enough to bound drawing work
+across many rooms. Each agent keeps its square and each shell its hollow contour,
+with the same status colours, pulse controls and close-up/overview geometry.
+Empty rooms add no drawing surface. Smaller boards keep individual squares up to
+64 panes, then use the same batching.
 `ConcurrentContexts.test.ts` records Board render time and observer work by phase
 at 1440 and 390 pixels. Its refresh also updates the mounted terminal stores and
 checks that no terminals open, dispose or fit, and no retained cards re-register.
+It also bounds summary drawing nodes and retains its worst-input budget below
+200 ms for the complete concurrent workload.
 `ProductionContexts.board.test.ts` holds this path to the 200 ms p95 / 500 ms
 maximum input budget at 64 hosts.
 

@@ -9,8 +9,9 @@
 
 ### Fixed
 
-- Batch dense rooms' overview squares to keep terminal input responsive at
-  maximum scale, preserving each pane's status and the status-pulse controls.
+- Batch status squares in dense rooms and across large boards with many small
+  rooms to keep terminal input responsive, preserving each pane's status and
+  the status-pulse controls.
 - Keep animated Town input responsive in dense snapshots by skipping empty
   question lookups and yielding automatic Town-master name searches between batches.
 - Keep the Inspector pane map open when a delayed terminal-focus handoff runs

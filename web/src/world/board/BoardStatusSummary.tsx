@@ -2,7 +2,7 @@ import { memo } from "react";
 import type { BoardSquare } from "./boardModel";
 import "./boardStatusSummary.css";
 
-/** Large rooms keep every square, without a DOM node and animation per pane. */
+/** Keep every workspace square without a DOM node and animation per pane. */
 export const BoardStatusSummary = memo(function BoardStatusSummary({
   squares,
   overview,

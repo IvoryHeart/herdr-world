@@ -590,6 +590,14 @@ async function run() {
       !!scene.querySelector(".board-card") &&
       !!scene.querySelector("[data-world-node-anchor]"),
   );
+  // Many small rooms must not recreate a DOM square for every pane.
+  // Five agent states and shells need at most six paths and one surface.
+  check(
+    [...scene.querySelectorAll(".board-sum")].every(
+      (summary) => summary.querySelectorAll("*").length <= 7,
+    ),
+    "dense Board summaries exceed the bounded status drawing nodes",
+  );
   measurements.renderMs = performance.now() - renderStart;
   await finishStress();
   await beginStress("refresh");

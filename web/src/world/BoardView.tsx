@@ -3452,7 +3452,7 @@ export default function BoardView({
                   />
                   <div className="board-counts">{workspaceCounts(space)}</div>
                   <div className="board-sum" aria-hidden="true">
-                    {space.squares.length > 64 ? (
+                    {space.squares.length > (culling ? 0 : 64) ? (
                       <BoardStatusSummary
                         squares={space.squares}
                         overview={far}

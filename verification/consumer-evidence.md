@@ -436,9 +436,13 @@ These extend Q22/Q42/Q43's existing direct consumer evidence; no new authority o
 ordering state machine is introduced.
 The maximum-scale Board input acceptance retains its existing 150ms p95 / 450ms
 worst-event limits. Dense room summaries batch same-status squares into SVG paths;
-a direct rendering test checks every agent/shell contour, both zoom geometries,
-and a bounded path count. This preserves status and pulse presentation without
-thousands of independently animated DOM nodes. CPU-throttled before/after runs
+direct rendering tests check every agent/shell contour in 17- and 255-pane rooms,
+both zoom geometries and a bounded path count. The same batching covers small
+nonempty rooms on large boards, while empty rooms draw no surface. The actual
+concurrent-context consumer bounds each summary's drawing nodes and retains its
+complete workload and 200 ms worst-input budget at desktop and phone widths.
+This preserves status and pulse presentation without thousands of independently
+animated DOM nodes. CPU-throttled before/after runs
 supplement the unchanged native-input consumer instead of changing its budget.
 
 ### History input and mobile shell launches (Q09)

@@ -1762,6 +1762,7 @@
         "web/src/world/PullRequestReviews.test.ts",
         "server/src/sources/actions.test.ts",
         "web/src/world/ConcurrentContexts.test.ts",
+        "web/src/world/board/BoardStatusSummary.test.tsx",
         "web/src/world/board/boardCardRefs.test.ts",
         "web/src/world/ProductionContexts.test.ts",
         "web/src/world/town/townLayout.test.ts",
@@ -1840,6 +1841,7 @@
         ],
         "tests": [
           "web/src/world/ConcurrentContexts.test.ts",
+          "web/src/world/board/BoardStatusSummary.test.tsx",
           "web/src/world/board/boardCardRefs.test.ts",
           "web/src/world/ProductionContexts.test.ts",
           "web/src/world/town/townLayout.test.ts",
