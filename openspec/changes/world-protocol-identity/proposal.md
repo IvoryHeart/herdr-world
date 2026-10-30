@@ -123,9 +123,14 @@ No new dependency is required:
 9. **Town master uniqueness:** across all observed hosts, the claim with the highest
    revision wins; ties break by qualified terminal key. Superseded claims are cleared.
 10. **The synthetic source is test-only.** It is never registered in production builds.
-11. **The v2 gate** has four parts: the Herdr event-class inventory, the consumer
-    inventory, a passing synthetic conformance run, and the approved Q12–Q14 re-mapping
-    (design, "The v2 gate").
+11. **The v2 gate** has four parts (design §6):
+    - **Herdr evidence:** the event-class inventory, plus a working day of zero
+      shadow-diff mismatches on 8788;
+    - **Consumer evidence:** the consumer inventory mapped to queries, plus the ask,
+      notice and run queries;
+    - **Synthetic source:** a passing conformance run;
+    - **Verification:** passing resume and composition checks, and the owner-approved
+      Q12–Q14 re-mapping.
 
 ## Owner questions
 
