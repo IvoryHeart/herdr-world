@@ -2874,6 +2874,22 @@ async function run() {
     };
     let moved = false;
     const tried: string[] = [];
+    // Town's gesture trace for a lift failure below: collected passively, with
+    // no overlay, keeping only the last 20 non-frame events of each press.
+    const townTrace = window.__HERDR_TOWN_RENDERER__?.trace;
+    const traced = townTrace && {
+      enabled: townTrace.enabled,
+      record: townTrace.record,
+    };
+    const gestures: { kind: string; detail?: unknown }[] = [];
+    if (townTrace) {
+      townTrace.enabled = true;
+      townTrace.record = (kind, detail) => {
+        if (kind === "frame") return;
+        gestures.push({ kind, detail });
+        if (gestures.length > 20) gestures.shift();
+      };
+    }
     for (const room of phone && scale === "extended" ? [] : rooms) {
       const ghost = () => host.querySelector<HTMLElement>(".town-drag-ghost");
       // On failure, say why: where the press landed against where the desk is
@@ -2890,6 +2906,7 @@ async function run() {
       };
       const pressedAt = at(fromDesk);
       const cameraAtPress = camera();
+      gestures.length = 0;
       const pressedTime = performance.now();
       press("pointerdown", pressedAt);
       await waitFor(
@@ -2899,10 +2916,28 @@ async function run() {
             room: room.dataset.id ?? room.getAttribute("aria-label"),
             tried,
             pressedAt,
-            deskNow: fromDesk.isConnected ? at(fromDesk) : "detached",
+            deskNow: fromDesk.isConnected
+              ? (() => {
+                  const box = fromDesk.getBoundingClientRect();
+                  return {
+                    left: box.left,
+                    top: box.top,
+                    right: box.right,
+                    bottom: box.bottom,
+                    width: box.width,
+                    height: box.height,
+                    containsPress:
+                      pressedAt[0] >= box.left &&
+                      pressedAt[0] <= box.right &&
+                      pressedAt[1] >= box.top &&
+                      pressedAt[1] <= box.bottom,
+                  };
+                })()
+              : "detached",
             heldMs: Math.round(performance.now() - pressedTime),
             cameraAtPress,
             cameraNow: camera(),
+            gestures: JSON.stringify(gestures).slice(0, 4000),
           })}`,
       );
       press("pointermove", floor(room));
@@ -2943,6 +2978,10 @@ async function run() {
       await landed(drawn, "a desk moved to another room");
       moved = true;
       break;
+    }
+    if (townTrace && traced) {
+      townTrace.enabled = traced.enabled;
+      townTrace.record = traced.record;
     }
     if (!moved) {
       const target = await prepareTownEdgeDrop({

@@ -285,6 +285,8 @@ export function TownCanvas({
   const shellRef = useRef<HTMLDivElement | null>(null);
   const traceRef = useRef(trace);
   traceRef.current = trace;
+  if (DEVTOOLS && window.__HERDR_TOWN_RENDERER__)
+    window.__HERDR_TOWN_RENDERER__.trace = trace;
   const hostRef = useRef<HTMLDivElement | null>(null);
   const worldRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<TownRendererHandle | null>(null);
