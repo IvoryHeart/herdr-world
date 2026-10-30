@@ -39,6 +39,7 @@ import {
   forgetOnExit,
   noticeStaleWatcher,
   type Seat,
+  seatInventory,
   seats,
   startSeat,
 } from "./crew/seats";
@@ -143,9 +144,12 @@ export function crewPass(context: PassContext) {
   // prompt that was already sent. A dry run changes nothing and takes no lock.
   const pass = () => {
     const { verdicts, inputs } = context.judge();
-    const live = seats(deps.run);
+    const live = seatInventory(deps.run);
     const names = [
-      ...new Set([...Object.keys(settings.roster), ...live.map((s) => s.name)]),
+      ...new Set([
+        ...Object.keys(settings.roster),
+        ...(live ?? []).map((s) => s.name),
+      ]),
     ];
     const byNumber = new Map(inputs.map((input) => [input.number, input]));
     // How long each running check of an in-scope PR has been running, as
@@ -277,7 +281,7 @@ function act(
   planned: Action[],
   verdicts: Verdict[],
   inputs: GateInput[],
-  live: Seat[],
+  live: Seat[] | null,
   authors: Map<number, Item>,
   say: (text: string) => void,
 ) {
@@ -636,7 +640,7 @@ function settleRuns(
 function deliver(
   crew: Database,
   settings: CrewSettings,
-  live: Seat[],
+  live: Seat[] | null,
   authors: Map<number, Item>,
   deliverable: (entry: StoredAction) => boolean,
   record: (entry: Action) => void,
@@ -660,6 +664,15 @@ function deliver(
     if (AUTHOR_KINDS.has(entry.kind) && !fixing.has(entry.pr))
       bySeat.set(entry.target, [...(bySeat.get(entry.target) ?? []), entry]);
   for (const [name, entries] of bySeat) {
+    // A failed read says nothing about whether the author is still working.
+    if (live === null) {
+      for (const entry of entries) {
+        if (entry.detail === "seat inventory unreadable") continue;
+        setAction(crew, entry.key, "pending", now, "seat inventory unreadable");
+        say(`#${entry.pr} waiting for readable seat inventory for ${name}`);
+      }
+      continue;
+    }
     const why = promptable(
       live.find((seat) => seat.name === name),
       settings,
@@ -680,12 +693,11 @@ function deliver(
         say,
       );
       for (const entry of entries) {
-        if (fixers.handed.has(entry.key) || entry.detail === why) continue;
-        setAction(crew, entry.key, "pending", now, why);
         const fixer = fixers.waits.get(entry.pr);
-        say(
-          `#${entry.pr} waiting for ${name} (${why}${fixer ? `; no fixer: ${fixer}` : ""})`,
-        );
+        const detail = fixer ? `${why}; no fixer: ${fixer}` : why;
+        if (fixers.handed.has(entry.key) || entry.detail === detail) continue;
+        setAction(crew, entry.key, "pending", now, detail);
+        say(`#${entry.pr} waiting for ${name} (${detail})`);
         if (
           (why === "no live seat" && fixer !== "no free run slot") ||
           why === "never prompted" ||
@@ -694,8 +706,8 @@ function deliver(
           record(
             notice(
               entry,
-              `waits-${digest(why)}`,
-              `#${entry.pr} waits for ${name} (${why}): ${entry.text}`,
+              `waits-${digest(detail)}`,
+              `#${entry.pr} waits for ${name} (${detail}): ${entry.text}`,
             ),
           );
       }

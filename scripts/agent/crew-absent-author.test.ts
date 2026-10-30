@@ -13,6 +13,8 @@ function absentAuthor(neverPrompt: string[] = []) {
   });
   const original = f.deps.run;
   let dirty = false;
+  let missing = false;
+  let head = SHA.reviewed;
   f.deps.run = (argv) => {
     const result = original(argv);
     if (
@@ -22,13 +24,15 @@ function absentAuthor(neverPrompt: string[] = []) {
     )
       return {
         code: 0,
-        stdout: `worktree /synthetic/pr-worktree\nHEAD ${SHA.reviewed}\nbranch refs/heads/agent/builder-7\n\n`,
+        stdout: missing
+          ? ""
+          : `worktree /synthetic/pr-worktree\nHEAD ${head}\nbranch refs/heads/agent/builder-7\n\n`,
         stderr: "",
       };
     if (argv[0] === "git" && argv.includes("status"))
       return { code: 0, stdout: dirty ? " M synthetic.ts\n" : "", stderr: "" };
     if (argv[0] === "git" && argv.includes("rev-parse"))
-      return { code: 0, stdout: SHA.reviewed, stderr: "" };
+      return { code: 0, stdout: head, stderr: "" };
     return result;
   };
   const asks = () =>
@@ -44,8 +48,38 @@ function absentAuthor(neverPrompt: string[] = []) {
     dirty: () => {
       dirty = true;
     },
+    block: (kind: string) => {
+      dirty = kind === "dirty";
+      missing = kind === "missing";
+      head = kind === "head" ? SHA.other : SHA.reviewed;
+    },
   };
 }
+
+test.each([
+  { code: 1, stdout: "", stderr: "unavailable" },
+  { code: 0, stdout: "not json", stderr: "" },
+  { code: 0, stdout: '{"result":{}}', stderr: "" },
+  { code: 0, stdout: '{"result":{"agents":{}}}', stderr: "" },
+  { code: 0, stdout: '{"result":{"agents":[null]}}', stderr: "" },
+  { code: 0, stdout: '{"result":{"agents":[{"name":42}]}}', stderr: "" },
+])("an unreadable seat inventory never authorizes a fixer: %j", (inventory) => {
+  const f = absentAuthor();
+  const original = f.deps.run;
+  f.deps.run = (argv) => {
+    const result = original(argv);
+    return argv[0] === "herdr" && argv[2] === "list" ? inventory : result;
+  };
+  f.pass();
+  f.pass(SHA.reviewed, NOW + 60_000);
+  expect(f.spawned).toEqual([]);
+  expect(
+    f.calls.some((argv) => argv[0] === "herdr" && argv[2] === "prompt"),
+  ).toBe(false);
+  f.deps.run = original;
+  f.pass(SHA.reviewed, NOW + 120_000);
+  expect(f.spawned.map((argv) => argv[2])).toEqual(["fix"]);
+});
 
 test("an absent author gets one fresh fixer without requiring an earlier prompt elsewhere", () => {
   const f = absentAuthor();
@@ -92,6 +126,43 @@ test("a missing seat does not bypass the clean worktree requirement", () => {
   expect(f.spawned).toEqual([]);
   expect(f.asks()).toHaveLength(1);
 });
+
+test.each([
+  ["dirty", "its worktree has uncommitted changes"],
+  ["missing", "no worktree has agent/builder-7 checked out"],
+  ["head", "its worktree isn't at the PR's head"],
+])(
+  "a capacity wait escalates once when the fixer is blocked by %s",
+  (kind, why) => {
+    const f = absentAuthor();
+    const id = addRun(
+      f.crew,
+      {
+        actionKey: "other-review",
+        pr: 8,
+        head: SHA.other,
+        reviewer: "rev2",
+        log: "synthetic.log",
+      },
+      NOW,
+    );
+    f.pass();
+    expect(f.asks()).toEqual([]);
+    finishRun(f.crew, id, 0, null, NOW + 1);
+    f.block(kind!);
+    f.pass(SHA.reviewed, NOW + 60_000);
+    f.pass(SHA.reviewed, NOW + 120_000);
+    expect(f.spawned).toEqual([]);
+    expect(f.asks()).toHaveLength(1);
+    expect(f.asks()[0]![2]).toContain(why!);
+    f.block("clear");
+    f.pass(SHA.reviewed, NOW + 180_000);
+    expect(f.spawned.map((argv) => argv[2])).toEqual(["fix"]);
+    expect(
+      f.calls.some((argv) => argv[1] === "ask" && argv[2] === "withdraw"),
+    ).toBe(true);
+  },
+);
 
 test("a missing never-prompt seat is not replaced by a fixer", () => {
   const f = absentAuthor(["builder"]);

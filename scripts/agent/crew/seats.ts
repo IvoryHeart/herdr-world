@@ -10,17 +10,28 @@ import { seatArgv } from "./worker";
 
 export type Seat = { name: string; status: string; focused: boolean };
 
-/** Herdr's named agents; an empty list if Herdr can't be read. */
-export function seats(run: Run): Seat[] {
+/** Herdr's named agents; null when the inventory cannot prove absence. */
+export function seatInventory(run: Run): Seat[] | null {
   const result = run(["herdr", "agent", "list"]);
-  if (result.code !== 0) return [];
+  if (result.code !== 0) return null;
   try {
     const agents = (
       JSON.parse(result.stdout) as {
-        result?: { agents?: Record<string, unknown>[] };
+        result?: { agents?: unknown };
       }
     ).result?.agents;
-    return (agents ?? [])
+    if (
+      !Array.isArray(agents) ||
+      agents.some(
+        (agent) =>
+          !agent ||
+          typeof agent !== "object" ||
+          Array.isArray(agent) ||
+          (agent.name != null && typeof agent.name !== "string"),
+      )
+    )
+      return null;
+    return agents
       .filter((agent) => typeof agent.name === "string")
       .map((agent) => ({
         name: agent.name as string,
@@ -28,8 +39,13 @@ export function seats(run: Run): Seat[] {
         focused: agent.focused === true,
       }));
   } catch {
-    return [];
+    return null;
   }
+}
+
+/** Named seats for callers that tolerate an unavailable inventory. */
+export function seats(run: Run): Seat[] {
+  return seatInventory(run) ?? [];
 }
 
 /** Relative imports and re-exports, static or dynamic, in a source file. */

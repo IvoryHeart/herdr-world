@@ -449,8 +449,11 @@ plans the next step for every PR in scope and takes each step once:
     prompt was only about other PRs. One prompt carries every waiting step,
     so a prompt that included this PR means the author may be on it. A seat
     the crew has never prompted keeps its steps too. An absent author needs no
-    earlier prompt elsewhere: no live seat can be interrupted. Its fixer waits
-    silently for a run slot. Never-prompt seats remain excluded.
+    earlier prompt elsewhere, but only a successful, valid Herdr agent inventory
+    proves it is absent. A failed or malformed inventory read leaves author steps
+    waiting until discovery recovers. Its fixer waits silently for a run slot;
+    if a freed slot reveals a worktree or other blocker, the owner gets a notice
+    for that blocker, once while it holds. Never-prompt seats remain excluded.
   - **Only where it can't clash:** the step also waits for the author when the
     PR's worktree is missing, has uncommitted changes or isn't at the PR's
     head, the seat has no roster model, or no run slot is free.
