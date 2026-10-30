@@ -33,9 +33,9 @@ assets required by server typechecks and process tests.
 | Related tests | `bun run test <path>` or `bun run test:quick` (includes integration tests and excludes the dedicated browser suite). |
 | Browser regressions | `bun run test:browser` runs every Chrome-driven test and World browser suite; requires Chrome/Chromium or `CHROME_BIN`. |
 | Completed candidate | Stage intended files, run `bun run format:staged` once, restage and inspect the diff. The command rejects staged files with unstaged edits; docs-only candidates are a safe no-op. |
-| Branch push | The installed pre-push hook runs `bun run check:changed` for code: static checks plus the tests the change affects. A Markdown-only follow-up to a passed code gate runs `bun run check:docs`; a push that only merges `origin/main` runs `bun run check:static`. CI runs the full gate on the PR head. |
+| Branch push | The installed pre-push hook runs `bun run check:changed` for code: static checks plus affected non-browser unit tests. Browser suites and behavioral verification run in CI, where required `Delivery checks` blocks merges. A Markdown-only follow-up to a passed code gate runs `bun run check:docs`; a push that only merges `origin/main` runs `bun run check:static`. CI runs the applicable gate on the PR head; every main push runs the full matrix. |
 | Full local gate | `bun run check:delivery` runs every check, in parallel lanes; `HERDR_WORLD_PREPUSH=full git push` makes the hook run it. |
-| Disk hygiene | `bun run agent:worktree -- prune` removes merged, clean agent worktrees (see [agent development](docs/agent-development.md#keep-the-disk-healthy)); heavy checks refuse to start below 3 GB free (`HERDR_WORLD_MIN_FREE_GB`). |
+| Disk hygiene | `bun run agent:worktree -- prune` removes merged, clean agent worktrees (see [agent development](docs/agent-development.md#keep-the-disk-healthy)); disk management belongs to the owner and never blocks a check. |
 
 Run `bun run install-hooks` once per clone to point Git at the tracked
 `.githooks/` directory. Its `pre-commit` hook checks formatting and lint without
@@ -50,40 +50,47 @@ newly staged sources are included without changing HEAD or staged contents.
 Merge conflicts block the check. Fetch main to refresh the proposed merge input.
 For a stacked PR, run `bun run check:size origin/main <target-ref>` or set
 `HERDR_WORLD_RATCHET_TARGET=<target-ref>` for pre-push; CI supplies the exact PR
-base SHA. The gate then runs the unit tests that import or read a changed
-file, the World browser suites nearest to each changed file, and behavioral
-verification when a change touches its models, adapters, contracts or a
-`verification/coverage.json` owner. A deleted file runs the tests that still
+base SHA. The local gate then runs non-browser unit tests that import or read a changed
+file. Browser suites and behavioral verification run in CI;
+`HERDR_WORLD_PREPUSH=full` opts into every local lane. A deleted file runs the tests that still
 import or name it. Toolchain, lockfile, configuration and gate changes, code that
 no test, build or verification model reaches, and pushes of anything but the
-worktree's HEAD (another branch, several refs) get the full gate. CI and pre-push share the complete-PR classification in
+worktree's HEAD (another branch, several refs) run all local non-browser units. CI and pre-push share the complete-PR classification in
 `scripts/validation-scope.ts`. Unknown paths and gate/configuration changes select
 every suite. Main always runs the full matrix; its integrated result remains the
 broader acceptance boundary. The hook uses `bun run check:docs`
 only if its local report proves a passed code gate on an ancestor and every
-change since then is ordinary Markdown documentation. Behavioral contracts,
-OpenSpec, tooling and agent/contributor policy receive the code gate even when
-only Markdown changes. CI runs documentation
-checks for ordinary Markdown-only PR diffs, and reuses a successful full result
-on the exact PR, base and head for description edits and label changes. These
+change since then is eligible Markdown documentation. Behavioral contracts,
+OpenSpec, coverage-owned inputs and the named agent/crew/dispatch runbooks receive
+the code gate even for Markdown edits; executable tooling also receives it.
+Eligible AGENTS.md, CONTRIBUTING.md and skill Markdown follow-ups may use
+`check:docs` under the same ancestral-pass rule. CI runs documentation
+checks for ordinary Markdown-only PR diffs, and reuses a successful full result, or a scoped result with an identical
+selection, on the exact PR, base and head for description edits and label changes. These
 metadata events queue behind active CI instead of cancelling it; missing proof
-falls back to full validation. One scope decision feeds every platform job,
+falls back to fresh validation for the current scope. One scope decision feeds every platform job,
 and Delivery checks includes both macOS lifecycle results. See the
 [pipeline ownership guide](docs/ci-pipelines.md) for the job boundaries and
 failure diagnosis.
 
-PR CI and pre-push use the same suite rules. Static checks always run for code;
+Static checks run outside the machine-wide heavy queue. Units share two light
+slots; World and other Chrome tests share one browser slot, and behavioral
+verification has one slot. No delivery lane takes the whole machine. Lane logs
+are cleared at the start of each run, including lanes that are skipped.
+
+PR CI and pre-push share affected-unit selection; CI also selects browser,
+behavioral and platform suites. Static checks always run for code;
 ordinary Markdown uses `check:docs`. The complete PR determines applicability,
 including both rename paths; a local incremental push may narrow unit consumers.
 The graph retains deletions from both diffs, so adding then removing an unused
 file across pushes does not widen the remaining change's scope.
 A reverted gate/configuration edit in the incremental delta still selects the
-full gate, even when that input is absent from the net PR diff.
+full unit inventory locally and full CI gate, even when that input is absent from the net PR diff.
 
 | Suite | PR selection | Full/main execution |
 | --- | --- | --- |
 | Non-browser tests | Tests reaching changed inputs | All tests, across two CI runners |
-| Behavioral verification | Verification/OpenSpec inputs or `verification/coverage.json` owners | All accepted models, across three CI groups |
+| Behavioral verification | Model/tooling/OpenSpec inputs or model-backed coverage owners; model-free owners run the cheap coverage inventory check | All accepted models, across three CI groups balanced by measured work |
 | World browser tests | Nearest consumer suites in the import graph; World runtime paths add the dense end-to-end suites (production and concurrent contexts, terminal handoff) | All six World shards |
 | Web browser tests | Affected registered browser suites | All suites, across two runners |
 | Native installation | Install/plugin/package inputs, server/shared binary sources, build-version metadata or affected installation consumers | Installer upgrades, Windows plugin and both macOS architectures |
@@ -92,9 +99,12 @@ The agent-tooling exception from #484 still covers `scripts/agent/**`, the named
 agent/crew/dispatch runbooks and `changes/<slug>.md`: static checks and affected
 unit tests, with the agent test inventory for uncovered modules. It skips heavy
 suites even though the inventory's broad scripts owner would otherwise apply.
-Ordinary docs skip behavioral verification unless they are verification inputs or
-contract owners. Agent/contributor policy, workflows and gate configuration run
-all checks. Browser Chat changes can skip verification/platform work; server
+Contributor docs and skill Markdown run documentation checks or named consumer
+tests. Executable workflows and gate configuration run all checks. Browser
+shard-table edits retain inventory tests and every browser suite without selecting
+native work or models. Model-free owners (including Q41's scripts) run affected
+consumers and `scripts/verification-coverage.test.ts`; changed model mappings
+still select verification. Main always runs every suite. Browser Chat changes can skip verification/platform work; server
 agent changes remain contract owners.
 
 `Delivery checks`, `Repository validation`, browser/behavioral aggregates
