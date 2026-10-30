@@ -60,6 +60,11 @@ creation is pending; disconnected, replaced and removed owners retire intent.
 Its controlled opener does not establish actual browser focus
 or cancellation wiring. The browser keeps launcher-to-Inspector rendering,
 explicit Close-button supersession, view handoff and terminal lifecycle checks.
+The browser also holds an actual browser-local focus request to reject premature
+Inspector rendering. Its cancellation smoke uses the unchanged production
+deadline on an isolated fixture timer port and awaits actual opener completion
+before checking the retained Inspector on native painted frames; a fixed sleep
+or the controlled headless opener would not establish that rendering boundary.
 
 ## Properties, witnesses and negative controls
 

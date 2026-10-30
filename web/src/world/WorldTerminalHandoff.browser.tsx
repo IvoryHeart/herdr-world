@@ -1,3 +1,8 @@
+import {
+  admissionClock,
+  nextCreatedOpenerCompletion,
+} from "./testing/handoffAdmissionClock";
+
 const resumeGallery = new URLSearchParams(location.search).has(
   "resume-gallery",
 );
@@ -895,6 +900,16 @@ async function run() {
   const browserLocalCreateCount = calls.filter(
     ({ method }) => method === "tab.create",
   ).length;
+  const browserLocalFocusGate = Promise.withResolvers<void>();
+  const browserLocalFocusEntered = Promise.withResolvers<void>();
+  const browserLocalOpened = nextCreatedOpenerCompletion(
+    worldObjectId(client.connectionId, "terminal", "created-terminal-3"),
+  );
+  delayedPaneGet = {
+    paneId: "created-pane-3",
+    promise: browserLocalFocusGate.promise,
+    entered: browserLocalFocusEntered.resolve,
+  };
   await until(
     () =>
       document.querySelector<HTMLButtonElement>(
@@ -931,6 +946,17 @@ async function run() {
   // Rendering/lifecycle: a launcher-created seat owns one real Inspector and
   // terminal renderer. Admission retries are covered headlessly on test time.
   await worldRuntimeStore.refresh();
+  await browserLocalFocusEntered.promise;
+  await settleWindowLayout();
+  check(
+    ![...document.querySelectorAll(".workspace-inspector-agent-identity")].some(
+      (identity) => identity.getAttribute("data-kind") === "terminal",
+    ),
+    "pending browser-local focus rendered an unadmitted terminal Inspector",
+  );
+  browserLocalFocusGate.resolve();
+  delayedPaneGet = null;
+  await browserLocalOpened;
   await until(
     () =>
       store.get().selectedPaneId === "created-pane-3" &&
@@ -2839,6 +2865,9 @@ async function run() {
   );
   const sharedFocusGate = Promise.withResolvers<void>();
   const sharedFocusEntered = Promise.withResolvers<void>();
+  const sharedFocusCompleted = nextCreatedOpenerCompletion(
+    worldObjectId(client.connectionId, "terminal", "created-terminal-3"),
+  );
   delayedPaneGet = {
     paneId: "created-pane-3",
     promise: sharedFocusGate.promise,
@@ -2854,17 +2883,15 @@ async function run() {
   );
   await worldRuntimeStore.refresh();
   await sharedFocusEntered.promise;
-  await new Promise((resolve) =>
-    window.setTimeout(resolve, CREATED_PANE_ADMISSION_TIMEOUT_MS + 200),
-  );
-  await until(
-    () =>
-      store.get().notice?.message === "Tab created, but Inspector focus failed",
+  await admissionClock.advance(CREATED_PANE_ADMISSION_TIMEOUT_MS);
+  check(
+    store.get().notice?.message === "Tab created, but Inspector focus failed",
     "hook cancellation reached the actual opener",
   );
   sharedFocusGate.resolve();
   delayedPaneGet = null;
-  await settle();
+  await sharedFocusCompleted;
+  await settleWindowLayout();
   check(
     priorInspector?.isConnected === true &&
       document.querySelector(".world-managed-window.is-active") ===
@@ -2873,7 +2900,7 @@ async function run() {
     "late cancelled opener replaced the rendered prior Inspector or took its focus",
   );
   store.clearNotice();
-  await settle();
+  await settleWindowLayout();
   await until(() => agentTarget("Builder"), "Builder desk target");
   await openAgent("Builder");
   await until(

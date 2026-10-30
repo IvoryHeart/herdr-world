@@ -157,26 +157,48 @@ test.skipIf(!chrome)(
         define: { __HERDR_WORLD_VERSION__: JSON.stringify("9.8.7-test") },
         plugins: [
           {
-            name: "short-created-pane-deadline",
+            name: "created-opener-clock-and-completion",
             setup(builder) {
               builder.onLoad(
-                { filter: /officeRoomActions\.ts$/ },
+                { filter: /createdTerminalAdmission\.ts$/ },
                 async (args) => {
                   const source = await Bun.file(args.path).text();
-                  const declaration =
-                    /export const CREATED_PANE_ADMISSION_TIMEOUT_MS = 21_000;/;
-                  if (!declaration.test(source)) {
-                    throw new Error(
-                      "Created-pane deadline declaration changed",
-                    );
-                  }
-                  // The full deadline policy runs on the headless test clock.
-                  // Browser coverage retains actual opener/focus cancellation wiring.
+                  if (
+                    !source.includes("const timer = setTimeout(") ||
+                    !source.includes("clearTimeout(timer);")
+                  )
+                    throw new Error("Created-terminal timer port changed");
                   return {
-                    contents: source.replace(
-                      declaration,
-                      "export const CREATED_PANE_ADMISSION_TIMEOUT_MS = 1_000;",
-                    ),
+                    contents:
+                      'import { admissionTimers } from "./testing/handoffAdmissionClock";\n' +
+                      source
+                        .replace(
+                          "const timer = setTimeout(",
+                          "const timer = admissionTimers.setTimeout(",
+                        )
+                        .replace(
+                          "clearTimeout(timer);",
+                          "admissionTimers.clearTimeout(timer);",
+                        ),
+                    loader: "ts",
+                  };
+                },
+              );
+              builder.onLoad(
+                { filter: /useWorldCreatedTerminal\.ts$/ },
+                async (args) => {
+                  const source = await Bun.file(args.path).text();
+                  if (source.split("await opening;").length !== 2)
+                    throw new Error(
+                      "Created-terminal opener completion changed",
+                    );
+                  return {
+                    contents:
+                      'import { createdOpenerCompleted } from "./testing/handoffAdmissionClock";\n' +
+                      source.replace(
+                        "await opening;",
+                        "try { await opening; } finally { createdOpenerCompleted(node.id); }",
+                      ),
                     loader: "ts",
                   };
                 },

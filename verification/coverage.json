@@ -673,13 +673,12 @@
         ],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
       },
-      "evidenceDecision": "useWorldCreatedTerminal.test.ts replaces the WorldTerminalHandoff browser policy checks for overlapping created-seat focus, transient retry and the admission deadline/late completion, and SharedViewCreation stale-observation admission. It mounts the production creation hook and the Inspector controller’s extracted selection-lease effect, drives real coordinateCreation and admitCreatedTerminal with controlled time, and supplies deferred opener outcomes. Stale observations preserve intent while disconnect, replacement and removal retire it. Browser consumers still cover launcher wiring, actual opener cancellation, focus, layout, rendering and terminal ownership; no Q39/Q43 input or latency claim moves.",
+      "evidenceDecision": "useWorldCreatedTerminal.test.ts replaces the WorldTerminalHandoff browser policy checks for overlapping created-seat focus, transient retry and the admission deadline/late completion, and SharedViewCreation stale-observation admission. It mounts the production creation hook and the Inspector controller’s extracted selection-lease effect, drives real coordinateCreation and admitCreatedTerminal with controlled time, and supplies deferred opener outcomes. Stale observations preserve intent while disconnect, replacement and removal retire it. Browser consumers still cover launcher wiring, actual opener cancellation, focus, layout, rendering and terminal ownership; no Q39/Q43 input or latency claim moves. v0.8.5: Asynchronous naming remains a presentation input to qualified creation. DOM schedules exercise editing before suggestion, close/reopen, obsolete results and rejected loading; existing creation models and consumer gates remain mandatory.",
       "promotion": {
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
         "scope": "Accepted documented bounds, mandatory consumers and excluded claims; final implementation/gate/resource acceptance is recorded in review 5517420140."
-      },
-      "evidenceDecision": "v0.8.5: Asynchronous naming remains a presentation input to qualified creation. DOM schedules exercise editing before suggestion, close/reopen, obsolete results and rejected loading; existing creation models and consumer gates remain mandatory."
+      }
     },
     {
       "id": "Q18",

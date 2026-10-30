@@ -309,6 +309,16 @@ until each callback runs, including when an earlier callback disposes a terminal
 The dense production suites above stay on real time, because the latency trend
 measures real time.
 
+The terminal-handoff fixture retains real browser frames for Inspector rendering
+and focus. It imports [testing/handoffAdmissionClock.ts](testing/handoffAdmissionClock.ts)
+before the app; its bundle plugin connects the production admission timer port
+to that clock without shortening the deadline. The cancellation probe advances
+the full admission window, then awaits a completion registered before creation
+and emitted after the actual controller opener settles. Native painted frames
+settle the rendering assertion. The browser-local pending-focus probe holds the
+real focus request and asserts that no terminal Inspector has rendered; the
+headless fixture's controlled opener cannot establish that boundary.
+
 When a fixture models a healthy terminal with a real `TerminalView`, emit a
 qualified full `TerminalPush` for each successful `terminal.attach`, using its
 connection and runtime generation, terminal ID and requested dimensions. The no-frame watchdog
