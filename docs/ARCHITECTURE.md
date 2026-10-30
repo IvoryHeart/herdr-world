@@ -279,7 +279,12 @@ the moved terminal and restores keys only if Herdr dropped them.
 After complete clean host observations, its separate reconciliation work
 imports legacy assignments once per connection and clears superseded master
 claims; it never delays snapshot delivery for those writes. Unreachable
-hosts retain unresolved observations. The highest claim revision is durable
+hosts retain unresolved observations; removing a connection retires its cached
+assignments and claims without changing the terminal tokens. Import eligibility
+is rechecked against the current terminal read, so a stale list cannot replace
+a newer assignment. Every valid revision learned through a current write or
+guarded cleanup read advances the clock watermark before the next allocation.
+The highest claim revision is durable
 with the profiles; assignments use `max(now, highest seen + 1)`, with ties
 broken by the greater terminal ID. Cross-machine clock skew remains a limit.
 Profiles and chimes stay World-local. Migration backup and rollback details

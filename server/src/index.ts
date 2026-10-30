@@ -447,9 +447,7 @@ const {
   terminalSettings,
   publishProfilesChanged,
   observeTerminalSettings,
-} = createProfileServices(revisionPublisher, (id) =>
-  connectionManager.readyRuntimeLease(id),
-);
+} = createProfileServices(revisionPublisher, () => connectionManager);
 
 /**
  * Record which agent each newly strung pane end is for: the agent the

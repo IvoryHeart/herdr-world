@@ -12,6 +12,7 @@ import {
   type MasterClaim,
   type PaneRow,
   type SettingsLease,
+  type SettingTokens,
 } from "./terminal-tokens";
 
 type Host = { generation: number; panes: PaneRow[] };
@@ -33,10 +34,14 @@ export class TerminalSettings {
     private readonly leaseFor: (id: string) => SettingsLease | null,
     private readonly changed: (revision: number) => void = () => {},
     private readonly now: () => number = Date.now,
+    private readonly connections?: () => readonly string[],
   ) {}
 
   private serial<T>(work: () => Promise<T>): Promise<T> {
-    const result = this.pending.then(work);
+    const result = this.pending.then(() => {
+      this.reconcileConnections();
+      return work();
+    });
     this.pending = result.then(
       () => {},
       () => {},
@@ -60,6 +65,7 @@ export class TerminalSettings {
   }
 
   get() {
+    this.reconcileConnections();
     const assignments: ProfileAssignment[] = [];
     for (const [connection_id, host] of this.hosts)
       for (const pane of host.panes) {
@@ -97,8 +103,22 @@ export class TerminalSettings {
     this.changed(this.get().revision);
   }
 
+  private reconcileConnections() {
+    if (!this.connections) return;
+    const current = new Set(this.connections());
+    let changed = false;
+    for (const id of this.hosts.keys())
+      if (!current.has(id)) changed = this.hosts.delete(id) || changed;
+    if (changed) this.publish();
+  }
+
+  private currentLease(id: string) {
+    if (this.connections && !this.connections().includes(id)) return null;
+    return this.leaseFor(id);
+  }
+
   private lease(id: string, generation: number) {
-    const lease = this.leaseFor(id);
+    const lease = this.currentLease(id);
     if (!lease || lease.generation !== generation || !lease.isCurrent())
       throw new Error("terminal settings runtime is unavailable");
     return lease;
@@ -114,9 +134,15 @@ export class TerminalSettings {
       target.pane_id,
       target.terminal_id,
       tokens,
-      expectedMaster,
+      { expectedMaster, onRead: (pane) => this.cachePane(target, pane) },
     );
     if (!pane) return;
+    this.cachePane(target, pane);
+  }
+
+  private cachePane(target: TerminalTarget, pane: PaneRow) {
+    const master = readTerminalSettings(pane).master;
+    if (master !== undefined) this.store.rememberMaster(master);
     let host = this.hosts.get(target.connection_id);
     if (!host || host.generation !== target.connection_generation) {
       host = { generation: target.connection_generation, panes: [] };
@@ -178,27 +204,34 @@ export class TerminalSettings {
         pane_id: String(pane.pane_id),
       };
       const assignment = legacy.assignments.find((a) => same(a, target));
-      const settings = readTerminalSettings(pane);
-      const tokens: Parameters<typeof writeTerminalTokens>[3] = {};
-      if (assignment && !settings.profile_id) {
-        const profile = this.store.profile(assignment.profile_id);
-        if (profile)
-          Object.assign(
-            tokens,
-            profileTokens(terminalId, profile.id, profile.name),
-          );
-      }
       if (
-        legacy.town_master &&
-        same(legacy.town_master, target) &&
-        !settings.master &&
-        this.claims().length === 0
+        !assignment &&
+        !(legacy.town_master && same(legacy.town_master, target))
       )
-        Object.assign(tokens, {
-          world_terminal: terminalId,
-          world_master: String(this.nextRevision()),
-        });
-      if (Object.keys(tokens).length) await this.write(target, tokens);
+        continue;
+      await this.write(target, (currentPane) => {
+        const settings = readTerminalSettings(currentPane);
+        const tokens: SettingTokens = {};
+        if (assignment && !settings.profile_id) {
+          const profile = this.store.profile(assignment.profile_id);
+          if (profile)
+            Object.assign(
+              tokens,
+              profileTokens(terminalId, profile.id, profile.name),
+            );
+        }
+        if (
+          legacy.town_master &&
+          same(legacy.town_master, target) &&
+          !settings.master &&
+          this.claims().length === 0
+        )
+          Object.assign(tokens, {
+            world_terminal: terminalId,
+            world_master: String(this.nextRevision()),
+          });
+        return tokens;
+      });
     }
     this.lease(connectionId, generation);
     this.store.finishSettingsImport(connectionId);
@@ -215,7 +248,7 @@ export class TerminalSettings {
       )
         continue;
       const host = this.hosts.get(claim.connection_id)!;
-      const lease = this.leaseFor(claim.connection_id);
+      const lease = this.currentLease(claim.connection_id);
       if (!lease || lease.generation !== host.generation || !lease.isCurrent())
         continue;
       // Another client may have moved the terminal since our observation.
@@ -226,6 +259,10 @@ export class TerminalSettings {
       )) as { panes?: PaneRow[] };
       if (!lease.isCurrent() || !Array.isArray(listed.panes))
         throw new Error("terminal settings cleanup observation is unavailable");
+      for (const observed of listed.panes) {
+        const revision = readTerminalSettings(observed).master;
+        if (revision !== undefined) this.store.rememberMaster(revision);
+      }
       const pane = listed.panes.find(
         (p) => p.terminal_id === claim.terminal_id,
       );
@@ -297,10 +334,10 @@ export class TerminalSettings {
           throw new Error("Town master requires a qualified terminal");
         if (current && !same(current, target) && params.replace !== true)
           throw new Error("another agent is the Town master");
-        await this.write(target, {
+        await this.write(target, () => ({
           world_terminal: target.terminal_id,
           world_master: String(this.nextRevision()),
-        });
+        }));
       }
       // Clearing an unreachable superseded claim waits for its next observation.
       await this.clearSuperseded();

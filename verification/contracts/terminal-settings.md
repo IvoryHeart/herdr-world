@@ -13,7 +13,9 @@ recorded name and default look; moves retain settings; offline claims remain
 unresolved; a newer assignment supersedes a returning older claim. Forbidden:
 using another terminal's tokens, importing an assignment twice, dispatching
 on a retired or different lease, reporting a refused metadata write as saved,
-or letting a stale cleanup remove a newer revision on that terminal.
+letting a stale cleanup remove a newer revision on that terminal, discarding
+a master revision already learned through a current read, or retaining a
+removed connection as an unresolved host.
 
 ## Implementation mapping and evidence choice
 
@@ -26,7 +28,11 @@ reconciliation is queued separately and does not block snapshot delivery.
 Writes validate every non-null value, read `pane.get` to confirm the terminal,
 dispatch `pane.report_metadata` through the exact lease and revalidate it.
 Cleanup re-lists moved terminals and compares the observed revision again
-before clearing. The shared Town move executor checks the moved terminal and
+before clearing. Import decisions use this current read rather than the
+earlier list; all current write/guarded-cleanup reads advance the durable
+clock, and a new master revision is allocated after its target read. Cached
+state is retired against the current connection catalogue; offline entries
+remain unresolved. The shared Town move executor checks the moved terminal and
 restores dropped keys; a concurrent existing key wins over restoration.
 
 The existing `runtime-leases` model supplies retirement authority only.
@@ -44,7 +50,10 @@ actual token normalization, key limit and move/restart behavior.
   per-connection import, offline deferred import, immutable migration backup,
   retained rollback fields, no re-import after a newer token assignment,
   terminal replacement, refused writes, explicit role replacement, and a
-  returning old holder after World restart with a backwards clock.
+  returning old holder after World restart with a backwards clock. Review
+  regressions cover a stale captured migration list, a higher master learned
+  during profile write and guarded cleanup, restart after those reads,
+  dispatch-time master allocation, and removal followed by assign/clear/observe.
 - P7 enumerates 288 combinations: two Worlds on two hosts; neither/alpha/beta
   offline; neither/either/both Worlds restarted; three relative revision
   orders (including a tie); both assignment orders and both host observation
@@ -56,6 +65,9 @@ actual token normalization, key limit and move/restart behavior.
   lease, convergence, actual 32-key refusal, normalization and Herdr restart.
 - Launcher RPC evidence checks the refused settings error reaches the user.
   Browser helpers check the recorded name without claiming a local profile.
+  [Desktop/mobile captures](../../docs/evidence/terminal-settings/README.md)
+  show the migrated known and unknown-profile looks and Inspector controls
+  using production components with an explicitly synthetic service projection.
 
 ## Environment and limitations
 

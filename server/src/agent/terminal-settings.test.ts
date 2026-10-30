@@ -33,7 +33,8 @@ function fixture() {
   );
   const writes: unknown[] = [];
   const lease = (id: string) => {
-    const host = hosts.get(id)!;
+    const host = hosts.get(id);
+    if (!host) throw new Error("unknown connection");
     if (!host.online) return null;
     const generation = host.generation;
     return {
@@ -73,6 +74,7 @@ function fixture() {
         lease,
         () => {},
         () => now,
+        () => [...hosts.keys()],
       ),
     };
   };
@@ -187,6 +189,114 @@ test("an interrupted import retries without replacing settings another World has
   await f.observe(a.settings, "alpha");
   expect(a.settings.get().assignments[0]!.profile_id).toBe("reviewer");
   expect(a.store.settingsState().imported_connections).toEqual(["alpha"]);
+});
+
+test("migration preserves a newer profile and master already present at its dispatch read", async () => {
+  const f = fixture(),
+    a = f.world("a");
+  a.store.assign({ ...f.target("alpha"), profile_id: "builder" });
+  a.store.setTownMaster(f.target("alpha"));
+  const captured = structuredClone(f.hosts.get("alpha")!.panes);
+  f.hosts.get("alpha")!.panes[0]!.tokens = {
+    ...profileTokens("term_0", "reviewer", "Reviewer"),
+    world_master: "100",
+  };
+  await a.settings.observe("alpha", 1, captured);
+  expect(a.settings.get().assignments[0]!.profile_id).toBe("reviewer");
+  expect(readTerminalSettings(f.hosts.get("alpha")!.panes[0]!).master).toBe(
+    100,
+  );
+  expect(a.store.settingsState().highest_master_revision).toBe(100);
+  expect(a.store.settingsState().imported_connections).toEqual(["alpha"]);
+});
+
+test("revisions learned by profile writes survive restart and order the next master assignment", async () => {
+  const f = fixture();
+  let a = f.world("a");
+  await f.observe(a.settings, "alpha");
+  await f.observe(a.settings, "beta");
+  f.hosts.get("alpha")!.panes[0]!.tokens = {
+    world_terminal: "term_0",
+    world_master: "100",
+  };
+  await a.settings.assign(f.target("alpha"), a.store.profile("builder")!);
+  expect(a.store.settingsState().highest_master_revision).toBe(100);
+  a = f.world("a");
+  await a.settings.setMaster({ terminal: f.target("beta"), replace: true });
+  expect(readTerminalSettings(f.hosts.get("beta")!.panes[0]!).master).toBe(101);
+  await f.observe(a.settings, "alpha");
+  expect(a.settings.get().town_master?.connection_id).toBe("beta");
+});
+
+test("a guarded cleanup read remembers a replaced claim before allocating the next revision", async () => {
+  const f = fixture(),
+    a = f.world("a");
+  await f.observe(a.settings, "alpha");
+  await f.observe(a.settings, "beta");
+  await a.settings.setMaster({ terminal: f.target("alpha") });
+  f.hosts.get("alpha")!.panes[0]!.tokens = {
+    world_terminal: "term_0",
+    world_master: "100",
+  };
+  await a.settings.setMaster({ terminal: f.target("beta"), replace: true });
+  expect(a.store.settingsState().highest_master_revision).toBe(100);
+  expect(a.settings.get().town_master?.connection_id).toBe("alpha");
+  await a.settings.setMaster({ terminal: f.target("beta"), replace: true });
+  expect(readTerminalSettings(f.hosts.get("beta")!.panes[0]!).master).toBe(101);
+  expect(a.settings.get().town_master?.connection_id).toBe("beta");
+});
+
+test("connection removal drops cached claims while offline hosts remain unresolved", async () => {
+  const f = fixture(),
+    a = f.world("a");
+  await f.observe(a.settings, "alpha");
+  await f.observe(a.settings, "beta");
+  await a.settings.setMaster({ terminal: f.target("alpha") });
+  f.hosts.get("alpha")!.online = false;
+  expect(a.settings.get().town_master?.connection_id).toBe("alpha");
+  f.hosts.delete("alpha");
+  await a.settings.setMaster({ terminal: f.target("beta") });
+  expect(a.settings.get().town_master?.connection_id).toBe("beta");
+  await a.settings.setMaster({ terminal: null });
+  expect(a.settings.get().town_master).toBeNull();
+  await f.observe(a.settings, "beta");
+});
+
+test("assigning a master allocates its clock after the target's current read", async () => {
+  const f = fixture(),
+    a = f.world("a");
+  await f.observe(a.settings, "alpha");
+  f.hosts.get("alpha")!.panes[0]!.tokens = {
+    world_terminal: "term_0",
+    world_master: "100",
+  };
+  await a.settings.setMaster({ terminal: f.target("alpha") });
+  expect(readTerminalSettings(f.hosts.get("alpha")!.panes[0]!).master).toBe(
+    101,
+  );
+  expect(a.store.settingsState().highest_master_revision).toBe(101);
+});
+
+test("cleanup persists higher revisions elsewhere in its current host list", async () => {
+  const f = fixture(),
+    a = f.world("a");
+  await f.observe(a.settings, "alpha");
+  await f.observe(a.settings, "beta");
+  await a.settings.setMaster({ terminal: f.target("alpha") });
+  const alpha = f.hosts.get("alpha")!;
+  alpha.panes.push({
+    pane_id: "w1:p2",
+    terminal_id: "term_higher",
+    tokens: { world_terminal: "term_higher", world_master: "200" },
+  });
+  await a.settings.setMaster({ terminal: f.target("beta"), replace: true });
+  expect(a.store.settingsState().highest_master_revision).toBe(200);
+  const reopened = f.world("a");
+  await reopened.settings.setMaster({
+    terminal: f.target("beta"),
+    replace: true,
+  });
+  expect(readTerminalSettings(f.hosts.get("beta")!.panes[0]!).master).toBe(201);
 });
 
 test("a returning offline holder loses to the newer assignment even across a World restart and a backwards clock", async () => {

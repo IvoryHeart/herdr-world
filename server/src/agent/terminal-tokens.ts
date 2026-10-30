@@ -108,19 +108,23 @@ export function paneOf(value: unknown): PaneRow {
     throw new Error("Herdr did not return a terminal");
   return result.pane;
 }
+export type TokenWrite = SettingTokens | ((pane: PaneRow) => SettingTokens);
 export async function writeTerminalTokens(
   lease: SettingsLease,
   paneId: string,
   terminalId: string,
-  tokens: SettingTokens,
-  expectedMaster?: number,
+  write: TokenWrite,
+  options: { expectedMaster?: number; onRead?: (pane: PaneRow) => void } = {},
 ): Promise<PaneRow | null> {
-  for (const [key, value] of Object.entries(tokens))
-    if (
-      !KEYS.includes(key as (typeof KEYS)[number]) ||
-      (value !== null && !validToken(value))
-    )
-      throw new Error("invalid terminal setting value");
+  const validate = (tokens: SettingTokens) => {
+    for (const [key, value] of Object.entries(tokens))
+      if (
+        !KEYS.includes(key as (typeof KEYS)[number]) ||
+        (value !== null && !validToken(value))
+      )
+        throw new Error("invalid terminal setting value");
+  };
+  if (typeof write !== "function") validate(write);
   if (!lease.isCurrent()) throw new Error("terminal settings runtime changed");
   const pane = paneOf(
     await lease.runtime.herdr.call("pane.get", { pane_id: paneId }, 10_000),
@@ -128,12 +132,16 @@ export async function writeTerminalTokens(
   if (!lease.isCurrent()) throw new Error("terminal settings runtime changed");
   if (pane.pane_id !== paneId || pane.terminal_id !== terminalId)
     throw new Error("pane no longer holds the expected terminal");
+  options.onRead?.(pane);
   // A stale cleanup must not remove a claim replaced since its observation.
   if (
-    expectedMaster !== undefined &&
-    readTerminalSettings(pane).master !== expectedMaster
+    options.expectedMaster !== undefined &&
+    readTerminalSettings(pane).master !== options.expectedMaster
   )
     return null;
+  const tokens = typeof write === "function" ? write(pane) : write;
+  validate(tokens);
+  if (!Object.keys(tokens).length) return pane;
   await lease.runtime.herdr.call(
     "pane.report_metadata",
     { pane_id: paneId, source: TERMINAL_SETTINGS_SOURCE, tokens },

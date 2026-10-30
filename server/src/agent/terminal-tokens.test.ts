@@ -187,7 +187,7 @@ test("superseded-claim cleanup cannot erase a newer revision observed at dispatc
     "w1:p1",
     "term_a",
     { world_master: null },
-    12,
+    { expectedMaster: 12 },
   );
   expect(result).toBeNull();
   expect(calls).toEqual(["pane.get"]);

@@ -6,7 +6,10 @@ import type { PaneRow, SettingsLease } from "./terminal-tokens";
 /** Lazy profile storage and the terminal-settings reconciler share one publisher. */
 export function createProfileServices(
   publisher: ReturnType<typeof createRevisionPublisher>,
-  lease: (id: string) => SettingsLease | null,
+  registry: () => {
+    readyRuntimeLease(id: string): SettingsLease | null;
+    list(): readonly { id: string }[];
+  },
   log: (message: string) => void = console.warn,
 ) {
   let store: ProfileStore | null = null;
@@ -19,8 +22,13 @@ export function createProfileServices(
   const terminalSettings = () =>
     (settings ??= new TerminalSettings(
       profiles(),
-      lease,
+      (id) => registry().readyRuntimeLease(id),
       publishProfilesChanged,
+      Date.now,
+      () =>
+        registry()
+          .list()
+          .map(({ id }) => id),
     ));
   const observeTerminalSettings = (
     connectionId: string,
