@@ -25,31 +25,32 @@ export const worldRuntimeSuites = [
   "web/src/world/WorldTerminalHandoff.test.ts",
 ];
 
-// The suites spread across six machines, one case at a time, balanced by mean
-// CI file timings in seconds (four runs to 2026-10-21; the former latency
-// suites from their own runners to 2026-10-30). The slowest file bounds the
-// slowest shard, so more machines would not finish sooner. Per-file timings in
-// CI artifacts guide later rebalancing.
+// The suites spread across six machines, balanced by CI test seconds per file
+// (run 41083467325, 2026-10-30, pinned Chrome). The slowest file bounds the
+// slowest shard, so more machines would not finish sooner. TownCanvas, the
+// slowest and the most load-sensitive, shares its machine with no dense
+// snapshot suite (none did before the latency lane moved into the shards).
+// Per-file timings in CI artifacts guide later rebalancing.
 export const worldBrowserShards = [
-  ["SharedViewCreation", "WorldViewErrorBoundary", "ProductionContexts.town"], // 147
+  ["SharedViewCreation", "WorldViewErrorBoundary", "ProductionContexts.town"], // 141
   [
     "HostsFilter.resources",
     "HostsFilter.inspector-timeout",
     "ProductionContexts.board",
-  ], // 134
+  ], // 143
   [
     "HostsFilter",
     "HostsFilter.cold",
     "HostsFilter.timeouts",
     "ProductionContexts.animated",
-  ], // 136
+  ], // 191
   [
     "HostsFilter.actions",
     "DeskView.browser",
     "BoardView",
     "useSpacesTabWindowArrangement.browser",
     "WorldTerminalHandoff",
-  ], // 166
+  ], // 227
   [
     "HostsFilter.creation",
     "HostsFilter.arrangement",
@@ -57,13 +58,9 @@ export const worldBrowserShards = [
     "windows/WorldPanel",
     "groups/GroupsWindow",
     "ProductionContexts",
-  ], // 72 + GroupsWindow
-  [
-    "HostsFilter.navigation",
-    "town/TownCanvas",
-    "HostsFilter.pending",
     "ConcurrentContexts",
-  ], // 89
+  ], // 116
+  ["HostsFilter.navigation", "town/TownCanvas", "HostsFilter.pending"], // 504
 ].map((shard) => shard.map((name) => `web/src/world/${name}.test.ts`));
 
 export const worldBrowserSuites = worldBrowserShards.flat();
