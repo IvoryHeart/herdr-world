@@ -54,10 +54,29 @@ test("takes over the lock of a World that is gone, or its own after a restart", 
   mkdirSync(root, { recursive: true });
   const path = join(root, "instance.lock");
   writeFileSync(path, JSON.stringify({ pid: 424242, port: 8787 }));
-  acquireInstanceLock(root, 8788, () => false);
+  const release = acquireInstanceLock(root, 8788, () => false);
   expect(JSON.parse(readFileSync(path, "utf8")).port).toBe(8788);
+  release();
+  // A restarted process can get the ID its crashed predecessor had.
+  writeFileSync(path, JSON.stringify({ pid: process.pid, port: 8788 }));
   acquireInstanceLock(root, 8789, () => true);
   expect(JSON.parse(readFileSync(path, "utf8")).port).toBe(8789);
+});
+
+test("refuses a folder another service in this process holds until it releases", () => {
+  const root = folder();
+  const release = acquireInstanceLock(root, 8788);
+  expect(() => acquireInstanceLock(root, 8789, () => false)).toThrow(
+    `is in use by World (pid ${process.pid}, port 8788)`,
+  );
+  const other = acquireInstanceLock(folder(), 8789);
+  release();
+  release();
+  const path = join(root, "instance.lock");
+  expect(existsSync(path)).toBeFalse();
+  acquireInstanceLock(root, 8790);
+  expect(JSON.parse(readFileSync(path, "utf8")).port).toBe(8790);
+  other();
 });
 
 test("takes over a lock a crashed startup left unreadable", () => {

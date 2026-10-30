@@ -4,14 +4,71 @@ import type {
   resolveRpcRoute,
 } from "../connections/rpc-routing";
 import type { LegacyConnectionRuntime } from "../connections/runtime";
-import type { RpcServices } from "../index";
+import type { ProfileStore } from "../agent/profile-store";
+import type { createAssistantService } from "../assistant/service";
+import type { WorldSnapshotAdmission } from "../bridge/world-snapshot-admission";
+import type { ConnectionManager } from "../connections/manager";
+import type { ConnectionProfileService } from "../connections/profile-service";
+import type { Logger } from "../utils/logger";
+import type { ObservedAgent } from "../world/board-recipient";
+import type { BoardOp, BoardStore } from "../world/board-store";
+import type { createMoveQueue } from "../world/desk-move";
+import type { createWorldDeskService } from "../world/desk-service";
+import type { WorldSnapshotService } from "../world/snapshot";
+import type { WorldWatchlistRegistry } from "../world/watchlist";
+import type { createWorldCliService } from "../world/world-cli-service";
 
-export type { RpcServices };
+type Socket = ServerWebSocket<unknown>;
+type DeskService = ReturnType<typeof createWorldDeskService>;
+
+/** What the rpc/ namespace handlers share with their World service. */
+export type RpcServices = {
+  bindBoardRecipients(
+    ops: readonly BoardOp[],
+    observed: ReadonlyMap<string, ObservedAgent>,
+  ): Promise<void>;
+  board(): BoardStore;
+  clients: Set<Socket>;
+  connectionManager: ConnectionManager<LegacyConnectionRuntime>;
+  connectionProfiles: ConnectionProfileService<LegacyConnectionRuntime>;
+  conversationWatchers: WeakMap<Socket, Set<{ unwatch(owner: object): void }>>;
+  getAssistantService(): Promise<
+    Awaited<ReturnType<typeof createAssistantService>>
+  >;
+  logger: Logger;
+  markRpcError(
+    ws: Socket,
+    id: string | null | undefined,
+    detail?: string,
+  ): void;
+  profiles(): ProfileStore;
+  publishBoardChanged(revision: number): void;
+  publishProfilesChanged(revision: number): void;
+  publishWatchlistChanged(revision: number): void;
+  publishWorldInvalidation(
+    connectionId: string,
+    connectionGeneration: number,
+    observedLate?: boolean,
+  ): void;
+  safeSend(
+    ws: Socket,
+    payload: string,
+    context?: string,
+    coalesceKey?: string,
+  ): boolean;
+  snapshotAdmission: WorldSnapshotAdmission;
+  townMoveQueues: Map<string, ReturnType<typeof createMoveQueue>>;
+  worldWatchlist: WorldWatchlistRegistry;
+  worldDesk: DeskService["registry"];
+  publishDeskChanged: DeskService["publish"];
+  worldCli: ReturnType<typeof createWorldCliService>;
+  worldSnapshots: WorldSnapshotService<LegacyConnectionRuntime> | null;
+};
 
 type RpcRoute = ReturnType<typeof resolveRpcRoute<LegacyConnectionRuntime>>;
 
 /**
- * What one browser RPC hands to a namespace handler (see index.ts handleRpc).
+ * What one browser RPC hands to a namespace handler (see service/rpc-dispatch.ts).
  * Handlers return false synchronously when no branch matches, so dispatch
  * never yields before entering the matching handler on the captured runtime.
  */

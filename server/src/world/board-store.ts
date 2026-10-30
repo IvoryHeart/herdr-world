@@ -39,9 +39,7 @@ import {
   type GroupOp,
 } from "./board-groups";
 import { existsSync, readFileSync, renameSync } from "node:fs";
-import { join } from "node:path";
-import { dataRoot, replaceDataFile } from "../config/data-paths";
-import { worldEnv } from "../config/environment";
+import { replaceDataFile } from "../config/data-paths";
 import { RECIPIENT_MAX, type ObservedAgent } from "./board-recipient";
 import { cardKey, tabCardKey } from "../../../shared/terminalColor";
 import {
@@ -345,10 +343,6 @@ export function emptyBoardDocument(): BoardDocument {
   };
 }
 
-export function defaultBoardPath() {
-  return worldEnv("BOARD_PATH") ?? join(dataRoot(), "boards", "board.json");
-}
-
 /* ---------- Validation ---------- */
 
 function fail(message: string): never {
@@ -602,7 +596,7 @@ export class BoardStore {
   private readonly appearanceEdits: AppearanceEdits = new Map();
 
   constructor(
-    private readonly path: string = defaultBoardPath(),
+    private readonly path: string,
     private readonly options: {
       now?: () => number;
       log?: (message: string) => void;

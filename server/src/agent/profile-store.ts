@@ -1,7 +1,5 @@
 import { existsSync, readFileSync, renameSync } from "node:fs";
-import { join } from "node:path";
-import { dataRoot, replaceDataFile } from "../config/data-paths";
-import { worldEnv } from "../config/environment";
+import { replaceDataFile } from "../config/data-paths";
 import {
   type AgentProfile,
   PROFILE_LIMITS,
@@ -47,12 +45,6 @@ export type ProfilesDocument = {
 };
 
 export const MAX_ASSIGNMENTS = 256;
-
-export function defaultProfilesPath() {
-  return (
-    worldEnv("AGENT_PROFILES_PATH") ?? join(dataRoot(), "agent-profiles.json")
-  );
-}
 
 function seeded(): ProfilesDocument {
   return {
@@ -142,7 +134,7 @@ export class ProfileStore {
   private document: ProfilesDocument;
 
   constructor(
-    private readonly path: string = defaultProfilesPath(),
+    private readonly path: string,
     private readonly options: {
       now?: () => number;
       log?: (message: string) => void;

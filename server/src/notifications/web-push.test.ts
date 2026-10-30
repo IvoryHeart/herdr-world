@@ -21,6 +21,11 @@ import {
 } from "./web-push";
 import { createAuthHandlers } from "../http/auth";
 import { createLegacyConnectionRuntime } from "../connections/runtime";
+import { createGuiSettingsStore } from "../config/gui-settings";
+
+const settings = createGuiSettingsStore(
+  join(mkdtempSync(join(tmpdir(), "runtime-settings-")), "settings.json"),
+);
 
 function device(id = "device-1") {
   const key = createECDH("prime256v1");
@@ -501,6 +506,7 @@ test.each(["older first", "newer first"])(
     );
     let lookupIndex = 0;
     const runtime = createLegacyConnectionRuntime({
+      settings,
       config: {
         socketPath: join(dirname(f.path), "control.sock"),
         clientSocketPath: join(dirname(f.path), "client.sock"),
@@ -603,6 +609,7 @@ test.each([
   let tabLabel = "Peter";
   const subscribed = Promise.withResolvers<void>();
   const runtime = createLegacyConnectionRuntime({
+    settings,
     config: {
       socketPath: join(dirname(f.path), "control.sock"),
       clientSocketPath: join(dirname(f.path), "client.sock"),

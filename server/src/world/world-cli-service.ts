@@ -1,6 +1,6 @@
 import { handleWorldCliEndpoint } from "../http/world-cli-endpoint";
 import { answerAsk, CliError, createWorldCli, dismissAsk } from "./world-cli";
-import { WorldLedger } from "./world-ledger";
+import type { WorldLedger } from "./world-ledger";
 import type { WorldSnapshotResult } from "./snapshot";
 import type { WorldSourcesSnapshot } from "../../../shared/worldSources";
 import { runGroupMove } from "./group-move";
@@ -31,6 +31,8 @@ type Lease = {
 
 export function createWorldCliService(deps: {
   board(): TownMoveContext["board"];
+  /** The service's own ledger, opened on first use. */
+  ledger(): WorldLedger;
   /** Read when a call arrives, so the service may be built first. */
   connections(): {
     list(): { id: string }[];
@@ -52,11 +54,7 @@ export function createWorldCliService(deps: {
     captureColorChanges: () => deps.board().captureColorChanges(),
     captureAppearanceChanges: () => deps.board().captureAppearanceChanges(),
   };
-  let ledgerStore: WorldLedger | null = null;
-  const ledger = () =>
-    (ledgerStore ??= new WorldLedger(undefined, {
-      log: (message) => console.warn(message),
-    }));
+  const ledger = () => deps.ledger();
   /** Pages fetch the open questions only when `asks` says they changed. */
   const publishLedger = (revision: number, asks = false) =>
     deps.broadcast(

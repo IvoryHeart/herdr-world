@@ -1,7 +1,5 @@
 import { existsSync, readFileSync, renameSync } from "node:fs";
-import { join } from "node:path";
-import { dataRoot, replaceDataFile } from "../config/data-paths";
-import { worldEnv } from "../config/environment";
+import { replaceDataFile } from "../config/data-paths";
 import type { TerminalRef } from "../../../shared/relations";
 import type { BoardOp } from "./board-store";
 
@@ -112,12 +110,6 @@ export const LEDGER_LIMITS = {
   task: 120,
 };
 
-export function defaultLedgerPath() {
-  return (
-    worldEnv("LEDGER_PATH") ?? join(dataRoot(), "boards", "world-ledger.json")
-  );
-}
-
 const empty = (): LedgerDocument => ({
   version: 1,
   revision: 0,
@@ -131,7 +123,7 @@ export class WorldLedger {
   private sequence = 0;
 
   constructor(
-    private readonly path: string = defaultLedgerPath(),
+    private readonly path: string,
     private readonly options: {
       now?: () => number;
       log?: (message: string) => void;
