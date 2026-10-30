@@ -3,6 +3,7 @@ import {
   concurrentWorkViolations,
   productionWorkCeilings,
   TOWN_IDLE_WORK_CEILINGS,
+  TOWN_STATIC_WORK_CEILINGS,
   workViolations,
   type ConcurrentWork,
 } from "./workCeilings";
@@ -154,4 +155,13 @@ test("idle Town commits only for its data polls, never per frame", () => {
   expect(idle(2)).toEqual([]);
   // The frame-rate loop committed in every frame: 126 in 2 s.
   expect(idle(126)).toEqual(["Town idle: commit-frames 126 > 2"]);
+});
+
+test("a static Town has no per-second draw allowance", () => {
+  expect(
+    workViolations({ idle: { draws: 0 } }, TOWN_STATIC_WORK_CEILINGS, "Town"),
+  ).toEqual([]);
+  expect(
+    workViolations({ idle: { draws: 64 } }, TOWN_STATIC_WORK_CEILINGS, "Town"),
+  ).toEqual(["Town idle: draws 64 > 0"]);
 });

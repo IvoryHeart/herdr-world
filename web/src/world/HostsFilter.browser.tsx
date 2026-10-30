@@ -1,5 +1,6 @@
 // First: the page runs on test time (see testing/testClock.ts).
 import { clock } from "./testing/installHostsFilterClock";
+import { checkTownIdleDraws } from "./town/townIdleDraws.browser";
 import { Profiler } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
@@ -91,7 +92,7 @@ const operation =
 const requestedView =
   new URLSearchParams(location.search).get("view") ?? "board";
 // Idle Town proves it is drawing through the renderer's frame counters.
-if (operation === "town-idle")
+if (operation.startsWith("town-idle"))
   window.__HERDR_WORLD_RENDERER_DEBUG__ = "counters";
 const coldMaster = operation === "cold-master";
 const coldHost =
@@ -449,6 +450,16 @@ async function float(id: string) {
   await frame();
 }
 async function operationalScenario(unmount: () => void) {
+  if (operation === "town-idle-draws") {
+    unmount();
+    await checkTownIdleDraws(
+      clock,
+      parseWorldSnapshotResult(snapshot())!.connections,
+      check,
+      failures,
+    );
+    return;
+  }
   if (operation === "town-idle") {
     await float("alpha");
     // Town must be drawing, so a quiet World below is idle, not broken.

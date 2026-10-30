@@ -1,3 +1,10 @@
+import {
+  TownAmbient,
+  townSpriteVisible,
+  createTownBlink,
+  createTownScreenResolver,
+} from "./townAmbient";
+import { drawTownSelectionEffects } from "./townSelectionEffects";
 import { townBubbleKind, townAgentChatting } from "./townBubbleKind";
 /**
  * Pixi renderer for the Office town.
@@ -71,7 +78,6 @@ import {
   townCharacter,
   townHash,
   townLookFor,
-  townScreen,
   type TownCanvas,
   type TownLook,
 } from "./townSprites";
@@ -299,6 +305,14 @@ export async function createTownRenderer(
   let disposed = false;
   let last = 0;
   let clock = 0;
+  let ambient = new TownAmbient(clock);
+  let ambientTimer: ReturnType<typeof setTimeout> | null = null;
+  const cancelAmbient = () => {
+    if (ambientTimer !== null) clearTimeout(ambientTimer);
+    ambientTimer = null;
+  };
+  const visible = (sprite: Sprite | Graphics) =>
+    townSpriteVisible(sprite, camera.viewport);
 
   const outdoor = new Container();
   outdoor.sortableChildren = true;
@@ -785,12 +799,7 @@ export async function createTownRenderer(
   const resting = (agent: { semanticStatus: string }) =>
     agent.semanticStatus === "idle" || agent.semanticStatus === "unknown";
 
-  const updatePods = (
-    deskBlend: number,
-    glow: boolean,
-    lite: boolean,
-    blink: (key: string) => boolean,
-  ) => {
+  const updatePods = (deskBlend: number, glow: boolean, lite: boolean) => {
     const frame = Math.floor(clock * 6);
     // The same fade as standing and walking agents (updateActors).
     const peopleBlend = Math.max(deskBlend, townBlend(0.35, 0.6, camera.z));
@@ -818,6 +827,16 @@ export async function createTownRenderer(
                     frame,
                   ),
             );
+          if (!top && view.device.visible && visible(view.device)) {
+            if (info.state === "idle" || info.state === "unknown")
+              ambient.every(1);
+            else if (
+              info.state === "working" ||
+              info.state === "blocked" ||
+              info.state === "shell"
+            )
+              ambient.every(6);
+          }
           view.papers.visible = Boolean(
             info.agent &&
               info.agent.semanticStatus === "done" &&
@@ -838,10 +857,14 @@ export async function createTownRenderer(
                 typing,
                 "sit",
                 // Idle agents doze with their eyes closed.
-                top && (resting(info.agent) || blink(info.agent.key)),
+                top &&
+                  (resting(info.agent) ||
+                    blink(info.agent.key, visible(person))),
               ),
             );
             person.alpha = peopleBlend;
+            if (info.agent.semanticStatus === "working" && visible(person))
+              ambient.every(7, townHash(info.agent.key) % 7);
           }
           const glowSprite = view.glow;
           const color = BLOCK_COLORS[info.state];
@@ -853,36 +876,18 @@ export async function createTownRenderer(
                 ? 0.55 + 0.35 * Math.sin(clock * 5)
                 : 0.5 + 0.08 * Math.sin(clock * 23 + seat);
             glowSprite.alpha = info.state === "shell" ? 0.3 : pulse;
+            if (info.state !== "shell" && visible(glowSprite))
+              ambient.continuous();
           }
         });
         if (pod.item) pod.item.visible = !lite;
       }
   };
 
-  const screenCanvases = new Map<string, TownCanvas>();
-  const screenCanvas = (stateName: string, frame: number) => {
-    const key = `${stateName}:${stateName === "working" ? frame % 7 : stateName === "off" ? 0 : stateName === "idle" || stateName === "unknown" ? Math.floor(frame / 6) % 36 : frame % 2}`;
-    let canvasValue = screenCanvases.get(key);
-    if (!canvasValue)
-      screenCanvases.set(
-        key,
-        (canvasValue = townScreen(stateName, Number(key.split(":")[1]))),
-      );
-    return canvasValue;
-  };
-
-  const blinkAt = new Map<string, number>();
-  const blink = (key: string) => {
-    let next = blinkAt.get(key);
-    if (next === undefined)
-      blinkAt.set(key, (next = clock + 1 + (townHash(key) % 400) / 100));
-    if (clock > next + 0.13)
-      blinkAt.set(
-        key,
-        clock + 2 + (townHash(`${key}${Math.floor(clock)}`) % 400) / 100,
-      );
-    return clock > next && clock < next + 0.13;
-  };
+  const screenCanvas = createTownScreenResolver();
+  const blinkFrame = createTownBlink();
+  const blink = (key: string, onScreen: boolean) =>
+    blinkFrame(key, clock, onScreen, ambient);
 
   const updateActors = (standingAlpha: number) => {
     const live = new Set<string>();
@@ -893,7 +898,11 @@ export async function createTownRenderer(
       live.add(actor.key);
       let view = actorViews.get(actor.key);
       if (!view) {
-        const sprite = new Sprite(Texture.EMPTY);
+        const sprite = new Sprite(
+          textureOf(
+            townCharacter(lookOf(actor.key), actor.dir, 0, "stand", false),
+          ),
+        );
         const shadow = new Graphics()
           .rect(-5, -1, 10, 3)
           .fill({ color: 0x000000, alpha: 0.22 });
@@ -908,9 +917,6 @@ export async function createTownRenderer(
       const frame = moving ? Math.floor(actor.walked / 6) % 4 : 0;
       const bob = moving && frame % 2 ? -1 : 0;
       view.look = lookOf(actor.key);
-      view.sprite.texture = textureOf(
-        townCharacter(view.look, actor.dir, frame, "stand", blink(actor.key)),
-      );
       view.sprite.position.set(
         Math.round(actor.x),
         Math.round(actor.y + 1 + bob),
@@ -920,6 +926,15 @@ export async function createTownRenderer(
       view.shadow.zIndex = actor.y - 0.5;
       view.sprite.alpha = view.shadow.alpha = standingAlpha;
       view.sprite.visible = view.shadow.visible = standingAlpha > 0.02;
+      view.sprite.texture = textureOf(
+        townCharacter(
+          view.look,
+          actor.dir,
+          frame,
+          "stand",
+          blink(actor.key, actor.dir !== "up" && visible(view.sprite)),
+        ),
+      );
     }
     for (const [key, view] of actorViews)
       if (!live.has(key)) {
@@ -955,7 +970,6 @@ export async function createTownRenderer(
           chatting,
           Math.floor(clock * 3),
         );
-        if (!kind) continue;
         let headX = actor.x;
         let headY = actor.y - 20 * TOWN_AGENT_SCALE;
         if (actor.mode === "seat") {
@@ -977,6 +991,18 @@ export async function createTownRenderer(
           point.y > camera.viewport.height + 40
         )
           continue;
+        if (
+          near &&
+          status === "working" &&
+          actor.mode === "seat" &&
+          !state.askingKeys?.has(agent.key)
+        ) {
+          const phase = clock * 0.35 + (townHash(agent.key) % 97) / 97;
+          const fraction = phase - Math.floor(phase);
+          ambient.at(clock + ((chatting ? 0.33 : 1) - fraction) / 0.35);
+          if (chatting) ambient.every(3);
+        }
+        if (!kind) continue;
         wanted.add(actor.key);
         let bubble = bubbles.get(actor.key);
         if (!bubble) {
@@ -999,6 +1025,7 @@ export async function createTownRenderer(
           Math.round(point.x),
           Math.round(point.y - 2 - bounce),
         );
+        if (kind === "blocked" && visible(bubble)) ambient.continuous();
       }
     for (const [key, bubble] of bubbles)
       if (!wanted.has(key)) {
@@ -1008,62 +1035,6 @@ export async function createTownRenderer(
   };
 
   let layoutCells = new Map<string, TownCell>();
-
-  const drawEffects = () => {
-    fxLayer.clear();
-    if (!model) return;
-    const ring = (
-      x: number,
-      y: number,
-      rx: number,
-      ry: number,
-      color: number,
-      alpha: number,
-    ) => {
-      fxLayer
-        .ellipse(x, y, rx, ry)
-        .stroke({ color, width: 1.5 / Math.max(0.5, camera.z) + 0.5, alpha });
-      fxLayer.ellipse(x, y, rx, ry).fill({ color, alpha: alpha * 0.2 });
-    };
-    for (const [key, color] of [
-      [state.selectedKey, 0xffd166],
-      [state.hoverKey !== state.selectedKey ? state.hoverKey : null, 0xffffff],
-    ] as const) {
-      if (!key) continue;
-      const alpha = color === 0xffd166 ? 0.7 + 0.3 * Math.sin(clock * 5) : 0.45;
-      const actor = actors.actors.get(key);
-      if (actor) {
-        if (actor.mode === "seat") {
-          const seat = model.agentSeats.get(key);
-          const cell = seat && layoutCells.get(seat.deskKey);
-          if (cell && seat) {
-            const geometry = townSeat(cell, seat.seat);
-            ring(
-              geometry.cx,
-              geometry.top ? geometry.tableY + 17 : geometry.tableY + 56,
-              11,
-              4,
-              color,
-              alpha,
-            );
-          }
-        } else ring(actor.x, actor.y, 10, 4, color, alpha);
-        continue;
-      }
-      const cell = layoutCells.get(key);
-      if (cell) {
-        ring((cell.x + 3) * T, cell.y * T + 50, 38, 8, color, alpha);
-        continue;
-      }
-      const room = layout?.buildings
-        .flatMap((b) => b.rooms)
-        .find((r) => r.key === key);
-      if (room)
-        fxLayer
-          .rect(room.x * T + 2, room.y * T + 2, room.w * T - 4, room.h * T - 4)
-          .stroke({ color, width: 2, alpha });
-    }
-  };
 
   const updateRoofs = (dt: number) => {
     const roofZ = camera.limits?.roof ?? 0;
@@ -1182,9 +1153,12 @@ export async function createTownRenderer(
   };
   const drawFrame = (now: number, why: string[]) => {
     if (disposed || !layout || !model) return;
-    const dt = last ? Math.min(0.05, (now - last) / 1000) : 1 / 60;
+    cancelAmbient();
+    const elapsed = last ? Math.max(0, (now - last) / 1000) : 1 / 60;
+    const dt = Math.min(0.05, elapsed);
     last = now;
-    clock += dt;
+    clock += elapsed;
+    ambient = new TownAmbient(clock);
     stats.frames += 1;
     const cameraMoved = camera.update(dt);
     const actorsMoved = actors.step(camera.reducedMotion ? 10 : dt);
@@ -1200,10 +1174,20 @@ export async function createTownRenderer(
     const materializing = materialize();
     const roofsMoving = updateRoofs(dt);
     cull();
-    updatePods(deskBlend, camera.z >= 0.6, lite, blink);
+    updatePods(deskBlend, camera.z >= 0.6, lite);
     updateActors(Math.max(deskBlend, townBlend(0.35, 0.6, camera.z)));
     updateBubbles();
-    drawEffects();
+    drawTownSelectionEffects(
+      fxLayer,
+      model,
+      layout,
+      actors,
+      layoutCells,
+      state,
+      camera,
+      clock,
+      ambient,
+    );
     onFrame(camera, level); // before the drag, so a carry aims at this frame
     const dragging = updateDrag(dt);
     app.renderer.render(app.stage);
@@ -1232,10 +1216,22 @@ export async function createTownRenderer(
       dragging;
     const next = moving
       ? "state"
-      : !camera.reducedMotion && !state.calm
+      : !camera.reducedMotion && !state.calm && ambient.next === clock
         ? "motion"
         : null;
     if (next) frames?.request(next);
+    else if (
+      !camera.reducedMotion &&
+      !state.calm &&
+      Number.isFinite(ambient.next)
+    )
+      ambientTimer = setTimeout(
+        () => {
+          ambientTimer = null;
+          frames?.request("motion");
+        },
+        Math.max(1, (ambient.next - clock) * 1000 - 16),
+      );
     if (DEVTOOLS && onTrace) {
       const causes = Object.entries({
         camera: cameraMoved,
@@ -1258,6 +1254,7 @@ export async function createTownRenderer(
   };
   frames = registerWorldFrames(element, draw, (paused) => {
     stats.interactionPaused = paused;
+    if (paused) last = 0;
   });
 
   const onMotion = (event: MediaQueryListEvent) => {
@@ -1639,6 +1636,7 @@ export async function createTownRenderer(
     destroy() {
       if (disposed) return;
       disposed = true;
+      cancelAmbient();
       clearDrag();
       motion.removeEventListener("change", onMotion);
       frames?.dispose();

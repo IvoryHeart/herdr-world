@@ -147,6 +147,23 @@ work ceilings and the World latency trend cover its cost.
 The renderer draws through the shared World frame scheduler: state frames for
 camera, roof and walking changes, motion frames for ambient animation, which
 pause while the user types in a terminal and for reduced motion or calm mode.
+Only visible animation requests motion frames. Continuous glow, selection pulses
+and bouncing status bubbles retain their cadence; screen, typing and blink
+changes schedule their next discrete frame. Covered interiors and off-screen
+sprites do not keep ambient drawing alive. A settled scene with no visible
+motion sleeps until a state change, input, preference or viewport invalidation.
+The animation clock uses elapsed time even between sparse draws; simulation
+steps retain their bounded delta. Pending ambient wake-ups are cancelled on
+redraw and renderer destruction.
+
+`town-idle-draws` in the Hosts filter suite uses the test clock and
+`TOWN_STATIC_WORK_CEILINGS` to require zero draws per second in a settled,
+roof-covered scene at 1440 and 390 px. It first proves renderer readiness, then
+checks a coalesced state paint, smooth camera flight and visible pulses, return
+to sleep, and destruction. The existing idle React-commit and moving-Inspector
+anchor cases remain. See the [idle-frame audit](../../../docs/town-idle-frames.md)
+for measured busy time, residual callback owners and paired synthetic captures.
+
 Ground is painted in 512-pixel chunks only when a chunk first comes into view,
 with deterministic per-tile randomness, and its trees and lamps join the scene
 with it. A building's interior, façade, roof and desks are baked the first time
