@@ -665,14 +665,20 @@ function deliver(
       settings,
     );
     if (why) {
-      // A busy author's fix, ci and conflict steps can go to a fresh fixer.
+      // An absent or busy author's steps can go to a fresh fixer.
       const seat = live.find((candidate) => candidate.name === name);
       const branches = new Map(
         entries.map((entry) => [entry.pr, authors.get(entry.pr)?.branch]),
       );
-      const fixers = seat
-        ? startFixers(crew, context, settings, seat, entries, branches, say)
-        : { handed: new Set<string>(), waits: new Map<number, string>() };
+      const fixers = startFixers(
+        crew,
+        context,
+        settings,
+        seat ?? { name, status: "absent" },
+        entries,
+        branches,
+        say,
+      );
       for (const entry of entries) {
         if (fixers.handed.has(entry.key) || entry.detail === why) continue;
         setAction(crew, entry.key, "pending", now, why);
@@ -681,7 +687,7 @@ function deliver(
           `#${entry.pr} waiting for ${name} (${why}${fixer ? `; no fixer: ${fixer}` : ""})`,
         );
         if (
-          why === "no live seat" ||
+          (why === "no live seat" && fixer !== "no free run slot") ||
           why === "never prompted" ||
           why === "blocked"
         )

@@ -5,7 +5,7 @@ import { crewPass } from "./crew";
 import type { Deps } from "./crew/deps";
 import { config, input, NOW, SHA } from "./gate/cases";
 import { evaluate, type GateInput } from "./gate/predicate";
-import { SETTINGS_DEFAULTS } from "./crew/plan";
+import { SETTINGS_DEFAULTS, type RosterEntry } from "./crew/plan";
 import { saveCycle } from "./crew/round-policy-store";
 import { openCrewStore, openLock, roundFor } from "./crew/store";
 
@@ -15,7 +15,12 @@ export function cleanupDeliveries() {
 }
 
 export function setup(
-  options: { reviewers?: string[]; seedCycle?: boolean } = {},
+  options: {
+    reviewers?: string[];
+    seedCycle?: boolean;
+    roster?: Record<string, RosterEntry>;
+    neverPrompt?: string[];
+  } = {},
 ) {
   const root = mkdtempSync(join(tmpdir(), "crew-round-delivery-"));
   const dir = join(root, ".agents", "crew-gate");
@@ -24,11 +29,13 @@ export function setup(
     ...SETTINGS_DEFAULTS,
     maxRuns: 1,
     authors: { "7": "builder" },
+    neverPrompt: options.neverPrompt ?? [],
     roster: {
       "rev-astra": { model: "gpt-6-astra" },
       rev2: { model: "gpt-6.1-sol" },
       evaluator: { model: "claude-opus-5-5", effort: "high" },
       visionary: { model: "claude-opus-5-5" },
+      ...options.roster,
     },
   };
   const gateConfig = {
