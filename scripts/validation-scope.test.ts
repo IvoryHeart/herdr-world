@@ -8,7 +8,8 @@ import {
   repositorySelection,
   selectValidation,
 } from "./validation-scope";
-import type { Graph } from "./affected";
+import { buildGraph, gitChanges, type Graph } from "./affected";
+import { readCoverageScope } from "./coverage-scope";
 import {
   worldBrowserSuites,
   worldRuntimeSuites,
@@ -153,7 +154,10 @@ test("ordinary docs skip suites and the tooling exception still runs its fallbac
     tooling: true,
     verification: false,
     packaging: false,
-    unit: ["scripts/agent/example.test.ts"],
+    unit: [
+      "scripts/agent/example.test.ts",
+      "scripts/verification-coverage.test.ts",
+    ],
     world: [],
   });
 });
@@ -220,7 +224,10 @@ test("build-version changes select native jobs because the module is compiled in
   };
   const selection = selectValidation(versionGraph, [version], () => true);
   expect(selection.full).toBe(false);
-  expect(selection.unit).toEqual([versionTest]);
+  expect(selection.unit).toEqual([
+    versionTest,
+    "scripts/verification-coverage.test.ts",
+  ]);
   expect(selection.packaging).toBe(true);
 });
 
@@ -275,4 +282,115 @@ test("an incremental-only deletion keeps the repository's affected unit scope", 
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("contributor docs and skill Markdown avoid full validation but retain named readers", () => {
+  const docs = [
+    "AGENTS.md",
+    "CONTRIBUTING.md",
+    ".agents/skills/example/SKILL.md",
+  ];
+  const reader = "scripts/policy.test.ts";
+  const policyGraph: Graph = {
+    ...graph,
+    files: new Set([...graph.files, ...docs, reader]),
+    deps: new Map([...graph.deps, [reader, new Set([docs[0]!])]]),
+  };
+  for (const path of docs) {
+    const selection = selectValidation(policyGraph, [path]);
+    expect(selection.full).toBe(false);
+    expect(selection.verification).toBe(false);
+    expect(selection.packaging).toBe(false);
+    if (path === docs[0]) expect(selection.unit).toContain(reader);
+  }
+});
+
+test("shard-table edits keep browser and inventory evidence without models or packaging", () => {
+  const table = "scripts/world-browser-suites.ts";
+  const check = "scripts/world-browser-suites.test.ts";
+  const shardGraph: Graph = {
+    ...graph,
+    files: new Set([...graph.files, table, check]),
+    deps: new Map([...graph.deps, [check, new Set([table])]]),
+  };
+  const selection = selectValidation(
+    shardGraph,
+    [table],
+    () => true,
+    [table],
+    () => false,
+  );
+  expect(selection.full).toBe(false);
+  expect(selection.unit).toContain(check);
+  expect(selection.unit).toContain("scripts/verification-coverage.test.ts");
+  expect(selection.world).toEqual(worldBrowserSuites);
+  expect(selection.web).toEqual(webBrowserSuites);
+  expect(selection.verification).toBe(false);
+  expect(selection.packaging).toBe(false);
+});
+
+test("model-free owners keep their consumer tests and cheap coverage while modeled owners run models", () => {
+  const path = "scripts/example.ts";
+  const check = "scripts/example.test.ts";
+  const ownerGraph: Graph = {
+    ...graph,
+    files: new Set([...graph.files, path, check]),
+    deps: new Map([...graph.deps, [check, new Set([path])]]),
+  };
+  const selection = selectValidation(
+    ownerGraph,
+    [path],
+    () => true,
+    [path],
+    () => false,
+  );
+  expect(selection.full).toBe(false);
+  expect(selection.verification).toBe(false);
+  expect(selection.unit).toEqual([
+    check,
+    "scripts/verification-coverage.test.ts",
+  ]);
+  expect(selectValidation(ownerGraph, [path], () => true).verification).toBe(
+    true,
+  );
+});
+
+test("the real shard-table graph does not mistake installer test imports for native distribution changes", () => {
+  const files = gitChanges(process.cwd(), "HEAD");
+  const realGraph = buildGraph(process.cwd(), files.tracked, files.deleted);
+  const coverage = readCoverageScope(process.cwd());
+  const paths = [
+    "scripts/world-browser-suites.ts",
+    "scripts/world-browser-suites.test.ts",
+    "CONTRIBUTING.md",
+  ];
+  const selection = selectValidation(
+    realGraph,
+    paths,
+    coverage.owns,
+    paths,
+    coverage.models,
+  );
+  expect(selection.full).toBe(false);
+  expect(selection.world).toEqual(worldBrowserSuites);
+  expect(selection.web).toEqual(webBrowserSuites);
+  expect(selection.packaging).toBe(false);
+  expect(selection.verification).toBe(false);
+  const fixture = "web/src/world/town/TownCanvas.browser.tsx";
+  const town = selectValidation(
+    realGraph,
+    [fixture],
+    coverage.owns,
+    [fixture],
+    coverage.models,
+  );
+  for (const path of worldBrowserSuites.filter((path) =>
+    path.includes("/town/TownCanvas"),
+  ))
+    expect(town.world).toContain(path);
+  const mixed = [...paths, "scripts/prepare-release.ts"];
+  expect(
+    selectValidation(realGraph, mixed, coverage.owns, mixed, coverage.models)
+      .packaging,
+  ).toBe(true);
 });

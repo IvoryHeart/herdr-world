@@ -24,6 +24,7 @@ import { appearanceFor } from "../../../shared/appearance";
 import { TERMINAL_COLOR_PALETTE } from "./terminalColor";
 import "../styles/tokens.css";
 import "../styles/base.css";
+import "../components/WorkspaceInspectorFrame.css";
 import "../components/WorkspaceInspectorHost.css";
 
 const adapterMode = new URLSearchParams(location.search).has("adapters");
