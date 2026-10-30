@@ -60,15 +60,17 @@ export function fixture(ordinal = 1) {
       let stdout = "";
       if (argv[0] === "gh") {
         const rows = argv.at(-1)!.includes("/reviews?") ? posts : [];
-        stdout = JSON.stringify([
-          rows.map((post) => ({
-            id: post.id,
-            body: post.body,
-            created_at: new Date(post.at).toISOString(),
-            html_url: post.url,
-            commit_id: post.commit,
-          })),
-        ]);
+        stdout = rows
+          .map((post) =>
+            JSON.stringify({
+              id: post.id,
+              body: post.body,
+              created_at: new Date(post.at).toISOString(),
+              html_url: post.url,
+              commit_id: post.commit,
+            }),
+          )
+          .join("\n");
       } else if (argv.includes("rev-list"))
         stdout = mainOnly
           ? `${SHA.fixed} ${SHA.reviewed} ${SHA.other}\n`
