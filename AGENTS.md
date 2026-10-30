@@ -116,7 +116,7 @@ matrix on every main commit; `bun run check:delivery` runs it locally in paralle
 only when a passed code gate already covers its code, and a push that only merges
 `origin/main` (no edits beyond changelog fragments) runs `bun run check:static`.
 Heavy checks from every worktree share one machine-wide queue (one browser lane and
-one verification at a time; the timed latency lane alone); run browser suites via
+one verification at a time; the gate's quiet lane alone); run browser suites via
 `bun run test <path>` so they queue too. A queued gate prints whom it waits for, so wait rather
 than bypass the hook.
 CI runs documentation checks for ordinary Markdown-only PR diffs. PRs limited
@@ -125,11 +125,12 @@ to `scripts/agent/**`, `docs/agent-development.md`, `docs/crew-runbook.md`,
 static checks and affected unit tests, without World suites, behavioral
 verification or native installers. `Delivery checks` and both protected macOS
 reports remain required. Other classified PRs run affected unit and nearest browser suites, verification
-for its inputs/contract owners, latency for World runtime/UI consumers, and native
+for its inputs/contract owners, the dense World suites for World runtime changes, and native
 jobs for installation or binary inputs. Unknown paths, policy/configuration and
 main pushes run everything. Pre-push uses the same complete-PR classification.
 CI splits units/web suites across two runners and verification across three model
-groups; each latency suite has its own runner. Verification aggregates require all
+groups; no CI test asserts a wall-clock budget (the non-blocking World latency
+trend reports timing). Verification aggregates require all
 models, source/tool identity and each group's enforced resource accounting.
 Leaf checks report failure when their job ends; `Delivery checks` remains the
 required aggregate, and protected report names and branch rules stay unchanged.

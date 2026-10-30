@@ -126,12 +126,13 @@ CI and pre-push share a tooling-only allowlist: `scripts/agent/**` and its tests
 this guide, `docs/crew-runbook.md`, `docs/dispatch-runbook.md` and
 `changes/<slug>.md`. Every changed path in the complete PR must qualify; renames
 include both paths. This mode runs the full static lane and affected unit tests,
-including all source type checks, and skips World browser/latency, behavioral
+including all source type checks, and skips World browser suites, behavioral
 verification and native installation work. `Delivery checks` and the protected
 macOS reports still run. Other classified changes run their affected contracts and consumers under the
 same rules as pre-push; unknown paths and every main push keep the full matrix.
 Unit/web tests use two CI runners, behavioral models three groups with complete
-source-bound aggregation, and each latency suite remains isolated on its runner.
+source-bound aggregation; no CI test asserts a wall-clock budget (the World
+latency trend reports timing without gating).
 Leaf failures are visible before `Delivery checks` finishes; the crew's reaction
 to a first failure is a separate workflow concern. See [pipeline ownership](ci-pipelines.md) for result requirements.
 Fetch main before pushing: `check:size` evaluates the proposed merge against
@@ -667,11 +668,9 @@ passed code gate on an ancestor, and a push that only merges `origin/main` runs
 same Git hook configuration.
 
 Agents in parallel worktrees share one machine-wide check queue: one browser lane
-and one behavioral verification at a time, two light lanes, and the timed
-(latency) lane alone on the whole machine. Within that lane, the delivery gate
-runs timed World browser files serially, matching CI’s latency shard while
-preserving each fixture’s concurrent-context checks and deadlines. Run browser
-suites through
+and one behavioral verification at a time, two light lanes, and the delivery
+gate's quiet lane (Chrome-driven tests outside World) alone on the whole
+machine. Run browser suites through
 `bun run test <path>` or `bun run test:browser`, which queue, rather than a bare
 `bun test` on a browser file, which does not. A queued gate prints
 `[queue] <lane> waiting for <worktree> <lane> (pid, since)`. Do not bypass the
@@ -682,9 +681,8 @@ absolute paths and symlinks. A pending whole-machine lane reserves admission bef
 waiting for running work, so later ordinary arrivals cannot continually overtake
 it. This reserves admission before heavy slots drain: light work also waits,
 even with free light slots, and can wait minutes behind a running heavy lane.
-Direct runs containing timed suites take every slot, including the default
-full test run and `test:world --shard=latency`. Unknown selections conservatively
-take the quiet lane; known browser-only selections take the browser slot.
+Direct runs that may include a browser suite, including the default full test
+run and unknown selections, take the browser slot.
 Known value-taking flags such as `-t` and `--timeout` do not widen an explicit
 file selection; a flags-only invocation still selects Bun's full test run.
 Process exit releases both admission and slots through the kernel.

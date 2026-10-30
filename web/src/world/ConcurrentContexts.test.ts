@@ -8,9 +8,53 @@ import {
 } from "../browserChrome";
 import { InputDriver, denseSnapshot } from "./browserAcceptanceFixture";
 import { startIndependentInput } from "./independentInputSchedule";
+import { recordLatency } from "./testing/latencyTrend";
 
 const chrome =
   Bun.env.CHROME_BIN || Bun.which("google-chrome") || Bun.which("chromium");
+
+/**
+ * Work this fixed workload may do, whatever the runner's speed. Each ceiling
+ * is the most seen in 756 CI runs (2026-10-19 to 10-30), so a change that does
+ * more work per event (remounting terminals, re-registering every card, extra
+ * Board commits or world-build slices) fails here instead of in a timing
+ * budget. Raise one only in a reviewed change that explains the new work.
+ */
+function expectWorkWithinCeilings(
+  measurements: {
+    terminalWorkByPhase: Record<string, Record<string, number>>;
+    boardObserverWorkByPhase: Record<string, Record<string, number>>;
+    boardRenderByPhase: Record<string, { commits: number }>;
+    worldBuildSliceCount: number;
+    worldBuildMaxSliceNodes: number;
+  },
+  width: number,
+) {
+  const stress = ["projection", "render", "refresh", "noisy-output"];
+  // Dense load must not mount, fit or dispose a terminal.
+  for (const phase of stress)
+    expect(measurements.terminalWorkByPhase[phase] ?? {}).toEqual({});
+  const terminals = measurements.terminalWorkByPhase["outside-stress"] ?? {};
+  expect(terminals.open ?? 0).toBeLessThanOrEqual(5);
+  expect(terminals.dispose ?? 0).toBe(terminals.open ?? 0);
+  expect(terminals.fit ?? 0).toBeLessThanOrEqual(20);
+  // Board cards register once when rendered and are all released afterwards;
+  // refresh, projection and noisy output re-register none.
+  const cards = width === 1440 ? 1280 : 80;
+  const observers = measurements.boardObserverWorkByPhase;
+  expect(Object.keys(observers).sort()).toEqual(["outside-stress", "render"]);
+  expect(observers.render).toEqual({ observe: cards });
+  expect(observers["outside-stress"]).toEqual({ unobserve: cards });
+  expect(measurements.boardRenderByPhase.render?.commits).toBeLessThanOrEqual(
+    width === 1440 ? 6 : 7,
+  );
+  expect(measurements.boardRenderByPhase.refresh?.commits).toBeLessThanOrEqual(
+    2,
+  );
+  // The world build yields in slices of at most 256 nodes.
+  expect(measurements.worldBuildMaxSliceNodes).toBeLessThanOrEqual(256);
+  expect(measurements.worldBuildSliceCount).toBeLessThanOrEqual(7304);
+}
 
 test.skipIf(!chrome).each([1440, 390])(
   "two mounted runtimes retain terminals and Files across focus and host retirement at %i pixels",
@@ -48,6 +92,8 @@ test.skipIf(!chrome).each([1440, 390])(
           string,
           { commits: number; totalMs: number; maxMs: number }
         >;
+        worldBuildSliceCount: number;
+        worldBuildMaxSliceNodes: number;
       };
       stressReceipts: {
         phase: string;
@@ -225,8 +271,7 @@ test.skipIf(!chrome).each([1440, 390])(
       expect(observed.failures).toEqual([]);
       expect(observed.measurements.outputFrames).toBe(1536);
       expect(observed.measurements.snapshotBytes).toBeGreaterThan(20_000_000);
-      expect(observed.measurements.snapshotTransportMs).toBeLessThan(20_000);
-      expect(observed.measurements.healthyInputMs).toBeLessThan(1000);
+      expectWorkWithinCeilings(observed.measurements, width);
       expect(observed.stressReceipts).toHaveLength(sentInputs.length);
       const inputDelays: number[] = [];
       for (const phase of ["projection", "render", "refresh", "noisy-output"]) {
@@ -265,8 +310,16 @@ test.skipIf(!chrome).each([1440, 390])(
       console.info(
         `Budget check at ${width}px: worstDelay=${worstDelay}ms senderLateness=${senderLateness}ms sentAtMax=${sentAtMax}ms`,
       );
-      // Engineering acceptance budget for this fixed synthetic workload, not a spec SLA.
-      expect(worstDelay).toBeLessThan(200);
+      // Input delays depend on the runner: the latency trend reports them.
+      recordLatency("ConcurrentContexts", `${width}px`, {
+        worstInputMs: worstDelay,
+        p95InputMs: inputDelays[Math.ceil(inputDelays.length * 0.95) - 1]!,
+        healthyInputMs: observed.measurements.healthyInputMs,
+        snapshotTransportMs: observed.measurements.snapshotTransportMs,
+        projectionMs: observed.measurements.projectionMs,
+        renderMs: observed.measurements.renderMs,
+        longestTaskMs: observed.measurements.longestTaskMs,
+      });
       console.info(
         `Synthetic mounted terminals at ${width}px: ${JSON.stringify({ ...observed.measurements, inputDuringDenseMaxMs: inputDelays[inputDelays.length - 1], inputDuringDenseP95Ms: inputDelays[Math.ceil(inputDelays.length * 0.95) - 1], inputSenderMaxLatenessMs: Math.max(...sentInputs.map((input) => input.sentAt - input.dueAt)) })}`,
       );

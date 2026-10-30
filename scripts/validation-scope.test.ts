@@ -11,7 +11,7 @@ import {
 import type { Graph } from "./affected";
 import {
   worldBrowserSuites,
-  worldTimedSuites,
+  worldRuntimeSuites,
   webBrowserSuites,
 } from "./world-browser-suites";
 import { selectedCITests } from "./ci-tests";
@@ -83,14 +83,13 @@ const graph: Graph = {
   ]),
 };
 
-test("browser Chat selects nearby consumers without verification, latency or platforms", () => {
+test("browser Chat selects nearby consumers without verification, runtime suites or platforms", () => {
   const selection = selectValidation(graph, [chat]);
   expect(selection).toMatchObject({
     full: false,
     tooling: false,
     verification: false,
     packaging: false,
-    latency: [],
     unit: [unit],
     world: [worldBrowserSuites[0]],
     web: [webBrowserSuites[0]],
@@ -103,13 +102,16 @@ test("owners and World runtime paths independently require their maintained suit
     selectValidation(graph, [scene], (path) => path === scene),
   ).toMatchObject({
     verification: true,
-    latency: worldTimedSuites,
     packaging: false,
+    world: worldBrowserSuites.filter(
+      (path) =>
+        path === worldBrowserSuites[0] || worldRuntimeSuites.includes(path),
+    ),
   });
   expect(selectValidation(graph, [native])).toMatchObject({
     verification: false,
     packaging: true,
-    latency: [],
+    world: [],
   });
   expect(selectValidation(graph, [native], () => true).verification).toBe(true);
 });
@@ -128,7 +130,7 @@ test("unknown paths, configuration and empty main selections run the full matrix
       full: true,
       verification: true,
       packaging: true,
-      latency: worldTimedSuites,
+      world: worldBrowserSuites,
     });
   }
   expect(
@@ -144,7 +146,6 @@ test("ordinary docs skip suites and the tooling exception still runs its fallbac
     unit: [],
     world: [],
     web: [],
-    latency: [],
   });
   expect(
     selectValidation(graph, ["scripts/agent/new.ts"], () => true),
@@ -154,7 +155,6 @@ test("ordinary docs skip suites and the tooling exception still runs its fallbac
     packaging: false,
     unit: ["scripts/agent/example.test.ts"],
     world: [],
-    latency: [],
   });
 });
 
@@ -165,10 +165,9 @@ test("rename deletions retain World and native obligations", () => {
     gone: new Set(gone),
     files: new Set([...graph.files, ...gone]),
   };
-  expect(selectValidation(renamed, [...gone, chat])).toMatchObject({
-    packaging: true,
-    latency: worldTimedSuites,
-  });
+  const selection = selectValidation(renamed, [...gone, chat]);
+  expect(selection.packaging).toBe(true);
+  expect(selection.world).toEqual(expect.arrayContaining(worldRuntimeSuites));
 });
 
 test("the CI runner executes only its selected lane and rejects invalid selectors", () => {
@@ -178,8 +177,7 @@ test("the CI runner executes only its selected lane and rejects invalid selector
     worldBrowserSuites[0]!,
   ]);
   expect(selectedCITests(selection, "world", "2")).toEqual([]);
-  expect(selectedCITests(selection, "latency")).toEqual([]);
-  for (const lane of ["invalid", "full", "__proto__"])
+  for (const lane of ["invalid", "full", "latency", "__proto__"])
     expect(() => selectedCITests(selection, lane)).toThrow();
   expect(() => selectedCITests(selection, "world", "0")).toThrow();
   expect(() =>
@@ -187,7 +185,7 @@ test("the CI runner executes only its selected lane and rejects invalid selector
   ).toThrow();
 });
 
-test("CI unit and web partitions are disjoint, exhaustive and keep each latency suite alone", () => {
+test("CI unit and web partitions are disjoint and exhaustive", () => {
   const selection = selectValidation(graph, ["package.json"]);
   for (const lane of ["unit", "web"] as const) {
     const first = selectedCITests(selection, lane, "1/2");
@@ -196,15 +194,9 @@ test("CI unit and web partitions are disjoint, exhaustive and keep each latency 
     expect(first.some((path) => second.includes(path))).toBe(false);
     expect(() => selectedCITests(selection, lane, "3/2")).toThrow();
   }
-  expect(
-    [1, 2, 3, 4, 5, 6].flatMap((index) =>
-      selectedCITests(selection, "latency", String(index)),
-    ),
-  ).toEqual(worldTimedSuites);
 });
 
 test("an incremental full-gate path escalates every suite even when absent from the final PR diff", () => {
-  const timed = new Set(worldTimedSuites);
   for (const paths of [[chat], ["README.md"], ["scripts/agent/new.ts"]]) {
     const selection = selectValidation(graph, paths, () => false, [
       "package.json",
@@ -212,10 +204,7 @@ test("an incremental full-gate path escalates every suite even when absent from 
     expect(selection.full).toBe(true);
     expect(selection.tooling).toBe(false);
     expect(selection.documentation).toBe(false);
-    expect(selection.world).toEqual(
-      worldBrowserSuites.filter((path) => !timed.has(path)),
-    );
-    expect(selection.latency).toEqual(worldTimedSuites);
+    expect(selection.world).toEqual(worldBrowserSuites);
     expect(selection.verification).toBe(true);
     expect(selection.packaging).toBe(true);
   }
@@ -276,7 +265,6 @@ test("an incremental-only deletion keeps the repository's affected unit scope", 
       world: [],
       worldShards: [],
       web: [],
-      latency: [],
       verification: false,
       packaging: false,
     };

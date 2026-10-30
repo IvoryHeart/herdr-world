@@ -9,7 +9,7 @@ import {
 import {
   worldBrowserSuites,
   worldBrowserShards,
-  worldTimedSuites,
+  worldRuntimeSuites,
   webBrowserSuites,
 } from "./world-browser-suites";
 
@@ -68,7 +68,6 @@ export type ValidationSelection = {
   world: string[];
   worldShards: number[];
   web: string[];
-  latency: string[];
   verification: boolean;
   packaging: boolean;
 };
@@ -117,7 +116,6 @@ export function selectValidation(
       world: [],
       worldShards: [],
       web: [],
-      latency: [],
       verification: false,
       packaging: false,
     };
@@ -133,17 +131,20 @@ export function selectValidation(
       : tests.full
         ? allTests
         : tests.unit;
-  const timed = new Set(worldTimedSuites);
   const world = new Set(worldBrowserSuites);
   const web = new Set(webBrowserSuites);
-  const latency =
-    !tooling &&
-    (full ||
-      paths.some((path) => WORLD_RUNTIME.test(path)) ||
-      (!complete.full && complete.browser.some((path) => timed.has(path))));
-  const chosenWorld = (
-    full ? worldBrowserSuites : tooling || tests.full ? [] : tests.browser
-  ).filter((path) => !timed.has(path));
+  const runtime =
+    !tooling && !full && paths.some((path) => WORLD_RUNTIME.test(path));
+  const affectedWorld = full
+    ? worldBrowserSuites
+    : tooling || tests.full
+      ? []
+      : tests.browser;
+  const chosenWorld = worldBrowserSuites.filter(
+    (path) =>
+      affectedWorld.includes(path) ||
+      (runtime && worldRuntimeSuites.includes(path)),
+  );
   return {
     full,
     tooling,
@@ -163,7 +164,6 @@ export function selectValidation(
     worldShards: worldBrowserShards.flatMap((shard, index) =>
       chosenWorld.some((path) => shard.includes(path)) ? [index + 1] : [],
     ),
-    latency: latency ? [...worldTimedSuites] : [],
     verification:
       !tooling && (full || (!complete.full && complete.verification)),
     packaging:

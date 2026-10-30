@@ -180,7 +180,7 @@ export function writeValidationOutputs(
     [
       `mode=${mode}`,
       `selection=${JSON.stringify(selection)}`,
-      `world=${active && !!(selection.world.length + selection.web.length + selection.latency.length)}`,
+      `world=${active && !!(selection.world.length + selection.web.length)}`,
       `verification=${active && selection.verification}`,
       `packaging=${active && selection.packaging}`,
     ].join("\n") + "\n",

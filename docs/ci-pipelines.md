@@ -73,7 +73,7 @@ diff must contain only `scripts/agent/**` (including tests),
 `changes/<slug>.md`. Empty diffs and any other code path retain ordinary scope.
 Both sides of renames count. The mode runs the complete static lane and affected
 unit tests (or the agent test inventory for uncovered agent modules), and skips
-World browser/latency, behavioral verification, Windows installation and installer
+World browser suites, behavioral verification, Windows installation and installer
 upgrades. macOS jobs still report their protected names without native work.
 `Delivery checks` requires repository validation and macOS success, and the exact
 expected skips; failure, cancellation or missing results fail closed. It never
@@ -84,11 +84,12 @@ Main pushes and explicit full local gates always run everything.
 
 `validation-scope.ts` applies the affected import graph to the complete PR; unknown
 paths, workflow/gate policy and configuration select every suite. A full-gate
-incremental delta also escalates all suite families, including World and latency,
+incremental delta also escalates all suite families, including World,
 even when the triggering input was reverted out of the net PR diff. Verification
 runs for model/tooling/OpenSpec inputs or an inventory owner. World browser suites
 are the nearest consumers; web suites come from their maintained inventory.
-World runtime/UI changes or a nearest timed World consumer select latency suites.
+World runtime changes also select the dense end-to-end World suites
+(`worldRuntimeSuites`: production and concurrent contexts, terminal handoff).
 Native checks cover install/plugin/package inputs, server/shared binary sources,
 compiled `scripts/build-version.ts` metadata and installation consumers. The
 agent-tooling exception remains explicit.
@@ -96,8 +97,11 @@ agent-tooling exception remains explicit.
 Main and non-PR dispatches force the full plan. Code receives all static checks;
 ordinary docs receive `check:docs`. Non-browser tests and web suites are partitioned
 into two disjoint inventories. Six World shards keep their maintained membership,
-while only relevant shards/suites run. Each of the six latency files runs alone on
-a separate runner, retaining quiet admission and its single allowed retry.
+while only relevant shards/suites run. Browser jobs use the pinned test Chrome
+(`tools/chrome/test-chrome.json`) and never retry. Timing is not a CI check: the
+separate, non-blocking World latency trend workflow measures the dense suites on
+quiet runners for main pushes and `latency-trend`-labelled PRs and reports them
+beside main's recent runs on the same CPU model.
 
 Three verification runners partition the complete accepted model inventory. Each
 runs the maintained focused workers inside the enforced 4 GiB/no-swap/two-CPU
@@ -111,7 +115,7 @@ current source/tool identity, and verifies every group's retained accounting.
 It publishes one canonical manifest including the three resource records. The
 single-machine canonical gate is unchanged and still rejects filters.
 
-`Repository validation`, `Web browser tests`, `World latency budgets`, `Behavioral
+`Repository validation`, `Web browser tests`, `Behavioral
 verification`, `Delivery checks` and both macOS report names remain. Leaf jobs
 report their check results immediately on completion; aggregate jobs require
 success from all applicable leaves. No crew automation or branch protection is

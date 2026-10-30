@@ -9,7 +9,7 @@ import {
 } from "./check-lock";
 import { guardDiskSpace } from "./disk-guard";
 import { repositorySelection } from "./validation-scope";
-import { worldBrowserSuites, worldTimedSuites } from "./world-browser-suites";
+import { worldBrowserSuites } from "./world-browser-suites";
 
 /**
  * The local delivery gate, in lanes.
@@ -18,10 +18,9 @@ import { worldBrowserSuites, worldTimedSuites } from "./world-browser-suites";
  *                  because later lanes read the build
  *   verification   behavioral verification, from then on ────────────────┐
  *   unit, browser  alongside it: unit tests, and World browser suites    │
- *                  that assert no timings                                │
- *   quiet          once unit and browser finish: Chrome-driven tests and │
- *                  suites with wall-clock budgets, which fail when the   │
- *                  CPU is contended (verification alone leaves room) ────┘
+ *   quiet          once unit and browser finish: Chrome-driven tests     │
+ *                  outside World, which fail when the CPU is contended   │
+ *                  (verification alone leaves room) ─────────────────────┘
  *
  * `--full` runs everything (`check:delivery`). Without it (`check:changed`,
  * the pre-push default) only what the change affects runs (see affected.ts);
@@ -36,7 +35,7 @@ import { worldBrowserSuites, worldTimedSuites } from "./world-browser-suites";
 
 type Lane = {
   name: string;
-  /** "all": the lane needs the whole machine (timed suites). */
+  /** "all": the lane needs the whole machine (contention-sensitive Chrome tests). */
   queue: CheckClass | "all";
   commands: string[][];
   env?: Record<string, string>;
@@ -69,7 +68,7 @@ function scope(): Affected & { why: string } {
   return {
     full: false,
     unit: [...result.unit, ...result.web],
-    browser: [...result.world, ...result.latency],
+    browser: result.world,
     verification: result.verification,
     why: `${tooling ? "tooling-only" : "scoped"}; ${result.reason}`,
   };
@@ -106,7 +105,6 @@ function trackedTests() {
 
 function plan(selection: Affected) {
   const world = new Set(worldBrowserSuites);
-  const timed = new Set(worldTimedSuites);
   const browser = selection.full ? worldBrowserSuites : selection.browser;
   const tests = (selection.full ? trackedTests() : selection.unit).filter(
     (path) => !world.has(path),
@@ -122,38 +120,19 @@ function plan(selection: Affected) {
       queue: "light",
       commands: [["bun", "scripts/run-tests.ts", ...unit]],
     });
-  const untimed = browser.filter((path) => !timed.has(path));
-  if (untimed.length)
+  if (browser.length)
     busy.push({
       name: "browser",
       queue: "browser",
-      commands: [["bun", "scripts/run-world-tests.ts", ...untimed]],
+      commands: [["bun", "scripts/run-world-tests.ts", ...browser]],
       env: { HERDR_WORLD_TEST_LABEL: "browser" },
     });
   const quiet: Lane[] = [];
-  const timedSuites = browser.filter((path) => timed.has(path));
-  if (chrome.length || timedSuites.length)
+  if (chrome.length)
     quiet.push({
       name: "quiet",
       queue: "all",
-      commands: [
-        ...(chrome.length
-          ? [["bun", "scripts/run-tests.ts", ...chrome, "--parallel=2"]]
-          : []),
-        ...(timedSuites.length
-          ? [
-              [
-                "bun",
-                "scripts/run-world-tests.ts",
-                ...timedSuites,
-                // Match the latency shard: independent Chrome/renderer loads
-                // must not compete inside the exclusive timed lane.
-                "--parallel=1",
-              ],
-            ]
-          : []),
-      ],
-      env: { HERDR_WORLD_TEST_LABEL: "timed" },
+      commands: [["bun", "scripts/run-tests.ts", ...chrome, "--parallel=2"]],
     });
   const verification: Lane[] =
     !browserOnly && (selection.full || selection.verification)

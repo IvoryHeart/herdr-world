@@ -2,47 +2,71 @@ import { existsSync, realpathSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
 
 /**
- * Suites that assert wall-clock budgets (input latency, frame counts). They
- * fail when other work competes for the CPU, so they run on their own: on CI
- * in the dedicated, quiet "latency" job, one at a time, and locally in the
- * quiet lane for both gate and direct runs.
+ * Suites whose input delays the non-blocking World latency trend reports.
+ * They assert only what does not depend on the runner's speed, so CI runs
+ * them in the ordinary shards below; the trend job runs them again, one at a
+ * time on quiet runners, to record timing (scripts/latency-trend.ts).
  */
-export const worldTimedSuites = [
-  "ProductionContexts",
+export const worldLatencyTrendSuites = [
   "ProductionContexts.board",
   "ProductionContexts.town",
   "ProductionContexts.animated",
   "ConcurrentContexts",
-  "WorldTerminalHandoff",
 ].map((name) => `web/src/world/${name}.test.ts`);
 
-// The other suites spread across six machines, one case at a time, balanced
-// by mean CI file timings (seconds, four runs to 2026-10-21). The slowest file
-// bounds the slowest shard, so more machines would not finish sooner. Per-file
-// timings in CI artifacts guide later rebalancing.
+/**
+ * End-to-end consumers of the World runtime: a change to the runtime itself
+ * (WORLD_RUNTIME in validation-scope.ts) runs them even when the import graph
+ * does not reach them.
+ */
+export const worldRuntimeSuites = [
+  ...worldLatencyTrendSuites,
+  "web/src/world/ProductionContexts.test.ts",
+  "web/src/world/WorldTerminalHandoff.test.ts",
+];
+
+// The suites spread across six machines, one case at a time, balanced by mean
+// CI file timings in seconds (four runs to 2026-10-21; the former latency
+// suites from their own runners to 2026-10-30). The slowest file bounds the
+// slowest shard, so more machines would not finish sooner. Per-file timings in
+// CI artifacts guide later rebalancing.
 export const worldBrowserShards = [
-  ["SharedViewCreation", "WorldViewErrorBoundary", "groups/GroupsWindow"], // 72
-  ["HostsFilter.resources", "HostsFilter.inspector-timeout"], // 60
-  ["HostsFilter", "HostsFilter.cold", "HostsFilter.timeouts"], // 60
+  ["SharedViewCreation", "WorldViewErrorBoundary", "ProductionContexts.town"], // 147
+  [
+    "HostsFilter.resources",
+    "HostsFilter.inspector-timeout",
+    "ProductionContexts.board",
+  ], // 134
+  [
+    "HostsFilter",
+    "HostsFilter.cold",
+    "HostsFilter.timeouts",
+    "ProductionContexts.animated",
+  ], // 136
   [
     "HostsFilter.actions",
     "DeskView.browser",
     "BoardView",
     "useSpacesTabWindowArrangement.browser",
-  ], // 60
+    "WorldTerminalHandoff",
+  ], // 166
   [
     "HostsFilter.creation",
     "HostsFilter.arrangement",
     "windows/WindowFrame",
     "windows/WorldPanel",
-  ], // 60
-  ["HostsFilter.navigation", "town/TownCanvas", "HostsFilter.pending"], // 59
+    "groups/GroupsWindow",
+    "ProductionContexts",
+  ], // 72 + GroupsWindow
+  [
+    "HostsFilter.navigation",
+    "town/TownCanvas",
+    "HostsFilter.pending",
+    "ConcurrentContexts",
+  ], // 89
 ].map((shard) => shard.map((name) => `web/src/world/${name}.test.ts`));
 
-export const worldBrowserSuites = [
-  ...worldBrowserShards.flat(),
-  ...worldTimedSuites,
-];
+export const worldBrowserSuites = worldBrowserShards.flat();
 export const worldBrowserIgnorePattern = ignorePattern(worldBrowserSuites);
 
 /**
@@ -86,13 +110,12 @@ const browserSource = (source: string) =>
 
 export function selectWorldBrowserShard(shard?: string): string[] {
   if (!shard) return [...worldBrowserSuites];
-  if (shard === "latency") return [...worldTimedSuites];
   const match = /^(\d+)\/(\d+)$/.exec(shard);
   const index = Number(match?.[1]);
   const total = Number(match?.[2]);
   if (total !== worldBrowserShards.length || index < 1 || index > total) {
     throw new Error(
-      `World shard must be 1/${worldBrowserShards.length} through ${worldBrowserShards.length}/${worldBrowserShards.length}, or latency`,
+      `World shard must be 1/${worldBrowserShards.length} through ${worldBrowserShards.length}/${worldBrowserShards.length}`,
     );
   }
   return [...worldBrowserShards[index - 1]!];
@@ -158,14 +181,6 @@ export function includesBrowserSuites(
   );
 }
 
-/** Unknown selections may include a timed suite and require the quiet lane. */
-export function includesTimedSuites(
-  args: readonly string[],
-  root = process.cwd(),
-): boolean {
-  return includesSuites(args, worldTimedSuites, root);
-}
-
 function includesSuites(
   args: readonly string[],
   suites: readonly string[],
@@ -209,9 +224,4 @@ function includesSuites(
       return true;
     }
   });
-}
-
-/** Whether a World run's resolved files include a timed (latency) suite. */
-export function includesTimedFiles(files: readonly string[]): boolean {
-  return files.some((file) => worldTimedSuites.includes(file));
 }
