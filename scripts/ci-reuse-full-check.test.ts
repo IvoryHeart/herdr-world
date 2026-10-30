@@ -20,10 +20,15 @@ import {
 const base = "a".repeat(40);
 const head = "b".repeat(40);
 const pr = { number: 126, base: { sha: base }, head: { sha: head } };
-const run = (id: number, baseSha = base) => ({
+const run = (
+  id: number,
+  baseSha = base,
+  conclusion: string | null = "success",
+) => ({
   id,
   run_attempt: 1,
   head_sha: head,
+  conclusion,
   pull_requests: [{ ...pr, base: { sha: baseSha } }],
 });
 const job = (full: string, result = "success", reused = false) => ({
@@ -355,3 +360,70 @@ test("metadata can reuse a passing scoped merge only with the identical selectio
   expect(await attempt(selection, "cancelled")).toBe(false);
   expect(await attempt(selection, "success", [head, base])).toBe(false);
 });
+
+test.each(["full", "scoped"])(
+  "a newer unsuccessful workflow without a Delivery job blocks older %s success",
+  async (mode) => {
+    const { selectValidation } = await import("./validation-scope");
+    const selection = selectValidation(
+      {
+        files: new Set(["scripts/example.test.ts"]),
+        gone: new Set(),
+        deps: new Map(),
+      },
+      ["scripts/example.test.ts"],
+    );
+    for (const conclusion of [
+      "failure",
+      "cancelled",
+      "timed_out",
+      "action_required",
+      "startup_failure",
+      "stale",
+      "skipped",
+      null,
+    ]) {
+      const result = await canReuseFullCheck(
+        [run(3, base, conclusion), run(2)],
+        4,
+        126,
+        base,
+        head,
+        "Delivery checks",
+        "Run full repository check",
+        async (id) =>
+          id === 3
+            ? []
+            : [
+                {
+                  ...job(
+                    mode === "full" ? "success" : "skipped",
+                    "success",
+                    mode === "scoped",
+                  ),
+                  run_id: id,
+                  steps: [
+                    ...job(
+                      mode === "full" ? "success" : "skipped",
+                      "success",
+                      mode === "scoped",
+                    ).steps,
+                    {
+                      name: "Verify applicable or reused results",
+                      conclusion: "success",
+                    },
+                  ],
+                },
+              ],
+        async () => ({
+          checkoutSha: "d".repeat(40),
+          commitSha: "d".repeat(40),
+          parents: [base, head],
+          validation: { mode, selection },
+        }),
+        selection,
+      );
+      expect(result).toBe(false);
+    }
+  },
+);

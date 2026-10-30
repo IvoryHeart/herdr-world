@@ -55,7 +55,10 @@ results pass. Reuse compares every selection field, including ordered test array
 (the order determines shards), and requires the scoped acceptance step to pass.
 A reused result is never fresh evidence. Default leaf checkouts retain the
 original event's `GITHUB_SHA`. A newer failed or cancelled candidate prevents
-reuse of an older success; missing, ambiguous or expired logs and API errors
+reuse of an older success, even when its Delivery job was never created. A
+matching workflow must have succeeded before its job proof is considered;
+unfinished or other unsuccessful runs also fail closed. Missing, ambiguous or
+expired logs and API errors
 fall back to fresh validation for the current scope.
 The release-preview label can therefore request archives without repeating a
 successful applicable check. Other label changes still create workflow runs, but can

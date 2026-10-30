@@ -31,6 +31,7 @@ type Run = {
   id: number;
   run_attempt: number;
   head_sha: string;
+  conclusion: string | null;
   pull_requests: Array<{
     number: number;
     base: { sha: string };
@@ -63,6 +64,9 @@ export async function canReuseFullCheck(
       )
     )
       continue;
+    // A failed or unfinished candidate may have no aggregate job at all.
+    // Its workflow result is still a barrier to older passing evidence.
+    if (run.conclusion !== "success") return false;
     const job = (await jobsForRun(run.id)).find(({ name }) => name === jobName);
     if (!job) continue;
     if (job.run_id !== run.id || job.run_attempt !== run.run_attempt)

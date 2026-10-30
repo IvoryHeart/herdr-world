@@ -33,7 +33,7 @@ assets required by server typechecks and process tests.
 | Related tests | `bun run test <path>` or `bun run test:quick` (includes integration tests and excludes the dedicated browser suite). |
 | Browser regressions | `bun run test:browser` runs every Chrome-driven test and World browser suite; requires Chrome/Chromium or `CHROME_BIN`. |
 | Completed candidate | Stage intended files, run `bun run format:staged` once, restage and inspect the diff. The command rejects staged files with unstaged edits; docs-only candidates are a safe no-op. |
-| Branch push | The installed pre-push hook runs `bun run check:changed` for code: static checks plus affected non-browser unit tests. Browser suites and behavioral verification run in CI, where required `Delivery checks` blocks merges. A Markdown-only follow-up to a passed code gate runs `bun run check:docs`; a push that only merges `origin/main` runs `bun run check:static`. CI runs the full gate on the PR head. |
+| Branch push | The installed pre-push hook runs `bun run check:changed` for code: static checks plus affected non-browser unit tests. Browser suites and behavioral verification run in CI, where required `Delivery checks` blocks merges. A Markdown-only follow-up to a passed code gate runs `bun run check:docs`; a push that only merges `origin/main` runs `bun run check:static`. CI runs the applicable gate on the PR head; every main push runs the full matrix. |
 | Full local gate | `bun run check:delivery` runs every check, in parallel lanes; `HERDR_WORLD_PREPUSH=full git push` makes the hook run it. |
 | Disk hygiene | `bun run agent:worktree -- prune` removes merged, clean agent worktrees (see [agent development](docs/agent-development.md#keep-the-disk-healthy)); disk management belongs to the owner and never blocks a check. |
 
@@ -60,9 +60,11 @@ worktree's HEAD (another branch, several refs) run all local non-browser units. 
 every suite. Main always runs the full matrix; its integrated result remains the
 broader acceptance boundary. The hook uses `bun run check:docs`
 only if its local report proves a passed code gate on an ancestor and every
-change since then is ordinary Markdown documentation. Behavioral contracts,
-OpenSpec, tooling and agent/contributor policy receive the code gate even when
-only Markdown changes. CI runs documentation
+change since then is eligible Markdown documentation. Behavioral contracts,
+OpenSpec, coverage-owned inputs and the named agent/crew/dispatch runbooks receive
+the code gate even for Markdown edits; executable tooling also receives it.
+Eligible AGENTS.md, CONTRIBUTING.md and skill Markdown follow-ups may use
+`check:docs` under the same ancestral-pass rule. CI runs documentation
 checks for ordinary Markdown-only PR diffs, and reuses a successful full result, or a scoped result with an identical
 selection, on the exact PR, base and head for description edits and label changes. These
 metadata events queue behind active CI instead of cancelling it; missing proof
