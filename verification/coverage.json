@@ -591,6 +591,8 @@
       "requirement": "openspec/specs/world-surfaces/spec.md",
       "properties": "Cached results cannot cross connection/checkout/generation; old fetch cannot repopulate replacement cache",
       "existingTests": [
+        "web/src/components/WorktreeLifecycleDialog.test.ts",
+        "web/src/world/HostsFilter.resources.test.ts",
         "web/src/agentWorktreeClient.test.ts",
         "web/src/useAgentWorktree.test.ts",
         "web/src/world/WorldInspectorWorktree.test.ts",
@@ -615,6 +617,8 @@
           "verification/composition.md"
         ],
         "tests": [
+          "web/src/components/WorktreeLifecycleDialog.test.ts",
+          "web/src/world/HostsFilter.resources.test.ts",
           "web/src/agentWorktreeClient.test.ts",
           "web/src/useAgentWorktree.test.ts",
           "web/src/world/WorldInspectorWorktree.test.ts",
@@ -628,7 +632,7 @@
         "checks": ["bun run check", "bun run verification:check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
       },
-      "evidenceDecision": "Runtime currency remains cache admission identity; agent-worktree candidate/revision also separates roots within one workspace. Actual Inspector delayed-preview and retained-selection tests cover same-path binding replacement independently of saved preferences. Chat source-link fixtures also reject outside-root, host/session/generation mismatches and retired callbacks; desktop/phone browser fixtures exercise the real Chat-to-Files route and repeated line targeting. Direct stale/occupant tests, all sixteen source-presence combinations and a real linked Git/HTTP fixture cover the new adapter; maintained lease/preparation models retain their existing authority bounds.",
+      "evidenceDecision": "Runtime currency remains cache admission identity; agent-worktree candidate/revision also separates roots within one workspace. Actual Inspector delayed-preview and retained-selection tests cover same-path binding replacement independently of saved preferences. Chat source-link fixtures also reject outside-root, host/session/generation mismatches and retired callbacks; desktop/phone browser fixtures exercise the real Chat-to-Files route and repeated line targeting. Direct stale/occupant tests, all sixteen source-presence combinations and a real linked Git/HTTP fixture cover the new adapter; maintained lease/preparation models retain their existing authority bounds. WorktreeLifecycleDialog.test.ts replaces HostsFilter resource policy cases for retirement/disposal during an open, closed-target refresh/retry and failed validation, plus the live remembered-target retry count. The actual dialog and requestWorkspaceInspector run on controlled time with deliberately unfenced synthetic operational/service ports and an explicit admission-result receiver. This proves dialog cancellation and target-cache policy, not RPC lease composition or real Inspector publication. Files/Changes routes, rejection rendering/focus, browser file input/download lifecycle and qualified UI wiring remain mandatory in HostsFilter.resources.test.ts; existing store and runtime-lease consumers remain required.",
       "promotion": {
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
@@ -1374,6 +1378,8 @@
       "requirement": "openspec/specs/world-surfaces/spec.md",
       "properties": "Partial failure leaves recoverable state; removal cannot target another checkout; hooks run only at valid stages",
       "existingTests": [
+        "web/src/components/WorktreeLifecycleDialog.test.ts",
+        "web/src/world/HostsFilter.resources.test.ts",
         "web/src/components/WorktreePullRequestBadge.test.ts",
         "server/src/worktree/create.test.ts",
         "server/src/worktree/remove.test.ts",
@@ -1385,11 +1391,13 @@
       "status": "alternative-evidence",
       "remaining": "Native Git/filesystem/hook execution is required; shared-operation examples are bounded integration evidence, not all concurrent worktree schedules.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
-      "evidenceDecision": "Real worktree/hook tests exercise fetch-before-create, failed fetch, one in-flight removal and retry after failure.",
+      "evidenceDecision": "Real worktree/hook tests exercise fetch-before-create, failed fetch, one in-flight removal and retry after failure. WorktreeLifecycleDialog.test.ts replaces HostsFilter resource policy cases for retirement/disposal during an open, closed-target refresh/retry and failed validation, plus the live remembered-target retry count. The actual dialog and requestWorkspaceInspector run on controlled time with deliberately unfenced synthetic operational/service ports and an explicit admission-result receiver. This proves dialog cancellation and target-cache policy, not RPC lease composition or real Inspector publication. Files/Changes routes, rejection rendering/focus, browser file input/download lifecycle and qualified UI wiring remain mandatory in HostsFilter.resources.test.ts; existing store and runtime-lease consumers remain required.",
       "partialEvidence": {
         "models": [],
         "contracts": ["verification/consumer-evidence.md"],
         "tests": [
+          "web/src/components/WorktreeLifecycleDialog.test.ts",
+          "web/src/world/HostsFilter.resources.test.ts",
           "server/src/worktree/create.test.ts",
           "server/src/worktree/remove.test.ts",
           "server/src/worktree/worktree-hooks.test.ts"
