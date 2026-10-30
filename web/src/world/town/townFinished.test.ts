@@ -3,6 +3,7 @@ import type { HerdrOfficeProjection } from "../herdrOfficeProjection";
 import {
   nextTownFinished,
   townTrackedAgents,
+  townCheckedKeys,
   withTownFinished,
 } from "./townFinished";
 
@@ -69,6 +70,21 @@ test("Town presents unchecked finishes as done and checked ones as idle", () => 
     presented.rooms[0]!.roomAgents.map((agent) => agent.semanticStatus),
   ).toEqual(["done", "idle"]);
   expect(withTownFinished(office, new Set(), new Set())).toBe(office);
+  // A finish Town saw that was reviewed elsewhere (Desk, Needs you, another
+  // browser) is no longer presented as done.
+  expect(
+    withTownFinished(office, new Set(["a"]), new Set(["a"])).roster.map(
+      ({ agent }) => agent.semanticStatus,
+    ),
+  ).toEqual(["idle", "done", "idle"]);
+  // Reviewed keys are looked up for done agents and Town's own finishes only.
+  const asked: string[] = [];
+  const checked = townCheckedKeys(office, new Set(["a"]), ({ key }) => {
+    asked.push(key);
+    return key === "a";
+  });
+  expect(asked).toEqual(["a", "b"]);
+  expect([...checked]).toEqual(["a"]);
 });
 
 test("finishes are tracked for every agent of a presented room", () => {

@@ -44,6 +44,8 @@ import {
 import type { WorldLeafObject, WorldObject } from "./worldObject";
 import { useDeskState } from "./useDeskState";
 import type { WorldDeskStore } from "./deskStateStore";
+import { AgentState } from "../components/AgentMark";
+import { needsYouLeafKey, openNeedsYou } from "./needsYou";
 import "./DeskView.css";
 
 type Lane = "needs" | "review" | "working";
@@ -755,7 +757,11 @@ export function DeskBoard({
           <button
             type="button"
             className="is-primary"
-            onClick={() => open(leaf)}
+            onClick={() =>
+              item.lane === "needs"
+                ? openNeedsYou(needsYouLeafKey(leaf.id))
+                : open(leaf)
+            }
           >
             {item.lane === "needs"
               ? "Answer"
@@ -782,13 +788,6 @@ export function DeskBoard({
     );
   };
 
-  const statusLabel: Record<string, string> = {
-    blocked: "Needs you",
-    done: "Done",
-    working: "Working",
-    idle: "Idle",
-    unknown: "Unknown",
-  };
   const row = (leaf: WorldLeafObject, showWorkspace = false) => {
     const { receipt } = receiptFor(leaf);
     const line =
@@ -797,7 +796,7 @@ export function DeskBoard({
     const meta = [
       agentRuntime(leaf),
       showWorkspace ? leaf.spaceLabel : null,
-      leaf.tabLabel ? `tab ${leaf.tabLabel}` : null,
+      leaf.tabLabel ? `desk ${leaf.tabLabel}` : null,
       agentFolder(leaf),
     ].filter(Boolean);
     return (
@@ -810,7 +809,7 @@ export function DeskBoard({
           onClick={() => open(leaf)}
         >
           <span className="desk-row-status">
-            {statusLabel[leaf.status] ?? leaf.status}
+            <AgentState status={leaf.status} asking={asking.has(leaf.id)} />
           </span>
           <span className="desk-row-main">
             <span className="desk-row-title">

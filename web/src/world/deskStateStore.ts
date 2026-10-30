@@ -1,4 +1,5 @@
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
+import { bridge } from "../api";
 import {
   parseDeskState,
   type DeskState,
@@ -102,4 +103,30 @@ export class WorldDeskStore {
 
 export function useWorldDeskState(store: WorldDeskStore) {
   return useSyncExternalStore(store.subscribe, store.get, store.get);
+}
+
+let shared: WorldDeskStore | null = null;
+let users = 0;
+
+/**
+ * The one reviewed record (the service's Desk state) every view reads, so
+ * marking work reviewed in Needs you, Town or Desk clears it everywhere.
+ */
+export function sharedDeskStore() {
+  return (shared ??= new WorldDeskStore(bridge));
+}
+
+/** Keep the shared store observing while any view uses it. */
+export function useSharedDeskStore(store = sharedDeskStore()) {
+  useEffect(() => {
+    if (store !== shared) {
+      store.start();
+      return () => store.stop();
+    }
+    if (users++ === 0) store.start();
+    return () => {
+      if (--users === 0) store.stop();
+    };
+  }, [store]);
+  return store;
 }

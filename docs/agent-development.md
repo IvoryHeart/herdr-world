@@ -291,7 +291,7 @@ retained ask and withdraws it without creating a question. A repeated answered
 key returns its retained answer. Human withdrawal output explicitly names the
 withdrawal, including any answer already recorded.
 
-Open asks appear first in Town's Needs you rail and Summary, named as Town
+Open asks appear first in the Needs you window and Town's Summary, named as Town
 labels the asking desk. Their agents wait at reception with a quiet **?** until
 answered, dismissed or withdrawn, an unverified asker marked as such; **!**
 remains urgent blocking and **✓** an unchecked finish. Board and Desk use the

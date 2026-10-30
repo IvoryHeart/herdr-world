@@ -1,4 +1,5 @@
 import { bridge } from "../api";
+import { NEEDS_YOU_OPEN_EVENT, needsYouLeafKey } from "./needsYou";
 import { sharedAsksStore, type WorldAsk } from "./worldAsks";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
@@ -883,11 +884,19 @@ async function run() {
     card("asker")?.textContent?.includes("Which design should I use?") === true,
     "Desk shows the owner's actual question",
   );
+  // Answer opens the Needs you window at the asking agent's question.
+  const needsYou: (string | undefined)[] = [];
+  const onNeedsYou = (event: Event) =>
+    needsYou.push((event as CustomEvent<{ itemKey?: string }>).detail.itemKey);
+  window.addEventListener(NEEDS_YOU_OPEN_EVENT, onNeedsYou);
+  const openedBeforeAnswer = opened.length;
   card("asker")?.querySelector<HTMLButtonElement>("button.is-primary")?.click();
   await settle(100);
+  window.removeEventListener(NEEDS_YOU_OPEN_EVENT, onNeedsYou);
   check(
-    opened[opened.length - 1] === "asker",
-    "one action opens the asking agent",
+    needsYou.join() === needsYouLeafKey("asker") &&
+      opened.length === openedBeforeAnswer,
+    "Answer opens Needs you at the asking agent",
   );
   check(
     !metadataOpens.includes("asker"),

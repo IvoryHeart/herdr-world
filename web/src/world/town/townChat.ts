@@ -122,10 +122,35 @@ export function useTownConversation(
   leaf: WorldLeafObject | null,
   active: boolean,
 ): TownConversation | null {
+  return useTownConversationRead(leaf, active).conversation;
+}
+
+/**
+ * The same read, which also reads again whenever `readFor` changes and says
+ * which `readFor` the conversation shown was read for, so a caller can tell
+ * a report of an earlier stop from the current one. `failed` says the newest
+ * read for this `readFor` failed; `retry` reads again.
+ */
+export function useTownConversationRead(
+  leaf: WorldLeafObject | null,
+  active: boolean,
+  readFor: string | null = null,
+): {
+  conversation: TownConversation | null;
+  readFor: string | null;
+  failed: boolean;
+  retry(): void;
+} {
   const [conversation, setConversation] = useState<{
     id: string;
     value: TownConversation;
+    readFor: string | null;
   } | null>(null);
+  const [failed, setFailed] = useState<{
+    id: string;
+    readFor: string | null;
+  } | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const identity = leaf ? townPaneIdentity(leaf) : null;
   useEffect(() => {
     const client = leaf && townOwner(leaf);
@@ -136,27 +161,36 @@ export function useTownConversation(
     let sequence = 0;
     const read = async () => {
       const mine = ++sequence;
+      const answering = () =>
+        !cancelled && mine === sequence && client.isCurrent();
+      // An unreadable conversation keeps the last one until it can be read,
+      // and says the read failed.
+      const fail = () => {
+        if (answering()) setFailed({ id: identity, readFor });
+      };
       try {
         const reply = (await client.call(
           "agent_conversation.latest",
           { pane_id: leaf.pane.pane_id },
           8_000,
         )) as TownConversation | null;
+        if (!answering()) return;
         if (
-          cancelled ||
-          mine !== sequence ||
-          !client.isCurrent() ||
           !reply ||
           typeof reply !== "object" ||
-          (reply.status !== "ok" && reply.status !== "unavailable") ||
-          (reply.unavailable?.reason === "read_failed" &&
-            shown?.status === "ok")
+          (reply.status !== "ok" && reply.status !== "unavailable")
+        )
+          return fail();
+        if (
+          reply.unavailable?.reason === "read_failed" &&
+          shown?.status === "ok"
         )
           return;
         shown = reply;
-        setConversation({ id: identity, value: reply });
+        setFailed(null);
+        setConversation({ id: identity, value: reply, readFor });
       } catch {
-        // An unreadable conversation keeps the last one until it can be read.
+        fail();
       }
     };
     const stop = watchConversation(client, leaf.pane.pane_id, () => {
@@ -169,8 +203,17 @@ export function useTownConversation(
     };
     // identity captures the leaf's owner and pane.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [identity, active]);
-  return conversation?.id === identity ? conversation.value : null;
+  }, [identity, active, readFor, attempt]);
+  const retry = () => setAttempt((count) => count + 1);
+  const failedNow = failed?.id === identity && failed.readFor === readFor;
+  return conversation?.id === identity
+    ? {
+        conversation: conversation.value,
+        readFor: conversation.readFor,
+        failed: failedNow,
+        retry,
+      }
+    : { conversation: null, readFor: null, failed: failedNow, retry };
 }
 
 /**

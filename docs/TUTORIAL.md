@@ -198,9 +198,10 @@ hosts stay usable.
    In Town it docks on the right at a readable width; drag its left edge to
    resize it (Town remembers the width), or drag its title to undock it.
    [Chat with an agent](#chat) explains reading, replying and answering there.
-   The **NEEDS YOU** list provides another route to waiting
-   agents and becomes a bottom tray on phones; it hides when no agent is
-   blocked. The Town master's chat (**Menu → Town master**, `firstmate` by
+   **Needs you** beside the view buttons (bottom left on a phone) counts the
+   questions and blocked agents waiting on you; tap it to open the Needs you
+   window, a conversation in which each question, blocked agent and finished
+   task is a message from its agent, answered in place. The Town master's chat (**Menu → Town master**, `firstmate` by
    default) opens docked once per visit on wide screens. Hover an agent for a
    small preview card: its latest message as **Chat** shows it, never terminal
    text; when the conversation cannot be read, it says why. It highlights a
@@ -337,15 +338,18 @@ ambient animation.
 
 A quiet **?** at reception means an agent has asked you a question with
 `herdr-world ask`. It stays there until answered, dismissed or withdrawn;
-tapping its reception entry opens that agent. Read the question first in
-**Needs you** or **Summary**, where it names the asking agent, then choose an
-option or type an answer. The waiting agent receives that answer. **Open agent**
+tapping its reception entry (a letter) opens **Needs you** at that question.
+Read it there or in **Summary**, where it names the asking agent, then choose
+an option or type an answer. The waiting agent receives that answer. **Open agent**
 opens the asker; **Dismiss** closes a stale or mistaken question without
 answering it. A question marked unverified came from a process World could not
-confirm runs in that pane. Board and Desk show the same question mark. **!** means urgent
-blocking, while **✓** means a finish still needs checking.
+confirm runs in that pane. Town, Board, Desk and Chat share one set of marks,
+each with one glyph, colour and word: **•** Working, **!** Needs you (blocked on
+its own question), **?** Asks you, **✓** Done (not reviewed yet), **–** Idle
+or Reviewed, **~** No signal and **×** Offline.
 
-**Mark reviewed** acknowledges that completion in this browser. Opening a finished
+**Mark reviewed** acknowledges that completion in one record on the service,
+so Town, Desk, Needs you and every browser agree. Opening a finished
 agent's terminal also clears its reception stop; neither action proves the result
 is correct. A later completion can need review again. Read the explanation and
 check the diff using chapter 2 before treating the work as complete.

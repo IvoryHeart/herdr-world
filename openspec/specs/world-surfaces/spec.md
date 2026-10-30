@@ -849,7 +849,7 @@ to another session or a same-named pane on another host.
 
 - **WHEN** an agent within the host filter is blocked on an approval
 - **THEN** its Needs you card shows the approval question and choices from its screen, and Answer
-  opens that pane's terminal Inspector without sending any input
+  opens the Needs you window at that agent without Desk sending any input
 
 #### Scenario: Review a finished turn
 
@@ -1536,7 +1536,10 @@ terminal or marking it reviewed; a checked agent SHALL then go to the lounge.
 Because Herdr may report a finished agent as idle, Town SHALL also treat an
 agent it observes going from working or blocked to idle as done until checked.
 A check covers one completion: when the agent works, asks or finishes again,
-its next completion SHALL be unchecked. This browser-local state SHALL NOT
+its next completion SHALL be unchecked. A check SHALL be the shared reviewed
+record Desk and Needs you read (one stop of one agent session), so checking a
+completion in any view or browser checks it everywhere; a check the service did
+not save SHALL be reported and leave the completion unchecked. A check SHALL NOT
 represent approval or mutate Herdr. Desks
 SHALL carry their tab's name from the room level, and each seat its agent's or
 terminal's name at the desk level. An idle agent SHALL move to a lounge spot in its
@@ -1617,36 +1620,54 @@ order, including any hidden pinned or selected tab.
 - **THEN** the pinned desk keeps its cell and the other desks fill the free
   cells in tab order
 
-### Requirement: Town attention rail
+### Requirement: Needs you window
 
-Town SHALL present the agents that need the user in the same order as Desk
-attention triage: blocked agents oldest first, then done agents newest first. On
-desktop the list SHALL be a left rail grouped by host and then room, with
-collapsible host groups, and the user SHALL be able to hide it to a count and
-restore it; this choice SHALL persist per browser. On phones the list SHALL be a
-bottom tray that remains reachable while a peek or card is open. Hovering an
-entry SHALL show its card, and activating an entry SHALL open that agent's
-window on Chat, where replies go. A keyboard command SHALL open the next agent
-that needs the user.
-The rail SHALL list a bounded number of entries and count the rest.
+World SHALL present what waits on the user in one Needs you window, the same in
+Town, Board, Desk and on phones: open owner questions oldest first, then blocked
+agents oldest first, then finished work not yet reviewed newest first (done
+agents, and idle agents whose turn the service saw end within Desk's 12-hour
+window). The window SHALL be the shared panel window, and on phones a
+full-screen sheet with Back. Each item SHALL name its agent, mark an asker World
+could not verify, and offer Open agent. A question SHALL be answerable with its
+options or typed text, or dismissed. A blocked agent's own question SHALL be
+answered with Chat's checked answer and show Chat's receipt, including an
+unconfirmed answer's warning and the agent's Terminal; a prompt Chat cannot
+answer SHALL offer the Terminal, never Chat. Finished work SHALL offer Mark
+reviewed for the stop whose report is shown, unavailable while the current
+stop's report is being read, SHALL say when that report could not be read and
+offer to read it again, and SHALL report a mark the service did not save.
+Blocked and finished items SHALL come from the hosts the Hosts filter admits,
+and Open agent SHALL open that exact agent. A Needs you counter beside the view
+picker SHALL count open questions and the admitted blocked agents and open the
+window; Town's reception letters, Desk's Answer and Board's attention badges
+SHALL open it at their item. The window SHALL show and observe one bounded page
+of items at a time, with actions to show the next and earlier pages, and SHALL
+open at the page holding an item an opener asked for. A
+keyboard command in Town SHALL open the next agent that needs the user.
 
 #### Scenario: Work through waiting agents on desktop
 
-- **WHEN** three agents in two hosts are blocked and the user presses the next-agent key repeatedly
-- **THEN** Town opens each agent's exact pane in age order and the rail
-  reflects each answer without reordering unrelated entries
+- **WHEN** three agents in two hosts are blocked and the user presses Town's next-agent key repeatedly
+- **THEN** Town opens each agent's exact pane in age order and the Needs you
+  window reflects each answer without reordering unrelated entries
 
-#### Scenario: Hide the rail
+#### Scenario: Open Needs you at an agent past the limit
 
-- **WHEN** the user hides the desktop rail and reloads Town
-- **THEN** the rail stays hidden, shows the waiting count, and can be restored with one action
+- **WHEN** more agents are blocked than the window shows and the user uses Desk's Answer on the newest
+- **THEN** the window opens at the page showing that agent's item, the others stay a page away, and turning pages never observes more than one page of agents
+
+#### Scenario: Review where the report is shown
+
+- **WHEN** the service observes a new stop for a finished agent while Needs you still shows the earlier report
+- **THEN** Mark reviewed stays unavailable until the new report is read, and then marks the new stop
+- **AND** a read that fails says so and offers Retry instead of waiting for a change that a finished agent never makes
 
 ### Requirement: Town summary
 
 Town SHALL derive its board sign, its phone counts chip and its summary window
-from one summary read model built from the attention rail's entries, so they
+from one summary read model built from Town's attention entries, so they
 show the same attention items and needs-you count as the reception tray and
-rail. Needs-you SHALL count blocked agents plus open questions as separate
+the Needs you counter. Needs-you SHALL count blocked agents plus open questions as separate
 items, including when one blocked agent also raised a question. Reception as
 a place continues to seat agents. Host and room counts describe agents;
 questions SHALL NOT acquire a guessed host or room. The board sign SHALL show
@@ -1654,7 +1675,7 @@ agents working and finished, items needing the user, and spend when a metrics
 provider reports it. Its Summary action, and
 on phones its counts chip, SHALL open a Town summary window in the shared
 window frame. Launching an already-open Summary SHALL restore and raise it
-through the shared window manager. It lists, in this order: open questions using the rail's Ask
+through the shared window manager. It lists, in this order: open questions using the shared Ask
 cards and answer action, then blocked agents with their reason, waiting age
 and one action; unreviewed finishes with when each was last
 active when Herdr reports activity times, never presented as the finish time; every host with its rooms and their counts (needing
@@ -1672,7 +1693,7 @@ zero spend.
 
 - **WHEN** two agents are blocked, one of them also has an open question,
   and one agent has an unreviewed finish
-- **THEN** the board sign, phone chip, reception tray, rail and summary all
+- **THEN** the board sign, phone chip, reception tray, Needs you counter and summary all
   show three items needing the user, with one finished agent in the summary
 - **AND** answering that question updates every needs-you count to two while
   both blocked agents remain waiting
@@ -3458,7 +3479,7 @@ tab window before a visual Inspector can attach that qualified pane.
 
 Town SHALL be a World view with its own route and entries in the shell's view switcher and phone
 navigation. Town SHALL render inside the shared World shell and SHALL NOT add a second application
-top bar. Its attention rail SHALL live inside the Town view and be hideable there. Town search,
+top bar. What needs the user SHALL open in the shared Needs you window, as in every view. Town search,
 settings and full terminals SHALL use the shell's search, common menu and shared Inspector, so a
 terminal opened from Town remains the same presentation after switching views.
 

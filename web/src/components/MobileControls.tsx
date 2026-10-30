@@ -4,6 +4,7 @@ import { ChevronDown, EllipsisVertical, Pin, SquareStack } from "lucide-react";
 import { useStoreSelector } from "../store";
 import type { Pane, Tab } from "../types";
 import { agentStateKind, type AgentStateKind } from "./agentSession";
+import { agentStateWord } from "../agentMarks";
 import { TerminalAppearanceButton } from "../world/TerminalAppearanceButton";
 import type { TabColorControl, TabColorOwner } from "./TabBar";
 import "./MobileControls.css";
@@ -227,10 +228,10 @@ export function useVisibleTerminalWorkspaceId() {
 }
 
 const STATUS_LABEL: Record<AgentStateKind, string> = {
-  working: "Working",
-  blocked: "Needs you",
-  idle: "Idle",
-  done: "Done",
+  working: agentStateWord("working"),
+  blocked: agentStateWord("blocked"),
+  idle: agentStateWord("idle"),
+  done: agentStateWord("done"),
   unknown: "",
 };
 

@@ -1,11 +1,12 @@
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { deskKey, type DeskIdentity } from "../../../shared/deskState";
-import { bridge } from "../api";
 import { deskClient, receiptIdentity, type DeskClients } from "./handoffs";
 import {
+  sharedDeskStore,
+  useSharedDeskStore,
   useWorldDeskState,
-  WorldDeskStore,
   type DeskStoreState,
+  type WorldDeskStore,
 } from "./deskStateStore";
 import type { WorldLeafObject } from "./worldObject";
 
@@ -50,15 +51,9 @@ export function useDeskState(
   clients: DeskClients,
   provided?: WorldDeskStore,
 ) {
-  const store = useMemo(
-    () => provided ?? new WorldDeskStore(bridge),
-    [provided],
-  );
+  // The one reviewed record Town and Needs you read too.
+  const store = useSharedDeskStore(provided ?? sharedDeskStore());
   const state = useWorldDeskState(store);
-  useEffect(() => {
-    store.start();
-    return () => store.stop();
-  }, [store]);
   const { handled, stops, stopIds, opens } = useMemo(() => {
     return deskMetadata(agents, state);
   }, [agents, state]);

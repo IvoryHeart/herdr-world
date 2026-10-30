@@ -99,8 +99,29 @@ export function useTownFinished(office: HerdrOfficeProjection) {
 }
 
 /**
+ * Finished agents (done, or idle ones Town saw finish) whose work is checked,
+ * looked up only for them so a dense roster pays one cheap pass.
+ */
+export function townCheckedKeys(
+  office: HerdrOfficeProjection,
+  finished: ReadonlySet<string>,
+  checked: (agent: OfficeAgent) => boolean,
+) {
+  const keys = new Set<string>();
+  for (const { agent } of office.roster)
+    if (
+      (agent.semanticStatus === "done" ||
+        (agent.semanticStatus === "idle" && finished.has(agent.key))) &&
+      checked(agent)
+    )
+      keys.add(agent.key);
+  return keys;
+}
+
+/**
  * The projection as Town presents it: agents that finished unchecked are
- * done, and done agents the user has checked are idle.
+ * done, and finished agents the user has checked (here, in Desk or in
+ * another browser) are idle.
  */
 export function withTownFinished(
   office: HerdrOfficeProjection,
@@ -108,7 +129,9 @@ export function withTownFinished(
   checked: ReadonlySet<string>,
 ): HerdrOfficeProjection {
   const changes = (agent: OfficeAgent) =>
-    (agent.semanticStatus === "idle" && finished.has(agent.key)) ||
+    (agent.semanticStatus === "idle" &&
+      finished.has(agent.key) &&
+      !checked.has(agent.key)) ||
     (agent.semanticStatus === "done" &&
       checked.has(agent.key) &&
       !finished.has(agent.key));

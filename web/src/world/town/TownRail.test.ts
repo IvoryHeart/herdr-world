@@ -2,9 +2,9 @@ import { expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
-  townRailInset,
   nextTownCall,
-  TownRail,
+  TownAsk,
+  type TownAskActions,
   type TownCall,
 } from "./TownRail";
 
@@ -35,36 +35,32 @@ test("Next moves to a finished agent only when no other agent waits", () => {
   expect(nextTownCall([call("a", "blocked")], "a")).toBeNull();
 });
 
-test("questions from agents open the rail, with their options", () => {
+const actions = (askers: TownAskActions["askers"] = new Map()) => ({
+  askers,
+  answer: async () => null,
+  dismiss: async () => null,
+  open: () => {},
+});
+
+test("a question shows its options and its age", () => {
   const html = renderToStaticMarkup(
-    createElement(TownRail, {
-      needsYouCount: 1,
-      asks: [
-        {
-          id: "q-1",
-          at: 0,
-          actor: { label: "claude in w1:p2", verified: true },
-          question: "Ship the fix now?",
-          options: ["yes", "no"],
-          owner_only: true,
-        },
-      ],
-      calls: [],
-      activeKey: null,
+    createElement(TownAsk, {
+      ask: {
+        id: "q-1",
+        at: 0,
+        actor: { label: "claude in w1:p2", verified: true },
+        question: "Ship the fix now?",
+        options: ["yes", "no"],
+        owner_only: true,
+      },
       now: 60_000,
-      onPeek: () => {},
-      onOpen: () => {},
-      collapsed: false,
-      onCollapsedChange: () => {},
+      actions: actions(),
     }),
   );
-  expect(html).toContain("NEEDS YOU <b>1</b>");
-  expect(html).toContain("Ship the fix now?");
   expect(html).toContain("claude in w1:p2");
   expect(html).toContain("asks: Ship the fix now?");
   expect(html).toContain("1m</small>");
   expect(html).toContain(">yes</button>");
-  expect(html).not.toContain("Nobody is waiting on you.");
 });
 
 test("a question names its asker once, marks it unverified, and offers Open agent and Dismiss", () => {
@@ -76,34 +72,21 @@ test("a question names its asker once, marks it unverified, and offers Open agen
     options: [],
     owner_only: true,
   });
-  const html = renderToStaticMarkup(
-    createElement(TownRail, {
-      needsYouCount: 2,
-      asks: [
-        question("q-placed", "unverified w1:p6", false),
-        question("q-bare", "unverified w1:p6", false),
-      ],
-      askActions: {
-        // Only the placed one has a Town agent, named as its desk is.
-        askers: new Map([
-          [
-            "q-placed",
-            { name: "dispatch", key: "agent-dispatch", terminal: false },
-          ],
-        ]),
-        answer: async () => null,
-        dismiss: async () => null,
-        open: () => {},
-      },
-      calls: [],
-      activeKey: null,
-      now: 60_000,
-      onPeek: () => {},
-      onOpen: () => {},
-      collapsed: false,
-      onCollapsedChange: () => {},
-    }),
-  );
+  // Only the placed one has a Town agent, named as its desk is.
+  const askers = new Map([
+    ["q-placed", { name: "dispatch", key: "agent-dispatch", terminal: false }],
+  ]);
+  const html = ["q-placed", "q-bare"]
+    .map((id) =>
+      renderToStaticMarkup(
+        createElement(TownAsk, {
+          ask: question(id, "unverified w1:p6", false),
+          now: 60_000,
+          actions: actions(askers),
+        }),
+      ),
+    )
+    .join("");
   expect(html).toContain(
     "<b>dispatch</b> (unverified) asks: Which brief next?",
   );
@@ -112,12 +95,4 @@ test("a question names its asker once, marks it unverified, and offers Open agen
   expect(html.match(/>Open agent</g)).toHaveLength(1);
   expect(html).toContain('aria-label="Open dispatch"');
   expect(html.match(/>Dismiss</g)).toHaveLength(2);
-});
-
-test("camera reserves the rail for open questions and respects tray/collapse boundaries", () => {
-  expect(townRailInset(960, false, 1)).toBe(252);
-  expect(townRailInset(960, false, 0)).toBe(0);
-  expect(townRailInset(960, true, 1)).toBe(0);
-  expect(townRailInset(640, false, 1)).toBe(0);
-  expect(townRailInset(641, false, 1)).toBe(252);
 });

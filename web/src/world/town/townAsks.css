@@ -87,15 +87,3 @@
   opacity: 0.5;
   cursor: default;
 }
-
-@media (max-width: 640px) {
-  .town-view-shell .town-rail {
-    flex-wrap: wrap;
-  }
-  /* Questions take a full row above the rail's head and strip. */
-  .town-asks {
-    order: -1;
-    flex: 1 0 100%;
-    max-height: 40vh;
-  }
-}

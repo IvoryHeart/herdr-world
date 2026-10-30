@@ -64,6 +64,7 @@ export const hostFilterCases = [
     "arrangement-retirement",
     "close-all",
   ].map((operation) => ({ width: 1440, operation, view: "board" })),
+  { width: 1440, operation: "needs-you", view: "board" },
   { width: 1440, operation: "cold-master", view: "town" },
   { width: 1440, operation: "cold-master-connect", view: "town" },
   ...[1440, 390].flatMap((width) =>
@@ -154,6 +155,7 @@ export function hostFilterGroup({
       "watch-unavailable",
       "cold-host",
       "notifications",
+      "needs-you",
     ].includes(operation)
   )
     return "actions";

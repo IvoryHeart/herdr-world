@@ -2,6 +2,8 @@ import { AppearanceAvatar } from "./AppearanceAvatar";
 import { visibleAppearanceColors, saveAppearance } from "./appearance";
 import { tabCardKey } from "../../../shared/terminalColor";
 import { useWorldAsks } from "./worldAsks";
+import { agentStateWord } from "../agentMarks";
+import { needsYouLeafKey, openNeedsYou } from "./needsYou";
 import { asksForWorld } from "./worldAskTargets";
 import { WorldAskMark } from "./WorldAskMark";
 import { boardObservation } from "./board/boardObservation";
@@ -120,6 +122,7 @@ import type { WorldCanvasAnchor } from "./worldConnectorGeometry";
 import { worldMotionPreference } from "./worldFrameScheduler";
 import type { WorldAgentStatus, WorldObject } from "./worldObject";
 import "./board/board.css";
+import "./board/boardBadge.css";
 import "./board/boardRelations.css";
 import {
   relationTeams,
@@ -141,13 +144,12 @@ import {
  * comes to rest within about a second. See openspec/changes/board-view.
  */
 
-const STATUS_LABEL: Record<WorldAgentStatus, string> = {
-  blocked: "Needs you",
-  working: "Working",
-  done: "Finished, not checked",
-  idle: "Idle",
-  unknown: "No signal",
-};
+const STATUS_LABEL = Object.fromEntries(
+  (["blocked", "working", "done", "idle", "unknown"] as const).map((status) => [
+    status,
+    agentStateWord(status),
+  ]),
+) as Record<WorldAgentStatus, string>;
 const OVERVIEW_IN = 0.44;
 const OVERVIEW_OUT = 0.5;
 const MIN_ZOOM = 0.12;
@@ -384,12 +386,12 @@ function rowsByUrgency(tab: BoardTab): BoardPane[] {
 }
 
 function paneName(pane: BoardPane) {
-  if (!pane.isAgent) return "shell";
+  if (!pane.isAgent) return "terminal";
   return pane.leaf.agentName ?? pane.leaf.agentLabel ?? "agent";
 }
 
 function paneLine(pane: BoardPane, status: WorldAgentStatus) {
-  if (!pane.isAgent) return pane.leaf.terminalTitle ?? "shell";
+  if (!pane.isAgent) return pane.leaf.terminalTitle ?? "terminal";
   return (
     pane.leaf.taskSummary ?? pane.leaf.terminalTitle ?? STATUS_LABEL[status]
   );
@@ -3517,7 +3519,7 @@ export default function BoardView({
                           role="button"
                           aria-pressed={selectedId === row.leaf.id}
                           className={`board-pane${row.isAgent ? ` board-s-${row.status}` : " board-pane-shell"}${selectedId === row.leaf.id ? " board-pane-selected" : ""}`}
-                          aria-label={`${paneName(row)}, ${row.isAgent ? STATUS_LABEL[row.status] : "shell"}`}
+                          aria-label={`${paneName(row)}, ${row.isAgent ? STATUS_LABEL[row.status] : "terminal"}`}
                         >
                           {row.isAgent ? (
                             <span className="board-dot" />
@@ -3537,7 +3539,9 @@ export default function BoardView({
                             <QuestChip quest={quests.get(row.leaf.id)!} />
                           ) : null}
                           <span className="board-pane-state">
-                            {row.isAgent ? STATUS_LABEL[row.status] : "shell"}
+                            {row.isAgent
+                              ? STATUS_LABEL[row.status]
+                              : "terminal"}
                           </span>
                         </div>
                       ))}
@@ -3568,7 +3572,20 @@ export default function BoardView({
                       {pane.leaf.appearance.status}
                     </div>
                   ) : null}
-                  <span className="board-badge" aria-hidden="true" />
+                  {/* Its ! or ✓ opens Needs you at this agent. */}
+                  <button
+                    type="button"
+                    className="board-badge"
+                    aria-label={`Open ${tab.label} in Needs you`}
+                    disabled={tab.status === "unknown"}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      openNeedsYou(
+                        pane ? needsYouLeafKey(pane.leaf.id) : undefined,
+                      );
+                    }}
+                  />
                   <span
                     className="board-handle"
                     title="Drag to string this to a note or card"
@@ -3965,7 +3982,7 @@ export default function BoardView({
                 )}
                 <span className="board-pane-name">{paneName(row)}</span>
                 <span className="board-pane-state">
-                  {row.isAgent ? STATUS_LABEL[row.status] : "shell"}
+                  {row.isAgent ? STATUS_LABEL[row.status] : "terminal"}
                 </span>
               </button>
             ))}
@@ -4281,14 +4298,10 @@ function NewTabDialog({
   );
 }
 
-/** A workspace's agents by status, and its shells: "3 agents · 1 working · 2 idle". */
-const COUNT_ORDER: [WorldAgentStatus, string][] = [
-  ["blocked", "waiting"],
-  ["working", "working"],
-  ["done", "done"],
-  ["idle", "idle"],
-  ["unknown", "unknown"],
-];
+/** A workspace's agents by state word, and its terminals: "3 agents · 1 working · 2 idle". */
+const COUNT_ORDER = (
+  ["blocked", "working", "done", "idle", "unknown"] as const
+).map((status) => [status, STATUS_LABEL[status].toLowerCase()] as const);
 function workspaceCounts(space: BoardWorkspace) {
   const agents = space.squares.filter((square) => square.isAgent);
   const shells = space.squares.length - agents.length;
@@ -4297,7 +4310,7 @@ function workspaceCounts(space: BoardWorkspace) {
     const n = agents.filter((square) => square.status === status).length;
     if (n) parts.push(`${n} ${word}`);
   }
-  if (shells) parts.push(`${shells} shell${shells === 1 ? "" : "s"}`);
+  if (shells) parts.push(`${shells} terminal${shells === 1 ? "" : "s"}`);
   return parts.join(" · ");
 }
 const NO_IDS: readonly string[] = [];

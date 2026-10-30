@@ -25,6 +25,7 @@ import { dockedWidthAfterPlace } from "./windows/windowManager";
 import { useWorldInspectorController } from "./useWorldInspectorController";
 import { useWorldVisualActions } from "./useWorldVisualActions";
 import WorldInspectorConversationView from "./WorldInspectorConversation";
+import { NeedsYouHost } from "./NeedsYouWindow";
 import WorldIntentProfile from "./WorldIntentProfile";
 import { WorldConnectionRequired } from "./WorldStatus";
 import { WindowFrame } from "./windows/WindowFrame";
@@ -658,6 +659,13 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
           </WindowSurface>
         </div>
       )}
+      <NeedsYouHost
+        world={world}
+        onOpenAgent={(id) => void openNodeById(id).catch(() => undefined)}
+        onOpenTerminal={(id) =>
+          void openTerminalById(id).catch(() => undefined)
+        }
+      />
       <Suspense fallback={null}>
         {inspectorConversations.map((conversation) => (
           <WorldInspectorConversationView

@@ -1,5 +1,6 @@
 import { townReceptionVisitors } from "./townReception";
 import "../worldAsks.css";
+import { needsYouLeafKey, openNeedsYou } from "../needsYou";
 import { TownBuildingSign } from "./TownBuildingSign";
 import { TownBuildingSigns } from "./townBuildingSigns";
 import { ConnectionRecoveryBanner } from "../ConnectionRecoveryBanner";
@@ -213,7 +214,6 @@ export function TownCanvas({
   completionSeenKeys,
   summonedKeys = NO_KEYS,
   askingKeys = NO_KEYS,
-  onActivateAsk,
   quests = NO_QUESTS,
   conversationTargets,
   onSelect,
@@ -265,7 +265,6 @@ export function TownCanvas({
   /** Agents the user opened, who walk back to their desks. */
   summonedKeys?: ReadonlySet<string>;
   askingKeys?: ReadonlySet<string>;
-  onActivateAsk?: (nodeId: string) => void;
   /** Quest progress by agent key, marked over each agent's desk. */
   quests?: ReadonlyMap<string, TownQuestMark>;
   conversationTargets: readonly WorldConversationAnchorTarget[];
@@ -1489,7 +1488,6 @@ export function TownCanvas({
         <TownWorldLayer
           foldedActivity={foldedActivity}
           askingKeys={askingKeys}
-          onActivateAsk={onActivateAsk}
           teams={teams}
           model={model}
           layout={layout}
@@ -1747,7 +1745,6 @@ const TownWorldLayer = memo(function TownWorldLayer({
   model,
   foldedActivity,
   askingKeys,
-  onActivateAsk,
   layout,
   teams,
   selectedKey,
@@ -1769,7 +1766,6 @@ const TownWorldLayer = memo(function TownWorldLayer({
   signs: TownBuildingSigns;
   model: TownModel;
   askingKeys: ReadonlySet<string>;
-  onActivateAsk?: (nodeId: string) => void;
   foldedActivity: ReadonlyMap<string, TownFoldedActivity>;
   layout: TownLayout;
   teams: TownTeams;
@@ -1963,7 +1959,10 @@ const TownWorldLayer = memo(function TownWorldLayer({
                         data-owner-question-terminal={agent.nodeId}
                         aria-label={`${agent.displayLabel}, owner question`}
                         disabled={agent.stale || !agent.canOpenInSpaces}
-                        onClick={() => onActivateAsk?.(agent.nodeId)}
+                        // A letter at reception: its question in Needs you.
+                        onClick={() =>
+                          openNeedsYou(needsYouLeafKey(agent.nodeId))
+                        }
                       >
                         <img
                           src={portrait(agent.key)}
@@ -2531,10 +2530,12 @@ function ReceptionEntry({
           ? `${agent.displayLabel}, owner question`
           : agent.semanticStatus === "done"
             ? `${agent.displayLabel}, finished`
-            : `${agent.displayLabel}, needs input for ${ago(since, now)}`
+            : `${agent.displayLabel}, needs you for ${ago(since, now)}`
       }
       title={agent.taskSummary ?? agent.displayLabel}
-      onClick={() => (asking ? onActivate(agent.key) : onSelect(agent.key))}
+      onClick={() =>
+        asking ? openNeedsYou(needsYouLeafKey(agent.key)) : onSelect(agent.key)
+      }
       onDoubleClick={() => onActivate(agent.key)}
       onMouseEnter={(event) =>
         onHoverEntry(agent.key, event.currentTarget.getBoundingClientRect())

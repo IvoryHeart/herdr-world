@@ -805,6 +805,28 @@ async function run() {
       ) !== null,
     "Town opening in Zen with the view picker",
   );
+  // Needs you leads the view buttons in every view and opens one window.
+  document
+    .querySelector<HTMLButtonElement>(".zen-dock .needs-you-counter")
+    ?.click();
+  await until(
+    () =>
+      document.querySelector(".world-panel-window .needs-you-count") !== null,
+    "the Needs you counter opens the Needs you window",
+  );
+  check(
+    document.querySelector(".world-panel-title")?.textContent === "Needs you",
+    "the Needs you window is the shared panel window",
+  );
+  document
+    .querySelector<HTMLButtonElement>(
+      '.world-panel-window [aria-label="Close Needs you window"]',
+    )
+    ?.click();
+  await until(
+    () => document.querySelector(".needs-you") === null,
+    "closing the Needs you window",
+  );
   check(
     worldLocalStorage.getItem("zenMode.world") === null,
     "World's default Zen was stored as if the user had chosen it",
