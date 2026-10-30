@@ -10,6 +10,114 @@ other than the shared skills (`bun run check:agents`).
 The crew itself, its marks and its watcher are described in
 [agent development](agent-development.md#act-on-readiness-with-agentcrew).
 
+## Review rounds and evaluation
+
+Round 1 reviews the whole PR. Every reviewer reads the linked issue and flags
+behaviour it did not request (scope drift). Later rounds use fresh sessions,
+confirm earlier findings and review only the author's changes since the last
+reviewed head. Changes imported from main are excluded; manual merge conflict
+resolutions remain in scope. Previously accepted code is not reviewed again.
+
+A push alone does not start the next round. While findings await fresh replies,
+main-only merges, unrelated CI/harness repairs and pushes outside findings' files
+are recorded as skipped. Once every finding is answered, the scoped confirmation
+can proceed after quiet time even when the fix belongs in another file. Findings
+in CI or harness files follow the same rule; their fixes do not get stuck behind
+the CI-only skip.
+
+After a fully confirmed round, only changes to the synthetic PR data fixture
+`web/src/world/testing/pullRequestFixture.ts` can carry those exact confirmations
+for crew readiness once checks pass. Workflow files and CI, verification, check
+or policy scripts require a scoped confirmation. New findings or changed reviewer
+evidence invalidate a carry. The report-only `agent:gate` keeps its conservative
+copy rule; the crew mark also uses this recorded workflow evidence. Every admitted
+round must receive all of its fresh results before readiness or an owner merge
+notice, including when an earlier round reviewed the same head.
+
+Read failures hold admission and retry silently. Three consecutive failed reads
+on a head escalate to the owner; a successful read resets that count. Rewritten
+ancestry or a merge outside main escalates immediately.
+The watcher never kills a running round for a merge of main; its reviewers finish
+on their pinned head. Waiting reviewers from that round retain their slots in
+the queue across pushes.
+
+The author pushes fixes and replies to **every** open finding, signed with
+`[<seat>]` (or `[fixer #<PR>]`), one line per finding naming its fixing commit.
+Use the finding's stable ID, such as `rev2:123:1`, or its exact `file:line`.
+A bare filename suffices only when there is one finding on that file. Two
+findings on a file require separate identifiers. A reviewer RESULT that cannot
+be mapped to a file still needs an explicit reply using its ID. Replies must
+follow the latest reviewer RESULT retaining the finding, even if it only repeats
+an unresolved fraction. A prior rejected fix reply cannot start
+another round. Fix requests stay stable across pushes while replies are missing.
+If a later rejecting RESULT reopens answered findings in the same cycle, the
+completed request reopens once; repeat passes do not send duplicate prompts.
+After all replies, the watcher waits
+until it has observed ten minutes without a new push.
+An explanatory reply that needs no code change can trigger a fresh confirmation
+round on the same head after that quiet period.
+Each admitted round records its finding replies, quiet-period start and trigger
+in `review_cycle`; each observed push and each skip reason are retained in
+`review_push` and `review_skip` in the local crew SQLite store. These records
+survive watcher restarts. Existing stores adopt their recorded reviewer rounds;
+fixer and evaluator sessions do not count as review rounds. Migration preserves
+queued reviewers, their existing action keys, and their full first reviews. Only
+review/confirm actions consume RESULT evidence; auxiliary seats require their
+checkpoint-specific verdict or process report.
+
+After round 2, any unresolved earlier finding or new finding starts a fresh
+`evaluator` instead of round 3. The roster entry is:
+
+```json
+{ "evaluator": { "model": "claude-opus-5-5", "effort": "high" } }
+```
+
+The evaluator reads the linked issue, whole PR, all rounds' findings and replies,
+and commits between rounds. It posts one comment signed `[evaluator]`, identifying
+the checkpoint (`Evaluation: 2`, then 4, 6, …) and `Evaluated commit: <full SHA>`.
+Its final line is exactly:
+
+```text
+EVALUATION #<PR>: go|no-go — <next step>
+```
+
+For **go**, `Required: <comma-separated finding IDs>` (or `Required: none`)
+names what must be fixed for the next round. Each other finding has a real
+follow-up issue, on its own `Follow-up: <ID> -> <issue URL>` line. Every finding
+must be dispositioned once. The next fresh round checks only the mandatory
+findings and their fixes; it does not reopen follow-up issues. Mandatory findings
+require replies after the evaluator verdict; its timestamp also restarts the
+ten-minute quiet period. Follow-up dispositions remain in force
+throughout the scoped round, including later passes before its results arrive.
+A go with no mandatory findings can start a confirmation round on the same head, with distinct reviewer actions.
+
+For **no-go**, `Process: splitter|fresh-fixer|visionary|restart|owner` selects
+one process, with reasons and a concrete next step. `Seat: <roster seat>` names
+the fresh process session, except for an owner decision. A fresh fixer must use
+a different persona from the author and a clean PR worktree. After pushing, it
+posts per-finding replies signed `[fixer #<PR>]` before its separately signed
+process report; this lets the next confirmation use its actual fixing replies.
+Split/restart processes prepare reviewable replacement PRs before closing the original;
+visionary reports a design on the linked issue. The watcher starts the selected
+process, holds further reviews and the merge-ready mark, and tells the owner at
+reception through `herdr-world ask`. The process reports back in a signed PR
+comment carrying the same `Evaluation: <checkpoint>`, ending with:
+
+```text
+PROCESS #<PR>: done — <outcome and next step>
+```
+
+Only that report releases the hold. For `Process: owner`, the owner's answer at
+reception supplies the decision and releases it. An unavailable process seat,
+invalid verdict or failed process remains held for the owner. After every two
+further non-converging rounds the evaluator runs again. Owners apply roster
+changes to the live config and restart watchers themselves; workers propose
+setup changes in PR notes and never edit a running watcher's configuration.
+
+This is crew tooling only; it does not change World's bounded behavioral
+verification contracts in `verification/coverage.json`. Focused policy, git
+delta, launch and consumer tests cover these workflow transitions directly.
+
 ## Dispatcher
 
 You are `dispatch`, a thin dispatcher for the Herdr World backlog. Your only job
@@ -18,7 +126,8 @@ ledger. Everything after the hand-off already runs without you:
 
 - the seat implements, opens a ready PR, and fixes review findings;
 - the crew watcher (`bun run agent:crew -- watch`) starts fresh reviewers for
-  every PR head as soon as it is pushed, sends findings back to the author
+  the first round, then admits scoped rounds after finding replies and a quiet
+  period (see [review rounds](#review-rounds-and-evaluation)), sends findings back to the author
   seat (or to a fresh fixer when that seat is busy on another PR), and marks a head
   `crew/merge-ready` or `crew/needs-owner`;
 - the owner merges, and only PRs whose head shows a green `crew/merge-ready`.

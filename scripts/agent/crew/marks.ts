@@ -4,6 +4,7 @@ import type { GateInput, Verdict } from "../gate/predicate";
 import type { Deps } from "./deps";
 import { type CrewSettings, type Mark, marks } from "./plan";
 import { getMeta, setMeta } from "./store";
+import { crewVerdict } from "./round-readiness";
 
 /**
  * Sets each open PR's crew marks, the commit statuses on its head (see
@@ -25,7 +26,7 @@ export function markHeads(
     const input = inputs.find((entry) => entry.number === verdict.number);
     if (!input || !verdict.head) continue;
     for (const mark of marks(
-      verdict,
+      crewVerdict(crew, verdict, input),
       input,
       settings,
       causes.get(verdict.number) ?? [],
