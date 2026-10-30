@@ -65,7 +65,9 @@ management, Web Push, optional cost metrics, World snapshots and per-connection
 runtimes. `start()` binds the listener, then starts connections and Ranger. `stop()`
 admits nothing new (requests get 503 while the port stays bound), stops Ranger and
 the connections (failing Herdr calls still waiting), waits for in-flight requests,
-closes storage, releases the folder and closes the listener last. The entry keeps
+closes storage, releases the folder and closes the listener last. Once storage
+closes, every store refuses writes, so a request that outlived the drain cannot
+write a folder the service no longer owns. The entry keeps
 the listener until the process exits, because launchd's restart waits for the
 port to free before it starts the next process. The service never resolves a data
 path from the environment or the home folder, so tests run several services in one

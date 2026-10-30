@@ -121,6 +121,7 @@ const empty = (): LedgerDocument => ({
 export class WorldLedger {
   private document: LedgerDocument;
   private sequence = 0;
+  #closed = false;
 
   constructor(
     private readonly path: string,
@@ -197,8 +198,14 @@ export class WorldLedger {
     };
   }
 
+  /** Refuse every later change: the service that owns this file stopped. */
+  close(): void {
+    this.#closed = true;
+  }
+
   /** Change the document and save it; returns the new revision. */
   update(change: (document: LedgerDocument) => void): number {
+    if (this.#closed) throw new Error("World storage is closed");
     const next = structuredClone(this.document);
     change(next);
     next.revision = this.document.revision + 1;

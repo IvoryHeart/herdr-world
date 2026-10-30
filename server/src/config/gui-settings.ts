@@ -162,14 +162,18 @@ export type GuiSettingsStore = {
     update: (current: GuiSettings) => GuiSettings | Promise<GuiSettings>,
     shouldCommit?: () => boolean,
   ): Promise<GuiSettings>;
-  /** Settles once every queued write has finished. */
-  flush(): Promise<void>;
+  /**
+   * Refuse every later write, then settle once the queued writes finish:
+   * the service that owns this file is stopping.
+   */
+  close(): Promise<void>;
 };
 
 export function createGuiSettingsStore(path: string): GuiSettingsStore {
   let cached: GuiSettings | null = null;
   let mutationQueue: Promise<void> = Promise.resolve();
   let temporaryFileSequence = 0;
+  let closed = false;
 
   async function read(): Promise<GuiSettings> {
     if (cached) return cached;
@@ -228,13 +232,19 @@ export function createGuiSettingsStore(path: string): GuiSettingsStore {
     read,
     update: (update, shouldCommit = () => true) =>
       enqueue(async () => {
+        if (closed) throw new Error("World storage is closed");
+        // A close while this update runs cancels it before it commits.
+        const open = () => !closed && shouldCommit();
         const current = await read();
-        if (!shouldCommit()) throw new Error("settings update cancelled");
+        if (!open()) throw new Error("settings update cancelled");
         const next = await update(current);
-        if (!shouldCommit()) throw new Error("settings update cancelled");
-        return persist(next, shouldCommit);
+        if (!open()) throw new Error("settings update cancelled");
+        return persist(next, open);
       }),
-    flush: () => mutationQueue,
+    close() {
+      closed = true;
+      return mutationQueue;
+    },
   };
 }
 

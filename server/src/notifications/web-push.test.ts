@@ -756,3 +756,25 @@ test("push payload uses Herdr text and tolerates pane-less alerts", () => {
     target: null,
   });
 });
+
+test("a stopped service keeps its push registry as it was", async () => {
+  const f = fixture();
+  try {
+    expect((await f.service.handle(request("POST", device()))).status).toBe(
+      200,
+    );
+    const before = readFileSync(f.path, "utf8");
+    f.service.stop();
+    // A registration admitted before stop and finished after it.
+    expect(
+      (await f.service.handle(request("POST", device("second")))).status,
+    ).toBe(500);
+    // Logout turns this refusal into a 503 (service/listener.ts).
+    expect(() => f.service.revokeSession("session-token")).toThrow(
+      "World storage is closed",
+    );
+    expect(readFileSync(f.path, "utf8")).toBe(before);
+  } finally {
+    f.cleanup();
+  }
+});

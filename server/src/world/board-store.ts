@@ -592,6 +592,7 @@ function checkBounds(document: BoardDocument) {
 
 export class BoardStore {
   private document: BoardDocument;
+  #closed = false;
   private readonly colorEdits = new Map<string, ColorEdit>();
   private readonly appearanceEdits: AppearanceEdits = new Map();
 
@@ -653,6 +654,7 @@ export class BoardStore {
    * overwrites a newer note.
    */
   patch(ops: readonly BoardOp[]): BoardDocument {
+    if (this.#closed) throw new Error("World storage is closed");
     if (!Array.isArray(ops) || ops.length > BOARD_LIMITS.ops)
       fail(`1 to ${BOARD_LIMITS.ops} operations`);
     const next = structuredClone(this.document);
@@ -669,6 +671,11 @@ export class BoardStore {
     trackAppearanceEdits(this.appearanceEdits, ops, next);
     return this.get();
   }
+  /** Refuse every later change: the service that owns this file stopped. */
+  close(): void {
+    this.#closed = true;
+  }
+
   /**
    * Apply the operations only if the board is still at `revision`; null when
    * a newer edit landed meanwhile, so the caller can read again.

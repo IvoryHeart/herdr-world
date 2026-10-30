@@ -22,7 +22,10 @@ export type WorldStorage = {
   ledger(): WorldLedger;
   /** Opened on first use. */
   profiles(): ProfileStore;
-  /** Called last in stop, once nothing can write any more. */
+  /**
+   * Called last in stop: every family refuses later writes, then queued
+   * writes settle.
+   */
   close(): Promise<void>;
 };
 
@@ -38,16 +41,31 @@ export const openStorage: OpenStorage = async (paths, { clock }) => {
     log: (message: string) => console.warn(message),
   };
   const settings = createGuiSettingsStore(paths.settings);
+  const connections = new ConnectionProfileStore({ path: paths.connections });
   let board: BoardStore | null = null;
   let ledger: WorldLedger | null = null;
   let profiles: ProfileStore | null = null;
+  let closed = false;
+  // A store first opened after close comes up closed: reads only.
+  const opened = <T extends { close(): unknown }>(store: T) => {
+    if (closed) store.close();
+    return store;
+  };
   return {
     settings,
-    connections: new ConnectionProfileStore({ path: paths.connections }),
-    board: () => (board ??= new BoardStore(paths.board, options)),
-    ledger: () => (ledger ??= new WorldLedger(paths.ledger, options)),
+    connections,
+    board: () => (board ??= opened(new BoardStore(paths.board, options))),
+    ledger: () => (ledger ??= opened(new WorldLedger(paths.ledger, options))),
     profiles: () =>
-      (profiles ??= new ProfileStore(paths.agentProfiles, options)),
-    close: () => settings.flush(),
+      (profiles ??= opened(new ProfileStore(paths.agentProfiles, options))),
+    // Every store refuses writes from here on, even from work that outlived
+    // the drain; a later owner of the folder opens stores of its own.
+    async close() {
+      closed = true;
+      board?.close();
+      ledger?.close();
+      profiles?.close();
+      await Promise.all([settings.close(), connections.close()]);
+    },
   };
 };

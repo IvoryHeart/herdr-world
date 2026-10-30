@@ -8,6 +8,7 @@ import {
   rmSync,
   statSync,
 } from "node:fs";
+import * as net from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readWorldCliToken } from "../config/session-secret";
@@ -459,4 +460,57 @@ test("the service's clock times questions, answers and observations", async () =
   expect(snapshot.observedAt).toBe(at);
   await started.service.stop();
   rmSync(top, { recursive: true, force: true });
+});
+
+test("a request admitted before stop cannot write once storage has closed", async () => {
+  const { top, root } = scratch("world-service-held-body-");
+  // The drain budget runs out at once, so stop does not wait for the body.
+  const started = await startTestService(root, {}, {}, { scheduler: expired });
+  await started.connected;
+  const cookie = await login(started.base, "world-service-test-password");
+  const body = JSON.stringify({ title_suffix: "after-close" });
+  const socket = net.createConnection({
+    host: "127.0.0.1",
+    port: Number(new URL(started.base).port),
+  });
+  socket.setEncoding("utf8");
+  let received = "";
+  const admitted = Promise.withResolvers<void>();
+  const answered = Promise.withResolvers<string>();
+  socket.on("data", (chunk) => {
+    received += chunk;
+    // Bun asks for the body only once the handler is reading it.
+    if (received.includes("100 Continue")) admitted.resolve();
+  });
+  socket.on("close", () => answered.resolve(received));
+  try {
+    await new Promise<void>((resolve) => socket.once("connect", resolve));
+    socket.write(
+      [
+        "PUT /api/instance-settings HTTP/1.1",
+        `Host: ${new URL(started.base).host}`,
+        `Cookie: ${cookie}`,
+        "Content-Type: application/json",
+        "X-Herdr-World-Settings: 1",
+        `Content-Length: ${Buffer.byteLength(body)}`,
+        "Expect: 100-continue",
+        "Connection: close",
+        "",
+        "",
+      ].join("\r\n"),
+    );
+    await admitted.promise;
+    // The entry point's stop: the port stays bound.
+    await started.service.stop({ keepListener: true });
+    expect(existsSync(join(root, "instance.lock"))).toBeFalse();
+    socket.write(body);
+    const response = await answered.promise;
+    expect(response).toContain("HTTP/1.1 500");
+    expect(response).not.toContain("HTTP/1.1 200");
+    expect(existsSync(join(root, "settings.json"))).toBeFalse();
+  } finally {
+    socket.destroy();
+    await started.service.stop();
+    rmSync(top, { recursive: true, force: true });
+  }
 });

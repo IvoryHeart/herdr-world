@@ -156,6 +156,8 @@ async function compose(
   const settings = storage.settings;
   // Set when stop begins: nothing new is admitted or started after it.
   let stopping = false;
+  // Cleared when storage closes: no write may reach the folder after it.
+  let storageOpen = true;
   const snapshotAdmission = new WorldSnapshotAdmission();
   /** Town moves run one at a time per connection (see world/desk-move). */
   const townMoveQueues = new Map<string, ReturnType<typeof createMoveQueue>>();
@@ -651,7 +653,10 @@ async function compose(
     },
     secrets: {
       read: () => readSourceSecrets(paths.sourceSecrets),
-      write: (secrets) => writeSourceSecrets(secrets, paths.sourceSecrets),
+      write: (secrets) => {
+        if (!storageOpen) throw new Error("World storage is closed");
+        writeSourceSecrets(secrets, paths.sourceSecrets);
+      },
     },
     run: runSourceProcess,
     topology: async () =>
@@ -849,6 +854,7 @@ async function compose(
       await drained();
     } finally {
       try {
+        storageOpen = false;
         await storage.close();
       } finally {
         releaseDataFolder();

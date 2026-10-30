@@ -132,6 +132,7 @@ export function parseProfilesDocument(value: unknown): ProfilesDocument {
 
 export class ProfileStore {
   private document: ProfilesDocument;
+  #closed = false;
 
   constructor(
     private readonly path: string,
@@ -170,7 +171,13 @@ export class ProfileStore {
     return found && structuredClone(found);
   }
 
+  /** Refuse every later change: the service that owns this file stopped. */
+  close(): void {
+    this.#closed = true;
+  }
+
   private commit(next: ProfilesDocument) {
+    if (this.#closed) throw new Error("World storage is closed");
     next.revision = this.document.revision + 1;
     replaceDataFile(this.path, JSON.stringify(next));
     this.document = next;
