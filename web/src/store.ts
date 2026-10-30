@@ -3,6 +3,7 @@ import {
   notificationPaneMatches,
   type NotificationFocusOptions,
 } from "./store/notificationFocus";
+import { handleStoreControl } from "./store/controls";
 import {
   emptyServerSessionState,
   nextRecentPaneIds,
@@ -1049,14 +1050,7 @@ export const store = {
     bridge.onEvent(handleHerdrEvent);
     bridge.onAssistantNotification(notifyRangerTask);
     bridge.onPopup(handlePopupPush);
-    bridge.onControl((control) => {
-      if (control.type === "pause_connection") {
-        store.pauseConnection(
-          control.reason ??
-            "Another Herdr World client paused this connection. Resume when you want this browser to sync again.",
-        );
-      }
-    });
+    bridge.onControl(handleStoreControl);
     // Browsers throttle timers in hidden tabs, which stalls the metadata
     // poll that carries agent statuses. Catch up as soon as the page is
     // visible, focused, or back online instead of waiting out the throttle.

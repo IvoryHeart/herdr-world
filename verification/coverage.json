@@ -140,6 +140,8 @@
       "requirement": "openspec/specs/runtime-federation/spec.md",
       "properties": "Single owned subscription; cancellation prevents old events; recovery does not overlap owners",
       "existingTests": [
+        "server/src/world/agent-activity-cache.test.ts",
+        "server/src/service/agent-activity.test.ts",
         "server/src/connections/subscription-loop.test.ts",
         "server/src/connections/agent-status-subscription.test.ts",
         "server/src/world/focused-acquisition.test.ts",
@@ -161,6 +163,8 @@
           "verification/contracts/shared-acquisition.md"
         ],
         "tests": [
+          "server/src/world/agent-activity-cache.test.ts",
+          "server/src/service/agent-activity.test.ts",
           "server/src/connections/subscription-loop.test.ts",
           "server/src/connections/agent-status-subscription.test.ts",
           "server/src/world/focused-acquisition.test.ts",
@@ -562,6 +566,8 @@
       "requirement": "openspec/specs/runtime-federation/spec.md",
       "properties": "Host focus/filter changes do not retarget operations; retirement affects only its owner; global disconnect retires all",
       "existingTests": [
+        "web/src/agentRecency.test.ts",
+        "web/src/store/agentActivity.test.ts",
         "web/src/store.test.ts",
         "web/src/useConnectionClient.test.ts",
         "web/src/world/ConcurrentContexts.test.ts"
@@ -576,9 +582,12 @@
         "models": ["quint/creation-flow.qnt", "quint/browser-preparation.qnt"],
         "contracts": [
           "verification/consumer-evidence.md",
-          "verification/composition.md"
+          "verification/composition.md",
+          "verification/contracts/shared-acquisition.md"
         ],
         "tests": [
+          "web/src/agentRecency.test.ts",
+          "web/src/store/agentActivity.test.ts",
           "web/src/store.test.ts",
           "web/src/useConnectionClient.test.ts",
           "web/src/world/ConcurrentContexts.test.ts"
@@ -586,7 +595,7 @@
         "checks": ["bun run check", "bun run verification:check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
       },
-      "evidenceDecision": "Captured owner/generation and colliding native IDs are exercised through real store/Bridge replay. Store and concurrent-context tests verify inactive-host operations and context isolation.",
+      "evidenceDecision": "Captured owner/generation and colliding native IDs are exercised through real store/Bridge replay. Store and concurrent-context tests verify inactive-host operations and context isolation. Shared recency uses 48 list/push order combinations, exact session identity checks and actual two-host Bridge/store publication races, including a push during an in-flight layout read; see verification/contracts/shared-acquisition.md for bounds.",
       "promotion": {
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",

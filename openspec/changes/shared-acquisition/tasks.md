@@ -16,7 +16,7 @@ The service half of T2 is written first and must be green before task 3.1.
   - `world_focused_changed` to a holder whose record differs, leaving out activity times and `panes[].scroll`.
 
   Write the service cases from the design first, with two browser sockets and two simulated hosts. They include a one-off list call from another caller, which must not suppress a notice.
-- [ ] 2.3 Activity cache and `world_agent_activity`: today's reading limits; `agent.list` reading the cache while it's fresh; the whole map on change, to holders only, never before a reading.
+- [x] 2.3 Activity cache and `world_agent_activity`: today's reading limits; `agent.list` reading the cache while it's fresh; the whole map on change, to holders only, never before a reading.
 - [ ] 2.4 Advertise `world_shared_acquisition`. Send `world_connections_changed` on profile changes, connection state or generation changes, and socket open or close.
 
 Focused registry and catalogue notices are implemented in the observer/notices
@@ -32,7 +32,7 @@ Owner approval (1.4) is recorded in the implementation brief for merged #551.
   - `world_connections_changed`: `bridge.status`, one in flight and one queued.
 
   Retry a failed catalogue fetch or held re-list once per period until it succeeds (design D7).
-- [ ] 3.3 Keep the latest recency time per pane, terminal, agent and session, from `agent.list` and from pushes, and join it into panes. Status agreement still gates `state_change_seq` only.
+- [x] 3.3 Keep the latest recency time per pane, terminal, agent and session, from `agent.list` and from pushes, and join it into panes. Status agreement still gates `state_change_seq` only.
 - [ ] 3.4 Declare interest: the active connection plus Inspector owners, which hold and release through the store; an empty set when hidden; again after a generation is admitted.
   - Re-list on each new hold: an admitted Inspector conversation, and every held owner when the page is shown.
   - Add the T2 cases: an Inspector's hold declares its host and receives its recency, and a preview of an already-closed tab is removed.

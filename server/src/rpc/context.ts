@@ -16,6 +16,7 @@ import type { createMoveQueue } from "../world/desk-move";
 import type { createWorldDeskService } from "../world/desk-service";
 import type { WorldSnapshotService } from "../world/snapshot";
 import type { FocusedAcquisition } from "../world/focused-acquisition";
+import type { AgentActivityCache } from "../world/agent-activity-cache";
 import type { WorldCompletionSeenRegistry } from "../world/completion-seen";
 import type { WorldWatchlistRegistry } from "../world/watchlist";
 import type { createWorldCliService } from "../world/world-cli-service";
@@ -34,6 +35,7 @@ export type RpcServices = {
   connectionManager: ConnectionManager<LegacyConnectionRuntime>;
   connectionProfiles: ConnectionProfileService<LegacyConnectionRuntime>;
   focusedAcquisition: FocusedAcquisition<Socket>;
+  agentActivity: AgentActivityCache;
   conversationWatchers: WeakMap<Socket, Set<{ unwatch(owner: object): void }>>;
   getAssistantService(): Promise<
     Awaited<ReturnType<typeof createAssistantService>>

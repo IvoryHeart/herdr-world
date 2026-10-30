@@ -80,6 +80,7 @@ import { createTerminalMarks } from "../world/terminal-marks";
 import { createWorldCliService } from "../world/world-cli-service";
 import { FocusedAcquisition } from "../world/focused-acquisition";
 import { readFocusedLists } from "../world/focused-lists";
+import { AgentActivityCache } from "../world/agent-activity-cache";
 import { createBrowserClients, logDetail } from "./clients";
 import { listen } from "./listener";
 import type { Clock, Scheduler, WorldAdapters } from "./ports";
@@ -417,8 +418,23 @@ async function compose(
     },
     logger.child("connections"),
   );
+  const agentActivity = new AgentActivityCache({
+    clock,
+    active: (owner) => focusedAcquisition.holdersFor(owner).size > 0,
+    changed(owner, agents) {
+      for (const socket of [...focusedAcquisition.holdersFor(owner)])
+        safeSend(
+          socket,
+          JSON.stringify({
+            control: { type: "world_agent_activity", ...owner, agents },
+          }),
+          "world-agent-activity",
+        );
+    },
+  });
   const focusedAcquisition = new FocusedAcquisition<ServerWebSocket<unknown>>({
     scheduler,
+    released: (owner) => agentActivity.clear(owner),
     lease(owner) {
       const lease = connectionManager.readyRuntimeLease(owner.connection_id);
       if (
@@ -429,7 +445,13 @@ async function compose(
         return null;
       return {
         isCurrent: lease.isCurrent,
-        read: () => readFocusedLists(lease.runtime),
+        read: () =>
+          readFocusedLists(lease.runtime, {
+            cache: agentActivity,
+            owner,
+            isCurrent: lease.isCurrent,
+            force: true,
+          }),
       };
     },
     send: (socket, control) =>
@@ -717,6 +739,7 @@ async function compose(
     connectionManager,
     connectionProfiles,
     focusedAcquisition,
+    agentActivity,
     conversationWatchers: browsers.conversationWatchers,
     getAssistantService,
     logger,
