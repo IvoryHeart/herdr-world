@@ -248,15 +248,15 @@ exit 7
   }
 });
 
-test("diagnostic CLI preserves argument boundaries, stdout and exit status", async () => {
+test("diagnostic CLI preserves argument boundaries, stdout, stderr and exit status", async () => {
   const directory = await mkdtemp(join(tmpdir(), "diagnostic-cli-"));
   try {
     const fake = join(directory, "fake chrome");
     await Bun.write(
       fake,
       process.platform === "win32"
-        ? "#!/usr/bin/env bun\nconsole.log(JSON.stringify(process.argv.slice(2)));\nprocess.exit(7);\n"
-        : "#!/bin/sh\nprintf '%s\\0' \"$@\"\nexit 7\n",
+        ? '#!/usr/bin/env bun\nconsole.log(JSON.stringify(process.argv.slice(2)));\nconsole.error("synthetic chrome stderr boundary");\nprocess.exit(7);\n'
+        : "#!/bin/sh\nprintf '%s\\0' \"$@\"\nprintf '%s\\n' 'synthetic chrome stderr boundary' >&2\nexit 7\n",
     );
     await chmod(fake, 0o755);
     const args = [
@@ -276,6 +276,9 @@ test("diagnostic CLI preserves argument boundaries, stdout and exit status", asy
       },
     });
     expect(await child.exited).toBe(7);
+    expect(await new Response(child.stderr).text()).toContain(
+      "synthetic chrome stderr boundary",
+    );
     const output = await new Response(child.stdout).text();
     expect(
       process.platform === "win32"
