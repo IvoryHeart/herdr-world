@@ -3,7 +3,7 @@ import type { RoundContext } from "./round-policy";
 import type { Evaluation, Finding, ReviewCycle } from "./round-policy-store";
 import { getAction, setAction } from "./store";
 
-/** A review cycle gets one fix request, retained across pushes until answered. */
+/** A fix request survives pushes and reopens when answered findings recur. */
 export function findingFix(
   context: RoundContext,
   cycle: ReviewCycle,
@@ -16,12 +16,23 @@ export function findingFix(
     : `round-${cycle.ordinal}`;
   const key = `${cycle.pr}:${evaluation?.head ?? cycle.head}:fix:${context.author}:${suffix}`;
   const missing = findings.filter((finding) => !finding.reply);
+  const known = getAction(context.crew, key);
   if (!missing.length) {
-    const known = getAction(context.crew, key);
     if (!context.dryRun && known && ["pending", "sent"].includes(known.state))
-      setAction(context.crew, key, "done", context.now);
+      setAction(context.crew, key, "done", context.now, "findings answered");
     return null;
   }
+  // addAction revives superseded requests with fresh text and reset attempts.
+  // Sent requests stay sent, so repeat passes do not prompt again.
+  const rejectedAt = Math.max(
+    ...missing.map((finding) => finding.respondAfter ?? finding.at),
+  );
+  if (
+    !context.dryRun &&
+    known?.state === "done" &&
+    (known.detail === "findings answered" || rejectedAt > known.updatedAt)
+  )
+    setAction(context.crew, key, "superseded", context.now);
   return {
     key,
     pr: cycle.pr,

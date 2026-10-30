@@ -49,8 +49,10 @@ findings on a file require separate identifiers. A reviewer RESULT that cannot
 be mapped to a file still needs an explicit reply using its ID. Replies must
 follow the latest reviewer RESULT retaining the finding, even if it only repeats
 an unresolved fraction. A prior rejected fix reply cannot start
-another round. Fix prompts are sent once per review cycle while replies are
-missing, rather than again for each push. After all replies, the watcher waits
+another round. Fix requests stay stable across pushes while replies are missing.
+If a later rejecting RESULT reopens answered findings in the same cycle, the
+completed request reopens once; repeat passes do not send duplicate prompts.
+After all replies, the watcher waits
 until it has observed ten minutes without a new push.
 An explanatory reply that needs no code change can trigger a fresh confirmation
 round on the same head after that quiet period.
