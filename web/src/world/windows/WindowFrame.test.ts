@@ -16,7 +16,7 @@ const chrome =
     ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
     : Bun.which("google-chrome") || Bun.which("chromium"));
 
-test.skipIf(!chrome).each(["fine", "coarse"])(
+test.skipIf(!chrome).each(["fine", "coarse", "none"])(
   "shared window frame coordinates presentation with a %s pointer",
   async (pointer) => {
     const dir = await mkdtemp(join(tmpdir(), "spaces-tab-window-test-"));
@@ -79,13 +79,16 @@ test.skipIf(!chrome).each(["fine", "coarse"])(
           "--headless",
           "--disable-gpu",
           "--window-size=1100,700",
+          // Blink's pointer/hover "none" capability uses bit value 1.
           pointer === "coarse"
-            ? "--blink-settings=primaryPointerType=2,availablePointerTypes=2,primaryHoverType=0,availableHoverTypes=0"
-            : "--blink-settings=primaryPointerType=4,availablePointerTypes=4,primaryHoverType=2,availableHoverTypes=2",
+            ? "--blink-settings=primaryPointerType=2,availablePointerTypes=2,primaryHoverType=1,availableHoverTypes=1"
+            : pointer === "fine"
+              ? "--blink-settings=primaryPointerType=4,availablePointerTypes=4,primaryHoverType=2,availableHoverTypes=2"
+              : "--blink-settings=primaryPointerType=1,availablePointerTypes=1,primaryHoverType=1,availableHoverTypes=1",
           "--no-first-run",
           "--no-default-browser-check",
           `--user-data-dir=${join(dir, "profile")}`,
-          `${server.url.href}${pointer === "coarse" ? "?coarse" : ""}`,
+          `${server.url.href}?pointer=${pointer}`,
         ],
         { stdout: "ignore", stderr: Bun.file(errorOutput) },
       );

@@ -8,6 +8,7 @@ import "../../styles/tokens.css";
 import "../../styles/base.css";
 import "../../components/WorkspaceInspectorHost.css";
 import "../../components/InspectorPaneMap.css";
+import "./WorldLayout.css";
 import { WindowFrame } from "./WindowFrame";
 import { WindowSurface } from "./WindowSurface";
 import { WindowSwitcher } from "./WindowSwitcher";
@@ -157,9 +158,9 @@ const pointer = (target: EventTarget, type: string, x: number, y: number) =>
   );
 
 async function checkNarrowTownHeaders() {
-  const coarse = new URLSearchParams(location.search).has("coarse");
+  const pointer = new URLSearchParams(location.search).get("pointer") ?? "fine";
   check(
-    matchMedia(`(pointer: ${coarse ? "coarse" : "fine"})`).matches,
+    matchMedia(`(pointer: ${pointer})`).matches,
     "browser did not emulate the requested primary pointer",
   );
   document.documentElement.dataset.layout = "desktop";
@@ -178,7 +179,7 @@ async function checkNarrowTownHeaders() {
     onFloat() {},
   };
   // Four Columns on a landscape tablet leave about 256px per window.
-  for (const width of [240, 256, 279]) {
+  for (const width of [223, 240, 256, 279]) {
     flushSync(() =>
       root.render(
         <div className="world-managed-window is-town-skin" style={{ width }}>
@@ -226,8 +227,9 @@ async function checkNarrowTownHeaders() {
     for (const button of buttons) {
       const rect = button.getBoundingClientRect();
       check(
-        rect.width >= (coarse ? 40 : 30) && rect.height >= (coarse ? 40 : 30),
-        `${width}px Town ${button.getAttribute("aria-label")} target is ${rect.width}×${rect.height} for ${coarse ? "coarse" : "fine"} pointer`,
+        rect.width >= (pointer === "fine" ? 30 : 40) &&
+          rect.height >= (pointer === "fine" ? 30 : 40),
+        `${width}px Town ${button.getAttribute("aria-label")} target is ${rect.width}×${rect.height} for ${pointer} pointer`,
       );
       check(
         rect.left >= bounds.left &&
@@ -235,6 +237,17 @@ async function checkNarrowTownHeaders() {
           rect.top >= bounds.top &&
           rect.bottom <= bounds.bottom,
         `${width}px Town control overflows its header`,
+      );
+    }
+    for (const button of header.querySelectorAll("button")) {
+      if (!button.getClientRects().length) continue;
+      const rect = button.getBoundingClientRect();
+      check(
+        rect.width > 0 &&
+          rect.height > 0 &&
+          rect.left >= bounds.left &&
+          rect.right <= bounds.right,
+        `${width}px Town identity or action control collapsed or clipped for ${pointer} pointer`,
       );
     }
     check(

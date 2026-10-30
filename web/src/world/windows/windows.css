@@ -500,9 +500,9 @@
     }
   }
 }
-/* Touch tablets use desktop Columns too. Give the name the pane map's
-   space, keeping Back and window actions at their 40px Town size. */
-@media (pointer: coarse) {
+/* Touch tablets and devices without a pointer use desktop Columns too.
+   Give the name the pane map's space, keeping 40px Town window actions. */
+@media (pointer: coarse), (pointer: none) {
   @container workspace-inspector (max-width: 279px) {
     .world-managed-window.is-town-skin:not(.is-compact)
       .workspace-inspector-agent-identity {

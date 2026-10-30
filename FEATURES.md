@@ -411,8 +411,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   a minimize shortcut, the snap choices and float. Tapping the location line under the name
   shows the branch, worktree and PR status, replacing the card above Changes. In
   Town the window takes the Town look (portrait, pixel name, chunky buttons,
-  **‹ Back**). Narrow Town columns keep 40px window controls on touch screens;
-  the pane map hides to leave room for the agent's name. On a phone the window fills the screen like the
+  **‹ Back**). On touch screens or without a pointing device, narrow Town
+  columns keep 40px window controls; the pane map hides to leave room for the
+  agent's name. On a phone the window fills the screen like the
   terminal: its bar shows the name and status, and **⋯** switches the view
   (Chat, Terminal, Changes, Files) or switches to another agent or terminal. Opening or focusing a window preserves other
   placements; snapping into an occupied region overlaps without rearranging it.

@@ -682,8 +682,8 @@ Use the visible **− Minimize** button in an Inspector's header to hide its
 window, then **Open windows** to restore it. **Close** (or **‹ Back**) dismisses
 the window; tap the agent or terminal again to reopen it. These controls leave
 agents and terminal sessions running and work in Town, Board and Desk.
-On touch tablets, narrow Town columns keep 40px window controls and hide the
-pane map to leave room for the agent's name.
+On touch tablets or without a pointing device, narrow Town columns keep 40px
+window controls and hide the pane map to leave room for the agent's name.
 While a window is minimized on a phone, **Open windows** sits beside
 **− Minimize** in any open Inspector's header, clear of its composer. When all
 Inspectors are minimized it floats at the bottom left above the bottom controls,
