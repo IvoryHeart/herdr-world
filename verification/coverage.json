@@ -1936,6 +1936,50 @@
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
         "scope": "Accepted documented bounds, mandatory consumers and excluded claims; final implementation/gate/resource acceptance is recorded in review 5517420140."
       }
+    },
+    {
+      "id": "Q44",
+      "area": "Adapter descriptors and conformance",
+      "owner": "server/src/adapters/",
+      "requirement": "openspec/specs/world-adapters/spec.md",
+      "properties": "Instance-qualified opaque IDs; complete-list absence only; reset and evidence fences; event payloads never publish; declared verbs and acquisition limits; retired and disabled owners cannot acquire or publish; synthetic code excluded from the production bundle",
+      "existingTests": [
+        "server/src/adapters/conformance.test.ts",
+        "server/src/adapters/session.test.ts",
+        "server/src/adapters/registry.test.ts",
+        "server/src/adapters/herdr.live.test.ts",
+        "server/src/world/snapshot.test.ts"
+      ],
+      "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/549",
+      "technique": "direct-conformance",
+      "assessment": "One provider-neutral admission suite exercised by native Herdr fixtures and a deterministic paginated terminal-less source, with malformed-source controls, production-entrypoint bundling and an opt-in disposable Herdr session",
+      "status": "alternative-evidence",
+      "remaining": "Durable World binding resolution, cross-source claim display rules and legacy verb policy belong to later identity/verb work. Synthetic subscription crossing remains a named pending v2 gate. Live Herdr evidence requires HERDR_WORLD_LIVE_ADAPTERS=1 and the installed Herdr binary.",
+      "requiredChecks": [
+        "bun run check",
+        "bun run test server/src/adapters/",
+        "HERDR_WORLD_LIVE_ADAPTERS=1 bun run test server/src/adapters/herdr.live.test.ts"
+      ],
+      "partialEvidence": {
+        "models": [],
+        "contracts": ["verification/contracts/adapter-conformance.md"],
+        "tests": [
+          "server/src/adapters/conformance.test.ts",
+          "server/src/adapters/session.test.ts",
+          "server/src/adapters/registry.test.ts",
+          "server/src/adapters/herdr.live.test.ts"
+        ],
+        "checks": [
+          "bun run test server/src/adapters/",
+          "bun run test server/src/world/snapshot.test.ts"
+        ],
+        "review": "The accepted delivery link records the merged design contract, not implementation acceptance. This adapter implementation awaits independent PR review."
+      },
+      "evidenceDecision": "P3 selects direct external-source conformance rather than a finite model. Existing runtime/snapshot models remain required for their unchanged owner fences; these tests establish the new adapter boundary, not durable identity, effect recovery or v2 delivery.",
+      "promotion": {
+        "decision": "pending",
+        "scope": "New adapter boundary only; independent implementation review and CI required."
+      }
     }
   ],
   "promotionReview": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",

@@ -109,10 +109,8 @@ import {
   isConnectionRpcEnvelope,
   resolveRpcRoute,
 } from "./connections/rpc-routing";
-import {
-  createLegacyConnectionRuntime,
-  type LegacyConnectionRuntime,
-} from "./connections/runtime";
+import type { LegacyConnectionRuntime } from "./connections/runtime";
+import * as adapterRegistry from "./adapters/registry";
 import { createShutdownController } from "./connections/shutdown";
 import {
   bindListenerBeforeConnectionStart,
@@ -706,7 +704,7 @@ function runtimeFactoryForProfile(
             };
     let runtime: LegacyConnectionRuntime;
     try {
-      runtime = createLegacyConnectionRuntime({
+      runtime = adapterRegistry.productionAdapters.herdr.createRuntime({
         identity,
         connectionGeneration: context.generation,
         config: profileConfig,
@@ -1534,6 +1532,7 @@ function main() {
                 hello: true,
                 socket: config.socketPath,
                 bridge_protocol_version: 2,
+                adapters: adapterRegistry.productionAdapterDescriptors(),
                 default_connection_id: connectionManager.defaultId(),
                 capabilities: {
                   connection_id: true,
