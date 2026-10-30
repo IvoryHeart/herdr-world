@@ -1,4 +1,5 @@
 /** Town renderer counters for development tools and browser tests (townRenderer.ts). */
+import type { ViewTrace } from "../devtools/flag";
 import { worldRendererCountersEnabled } from "../devtools/renderer";
 import type { TownLevel } from "./townCamera";
 
@@ -11,6 +12,8 @@ export type TownFrameTrace = {
 };
 
 export type TownRendererDiagnostics = {
+  /** Town's event trace, so a fixture can read gestures without its overlay. */
+  trace?: ViewTrace;
   mounts: number;
   destroys: number;
   activeApplications: number;
