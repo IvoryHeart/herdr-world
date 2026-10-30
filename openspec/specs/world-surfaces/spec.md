@@ -1897,7 +1897,8 @@ would send; a combination Herdr cannot name that way SHALL be disabled. Each SHA
 the session Chat shows and only after a second unchanged pane read; scrolling
 and keys Herdr does not name SHALL be disabled. A new connection, runtime, pane
 or session SHALL retire a shown menu and its notice. Keyboard focus SHALL stay on
-the menu card across the menu's steps. Opening, changing or
+the menu card across the menu's steps, unless the user moved it outside the card
+while a key was pending. Opening, changing or
 closing a menu SHALL keep the transcript, its scroll position, the composer
 draft, attachments and send receipts. Herdr's lack of conditional input
 remains a documented gap between the last check and the key.

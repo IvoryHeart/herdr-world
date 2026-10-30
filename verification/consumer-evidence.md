@@ -502,7 +502,8 @@ the shifted character.
 whole Chat chain: menus requested only by Chat, the reread after a slash
 command, cursor marking, arrow-only options, the qualified press parameters,
 card keyboard keys across successive redrawn menus, focus back on the card
-after a clicked key, a composer key's late redraw caught by the reread,
+after a clicked key but left in the composer when moved there while the key
+was pending, a composer key's late redraw caught by the reread,
 refusal notices retired by a session change, field typing,
 composer draft retention and the ellipsis key controls. No model is added: the
 property is the same check-then-dispatch admission as prompt answers, directly

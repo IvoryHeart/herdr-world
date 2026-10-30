@@ -199,6 +199,8 @@ that root; stat metadata cannot redirect the read to a different transcript.
   menu's own Enter submits it. The card's keys also work while it has focus;
   the card stays in place across the menu's steps, and after a key sent from
   it (a click included) focus returns to the card, so ↓ ↓ Enter walks a list.
+  Focus moved elsewhere, such as the composer, while the key is pending stays
+  there, so later typing never reaches the menu.
 - Each menu key calls `agent_conversation.press` with the session and the
   menu's fingerprint. The service checks that the session is the one Chat
   showed, the pane still shows a menu by the rules above, the screen shows that exact

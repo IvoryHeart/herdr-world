@@ -44,7 +44,8 @@ export function MenuCard({
   useEffect(() => setText(""), [prompt.fingerprint]);
   // After a key sent from inside the card, focus returns to the card itself,
   // whose keys work: the control that sent it was disabled meanwhile, and a
-  // focused button would take the next arrow.
+  // focused button would take the next arrow. Focus the user moved outside
+  // the card while the key was pending stays there.
   const cardRef = useRef<HTMLElement>(null);
   const refocus = useRef(false);
   const own =
@@ -60,6 +61,13 @@ export function MenuCard({
   useEffect(() => {
     if (pressing || !refocus.current) return;
     refocus.current = false;
+    const active = document.activeElement;
+    if (
+      active &&
+      active !== document.body &&
+      !cardRef.current?.contains(active)
+    )
+      return;
     cardRef.current?.focus({ preventScroll: true });
   }, [pressing, prompt.fingerprint]);
   const keys = new Set([

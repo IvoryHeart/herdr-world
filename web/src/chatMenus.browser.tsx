@@ -302,6 +302,38 @@ try {
     document.activeElement?.classList.contains("agent-chat-menu"),
     "After a clicked key, keyboard focus is back on the card",
   );
+  // Focus moved to the composer while a key is pending stays there, so the
+  // next key typed reaches the composer, not the menu.
+  let release = () => {};
+  pressReply = (params) =>
+    new Promise((resolve) => {
+      release = () => {
+        step += 1;
+        menu = { ...modelMenu, fingerprint: `model-menu-${step}` };
+        resolve({ status: "sent", key: params.key, menu });
+      };
+    });
+  const pending = presses().length;
+  button("move")!.focus();
+  await act(async () => button("move")!.click());
+  const composer = document.querySelector("textarea")!;
+  await act(async () => composer.focus());
+  await act(async () => release());
+  await settle();
+  check(
+    document.activeElement === composer,
+    "Focus moved to the composer while a key was pending stays there",
+  );
+  await act(async () =>
+    document.activeElement!.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "1", bubbles: true }),
+    ),
+  );
+  await settle();
+  check(
+    presses().length === pending + 1,
+    "A key typed in the composer afterwards presses nothing in the menu",
+  );
 
   // A new session retires the card's notice; its keys go to that session.
   session = "b".repeat(64);
