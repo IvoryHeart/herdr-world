@@ -8,6 +8,7 @@ import {
 } from "../store";
 import { type Workspace, type Tab, type PaneLayout } from "../types";
 import { withAgentActivity } from "../agentOrder";
+import { observedRecency } from "../agentRecency";
 import { forgetTerminalRelayViewportsExcept } from "../terminalResize";
 import { forgetTabLayoutsExcept, rememberTabLayout } from "../tabLayout";
 import { trackTaskCompletions, notifyCompletedTasks } from "./notifications";
@@ -290,6 +291,14 @@ async function refreshNow(
       delete next.endpointAvailability;
       queuedConnectionKeys.add(refreshKey);
     }
+    Object.assign(
+      next,
+      observedRecency(
+        leaseSnapshot(lease).agentActivity,
+        next.panes ?? [],
+        agentRes,
+      ),
+    );
     const patch = stabilizeRefreshPatch(leaseSnapshot(lease), next);
     if (
       !setForConnection(lease, {

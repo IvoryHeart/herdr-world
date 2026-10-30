@@ -85,6 +85,7 @@ export class FocusedAcquisition<Socket extends object | string> {
       scheduler: Scheduler;
       lease(owner: FocusedOwner): Lease | null;
       send(socket: Socket, notice: Notice): boolean;
+      released?(owner: FocusedOwner): void;
     },
   ) {}
 
@@ -168,6 +169,10 @@ export class FocusedAcquisition<Socket extends object | string> {
     this.records.delete(socket);
   }
 
+  holdersFor(owner: FocusedOwner): ReadonlySet<Socket> {
+    return this.held.get(ownerKey(owner))?.holders ?? new Set();
+  }
+
   /** Retired generations lapse; declaring interest never starts a runtime. */
   reconcile(): void {
     for (const [key, state] of this.held) {
@@ -194,6 +199,7 @@ export class FocusedAcquisition<Socket extends object | string> {
     state.holders.delete(socket);
     state.notified.delete(socket);
     if (state.holders.size) return;
+    this.deps.released?.(state.owner);
     state.epoch++;
     state.timer?.cancel();
     state.timer = undefined;

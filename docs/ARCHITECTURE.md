@@ -76,9 +76,19 @@ service stop and runtime retirement fence pending results. Profile changes,
 connection state/generation changes and browser count changes publish
 `world_connections_changed` with a service-local revision.
 
+Session-file activity is cached separately from live agent status for at most
+one observation period. Concurrent list readers share a pending activity read;
+the observer refreshes that reading and pushes a changed, session-qualified
+`world_agent_activity` map only to current holders. Last release discards the
+cache, and lease retirement or release during a read prevents publication.
+Browser connection partitions keep the maximum activity timestamp per pane,
+terminal, agent and session. A late list or layout reply cannot undo a push;
+status agreement gates only the native state sequence. Replaced sessions and
+runtime generations do not inherit their predecessors' activity.
+
 This service substrate does not yet advertise `world_shared_acquisition`; the
-browser retains its existing focused timer until recency, Desk watches and the
-browser consumers are delivered together. Spaces remains mounted and the
+browser retains its existing focused timer until explicit interest, Desk watches
+and the timer gate are delivered together. Spaces remains mounted and the
 aggregate refresh and 15-second fallback retain their existing behavior.
 
 Large aggregate replies negotiate bounded chunks on the same World WebSocket.
