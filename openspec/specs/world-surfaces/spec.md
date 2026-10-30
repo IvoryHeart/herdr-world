@@ -3607,3 +3607,40 @@ SHALL NOT depend on this cached metadata.
 - **WHEN** terminal screen, Composer panel, Inspector navigation and a menu are open
 - **THEN** successive system Back actions close menu, navigation, panel and screen
   before returning to the prior route
+
+### Requirement: History terminal input preserves the pane draft
+
+Details' Chat history view SHALL share the selected pane's runtime-qualified,
+in-memory terminal Message draft and single-submission lock. Sending SHALL type
+into the captured pane through its admitted connection; a retired connection
+SHALL refuse dispatch and restore the draft. Image uploads SHALL retain successful
+paths in the original draft. A working, blocked or unknown agent SHALL require
+explicit **Send anyway** confirmation; repeated Enter SHALL NOT confirm. Primary
+Chat's conversation-binding and receipt requirements SHALL remain applicable.
+
+#### Scenario: History opens after a same-runtime reconnect
+
+- **WHEN** the transport epoch changes while the pane's runtime remains the same
+- **THEN** History SHALL show the terminal's existing draft and SHALL send it at most once
+- **AND** retirement during input SHALL NOT move the draft or dispatch to another connection
+
+#### Scenario: Codex readiness is unknown
+
+- **WHEN** Codex has an unknown, absent or unrecognized status and the user presses Enter or Send in History
+- **THEN** History SHALL show the terminal-input warning without dispatching the draft
+- **AND** repeated Enter or Send SHALL NOT confirm; a separate **Send anyway** activation SHALL be required
+
+### Requirement: Mobile shell agent commands require explicit selection
+
+Ordinary mobile shell panes SHALL offer editable agent launch commands beside
+Message and the Direct-mode hint. Preferences SHALL be isolated to this browser, connection and
+agent. Selection SHALL require an empty Message draft, validate a single-line
+command and send it once with Enter to the captured pane. Detection or editing
+SHALL NOT execute a command. Failed sends SHALL retain the command for recovery.
+Existing agent and pad panes SHALL NOT offer this launcher.
+
+#### Scenario: Selection fails after command detection
+
+- **WHEN** an eligible user chooses a command and the captured pane rejects input
+- **THEN** Message SHALL retain the command and report the error without retrying it
+- **AND** a connection or pane replacement SHALL dismiss obsolete detection results

@@ -294,9 +294,9 @@
     overflow-y: auto;
     direction: ltr;
     translate: 0 0;
-    padding: 4px 0 8px;
-    border: 1px solid var(--border);
-    border-radius: 14px;
+    padding: 0 0 4px;
+    border: 1px solid var(--viewer-border);
+    border-radius: 10px;
     background: var(--panel);
     box-shadow: var(--shadow-lg);
   }
@@ -306,9 +306,23 @@
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    padding: 0 4px 0 16px;
+    min-height: 44px;
+    padding: 0 4px 0 12px;
+    border-bottom: 1px solid var(--viewer-border);
     color: var(--muted);
-    font-size: 13px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  body .app[data-mobile-more] .mobile-more-head .close-button {
+    width: max(44px, calc(44px / var(--ui-scale, 1)));
+    height: max(44px, calc(44px / var(--ui-scale, 1)));
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--muted);
   }
 
   body .app[data-mobile-more] .mobile-controls-stack .mobile-nav,
@@ -319,7 +333,7 @@
     gap: 0;
     width: 100%;
     max-width: none;
-    padding: 0;
+    padding: 4px;
     border: 0;
     border-radius: 0;
     background: transparent;
@@ -349,16 +363,16 @@
     flex-direction: row;
     align-items: center;
     justify-content: flex-start;
-    gap: 14px;
+    gap: 10px;
     width: 100%;
     min-width: 0;
     height: 48px;
-    padding: 0 16px;
+    padding: 7px 10px;
     border: 0;
-    border-radius: 0;
+    border-radius: 7px;
     background: transparent;
     color: var(--text-strong);
-    font-size: 15px;
+    font-size: 13px;
     box-shadow: none;
     inset: auto;
     translate: 0 0;
