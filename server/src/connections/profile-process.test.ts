@@ -761,6 +761,40 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
       ),
     ).toBe(true);
 
+    // Town's checked completions are shared the same way.
+    const seenIdentity = {
+      connection_id: "alpha",
+      connection_generation: oldAlphaGeneration,
+      terminal_id: "alpha-terminal",
+    };
+    expect(
+      await browserA.rpc("world.completion_seen.mark", seenIdentity),
+    ).toMatchObject({
+      revision: 1,
+      records: [{ ...seenIdentity, revision: 1 }],
+    });
+    for (
+      let attempt = 0;
+      attempt < 20 &&
+      !browserB.controls.some(
+        (control) => control.type === "world_completion_seen_changed",
+      );
+      attempt++
+    ) {
+      await Bun.sleep(10);
+    }
+    expect(await browserB.rpc("world.completion_seen.list")).toMatchObject({
+      revision: 1,
+      records: [seenIdentity],
+    });
+    // A browser that noticed new work before that mark cannot clear it.
+    expect(
+      await browserB.rpc("world.completion_seen.clear", {
+        ...seenIdentity,
+        seen_revision: 0,
+      }),
+    ).toMatchObject({ revision: 1, records: [seenIdentity] });
+
     const deskIdentity = {
       connection_id: "alpha",
       connection_generation: oldAlphaGeneration,
@@ -812,6 +846,10 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
     ).generation as number;
     expect(newAlphaGeneration).not.toBe(oldAlphaGeneration);
     expect(await browserA.rpc("world.desk.get")).toMatchObject({ records: [] });
+    expect(await browserA.rpc("world.completion_seen.list")).toMatchObject({
+      revision: 2,
+      records: [],
+    });
 
     const betaPaneCloseCalls = () =>
       (controlCalls.get("beta") ?? []).filter(

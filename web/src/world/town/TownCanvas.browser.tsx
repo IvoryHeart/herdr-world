@@ -29,7 +29,7 @@ import {
   type BridgeControlMsg,
   type ConnectionClient,
 } from "../../api";
-import { readCompletionSeen } from "../completionSeenState";
+import { completionSeenStore } from "../completionSeenState";
 import { worldSourcesStore } from "../worldSources";
 import "../world.css";
 import {
@@ -593,7 +593,47 @@ const ledger = {
   ],
 };
 const askDismissals: string[] = [];
+/** The service's in-memory completion marks, as one World holds them. */
+const completionSeen = {
+  revision: 0,
+  records: [] as {
+    connection_id: string;
+    connection_generation: number;
+    terminal_id: string;
+    revision: number;
+  }[],
+};
 worldBridge.call = async (method, params) => {
+  if (method.startsWith("world.completion_seen.")) {
+    const identity = params as {
+      connection_id: string;
+      connection_generation: number;
+      terminal_id: string;
+      seen_revision?: number;
+    };
+    const index = completionSeen.records.findIndex(
+      (record) =>
+        record.connection_id === identity.connection_id &&
+        record.connection_generation === identity.connection_generation &&
+        record.terminal_id === identity.terminal_id,
+    );
+    if (method === "world.completion_seen.mark" && index < 0)
+      completionSeen.records.push({
+        connection_id: identity.connection_id,
+        connection_generation: identity.connection_generation,
+        terminal_id: identity.terminal_id,
+        revision: ++completionSeen.revision,
+      });
+    if (
+      method === "world.completion_seen.clear" &&
+      index >= 0 &&
+      completionSeen.records[index]!.revision <= identity.seen_revision!
+    ) {
+      completionSeen.records.splice(index, 1);
+      completionSeen.revision += 1;
+    }
+    return structuredClone(completionSeen);
+  }
   if (method === "world.asks.get") return structuredClone(ledger);
   if (method === "world.ask.dismiss") {
     const id = String(params?.id);
@@ -2376,7 +2416,7 @@ async function run() {
   const [, , finishedDesk, finishedRoom, finishedHost] = finishedAgent!
     .getAttribute("aria-label")!
     .split(", ");
-  const seenBefore = [...readCompletionSeen(worldLocalStorage)].sort().join();
+  const seenBefore = [...completionSeenStore.get().identities].sort().join();
   [
     ...host.querySelectorAll<HTMLButtonElement>(
       '.world-semantic-target[data-kind="desk"]',
@@ -2407,7 +2447,7 @@ async function run() {
     "Terminal mode did not bring the agent to its desk",
   );
   check(
-    [...readCompletionSeen(worldLocalStorage)].sort().join() === seenBefore,
+    [...completionSeenStore.get().identities].sort().join() === seenBefore,
     "Terminal mode marked the finished agent reviewed",
   );
   writeOfficePreferences(worldLocalStorage, {

@@ -927,7 +927,9 @@
         "server/src/connections/profile-process.test.ts",
         "web/src/world/deskStateStore.test.ts",
         "web/src/world/deskSharedStops.test.ts",
-        "web/src/world/DeskView.browser.test.ts"
+        "web/src/world/DeskView.browser.test.ts",
+        "server/src/world/completion-seen.test.ts",
+        "web/src/world/completionSeenState.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/145",
       "technique": "alternative",
@@ -935,7 +937,7 @@
       "status": "alternative-evidence",
       "remaining": "A summary is presentation evidence, not proof that external work succeeded; publication identity remains a separate operational guard.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
-      "evidenceDecision": "Fixture receipt parsing and real Desk browser routing/review tests directly check human-facing summaries and review intent. Shared Desk state (#164): direct registry cases cover bounded metadata, exact conditional Undo, owner/session replacement, expiry and older observations after live mutations. RPC tests revalidate the captured runtime and session after live pane admission. Two-WebSocket service and Desk browser regressions establish shared marks/recent opens and cross-browser Undo. Paired real-registry/browser-store consumers with 41 agents check unequal receipt polling coverage, filter changes, later native activity and service stops. Deferred native admissions check session replacement, return to the original fingerprint and observation eviction; the browser checks exact next-card focus after external-store publication; deferred client replies cover revision and reconnect epochs. These finite metadata transitions are exercised directly rather than adding a model that repeats the store; arbitrary external transport liveness remains excluded. Stable stop identities are checked across 13-hour timestamp/observation expiry for idle and done agents, including native counter progress after an unobserved working phase. The real fresh-snapshot callback carries agent.list data; pane-only identity, missing pane agent/session fields, and duplicate, malformed, mismatched or obsolete progress cases exercise the adapter. Metadata cannot manufacture a browser/RPC identity. Browser consumers retain Reviewed on display expiry and refresh receipts for new stable stop IDs while native status/activity remain unchanged. Deferred reads and failed refreshes leave the successor unmarkable against its predecessor report; repeated failure settles without an old report, and a late superseded response cannot publish.",
+      "evidenceDecision": "Fixture receipt parsing and real Desk browser routing/review tests directly check human-facing summaries and review intent. Shared Desk state (#164): direct registry cases cover bounded metadata, exact conditional Undo, owner/session replacement, expiry and older observations after live mutations. RPC tests revalidate the captured runtime and session after live pane admission. Two-WebSocket service and Desk browser regressions establish shared marks/recent opens and cross-browser Undo. Paired real-registry/browser-store consumers with 41 agents check unequal receipt polling coverage, filter changes, later native activity and service stops. Deferred native admissions check session replacement, return to the original fingerprint and observation eviction; the browser checks exact next-card focus after external-store publication; deferred client replies cover revision and reconnect epochs. These finite metadata transitions are exercised directly rather than adding a model that repeats the store; arbitrary external transport liveness remains excluded. Stable stop identities are checked across 13-hour timestamp/observation expiry for idle and done agents, including native counter progress after an unobserved working phase. The real fresh-snapshot callback carries agent.list data; pane-only identity, missing pane agent/session fields, and duplicate, malformed, mismatched or obsolete progress cases exercise the adapter. Metadata cannot manufacture a browser/RPC identity. Browser consumers retain Reviewed on display expiry and refresh receipts for new stable stop IDs while native status/activity remain unchanged. Deferred reads and failed refreshes leave the successor unmarkable against its predecessor report; repeated failure settles without an old report, and a late superseded response cannot publish. Town completion checks share the same service-memory model: registry cases cover generation retirement, the bound and conditional clearing, and two store clients over the real RPC handler cover cross-browser agreement, a late renewal that cannot erase a newer check, and a restart forgetting every check.",
       "partialEvidence": {
         "models": [],
         "contracts": ["verification/consumer-evidence.md"],
@@ -949,7 +951,9 @@
           "server/src/connections/profile-process.test.ts",
           "web/src/world/deskStateStore.test.ts",
           "web/src/world/deskSharedStops.test.ts",
-          "web/src/world/DeskView.browser.test.ts"
+          "web/src/world/DeskView.browser.test.ts",
+          "server/src/world/completion-seen.test.ts",
+          "web/src/world/completionSeenState.test.ts"
         ],
         "checks": ["bun run check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."

@@ -106,9 +106,9 @@ import {
   type OfficeCreationActionState,
 } from "./officeRoomActions";
 import {
-  officeCompletionIdentity,
-  readCompletionSeen,
-  writeCompletionSeen,
+  completionSeenIdentity,
+  completionSeenStore,
+  useCompletionSeen,
 } from "./completionSeenState";
 import { preferredOfficeConnectorAnchor } from "./worldConnectorGeometry";
 import { officeCreationInputsEqual } from "./officeCreationInputs";
@@ -190,9 +190,7 @@ export default function TownView({
   );
   const preferencesRef = useRef(preferences);
   const [roomDialog, setRoomDialog] = useState<RoomDialog | null>(null);
-  const [completionSeen, setCompletionSeen] = useState(() =>
-    readCompletionSeen(worldLocalStorage),
-  );
+  const completionSeen = useCompletionSeen();
   const [sceneHover, setSceneHover] = useState<WorldCanvasHover | null>(null);
   const [observability, setObservability] = useState<OfficeObservability>(
     EMPTY_OFFICE_OBSERVABILITY,
@@ -247,43 +245,24 @@ export default function TownView({
       );
   }, []);
 
-  // Seen marks name their agent last; only those agents need their full
-  // identity checked, not the whole roster.
-  const seenAgentKeys = useMemo(() => {
-    const keys = new Set<string>();
-    for (const identity of completionSeen)
-      try {
-        const parts: unknown = JSON.parse(identity);
-        if (Array.isArray(parts) && typeof parts[3] === "string")
-          keys.add(parts[3]);
-      } catch {
-        // A malformed mark names no agent.
-      }
-    return keys;
-  }, [completionSeen]);
+  // Only agents on a marked terminal need their full identity checked, not
+  // the whole roster.
   const completionSeenKeys = useMemo(() => {
     const keys = new Set<string>();
-    if (seenAgentKeys.size)
+    if (completionSeen.terminals.size)
       for (const { agent } of observedOffice.roster)
         if (
-          seenAgentKeys.has(agent.key) &&
-          completionSeen.has(officeCompletionIdentity(agent))
+          completionSeen.terminals.has(agent.currentTerminalRef.nativeId) &&
+          completionSeen.identities.has(completionSeenIdentity(agent))
         )
           keys.add(agent.key);
     return keys;
-  }, [completionSeen, seenAgentKeys, observedOffice]);
+  }, [completionSeen, observedOffice]);
   // Seen marks belong to one completion: an agent that works again, or
   // finishes again, has new work to check.
   useEffect(() => {
-    if (!townFinished.fresh.length) return;
-    setCompletionSeen((current) => {
-      const next = new Set(current);
-      for (const agent of townFinished.fresh)
-        next.delete(officeCompletionIdentity(agent));
-      if (next.size === current.size) return current;
-      writeCompletionSeen(worldLocalStorage, next);
-      return next;
-    });
+    for (const agent of townFinished.fresh)
+      void completionSeenStore.renew(agent);
   }, [townFinished.fresh]);
   const office = useMemo(
     () =>
@@ -478,12 +457,7 @@ export default function TownView({
   };
   const markCompletionSeen = (agent: OfficeAgent) => {
     townFinished.dismiss(agent.key);
-    setCompletionSeen((current) => {
-      const next = new Set(current);
-      next.add(officeCompletionIdentity(agent));
-      writeCompletionSeen(worldLocalStorage, next);
-      return next;
-    });
+    void completionSeenStore.mark(agent);
   };
   /**
    * Open the terminal for a pane, agent or desk. Opening a finished agent's
