@@ -138,16 +138,37 @@ export function WindowControls({
       section: index === 0 ? "View" : undefined,
       run: view.onSelect,
     })),
+    ...(controls.attention?.onDefault
+      ? [
+          {
+            key: "attention:default",
+            label: "Default (from groups)",
+            detail: "Use group Focus or Mute; otherwise watch",
+            checked: controls.attention.override === null,
+            section: "Attention",
+            run: () => controls.attention?.onDefault?.(),
+          },
+        ]
+      : []),
     ...(controls.attention
       ? INTEREST_CHOICES.map((choice, index) => ({
           key: `attention:${choice.id}`,
-          label: choice.label,
+          label:
+            controls.attention?.onDefault && choice.id === "watching"
+              ? "Watch"
+              : choice.label,
           detail:
             controls.attention?.quiet && choice.id === "watching"
               ? "Quiet while an agent is focused"
               : choice.hint,
-          checked: controls.attention?.current === choice.id,
-          section: index === 0 ? "Attention" : undefined,
+          checked:
+            (controls.attention?.onDefault
+              ? controls.attention.override
+              : controls.attention?.current) === choice.id,
+          section:
+            index === 0 && !controls.attention?.onDefault
+              ? "Attention"
+              : undefined,
           run: () => controls.attention?.onInterest(choice.id),
         }))
       : []),

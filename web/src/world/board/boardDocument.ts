@@ -1,3 +1,5 @@
+import type { GroupOp } from "../../../../shared/groupOps";
+
 import type {
   AppearanceFields,
   AppearanceTarget,
@@ -9,11 +11,11 @@ import {
   type BridgeControlMsg,
   type ConnectionStatus,
 } from "../../api";
+import type { RelationsDocument } from "../../../../shared/relations";
 import type {
-  RelationsDocument,
-  TerminalRef,
-} from "../../../../shared/relations";
-import type { StoredInterest } from "../../../../shared/interest";
+  StoredInterest,
+  GroupInterest,
+} from "../../../../shared/interest";
 
 /**
  * The browser's view of Board's saved state in the World service
@@ -96,6 +98,7 @@ export type BoardDocument = {
     desk_pins?: Record<string, DeskPin>;
     /** Terminal key to muted or focused; absent from older services. */
     interest?: Record<string, StoredInterest>;
+    group_interest?: Record<string, GroupInterest>;
   };
   notes: BoardNote[];
   strings: BoardString[];
@@ -135,19 +138,14 @@ export type BoardOp =
   | { op: "desk.unpin"; key: string }
   | { op: "desk.place"; key: string; cell: DeskCell }
   | { op: "interest.set"; key: string; interest: StoredInterest | null }
+  | { op: "group.interest"; id: string; interest: GroupInterest | null }
   | {
       op: "anchor.witness";
       string_id: string;
       end: "from" | "to";
       witness: string[];
     }
-  | {
-      op: "group.join";
-      id: string;
-      members: TerminalRef[];
-      target: TerminalRef[];
-    }
-  | { op: "group.leave"; members: TerminalRef[] };
+  | GroupOp;
 
 export type BoardDocumentState = {
   document: BoardDocument | null;
@@ -229,8 +227,11 @@ export class BoardDocumentStore {
    * Apply operations in order, one patch at a time. A conflict replaces the
    * local document with the service's and returns its message.
    */
-  patch(ops: BoardOp[]): Promise<string | null> {
-    return this.write("world.board.patch", { ops });
+  patch(ops: BoardOp[], revision?: number): Promise<string | null> {
+    return this.write("world.board.patch", {
+      ops,
+      ...(revision === undefined ? {} : { revision }),
+    });
   }
   appearance(
     target: AppearanceTarget & { connection_generation: number },

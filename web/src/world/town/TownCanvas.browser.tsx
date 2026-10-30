@@ -1591,7 +1591,7 @@ async function run() {
     );
     check(
       sections.join("|") ===
-        "Needs you|Finished, not reviewed|Hosts and rooms|Spend",
+        "Needs you|Finished, not reviewed|Hosts and rooms|Pods|Spend",
       `summary sections out of order: ${sections.join(", ")}`,
     );
     check(

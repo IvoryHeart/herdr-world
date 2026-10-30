@@ -283,15 +283,19 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     Undo compares that binding as well as its colour. An older undo that cannot
     establish continuity is refused; set the desired colour explicitly instead.
 - **Agent interest.** The button beside an agent's name in its Inspector
-  header in Town, Board and Spaces (or **⋯ → Attention** in mobile windows)
-  sets **Watching** (the default), **Muted**
-  or **Focused** for that agent, saved by the World service for its terminal on
+  header in Town, Board and Spaces (or **⋯ → Attention** in mobile windows) sets **Default (from groups)**, explicit
+  **Watch**, **Muted** or **Focused**, saved by the World service for its terminal on
   every device. Chimes
   read it: a muted agent never chimes, and while a focused agent is reachable
   only focused agents and the Town master's needs-you chime (Watching then
   says it is quiet). A focus on an offline host silences no one until the host
   is back. Interest never hides
-  anything from reception. It follows the terminal through moves, and goes
+  anything from reception. An explicit agent choice wins; otherwise Group Focus
+  beats Group Mute, with Default contributing no claim. Focus combines currently
+  reachable effective-focused agents and Group members. Hover explains the source
+  and any overridden group claim. Team/Pod controls live in Groups; v1 hides them
+  on Room/Desk. Group preferences survive away members and are removed atomically
+  with deletion. Individual interest follows the terminal through moves, and goes
   when its host shows the terminal has closed, including after reconnecting.
   A failed save shows an error and keeps the previous choice; reopen the
   button to retry.
@@ -569,6 +573,30 @@ related cards and groups a tab dropped on another tab, or chosen with
 **Group…** and a tap; **Ungroup** undoes it. Existing saved magnetic groups
 migrate automatically to kind Team; these controls continue to act on Teams.
 
+### Groups
+
+**Actions → Groups** opens the existing movable panel window (full screen on
+phones). Filter All/Pod/Team/Room/Desk, then open a row for member roles, live
+status, linked open PR cards, the ordered Now list and recent sender attribution.
+The roster shows shared reviewers with rings and warns above the Pod's open-PR
+limit without blocking edits. Unavailable work is unknown; failed refreshes are
+labelled cached. Away and ambiguous addresses never contribute live work/status.
+
+Town's open **Summary** shows a **Pods** section after Hosts and rooms, with
+the same status, first Now item and source-qualified PR warning. Tap a Pod to
+open or raise its Groups detail. Pod roll-ups do not add to reception counts.
+
+Create Teams/Pods, add/remove members, edit roles, name/Now/limit, delete with
+confirmation or explicitly promote a Team with a complete current address mapping.
+Exclusive-role transfers ask first. An edit or confirmation based on an older
+Board revision is refused and refreshes the roster. Add, Edit and Roles keep
+their drafts open until a write succeeds; after a conflict, review the current
+values and choose **Use current version** before explicitly saving again.
+Current-agent selection refuses a replaced agent or a duplicate Herdr name;
+rename duplicates or supply an explicit qualified address. Ambiguous member actions
+inspect a qualified match without treating it as resolved. Room/Desk membership
+belongs to Herdr and uses Town's move gestures or guarded CLI moves.
+
 ### Agent CLI (`herdr-world --skill`)
 
 Agents change World objects themselves from their pane, through the running
@@ -608,6 +636,19 @@ when piped, with stable exit codes:
   is display-only Herdr pane metadata, so it needs no `--herdr`; the parent
   it names is the child's claim.
 - `whoami`, `ls`, `history [--actor]`.
+- `group create|add|remove|lead|reviewers|now|list|show|delete|promote`:
+  World-owned Teams and Pods, with `pod` and `team` aliases. Lead/reviewer
+  edits follow the owner/FirstMate crew rule; sender claims are attribution,
+  not authenticated permission. Exclusive-role transfers need `--replace --yes`,
+  deletion needs `--yes`, and Team promotion needs a complete explicit address mapping.
+  `group show` includes recent sender attribution (128 changes retained globally).
+  Room/Desk groups are projected from Herdr. Adding with `--herdr` reuses Town's
+  move: Room moves the whole desk and prints every affected agent first; Desk
+  moves one pane. Results report confirmed Done/Partly done/Not done/Unknown
+  outcomes and locations, with no automatic retry on Unknown.
+  `group import FILE --yes` migrates one Pod table atomically and never overwrites
+  existing Pods; explicit address mappings handle away or annotated names.
+  `group list --kind pod --markdown` renders the roster; files are never synchronized.
 
 World checks who is calling: the CLI sends its `HERDR_PANE_ID`, and the
 service accepts it only when the calling process runs in that pane of a local

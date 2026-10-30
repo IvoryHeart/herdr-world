@@ -260,6 +260,34 @@ From inside the child pane, `herdr-world spawned-by w1:p1` makes the same
 stamp through the running World service, which first checks that the caller
 runs in that pane.
 
+## Town move execution
+
+`server/src/world/town-move.ts` owns desk/pane move orchestration independently
+of the RPC transport. Its caller injects the captured connection ID/generation,
+current-runtime check, Herdr call, Board access/publication and the service's
+shared `townMoveQueues` map. It never looks up a default connection. A queued
+retired generation is refused before reading another runtime; the existing
+`moveDesk`/`movePane` functions reread topology after queue admission and keep
+their layout, last-room, rollback and uncertain-step rules. Source colours are
+captured at queue entry.
+
+Native movement and appearance/Board reconciliation finish in the same queue
+slot, matching the shared appearance contract. Both RPC and CLI capture
+colour intent at admission and read the latest fields after asynchronous probes,
+so operator edits survive native close cleanup and movement. Per-field edit
+revisions, bounded by current saved appearance bindings,
+distinguish an explicit reset from an untouched field during a move. After
+relocation, reconciliation replays the latest committed source/destination
+field values, preserving qualified saves addressed to the new native IDs as
+well as saves admitted against the old IDs. Compensation compares every alias
+that converges onto a restored native ID. Explicit colour intent survives
+native-close cleanup; a colour restoration supersedes that intent. This bookkeeping is transient;
+the persisted appearance schema stays the same. Successful moves follow confirmed
+replacement IDs; failed moves reconcile only observed terminal witnesses. Unknown locations
+are not guessed or retried. Board-follow errors are reported separately while
+the real move outcome is preserved. RPC keeps transport replies and synchronous
+unmatched-method decline. This extraction adds no user controls or camera policy.
+
 ## Stored Groups
 
 World stores Teams, Pods and generic kinds in the existing Board document's
@@ -323,8 +351,130 @@ Board byte cap, 500 groups, 32 members per group, 32 Pods per participating
 connection and bounded roles/attributes. Pods default to `open_pr_limit: 2`;
 `open_pr_limit` and ordered `queue` are intent, never enforced work limits.
 
-This is the model/store foundation. The Groups CLI, roster, frames and one-time
-import are delivered separately; existing user controls are unchanged.
+### Group projections and derived facts
+
+`shared/groupViews.ts` combines stored Groups with bounded Herdr observations
+and existing source work links. Room members are qualified Desk/tab refs; Desk
+members are qualified terminal refs. These projection refs stay separate from
+stored `GroupRef` and never enter `relations.groups`. Their view keys use a
+separate namespace, so a stored ID cannot shadow a Herdr projection. Cached
+Herdr groups remain visible as noncurrent observations without live roll-ups.
+
+`shared/groupObservations.ts` gives service and browser adapters the same
+admission rules. Only ready, actionable, nonstale snapshots from the current
+runtime generation supply live members. A Pod resolves using the actual
+`agent.list` name qualified by pane, terminal and harness, never a truncated
+display label or the harness name. Conflicting current names and mismatched
+session metadata do not select an occupant. Existing service/browser session
+fingerprint functions qualify work links identically.
+
+Away and ambiguous members contribute neither status nor work. Present
+terminals are deduplicated across member refs; status rolls up worst first:
+needs you, failed, working, finished, quiet, unknown. Open PRs are deduplicated
+from existing source links matched by connection, generation, pane and session;
+merged/closed PRs are excluded. A Pod defaults to a displayed limit of two,
+and exceeding the limit sets a warning without preventing any edit. GitHub's
+source status distinguishes current counts, stale cached work and unavailable
+counts; only current counts produce a limit warning. The Now
+list is the stored ordered queue. This read model copies no source facts into
+the Board and grants no downstream operation lease.
+
+The Groups CLI, roster and Town Summary use this read model rather than
+duplicating topology or source ownership.
+
+### Group CLI and Herdr membership moves
+
+`herdr-world group` supplies create, add, remove, lead, reviewers, now, list,
+show, delete and promote. `pod`/`team` aliases supply the kind. Names must resolve
+uniquely; explicit addresses preserve away Pod members. Teams require a current
+terminal on their connection. Promotion preserves identity and requires an
+explicit complete terminal-to-address mapping. An exclusive-role transfer needs
+`--replace --yes`; deleting needs `--yes` and never deletes agents.
+Lead/reviewer edits follow the owner/FirstMate crew rule across every verb.
+There is no caller identity allowlist or authenticated role gate. The actual
+CLI actor supplies the reported/inferred sender claim, or unknown when absent.
+Group changes use bounded `relations.group_changes`, outside Board CLI undo.
+
+`group import FILE --yes` reads one explicit Pod table on the CLI side (48000
+characters, at most 32 rows), with Lead/Builders/Reviewers and optional Now. It
+resolves names under the selected connection or accepts a caller-supplied JSON
+name-to-address mapping for away/annotated names. All creates are one Board
+transaction; duplicate role/Now columns, mismatched table columns, existing Pod
+names, unresolved names, caps or exclusivity conflicts refuse the entire import. No existing Group is overwritten and no background
+file watcher or synchronization exists. `group list --kind pod --markdown`
+renders qualified role refs and ordered Now items with escaped table content.
+Derived PR counts are display-only; this rendering is not a full Board backup.
+
+Room moves preserve a desk's chosen colour or its spawn-parent colour
+inheritance. Saved relations and colours are captured at queue admission; a
+colour or spawn claim changed after the preview is read at that boundary.
+
+Rooms/Desks remain unpersisted. Their create/delete/role edits are refused.
+`group add DESTINATION AGENT --herdr` reads a complete effect from the captured
+connection/generation before moving. Room moves print the whole desk and every
+agent; Desk moves print the selected pane and destination. JSON mode sends this
+preview to stderr and retains one JSON result on stdout. Its hash binds the
+qualified identities, names/sessions and destination; queue-entry rereading
+refuses a changed plan, and native move admission checks terminal witnesses.
+`--allow-close-room` separately opts into closing a source room's last desk.
+
+`group-move.ts` uses the same injected service-owned queue as RPC through
+`town-move.ts`, with no default-host fallback or RPC context dependency. The
+existing native rollback, uncertain-step handling and post-queue observed Board
+reconciliation apply unchanged. CLI results retain the real move outcome and
+confirmed locations: Done, Partly done, Not done, or Unknown. Failure returns a
+nonzero exit plus the structured result; Unknown is never automatically retried.
+
+### Groups panel
+
+`groups/GroupsWindow.tsx` mounts in WorldControlPlane inside the existing
+WorldPanels provider. Actions opens it with the `herdr-world:groups-open` event;
+spatial signs can supply the stable view key. It reuses the window manager and
+panel chrome. `useGroups` subscribes to existing runtime/source observations and
+owns only its reference-counted Board subscription; it never stops the shell's
+runtime owner. The detail reuses browser-only PullRequestCard controls.
+
+`shared/groupOps.ts` supplies the existing Group operation types to both browser
+and service. Forms and confirmations pass the reviewed Board revision through
+BoardDocumentStore and the optional `world.board.patch` revision parameter to
+BoardStore.patchIf. A stale revision returns current state/conflict without retry.
+Add captures that revision when its form opens, including before transfer
+confirmation. Add/Edit/Roles close only after their completion callback reports
+a successful write. A refused write keeps the draft and form-local error;
+adopting the refreshed revision requires an explicit review action and never
+dispatches a write itself. Current-agent Add captures its canonical ref and
+connection/generation/pane/terminal/name/session witness at selection, then
+revalidates without substituting a replacement. UI and CLI terminal selections
+must have one current Herdr name match on that connection before deriving a Pod
+address; an explicit qualified address remains intentional, including when away
+or ambiguous.
+Legacy callers omitting a revision keep their existing operation-specific rules.
+Browser edits without an explicit sender claim retain unknown attribution; the
+crew rule is explanatory, not a principal check. Ambiguous member inspection
+revalidates connection, generation, terminal, pane and session before opening,
+and never persists a tie-break or changes effective membership.
+
+### Group and agent Interest
+
+Board `layout.group_interest` stores Focus/Mute viewer intent by immutable stored
+Team/Pod ID, separate from membership and attrs. Default removes the overlay.
+Projected Room/Desk controls and persistence are refused in v1. Group deletion or
+Team dissolution removes its overlay in the same Board write; transient unresolved
+membership does not. The existing layout-entry cap includes these preferences.
+`board-interest.ts` owns parsing and writes without changing terminal pruning.
+
+Explicit terminal overrides now include watching (force-Watch); null/deletion means
+Default (from groups). Old absent records keep that meaning; no former explicit
+Watch is guessed. At read time an agent override wins, else group Focus beats
+Mute, else watching. `shared/groupInterest.ts` derives from current unambiguous
+members without copying terminal choices or changing status/reception. Focus is
+a union of reachable effective-focused terminals. The cached live reader keeps
+consumer identity for unrelated Board edits and resolves address restarts afresh.
+
+`useChimeHost` installs the live reader into the real chime source, and Inspector
+bells explain the winning claim and overrides. The existing `shouldChime` remains
+decisive: Town-master needs-you bypasses focus only, never mute, device-off,
+motif-off or seen. Reception and needs-you counts remain independent.
 
 ## Agent CLI
 
@@ -366,7 +516,7 @@ naming no pane is not looked up and is labelled "terminal with no pane"; a
 claim that is not a Herdr pane ID is refused. Unverified callers share one
 allowance of open questions. A call through a proxy, such as the Vite dev
 server, reaches the service from the proxy's connection, so it is never
-verified: point `HERDR_WORLD_URL` at the service's own port. Changes, questions and results live
+verified: point `HERDR_WORLD_URL` at the service's own port. Board changes, questions and results live
 in `world-ledger.json` beside the Board file (`HERDR_WORLD_LEDGER_PATH`
 overrides it). To try it against a development service, run the CLI with the
 same `HOME` (or set `HERDR_WORLD_URL` to its loopback URL and

@@ -779,14 +779,16 @@ describe("questions and results", () => {
     process.env.HERDR_WORLD_LEDGER_PATH = path;
     try {
       const lines: string[] = [];
+      const board = new BoardStore(join(root, "board.json"));
       const service = createWorldCliService({
-        board: new BoardStore(join(root, "board.json")),
+        board: () => board,
         connections: () => ({
           list: () => [],
           readyRuntimeLease: () => null,
           defaultId: () => null,
         }),
         snapshots: () => null,
+        townMoveQueues: new Map(),
         publishBoard: () => {},
         broadcast: (line) => lines.push(line),
       });

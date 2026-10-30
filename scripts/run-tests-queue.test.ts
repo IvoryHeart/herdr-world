@@ -51,6 +51,9 @@ test.each(["run-tests.ts", "run-world-tests.ts"])(
         env: {
           ...process.env,
           CI: "",
+          // This child exercises only synthetic queue admission and is stopped
+          // before World browser execution; real disk space is not its premise.
+          HERDR_WORLD_MIN_FREE_GB: "0",
           XDG_RUNTIME_DIR: runtime,
           [HELD_ENV]: "",
           HERDR_TEST_EXCLUDE_WORLD_BROWSER: "",
@@ -73,12 +76,12 @@ test.each(["run-tests.ts", "run-world-tests.ts"])(
       }
     })();
     try {
-      const [code] = await Promise.all([
+      const [code, , stderr] = await Promise.all([
         child.exited,
         output,
         new Response(child.stderr).text(),
       ]);
-      expect(sawWait).toBe(true);
+      expect(sawWait, stderr).toBe(true);
       if (runner === "run-tests.ts") {
         expect(code).toBe(0);
         expect(existsSync(marker)).toBe(true);

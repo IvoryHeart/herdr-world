@@ -1,13 +1,10 @@
 import { handleWorldCliEndpoint } from "../http/world-cli-endpoint";
-import {
-  answerAsk,
-  CliError,
-  createWorldCli,
-  dismissAsk,
-  type WorldCliDeps,
-} from "./world-cli";
+import { answerAsk, CliError, createWorldCli, dismissAsk } from "./world-cli";
 import { WorldLedger } from "./world-ledger";
 import type { WorldSnapshotResult } from "./snapshot";
+import type { WorldSourcesSnapshot } from "../../../shared/worldSources";
+import { runGroupMove } from "./group-move";
+import type { TownMoveContext } from "./town-move";
 
 /**
  * The agent CLI inside the running service: its ledger, the notices World's
@@ -33,7 +30,7 @@ type Lease = {
 };
 
 export function createWorldCliService(deps: {
-  board: WorldCliDeps["board"];
+  board(): TownMoveContext["board"];
   /** Read when a call arrives, so the service may be built first. */
   connections(): {
     list(): { id: string }[];
@@ -43,10 +40,18 @@ export function createWorldCliService(deps: {
   snapshots(): {
     snapshot(params: Record<string, never>): Promise<WorldSnapshotResult>;
   } | null;
+  sources?(): Promise<WorldSourcesSnapshot>;
+  townMoveQueues: TownMoveContext["queues"];
   publishBoard(revision: number): void;
   /** Send one control line to every connected page. */
   broadcast(line: string): void;
 }) {
+  const board: TownMoveContext["board"] = {
+    get: () => deps.board().get(),
+    patch: (ops) => deps.board().patch(ops),
+    captureColorChanges: () => deps.board().captureColorChanges(),
+    captureAppearanceChanges: () => deps.board().captureAppearanceChanges(),
+  };
   let ledgerStore: WorldLedger | null = null;
   const ledger = () =>
     (ledgerStore ??= new WorldLedger(undefined, {
@@ -64,7 +69,7 @@ export function createWorldCliService(deps: {
       }),
     );
   const cli = createWorldCli({
-    board: deps.board,
+    board,
     get ledger() {
       return ledger();
     },
@@ -91,6 +96,36 @@ export function createWorldCliService(deps: {
       const snapshots = deps.snapshots();
       if (!snapshots) throw new Error("World snapshot service is unavailable");
       return snapshots.snapshot({});
+    },
+    sources: deps.sources,
+    groupMove: (request) => {
+      const lease = deps.connections().readyRuntimeLease(request.connection_id);
+      if (
+        !lease?.isCurrent() ||
+        lease.connectionId !== request.connection_id ||
+        lease.generation !== request.generation
+      )
+        throw new CliError(
+          "refused",
+          "The selected host reconnected. Read Groups again.",
+        );
+      return runGroupMove(
+        {
+          connectionId: lease.connectionId,
+          generation: lease.generation,
+          isCurrent: () => lease.isCurrent(),
+          call: (method, params) =>
+            lease.runtime.herdr.call(method, params, 10_000),
+          queues: deps.townMoveQueues,
+          board,
+          publishBoard: deps.publishBoard,
+          onFollowError: () =>
+            console.warn(
+              "Group move completed; Board following could not be reconciled",
+            ),
+        },
+        request,
+      );
     },
     publishBoard: deps.publishBoard,
     publishLedger,

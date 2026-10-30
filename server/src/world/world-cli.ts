@@ -4,11 +4,21 @@ import {
   parseAppearanceTarget,
 } from "../../../shared/appearance";
 import { askSessionFingerprint } from "./world-cli-asks";
-import { CliError, type CliErrorCode } from "./world-cli-errors";
 import { handleWorldAsk } from "./world-cli-asks";
 export { answerAsk, ASK_WAIT_MAX_MS, dismissAsk } from "./world-cli-asks";
 import { teamMembers, type GroupSender } from "../../../shared/groups";
 import { isGroupOp } from "./board-groups";
+import {
+  GROUP_CLI_COMMANDS,
+  runGroupCommand,
+  type GroupMoveRequest,
+} from "./world-cli-groups";
+import { CliError } from "./world-cli-errors";
+import { usage, refused, notFound } from "./world-cli-errors";
+import type { WorldCliRequest, WorldCliResponse } from "./world-cli-protocol";
+export type { WorldCliRequest, WorldCliResponse } from "./world-cli-protocol";
+import type { GroupWorkSources } from "../../../shared/groupViews";
+export { CliError, type CliErrorCode } from "./world-cli-errors";
 import { randomUUID } from "node:crypto";
 import { stampSpawn } from "../herdr/spawn-stamp";
 import {
@@ -49,8 +59,8 @@ import {
  * The World service's side of the `herdr-world` agent CLI (cli/world.ts).
  * Agents change World objects themselves: Board cards and colours, desk order
  * in Town, spawn claims, questions for the owner and task results. Every
- * change is recorded with its actor and time; World-side changes can be
- * undone. Herdr changes need `herdr: true` and cannot be undone by World.
+ * Board change is recorded with its actor and time and can be conditionally
+ * undone. Groups retain bounded recent attribution, separate from Board undo. Herdr changes need `herdr: true` and cannot be undone by World.
  * Nothing here merges, deletes Herdr objects or reaches outside World.
  */
 
@@ -72,38 +82,17 @@ export type WorldCliDeps = {
   hosts(): CliHost[];
   defaultConnectionId(): string | null;
   snapshot(): Promise<WorldSnapshotResult>;
+  sources?(): Promise<GroupWorkSources>;
+  groupMove?(request: GroupMoveRequest): Promise<unknown>;
   publishBoard(revision: number): void;
   /** Tell World's pages; `asks` when a question was asked or answered. */
   publishLedger(revision: number, asks?: boolean): void;
   now?: () => number;
 };
 
-export type WorldCliRequest = {
-  command: string;
-  params?: Record<string, unknown>;
-  /** What the caller claims: its HERDR_PANE_ID. */
-  caller?: { pane_id?: unknown };
-};
-
-export { CliError } from "./world-cli-errors";
-export type { CliErrorCode } from "./world-cli-errors";
-
-export type WorldCliResponse =
-  | { ok: true; actor: CliActor; result: unknown }
-  | { ok: false; code: CliErrorCode; error: string; actor?: CliActor };
-
-const usage = (message: string): never => {
-  throw new CliError("usage", message);
-};
-const refused = (message: string): never => {
-  throw new CliError("refused", message);
-};
-const notFound = (message: string): never => {
-  throw new CliError("not_found", message);
-};
-
 /** The commands the endpoint accepts, as the CLI spells them. */
 export const WORLD_CLI_COMMANDS = [
+  ...GROUP_CLI_COMMANDS,
   "whoami",
   "ls",
   "history",
@@ -710,6 +699,13 @@ export function createWorldCli(deps: WorldCliDeps) {
     actor: CliActor,
     host: CliHost | undefined,
   ): Promise<unknown> {
+    if (command.startsWith("group "))
+      return runGroupCommand(command, params, {
+        deps,
+        actor,
+        host,
+        patch: (ops) => patchBoard(ops, actor),
+      });
     if (BOARD_COMMANDS.has(command)) {
       const topology = await topologyFor(host, params);
       const plan = planBoard(
@@ -961,7 +957,13 @@ export function createWorldCli(deps: WorldCliDeps) {
         return { ok: true, actor, result };
       } catch (error) {
         if (error instanceof CliError)
-          return { ok: false, code: error.code, error: error.message, actor };
+          return {
+            ok: false,
+            code: error.code,
+            error: error.message,
+            actor,
+            ...(error.result !== undefined ? { result: error.result } : {}),
+          };
         const message = error instanceof Error ? error.message : String(error);
         // Board validation is the caller's to fix; anything else is Herdr or
         // the service failing.
