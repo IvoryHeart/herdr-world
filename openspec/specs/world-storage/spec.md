@@ -96,6 +96,8 @@ consumer; the answer-delivery follow-up introduces that effect with its consumer
 
 Close SHALL stop admission, drain admitted operations and any final partial
 group, close the worker and release handles before releasing instance ownership.
+Unopened lazy families SHALL remain closed after close; SQLite accessors SHALL
+NOT reopen the database, import JSON or run migrations.
 Independent roots SHALL share no storage state. The compiled executable SHALL
 embed its worker and require no adjacent source. Native Linux, macOS and Windows
 crash tests SHALL report the SQLite identity actually used; process recovery

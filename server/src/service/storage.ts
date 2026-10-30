@@ -29,8 +29,8 @@ export type WorldStorage = {
   /** Opened on first use. */
   profiles(): ProfileStore;
   /**
-   * Called last in stop: every family refuses later writes, then queued
-   * writes settle.
+   * Called last in stop: every family refuses later writes, unopened lazy
+   * families stay closed, and queued writes settle.
    */
   close(): Promise<void>;
 };
@@ -55,20 +55,27 @@ export const openStorage: OpenStorage = async (paths, { clock, scheduler }) => {
   );
   let profiles: ProfileStore | null = null;
   let closed = false;
-  const opened = <T extends { close(): unknown }>(store: T) => {
-    if (closed) store.close();
-    return store;
+  // Even construction can rename an unreadable JSON file: fence before it.
+  const open = <T>(store: T | null, create: () => T): T => {
+    if (store) return store;
+    if (closed) throw new Error("World storage is closed");
+    return create();
   };
   return {
     settings,
     connections,
-    board: () => (board ??= opened(new BoardStore(paths.board, options))),
+    board: () =>
+      (board = open(board, () => new BoardStore(paths.board, options))),
+    // Eager committed cache only: this accessor never opens/imports/migrates.
     ledger: () => world.ledger,
     attention: () => world.outbox,
     failed: world.failed,
     incarnation: world.incarnation,
     profiles: () =>
-      (profiles ??= opened(new ProfileStore(paths.agentProfiles, options))),
+      (profiles = open(
+        profiles,
+        () => new ProfileStore(paths.agentProfiles, options),
+      )),
     async close() {
       closed = true;
       board?.close();
