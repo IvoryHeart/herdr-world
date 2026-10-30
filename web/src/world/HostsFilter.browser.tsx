@@ -450,16 +450,6 @@ async function float(id: string) {
   await frame();
 }
 async function operationalScenario(unmount: () => void) {
-  if (operation === "town-idle-draws") {
-    unmount();
-    await checkTownIdleDraws(
-      clock,
-      parseWorldSnapshotResult(snapshot())!.connections,
-      check,
-      failures,
-    );
-    return;
-  }
   if (operation === "town-idle") {
     await float("alpha");
     // Town must be drawing, so a quiet World below is idle, not broken.
@@ -2455,6 +2445,16 @@ async function operationalScenario(unmount: () => void) {
   );
 }
 async function run() {
+  // This renderer-only case needs neither the shell nor a first Town mount.
+  if (operation === "town-idle-draws") {
+    await checkTownIdleDraws(
+      clock,
+      parseWorldSnapshotResult(snapshot())!.connections,
+      check,
+      failures,
+    );
+    return;
+  }
   localStorage.clear();
   // The legacy operational preference must not become an overview filter.
   worldLocalStorage.setItem("worldSelectedConnection", "beta");

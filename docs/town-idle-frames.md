@@ -78,6 +78,18 @@ actual coalesced state paint, a smooth flight, continuous visible pulses, sleep
 after covering the scene again, and no frame after destruction. There are no
 wall-clock sleeps or speed-dependent thresholds in this case.
 
+The acceptance case now mounts only its renderer, bypassing the shell's Board
+and Town mounts that it previously discarded. It waits for the renderer trace
+to report no camera, roof, actor, materialization or drag transition, rather
+than drawing through fixed three-second tails. The flight lasts 160 ms; flight
+and settled visible-pulse samples each require at least six draws in 128 ms
+(eight test-clock frames). This retains a cadence check while bounding repeated
+software-GL work. The three initial one-second zero-draw windows, recovery
+windows, covered-again window and disposal window remain unchanged. Settling
+does not wait for ambient requests to stop, so a continuously drawing static
+scene still reaches and fails the draw ceiling. Renderer readiness and a
+positive initial frame remain prerequisites; neither timeout nor retries changed.
+
 Before the fix, both widths drew 64 frames in every measured test second and
 failed the zero-draw ceiling. The fixed cases pass. The previous idle React
 commit ceiling and stationary-camera walking-anchor case remain intact.
