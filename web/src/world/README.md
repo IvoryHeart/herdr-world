@@ -200,7 +200,13 @@ slices (`prepareWorldBoard`), and the projection stays with the host object, so
 Board's render reuses it; the watch overlay keeps untouched hosts so that reuse
 survives. A large board's first placement runs in a task of its own, outside
 React's commit. Tab placement waits until the overview ends. Paint never reads
-layout mid-frame. Sizes come from a ResizeObserver, zones are measured before they
+layout mid-frame. Until initial placement fits the camera, an early frame keeps
+the dense Board's initial overview and does not publish an empty set of visible
+cards. Placement requests the first frame that can publish them.
+`BoardView.mount.test.ts` controls frames before the dense transition, between
+the transition and placement, and after placement, with immediate and deferred
+Board read failures; each order must retain the phone render ceiling.
+Sizes come from a ResizeObserver, zones are measured before they
 are written, and Inspector anchors and the board's box come from geometry and a
 cache. Cards mount in their own container, so React appends them as one subtree.
 Mounted cards also keep their callback refs and resize-observer registrations
@@ -209,6 +215,11 @@ would force fresh resize notifications and another drawing pass.
 `ConcurrentContexts.test.ts` records Board render time and observer work by phase
 at 1440 and 390 pixels. Its refresh also updates the mounted terminal stores and
 checks that no terminals open, dispose or fit, and no retained cards re-register.
+Board controls compare measured layouts before dispatching a state update:
+returning unchanged state from an updater can still add a React commit after the
+initial layout effect. `board/BoardControls.dom.test.ts` delivers that initial
+ResizeObserver notification after layout and checks that repeated measurements
+add no commits, while narrower and wider layouts still update the controls.
 `ProductionContexts.board.test.ts` holds this path to the 200 ms p95 / 500 ms
 maximum input budget at 64 hosts.
 

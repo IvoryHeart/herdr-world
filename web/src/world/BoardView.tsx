@@ -1314,6 +1314,11 @@ export default function BoardView({
   );
 
   function paint(svg: SVGSVGElement, m: BoardModel) {
+    // A previously armed frame can run before the dense transition or its
+    // placement task. Keep the initial overview and culling state until the
+    // cards have positions and the camera has fitted them; placement asks
+    // for another frame when ready.
+    if (!built || (large.current && !fitted.current)) return;
     const c = cam.current;
     const worldEl = worldRef.current,
       board = boardRef.current;
