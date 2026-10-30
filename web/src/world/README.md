@@ -258,7 +258,10 @@ Raise a ceiling only in a reviewed change that explains the new work.
 The Hosts filter fixture's `town-idle` case holds idle Town, with an
 Inspector and its line open, to the same file's idle ceiling: React commits in
 at most two frames of 2 s of test time. Town animates through Pixi alone; only
-its data polls render React, and views keep an unchanged anchor set.
+its data polls render React, and views keep an unchanged anchor set. Its
+`town-walk-anchor` case mounts a bare Town whose host never renders again, so
+the Inspector line follows a walking agent under a still camera only through
+the anchors Town reports from its own drawn frames.
 
 Input delays (p95 and worst acknowledgement, worst input during dense load) are
 not asserted: they depend on the runner's CPU and Chrome build, and fixed budgets

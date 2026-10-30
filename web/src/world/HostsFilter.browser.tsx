@@ -37,14 +37,16 @@ import {
 import { TASK_NOTIFICATION_ACTIVATE_EVENT } from "../taskNotifications";
 import type { Pane, Tab, Workspace } from "../types";
 import { writeHostsFilter } from "./hostsFilter";
-import { worldRuntimeStore } from "./runtimeStore";
+import { parseWorldSnapshotResult, worldRuntimeStore } from "./runtimeStore";
 import {
   TOWN_IDLE_WORK_CEILINGS,
   workViolations,
 } from "./testing/workCeilings";
 import WorldFoundationApp from "./WorldFoundationApp";
+import TownView from "./TownView";
 import WorldInspectorConversationView from "./WorldInspectorConversation";
-import { worldObjectId } from "./worldObject";
+import { buildWorldObject, worldObjectId } from "./worldObject";
+import type { WorldCanvasAnchor } from "./worldConnectorGeometry";
 import "../styles/tokens.css";
 import "../styles/base.css";
 import "./world.css";
@@ -468,6 +470,71 @@ async function operationalScenario(unmount: () => void) {
         !!document.querySelector(".world-intent-connector"),
         "Idle Town lost the open Inspector's line",
       );
+    return;
+  }
+  if (operation === "town-walk-anchor") {
+    // A bare Town whose host records anchors without rendering again, so only
+    // Town's own frames can move the line while an inspected agent walks.
+    unmount();
+    const nodeId = worldObjectId("alpha", "terminal", "shared");
+    const target = document.createElement("div");
+    target.style.cssText =
+      "position:fixed;inset:0;display:flex;flex-direction:column";
+    document.body.append(target);
+    const town = createRoot(target);
+    let anchor: WorldCanvasAnchor | undefined;
+    const render = () =>
+      town.render(
+        <TownView
+          world={buildWorldObject(
+            parseWorldSnapshotResult(snapshot())!.connections,
+            "alpha",
+          )}
+          selectedId={null}
+          floatingTerminals={[{ nodeId }]}
+          onSelect={() => {}}
+          onOpenTerminal={async () => {}}
+          onConversationNodeAnchorsChange={(anchors) => {
+            anchor = anchors?.[nodeId];
+          }}
+        />,
+      );
+    render();
+    await clock.advance(6000);
+    const end = () => (anchor ? `${anchor.x},${anchor.y}` : "");
+    const start = end();
+    check(!!start, "Town reported no anchor for the Inspector's agent");
+    // The agent leaves the lounge for its desk; the camera stays still.
+    pane.agent_status = "working";
+    pane.revision += 1;
+    render();
+    const samples = [start];
+    const resting = () =>
+      samples.length > 10 &&
+      samples
+        .slice(-10)
+        .every((value) => value === samples[samples.length - 1]);
+    for (
+      let step = 0;
+      step < 600 && !(samples.some((value) => value !== start) && resting());
+      step += 1
+    ) {
+      await clock.advance(100);
+      samples.push(end());
+    }
+    const moves = samples.filter(
+      (value, i) => i > 0 && value !== samples[i - 1],
+    );
+    check(
+      moves.length >= 10,
+      `The Inspector's line moved ${moves.length} times while its agent walked`,
+    );
+    check(
+      resting() && samples[samples.length - 1] !== start,
+      `The Inspector's line did not rest on the arrived agent (${start} → ${samples.slice(-3).join(" ")})`,
+    );
+    flushSync(() => town.unmount());
+    target.remove();
     return;
   }
   if (operation.startsWith("pending-inspector-")) {

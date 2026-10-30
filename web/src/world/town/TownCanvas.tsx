@@ -610,15 +610,19 @@ export function TownCanvas({
       }
     }
     const signature = `${camera.x.toFixed(1)},${camera.y.toFixed(1)},${camera.z.toFixed(4)}`;
-    if (signature !== lastCamera.current) {
+    const moved = signature !== lastCamera.current;
+    if (moved) {
       lastCamera.current = signature;
       savedCameras.set(townShapeKey(latest.current.layout.shape), {
         x: camera.x,
         y: camera.y,
         z: camera.z,
       });
-      scheduleAnchors();
     }
+    // Inspected agents walk under a still camera, so their lines follow every
+    // drawn frame. World keeps unchanged anchors, so idle frames commit nothing.
+    if (moved || latest.current.conversationTargets.length > 0)
+      scheduleAnchors();
   };
   const onFrameRef = useRef(onFrame);
 
