@@ -42,7 +42,16 @@ and retirement cases run in [deskReveal.test.ts](deskReveal.test.ts). Shell reve
 cases minimize the phone Inspector through its menu and check actual viewport
 bounds and pointer hits for host chips and expanded reveal actions at all five
 review viewports. Desk reserves the snapped right half for its reading pane,
-including on wide monitors. Pending reads keep
+including on wide monitors. Each reveal owns an AbortController: Desk departure,
+unmount and a newer reveal permanently abort the previous request, including its
+Inspector admission. The qualified focus queue rechecks the opening intent before
+subsequent native calls. Supersession stays distinct from real identity/read
+failures and neither disables a healthy agent nor records a recent open.
+[Hook lifecycle regressions](testing/deskRevealHookAcceptance.tsx) hold reads and
+Inspector admission across exit/return, replacement and unmount; the
+[real shell cancellation cases](testing/deskRevealCancellationAcceptance.ts) hold
+both the initial read and queued native focus at all five viewports.
+Pending reads keep
 their admission across refreshes; queued work coalesces to the latest observation.
 
 | Task | Open these owners | Focused evidence |

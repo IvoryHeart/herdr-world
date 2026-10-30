@@ -1393,6 +1393,75 @@ describe("independent qualified operational sessions", () => {
     });
   });
 
+  test.each(["pane.get", "agent_session.get", "workspace.focus", "tab.focus"])(
+    "aborting qualified focus during %s prevents subsequent dispatch and selection",
+    async (heldMethod) => {
+      await withIndependentClients(async (calls, heldWorkspace) => {
+        heldWorkspace.resolve({});
+        const snapshot = store.get();
+        __storeTesting.replaceState({
+          ...snapshot,
+          sessionsByConnectionId: {
+            ...snapshot.sessionsByConnectionId,
+            beta: {
+              ...snapshot.sessionsByConnectionId.beta,
+              selectedPaneId: null,
+            },
+          },
+        });
+        const original = bridge.connection;
+        const started = Promise.withResolvers<void>();
+        const held = Promise.withResolvers<void>();
+        const controller = new AbortController();
+        bridge.connection = ((id, generation) => {
+          const client = original(id, generation);
+          return {
+            ...client,
+            call: async (method: string, params?: Record<string, unknown>) => {
+              if (id === "beta" && method === heldMethod) {
+                started.resolve();
+                await held.promise;
+              }
+              return client.call(method, params);
+            },
+          };
+        }) as typeof bridge.connection;
+        try {
+          const focus = store.focusQualifiedTarget({
+            connectionId: "beta",
+            runtimeGeneration: 1,
+            workspaceId: "same-workspace",
+            paneId: "same-pane",
+            agentSessionId: "synthetic-replacement-session",
+            isCurrent: () => !controller.signal.aborted,
+          });
+          await started.promise;
+          controller.abort();
+          held.resolve();
+          expect(await focus).toBe(false);
+          const sequence = [
+            "pane.get",
+            "agent_session.get",
+            "workspace.focus",
+            "tab.focus",
+          ];
+          const forbidden = sequence.slice(sequence.indexOf(heldMethod) + 1);
+          expect(
+            calls.some(
+              (call) => call.host === "beta" && forbidden.includes(call.method),
+            ),
+          ).toBe(false);
+          expect(
+            store.get().sessionsByConnectionId.beta.selectedPaneId,
+          ).toBeNull();
+        } finally {
+          held.resolve();
+          bridge.connection = original;
+        }
+      });
+    },
+  );
+
   test("focuses a ready sibling host's colliding pane without replacing another session", async () => {
     await withIndependentClients(async (calls, held) => {
       const snapshot = partitionState();

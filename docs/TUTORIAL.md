@@ -664,7 +664,10 @@ adds that host to your current Hosts selection and opens the selected agent's
 Inspector; previously opened Inspectors keep their own hosts and resources.
 Reading a summary leaves the filter unchanged. Cached or unavailable agents
 explain why they cannot open. If the runtime or agent session changes while the
-summary is open, reopen the summary to choose a current agent.
+summary is open, reopen the summary to choose a current agent. Leaving Desk or
+starting another opening cancels a pending reveal; returning does not resume it.
+A superseded reveal leaves a current agent available to retry. A host or session
+that is actually unavailable still explains why it cannot open.
 
 Desk marks, observed stop times and recent opens live in bounded service memory.
 They survive browser reloads and changes to the Hosts filter, but clear when the

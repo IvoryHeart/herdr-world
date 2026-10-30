@@ -231,15 +231,21 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
     intentRequestRef,
     world: aggregateWorld,
     hostsFilter,
-    open: (leaf, candidateWorld, sessionId) =>
-      applySelection(
+    open: async (leaf, candidateWorld, sessionId, signal) => {
+      const admittedIntent = intentRequestRef.current + 1;
+      const opened = await applySelection(
         leaf.id,
         defaultOpenView(leaf),
         true,
         candidateWorld,
-        undefined,
+        signal,
         sessionId,
-      ),
+      );
+      if (opened) return "opened";
+      return signal.aborted || intentRequestRef.current !== admittedIntent
+        ? "superseded"
+        : "unavailable";
+    },
   });
   useWorldPanelFocus(panelRegistry, managedWindows, windowCommand);
   /**

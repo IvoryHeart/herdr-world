@@ -1,3 +1,4 @@
+import { checkDeskRevealHook } from "./testing/deskRevealHookAcceptance";
 import { checkDeskOtherHosts } from "./testing/deskOtherHostsAcceptance";
 import { bridge } from "../api";
 import { sharedAsksStore, type WorldAsk } from "./worldAsks";
@@ -907,6 +908,7 @@ async function run() {
     "withdrawal clears Desk's question mark",
   );
   await checkDeskOtherHosts(check);
+  await checkDeskRevealHook(check);
 }
 
 run()

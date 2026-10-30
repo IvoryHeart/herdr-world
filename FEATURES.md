@@ -381,7 +381,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     Hosts and opens that exact agent's Inspector while preserving existing open
     resources. Host controls remain visible beside a reading pane and wrap below
     the counts on phones. Cached, unavailable or replaced agents explain why they
-    cannot open.
+    cannot open. Leaving Desk or starting another opening cancels a pending
+    reveal permanently; supersession keeps current agents available to retry.
 - **Spaces** is the focused operational workspace: terminals, files, changes,
   annotations, worktrees, and Agent History for one selected connection.
 - **Town**, **Board** and **Desk** show the aggregate of local and SSH hosts.

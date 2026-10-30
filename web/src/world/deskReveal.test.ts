@@ -43,6 +43,7 @@ function setup() {
   let reply: unknown = { pane: target.pane };
   let currentClient = true;
   let read = async () => reply;
+  const controller = new AbortController();
   const events: string[] = [];
   const client = {
     connectionId: "beta",
@@ -55,7 +56,8 @@ function setup() {
       return read();
     },
   } as unknown as ConnectionClient;
-  const context = {
+  const context: Parameters<typeof revealDeskAgent>[1] = {
+    signal: controller.signal,
     world: () =>
       ({
         nodeById: new Map([[current.id, current]]),
@@ -70,17 +72,20 @@ function setup() {
       leaf: WorldLeafObject,
       world: WorldObject,
       sessionId: string,
+      signal: AbortSignal,
     ) => {
       events.push("open");
       expect(leaf).toBe(current);
       expect(world.nodeById.get(leaf.id)).toBe(current);
       expect(sessionId).toBe(session.value);
+      expect(signal).toBe(controller.signal);
       if (ids !== null) expect(ids).toContain("beta");
-      return true;
+      return "opened";
     },
   };
   return {
     context,
+    controller,
     events,
     ids: () => ids,
     replace: (value: WorldLeafObject) => {
@@ -240,9 +245,25 @@ describe("outside-filter Desk reveal", () => {
     });
     current = false;
     pending.resolve({ pane: target.pane });
-    await expect(opening).rejects.toThrow("superseded");
+    await expect(opening).resolves.toBe("superseded");
     expect(state.events).toEqual(["pane.get"]);
     expect(state.ids()).toEqual(["alpha"]);
+  });
+
+  test("aborting during Inspector admission is supersession, not unavailability", async () => {
+    const state = setup();
+    const started = Promise.withResolvers<void>();
+    const gate = Promise.withResolvers<void>();
+    state.context.open = async () => {
+      started.resolve();
+      await gate.promise;
+      return "superseded";
+    };
+    const opening = revealDeskAgent(target, state.context);
+    await started.promise;
+    state.controller.abort();
+    gate.resolve();
+    await expect(opening).resolves.toBe("superseded");
   });
 
   test("preserves filter edits made while live admission is pending", async () => {
@@ -256,9 +277,29 @@ describe("outside-filter Desk reveal", () => {
     expect(state.ids()).toEqual(["gamma", "beta"]);
   });
 
+  test("superseded Inspector admission remains distinct from a real failure", async () => {
+    const state = setup();
+    state.context.open = async () => "superseded";
+    await expect(revealDeskAgent(target, state.context)).resolves.toBe(
+      "superseded",
+    );
+  });
+
+  test("aborting a held live read never widens the filter", async () => {
+    const state = setup();
+    const gate = Promise.withResolvers<unknown>();
+    state.defer(gate.promise);
+    const opening = revealDeskAgent(target, state.context);
+    state.controller.abort();
+    gate.resolve({ pane: target.pane });
+    await expect(opening).resolves.toBe("superseded");
+    expect(state.events).toEqual(["pane.get"]);
+    expect(state.ids()).toEqual(["alpha"]);
+  });
+
   test("reports a failed Inspector admission without opening another agent", async () => {
     const state = setup();
-    state.context.open = async () => false;
+    state.context.open = async () => "unavailable";
     await expect(revealDeskAgent(target, state.context)).rejects.toThrow(
       "Synthetic beta",
     );

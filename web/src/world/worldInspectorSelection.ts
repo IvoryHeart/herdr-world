@@ -298,6 +298,7 @@ type WorldFocusStore = {
     runtimeGeneration: number;
     workspaceId: string;
     paneId: string | null;
+    isCurrent?(): boolean;
   }): Promise<boolean>;
 };
 
@@ -364,7 +365,10 @@ export async function focusWorldNode(
   node: WorldObjectNode,
   focusStore: WorldFocusStore = store,
   agentSessionId?: string,
+  isCurrent?: () => boolean,
 ) {
+  if (isCurrent?.() === false)
+    throw new Error("Inspector activation was superseded");
   const target = workspaceTarget(node);
   if (!target) throw new Error("Select a space, agent, or terminal first");
   const connection = focusStore
@@ -386,6 +390,7 @@ export async function focusWorldNode(
     runtimeGeneration: node.generation,
     workspaceId: target.workspaceId,
     paneId: target.paneId,
+    ...(isCurrent ? { isCurrent } : {}),
     ...(agentSessionId
       ? {
           agentSessionId,
@@ -395,6 +400,8 @@ export async function focusWorldNode(
         }
       : {}),
   });
+  if (isCurrent?.() === false)
+    throw new Error("Inspector activation was superseded");
   if (!focused) {
     throw new Error("The selected item could not be focused");
   }

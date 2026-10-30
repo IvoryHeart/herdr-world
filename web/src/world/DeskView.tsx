@@ -41,6 +41,7 @@ import {
 import type { WorldLeafObject, WorldObject } from "./worldObject";
 import { useDeskState } from "./useDeskState";
 import type { WorldDeskStore } from "./deskStateStore";
+import type { DeskRevealResult } from "./deskReveal";
 import { DeskOtherHosts } from "./DeskOtherHosts";
 export { otherHostSummaries } from "./DeskOtherHosts";
 import "./DeskView.css";
@@ -271,7 +272,7 @@ export function DeskView(props: {
   world: WorldObject;
   aggregate?: WorldObject;
   onOpen(id: string): Promise<void>;
-  onReveal?: (leaf: WorldLeafObject) => Promise<void>;
+  onReveal?: (leaf: WorldLeafObject) => Promise<DeskRevealResult>;
   reading?: string | null;
   onPreview?: ((id: string) => Promise<void>) | null;
   onCloseReading?: () => void;
@@ -301,7 +302,7 @@ export function DeskBoard({
   aggregate?: WorldObject;
   client: DeskClients;
   onOpen(id: string): Promise<void>;
-  onReveal?: (leaf: WorldLeafObject) => Promise<void>;
+  onReveal?: (leaf: WorldLeafObject) => Promise<DeskRevealResult>;
   /** The agent shown in the docked reading pane, on wide screens. */
   reading?: string | null;
   onPreview?: ((id: string) => Promise<void>) | null;
@@ -916,8 +917,9 @@ export function DeskBoard({
             onReveal
               ? async (leaf) => {
                   cancelPreview();
-                  await onReveal(leaf);
-                  void recordOpen(leaf);
+                  const result = await onReveal(leaf);
+                  if (result === "opened") void recordOpen(leaf);
+                  return result;
                 }
               : undefined
           }

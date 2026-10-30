@@ -27,7 +27,11 @@ export async function checkDeskOtherHosts(
     agentSessionFingerprint: "a".repeat(64),
   } as WorldLeafObject;
   let opens = 0;
-  const render = (leaf: WorldLeafObject | null, fail = false) =>
+  const render = (
+    leaf: WorldLeafObject | null,
+    fail = false,
+    superseded = false,
+  ) =>
     flushSync(() =>
       root.render(
         <DeskOtherHosts
@@ -43,6 +47,7 @@ export async function checkDeskOtherHosts(
             opens++;
             if (fail)
               throw new Error("Captured session unavailable on Synthetic beta");
+            return superseded ? "superseded" : "opened";
           }}
         />,
       ),
@@ -84,6 +89,20 @@ export async function checkDeskOtherHosts(
           .click(),
       );
     }
+    render(target, false, true);
+    expand();
+    action().click();
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    check(!action().disabled, "Supersession disabled a healthy reveal action");
+    check(
+      !container.querySelector('[role="alert"]'),
+      "Supersession was reported as an admission failure",
+    );
+    flushSync(() =>
+      container
+        .querySelector<HTMLButtonElement>(".desk-host-heading button")!
+        .click(),
+    );
     render(target, true);
     expand();
     action().click();

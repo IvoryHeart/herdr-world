@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { WorldLeafObject, WorldObject } from "./worldObject";
 import { agentName, where } from "./deskAgentLabels";
-import { deskRevealUnavailable } from "./deskReveal";
+import { deskRevealUnavailable, type DeskRevealResult } from "./deskReveal";
 
 type Elsewhere = {
   connectionId: string;
@@ -53,7 +53,7 @@ export function DeskOtherHosts({
   world: WorldObject;
   filtered: WorldObject;
   label: string | undefined;
-  onReveal?: (leaf: WorldLeafObject) => Promise<void>;
+  onReveal?: (leaf: WorldLeafObject) => Promise<DeskRevealResult>;
 }) {
   const [expanded, setExpanded] = useState<{
     connectionId: string;
@@ -69,8 +69,7 @@ export function DeskOtherHosts({
     setBusy(true);
     setError(null);
     try {
-      await onReveal?.(leaf);
-      setExpanded(null);
+      if ((await onReveal?.(leaf)) === "opened") setExpanded(null);
     } catch (cause) {
       setError({
         id: leaf.id,

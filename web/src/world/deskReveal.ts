@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { bridge, type ConnectionClient } from "../api";
 import type { HostsFilter } from "./hostsFilter";
 import { connectionClientScopeGeneration } from "../useConnectionClient";
@@ -33,7 +33,11 @@ export function deskRevealUnavailable(
   return null;
 }
 
+export type DeskRevealResult = "opened" | "superseded";
+export type DeskRevealAdmission = DeskRevealResult | "unavailable";
+
 type RevealContext = {
+  signal: AbortSignal;
   isCurrent?(): boolean;
   world(): WorldObject;
   filter(): HostsFilter;
@@ -43,16 +47,17 @@ type RevealContext = {
     leaf: WorldLeafObject,
     world: WorldObject,
     sessionId: string,
-  ): Promise<boolean>;
+    signal: AbortSignal,
+  ): Promise<DeskRevealAdmission>;
 };
 
 export async function revealDeskAgent(
   captured: WorldLeafObject,
   context: RevealContext,
-): Promise<void> {
+): Promise<DeskRevealResult> {
+  const superseded = () =>
+    context.signal.aborted || context.isCurrent?.() === false;
   const requireCurrent = () => {
-    if (context.isCurrent?.() === false)
-      throw new Error("This agent opening was superseded.");
     const world = context.world();
     const reason = deskRevealUnavailable(
       captured,
@@ -61,6 +66,7 @@ export async function revealDeskAgent(
     if (reason) throw new Error(reason);
     return world;
   };
+  if (superseded()) return "superseded";
   requireCurrent();
   const client = context.client(captured);
   const clientCurrent = () =>
@@ -74,8 +80,10 @@ export async function revealDeskAgent(
   try {
     result = await client.call("pane.get", { pane_id: captured.pane.pane_id });
   } catch {
+    if (superseded()) return "superseded";
     throw unavailable();
   }
+  if (superseded()) return "superseded";
   const world = requireCurrent();
   const pane = result?.pane;
   const session = pane?.agent_session;
@@ -98,15 +106,23 @@ export async function revealDeskAgent(
   context.reveal(
     ids === null ? null : [...new Set([...ids, captured.connectionId])],
   );
-  // The existing qualified focus queue rechecks this live session value before focusing.
-  if (
-    !(await context.open(
+  // Inspector admission owns its intent revision after this handoff. Its signal
+  // and typed result distinguish cancellation from a real admission failure.
+  try {
+    const admission = await context.open(
       world.nodeById.get(captured.id) as WorldLeafObject,
       world,
       session.value,
-    ))
-  )
+      context.signal,
+    );
+    if (context.signal.aborted || admission === "superseded")
+      return "superseded";
+    if (admission !== "opened") throw unavailable();
+    return "opened";
+  } catch {
+    if (context.signal.aborted) return "superseded";
     throw unavailable();
+  }
 }
 
 /** Async admission uses the latest observation and filter, without changing resource owners. */
@@ -120,17 +136,24 @@ export function useDeskReveal(input: {
   const latest = useRef(input);
   latest.current = input;
   const mounted = useRef(true);
-  useEffect(() => {
+  const pending = useRef<AbortController | null>(null);
+  useLayoutEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
+      pending.current?.abort();
     };
-  }, []);
+  }, [input.active]);
   return (captured: WorldLeafObject) => {
+    pending.current?.abort();
+    const controller = new AbortController();
+    pending.current = controller;
     const intent = input.intentRequestRef.current;
     return revealDeskAgent(captured, {
+      signal: controller.signal,
       isCurrent: () =>
         mounted.current &&
+        pending.current === controller &&
         latest.current.active &&
         latest.current.intentRequestRef.current === intent,
       world: () => latest.current.world,
@@ -138,6 +161,8 @@ export function useDeskReveal(input: {
       client: (leaf) => bridge.connection(leaf.connectionId, leaf.generation),
       reveal: (ids) => latest.current.hostsFilter.setIds(ids),
       open: (...args) => latest.current.open(...args),
+    }).finally(() => {
+      if (pending.current === controller) pending.current = null;
     });
   };
 }

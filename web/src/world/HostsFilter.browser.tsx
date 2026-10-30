@@ -1,5 +1,6 @@
 // First: the page runs on test time (see testing/testClock.ts).
 import { clock } from "./testing/installHostsFilterClock";
+import { runDeskRevealCancellationAcceptance } from "./testing/deskRevealCancellationAcceptance";
 import { runDeskRevealAcceptance } from "./testing/deskRevealAcceptance";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
@@ -200,6 +201,7 @@ let catalogue =
     : ["alpha", "beta", "offline"];
 let heldNotificationGet: {
   host: string;
+  skip?: number;
   started(): void;
   wait: Promise<void>;
 } | null = null;
@@ -457,6 +459,25 @@ async function operationalScenario(unmount: () => void) {
       calls,
       dispatches,
       inspectorForHost,
+    });
+    await runDeskRevealCancellationAcceptance({
+      check,
+      waitFor,
+      frame,
+      calls,
+      dispatches,
+      inspectorForHost,
+      holdPaneRead(skip) {
+        const started = Promise.withResolvers<void>();
+        const release = Promise.withResolvers<void>();
+        heldNotificationGet = {
+          host: "beta",
+          skip,
+          started: () => started.resolve(),
+          wait: release.promise,
+        };
+        return { started: started.promise, release: () => release.resolve() };
+      },
     });
     return;
   }
@@ -2755,9 +2776,12 @@ async function run() {
       if (method === "pane.get") {
         if (heldNotificationGet?.host === id) {
           const held = heldNotificationGet;
-          heldNotificationGet = null;
-          held.started();
-          await held.wait;
+          if (held.skip) held.skip--;
+          else {
+            heldNotificationGet = null;
+            held.started();
+            await held.wait;
+          }
         }
         const target = (dense ? densePanes : fixturePanes).find(
           (value) => value.pane_id === params.pane_id,
@@ -2823,6 +2847,13 @@ async function run() {
       rejectResourceFocus
     )
       return false;
+    if (operation === "desk-reveal") {
+      try {
+        return await focusQualifiedTarget(target);
+      } finally {
+        calls.push(`focus:settled:${target.connectionId}`);
+      }
+    }
     return focusQualifiedTarget(target);
   };
   bridge.call = client.call;

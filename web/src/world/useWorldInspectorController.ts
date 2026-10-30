@@ -233,6 +233,9 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
           : null);
     const requestId = intentRequestRef.current + 1;
     intentRequestRef.current = requestId;
+    const isCurrentIntent = signal
+      ? () => !signal.aborted && intentRequestRef.current === requestId
+      : undefined;
     setIntentError(null);
     setSelectedVisualAnchor(null);
     setVisualConversationAnchors(null);
@@ -257,7 +260,8 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
       setIntentOpening(true);
       const unbindAbort = bindSelectionIntentAbort(signal, requestId);
       try {
-        if (focusTarget) await focusWorldNode(next, store, agentSessionId);
+        if (focusTarget)
+          await focusWorldNode(next, store, agentSessionId, isCurrentIntent);
         if (signal?.aborted || intentRequestRef.current !== requestId)
           return false;
         const currentConversations = inspectorConversationsRef.current;
@@ -316,7 +320,8 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
     setIntentOpening(true);
     const unbindAbort = bindSelectionIntentAbort(signal, requestId);
     try {
-      if (focusTarget) await focusWorldNode(next, store, agentSessionId);
+      if (focusTarget)
+        await focusWorldNode(next, store, agentSessionId, isCurrentIntent);
       if (signal?.aborted || intentRequestRef.current !== requestId)
         return false;
       const currentConversations = inspectorConversationsRef.current;
