@@ -15,7 +15,10 @@ or agent sessions are used.
 | Wide, 2560 × 1440 | [wide](wide-2560x1440.webp) |
 | Portrait, 1440 × 2560 | [portrait](portrait-1440x2560.webp) |
 
-Captured from the Town browser fixture at PR source `11204307`, using Chromium
-with a 1× device scale factor and the software WebGL renderer. These captures
-show the synthetic closure transition; they do not claim native runtime or
-agent behavior.
+The phone, half-width, wide and portrait captures use PR source `11204307`.
+The laptop capture was retaken from `5c5495b` after the Town renderer reported
+all eight desk sprites visible (`animation.monitors === 8`), then visually
+checked for the room floor, building interior and desk sprites. All captures
+use Chromium at a 1× device scale factor with software WebGL. They show the
+synthetic closure transition; they do not claim native runtime or agent
+behavior.
