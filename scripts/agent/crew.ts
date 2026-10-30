@@ -945,7 +945,7 @@ export async function main(argv: string[], deps: Deps = realDeps) {
           // state, and the next pass over every PR still comes an interval
           // after the last one started, as `afterPass` decides.
           deps.out(
-            `pass failed: ${error instanceof Error ? error.message : String(error)}; github calls=${github?.calls ?? 1} remaining=${github?.remaining ?? "unknown"}`,
+            `${new Date(now).toISOString()} pass failed: ${error instanceof Error ? error.message : String(error)}; github calls=${github?.calls ?? 1} 304=${github?.notModified ?? 0} remaining=${github?.remaining ?? "unknown"}`,
           );
           if (options.command === "pass") return 1;
         }
