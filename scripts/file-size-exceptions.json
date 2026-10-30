@@ -9,7 +9,7 @@
     "server/src/assistant/tasks.ts": 1703,
     "server/src/bridge/terminal-bridge.ts": 1610,
     "server/src/http/update.ts": 1088,
-    "server/src/index.ts": 1771,
+    "server/src/index.ts": 1766,
     "server/src/workspace/git-diff.ts": 1363,
     "server/src/world/snapshot.ts": 1077,
     "site/styles.css": 2354,

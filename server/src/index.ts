@@ -143,7 +143,7 @@ import { rpcLogLevel, shouldLogRpc } from "./utils/rpc-logging";
 import { DOWNLOAD_TIMEOUT_MS } from "./workspace/file-constants";
 import { WorldSnapshotService } from "./world/snapshot";
 import { createWorldDeskService } from "./world/desk-service";
-import { WorldWatchlistRegistry } from "./world/watchlist";
+import { createTerminalMarks } from "./world/terminal-marks";
 import { BoardStore, type BoardOp } from "./world/board-store";
 import { afterHerdrClose } from "./world/board-closing";
 import { reconcileReadyInterest } from "./world/interest-prune";
@@ -430,7 +430,6 @@ try {
 const connectionFailureReporters = new Map<string, RecoveryReporter>();
 const readyConnectionGenerations = new Map<string, number>();
 let worldSnapshots: WorldSnapshotService<LegacyConnectionRuntime> | null = null;
-const worldWatchlist = new WorldWatchlistRegistry();
 const deskService = createWorldDeskService((line) => {
   for (const ws of clients) safeSend(ws, line, "world-desk");
 });
@@ -503,10 +502,11 @@ const worldCli = createWorldCliService({
   },
 });
 
-const publishWatchlistChanged = revisionPublisher(
-  "world_watchlist_changed",
-  "world-watchlist",
-);
+const {
+  retire: retireTerminalMarks,
+  observe: observeHost,
+  ...terminalMarks
+} = createTerminalMarks(revisionPublisher, deskService.observe);
 
 function publishWorldInvalidation(
   connectionId: string,
@@ -543,11 +543,7 @@ const connectionManager = new ConnectionManager<LegacyConnectionRuntime>(
   connectionBootstrap.defaultConnectionId,
   (status) => {
     deskService.retire(status.id, status.generation);
-    const retired = worldWatchlist.retireConnectionGeneration(
-      status.id,
-      status.generation,
-    );
-    if (retired.changed) publishWatchlistChanged(retired.revision);
+    retireTerminalMarks(status.id, status.generation);
     publishWorldInvalidation(status.id, status.generation);
     const fields = {
       connection: status.id,
@@ -590,8 +586,8 @@ worldSnapshots = new WorldSnapshotService(
   (connectionId, generation) =>
     publishWorldInvalidation(connectionId, generation, true),
   undefined,
-  () => worldWatchlist.list(),
-  deskService.observe,
+  () => terminalMarks.worldWatchlist.list(),
+  observeHost,
 );
 
 const assistantContext = createAssistantContext({
@@ -915,12 +911,11 @@ const rpcServices = {
   profiles,
   publishBoardChanged,
   publishProfilesChanged,
-  publishWatchlistChanged,
   publishWorldInvalidation,
   safeSend,
   snapshotAdmission,
   townMoveQueues,
-  worldWatchlist,
+  ...terminalMarks,
   worldDesk: deskService.registry,
   publishDeskChanged: deskService.publish,
   worldCli,
