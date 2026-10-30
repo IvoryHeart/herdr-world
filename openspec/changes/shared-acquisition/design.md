@@ -426,6 +426,7 @@ no timing assertions:
 | A status event updates that host's panes, on the active and the Inspector's host | guard |
 | A focus event on one host keeps the active host's selection, pending focus and layout | guard |
 | This browser's own attachment updates availability at once | guard |
+| List calls from other callers, made as the worktree dialog and Town moves make them, stay unmarked (D1) | guard |
 | `layout.updated` re-reads the active tab's layout | guard |
 | A working→idle transition notifies once; a later re-list does not | guard |
 | Showing the page re-lists the active host and fetches the catalogue | guard |

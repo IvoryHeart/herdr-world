@@ -212,6 +212,23 @@ test("this browser's own attachment updates availability at once", () => {
   world.host("alpha").endpointAvailability["term-alpha-a"] = advertisement;
 });
 
+test("list calls from other callers stay unmarked", async () => {
+  // The worktree dialog and Town moves list a host this way. Their replies must
+  // not update the service's record of what the focused store received (D1).
+  const since = world.calls.length;
+  const client = bridge.connection("alpha", 7);
+  await client.call("workspace.list", {});
+  await client.call("tab.list", {});
+  expect(
+    world
+      .callsSince(since, "alpha")
+      .map((call) => [call.method, call.focusedObservation]),
+  ).toEqual([
+    ["workspace.list", false],
+    ["tab.list", false],
+  ]);
+});
+
 test("layout.updated re-reads the active tab's layout", async () => {
   const host = world.host("alpha");
   const wider = layoutFor("alpha", "t-alpha", host.panes, 120);

@@ -21,7 +21,7 @@ The service half of T2 is written first and must be green before task 3.1.
 
 ## 3. Browser
 
-- [ ] 3.1 Keep the metadata timer only when the hello lacks the capability; keep the update check, reconnection and return-to-page catch-up. Mark the focused re-list's four list calls with `focused_observation: true` on the frame.
+- [ ] 3.1 Keep the metadata timer only when the hello lacks the capability; keep the update check, reconnection and return-to-page catch-up. Mark the focused re-list's four list calls with `focused_observation: true` on the frame, and no other call.
 - [ ] 3.2 Handle the notices, admitted only for ready owners with the matching generation:
   - `world_focused_changed`: a scoped re-list;
   - `world_connections_changed`: `bridge.status`, one in flight and one queued.
