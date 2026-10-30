@@ -40,10 +40,14 @@
 .town-pod-plaque {
   position: absolute;
   left: 8px;
-  bottom: -4px;
+  /*
+   * Just inside its wall's bottom edge, growing down past it when zoomed out
+   * so it stays clear of the tables' nameplates, which grow down too.
+   */
+  bottom: 2px;
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 2px;
   box-sizing: border-box;
   /* Within its wall, however far it scales. */
   max-width: calc((var(--wall-w, 76px) - 12px) / clamp(1, var(--iz), 1.6));
@@ -56,13 +60,14 @@
   background: rgba(14, 17, 24, 0.88);
   border: 1px solid #6d5a3a;
   border-radius: 3px;
-  padding: 0 4px;
+  padding: 0 3px;
+  overflow: hidden;
   transform: scale(clamp(1, var(--iz), 1.6));
-  transform-origin: 0 100%;
+  transform-origin: 0 0;
 }
-/* On a wall's bottom edge it hangs just inside the wall. */
-.town-pod-plaque-at[data-edge="bottom"] .town-pod-plaque {
-  bottom: 2px;
+/* Zoomed in, never scaled: clear of the seat labels on the row below. */
+.town-world[data-level="desk"] .town-pod-plaque {
+  bottom: 6px;
 }
 .town-pod-plaque > i {
   flex: none;
@@ -80,12 +85,20 @@
 .town-pod-plaque[data-state="ready"] > i {
   background: #7be08f;
 }
-.town-pod-plaque-name {
+/* In a narrow wall the state gives way first, then the rounds; the number stays. */
+.town-pod-plaque > :nth-child(2) {
+  flex: none;
+}
+.town-pod-plaque-name,
+.town-pod-plaque-rounds {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.town-pod-plaque-name {
+  flex: 0 1000 auto;
+}
 .town-pod-plaque-rounds {
-  flex: none;
+  flex: 0 1 auto;
   color: #a9b2a4;
 }

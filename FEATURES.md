@@ -177,14 +177,18 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     pinned table joins a team only in its own room, and keeps its place.
   - **Pods.** A pull request's review rounds, the tabs the crew watcher
     names `#<N> <slug> · r<K>`, and the author's table (the agent World
-    sources link to that pull request) share one wall. Its plaque gives the
-    pull request number, its state from the pull request card (Reviewing,
-    Fixes requested, READY) and its rounds (`r2 +1`: round 2, one earlier),
-    with the branch and title in its tooltip; the number opens the pull
-    request card. A plaque stays within its wall, on the wall's top edge, or
-    just inside its bottom edge in a room's first row. Earlier rounds stack as faded
-    tables behind the current one, unless an agent there needs you or the
-    table is pinned. The pod leaves when the watcher closes its round tabs.
+    sources link to that pull request) share one wall; two pull requests
+    never share one, even when their authors are in one team. The pull
+    request is the one a round's agent is linked to, or the one whose branch
+    the label names. Its plaque gives the pull request number, its state
+    from the pull request card (Reviewing; Fixes requested, including a
+    reviewer's open findings; READY) and its rounds (`r2 +1`: round 2, one
+    earlier), with the branch and title in its tooltip; the number opens the
+    pull request card. A plaque hangs just inside its wall's bottom-left
+    table and stays within it. Earlier rounds stack as faded tables behind
+    the current one once every agent there is idle or done, unless one asks
+    you something or the table is pinned. The pod leaves when the watcher
+    closes its round tabs.
   - **Pin a desk** from the first item in its mobile agent window's **⋯** menu
     (**Pin desk in Town**), or from the desktop window’s **⋯** menu. A
     pinned table wears a pin and keeps its place: tab reorders, a room growing

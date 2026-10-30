@@ -12,6 +12,7 @@ import TownView from "../TownView";
 import { AgentLauncherDialog } from "../AgentLauncherDialog";
 import { WORLD_AGENT_LAUNCH_EVENT, type LaunchTarget } from "../agentProfiles";
 import { sharedAsksStore, type WorldAsk } from "../worldAsks";
+import { checkTownPodPlaques } from "./townPodPlaques.browser";
 import { checkTownRoomPlates } from "./townRoomPlates.browser";
 import { checkTownRoomFold, tapTownControl } from "./townRoomFold.browser";
 import type { BoardDocument, BoardOp } from "../board/boardDocument";
@@ -165,14 +166,27 @@ const STATUSES = [
 
 type Topology = { connections: WorldRuntimeConnection[]; agentPanes: Pane[] };
 
+/**
+ * The pods scenario's room: three adjacent pull requests' rounds, one with an
+ * earlier round, between two ordinary desks.
+ */
+const POD_TABS = [
+  "builder",
+  "#512 settings-sync · r1",
+  "#512 settings-sync · r2",
+  "#513 search · r1",
+  "#514 sidebar-polish-and-long-follow-up · r1",
+  "docs",
+];
+
 function topology(seed: number): Topology {
   const r = random(seed);
   const agentPanes: Pane[] = [];
   const connections = HOSTS.map((host): WorldRuntimeConnection => {
     const roomNames =
-      scale === "fold"
+      scale === "fold" || scale === "pods"
         ? host === HOSTS[0]
-          ? ["fold-room"]
+          ? [`${scale}-room`]
           : [`${host.id}-room`]
         : scale === "fold-protected"
           ? host === HOSTS[0]
@@ -212,15 +226,19 @@ function topology(seed: number): Topology {
               host === HOSTS[0] &&
               roomIndex === 0
             ? 26
-            : scale === "recovery"
-              ? 4
-              : scale === "navigation" || scale === "plates"
-                ? 1
-                : extended
-                  ? extended
-                  : scale === "max"
-                    ? 11 + Math.floor(r() * 5)
-                    : 3 + Math.floor(r() * r() * 13);
+            : scale === "pods"
+              ? host === HOSTS[0]
+                ? POD_TABS.length
+                : 1
+              : scale === "recovery"
+                ? 4
+                : scale === "navigation" || scale === "plates"
+                  ? 1
+                  : extended
+                    ? extended
+                    : scale === "max"
+                      ? 11 + Math.floor(r() * 5)
+                      : 3 + Math.floor(r() * r() * 13);
       let paneTotal = 0;
       const foldStatuses =
         scale === "fold" && host === HOSTS[0] && roomIndex === 0
@@ -235,7 +253,10 @@ function topology(seed: number): Topology {
             )
           : scale === "fold-protected" && host === HOSTS[0]
             ? Array.from({ length: deskCount }, () => "working")
-            : null;
+            : scale === "pods" && host === HOSTS[0]
+              ? // The earlier round is done, so it stacks.
+                POD_TABS.map((_, index) => (index === 1 ? "done" : "working"))
+              : null;
       const plateStatuses =
         scale === "plates"
           ? [
@@ -279,7 +300,10 @@ function topology(seed: number): Topology {
           tab_id: tabId,
           workspace_id: workspaceId,
           number: d + 1,
-          label: `task ${d + 1}`,
+          label:
+            scale === "pods" && host === HOSTS[0]
+              ? POD_TABS[d]!
+              : `task ${d + 1}`,
           focused: d === 0,
           pane_count: paneCount,
           agent_status: "working",
@@ -1025,7 +1049,31 @@ async function run() {
             images: 0,
           },
         },
-      ],
+      ].flatMap((item) =>
+        scale === "pods"
+          ? [
+              item,
+              ...(
+                [
+                  [512, "agent/settings-sync", "changes_requested"],
+                  [
+                    514,
+                    "agent/sidebar-polish-and-long-follow-up",
+                    "review_required",
+                  ],
+                ] as const
+              ).map(([number, branch, review]) => ({
+                ...item,
+                key: `github:pr:example-org/atlas#${number}`,
+                ref: `example-org/atlas#${number}`,
+                url: `https://github.com/example-org/atlas/pull/${number}`,
+                number,
+                branch,
+                review,
+              })),
+            ]
+          : [item],
+      ),
       links: agents.map((leaf) => ({
         connectionId: leaf.connectionId,
         generation: leaf.generation,
@@ -1245,6 +1293,13 @@ async function run() {
       generation: base.connections[0]!.generation,
       workspaceId: base.connections[0]!.snapshot!.workspaces[0]!.workspace_id,
     });
+    root.unmount();
+    await settle();
+    return;
+  }
+
+  if (scale === "pods" && mode === "test") {
+    await checkTownPodPlaques(host, check, waitFor);
     root.unmount();
     await settle();
     return;

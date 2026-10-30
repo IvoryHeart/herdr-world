@@ -7,7 +7,8 @@ import type { TownModel } from "./townModel";
  * Pods in Town (pods.ts): a desk is a tab, so a pod's rounds and author are
  * desks inside one team wall (townTeams.ts) under the pod's plaque. Earlier
  * rounds stack behind the current round's table instead of taking a cell
- * each, unless one of their agents needs you or the desk is pinned. Pure.
+ * each, unless the desk is pinned or still busy: an agent at it working,
+ * blocked or unknown, or an open ask from it. Pure.
  */
 
 export function townPodTabs(projection: HerdrOfficeProjection): PodTabInput[] {
@@ -32,6 +33,7 @@ export function townPodsKey(pods: readonly WorldPod[]) {
     .map((pod) =>
       [
         pod.key,
+        pod.slug ?? "",
         pod.rounds.map((round) => `${round.round}=${round.tabKey}`).join(","),
         pod.authorKeys.join(","),
         pod.state ?? "",
@@ -57,24 +59,29 @@ export const NO_TOWN_POD_STACKS: TownPodStacks = {
 export function townPodStacks(
   model: TownModel,
   pods: readonly WorldPod[],
+  asking: ReadonlySet<string> = new Set(),
 ): TownPodStacks {
   const stacked = new Set<string>();
   const stacks = new Map<string, number>();
-  const needsYou = (deskKey: string) =>
-    model.desks
-      .get(deskKey)
-      ?.paneDevices.some(
-        (device) =>
-          device.agentKey &&
-          model.agents.get(device.agentKey)?.semanticStatus === "blocked",
-      ) ?? false;
+  // Every agent and pane at a desk, not only the seats it draws.
+  const busy = new Set<string>();
+  for (const agent of model.agents.values())
+    if (
+      agent.deskKey &&
+      ((agent.semanticStatus !== "idle" && agent.semanticStatus !== "done") ||
+        asking.has(agent.key))
+    )
+      busy.add(agent.deskKey);
+  if (asking.size)
+    for (const { device } of model.projection.paneRoster)
+      if (asking.has(device.nodeId)) busy.add(device.deskKey);
   for (const pod of pods) {
     const present = pod.rounds.filter((round) => model.desks.has(round.tabKey));
     const current = present[present.length - 1];
     if (!current) continue;
     let count = 0;
     for (const round of present.slice(0, -1)) {
-      if (needsYou(round.tabKey) || model.deskPins.has(round.tabKey)) continue;
+      if (busy.has(round.tabKey) || model.deskPins.has(round.tabKey)) continue;
       stacked.add(round.tabKey);
       count += 1;
     }

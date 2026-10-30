@@ -5,9 +5,11 @@ import type {
   WorkItem,
   WorldSourcesSnapshot,
 } from "../../../../shared/worldSources";
+import type { Relation } from "../../../../shared/relations";
 import type { Pane, Tab, Workspace } from "../../types";
 import { projectWorldOffice } from "../herdrOfficeProjection";
 import { worldPods } from "../pods";
+import { terminalPlaces } from "../relations";
 import type { WorldRuntimeConnection } from "../runtimeStore";
 import { buildWorldObject } from "../worldObject";
 import { EMPTY_WORLD_SOURCES } from "../worldSources";
@@ -22,7 +24,11 @@ import { townTeams } from "./townTeams";
  * A pod end to end, from Herdr tabs to the drawn scene: the watcher's round
  * tabs and the author's tab in one room, the pull request from World sources.
  */
-function scene(labels: string[], sources: WorldSourcesSnapshot) {
+function scene(
+  labels: string[],
+  sources: WorldSourcesSnapshot,
+  relations: Relation[] = [],
+) {
   const workspace: Workspace = {
     workspace_id: "room",
     label: "Studio",
@@ -77,7 +83,13 @@ function scene(labels: string[], sources: WorldSourcesSnapshot) {
     deskStacks: stacks.stacks,
   };
   const { layout } = layoutTown(model.input, townShapeFor(1440, 900));
-  const teams = townTeams(model, layout, [], new Map(), pods);
+  const teams = townTeams(
+    model,
+    layout,
+    relations,
+    terminalPlaces([connection]),
+    pods,
+  );
   const deskOf = (label: string) =>
     [...model.desks.values()].find((desk) => desk.displayLabel === label)!.key;
   return { model, layout, pods, stacks, teams, deskOf };
@@ -95,22 +107,24 @@ const item: WorkItem = {
   roles: ["author"],
   updatedAt: 0,
   number: 512,
+  branch: "agent/settings-sync",
   review: "changes_requested",
 };
 
-const linkedTo = (paneId: string): WorldSourcesSnapshot => ({
+const linkedTo = (
+  paneId: string,
+  items: [string, WorkItem][] = [[paneId, item]],
+): WorldSourcesSnapshot => ({
   ...EMPTY_WORLD_SOURCES,
-  items: [item],
-  links: [
-    {
-      connectionId: "host",
-      generation: 1,
-      paneId,
-      sessionFingerprint: null,
-      itemKey: item.key,
-      via: "branch",
-    },
-  ],
+  items: items.map(([, entry]) => entry),
+  links: items.map(([pane, entry]) => ({
+    connectionId: "host",
+    generation: 1,
+    paneId: pane,
+    sessionFingerprint: null,
+    itemKey: entry.key,
+    via: "branch",
+  })),
 });
 
 test("a two-round pod walls its author and current round, earlier round stacked", () => {
@@ -154,4 +168,50 @@ test("a merged pull request's closed round tabs leave no pod behind", () => {
   expect(pods).toEqual([]);
   expect(teams.plaques).toEqual([]);
   expect(teams.walls).toEqual([]);
+});
+
+test("two pull requests whose authors share a group keep a wall and plaque each", () => {
+  const other: WorkItem = {
+    ...item,
+    key: "github:pr:example-org/atlas#513",
+    ref: "example-org/atlas#513",
+    url: "https://github.com/example-org/atlas/pull/513",
+    number: 513,
+    branch: "agent/b",
+  };
+  const group: Relation = {
+    key: "authors",
+    a: { connection_id: "host", terminal_id: "term0" },
+    b: { connection_id: "host", terminal_id: "term3" },
+    evidence: [
+      {
+        kind: "manual",
+        sor: "world",
+        source: "group",
+        observed_at: null,
+        current: true,
+      },
+    ],
+    strength: 1,
+  };
+  const { teams, deskOf } = scene(
+    ["author-a", "#512 settings-sync · r1", "#513 b · r1", "author-b"],
+    linkedTo("p0", [
+      ["p0", item],
+      ["p3", other],
+    ]),
+    [group],
+  );
+  // Two teams, never one wall holding both pull requests.
+  const teamOf = (label: string) => teams.deskTeams.get(deskOf(label));
+  expect(teamOf("author-a")).toBe(teamOf("#512 settings-sync · r1"));
+  expect(teamOf("author-b")).toBe(teamOf("#513 b · r1"));
+  expect(teamOf("author-a")).not.toBe(teamOf("author-b"));
+  expect(new Set(teams.walls.map((wall) => wall.team)).size).toBe(2);
+  expect(teams.plaques.map((plaque) => plaque.pod.number)).toEqual([512, 513]);
+  // The group stays visible as a connector between the authors.
+  const authors = [deskOf("author-a"), deskOf("author-b")]
+    .sort()
+    .join("\u0001");
+  expect(teams.links.some((link) => link.key === authors)).toBe(true);
 });

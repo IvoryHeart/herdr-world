@@ -1,4 +1,7 @@
-import { readyToMerge } from "../../../shared/pullRequests";
+import {
+  pullRequestReadiness,
+  readyToMerge,
+} from "../../../shared/pullRequests";
 import type {
   WorkItem,
   WorldSourcesSnapshot,
@@ -69,14 +72,30 @@ export function parseRoundLabel(
   };
 }
 
-/** The plaque's state, from the pull request card's own facts. */
+/**
+ * The plaque's state, from the pull request card's own facts. Crew reviewers
+ * post comment reviews, so their open findings come from the card's findings
+ * rule rather than GitHub's review state.
+ */
 export function podState(item: WorkItem, now = Date.now()): PodState {
   if (item.lane === "merged") return "merged";
   if (readyToMerge(item, now)) return "ready";
-  if (item.review === "changes_requested" || item.lane === "fixing")
+  if (
+    item.review === "changes_requested" ||
+    item.lane === "fixing" ||
+    pullRequestReadiness(item, now).some(
+      (rule) => rule.id === "findings" && rule.state === "fail",
+    )
+  )
     return "fixes";
   return "reviewing";
 }
+
+/** The round label's branch name is the pull request's branch (crew/launch.ts). */
+const sameBranch = (item: WorkItem, slug: string | null) =>
+  !!slug &&
+  !!item.branch &&
+  (item.branch === slug || item.branch.endsWith(`/${slug}`));
 
 export function worldPods(
   tabs: readonly PodTabInput[],
@@ -132,11 +151,13 @@ export function worldPods(
     pod.rounds.sort((a, b) => a.round - b.round);
     const own = new Set(pod.rounds.map((round) => round.tabKey));
     const numbered = pullRequests.filter((item) => item.number === pod.number);
-    // A linked one wins; otherwise the only pull request with that number.
+    // A number is only unique within a repository: a round's own link wins,
+    // otherwise the only one whose branch the label names.
+    const branched = numbered.filter((entry) => sameBranch(entry, pod.slug));
     const item =
       numbered.find((entry) =>
         [...(linked.get(entry.key) ?? [])].some((key) => own.has(key)),
-      ) ?? (numbered.length === 1 ? numbered[0]! : null);
+      ) ?? (branched.length === 1 ? branched[0]! : null);
     if (!item) continue;
     pod.item = item;
     pod.state = podState(item, now);

@@ -126,11 +126,15 @@ test("an outline of one cell is its footprint", () => {
 });
 
 /** A pod over desks named by their grid marks; capitals have no relations. */
-const pod = (rounds: string[], authorKeys: string[] = []): WorldPod => ({
-  key: "room\u0000#7",
+const pod = (
+  rounds: string[],
+  authorKeys: string[] = [],
+  number = 7,
+): WorldPod => ({
+  key: `room\u0000#${number}`,
   connectionId: "c",
   roomKey: "room",
-  number: 7,
+  number,
   slug: "fix",
   rounds: rounds.map((tabKey, index) => ({ round: index + 1, tabKey })),
   authorKeys,
@@ -146,11 +150,9 @@ test("a pod's round and author share a wall with the pod's plaque", () => {
   expect(result.plaques[0]).toMatchObject({
     key: "room\u0000#7",
     roomKey: "room",
-    // The room's first row: the nameplate covers its top edge.
-    edge: "bottom",
     x: result.walls[0]!.x,
     y: result.walls[0]!.y + result.walls[0]!.h,
-    row: 0,
+    w: result.walls[0]!.w,
   });
   expect(result.links).toHaveLength(0);
 });
@@ -159,11 +161,53 @@ test("a lone round is walled, and an author elsewhere gets a connector", () => {
   const { result } = room(["...", "R.A"], [pod(["R01"], ["A21"])]);
   expect(result.walls.map((wall) => wall.desks)).toEqual([1, 1]);
   expect(result.links).toMatchObject([{ kind: "manual", current: true }]);
-  // The plaque sits on top of the current round's wall.
+  // The plaque hangs inside the bottom of the current round's wall.
   const wall = result.walls.find((entry) => entry.key.endsWith("R01"))!;
   expect(result.plaques[0]).toMatchObject({
-    edge: "top",
     x: wall.x,
-    y: wall.y,
+    y: wall.y + wall.h,
+    w: wall.w,
   });
+});
+
+test("two pull requests whose authors are related keep a wall each", () => {
+  // a00 spawned a01; each is the author of its own pull request.
+  const { result } = room(
+    ["aR", "aS"],
+    [pod(["R10"], ["a00"], 512), pod(["S11"], ["a01"], 513)],
+  );
+  expect(result.walls.map((wall) => wall.desks)).toEqual([2, 2]);
+  // Each inside its own wall's bottom edge, so they never meet.
+  expect(result.plaques.map((plaque) => plaque.y)).toEqual(
+    result.walls.map((wall) => wall.y + wall.h),
+  );
+  expect(result.deskTeams.get("R10")).not.toBe(result.deskTeams.get("S11"));
+  // The authors' relation stays visible as a connector.
+  expect(result.links).toMatchObject([{ kind: "spawned" }]);
+});
+
+test("an outlined wall's plaque hangs on its own bottom-left cell", () => {
+  // The pod wraps another desk at its wall's bottom-left corner.
+  const { result } = room(
+    ["RR", "XR", "RR"],
+    [pod(["R00", "R10", "R11", "R02", "R12"])],
+  );
+  const wall = result.walls.find((entry) => entry.outline)!;
+  expect(wall.x).toBe(0.6 * T);
+  expect(result.plaques[0]).toMatchObject({
+    x: wall.x,
+    y: wall.y + wall.h,
+    w: 9.8 * T,
+  });
+  const notched = room(
+    ["RR", "RR", "XR"],
+    [pod(["R00", "R10", "R01", "R11", "R12"])],
+  );
+  const outlined = notched.result.walls[0]!;
+  expect(outlined.outline).not.toBeNull();
+  expect(notched.result.plaques[0]).toMatchObject({
+    x: (5 + 0.6) * T,
+    y: outlined.y + outlined.h,
+  });
+  expect(notched.result.plaques[0]!.w).toBeCloseTo(4.8 * T);
 });

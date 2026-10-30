@@ -1242,13 +1242,18 @@ A pull request's review rounds SHALL be drawn as a pod. World SHALL project a
 pod from the tabs of one workspace named `#<N> <slug> · r<K>` (the crew
 watcher's round tabs) and SHALL take as its author the other tabs whose agent
 panes World sources link to that pull request; a later Herdr group MAY replace
-the projection. The pod's desks SHALL be one team, and its wall around the
-current round SHALL carry a plaque, within the wall's width, with the pull
-request's number, its state from the pull request card (Reviewing, Fixes
-requested, READY) when World sources know it, and its rounds; its accessible
-name SHALL also give the branch name and title. Earlier rounds SHALL stack
-as faded tables behind the current round's table instead of taking a desk
-each, except a round whose agent needs the user or whose desk is pinned. A
+the projection. Its pull request SHALL be the one a round's pane is linked to,
+or else the only one with that number whose branch the label names; a number
+alone SHALL NOT pick a pull request. The pod's desks SHALL be one team, and
+two pods SHALL NOT share a team: a relation between their desks stays a
+connector. The wall around the current round SHALL carry a plaque, inside
+the wall along its bottom-left desk, with the pull request's number, its
+state from the pull request card (Reviewing; Fixes requested, including a
+reviewer's open findings; READY) when World sources know it, and its rounds;
+its accessible name SHALL also give the branch name and title. Earlier
+rounds SHALL stack as faded tables behind the current round's table instead
+of taking a desk each, but only while every agent at the round's desk is idle
+or done, none of its panes has an open ask, and the desk is not pinned. A
 pod SHALL leave Town when its round tabs close.
 
 A building for a host whose topology is cached after failure SHALL be visibly
@@ -1288,6 +1293,19 @@ supplies it.
   shows `#512`, the pull request's state and `r2 +1`, its accessible name
   reads `#512 settings-sync`, the state and `r2 · +1 earlier`, and round 1 is
   a faded table behind round 2's
+
+#### Scenario: An earlier round is still busy
+
+- **WHEN** round 1's reviewer is still working, or asks the user a question,
+  while round 2 runs
+- **THEN** round 1 keeps its own desk, agent and target, and it stacks behind
+  round 2 once its agents are idle or done and the question is answered
+
+#### Scenario: Two pull requests whose authors share a team
+
+- **WHEN** the authors of pull requests 512 and 513 are in one manual group
+- **THEN** each pull request keeps its own wall and plaque, and the group
+  shows as a connector between the authors
 
 #### Scenario: A pull request merges
 

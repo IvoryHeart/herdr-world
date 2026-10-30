@@ -40,23 +40,20 @@ export type TownTeamLink = {
   current: boolean;
 };
 
-/** A pod's plaque, on the wall around its current round. */
+/** A pod's plaque, on the wall around its current round; one per wall. */
 export type TownPodPlaque = {
   key: string;
   pod: WorldPod;
   roomKey: string;
   /**
-   * Where it hangs: the wall's top-left corner, or its bottom-left when the
-   * wall starts on the room's first row, whose top edge the room's nameplate
-   * covers.
+   * Where it hangs: just inside the bottom edge of the wall's bottom-left
+   * cell, below the desks' nameplates. The top edge has chairs and seat
+   * labels, and on the room's first row the room's nameplate.
    */
-  edge: "top" | "bottom";
   x: number;
   y: number;
-  /** The wall's width, which the plaque stays within. */
+  /** The width of that cell's run along the edge, which the plaque stays within. */
   w: number;
-  /** Plaques on one wall stack downwards: 0 for the first. */
-  row: number;
   color: TerminalColor;
 };
 
@@ -205,6 +202,25 @@ export function outlinePath(cells: readonly TownCell[]): string {
     .join(" ");
 }
 
+/**
+ * Where a wall's plaque hangs: on the leftmost cell of its bottom row, as
+ * wide as the run of cells beside it, so an outlined wall's plaque never
+ * hangs over another team's desk.
+ */
+function plaqueAnchor(group: readonly TownCell[]) {
+  const row = Math.max(...group.map((cell) => cell.row));
+  const cols = new Set(
+    group.filter((cell) => cell.row === row).map((cell) => cell.col),
+  );
+  const first = Math.min(...cols);
+  let last = first;
+  while (cols.has(last + 1)) last += 1;
+  const at = (col: number) =>
+    footprint(group.find((cell) => cell.row === row && cell.col === col)!);
+  const start = at(first);
+  return { x: start.x0, y: start.y1, w: at(last).x1 - start.x0 };
+}
+
 /** A closed path through rectilinear corners, rounded like the box walls. */
 function roundedLoop(corners: readonly { x: number; y: number }[]): string {
   const towards = (
@@ -255,8 +271,11 @@ export function townTeams(
       for (const cell of room.cells)
         if (cell.deskKey) cells.set(cell.deskKey, cell);
 
-  // Union desks joined by any relation; a team's label is its first desk.
+  // Union desks joined by a pod or any relation; a team's label is its
+  // first desk. Two pods never join one team: a relation between them stays
+  // a connector, so each pull request keeps its own wall and plaque.
   const parent = new Map<string, string>();
+  const podOfRoot = new Map<string, string>();
   const find = (key: string): string => {
     let root = key;
     while (parent.get(root) !== root) root = parent.get(root)!;
@@ -266,20 +285,12 @@ export function townTeams(
   const join = (a: string, b: string) => {
     for (const key of [a, b]) if (!parent.has(key)) parent.set(key, key);
     const [x, y] = [find(a), find(b)].sort();
+    const podX = podOfRoot.get(x!);
+    const podY = podOfRoot.get(y!);
+    if (podX && podY && podX !== podY) return;
     parent.set(y!, x!);
+    if (podY) podOfRoot.set(x!, podY);
   };
-  const pairs: { a: string; b: string; relation: Relation }[] = [];
-  const groupedDesks = new Set<string>();
-  for (const relation of relations) {
-    const a = deskOf(relation.a);
-    const b = deskOf(relation.b);
-    // A desk in a group can leave it even when its partner is gone.
-    if (relation.evidence.some((entry) => entry.kind === "manual"))
-      for (const desk of [a, b]) if (desk) groupedDesks.add(desk);
-    if (!a || !b || a === b) continue;
-    join(a, b);
-    pairs.push({ a, b, relation });
-  }
   // A pod's desks join its current round's; a lone round is a team of one.
   const podPairs: { a: string; b: string }[] = [];
   const podDesks = new Map<WorldPod, string[]>();
@@ -292,10 +303,23 @@ export function townTeams(
     if (!head) continue;
     podDesks.set(pod, desks);
     join(head, head);
+    if (!podOfRoot.has(find(head))) podOfRoot.set(find(head), pod.key);
     for (const key of rest) {
       join(head, key);
       podPairs.push({ a: head, b: key });
     }
+  }
+  const pairs: { a: string; b: string; relation: Relation }[] = [];
+  const groupedDesks = new Set<string>();
+  for (const relation of relations) {
+    const a = deskOf(relation.a);
+    const b = deskOf(relation.b);
+    // A desk in a group can leave it even when its partner is gone.
+    if (relation.evidence.some((entry) => entry.kind === "manual"))
+      for (const desk of [a, b]) if (desk) groupedDesks.add(desk);
+    if (!a || !b || a === b) continue;
+    join(a, b);
+    pairs.push({ a, b, relation });
   }
   const deskTeams = new Map<string, string>();
   for (const key of parent.keys()) deskTeams.set(key, find(key));
@@ -318,7 +342,7 @@ export function townTeams(
     for (const key of desks) currentDesks.add(key);
   const walls: TownTeamWall[] = [];
   const walled = new Map<string, string>();
-  const firstRow = new Map<string, number>();
+  const anchors = new Map<string, { x: number; y: number; w: number }>();
   for (const [key, deskKeys] of byRoom) {
     const team = deskTeams.get(deskKeys[0]!)!;
     const roomKey = model.desks.get(deskKeys[0]!)?.roomKey;
@@ -355,7 +379,7 @@ export function townTeams(
         desks: group.length,
       });
       for (const cell of group) walled.set(cell.deskKey!, wallKey);
-      firstRow.set(wallKey, r0);
+      anchors.set(wallKey, plaqueAnchor(group));
     }
   }
 
@@ -398,23 +422,16 @@ export function townTeams(
   }
   const wallByKey = new Map(walls.map((wall) => [wall.key, wall]));
   const plaques: TownPodPlaque[] = [];
-  const rows = new Map<string, number>();
   for (const [pod, desks] of podDesks) {
     const wall = wallByKey.get(walled.get(desks[0]!) ?? "");
+    const anchor = anchors.get(wall?.key ?? "");
     const desk = model.desks.get(desks[0]!);
-    if (!wall || !desk) continue;
-    const row = rows.get(wall.key) ?? 0;
-    rows.set(wall.key, row + 1);
-    const edge = firstRow.get(wall.key) === 0 ? "bottom" : "top";
+    if (!wall || !anchor || !desk) continue;
     plaques.push({
       key: pod.key,
       pod,
       roomKey: desk.roomKey,
-      edge,
-      x: wall.x,
-      y: edge === "top" ? wall.y : wall.y + wall.h,
-      w: wall.w,
-      row,
+      ...anchor,
       color: wall.color,
     });
   }

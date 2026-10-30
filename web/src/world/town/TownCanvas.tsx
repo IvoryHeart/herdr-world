@@ -383,12 +383,12 @@ export function TownCanvas({
     stacks: NO_TOWN_POD_STACKS,
   });
   const podStacks = useMemo(() => {
-    const next = townPodStacks(pinnedModel, pods);
+    const next = townPodStacks(pinnedModel, pods, askingKeys);
     const key = `${[...next.stacks].join(",")}|${[...next.stacked].join(",")}`;
     if (key !== stacksRef.current.key)
       stacksRef.current = { key, stacks: next };
     return stacksRef.current.stacks;
-  }, [pinnedModel, pods]);
+  }, [pinnedModel, pods, askingKeys]);
   const stackedInput = useMemo(
     () => townStackedInput(pinnedModel.input, podStacks.stacked),
     [pinnedModel.input, podStacks],

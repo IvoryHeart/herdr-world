@@ -15,9 +15,9 @@ const TONES: Record<PodState, TownBadgeTone> = {
 /**
  * A pod's plaque on its wall: the pull request's number, its state from the
  * pull request card (Reviewing, Fixes requested, READY) and its rounds,
- * within the wall's width so neighbouring pods' plaques never overlap. The
- * state gives way first; the branch name is on the desk's own nameplate and
- * in the plaque's tooltip. The number opens the pull request card, as a
+ * inside its wall so neighbouring pods' plaques never overlap. The state
+ * gives way first, then the rounds; the branch name is on the desk's own
+ * nameplate and in the plaque's tooltip. The number opens the pull request card, as a
  * desk's badge does.
  */
 export function TownPodPlaque({
@@ -39,11 +39,10 @@ export function TownPodPlaque({
   return (
     <div
       className="town-desk-tags town-pod-plaque-at"
-      data-edge={plaque.edge}
       style={
         {
           left,
-          top: top + plaque.row * 14,
+          top,
           "--wall-w": `${plaque.w}px`,
         } as CSSProperties
       }
