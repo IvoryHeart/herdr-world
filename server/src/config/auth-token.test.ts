@@ -32,6 +32,7 @@ function tempAuthTokenPath(homeDir = tempHome()): string {
     homeDir,
     process.platform,
     join(homeDir, "AppData", "Roaming"),
+    {},
   );
 }
 
@@ -74,7 +75,7 @@ describe("generated authentication token", () => {
   test("uses APPDATA for the Windows token", () => {
     const home = join("C:", "Users", "tester");
     const appData = join(home, "AppData", "Roaming");
-    expect(defaultAuthTokenPath(home, "win32", appData)).toBe(
+    expect(defaultAuthTokenPath(home, "win32", appData, {})).toBe(
       join(appData, "herdr-world", "auth-token"),
     );
   });
@@ -122,6 +123,7 @@ describe("generated authentication token", () => {
         homeWithSeparator,
         process.platform,
         join(home, "AppData", "Roaming"),
+        {},
       );
       expect(
         authTokenPrintCommand(path, homeWithSeparator, process.platform, ""),

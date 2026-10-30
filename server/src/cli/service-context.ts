@@ -1,11 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { readAuthToken } from "../config/auth-token";
-import {
-  assertSafeDataPath,
-  dataRoot,
-  defaultDataFile,
-} from "../config/data-paths";
+import { assertSafeDataPath, dataRoot } from "../config/data-paths";
 import { worldEnv } from "../config/environment";
 import {
   browserUrlFor,
@@ -25,6 +21,7 @@ import {
 import {
   parseServiceEnvironment,
   prepareServiceAccess,
+  serviceTokenPath,
   worldServiceStatus,
   runServiceCommand,
 } from "../config/service-manager";
@@ -47,11 +44,22 @@ export interface ServiceConfigFile {
 /** The managed service's configuration as the service process will see it. */
 export interface ServiceSetup extends ServiceConfigFile {
   env: Record<string, string>;
+  /** The data folder: the CLI's own HERDR_WORLD_DATA_DIR, then the service's. */
+  dataRoot?: string;
 }
 
-/** The private data directory of the runtime's user, never the test runner's. */
-export function runtimeDataRoot(runtime: CliRuntime): string {
-  return dataRoot(runtime.homeDir, runtime.platform, runtime.appDataDir);
+/**
+ * The private data directory of the runtime's user, never the test runner's:
+ * the CLI's own HERDR_WORLD_DATA_DIR, then the service environment's.
+ */
+export function runtimeDataRoot(
+  runtime: CliRuntime,
+  serviceEnv: Record<string, string> = {},
+): string {
+  return dataRoot(runtime.homeDir, runtime.platform, runtime.appDataDir, {
+    HERDR_WORLD_DATA_DIR:
+      worldEnv("DATA_DIR", runtime.env) ?? worldEnv("DATA_DIR", serviceEnv),
+  });
 }
 
 export function connectionRegistryPath(
@@ -60,12 +68,7 @@ export function connectionRegistryPath(
 ): string {
   return (
     worldEnv("CONNECTIONS_PATH", env) ??
-    defaultDataFile(
-      "connections.json",
-      runtime.homeDir,
-      runtime.platform,
-      runtime.appDataDir,
-    )
+    join(runtimeDataRoot(runtime, env), "connections.json")
   );
 }
 
@@ -129,15 +132,13 @@ export function locateServiceConfig(runtime: CliRuntime): ServiceConfigFile {
 /** Also throws when the env file has entries the service could not load. */
 export function readServiceSetup(runtime: CliRuntime): ServiceSetup {
   const file = locateServiceConfig(runtime);
-  return {
-    ...file,
-    env: parseServiceEnvironment(
-      file.contents,
-      file.configPath,
-      file.platform,
-      file.homeDir,
-    ),
-  };
+  const env = parseServiceEnvironment(
+    file.contents,
+    file.configPath,
+    file.platform,
+    file.homeDir,
+  );
+  return { ...file, env, dataRoot: runtimeDataRoot(runtime, env) };
 }
 
 export interface ServiceAccessInfo {
@@ -153,10 +154,14 @@ export interface ServiceAccessInfo {
   pinEnabled: boolean;
 }
 
-/** The World-owned generated token; no upstream credential fallback. */
-export function generatedTokenPath(setup: ServiceConfigFile): string {
-  const current = join(dirname(setup.paths.config), "auth-token");
-  return current;
+/**
+ * The World-owned generated token, in the data folder the CLI resolves
+ * (runtimeDataRoot); no upstream credential fallback.
+ */
+export function generatedTokenPath(setup: ServiceSetup): string {
+  return setup.dataRoot
+    ? join(setup.dataRoot, "auth-token")
+    : serviceTokenPath(setup.configPath, worldEnv("DATA_DIR", setup.env));
 }
 
 /** Validated access settings plus the existing token; never creates one. */

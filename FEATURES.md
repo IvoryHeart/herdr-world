@@ -620,8 +620,15 @@ when piped, with stable exit codes:
   reaches reception when exactly one local Herdr has the pane it names. A new
   ask follows your chime, toast and OS notification preferences, naming its
   agent with the question's first line and **Open agent** for its exact
-  original seat. Another verified agent (never the asker) may answer a
-  question that is not owner-only.
+  original seat. The CLI also alerts you through the asking pane's Herdr
+  (`herdr notification show --sound request`), so the question reaches Herdr's
+  toasts, every World connected to that Herdr and phone notifications even
+  when no World tab is open. When no one was alerted the ask exits 6
+  (`not_delivered`) with its recorded ID; when World could not record it, the
+  alert still goes out, names the failure and the ask exits 1. Its JSON says
+  `recorded` and what Herdr reported in `notified` (`null` for a repeated
+  cause, which is not alerted again), kept through `--wait`. Another verified agent (never
+  the asker) may answer a question that is not owner-only.
 - `ask withdraw ID` or `ask withdraw --key CAUSE`: the original verified asker
   withdraws a cleared cause, including when a creation reply lost its ask ID.
   Answering or withdrawing removes its question marks. `--key` keeps repeated

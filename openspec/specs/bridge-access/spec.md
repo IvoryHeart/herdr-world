@@ -90,6 +90,23 @@ per-client throttling plus a bounded global failure cooldown.
 - **WHEN** a configured login credential changes and the listener starts
 - **THEN** cookies signed before the change no longer authenticate
 
+### Requirement: One listener per data folder
+Each running World listener SHALL own its data folder exclusively: the default
+platform folder, or `HERDR_WORLD_DATA_DIR` when set. Its signing key SHALL be the
+folder's single `session-secret.json`. A listener started on a folder another
+running listener holds SHALL stop before loading signing state, naming the
+holder's process and port. A folder whose holder no longer runs SHALL be taken
+over. Management commands and the agent CLI SHALL NOT take the folder. Tests
+SHALL NOT use the user's data folder.
+
+#### Scenario: A second instance shares a folder
+- **WHEN** a World listener starts on a data folder a running World holds
+- **THEN** it exits naming that World and leaves the folder's files unchanged
+
+#### Scenario: Separate folders on one home
+- **WHEN** two listeners run with different `HERDR_WORLD_DATA_DIR` folders
+- **THEN** each keeps its own sessions across restarts and credential changes
+
 ### Requirement: Local agent command line
 The World service SHALL accept agent CLI calls at `/api/world/cli` only from a
 loopback peer without an Origin header, authenticated with a bearer token

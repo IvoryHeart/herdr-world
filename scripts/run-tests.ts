@@ -1,4 +1,5 @@
 import { availableParallelism } from "node:os";
+import { join } from "node:path";
 import { acquireAllCheckSlots, acquireCheckSlot, heldEnv } from "./check-lock";
 import { warmChrome } from "./chrome-warmup";
 import {
@@ -88,6 +89,8 @@ try {
         TMPDIR: directory,
         TMP: directory,
         TEMP: directory,
+        // Never the user's World data (see test-temp-preload.ts).
+        HERDR_WORLD_DATA_DIR: join(directory, "herdr-world-data"),
         ...(warm ? { HERDR_CHROME_WARM: "1" } : {}),
         ...(usesBrowser ? heldEnv("browser") : {}),
       },

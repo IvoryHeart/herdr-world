@@ -22,6 +22,7 @@ test("terminal codec preferences survive a fresh process and default to enabled"
         env: {
           ...process.env,
           HOME: home,
+          HERDR_WORLD_DATA_DIR: undefined,
           USERPROFILE: home,
           APPDATA: join(home, "AppData"),
           HERDR_WORLD_SETTINGS_PATH: undefined,
@@ -87,6 +88,7 @@ test("explicit settings paths isolate writes and bypass legacy migration", async
         env: {
           ...process.env,
           HOME: home,
+          HERDR_WORLD_DATA_DIR: undefined,
           USERPROFILE: home,
           APPDATA: join(home, "AppData"),
           HERDR_WORLD_SETTINGS_PATH: currentPath,

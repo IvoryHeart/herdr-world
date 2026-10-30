@@ -1,7 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import type { CliContext } from "./command";
 import { runCli } from "./index";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { loadOrCreateSessionSecret } from "../config/session-secret";
 import {
+  herdrAlert,
+  httpTransport,
+  type OwnerAlert,
   parseWorldArgs,
   runWorldCommand,
   WORLD_EXIT,
@@ -265,4 +272,273 @@ test("--skill prints the agent guide", async () => {
   expect(await runCli(["--skill"], ctx)).toBe(0);
   expect(out[0]).toBe(WORLD_SKILL);
   expect(WORLD_SKILL).toMatchSnapshot();
+});
+
+describe("owner alert", () => {
+  const alerts: [string, string][] = [];
+  const shown =
+    (value: boolean, reason = value ? "shown" : "disabled"): OwnerAlert =>
+    (title, body) => {
+      alerts.push([title, body]);
+      return { shown: value, reason };
+    };
+  const asked: WorldCliTransport = async () => ({
+    ok: true,
+    actor: { label: "claude in w1:p1", verified: true },
+    result: { id: "q-1", created: true },
+  });
+
+  test("a new question alerts the owner through Herdr once", async () => {
+    alerts.length = 0;
+    const { context: ctx, out } = context();
+    expect(
+      await runWorldCommand(
+        "ask",
+        ["Ship?", "--json"],
+        ctx,
+        asked,
+        false,
+        shown(true),
+      ),
+    ).toBe(0);
+    expect(alerts).toEqual([["claude in w1:p1 asks", "Ship? (q-1)"]]);
+    expect(JSON.parse(out[0]!)).toMatchObject({
+      ok: true,
+      result: { id: "q-1" },
+      notified: { shown: true, reason: "shown" },
+    });
+  });
+
+  test("a known cause is not alerted again", async () => {
+    alerts.length = 0;
+    const { context: ctx } = context();
+    const known: WorldCliTransport = async () => ({
+      ok: true,
+      result: { id: "q-1", question: "Ship?", at: 1 },
+    });
+    expect(
+      await runWorldCommand(
+        "ask",
+        ["Ship?", "--key", "crew:7"],
+        ctx,
+        known,
+        true,
+        shown(true),
+      ),
+    ).toBe(0);
+    expect(alerts).toEqual([]);
+  });
+
+  test("an alert nobody saw fails loudly, keeps the record and does not wait", async () => {
+    alerts.length = 0;
+    const { context: ctx, err } = context();
+    let calls = 0;
+    const transport: WorldCliTransport = async (...args) => {
+      calls += 1;
+      return asked(...args);
+    };
+    expect(
+      await runWorldCommand(
+        "ask",
+        ["Ship?", "--wait"],
+        ctx,
+        transport,
+        true,
+        shown(false),
+      ),
+    ).toBe(WORLD_EXIT.not_delivered);
+    expect(calls).toBe(1);
+    expect(err).toEqual([
+      "herdr-world ask: recorded q-1, but Herdr showed the owner no alert: disabled",
+    ]);
+  });
+
+  test("a question World could not record still reaches the owner and exits unavailable", async () => {
+    const down: WorldCliTransport = async () => ({
+      ok: false,
+      code: "refused",
+      error: "wrong World CLI token",
+    });
+    for (const [delivered, said] of [
+      [true, "the owner was alerted through Herdr"],
+      [false, "Herdr alert also failed: disabled"],
+    ] as const) {
+      alerts.length = 0;
+      const { context: ctx, out } = context();
+      expect(
+        await runWorldCommand(
+          "ask",
+          ["Ship?", "--json"],
+          ctx,
+          down,
+          false,
+          shown(delivered),
+        ),
+      ).toBe(WORLD_EXIT.failure);
+      expect(alerts).toEqual([
+        [
+          "pane w1:p1 asks",
+          "Ship? (not recorded in World: wrong World CLI token)",
+        ],
+      ]);
+      expect(JSON.parse(out[0]!)).toMatchObject({
+        ok: false,
+        code: "unavailable",
+        recorded: false,
+        notified: { shown: delivered },
+        error: `World did not record the question: wrong World CLI token; ${said}`,
+      });
+    }
+  });
+
+  test("a repeated cause says it was recorded and sent no alert", async () => {
+    alerts.length = 0;
+    const { context: ctx, out } = context();
+    const known: WorldCliTransport = async () => ({
+      ok: true,
+      result: { id: "q-1", question: "Ship?", at: 1 },
+    });
+    expect(
+      await runWorldCommand(
+        "ask",
+        ["Ship?", "--key", "crew:7", "--json"],
+        ctx,
+        known,
+        false,
+        shown(true),
+      ),
+    ).toBe(0);
+    expect(alerts).toEqual([]);
+    expect(JSON.parse(out[0]!)).toMatchObject({
+      ok: true,
+      recorded: true,
+      notified: null,
+    });
+  });
+
+  test("--wait keeps the recording and alert outcome, answered or timed out", async () => {
+    for (const answered of [true, false]) {
+      alerts.length = 0;
+      const { context: ctx, out, err } = context();
+      const transport: WorldCliTransport = async (command) =>
+        command === "ask"
+          ? {
+              ok: true,
+              actor: { label: "claude in w1:p1", verified: true },
+              result: { id: "q-1", created: true },
+            }
+          : {
+              ok: true,
+              result: answered
+                ? { id: "q-1", answer: { text: "Yes" } }
+                : { id: "q-1" },
+            };
+      const code = await runWorldCommand(
+        "ask",
+        ["Ship?", "--json", "--wait", "--timeout", "0.001"],
+        ctx,
+        transport,
+        false,
+        shown(true),
+      );
+      expect(code).toBe(answered ? 0 : WORLD_EXIT.timeout);
+      const printed = JSON.parse((answered ? out : [...out, ...err])[0]!);
+      expect(printed).toMatchObject({
+        recorded: true,
+        notified: { shown: true, reason: "shown" },
+        ...(answered
+          ? { result: { answer: { text: "Yes" } } }
+          : { timed_out: true }),
+      });
+    }
+  });
+
+  test("reads Herdr's notification reply and its failures", () => {
+    const { context: ctx } = context();
+    const argv: string[][] = [];
+    const reply = (code: number, stdout: string) => {
+      ctx.captureCommand = (command: string[]) => {
+        argv.push(command);
+        return { code, stdout };
+      };
+      return herdrAlert(ctx)("claude asks", "Ship? (q-1)");
+    };
+    expect(
+      reply(
+        0,
+        '{"id":"cli:notification:show","result":{"type":"notification_show","shown":true,"reason":"shown"}}',
+      ),
+    ).toEqual({ shown: true, reason: "shown" });
+    expect(argv[0]).toEqual([
+      "herdr",
+      "notification",
+      "show",
+      "claude asks",
+      "--body",
+      "Ship? (q-1)",
+      "--sound",
+      "request",
+    ]);
+    expect(
+      reply(
+        1,
+        '{"id":"cli:notification:show","error":{"code":"server_not_running","message":"no herdr server is running"}}',
+      ),
+    ).toEqual({ shown: false, reason: "no herdr server is running" });
+    expect(reply(127, "")).toEqual({
+      shown: false,
+      reason: "herdr notification show exited 127",
+    });
+    ctx.captureCommand = () => {
+      throw new Error("ENOENT");
+    };
+    expect(herdrAlert(ctx)("t", "b")).toEqual({
+      shown: false,
+      reason: "could not run herdr: ENOENT",
+    });
+  });
+});
+
+describe("endpoint diagnostics", () => {
+  test("every token or endpoint error names the service and the token's source", async () => {
+    const home = mkdtempSync(join(tmpdir(), "world-cli-endpoint-"));
+    const data = join(home, "data");
+    const secret = join(data, "session-secret.json");
+    const transport = (url: string) => {
+      const { context: ctx } = context();
+      ctx.runtime.homeDir = home;
+      ctx.runtime.env = { HERDR_WORLD_URL: url, HERDR_WORLD_DATA_DIR: data };
+      return httpTransport(ctx);
+    };
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch: () => new Response("not json", { status: 500 }),
+    });
+    const answering = `http://127.0.0.1:${server.port}`;
+    try {
+      const missing = await transport(answering)("whoami", {});
+      expect(missing.error).toContain(secret);
+      expect(missing.error).toContain(answering);
+      loadOrCreateSessionSecret(["synthetic-credential"], secret);
+      const garbled = await transport(answering)("whoami", {});
+      expect(garbled.error).toBe(
+        `World service at ${answering} (token from ${secret}) answered 500 without JSON`,
+      );
+      const stopped = Bun.serve({
+        hostname: "127.0.0.1",
+        port: 0,
+        fetch: () => new Response(),
+      });
+      const gone = `http://127.0.0.1:${stopped.port}`;
+      stopped.stop(true);
+      const unreachable = await transport(gone)("whoami", {});
+      expect(unreachable.error).toStartWith(
+        `World service not reachable at ${gone} (token from ${secret}): `,
+      );
+    } finally {
+      server.stop(true);
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
 });
