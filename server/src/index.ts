@@ -153,7 +153,7 @@ import {
   type ObservedAgent,
 } from "./world/board-recipient";
 import { herdrEventName } from "./utils/herdr-events";
-import { ProfileStore } from "./agent/profile-store";
+import { createProfileServices } from "./agent/profile-service";
 import {
   createOfficeObservabilityHttpHandler,
   resolveOfficeObservabilityBootstrap,
@@ -441,18 +441,14 @@ function board() {
   return boardStore;
 }
 
-let profileStore: ProfileStore | null = null;
-/** Opened on first use, like Board's store. */
-function profiles() {
-  profileStore ??= new ProfileStore(undefined, {
-    log: (message) => console.warn(message),
-  });
-  return profileStore;
-}
 const revisionPublisher = createRevisionPublisher(clients, safeSend);
-const publishProfilesChanged = revisionPublisher(
-  "world_profiles_changed",
-  "world-profiles",
+const {
+  profiles,
+  terminalSettings,
+  publishProfilesChanged,
+  observeTerminalSettings,
+} = createProfileServices(revisionPublisher, (id) =>
+  connectionManager.readyRuntimeLease(id),
 );
 
 /**
@@ -588,6 +584,7 @@ worldSnapshots = new WorldSnapshotService(
   undefined,
   () => terminalMarks.worldWatchlist.list(),
   observeHost,
+  observeTerminalSettings,
 );
 
 const assistantContext = createAssistantContext({
@@ -909,6 +906,7 @@ const rpcServices = {
   logger,
   markRpcError,
   profiles,
+  terminalSettings,
   publishBoardChanged,
   publishProfilesChanged,
   publishWorldInvalidation,

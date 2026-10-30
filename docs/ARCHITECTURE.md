@@ -267,6 +267,24 @@ Subscription acknowledgements, including reconnects, trigger fresh snapshots;
 events during refresh queue another refresh. This reconciles missed changes,
 not an atomic or replayable event log.
 
+## Per-terminal profile settings
+
+Herdr owns profile assignments and Town master claims as four namespaced
+metadata tokens on the terminal. `server/src/agent/terminal-tokens.ts` validates
+the terminal witness and all values, writes through the exact current lease,
+and checks that lease again after dispatch. The shared Town move path checks
+the moved terminal and restores keys only if Herdr dropped them.
+
+`server/src/agent/terminal-settings.ts` projects these tokens for browsers.
+After complete clean host observations, its separate reconciliation work
+imports legacy assignments once per connection and clears superseded master
+claims; it never delays snapshot delivery for those writes. Unreachable
+hosts retain unresolved observations. The highest claim revision is durable
+with the profiles; assignments use `max(now, highest seen + 1)`, with ties
+broken by the greater terminal ID. Cross-machine clock skew remains a limit.
+Profiles and chimes stay World-local. Migration backup and rollback details
+are in [deployment](DEPLOYMENT.md#terminal-profile-settings-migration).
+
 ## Connection isolation
 
 A bridge-global `ConnectionManager` owns shared profiles and independent

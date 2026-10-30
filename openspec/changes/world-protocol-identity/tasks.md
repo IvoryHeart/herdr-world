@@ -72,27 +72,27 @@ with the `openspec-sync-specs` skill.
 
 ## 5. Per-terminal settings
 
-- [ ] 5.1 On a disposable `herdr --session`, confirm and record in the PR that:
+- [x] 5.1 On a disposable `herdr --session`, confirm and record in the PR that:
   - tokens follow `pane.move`;
   - tokens are gone after a Herdr restart;
   - a write past the 32-key limit is refused;
   - values are trimmed, stripped and truncated as the design states.
-- [ ] 5.2 Write and read `world_terminal`, `world_profile`, `world_profile_name` and
+- [x] 5.2 Write and read `world_terminal`, `world_profile`, `world_profile_name` and
   `world_master`. Writes go through the exact current lease, with the terminal witness
   and validation of every value before writing. Verify with P5, including a refused
   write that is shown as failed.
-- [ ] 5.3 Add the Town master hybrid-clock revision, its highest-seen value kept with
+- [x] 5.3 Add the Town master hybrid-clock revision, its highest-seen value kept with
   the profiles, and the clearing of superseded claims. Verify with:
   - P7's exhaustive convergence check;
   - a test of two in-process Worlds on one disposable Herdr, covering an offline
     holder returning after a newer assignment.
-- [ ] 5.4 Add the import from `agent-profiles.json`, recorded as done per connection in
+- [x] 5.4 Add the import from `agent-profiles.json`, recorded as done per connection in
   the profiles document. Leave the legacy fields unread for one release. Verify that:
   - the import runs once per connection;
   - an offline host's assignments wait for its first observation;
   - a restart after a newer token assignment does not import again;
   - a rollback keeps today's behaviour.
-- [ ] 5.5 Sync the per-terminal settings requirement into `world-surfaces`. Reconcile
+- [x] 5.5 Sync the per-terminal settings requirement into `world-surfaces`. Reconcile
   the Town master storage text in the `chimes` and `agent-profiles` changes in the same
   PR, so the current specs never keep "kept by the service". Update `FEATURES.md` and
   `docs/TUTORIAL.md` if the shared Town master is visible to users, plus the knowledge
