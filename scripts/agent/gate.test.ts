@@ -10,7 +10,9 @@ import {
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { main } from "./gate";
+import { main, runPass } from "./gate";
+import { cachedObserve } from "./crew/github-cache";
+import { openCrewStore } from "./crew/store";
 import { CASES, config, confirm, input, NOW, SHA } from "./gate/cases";
 import type { Run } from "./gate/observe";
 import { evaluate } from "./gate/predicate";
@@ -307,6 +309,79 @@ beforeEach(() => {
 });
 
 describe("pass", () => {
+  test("crew caches complete observations while explicit merge checks retain the seven-call baseline", async () => {
+    const crew = openCrewStore(":memory:");
+    const gate = openStore(dbPath);
+    let calls = 0;
+    const run: Run = (args) => {
+      calls++;
+      return fakeGitHub(args);
+    };
+    const context = {
+      config: { ...config, remote },
+      run,
+      mirror: join(root, "cached-mirror.git"),
+      now: NOW,
+      observe: (options: Parameters<typeof cachedObserve>[1]) =>
+        cachedObserve(crew, options),
+    };
+    try {
+      expect(runPass(gate, context, []).verdicts[0]?.state).toBe("READY");
+      expect(calls).toBe(7);
+      calls = 0;
+      expect(
+        runPass(gate, { ...context, now: NOW + 60_000 }, []).verdicts[0]?.state,
+      ).toBe("READY");
+      expect(calls).toBe(1); // plus the crew's quota read = two per unchanged pass
+      calls = 0;
+      runPass(gate, { ...context, now: NOW + 600_000 }, []);
+      expect(calls).toBe(7);
+      world.listRollup = "FAILURE";
+      world.checks[0]!.conclusion = "FAILURE";
+      calls = 0;
+      expect(
+        runPass(gate, { ...context, now: NOW + 660_000 }, []).verdicts[0]
+          ?.state,
+      ).toBe("NOT_READY");
+      expect(calls).toBe(7);
+      calls = 0;
+      expect((await cli(["merge-line", "7"], NOW + 660_000, run)).code).toBe(2);
+      expect(calls).toBe(7);
+      world.listRollup = "SUCCESS";
+      world.checks[0]!.conclusion = "SUCCESS";
+      calls = 0;
+      const budgetContext = {
+        ...context,
+        now: NOW + 1_300_000,
+        observe: (options: Parameters<typeof cachedObserve>[1]) =>
+          cachedObserve(crew, options, undefined, {
+            mergeOnly: true,
+            eligible: () => false,
+          }),
+      };
+      const deferred = runPass(gate, budgetContext, []);
+      expect(calls).toBe(1);
+      expect(deferred.inputs[0]?.item?.headSha).toBe(fixed);
+      expect(deferred.inputs[0]?.historyComplete).toBe(false);
+      calls = 0;
+      expect(
+        runPass(
+          gate,
+          {
+            ...budgetContext,
+            observe: (options) =>
+              cachedObserve(crew, options, undefined, { mergeOnly: true }),
+          },
+          [],
+        ).verdicts[0]?.state,
+      ).toBe("READY");
+      expect(calls).toBe(7);
+    } finally {
+      crew.close();
+      gate.close();
+    }
+  });
+
   test("reads GitHub and git and records READY from full review history", async () => {
     world.retried = true;
     const first = await cli(["pass"]);

@@ -1,4 +1,6 @@
 import { crewVerdict } from "./crew/round-readiness";
+import { cachedObserve, budgetIntervals } from "./crew/github-cache";
+import { GitHubPass } from "./crew/github-requests";
 import { parseOptions, USAGE } from "./crew/options";
 export { parseOptions } from "./crew/options";
 import { reconcileOwnerAsks } from "./crew/owner-asks";
@@ -8,7 +10,7 @@ import { dirname, join } from "node:path";
 import { shortSha } from "../../shared/pullRequests";
 import { gateDir, loadConfig, runPass } from "./gate";
 import type { GateInput, Verdict } from "./gate/predicate";
-import { openStore } from "./gate/store";
+import { activeHold, openStore } from "./gate/store";
 import { fix, fixed, startFixers } from "./crew/fixer";
 import {
   FRESH_KINDS,
@@ -128,6 +130,7 @@ type PassContext = {
   deps: Deps;
   /** The command that starts a reviewer run, before its own arguments. */
   worker: string[];
+  mergeOnly?: boolean;
 };
 
 export function crewPass(context: PassContext) {
@@ -197,7 +200,8 @@ export function crewPass(context: PassContext) {
         input.state === "OPEN" &&
         !isOnHold(input) &&
         !input.hold &&
-        !input.item?.draft
+        !input.item?.draft &&
+        !context.mergeOnly
           ? roundPolicy({
               crew,
               input,
@@ -214,6 +218,8 @@ export function crewPass(context: PassContext) {
                 .map((entry) => entry.id.slice(7)),
             })
           : actions;
+      if (context.mergeOnly)
+        due = due.filter((entry) => entry.kind === "ready");
       const effective = crewVerdict(crew, verdict, input);
       if (effective.state !== "READY")
         due = due.filter((entry) => entry.kind !== "ready");
@@ -252,7 +258,22 @@ export function crewPass(context: PassContext) {
       }
       return planned;
     }
-    act(crew, context, settings, planned, verdicts, inputs, live, authors, say);
+    if (context.mergeOnly)
+      markHeads(crew, context, settings, verdicts, inputs, new Map(), say, [
+        "crew/merge-ready",
+      ]);
+    else
+      act(
+        crew,
+        context,
+        settings,
+        planned,
+        verdicts,
+        inputs,
+        live,
+        authors,
+        say,
+      );
     return planned;
   };
   return dryRun ? pass() : holdLock(context.lock, pass);
@@ -789,10 +810,18 @@ export function afterPass(
   start: number,
   busy: number[] | null,
   options: { interval: number; busyInterval: number },
+  remaining = Infinity,
 ): { cadence: Cadence; at: number } {
   const lastFull = cadence.scope === null ? start : cadence.lastFull;
   const kept = busy ?? cadence.busy;
-  const next = nextPass(lastFull, start, kept, options);
+  const intervals = budgetIntervals(remaining, options);
+  const next = nextPass(lastFull, start, kept, intervals);
+  if (remaining < 1500)
+    next.at = Math.max(
+      next.at,
+      start +
+        (kept.length ? intervals.busyInterval : intervals.interval) * 1000,
+    );
   return { cadence: { scope: next.prs, lastFull, busy: kept }, at: next.at };
 }
 
@@ -857,14 +886,32 @@ export async function main(argv: string[], deps: Deps = realDeps) {
         // Null until the pass has read its PRs; a failed pass keeps the last.
         let busy: number[] | null = null;
         const judged: { value?: ReturnType<typeof runPass> } = {};
+        let github: GitHubPass | undefined;
         try {
+          github = new GitHubPass(
+            crew,
+            loadConfig(configPath).repo,
+            deps.run,
+            now,
+            !options.dryRun,
+          );
+          const passDeps = { ...deps, run: github.run };
+          const settings = loadSettings(configPath);
           const planned = crewPass({
             judge: () =>
               (judged.value = runPass(
                 gate,
                 {
                   config: loadConfig(configPath),
-                  run: deps.run,
+                  run: github!.run,
+                  observe: (readOptions) =>
+                    cachedObserve(crew, readOptions, undefined, {
+                      mergeOnly: github!.remaining < 300,
+                      persist: !options.dryRun,
+                      eligible: (input) =>
+                        inScope(input, settings) &&
+                        !activeHold(gate, input.number),
+                    }),
                   mirror: join(dir, "mirror.git"),
                   now,
                 },
@@ -877,8 +924,9 @@ export async function main(argv: string[], deps: Deps = realDeps) {
             prs,
             dryRun: options.dryRun,
             now,
-            deps,
+            deps: passDeps,
             worker,
+            mergeOnly: github.remaining < 300,
           });
           const open = actionsIn(crew, ["pending", "running"]);
           if (judged.value)
@@ -890,19 +938,25 @@ export async function main(argv: string[], deps: Deps = realDeps) {
             );
           if (!options.dryRun)
             deps.out(
-              `${new Date(now).toISOString()} pass${scope ? ` ${numbers(scope)}` : ""}: ${planned.length} planned, ${open.length} open${busy?.length ? `; busy ${numbers(busy)}` : ""}`,
+              `${new Date(now).toISOString()} pass${scope ? ` ${numbers(scope)}` : ""}: ${planned.length} planned, ${open.length} open${busy?.length ? `; busy ${numbers(busy)}` : ""}; github calls=${github.calls} 304=${github.notModified} remaining=${github.remaining}${github.remaining < 300 ? " merge-only" : ""}`,
             );
         } catch (error) {
           // A failed read costs one pass. Its PRs keep their last busy
           // state, and the next pass over every PR still comes an interval
           // after the last one started, as `afterPass` decides.
           deps.out(
-            `pass failed: ${error instanceof Error ? error.message : String(error)}`,
+            `pass failed: ${error instanceof Error ? error.message : String(error)}; github calls=${github?.calls ?? 1} remaining=${github?.remaining ?? "unknown"}`,
           );
           if (options.command === "pass") return 1;
         }
         if (options.command === "pass") return 0;
-        const next = afterPass(cadence, now, busy, options);
+        const next = afterPass(
+          cadence,
+          now,
+          busy,
+          options,
+          github?.remaining ?? 0,
+        );
         cadence = next.cadence;
         await Bun.sleep(Math.max(0, next.at - Date.now()));
       }

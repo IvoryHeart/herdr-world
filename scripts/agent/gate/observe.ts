@@ -60,7 +60,8 @@ const MAX_OPEN = 100;
 
 export function listQuery(repo: string, numbers: number[]) {
   const [owner, name] = repo.split("/");
-  const fields = `${PR_FIELDS} labels(first: 20) { nodes { name } }`;
+  // Identity and per-check state catch reruns even while the aggregate stays failed/pending.
+  const fields = `${PR_FIELDS.replace("... on CheckRun { status conclusion }", "... on CheckRun { databaseId name status conclusion startedAt completedAt }").replace("... on StatusContext { context state }", "... on StatusContext { context state targetUrl createdAt }")} baseRefOid labels(first: 20) { nodes { name } }`;
   if (numbers.length)
     return `query { repository(owner: ${JSON.stringify(owner)}, name: ${JSON.stringify(name)}) {
 ${numbers.map((number, index) => `  p${index}: pullRequest(number: ${number}) { ${fields} }`).join("\n")}
@@ -209,9 +210,11 @@ export function observe(options: {
   numbers: number[];
   mirror: string;
   now: number;
+  /** A crew pass already read the list and selected changed PRs. */
+  nodes?: Record<string, unknown>[];
 }): GateInput[] {
   const { run, config, numbers, mirror, now } = options;
-  const nodes = listPullRequests(run, config.repo, numbers);
+  const nodes = options.nodes ?? listPullRequests(run, config.repo, numbers);
   const labels = new Map(
     nodes.map((node) => [
       Number(node.number),

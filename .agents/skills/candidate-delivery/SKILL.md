@@ -30,9 +30,10 @@ candidate cycle.
 
 In Codex, when a command returns a running session, call `write_stdin` on that
 session with empty `chars` and `yield_time_ms: 300000`; wait again only if it
-actually times out and remains running. Apply the same rule to `gh run watch`.
-Do not issue 30-second status loops or separate `ps`/`gh pr checks` probes while
-the blocking command is running. Do not add a Codex lifecycle hook for polling;
+actually times out and remains running. Do not watch CI; the crew watcher reports
+results to authors. Where waiting is unavoidable, use `gh run watch --interval 120`.
+Never use `gh` polling loops or separate `ps`/`gh pr checks` probes while a
+blocking command is running. Do not add a Codex lifecycle hook for polling;
 it cannot intercept `write_stdin`.
 
 When delivering a PR, keep its changelog fragment (`changes/<pr-number-or-slug>.md`,
