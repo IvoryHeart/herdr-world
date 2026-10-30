@@ -148,8 +148,21 @@ No new dependency is required:
    whichever limit is reached first. Pending domain state is kept until it is resolved,
    whatever its age.
 7. **Offline intents are state-conditioned, never time-expired** (owner, 2026-10-21).
-   Only verbs that declare themselves queueable can be queued. Terminal input and Chat
-   sends never are.
+   Only verbs that declare themselves queueable can be queued. Generic terminal input
+   and Chat sends never are, so there is no second send queue.
+
+   **One exception you will notice:** a declared verb that delivers one stored record
+   to its bound recipient may be queued. The first is `world.ask.deliver-answer`, which
+   delivers an ask's answer to its asker, possibly long after an outage. Its effect is
+   input to the asker's terminal. Such a verb:
+   - reads the record's text at dispatch and copies none of it into the intent;
+   - is conditioned on the recipient's binding and on the record still awaiting
+     delivery;
+   - is `opaque`, so it is never retried after a possible send;
+   - dispatches through Chat's guarded send path.
+
+   If the asker's session changed, the answer is not sent and stays readable on the
+   ask.
 8. **Profiles stay per World.** A profile assignment shared through Herdr resolves
    against each World's own profiles. A World that lacks the profile shows the recorded
    name with the default look.

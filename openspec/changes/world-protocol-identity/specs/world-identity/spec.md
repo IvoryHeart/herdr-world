@@ -89,7 +89,9 @@ Rules for each state:
 **Existing kinds keep their current rules:**
 - **Board strings:** follow only moves World performs. They end only on an observed
   close or a qualified not-found, and stay unresolved while their target is missing
-  from the topology.
+  from the topology. A string bound to a workspace or tab that held no terminals keeps
+  its weak evidence: it is attached while the target exists, and never authorizes
+  Send.
 - **Terminal appearance:** stays with its record while any witnessed terminal is
   present, including after a lost move acknowledgement. It is reclaimed only when a
   current, complete listing shows every witnessed terminal absent.
@@ -144,8 +146,11 @@ Tab colours stay terminal appearance, under the Terminal colour requirement.
 #### Scenario: A workspace ID is reused
 - **WHEN** Herdr restarts and a new workspace reuses a workspace ID that had a Board card
   position and a workspace colour
-- **THEN** the new workspace inherits that position and colour, as today. A Board string
-  to the old workspace becomes unconfirmed, not attached
+- **THEN** the new workspace inherits that position and colour, as today.
+  - A Board string witnessed by the old workspace's terminals becomes unconfirmed, not
+    attached.
+  - A string bound while the workspace held no terminals keeps today's weak-evidence
+    rule, and stays attached while the workspace exists
 
 #### Scenario: Look-alike entity
 - **WHEN** a new pane has the same label, directory and agent kind as an ended one
