@@ -18,14 +18,17 @@ export function storeReaches(
 }
 
 /**
- * Register before the trigger: resolves once `owner` completes a re-list. Every
- * completed re-list stamps `lastTopologyObservationStartedAt`, changed or not.
+ * Register before the trigger: resolves once `owner` completes a re-list that
+ * started after this call, so one already in flight can't satisfy it. Every
+ * completed re-list stamps its start time (`performance.now()`) in
+ * `lastTopologyObservationStartedAt`, changed or not.
  */
 export function relisted(owner: string): Promise<void> {
-  const before = store.getConnection(owner).lastTopologyObservationStartedAt;
+  const registeredAt = performance.now();
   return storeReaches(
     () =>
-      store.getConnection(owner).lastTopologyObservationStartedAt !== before,
+      store.getConnection(owner).lastTopologyObservationStartedAt >
+      registeredAt,
     `${owner} re-lists`,
   );
 }

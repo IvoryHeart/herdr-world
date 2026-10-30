@@ -25,6 +25,7 @@ import {
 } from "./refresh";
 import {
   installSimulatedBrowser,
+  LIST_METHODS,
   ManualClock,
   OBSERVATION_METHODS,
   settles,
@@ -281,6 +282,30 @@ test.failing("no browser timer re-lists a host or fetches the catalogue", async 
   expect(observations(since)).toEqual([]);
 });
 
+test.failing("the focused re-list marks its four list calls", async () => {
+  // Only marked replies update the service's record of what this browser
+  // received; other callers of the same methods leave it alone (design D1).
+  const since = world.calls.length;
+  const done = relisted("alpha");
+  world.event("alpha", "pane.updated", {
+    pane: world
+      .host("alpha")
+      .panes.find((pane) => pane.pane_id === "p-alpha-b"),
+  });
+  await clock.flushTimeouts();
+  await done;
+  const lists = world
+    .callsSince(since, "alpha")
+    .filter((call) => LIST_METHODS.has(call.method));
+  expect(lists.map((call) => call.method).sort()).toEqual([
+    "agent.list",
+    "pane.list",
+    "tab.list",
+    "workspace.list",
+  ]);
+  expect(lists.filter((call) => !call.focusedObservation)).toEqual([]);
+});
+
 test.failing("recency moves without a status change, with no re-list", async () => {
   const since = world.calls.length;
   const activityOf = (paneId: string) =>
@@ -443,7 +468,7 @@ test.failing("a runtime replaced elsewhere is repaired by the catalogue notice",
 });
 
 // Last: it restarts the service. A service that doesn't advertise
-// `world_focused_observation`, because it is older or was told to stop, still
+// `world_shared_acquisition`, because it is older or was told to stop, still
 // gets today's 5 s re-list and catalogue fetch (design D9).
 test("after reconnecting to a service without the capability, the 5 s re-list and catalogue fetch resume", async () => {
   world.restart({});

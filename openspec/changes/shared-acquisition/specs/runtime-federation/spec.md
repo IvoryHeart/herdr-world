@@ -2,10 +2,11 @@
 
 ### Requirement: Focused observation without per-client polling
 
-When the World service advertises `world_focused_observation`, a browser SHALL NOT re-list a
-managed connection or fetch the connection catalogue periodically. Its only timers SHALL be a
-retry of a failed fetch or re-list, and a re-list's own debounce and follow-ups. Without that
-capability, the browser SHALL keep today's 5-second re-list and catalogue fetch.
+When the World service advertises `world_shared_acquisition`, a browser SHALL NOT re-list a
+managed connection or fetch the connection catalogue periodically. Its only timers that re-list a
+host or fetch the catalogue SHALL be a retry of a failed fetch or re-list, and a re-list's own
+debounce and follow-ups. Without that capability, the browser SHALL keep today's 5-second re-list
+and catalogue fetch.
 
 The focused store SHALL re-list an admitted owner's workspaces, tabs, panes and agents, and read
 that owner's active tab layout, after:
@@ -29,7 +30,9 @@ For every owner that a visible browser holds, the World service SHALL keep these
 - the connection catalogue and browser count, within one fetch after the change.
 
 The service SHALL send a change notice to a browser only when its observation differs from the
-lists that browser last received for that owner. Activity times and pane scroll positions SHALL
+lists that browser last received for that owner. The focused re-list SHALL mark its four list
+calls on the request frame, and only replies to marked calls SHALL update that record. Replies to
+other callers of the same methods SHALL NOT. Activity times and pane scroll positions SHALL
 NOT count as differences. No browser reads a pane's scroll position, and on Herdr 0.9.3 it
 changes with output alone.
 
@@ -69,6 +72,13 @@ bootstrap, reconnect or resynchronization observation SHALL NOT be reported as a
   no event for the commit
 - **THEN** it re-lists that host when it holds it again and shows the new git status, and the
   service's next observation sends it no further notice for that change
+
+#### Scenario: Another caller lists the host
+
+- **WHEN** an agent commits on a held host without a Herdr event, and a dialog then lists that
+  host's workspaces before the next observation
+- **THEN** the next observation still sends a change notice to each browser whose focused store
+  hasn't received the commit, and its tree shows the new git status
 
 #### Scenario: Preview of a tab that has already closed
 
@@ -123,7 +133,7 @@ bootstrap, reconnect or resynchronization observation SHALL NOT be reported as a
 
 #### Scenario: Service without the capability
 
-- **WHEN** the World service does not advertise `world_focused_observation`, for example after a
+- **WHEN** the World service does not advertise `world_shared_acquisition`, for example after a
   rollback
 - **THEN** the browser re-lists its active host and fetches the catalogue every 5 seconds, as
   before this change

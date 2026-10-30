@@ -43,8 +43,8 @@ screens and turns once per pane with reference counts.
   - Interest is keyed by connection ID and runtime generation, plus pane and
     agent session for session-scoped targets.
   - Starting a hold re-lists that host once.
-- **A capability gates it.** Without `world_focused_observation` in the
-  service's hello, a browser keeps the 5 s timer.
+- **One capability gates it.** Without `world_shared_acquisition` in the
+  service's hello, a browser keeps the 5 s timer, and Desk keeps its own reads.
 - **Parity tests (T2)** cover recency, status, navigation, availability,
   layouts, completions, the catalogue and enriched workspace fields, on two open
   hosts. Tests that need the new behaviour are checked in as expected failures.
@@ -90,7 +90,9 @@ None.
   - service tests with two browser sockets;
   - `verification/coverage.json` Q04, Q15 and Q24.
 - **Wire:**
-  - a new hello capability, `world_focused_observation`;
+  - a new hello capability, `world_shared_acquisition`;
+  - a request-frame field, `focused_observation`, on the focused re-list's
+    four list calls;
   - new bridge methods `world.focused.observe` and `world.desk.observe`;
   - new controls `world_connections_changed`, `world_focused_changed`,
     `world_agent_activity` and `world_desk_reads`.
@@ -124,7 +126,7 @@ implementation, and must be green before task 3.1 removes the timer.
    lifecycle event, ordered and loss-signalled. On Herdr 0.9.3, `pane.layout`
    already returns the new layout when the event arrives (measured). Every
    re-list still reads the active tab's layout.
-5. **A capability gates the change.** The service advertises
-   `world_focused_observation`; without it, a browser keeps the 5 s timer. A
-   newer page on an older service still refreshes, and the service can stop
-   advertising it to fall back without a release.
+5. **One capability gates the change.** The service advertises
+   `world_shared_acquisition`. Without it, a browser keeps the 5 s timer and
+   Desk keeps its own reads. A newer page on an older service still refreshes,
+   and the service can stop advertising it to fall back without a release.

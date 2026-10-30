@@ -12,16 +12,16 @@ The service half of T2 is written first and must be green before task 3.1.
 - [ ] 2.1 Interest registry: per-socket declarations replaced whole, holder counts per owner and Desk target, release on hide and socket close, rejection of malformed declarations. Test it exhaustively over two sockets, two owners, visible, hidden and closed, and a generation bump.
 - [ ] 2.2 Focused observer per held owner:
   - the enriched lists every 5 s, with no overlap and the lease and generation fence;
-  - per-socket records of the lists last sent in replies;
+  - per-socket records of the lists last sent in replies to marked calls (`focused_observation`), and only those;
   - `world_focused_changed` to a holder whose record differs, leaving out activity times and `panes[].scroll`.
 
-  Write the service cases from the design first, with two browser sockets and two simulated hosts.
+  Write the service cases from the design first, with two browser sockets and two simulated hosts. They include a one-off list call from another caller, which must not suppress a notice.
 - [ ] 2.3 Activity cache and `world_agent_activity`: today's reading limits; `agent.list` reading the cache while it's fresh; the whole map on change, to holders only, never before a reading.
-- [ ] 2.4 Advertise `world_focused_observation`. Send `world_connections_changed` on profile changes, connection state or generation changes, and socket open or close.
+- [ ] 2.4 Advertise `world_shared_acquisition`. Send `world_connections_changed` on profile changes, connection state or generation changes, and socket open or close.
 
 ## 3. Browser
 
-- [ ] 3.1 Keep the metadata timer only when the hello lacks the capability; keep the update check, reconnection and return-to-page catch-up.
+- [ ] 3.1 Keep the metadata timer only when the hello lacks the capability; keep the update check, reconnection and return-to-page catch-up. Mark the focused re-list's four list calls with `focused_observation: true` on the frame.
 - [ ] 3.2 Handle the notices, admitted only for ready owners with the matching generation:
   - `world_focused_changed`: a scoped re-list;
   - `world_connections_changed`: `bridge.status`, one in flight and one queued.
@@ -36,8 +36,8 @@ The service half of T2 is written first and must be green before task 3.1.
 ## 4. Desk
 
 - [ ] 4.1 Service screen and receipt watches: holder counts, per-host queues, `world_desk_reads` in read order, and no placeholder. Write the two-browser tests first.
-- [ ] 4.2 Desk declares its chosen targets with `world.desk.observe` instead of reading them, and releases them on hide and close.
-- [ ] 4.3 Update the Desk browser fixture and the Desk tests that count reads.
+- [ ] 4.2 When the hello advertises `world_shared_acquisition`, Desk declares its chosen targets with `world.desk.observe` instead of reading them, and releases them on hide and close. Without it, Desk keeps its own 4 s and 20 s reads.
+- [ ] 4.3 Update the Desk browser fixture and the Desk tests that count reads, and cover the fallback without the capability.
 
 ## 5. Evidence and documentation
 

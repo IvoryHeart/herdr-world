@@ -141,6 +141,15 @@ holder's record, and the browser re-lists as it does for a Herdr event:
 - A restarted observer has no silent baseline, because the comparison is with
   what the browser has, not with the observer's last reading.
 
+**Only the focused re-list updates the record.** Its four list calls carry
+`focused_observation: true` on the request frame, which the service doesn't
+forward to Herdr, and only replies to marked calls update the record. Other
+callers of the same methods leave the record alone, so a reply they get can't
+hide a change from the focused store:
+- the worktree dialog calls `workspace.list`
+  (`web/src/components/WorktreeLifecycleDialog.tsx:145`);
+- Town moves call `tab.list` (`web/src/world/town/townMoves.ts:152`).
+
 **Digests leave out what no browser reads and what output alone changes.**
 These are activity times, which are pushed (D2), and `panes[].scroll`, which
 changes with output and no event (measured above). Activity changes go out as
@@ -277,10 +286,14 @@ attachment change during the read, or a queued successor
 - Return-to-page catch-up, the aggregate store, the update check and Spaces
   staying mounted.
 
-### D9. A capability gates the change
+### D9. One capability gates the whole change
 
-The service advertises `world_focused_observation` in its hello. A browser that
-doesn't see it keeps today's 5 s re-list and catalogue fetch. So:
+The service advertises `world_shared_acquisition` in its hello. A browser that
+doesn't see it keeps today's acquisition:
+- the 5 s re-list and catalogue fetch;
+- Desk's own reads: screens every 4 s, receipts every 20 s and on their trigger.
+
+So:
 - a newer page on an older service, for example after a rollback, still
   refreshes;
 - the service can stop advertising the capability to fall back without a
@@ -331,7 +344,12 @@ discarded. An Inspector bound to the old generation is retired, as today
 
 All are bridge-global. Existing methods and controls keep their meaning.
 
-- Hello capability `world_focused_observation: true` (D9).
+- Hello capability `world_shared_acquisition: true` (D9). It gates the focused
+  path and Desk together.
+- Request-frame field `focused_observation: true` on the focused re-list's four
+  list calls. It sits beside `connection_id`, not in `params`, so it never reaches
+  Herdr. Only replies to marked calls update the service's per-socket record
+  (D1).
 - `world.focused.observe` `{owners: [{connection_id, connection_generation}]}`
   → `{ok: true}`:
   - replaces this socket's focused interest, and `[]` releases it;
@@ -419,12 +437,14 @@ no timing assertions:
 | Hiding the page releases interest; showing it declares again | expected failure |
 | A runtime replaced elsewhere is repaired by the catalogue notice: its dropped event's change appears, no completion is announced across generations, and late old-generation frames change nothing | expected failure |
 | After reconnecting to a service without the capability, the 5 s re-list and catalogue fetch resume (D9) | guard |
+| The focused re-list marks its four list calls (D1) | expected failure |
 
 How this was checked:
 - Each expected failure fails at its first intended assertion, not in the
   harness.
-- A throwaway browser-side prototype of D2, D3, D4 (the active host only), D7
-  and D9 turned all six green without changing a guard. It wasn't committed.
+- A throwaway browser-side prototype turned all seven green without changing a
+  guard. It covered D2, D3, D4 (the active host only), D7, D9 and the call
+  marker of D1. It wasn't committed.
 - Pending-focus settlement keeps its own tests
   (`web/src/store.test.ts:3319-3527`), which call the re-list directly and
   don't use the timer.
@@ -440,6 +460,8 @@ be green before task 3.1 removes the timer:
 - A holder that declares after a quiet change gets one notice. A restarted
   observer has no silent baseline.
 - A pane that only prints (`scroll` changes) causes no notice.
+- A one-off `workspace.list` or `tab.list` from another caller doesn't update
+  the record, and doesn't suppress the next notice.
 - No recency push is sent before the first reading; pushes reach holders only.
 - One browser hidden: the other keeps receiving; the hidden one receives
   nothing.
@@ -448,7 +470,8 @@ be green before task 3.1 removes the timer:
   generation.
 - Desk: two browsers declaring the same screen cause one read per 4 s.
   Releasing one keeps the other's reads. A read completing after release or
-  retirement is not published.
+  retirement is not published. Without the capability, Desk keeps its own
+  reads (task 4.3).
 
 Once `createWorldService(deps)` exists (committee item 9), one composed
 in-process case joins these: two real browser stores, one service, two hosts.
@@ -458,8 +481,9 @@ in-process case joins these: two real browser stores, one service, two hosts.
 - **Q15** (focused operational contexts, owner `web/src/store.ts`): the browser
   half of T2 joins its tests. Properties added:
   - no browser timer re-lists a host or fetches the catalogue periodically;
-  - a timer only retries a failed fetch or re-list, or runs a re-list's own
-    debounce and follow-ups;
+  - the only timers that re-list a host or fetch the catalogue retry a failed
+    fetch or re-list, or are a re-list's own debounce and follow-ups;
+  - the focused re-list marks its four list calls;
   - notices and recency are admitted only for a ready owner with the matching
     generation.
 - **Q04** (subscriptions): resynchronization after acknowledgement stays the

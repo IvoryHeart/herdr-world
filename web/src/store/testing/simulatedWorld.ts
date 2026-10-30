@@ -131,6 +131,8 @@ export type RecordedCall = {
   connectionId: string | null;
   generation: number | null;
   params: Record<string, unknown>;
+  /** The frame marks it as part of the browser's focused re-list. */
+  focusedObservation: boolean;
 };
 
 type Frame = Record<string, unknown>;
@@ -146,8 +148,19 @@ export const OBSERVATION_METHODS = new Set([
   "connections.list",
 ]);
 
-/** Advertised by a service that observes focused hosts for its browsers. */
-export const FOCUSED_OBSERVATION_CAPABILITY = "world_focused_observation";
+/**
+ * Advertised by a service that observes focused hosts and watches Desk targets
+ * for its browsers (shared acquisition).
+ */
+export const SHARED_ACQUISITION_CAPABILITY = "world_shared_acquisition";
+
+/** The four lists of a focused re-list. */
+export const LIST_METHODS = new Set([
+  "workspace.list",
+  "tab.list",
+  "pane.list",
+  "agent.list",
+]);
 
 export class SimulatedWorld {
   readonly hosts = new Map<string, SimulatedHost>();
@@ -166,7 +179,7 @@ export class SimulatedWorld {
   private revision = 0;
 
   private capabilities: Record<string, boolean> = {
-    [FOCUSED_OBSERVATION_CAPABILITY]: true,
+    [SHARED_ACQUISITION_CAPABILITY]: true,
   };
 
   constructor(hosts: SimulatedHost[]) {
@@ -346,7 +359,13 @@ export class SimulatedWorld {
         ? frame.connection_generation
         : null;
     const params = (frame.params ?? {}) as Frame;
-    const call = { method: frame.method, connectionId, generation, params };
+    const call = {
+      method: frame.method,
+      connectionId,
+      generation,
+      params,
+      focusedObservation: frame.focused_observation === true,
+    };
     this.calls.push(call);
     const identity =
       connectionId === null
