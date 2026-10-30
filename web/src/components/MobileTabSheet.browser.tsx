@@ -2,6 +2,9 @@ import { createRoot } from "react-dom/client";
 import { __storeTesting, store } from "../store";
 import type { Tab, Workspace } from "../types";
 import { MobileTabSheet } from "./MobileTabSheet";
+import "../styles/tokens.css";
+import "../styles/base.css";
+document.documentElement.dataset.layout = "mobile";
 
 const workspace: Workspace = {
   workspace_id: "studio",
@@ -84,6 +87,12 @@ setTimeout(() => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        touchRows: rows.every(
+          (row) => row.getBoundingClientRect().height >= 44,
+        ),
+        flatRows: rows.every(
+          (row) => getComputedStyle(row).borderTopWidth === "0px",
+        ),
         button: Boolean(button),
         events,
         rows: rows.length,
