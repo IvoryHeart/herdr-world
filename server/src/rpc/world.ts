@@ -131,7 +131,21 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
         (params as { ops?: unknown } | undefined)?.ops,
         board().get(),
       );
-      const result = board().patch(ops);
+      const revision = (params as { revision?: unknown } | undefined)?.revision;
+      if (
+        revision !== undefined &&
+        (!Number.isSafeInteger(revision) || Number(revision) < 0)
+      )
+        throw new Error("invalid Board revision");
+      const result =
+        revision === undefined
+          ? board().patch(ops)
+          : board().patchIf(Number(revision), ops);
+      if (!result)
+        throw new BoardConflictError(
+          "The Board changed. Review the current Group before editing again.",
+          board().get(),
+        );
       publishBoardChanged(result.revision);
       sendReply({ id, result: { document: result } }, "world-board-patch");
       void bindBoardRecipients(ops, observed).catch((error) =>

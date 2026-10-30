@@ -60,8 +60,12 @@ take this same short path.
 Ordinary Markdown-only diffs receive documentation checks. Verification inputs or
 contract owners still require behavioral verification, even when their edits are Markdown. Packaged notices, agent policy,
 OpenSpec, verification and tooling do not qualify for this shortcut. macOS jobs
-still report their protected names in short runs, with their native build and
-lifecycle steps skipped. Their aggregate must succeed in every mode.
+still report both protected architecture names in short runs. When native
+packaging is not selected, those reports run on Ubuntu with native build and
+lifecycle steps skipped, so metadata reuse does not wait for a macOS runner.
+When packaging is selected, each report runs its complete native checks on
+its declared macOS architecture. Their aggregate must succeed in every mode;
+cancellation and missing reports still fail delivery.
 
 Tooling-only PRs use `scripts/validation-scope.ts` in CI and pre-push. The complete
 diff must contain only `scripts/agent/**` (including tests),

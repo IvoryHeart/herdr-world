@@ -1947,6 +1947,15 @@ panes back into the original tab using their current IDs and report the outcome.
 It SHALL NOT retry an uncertain step, and if rollback fails it SHALL report the
 actual resulting topology.
 
+Service move adapters SHALL share one service-owned queue per connection and
+use the captured connection/generation without a default fallback. A queued
+retired generation SHALL be refused. Topology and source colours SHALL be read
+at queue admission. Board following SHALL retain its ordering after move
+serialization: confirmed replacement IDs may be followed, and failed moves
+SHALL reconcile only positively observed terminal witnesses. Unknown locations
+SHALL NOT be guessed. A Board-follow failure SHALL NOT replace the real move
+outcome with a success or discard partial/unknown topology.
+
 Town SHALL let the user reorder a desk within its room the same ways: dropping
 it on another desk of its room puts it in that desk's slot, as a tab dragged
 onto another in Spaces, and dropping it on the room's free spot puts it last of
@@ -2294,6 +2303,123 @@ authenticated-principal guarantee; a sender name SHALL NOT grant authority.
 - **WHEN** a client creates or changes a persisted group to Room or Desk
 - **THEN** World refuses it without changing the document or its history
 
+### Requirement: Group projections and derived facts
+
+World SHALL project Herdr workspaces as Room groups whose members are qualified
+Desk/tab refs, and Herdr tabs as Desk groups whose members are qualified terminal
+refs. These projected refs SHALL remain separate from stored Group refs and SHALL
+NOT be persisted in `relations.groups`. Projection keys SHALL distinguish stored
+and Herdr-owned groups even when their IDs coincide. Cached Herdr projections MAY
+remain visible but SHALL NOT contribute live status or work.
+
+Service and browser Group readers SHALL apply the same current-generation,
+freshness and identity rules. Pod addresses SHALL resolve against actual Herdr
+agent names qualified by connection, pane, terminal and matching session data
+when present. Display labels, shortened names, harness names and mismatched
+session metadata SHALL NOT substitute for agent identity. Conflicting matches
+SHALL remain unresolved.
+
+Group status SHALL count each present unambiguous terminal once and use the
+worst state in this order: needs you, failed, working, finished, quiet, unknown.
+Away and ambiguous members SHALL contribute neither status nor work. Open PRs
+SHALL derive from existing source links qualified by connection, runtime
+generation, pane and session, with duplicate and merged/closed PRs excluded.
+The open-PR limit SHALL default to two for Pods and warn rather than enforce.
+Readers SHALL distinguish current, stale cached and unavailable source work;
+only a current source count SHALL produce an open-PR-limit warning.
+The Now list SHALL preserve the stored queue order. These derived facts SHALL
+NOT mutate source records or grant downstream action authority.
+
+#### Scenario: The same native IDs occur on two connections
+
+- **WHEN** two current connections report equal workspace, tab or terminal IDs
+- **THEN** their projected memberships and work remain qualified by connection
+
+#### Scenario: An address is stale or ambiguous
+
+- **WHEN** a Pod member has no current exact identity or has multiple matches
+- **THEN** it contributes no live status or linked PRs and World guesses no occupant
+
+#### Scenario: Source links belong to the previous runtime or session
+
+- **WHEN** a pane's old-generation or old-session work link remains cached
+- **THEN** the replacement occupant's Group does not count that link
+
+### Requirement: Groups roster and detail
+
+World SHALL offer Actions → Groups in its existing panel window, with kind
+filters All/Pod/Team/Room/Desk and a phone roster/detail Back flow. Rows SHALL
+show kind/name, rolled-up status, lead/member/reviewer indicators, source-qualified
+open PR counts and the first Now item. Detail SHALL reuse linked PR cards and
+show member roles, the full ordered Now list and bounded recent attribution.
+World-owned Group edits SHALL support explicit membership/role changes,
+name/Now/limit edits, confirmed deletion and complete explicit Team promotion.
+Exclusive-role transfers SHALL ask first. A form or confirmation SHALL bind to
+the Board revision reviewed and SHALL refuse a stale write without automatic retry.
+Projected membership SHALL remain owned by Herdr. An ambiguous member's Inspect
+control SHALL revalidate the qualified current match without persisting a resolved
+address or contributing that match to membership roll-ups.
+
+The open Town Summary SHALL show Pods after Hosts/rooms and before Spend,
+using the same current Groups read model for status, first Now item and
+source-qualified open PR warnings. Activating a row SHALL open that Pod's
+Groups detail, restoring and raising an already-open Groups window. This
+section SHALL NOT change reception's shared calls/Asks items or counts.
+
+#### Scenario: Open a Pod from Town Summary
+
+- **WHEN** the user activates a Pod row in the open Town Summary
+- **THEN** its Groups detail opens or is restored and raised
+- **AND** cached or unavailable work remains labelled and reception counts do not change
+
+#### Scenario: Another client changes the roster during a role confirmation
+
+- **WHEN** the user confirms a Group edit against an older Board revision
+- **THEN** World returns the current document/conflict and changes no membership
+
+### Requirement: Group CLI
+
+The World CLI SHALL expose Group create/add/remove/lead/reviewers/now/list/show/
+delete/promote, with pod/team aliases. Stored create SHALL accept Team/Pod only.
+Names SHALL resolve uniquely; Pod addresses MAY remain away. Promotion SHALL
+require a complete explicit terminal-to-address mapping and preserve the Group
+identity. Exclusive-role transfers SHALL require explicit replacement confirmation.
+Deletion SHALL require confirmation and SHALL NOT delete agents. All edits SHALL
+retain actual sender claims and their basis in bounded recent Group history.
+Lead/reviewer edits SHALL be described as an owner/FirstMate crew rule, without
+claiming authenticated caller authorization. PR actions SHALL remain absent from
+the World CLI and its agent guide.
+
+Room/Desk create/delete/role edits SHALL be refused with Herdr guidance. A
+projected membership add SHALL require `--herdr`, an exact compatible current
+connection/generation, and a complete preview printed before mutation. Room add
+SHALL move the whole desk and name all affected agents; Desk add SHALL move one
+pane. The CLI SHALL use the same service-owned per-connection Town queue and
+native move orchestration as RPC, revalidate the preview at queue admission and
+refuse changed terminal witnesses. Closing the source's last room SHALL require
+separate opt-in. Existing rollback and observed Board reconciliation SHALL apply
+to failed partial moves. Results SHALL retain the actual outcome and confirmed
+locations as Done, Partly done, Not done or Unknown; Unknown SHALL NOT be retried
+automatically.
+
+#### Scenario: Another move or agent changes the printed effect
+
+- **WHEN** a queued Room/Desk CLI move no longer matches its printed preview
+- **THEN** no native move is made and the CLI asks the caller to read Groups again
+
+#### Scenario: A move loses its reply and topology cannot be observed
+
+- **WHEN** Herdr cannot confirm the result or current locations
+- **THEN** the CLI returns Unknown with a nonzero exit, preserves known evidence
+  and makes no automatic retry
+
+#### Scenario: Explicit one-time crew-table migration
+
+- **WHEN** a caller imports one Pod table with confirmation
+- **THEN** World resolves names without guessing, accepts explicit address mappings,
+  creates all Pods atomically or none, and refuses existing Pod names
+- **AND** later Markdown export is a rendering; no two-way file synchronization exists
+
 ### Requirement: Shared terminal appearance
 
 World SHALL provide a common appearance editor from terminal title bars on desktop
@@ -2436,8 +2562,8 @@ own colour MAY be reset.
 
 ### Requirement: Agent interest
 
-Each agent SHALL have the viewer's interest: watching (the default), muted or
-focused, chosen from a button beside the agent's name in its Inspector header in
+Each agent SHALL have Default (from groups), explicit Watch, Muted or Focused,
+chosen from a button beside the agent's name in its Inspector header in
 every view. Interest SHALL belong to the agent's terminal on its host, without
 the runtime generation, so it follows the terminal through moves and an agent
 restarted in that terminal keeps it, and each agent in a multi-pane tab has its
@@ -2450,7 +2576,22 @@ while a focused agent's terminal is shown on a ready host only focused agents
 and the Town master's needs-you SHALL chime; a focus World cannot reach SHALL
 NOT silence other agents, and SHALL apply again when its host is back. A
 watched agent's control SHALL say when it is quiet because another agent is
-focused. Interest SHALL NOT keep any item out of reception.
+focused. Interest SHALL NOT keep any item out of reception or change needs-you
+counts. An explicit agent choice SHALL override group claims; otherwise Group
+Focus SHALL beat Mute, with Default contributing no claim. Effective Focus SHALL
+be a union and count only currently reachable effective-focused members. Away
+and ambiguous addresses SHALL contribute no group intent. Hover guidance SHALL
+explain the source and overridden claims. Explicit Watch SHALL be stored distinctly
+from Default deletion; no meaning SHALL be inferred for old absent records.
+
+Stored Teams/Pods SHALL have Focus/Mute/Default viewer controls, saved separately
+as Board layout.group_interest by immutable Group ID, without copying member
+terminal preferences or writing membership attrs. Deletion or Team dissolution
+SHALL remove the overlay atomically; unresolved members SHALL retain it. Empty
+or offline Focus SHALL NOT silence everyone and the chip SHALL disclose no members
+online. Projected Room/Desk controls and persisted overlays SHALL be refused in v1.
+The Town-master needs-you exception SHALL bypass focus filtering only, never an
+explicit mute, device-off, motif-off or seen policy.
 
 #### Scenario: Mute an agent
 

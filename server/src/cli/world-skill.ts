@@ -5,8 +5,10 @@ Herdr World shows your Herdr panes as Town desks and Board cards. These
 commands let you arrange them, ask the owner questions and report results.
 Run them inside your Herdr pane: World reads HERDR_PANE_ID and checks that
 you really run in that pane. Without a pane, or in a pane World cannot
-check, your changes are marked unverified. Every change is recorded with
-who made it, and World-side changes can be undone.
+check, your changes are marked unverified. Board changes have history and
+conditional undo. Groups keep the latest 128 changes with the sender claim
+and its reported/inferred basis (unknown when absent), including deletion;
+this recent attribution is not a complete audit and has no CLI undo.
 
 ## Examples
 
@@ -29,6 +31,11 @@ who made it, and World-side changes can be undone.
     herdr-world result --task FM-42 "Fixed the login race" --pr 12 --status done
     herdr-world history --actor w1:p2
     herdr-world undo c-lq3x9-4
+    herdr-world pod create Chat
+    herdr-world pod add Chat agent://connection-a/builder
+    herdr-world pod reviewers Chat agent://connection-a/reviewer
+    herdr-world pod now Chat "Review first" "Ship"
+    herdr-world group list --kind room --json
 
 ## Targets
 
@@ -66,9 +73,56 @@ Targets are on your own host; add --connection ID for another one.
          (display-only Herdr pane metadata, so no --herdr)
   stamp CHILD_PANE PARENT_PANE
          the same stamp, written by a harness that started CHILD_PANE
+  group create NAME --kind pod|team [--open-pr-limit N]
+  group list [--kind pod|team|room|desk] [--json|--markdown] | group show GROUP
+  group add GROUP AGENT [--role builder|lead|reviewer]
+  group remove GROUP AGENT
+  group lead GROUP AGENT | group reviewers GROUP [AGENT...]
+  group now GROUP [ITEM...] | group delete GROUP --yes
+  group import FILE --yes [--connection ID] [--mapping JSON]
+         one-time Pod table import, no overwrite or file synchronization
+         mapping is {"table name":"agent://CONNECTION/ENCODED_NAME"}
+  group promote TEAM --name POD_NAME --mapping JSON
+         complete explicit [{from:{connection_id,terminal_id},to:"agent://...",
+         roles:["builder"]}] mapping, preserving the group ID
+         pod/team aliases mean group with --kind pod/team
 
-The CLI never merges, deletes panes, tabs or workspaces, or sends anything
-outside World.
+## Groups
+
+Use a group ID or an unambiguous name. AGENT is an actual Herdr agent name,
+agent://CONNECTION/ENCODED_NAME, pane:ID, terminal:ID or verified me. A Pod
+keeps away addresses; duplicate live matches are ambiguous, never guessed.
+Teams use terminal refs on one host. Rooms and desks are projected from
+Herdr and never stored; create/delete/roles are refused (use Herdr's verbs).
+Adding to a Room or Desk needs --herdr and one compatible current agent.
+A Room add moves the WHOLE DESK: the CLI prints every affected agent before
+acting. A Desk add moves one pane. --allow-close-room additionally consents
+to closing the last desk's source room. The same Town move queue, generation
+checks and observed Board following apply. Results say Done, Partly done,
+Not done or Unknown with confirmed locations. Never automatically retry
+Unknown. These moves cannot be undone by World.
+
+Membership edits are available to agents. Setting or removing lead/reviewer
+roles is owner/FirstMate-only by CREW RULE, including add/remove/promote.
+World cannot authenticate that identity; sender claims do not authorize it.
+Lead and builder together are exclusive to one Pod; reviewer may span Pods.
+Transferring an exclusive role requires --replace --yes, never silently
+displaces it, and preserves other roles. PR counts come from current source
+links and the Pod's limit defaults to 2; excess is a warning, not a gate.
+PR action verbs remain browser UI/RPC only.
+
+For one-time migration, import a table with Pod, Lead, Builders, Reviewers and
+optional Now columns. Names must resolve uniquely on the chosen connection;
+map away or annotated names explicitly to agent:// addresses. The whole table
+is atomic: missing/ambiguous names, role conflicts or existing Pod names refuse
+it without partial edits. Limits: 48000 characters, 32 rows, existing member
+and Now caps. Afterwards World owns the roster; export with group list --kind
+pod --markdown. This is a human rendering, not a full Board backup or two-way
+sync. Edit through the CLI; never reimport to update existing Pods.
+
+The CLI never merges PRs or exposes PR actions. It does not directly delete
+Herdr panes, tabs or workspaces; moving the last pane can close an empty tab
+or, with explicit consent, its room.
 
 ## Reaching the owner
 

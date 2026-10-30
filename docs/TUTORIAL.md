@@ -265,7 +265,8 @@ hosts stay usable.
    In the agent's window, the button beside its name sets its interest (on a
    phone, use **⋯ → Attention**):
    **Muted** stops its chimes, **Focused** lets only focused agents chime, and
-   **Watching** is the default. Its questions and results still arrive in
+   **Default (from groups)** inherits group intent, while **Watch** explicitly
+   overrides a group mute. Its questions and results still arrive in
    reception.
    **Next** cycles waiting agents, then finished agents when no other agent is
    waiting.
@@ -670,10 +671,75 @@ and the waiting agent carries on. An asker can withdraw a cleared question with
 `herdr-world ask withdraw <question-id>`, which clears its markers. If its
 creation reply was lost, `herdr-world ask withdraw --key <cause-key>` withdraws
 that asking occupant's retained question without creating another one.
-`herdr-world history` shows who changed what, and `herdr-world undo` takes
-back a World-side change. A change marked **unverified** came from a process
+`herdr-world history` shows Board edits, and `herdr-world undo` conditionally
+takes back a recorded Board change. A change marked **unverified** came from a process
 World could not place in the pane it named, or from a terminal that named no
 pane.
+
+Use `herdr-world pod create Chat` to create a crew Group, then
+`herdr-world pod add Chat agent://connection-a/builder` to add an agent's
+qualified address. `pod now Chat "Review first" "Ship"` records an ordered
+Now list; `group list` includes World-owned Teams/Pods and Herdr-owned Rooms/Desks.
+Lead/reviewer edits are reserved to you or FirstMate by crew rule; World records
+the sender claim and basis without authenticating that role. `group show Chat`
+shows recent attribution from the latest 128 Group changes, which are separate
+from Board undo. Deleting a Group needs `--yes` and leaves its agents running.
+
+`group add ROOM AGENT --herdr` moves the agent's whole desk: read the printed
+list of every affected agent before the move. Adding to a Desk moves one pane.
+Use `--allow-close-room` only when you also agree to close the source room when its last desk leaves.
+The result reports Done, Partly done, Not done or Unknown and observed locations.
+On Unknown, inspect Herdr before deciding what to do; never retry automatically.
+
+To migrate an existing crew table once, use `herdr-world group import pods.md
+--connection connection-a --yes`. The table needs Pod, Lead, Builders and
+Reviewers columns, with optional Now. If a name is away, ambiguous or annotated,
+supply `--mapping` as a JSON object from that exact table name to its qualified
+`agent://` address. The import is atomic and refuses existing Pod names. From
+then on, edit World through the CLI and render the table with `herdr-world group
+list --kind pod --markdown`; there is no two-way file synchronization.
+
+### Organize Groups
+
+Open **Actions → Groups**. Use the kind chips to find a Pod, Team, Room or Desk;
+tap a row for its members, status, open PR cards and Now list. On a phone, Back
+returns to the roster or closes the panel. On desktop the panel uses the same
+move, snap, maximize and window menu as your other World windows.
+
+Town's **Summary** also lists **Pods**, after Hosts and rooms and before Spend.
+Each row shows current status, the first Now item and the PR count or its
+cached/unknown state. Tap it to open that Pod in Groups, including when the
+Groups window is already open or minimized. Reception keeps its shared counts.
+
+Choose **New…** for a Pod or Team. In a Pod, **Add…** accepts a current agent or
+an explicit qualified address, including an away agent. **Roles…** changes roles;
+lead/reviewer edits follow the owner/FirstMate crew rule. Moving an exclusive
+lead/builder role asks first and keeps any other roles. An ambiguous address
+remains ambiguous: **Inspect** opens one current match; it does not pick its
+identity for membership. Rename duplicates in Herdr or explicitly replace the
+member with a distinct address.
+Selecting a current agent refuses duplicate Herdr names on the same connection.
+It also refuses to add a replacement that has appeared in the selected terminal;
+choose the agent again or supply the intended qualified address.
+
+**Edit pod…** changes its name, Now list and warning limit. **Promote to Pod…**
+shows every terminal-to-address mapping before preserving a Team's identity as a
+Pod. **Delete…** asks first and leaves agents running. If someone edits the Board
+while a form or confirmation is open, the write is refused and your draft stays
+open. Review the current values shown in the form, choose **Use current version**,
+then explicitly save again. Reviewing does not retry the write. Recent changes retain sender claims and their basis, or unknown attribution
+when no claim was supplied.
+
+A Team/Pod's Interest button offers **Default**, **Muted** and **Focused**.
+An agent's bell, or **⋯ → Attention** in a mobile window, offers **Default (from
+groups)** and explicit **Watch**, **Muted** and **Focused**. Default follows its
+groups; an explicit agent choice overrides them. Otherwise Group Focus
+wins over Mute. Focus adds reachable members to the other focused agents/groups;
+away or ambiguous members do not activate it. A focused group with no effective
+members online says so. Hover an agent's bell to see the source of its choice.
+Needs-you items and counts still arrive while muted. The Town master's needs-you
+can break the focus filter, while its explicit mute and device/motif switches
+still apply. Room/Desk interest controls are hidden in v1.
 
 ### Use Desk: answer, review and follow work
 

@@ -2307,7 +2307,7 @@ async function run() {
   check(
     attentionChoices
       .map((button) => button.querySelector("span")?.textContent)
-      .join(",") === "Watching,Muted,Focused",
+      .join(",") === "Default (from groups),Watch,Muted,Focused",
     "mobile ellipsis does not contain attention choices separately from views",
   );
   attentionChoices

@@ -83,11 +83,167 @@ attribution. Existing relation/store/CLI tests retain terminal grouping,
 pruning and undo; the browser adapter also proves Pod-only data does not scan
 terminal topology or enable magnetic Ungroup.
 
+Group form properties require preserving reviewed intent across concurrent edits:
+Add binds the Board revision when opened and retains it through confirmation;
+Add/Edit/Roles keep their drafts until a successful write, expose conflicts in
+the form, and accept a refreshed Board revision only through explicit review without retry.
+`GroupsWindow.test.ts` executes the real forms and Board store at desktop/phone
+and owner viewports: another client's Team assignment is preserved by a stale
+Add, a pre-confirmation edit refuses transfer, and retained drafts save only on
+explicit resubmission. A replacement in the selected terminal cannot retarget a
+Pod address. `groupActions.test.ts` also checks captured generation/session/name
+witnesses and same-connection duplicate-name refusal. Real browser interaction
+and atomic Board conflicts directly exercise this finite contract; they do not
+establish arbitrary UI schedules or authenticated crew roles.
+
+Group read-model properties come from the Group projections and derived facts
+requirement. `shared/groupViews.test.ts` enumerates all 36 pairs of the six
+roll-up states and covers qualified Room/Desk projections, separate stored
+refs, deduplicated members/work, away/ambiguous exclusion and generation/session
+work-link matching. `shared/groupObservations.test.ts` exercises both actual
+service and browser adapters against the same fixtures: current-generation
+admission, canonical full agent names, replacement-session refusal, conflicting
+names and no display/harness fallback. These are bounded observation and pure
+projection checks, not runtime leases or a proof of source completeness.
+
 Direct exhaustive and service evidence fits these pure finite validation rules
 and the existing atomic Board write. No new scheduling or authenticated caller
 protocol is introduced. Board/Town browser checks remain necessary for real
 layout and gesture outcomes. This does not prove human-only role editing,
-permanent audit retention, or future Groups CLI/roster behavior.
+permanent audit retention, or untested Groups roster behavior.
+
+### Shared Town move execution (Q43)
+
+The existing Town desk/agent move contract supplies the properties: one queue
+per captured connection, retired-generation refusal, topology/colour capture at
+queue admission, unchanged rollback/uncertain-step behavior, and Board following
+only from confirmed or positively observed topology. `town-move.test.ts` uses
+the actual RPC adapter and native move functions to check the injected shared
+queue, a retired queued generation, known partial-failure reconciliation,
+unknown topology without retry/anchor guessing, and the shared appearance
+contract's reconciliation before the next queued move starts. This supersedes
+the pre-appearance extraction's outside-queue following order.
+Existing `desk-move.test.ts` retains
+the full native move/rollback fixtures. The fixture was moved unchanged to a
+shared test helper. These controlled promise schedules and actual transformations
+are direct bounded adapter evidence, not a general temporal progress proof.
+
+### Group CLI and shared Town moves (Q43)
+
+The CLI's allowed/forbidden cases follow the stored/projected Group ownership
+requirements: aliases do not change kind, ambiguous names never choose a member,
+lead/builder transfers need explicit confirmation, and promotion requires every
+terminal-to-address mapping. `world-cli-groups.test.ts` exercises the actual
+service edits, retained deletion attribution and role preservation;
+`cli/world-groups.test.ts` checks parser intent and preview-before-mutation output.
+These edits have recent Group attribution rather than Board ledger undo. Markdown tests add explicit table parsing/escaped rendering, duplicate role/Now-column and separator-width refusal, and actual service all-or-none import, existing-name refusal, role-conflict rollback and sender attribution; the CLI test proves only the selected file is read and piped Markdown stays Markdown. No file watcher or resynchronization is introduced.
+Terminal/pane selections for add/lead/reviewers refuse a Pod address when its
+Herdr name matches multiple current terminals on that connection; actual service
+tests cover each command, preserve Board state on refusal, and retain intentional
+explicit-address edits.
+
+`group-move.test.ts` drives the real native move orchestration and the actual CLI
+HTTP service. A controlled queue blocker demonstrates the same injected queue as
+RPC, changed occupants refuse before any move, retired queued leases make zero
+Herdr calls, and terminal witnesses refuse changes after preflight.
+Room/Desk preview witnesses include only explicit pane/terminal/tab/workspace
+identities, name and session, rather than incidental runtime rows. Both move
+paths accept status/focus/revision-only changes; changed occupants and missing
+destinations still refuse before a native move. Known partial
+failure reconciles Board anchors from observed terminals; lost replies with
+unreadable topology return Unknown without retry. `town-move.test.ts` retains
+move-and-document serialization checks, while native desk/pane tests retain
+rollback, last-room consent and uncertain-step contracts. Actual native move
+regressions add spawn claims and explicit colours after the preview: the moved
+desk keeps its explicit choice or retains parent inheritance without saving a
+new default override.
+A delayed-probe regression changes colour and status during a post-move probe;
+CLI movement preserves both latest fields at the witnessed destination, using
+the same appearance reconciliation as RPC.
+Real appearance-RPC schedules in `town-move.test.ts` admit saves against the new
+native tab/pane IDs while moves are pending, then retain destination status,
+colour and avatar updates/resets through reconciliation. Partial patches keep
+untouched source fields, and a first destination save needs no source record.
+`appearance-edits.test.ts` checks per-field commit ordering, reset versus no
+write, effective compensation values, both alias insertion orders converging
+onto a third rollback ID, identity replacement/pruning and history
+bounded by live bindings. These extend the existing direct move/RPC evidence;
+they do not add a persisted schema or authenticated-principal protocol.
+Field ordering is a finite choice within the existing atomic Board writes;
+commit-order permutations and the actual RPC schedule exercise that choice
+without duplicating its reducer in a separate model.
+The Group conflict consumer also checks an unrelated Group's edit: the hint
+identifies the whole Board, retains the current Group values and still requires
+explicit review. Source roll-up tests
+distinguish current, stale and unknown work so unavailable counts cannot claim
+a confirmed limit warning.
+
+Direct finite cases and controlled promise schedules are the proportionate
+alternative here: they execute the production transforms and adapters, rather
+than modeling a duplicate CLI parser. This does not authenticate sender claims,
+prove every external Herdr interleaving, or extend the bounded history into an
+audit. The revision-only publisher extraction has no contract impact: it preserves the exact type/revision payload, explicit send context, synchronous error behavior and live client iteration. Full required registry/consumer verification remains a batch-close check.
+
+
+### Groups roster and revision-bound edits (Q43)
+
+Group action tests cover explicit pooled-role transfer plans, unknown browser
+sender attribution, projected-owner refusal, complete promotion admission and
+unavailable PR counts. The real BoardDocumentStore/RPC/BoardStore adapter test
+proves stale reviewed revisions cannot delete or change a newer Group and return
+the current document. The panel's registered browser suite uses real panel/window
+components and the actual service Group store/handler: kind filters, away and
+ambiguous states, linked PR warnings and a competing edit during confirmation at
+actual 320/360/390/430/1280/1440/1512/2560 CSS-pixel widths and explicit heights. The fixture includes the required
+snapshot coverage and asserts admission of its current connection before UI
+checks. It waits for rendered edit controls, inspects a qualified ambiguous match
+without resolving membership, and checks every member after a refused transfer.
+Synthetic roster/detail captures for phone, laptop, wide, half-width and portrait
+layouts live in [Groups evidence](../docs/evidence/groups-roster/README.md).
+Final batch checks and independent acceptance remain required.
+
+The shared GroupOp move is type-only and has no contract impact. The optional
+Board revision guard preserves legacy omitted-revision behavior and synchronous
+unmatched namespace decline. Direct finite adapter cases fit this existing atomic
+revision mechanism; actual panel, gesture and device behavior require the browser
+consumer evidence separately.
+
+### Effective Group Interest (Q43)
+
+Requirements supply explicit agent override precedence, Group Focus/Mute/Default,
+current unambiguous resolution and effective reachable-focus union. Direct tests
+exhaust all 36 two-group/agent combinations, away/ambiguity exclusion and source
+explanations. The actual reader covers address restart, force-Watch and stable
+consumer identity on unrelated Board edits. With no effective Focus claim,
+Default/Mute/Watch reader regressions require no runtime-pane enumeration;
+focused claims retain the same current-terminal reachability checks. Real Board persistence tests cover
+separate overlays, atomic deletion/dissolution, promotion identity, projection
+refusal and opaque ID safety. A real browser-store/chime-source installer test
+proves an explicit mute reaches actual chime decisions and force-Watch restores
+sound; existing shared shouldChime, chime center, host/device and prune consumers
+retain Town-master, motif, seen, device and current-topology boundaries. The
+registered panel consumer exercises Default/Watch controls through both the bell
+and mobile Attention menu, restoration of Group Focus through Default, and
+unchanged needs-you counts at all eight actual viewports. The real Inspector
+handoff browser also requires the exact four mobile Attention choices and retains
+cross-view persistence and failed-save checks. No terminal choice is copied from membership.
+These finite precedence and existing atomic-storage adapters warrant direct
+exhaustive evidence rather than a separate model of the same small table.
+
+### Pods in Town Summary (Q43)
+
+Direct rendering checks use the shared Group projection and the actual Summary
+panel to cover Pod-only rows, first Now item, current PR warnings, cached/unknown
+work, loading/error/empty distinction, placement between Hosts and Spend, and
+unchanged reception markup. The production hook mounts the optional section only
+while Summary is open. The actual Town browser fixture retains an exact section
+order check including Pods between Hosts/rooms and Spend. The registered Groups
+browser fixture exercises its real
+Groups-open event and shared panel focus path, including minimized-window restore,
+at all eight actual viewports. Final batch verification and review remain delivery
+acceptance. This adds a projection consumer, not
+a new membership, ordering or recovery protocol, so direct consumer evidence is
+appropriate alongside the existing Summary and panel tests.
 
 ### Mobile Board Work controls (Q43)
 

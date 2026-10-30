@@ -200,6 +200,9 @@ export type DeskMoveRequest = {
   workspace_id: string;
   /** The source room closes when its last desk leaves; the user agreed. */
   allow_close_room?: boolean;
+  /** Optional CLI preview witness; compare the complete desk before moving. */
+  expected_terminal_ids?: readonly string[];
+  expected_source_workspace_id?: string;
   /** False once the connection's runtime generation has changed. */
   isCurrent: () => boolean;
 };
@@ -221,6 +224,14 @@ export async function moveDesk(
   const sourceWorkspace = layout?.workspace_id;
   if (!root || typeof sourceWorkspace !== "string")
     return refuse("not_found", "This desk's layout could not be read.");
+  if (
+    request.expected_source_workspace_id &&
+    sourceWorkspace !== request.expected_source_workspace_id
+  )
+    return refuse(
+      "desk_changed",
+      "The desk's room changed after the preview. Read Groups again.",
+    );
   if (sourceWorkspace === request.workspace_id)
     return refuse("same_room", "The desk is already in that room.");
 
@@ -228,6 +239,18 @@ export async function moveDesk(
   const panes = await listPanes(call);
   const tabPanes = panes.filter((pane) => pane.tab_id === request.tab_id);
   const byId = new Map(tabPanes.map((pane) => [pane.pane_id, pane]));
+  if (
+    request.expected_terminal_ids &&
+    (request.expected_terminal_ids.length !== tabPanes.length ||
+      new Set(request.expected_terminal_ids).size !== tabPanes.length ||
+      tabPanes.some(
+        (pane) => !request.expected_terminal_ids!.includes(pane.terminal_id),
+      ))
+  )
+    return refuse(
+      "desk_changed",
+      "The desk's agents changed after the preview. Read Groups again.",
+    );
   if (
     leaves.length !== tabPanes.length ||
     new Set(leaves).size !== leaves.length ||
@@ -419,6 +442,11 @@ async function rollBack(
 
 export type PaneMoveRequest = {
   pane_id: string;
+  /** Refuse a reused pane ID after a CLI preview. */
+  expected_terminal_id?: string;
+  expected_source_tab_id?: string;
+  expected_source_workspace_id?: string;
+  expected_workspace_id?: string;
   /** The destination desk (tab). */
   tab_id: string;
   allow_close_room?: boolean;
@@ -447,6 +475,14 @@ export async function movePane(
   const root = parseLayout(layout?.root);
   if (!root)
     return refuse("not_found", "That desk's layout could not be read.");
+  if (
+    request.expected_workspace_id &&
+    layout?.workspace_id !== request.expected_workspace_id
+  )
+    return refuse(
+      "desk_changed",
+      "The destination desk's room changed after the preview. Read Groups again.",
+    );
   const destination = leavesOf(root);
   const neighbour = destination[destination.length - 1]!;
   const split: SplitDirection = destination.length % 2 === 1 ? "down" : "right";
@@ -456,6 +492,24 @@ export async function movePane(
   const target = panes.find((candidate) => candidate.pane_id === neighbour);
   if (!pane || !target || target.tab_id !== request.tab_id)
     return refuse("desk_changed", "The desks changed. Try again.");
+  if (
+    request.expected_terminal_id &&
+    pane.terminal_id !== request.expected_terminal_id
+  )
+    return refuse(
+      "desk_changed",
+      "The agent changed after the preview. Read Groups again.",
+    );
+  if (
+    (request.expected_source_tab_id &&
+      pane.tab_id !== request.expected_source_tab_id) ||
+    (request.expected_source_workspace_id &&
+      pane.workspace_id !== request.expected_source_workspace_id)
+  )
+    return refuse(
+      "desk_changed",
+      "The agent's desk changed after the preview. Read Groups again.",
+    );
   if (pane.tab_id === request.tab_id)
     return refuse("same_room", "The agent is already at that desk.");
   const alone =

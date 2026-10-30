@@ -361,6 +361,15 @@ test("CI exercises the real plugin-managed launchd lifecycle on both protected a
         step.name === "Exercise the real plugin-managed launchd lifecycle",
     )?.if,
   ).toBe("needs.validation-scope.outputs.packaging == 'true'");
+  expect(launchd?.["runs-on"]).toBe(
+    "${{ needs.validation-scope.outputs.packaging == 'true' && matrix.runner || 'ubuntu-latest' }}",
+  );
+  for (const step of launchd?.steps ?? []) {
+    if (step.run)
+      expect(step.if).toBe(
+        "needs.validation-scope.outputs.packaging == 'true'",
+      );
+  }
   expect(launchd?.needs).toBe("validation-scope");
   expect(
     launchd?.steps.some(

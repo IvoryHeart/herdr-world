@@ -1,8 +1,20 @@
 import {
+  interests,
+  groupInterests,
+  applyBoardInterest,
+  pruneGroupInterest,
+  checkGroupInterest,
+} from "./board-interest";
+import {
   colorFollowOps,
   trackColorEdits,
   type ColorEdit,
 } from "./board-color-moves";
+import {
+  captureAppearanceChanges,
+  trackAppearanceEdits,
+  type AppearanceEdits,
+} from "./appearance-edits";
 import { movedAppearanceOps } from "./appearance-observation";
 import {
   restoreAppearance,
@@ -41,9 +53,8 @@ import {
   type TerminalRef,
 } from "../../../shared/relations";
 import {
-  isInterestKey,
-  STORED_INTERESTS,
   type StoredInterest,
+  type GroupInterest,
 } from "../../../shared/interest";
 
 /**
@@ -111,6 +122,8 @@ export type BoardLayoutDocument = {
   desk_pins: Record<string, DeskPin>;
   /** Terminal key (shared/interest.ts) to the viewer's muted or focused. */
   interest: Record<string, StoredInterest>;
+  /** Viewer intent by immutable stored Group ID, separate from membership. */
+  group_interest?: Record<string, GroupInterest>;
 };
 /** A desk's cell in its Town room: column and row, from the top left. */
 export type DeskCell = { col: number; row: number };
@@ -181,6 +194,7 @@ export type BoardOp =
   | { op: "desk.place"; key: string; cell: DeskCell }
   /** Mute or focus an agent's terminal, or return it to watching with null. */
   | { op: "interest.set"; key: string; interest: StoredInterest | null }
+  | { op: "group.interest"; id: string; interest: GroupInterest | null }
   | {
       op: "anchor.witness";
       string_id: string;
@@ -323,6 +337,7 @@ export function emptyBoardDocument(): BoardDocument {
       colors: {},
       desk_pins: {},
       interest: {},
+      group_interest: {},
     },
     notes: [],
     strings: [],
@@ -405,17 +420,7 @@ function deskPins(value: unknown): Record<string, DeskPin> {
   }
   return out;
 }
-function interests(value: unknown): Record<string, StoredInterest> {
-  if (value === undefined) return {};
-  if (!isObject(value)) fail("interest must be an object");
-  const out: Record<string, StoredInterest> = {};
-  for (const [key, entry] of Object.entries(value)) {
-    text(key, "interest key", BOARD_LIMITS.key);
-    if (!STORED_INTERESTS.includes(entry as StoredInterest)) fail("interest");
-    out[key] = entry as StoredInterest;
-  }
-  return out;
-}
+
 function anchor(value: unknown): BoardAnchor {
   if (!isObject(value)) fail("anchor must be an object");
   if (!KINDS.includes(value.kind as BoardAnchorKind)) fail("anchor kind");
@@ -530,7 +535,8 @@ export function parseBoardDocument(value: unknown): BoardDocument {
       // Boards saved before desk pins have none.
       desk_pins: deskPins(layout.desk_pins),
       // Boards saved before interest have none: every agent is watched.
-      interest: interests(layout.interest),
+      interest: interests(layout.interest, BOARD_LIMITS.key),
+      group_interest: groupInterests(layout.group_interest, BOARD_LIMITS.key),
     },
     notes: notes.map((entry) => {
       const rev =
@@ -559,7 +565,8 @@ function checkBounds(document: BoardDocument) {
     layout.folded.length +
     Object.keys(layout.colors).length +
     Object.keys(layout.desk_pins).length +
-    Object.keys(layout.interest).length;
+    Object.keys(layout.interest).length +
+    Object.keys(layout.group_interest ?? {}).length;
   if (entries > BOARD_LIMITS.layoutEntries)
     fail(`at most ${BOARD_LIMITS.layoutEntries} layout entries`);
   const noteIds = new Set(document.notes.map((entry) => entry.id));
@@ -578,6 +585,7 @@ function checkBounds(document: BoardDocument) {
   const children = new Set(spawns.map((claim) => terminalKey(claim.child)));
   if (children.size !== spawns.length) fail("one spawn claim per child");
   checkStoredGroups(groups);
+  checkGroupInterest(document);
   if (
     document.relations.group_changes?.some(
       (event) => event.revision > document.revision,
@@ -591,6 +599,7 @@ function checkBounds(document: BoardDocument) {
 export class BoardStore {
   private document: BoardDocument;
   private readonly colorEdits = new Map<string, ColorEdit>();
+  private readonly appearanceEdits: AppearanceEdits = new Map();
 
   constructor(
     private readonly path: string = defaultBoardPath(),
@@ -636,6 +645,14 @@ export class BoardStore {
     };
   }
 
+  captureAppearanceChanges() {
+    return captureAppearanceChanges(
+      this.appearanceEdits,
+      this.document.revision,
+      () => this.document,
+    );
+  }
+
   /**
    * Apply every operation or none. A note edit made against an older note
    * revision is refused with the current document, so a second client never
@@ -647,6 +664,7 @@ export class BoardStore {
     const next = structuredClone(this.document);
     const now = (this.options.now ?? Date.now)();
     for (const op of ops) applyOp(next, op, this.document, now);
+    pruneGroupInterest(next);
     next.revision = this.document.revision + 1;
     checkBounds(next);
     const payload = JSON.stringify(next);
@@ -654,6 +672,7 @@ export class BoardStore {
     replaceDataFile(this.path, payload);
     this.document = next;
     trackColorEdits(this.colorEdits, ops, next);
+    trackAppearanceEdits(this.appearanceEdits, ops, next);
     return this.get();
   }
   /**
@@ -675,6 +694,10 @@ function applyOp(
   if (isGroupOp(op)) {
     try {
       applyGroupOp(next.relations, op as GroupOp, now, current.revision + 1);
+      if (op.op === "group.delete" && next.layout.group_interest)
+        delete next.layout.group_interest[
+          (op as Extract<GroupOp, { op: "group.delete" }>).id
+        ];
     } catch (error) {
       fail((error as Error).message);
     }
@@ -824,15 +847,10 @@ function applyOp(
       if (pin && !pin.cell) pin.cell = cell;
       return;
     }
-    case "interest.set": {
-      const key = text(op.key, "interest key", BOARD_LIMITS.key);
-      if (!isInterestKey(key)) fail("interest key");
-      if (op.interest === null) delete next.layout.interest[key];
-      else if (STORED_INTERESTS.includes(op.interest))
-        next.layout.interest[key] = op.interest;
-      else fail("interest");
+    case "interest.set":
+    case "group.interest":
+      applyBoardInterest(next, op, BOARD_LIMITS.key);
       return;
-    }
     case "anchor.witness": {
       const target = next.strings.find((entry) => entry.id === op.string_id);
       const side = target?.[op.end === "to" ? "to" : "from"];
