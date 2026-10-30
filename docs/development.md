@@ -83,7 +83,12 @@ six separate runners, each with one file worker and one active case, and
 **Web browser tests**. Browser jobs install the Chrome for Testing build pinned in
 [`tools/chrome/test-chrome.json`](../tools/chrome/test-chrome.json) (checksum
 verified, cached) and print its version and the runner's CPU, so a browser
-update is a reviewed change rather than a runner-image roll-out. No job retries a
+update is a reviewed change rather than a runner-image roll-out. Ubuntu 24.04
+and later deny unprivileged user namespaces to programs without an AppArmor
+profile, which aborts Chrome's sandbox outside the packaged path; on CI the
+installer loads a profile like the Chrome package's for the pinned binary, and
+then starts it headless once, so a browser that cannot start fails installation
+rather than every test. Locally it prints the two commands instead. No job retries a
 failed test. The [shard inventory](../scripts/world-browser-suites.ts) splits all
 World browser suites between the six shards; inventory checks reject missing or
 duplicate assignments. The required Delivery checks status succeeds only when

@@ -1,9 +1,22 @@
 import { expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import pin from "../tools/chrome/test-chrome.json";
-import { installTestChrome, verifyArchive } from "./test-chrome";
+import {
+  appArmorProfile,
+  installTestChrome,
+  smokeTestChrome,
+  userNamespacesRestricted,
+  verifyArchive,
+} from "./test-chrome";
 
 test("the pin names one Chrome for Testing build and its checksum", () => {
   expect(pin.url).toBe(
@@ -31,3 +44,48 @@ test("an archive that does not match the pinned checksum is refused before it is
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("the sandbox profile allows user namespaces for exactly the pinned path", () => {
+  const profile = appArmorProfile("/example/cache/chrome-linux64/chrome");
+  expect(profile).toContain(
+    'profile herdr-test-chrome "/example/cache/chrome-linux64/chrome" flags=(unconfined) {',
+  );
+  expect(profile).toContain("  userns,");
+  expect(profile.startsWith("abi <abi/4.0>,")).toBe(true);
+});
+
+test("only an enabled AppArmor restriction needs the profile", () => {
+  expect(userNamespacesRestricted((() => "1\n") as never)).toBe(true);
+  expect(userNamespacesRestricted((() => "0\n") as never)).toBe(false);
+  expect(
+    userNamespacesRestricted((() => {
+      throw new Error("absent");
+    }) as never),
+  ).toBe(false);
+});
+
+test.skipIf(process.platform === "win32")(
+  "installation fails when the browser cannot start headless, not at the first test",
+  () => {
+    const directory = mkdtempSync(join(tmpdir(), "test-chrome-smoke-"));
+    try {
+      const fake = (name: string, body: string) => {
+        const path = join(directory, name);
+        writeFileSync(path, `#!/bin/sh\n${body}\n`);
+        chmodSync(path, 0o755);
+        return path;
+      };
+      expect(() =>
+        smokeTestChrome(
+          fake("aborts", "echo 'No usable sandbox!' >&2; exit 134"),
+        ),
+      ).toThrow("No usable sandbox!");
+      expect(() => smokeTestChrome(fake("silent", "exit 0"))).toThrow(
+        "did not start headless",
+      );
+      smokeTestChrome(fake("starts", "echo '<html><head></head></html>'"));
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  },
+);
