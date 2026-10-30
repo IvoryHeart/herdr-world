@@ -1,0 +1,183 @@
+{
+  "baselineRenderer": "488682bc",
+  "afterRenderer": "PR 564 round-1 repair",
+  "method": "Own headless Chrome/CDP, native time, 14-second same-scene sequence; CDP JPEG timestamps preserved in 60 fps video containers. Container frame rate is not a claim of 60 rendered frames/s.",
+  "dpr": 1,
+  "sequence": {
+    "0-5s": "working/blocked glow, typing/bouncing bubbles and blinks",
+    "5-8s": "camera flight out and back",
+    "8-10s": "desk carry along a synthetic pointer path",
+    "10-11.3s": "cancel, shake and spring home",
+    "11.3-14s": "ambient animation"
+  },
+  "clips": [
+    {
+      "build": "before",
+      "width": 1440,
+      "height": 900,
+      "cpuThrottle": 1,
+      "renderer": "ANGLE (AMD, Vulkan 1.4.318 (AMD Radeon RX 6700 XT (RADV NAVI22) (0x000073DF)), radv)",
+      "durationMs": 14000.19999885559,
+      "drawnFrames": 841,
+      "capturedFrames": 840,
+      "phases": {
+        "ambient": {
+          "drawnFrames": 301,
+          "medianDrawIntervalMs": 16.7,
+          "maxDrawIntervalMs": 17.1
+        },
+        "camera-out": {
+          "drawnFrames": 90,
+          "medianDrawIntervalMs": 16.7,
+          "maxDrawIntervalMs": 16.9
+        },
+        "camera-back": {
+          "drawnFrames": 90,
+          "medianDrawIntervalMs": 16.7,
+          "maxDrawIntervalMs": 17.4
+        },
+        "desk-drag": {
+          "drawnFrames": 120,
+          "medianDrawIntervalMs": 16.7,
+          "maxDrawIntervalMs": 18.3
+        },
+        "spring-return": {
+          "drawnFrames": 78,
+          "medianDrawIntervalMs": 16.7,
+          "maxDrawIntervalMs": 17.9
+        },
+        "ambient-again": {
+          "drawnFrames": 162,
+          "medianDrawIntervalMs": 16.7,
+          "maxDrawIntervalMs": 16.8
+        }
+      }
+    },
+    {
+      "build": "after",
+      "width": 1440,
+      "height": 900,
+      "cpuThrottle": 1,
+      "renderer": "ANGLE (AMD, Vulkan 1.4.318 (AMD Radeon RX 6700 XT (RADV NAVI22) (0x000073DF)), radv)",
+      "durationMs": 14000.099998474121,
+      "drawnFrames": 840,
+      "capturedFrames": 839,
+      "phases": {
+        "ambient": {
+          "drawnFrames": 300,
+          "medianDrawIntervalMs": 16.7,
+          "maxDrawIntervalMs": 17.0
+        },
+        "camera-out": {
+          "drawnFrames": 90,
+          "medianDrawIntervalMs": 16.7,
+          "maxDrawIntervalMs": 16.9
+        },
+        "camera-back": {
+          "drawnFrames": 90,
+          "medianDrawIntervalMs": 16.7,
+          "maxDrawIntervalMs": 17.1
+        },
+        "desk-drag": {
+          "drawnFrames": 120,
+          "medianDrawIntervalMs": 16.7,
+          "maxDrawIntervalMs": 18.3
+        },
+        "spring-return": {
+          "drawnFrames": 78,
+          "medianDrawIntervalMs": 16.6,
+          "maxDrawIntervalMs": 17.7
+        },
+        "ambient-again": {
+          "drawnFrames": 162,
+          "medianDrawIntervalMs": 16.7,
+          "maxDrawIntervalMs": 17.1
+        }
+      }
+    },
+    {
+      "build": "before",
+      "width": 390,
+      "height": 844,
+      "cpuThrottle": 4,
+      "renderer": "ANGLE (AMD, Vulkan 1.4.318 (AMD Radeon RX 6700 XT (RADV NAVI22) (0x000073DF)), radv)",
+      "durationMs": 14000,
+      "drawnFrames": 812,
+      "capturedFrames": 813,
+      "phases": {
+        "ambient": {
+          "drawnFrames": 290,
+          "medianDrawIntervalMs": 17.2,
+          "maxDrawIntervalMs": 18.7
+        },
+        "camera-out": {
+          "drawnFrames": 87,
+          "medianDrawIntervalMs": 17.2,
+          "maxDrawIntervalMs": 20.7
+        },
+        "camera-back": {
+          "drawnFrames": 88,
+          "medianDrawIntervalMs": 17.1,
+          "maxDrawIntervalMs": 19.3
+        },
+        "desk-drag": {
+          "drawnFrames": 115,
+          "medianDrawIntervalMs": 17.3,
+          "maxDrawIntervalMs": 25.5
+        },
+        "spring-return": {
+          "drawnFrames": 75,
+          "medianDrawIntervalMs": 17.3,
+          "maxDrawIntervalMs": 22.2
+        },
+        "ambient-again": {
+          "drawnFrames": 157,
+          "medianDrawIntervalMs": 17.1,
+          "maxDrawIntervalMs": 18.2
+        }
+      }
+    },
+    {
+      "build": "after",
+      "width": 390,
+      "height": 844,
+      "cpuThrottle": 4,
+      "renderer": "ANGLE (AMD, Vulkan 1.4.318 (AMD Radeon RX 6700 XT (RADV NAVI22) (0x000073DF)), radv)",
+      "durationMs": 14000.79999923706,
+      "drawnFrames": 812,
+      "capturedFrames": 813,
+      "phases": {
+        "ambient": {
+          "drawnFrames": 290,
+          "medianDrawIntervalMs": 17.2,
+          "maxDrawIntervalMs": 20.5
+        },
+        "camera-out": {
+          "drawnFrames": 88,
+          "medianDrawIntervalMs": 17.0,
+          "maxDrawIntervalMs": 18.5
+        },
+        "camera-back": {
+          "drawnFrames": 88,
+          "medianDrawIntervalMs": 17,
+          "maxDrawIntervalMs": 20.0
+        },
+        "desk-drag": {
+          "drawnFrames": 114,
+          "medianDrawIntervalMs": 17.3,
+          "maxDrawIntervalMs": 24.5
+        },
+        "spring-return": {
+          "drawnFrames": 75,
+          "medianDrawIntervalMs": 17.4,
+          "maxDrawIntervalMs": 22.3
+        },
+        "ambient-again": {
+          "drawnFrames": 157,
+          "medianDrawIntervalMs": 17.1,
+          "maxDrawIntervalMs": 19.6
+        }
+      }
+    }
+  ]
+}
