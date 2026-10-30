@@ -35,6 +35,11 @@ export type CrewSettings = {
    * `seat start` launches a seat with exactly these settings.
    */
   roster: Record<string, RosterEntry>;
+  /**
+   * The seat told once when an owner ask fails or reaches no one, such as
+   * the FirstMate seat; unset, the failure is only in the feed.
+   */
+  escalate?: string;
 };
 
 export type RosterEntry = {
