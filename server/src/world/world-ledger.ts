@@ -1,7 +1,5 @@
 import { existsSync, readFileSync, renameSync } from "node:fs";
-import { join } from "node:path";
-import { dataRoot, replaceDataFile } from "../config/data-paths";
-import { worldEnv } from "../config/environment";
+import { replaceDataFile } from "../config/data-paths";
 import type { TerminalRef } from "../../../shared/relations";
 import type { BoardOp } from "./board-store";
 
@@ -112,12 +110,6 @@ export const LEDGER_LIMITS = {
   task: 120,
 };
 
-export function defaultLedgerPath() {
-  return (
-    worldEnv("LEDGER_PATH") ?? join(dataRoot(), "boards", "world-ledger.json")
-  );
-}
-
 const empty = (): LedgerDocument => ({
   version: 1,
   revision: 0,
@@ -129,9 +121,10 @@ const empty = (): LedgerDocument => ({
 export class WorldLedger {
   private document: LedgerDocument;
   private sequence = 0;
+  #closed = false;
 
   constructor(
-    private readonly path: string = defaultLedgerPath(),
+    private readonly path: string,
     private readonly options: {
       now?: () => number;
       log?: (message: string) => void;
@@ -205,8 +198,14 @@ export class WorldLedger {
     };
   }
 
+  /** Refuse every later change: the service that owns this file stopped. */
+  close(): void {
+    this.#closed = true;
+  }
+
   /** Change the document and save it; returns the new revision. */
   update(change: (document: LedgerDocument) => void): number {
+    if (this.#closed) throw new Error("World storage is closed");
     const next = structuredClone(this.document);
     change(next);
     next.revision = this.document.revision + 1;

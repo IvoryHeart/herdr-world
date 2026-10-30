@@ -30,7 +30,8 @@ import {
 import { worldEnv } from "../config/environment";
 import { createSettingsRpcHandler } from "../bridge/settings-rpc";
 import {
-  readGuiSettings,
+  type GuiSettingsStore,
+  repoWorktreeHooksEnabled,
   terminalSurfaceCodecsEnabled,
 } from "../config/gui-settings";
 import {
@@ -119,6 +120,8 @@ export function createLegacyConnectionRuntime(args: {
   identity?: ConnectionIdentity;
   connectionGeneration?: number;
   config: SshTunnelConfig;
+  /** The owning service's settings file. */
+  settings: GuiSettingsStore;
   logger?: Logger;
   safeSend: SafeSend;
   broadcast?: (payload: string, context?: string) => void;
@@ -195,10 +198,15 @@ export function createLegacyConnectionRuntime(args: {
       readSessionMetadata: agentSessions.readWorktreeMetadata,
     }),
   );
+  const readSettings = () => args.settings.read();
+  const updateSettings: GuiSettingsStore["update"] = (update, shouldCommit) =>
+    args.settings.update(update, shouldCommit);
   const worktreeParents = createWorktreeParentStore({
     connectionId: identity.id,
     herdr,
     sshHost,
+    readSettings,
+    updateSettings,
   });
   const { handleHerdrInfo } = createHerdrInfoHandler({
     ping: () => herdr.ping(),
@@ -225,6 +233,7 @@ export function createLegacyConnectionRuntime(args: {
   const status = createStatusEnricher({
     connectionId: identity.id,
     sshHost,
+    readSettings,
     runProcessWithCodeTimeout,
     shQuote,
   });
@@ -239,6 +248,8 @@ export function createLegacyConnectionRuntime(args: {
     invalidateGitStatus: status.invalidateGitStatus,
     resolveWorkspaceGitRoot: async (workspaceId) =>
       files.resolveWorkspaceGitRoot({ workspace_id: workspaceId }),
+    readSettings,
+    updateSettings,
   });
   const worktreeHooks = unixOnlyHandlers(
     remotePlatform,
@@ -250,6 +261,8 @@ export function createLegacyConnectionRuntime(args: {
       runProcess,
       runProcessWithCode,
       shQuote,
+      hooksEnabled: (repoKey) =>
+        repoWorktreeHooksEnabled(readSettings, repoKey),
     }),
   );
   const worktreeRemovalCoordinator = createWorktreeRemovalCoordinator();
@@ -279,6 +292,7 @@ export function createLegacyConnectionRuntime(args: {
   const handleSettingsRpc = createSettingsRpcHandler({
     connectionId: identity.id,
     connectionGeneration: args.connectionGeneration,
+    settings: args.settings,
     herdr,
     sshHost,
     readWorktreeHooks: worktreeHooks.readWorktreeHooks,
@@ -308,7 +322,7 @@ export function createLegacyConnectionRuntime(args: {
     formatError: sanitizeConnectionError,
     clientSocketPath,
     surfaceCodecsEnabled: async () =>
-      terminalSurfaceCodecsEnabled(await readGuiSettings(), identity.id),
+      terminalSurfaceCodecsEnabled(await readSettings(), identity.id),
     herdrProtocol: async () => {
       const protocol: unknown = (await herdr.ping()).protocol;
       assertSupportedHerdrProtocol(protocol);
@@ -728,6 +742,9 @@ export function createLegacyConnectionRuntime(args: {
     if (disposed) return Promise.resolve();
     disposed = true;
     backgroundStarted = false;
+    // Calls still waiting on Herdr belong to this retired runtime: fail them
+    // now rather than at their timeout, so their callers can settle.
+    herdr.close();
     handleTerminalUpload.stopCleanup();
     herdr.off("event", onHerdrEvent);
     herdr.off("error", onHerdrError);

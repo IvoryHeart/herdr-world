@@ -209,24 +209,27 @@ export function loadOrCreateSessionSecret(
 }
 
 /**
- * The listener's signing secret, or exit. Only a listener startup may rotate
- * sessions; the secret is empty when login is not required.
+ * The listener's signing secret. Only a listener startup may rotate sessions;
+ * the secret is empty when login is not required.
  */
-export function listenerSessionSecret(config: {
-  authRequired: boolean;
-  password: string;
-  pin?: string;
-}): string {
+export function listenerSessionSecret(
+  config: {
+    authRequired: boolean;
+    password: string;
+    pin?: string;
+  },
+  path: string,
+): string {
   if (!config.authRequired) return "";
   try {
-    return loadOrCreateSessionSecret([
-      config.password,
-      ...(config.pin ? [config.pin] : []),
-    ]);
-  } catch (cause) {
-    console.error(
-      `[bridge] FATAL: could not load the session signing secret: ${(cause as Error).message}`,
+    return loadOrCreateSessionSecret(
+      [config.password, ...(config.pin ? [config.pin] : [])],
+      path,
     );
-    process.exit(1);
+  } catch (cause) {
+    throw new Error(
+      `could not load the session signing secret: ${(cause as Error).message}`,
+      { cause },
+    );
   }
 }

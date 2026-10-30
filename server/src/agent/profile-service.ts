@@ -1,5 +1,5 @@
 import type { createRevisionPublisher } from "../world/revision-publisher";
-import { ProfileStore } from "./profile-store";
+import type { ProfileStore } from "./profile-store";
 import { TerminalSettings } from "./terminal-settings";
 import type { PaneRow, SettingsLease } from "./terminal-tokens";
 
@@ -10,11 +10,13 @@ export function createProfileServices(
     readyRuntimeLease(id: string): SettingsLease | null;
     list(): readonly { id: string }[];
   },
+  /** The service's profile store, opened on first use. */
+  profiles: () => ProfileStore,
+  /** The service clock. */
+  now: () => number,
   log: (message: string) => void = console.warn,
 ) {
-  let store: ProfileStore | null = null;
   let settings: TerminalSettings | null = null;
-  const profiles = () => (store ??= new ProfileStore(undefined, { log }));
   const publishProfilesChanged = publisher(
     "world_profiles_changed",
     "world-profiles",
@@ -24,7 +26,7 @@ export function createProfileServices(
       profiles(),
       (id) => registry().readyRuntimeLease(id),
       publishProfilesChanged,
-      Date.now,
+      now,
       () =>
         registry()
           .list()

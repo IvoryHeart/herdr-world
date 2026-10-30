@@ -10,6 +10,7 @@ import type { TownMoveContext } from "./town-move";
 import { fakeHerdr } from "./testing/deskMoveFixture";
 import { CliError } from "./world-cli-errors";
 import { createWorldCliService } from "./world-cli-service";
+import { WorldLedger } from "./world-ledger";
 import type { WorldSnapshotResult } from "./snapshot";
 import { appearanceFor } from "../../../shared/appearance";
 
@@ -466,11 +467,14 @@ test("the actual CLI service injects the RPC-owned queue and exact lease", async
   } as unknown as WorldSnapshotResult;
   const selected: string[] = [];
   let boardReads = 0;
+  const ledger = new WorldLedger("ledger.json", { persist: false });
   const service = createWorldCliService({
     board: () => {
       boardReads++;
       return state.board;
     },
+    ledger: () => ledger,
+    now: Date.now,
     townMoveQueues: state.context.queues,
     publishBoard: state.context.publishBoard,
     broadcast: () => {},

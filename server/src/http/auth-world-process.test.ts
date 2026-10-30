@@ -1,58 +1,25 @@
-import { expect, test } from "bun:test";
+import { afterAll, beforeAll, expect, test } from "bun:test";
 import { createECDH, randomBytes } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { startTestService } from "../service/testing/services";
+import { configureServerLogger } from "../utils/logger";
+
+beforeAll(() => configureServerLogger("error"));
+afterAll(() => configureServerLogger("info"));
 
 // Exercise the real HTTP router and socket cleanup, not a second test router.
 test("logout after reauthentication closes earlier and later tabs, not other browsers", async () => {
   const root = await mkdtemp(join(tmpdir(), "herdr-world-logout-"));
   const pushPath = join(root, "web-push.json");
   const sockets: WebSocket[] = [];
-  const child = Bun.spawn([process.execPath, "server/src/index.ts"], {
-    cwd: join(import.meta.dir, "../../.."),
-    env: {
-      ...process.env,
-      HOME: root,
-      APPDATA: root,
-      XDG_CONFIG_HOME: root,
-      HERDR_WORLD_DATA_DIR: undefined,
-      HOST: "0.0.0.0",
-      PORT: "0",
-      OPEN_BROWSER: "0",
-      HERDR_WORLD_PASSWORD: "logout-test-secret",
-      HERDR_CONNECTIONS_PATH: join(root, "connections.json"),
-      HERDR_SOCKET_PATH: join(root, "missing-control.sock"),
-      HERDR_CLIENT_SOCKET_PATH: join(root, "missing-render.sock"),
-      HERDR_SSH_HOST: "",
-      HERDR_SESSION: "",
-      HERDR_WORLD_TLS_CERT: "",
-      HERDR_WORLD_TLS_KEY: "",
-      HERDR_WORLD_WEB_PUSH_PATH: pushPath,
-    },
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  const errors = new Response(child.stderr).text();
-  const ready = Promise.withResolvers<string>();
-  const output = (async () => {
-    let text = "";
-    for await (const chunk of child.stdout) {
-      text += new TextDecoder().decode(chunk);
-      const port = text.match(/\bINFO bridge listening\b[^\r\n]*:(\d+)\b/)?.[1];
-      if (port) ready.resolve(`http://127.0.0.1:${port}`);
-    }
-    ready.reject(
-      new Error(`Server exited before listening: ${text}\n${await errors}`),
-    );
-  })();
-  const deadline = setTimeout(
-    () => ready.reject(new Error("Server startup timed out")),
-    10_000,
+  const { service, base } = await startTestService(
+    root,
+    { host: "0.0.0.0", password: "logout-test-secret" },
+    { HERDR_WORLD_WEB_PUSH_PATH: pushPath },
   );
   try {
-    const base = await ready.promise;
-    clearTimeout(deadline);
     const request = (path: string, init?: RequestInit) =>
       fetch(`${base}${path}`, { ...init, signal: AbortSignal.timeout(5000) });
     const login = async (cookie = "") => {
@@ -189,11 +156,8 @@ test("logout after reauthentication closes earlier and later tabs, not other bro
     expect(redirect.headers.get("location")).toBe("/login");
     expect(await login()).not.toBe(first);
   } finally {
-    clearTimeout(deadline);
     for (const socket of sockets) socket.close();
-    child.kill();
-    await child.exited;
-    await output;
+    await service.stop();
     await rm(root, { recursive: true, force: true });
   }
 }, 20_000);

@@ -4,8 +4,7 @@ import {
   connectionSettingsPrefix,
   DEFAULT_WORKSPACE_AUTO_SYNC_INTERVAL_MINUTES,
   type GuiWorkspaceAutoSyncSettings,
-  readGuiSettings,
-  updateGuiSettings,
+  type GuiSettingsStore,
   workspaceAutoSyncSettingsKey,
 } from "../config/gui-settings";
 import {
@@ -234,13 +233,12 @@ export function createWorkspaceAutoSync(args: {
   runProcessWithCodeTimeout: RunProcessWithCodeTimeout;
   invalidateGitStatus: (root: string) => void;
   resolveWorkspaceGitRoot: (workspaceId: string) => Promise<{ root: string }>;
-  readSettings?: typeof readGuiSettings;
-  updateSettings?: typeof updateGuiSettings;
+  readSettings: GuiSettingsStore["read"];
+  updateSettings: GuiSettingsStore["update"];
   syncBranch?: typeof syncWorkspaceBranch;
 }) {
   const logger = args.logger ?? silentLogger;
-  const readSettings = args.readSettings ?? readGuiSettings;
-  const updateSettings = args.updateSettings ?? updateGuiSettings;
+  const { readSettings, updateSettings } = args;
   const syncBranch = args.syncBranch ?? syncWorkspaceBranch;
   const formatError =
     args.formatError ??

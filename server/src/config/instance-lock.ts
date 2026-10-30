@@ -7,9 +7,9 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { lockSync } from "proper-lockfile";
-import { assertSafeDataPath, dataRoot } from "./data-paths";
+import { assertSafeDataPath } from "./data-paths";
 
 /** How long a starting World waits for another one's startup check. */
 const CLAIM_WAIT_MS = 5_000;
@@ -18,6 +18,9 @@ const CLAIM_STALE_MS = 10_000;
 const claimWait = new Int32Array(new SharedArrayBuffer(4));
 
 type Holder = { pid: number; port: number };
+
+/** Folders held by live World services in this process. */
+const heldRoots = new Set<string>();
 
 function processAlive(pid: number): boolean {
   try {
@@ -78,7 +81,8 @@ function claimStartup(path: string, root: string, waitMs: number): () => void {
  * One listening World per data folder. Two would overwrite each other's
  * whole-file stores (ledger, Board, agent profiles), rotate each other's
  * session secret and both send Web Push. The lock names its holder and is
- * taken over when that process is gone. Returns the release.
+ * taken over when that process is gone. Services in one process share its ID,
+ * so the folders they hold are also kept here. Returns the release.
  */
 export function acquireInstanceLock(
   root: string,
@@ -89,10 +93,14 @@ export function acquireInstanceLock(
   const path = join(root, "instance.lock");
   assertSafeDataPath(path);
   mkdirSync(root, { recursive: true, mode: 0o700 });
+  const held = resolve(root);
   const releaseClaim = claimStartup(path, root, waitMs);
   try {
     const holder = readHolder(path);
-    if (holder && holder.pid !== process.pid && alive(holder.pid))
+    if (
+      holder &&
+      (holder.pid === process.pid ? heldRoots.has(held) : alive(holder.pid))
+    )
       throw new Error(
         `the data folder ${root} is in use by World (pid ${holder.pid}, port ${holder.port}); give this instance its own folder with HERDR_WORLD_DATA_DIR`,
       );
@@ -110,26 +118,16 @@ export function acquireInstanceLock(
     } finally {
       closeSync(fd);
     }
+    heldRoots.add(held);
   } finally {
     releaseClaim();
   }
   // Only this live process could replace its own lock, so no claim is needed.
+  let released = false;
   return () => {
+    if (released) return;
+    released = true;
+    heldRoots.delete(held);
     if (readHolder(path)?.pid === process.pid) rmSync(path, { force: true });
   };
-}
-
-/**
- * Claim the data folder for this listener until it exits, or stop: a second
- * World on one folder would overwrite the first one's files.
- */
-export function claimDataFolder(port: number, root = dataRoot()): void {
-  let release: () => void;
-  try {
-    release = acquireInstanceLock(root, port);
-  } catch (cause) {
-    console.error(`[bridge] FATAL: ${(cause as Error).message}`);
-    process.exit(1);
-  }
-  process.on("exit", release);
 }
