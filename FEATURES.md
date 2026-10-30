@@ -240,6 +240,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     start plainly and get the role in their first prompt. The editor shows the
     exact command. The new tab takes the profile's colour and its agent wears
     the profile's look in Town.
+  - Profile assignments and the Town master travel with their terminal in Herdr
+    and are shared by Worlds connected to that Herdr. Profiles and chimes stay
+    per World; an unknown profile shows its recorded name with the default look.
+    Closing the terminal or restarting Herdr ends its assignment and role.
+    The newest Town master assignment wins; moving the role still asks first.
   See the [New agent exercise](./docs/TUTORIAL.md#new-agent).
 - **Shared terminal appearance.** The title-bar icon opens the same editor in
   every view, including the Spaces tab strip and arranged window headers; a

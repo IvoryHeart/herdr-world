@@ -12,8 +12,9 @@ afterEach(() => {
   for (const root of roots.splice(0))
     rmSync(root, { recursive: true, force: true });
 });
-for (const retire of [false, true])
-  test(`profile launch on reused tab ID binds its new terminal; retired=${retire}`, async () => {
+for (const mode of ["ready", "retired", "refused-settings"])
+  test(`profile launch on reused tab ID binds its new terminal; ${mode}`, async () => {
+    const retire = mode === "retired";
     const root = mkdtempSync(join(tmpdir(), "launcher-appearance-"));
     roots.push(root);
     const board = new BoardStore(join(root, "board.json"));
@@ -89,9 +90,13 @@ for (const retire of [false, true])
       sendError: (_context: string, error: unknown) => errors.push(error),
       services: {
         board: () => board,
-        profiles: () => ({
-          profile: () => profile,
-          assign: () => ({ revision: 1 }),
+        profiles: () => ({ profile: () => profile }),
+        terminalSettings: () => ({
+          assign: async () => {
+            if (mode === "refused-settings")
+              throw new Error("metadata_token_limit");
+            return { revision: 1 };
+          },
         }),
         publishProfilesChanged: () => {},
         publishBoardChanged: () => {},
@@ -101,11 +106,17 @@ for (const retire of [false, true])
     } as unknown as ConnectionRpcContext);
     expect(errors).toEqual([]);
     expect(result).toMatchObject({
-      status: "started",
+      status: mode === "refused-settings" ? "failed" : "started",
       terminal_id: "new-terminal",
     });
     const next = { ...old, witness: ["new-terminal"] };
-    if (retire)
+    if (mode === "refused-settings")
+      expect(result).toMatchObject({
+        message: expect.stringContaining(
+          "profile settings were not saved: metadata_token_limit",
+        ),
+      });
+    if (retire || mode === "refused-settings")
       expect(board.get().layout.colors[old.color_key]).toBeUndefined();
     else {
       expect(appearanceColors(board.get(), [next])[old.color_key]).toBe(

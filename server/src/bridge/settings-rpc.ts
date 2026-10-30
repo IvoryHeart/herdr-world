@@ -13,11 +13,9 @@ import {
   connectionSettingsPrefix,
   DEFAULT_WORKSPACE_AUTO_SYNC_INTERVAL_MINUTES,
   type GuiRepoSettings,
-  guiSettingsPath,
-  readGuiSettings,
+  type GuiSettingsStore,
   repoWorktreeHooksEnabled,
   terminalSurfaceCodecsEnabled,
-  updateGuiSettings,
   workspaceAutoSyncSettingsKey,
   workspaceRepoSettingsKey,
 } from "../config/gui-settings";
@@ -33,8 +31,8 @@ type ReadWorktreeHooks = ReturnType<
 export function createSettingsRpcHandler(args: {
   connectionId?: string;
   connectionGeneration?: number;
-  readSettings?: typeof readGuiSettings;
-  updateSettings?: typeof updateGuiSettings;
+  /** The service's settings file. */
+  settings: Pick<GuiSettingsStore, "path" | "read" | "update">;
   herdr: HerdrClient;
   sshHost: () => string | undefined;
   readWorktreeHooks: ReadWorktreeHooks;
@@ -56,8 +54,9 @@ export function createSettingsRpcHandler(args: {
     detail?: string,
   ) => void;
 }) {
-  const readSettings = args.readSettings ?? readGuiSettings;
-  const updateSettings = args.updateSettings ?? updateGuiSettings;
+  const readSettings = () => args.settings.read();
+  const updateSettings: GuiSettingsStore["update"] = (update, shouldCommit) =>
+    args.settings.update(update, shouldCommit);
   const serialize = (message: Record<string, unknown>) =>
     args.connectionId
       ? serializeConnectionEnvelope(
@@ -143,7 +142,7 @@ export function createSettingsRpcHandler(args: {
       }
       if (method === "settings.get") {
         const settings = await readSettings();
-        return reply({ settings, path: guiSettingsPath() });
+        return reply({ settings, path: args.settings.path });
       }
       if (method === "settings.worktree_hooks.get") {
         const workspaceId = String(params.workspace_id ?? "");
@@ -190,7 +189,7 @@ export function createSettingsRpcHandler(args: {
         return reply({
           workspace_id: workspaceId,
           key,
-          enabled: await repoWorktreeHooksEnabled(key),
+          enabled: await repoWorktreeHooksEnabled(readSettings, key),
           repo_name: workspace.worktree.repo_name,
           repo_root: workspace.worktree.repo_root,
           checkout_path: checkoutPath,
@@ -246,7 +245,7 @@ export function createSettingsRpcHandler(args: {
               running: args.workspaceAutoSyncIsRunning(key),
             }))
             .sort((a, b) => a.key.localeCompare(b.key)),
-          path: guiSettingsPath(),
+          path: args.settings.path,
         });
       }
       if (method === "settings.workspace_auto_sync.update_key") {

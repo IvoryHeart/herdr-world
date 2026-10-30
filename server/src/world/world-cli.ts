@@ -88,6 +88,8 @@ export type WorldCliDeps = {
   /** Tell World's pages; `asks` when a question was asked or answered. */
   publishLedger(revision: number, asks?: boolean): void;
   now?: () => number;
+  /** Aborted when the service stops: calls that wait return early. */
+  signal?: AbortSignal;
 };
 
 /** The commands the endpoint accepts, as the CLI spells them. */

@@ -147,6 +147,26 @@ work ceilings and the World latency trend cover its cost.
 The renderer draws through the shared World frame scheduler: state frames for
 camera, roof and walking changes, motion frames for ambient animation, which
 pause while the user types in a terminal and for reduced motion or calm mode.
+Only visible animation requests motion frames. Continuous glow, selection pulses
+and bouncing status bubbles retain their cadence; screen, typing and blink
+changes schedule their next discrete frame. Covered interiors and off-screen
+sprites do not keep ambient drawing alive. A settled scene with no visible
+motion sleeps until a state change, input, preference or viewport invalidation.
+The animation clock uses elapsed time even between sparse draws; simulation
+steps retain their bounded delta. Pending ambient wake-ups are cancelled on
+redraw and renderer destruction. [townFrameLifecycle.ts](town/townFrameLifecycle.ts)
+requests a state paint after GPU context restoration and removes that listener
+on disposal. A restore while hidden remains pending until visibility returns.
+
+`town-idle-draws` in the Hosts filter suite uses the test clock and
+`TOWN_STATIC_WORK_CEILINGS` to require zero draws per second in a settled,
+roof-covered scene at 1440 and 390 px. It first proves renderer readiness, then
+checks a coalesced state paint, smooth camera flight and visible pulses, return
+to sleep, native GPU context loss/restoration while sleeping and hidden, and
+destruction. The existing idle React-commit and moving-Inspector
+anchor cases remain. See the [idle-frame audit](../../../docs/town-idle-frames.md)
+for measured busy time, residual callback owners and paired synthetic captures.
+
 Ground is painted in 512-pixel chunks only when a chunk first comes into view,
 with deterministic per-tile randomness, and its trees and lamps join the scene
 with it. A building's interior, façade, roof and desks are baked the first time
@@ -264,7 +284,13 @@ World preparation and one view projection per snapshot, however much typing and
 output run alongside. Dev-only counters in the production modules
 (`countWorldWork` in [devtools/renderer.ts](devtools/renderer.ts), absent from
 release builds) supply the World counts; construction is counted in units, not
-in its time-bounded slices. A change that does more work per event fails there.
+in its time-bounded slices. `world.sync-build` counts a `buildWorldObject` that
+render had to build because preparation had not (preparation builds the
+focused host's variant, so a refresh needs none), and `colors.derive` counts
+terminal-colour derivations (once per colour hook per changed input, never per
+render). Unit tests read the same counters through
+[testing/countedWorldWork.ts](testing/countedWorldWork.ts). A change that does
+more work per event fails there.
 Raise a ceiling only in a reviewed change that explains the new work.
 The Hosts filter fixture's `town-idle` case holds idle Town, with an
 Inspector and its line open, to the same file's idle ceiling: React commits in
@@ -326,6 +352,16 @@ test time and fail on uncaught browser errors. Frame cancellation remains effect
 until each callback runs, including when an earlier callback disposes a terminal.
 The dense production suites above stay on real time, because the latency trend
 measures real time.
+
+The terminal-handoff fixture retains real browser frames for Inspector rendering
+and focus. It imports [testing/handoffAdmissionClock.ts](testing/handoffAdmissionClock.ts)
+before the app; its bundle plugin connects the production admission timer port
+to that clock without shortening the deadline. The cancellation probe advances
+the full admission window, then awaits a completion registered before creation
+and emitted after the actual controller opener settles. Native painted frames
+settle the rendering assertion. The browser-local pending-focus probe holds the
+real focus request and asserts that no terminal Inspector has rendered; the
+headless fixture's controlled opener cannot establish that boundary.
 
 When a fixture models a healthy terminal with a real `TerminalView`, emit a
 qualified full `TerminalPush` for each successful `terminal.attach`, using its

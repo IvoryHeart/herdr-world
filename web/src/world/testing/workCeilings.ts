@@ -43,7 +43,14 @@ export function productionWorkCeilings(view: string): WorkByPhase {
     ...ONE_SNAPSHOT,
     ...(view === "board" ? { "board.project": 1 } : { "office.project": 1 }),
   };
-  return { initial: stage, refresh: stage };
+  if (view === "board") return { initial: stage, refresh: stage };
+  // Terminal colours are derived once per colour hook when its inputs change
+  // (useTerminalColors.ts), never per render: Town's two hooks on mount, and
+  // on refresh only the one whose connections come from the refreshed World.
+  return {
+    initial: { ...stage, "colors.derive": 2 },
+    refresh: { ...stage, "colors.derive": 1 },
+  };
 }
 
 /**
@@ -54,6 +61,11 @@ export function productionWorkCeilings(view: string): WorkByPhase {
  */
 export const TOWN_IDLE_WORK_CEILINGS: WorkByPhase = {
   idle: { "commit-frames": 2 },
+};
+
+/** A settled, roof-covered Town has no visible animated pixels. Per test second. */
+export const TOWN_STATIC_WORK_CEILINGS: WorkByPhase = {
+  idle: { draws: 0 },
 };
 
 export type ConcurrentWork = {

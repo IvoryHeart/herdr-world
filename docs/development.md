@@ -24,7 +24,13 @@ same Herdr hosts. A second World on an occupied folder refuses to start. Point
 its agent CLI at it with `HERDR_WORLD_URL` and the same `HERDR_WORLD_DATA_DIR`,
 which locates the CLI token. Tests never use your data folder: the test preload
 sets `HERDR_WORLD_DATA_DIR` under the run's temporary directory, and a test that
-starts World with its own `HOME` unsets it.
+starts World with its own `HOME` unsets it. To test the service end to end, start
+it in the test's own process with `startTestService`
+([test services](../server/src/service/testing/services.ts)), which gives it its own
+folder. Spawn `server/src/index.ts` only for what needs a real process: signals and
+exit codes, the lock between processes, a home folder of its own, or fakes on
+`PATH`. A test that saves source settings should switch the GitHub source off
+first, because `gh` keeps its own state in the process's home folder.
 
 ## Development tools
 
@@ -77,6 +83,20 @@ tests with up to four file workers and one case per worker. World bundles are bu
 per run; each case retains its own server, fixture and fresh browser profile.
 Focused test files build a bundle once per file. Production responsiveness cases
 are serial within each file so their global diagnostic instrumentation cannot overlap.
+
+Keep policy checks headless once a replacement test and its mapping in
+`verification/coverage.json` exist. Retained browser cases name the behavior that
+requires a browser: geometry, trusted input, focus, rendering, renderer lifecycle
+or visual comparison. For example, `useWorldCreatedTerminal.test.ts` mounts the
+production creation hook and the Inspector selection-lease effect on the test
+clock to check admission retries, deadline cancellation and stale observations.
+`WorldTerminalHandoff.test.ts` and
+`SharedViewCreation.test.ts` retain launcher wiring, focus, rendered Inspectors and
+real terminal ownership. Controlled opener tests do not replace browser evidence
+that the actual opener honors cancellation.
+The handoff browser probe holds the real browser-local focus request, then uses
+controlled admission time and named opener completion for its cancellation
+check; see [the fixture clock guide](../web/src/world/README.md#browser-fixtures-on-test-time).
 
 **Known limitation: native sequential World browser runs.** Direct `bun test` runs
 across multiple `HostsFilter*.test.ts` or `ProductionContexts*.test.ts` files,
