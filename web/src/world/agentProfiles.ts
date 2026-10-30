@@ -1,5 +1,4 @@
 import { useEffect, useSyncExternalStore } from "react";
-import { bridge } from "../api";
 import {
   HARNESS_CHOICES,
   type AgentLook,
@@ -53,11 +52,15 @@ const get = () => state;
 /** The profiles last read, for code outside React (Town's renderer). */
 export const profilesSnapshot = () => state.document;
 
+async function bridge() {
+  return (await import("../api")).bridge;
+}
+
 export async function refreshProfiles() {
   try {
-    const document = (await bridge.call(
-      "world.profiles.get",
-    )) as ProfilesDocument;
+    const document = (await (
+      await bridge()
+    ).call("world.profiles.get")) as ProfilesDocument;
     if (document?.version === 1 && Array.isArray(document.profiles))
       set({ document, error: null });
   } catch (error) {
@@ -72,21 +75,23 @@ export async function refreshProfiles() {
 export function useAgentProfiles() {
   useEffect(() => {
     users += 1;
-    if (users === 1) {
-      unlisten = [
-        bridge.onControl((control) => {
-          if (
-            control.type === "world_profiles_changed" &&
-            (control.revision ?? 0) > (state.document?.revision ?? -1)
-          )
-            void refreshProfiles();
-        }),
-        bridge.onStatus((status) => {
-          if (status === "connected") void refreshProfiles();
-        }),
-      ];
-      void refreshProfiles();
-    }
+    if (users === 1)
+      void bridge().then((b) => {
+        if (!users || unlisten.length) return;
+        unlisten = [
+          b.onControl((control) => {
+            if (
+              control.type === "world_profiles_changed" &&
+              (control.revision ?? 0) > (state.document?.revision ?? -1)
+            )
+              void refreshProfiles();
+          }),
+          b.onStatus((status) => {
+            if (status === "connected") void refreshProfiles();
+          }),
+        ];
+        void refreshProfiles();
+      });
     return () => {
       users -= 1;
       if (users) return;
@@ -98,7 +103,9 @@ export function useAgentProfiles() {
 }
 
 async function write(method: string, params: Record<string, unknown>) {
-  const document = (await bridge.call(method, params)) as ProfilesDocument;
+  const document = (await (
+    await bridge()
+  ).call(method, params)) as ProfilesDocument;
   set({ document, error: null });
   return document;
 }
@@ -169,7 +176,9 @@ export async function launcherCatalog(
     workspaceId?: string;
   },
 ): Promise<LauncherCatalog> {
-  const result = (await bridge
+  const result = (await (
+    await bridge()
+  )
     .connection(target.connectionId, target.generation)
     .call(
       "launcher.catalog",
@@ -208,7 +217,9 @@ export function parseLauncherCatalog(value: unknown): LauncherCatalog {
 
 /** Open a small tab running the harness's own login command. */
 export async function openHarnessLogin(target: LaunchTarget, kind: string) {
-  return (await bridge
+  return (await (
+    await bridge()
+  )
     .connection(target.connectionId, target.generation)
     .call(
       "launcher.login",
@@ -234,25 +245,29 @@ export async function launchAgent(
     parent?: { paneId: string; terminalId?: string };
   },
 ) {
-  return (await bridge.connection(target.connectionId, target.generation).call(
-    "launcher.start",
-    {
-      workspace_id: target.workspaceId,
-      profile_id: choice.profileId ?? "",
-      kind: choice.kind ?? "",
-      label: choice.label,
-      text: choice.text,
-      ...(choice.parent
-        ? {
-            parent_pane_id: choice.parent.paneId,
-            ...(choice.parent.terminalId
-              ? { parent_terminal_id: choice.parent.terminalId }
-              : {}),
-          }
-        : {}),
-    },
-    150_000,
-  )) as LaunchOutcome;
+  return (await (
+    await bridge()
+  )
+    .connection(target.connectionId, target.generation)
+    .call(
+      "launcher.start",
+      {
+        workspace_id: target.workspaceId,
+        profile_id: choice.profileId ?? "",
+        kind: choice.kind ?? "",
+        label: choice.label,
+        text: choice.text,
+        ...(choice.parent
+          ? {
+              parent_pane_id: choice.parent.paneId,
+              ...(choice.parent.terminalId
+                ? { parent_terminal_id: choice.parent.terminalId }
+                : {}),
+            }
+          : {}),
+      },
+      150_000,
+    )) as LaunchOutcome;
 }
 
 export const WORLD_AGENT_LAUNCH_EVENT = "herdr-world:agent-launch";

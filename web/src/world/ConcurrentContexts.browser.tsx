@@ -489,10 +489,6 @@ async function run() {
     </div>,
   );
   await Promise.all([bothAttached.promise, filesStarted.promise]);
-  // The Inspector and its file preview load lazily; measure once both are in.
-  await waitForDom(
-    () => document.querySelector(".file-preview-file-content") !== null,
-  );
   await waitForDom(
     () => document.querySelectorAll(".xterm-helper-textarea").length === 2,
   );

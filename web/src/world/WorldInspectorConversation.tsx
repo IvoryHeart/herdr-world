@@ -24,8 +24,7 @@ import { worldLocalStorage } from "../browserStorage";
 import { type ActiveDiffSelection } from "../components/DiffViewerPanel";
 import { requestFilePreview } from "../components/fileExplorerResources";
 import type { ActiveFilePreviewSelection } from "../components/FilePreviewContent";
-import { lazyWithReload } from "../lazyWithReload";
-import { InspectorLoadingShell } from "../components/InspectorLoadingShell";
+import { WorkspaceInspectorHost } from "../components/WorkspaceInspectorHost";
 import { ThemeScope } from "../themeScope";
 import { AgentProfileLink } from "./AgentProfileLink";
 import { InspectorPaneMap } from "../components/InspectorPaneMap";
@@ -65,12 +64,6 @@ import {
   type InspectorTerminalFileRequest,
 } from "./inspectorTerminalHandoff";
 import { townPortrait } from "./town/townSprites";
-
-const WorkspaceInspectorHost = lazyWithReload("workspace-inspector", () =>
-  import("../components/WorkspaceInspectorHost").then((module) => ({
-    default: module.WorkspaceInspectorHost,
-  })),
-);
 
 const emptyDiff = (): ActiveDiffSelection => ({
   entry: null,
@@ -547,17 +540,7 @@ function InspectorResources({
           className="workspace-inspector-slot"
           data-stale={presentationStale || undefined}
         >
-          <Suspense
-            fallback={
-              <InspectorLoadingShell
-                title={conversation.label}
-                dock={conversation.dock}
-                floating={floating}
-                windowControls={windowControls}
-                onClose={onClose}
-              />
-            }
-          >
+          <Suspense fallback={null}>
             <WorkspaceInspectorHost
               state={inspectorState}
               visible={Boolean(target)}

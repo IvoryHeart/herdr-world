@@ -21,7 +21,6 @@ import { measuredFixedPositionScale } from "../../fixedPositionScale";
 import { useLayer } from "../../layerStack";
 import type { SnapTarget } from "./windowManager";
 import "./windows.css";
-import "../../components/WorkspaceInspectorActions.css";
 
 export type ManagedWindowControls = {
   maximized: boolean;

@@ -16,8 +16,7 @@ The web build is limited to 180 files and 13.25 MiB total embedded assets,
 including lazy features such as Ranger, commit history, the diff worker and the
 Town and Board views. Startup limits remain 660 KiB
 JavaScript (202 KiB gzip) and 196 KiB CSS. Small highlighting themes share a
-lazy chunk to control file count. `bun run build` enforces these limits, and it
-fails when a static import elsewhere keeps a lazy import in the eager chunk.
+lazy chunk to control file count. `bun run build` enforces these limits.
 
 From an installed, clean checkout:
 

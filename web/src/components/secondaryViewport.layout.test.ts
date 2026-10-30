@@ -1,14 +1,14 @@
 import { expect, test } from "bun:test";
 
 const read = (path: string) => Bun.file(new URL(path, import.meta.url)).text();
-const [app, shell, sidebar, annotations, ranger, inspectorFrame, composer] =
+const [app, shell, sidebar, annotations, ranger, inspector, composer] =
   await Promise.all([
     read("../App.tsx"),
     read("../styles/layout/app.css"),
     read("../styles/layout/sidebar.css"),
     read("./AnnotationPanel.css"),
     read("./AssistantPanel.css"),
-    read("./WorkspaceInspectorFrame.css"),
+    read("./WorkspaceInspectorHost.css"),
     read("./TerminalComposer.css"),
   ]);
 
@@ -46,9 +46,7 @@ test("all phone Inspector views replace the terminal with a full-height page", (
     "flex: 1;",
   ])
     expect(slot).toContain(declaration);
-  expect(rule(inspectorFrame, ".workspace-inspector")).toContain(
-    "height: 100%;",
-  );
+  expect(rule(inspector, ".workspace-inspector")).toContain("height: 100%;");
 });
 
 test("qualified terminal input reserves local flow height; World owns its app bar", () => {
