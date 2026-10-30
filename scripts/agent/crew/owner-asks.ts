@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite";
 import type { Deps } from "./deps";
 import { digest, type Action } from "./plan";
 import { actionsIn, getAction, setAction, type StoredAction } from "./store";
+import { reportOwnerDecision } from "./round-policy";
 
 type Receipt = {
   ask?: string;
@@ -75,6 +76,7 @@ export function reconcileOwnerAsks(
   const { prs, now, deps } = context;
   const keys = new Set(planned.map((entry) => entry.key));
   const answered = (entry: StoredAction, id: string, text: string) => {
+    reportOwnerDecision(crew, entry, text);
     const line = `#${entry.pr} owner answered ${id}: ${text}`;
     say(line);
     deps.out(line);

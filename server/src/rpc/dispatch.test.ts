@@ -61,6 +61,40 @@ describe("RPC namespace admission", () => {
     expect(replies).toEqual([{ id: "page-request", result: page }]);
   });
 
+  test("quest reads are answered by the service, never passed through to Herdr", async () => {
+    const quests = [{ pane_id: "example-pane", quest: null }];
+    const asked: unknown[] = [];
+    const replies: unknown[] = [];
+    const rpc = {
+      method: "agent_quest.list",
+      id: "quest-request",
+      params: { pane_ids: ["example-pane", 7] },
+      services: {},
+      connection: {
+        agentSessions: {
+          conversation: {
+            quests: async (ids: unknown) => {
+              asked.push(ids);
+              return quests;
+            },
+          },
+        },
+      },
+      sendReply: (reply: unknown) => {
+        replies.push(reply);
+        return true;
+      },
+      sendError: (_context: string, error: unknown) => {
+        throw error;
+      },
+    } as unknown as ConnectionRpcContext;
+    for (const handler of handlers.filter((entry) => entry !== handleAgentRpc))
+      expect(handler(rpc as never)).toBe(false);
+    await handleAgentRpc(rpc);
+    expect(asked).toEqual([["example-pane"]]);
+    expect(replies).toEqual([{ id: "quest-request", result: { quests } }]);
+  });
+
   test("pass-through and pre-step methods decline synchronously without reading a runtime", () => {
     for (const method of [
       "workspace.list",

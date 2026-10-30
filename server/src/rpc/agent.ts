@@ -16,6 +16,7 @@ export function handleAgentRpc(
       method === "agent_conversation.watch" ||
       method === "agent_conversation.unwatch" ||
       CONVERSATION_RPC_METHODS.has(method) ||
+      method === "agent_quest.list" ||
       method === "agent_history.get" ||
       method === "agent_history.entry" ||
       method === "agent_session.get" ||
@@ -88,6 +89,18 @@ async function dispatchAgentRpc(
         connection.agentSessions.conversation,
       );
       sendReply({ id, result }, method);
+    } catch (e) {
+      sendError(`${method}-error`, e);
+    }
+    return;
+  }
+  if (method === "agent_quest.list") {
+    try {
+      const ids = Array.isArray(params?.pane_ids)
+        ? params.pane_ids.filter((id): id is string => typeof id === "string")
+        : undefined;
+      const quests = await connection.agentSessions.conversation.quests(ids);
+      sendReply({ id, result: { quests } }, method);
     } catch (e) {
       sendError(`${method}-error`, e);
     }

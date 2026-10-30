@@ -1,3 +1,6 @@
+import { crewVerdict } from "./crew/round-readiness";
+import { parseOptions, USAGE } from "./crew/options";
+export { parseOptions } from "./crew/options";
 import { reconcileOwnerAsks } from "./crew/owner-asks";
 import type { Database } from "bun:sqlite";
 import { existsSync, readFileSync } from "node:fs";
@@ -7,7 +10,14 @@ import { gateDir, loadConfig, runPass } from "./gate";
 import type { GateInput, Verdict } from "./gate/predicate";
 import { openStore } from "./gate/store";
 import { fix, fixed, startFixers } from "./crew/fixer";
-import { launchRun } from "./crew/launch";
+import {
+  FRESH_KINDS,
+  preserveRoundAction,
+  roundPolicy,
+  reviewClaimCounts,
+} from "./crew/round-policy";
+import { startReviewers } from "./crew/reviewer-delivery";
+import { REVIEW_KINDS } from "./crew/round-actions";
 import { type Deps, realDeps } from "./crew/deps";
 import {
   type Action,
@@ -22,13 +32,7 @@ import {
   loadSettings,
   plan,
 } from "./crew/plan";
-import {
-  checkoutOf,
-  openChat,
-  type Options,
-  review,
-  runs,
-} from "./crew/review";
+import { checkoutOf, openChat, review, runs } from "./crew/review";
 import { markDue, markHeads } from "./crew/marks";
 import {
   crewCodeVersion,
@@ -76,32 +80,9 @@ import {
  * never merges, pushes or approves.
  */
 
-const USAGE = `Usage: bun run agent:crew -- <command> [options]
-
-  pass [--pr N]... [--dry-run]   One pass: read, plan, act; --dry-run only prints the plan
-  watch [--interval SECONDS] [--busy-interval SECONDS]
-                                 A pass over every PR every interval (default 300) and,
-                                 between them, over busy PRs every busy interval (default 60)
-  status [--hours N]             Held PRs, open actions, recent reviewer runs, reviewer tokens
-                                 per PR, pod and track over the last N hours (default 24),
-                                 seats missing from the roster and a watcher on old code
-  seat start SEAT                Start a roster seat in a new Herdr tab on exactly its roster
-                                 harness, model, effort and persona
-  feed [--lines N]               The last lines of the crew feed (default 40)
-  runs [--pr N] [--lines N]      Reviewer runs: round, RESULT, tokens and how to reopen each
-  open --run ID | --pr N --reviewer NAME [--round K]
-                                 Reopen a reviewer's session as a chat in a new Herdr tab
-  review --pr N --reviewer NAME --head SHA [--since SHA] [--author SEAT] [--run ID]
-                                 Run one fresh reviewer now (the watcher starts these itself)
-  fix --pr N --author SEAT --head SHA --run ID
-                                 Run a fresh fixer for a busy author (the watcher starts these)
-  fixed --run ID                 A fixer is done, pushed or not: free its slot and the PR's steps
-
-Settings live under "crew" in the gate config (.agents/crew-gate/config.json).`;
-
 /** Kinds whose target is a seat that has to do something. */
 const AUTHOR_KINDS = new Set(["fix", "ci", "conflict", "screenshots"]);
-const RUN_KINDS = new Set(["review", "confirm"]);
+const RUN_KINDS = FRESH_KINDS;
 /** A finished reviewer run whose RESULT hasn't shown up by then is stuck. */
 const STUCK_MS = 15 * 60_000;
 /** Reviewer runs per action, the first included. */
@@ -130,7 +111,7 @@ export function promptable(seat: Seat | undefined, settings: CrewSettings) {
 type Item = {
   author: string | null;
   branch: string | undefined;
-  posted: Map<string, { commit: string; line: string }>;
+  posted: Map<string, { commit: string; line: string; source: string }>;
 };
 
 type PassContext = {
@@ -191,10 +172,14 @@ export function crewPass(context: PassContext) {
       if (!input || !inScope(input, settings)) continue;
       // A post with no RESULT line, such as a header-only note, isn't one.
       const posted: Item["posted"] = new Map();
-      for (const claim of input.item?.pr?.reviewers ?? [])
+      for (const claim of [
+        ...input.history,
+        ...(input.item?.pr?.reviewers ?? []),
+      ])
         if (claim.reviewer && claim.commit && claim.line.trim())
-          posted.set(claim.reviewer, {
+          posted.set(`${claim.reviewer}:${claim.commit}`, {
             commit: claim.commit,
+            source: claim.url,
             line: `RESULT #${verdict.number}: ${claim.line.trim()}`,
           });
       authors.set(verdict.number, {
@@ -207,7 +192,38 @@ export function crewPass(context: PassContext) {
         url: check.url!,
         minutes: Math.floor((now - (since.get(check.url!) ?? now)) / 60_000),
       }));
-      planned.push(...plan(verdict, input, settings, names, stalls));
+      const actions = plan(verdict, input, settings, names, stalls);
+      let due =
+        input.state === "OPEN" &&
+        !isOnHold(input) &&
+        !input.hold &&
+        !input.item?.draft
+          ? roundPolicy({
+              crew,
+              input,
+              actions,
+              settings,
+              repo: loadConfig(configPath).repo,
+              dir,
+              now,
+              dryRun,
+              author: authors.get(verdict.number)!.author,
+              deps,
+              requiredReviewers: verdict.conditions
+                .filter((entry) => entry.id.startsWith("review:"))
+                .map((entry) => entry.id.slice(7)),
+            })
+          : actions;
+      const effective = crewVerdict(crew, verdict, input);
+      if (effective.state !== "READY")
+        due = due.filter((entry) => entry.kind !== "ready");
+      else if (!due.some((entry) => entry.kind === "ready"))
+        due.push(
+          ...plan(effective, input, settings, names).filter(
+            (entry) => entry.kind === "ready",
+          ),
+        );
+      planned.push(...due);
     }
     if (dryRun) {
       deps.out(`plan: ${planned.length} action(s) for ${authors.size} PR(s)`);
@@ -223,7 +239,7 @@ export function crewPass(context: PassContext) {
         const input = byNumber.get(verdict.number);
         if (!input) continue;
         const due = marks(
-          verdict,
+          crewVerdict(crew, verdict, input),
           input,
           settings,
           owed.get(verdict.number) ?? [],
@@ -335,10 +351,14 @@ function act(
     "failed",
     "done",
   ])) {
-    const claim = RUN_KINDS.has(entry.kind)
-      ? authors.get(entry.pr)?.posted.get(entry.target)
+    const claim = REVIEW_KINDS.has(entry.kind)
+      ? authors.get(entry.pr)?.posted.get(`${entry.target}:${entry.head}`)
       : undefined;
-    if (claim?.commit !== entry.head) continue;
+    if (
+      claim?.commit !== entry.head ||
+      !reviewClaimCounts(crew, entry, claim.source)
+    )
+      continue;
     const run = latestRun(crew, entry.key);
     if (run && run.result === null) setRunResult(crew, run.id, claim.line);
     if (run && run.finishedAt === null)
@@ -358,7 +378,11 @@ function act(
 
   for (const waiting of actionsIn(crew, ["pending", "running"])) {
     if (prs.length && !observed.has(waiting.pr)) continue;
-    if (heads.get(waiting.pr) === waiting.head) continue;
+    if (
+      heads.get(waiting.pr) === waiting.head ||
+      preserveRoundAction(waiting, heads.has(waiting.pr))
+    )
+      continue;
     if (waiting.state === "running") {
       const active = runFor(crew, waiting);
       // A fixer whose worktree is at the new head pushed it: it is done,
@@ -581,7 +605,7 @@ function settleRuns(
     if (!last || last.finishedAt === null) continue;
     // A fixer that ended without pushing leaves the step to the author;
     // a head gets one fixer.
-    if (last.cwd) {
+    if (last.cwd && AUTHOR_KINDS.has(running.kind)) {
       setAction(
         crew,
         running.key,
@@ -689,40 +713,7 @@ function deliver(
     }
   }
 
-  // Fresh reviewers, up to the run limit.
-  let slots = settings.maxRuns - activeRuns(crew).length;
-  for (const entry of pending()) {
-    if (!RUN_KINDS.has(entry.kind) || slots <= 0) continue;
-    const item = authors.get(entry.pr);
-    const author = item?.author;
-    const run = launchRun(
-      crew,
-      context,
-      {
-        keys: [entry.key],
-        pr: entry.pr,
-        head: entry.head,
-        name: entry.target,
-        branch: item?.branch,
-      },
-      (id) => [
-        ...context.worker,
-        "review",
-        "--pr",
-        String(entry.pr),
-        "--reviewer",
-        entry.target,
-        "--head",
-        entry.head,
-        "--run",
-        String(id),
-        ...(entry.since ? ["--since", entry.since] : []),
-        ...(author ? ["--author", author] : []),
-      ],
-    );
-    say(`#${entry.pr} started ${entry.target} ${entry.kind} (${run.where})`);
-    slots--;
-  }
+  startReviewers(crew, context, settings, pending(), authors, say);
 
   // Each owner notice's signed comment, once, so GitHub shows what the PR
   // waits for. One whose notice was dropped before it went out is dropped
@@ -756,60 +747,6 @@ function deliver(
       if (entry.detail !== error) say(`#${entry.pr} comment failed: ${error}`);
     }
   }
-}
-
-export function parseOptions(argv: string[]): Options {
-  const options: Options = {
-    command: "",
-    prs: [],
-    dryRun: false,
-    interval: 300,
-    busyInterval: 60,
-    lines: 40,
-    args: [],
-    hours: 24,
-  };
-  for (let index = 0; index < argv.length; index++) {
-    const arg = argv[index]!;
-    const value = () => {
-      const next = argv[++index];
-      if (next === undefined) throw new Error(`${arg} needs a value`);
-      return next;
-    };
-    const count = (label: string) => {
-      const parsed = Number(value().replace(/^#/u, ""));
-      if (!Number.isSafeInteger(parsed) || parsed < 0)
-        throw new Error(`${label} needs a number`);
-      return parsed;
-    };
-    if (arg === "--pr") options.prs.push(count("--pr"));
-    else if (arg === "--dry-run") options.dryRun = true;
-    else if (arg === "--interval") options.interval = count("--interval");
-    else if (arg === "--busy-interval") {
-      // Zero would read the busy PRs back to back, and GitHub's rate limit
-      // with them, for as long as one stays busy.
-      options.busyInterval = count("--busy-interval");
-      if (options.busyInterval < 1)
-        throw new Error("--busy-interval needs at least 1 second");
-    } else if (arg === "--lines") options.lines = count("--lines");
-    else if (arg === "--reviewer") options.reviewer = value();
-    else if (arg === "--head") options.head = value();
-    else if (arg === "--since") options.since = value();
-    else if (arg === "--author") options.author = value();
-    else if (arg === "--run") options.run = count("--run");
-    else if (arg === "--round")
-      options.round = Number(value().replace(/^r/u, "")) || 0;
-    else if (arg === "--hours") options.hours = count("--hours");
-    else if (
-      arg.startsWith("--") ||
-      (options.command && options.command !== "seat")
-    )
-      throw new Error(`Unknown argument ${arg}\n\n${USAGE}`);
-    else if (options.command) options.args.push(arg);
-    else options.command = arg;
-  }
-  if (!options.command) throw new Error(USAGE);
-  return options;
 }
 
 /**
@@ -864,7 +801,8 @@ const numbers = (prs: number[]) => prs.map((pr) => `#${pr}`).join(" ");
 export async function main(argv: string[], deps: Deps = realDeps) {
   const options = parseOptions(argv);
   const dir = gateDir();
-  if (options.command === "review") return review(options, dir, deps);
+  if (["review", "evaluate", "process"].includes(options.command))
+    return review(options, dir, deps);
   if (options.command === "fix") return fix(options, dir, deps);
   if (options.command === "fixed") return fixed(options, dir, deps);
   const crew = openCrewStore(join(dir, "crew.sqlite"));
