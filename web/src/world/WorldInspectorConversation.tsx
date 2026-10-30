@@ -25,6 +25,7 @@ import { type ActiveDiffSelection } from "../components/DiffViewerPanel";
 import { requestFilePreview } from "../components/fileExplorerResources";
 import type { ActiveFilePreviewSelection } from "../components/FilePreviewContent";
 import { lazyWithReload } from "../lazyWithReload";
+import { InspectorLoadingShell } from "../components/InspectorLoadingShell";
 import { ThemeScope } from "../themeScope";
 import { AgentProfileLink } from "./AgentProfileLink";
 import { InspectorPaneMap } from "../components/InspectorPaneMap";
@@ -546,7 +547,15 @@ function InspectorResources({
           className="workspace-inspector-slot"
           data-stale={presentationStale || undefined}
         >
-          <Suspense fallback={null}>
+          <Suspense
+            fallback={
+              <InspectorLoadingShell
+                title={conversation.label}
+                windowControls={windowControls}
+                onClose={onClose}
+              />
+            }
+          >
             <WorkspaceInspectorHost
               state={inspectorState}
               visible={Boolean(target)}

@@ -1,0 +1,83 @@
+/* The preview's frame and header. Its loading fallback shows them too, so
+   they load with the code that lazy-loads the preview. */
+.workspace-inspector .file-preview {
+  border-radius: 8px;
+}
+
+.workspace-inspector.is-compact .file-preview {
+  border: 0;
+  border-radius: 0;
+}
+
+.file-preview {
+  position: relative;
+  isolation: isolate;
+  min-width: 0;
+  min-height: 260px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--viewer-border);
+  border-radius: 8px;
+  background: var(--viewer-content-bg);
+}
+
+.file-explorer-side .file-preview {
+  flex: 1 1 42%;
+  min-height: 180px;
+}
+
+.file-preview-head {
+  flex: 0 0 auto;
+  display: grid;
+  gap: 3px;
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--viewer-border);
+  background: var(--viewer-header-bg);
+}
+
+.file-preview-title-row {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.file-preview-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-strong);
+  font-size: 13px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-preview-back {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 6px;
+  color: var(--muted);
+}
+
+.file-preview-back:hover {
+  background: var(--accent-soft);
+  color: var(--text-strong);
+}
+
+.file-preview-head span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

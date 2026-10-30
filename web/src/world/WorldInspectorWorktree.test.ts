@@ -141,12 +141,19 @@ if (process.env.INSPECTOR_WORKTREE_DOM_TEST !== "1") {
       typeof import("../components/WorkspaceInspectorHost").WorkspaceInspectorHost
     >;
     let shown!: InspectorProps;
-    mock.module("../components/WorkspaceInspectorHost", () => ({
-      WorkspaceInspectorHost: (props: InspectorProps) => {
-        shown = props;
-        return createElement("div");
-      },
-    }));
+    // The Inspector's code loads lazily; hold it back to see the window
+    // while it downloads.
+    const hostLoaded = Promise.withResolvers<void>();
+    mock.module("../components/WorkspaceInspectorHost", async () => {
+      await hostLoaded.promise;
+      return {
+        WorkspaceInspectorHost: (props: InspectorProps) => {
+          shown = props;
+          return createElement("div");
+        },
+      };
+    });
+    let closes = 0;
     const View = (await import("./WorldInspectorConversation")).default;
     const host = document.createElement("div");
     document.body.append(host);
@@ -183,12 +190,28 @@ if (process.env.INSPECTOR_WORKTREE_DOM_TEST !== "1") {
       floating: true,
       terminalActive: false,
       onChange() {},
-      onClose() {},
+      onClose() {
+        closes += 1;
+      },
       onResourceFocus() {},
       onTerminalPortalChange() {},
     };
     try {
       await act(async () => root.render(createElement(View, props)));
+      const shell = document.querySelector(".inspector-loading-shell");
+      expect(shell?.getAttribute("aria-busy")).toBe("true");
+      expect(
+        shell?.querySelector(".inspector-loading-shell-title")?.textContent,
+      ).toBe("Example");
+      shell
+        ?.querySelector<HTMLElement>('[aria-label="Close Workspace Inspector"]')
+        ?.click();
+      expect(closes).toBe(1);
+      await act(async () => {
+        hostLoaded.resolve();
+        await hostLoaded.promise;
+      });
+      expect(document.querySelector(".inspector-loading-shell")).toBeNull();
       expect(shown.agentWorktree?.target?.candidateId).toBe("old-root");
       await act(async () => shown.onSelectFileTab("same.txt"));
       expect(shown.fileSelection.loading).toBe(true);
