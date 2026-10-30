@@ -197,7 +197,9 @@ export async function handleWorldAsk(
         ),
         true,
       );
-      return { id };
+      // Only a new question alerts the owner (cli/world.ts); a known cause
+      // returns the recorded ask above.
+      return { id, created: true };
     }
     case "ask get": {
       const id = text(params.id, "the question ID");

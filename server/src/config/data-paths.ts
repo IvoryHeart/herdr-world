@@ -16,11 +16,19 @@ import {
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
+/**
+ * World's private data folder. `HERDR_WORLD_DATA_DIR` gives an instance its
+ * own folder; one listener owns a folder at a time (instance-lock.ts).
+ */
 export function dataRoot(
   homeDir = homedir(),
   platform: string = process.platform,
   appDataDir = process.env.APPDATA,
+  environment: Record<string, string | undefined> = process.env,
 ): string {
+  // Read directly: the plugin launcher copies this file without its imports.
+  const override = environment.HERDR_WORLD_DATA_DIR;
+  if (override) return resolve(override);
   return join(
     platform === "win32"
       ? (appDataDir ?? join(homeDir, "AppData", "Roaming"))
@@ -156,6 +164,7 @@ export function defaultDataFile(
   homeDir = homedir(),
   platform: string = process.platform,
   appDataDir = process.env.APPDATA,
+  environment: Record<string, string | undefined> = process.env,
 ): string {
-  return join(dataRoot(homeDir, platform, appDataDir), name);
+  return join(dataRoot(homeDir, platform, appDataDir, environment), name);
 }

@@ -16,6 +16,7 @@ test("logout after reauthentication closes earlier and later tabs, not other bro
       HOME: root,
       APPDATA: root,
       XDG_CONFIG_HOME: root,
+      HERDR_WORLD_DATA_DIR: undefined,
       HOST: "0.0.0.0",
       PORT: "0",
       OPEN_BROWSER: "0",

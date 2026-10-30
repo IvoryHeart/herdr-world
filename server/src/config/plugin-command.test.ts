@@ -66,6 +66,21 @@ describe("computeUrl", () => {
     );
   });
 
+  test("reads the token from the service's own data folder", () => {
+    const own = fixture({
+      "auth-token":
+        "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\n",
+    });
+    const dir = fixture({
+      "herdr-world.env": `HOST=127.0.0.1\nHERDR_WORLD_DATA_DIR=${own}\n`,
+      "auth-token":
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+    });
+    expect(computeUrl(dir)).toBe(
+      "http://localhost:8787/?token=cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    );
+  });
+
   test("includes the login token for loopback binds", () => {
     const dir = fixture({
       "herdr-world.env": "HOST=127.0.0.1\nPORT=8787\n",

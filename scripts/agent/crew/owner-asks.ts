@@ -10,13 +10,36 @@ type Receipt = {
   rearm?: boolean;
   withdrawing?: boolean;
   retired?: boolean;
+  /**
+   * A failed ask: its error, reported once, and what the World CLI looked
+   * like then (`failureInputs`). It is asked again only when those change.
+   */
+  failed?: { reason: string; inputs: string };
 };
+
+/**
+ * What a failed ask depended on, read without asking: the CLI's version and
+ * World's answer to `whoami`, including whether it verified this pane (keyed
+ * asks need that). `whoami` records nothing and alerts no one.
+ */
+function failureInputs(deps: Deps) {
+  const version = deps.run(["herdr-world", "--version"]);
+  const world = deps.run(["herdr-world", "whoami", "--json"]);
+  const answer = reply(world);
+  return [
+    `${version.code} ${version.stdout.trim()}`,
+    answer?.ok
+      ? `ok ${answer.actor?.verified === true ? "verified" : "unverified"} ${answer.actor?.label ?? ""}`
+      : `${world.code} ${answer?.code ?? ""} ${answer?.error ?? (world.stderr || world.stdout).trim().slice(0, 200)}`,
+  ].join(" | ");
+}
 function receipt(detail: string | null): Receipt | null {
   try {
     const value = JSON.parse(detail ?? "null") as Receipt | null;
     return value &&
       typeof value === "object" &&
       ((typeof value.ask === "string" && value.ask.length > 0) ||
+        typeof value.failed === "object" ||
         value.rearm === true ||
         value.withdrawing === true ||
         value.retired === true)
@@ -31,6 +54,8 @@ function reply(result: ReturnType<Deps["run"]>) {
     const value = JSON.parse(result.stdout) as {
       ok: boolean;
       code?: string;
+      error?: string;
+      actor?: { label?: string; verified?: boolean };
       result?: {
         id?: string;
         answer?: { text: string };
@@ -70,10 +95,27 @@ function holds(crew: Database, entry: StoredAction, keys: Set<string>) {
 export function reconcileOwnerAsks(
   crew: Database,
   planned: Action[],
-  context: { prs: number[]; now: number; deps: Deps },
+  context: { prs: number[]; now: number; deps: Deps; escalate?: string },
   say: (text: string) => void,
 ) {
   const { prs, now, deps } = context;
+  // Tell the configured seat once about an ask that reached no one.
+  const escalate = (entry: StoredAction, text: string) => {
+    if (!context.escalate) return;
+    const sent = deps.run([
+      "herdr",
+      "agent",
+      "prompt",
+      context.escalate,
+      `crew: ${text} (#${entry.pr}: ${entry.text.split("\n")[0]!.slice(0, 160)})`,
+    ]);
+    if (sent.code !== 0)
+      say(
+        `#${entry.pr} couldn't tell ${context.escalate}: ${(sent.stderr || sent.stdout).trim().slice(0, 200)}`,
+      );
+  };
+  let inputs: string | undefined;
+  const currentInputs = () => (inputs ??= failureInputs(deps));
   const keys = new Set(planned.map((entry) => entry.key));
   const answered = (entry: StoredAction, id: string, text: string) => {
     reportOwnerDecision(crew, entry, text);
@@ -83,7 +125,7 @@ export function reconcileOwnerAsks(
   };
   const save = (
     entry: StoredAction,
-    state: "pending" | "sent" | "superseded",
+    state: "pending" | "sent" | "superseded" | "failed",
     value: Receipt,
     attempted = false,
   ) => setAction(crew, entry.key, state, now, JSON.stringify(value), attempted);
@@ -96,20 +138,41 @@ export function reconcileOwnerAsks(
       { ...prior, rearm: true, retired: false, withdrawing: false },
       true,
     );
-    const asked = reply(
-      deps.run([
-        "herdr-world",
-        "ask",
-        entry.text,
-        "--key",
-        `crew:${entry.key}`,
-        "--owner-only",
-        "--json",
-      ]),
-    );
-    if (!asked?.ok || !asked.result?.id) {
-      say(`#${entry.pr} couldn't record its owner ask; retrying next pass`);
+    const run = deps.run([
+      "herdr-world",
+      "ask",
+      entry.text,
+      "--key",
+      `crew:${entry.key}`,
+      "--owner-only",
+      "--json",
+    ]);
+    const asked = reply(run);
+    if (!asked?.result?.id) {
+      const reason =
+        asked?.error ??
+        `herdr-world exited ${run.code}: ${(run.stderr || run.stdout).trim().slice(0, 200)}`;
+      // Held until the CLI or World changes; each distinct failure is said
+      // and escalated once.
+      if (prior?.failed?.reason !== reason) {
+        say(`#${entry.pr} couldn't ask the owner: ${reason}`);
+        escalate(entry, `owner ask failed: ${reason}`);
+      }
+      inputs = undefined;
+      save(entry, "failed", {
+        ...prior,
+        rearm: true,
+        retired: false,
+        withdrawing: false,
+        failed: { reason, inputs: currentInputs() },
+      });
       return;
+    }
+    // Recorded, but no one was alerted (exit 6): the question waits in World.
+    if (asked.code === "not_delivered") {
+      const line = `owner ask ${asked.result.id} reached no one: ${asked.error}`;
+      say(`#${entry.pr} ${line}`);
+      escalate(entry, line);
     }
     const id = asked.result.id;
     const dismissed = Boolean(asked.result.dismissed);
@@ -125,7 +188,12 @@ export function reconcileOwnerAsks(
         : `#${entry.pr} asked owner (${id}): ${entry.text}`,
     );
   };
-  for (const entry of actionsIn(crew, ["pending", "sent", "superseded"])) {
+  for (const entry of actionsIn(crew, [
+    "pending",
+    "sent",
+    "superseded",
+    "failed",
+  ])) {
     if (entry.target !== "owner" || (prs.length && !prs.includes(entry.pr)))
       continue;
     const known = receipt(entry.detail);
@@ -195,6 +263,7 @@ export function reconcileOwnerAsks(
       }
       continue;
     }
+    if (known?.failed && known.failed.inputs === currentInputs()) continue;
     create(entry, known);
   }
 }

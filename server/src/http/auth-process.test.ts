@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -20,6 +21,7 @@ async function withAuthServer(
       HOME: root,
       APPDATA: root,
       XDG_CONFIG_HOME: root,
+      HERDR_WORLD_DATA_DIR: undefined,
       HOST: "127.0.0.1",
       PORT: "0",
       OPEN_BROWSER: "0",
@@ -436,18 +438,18 @@ test("PIN endpoint is disabled by default", async () => {
   );
 });
 
-test("instances sharing a home preserve independent sessions across restarts and credential rotations", async () => {
+test("instances with their own data folders on one home preserve independent sessions across restarts and credential rotations", async () => {
   const root = await mkdtemp(join(tmpdir(), "roamgate-instance-sessions-"));
   const shared = { HOME: root, APPDATA: root, XDG_CONFIG_HOME: root };
   const first = {
     ...shared,
-    HERDR_WORLD_SETTINGS_PATH: join(root, "first-settings.json"),
+    HERDR_WORLD_DATA_DIR: join(root, "first-data"),
     HERDR_WORLD_PASSWORD: "first-instance-password",
     HERDR_WORLD_PIN: "012345",
   };
   const second = {
     ...shared,
-    HERDR_WORLD_SETTINGS_PATH: join(root, "second-settings.json"),
+    HERDR_WORLD_DATA_DIR: join(root, "second-data"),
     HERDR_WORLD_PASSWORD: "second-instance-password",
     HERDR_WORLD_PIN: "654321",
   };
@@ -513,3 +515,39 @@ test("instances sharing a home preserve independent sessions across restarts and
     await rm(root, { recursive: true, force: true });
   }
 }, 30_000);
+
+test("a second World on the same data folder refuses to start", async () => {
+  const data = await mkdtemp(join(tmpdir(), "world-instance-lock-"));
+  try {
+    await withAuthServer(
+      async () => {
+        expect(existsSync(join(data, "instance.lock"))).toBeTrue();
+        const second = Bun.spawn([process.execPath, "server/src/index.ts"], {
+          cwd: join(import.meta.dir, "../../.."),
+          env: {
+            ...process.env,
+            HERDR_WORLD_DATA_DIR: data,
+            HOST: "127.0.0.1",
+            PORT: "0",
+            OPEN_BROWSER: "0",
+            HERDR_WORLD_PASSWORD: password,
+            HERDR_SOCKET_PATH: join(data, "missing-control.sock"),
+            HERDR_CLIENT_SOCKET_PATH: join(data, "missing-render.sock"),
+          },
+          stdout: "ignore",
+          stderr: "pipe",
+        });
+        expect(await second.exited).toBe(1);
+        expect(await new Response(second.stderr).text()).toContain(
+          "is in use by World",
+        );
+        expect(existsSync(join(data, "instance.lock"))).toBeTrue();
+      },
+      { HERDR_WORLD_DATA_DIR: data },
+    );
+    // The first World released its folder when it stopped.
+    expect(existsSync(join(data, "instance.lock"))).toBeFalse();
+  } finally {
+    await rm(data, { recursive: true, force: true });
+  }
+}, 20_000);

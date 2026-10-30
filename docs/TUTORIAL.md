@@ -337,7 +337,9 @@ narrow the work you are following. The **Town calm motion** setting reduces
 ambient animation.
 
 A quiet **?** at reception means an agent has asked you a question with
-`herdr-world ask`. It stays there until answered, dismissed or withdrawn;
+`herdr-world ask`. The question also arrives as a Herdr notification, which
+reaches Herdr and, when you enabled them, your phone notifications. It stays
+at reception until answered, dismissed or withdrawn;
 tapping its reception entry opens that agent. Read the question first in
 **Needs you** or **Summary**, where it names the asking agent, then choose an
 option or type an answer. The waiting agent receives that answer. **Open agent**

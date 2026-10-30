@@ -17,6 +17,15 @@ Open <http://localhost:5173>. Vite proxies API and WebSocket traffic to the Worl
 service at <http://127.0.0.1:8788>. To use explicit Herdr sockets or SSH, pass service
 options after the workspace command or configure a profile in the UI.
 
+A development or preview World next to an installed one needs its own data
+folder: set `HERDR_WORLD_DATA_DIR` for that instance, and copy
+`connections.json` (and `settings.json`) into it once if it should reach the
+same Herdr hosts. A second World on an occupied folder refuses to start. Point
+its agent CLI at it with `HERDR_WORLD_URL` and the same `HERDR_WORLD_DATA_DIR`,
+which locates the CLI token. Tests never use your data folder: the test preload
+sets `HERDR_WORLD_DATA_DIR` under the run's temporary directory, and a test that
+starts World with its own `HOME` unsets it.
+
 ## Development tools
 
 World's event traces and renderer counters exist only in development builds:

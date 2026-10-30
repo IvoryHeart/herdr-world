@@ -1410,7 +1410,9 @@
         "server/src/cli/config.test.ts",
         "server/src/config/data-paths.test.ts",
         "server/src/config/gui-settings.test.ts",
-        "server/src/config/session-secret.test.ts"
+        "server/src/config/instance-lock.test.ts",
+        "server/src/config/session-secret.test.ts",
+        "server/src/http/auth-process.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/182",
       "technique": "alternative",
@@ -1418,14 +1420,16 @@
       "status": "alternative-evidence",
       "remaining": "Actual rename/fsync/permission behavior remains platform-dependent; unsupported power-loss guarantees are not inferred.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
-      "evidenceDecision": "Owned filesystem and fresh-process tests exercise private namespaces, permissions, settings publication and durable secrets.",
+      "evidenceDecision": "Owned filesystem and fresh-process tests exercise private namespaces, permissions, settings publication, durable secrets and one listener per data folder (a second real listener refuses; a dead holder is taken over).",
       "partialEvidence": {
         "models": [],
         "contracts": ["verification/consumer-evidence.md"],
         "tests": [
           "server/src/config/data-paths.test.ts",
           "server/src/config/gui-settings.test.ts",
-          "server/src/config/session-secret.test.ts"
+          "server/src/config/instance-lock.test.ts",
+          "server/src/config/session-secret.test.ts",
+          "server/src/http/auth-process.test.ts"
         ],
         "checks": ["bun run check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."

@@ -20,7 +20,8 @@ import { inspectWorkspacePath } from "./workspace/path";
 import { createWorkspaceWorktree } from "./worktree/create";
 import { canRevealFiles } from "./workspace/file-manager";
 import { WorldSnapshotAdmission } from "./bridge/world-snapshot-admission";
-import { loadOrCreateSessionSecret } from "./config/session-secret";
+import { listenerSessionSecret } from "./config/session-secret";
+import { claimDataFolder } from "./config/instance-lock";
 import {
   authTokenPrintCommand,
   isShortAuthPassword,
@@ -206,22 +207,11 @@ if (cliResult === CONTINUE_TO_SERVER) {
 const config = loadServerConfig(APP_VERSION, {
   helpText: () => topLevelHelp(cliCommandList),
 });
-// Only a listener startup may rotate sessions. Management commands also read
-// ServerConfig, sometimes with a different environment from the running service.
-let sessionSecret = "";
-if (config.authRequired) {
-  try {
-    sessionSecret = loadOrCreateSessionSecret([
-      config.password,
-      ...(config.pin ? [config.pin] : []),
-    ]);
-  } catch (cause) {
-    console.error(
-      `[bridge] FATAL: could not load the session signing secret: ${(cause as Error).message}`,
-    );
-    process.exit(1);
-  }
-}
+// Only a listener owns its data folder (instance-lock.ts) and may rotate
+// sessions. Management commands also read ServerConfig, sometimes with a
+// different environment from the running service.
+claimDataFolder(config.port);
+const sessionSecret = listenerSessionSecret(config);
 configureServerLogger(config.logLevel);
 const logger = serverLogger;
 if (
