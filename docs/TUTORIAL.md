@@ -425,6 +425,18 @@ the intended thread. Ambiguous panes or threads stay unbound. If Chat cannot
 read a conversation, it says why and offers the matching action. The
 [Chat guide](./CHAT.md) covers each harness.
 
+To type directly into the selected agent's terminal while reading its history,
+open **Details → Chat**. Its message box shares that pane's **Message** draft;
+paste an image or use **Add images** to insert an uploaded path. Desktop Enter
+sends and Shift+Enter adds a line; touch Enter adds a line and **Send** sends.
+If the agent is working, blocked or unknown, read the warning and choose **Send
+anyway** explicitly. This terminal input has no transcript receipt. The primary
+Chat composer still requires a verified session binding.
+
+For new Codex panes, use `codex --no-daemon` after installing the host's Codex
+integration. Its hooks then inherit that pane's environment. Resume existing
+shared-daemon sessions with the same flag; see [Codex launches](./HISTORY.md#pane-scoped-codex-launches).
+
 **You are done when:** you sent an agent a message from Chat and its receipt
 shows it in the transcript.
 
@@ -939,6 +951,11 @@ Use its HTTPS URL: `127.0.0.1` on a phone means the phone, not the work computer
    the middle, and Insert, Send and Close on the right.
    Tabs and More live in the shared top app bar. Special-key rows stay visible
    in both modes for arrows, Ctrl and other actions awkward on a touch keyboard.
+   In an ordinary shell pane, **Agent terminals** beside Message can
+   start an agent there. Begin with an empty shell prompt and draft, then choose
+   the agent; World types its command and Enter. Use the pencil to customize a
+   command for this browser and connection, or **Reset** for the detected default.
+   An unsuccessful send keeps the command in Message for recovery.
 3. Open Changes to review the README diff. Mobile uses a unified diff layout;
    long-press a file to open its actions menu. To open a link printed in a
    terminal, long-press it and choose **Open link** (on a computer,

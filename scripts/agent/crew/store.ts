@@ -1,3 +1,4 @@
+import { initRoundPolicy } from "./round-policy-store";
 import { Database } from "bun:sqlite";
 import { appendFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
@@ -138,6 +139,7 @@ export function openCrewStore(path: string, busyMs = 120_000) {
       value TEXT NOT NULL
     );
   `);
+  initRoundPolicy(db);
   return db;
 }
 
@@ -190,10 +192,12 @@ export function addAction(db: Database, planned: Action, now: number) {
       `INSERT INTO action
         (key, pr, head, kind, target, text, since, state, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
-       ON CONFLICT(key) DO UPDATE SET state = 'pending', attempts = 0,
-         detail = CASE WHEN action.target = 'owner' THEN action.detail ELSE NULL END,
+       ON CONFLICT(key) DO UPDATE SET state = 'pending',
+         attempts = CASE WHEN action.state = 'superseded' THEN 0 ELSE action.attempts END,
+         head = excluded.head, text = excluded.text, since = excluded.since,
+         detail = CASE WHEN action.target = 'owner' OR action.state = 'pending' THEN action.detail ELSE NULL END,
          updated_at = excluded.updated_at
-       WHERE action.state = 'superseded'`,
+       WHERE action.state = 'superseded' OR (action.state = 'pending' AND action.head != excluded.head)`,
     )
     .run(
       planned.key,
@@ -319,6 +323,10 @@ export function setRunPid(db: Database, id: number, pid: number) {
   db.query("UPDATE run SET pid = ? WHERE id = ?").run(pid, id);
 }
 
+export function setRunCwd(db: Database, id: number, cwd: string) {
+  db.query("UPDATE run SET cwd = ? WHERE id = ?").run(cwd, id);
+}
+
 export function setRunPane(
   db: Database,
   id: number,
@@ -419,67 +427,13 @@ export function roundPanes(db: Database, pr: number, round: number) {
     .map((row) => row.pane);
 }
 
-export type Round = {
-  pr: number;
-  round: number;
-  head: string;
-  tab: string | null;
-};
-
-/** A PR head's open round, numbering a new one after the PR's last. */
-export function roundFor(db: Database, pr: number, head: string, now: number) {
-  const found = db
-    .query<Round, [number, string]>(
-      `SELECT pr, round, head, tab FROM round
-       WHERE pr = ? AND head = ? AND closed_at IS NULL`,
-    )
-    .get(pr, head);
-  if (found) return found;
-  const last = db
-    .query<{ round: number | null }, [number]>(
-      "SELECT MAX(round) AS round FROM round WHERE pr = ?",
-    )
-    .get(pr);
-  const round = (last?.round ?? 0) + 1;
-  db.query(
-    "INSERT INTO round (pr, round, head, created_at) VALUES (?, ?, ?, ?)",
-  ).run(pr, round, head, now);
-  return { pr, round, head, tab: null };
-}
-
-export function setRoundTab(
-  db: Database,
-  pr: number,
-  round: number,
-  tab: string,
-) {
-  db.query("UPDATE round SET tab = ? WHERE pr = ? AND round = ?").run(
-    tab,
-    pr,
-    round,
-  );
-}
-
-export function openRounds(db: Database) {
-  return db
-    .query<Round, []>(
-      "SELECT pr, round, head, tab FROM round WHERE closed_at IS NULL ORDER BY pr, round",
-    )
-    .all();
-}
-
-export function closeRound(
-  db: Database,
-  pr: number,
-  round: number,
-  now: number,
-) {
-  db.query("UPDATE round SET closed_at = ? WHERE pr = ? AND round = ?").run(
-    now,
-    pr,
-    round,
-  );
-}
+export {
+  type Round,
+  roundFor,
+  setRoundTab,
+  openRounds,
+  closeRound,
+} from "./round-store";
 
 /** A PR's runs, or one reviewer's; newest first. */
 export function runsOf(db: Database, pr: number, reviewer?: string) {

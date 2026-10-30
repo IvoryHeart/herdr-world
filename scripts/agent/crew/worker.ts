@@ -20,16 +20,19 @@ export type ReviewTask = {
   url: string;
   branch: string;
   author: string | null;
+  /** A go verdict limits this round to these finding IDs and their fixes. */
+  scope?: string[];
 };
 
 export function reviewerPrompt(task: ReviewTask) {
   const { repo, pr, head, reviewer, since } = task;
   const job = since
-    ? `Confirm your earlier findings. Your last RESULT was at ${since}. Review the delta ${since}..${head}: check each of your findings is fixed and the fixes are correct, and report anything new in the delta.`
+    ? `Confirm the earlier findings from the last reviewed head ${since}. Review ONLY the author's delta since that head, excluding changes brought in from main. Walk git log --first-parent --reverse ${since}..${head}; inspect each non-merge with git show, and main merges ONLY with git show --remerge-diff (manual conflict resolutions). Never use the raw endpoint diff as the scope: it includes imported main changes. Check each finding and its replies, the correctness of the fixes, and new problems in that delta. Do not re-review already accepted code.`
     : `Review the pull request at head ${head}. For a batch PR, go commit by commit.`;
   return `You are ${reviewer}, an independent reviewer of Herdr World pull request #${pr}, started fresh for this one review.
 
 ${job}
+${task.scope ? `\nEvaluator go scope: ${task.scope.join(", ") || "no mandatory findings"}. Check ONLY these findings and their fixes. Dispositioned follow-ups are not open findings on this PR. Read the [evaluator] verdict and follow-up links. Report any new issue within the mandatory fixes.\n` : ""}
 
 Work item:
 - PR: ${task.url} "${task.title}", branch ${task.branch}, author seat ${task.author ?? "unknown"}.
@@ -38,9 +41,10 @@ Work item:
 
 Rules:
 - Follow AGENTS.md. Look for correctness bugs, missing tests, documentation gaps, privacy leaks (real hosts, users, paths, sessions, tokens) and contract or verification impact. Grade findings P1, P2 or P3. The owner has every finding fixed, so report only real ones.
+- Read the linked issue in full (gh pr view --json body,closingIssuesReferences, then gh issue view). Flag behaviour the linked issue did not ask for: scope drift.
 - The machine is shared: typecheck and focused unit tests only; a browser suite only through \`bun run test <path>\` when the change needs one. Keep command output bounded.
 - To reach the owner, use \`herdr-world ask "QUESTION" --owner-only --wait\` from your own pane; no other channel. Do not prompt the owner, send Herdr custom notifications, edit shared runbooks/configuration or substitute an issue comment for asking.
-- Independence: do not read the other reviewers' reviews or comments on this head before you post yours.
+- Independence: do not read the other reviewers' reviews or comments for this round before you post yours. Earlier completed rounds and the evaluator's verdict are allowed, including earlier rounds on the same head.
 - Post exactly one formal review with \`gh pr review ${pr} --repo ${repo} --comment --body-file <file>\`. The body starts with exactly these three lines, no text before them:
   Reviewer: ${reviewer}
   Reviewed commit: ${head}

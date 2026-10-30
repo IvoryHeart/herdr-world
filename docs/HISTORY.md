@@ -4,6 +4,39 @@
 History, summary, transcript preview, and ATIF export. Concurrent requests share
 in-flight reads/projection; raw preview prefix reads/downloads stay separate.
 
+## Pane-scoped Codex launches
+
+The mobile agent launcher defaults to `codex --no-daemon` (Codex 0.163.0+).
+Install or update the Herdr Codex integration on the agent's host; starting,
+resuming or forking a conversation in this mode lets its hooks inherit the
+selected pane's environment. Custom launch commands must keep the flag.
+Already-running shared-daemon sessions should be closed normally and resumed
+with `codex --no-daemon resume <session-id>`; their transcripts stay in place.
+World does not start, stop or upgrade the external Herdr runtime during a source sync.
+
+For Bash or Zsh, optionally source the attributed `scripts/codex-herdr.sh` from a
+stable checkout or copy in the shell's startup file. Inside Herdr it applies the
+same flag to commands typed directly, including resume/fork. It preserves
+arguments and existing aliases, explicit remote connections and shared-server
+management commands; outside Herdr it delegates unchanged. World does not edit
+shell configuration automatically.
+
+World retains its explicit session-link compatibility path, thread-title
+precedence and read-only daemon inference described below. A pane-scoped launch
+improves hook association; it does not bypass conversation fingerprint checks.
+
+## History terminal input
+
+The Details drawer's Chat view adds `AgentHistoryComposer`, sharing the runtime-
+qualified in-memory Message draft and single-submission lock with the terminal.
+It types into the captured pane through the connection client; a retired client
+refuses sending and restores the draft. Image uploads use the same-origin,
+connection/generation-qualified route. Late successful paths remain in the
+original draft. Working, blocked or unknown agent states require a separate
+**Send anyway** activation; repeated Enter cannot confirm. Codex also requires
+confirmation when its status is unknown, absent or unrecognized. The primary AgentChat
+continues to require session-fingerprint authority and supplies its own receipts.
+
 ## Cache and consistency
 
 The cache retains at most 16 sessions, four recent History revisions per session,

@@ -786,7 +786,11 @@ Open Files, Changes, or Chat with the TabBar Inspector button,
 branch/worktree, and checkout path. Inspector and Annotations leave the primary
 sidebar's visibility unchanged. Workspace rows show the latest PR/MR status while
 keeping workspace names visible; Inspector commit navigation preserves focus and
-refreshes Files after changes.
+refreshes Files after changes. PR/MR refreshes keep the current badge visible.
+A failed refresh leaves the last known result dimmed with its successful check
+time; the status card marks it **Last known**. This fallback belongs to the same
+host, runtime, workspace, checkout and branch; changing targets clears it. A paused branch rebase can retain
+its request on detached HEAD; unrelated detached checkouts stay unresolved.
 
 - Activating a desktop terminal preserves a docked Inspector. After prefilling
   review feedback, **Go to agent** closes it and reveals the destination terminal;
@@ -869,6 +873,16 @@ See [resource ownership](docs/ARCHITECTURE.md#workspace-resource-ownership).
   matching pane and one loaded thread can provide a recent, read-only guess.
   Ambiguity shows no conversation. Add **Thread ID** with `/title`, link the
   session explicitly, or use the Terminal to reply or answer permissions.
+- Details' **Chat** view has a terminal message box sharing the pane's Message
+  draft. Paste images or choose **Add images**; uploaded paths stay in the draft
+  until sent. Desktop Enter sends and Shift+Enter adds a line; touch Enter adds
+  a line and **Send** sends. A working, blocked or unknown agent first requires
+  **Send anyway**. This types into the selected terminal and has no Chat receipt.
+  The primary Chat tab keeps its session-binding and permission-answer checks.
+- Codex launch commands default to `codex --no-daemon`, so integration hooks
+  inherit the selected pane's environment. Install the Codex integration on that
+  host and resume existing shared-daemon conversations in this mode. See
+  [Codex launch guidance](docs/HISTORY.md#pane-scoped-codex-launches).
 - Open Details with independent User/Agent/Tool filters (User/Agent enabled,
   Tool hidden initially), a message minimap, and on-demand tool details. The recent window
   counts 200 conversation entries, not associated tools; exports remain complete.
@@ -1061,6 +1075,16 @@ Git actions recheck status/content and reject stale menus instead of destroying
 newer work.
 
 ## Mobile and PWA
+
+- In an ordinary mobile shell terminal, **Agent terminals** beside Message
+  launches an agent in that pane with Enter. Start with an empty shell prompt
+  and draft. The pencil edits each command, including arguments or an executable
+  not detected on the host; preferences stay in this browser per connection and
+  agent. **Reset** restores the detected default. A failed send keeps the command
+  in Message. Existing agent and pad terminals do not offer the launcher.
+- List panels use the command picker's borderless rows, compact headings and
+  selection highlights. World's shared top app bar and managed-window Tabs
+  sheet keep their existing navigation and window-restoration behavior.
 
 The Message editor sits below each terminal in normal layout flow. Tap it to
 raise the keyboard and compose; Direct explicitly enables raw terminal input.

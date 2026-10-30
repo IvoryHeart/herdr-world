@@ -338,7 +338,8 @@ plans the next step for every PR in scope and takes each step once:
 | A required check fails and no check is still running | `ACT #N ci` prompt | The author's seat |
 | GitHub reports a conflict, or screenshots are missing | `ACT #N conflict` or `ACT #N screenshots` prompt | The author's seat |
 | A fix, ci or conflict step is due and the author seat is busy with another PR | A fresh fixer run in the PR's own worktree | The author seat's roster model |
-| A required reviewer has no RESULT, or a newer head needs confirming, and GitHub reports the head mergeable, whatever its checks | A fresh reviewer run | That reviewer's model |
+| A required reviewer has no RESULT, or finding replies and a quiet push admit a scoped later round, and GitHub reports the head mergeable | A fresh reviewer run | That reviewer's model |
+| Two more review rounds have not converged | A fresh evaluator; its go scopes the next round, or no-go starts a process and holds reviews | The evaluator roster seat |
 | READY, with every required reviewer confirmed on the head | The `crew/merge-ready` mark and a World ask with the PR and reason | The owner |
 | A judgment condition, an unknown author, an unsupported roster model, a stuck author seat or a reviewer run that posted nothing | The `crew/needs-owner` mark, one signed `[crew]` state comment and one World ask per distinct cause | The owner |
 
@@ -380,7 +381,9 @@ plans the next step for every PR in scope and takes each step once:
   once that RESULT is on GitHub: the watcher then records the result and the
   token usage (read from the harness's session files) and frees the slot. The
   session stays open in its pane as a chat. A confirmation reviews the delta
-  from that reviewer's last claimed commit. At most `maxRuns` reviewers work
+  from the last reviewed round's head, excluding imports from main and preserving
+  manual conflict resolutions. Every prompt checks the linked issue for scope drift.
+  At most `maxRuns` reviewers work
   at once. One that is still working after `runTimeoutMinutes` without posting
   is reported to the owner, not stopped. A session that crashes before
   posting is retried once. One that is quit, or exits cleanly, without a
@@ -391,9 +394,9 @@ plans the next step for every PR in scope and takes each step once:
   round. A round has its own Herdr tab, named like `#7 towncx-12-plates · r2`,
   with one pane per reviewer, named after the reviewer. Every reviewer stays
   in its pane until the PR merges or closes, so the owner can read and
-  question every round before merging. Only a reviewer still working when a
-  newer head arrives is stopped, since its review is stale; its pane says so
-  and gives the command to reopen it. If you quit a session yourself, its pane
+  question every round before merging. A newer head leaves the running round
+  pinned to its reviewed commit; a merge of main never stops it. A merge or
+  close of the PR stops outstanding runs. If you quit a session yourself, its pane
   gives the same command. A tab the owner closes is reopened for that round's
   next reviewer, and every tab a round used closes with it. If Herdr or git
   can't finish that cleanup, the round stays open and the next pass retries
@@ -408,12 +411,20 @@ plans the next step for every PR in scope and takes each step once:
   pass, so a merge can't land between opening a chat and recording it. A chat
   opened after the PR has closed removes its checkout when you exit it. Until
   then, `open` refuses a second chat on that run.
-- **Review on push.** Reviewers read the diff, not CI results, so a round
-  starts as soon as a new head is pushed and GitHub reports it mergeable, in
-  parallel with its checks: with busy passes, within about a minute of the
-  push. A failure still goes to the author as a `ci` step once the checks
-  settle, and a CI rerun the owner has to judge still asks them. READY and
-  `crew/merge-ready` still need green checks, any judgment and the reviews.
+- **Review rounds.** Round 1 starts when GitHub reports the head mergeable,
+  in parallel with checks. Later rounds require fresh replies to every open finding
+  and ten observed minutes without a push. Main-only merges, CI/test-harness
+  repairs and pushes outside findings' files are skipped while replies are
+  missing; answered findings proceed to scoped confirmation after quiet time.
+  Gate/workflow policy changes require scoped review, and every admitted round
+  needs all fresh results before merge readiness.
+  After every two non-converging rounds a fresh evaluator weighs the whole PR.
+  Its go names mandatory findings and follow-up issues; no-go starts a named
+  process and holds reviews and merge readiness until it reports back. See the
+  [crew runbook](crew-runbook.md#review-rounds-and-evaluation) for finding reply
+  IDs, roster setup, verdict/report lines and owner decisions at reception.
+  CI failures still go to the author once checks settle. READY and
+  `crew/merge-ready` still need green checks, resolved judgments and reviews.
 - **A fresh fixer for a busy author.** A seat works on one PR at a time, so
   when a PR's `fix`, `ci` or `conflict` step is due and its author seat is
   working (or blocked) on another PR, the watcher starts a fresh fixer
@@ -427,7 +438,7 @@ plans the next step for every PR in scope and takes each step once:
   command its brief gives, as after rerunning a flaky job without a push.
   Its session then stays open as a chat, and `open --run` reopens it in that
   worktree, under the pass lock. A fixer overtaken by someone else's push, or
-  whose PR merges or closes, is stopped like a stale reviewer.
+  whose PR merges or closes, is stopped; pinned reviewer sessions continue until the PR closes.
   - **Only on evidence that the author is elsewhere:** the seat's latest crew
     prompt was only about other PRs. One prompt carries every waiting step,
     so a prompt that included this PR means the author may be on it. A seat
@@ -441,8 +452,9 @@ plans the next step for every PR in scope and takes each step once:
     against `maxRuns` and `runTimeoutMinutes` like reviewers; screenshots stay
     with the author. A Codex fixer's session is the one created after it
     started, not the author's older one in the same worktree.
-- **What stops a step.** Only a newer head, a merge or a close supersedes a
-  waiting step or stops a running reviewer. On the same head, a CI rerun or
+- **What stops a step.** A newer head supersedes author steps; reviewer and
+  evaluator/process actions remain pinned until they post or the PR closes.
+  Evaluator holds survive pushes. On the same head, a CI rerun or
   an unknown mergeable state only pauses steps; they resume when the head is
   eligible again. A reviewer that has just posted finishes its run. A PR
   reopened on the same head is planned afresh.
