@@ -126,12 +126,17 @@ static checks and affected unit tests, without World suites, behavioral
 verification or native installers. `Delivery checks` and both protected macOS
 reports remain required. Other classified PRs run affected unit and nearest browser suites, verification
 for its inputs/contract owners, the dense World suites for World runtime changes, and native
-jobs for installation or binary inputs. Unknown paths, policy/configuration and
-main pushes run everything. Pre-push uses the same complete-PR classification.
+jobs for installation or binary inputs. Unknown paths, executable gate/workflow
+policy, configuration and main pushes run everything. Contributor docs and skill
+Markdown use documentation checks or named consumers; browser shard-table edits
+retain all browser suites and inventory evidence. Model-free coverage owners run
+consumer tests and the cheap coverage check; model-backed owners select models. Pre-push uses the same complete-PR classification.
 CI splits units/web suites across two runners and verification across three model
-groups; no CI test asserts a wall-clock budget (the non-blocking World latency
+groups balanced by measured work; no CI test asserts a wall-clock budget (the non-blocking World latency
 trend reports timing). Verification aggregates require all
 models, source/tool identity and each group's enforced resource accounting.
+Metadata events may reuse a passing scoped result only for the exact PR/base/head
+and identical recorded selection; failed or cancelled candidates cannot be reused.
 Leaf checks report failure when their job ends; `Delivery checks` remains the
 required aggregate, and protected report names and branch rules stay unchanged.
 After committing, run `bun run check:pr-body <file>` on the exact description

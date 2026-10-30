@@ -1,0 +1,17 @@
+{
+  "sourceRun": "https://github.com/IvoryHeart/herdr-world/actions/runs/41083467325",
+  "units": "seconds; per-model ci-shard manifest elapsedMs divided by 1000",
+  "seconds": {
+    "browser-preparation": 72.123,
+    "browser-refresh": 62.829,
+    "chunk-assembly": 32.621,
+    "chunk-credits": 62.998,
+    "creation-flow": 16.107,
+    "ranger-authority": 10.58,
+    "ranger-recovery": 20.574,
+    "runtime-control": 37.172,
+    "runtime-drain": 37.882,
+    "runtime-leases": 46.514,
+    "space-admission": 225.083
+  }
+}

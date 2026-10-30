@@ -22,7 +22,7 @@ the complete candidate once and let the pre-push hook run
 gate; the explicit agent-tooling allowlist shares CI's shorter path). A
 Markdown-only follow-up may use
 `bun run check:docs` when this worktree has a successful code gate on an ancestor. CI
-runs the applicable gate on the PR head, and reuses successful full results on
+runs the applicable gate on the PR head, and reuses successful full results or scoped results with identical selections on
 the exact PR, base and head for description edits and label changes. Do not run a separate final full check
 immediately before that push. For an explicitly local-only handoff, run one
 explicit `bun run check:delivery` instead. If a later repair changes code, begin a new

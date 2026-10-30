@@ -139,8 +139,6 @@ test("pre-push compares with the pushed branch, and uses the docs gate only afte
       "docs/agent-development.md",
       "verification/contracts/runtime-leases.md",
       "openspec/specs/runtime-federation/spec.md",
-      "AGENTS.md",
-      "CONTRIBUTING.md",
     ]) {
       mkdirSync(join(root, path, ".."), { recursive: true });
       writeFileSync(join(root, path), "changed evidence contract\n");
@@ -154,6 +152,23 @@ test("pre-push compares with the pushed branch, and uses the docs gate only afte
       expect(readFileSync(argsPath, "utf8")).toBe(
         `run check:changed --base=${docs}\n`,
       );
+    }
+    for (const path of [
+      "AGENTS.md",
+      "CONTRIBUTING.md",
+      ".agents/skills/example/SKILL.md",
+    ]) {
+      mkdirSync(join(root, path, ".."), { recursive: true });
+      const priorInstructions = git("rev-parse", "HEAD");
+      writeFileSync(join(root, path), "contributor instructions\n");
+      git("add", path);
+      git("commit", "-qm", "instructions");
+      writeFileSync(
+        join(root, ".agents/delivery/pre-push.tsv"),
+        `synthetic\t${priorInstructions}\t0\t0\tfull\n`,
+      );
+      expect(run(git("rev-parse", "HEAD"), docs).status).toBe(0);
+      expect(readFileSync(argsPath, "utf8")).toBe("run check:docs\n");
     }
     writeFileSync(join(root, "code.ts"), "export const value = 1;\n");
     git("add", "code.ts");

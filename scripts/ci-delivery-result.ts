@@ -1,4 +1,5 @@
 import type { ValidationSelection } from "./validation-scope";
+import { VALIDATION_PROOF_PREFIX } from "./ci-validation-proof";
 /**
  * Native results include Windows plugin installation, installer upgrades and
  * both macOS lifecycle jobs. The macOS jobs keep their protected names and
@@ -63,4 +64,12 @@ if (import.meta.main) {
       : undefined,
   );
   console.info("Delivery checks passed");
+  if (Bun.env.HERDR_CI_SELECTION)
+    console.info(
+      VALIDATION_PROOF_PREFIX +
+        JSON.stringify({
+          mode: Bun.env.VALIDATION_MODE,
+          selection: JSON.parse(Bun.env.HERDR_CI_SELECTION),
+        }),
+    );
 }

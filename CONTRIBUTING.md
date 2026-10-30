@@ -64,10 +64,10 @@ only if its local report proves a passed code gate on an ancestor and every
 change since then is ordinary Markdown documentation. Behavioral contracts,
 OpenSpec, tooling and agent/contributor policy receive the code gate even when
 only Markdown changes. CI runs documentation
-checks for ordinary Markdown-only PR diffs, and reuses a successful full result
-on the exact PR, base and head for description edits and label changes. These
+checks for ordinary Markdown-only PR diffs, and reuses a successful full result, or a scoped result with an identical
+selection, on the exact PR, base and head for description edits and label changes. These
 metadata events queue behind active CI instead of cancelling it; missing proof
-falls back to full validation. One scope decision feeds every platform job,
+falls back to fresh validation for the current scope. One scope decision feeds every platform job,
 and Delivery checks includes both macOS lifecycle results. See the
 [pipeline ownership guide](docs/ci-pipelines.md) for the job boundaries and
 failure diagnosis.
@@ -83,7 +83,7 @@ full gate, even when that input is absent from the net PR diff.
 | Suite | PR selection | Full/main execution |
 | --- | --- | --- |
 | Non-browser tests | Tests reaching changed inputs | All tests, across two CI runners |
-| Behavioral verification | Verification/OpenSpec inputs or `verification/coverage.json` owners | All accepted models, across three CI groups |
+| Behavioral verification | Model/tooling/OpenSpec inputs or model-backed coverage owners; model-free owners run the cheap coverage inventory check | All accepted models, across three CI groups balanced by measured work |
 | World browser tests | Nearest consumer suites in the import graph; World runtime paths add the dense end-to-end suites (production and concurrent contexts, terminal handoff) | All six World shards |
 | Web browser tests | Affected registered browser suites | All suites, across two runners |
 | Native installation | Install/plugin/package inputs, server/shared binary sources, build-version metadata or affected installation consumers | Installer upgrades, Windows plugin and both macOS architectures |
@@ -92,9 +92,12 @@ The agent-tooling exception from #484 still covers `scripts/agent/**`, the named
 agent/crew/dispatch runbooks and `changes/<slug>.md`: static checks and affected
 unit tests, with the agent test inventory for uncovered modules. It skips heavy
 suites even though the inventory's broad scripts owner would otherwise apply.
-Ordinary docs skip behavioral verification unless they are verification inputs or
-contract owners. Agent/contributor policy, workflows and gate configuration run
-all checks. Browser Chat changes can skip verification/platform work; server
+Contributor docs and skill Markdown run documentation checks or named consumer
+tests. Executable workflows and gate configuration run all checks. Browser
+shard-table edits retain inventory tests and every browser suite without selecting
+native work or models. Model-free owners (including Q41's scripts) run affected
+consumers and `scripts/verification-coverage.test.ts`; changed model mappings
+still select verification. Main always runs every suite. Browser Chat changes can skip verification/platform work; server
 agent changes remain contract owners.
 
 `Delivery checks`, `Repository validation`, browser/behavioral aggregates
