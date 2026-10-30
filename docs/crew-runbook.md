@@ -107,6 +107,15 @@ comment carrying the same `Evaluation: <checkpoint>`, ending with:
 PROCESS #<PR>: done — <outcome and next step>
 ```
 
+The watcher runs this checkout's own agent CLI (`server/src/index.ts`), never
+an older `herdr-world` on PATH. A failed owner ask is held as `failed` with the
+CLI's error, written to the feed once, and asked again only when the CLI's
+version or World's `whoami` answer changes; retrying unchanged would repeat
+the CLI's Herdr alert. An ask World recorded but nobody was alerted to (exit 6,
+`not_delivered`) stays recorded and is reported once. Set `crew.escalate` in
+the gate config to a seat name, such as the FirstMate seat, to have each
+distinct failure also prompted to that seat once.
+
 Only that report releases the hold. For `Process: owner`, the owner's answer at
 reception supplies the decision and releases it. An unavailable process seat,
 invalid verdict or failed process remains held for the owner. After every two

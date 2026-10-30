@@ -468,7 +468,12 @@ function act(
   const deliverable = (entry: StoredAction) =>
     keys.has(entry.key.split("|")[0]!);
   deliver(crew, settings, live, authors, deliverable, record, context, say);
-  reconcileOwnerAsks(crew, planned, context, say);
+  reconcileOwnerAsks(
+    crew,
+    planned,
+    { ...context, escalate: settings.escalate },
+    say,
+  );
 
   // A notice about a seat that still holds keeps the owner's mark on.
   oweHeldNotices(crew, causes, root, parked);

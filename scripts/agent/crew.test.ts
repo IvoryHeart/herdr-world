@@ -622,6 +622,28 @@ describe("delivery", () => {
     if (argv[0] === "herdr-world") {
       if (refuse.has("ask"))
         return { code: 1, stdout: "", stderr: "World unavailable" };
+      if (argv[1] === "--version")
+        return { code: 0, stdout: "herdr-world 0.0.0-test\n", stderr: "" };
+      if (argv[1] === "whoami")
+        return {
+          code: 0,
+          stdout: JSON.stringify({
+            ok: true,
+            actor: { label: "crew in w1:p9", verified: !refuse.has("verify") },
+            result: {},
+          }),
+          stderr: "",
+        };
+      if (refuse.has("verify") && argv[1] === "ask" && argv.includes("--key"))
+        return {
+          code: 3,
+          stdout: JSON.stringify({
+            ok: false,
+            code: "refused",
+            error: "cause keys require a verified asking pane",
+          }),
+          stderr: "",
+        };
       const verb = argv[2];
       let ask;
       if (verb === "get" || verb === "withdraw") {
@@ -647,6 +669,17 @@ describe("delivery", () => {
           ownerAsks.set(key, ask);
         }
       }
+      if (ask && verb !== "get" && verb !== "withdraw" && refuse.has("alert"))
+        return {
+          code: 6,
+          stdout: JSON.stringify({
+            ok: false,
+            code: "not_delivered",
+            error: `recorded ${ask.id}, but Herdr showed the owner no alert: disabled`,
+            result: ask,
+          }),
+          stderr: "",
+        };
       return {
         code: 0,
         stdout: JSON.stringify({
@@ -2529,21 +2562,55 @@ describe("delivery", () => {
     ).toHaveLength(1);
   });
 
-  test("a notification Herdr couldn't show is tried again", () => {
+  test("a notification Herdr couldn't show is held until World changes, and told once", () => {
     const ready = town({
       head: SHA.reviewed,
       posts: ["rev2", "rev-astra", "rev-opus"].map((name) =>
         confirm(name, SHA.reviewed),
       ),
     });
+    const escalating = join(root, "escalate.json");
+    writeFileSync(
+      escalating,
+      JSON.stringify({
+        ...config,
+        roster: ROSTER,
+        crew: { ...SETTINGS, roster: {}, escalate: "firstmate-2" },
+      }),
+    );
+    const at = (now: number) =>
+      passOver([ready], now, { configPath: escalating });
+    const feed = () =>
+      existsSync(join(dir, "feed.log"))
+        ? readFileSync(join(dir, "feed.log"), "utf8")
+        : "";
+    const told = () => prompts().filter((argv) => argv[3] === "firstmate-2");
+    const before = feed().length;
     refuse.add("ask");
-    pass(ready);
-    expect(actionsIn(crew, ["pending"])).toHaveLength(1);
+    at(NOW);
+    at(NOW + 60_000);
+    at(NOW + 2 * 60 * 60_000);
+    // Held, said and told once, with the CLI's error, never asked again
+    // while nothing changed.
+    expect(actionsIn(crew, ["failed"])).toHaveLength(1);
+    expect(notices()).toHaveLength(1);
+    const failures = feed()
+      .slice(before)
+      .split("\n")
+      .filter((line) => line.includes("couldn't ask the owner"));
+    expect(failures).toHaveLength(1);
+    expect(failures[0]).toContain("herdr-world exited 1: World unavailable");
+    expect(told()).toHaveLength(1);
+    expect(told()[0]![4]).toContain(
+      "owner ask failed: herdr-world exited 1: World unavailable",
+    );
+    // World answers again: the held ask is sent on the next pass.
     refuse.clear();
-    pass(ready, NOW + 60_000);
-    pass(ready, NOW + 120_000);
+    at(NOW + 2 * 60 * 60_000 + 60_000);
+    at(NOW + 2 * 60 * 60_000 + 120_000);
     expect(notices()).toHaveLength(2);
-    expect(actionsIn(crew, ["pending"])).toEqual([]);
+    expect(told()).toHaveLength(1);
+    expect(actionsIn(crew, ["pending", "failed"])).toEqual([]);
   });
 
   test("a scoped pass leaves other PRs' queued steps alone", () => {
@@ -2610,6 +2677,61 @@ describe("delivery", () => {
     expect(actionsIn(crew, ["pending", "running"])).toEqual([]);
     pass(town({ head: SHA.reviewed, posts: [] }), NOW + 120_000);
     expect(spawned).toHaveLength(6);
+  });
+
+  test("an ask refused while World can't verify the pane is sent once it can", () => {
+    const ready = town({
+      head: SHA.reviewed,
+      posts: ["rev2", "rev-astra", "rev-opus"].map((name) =>
+        confirm(name, SHA.reviewed),
+      ),
+    });
+    // Only the ask is refused; `--version` and `whoami` still answer.
+    refuse.add("verify");
+    pass(ready);
+    pass(ready, NOW + 60_000);
+    expect(notices()).toHaveLength(1);
+    expect(actionsIn(crew, ["failed"])).toHaveLength(1);
+    refuse.clear();
+    pass(ready, NOW + 120_000);
+    pass(ready, NOW + 180_000);
+    expect(notices()).toHaveLength(2);
+    expect(actionsIn(crew, ["pending", "failed"])).toEqual([]);
+  });
+
+  test("an ask World recorded but nobody saw is kept, said and told once", () => {
+    const ready = town({
+      head: SHA.reviewed,
+      posts: ["rev2", "rev-astra", "rev-opus"].map((name) =>
+        confirm(name, SHA.reviewed),
+      ),
+    });
+    const escalating = join(root, "escalate-undelivered.json");
+    writeFileSync(
+      escalating,
+      JSON.stringify({
+        ...config,
+        roster: ROSTER,
+        crew: { ...SETTINGS, roster: {}, escalate: "firstmate-2" },
+      }),
+    );
+    const feed = () =>
+      existsSync(join(dir, "feed.log"))
+        ? readFileSync(join(dir, "feed.log"), "utf8")
+        : "";
+    const before = feed().length;
+    refuse.add("alert");
+    passOver([ready], NOW, { configPath: escalating });
+    refuse.clear();
+    passOver([ready], NOW + 60_000, { configPath: escalating });
+    expect(notices()).toHaveLength(1);
+    expect(feed().slice(before)).toContain(
+      "but Herdr showed the owner no alert: disabled",
+    );
+    const told = prompts().filter((argv) => argv[3] === "firstmate-2");
+    expect(told).toHaveLength(1);
+    expect(told[0]![4]).toMatch(/owner ask q-\S+ reached no one/);
+    expect(actionsIn(crew, ["pending", "failed"])).toEqual([]);
   });
 
   test("an owner notice Herdr couldn't show is retried for every kind", () => {
@@ -2736,7 +2858,7 @@ describe("delivery", () => {
     refuse.add("ask");
     at(NOW);
     // Rewrite the notice as an older watcher stored it: `<parent>|waits`.
-    const [fresh] = actionsIn(crew, ["pending"]).filter((entry) =>
+    const [fresh] = actionsIn(crew, ["pending", "failed"]).filter((entry) =>
       entry.key.includes("|waits-"),
     );
     crew
@@ -2750,7 +2872,9 @@ describe("delivery", () => {
       notices().filter((argv) => argv.join(" ").includes("waits for towncx")),
     ).toHaveLength(1);
     expect(
-      actionsIn(crew, ["pending"]).filter((entry) => entry.target === "owner"),
+      actionsIn(crew, ["pending", "failed"]).filter(
+        (entry) => entry.target === "owner",
+      ),
     ).toEqual([]);
   });
 });
