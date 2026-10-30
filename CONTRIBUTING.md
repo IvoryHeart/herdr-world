@@ -356,12 +356,10 @@ After a merge, CI runs the full check again on main. Merges that land while a
 main check is running are checked together, once, at the newest of them. If a
 check fails, the Main gate workflow opens one `main-red` issue. It names the
 merge commit and its PR and prepares a revert PR, which it never merges; when the
-check covered several merges, it lists them all and prepares no revert. A run
-whose failed steps show only a known infrastructure flake (a fresh runner's
-Chrome startup timeout or the runner's control-group error) and at most one
-failing test is rerun once first, and alerts only if it fails again. Rerun the
-failed jobs first when the failure is a known flake; otherwise merge the revert,
-revert the merge that broke it, or land a fix. Later red commits are added to the open issue, not to new ones, and the next
+check covered several merges, it lists them all and prepares no revert. Nothing
+is rerun automatically: a failing test is fixed at its cause, not retried. Merge
+the revert, revert the merge that broke it, or land a fix; rerun only after a
+GitHub service failure. Later red commits are added to the open issue, not to new ones, and the next
 green main run at or after the red commit closes the issue and its revert PR.
 
 The **Web asset headroom** status on a PR projects its web asset delta onto

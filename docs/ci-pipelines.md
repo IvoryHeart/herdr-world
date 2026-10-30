@@ -149,18 +149,18 @@ shared policy.
 3. Keep native installer and plugin lifecycle failures distinct: archives and
    service-manager behavior have different acceptance boundaries from browser
    tests. Do not remove them merely because they share checkout/build steps.
-4. Main gate fetches failed-job logs directly from GitHub's API. Terminal colour
-   escapes must reach its classifier even when a runner's `gh` version refuses
-   to print them. Unavailable logs never count as proof of an infrastructure
-   flake. A failure creating an alert is separate from the original CI failure.
+4. Main gate alerts on the first red main run; it never reruns one or classifies
+   a failure as a flake. Read the failed job, then fix or revert; rerun only
+   after a GitHub service failure. A failure creating an alert is separate from
+   the original CI failure.
 5. Read the current branch rules before calling a status blocking. The asset
    headroom workflow publishes a status independently; whether it blocks merging
    depends on repository settings.
 
 Workflow regressions live in `scripts/ci-workflow.test.ts`; scope and reuse in
 `scripts/ci-reuse-full-check.test.ts`; aggregate acceptance in
-`scripts/ci-delivery-result.test.ts`; Main gate classification in
-`scripts/main-gate.test.ts`. Native, release and browser workflows retain their
+`scripts/ci-delivery-result.test.ts`; Main gate alerts, reverts and resolution
+in `scripts/main-gate.test.ts`. Native, release and browser workflows retain their
 own platform and consumer tests. These finite scheduling and result-selection
 checks exercise the tooling directly; application model contracts and their
 mandatory consumers are unchanged.

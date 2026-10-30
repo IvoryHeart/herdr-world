@@ -47,6 +47,7 @@ import {
   WORLD_OFFICE_PREFERENCES_CHANGED_EVENT,
   writeOfficePreferences,
 } from "../officePreferences";
+import { waitForElement } from "../testing/waitForElement";
 
 /*
  * Synthetic Office town fixture. `?mode=test` runs checks and posts them to
@@ -1271,10 +1272,17 @@ async function run() {
 
   if (scale === "fold-protected" && mode === "test") {
     const rendered = window.__HERDR_TOWN_RENDERER__!;
-    const card = [
-      ...host.querySelectorAll<HTMLButtonElement>(".town-room-card"),
-    ].find((candidate) =>
-      candidate.textContent?.includes("all-protected-room"),
+    const protectedRoomCard = () =>
+      [...host.querySelectorAll<HTMLButtonElement>(".town-room-card")].find(
+        (candidate) => candidate.textContent?.includes("all-protected-room"),
+      );
+    // Renderer readiness and completed target admission can precede this DOM
+    // commit (cards show only after the first frame's setVisible commits), so
+    // wait on the commit itself.
+    const card = await waitForElement(
+      host,
+      protectedRoomCard,
+      "the all-protected room overview card never mounted",
     );
     check(card !== undefined, "all-protected room has no overview card");
     if (card) {
