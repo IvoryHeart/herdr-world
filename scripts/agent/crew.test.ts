@@ -585,6 +585,8 @@ describe("delivery", () => {
 
   const run: Run = (argv) => {
     calls.push(argv);
+    if (argv[0] === "gh" && argv.includes("--paginate"))
+      return { code: 0, stdout: "[[]]", stderr: "" };
     if (argv.join(" ") === "herdr agent list")
       return {
         code: 0,
@@ -878,7 +880,7 @@ describe("delivery", () => {
       expect(prompts()).toEqual([]);
       expect(actionsIn(crew, ["pending"]).map((a) => a.kind)).toEqual(["ci"]);
       // Its push ends its job: the run finishes with its usage and its
-      // session stays open as a chat, while the new head's round starts.
+      // session stays open as a chat; review waits for replies and quiet.
       checkedOut = SHA.fixed;
       passFixer(findings(SHA.fixed), NOW + 120_000);
       expect(getRun(crew, 1)).toMatchObject({
@@ -888,11 +890,7 @@ describe("delivery", () => {
       });
       expect(killed).toEqual([]);
       expect(getAction(crew, step!.key)!.state).toBe("superseded");
-      expect(spawned.slice(1).map((argv) => argv[2])).toEqual([
-        "review",
-        "review",
-        "review",
-      ]);
+      expect(spawned.slice(1)).toEqual([]);
     });
 
     test("a blocked author's steps go to a fixer without asking the owner", () => {
@@ -1867,7 +1865,7 @@ describe("delivery", () => {
     expect(getAction(crew, `${key}|stuck`)?.target).toBe("owner");
   });
 
-  test("a new head supersedes waiting actions and stops stale runs", () => {
+  test("a new head preserves the pinned round until its reviewers post", () => {
     live = live.map((seat) =>
       seat.name === "towncx" ? { ...seat, status: "working" } : seat,
     );
@@ -1881,18 +1879,12 @@ describe("delivery", () => {
       }),
       NOW + 60_000,
     );
-    expect(
-      actionsIn(crew, ["pending", "running"]).filter(
-        (a) => a.head === SHA.reviewed,
-      ),
-    ).toEqual([]);
-    expect(killed).toEqual([1001, 1002]);
-    // The new head's round starts in the same pass, while CI runs.
-    expect(spawned.slice(2).map((argv) => argv[6])).toEqual([
-      "rev2",
-      "rev-astra",
-      "rev-opus",
-    ]);
+    expect(activeRuns(crew)).toHaveLength(2);
+    expect(activeRuns(crew).every((run) => run.head === SHA.reviewed)).toBe(
+      true,
+    );
+    expect(killed).toEqual([]);
+    expect(spawned).toHaveLength(2);
   });
 
   test("shows a round's reviewers as panes of one tab, kept after they finish", () => {
@@ -1925,10 +1917,14 @@ describe("delivery", () => {
     expect(openRounds(crew)).toHaveLength(1);
   });
 
-  test("a new head opens the next round's tab and keeps the stopped one", () => {
+  test("a completed round opens a scoped round after a quiet push, keeping both tabs", () => {
     panes = true;
     pass(town({ head: SHA.reviewed, posts: [] }));
-    pass(town({ head: SHA.fixed, posts: [] }), NOW + 60_000);
+    const posts = ["rev2", "rev-astra", "rev-opus"].map((name) =>
+      confirm(name, SHA.reviewed),
+    );
+    pass(town({ head: SHA.fixed, posts }), NOW + 60_000);
+    pass(town({ head: SHA.fixed, posts }), NOW + 660_000);
     expect(closed).toEqual([]);
     expect(places.slice(3).map((place) => [place.tab, place.label])).toEqual([
       [null, "#7 towncx-12-plates · r2"],
@@ -1946,7 +1942,7 @@ describe("delivery", () => {
     passOver([], NOW + 90_000, { prs: [8] });
     expect(closed).toEqual([]);
     pass(town({ head: SHA.fixed, posts: [], state: "MERGED" }), NOW + 120_000);
-    expect(closed).toEqual(["wP:t1", "wP:t4"]);
+    expect(closed).toEqual(["wP:t1"]);
     expect(openRounds(crew)).toEqual([]);
     expect(actionsIn(crew, ["pending", "running"])).toEqual([]);
   });
@@ -1973,12 +1969,12 @@ describe("delivery", () => {
     expect(closed.toSorted()).toEqual(["wP:t1", "wP:t2", "wP:t3"]);
   });
 
-  test("a run superseded after it reported its pid is stopped by that pid", () => {
+  test("a closing PR stops a pinned reviewer by its reported pid", () => {
     panes = true;
     pass(town({ head: SHA.reviewed, posts: [] }));
     const [reported, quiet] = activeRuns(crew);
     setRunPid(crew, reported!.id, 4242);
-    pass(town({ head: SHA.fixed, posts: [] }), NOW + 60_000);
+    pass(town({ head: SHA.fixed, posts: [], state: "CLOSED" }), NOW + 60_000);
     expect(killed).toEqual([4242]);
     // One that hadn't reported is finished, so its worker exits on start.
     expect(getRun(crew, quiet!.id)!.finishedAt).not.toBeNull();
@@ -3481,7 +3477,9 @@ describe("worker", () => {
     expect(prompt).toContain(
       `Reviewer: rev2\n  Reviewed commit: ${SHA.fixed}\n  RESULT #7: x/y resolved, z new`,
     );
-    expect(prompt).toContain(`delta ${SHA.reviewed}..${SHA.fixed}`);
+    expect(prompt).toContain(
+      `--first-parent --reverse ${SHA.reviewed}..${SHA.fixed}`,
+    );
     expect(prompt).toContain("Never push, merge, approve");
   });
 
