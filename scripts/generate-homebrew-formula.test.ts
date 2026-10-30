@@ -44,6 +44,8 @@ test("Homebrew Formula uses each platform's verified archive digest", () => {
   expect(formula).not.toContain('bin.install_symlink libexec/"herdr/herdr"');
 });
 
+// About fifteen Ruby launches take about a second; a cold CI runner once took
+// over Bun's 5 s default. The limit only catches a hung launch.
 test("Homebrew reuses any existing Herdr and bootstraps only a missing runtime", () => {
   const directory = mkdtempSync(join(tmpdir(), "herdr-world-homebrew-reuse-"));
   try {
@@ -313,7 +315,7 @@ if [ "\${FIXTURE_CORRUPT_DOWNLOAD:-}" = 1 ]; then echo '# corrupted' >> "$destin
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
-});
+}, 30_000);
 
 test("Homebrew RC Formula uses the separate candidate identity", () => {
   const digests = {

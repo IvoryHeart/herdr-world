@@ -15,92 +15,6 @@
 
 export const MAIN_RED_LABEL = "main-red";
 
-/**
- * Runner and infrastructure failures with a known cause, not code. A red main
- * run whose failed jobs show only these is rerun once before anyone is alerted
- * or a revert is prepared.
- */
-export const INFRA_FLAKES = [
-  /browser startup timed out after \d+ms/, // first Chrome launch on a fresh runner
-  /AssertionError: Invalid control group/, // verification:resources on the runner (#242)
-];
-
-/** Jobs that only aggregate other jobs' results. */
-const AGGREGATES = new Set(["Delivery checks"]);
-
-/** Lines in a failed step that say nothing beyond the failure itself. */
-const NEUTRAL = [
-  /^\(pass\) /,
-  /^\(fail\) /,
-  /exited with code \d+/,
-  /^Process completed with exit code \d+/,
-  /^$/,
-  /^\d+ tests? failed:$/,
-  /^\d+ fail$/,
-  /^\d+ \|/, // source excerpt in a stack trace
-];
-const ERRORISH = /error|exceed|fail|assert|panic|refus|denied|mismatch/i;
-
-/**
- * The output of every failed step: each `##[group]Run` section holding an
- * `##[error]` line (a script's exit, or an action's own error).
- */
-export function failedStepOutputs(log: string): string[][] {
-  const steps: string[][] = [[]];
-  for (const raw of log.split("\n")) {
-    const line = raw.replace(/^\d{4}-\d\d-\d\dT[\d:.]+Z ?/, "").trim();
-    if (line.startsWith("##[group]Run ")) steps.push([]);
-    steps.at(-1)!.push(line);
-  }
-  return steps.filter((step) =>
-    step.some((line) => line.startsWith("##[error]")),
-  );
-}
-
-/**
- * True when every failed job (aggregates aside) failed only through a known
- * infrastructure flake: each of its failed steps shows that flake, at most one
- * failing test, and no other error of any kind.
- */
-export function onlyInfraFlakes(
-  failed: Array<{ name: string; log: string }>,
-): boolean {
-  const jobs = failed.filter((job) => !AGGREGATES.has(job.name));
-  return (
-    jobs.length > 0 &&
-    jobs.every((job) => {
-      // Every failed step, including always() steps after the first, must be
-      // the flake alone.
-      const steps = failedStepOutputs(job.log);
-      return (
-        steps.length > 0 &&
-        steps.every((step) => {
-          const tests = new Set(
-            step.filter((line) => line.startsWith("(fail) ")),
-          );
-          const flake = step.some((line) =>
-            INFRA_FLAKES.some((pattern) => pattern.test(line)),
-          );
-          const known = (line: string) =>
-            INFRA_FLAKES.some((pattern) => pattern.test(line)) ||
-            NEUTRAL.some((pattern) => pattern.test(line));
-          // An error annotation is a failure whatever its wording, so its
-          // message must be the flake or neutral; other lines count only
-          // when they read as an error.
-          const other = step.some((line) =>
-            line.startsWith("##[error]")
-              ? !known(line.slice("##[error]".length))
-              : !line.startsWith("##[group]") &&
-                ERRORISH.test(line) &&
-                !known(line),
-          );
-          return flake && tests.size <= 1 && !other;
-        })
-      );
-    })
-  );
-}
-
 /** Hidden in the issue body: which commit turned main red. */
 export const redShaMarker = (sha: string) => `<!-- main-gate-sha: ${sha} -->`;
 
@@ -197,7 +111,7 @@ export function planMainGate(facts: MainGateFacts): MainGatePlan {
       "",
       `Failed run: ${facts.runUrl}`,
       "",
-      "1. If the failure is a known flaky test, rerun the failed jobs. A green run closes this issue and the revert PR.",
+      "1. A failing test is a real failure, flaky or not: fix it or revert. Rerun only when a GitHub service failed (an outage, a download); a green run closes this issue and the revert PR.",
       untested.length
         ? "2. Otherwise find the merge that broke it (the failing job usually names its area), then revert or fix it; the next green main run closes this issue. No revert was prepared, because more than one merge is a suspect."
         : "2. Otherwise merge the revert PR (its CI was dispatched) or land a fix; the next green main run closes this issue.",
@@ -218,7 +132,7 @@ export function planMainGate(facts: MainGateFacts): MainGatePlan {
       [
         `Reverts ${source}: CI failed on main at ${facts.sha} (${facts.runUrl}).`,
         "",
-        `Prepared automatically for #${issue}. Do not merge if a rerun shows the failure was a flake.`,
+        `Prepared automatically for #${issue}.`,
         "",
         "Changelog: none — reverts an unreleased change.",
       ].join("\n"),
@@ -247,55 +161,10 @@ async function git(args: string[]) {
   return (await child.exited) === 0;
 }
 
-/** Fetch raw logs: gh can reject ANSI sequences before classification sees them. */
-export async function readJobLog(
-  repo: string,
-  jobId: number,
-  token: string,
-  request: (url: string, options: RequestInit) => Promise<Response> = fetch,
-): Promise<string> {
-  const response = await request(
-    `https://api.github.com/repos/${repo}/actions/jobs/${jobId}/logs`,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/vnd.github+json",
-      },
-      signal: AbortSignal.timeout(30_000),
-    },
-  );
-  if (!response.ok)
-    throw new Error(`Cannot read job log: HTTP ${response.status}`);
-  return response.text();
-}
-
 async function run() {
   const repo = Bun.env.GITHUB_REPOSITORY!;
   const sha = Bun.env.HEAD_SHA!;
   const conclusion = Bun.env.CONCLUSION === "success" ? "success" : "failure";
-  if (conclusion === "failure" && Bun.env.RUN_ATTEMPT === "1") {
-    const runId = Bun.env.RUN_ID!;
-    const jobs = JSON.parse(
-      await gh([
-        "api",
-        `repos/${repo}/actions/runs/${runId}/jobs?per_page=100`,
-        "--jq",
-        '[.jobs[] | select(.conclusion == "failure") | {id, name}]',
-      ]),
-    ) as Array<{ id: number; name: string }>;
-    const failed = [];
-    for (const job of jobs)
-      failed.push({
-        name: job.name,
-        log: await readJobLog(repo, job.id, Bun.env.GH_TOKEN!).catch(() => ""),
-      });
-    if (onlyInfraFlakes(failed)) {
-      // The rerun's completion runs this gate again, as attempt 2.
-      console.info(`Known infrastructure flake only; rerunning ${runId} once`);
-      await gh(["run", "rerun", runId, "--failed"]);
-      return;
-    }
-  }
   const pulls = JSON.parse(
     await gh(["api", `repos/${repo}/commits/${sha}/pulls`]),
   ) as Array<{ number: number; title: string; merge_commit_sha?: string }>;

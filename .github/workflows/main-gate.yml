@@ -10,7 +10,6 @@ on:
     branches: [main]
 
 permissions:
-  actions: write
   contents: write
   issues: write
   pull-requests: write
@@ -38,8 +37,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
           CONCLUSION: ${{ github.event.workflow_run.conclusion }}
-          RUN_ID: ${{ github.event.workflow_run.id }}
-          RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
           RUN_URL: ${{ github.event.workflow_run.html_url }}
         run: |
           git config user.name "github-actions[bot]"
