@@ -146,5 +146,17 @@ export function setup(
       },
     ];
   };
-  return { crew, deps, spawned, killed, calls, pass, passInput, comment };
+  return {
+    crew,
+    deps,
+    spawned,
+    killed,
+    calls,
+    pass,
+    passInput,
+    comment,
+    setPosts: (next: typeof posts) => {
+      posts = next;
+    },
+  };
 }

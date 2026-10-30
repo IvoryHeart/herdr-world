@@ -164,6 +164,12 @@ unique prefix; conflicting claims and ambiguous prefixes stay unknown. It
 never derives the reviewed head from timestamps. A historical RED/GREEN SHA
 mentioned in findings or comparison prose does not claim the reviewed head and
 cannot contradict formal review metadata or the canonical header.
+The crew gate separately handles reviews submitted after a push: when an
+unambiguous explicit reviewed SHA precedes GitHub's attached commit in the gate's
+git mirror, it binds the RESULT to that older SHA. The normal copy rule still
+decides whether it counts for the current head; authored changes require a fresh
+confirmation. Conflicting explicit declarations, unrelated histories and unknown
+ancestry stay unknown. This does not change World's conservative shared parser.
 RESULT-only evidence remains
 separately linked as unknown attribution; a later named review does not claim
 an earlier anonymous post. Correct the original post to attribute it. Positive
