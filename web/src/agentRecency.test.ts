@@ -46,7 +46,7 @@ test("an agent.list reply for another session never lends its timestamp", () => 
 
 test("a late list cannot roll back a push, and an older push cannot roll back a list", () => {
   const entry = { ...pane, session: "session-one", last_activity_at: 300 };
-  const pushed = rememberActivity({}, activityEntries([entry], true), [pane]);
+  const pushed = rememberActivity({}, activityEntries([entry], true));
   const late = observedRecency(pushed, [pane], {
     agents: [{ ...pane, last_activity_at: 100 }],
   });
@@ -57,7 +57,6 @@ test("a late list cannot roll back a push, and an older push cannot roll back a 
   const oldPush = rememberActivity(
     newer.agentActivity,
     activityEntries([entry], true),
-    newer.panes,
   );
   expect(withCachedRecency([pane], oldPush)[0]!.last_activity_at).toBe(500);
 });
@@ -88,7 +87,7 @@ test("an unsupported reading preserves the current identity's recency; replaceme
 
 test("a push before the first pane list is retained only for its matching identity", () => {
   const entry = { ...pane, session: "session-one", last_activity_at: 300 };
-  const early = rememberActivity({}, activityEntries([entry], true), []);
+  const early = rememberActivity({}, activityEntries([entry], true));
   expect(observedRecency(early, [pane], null).panes[0]!.last_activity_at).toBe(
     300,
   );
@@ -103,7 +102,7 @@ test("a push before the first pane list is retained only for its matching identi
 
 test("malformed and other-session pushes cannot replace a current session's maximum", () => {
   const entry = { ...pane, session: "session-one", last_activity_at: 300 };
-  const current = rememberActivity({}, activityEntries([entry], true), [pane]);
+  const current = rememberActivity({}, activityEntries([entry], true));
   const invalid = [
     null,
     {},
@@ -112,9 +111,7 @@ test("malformed and other-session pushes cannot replace a current session's maxi
     { ...entry, session: 42 },
     { ...entry, session: "other-session", last_activity_at: 900 },
   ];
-  const merged = rememberActivity(current, activityEntries(invalid, true), [
-    pane,
-  ]);
+  const merged = rememberActivity(current, activityEntries(invalid, true));
   expect(withCachedRecency([pane], merged)[0]!.last_activity_at).toBe(300);
 });
 
@@ -148,7 +145,6 @@ test("all list/push combinations and arrival orders retain the session maximum",
                   ],
                   true,
                 ),
-                [pane],
               );
       }
       expect(withCachedRecency([pane], cache)[0]!.last_activity_at).toBe(500);

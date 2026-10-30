@@ -3,7 +3,7 @@ import {
   notificationPaneMatches,
   type NotificationFocusOptions,
 } from "./store/notificationFocus";
-import { handleStoreControl } from "./store/controls";
+import { installStoreControls } from "./store/controls";
 import {
   emptyServerSessionState,
   nextRecentPaneIds,
@@ -291,6 +291,9 @@ function setForConnection(
     );
     state = {
       ...state,
+      ...(patch.agentActivityHistory && {
+        agentActivityHistory: patch.agentActivityHistory,
+      }),
       sessionsByConnectionId: {
         ...state.sessionsByConnectionId,
         [lease.connectionId]: updated,
@@ -1050,7 +1053,7 @@ export const store = {
     bridge.onEvent(handleHerdrEvent);
     bridge.onAssistantNotification(notifyRangerTask);
     bridge.onPopup(handlePopupPush);
-    bridge.onControl(handleStoreControl);
+    installStoreControls();
     // Browsers throttle timers in hidden tabs, which stalls the metadata
     // poll that carries agent statuses. Catch up as soon as the page is
     // visible, focused, or back online instead of waiting out the throttle.

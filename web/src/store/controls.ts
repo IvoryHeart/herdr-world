@@ -2,7 +2,9 @@ import {
   activityEntries,
   rememberActivity,
 } from "../../../shared/agentActivity";
-import { withCachedRecency } from "../agentRecency";
+import { rememberedRecency, withCachedRecency } from "../agentRecency";
+import { bridge } from "../api";
+import { startFocusedInterest } from "./focusedInterest";
 import type { BridgeControlMsg } from "../bridgeControl";
 import {
   store,
@@ -16,6 +18,7 @@ function handleAgentActivity(control: BridgeControlMsg): void {
   if (
     control.type !== "world_agent_activity" ||
     state.connectionPaused ||
+    bridge.hello?.capabilities?.world_shared_acquisition !== true ||
     !Array.isArray(control.agents)
   )
     return;
@@ -29,12 +32,19 @@ function handleAgentActivity(control: BridgeControlMsg): void {
   const lease = captureConnectionLease(owner.id),
     snapshot = leaseSnapshot(lease);
   const agentActivity = rememberActivity(
-    snapshot.agentActivity,
+    rememberedRecency(
+      owner.id,
+      snapshot.agentActivity,
+      state.agentActivityHistory,
+    ),
     activityEntries(control.agents, true),
-    snapshot.panes,
   );
   setForConnection(lease, {
     agentActivity,
+    agentActivityHistory: {
+      ...state.agentActivityHistory,
+      [owner.id]: agentActivity,
+    },
     panes: withCachedRecency(snapshot.panes, agentActivity),
   });
 }
@@ -48,4 +58,9 @@ export function handleStoreControl(control: BridgeControlMsg): void {
   } else {
     handleAgentActivity(control);
   }
+}
+
+export function installStoreControls(): void {
+  bridge.onControl(handleStoreControl);
+  startFocusedInterest();
 }

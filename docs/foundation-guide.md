@@ -183,8 +183,17 @@ release paths use the same interest and lease fences. The browser's
 [recency merge](../web/src/agentRecency.ts) runs after layout acquisition, retaining
 any newer [activity push](../web/src/store/controls.ts) in its qualified
 connection partition. [Shared activity identities](../shared/agentActivity.ts)
-keep sessions from lending timestamps to replacements. The
-[cache/observer consumer](../server/src/service/agent-activity.test.ts) and
+keep sessions from lending timestamps to replacements. Read-only maxima are keyed
+by complete identity outside runtime admission state, and survive a World restart
+that resets the service generation counter. The
+[focused interest controller](../web/src/store/focusedInterest.ts) declares the
+visible active host, releases it on hide and retries failed declarations without
+a standing successful timer. The current hello gates declarations and activity
+controls; Inspector holds remain a later part. The
+[restart regressions](../web/src/store/recencyReconnect.test.ts),
+[capability regressions](../web/src/store/recencyCapability.test.ts) and original
+[recency/hide T2 cases](../web/src/store/pollReplacement.test.ts) cover those paths.
+The [cache/observer consumer](../server/src/service/agent-activity.test.ts) and
 [real Bridge/store race tests](../web/src/store/agentActivity.test.ts) cover those
 boundaries.
 

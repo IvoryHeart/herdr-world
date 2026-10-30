@@ -578,6 +578,9 @@
       "requirement": "openspec/specs/runtime-federation/spec.md",
       "properties": "Host focus/filter changes do not retarget operations; retirement affects only its owner; global disconnect retires all",
       "existingTests": [
+        "web/src/store/recencyReconnect.test.ts",
+        "web/src/store/recencyCapability.test.ts",
+        "web/src/store/pollReplacement.test.ts",
         "web/src/agentRecency.test.ts",
         "web/src/store/agentActivity.test.ts",
         "web/src/store.test.ts",
@@ -598,6 +601,9 @@
           "verification/contracts/shared-acquisition.md"
         ],
         "tests": [
+          "web/src/store/recencyReconnect.test.ts",
+          "web/src/store/recencyCapability.test.ts",
+          "web/src/store/pollReplacement.test.ts",
           "web/src/agentRecency.test.ts",
           "web/src/store/agentActivity.test.ts",
           "web/src/store.test.ts",
@@ -607,7 +613,7 @@
         "checks": ["bun run check", "bun run verification:check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
       },
-      "evidenceDecision": "Captured owner/generation and colliding native IDs are exercised through real store/Bridge replay. Store and concurrent-context tests verify inactive-host operations and context isolation. Shared recency uses 48 list/push order combinations, exact session identity checks and actual two-host Bridge/store publication races, including a push during an in-flight layout read; see verification/contracts/shared-acquisition.md for bounds.",
+      "evidenceDecision": "Captured owner/generation and colliding native IDs are exercised through real store/Bridge replay. Store and concurrent-context tests verify inactive-host operations and context isolation. Shared recency uses 48 list/push order combinations, exact session identity checks and actual two-host Bridge/store publication races, including two sessions during initial layout admission, service counter resets with retained ordering, capability removal and declaration-driven recency/hide T2 parity; see verification/contracts/shared-acquisition.md for bounds.",
       "promotion": {
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",

@@ -23,6 +23,10 @@ Focused registry and catalogue notices are implemented in the observer/notices
 part. Task 2.1 stays open for Desk target reference counts; task 2.4 stays open
 until the complete focused and Desk paths can advertise the capability together.
 Owner approval (1.4) is recorded in the implementation brief for merged #551.
+The recency slice also declares the visible active host and releases it on hide,
+including capability and reconnect handling. Inspector holds and the remaining
+catch-up work keep 3.4 open. The original recency and hide/show T2 cases are normal
+passing tests; the remaining five expected failures keep 3.5 open.
 
 ## 3. Browser
 

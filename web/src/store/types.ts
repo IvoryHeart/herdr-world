@@ -65,6 +65,8 @@ export interface State extends ServerSessionState {
   activeConnectionId: string;
   connectionGeneration: number;
   sessionsByConnectionId: Record<string, ServerSessionState>;
+  /** Browser-only identity maxima, independent of service incarnation and operation leases. */
+  agentActivityHistory?: Record<string, AgentActivityMap>;
   notice: Notice | null;
   taskNotificationsEnabled: boolean;
   taskNotificationPreferences: TaskNotificationPreferences;

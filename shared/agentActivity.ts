@@ -108,30 +108,21 @@ export function enrichActivityList<T>(
   };
 }
 
-/** Keep one current identity per pane and the maximum timestamp for that identity. */
+/** Keep the maximum per complete identity, including identities awaiting pane admission. */
 export function rememberActivity(
   previous: AgentActivityMap,
   entries: readonly AgentActivityEntry[],
-  panes: readonly unknown[],
 ): AgentActivityMap {
-  const current = new Map(
-    panes
-      .map((pane) => activityIdentity(pane))
-      .filter((identity) => identity !== null)
-      .map((identity) => [identity.pane_id, activityKey(identity)]),
-  );
   const next = { ...previous };
   for (const entry of entries) {
     const key = activityKey(entry);
-    if (current.has(entry.pane_id) && current.get(entry.pane_id) !== key)
-      continue;
-    const old = next[entry.pane_id];
+    const old = next[key];
     if (
       !old ||
       activityKey(old) !== key ||
       old.last_activity_at < entry.last_activity_at
     )
-      next[entry.pane_id] = entry;
+      next[key] = entry;
   }
   return next;
 }

@@ -53,9 +53,10 @@ These direct finite traces exercise the actual registry and publication paths;
 adding a model that repeats this registry would not establish its socket/reply
 consumers. Q04's maintained runtime lease models remain binding for runtime
 ownership. This evidence does not prove arbitrary scheduler or transport liveness,
-remote filesystem timing, or browser parity. Browser T2 expected failures remain
-unchanged until their whole browser flow lands. Q15 maps the recency checkpoint
-below; Q24 remains with the Desk checkpoint.
+remote filesystem timing, or browser parity. At the observer checkpoint, browser
+T2 cases remained expected failures. The recency checkpoint below implements the
+recency and hide/show cases as normal tests. Q15 maps that checkpoint; Q24 remains
+with the Desk checkpoint.
 
 ## Recency checkpoint
 
@@ -76,7 +77,10 @@ retains actual filesystem, remote-session, concurrency and deadline coverage.
 
 For one pane/terminal/agent/session identity, the browser merge must equal the
 maximum valid time received from either a list or a push. An entry for another
-identity cannot apply; a new runtime partition starts empty. The merge runs at
+identity cannot apply; a new runtime partition starts empty while separate
+read-only full-identity maxima remain available to rejoin after fresh admission.
+World restarting and resetting its generation counters cannot lower the same
+external session's time or grant operation authority. The merge runs at
 publication after layout acquisition, so a push received during that wait cannot
 be overwritten. Status agreement continues to gate the native sequence only.
 
@@ -88,5 +92,13 @@ push admission without re-listing or focus changes, rejected sessions/generation
 an older re-list, and a push during a deferred layout read. These direct tests
 establish the maximum operation and the real publication boundary; they do not
 claim transport liveness or enable the remaining browser T2 expected failures,
-whose whole flow still needs explicit interest and the capability gate. Q24 and
-Desk acquisition remain a later checkpoint.
+whose remaining flows need Inspector interest, notices or timer removal. The
+original recency and hide/show T2 cases are normal passing tests through actual
+active-owner declarations and holder-routed pushes; five unrelated expected
+failures remain. `web/src/store/recencyReconnect.test.ts` checks ordinary reconnect
+and generation-counter resets with older and unavailable readings, preserved
+ordering, and obsolete-generation rejection. `web/src/store/recencyCapability.test.ts`
+checks both initial capability absence and removal on reconnect. The real store
+initial-layout race retains A's maximum when B pushes for the same pane before A
+publishes. Active declarations retry a failed release once per period and stop
+on success. Q24 and Desk acquisition remain a later checkpoint.
