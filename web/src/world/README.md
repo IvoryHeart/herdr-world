@@ -200,7 +200,13 @@ slices (`prepareWorldBoard`), and the projection stays with the host object, so
 Board's render reuses it; the watch overlay keeps untouched hosts so that reuse
 survives. A large board's first placement runs in a task of its own, outside
 React's commit. Tab placement waits until the overview ends. Paint never reads
-layout mid-frame. Sizes come from a ResizeObserver, zones are measured before they
+layout mid-frame. Until initial placement fits the camera, an early frame keeps
+the dense Board's initial overview and does not publish an empty set of visible
+cards. Placement requests the first frame that can publish them.
+`BoardView.mount.test.ts` controls frames before the dense transition, between
+the transition and placement, and after placement, with immediate and deferred
+Board read failures; each order must retain the phone render ceiling.
+Sizes come from a ResizeObserver, zones are measured before they
 are written, and Inspector anchors and the board's box come from geometry and a
 cache. Cards mount in their own container, so React appends them as one subtree.
 Mounted cards also keep their callback refs and resize-observer registrations
