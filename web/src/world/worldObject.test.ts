@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import type { WorldRuntimeConnection } from "./runtimeStore";
 import {
   buildWorldObject,
@@ -32,6 +32,42 @@ test("aggregate indexing yields and retires before indexing every dense leaf", a
     { checkpoint: "host", count: 1 },
     { checkpoint: "node-batch", count: 256 },
   ]);
+});
+
+test("construction work units do not depend on the clock; slices do", async () => {
+  // The browser suites bound units, not slices: a slice also ends after 8 ms.
+  const measure = async (step: number) => {
+    const owner = connection(`clock-${step}`);
+    const pane = owner.snapshot!.panes[0]!;
+    owner.snapshot!.panes = Array.from({ length: 4096 }, (_, index) => ({
+      ...pane,
+      pane_id: `clock-${step}-${index}`,
+      terminal_id: `clock-${step}-terminal-${index}`,
+    }));
+    let now = 0;
+    const clock = spyOn(performance, "now").mockImplementation(
+      () => (now += step),
+    );
+    const slices: number[] = [];
+    try {
+      await prepareWorldObject([owner], undefined, {
+        yieldTask: async () => {},
+        onWorkSlice: (_checkpoint, count) => slices.push(count),
+      });
+    } finally {
+      clock.mockRestore();
+    }
+    return {
+      slices: slices.length,
+      units: slices.reduce((sum, count) => sum + count, 0),
+      largest: Math.max(...slices),
+    };
+  };
+  const frozen = await measure(0);
+  const slow = await measure(9);
+  expect(slow.slices).toBeGreaterThan(frozen.slices);
+  expect(slow.units).toBe(frozen.units);
+  expect(frozen.largest).toBeLessThanOrEqual(256);
 });
 
 test("dense host construction yields and cancels before allocating every leaf", async () => {

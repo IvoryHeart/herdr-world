@@ -133,6 +133,8 @@ if (PerformanceObserver.supportedEntryTypes.includes("long-animation-frame")) {
 }
 let receivedFrames = 0,
   presentedFrames = 0;
+/** Production World work per stage (devtools counters; see renderer.ts). */
+const worldWork: Record<string, Record<string, number>> = {};
 bridge.onTerminal((frame) => {
   if (frame.connection_id === "alpha") receivedFrames++;
 });
@@ -606,6 +608,7 @@ async function run() {
       );
     for (const stage of ["initial", "refresh"]) {
       phase = stage;
+      const workBefore = { ...window.__HERDR_WORLD_WORK__ };
       await fetch("/input-ready?phase=" + stage);
       const began = performance.now();
       if (traceEnabled)
@@ -714,6 +717,13 @@ async function run() {
         acknowledgements.filter((ack) => ack.phase === stage).length === count,
         "Missing admitted input acknowledgement",
       );
+      const work: Record<string, number> = {};
+      for (const [kind, total] of Object.entries(
+        window.__HERDR_WORLD_WORK__ ?? {},
+      ))
+        if (total !== (workBefore[kind] ?? 0))
+          work[kind] = total - (workBefore[kind] ?? 0);
+      worldWork[stage] = work;
       phase = null;
       if (
         view === "town" &&
@@ -766,6 +776,7 @@ async function run() {
       notices,
       receivedFrames,
       presentedFrames,
+      worldWork,
     }),
   });
 }
@@ -787,6 +798,7 @@ void run().catch(async (error) => {
       notices,
       receivedFrames,
       presentedFrames,
+      worldWork,
     }),
   });
 });

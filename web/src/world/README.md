@@ -141,8 +141,8 @@ the interaction quiet-period guard.
 qualified asking identities onto hidden desks; [TownFoldIndicators.tsx](town/TownFoldIndicators.tsx)
 shows red needs-you and green unreviewed-completion corner icons without extra
 counts. It reads prepared identity indexes and visible desk sets, avoiding a
-second projection or a full-roster scan on Ask changes. The fixed production
-input-latency budgets remain binding in the browser tests.
+second projection or a full-roster scan on Ask changes. The production suites'
+work ceilings and the World latency trend cover its cost.
 
 The renderer draws through the shared World frame scheduler: state frames for
 camera, roof and walking changes, motion frames for ambient animation, which
@@ -241,21 +241,36 @@ when `window.__HERDR_WORLD_RENDERER_DEBUG__` is enabled. The `"counters"` mode
 collects acceptance counters without allocating debug node snapshots.
 
 The `ProductionContexts*.test.ts` cases drive a synthetic desktop and mobile
-transport workload through each view. Keep native key scheduling, cold
-initialization, aggregate refresh and the acknowledgement budgets (Town p95
-<150 ms / maximum <450 ms; other views 200/500 ms). These are regression
-ceilings, not optimization targets: preserve them as graphics and animation are
-added, and lower them when repeated measurements demonstrate headroom. Do not
-relax the limits or exclude slow phases to make a change pass. On Linux, repeat
-with `taskset -c <cpu-a>,<cpu-b>` after checking the CPU/core mapping: separate
-cores and sibling logical CPUs measure different contention conditions. Run cases
-sequentially and report every run; affinity is a stress proxy, not a model of CI
-hardware. On CI these suites run in the dedicated **World latency budgets** job,
-alone and one case at a time after the runner goes quiet, with one retry for a
-failed case; locally the delivery
-gate runs them in its quiet lane. For timing investigation, set `WORLD_TRACE_PREFIX` to a private
-temporary path; `WORLD_TIMINGS_ONLY=1` keeps acknowledgement/phase and Long
-Animation Frame evidence without the overhead of a full Chrome trace.
+transport workload through each view, and `ConcurrentContexts.test.ts` drives
+two mounted runtimes through dense projection, rendering, refresh and noisy
+output. Keep native key scheduling, cold initialization and aggregate refresh in
+them. They assert only what does not depend on the runner's speed: every input
+reaches the qualified host and generation and is acknowledged once, frames are
+coalesced, and the work per phase stays within the ceilings in
+[testing/workCeilings.ts](testing/workCeilings.ts): no terminal mount, card
+observer registration, Board commit or World work during terminal output; one
+World preparation and one view projection per snapshot, however much typing and
+output run alongside. Dev-only counters in the production modules
+(`countWorldWork` in [devtools/renderer.ts](devtools/renderer.ts), absent from
+release builds) supply the World counts; construction is counted in units, not
+in its time-bounded slices. A change that does more work per event fails there.
+Raise a ceiling only in a reviewed change that explains the new work.
+
+Input delays (p95 and worst acknowledgement, worst input during dense load) are
+not asserted: they depend on the runner's CPU and Chrome build, and fixed budgets
+on hosted runners failed at random. The suites record them through
+[testing/latencyTrend.ts](testing/latencyTrend.ts) for the non-blocking
+[World latency trend](../../../.github/workflows/world-latency-trend.yml), which
+runs each suite alone on a quiet runner with the pinned test Chrome and compares
+each value with recent main runs on the same CPU model. Treat a flagged rise
+(▲, over 25%) as a regression to explain, as graphics and animation are added;
+label a pull request `latency-trend` to measure it before merging. On Linux, a
+local comparison can repeat a suite with `taskset -c <cpu-a>,<cpu-b>` after
+checking the CPU/core mapping: separate cores and sibling logical CPUs measure
+different contention conditions; run cases sequentially and report every run.
+For timing investigation, set `WORLD_TRACE_PREFIX` to a private temporary path;
+`WORLD_TIMINGS_ONLY=1` keeps acknowledgement/phase and Long Animation Frame
+evidence without the overhead of a full Chrome trace.
 
 ## Browser fixtures on test time
 
@@ -291,8 +306,8 @@ through [testing/installHostsFilterClock.ts](testing/installHostsFilterClock.ts)
 All Hosts filter cases, including the desktop and phone Spaces navigator, use
 test time and fail on uncaught browser errors. Frame cancellation remains effective
 until each callback runs, including when an earlier callback disposes a terminal.
-The latency-budget suites above stay on real time, because real time is what they
-measure.
+The dense production suites above stay on real time, because the latency trend
+measures real time.
 
 When a fixture models a healthy terminal with a real `TerminalView`, emit a
 qualified full `TerminalPush` for each successful `terminal.attach`, using its

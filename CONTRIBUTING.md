@@ -84,9 +84,8 @@ full gate, even when that input is absent from the net PR diff.
 | --- | --- | --- |
 | Non-browser tests | Tests reaching changed inputs | All tests, across two CI runners |
 | Behavioral verification | Verification/OpenSpec inputs or `verification/coverage.json` owners | All accepted models, across three CI groups |
-| World browser tests | Nearest consumer suites in the import graph | All six World shards |
+| World browser tests | Nearest consumer suites in the import graph; World runtime paths add the dense end-to-end suites (production and concurrent contexts, terminal handoff) | All six World shards |
 | Web browser tests | Affected registered browser suites | All suites, across two runners |
-| World latency | World runtime/UI paths or a nearest timed World consumer | Six suites, each alone on its own runner |
 | Native installation | Install/plugin/package inputs, server/shared binary sources, build-version metadata or affected installation consumers | Installer upgrades, Windows plugin and both macOS architectures |
 
 The agent-tooling exception from #484 still covers `scripts/agent/**`, the named
@@ -98,7 +97,7 @@ contract owners. Agent/contributor policy, workflows and gate configuration run
 all checks. Browser Chat changes can skip verification/platform work; server
 agent changes remain contract owners.
 
-`Delivery checks`, `Repository validation`, browser/latency/behavioral aggregates
+`Delivery checks`, `Repository validation`, browser/behavioral aggregates
 and the two protected macOS report names remain. macOS reports succeed without
 native steps when installation is inapplicable. Aggregate checks require every
 selected job to succeed and only accept skips declared by scope. Leaf job checks
@@ -150,11 +149,11 @@ fragments. Any other conflict resolution or edit, including one that touches
 code, gets the normal check.
 The three required CI job names remain the same. `bun run check:delivery` runs
 the full gate locally: static checks first (later lanes read the build), then
-behavioral verification alongside unit tests and the untimed World browser
-suites, then Chrome-driven tests and the wall-clock-budget suites once the CPU is
-quieter. Timed World browser files run serially, matching the CI latency shard,
-so independent Chrome renderers do not compete for the measured budget. Each
-fixture still exercises its own concurrent production contexts and deadlines.
+behavioral verification alongside unit tests and the World browser suites, then
+the Chrome-driven tests outside World once the CPU is quieter. No suite asserts
+a wall-clock budget: input delays are reported by the non-blocking World latency
+trend ([development](docs/development.md)). Each fixture still exercises its own
+concurrent production contexts and deadlines.
 Lane logs are kept in `.agents/delivery/lanes/`.
 The Web browser lane also boots the real `web/src/main.tsx` through an isolated
 Vite development server, captures startup exceptions and ErrorBoundary failures,
@@ -164,18 +163,16 @@ These checks exercise entry initialization as well as the focused UI fixtures.
 
 Heavy local checks share one machine-wide queue (`scripts/check-lock.ts`) across
 all worktrees and clones: one browser lane (World browser suites, Chrome-driven
-tests, timed suites) and one behavioral verification at a time, and at most two
-light lanes (static checks, unit tests). The quiet lane's timed (latency) suites
-need the whole machine: they take every slot, waiting for running heavy lanes, and
-nothing heavy starts beside them. They reserve admission while waiting, so later
-ordinary requests cannot starve them. Canonical paths, directory selectors,
+tests) and one behavioral verification at a time, and at most two light lanes
+(static checks, unit tests). The delivery gate's quiet lane (Chrome-driven tests
+outside World) needs the whole machine: it takes every slot, waiting for running
+heavy lanes, and nothing heavy starts beside it. It reserves admission while
+waiting, so later ordinary requests cannot starve it. Canonical paths, directory selectors,
 filters and ambiguous options in direct test runs are queued conservatively.
 Admission is reserved before heavy slots drain, so even otherwise-free light
 slots wait while a whole-machine request is pending; this can take minutes.
-Direct runs containing timed suites (including the default full run and
-`test:world --shard=latency`) also take every slot. Unknown selectors take that
-same conservative quiet lane; known browser selections without timed suites
-take only the browser slot.
+Direct runs that may include a browser suite, including the default full run
+and unknown selectors, take the browser slot.
 Known value-taking flags such as `-t` and `--timeout` leave explicit file
 selection intact; a flags-only invocation still selects the full run.
 `bun run check:changed`, `check:delivery`,
@@ -359,12 +356,10 @@ After a merge, CI runs the full check again on main. Merges that land while a
 main check is running are checked together, once, at the newest of them. If a
 check fails, the Main gate workflow opens one `main-red` issue. It names the
 merge commit and its PR and prepares a revert PR, which it never merges; when the
-check covered several merges, it lists them all and prepares no revert. A run
-whose failed steps show only a known infrastructure flake (a fresh runner's
-Chrome startup timeout or the runner's control-group error) and at most one
-failing test is rerun once first, and alerts only if it fails again. Rerun the
-failed jobs first when the failure is a known flake; otherwise merge the revert,
-revert the merge that broke it, or land a fix. Later red commits are added to the open issue, not to new ones, and the next
+check covered several merges, it lists them all and prepares no revert. Nothing
+is rerun automatically: a failing test is fixed at its cause, not retried. Merge
+the revert, revert the merge that broke it, or land a fix; rerun only after a
+GitHub service failure. Later red commits are added to the open issue, not to new ones, and the next
 green main run at or after the red commit closes the issue and its revert PR.
 
 The **Web asset headroom** status on a PR projects its web asset delta onto

@@ -20,9 +20,12 @@ import {
 import {
   BROWSER_STARTUP_TIMEOUT_MS,
   waitForBrowserFixture,
+  waitForChromePort,
 } from "../../browserChrome";
 import { worldBrowserBundle } from "./worldBrowserBundle";
 import { chromeRenderingFlags } from "./chromeRendering";
+import { recordLatency } from "./latencyTrend";
+import { productionWorkCeilings, workViolations } from "./workCeilings";
 
 const chrome =
   Bun.env.CHROME_BIN || Bun.which("google-chrome") || Bun.which("chromium");
@@ -112,13 +115,6 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
           );
         return text;
       } as typeof JSON.stringify;
-      const reserve = Bun.serve({
-        hostname: "127.0.0.1",
-        port: 0,
-        fetch: () => new Response(),
-      });
-      const debuggingPort = reserve.port;
-      reserve.stop(true);
       const calls: {
         id: string;
         host: string;
@@ -205,6 +201,7 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
         notices: number;
         receivedFrames: number;
         presentedFrames: number;
+        worldWork?: Record<string, Record<string, number>>;
       }>();
       const send = (
         ws: any,
@@ -274,6 +271,13 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
           }
           if (url.pathname === "/input-ready") {
             const phase = url.searchParams.get("phase")!;
+            // Chrome chose its own DevTools port (no reserved number another
+            // server could be handed) and wrote it to the profile.
+            const debuggingPort = await waitForChromePort(
+              browser!,
+              dir + "/profile",
+              dir + "/browser.log",
+            );
             const pages = (await (
               await fetch("http://127.0.0.1:" + debuggingPort + "/json/list")
             ).json()) as { type: string; webSocketDebuggerUrl: string }[];
@@ -509,7 +513,7 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
             "--disable-background-timer-throttling",
             "--disable-renderer-backgrounding",
             "--disable-backgrounding-occluded-windows",
-            "--remote-debugging-port=" + debuggingPort,
+            "--remote-debugging-port=0",
             "--user-data-dir=" + dir + "/profile",
             "--window-size=" + width + ",1100",
             server.url +
@@ -519,7 +523,7 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
               entry +
               (Bun.env.WORLD_TRACE_PREFIX ? "&trace=1" : ""),
           ],
-          { stdout: "ignore", stderr: "ignore" },
+          { stdout: "ignore", stderr: Bun.file(dir + "/browser.log") },
         );
         // Keep both observation/render phases and the deliberate 20-second stall
         // in the original fixture budget. Input latency has separate budgets.
@@ -648,19 +652,21 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
                 paints: observed.paints,
                 receivedFrames: observed.receivedFrames,
                 presentedFrames: observed.presentedFrames,
+                worldWork: observed.worldWork,
               }),
           );
-          // Fixed synthetic Chrome workload budget, not a runtime/network SLA.
-          // Canvas rendering improvements ratchet both view limits down;
-          // keep cold initialization and refresh tails in both measurements.
-          const latencyBudget =
-            view === "town"
-              ? { p95: 150, maximum: 450 }
-              : { p95: 200, maximum: 500 };
-          expect(delays[Math.ceil(delays.length * 0.95) - 1]).toBeLessThan(
-            latencyBudget.p95,
+          // Input delays depend on the runner, so they go to the latency
+          // trend, not to an assertion; cold initialization and refresh tails
+          // stay in both numbers.
+          recordLatency(
+            "ProductionContexts",
+            `${view}${entry ? ` ${entry}` : ""} ${width}px`,
+            {
+              p95AckMs: delays[Math.ceil(delays.length * 0.95) - 1]!,
+              maxAckMs: Math.max(...delays),
+              maxDispatchMs: Math.max(...dispatch),
+            },
           );
-          expect(Math.max(...delays)).toBeLessThan(latencyBudget.maximum);
           expect(stalledResponseVerified).toBe(true);
           expect(observed.receivedFrames).toBeGreaterThan(500);
           expect(observed.presentedFrames).toBeGreaterThan(10);
@@ -668,6 +674,17 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
             observed.receivedFrames / 2,
           );
           expect(observed.paints).toBeGreaterThan(view === "board" ? -1 : 2);
+          // Work, not time: one preparation and one view projection per
+          // snapshot, whatever the typing and terminal output alongside.
+          const work = observed.worldWork ?? {};
+          expect(
+            ["initial", "refresh"].map(
+              (stage) => work[stage]?.["world.prepare"],
+            ),
+          ).toEqual([1, 1]);
+          expect(
+            workViolations(work, productionWorkCeilings(view), "production"),
+          ).toEqual([]);
         }
       } finally {
         clearInterval(loopMonitor);

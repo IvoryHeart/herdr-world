@@ -48,7 +48,6 @@ bun run test:quick            # non-Chromium suite
 CHROME_BIN=/path/to/chromium bun run test:browser
 bun run test:world            # all World browser acceptance suites
 bun run test:world --shard=1/6 # reproduce one CI shard, one browser at a time
-bun run test:world --shard=latency # the latency-budget suites, as CI's quiet job runs them
 bun run test --web-browser    # Chrome-driven suites outside World, as CI's web job runs them
 bun run build:site            # landing page/tutorial
 bun run check                 # repository checks and tests
@@ -89,37 +88,55 @@ those paths are unaffected, including shards with one file worker.
 PR CI and Release run the remaining repository checks with one file worker and up
 to two concurrent cases, preserving the upstream test configuration. Both call the
 [shared World browser workflow](../.github/workflows/world-browser.yml), which runs
-six separate runners, each with one file worker and one active case,
-**Web browser tests** and **World latency budgets**. That job runs only the suites that assert
-wall-clock budgets (production contexts, concurrent contexts, terminal handoff):
-it waits until the runner is quiet after setup (`scripts/wait-for-quiet.ts`:
-three consecutive seconds at least 90% idle, at most 60 s) and then runs them one
-case at a time. A failed case runs once more (`--retry=1`): a hosted runner still
-produces the odd slow event, and the worst-event budgets are judged on one run.
-The shards never retry. The [shard inventory](../scripts/world-browser-suites.ts)
-includes all World browser suites, split between the six shards and the
-`latency` group; inventory checks reject missing or duplicate assignments. The
-required Delivery checks status succeeds only when repository validation, every
-World shard, the web browser job and the latency job pass. Markdown-only and exact-head reuse keep their existing shorter paths.
-Release packaging requires repository validation, all six shards, the web
-browser job and the latency job to pass. **Web browser tests** runs the
+six separate runners, each with one file worker and one active case, and
+**Web browser tests**. Browser jobs install the Chrome for Testing build pinned in
+[`tools/chrome/test-chrome.json`](../tools/chrome/test-chrome.json) (checksum
+verified, cached) and print its version and the runner's CPU, so a browser
+update is a reviewed change rather than a runner-image roll-out. Ubuntu 24.04
+and later deny unprivileged user namespaces to programs without an AppArmor
+profile, which aborts Chrome's sandbox outside the packaged path; on CI the
+installer loads a profile like the Chrome package's for the pinned binary, and
+then starts it headless once, so a browser that cannot start fails installation
+rather than every test. Locally it prints the two commands instead. No job retries a
+failed test. The [shard inventory](../scripts/world-browser-suites.ts) splits all
+World browser suites between the six shards; inventory checks reject missing or
+duplicate assignments. The required Delivery checks status succeeds only when
+repository validation, every World shard and the web browser job pass.
+Markdown-only and exact-head reuse keep their existing shorter paths.
+Release packaging requires repository validation, all six shards and the web
+browser job to pass. **Web browser tests** runs the
 Chrome-driven suites outside World (`webBrowserSuites` in the same inventory) one
 file at a time; an inventory check rejects an unlisted one.
 Prepare Release validates its generated working tree in one checkout with one file
 worker; it retains the complete World suite, with one active World case at a time.
 
 Each World run writes JUnit results and per-file timings under `.agents/delivery/`.
-CI uploads them as `world-browser-N-attempt-M` and `world-latency-attempt-M`
-artifacts, and the web job's JUnit results as `web-browser-attempt-M`, including on test failure. Compare
+CI uploads them as `world-browser-N-attempt-M` artifacts, and the web job's JUnit results as `web-browser-attempt-M`, including on test failure. Compare
 the slowest shard and total delivery time before changing the shard assignment or
 concurrency. The slowest file bounds the slowest shard, so add shards only when
 the slowest shard holds more than one long file. Keep all scenario combinations, dense
-fixtures, real deadline checks and input-latency budgets when rebalancing.
+fixtures, real deadline checks and work-count ceilings when rebalancing.
+
+No World test asserts a wall-clock number. The dense suites (production and
+concurrent contexts) assert what does not depend on the runner's speed: routing
+and generation of every input, one acknowledgement per input, frame coalescing,
+and ceilings on the work done per phase (terminal mounts, card observer
+registrations, Board commits, World preparations, construction units and
+projections, counted by dev-only counters in the production modules; see
+`web/src/world/testing/workCeilings.ts`). Their input delays go to the
+non-blocking [World latency trend](../.github/workflows/world-latency-trend.yml):
+on every main push, and on a pull request labelled `latency-trend`, it runs each
+of those suites alone on a quiet runner (`scripts/wait-for-quiet.ts`: three
+consecutive seconds at least 90% idle, at most 60 s) with the pinned Chrome, and
+its summary sets each p95 and worst delay beside the median of recent main runs
+on the same CPU model, marking a rise over 25% (`scripts/latency-trend.ts`).
+Hosted runners differ by CPU model and image, so a timing is comparable only
+within one; no branch rule requires the trend.
 
 Production responsiveness cases also save `world-production-*-inputs.json` in
 those CI artifacts. These lightweight timings correlate independently scheduled
 inputs with browser dispatch, service replies, browser acknowledgements and
-snapshot admission. Inspect them when a latency limit fails; CI keeps full Chrome
+snapshot admission. Inspect them when the latency trend flags a rise; CI keeps full Chrome
 timeline tracing disabled to avoid adding its recording cost to the benchmark.
 
 World browser harnesses use two bounded phases through
@@ -129,7 +146,7 @@ per-fixture deadline begins. The fixture budget still includes serving HTML and
 assets, application initialization, interaction and every assertion. Browser exit
 fails either phase immediately, and deadline timers are cleared on completion.
 The outer Bun timeout includes setup, the startup allowance, fixture execution
-and cleanup. Input latency, rendering and operation-specific limits are unchanged.
+and cleanup. Rendering and operation-specific limits are unchanged.
 
 This boundary addresses a confirmed first-case CI failure: Chrome reached its
 debugging endpoint after 18.4 seconds, connected after 25.5 seconds and requested
@@ -140,7 +157,7 @@ the repaired harness completed all Spaces assertions in 33.3 seconds, with the
 same 30-second fixture limit. This proves startup consumed the acceptance budget;
 it does not identify why Chrome initialization was slow on that runner. Diagnose
 any failure after the page request separately, using fixture progress or input
-artifacts, rather than extending an acceptance or latency limit.
+artifacts, rather than extending an acceptance limit.
 
 A separate compact Inspector failure occurred after page loading: the terminal
 handoff fixture checked `data-view="files"`, optionally clicked the Files back

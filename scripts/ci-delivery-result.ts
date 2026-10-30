@@ -18,12 +18,7 @@ export function assertDeliveryResults(
   const native = mode === "full" || (mode === "scoped" && selection!.packaging);
   const browser =
     mode === "full" ||
-    (mode === "scoped" &&
-      !!(
-        selection!.world.length +
-        selection!.web.length +
-        selection!.latency.length
-      ));
+    (mode === "scoped" && !!(selection!.world.length + selection!.web.length));
   const verify =
     mode === "full" || (mode === "scoped" && selection!.verification);
   const known = ["full", "docs", "tooling", "scoped", "reuse"].includes(

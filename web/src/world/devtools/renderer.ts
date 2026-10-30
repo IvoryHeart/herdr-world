@@ -4,6 +4,8 @@ declare global {
   interface Window {
     /** Set by browser fixtures; `"counters"` collects counters only. */
     __HERDR_WORLD_RENDERER_DEBUG__?: boolean | "counters";
+    /** World model work by kind, while the counters are on. */
+    __HERDR_WORLD_WORK__?: Record<string, number>;
   }
 }
 
@@ -30,4 +32,15 @@ export function worldRendererCountersEnabled() {
     (window.__HERDR_WORLD_RENDERER_DEBUG__ === "counters" ||
       worldRendererDebugEnabled())
   );
+}
+
+/**
+ * Count World model work (preparations, construction units, projections) for
+ * browser fixtures' work ceilings. Unlike a timing, a count does not depend on
+ * how fast the machine is. Collected only while the counters are on.
+ */
+export function countWorldWork(kind: string, units = 1) {
+  if (!worldRendererCountersEnabled()) return;
+  const work = (window.__HERDR_WORLD_WORK__ ??= {});
+  work[kind] = (work[kind] ?? 0) + units;
 }

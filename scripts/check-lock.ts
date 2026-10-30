@@ -14,13 +14,14 @@ import { basename, join } from "node:path";
  * clone on this machine. Each class of work has a number of slots, and a slot
  * is an flock(2) on a file:
  *
- *   browser       1   World browser suites, Chrome-driven tests, timed suites
+ *   browser       1   World browser suites and Chrome-driven tests
  *   verification  1   behavioral verification
  *   light         2   static checks and unit tests
  *
- * Timed (latency) suites need the whole machine, so they take every slot of
- * every class (acquireAllCheckSlots), in one fixed order: they wait for the
- * running heavy lanes to finish, and nothing heavy starts beside them. An
+ * The local gate's quiet lane (contention-sensitive Chrome tests outside
+ * World) needs the whole machine, so it takes every slot of every class
+ * (acquireAllCheckSlots), in one fixed order: it waits for the running
+ * heavy lanes to finish, and nothing heavy starts beside it. An
  * exclusive admission lock prevents later ordinary arrivals overtaking them.
  *
  * The kernel releases a lock when its holder exits, however it exits, so a

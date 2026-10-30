@@ -7,6 +7,8 @@ import type {
   WorldSpaceObject,
 } from "../worldObject";
 import { yieldWorldTask } from "../worldObject";
+import { DEVTOOLS } from "../devtools/flag";
+import { countWorldWork } from "../devtools/renderer";
 import { cardKey, tabCardKey } from "../../../../shared/terminalColor";
 
 /**
@@ -124,6 +126,7 @@ const projected = new WeakMap<WorldHostObject, HostProjection>();
 function projectHost(host: WorldHostObject): HostProjection {
   const cached = projected.get(host);
   if (cached) return cached;
+  if (DEVTOOLS) countWorldWork("board.host-project");
   const workspaces: BoardWorkspace[] = [];
   const tabs: BoardTab[] = [];
   {
@@ -235,6 +238,7 @@ export async function prepareWorldBoard(
 const BOARD_PREPARATION_SLICE_MS = 6;
 
 export function projectBoard(world: WorldObject): BoardModel {
+  if (DEVTOOLS) countWorldWork("board.project");
   const hosts: BoardHost[] = [];
   const workspaces: BoardWorkspace[] = [];
   const tabs: BoardTab[] = [];
