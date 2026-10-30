@@ -4,6 +4,7 @@ import {
 } from "../agent/conversation-rpc";
 import { dispatchAgentSessionLink } from "../connections/rpc-routing";
 import type { ConnectionRpcContext } from "./context";
+import { readFocusedList } from "../world/focused-lists";
 
 /** Agent sessions, conversations, quests and history on one connection. */
 export function handleAgentRpc(
@@ -37,7 +38,6 @@ async function dispatchAgentRpc(
   const { id, method, params, route, sendError, sendReply, ws, connection } =
     rpc;
   const { conversationWatchers } = rpc.services;
-  const { herdr } = connection;
   const {
     readEntry: readAgentHistoryEntry,
     readHistoryRequest: readAgentMessageHistory,
@@ -46,10 +46,11 @@ async function dispatchAgentRpc(
   } = connection.agentSessions;
   if (method === "agent.list") {
     try {
-      const result =
-        connection.remotePlatform === "windows"
-          ? await herdr.call("agent.list", params ?? {})
-          : await connection.agentSessions.listWithActivity(params ?? {});
+      const result = await readFocusedList(
+        connection,
+        "agent.list",
+        params ?? {},
+      );
       sendReply({ id, result }, "agent-list");
     } catch (e) {
       sendError("agent-list-error", e);

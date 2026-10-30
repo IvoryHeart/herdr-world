@@ -237,6 +237,7 @@ export class ConnectionProfileService<
       createRuntime: ConnectionProfileRuntimeFactory<Runtime>;
       testProfile?: typeof testConnectionProfile;
       retry?: ConnectionRetryOptions;
+      changed?(): void;
     },
   ) {
     this.registry = args.bootstrap.persistedRegistry;
@@ -831,7 +832,11 @@ export class ConnectionProfileService<
   }
 
   private mutate<T>(operation: () => Promise<T>): Promise<T> {
-    const task = this.mutationQueue.then(operation);
+    const task = this.mutationQueue.then(async () => {
+      const result = await operation();
+      this.args.changed?.();
+      return result;
+    });
     this.mutationQueue = task.then(
       () => undefined,
       () => undefined,

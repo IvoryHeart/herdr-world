@@ -39,6 +39,15 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
     worldWatchlist,
     worldCli,
   } = rpc.services;
+  if (method === "world.focused.observe") {
+    try {
+      rpc.services.focusedAcquisition.declare(ws, params);
+      sendReply({ id, result: { ok: true } }, method);
+    } catch (error) {
+      sendError(`${method}-error`, error);
+    }
+    return;
+  }
   if (method.startsWith("world.appearance.")) return handleAppearanceRpc(rpc);
   if (method.startsWith("world.desk.")) return handleDeskRpc(rpc);
   if (method.startsWith("world.completion_seen."))

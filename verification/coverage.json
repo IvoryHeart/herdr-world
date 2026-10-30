@@ -141,7 +141,11 @@
       "properties": "Single owned subscription; cancellation prevents old events; recovery does not overlap owners",
       "existingTests": [
         "server/src/connections/subscription-loop.test.ts",
-        "server/src/connections/agent-status-subscription.test.ts"
+        "server/src/connections/agent-status-subscription.test.ts",
+        "server/src/world/focused-acquisition.test.ts",
+        "server/src/world/focused-lists.test.ts",
+        "server/src/service/focused-acquisition.test.ts",
+        "server/src/connections/profile-notices.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/145",
       "technique": "subscription",
@@ -153,16 +157,21 @@
         "models": ["quint/runtime-leases.qnt", "quint/runtime-drain.qnt"],
         "contracts": [
           "verification/consumer-evidence.md",
-          "verification/composition.md"
+          "verification/composition.md",
+          "verification/contracts/shared-acquisition.md"
         ],
         "tests": [
           "server/src/connections/subscription-loop.test.ts",
-          "server/src/connections/agent-status-subscription.test.ts"
+          "server/src/connections/agent-status-subscription.test.ts",
+          "server/src/world/focused-acquisition.test.ts",
+          "server/src/world/focused-lists.test.ts",
+          "server/src/service/focused-acquisition.test.ts",
+          "server/src/connections/profile-notices.test.ts"
         ],
         "checks": ["bun run check", "bun run verification:check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
       },
-      "evidenceDecision": "Retired manager owners cannot publish readiness. Subscription tests independently exercise stop-before-ready, stop-during-retry, coalesced drain and callback suppression.",
+      "evidenceDecision": "Retired manager owners cannot publish readiness. Subscription tests independently exercise stop-before-ready, stop-during-retry, coalesced drain and callback suppression. Focused acquisition adds direct exhaustive two-socket/two-owner interest traces plus deferred read, real dispatcher, reply-send and cleanup consumers; their bounded claims and exclusions are in verification/contracts/shared-acquisition.md.",
       "promotion": {
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",

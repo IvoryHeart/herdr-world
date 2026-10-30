@@ -30,12 +30,15 @@ export function createBrowserClients(deps: {
   clock: Clock;
   /** Every current connection runtime, for terminal views and counts. */
   forEachRuntime(visit: (runtime: LegacyConnectionRuntime) => void): void;
+  closed?(socket: Socket): void;
+  countChanged?(): void;
 }) {
   const { logger } = deps;
   const clients = new Set<Socket>();
   const clientIds = new WeakMap<Socket, number>();
   const clientSessions = new WeakMap<Socket, string | null>();
   let nextClientId = 1;
+  let lastClientCount = 0;
 
   // Conversation watchers each browser registered with, for cleanup on close.
   const conversationWatchers = new WeakMap<
@@ -100,6 +103,10 @@ export function createBrowserClients(deps: {
   }
 
   function notifyBrowserClientCount() {
+    if (lastClientCount !== clients.size) {
+      lastClientCount = clients.size;
+      deps.countChanged?.();
+    }
     deps.forEachRuntime((runtime) => {
       runtime.terminalBridge.browserClientCountChanged(clients.size);
     });
@@ -119,6 +126,7 @@ export function createBrowserClients(deps: {
       viewedTerminals,
     };
     clients.delete(ws);
+    deps.closed?.(ws);
     notifyBrowserClientCount();
     return snapshot;
   });

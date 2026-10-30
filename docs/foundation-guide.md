@@ -167,6 +167,17 @@ preferences; [styles](../web/src/styles/) hold shared design tokens and base
 styles. Follow imports from the owning row before editing a similarly named
 component.
 
+The service's [focused acquisition owner](../server/src/world/focused-acquisition.ts)
+counts socket interest by connection and runtime generation and uses the injected
+scheduler for one observer per held runtime. The
+[shared list reader](../server/src/world/focused-lists.ts) keeps browser replies
+and observer enrichment identical; the dispatcher records only delivered, marked
+focused replies. [Direct tests](../server/src/service/focused-acquisition.test.ts)
+exercise two sockets through that dispatcher, including unmarked callers and
+failed sends. [Registry tests](../server/src/world/focused-acquisition.test.ts)
+cover bounded interest traces and in-flight retirement. This substrate does not
+advertise the shared-acquisition capability yet, so the browser timer remains.
+
 The [focused store](../web/src/store.ts) retains the shared mutable connection
 state and public command object. Its [types](../web/src/store/types.ts),
 [session transitions](../web/src/store/sessions.ts),
