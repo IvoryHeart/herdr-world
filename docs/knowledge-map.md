@@ -171,6 +171,14 @@ acceptance. [Command regressions](../scripts/gate-commands.test.ts) cover scope,
 log reset, disk-guard removal and queue isolation; [queue tests](../scripts/check-lock.test.ts)
 cover slot ownership and recovery.
 
+Process-fixture startup and lifetime guidance is in
+[development verification](development.md#verification). The
+[diagnostics core](../scripts/browser-diagnostics.ts) and
+[plugin dispatcher](../server/src/config/plugin-command.ts) expose process seams;
+[SSH fixture forwarding](../server/src/connections/testing/inProcessSsh.ts) runs in
+the test process while preserving real child PIDs and Unix sockets. Consumer tests
+remain beside their owners; launcher and hook tests retain real CLI boundaries.
+
 Repository workflow lives in [AGENTS.md](../AGENTS.md) and
 [agent development](agent-development.md). The optional visible-team recipe is
 under [`.hwf/workflows/`](../.hwf/workflows/). Per-PR contributor token accounting

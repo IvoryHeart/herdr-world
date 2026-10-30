@@ -3,8 +3,26 @@ import { chmod, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { withBrowserDeadline } from "../web/src/browserChrome";
+import {
+  runBrowserDiagnostics,
+  type DiagnosticChild,
+} from "./browser-diagnostics";
 
 const adapter = new URL("./browser-diagnostics.ts", import.meta.url).pathname;
+
+function fakeChrome(exit: Promise<number>, stderr: string): DiagnosticChild {
+  return {
+    exited: exit,
+    signalCode: null,
+    stderr: new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(stderr));
+        void exit.then(() => controller.close());
+      },
+    }),
+    kill: () => {},
+  };
+}
 
 test("browser diagnostics preserve Chrome arguments and exit status while recording lifecycle", async () => {
   const directory = await mkdtemp(join(tmpdir(), "browser-diagnostics-test-"));
@@ -63,54 +81,48 @@ test("browser diagnostics preserve Chrome arguments and exit status while record
       },
     },
   });
-  let child: ReturnType<typeof Bun.spawn> | undefined;
   try {
-    const fake = join(directory, "fake-chrome");
-    await Bun.write(
-      fake,
-      `#!/usr/bin/env bun
-console.log(JSON.stringify(process.argv.slice(2)));
-console.error("DevTools listening on " + Bun.env.FAKE_DEBUG_URL);
-await fetch(Bun.env.FAKE_READY_URL);
-await new Promise(resolve => setTimeout(resolve, 25));
-process.exit(7);
-`,
-    );
-    await chmod(fake, 0o755);
-    const adapterProcess = Bun.spawn(
-      [
-        process.execPath,
-        adapter,
-        "--window-size=1440,900",
-        "http://fixture.example.test/",
-      ],
+    let forwarded: string[] = [];
+    const stderr: Uint8Array[] = [];
+    const listeners = [
+      process.listenerCount("SIGTERM"),
+      process.listenerCount("SIGINT"),
+    ];
+    const result = runBrowserDiagnostics(
       {
-        stdout: "pipe",
-        stderr: "pipe",
-        env: {
-          ...process.env,
-          HERDR_DIAGNOSTIC_CHROME: fake,
-          HERDR_BROWSER_DIAGNOSTICS_DIR: join(directory, "logs"),
-          FAKE_DEBUG_URL: server.url.href.replace("http:", "ws:"),
-          FAKE_READY_URL: `${server.url.href}ready`,
+        executable: "fake-chrome",
+        directory: join(directory, "logs"),
+        args: ["--window-size=1440,900", "http://fixture.example.test/"],
+      },
+      {
+        spawn: (argv) => {
+          forwarded = argv.slice(1);
+          return fakeChrome(
+            ready.promise.then(() => Bun.sleep(25)).then(() => 7),
+            "DevTools listening on " +
+              server.url.href.replace("http:", "ws:") +
+              "\n",
+          );
+        },
+        writeStderr: (chunk) => {
+          stderr.push(chunk);
         },
       },
     );
-    child = adapterProcess;
-    expect(
-      await withBrowserDeadline(child.exited, "diagnostic adapter", 5000),
-    ).toBe(7);
-    expect(
-      JSON.parse(await new Response(adapterProcess.stdout).text()),
-    ).toEqual([
+    expect(await withBrowserDeadline(result, "diagnostic adapter", 5000)).toBe(
+      7,
+    );
+    expect(forwarded).toEqual([
       "--enable-logging=stderr",
       "--remote-debugging-port=0",
       "--window-size=1440,900",
       "http://fixture.example.test/",
     ]);
-    expect(await new Response(adapterProcess.stderr).text()).toContain(
-      "DevTools listening on",
-    );
+    expect(Buffer.concat(stderr).toString()).toContain("DevTools listening on");
+    expect([
+      process.listenerCount("SIGTERM"),
+      process.listenerCount("SIGINT"),
+    ]).toEqual(listeners);
     const files = await readdir(join(directory, "logs"));
     expect(files).toHaveLength(1);
     const events = (await readFile(join(directory, "logs", files[0]!), "utf8"))
@@ -131,8 +143,6 @@ process.exit(7);
     );
     expect(events.find((event) => event.event === "exit").data.code).toBe(7);
   } finally {
-    child?.kill();
-    if (child) await child.exited;
     server.stop(true);
     await rm(directory, { recursive: true, force: true });
   }
@@ -159,32 +169,23 @@ test("stderr control mode preserves existing debugging flags without attaching a
     join(tmpdir(), "browser-diagnostics-control-"),
   );
   try {
-    const fake = join(directory, "fake-chrome");
-    await Bun.write(
-      fake,
-      "#!/usr/bin/env bun\nconsole.log(JSON.stringify(process.argv.slice(2)));\nprocess.exit(7);\n",
-    );
-    await chmod(fake, 0o755);
-    const child = Bun.spawn(
-      [
-        process.execPath,
-        adapter,
-        "--remote-debugging-port=4321",
-        "http://fixture.example.test/",
-      ],
+    let forwarded: string[] = [];
+    const code = await runBrowserDiagnostics(
       {
-        stdout: "pipe",
-        stderr: "ignore",
-        env: {
-          ...process.env,
-          HERDR_DIAGNOSTIC_CHROME: fake,
-          HERDR_BROWSER_DIAGNOSTICS_DIR: join(directory, "logs"),
-          HERDR_BROWSER_DIAGNOSTICS_MODE: "stderr",
+        executable: "fake-chrome",
+        directory: join(directory, "logs"),
+        mode: "stderr",
+        args: ["--remote-debugging-port=4321", "http://fixture.example.test/"],
+      },
+      {
+        spawn: (argv) => {
+          forwarded = argv.slice(1);
+          return fakeChrome(Promise.resolve(7), "");
         },
       },
     );
-    expect(await child.exited).toBe(7);
-    expect(JSON.parse(await new Response(child.stdout).text())).toEqual([
+    expect(code).toBe(7);
+    expect(forwarded).toEqual([
       "--enable-logging=stderr",
       "--remote-debugging-port=4321",
       "http://fixture.example.test/",
@@ -202,11 +203,18 @@ test("browser diagnostics exit when a descendant holds Chrome stderr open", asyn
     const fake = join(directory, "fake-chrome");
     await Bun.write(
       fake,
-      `#!/usr/bin/env bun
+      process.platform === "win32"
+        ? `#!/usr/bin/env bun
 const descendant = Bun.spawn([process.execPath, "-e", "setTimeout(() => {}, 30000)"], { stdin: "ignore", stdout: "ignore", stderr: "inherit" });
 await Bun.write(Bun.env.FAKE_PID_FILE, String(descendant.pid));
 console.error("synthetic descendant retains stderr");
 process.exit(7);
+`
+        : `#!/bin/sh
+sleep 30 &
+printf '%s' "$!" > "$FAKE_PID_FILE"
+printf '%s\n' 'synthetic descendant retains stderr' >&2
+exit 7
 `,
     );
     await chmod(fake, 0o755);
@@ -236,6 +244,49 @@ process.exit(7);
     }
     adapterProcess?.kill("SIGKILL");
     if (adapterProcess) await adapterProcess.exited;
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("diagnostic CLI preserves argument boundaries, stdout and exit status", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "diagnostic-cli-"));
+  try {
+    const fake = join(directory, "fake chrome");
+    await Bun.write(
+      fake,
+      process.platform === "win32"
+        ? "#!/usr/bin/env bun\nconsole.log(JSON.stringify(process.argv.slice(2)));\nprocess.exit(7);\n"
+        : "#!/bin/sh\nprintf '%s\\0' \"$@\"\nexit 7\n",
+    );
+    await chmod(fake, 0o755);
+    const args = [
+      "--window-size=1440,900",
+      "http://fixture.example.test/a b",
+      "",
+      "synthetic\nargument",
+    ];
+    const child = Bun.spawn([process.execPath, adapter, ...args], {
+      stdout: "pipe",
+      stderr: "pipe",
+      env: {
+        ...process.env,
+        HERDR_DIAGNOSTIC_CHROME: fake,
+        HERDR_BROWSER_DIAGNOSTICS_DIR: join(directory, "logs"),
+        HERDR_BROWSER_DIAGNOSTICS_MODE: "lifecycle",
+      },
+    });
+    expect(await child.exited).toBe(7);
+    const output = await new Response(child.stdout).text();
+    expect(
+      process.platform === "win32"
+        ? JSON.parse(output)
+        : output.split("\0").slice(0, -1),
+    ).toEqual([
+      "--enable-logging=stderr",
+      "--remote-debugging-port=0",
+      ...args,
+    ]);
+  } finally {
     await rm(directory, { recursive: true, force: true });
   }
 });

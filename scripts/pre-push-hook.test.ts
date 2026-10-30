@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { execFileSync, spawnSync } from "node:child_process";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -11,6 +12,31 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { coverageOwners, gitChanges } from "./affected";
+import { ordinaryDocumentation } from "./validation-scope";
+import { mainMergeOnly } from "./merge-push";
+
+function scopeResponse(root: string, real = false) {
+  const report = join(root, ".agents/delivery/pre-push.tsv");
+  const rows = existsSync(report)
+    ? readFileSync(report, "utf8")
+        .trim()
+        .split("\n")
+        .map((row) => row.split("\t"))
+    : [];
+  const sha =
+    rows
+      .filter(
+        (row) =>
+          row[2] === "0" && [undefined, "", "full", "changed"].includes(row[4]),
+      )
+      .at(-1)?.[1] ?? "";
+  const docs =
+    !real &&
+    !!sha &&
+    ordinaryDocumentation(gitChanges(root, sha).changed, coverageOwners(root));
+  return { HOOK_SCOPE_SHA: sha, HOOK_SCOPE_EXIT: docs ? "0" : "1" };
+}
 
 test("pre-push checks what changed and blocks a failed check", () => {
   const root = mkdtempSync(join(tmpdir(), "pre-push-hook-"));
@@ -95,7 +121,7 @@ test("pre-push compares with the pushed branch, and uses the docs gate only afte
     const base = git("rev-parse", "HEAD");
     writeFileSync(
       join(root, "bun"),
-      '#!/bin/sh\nif [ "$1" = scripts/validation-scope.ts ]; then exec "$REAL_BUN" "$SCOPE_SCRIPT" "$2"; fi\nprintf "%s\\n" "$*" > "$HOOK_ARGS_FILE"\nexit "$HOOK_EXIT_CODE"\n',
+      '#!/bin/sh\nif [ "$1" = scripts/validation-scope.ts ]; then\n  printf "%s\\n" "$*" > "$HOOK_SCOPE_ARGS"\n  if [ "$HOOK_SCOPE_REAL" = 1 ]; then exec "$REAL_BUN" "$SCOPE_SCRIPT" "$2"; fi\n  [ "$#" = 2 ] && [ "$2" = "--docs-since=$HOOK_SCOPE_SHA" ] || exit 70\n  exit "$HOOK_SCOPE_EXIT"\nfi\nprintf "%s\\n" "$*" > "$HOOK_ARGS_FILE"\nexit "$HOOK_EXIT_CODE"\n',
       { mode: 0o755 },
     );
     const run = (
@@ -103,8 +129,11 @@ test("pre-push compares with the pushed branch, and uses the docs gate only afte
       remote: string,
       exitCode = 0,
       extra: Record<string, string> = {},
-    ) =>
-      spawnSync("sh", [hook], {
+    ) => {
+      const scope = scopeResponse(root, extra.HOOK_SCOPE_REAL === "1");
+      const scopeArgs = join(root, "scope-args");
+      rmSync(scopeArgs, { force: true });
+      const result = spawnSync("sh", [hook], {
         cwd: root,
         input: `refs/heads/example ${local} refs/heads/example ${remote}\n`,
         encoding: "utf8",
@@ -118,9 +147,18 @@ test("pre-push compares with the pushed branch, and uses the docs gate only afte
           SCOPE_SCRIPT: fileURLToPath(
             new URL("./validation-scope.ts", import.meta.url),
           ),
+          ...scope,
+          HOOK_SCOPE_ARGS: scopeArgs,
+          HOOK_SCOPE_REAL: "",
           ...extra,
         },
       });
+      if (existsSync(scopeArgs))
+        expect(readFileSync(scopeArgs, "utf8")).toBe(
+          `scripts/validation-scope.ts --docs-since=${scope.HOOK_SCOPE_SHA}\n`,
+        );
+      return result;
+    };
 
     // A new branch: no remote commit to compare with.
     expect(run(base, "0".repeat(40)).status).toBe(0);
@@ -130,7 +168,7 @@ test("pre-push compares with the pushed branch, and uses the docs gate only afte
     git("add", "docs/guide.md");
     git("commit", "-qm", "docs");
     const docs = git("rev-parse", "HEAD");
-    expect(run(docs, base, 37).status).toBe(37);
+    expect(run(docs, base, 37, { HOOK_SCOPE_REAL: "1" }).status).toBe(37);
     expect(readFileSync(argsPath, "utf8")).toBe("run check:docs\n");
     expect(run(docs, base).status).toBe(0);
     expect(readFileSync(argsPath, "utf8")).toBe("run check:docs\n");
@@ -224,11 +262,14 @@ test("a push that only merges main runs static checks; a code resolution runs th
     // The fake bun runs the real merge detection and records the check.
     writeFileSync(
       join(root, "bun"),
-      `#!/bin/sh\nif [ "$1" = scripts/merge-push.ts ]; then exec "$REAL_BUN" "$MERGE_PUSH" "$2"; fi\nprintf "%s\\n" "$*" > "$HOOK_ARGS_FILE"\n`,
+      `#!/bin/sh\nif [ "$1" = scripts/merge-push.ts ]; then\n  [ "$#" = 2 ] && [ "$2" = "$HOOK_REMOTE" ] || exit 70\n  if [ "$HOOK_MERGE_REAL" = 1 ]; then exec "$REAL_BUN" "$MERGE_PUSH" "$2"; fi\n  printf '%s\\n' "$HOOK_MERGE_MESSAGE"\n  exit "$HOOK_MERGE_EXIT"\nfi\nprintf "%s\\n" "$*" > "$HOOK_ARGS_FILE"\n`,
       { mode: 0o755 },
     );
-    const run = () =>
-      spawnSync("sh", [hook], {
+    const run = (real = false) => {
+      const merge = real
+        ? undefined
+        : mainMergeOnly({ cwd: root, remote: pushed });
+      return spawnSync("sh", [hook], {
         cwd: root,
         input: `refs/heads/feature ${git("rev-parse", "HEAD")} refs/heads/feature ${pushed}\n`,
         encoding: "utf8",
@@ -239,9 +280,15 @@ test("a push that only merges main runs static checks; a code resolution runs th
           HOOK_ARGS_FILE: argsPath,
           REAL_BUN: process.execPath,
           MERGE_PUSH: mergePush,
+          HOOK_REMOTE: pushed,
+          HOOK_MERGE_REAL: real ? "1" : "",
+          HOOK_MERGE_MESSAGE: `merge-push: ${merge?.reason ?? ""}`,
+          HOOK_MERGE_EXIT: merge?.ok ? "0" : "1",
         },
       });
-    const merged = run();
+    };
+    const merged = run(true);
+    expect(run().status).toBe(merged.status);
     expect(merged.status).toBe(0);
     expect(merged.stderr).toMatch(
       /pre-push: merge-push: only merges [0-9a-f]{8} from origin\/main; running static checks only/,
