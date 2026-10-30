@@ -616,6 +616,55 @@ Herdr still has no atomic conditional input, so a change after the last check
 remains outside the guarantee. A successful input write alone never proves the
 answer was accepted.
 
+### Chat command menus and composer keys (Q25)
+
+The allowed transition is a key the shown command menu names, pressed while the
+same session and exact menu are on screen (idle/done, or blocked with no
+question and no open transcript tool call) and the pane is
+unchanged across two reads; or a composer key control under a Herdr key name
+for the same session. Another session, a working or blocked agent, a changed or
+closed menu, a key or digit the menu does not offer, multi-line or control-char
+field text, a pane change between reads and a concurrent answer must send
+nothing.
+
+`command-menu.test.ts` reads sanitized real screens of Claude Code 2.1.312
+(full-screen and inline rendering) and Codex 0.164.0 in an isolated Herdr 0.9.3
+session: `/model` (windowed, scrolled), its Codex effort step, `/permissions`
+with its tabs and search field, the rule field and save-location steps, Codex
+permission modes and its full-access confirmation above the idle composer, and
+closed menus. It checks digit admission against longer option numbers and text
+fields, footer key controls, cut-off panels, two cursors, numbering gaps,
+footers without Escape, and that every question and composer capture is not a
+command menu. The captures showed that a Claude Code `/model` digit saves the
+default for new sessions immediately and that Codex digits select without
+Enter; both are stated on the card's footer rather than inferred.
+`menu-keys.test.ts` drives the real parser and key action across those
+transitions: next-step and closed-menu replies, session, status, menu and
+second-read refusals, field text and the per-pane lock shared with answers;
+`conversation-answer.test.ts` covers the same through the Herdr conversation
+source, including Claude Code's `/permissions` list that Herdr's screen rules
+report blocked: a menu without a question or open tool call, a question
+otherwise, and never a menu for Town. The real parser and key action were also
+driven natively against the isolated session: Claude Code `/permissions` to a
+saved project-local rule and back, Codex `/model` with its effort step and
+`/permissions` with its confirmation, and a Claude `/clear` after which a key
+from the old session was refused. A menu drawn above Codex's composer that the agent's last message quotes, as
+an agent describing the confirmation would, is rejected at the parser and
+source levels. `chatKeys.test.ts` maps every Terminal key control to Herdr's
+names and checks printable Shift/Alt combinations against the Terminal's own
+encoder; Herdr 0.9.3 was observed sending `shift+1` as `1`, so Chat sends
+the shifted character.
+`chatMenus.test.ts` uses real Chrome at desktop and phone widths to check the
+whole Chat chain: menus requested only by Chat, the reread after a slash
+command, cursor marking, arrow-only options, the qualified press parameters,
+card keyboard keys across successive redrawn menus, focus back on the card
+after a clicked key but left in the composer when moved there while the key
+was pending, a composer key's late redraw caught by the reread,
+refusal notices retired by a session change, field typing,
+composer draft retention and the ellipsis key controls. No model is added: the
+property is the same check-then-dispatch admission as prompt answers, directly
+tested; the race after the last check is the documented Herdr gap.
+
 ### Repository PR/MR report retention (Q25)
 
 The actual WorkspaceInspectorLocation popover is kept open while its branch,

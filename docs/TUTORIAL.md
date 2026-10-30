@@ -418,6 +418,16 @@ text. It works for any agent you open from Town, Board or Desk.
    the option, type a single-line reply and choose **Send text answer**. Chat
    checks the native text editor before submitting. Already-open native text
    editors and unsupported menus stay in the Terminal.
+   Commands such as `/model` and `/permissions` open the harness's own menu;
+   Chat shows it on a menu card with the cursor marked. Pick a numbered
+   option, or use the key buttons the menu names (**↑**/**↓**, **Enter**,
+   **Esc**, **s**, **←**/**→**), or press those keys with the card focused.
+   Each step, such as Codex's effort level or Claude Code's rule field and
+   save location, replaces the card until the menu closes. A field takes one
+   line with **Type**; press the menu's **Enter** after checking it. Options
+   past 9, and lists with a search field, are reached with the arrows.
+   **⋮** also holds the Terminal's key controls (**Esc**, **Tab**, arrows,
+   **Ctrl** keys) for anything else; they go to the session Chat shows.
 7. A known pull request named in an agent's **READY** or **opened**
    announcement, or its current work claim, gets a PR card. Open **Details**
    for CI and reviews. **Ask the author to fix** sends a `↳ #N` message when

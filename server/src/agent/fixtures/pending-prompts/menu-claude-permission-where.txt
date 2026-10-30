@@ -1,0 +1,12 @@
+▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔
+   Add allow permission rule
+
+     Bash(ls *)
+     Any Bash command starting with ls
+
+   Where should this rule be saved?
+   ❯ 1. Project settings (local)  Saved in .claude/settings.local.json
+     2. Project settings          Checked in at .claude/settings.json
+     3. User settings             Saved in at ~/.claude/settings.json
+
+   Enter to confirm · Esc to cancel

@@ -166,6 +166,67 @@ that root; stat metadata cannot redirect the read to a different transcript.
   that evidence it gives `no_progress`; closing the menu or queuing the text
   alone does not prove the reply was accepted. Chat answers only when you
   pick an option.
+- Completes the harness's own command menus. `/model`, `/permissions` and
+  their follow-up steps open menus that Herdr usually reports as `idle`
+  (Claude Code) or `done` (Codex). Herdr's screen rules report Claude Code's
+  `/permissions` list as `blocked` once its cursor is on a rule; a blocked
+  pane shows a menu only when the prompt parser reads no question there and
+  the transcript has no open tool call (questions, approvals and plans are
+  tool calls; a transcript Chat cannot read counts as one). Chat asks for menus
+  (`agent_conversation.latest` with `menus: true`; Town never does) and
+  rereads 0.7 and 1.8 seconds after sending a slash command, since Herdr has
+  no event for a menu opening. Recognised shapes, captured from Claude Code
+  2.1.312 (full-screen and inline) and Codex 0.164.0:
+  - Claude Code: a panel between a `▔` or `─` top edge and a footer of
+    `<key> to <action>` segments joined by ` · `, one of them `Esc`. Its
+    first line is the title; tab rows, notes and a boxed search or entry
+    field are shown as they are.
+  - Codex: a title paragraph directly above a block of numbered options, and
+    a footer such as `enter select · esc back`, at the bottom of the screen or
+    directly above the idle composer (the full-access confirmation). Codex
+    draws its own messages in that place too, so a menu above the composer is
+    not offered when the agent's last message quotes its title or footer, or
+    when the transcript cannot be read.
+  The menu card shows the title, the other lines, each numbered option with
+  the harness's cursor marked, the field's contents and one button per key
+  the footer names (plus `↑`/`↓` for a list and `←`/`→` where a line says
+  `←/→ to …`). Unknown footer keys, such as `ctrl+g`, give no button. A digit
+  picks an option only when it cannot start a longer option number (in a
+  13-model list, `1` could start `10`) and the menu has no text field, which
+  would take the digit as text; those options are reached with the arrows.
+  Field text is one line of at most 500 characters without control
+  characters, typed without Enter so the next screen shows it before the
+  menu's own Enter submits it. The card's keys also work while it has focus;
+  the card stays in place across the menu's steps, and after a key sent from
+  it (a click included) focus returns to the card, so ↓ ↓ Enter walks a list.
+  Focus moved elsewhere, such as the composer, while the key is pending stays
+  there, so later typing never reaches the menu.
+- Each menu key calls `agent_conversation.press` with the session and the
+  menu's fingerprint. The service checks that the session is the one Chat
+  showed, the pane still shows a menu by the rules above, the screen shows that exact
+  menu and the key is one it names; then it reads the pane again (agent,
+  session, terminal, title, revision and state sequence) and presses the key.
+  It rereads for up to about half a second until the screen changes and
+  returns the next menu, or none when it closed; Chat also rereads 0.3 and
+  0.9 seconds after any key, since a changed menu does not trigger the
+  conversation watch. Any difference refuses with
+  nothing sent and returns the menu now shown. A new connection, runtime, pane
+  or session retires the card and its notice. Answers and keys to one pane
+  never interleave. The same gap as answers remains: Herdr cannot make the key
+  conditional on the menu ([herdrdev/herdr#4764](https://github.com/herdrdev/herdr/issues/4764)).
+  Claude Code's `/model` saves a digit or Enter as the default for new
+  sessions, as its footer says; use `s` for this session only.
+- The composer's **⋮** menu holds the Terminal's key controls, in the rows
+  arranged in Settings, on desktop and phone. Each press calls
+  `agent_conversation.press` without a menu fingerprint: the service checks
+  the session and Herdr's key name (`ctrl+c`, `alt+up`, `shift+tab`, `esc`,
+  `f5`, one character), then the pane again, and presses it. A custom
+  combination sends what the Terminal sends: Shift makes a printable key its
+  shifted character (Shift+1 is `!`, Shift+A is `A`), Ctrl+Shift keeps Shift
+  on letters (`ctrl+shift+x`), and combinations the Terminal refuses or sends
+  as their own key code (Ctrl+Shift+1, Alt+[) are disabled. Page Up/Down
+  scroll the Terminal and Herdr names no Home, End, Insert or Delete, so those
+  buttons are disabled in Chat. The popover stays open to walk a menu.
 - Keeps the last good conversation when a read fails, for example while the
   transcript is being written, and says that it could not refresh.
 - In Town, Board and Desk, opens local source references in the same
@@ -276,10 +337,11 @@ compression does not grant a stronger binding or enable Send for a guess.
 | RPC | Parameters | Reply |
 | --- | --- | --- |
 | `agent_conversation.get` | `pane_id` | A conversation |
-| `agent_conversation.latest` | `pane_id`, or `pane_ids`, or nothing for every agent | A conversation without `messages`, or `{ conversations }` |
+| `agent_conversation.latest` | `pane_id` and optional `menus`, or `pane_ids`, or nothing for every agent | A conversation without `messages`, or `{ conversations }`; with `menus: true`, a command menu (see above) is its `pending_prompt`, with `menu` |
 | `agent_conversation.send` | `pane_id`, `text`, `session_fingerprint`, optional `baseline` (IDs of the user messages Chat showed) | `{ status: "sent", delivery }` or `{ status: "refused", reason, message }` |
 | `agent_conversation.dismiss` | `pane_id`, `delivery_id` | `{ dismissed }`; forgets a delivery notice |
 | `agent_conversation.answer` | `pane_id`, `key`, `prompt_fingerprint` | `{ status: "sent", number, label, acknowledged, unconfirmed_reason, prompt_fingerprint }` or `{ status: "refused", reason, message, pending_prompt }` |
+| `agent_conversation.press` | `pane_id`, `key`, `session_fingerprint`, optional `menu_fingerprint` and `text` (a menu field's line) | `{ status: "sent", key, text?, menu }` (the menu after the key, or null) or `{ status: "refused", reason, message, menu }` |
 | `agent_conversation.steps` | `pane_id`, `call_ids` (at most 500) | `{ steps }`: the step model for those tool calls, by the harness's call ID; calls it cannot find are left out |
 | `agent_conversation.watch` / `.unwatch` | `pane_id` | `{ ok: true }`; see [Refresh](#refresh) |
 | `agent_worktree.get` | qualified `subject` (connection, generation, pane/terminal, session), optional `refresh` | Worktree observation with revision/time, candidates and attributed evidence; selected candidate plus subject/revision is submitted with resource requests |
