@@ -4,6 +4,12 @@
  * simulated World service with two ready hosts: "alpha" is active and "beta"
  * is loaded as an Inspector's host. Timers fire only when a test runs them.
  *
+ * Waits await completion signals registered before their trigger: a store
+ * emission that meets a named condition, a completed re-list
+ * (`lastTopologyObservationStartedAt`), or the service receiving a call.
+ * Frames are handled in order, so a frame the browser must ignore is followed
+ * by one it applies before the check.
+ *
  * `test.failing` marks behaviour the contract requires and today's code lacks;
  * the implementation flips each one. The other cases guard behaviour that must
  * not change when the timer goes.
@@ -11,132 +17,29 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { sortAgentPanes } from "../agentOrder";
 import { bridge } from "../api";
+import type { BridgeControlMsg } from "../bridgeControl";
 import { set, store } from "../store";
-import type { Pane, PaneLayout } from "../types";
 import {
+  clearPendingFocusWorkspace,
+  stampPendingFocusWorkspace,
+} from "./refresh";
+import {
+  installSimulatedBrowser,
   ManualClock,
-  microtasks,
   OBSERVATION_METHODS,
+  settles,
   SimulatedDocument,
-  type SimulatedHost,
   SimulatedWorld,
 } from "./testing/simulatedWorld";
+import { relisted, storeReaches } from "./testing/storeSignals";
+import {
+  agentPane,
+  gitStatus,
+  hostFixture,
+  layoutFor,
+} from "./testing/syntheticHosts";
 
 const PERIOD_MS = 5_000;
-
-function gitStatus(branch: string, dirty = false) {
-  return {
-    branch,
-    ahead: 0,
-    behind: 0,
-    staged: 0,
-    unstaged: dirty ? 1 : 0,
-    untracked: 0,
-    conflicted: 0,
-    dirty,
-  };
-}
-
-function layoutFor(
-  host: string,
-  tabId: string,
-  panes: Pane[],
-  width: number,
-): PaneLayout {
-  return {
-    workspace_id: `w-${host}`,
-    tab_id: tabId,
-    zoomed: false,
-    area: { x: 0, y: 0, width, height: 24 * panes.length },
-    focused_pane_id: panes.find((pane) => pane.focused)!.pane_id,
-    panes: panes.map((pane, index) => ({
-      pane_id: pane.pane_id,
-      focused: pane.focused,
-      rect: { x: 0, y: index * 24, width, height: 24 },
-    })),
-    splits: [],
-  };
-}
-
-function agentPane(
-  host: string,
-  name: string,
-  agent: string,
-  status: string,
-): Pane {
-  return {
-    pane_id: `p-${host}-${name}`,
-    terminal_id: `term-${host}-${name}`,
-    workspace_id: `w-${host}`,
-    tab_id: `t-${host}`,
-    focused: false,
-    agent,
-    agent_session: { value: `s-${host}-${name}` },
-    agent_status: status,
-    revision: 1,
-  };
-}
-
-function hostFixture(id: string, generation: number): SimulatedHost {
-  const tabId = `t-${id}`;
-  const panes: Pane[] = [
-    {
-      pane_id: `p-${id}-shell`,
-      terminal_id: `term-${id}-shell`,
-      workspace_id: `w-${id}`,
-      tab_id: tabId,
-      focused: true,
-      agent_status: "unknown",
-      revision: 1,
-    },
-    agentPane(id, "a", "claude", "idle"),
-    agentPane(id, "b", "codex", "idle"),
-    agentPane(id, "status", "claude", "idle"),
-    agentPane(id, "task", "codex", "working"),
-  ];
-  return {
-    id,
-    generation,
-    workspaces: [
-      {
-        workspace_id: `w-${id}`,
-        number: 1,
-        label: `Synthetic ${id} workspace`,
-        focused: true,
-        pane_count: panes.length,
-        tab_count: 1,
-        active_tab_id: tabId,
-        agent_status: "working",
-        worktree: {
-          repo_key: `repo-${id}`,
-          repo_name: "synthetic",
-          repo_root: `/synthetic/${id}`,
-          checkout_path: `/synthetic/${id}`,
-          is_linked_worktree: false,
-          git_status: gitStatus("main"),
-        },
-      },
-    ],
-    tabs: [
-      {
-        tab_id: tabId,
-        workspace_id: `w-${id}`,
-        number: 1,
-        label: "Synthetic tab",
-        focused: true,
-        pane_count: panes.length,
-        agent_status: "working",
-      },
-    ],
-    panes,
-    layouts: new Map([[tabId, layoutFor(id, tabId, panes, 80)]]),
-    activity: new Map([
-      [`p-${id}-a`, 1_000],
-      [`p-${id}-b`, 2_000],
-    ]),
-    endpointAvailability: {},
-  };
-}
 
 const clock = new ManualClock();
 const page = new SimulatedDocument();
@@ -146,20 +49,7 @@ const world = new SimulatedWorld([
 ]);
 type Notice = NonNullable<ReturnType<typeof store.get>["notice"]>;
 const notices: Notice[] = [];
-const saved = {
-  WebSocket: globalThis.WebSocket,
-  fetch: globalThis.fetch,
-  location: Object.getOwnPropertyDescriptor(globalThis, "location"),
-  document: Object.getOwnPropertyDescriptor(globalThis, "document"),
-};
-
-async function until(predicate: () => boolean, what: string) {
-  for (let round = 0; round < 200; round++) {
-    if (predicate()) return;
-    await microtasks(10);
-  }
-  throw new Error(`never happened: ${what}`);
-}
+let restoreBrowser = () => {};
 
 function paneOf(connectionId: string, paneId: string) {
   return store
@@ -190,6 +80,13 @@ function idleOrder(connectionId: string) {
   ).map((pane) => pane.pane_id);
 }
 
+function observations(since: number, connectionId?: string) {
+  return world
+    .callsSince(since, connectionId)
+    .filter((call) => OBSERVATION_METHODS.has(call.method))
+    .map((call) => `${call.connectionId ?? "bridge"} ${call.method}`);
+}
+
 /** The owners this browser last declared; none before its first declaration. */
 function lastDeclaredOwners(): unknown[] {
   const owners = world.declarations[world.declarations.length - 1]?.owners;
@@ -198,36 +95,15 @@ function lastDeclaredOwners(): unknown[] {
 
 beforeAll(async () => {
   clock.install();
-  Object.defineProperty(globalThis, "location", {
-    configurable: true,
-    value: {
-      protocol: "http:",
-      host: "localhost:5173",
-      origin: "http://localhost:5173",
-    },
-  });
-  Object.defineProperty(globalThis, "document", {
-    configurable: true,
-    value: page,
-  });
-  globalThis.WebSocket = world.socketClass();
-  globalThis.fetch = (async () =>
-    new Response("{}", {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    })) as unknown as typeof fetch;
+  restoreBrowser = installSimulatedBrowser(world, page);
   store.init();
-  await until(
+  await storeReaches(
     () =>
       store.getConnection("alpha").panes.length > 0 &&
       store.get().bridgeStatus !== null,
     "the active host and the catalogue load",
   );
   await store.loadConnectionSession("beta");
-  await until(
-    () => store.getConnection("beta").panes.length > 0,
-    "the Inspector's host loads",
-  );
   set({
     taskNotificationsEnabled: true,
     taskNotificationPreferences: { completed: true, blocked: true },
@@ -242,19 +118,12 @@ afterAll(() => {
   // Leave the shared Bridge disconnected, as other files in a run expect.
   bridge.disconnect("simulated World test finished");
   clock.uninstall();
-  globalThis.WebSocket = saved.WebSocket;
-  globalThis.fetch = saved.fetch;
-  for (const key of ["location", "document"] as const) {
-    const descriptor = saved[key];
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else delete (globalThis as Record<string, unknown>)[key];
-  }
+  restoreBrowser();
 });
 
-// Beta's recency on load depends on the Inspector's hold, which the
-// implementation adds (tasks 3.4); this case checks only what both share.
-test("both hosts load, with the active host's recency and the catalogue", async () => {
-  await until(
+test("both hosts load; the active host's first re-list carries its recency", async () => {
+  // No recency push has been sent, so this order comes from agent.list.
+  await storeReaches(
     () => idleOrder("alpha").join() === "p-alpha-b,p-alpha-a,p-alpha-status",
     "the active host's idle agents are ordered by recency",
   );
@@ -265,221 +134,330 @@ test("both hosts load, with the active host's recency and the catalogue", async 
   ]);
 });
 
+test("control frames reach the bridge's control handlers", () => {
+  const received: BridgeControlMsg[] = [];
+  const stop = bridge.onControl((control) => received.push(control));
+  // No generation in the catalogue matches, so the store must ignore it.
+  const control = {
+    type: "world_focused_changed",
+    connection_id: "alpha",
+    connection_generation: 999,
+  } as const;
+  try {
+    world.deliverToAll(control);
+  } finally {
+    stop();
+  }
+  expect(received).toEqual([control as unknown as BridgeControlMsg]);
+});
+
 test("a status event updates that host's panes, on the active and the Inspector's host", async () => {
+  const alpha = relisted("alpha");
+  const beta = relisted("beta");
   setStatus("alpha", "p-alpha-status", "working");
   setStatus("beta", "p-beta-status", "working");
   await clock.flushTimeouts();
-  await until(
-    () =>
-      paneOf("alpha", "p-alpha-status")?.agent_status === "working" &&
-      paneOf("beta", "p-beta-status")?.agent_status === "working",
-    "both hosts show the new status",
-  );
+  await alpha;
+  await beta;
+  expect(paneOf("alpha", "p-alpha-status")?.agent_status).toBe("working");
+  expect(paneOf("beta", "p-beta-status")?.agent_status).toBe("working");
 });
 
-test("a focus event re-lists only the host that sent it", async () => {
-  const since = world.calls.length;
-  for (const pane of world.host("beta").panes)
-    pane.focused = pane.pane_id === "p-beta-a";
-  world.event("beta", "pane.focused", {
-    pane_id: "p-beta-a",
-    workspace_id: "w-beta",
+test("a focus event on one host keeps the active host's navigation", async () => {
+  set({ selectedPaneId: "p-alpha-a" });
+  const seq = stampPendingFocusWorkspace("w-alpha");
+  const navigation = () => ({
+    selectedPaneId: store.get().selectedPaneId,
+    pendingFocusWorkspaceId: store.get().pendingFocusWorkspaceId,
+    layout: store.get().layout,
   });
-  await clock.flushTimeouts();
-  await until(
-    () => paneOf("beta", "p-beta-a")?.focused === true,
-    "the focus hint arrives",
-  );
-  expect(
-    world
-      .callsSince(since, "alpha")
-      .filter((call) => OBSERVATION_METHODS.has(call.method)),
-  ).toEqual([]);
+  const before = navigation();
+  const since = world.calls.length;
+  try {
+    const done = relisted("beta");
+    for (const pane of world.host("beta").panes)
+      pane.focused = pane.pane_id === "p-beta-a";
+    world.event("beta", "pane.focused", {
+      pane_id: "p-beta-a",
+      workspace_id: "w-beta",
+    });
+    await clock.flushTimeouts();
+    await done;
+    expect(paneOf("beta", "p-beta-a")?.focused).toBe(true);
+    expect(observations(since, "alpha")).toEqual([]);
+    expect(navigation()).toEqual(before);
+  } finally {
+    clearPendingFocusWorkspace(seq);
+  }
 });
 
 test("this browser's own attachment updates availability at once", () => {
   const client = bridge.connection("alpha", 7);
+  const advertisement = { methods: ["pane.scroll"], capabilities: [] };
   const since = world.calls.length;
   const attempt = store.beginTerminalAttachment(client, "term-alpha-a");
   expect(store.get().endpointAvailability["term-alpha-a"]).toBeNull();
-  store.completeTerminalAttachment(client, "term-alpha-a", attempt, {
-    methods: ["pane.scroll"],
-    capabilities: [],
-  });
-  expect(store.get().endpointAvailability["term-alpha-a"]).toEqual({
-    methods: ["pane.scroll"],
-    capabilities: [],
-  });
+  store.completeTerminalAttachment(
+    client,
+    "term-alpha-a",
+    attempt,
+    advertisement,
+  );
+  expect(store.get().endpointAvailability["term-alpha-a"]).toEqual(
+    advertisement,
+  );
   expect(world.callsSince(since)).toEqual([]);
+  // The service's terminal registry now lists it, as for a real attachment.
+  world.host("alpha").endpointAvailability["term-alpha-a"] = advertisement;
 });
 
 test("layout.updated re-reads the active tab's layout", async () => {
   const host = world.host("alpha");
   const wider = layoutFor("alpha", "t-alpha", host.panes, 120);
   host.layouts.set("t-alpha", wider);
+  const done = relisted("alpha");
   world.event("alpha", "layout.updated", { layout: wider });
   await clock.flushTimeouts();
-  await until(
-    () => store.get().layout?.area.width === 120,
-    "the wider layout is shown",
-  );
+  await done;
+  expect(store.get().layout?.area.width).toBe(120);
 });
 
-test("a working→idle transition notifies once; later re-lists do not", async () => {
+test("a working→idle transition notifies once; a later re-list does not", async () => {
   const completions = () =>
     notices.filter((notice) => notice.actionPaneId === "p-beta-task").length;
   expect(completions()).toBe(0);
+  let done = relisted("beta");
   setStatus("beta", "p-beta-task", "idle");
   await clock.flushTimeouts();
-  await until(() => completions() === 1, "the completion is announced");
+  await done;
+  expect(completions()).toBe(1);
+  done = relisted("beta");
   world.event("beta", "pane.updated", {
     pane: world.host("beta").panes.find((pane) => pane.pane_id === "p-beta-a"),
   });
   await clock.flushTimeouts();
-  await microtasks(200);
+  await done;
   expect(completions()).toBe(1);
 });
 
-test.failing("no browser timer re-lists a host or fetches the catalogue", async () => {
-  const since = world.calls.length;
-  await clock.advance(12 * PERIOD_MS);
-  expect(
-    world
-      .callsSince(since)
-      .filter((call) => OBSERVATION_METHODS.has(call.method))
-      .map((call) => `${call.connectionId ?? "bridge"} ${call.method}`),
-  ).toEqual([]);
-});
-
-test.failing("recency moves without a status change, on both hosts", async () => {
-  const since = world.calls.length;
-  for (const id of ["alpha", "beta"]) {
-    world.host(id).activity.set(`p-${id}-a`, 3_000);
-    world.pushActivity(id);
-  }
+test("showing the page re-lists the active host and fetches the catalogue", async () => {
+  const relist = relisted("alpha");
+  const status = world.nextCall("bridge.status");
+  page.setVisibility("visible");
   await clock.flushTimeouts();
-  await until(
-    () =>
-      idleOrder("alpha")[0] === "p-alpha-a" &&
-      idleOrder("beta")[0] === "p-beta-a",
-    "the more recent idle agent moves first on both hosts",
-  );
-  expect(
-    world
-      .callsSince(since)
-      .filter((call) => OBSERVATION_METHODS.has(call.method)),
-  ).toEqual([]);
-
-  // A late push for a retired generation changes nothing.
-  world.host("beta").activity.set("p-beta-b", 9_000);
-  world.pushActivity("beta", 2);
-  await microtasks(200);
-  expect(idleOrder("beta")[0]).toBe("p-beta-a");
-  world.host("beta").activity.set("p-beta-b", 2_000);
-});
-
-test.failing("a focused change notice re-lists that host only", async () => {
-  const since = world.calls.length;
-  world.host("alpha").workspaces[0]!.worktree!.git_status = gitStatus(
-    "feature",
-    true,
-  );
-  world.control({
-    type: "world_focused_changed",
-    connection_id: "alpha",
-    connection_generation: 7,
-    revision: 1,
-  });
-  await clock.flushTimeouts();
-  await until(
-    () =>
-      store.getConnection("alpha").workspaces[0]?.worktree?.git_status
-        ?.branch === "feature",
-    "the new branch is shown",
-  );
-  expect(
-    world
-      .callsSince(since, "beta")
-      .filter((call) => OBSERVATION_METHODS.has(call.method)),
-  ).toEqual([]);
-});
-
-test.failing("another browser connecting updates the browser count", async () => {
-  world.clients = 2;
-  world.control({ type: "world_connections_changed", revision: 1 });
-  await clock.flushTimeouts();
-  await until(
-    () => store.get().bridgeStatus?.clients === 2,
-    "the browser count changes",
-  );
+  await relist;
+  await settles(status, "the catalogue is fetched");
 });
 
 test("a failed re-list is retried within one period", async () => {
   world.failNext("alpha", "pane.list");
   world.host("alpha").tabs[0]!.label = "Renamed tab";
+  const failed = storeReaches(
+    () => store.getConnection("alpha").error !== null,
+    "the re-list fails",
+  );
   world.event("alpha", "tab.renamed", {
     tab_id: "t-alpha",
     workspace_id: "w-alpha",
     label: "Renamed tab",
   });
   await clock.flushTimeouts();
-  await until(
-    () => store.getConnection("alpha").error !== null,
-    "the re-list fails",
-  );
-  await clock.advance(PERIOD_MS);
-  await until(
+  await failed;
+  const retried = storeReaches(
     () =>
       store.getConnection("alpha").tabs[0]?.label === "Renamed tab" &&
       store.getConnection("alpha").error === null,
     "the retried re-list succeeds",
   );
+  await clock.advance(PERIOD_MS);
+  await clock.flushTimeouts();
+  await retried;
 });
 
-test.failing("hiding the page releases interest; showing it declares again and catches up", async () => {
+test.failing("no browser timer re-lists a host or fetches the catalogue", async () => {
+  const since = world.calls.length;
+  await clock.advance(12 * PERIOD_MS);
+  await clock.flushTimeouts();
+  expect(observations(since)).toEqual([]);
+});
+
+test.failing("recency moves without a status change, with no re-list", async () => {
+  const since = world.calls.length;
+  const activityOf = (paneId: string) =>
+    paneOf("alpha", paneId)?.last_activity_at;
+  world.host("alpha").activity.set("p-alpha-a", 3_000);
+  world.pushActivity("alpha");
+  await storeReaches(
+    () => activityOf("p-alpha-a") === 3_000,
+    "the pushed recency applies",
+  );
+  expect(idleOrder("alpha")[0]).toBe("p-alpha-a");
+  expect(observations(since)).toEqual([]);
+
+  // Two frames the browser must ignore: another session's entry, and a late
+  // push for a retired generation. Then one it applies.
+  const later = {
+    pane_id: "p-alpha-b",
+    terminal_id: "term-alpha-b",
+    agent: "codex",
+    last_activity_at: 9_000,
+  };
+  world.deliverToAll({
+    ...world.activity("alpha"),
+    agents: [{ ...later, session: "s-another-session" }],
+  });
+  world.deliverToAll({
+    ...world.activity("alpha", 6),
+    agents: [{ ...later, session: "s-alpha-b" }],
+  });
+  world.host("alpha").activity.set("p-alpha-a", 3_500);
+  world.pushActivity("alpha");
+  await storeReaches(
+    () => activityOf("p-alpha-a") === 3_500,
+    "the following push applies",
+  );
+  expect(activityOf("p-alpha-b")).toBe(2_000);
+});
+
+test.failing("a focused change notice re-lists that host only", async () => {
+  const since = world.calls.length;
+  const host = world.host("alpha");
+  host.workspaces[0]!.worktree!.git_status = gitStatus("feature", true);
+  host.endpointAvailability["term-alpha-b"] = {
+    methods: ["pane.scroll"],
+    capabilities: [],
+  };
+  const done = relisted("alpha");
+  world.notifyFocused("alpha");
+  await clock.flushTimeouts();
+  await done;
+  expect(
+    store.getConnection("alpha").workspaces[0]?.worktree?.git_status?.branch,
+  ).toBe("feature");
+  expect(store.get().endpointAvailability["term-alpha-b"]).toEqual({
+    methods: ["pane.scroll"],
+    capabilities: [],
+  });
+  expect(observations(since, "beta")).toEqual([]);
+});
+
+test.failing("another browser connecting updates the browser count", async () => {
+  world.clients = 2;
+  const fetched = world.nextCall("bridge.status");
+  world.control({
+    type: "world_connections_changed",
+    revision: world.nextRevision(),
+  });
+  await clock.flushTimeouts();
+  await settles(fetched, "the catalogue is fetched");
+  await storeReaches(
+    () => store.get().bridgeStatus?.clients === 2,
+    "the browser count changes",
+  );
+});
+
+test.failing("hiding the page releases interest; showing it declares again", async () => {
   const alpha = { connection_id: "alpha", connection_generation: 7 };
   try {
-    expect(world.declarations.length).toBeGreaterThan(0);
     expect(lastDeclaredOwners()).toContainEqual(alpha);
+    const released = world.nextCall("world.focused.observe");
     page.setVisibility("hidden");
-    await microtasks(200);
+    await settles(released, "the hidden page releases its interest");
     expect(lastDeclaredOwners()).toEqual([]);
-    const since = world.calls.length;
+    const declared = world.nextCall("world.focused.observe");
     page.setVisibility("visible");
     await clock.flushTimeouts();
-    await until(
-      () =>
-        lastDeclaredOwners().some(
-          (owner) => JSON.stringify(owner) === JSON.stringify(alpha),
-        ),
-      "the active host is declared again",
-    );
-    const methods = world.callsSince(since).map((call) => call.method);
-    expect(methods).toContain("bridge.status");
-    expect(methods).toContain("pane.list");
+    await settles(declared, "the shown page declares again");
+    expect(lastDeclaredOwners()).toContainEqual(alpha);
   } finally {
     page.visibilityState = "visible";
   }
 });
 
-test.failing("a runtime replaced elsewhere is admitted after a catalogue notice", async () => {
-  const host = world.host("beta");
-  host.generation = 4;
-  const created = agentPane("beta", "new", "claude", "idle");
+test.failing("a runtime replaced elsewhere is repaired by the catalogue notice", async () => {
+  const host = world.host("alpha");
+  host.generation = 8;
+  const created = agentPane("alpha", "new", "claude", "idle");
+  // Working in generation 7, idle in generation 8's first list.
+  host.panes.find((pane) => pane.pane_id === "p-alpha-task")!.agent_status =
+    "idle";
   host.panes = [...host.panes, created];
-  host.layouts.set("t-beta", layoutFor("beta", "t-beta", host.panes, 80));
-  world.control({ type: "world_connections_changed", revision: 2 });
+  host.layouts.set("t-alpha", layoutFor("alpha", "t-alpha", host.panes, 80));
+  // Generation 8 isn't admitted yet, so its event is dropped.
+  world.event("alpha", "pane.created", { pane: created });
+  expect(paneOf("alpha", "p-alpha-new")).toBeUndefined();
+
+  const noticesBefore = notices.length;
+  world.control({
+    type: "world_connections_changed",
+    revision: world.nextRevision(),
+  });
   await clock.flushTimeouts();
-  await until(
-    () =>
-      store.get().connections.find((owner) => owner.id === "beta")
-        ?.generation === 4,
-    "the new generation is admitted",
+  await storeReaches(
+    () => paneOf("alpha", "p-alpha-new") !== undefined,
+    "admitting generation 8 re-lists the host",
   );
-  world.event("beta", "pane.created", { pane: created });
+  expect(
+    store.get().connections.find((owner) => owner.id === "alpha")?.generation,
+  ).toBe(8);
+  expect(
+    notices
+      .slice(noticesBefore)
+      .filter((notice) => notice.actionPaneId === "p-alpha-task"),
+  ).toEqual([]);
+  expect(lastDeclaredOwners()).toContainEqual({
+    connection_id: "alpha",
+    connection_generation: 8,
+  });
+
+  // Late generation-7 frames change nothing and cause no generation-7 call.
+  const since = world.calls.length;
+  world.deliverToAll({
+    type: "world_focused_changed",
+    connection_id: "alpha",
+    connection_generation: 7,
+  });
+  world.deliverToAll({
+    ...world.activity("alpha", 7),
+    agents: [
+      {
+        pane_id: "p-alpha-b",
+        terminal_id: "term-alpha-b",
+        agent: "codex",
+        session: "s-alpha-b",
+        last_activity_at: 9_000,
+      },
+    ],
+  });
+  host.activity.set("p-alpha-a", 4_000);
+  world.pushActivity("alpha");
   await clock.flushTimeouts();
-  await until(
-    () => paneOf("beta", "p-beta-new") !== undefined,
-    "the new runtime's event is admitted",
+  await storeReaches(
+    () => paneOf("alpha", "p-alpha-a")?.last_activity_at === 4_000,
+    "generation 8's push applies",
   );
+  expect(paneOf("alpha", "p-alpha-b")?.last_activity_at).not.toBe(9_000);
+  expect(
+    world.callsSince(since, "alpha").filter((call) => call.generation === 7),
+  ).toEqual([]);
+});
+
+// Last: it restarts the service. A service that doesn't advertise
+// `world_focused_observation`, because it is older or was told to stop, still
+// gets today's 5 s re-list and catalogue fetch (design D9).
+test("after reconnecting to a service without the capability, the 5 s re-list and catalogue fetch resume", async () => {
+  world.restart({});
+  const reconnected = storeReaches(
+    () => store.get().status === "connected",
+    "the browser reconnects",
+  );
+  await clock.advance(2_000);
+  await reconnected;
+  await clock.flushTimeouts();
+  const relist = relisted("alpha");
+  const status = world.nextCall("bridge.status");
+  await clock.advance(PERIOD_MS);
+  await clock.flushTimeouts();
+  await relist;
+  await settles(status, "the catalogue is fetched");
 });

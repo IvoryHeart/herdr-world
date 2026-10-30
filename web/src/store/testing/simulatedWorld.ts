@@ -25,6 +25,23 @@ export async function microtasks(turns = 20): Promise<void> {
 }
 
 /**
+ * Await a completion signal. A microtask budget stands in for a hang guard, so
+ * a signal that never comes fails at once and deterministically.
+ */
+export function settles<T>(
+  signal: Promise<T>,
+  what: string,
+  turns = 2_000,
+): Promise<T> {
+  return Promise.race([
+    signal,
+    microtasks(turns).then(() => {
+      throw new Error(`never happened: ${what}`);
+    }),
+  ]);
+}
+
+/**
  * Timers run only when the test runs them. `advance` moves time and fires
  * everything due, intervals included; `flushTimeouts` runs short one-shot
  * timers (debounces) without reaching any periodic timer.
@@ -55,13 +72,6 @@ export class ManualClock {
   uninstall() {
     Object.assign(globalThis, nativeTimers);
     this.timers.clear();
-  }
-
-  /** Periods of the intervals currently armed. */
-  intervals(): number[] {
-    return [...this.timers.values()]
-      .filter((timer) => timer.repeat)
-      .map((timer) => timer.delay);
   }
 
   async advance(ms: number) {
@@ -136,19 +146,41 @@ export const OBSERVATION_METHODS = new Set([
   "connections.list",
 ]);
 
+/** Advertised by a service that observes focused hosts for its browsers. */
+export const FOCUSED_OBSERVATION_CAPABILITY = "world_focused_observation";
+
 export class SimulatedWorld {
   readonly hosts = new Map<string, SimulatedHost>();
   readonly calls: RecordedCall[] = [];
+  /** Every `world.focused.observe` declaration, in arrival order. */
   readonly declarations: Frame[] = [];
   clients = 1;
   readonly defaultConnectionId: string;
   private readonly sockets = new Set<SimulatedSocket>();
+  private readonly held = new Map<SimulatedSocket, Frame[]>();
   private readonly failures = new Map<string, number>();
+  private readonly waiters: {
+    method: string;
+    resolve(call: RecordedCall): void;
+  }[] = [];
   private revision = 0;
+
+  private capabilities: Record<string, boolean> = {
+    [FOCUSED_OBSERVATION_CAPABILITY]: true,
+  };
 
   constructor(hosts: SimulatedHost[]) {
     for (const host of hosts) this.hosts.set(host.id, host);
     this.defaultConnectionId = hosts[0]!.id;
+  }
+
+  /**
+   * Close every socket, as a service restart does, and greet reconnecting
+   * browsers with `capabilities`. Browsers reconnect on their own timer.
+   */
+  restart(capabilities: Record<string, boolean>) {
+    this.capabilities = capabilities;
+    for (const socket of [...this.sockets]) socket.close();
   }
 
   host(id: string): SimulatedHost {
@@ -173,6 +205,7 @@ export class SimulatedWorld {
           connection_id: true,
           connection_scoped_http: true,
           connection_runtime_generation: true,
+          ...this.capabilities,
         },
       }),
     );
@@ -180,6 +213,7 @@ export class SimulatedWorld {
 
   detach(socket: SimulatedSocket) {
     this.sockets.delete(socket);
+    this.held.delete(socket);
   }
 
   catalogue() {
@@ -208,6 +242,11 @@ export class SimulatedWorld {
       );
   }
 
+  /** Resolves on the next call of `method`; register it before the trigger. */
+  nextCall(method: string): Promise<RecordedCall> {
+    return new Promise((resolve) => this.waiters.push({ method, resolve }));
+  }
+
   /** A Herdr event as the service forwards it, qualified by owner. */
   event(connectionId: string, event: string, data: Frame, generation?: number) {
     const host = this.host(connectionId);
@@ -219,8 +258,19 @@ export class SimulatedWorld {
     });
   }
 
+  /** A control every socket receives, such as a catalogue change. */
   control(control: Frame) {
     this.broadcast({ control });
+  }
+
+  /** The observer found a change: notify the sockets that hold the owner. */
+  notifyFocused(connectionId: string, generation?: number) {
+    const owner = this.owner(connectionId, generation);
+    this.toHolders(owner, {
+      type: "world_focused_changed",
+      connection_id: owner.connection_id,
+      connection_generation: owner.connection_generation,
+    });
   }
 
   /** The owner's whole recency map, as `world_agent_activity` carries it. */
@@ -230,7 +280,6 @@ export class SimulatedWorld {
       type: "world_agent_activity",
       connection_id: connectionId,
       connection_generation: generation ?? host.generation,
-      revision: ++this.revision,
       agents: host.panes
         .filter((pane) => host.activity.has(pane.pane_id))
         .map((pane) => ({
@@ -243,9 +292,44 @@ export class SimulatedWorld {
     };
   }
 
-  /** Push recency to every browser, as the observer does after a change. */
+  /** The observer read new activity: push it to the owner's holders. */
   pushActivity(connectionId: string, generation?: number) {
-    this.control(this.activity(connectionId, generation));
+    this.toHolders(
+      this.owner(connectionId, generation),
+      this.activity(connectionId, generation),
+    );
+  }
+
+  /** A frame already in flight to every socket, whatever it now holds. */
+  deliverToAll(control: Frame) {
+    this.broadcast({ control });
+  }
+
+  nextRevision() {
+    return ++this.revision;
+  }
+
+  private owner(connectionId: string, generation?: number) {
+    return {
+      connection_id: connectionId,
+      connection_generation: generation ?? this.host(connectionId).generation,
+    };
+  }
+
+  private toHolders(
+    owner: { connection_id: string; connection_generation: number },
+    control: Frame,
+  ) {
+    for (const [socket, owners] of this.held) {
+      if (
+        owners.some(
+          (held) =>
+            held.connection_id === owner.connection_id &&
+            held.connection_generation === owner.connection_generation,
+        )
+      )
+        socket.deliver({ control });
+    }
   }
 
   private broadcast(frame: Frame) {
@@ -262,7 +346,8 @@ export class SimulatedWorld {
         ? frame.connection_generation
         : null;
     const params = (frame.params ?? {}) as Frame;
-    this.calls.push({ method: frame.method, connectionId, generation, params });
+    const call = { method: frame.method, connectionId, generation, params };
+    this.calls.push(call);
     const identity =
       connectionId === null
         ? {}
@@ -271,7 +356,7 @@ export class SimulatedWorld {
     try {
       const result =
         connectionId === null
-          ? this.global(frame.method, params)
+          ? this.global(socket, frame.method, params)
           : this.scoped(connectionId, generation, frame.method, params);
       reply = { id, ...identity, result };
     } catch (error) {
@@ -281,26 +366,18 @@ export class SimulatedWorld {
         error: { message: (error as Error).message },
       };
     }
-    queueMicrotask(() => {
-      socket.deliver(reply);
-      // Declaring an owner sends its current recency (shared-acquisition D2).
-      if (frame.method === "world.focused.observe" && "result" in reply)
-        for (const owner of this.declaredOwners(params))
-          socket.deliver({ control: this.activity(owner) });
-    });
+    queueMicrotask(() => socket.deliver(reply));
+    for (const waiter of this.waiters.splice(0)) {
+      if (waiter.method === call.method) waiter.resolve(call);
+      else this.waiters.push(waiter);
+    }
   }
 
-  private declaredOwners(params: Frame): string[] {
-    const owners = Array.isArray(params.owners) ? params.owners : [];
-    return owners.flatMap((owner: Frame) => {
-      const host = this.hosts.get(String(owner?.connection_id));
-      return host && owner.connection_generation === host.generation
-        ? [host.id]
-        : [];
-    });
-  }
-
-  private global(method: string, params: Frame): unknown {
+  private global(
+    socket: SimulatedSocket,
+    method: string,
+    params: Frame,
+  ): unknown {
     if (method === "connections.list")
       return {
         default_connection_id: this.defaultConnectionId,
@@ -315,7 +392,12 @@ export class SimulatedWorld {
       };
     if (method === "bridge.ping") return { ok: true };
     if (method === "world.focused.observe") {
+      if (!Array.isArray(params.owners))
+        throw new Error("owners must be an array");
+      // A declaration replaces this socket's previous one. Recency arrives
+      // only once the observer has read it; there is no placeholder map.
       this.declarations.push(params);
+      this.held.set(socket, params.owners as Frame[]);
       return { ok: true };
     }
     throw new Error(`unknown bridge-global method: ${method}`);
@@ -394,6 +476,7 @@ export class SimulatedSocket {
     this.world.receive(this, JSON.parse(raw) as Frame);
   }
 
+  /** Delivery is synchronous: once it returns, the browser has handled it. */
   deliver(frame: Frame) {
     if (this.readyState !== SimulatedSocket.OPEN) return;
     this.onmessage?.({ data: JSON.stringify(frame) } as MessageEvent);
@@ -440,4 +523,54 @@ export class SimulatedDocument {
     for (const listener of this.listeners.get("visibilitychange") ?? [])
       listener();
   }
+}
+
+type SavedGlobals = {
+  WebSocket: typeof WebSocket;
+  fetch: typeof fetch;
+  location?: PropertyDescriptor;
+  document?: PropertyDescriptor;
+};
+
+/**
+ * Point the browser globals the store uses at the simulated service and page.
+ * Returns a function that restores them.
+ */
+export function installSimulatedBrowser(
+  world: SimulatedWorld,
+  page: SimulatedDocument,
+): () => void {
+  const saved: SavedGlobals = {
+    WebSocket: globalThis.WebSocket,
+    fetch: globalThis.fetch,
+    location: Object.getOwnPropertyDescriptor(globalThis, "location"),
+    document: Object.getOwnPropertyDescriptor(globalThis, "document"),
+  };
+  Object.defineProperty(globalThis, "location", {
+    configurable: true,
+    value: {
+      protocol: "http:",
+      host: "localhost:5173",
+      origin: "http://localhost:5173",
+    },
+  });
+  Object.defineProperty(globalThis, "document", {
+    configurable: true,
+    value: page,
+  });
+  globalThis.WebSocket = world.socketClass();
+  globalThis.fetch = (async () =>
+    new Response("{}", {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    })) as unknown as typeof fetch;
+  return () => {
+    globalThis.WebSocket = saved.WebSocket;
+    globalThis.fetch = saved.fetch;
+    for (const key of ["location", "document"] as const) {
+      const descriptor = saved[key];
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+      else delete (globalThis as Record<string, unknown>)[key];
+    }
+  };
 }

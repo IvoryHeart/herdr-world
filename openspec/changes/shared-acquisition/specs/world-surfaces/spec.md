@@ -13,7 +13,8 @@ visibility refreshes SHALL coalesce queued work without overlapping reads of the
 host. Receipts SHALL refresh on a status or activity change and every 20 seconds; screens SHALL
 refresh every 4 seconds. A browser SHALL release its declarations while its page is hidden or its
 Desk is closed, and declare them again when shown. The service SHALL stop reading a target that no
-browser declares, including reads already queued. Receipts and screen excerpts SHALL be keyed by
+browser declares, including reads already queued. A browser that starts declaring a target SHALL
+receive its latest result only once a read exists, never a placeholder. Receipts and screen excerpts SHALL be keyed by
 connection, runtime generation, pane and agent session, so a replaced session never shows the
 previous session's text and a refresh does not remove a shown receipt.
 
