@@ -23,7 +23,7 @@ export type CrewSettings = {
   neverPrompt: string[];
   /** Reviewer runs at once. */
   maxRuns: number;
-  /** A reviewer still working after this long, without posting, is the owner's call. */
+  /** A run without its completion evidence is stopped at this bound, without retry. */
   runTimeoutMinutes: number;
   /**
    * A check still running this long after the watcher first saw it is
@@ -442,9 +442,18 @@ export function loadSettings(path: string): CrewSettings {
     crew?: Partial<CrewSettings>;
     roster?: CrewSettings["roster"];
   };
-  return {
+  const settings = {
     ...SETTINGS_DEFAULTS,
     ...raw.crew,
     roster: { ...raw.roster, ...raw.crew?.roster },
   };
+  if (
+    !Number.isFinite(settings.runTimeoutMinutes) ||
+    settings.runTimeoutMinutes <= 0 ||
+    !Number.isSafeInteger(settings.runTimeoutMinutes * 60_000)
+  )
+    throw new Error(
+      "crew.runTimeoutMinutes must be a positive finite number of minutes",
+    );
+  return settings;
 }

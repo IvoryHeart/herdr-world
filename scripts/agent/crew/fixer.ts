@@ -15,6 +15,7 @@ import {
   getRun,
   holdLock,
   latestPromptPrs,
+  RUN_TIMEOUT_EXIT_CODE,
   openCrewStore,
   openLock,
   setAction,
@@ -219,7 +220,11 @@ export async function fix(options: Options, dir: string, deps: Deps) {
     return 143;
   }
   process.on("SIGTERM", () => {
-    show("── stopped: the PR merged or closed");
+    show(
+      getRun(crew, runId)?.exitCode === RUN_TIMEOUT_EXIT_CODE
+        ? "── stopped: run timed out; slot released without retry"
+        : "── stopped: the PR merged or closed",
+    );
     process.exit(143);
   });
   let code = 1;

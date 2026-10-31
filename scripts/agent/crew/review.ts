@@ -16,6 +16,7 @@ import {
   finishRun,
   getRun,
   holdLock,
+  RUN_TIMEOUT_EXIT_CODE,
   openCrewStore,
   recentRuns,
   roundClosed,
@@ -139,7 +140,11 @@ export async function review(options: Options, dir: string, deps: Deps) {
   const harness = harnessOf(model) ?? "codex";
   setRunSession(crew, runId, harness, model.model, null);
   process.on("SIGTERM", () => {
-    show(`── stopped: a newer head made this review stale`);
+    show(
+      getRun(crew, runId)?.exitCode === RUN_TIMEOUT_EXIT_CODE
+        ? "── stopped: run timed out; slot released without retry"
+        : "── stopped: a newer head made this review stale",
+    );
     show(`   reopen as a chat: ${reopen(runId)}`);
     cleanup();
     process.exit(143);
