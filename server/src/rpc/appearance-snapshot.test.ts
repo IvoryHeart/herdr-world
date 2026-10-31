@@ -2,6 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { WorldObservation } from "../world/observation-v1";
 import { BoardStore } from "../world/board-store";
 import { handleWorldRpc } from "./world";
 import type { BridgeRpcContext } from "./context";
@@ -93,6 +94,7 @@ for (const mode of [
           }),
         },
         worldSnapshots: {
+          observation: new WorldObservation("synthetic-service"),
           snapshot: async () => {
             admitted.resolve();
             await finish.promise;

@@ -418,9 +418,12 @@
       "area": "Aggregate observation",
       "owner": "server/src/world/snapshot.ts",
       "requirement": "openspec/specs/runtime-federation/spec.md",
-      "properties": "Four-slot bound; deadline yields full catalogue; late result requires current lease; requests coalesce",
+      "properties": "Four-slot bound; deadline yields full catalogue; late result requires current lease; requests coalesce; based replies require equal incarnation, owner, generation and projected token",
       "existingTests": [
         "server/src/world/snapshot.test.ts",
+        "server/src/world/observation-v1.test.ts",
+        "server/src/world/snapshot-observation.test.ts",
+        "server/src/service/observation-v1.test.ts",
         "server/src/world/snapshot-terminal-settings.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/145",
@@ -434,10 +437,14 @@
         "models": [],
         "contracts": [
           "verification/consumer-evidence.md",
-          "verification/contracts/observation-progress.md"
+          "verification/contracts/observation-progress.md",
+          "verification/contracts/observation-base.md"
         ],
         "tests": [
           "server/src/world/snapshot.test.ts",
+          "server/src/world/observation-v1.test.ts",
+          "server/src/world/snapshot-observation.test.ts",
+          "server/src/service/observation-v1.test.ts",
           "server/src/world/snapshot-terminal-settings.test.ts"
         ],
         "checks": ["bun run check"],
