@@ -30,7 +30,7 @@ export function createAnswerRecorder(deps: {
         "refused",
         "The answering agent could not be verified for this ask",
       );
-    const occurrence = deps.ledger().nextId("a");
+    const occurrence = await deps.ledger().nextId("a");
     let effects: OutboxEffect[] = [];
     return deps.ledger().update(
       (document) => {

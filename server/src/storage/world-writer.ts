@@ -10,7 +10,7 @@ import {
   originalAsker,
 } from "../world/ask-delivery-types";
 import { randomBytes } from "node:crypto";
-import { newWorldId } from "./world-identifiers";
+import { createWorldIds } from "./world-ids";
 import { Database } from "bun:sqlite";
 import {
   chmodSync,
@@ -54,6 +54,7 @@ export function openWorldWriter(
   legacy: string,
   at: number,
   incarnation = randomBytes(16).toString("base64url"),
+  bytes?: () => Uint8Array,
 ) {
   assertSafeDataPath(path);
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
@@ -95,6 +96,7 @@ export function openWorldWriter(
     db.close();
     throw error;
   }
+  const ids = createWorldIds(db, bytes);
   const revision = () =>
     (db.query("SELECT revision FROM ledger_meta").get() as { revision: number })
       .revision;
@@ -147,15 +149,7 @@ export function openWorldWriter(
   function apply(write: LedgerWrite): LedgerCommit {
     if (write.revision !== revision())
       throw new Error("ledger revision conflict");
-    const operationId = newWorldId("o", (id) =>
-      Boolean(
-        db
-          .query(
-            "SELECT 1 FROM replay_changes WHERE operation_id=? UNION ALL SELECT 1 FROM outbox WHERE operation_id=? LIMIT 1",
-          )
-          .get(id, id),
-      ),
-    );
+    const operationId = ids.issue("o");
     const changed = new Set<string>();
     const removed: string[] = [];
     for (const [table, patch] of [
@@ -262,9 +256,7 @@ export function openWorldWriter(
         throw new Error(
           "dispatch claim does not match the captured connection",
         );
-      const id = newWorldId("e", (candidate) =>
-        Boolean(db.query("SELECT 1 FROM outbox WHERE id=?").get(candidate)),
-      );
+      const id = ids.issue("e");
       if (effect.kind === ANSWER_DELIVERY_VERB.name) {
         const row = db
           .query("SELECT body FROM asks WHERE id=?")
@@ -387,6 +379,8 @@ export function openWorldWriter(
     switch (request.type) {
       case "load":
         return read();
+      case "issue-id":
+        return ids.issue(request.kind);
       case "write":
         return apply(request.write);
       case "begin-dispatch":
