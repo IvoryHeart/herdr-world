@@ -218,7 +218,7 @@ test("a live room shrinks to fit remaining desks, and a rebuild re-derives from 
   );
 });
 
-test("an expanded room shrinks after closures and stays expanded", () => {
+test("an expanded room keeps its capacity through closures until Fold", () => {
   for (const shape of Object.values(TOWN_SHAPES)) {
     const expanded = town({ a: [130] });
     Object.assign(expanded.rooms[0]!, { deskFold: "expanded" });
@@ -228,18 +228,16 @@ test("an expanded room shrinks after closures and stays expanded", () => {
     const closed = layoutTown(closedInput, shape, first.memory);
     const expandedRoom = first.layout.buildings[0]!.rooms[0]!;
     const closedRoom = closed.layout.buildings[0]!.rooms[0]!;
-    expect(closedRoom.h).toBeLessThan(expandedRoom.h);
-    expect(closedRoom.cells.filter((cell) => cell.deskKey)).toHaveLength(2);
-    expect(closedRoom.foldActionCells).toBeDefined();
+    expect([closedRoom.cols, closedRoom.rows]).toEqual([
+      expandedRoom.cols,
+      expandedRoom.rows,
+    ]);
+    expect(closedRoom.h).toBe(expandedRoom.h);
 
     const foldedInput = town({ a: [2] });
     Object.assign(foldedInput.rooms[0]!, { deskFold: "folded" });
     const folded = layoutTown(foldedInput, shape, closed.memory);
-    expect([closedRoom.cols, closedRoom.rows]).toEqual([
-      folded.layout.buildings[0]!.rooms[0]!.cols,
-      folded.layout.buildings[0]!.rooms[0]!.rows,
-    ]);
-    expect(folded.layout.buildings[0]!.rooms[0]!.h).toBe(closedRoom.h);
+    expect(folded.layout.buildings[0]!.rooms[0]!.h).toBeLessThan(closedRoom.h);
     expect(folded.layout.deskCells.size).toBe(2);
   }
 });

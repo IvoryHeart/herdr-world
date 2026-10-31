@@ -42,8 +42,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
 
 - **Town** is the default view (`/town`); the root URL opens it too.
   Each host is a building, each workspace a room, each tab a team table and each
-  pane a seat. Rooms resize as tabs open and close; expanded rooms stay expanded
-  as they shrink, until folded. Plain terminals show prompts. Additional panes beyond the drawn
+  pane a seat. Rooms resize as tabs open and close; explicitly expanded rooms
+  keep their size until folded. Plain terminals show prompts. Additional panes beyond the drawn
   seats remain available through the table's count and chooser. Each table's
   nameplate shows its sole agent's Herdr name when exactly one named agent
   occupies the tab; otherwise it shows the tab's name, or `Tab N` if unnamed.
