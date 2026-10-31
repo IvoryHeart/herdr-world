@@ -785,6 +785,31 @@ test("a desk held at the edge never snaps to desks the town scrolls under it", (
   expect(last(t.ghost)?.[3]).toBe("group");
 });
 
+test("a carry held at the edge never snaps, even with frames slower than the magnet's wait", () => {
+  const t = setup();
+  const at = t.deskCentre(t.deskCell(0));
+  const pointer = t.press(at);
+  t.moveTo(pointer, offset(at, 20));
+  t.camera.jumpTo(t.camera.x, 1e6, t.camera.z);
+  if (t.draw().moved) t.interaction.reaim();
+  const edge = { x: at.x, y: 1 };
+  t.moveTo(pointer, edge);
+  const aims = new Set<string>();
+  const desks = new Set<string>();
+  // A large software-rendered canvas on a busy machine: each frame (one edge
+  // pan and one draw) comes after the magnet's wait has passed.
+  for (let frame = 0; frame < 40; frame += 1) {
+    t.frames.step();
+    if (t.draw().moved) t.interaction.reaim();
+    t.time.advance(TOWN_MAGNET_MS + 50);
+    const hit = t.interaction.hitAt(edge.x, edge.y);
+    if (hit?.kind === "desk") desks.add(hit.key);
+    aims.add(String(last(t.ghost)?.[3]));
+  }
+  expect(desks.size).toBeGreaterThan(1);
+  expect([...aims]).not.toContain("group");
+});
+
 test("a camera that moves under a resting carry restarts the magnet's wait", () => {
   const t = setup();
   const cell = t.deskCell(0);
