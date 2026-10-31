@@ -306,8 +306,8 @@ hosts stay usable.
    To change the order, drag a table onto another table in the same room: it
    takes that table's place, and the tables in between shift along. Drop it on
    the room's free spot to put it last of the tables shown. A room grows as
-   tabs open and ordinary rooms shrink to fit when tabs close. An expanded room
-   keeps its capacity through closures until you use **« Fold**. Rooms grow up
+   tabs open and rooms shrink to fit when tabs close. An expanded room stays
+   expanded as it shrinks until you use **« Fold**. Rooms grow up
    to eight tables wide on a wide screen, six on a portrait or half-width screen
    and four on a phone, then row by row. A folded room normally
    shows the first 24 tabs in the same order as Spaces. Use the room's bottom-right

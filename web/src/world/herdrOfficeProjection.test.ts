@@ -914,7 +914,7 @@ describe("Pixel Office projection", () => {
     });
   });
 
-  test("an expanded room keeps Fold after closures below the folded target, then explicitly shrinks", () => {
+  test("an expanded room stays expanded while shrinking after closures below the folded target", () => {
     const worldFor = (count: number) => {
       const tabs = Array.from({ length: count }, (_, index) =>
         tab(`tab-${index}`, index + 1),
@@ -960,15 +960,18 @@ describe("Pixel Office projection", () => {
           shape,
           first.memory,
         );
-        expect(retained.layout.buildings[0]!.rooms[0]!.h).toBe(
+        expect(retained.layout.buildings[0]!.rooms[0]!.h).toBeLessThan(
           first.layout.buildings[0]!.rooms[0]!.h,
         );
+        expect(
+          retained.layout.buildings[0]!.rooms[0]!.foldActionCells,
+        ).toBeDefined();
         const folded = layoutTown(
           townModelFromProjection(project(small, new Set())).input,
           shape,
           retained.memory,
         );
-        expect(folded.layout.buildings[0]!.rooms[0]!.h).toBeLessThan(
+        expect(folded.layout.buildings[0]!.rooms[0]!.h).toBe(
           retained.layout.buildings[0]!.rooms[0]!.h,
         );
         expect(folded.layout.deskCells.size).toBe(count);
