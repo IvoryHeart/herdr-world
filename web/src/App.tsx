@@ -4198,7 +4198,7 @@ export default function App({
       </div>
       <div className="topbar-actions">
         {mobile ? <MobileTerminalAppBar /> : null}
-        {!mobile && arrangementControl ? (
+        {arrangementControl ? (
           <WindowArrangementMenu control={arrangementControl} />
         ) : null}
         {mobile ? null : (

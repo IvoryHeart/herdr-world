@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { measuredFixedPositionScale } from "../../fixedPositionScale";
 import { PanelsTopLeft, Minus } from "lucide-react";
 import { useLayer } from "../../layerStack";
+import { useWindowSwitcherHeader } from "./windowSwitcherHeader";
 import "./windows.css";
 
 export type WindowSwitcherEntry = {
@@ -15,10 +16,14 @@ export type WindowSwitcherEntry = {
 };
 export function WindowSwitcher({
   entries,
+  floating = false,
 }: {
   entries: readonly WindowSwitcherEntry[];
+  /** Keep the mobile trigger outside the shell's translated Zen header. */
+  floating?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const header = useWindowSwitcherHeader(floating);
   const trigger = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState({ left: 0, top: 0 });
@@ -42,7 +47,7 @@ export function WindowSwitcher({
             Math.min(
               bounds.bottom + 4,
               window.innerHeight -
-                Math.min(entries.length * 40 + 16, 320) * scale -
+                (menu.current?.getBoundingClientRect().height ?? 320 * scale) -
                 8,
             ),
           ) / scale,
@@ -51,27 +56,30 @@ export function WindowSwitcher({
       menu.current?.querySelector<HTMLButtonElement>('[aria-current="true"]') ??
       menu.current?.querySelector<HTMLButtonElement>("button")
     )?.focus();
-  }, [open, entries.length]);
+  }, [open, entries.length, header]);
   useLayer(open, () => setOpen(false), {
     element: () => menu.current,
     anchors: () => [trigger.current],
   });
   if (!entries.length) return null;
+  const button = (
+    <button
+      ref={trigger}
+      type="button"
+      className={`world-window-switcher-trigger${floating && !header ? " is-floating" : ""}`}
+      title="Open windows"
+      aria-label={`Open windows (${entries.length})`}
+      aria-haspopup="menu"
+      aria-expanded={open}
+      onClick={() => setOpen((value) => !value)}
+    >
+      <PanelsTopLeft size={15} />
+      <span>{entries.length}</span>
+    </button>
+  );
   return (
     <>
-      <button
-        ref={trigger}
-        type="button"
-        className="world-window-switcher-trigger"
-        title="Open windows"
-        aria-label={`Open windows (${entries.length})`}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => setOpen((value) => !value)}
-      >
-        <PanelsTopLeft size={15} />
-        <span>{entries.length}</span>
-      </button>
+      {floating ? createPortal(button, header ?? document.body) : button}
       {open &&
         createPortal(
           <div

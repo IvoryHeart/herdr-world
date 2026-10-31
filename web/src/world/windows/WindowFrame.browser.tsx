@@ -2,7 +2,13 @@ import { useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { useWindowManager } from "./useWindowManager";
-import { WindowControls } from "./WindowControls";
+import { WindowBackButton, WindowControls } from "./WindowControls";
+import { WorkspaceInspectorAgentIdentity } from "../../components/WorkspaceInspectorAgentIdentity";
+import "../../styles/tokens.css";
+import "../../styles/base.css";
+import "../../components/WorkspaceInspectorHost.css";
+import "../../components/InspectorPaneMap.css";
+import "./WorldLayout.css";
 import { WindowFrame } from "./WindowFrame";
 import { WindowSurface } from "./WindowSurface";
 import { WindowSwitcher } from "./WindowSwitcher";
@@ -150,11 +156,117 @@ const pointer = (target: EventTarget, type: string, x: number, y: number) =>
       }),
     ),
   );
+
+async function checkNarrowTownHeaders() {
+  const pointer = new URLSearchParams(location.search).get("pointer") ?? "fine";
+  check(
+    matchMedia(`(pointer: ${pointer})`).matches,
+    "browser did not emulate the requested primary pointer",
+  );
+  document.documentElement.dataset.layout = "desktop";
+  const host = document.createElement("div");
+  document.body.append(host);
+  const root = createRoot(host);
+  const controls = {
+    compact: false,
+    narrow: true,
+    maximized: false,
+    back: { label: "Back to Town" },
+    onClose() {},
+    onMinimize() {},
+    onMaximize() {},
+    onSnap() {},
+    onFloat() {},
+  };
+  // Four Columns on a landscape tablet leave about 256px per window.
+  for (const width of [223, 240, 256, 279]) {
+    flushSync(() =>
+      root.render(
+        <div className="world-managed-window is-town-skin" style={{ width }}>
+          <aside className="workspace-inspector">
+            <header className="workspace-inspector-head" data-views-in-menu="">
+              <WindowBackButton controls={controls} label="Inspector window" />
+              <WorkspaceInspectorAgentIdentity
+                context={{
+                  kind: "agent",
+                  label: "Builder",
+                  agent: "claude",
+                  stateLabel: "Working",
+                  locationLabel: "Studio / Builder",
+                }}
+                paneMap={
+                  <button
+                    className="inspector-pane-map-glyph"
+                    aria-label="Tab panes"
+                  />
+                }
+                location={
+                  <button className="workspace-inspector-location">
+                    <span className="workspace-inspector-location-text">
+                      Studio / Builder
+                    </span>
+                  </button>
+                }
+              />
+              <WindowControls controls={controls} label="Inspector window" />
+            </header>
+          </aside>
+        </div>,
+      ),
+    );
+    await settle();
+    const header = host.querySelector<HTMLElement>("header")!;
+    const bounds = header.getBoundingClientRect();
+    const buttons = host.querySelectorAll<HTMLElement>(
+      ".world-window-back, .world-window-controls > button",
+    );
+    check(
+      buttons.length === 3,
+      "narrow Town header lost Back, menu or Minimize",
+    );
+    for (const button of buttons) {
+      const rect = button.getBoundingClientRect();
+      check(
+        rect.width >= (pointer === "fine" ? 30 : 40) &&
+          rect.height >= (pointer === "fine" ? 30 : 40),
+        `${width}px Town ${button.getAttribute("aria-label")} target is ${rect.width}×${rect.height} for ${pointer} pointer`,
+      );
+      check(
+        rect.left >= bounds.left &&
+          rect.right <= bounds.right &&
+          rect.top >= bounds.top &&
+          rect.bottom <= bounds.bottom,
+        `${width}px Town control overflows its header`,
+      );
+    }
+    for (const button of header.querySelectorAll("button")) {
+      if (!button.getClientRects().length) continue;
+      const rect = button.getBoundingClientRect();
+      check(
+        rect.width > 0 &&
+          rect.height > 0 &&
+          rect.left >= bounds.left &&
+          rect.right <= bounds.right,
+        `${width}px Town identity or action control collapsed or clipped for ${pointer} pointer`,
+      );
+    }
+    check(
+      header.scrollWidth <= header.clientWidth,
+      `${width}px Town header content overflows`,
+    );
+  }
+  root.unmount();
+  host.remove();
+}
 window.addEventListener("error", (event) => failures.push(event.message));
 async function run() {
   const root = createRoot(document.getElementById("root")!);
   flushSync(() => root.render(<Fixture />));
   await settle();
+  check(
+    Boolean(frame().querySelector('button[aria-label="Minimize A"]')),
+    "desktop minimize requires opening a menu",
+  );
   const before = geometry();
   frame("B").focus();
   await settle();
@@ -323,6 +435,38 @@ async function run() {
   );
   flushSync(() => item!.click());
   check(harness.pins.A === false, "compact window menu did not unpin the desk");
+  const minimize = frame().querySelector<HTMLButtonElement>(
+    'button[aria-label="Minimize A"]',
+  );
+  check(Boolean(minimize), "compact minimize requires opening a menu");
+  if (minimize) {
+    const target = minimize.getBoundingClientRect();
+    check(
+      target.width >= 44 && target.height >= 44,
+      "compact minimize touch target is smaller than 44px",
+    );
+    const close = frame()
+      .querySelector('[aria-label="Close A"]')!
+      .getBoundingClientRect();
+    check(
+      close.width >= 44 && close.height >= 44,
+      "compact close touch target is smaller than 44px",
+    );
+    flushSync(() => minimize.click());
+    check(!frame(), "compact minimize left the window visible");
+    flushSync(() =>
+      document
+        .querySelector<HTMLButtonElement>(".world-window-switcher-trigger")!
+        .click(),
+    );
+    const restore = [
+      ...document.querySelectorAll<HTMLButtonElement>(
+        ".world-window-switcher-menu button",
+      ),
+    ].find((button) => button.textContent === "A")!;
+    flushSync(() => restore.click());
+    check(Boolean(frame()), "compact switcher did not restore the window");
+  }
   flushSync(() => harness.setCompact(false));
   check(
     JSON.stringify(harness.state.windows) === desktop,
@@ -457,6 +601,7 @@ async function run() {
     }
   }
   root.unmount();
+  await checkNarrowTownHeaders();
 }
 void run()
   .catch((error) => failures.push(String(error)))

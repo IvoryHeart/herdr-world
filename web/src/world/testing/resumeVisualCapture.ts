@@ -24,6 +24,7 @@ export async function captureResumeViewports(
   port: string,
   directory: string,
   state: string,
+  assertion?: string,
 ) {
   const targets = (await (
     await fetch(`http://127.0.0.1:${port}/json/list`)
@@ -77,6 +78,14 @@ export async function captureResumeViewports(
         actual.result.value.height !== viewport.height
       )
         throw new Error(`Viewport mismatch: ${viewport.name}`);
+      if (assertion) {
+        const checked = await command("Runtime.evaluate", {
+          expression: assertion,
+          returnByValue: true,
+        });
+        if (checked.result.value !== true)
+          throw new Error(`Capture state is not reachable: ${viewport.name}`);
+      }
       const screenshot = await command("Page.captureScreenshot", {
         format: "png",
         captureBeyondViewport: false,
