@@ -24,9 +24,11 @@ export function registerHostsFilterTests(group: HostFilterGroup) {
     )(
     group === "resources"
       ? "rendering, focus and browser file input: qualified resource targets %j"
-      : group === "visibility"
-        ? "geometry, rendering, focus and terminal lifecycle: Hosts scope %j"
-        : "the shell preserves qualified operational targets: %j",
+      : group === "actions"
+        ? "rendering and focus: qualified Actions and watch feedback %j"
+        : group === "visibility"
+          ? "geometry, rendering, focus and terminal lifecycle: Hosts scope %j"
+          : "the shell preserves qualified operational targets: %j",
     async ({ width, operation, view }) => {
       const dir = await mkdtemp(join(tmpdir(), "world-hosts-filter-"));
       const { assets } = await worldBrowserBundle("HostsFilter");

@@ -84,6 +84,10 @@ per run; each case retains its own server, fixture and fresh browser profile.
 Focused test files build a bundle once per file. Production responsiveness cases
 are serial within each file so their global diagnostic instrumentation cannot overlap.
 
+`useWorldObservation.test.ts` mounts the real observation hook on the test clock
+for watch revision and unavailable-host scope policy. Actions browser cases keep
+rendered watch feedback, qualified action wiring and focus at desktop/phone widths.
+
 Keep policy checks headless once a replacement test and its mapping in
 `verification/coverage.json` exist. Retained browser cases name the behavior that
 requires a browser: geometry, trusted input, focus, rendering, renderer lifecycle
