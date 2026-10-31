@@ -177,3 +177,37 @@ direct consumers cover the new admission, retry and publication schedules. The
 finite cases do not establish arbitrary transport liveness, all browser freeze
 behavior or external filesystem latency. Aggregate refresh, its 15-second
 fallback and retained Spaces mounting are unchanged.
+
+## Composed service/store acceptance
+
+`server/src/service/shared-acquisition.test.ts` now joins the actual
+`createWorldService`, listener, dispatcher, interest registries, observer, cache,
+profile service and Desk watches to a real Bridge/focused store in a Worker and a
+second native WebSocket client. This is architect-poll's approved alternative to
+two stores. Only the external Herdr runtime adapter is synthetic; no fake World
+service or observer/dispatcher assembled separately participates in this case.
+Original browser T2 bodies and their three harness files remain unchanged.
+
+The two clocks are controlled independently. Explicit socket round trips and
+store/RPC/control completions establish ordering; timeouts guard hangs and never
+assert a latency budget. Browser clock advancement fences real heartbeat I/O
+before stepping past its timeout. The case checks both hosts' initial lists and
+attention order, one shared activity reading per host, holder-routed recency,
+no periodic browser lists/catalogue fetches, output-only suppression, marked
+focused calls, and an unmarked caller not consuming either holder's notice.
+It also covers quiet git/endpoint changes, inactive-host status/focus without
+retargeting navigation, layout events, one completion per transition, native
+resynchronization, local attachment availability, failure-only retry, hide/show,
+profile/count notices, two-client Desk sharing and last target release. Runtime
+replacement during a deferred observer read fences the retired result; late old
+controls neither regress recency nor make an old-generation request. Last socket
+and page releases stop native acquisition.
+
+The two current capability specs now contain the complete delivered deltas:
+22 scenarios across both runtime-federation additions and six Bounded Desk
+observation scenarios. Strict all-spec validation and an exact delta-block
+comparison check synchronization. This closes the previously owed composition
+and maintained-spec gaps, not arbitrary transport liveness, all browser freeze
+schedules or external filesystem/session parsing. Existing original T2 fallback,
+Desk Chrome, runtime and filesystem consumers remain mandatory. Archive follows
+independent acceptance of the active change.

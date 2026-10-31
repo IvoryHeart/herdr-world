@@ -501,8 +501,15 @@ be green before task 3.1 removes the timer:
   retirement is not published. Without the capability, Desk keeps its own
   reads (task 4.3).
 
-Once `createWorldService(deps)` exists (committee item 9), one composed
-in-process case joins these: two real browser stores, one service, two hosts.
+The composed in-process case now joins these at `createWorldService(deps)`
+(committee item 9): one real Bridge/focused store in a Worker, a second native
+socket client, one service and two synthetic hosts. Architect-poll approved this
+alternative to two stores. `server/src/service/shared-acquisition.test.ts` drives
+actual WebSocket declarations, notices, recency and Desk reads, using the injected
+service scheduler and a separately controlled browser clock. It covers the parity
+outputs above, failure recovery, hidden holders, last release and runtime
+replacement with an observation in flight. The original browser T2 bodies and
+harness remain unchanged.
 
 ## Verification mapping
 

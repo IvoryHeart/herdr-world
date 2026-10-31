@@ -203,6 +203,15 @@ The [cache/observer consumer](../server/src/service/agent-activity.test.ts) and
 [real Bridge/store race tests](../web/src/store/agentActivity.test.ts) cover those
 boundaries.
 
+The [composed acquisition case](../server/src/service/shared-acquisition.test.ts)
+connects the real service to a real Bridge/store in a Worker plus a second native
+socket on two synthetic hosts. Its independent manual clocks and completion
+signals verify shared reads, notices and the focused parity outputs through the
+actual listener and composition root, including pending generation replacement.
+[Current runtime requirements](../openspec/specs/runtime-federation/spec.md)
+and [Desk requirements](../openspec/specs/world-surfaces/spec.md#requirement-bounded-desk-observation)
+contain the delivered acquisition contract.
+
 The [Desk watch owner](../server/src/world/desk-watches.ts) shares screen and
 receipt reads across socket declarations using the same injected scheduler.
 Its [queues](../server/src/world/desk-read-queues.ts) retain one active read per

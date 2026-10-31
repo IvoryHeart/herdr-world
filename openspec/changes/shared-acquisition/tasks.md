@@ -54,3 +54,11 @@ The timer-removal part advertises the capability for both focused and Desk paths
 
 - [x] 5.1 Map the new tests in `verification/coverage.json` (Q04, Q15, Q24) and run the complete verification gate.
 - [x] 5.2 Update the architecture and knowledge-map entries that describe polling. Add a changelog fragment for the lower idle cost.
+
+- [x] 5.3 Join the real Bridge/store to createWorldService with two synthetic hosts and a second real socket, covering the composed parity and shared acquisition boundary.
+- [x] 5.4 Synchronize both delivered runtime-federation additions and the complete Bounded Desk observation into current specs, preserving their scenarios.
+
+The composed case runs a real Bridge/store in a Worker and a second native socket
+against createWorldService with two synthetic runtime adapters (architect-approved
+alternative to two stores). Both spec deltas are synchronized into current specs.
+The change remains active for independent review; archive follows acceptance.
