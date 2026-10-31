@@ -34,7 +34,14 @@ export class ReviewFactsError extends Error {
 }
 
 function pages(run: Run, path: string): Record<string, unknown>[] {
-  const result = run(["gh", "api", "--paginate", "--jq", ".[] | @json", path]);
+  const result = run([
+    "gh",
+    "api",
+    "--paginate",
+    "--jq",
+    'if type == "array" then .[] | @json else error("expected array page") end',
+    path,
+  ]);
   if (result.code !== 0)
     throw new Error("could not read complete review replies");
   return result.stdout
