@@ -1,3 +1,4 @@
+import type { AgentSessionIdentity } from "../types";
 import { useLayoutEffect, useRef } from "react";
 import { bridge, type ConnectionClient } from "../api";
 import type { HostsFilter } from "./hostsFilter";
@@ -46,7 +47,7 @@ type RevealContext = {
   open(
     leaf: WorldLeafObject,
     world: WorldObject,
-    sessionId: string,
+    session: AgentSessionIdentity,
     signal: AbortSignal,
   ): Promise<DeskRevealAdmission>;
 };
@@ -112,7 +113,12 @@ export async function revealDeskAgent(
     const admission = await context.open(
       world.nodeById.get(captured.id) as WorldLeafObject,
       world,
-      session.value,
+      {
+        source: session.source,
+        agent: session.agent,
+        kind: session.kind,
+        value: session.value,
+      },
       context.signal,
     );
     if (context.signal.aborted || admission === "superseded")

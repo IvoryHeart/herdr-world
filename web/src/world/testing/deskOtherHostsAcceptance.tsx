@@ -1,3 +1,4 @@
+import type { DeskRevealResult } from "../deskReveal";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { DeskOtherHosts } from "../DeskOtherHosts";
@@ -27,10 +28,33 @@ export async function checkDeskOtherHosts(
     agentSessionFingerprint: "a".repeat(64),
   } as WorldLeafObject;
   let opens = 0;
+  let completion: Promise<DeskRevealResult> = Promise.resolve("opened");
+  const rendered = (predicate: () => boolean) =>
+    new Promise<void>((resolve, reject) => {
+      const observer = new MutationObserver(checkRendered);
+      const timer = setTimeout(() => {
+        observer.disconnect();
+        reject(new Error("Desk reveal outcome did not render"));
+      }, 10_000);
+      function checkRendered() {
+        if (!predicate()) return;
+        clearTimeout(timer);
+        observer.disconnect();
+        resolve();
+      }
+      observer.observe(container, {
+        subtree: true,
+        childList: true,
+        attributes: true,
+        characterData: true,
+      });
+      checkRendered();
+    });
   const render = (
     leaf: WorldLeafObject | null,
     fail = false,
     superseded = false,
+    outcome?: Promise<void>,
   ) =>
     flushSync(() =>
       root.render(
@@ -43,11 +67,17 @@ export async function checkDeskOtherHosts(
           }
           filtered={{ hosts: [{ connectionId: "alpha" }] } as WorldObject}
           label="Synthetic alpha"
-          onReveal={async () => {
+          onReveal={() => {
             opens++;
-            if (fail)
-              throw new Error("Captured session unavailable on Synthetic beta");
-            return superseded ? "superseded" : "opened";
+            completion = (async () => {
+              await outcome;
+              if (fail)
+                throw new Error(
+                  "Captured session unavailable on Synthetic beta",
+                );
+              return superseded ? "superseded" : "opened";
+            })();
+            return completion;
           }}
         />,
       ),
@@ -89,10 +119,14 @@ export async function checkDeskOtherHosts(
           .click(),
       );
     }
-    render(target, false, true);
+    const superseded = Promise.withResolvers<void>();
+    render(target, false, true, superseded.promise);
     expand();
-    action().click();
-    await new Promise((resolve) => setTimeout(resolve, 30));
+    flushSync(() => action().click());
+    check(action().disabled, "Pending reveal did not enter its busy state");
+    superseded.resolve();
+    await completion;
+    await rendered(() => !action().disabled);
     check(!action().disabled, "Supersession disabled a healthy reveal action");
     check(
       !container.querySelector('[role="alert"]'),
@@ -103,10 +137,20 @@ export async function checkDeskOtherHosts(
         .querySelector<HTMLButtonElement>(".desk-host-heading button")!
         .click(),
     );
-    render(target, true);
+    const failure = Promise.withResolvers<void>();
+    render(target, true, false, failure.promise);
     expand();
-    action().click();
-    await new Promise((resolve) => setTimeout(resolve, 30));
+    flushSync(() => action().click());
+    check(action().disabled, "Pending failure did not enter its busy state");
+    failure.resolve();
+    await completion.catch(() => {});
+    await rendered(
+      () =>
+        container
+          .querySelector('[role="alert"]')
+          ?.textContent?.includes("Synthetic beta") === true &&
+        action().disabled,
+    );
     check(
       container
         .querySelector('[role="alert"]')

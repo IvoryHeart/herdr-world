@@ -1,3 +1,4 @@
+import type { AgentSessionIdentity } from "../types";
 import { describe, expect, test } from "bun:test";
 import type { ConnectionClient } from "../api";
 import { focusWorldNode } from "./worldInspectorSelection";
@@ -71,13 +72,13 @@ function setup() {
     open: async (
       leaf: WorldLeafObject,
       world: WorldObject,
-      sessionId: string,
+      admittedSession: AgentSessionIdentity,
       signal: AbortSignal,
     ) => {
       events.push("open");
       expect(leaf).toBe(current);
       expect(world.nodeById.get(leaf.id)).toBe(current);
-      expect(sessionId).toBe(session.value);
+      expect(admittedSession).toEqual(session);
       expect(signal).toBe(controller.signal);
       if (ids !== null) expect(ids).toContain("beta");
       return "opened";

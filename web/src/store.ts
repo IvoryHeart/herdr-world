@@ -7,6 +7,7 @@ import {
 import {
   focusTaskNotification,
   notificationPaneMatches,
+  matchesCapturedAgentSession,
   type NotificationFocusOptions,
 } from "./store/notificationFocus";
 import { installStoreControls } from "./store/controls";
@@ -1455,14 +1456,19 @@ export const store = {
         )
           return false;
       }
-      if (target.agentSessionId) {
+      if (target.agentSessionId || target.agentSession) {
         const session = await lease.client.call("agent_session.get", {
           pane_id: target.paneId,
         });
         if (
           !current() ||
-          (session?.session?.value ?? session?.agent_session?.value) !==
-            target.agentSessionId
+          (target.agentSessionId !== undefined &&
+            (session?.session?.value ?? session?.agent_session?.value) !==
+              target.agentSessionId) ||
+          !matchesCapturedAgentSession(
+            target.agentSession,
+            session?.session ?? session?.agent_session,
+          )
         )
           return false;
       }

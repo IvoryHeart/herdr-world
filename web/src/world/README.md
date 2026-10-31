@@ -109,7 +109,9 @@ independent host queues. [DeskOtherHosts.tsx](DeskOtherHosts.tsx) expands aggreg
 summaries without operational reads and captures the displayed agent sessions.
 [deskReveal.ts](deskReveal.ts) admits the captured runtime, pane, terminal and
 session through a qualified live pane read before widening Hosts and opening the
-Inspector through the existing session-checked focus queue. Stale or replaced
+Inspector through the existing session-checked focus queue. Queued live pane
+and session reads revalidate the full captured source, harness, identity kind
+and value before native focus. Stale or replaced
 occupants remain explained and disabled; existing Inspector ownership is unchanged.
 Desktop and phone shell consumers run in [HostsFilter.test.ts](HostsFilter.test.ts)
 with the [reveal acceptance](testing/deskRevealAcceptance.ts); finite admission

@@ -250,7 +250,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
     intentRequestRef,
     world: aggregateWorld,
     hostsFilter,
-    open: async (leaf, candidateWorld, sessionId, signal) => {
+    open: async (leaf, candidateWorld, session, signal) => {
       const admittedIntent = intentRequestRef.current + 1;
       const opened = await applySelection(
         leaf.id,
@@ -258,7 +258,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
         true,
         candidateWorld,
         signal,
-        sessionId,
+        session,
       );
       if (opened) return "opened";
       return signal.aborted || intentRequestRef.current !== admittedIntent
