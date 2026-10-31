@@ -26,8 +26,6 @@ export const hostFilterCases = [
       "filters",
       "cold-host",
       "navigator",
-      "delayed-catalogue",
-      "empty-catalogue",
       "nonempty-filter",
       "actions",
       "watches",

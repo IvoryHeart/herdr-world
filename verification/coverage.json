@@ -605,6 +605,8 @@
         "web/src/store/pollReplacement.test.ts",
         "web/src/agentRecency.test.ts",
         "web/src/store/agentActivity.test.ts",
+        "web/src/world/useHostsFilter.test.ts",
+        "web/src/world/HostsFilter.test.ts",
         "web/src/store.test.ts",
         "web/src/useConnectionClient.test.ts",
         "web/src/world/ConcurrentContexts.test.ts"
@@ -632,6 +634,8 @@
           "web/src/store/pollReplacement.test.ts",
           "web/src/agentRecency.test.ts",
           "web/src/store/agentActivity.test.ts",
+          "web/src/world/useHostsFilter.test.ts",
+          "web/src/world/HostsFilter.test.ts",
           "web/src/store.test.ts",
           "web/src/useConnectionClient.test.ts",
           "web/src/world/ConcurrentContexts.test.ts"
@@ -639,7 +643,7 @@
         "checks": ["bun run check", "bun run verification:check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
       },
-      "evidenceDecision": "Captured owner/generation and colliding native IDs are exercised through real store/Bridge replay. Store and concurrent-context tests verify inactive-host operations and context isolation. Shared recency uses 48 list/push order combinations, exact session identity checks and actual two-host Bridge/store publication races, including two sessions during initial layout admission, service counter resets with retained ordering, capability removal and declaration-driven recency/hide T2 parity; see verification/contracts/shared-acquisition.md for bounds. Timer removal activates all original T2 assertions, with two-host Inspector/reference/retry consumers, deferred catalogue coalescing, failed bootstrap recovery and actual Chrome preview-removal effects. The actual service hello advertises the capability. See verification/contracts/shared-acquisition.md for bounds and excluded liveness claims. The composed acceptance now runs createWorldService with two synthetic hosts, a real Bridge/store Worker and a second real WebSocket, checking the parity outputs, shared native acquisition, notices, Desk references and retirement in flight; original T2 bodies/harnesses remain unchanged. Current specs include both complete shared-acquisition deltas.",
+      "evidenceDecision": "useHostsFilter.test.ts replaces the desktop/phone delayed-catalogue and empty-catalogue policy cases with the actual hook, production store selectors and refreshConnections admission on test time. Deferred connections.list replies prove saved beta survives until admission; successful empty admission restores All hosts with the removal explanation. The actual HostsControl renders that status after empty admission and omits it after populated admission; this headless DOM consumer proves presence, not geometry or focus. Partial pruning, remount persistence and nonempty scope normalization have direct consumers. HostsFilter.test.ts retains responsive geometry, rendered scope/navigation/feedback, focus and terminal lifecycle; all Town cases remain mandatory. This adds direct policy evidence without extending creation/preparation model claims. Captured owner/generation and colliding native IDs are exercised through real store/Bridge replay. Store and concurrent-context tests verify inactive-host operations and context isolation. Shared recency uses 48 list/push order combinations, exact session identity checks and actual two-host Bridge/store publication races, including two sessions during initial layout admission, service counter resets with retained ordering, capability removal and declaration-driven recency/hide T2 parity; see verification/contracts/shared-acquisition.md for bounds. Timer removal activates all original T2 assertions, with two-host Inspector/reference/retry consumers, deferred catalogue coalescing, failed bootstrap recovery and actual Chrome preview-removal effects. The actual service hello advertises the capability. See verification/contracts/shared-acquisition.md for bounds and excluded liveness claims. The composed acceptance now runs createWorldService with two synthetic hosts, a real Bridge/store Worker and a second real WebSocket, checking the parity outputs, shared native acquisition, notices, Desk references and retirement in flight; original T2 bodies/harnesses remain unchanged. Current specs include both complete shared-acquisition deltas.",
       "promotion": {
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",

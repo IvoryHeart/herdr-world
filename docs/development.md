@@ -98,6 +98,10 @@ clock to check admission retries, deadline cancellation and stale observations.
 `SharedViewCreation.test.ts` retain launcher wiring, focus, rendered Inspectors and
 real terminal ownership. Controlled opener tests do not replace browser evidence
 that the actual opener honors cancellation.
+`useHostsFilter.test.ts` runs the real Hosts hook and catalogue refresh on the
+test clock, including delayed/empty admission and saved-scope reconciliation.
+`HostsFilter.test.ts` retains responsive geometry, rendered navigation and removal
+feedback, Inspector focus and terminal lifecycle. Town cases stay in the browser.
 The handoff browser probe holds the real browser-local focus request, then uses
 controlled admission time and named opener completion for its cancellation
 check; see [the fixture clock guide](../web/src/world/README.md#browser-fixtures-on-test-time).
