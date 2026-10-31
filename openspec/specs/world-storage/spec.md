@@ -121,7 +121,12 @@ SQLite rows behind the single writer and storage port. Rows SHALL retain existin
 connection-qualified settings keys. Cached reads SHALL advance only after commit;
 close SHALL drain admitted writes, fence later writes and retain cached reads.
 The scheduler SHALL use committed last-run time for its existing interval policy
-and await recording results. A retired scheduler SHALL NOT admit a late result.
+and await recording results. The composition root SHALL pass its Clock and
+Scheduler through each connection runtime to auto-sync. Eligibility and recorded
+timestamps SHALL use that clock; polling SHALL use cancellable scheduler jobs.
+Stop SHALL cancel polling, and callbacks from a retired start SHALL NOT run or
+rearm work or clear a replacement start's timer. A retired scheduler SHALL NOT
+admit a late result.
 Settings RPCs SHALL combine configuration with committed runtime status while
 preserving existing fields and connection isolation.
 
@@ -140,6 +145,12 @@ configuration writes after migration SHALL omit legacy status fields.
 - **WHEN** a current run records its result while a configuration RPC disables its schedule
 - **THEN** the result and the disabled schedule both survive restart in their own stores
 - **AND** the RPC reports the committed result using its existing wire fields
+
+#### Scenario: Auto-sync uses injected service time
+- **WHEN** the service clock is one second after a committed run with a ten-minute interval
+- **THEN** an ordinary poll does not run Git until that clock reaches the interval
+- **AND** an explicit force can run earlier and records that clock's timestamp
+- **AND** stopping cancels polling and rejects callbacks belonging to an earlier start
 
 #### Scenario: Runtime status import is interrupted
 - **WHEN** the process is killed before or after the import COMMIT

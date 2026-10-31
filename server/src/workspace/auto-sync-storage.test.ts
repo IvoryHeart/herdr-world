@@ -65,6 +65,8 @@ test("the real scheduler and RPC use durable status while toggles remain indepen
       markRpcError: () => {},
     });
   const auto = createWorkspaceAutoSync({
+    clock: systemClock,
+    scheduler: systemScheduler,
     connectionId: "studio",
     herdr: {
       call: async () => ({

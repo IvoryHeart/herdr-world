@@ -14,6 +14,9 @@ overwrite, config/custom/secrets in SQLite, new runtime writes to settings JSON,
 configuration writes losing runtime results, post-close admission, or a retired
 scheduler admitting a late result. Existing interval and explicit-force behavior,
 connection isolation, dirty-tree refusal and Git effect checks remain mandatory.
+Service Clock/Scheduler ownership extends through every connection runtime:
+eligibility and persisted time use the clock; polling is cancellable and a late
+callback from a retired start cannot clear a replacement timer or rearm work.
 
 ## Mapping and acceptance
 
@@ -29,6 +32,13 @@ connection isolation, dirty-tree refusal and Git effect checks remain mandatory.
   result; toggling configuration and reopening preserves status and RPC fields.
   The same checkout under a sibling connection stays isolated. Generic settings
   reads and repository-update replies retain their status fields too.
+- `workspace/auto-sync-clock.test.ts`: real SQLite with virtual service time checks
+  recent/not-due, due polling, force, exact persisted timestamps, repeated start,
+  stop cancellation and late callbacks across stop/restart. Storage's batch timer
+  is explicitly separate so worker acknowledgements use their ordinary drain.
+  `service/world-service.test.ts` verifies the exact service clock/scheduler reach
+  the actual connection-runtime constructor and retains shutdown tests whose
+  deadline-expiry injection now begins only during shutdown.
 - `workspace/auto-sync.test.ts`: retired Git/read work drains without admitting a
   late result; both connection namespaces remain isolated. Existing real Git
   branch/default/dirty-tree tests remain mandatory.
@@ -46,7 +56,9 @@ new Quint model: a model cannot establish actual WAL/filesystem/embedded-worker
 behavior. Existing runtime/binding models keep their fences; none is expanded by
 this storage migration. Compiled assertion controls cover import atomicity,
 idempotence, backup verification, cache timing, file separation, interval use and
-RPC projection. Loader/parser failures do not count as a killed control.
+RPC projection. Additional controls bypass eligibility time, persisted time,
+poll scheduling, cancellation, generation-fenced timer ownership and root clock
+wiring. Loader/parser failures do not count as a killed control.
 Run complete consumer files, the applicable delivery checks and the unfiltered
 `bun run verification:gate`. Existing accepted Q33 Git-action evidence is unchanged;
 this new storage boundary requires separate mapping/implementation acceptance.

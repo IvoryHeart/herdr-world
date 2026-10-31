@@ -1,3 +1,4 @@
+import type { Clock, Scheduler } from "../service/ports";
 import type { RuntimeStatusPort } from "../storage/runtime-status";
 import type { HerdrClient } from "../bridge/herdr-client";
 import { gitShellCommandArgv } from "./git-shell";
@@ -225,6 +226,8 @@ export async function syncWorkspaceBranch({
 }
 
 export function createWorkspaceAutoSync(args: {
+  clock: Clock;
+  scheduler: Scheduler;
   connectionId?: string;
   formatError?: (error: unknown) => string;
   logger?: Logger;
@@ -255,7 +258,7 @@ export function createWorkspaceAutoSync(args: {
     failureMessage: "workspace auto-sync tick failed",
     recoveryMessage: "workspace auto-sync tick recovered",
   });
-  let timer: ReturnType<typeof setInterval> | null = null;
+  let timer: ReturnType<Scheduler["schedule"]> | null = null;
   let started = false;
   let lifecycleGeneration = 0;
   let runningTask: Promise<void> | null = null;
@@ -292,7 +295,7 @@ export function createWorkspaceAutoSync(args: {
     await args.runtimeStatus.put(key, {
       ...args.runtimeStatus.get(key),
       ...result,
-      last_run_at: new Date().toISOString(),
+      last_run_at: new Date(args.clock.now()).toISOString(),
     });
   }
 
@@ -383,7 +386,7 @@ export function createWorkspaceAutoSync(args: {
         if (
           !forced &&
           Number.isFinite(lastRunAt) &&
-          Date.now() - lastRunAt < intervalMs
+          args.clock.now() - lastRunAt < intervalMs
         ) {
           continue;
         }
@@ -460,12 +463,22 @@ export function createWorkspaceAutoSync(args: {
     return wrapped;
   }
 
+  function schedulePoll(generation: number) {
+    if (!current(generation)) return;
+    timer = args.scheduler.schedule(() => {
+      if (!current(generation)) return;
+      timer = null;
+      void tick();
+      schedulePoll(generation);
+    }, AUTO_SYNC_POLL_MS);
+  }
+
   function start() {
     if (started) return;
     started = true;
     lifecycleGeneration += 1;
     stopTask = null;
-    timer = setInterval(() => void tick(), AUTO_SYNC_POLL_MS);
+    schedulePoll(lifecycleGeneration);
     void tick();
   }
 
@@ -474,7 +487,7 @@ export function createWorkspaceAutoSync(args: {
     if (!started && !runningTask) return Promise.resolve();
     started = false;
     lifecycleGeneration += 1;
-    if (timer) clearInterval(timer);
+    timer?.cancel();
     timer = null;
     rerunRequested = false;
     forcedKeys.clear();

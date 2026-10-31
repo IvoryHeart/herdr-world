@@ -1,3 +1,4 @@
+import { systemClock, systemScheduler } from "../service/ports";
 import { memoryRuntimeStatus } from "../storage/testing/runtime-status";
 import { describe, expect, test } from "bun:test";
 import { shQuote } from "../utils/process-utils";
@@ -265,6 +266,8 @@ describe("workspace auto-sync lifecycle", () => {
       let syncCalls = 0;
       const updatedKeys: string[] = [];
       const autoSync = createWorkspaceAutoSync({
+        clock: systemClock,
+        scheduler: systemScheduler,
         connectionId,
         herdr: {
           call: async () => ({
@@ -313,6 +316,8 @@ describe("workspace auto-sync lifecycle", () => {
     let workspaceCalls = 0;
     const settings = autoSyncSettings();
     const autoSync = createWorkspaceAutoSync({
+      clock: systemClock,
+      scheduler: systemScheduler,
       herdr: {
         call: async () => {
           workspaceCalls += 1;
@@ -376,6 +381,8 @@ describe("workspace auto-sync lifecycle", () => {
     let updateCalls = 0;
     const settings = autoSyncSettings();
     const autoSync = createWorkspaceAutoSync({
+      clock: systemClock,
+      scheduler: systemScheduler,
       herdr: {
         call: () => workspaceResult.promise,
       } as any,

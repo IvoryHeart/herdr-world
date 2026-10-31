@@ -626,6 +626,8 @@ async function compose(
       let runtime: LegacyConnectionRuntime;
       try {
         runtime = adapters.herdr.createRuntime({
+          clock,
+          scheduler,
           identity,
           connectionGeneration: context.generation,
           config: profileConfig,
