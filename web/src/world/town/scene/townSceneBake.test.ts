@@ -8,6 +8,7 @@ import { townRandom } from "../townSprites";
 import { manualClock, town, working } from "./townScene.fixture";
 import { TownScene, type TownSemantics } from "./townScene";
 import {
+  townActorViewsToDrop,
   townBakeDirty,
   townBakeKeys,
   type TownBakeKeys,
@@ -259,4 +260,51 @@ test("a room's carpet alone, a desk's seats, the town's size and a building's wa
   expect(townBakeDirty(keys, townBakeKeys(model, wider)).scene).toBe(true);
   const shifted = withBuilding((b) => ({ ...b!, x: b!.x + 1 }));
   expect(townBakeDirty(keys, townBakeKeys(model, shifted)).scene).toBe(true);
+});
+
+test("a host turning stale or taking another theme bakes its building", () => {
+  const { after } = dirtyAfter("base", "base");
+  const { model, layout } = after;
+  const keys = townBakeKeys(model, layout);
+  const lab = hostOf(after, "gamma");
+  const changed = (change: (host: object) => object) => ({
+    ...model,
+    hosts: new Map(
+      [...model.hosts].map(([key, host]) => [
+        key,
+        key === lab ? { ...host, ...change(host) } : host,
+      ]),
+    ) as TownModel["hosts"],
+  });
+  for (const next of [
+    changed(() => ({ stale: true })),
+    changed(() => {
+      const skin = model.hosts.get(lab)!.deterministicSkin;
+      return {
+        deterministicSkin: { ...skin, themeIndex: (skin.themeIndex + 1) % 6 },
+      };
+    }),
+  ])
+    expect(townBakeDirty(keys, townBakeKeys(next, layout))).toEqual({
+      scene: false,
+      buildings: new Set([lab]),
+    });
+});
+
+test("baking one building again drops only its own agents' sprites", () => {
+  const hosts = new Map([
+    ["a1", "studio"],
+    ["a2", "lab"],
+    ["a3", "studio"],
+  ]);
+  expect(
+    townActorViewsToDrop(
+      ["a1", "a2", "a3", "gone"],
+      (key) => hosts.get(key),
+      "studio",
+    ),
+  ).toEqual(["a1", "a3", "gone"]);
+  expect(
+    townActorViewsToDrop(["a1", "a2"], (key) => hosts.get(key), "lab"),
+  ).toEqual(["a2"]);
 });

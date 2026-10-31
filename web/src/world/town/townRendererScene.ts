@@ -6,9 +6,13 @@
  */
 
 import { CanvasSource, Container, Graphics, Sprite, Texture } from "pixi.js";
+import type { OfficeDesk } from "../herdrOfficeProjection";
 import type { TerminalColor } from "../terminalColor";
 import {
+  TOWN_AGENT_SCALE,
   TOWN_TILE as T,
+  townDeskSlots,
+  townDeskTable,
   type TownBuilding,
   type TownCell,
   type TownLayout,
@@ -22,6 +26,7 @@ import {
 import {
   townCanvas,
   townCharacter,
+  townHash,
   townLookFor,
   type TownCanvas,
   type TownStaticSprites,
@@ -37,6 +42,20 @@ export function textureOf(canvas: TownCanvas) {
     textureCache.set(canvas, texture);
   }
   return texture;
+}
+
+let glowCanvas: TownCanvas | null = null;
+function glowTexture() {
+  if (!glowCanvas) {
+    const [canvas, g] = townCanvas(64, 64);
+    const gradient = g.createRadialGradient(32, 32, 1, 32, 32, 32);
+    gradient.addColorStop(0, "rgba(255,255,255,0.55)");
+    gradient.addColorStop(1, "rgba(255,255,255,0)");
+    g.fillStyle = gradient;
+    g.fillRect(0, 0, 64, 64);
+    glowCanvas = canvas;
+  }
+  return textureOf(glowCanvas);
 }
 
 /** One seat's sprites: a top seat has a person and laptop lid, a bottom seat a screen and back. */
@@ -266,4 +285,138 @@ export function bakeTownBuilding(
     },
     pendingCells,
   };
+}
+
+/** What baking a desk's pod reads besides its cell. */
+export type TownPodBake = {
+  desk: OfficeDesk;
+  /** The table's colour: its tab's terminal colour. */
+  wood: TerminalColor;
+  pinned: boolean;
+  sprites: TownStaticSprites;
+};
+
+/**
+ * Bake a desk's detailed sprites (people, laptops and screens, glow, papers,
+ * an item and its pin) into `parent`, layered back to front.
+ */
+export function bakeTownPod(
+  cell: TownCell,
+  parent: Container,
+  bake: TownPodBake,
+): PodView {
+  {
+    const { desk, sprites } = bake;
+    const container = new Container();
+    const X = (cell.x + 1) * T;
+    const Y = cell.y * T;
+    container.zIndex = Y + 52;
+    const wood = bake.wood;
+    const make = (canvas: TownCanvas | null, x: number, y: number) => {
+      const sprite = new Sprite(canvas ? textureOf(canvas) : Texture.EMPTY);
+      sprite.position.set(x, y);
+      container.addChild(sprite);
+      return sprite;
+    };
+    const glow = (x: number, y: number, size: number) => {
+      const sprite = new Sprite(glowTexture());
+      sprite.anchor.set(0.5);
+      sprite.position.set(x, y);
+      sprite.width = sprite.height = size;
+      sprite.blendMode = "add";
+      sprite.visible = false;
+      return sprite;
+    };
+    const place = townDeskTable(cell.seats);
+    const shadow = new Graphics()
+      .rect(X + place.x + 4, Y + 50, place.w - 2, 4)
+      .fill({ color: 0x000000, alpha: 0.2 });
+    container.addChild(shadow);
+    const slots = townDeskSlots(cell.seats);
+    // Layered back to front: top chairs and people, the table, then laptops,
+    // screens, the people seen from behind and their chair backs.
+    for (const slot of slots)
+      if (slot.top) make(sprites.chair, X + slot.chairX, Y + 2);
+    // Seated agents keep their feet (facing) or head (from behind) in place.
+    const seated = (sprite: Sprite, x: number, y: number, top: boolean) => {
+      sprite.anchor.set(0.5, top ? 1 : 0);
+      sprite.position.set(x + 7, top ? y + 20 : y);
+      sprite.scale.set(TOWN_AGENT_SCALE);
+      return sprite;
+    };
+    const people = slots.map((slot) =>
+      slot.top ? seated(make(null, 0, 0), X + slot.chairX, Y + 5, true) : null,
+    );
+    make(
+      (cell.seats <= 2 ? sprites.tableSmall : sprites.table)[wood]!,
+      X + place.x,
+      Y + 17,
+    );
+    const devices = slots.map((slot) =>
+      make(
+        slot.top ? sprites.lidOff : null,
+        X + slot.chairX,
+        slot.top ? Y + 13 : Y + 26,
+      ),
+    );
+    const itemIndex = townHash(`${desk.key}:item`) % 4;
+    const itemX = X + (cell.seats <= 2 ? 41 : 29);
+    const item =
+      itemIndex === 0
+        ? make(sprites.mug, itemX + 1, Y + 22)
+        : itemIndex === 1
+          ? make(sprites.cactus, itemX, Y + 19)
+          : null;
+    const glows = slots.map((slot) =>
+      slot.top
+        ? glow(X + slot.chairX + 7, Y + 12, 38)
+        : glow(X + slot.chairX + 7, Y + 30, 30),
+    );
+    for (const sprite of glows) container.addChild(sprite);
+    // Beside the laptop or screen, on the table top.
+    const papers = slots.map((slot) => {
+      const sprite = make(
+        sprites.papers,
+        X + slot.chairX + 14,
+        slot.top ? Y + 18 : Y + 28,
+      );
+      sprite.visible = false;
+      return sprite;
+    });
+    const backs = slots.map((slot) =>
+      slot.top
+        ? null
+        : seated(make(null, 0, 0), X + slot.chairX, Y + 34, false),
+    );
+    for (const slot of slots)
+      if (!slot.top) make(sprites.chairBack, X + slot.chairX, Y + 45);
+    // A pinned desk wears a pin on its table's corner.
+    if (bake.pinned) {
+      const px = X + place.x + place.w - 3;
+      const py = Y + 18;
+      container.addChild(
+        new Graphics()
+          .moveTo(px, py)
+          .lineTo(px - 3, py + 6)
+          .stroke({ color: 0x3a3a3a, width: 1 })
+          .circle(px, py, 3)
+          .fill(0xe5534b)
+          .stroke({ color: 0xffffff, width: 1 }),
+      );
+    }
+    parent.addChild(container);
+    return {
+      container,
+      deskKey: desk.key,
+      seats: slots.map((slot, seat) => ({
+        top: slot.top,
+        person: (people[seat] ?? backs[seat])!,
+        device: devices[seat]!,
+        glow: glows[seat]!,
+        papers: papers[seat]!,
+      })),
+      item,
+      cell,
+    };
+  }
 }

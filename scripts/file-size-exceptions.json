@@ -33,7 +33,6 @@
     "web/src/world/TownView.tsx": 1450,
     "web/src/world/board/board.css": 1419,
     "web/src/world/town/town.css": 1383,
-    "web/src/world/town/townRenderer.ts": 1510,
     "web/src/world/useWorldInspectorController.ts": 1136,
     "web/src/world/worldObject.ts": 1052
   },

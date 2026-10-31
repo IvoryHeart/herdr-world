@@ -77,19 +77,22 @@ function connection(
         number: index + 1,
         label: `Tab ${index + 1}`,
         focused: index === 0,
-        pane_count: 1,
-        agent_status: status,
+        pane_count: status.endsWith("+") ? 2 : 1,
+        agent_status: status.replace(/\+$/, ""),
       });
-      panes.push({
-        pane_id: `${tabId}:p`,
-        terminal_id: `term-${tabId}`,
-        workspace_id: id,
-        tab_id: tabId,
-        focused: true,
-        agent: "claude",
-        agent_status: status,
-        revision: 1,
-      });
+      // A status ending in "+" gives its tab a second pane (another seat).
+      const agentStatus = status.replace(/\+$/, "");
+      for (const suffix of status.endsWith("+") ? ["", "b"] : [""])
+        panes.push({
+          pane_id: `${tabId}:p${suffix}`,
+          terminal_id: `term-${tabId}${suffix}`,
+          workspace_id: id,
+          tab_id: tabId,
+          focused: suffix === "",
+          agent: "claude",
+          agent_status: agentStatus,
+          revision: 1,
+        });
     });
   return {
     connectionId,

@@ -1,8 +1,8 @@
 /**
  * What the renderer bakes, and what to bake again after a change. Each
  * building's interior (tables in their desks' colours, carpets in their rooms'
- * colours), façade and roof (its host's colour) and its desks' pins are baked
- * into textures and pods. A change re-bakes only the buildings whose own bake
+ * colours), façade and roof (its host's theme and colour, and whether the
+ * host is stale) and its desks' pins are baked into textures and pods. A change re-bakes only the buildings whose own bake
  * inputs changed; a change to the town's size or any building's rectangle
  * rebuilds the whole scene, ground and outdoor items included.
  */
@@ -19,12 +19,14 @@ export type TownBakeKeys = {
 
 /** What each part of the town is baked from. */
 export function townBakeKeys(
-  model: Pick<TownModel, "deskColors" | "deskPins" | "placeColors">,
+  model: Pick<TownModel, "deskColors" | "deskPins" | "placeColors" | "hosts">,
   layout: TownLayout,
 ): TownBakeKeys {
   const buildings = new Map<string, string>();
   for (const b of layout.buildings) {
-    const host = model.placeColors.hosts.get(b.hostKey) ?? "";
+    // The theme (skin, else the host key's hash), roof colour and staleness.
+    const office = model.hosts.get(b.hostKey);
+    const host = `${office?.deterministicSkin.themeIndex ?? "-"}#${model.placeColors.hosts.get(b.hostKey) ?? ""}${office?.stale ? "#stale" : ""}`;
     const rooms = b.rooms.map((r) => {
       const carpet = model.placeColors.rooms.get(r.key) ?? "";
       const cells = r.cells.map((c) =>
@@ -55,4 +57,20 @@ export function townBakeDirty(
   for (const [hostKey, key] of next.buildings)
     if (previous.buildings.get(hostKey) !== key) buildings.add(hostKey);
   return { scene: false, buildings };
+}
+
+/**
+ * The walking agents' sprites to drop when one building is baked again: its
+ * own agents' (they live in its container), and any whose agent is gone.
+ * Other buildings' agents keep theirs.
+ */
+export function townActorViewsToDrop(
+  viewKeys: Iterable<string>,
+  hostOf: (agentKey: string) => string | undefined,
+  hostKey: string,
+): string[] {
+  return [...viewKeys].filter((key) => {
+    const host = hostOf(key);
+    return host === undefined || host === hostKey;
+  });
 }
