@@ -34,13 +34,25 @@ export class ReviewFactsError extends Error {
 }
 
 function pages(run: Run, path: string): Record<string, unknown>[] {
-  const result = run(["gh", "api", "--paginate", "--slurp", path]);
+  const result = run([
+    "gh",
+    "api",
+    "--paginate",
+    "--jq",
+    'if type == "array" then .[] | @json else error("expected array page") end',
+    path,
+  ]);
   if (result.code !== 0)
     throw new Error("could not read complete review replies");
-  const value: unknown = JSON.parse(result.stdout);
-  if (!Array.isArray(value) || value.some((page) => !Array.isArray(page)))
-    throw new Error("incomplete review reply pages");
-  return value.flat() as Record<string, unknown>[];
+  return result.stdout
+    .split(/\r?\n/u)
+    .filter((line) => line.trim())
+    .map((line) => {
+      const value: unknown = JSON.parse(line);
+      if (!value || typeof value !== "object" || Array.isArray(value))
+        throw new Error("incomplete review reply pages");
+      return value as Record<string, unknown>;
+    });
 }
 
 export function readCrewPosts(run: Run, repo: string, pr: number): CrewPost[] {

@@ -77,6 +77,10 @@ notice, including when an earlier round reviewed the same head.
 Read failures hold admission and retry silently. Three consecutive failed reads
 on a head escalate to the owner; a successful read resets that count. Rewritten
 ancestry or a merge outside main escalates immediately.
+Review pagination supports GitHub CLI 2.45: `--paginate --jq 'if type == "array" then .[] | @json else error("expected array page") end'`
+emits one JSON object per line, preserving multiline review bodies without
+requiring `--slurp`. Empty collections are valid; failed pages and malformed
+records keep admission held.
 The watcher never kills a running round for a merge of main; its reviewers finish
 on their pinned head. Waiting reviewers from that round retain their slots in
 the queue across pushes.

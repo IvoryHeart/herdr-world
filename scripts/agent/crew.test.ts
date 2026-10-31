@@ -611,7 +611,7 @@ describe("delivery", () => {
   const run: Run = (argv) => {
     calls.push(argv);
     if (argv[0] === "gh" && argv.includes("--paginate"))
-      return { code: 0, stdout: "[[]]", stderr: "" };
+      return { code: 0, stdout: "", stderr: "" };
     if (argv.join(" ") === "herdr agent list")
       return {
         code: 0,

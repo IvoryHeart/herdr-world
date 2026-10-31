@@ -76,9 +76,9 @@ export function setup(
       if (argv.join(" ") === "herdr agent list")
         stdout = '{"result":{"agents":[]}}';
       else if (argv[0] === "gh" && argv.includes("--paginate"))
-        stdout = JSON.stringify([
-          argv.at(-1)!.includes("issues/7/comments") ? posts : [],
-        ]);
+        stdout = (argv.at(-1)!.includes("issues/7/comments") ? posts : [])
+          .map((post) => JSON.stringify(post))
+          .join("\n");
       else if (argv[0] === "herdr-world")
         stdout = '{"ok":true,"result":{"id":"q-synthetic"}}';
       else if (argv.includes("rev-list"))
