@@ -22,6 +22,12 @@ export type TownRendererDiagnostics = {
   sceneRenders: number;
   /** Single buildings baked again after their colours, pins or desks changed. */
   buildingBakes: number;
+  /** Navigation grids built (unchanged buildings keep theirs). */
+  navigationsBuilt: number;
+  /** Agents reconciled by actor syncs (unchanged hosts are skipped). */
+  actorsReconciled: number;
+  /** Actor syncs per host: how often each host's agents were reconciled. */
+  hostSyncs: Record<string, number>;
   ready: boolean;
   reducedMotion: boolean;
   interactionPaused: boolean;
@@ -77,6 +83,9 @@ export function diagnostics(): TownRendererDiagnostics {
     frames: 0,
     sceneRenders: 0,
     buildingBakes: 0,
+    navigationsBuilt: 0,
+    actorsReconciled: 0,
+    hostSyncs: {},
     ready: false,
     reducedMotion: false,
     interactionPaused: false,

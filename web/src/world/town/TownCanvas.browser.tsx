@@ -1523,6 +1523,55 @@ async function run() {
     diagnostics.level === "overview",
     `default level is ${diagnostics.level}, expected overview`,
   );
+  // Observing the same town again reconciles no agent and builds no
+  // navigation; one agent's new status reconciles only its host's agents.
+  {
+    const observe = async () => {
+      const frames = diagnostics.frames;
+      setWorld(
+        worldFor(
+          base.connections.map((connection) => ({
+            ...connection,
+            snapshot: connection.snapshot && {
+              ...connection.snapshot,
+              panes: connection.snapshot.panes.map((pane) => ({ ...pane })),
+            },
+          })),
+        ),
+      );
+      await waitFor(
+        () => diagnostics.frames > frames,
+        "Town drew no frame after a new observation",
+      );
+    };
+    const reconciled = diagnostics.actorsReconciled;
+    const built = diagnostics.navigationsBuilt;
+    await observe();
+    check(
+      diagnostics.actorsReconciled === reconciled &&
+        diagnostics.navigationsBuilt === built,
+      `an unchanged observation reconciled ${diagnostics.actorsReconciled - reconciled} agents and built ${diagnostics.navigationsBuilt - built} navigation grids`,
+    );
+    const syncs = { ...diagnostics.hostSyncs };
+    // Any agent, to a status it does not have now.
+    const pane = base.agentPanes[0]!;
+    const status = pane.agent_status;
+    pane.agent_status = status === "working" ? "idle" : "working";
+    await observe();
+    const hosts = Object.keys(diagnostics.hostSyncs).filter(
+      (hostKey) => diagnostics.hostSyncs[hostKey] !== (syncs[hostKey] ?? 0),
+    );
+    check(
+      hosts.length === 1 && diagnostics.actorsReconciled > reconciled,
+      `one agent's status reconciled ${hosts.length} hosts' agents (${hosts.join(", ")})`,
+    );
+    check(
+      diagnostics.navigationsBuilt === built,
+      "a status change built navigation grids",
+    );
+    pane.agent_status = status;
+    await observe();
+  }
   check(
     [...host.querySelectorAll(".town-quest")].every(
       (pennant) => getComputedStyle(pennant).display === "none",

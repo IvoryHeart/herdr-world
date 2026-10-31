@@ -38,16 +38,17 @@ import {
   type BuildingView,
   type PodView,
 } from "./townRendererScene";
-import {
-  townBakeDirty,
-  townBakeKeys,
-  type TownBakeKeys,
-} from "./scene/townSceneBake";
+import type { TownSceneFrame, TownSceneState } from "./scene/townSceneDiff";
 import { diagnostics, type TownFrameTrace } from "./townDiagnostics";
 export type { TownFrameTrace } from "./townDiagnostics";
 import { DEVTOOLS } from "../devtools/flag";
 
-import { TownActors, townActorWorld, type TownActor } from "./townActors";
+import {
+  TownActors,
+  townActorWorld,
+  type TownActor,
+  type TownActorWorld,
+} from "./townActors";
 import type { TownMoveResult } from "./townMoves";
 import {
   TownCamera,
@@ -81,23 +82,13 @@ import {
 
 export type { TownRendererDiagnostics } from "./townDiagnostics";
 
-export type TownSceneState = {
-  selectedKey: string | null;
-  hoverKey: string | null;
-  completionSeenKeys: ReadonlySet<string>;
-  /** Agents the user opened, who walk back to their desks. */
-  summonedKeys: ReadonlySet<string>;
-  askingKeys?: ReadonlySet<string>;
-  /** Building currently held open (for example while moving a desk). */
-  openHostKey: string | null;
-  calm: boolean;
-};
+export type { TownSceneState } from "./scene/townSceneDiff";
 
 export type TownRendererHandle = {
   camera: TownCamera;
   readonly level: TownLevel;
-  setScene(model: TownModel, layout: TownLayout, state: TownSceneState): void;
-  setState(state: TownSceneState): void;
+  /** The town now and what changed since the last frame applied (scene/townSceneDiff.ts). */
+  apply(frame: TownSceneFrame): void;
   setViewport(viewport: TownViewport): void;
   /** Ask for a redraw after camera input; the reason is traced. */
   invalidate(reason?: string): void;
@@ -836,16 +827,23 @@ export async function createTownRenderer(
   };
   motion.addEventListener("change", onMotion);
 
-  const syncActors = (instant: boolean) => {
+  /** Reconcile agents: all of them, or only those of the given hosts. */
+  let actorWorld: TownActorWorld | null = null;
+  const syncActors = (instant: boolean, hosts?: ReadonlySet<string>) => {
     if (!layout || !model) return;
-    const actorWorld = townActorWorld(layout, model);
+    actorWorld = townActorWorld(layout, model, actorWorld);
+    stats.navigationsBuilt += actorWorld.built.size;
     layoutCells = new Map(actorWorld.cells);
     actors.sync(
       actorWorld,
       instant || camera.reducedMotion,
       state.summonedKeys,
       state.askingKeys ?? new Set(),
+      hosts,
     );
+    stats.actorsReconciled += actors.reconciled;
+    for (const hostKey of hosts ?? actorWorld.buildings.keys())
+      stats.hostSyncs[hostKey] = (stats.hostSyncs[hostKey] ?? 0) + 1;
     stats.summoned = [...state.summonedKeys].filter(
       (key) => actors.actors.get(key)?.goal?.kind === "seat",
     );
@@ -874,7 +872,6 @@ export async function createTownRenderer(
   });
   const { beginDrag, moveDrag, endDrag, finishMove } = dragEffects;
 
-  let bakeKeys: TownBakeKeys | null = null;
   return {
     beginDrag,
     moveDrag,
@@ -884,51 +881,28 @@ export async function createTownRenderer(
     get level() {
       return level;
     },
-    setScene(nextModel, nextLayout, nextState) {
-      const layoutChanged = nextLayout !== layout;
-      // Tables, carpets and roofs are baked with their colours (and tables
-      // with their pins), so a new colour, pin or host state may bake again.
-      const colorsChanged =
-        nextModel.deskColors !== model?.deskColors ||
-        nextModel.placeColors !== model?.placeColors ||
-        nextModel.deskPins !== model?.deskPins ||
-        // Roofs show a host's theme and whether it is stale.
-        nextModel.hosts !== model?.hosts;
-      const first = !layout;
+    apply({ model: nextModel, layout: nextLayout, state: nextState, dirty }) {
       model = nextModel;
       layout = nextLayout;
       state = nextState;
       camera.calm = nextState.calm;
-      if (!layoutChanged && !colorsChanged) {
-        syncActors(first);
-        dimDirty = true;
-        request("scene");
-        return;
-      }
       // Bake again only what changed: the whole scene when the town's size
       // or a building's rectangle changed, else just the changed buildings.
-      const keys = townBakeKeys(nextModel, nextLayout);
-      const dirty = townBakeDirty(bakeKeys, keys);
-      bakeKeys = keys;
-      if (dirty.scene) {
+      if (dirty.bake.scene) {
         buildScene();
         stats.sceneRenders += 1;
-      } else if (dirty.buildings.size) {
-        for (const hostKey of dirty.buildings) rebakeBuilding(hostKey);
+      } else if (dirty.bake.buildings.size) {
+        for (const hostKey of dirty.bake.buildings) rebakeBuilding(hostKey);
         recordLayout();
       }
-      syncActors(first);
-      dimDirty = true;
-      request("scene");
-    },
-    setState(nextState) {
-      const summonedChanged =
-        nextState.summonedKeys !== state.summonedKeys ||
-        nextState.askingKeys !== state.askingKeys;
-      state = nextState;
-      camera.calm = nextState.calm;
-      if (summonedChanged) syncActors(false);
-      request("scene-state");
+      // Agents of unchanged hosts keep their goals and paths; every sync
+      // still takes the new model and layout.
+      if (dirty.scene || dirty.actors.size)
+        syncActors(dirty.first, dirty.first ? undefined : dirty.actors);
+      if (dirty.scene) {
+        dimDirty = true;
+        request("scene");
+      } else request("scene-state");
     },
     setViewport(viewport) {
       app.renderer.resize(
