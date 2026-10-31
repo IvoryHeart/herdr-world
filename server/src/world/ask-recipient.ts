@@ -21,6 +21,7 @@ export type AnswerLease = {
         method: string,
         params: Record<string, unknown>,
         timeoutMs: number,
+        beforeSend?: () => void,
       ): Promise<unknown>;
     };
     agentSessions?: { conversation: ConversationSource };

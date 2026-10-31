@@ -35,6 +35,15 @@ terminal traffic. Browser RPC uses `{ id, method, params }` and returns either
 `{ id, result }` or `{ id, error }`, with connection identity attached to scoped
 traffic. Subscribed Herdr events are pushed as `{ event: ... }`.
 
+Browser RPC and agent CLI admission use the service-owned static
+[verb registry](world-verbs.md), with TypeBox schemas, actor policy, explicit effect
+acknowledgements and recovery declarations. Unknown browser methods are refused
+before runtime acquisition. Replies can add `command_evidence`: memory admission
+is `accepted`, durable records require a `stored` receipt, and acknowledged native
+dispatch is `sent` on its captured runtime. The registry preserves existing owner
+confirmation and target validation; [the verb guide](world-verbs.md#result-evidence)
+describes conservative legacy evidence and the remaining browser challenge gap.
+
 The bridge owns socket access, local/SSH runtimes, file/Git/worktree/hook/session
 operations, terminal and clipboard relay, optional observability-provider access,
 authentication, health, and updates.

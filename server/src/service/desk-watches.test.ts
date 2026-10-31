@@ -55,6 +55,7 @@ test("Desk declarations dispatch without runtime selection and socket cleanup re
     forEachRuntime() {},
     closed: (socket) => watches.release(socket),
   });
+  services.clients = clients.clients;
   const target = {
     connection_id: "alpha",
     connection_generation: 1,
@@ -76,7 +77,11 @@ test("Desk declarations dispatch without runtime selection and socket cleanup re
         }),
       );
       expect(frames.get(socket)).toEqual([
-        { id: "declare", result: { ok: true } },
+        {
+          id: "declare",
+          result: { ok: true },
+          command_evidence: { stage: "accepted" },
+        },
       ]);
     }
     await tick();

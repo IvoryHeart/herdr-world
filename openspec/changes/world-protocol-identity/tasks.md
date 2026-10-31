@@ -132,15 +132,24 @@ No v2 subscriptions or persisted-capture fences are implemented here.
 
 ## 7. Verbs, adapters and the synthetic source (stage 6)
 
-- [ ] 7.1 Build the verb registry from today's dispatch tables. Verify with the P4
+- [x] 7.1 Build the verb registry from today's dispatch tables. Verify with the P4
   table:
   - every policy is unchanged, including `acknowledge` for `--herdr`, `--replace --yes`,
     `--yes` and `--allow-close-room`;
   - every browser-called method is registered;
   - unregistered methods are refused before dispatch.
-- [ ] 7.2 Add staged command evidence. "Stored" appears only after a durable commit;
+- [x] 7.2 Add staged command evidence. "Stored" appears only after a durable commit;
   coordinate with the grey-tick wording fix in the ui-fixes seat. Verify with a test
   that memory-only acceptance shows `accepted`.
+
+  Backend delivery covers browser RPC, agent CLI and the existing browser forge
+  confirmation boundary. P4 records all 31 CLI commands for both actors against
+  the pre-registry implementation. Shared replies report conservative evidence;
+  durable CLI records require a store receipt, native acknowledgement proves only
+  sent, and no observed stage is inferred. Existing terminal/Chat evidence and UI
+  wording stay with their owners. Fresh service-issued confirmation challenges,
+  separate resource/assistant catalogs and later observation-linked command
+  tracking remain follow-up integrations; they are not claimed by this migration.
 - [x] 7.3 Add adapter descriptors and the registry in the composition root. The Herdr
   adapter wraps today's runtime. Verify with a test that a disabled adapter makes no
   requests, holds no timers and loads no browser code.
@@ -158,6 +167,12 @@ No v2 subscriptions or persisted-capture fences are implemented here.
   to `verification/coverage.json`. The bridge-access/verb migration in 7.6 and
   provider-name lint in 7.5 remain separate. The spec-required synthetic v2 crossing
   is a named pending test until v2 exists.
+
+- [x] 7.6b Sync the implemented browser/agent registry and conservative staged
+  evidence into `bridge-access`; document the preserved policy and browser
+  confirmation gap in `docs/world-verbs.md`; add Q45/P4 and its pending independent
+  acceptance. The broader resource/assistant registration and observation-linked
+  scenarios stay in the delta until those integrations ship.
 
 ## 8. Workflow substrate (item 15, then stage 5)
 

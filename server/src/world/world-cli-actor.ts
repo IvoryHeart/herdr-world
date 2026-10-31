@@ -13,7 +13,11 @@ export type CliHost = {
   generation: number;
   /** The Herdr runs on this machine, so its processes can be checked. */
   local: boolean;
-  call(method: string, params: Record<string, unknown>): Promise<unknown>;
+  call(
+    method: string,
+    params: Record<string, unknown>,
+    beforeSend?: () => void,
+  ): Promise<unknown>;
 };
 
 export function askSessionFingerprint(value: unknown): string | undefined {

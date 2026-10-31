@@ -2309,6 +2309,64 @@
         "decision": "pending",
         "scope": "SQLite allocator and ledger families only; independent review and CI required."
       }
+    },
+    {
+      "id": "Q46",
+      "area": "Verb registry and actor policy",
+      "owner": "server/src/verbs/",
+      "requirement": "openspec/specs/bridge-access/spec.md",
+      "properties": "Static browser/agent inventory; unchanged actor policy and acknowledgements; unknown methods refused before native acquisition; TypeBox admission; request-scoped new-effect authority and runtime recheck; already-started history completion and revision-fenced rollback; effect-accurate recovery classes; evidence never overstates memory acceptance or native acknowledgement",
+      "existingTests": [
+        "server/src/world/world-cli-authorization.test.ts",
+        "server/src/verbs/recovery.test.ts",
+        "server/src/bridge/endpoint-terminal-session.test.ts",
+        "server/src/verbs/policy.test.ts",
+        "server/src/verbs/compatibility.test.ts",
+        "server/src/verbs/admission.test.ts",
+        "server/src/verbs/dispatch.test.ts",
+        "server/src/verbs/cli-entry.test.ts",
+        "server/src/verbs/evidence.test.ts",
+        "server/src/service/world-service.test.ts",
+        "server/src/world/world-cli.test.ts",
+        "server/src/world/world-cli-groups.test.ts",
+        "server/src/world/group-move.test.ts",
+        "server/src/bridge/settings-rpc.test.ts",
+        "server/src/bridge/terminal-bridge.test.ts",
+        "server/src/sources/actions.test.ts"
+      ],
+      "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/549",
+      "technique": "direct-exhaustive-policy",
+      "assessment": "Finite verb \u00d7 actor baseline, all existing CLI commands through both actor paths against pre-registry outcomes, browser call inventory and actual service/dispatcher controls",
+      "status": "alternative-evidence",
+      "remaining": "Separate resource and assistant action catalogs retain their current owners. Fresh service-issued browser confirmation challenges and observation-linked command tracking require later browser/effect integration; no grant API, retry queue or new workflow authoring is introduced.",
+      "requiredChecks": [
+        "bun run check",
+        "bun run test server/src/verbs/",
+        "bun run check:changed"
+      ],
+      "partialEvidence": {
+        "models": [],
+        "contracts": ["verification/contracts/verb-policy.md"],
+        "tests": [
+          "server/src/world/world-cli-authorization.test.ts",
+          "server/src/verbs/recovery.test.ts",
+          "server/src/bridge/endpoint-terminal-session.test.ts",
+          "server/src/verbs/policy.test.ts",
+          "server/src/verbs/compatibility.test.ts",
+          "server/src/verbs/admission.test.ts",
+          "server/src/verbs/dispatch.test.ts",
+          "server/src/verbs/cli-entry.test.ts",
+          "server/src/verbs/evidence.test.ts",
+          "server/src/service/world-service.test.ts"
+        ],
+        "checks": ["bun run test server/src/verbs/"],
+        "review": "Merged protocol design is not implementation acceptance. Independent PR review and selected CI remain required."
+      },
+      "evidenceDecision": "P4 is finite and directly exhaustive; native runtime and storage ordering retain their existing model/consumer obligations. Mutation controls establish sensitivity of every new test, not full domain-validation or observation-delivery proof.",
+      "promotion": {
+        "decision": "pending",
+        "scope": "Migrated browser RPC, agent CLI and browser forge policy only; independent review and CI required."
+      }
     }
   ],
   "promotionReview": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",

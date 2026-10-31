@@ -421,9 +421,16 @@ test("stop ends a wait for an answer before storage closes", async () => {
     },
   );
   await started.connected;
-  const { result } = (await (
+  const { result, command_evidence } = (await (
     await askThroughCli(started, "Ship it?")
-  ).json()) as { result: { id: string } };
+  ).json()) as {
+    result: { id: string };
+    command_evidence: { stage: string; receipt: string };
+  };
+  expect(command_evidence).toEqual({
+    stage: "stored",
+    receipt: `world-ledger:1:${result.id}`,
+  });
   armed = true;
   const answer = fetch(`${started.base}/api/world/cli`, {
     method: "POST",
