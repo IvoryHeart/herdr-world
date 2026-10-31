@@ -114,6 +114,7 @@ Office view (`herdrOfficeProjection.ts`, `officeRoomActions.ts`,
 | View composition, room dialogs and creation | [TownView.tsx](TownView.tsx) owns taps, peeks, replies through World's terminal composer, toasts, room dialogs and seat/room creation and mounts [TownCanvas.tsx](town/TownCanvas.tsx). | [Town browser fixture](town/TownCanvas.browser.tsx), [room-action tests](officeRoomActions.test.ts) |
 | Needs-you rail and peek | [TownRail.tsx](town/TownRail.tsx) and [TownPeek.tsx](town/TownPeek.tsx); [townChat.ts](town/townChat.ts) reads pane screens and sends one-tap answers through each pane's own connection and generation; [terminalComposerRequest.ts](terminalComposerRequest.ts) asks the pane's terminal to open its composer. | [Town browser fixture](town/TownCanvas.browser.tsx) |
 | Herdr-to-Town data | [herdrOfficeProjection.ts](herdrOfficeProjection.ts) projects qualified topology and pane devices with `TOWN_PRESENTATION_BOUNDS`; [townModel.ts](town/townModel.ts) indexes presented rooms, desks, seats and per-room counts. | [Projection tests](herdrOfficeProjection.test.ts) |
+| Town scene model | [scene/townScene.ts](town/scene/townScene.ts) derives what the town is, headless: the model with colours and pins, placement with its memory per shape, the reflow hold and its explicit Fold/Expand bypass, teams, accessible targets, desk badges and blocked-since times. It reads time only through the [clock port](town/scene/ports.ts) (a lint rule restricts browser clocks and timers under `town/scene/`); `TownCanvas` is its adapter and passes the page clock ([townBrowserClock.ts](town/townBrowserClock.ts)). Camera, interaction, dirty sets and HUD topics move here in later steps ([#522](https://github.com/IvoryHeart/herdr-world/issues/522)). | [Scene tests](town/scene/townScene.test.ts) |
 | Town placement | [townLayout.ts](town/townLayout.ts) places buildings, rooms, desk cells, lounge and reception from native order, keeping desks in place while a scene is live. | [Layout tests](town/townLayout.test.ts) |
 | Pointer input | `TownCanvas` hit-tests the canvas and feeds World's shared gesture machine; [townGesture.ts](town/townGesture.ts) holds Town's targets (a hit, and the desk or agent a drag would carry) and thresholds. | [Shared cases](interaction/gesture.test.ts), [Town browser test](town/TownCanvas.test.ts) |
 | Camera and zoom levels | [townCamera.ts](town/townCamera.ts) owns pan, zoom about a point, flights and the town/overview/room/desk thresholds; [townCameraTargets.ts](town/townCameraTargets.ts) resolves desk cells and room/building zoom targets. | [Camera tests](town/townCamera.test.ts) |
@@ -134,9 +135,9 @@ updates reuse that topology. Asking identities resolve through the snapshot's
 generation-qualified pane and agent indexes, without scanning the roster. The
 canvas uses the same native-order tab prefix as Spaces: 24 tabs folded, then
 20 more per expansion. Attention never changes this admission. Explicit fold
-requests carry a local revision alongside their admission state, so TownCanvas
-applies that requested layout immediately; background topology changes retain
-the interaction quiet-period guard.
+requests carry a local revision alongside their admission state, so the scene
+model applies that requested layout immediately; background topology changes
+retain the interaction quiet-period guard.
 [townFoldedActivity.ts](town/townFoldedActivity.ts) maps shared rail calls and
 qualified asking identities onto hidden desks; [TownFoldIndicators.tsx](town/TownFoldIndicators.tsx)
 shows red needs-you and green unreviewed-completion corner icons without extra

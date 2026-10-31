@@ -234,6 +234,39 @@
         "es2024": true,
         "shared-node-browser": true
       }
+    },
+    {
+      "files": ["web/src/world/town/scene/**/*.ts"],
+      "rules": {
+        "no-restricted-globals": [
+          "error",
+          { "name": "performance", "message": "Read time through TownClock." },
+          { "name": "setTimeout", "message": "Defer through TownClock.after." },
+          {
+            "name": "setInterval",
+            "message": "Defer through TownClock.after."
+          },
+          {
+            "name": "requestAnimationFrame",
+            "message": "Frames come from the renderer's scheduler."
+          },
+          { "name": "window", "message": "The scene model is headless." },
+          { "name": "document", "message": "The scene model is headless." }
+        ],
+        "no-restricted-properties": [
+          "error",
+          {
+            "object": "Date",
+            "property": "now",
+            "message": "Read wall time through TownClock.wall."
+          },
+          {
+            "object": "Math",
+            "property": "random",
+            "message": "Use the scene's seed."
+          }
+        ]
+      }
     }
   ]
 }

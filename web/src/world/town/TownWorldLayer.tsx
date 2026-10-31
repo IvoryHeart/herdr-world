@@ -28,7 +28,7 @@ import { townCarpetFor, townCarpetOf } from "./townPaint";
 import { TownQuestPennant, type TownQuestMark } from "./townQuestPennant";
 import { townReceptionVisitors } from "./townReception";
 import type { TownRendererHandle } from "./townRenderer";
-import { townTargets, type TownTarget } from "./townTargets";
+import type { TownTarget } from "./townTargets";
 import type { TownTeams } from "./townTeams";
 import type { TownVisible } from "./townVisibleHosts";
 
@@ -77,7 +77,6 @@ export const TownWorldLayer = memo(function TownWorldLayer({
   askingKeys,
   onActivateAsk,
   layout,
-  teams,
   selectedKey,
   blockedSince,
   roomActions,
@@ -88,6 +87,7 @@ export const TownWorldLayer = memo(function TownWorldLayer({
   onFocusTarget,
   visible,
   onHoverEntry,
+  targets,
   deskBadges,
   quests,
   renderer,
@@ -100,8 +100,9 @@ export const TownWorldLayer = memo(function TownWorldLayer({
   onActivateAsk?: (nodeId: string) => void;
   foldedActivity: ReadonlyMap<string, TownFoldedActivity>;
   layout: TownLayout;
-  teams: TownTeams;
   visible: TownVisible;
+  /** Accessible targets from the scene model (townTargets). */
+  targets: readonly TownTarget[];
   /** Pull request or ticket chips for desks (World sources). */
   deskBadges: ReadonlyMap<string, TownDeskBadge>;
   /** Quests by agent key, as pennants at their seats. */
@@ -119,10 +120,6 @@ export const TownWorldLayer = memo(function TownWorldLayer({
   onActivateRoom(key: string): void;
   onFocusTarget(target: TownTarget): void;
 }) {
-  const targets = useMemo(
-    () => townTargets(model, layout, teams.deskTeams),
-    [model, layout, teams.deskTeams],
-  );
   const terminalAsksByHost = useMemo(() => {
     type Device = (typeof model.projection.paneRoster)[number]["device"];
     const byHost = new Map<string, Device[]>();
