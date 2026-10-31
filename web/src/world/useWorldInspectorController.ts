@@ -1,11 +1,5 @@
 import { useCreationProgress } from "../creationRequests";
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { type WorkspaceSurfaceSelection } from "../App";
 import { worldLocalStorage } from "../browserStorage";
 import { paneShortcutAction } from "../paneShortcuts";
@@ -22,10 +16,7 @@ import {
 } from "../workspaceResource";
 import { worldRuntimeStore, type WorldRuntimePriority } from "./runtimeStore";
 import { buildWorldObject, type WorldObjectNode } from "./worldObject";
-import {
-  sameCanvasAnchors,
-  type WorldCanvasAnchor,
-} from "./worldConnectorGeometry";
+import { createWorldAnchorFeed } from "./worldAnchorFeed";
 import type { WorldConnectorTargetBounds } from "./worldConnectorGeometry";
 import {
   reconcileWorldInspectorConversation,
@@ -102,19 +93,10 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
   >({});
   const [intentOpening, setIntentOpening] = useState(false);
   const [intentError, setIntentError] = useState<string | null>(null);
-  const [visualConversationAnchors, setVisualAnchorState] = useState<Record<
-    string,
-    WorldCanvasAnchor
-  > | null>(null);
-  // Views report anchors after every render and frame; keeping an unchanged
-  // set keeps an idle view from rendering World again.
-  const setVisualConversationAnchors = useCallback(
-    (next: Record<string, WorldCanvasAnchor> | null) =>
-      setVisualAnchorState((current) =>
-        sameCanvasAnchors(current, next) ? current : next,
-      ),
-    [],
-  );
+  // Views report anchors after every render and frame. They move with a
+  // walking agent or the camera, so they bypass React (worldAnchorFeed.ts).
+  const [visualConversationAnchors] = useState(createWorldAnchorFeed);
+  const setVisualConversationAnchors = visualConversationAnchors.set;
   const [floatingWindowAnchors, setFloatingWindowAnchors] = useState<
     Record<string, WorldConnectorTargetBounds | null>
   >({});
