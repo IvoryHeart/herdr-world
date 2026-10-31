@@ -5,7 +5,8 @@ interest independent of operation authority, and notices compared with each
 socket's received focused lists. The observer checkpoint delivers the service
 observer and catalogue notices; the recency checkpoint below adds shared readings
 and the browser maximum merge. The capability is not advertised yet, and browser
-timer removal and shared Desk reads remain pending.
+timer removal remains pending. The Desk checkpoint below adds capability-gated
+shared reads without enabling the capability.
 
 ## Required properties and scenarios
 
@@ -102,3 +103,45 @@ checks both initial capability absence and removal on reconnect. The real store
 initial-layout race retains A's maximum when B pushes for the same pane before A
 publishes. Active declarations retry a failed release once per period and stop
 on success. Q24 and Desk acquisition remain a later checkpoint.
+
+## Desk checkpoint
+
+Properties were derived from D5's resource and holder identities: triggers must
+never multiply physical watches, yet a new stop must receive an identical receipt
+with its own captured trigger. A late holder cannot mark a result whose read
+predates its declaration. Every failure must reach each holder so the browser's
+existing per-trigger two-failure settlement still works. Release, replacement and
+retirement must prevent publication without releasing active native admission.
+
+`server/src/world/desk-watches.test.ts` runs all 343 length-three traces over the
+same seven two-socket/two-owner actions used for focused interest. Named deferred
+cases cover trigger changes during a read, a late holder's null trigger and
+coalesced successor, unchanged-result/new-stop delivery, every failed read with
+independent holder histories, per-kind/per-host admission, queued cancellation,
+release/reacquire, generation and native session retirement, and service stop.
+`server/src/world/desk-watch-read.test.ts` exercises the actual native read helper,
+checking qualified session validation before and after content reads and the
+matching agent fallback when pane session fields are absent.
+
+`server/src/world/desk-watch-consumers.test.ts` connects two browser declaration
+controllers to the actual service watches, proving union acquisition, trigger
+updates, hide/show, last-owner release, capability removal and identity admission.
+`server/src/service/desk-watches.test.ts` drives the actual dispatcher and browser
+cleanup tracker: declarations do not select a runtime and last socket cleanup
+cancels scheduling. Cached-send-failure churn uses the real safe-send cleanup
+path with an active read and a queued successor: last drop and shutdown leave no
+holders, queued jobs, timers or retained watches after settlement. A separate
+shutdown regression removes declaration bookkeeping to check defensive retirement
+from the watch map itself. The real Chrome Desk fixture additionally runs the React
+hooks with a synthetic bridge and event completion signals. It checks no direct
+shared reads or placeholders, captured-trigger currency, a deliberately unrelated
+wire failure count, screen delivery, visibility release, unmount's final empty
+declaration, and capability removal restoring both legacy reads.
+
+These direct consumers exercise the socket/React/native boundaries that a copied
+registry model would omit. Q04's runtime ownership models remain binding. The
+finite traces do not prove arbitrary transport liveness, scheduler fairness,
+external receipt summarization or filesystem timing. Browser bounds and fair
+selection, search/lane retention, existing review marks and full-report reads
+remain covered by the unchanged Desk regressions. No UI or aggregate refresh
+contract changes in this checkpoint.

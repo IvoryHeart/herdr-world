@@ -1,4 +1,5 @@
 import type { ConnectionLifecycleState } from "./api";
+import type { DeskReadKind } from "../../shared/deskAcquisition";
 
 export interface BridgeControlMsg {
   type:
@@ -11,7 +12,14 @@ export interface BridgeControlMsg {
     | "world_ledger_changed"
     | "world_profiles_changed"
     | "agent_conversation_changed"
-    | "world_agent_activity";
+    | "world_agent_activity"
+    | "world_desk_reads";
+  kind?: DeskReadKind;
+  session?: string | null;
+  trigger?: string | null;
+  result?: unknown;
+  error?: string;
+  failures?: number;
   agents?: unknown;
   connection_state?: ConnectionLifecycleState;
   reason?: string;

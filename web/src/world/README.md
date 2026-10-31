@@ -95,6 +95,19 @@ terminal without attempting an agent-metadata mutation. Reads use fair bounded a
 independent host queues. Pending reads keep
 their admission across refreshes; queued work coalesces to the latest observation.
 
+When `world_shared_acquisition` is negotiated, [useDeskWatch](useDeskWatch.ts)
+and [DeskWatchClient](deskWatchClient.ts) replace screen/receipt polling with
+whole socket declarations. The service's [watch registry](../../../server/src/world/desk-watches.ts)
+reads the union once per resource: kind, host, generation, pane and session
+fingerprint. Triggers belong to holders; each read carries that holder's trigger
+captured at read start. Late holders see the result with a null trigger, which
+cannot mark a current stop. Browsers count consecutive failures per captured
+trigger independently. Hidden/closed Desks release their targets. Without the
+capability, the existing 4 s screens and 20 s receipts remain; full-report reads
+stay on demand. The service does not advertise the capability until focused timer
+replacement is complete. [Shared watch tests](../../../server/src/world/desk-watch-consumers.test.ts)
+and the [Desk browser fixture](DeskView.browser.tsx) cover both paths.
+
 | Task | Open these owners | Focused evidence |
 | --- | --- | --- |
 | Lane routing, ordering or keyboard triage | `partitionDesk` and `DeskView` in [DeskView.tsx](DeskView.tsx); [DeskView.css](DeskView.css) styles `.desk-*`. | [Desk tests](DeskView.test.ts) |
@@ -228,10 +241,16 @@ survives. A large board's first placement runs in a task of its own, outside
 React's commit. Tab placement waits until the overview ends. Paint never reads
 layout mid-frame. Until initial placement fits the camera, an early frame keeps
 the dense Board's initial overview and does not publish an empty set of visible
-cards. Placement requests the first frame that can publish them.
-`BoardView.mount.test.ts` controls frames before the dense transition, between
-the transition and placement, and after placement, with immediate and deferred
-Board read failures; each order must retain the phone render ceiling.
+cards. Placement requests the first frame that can publish them. Frames run
+the committed render only: BoardView publishes the refs a frame reads (its
+frame function, model, selection and anchor callbacks) in layout effects, never
+during render, because the dense transition renders in slices and a frame can
+run after BoardView's render but before that render commits.
+`BoardView.mount.test.ts` controls frames before the dense transition, during
+its held render, between the transition and placement, and after placement,
+with immediate and deferred Board read failures; each order must retain the
+phone render ceiling. Board reads its trace setting at mount rather than in an
+effect, which re-rendered it once while the transition was pending.
 Sizes come from a ResizeObserver, zones are measured before they
 are written, and Inspector anchors and the board's box come from geometry and a
 cache. Cards mount in their own container, so React appends them as one subtree.

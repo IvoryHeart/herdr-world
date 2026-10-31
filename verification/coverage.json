@@ -140,6 +140,10 @@
       "requirement": "openspec/specs/runtime-federation/spec.md",
       "properties": "Single owned subscription; cancellation prevents old events; recovery does not overlap owners",
       "existingTests": [
+        "server/src/world/desk-watches.test.ts",
+        "server/src/world/desk-watch-read.test.ts",
+        "server/src/world/desk-watch-consumers.test.ts",
+        "server/src/service/desk-watches.test.ts",
         "server/src/world/agent-activity-cache.test.ts",
         "server/src/service/agent-activity.test.ts",
         "server/src/connections/subscription-loop.test.ts",
@@ -163,6 +167,10 @@
           "verification/contracts/shared-acquisition.md"
         ],
         "tests": [
+          "server/src/world/desk-watches.test.ts",
+          "server/src/world/desk-watch-read.test.ts",
+          "server/src/world/desk-watch-consumers.test.ts",
+          "server/src/service/desk-watches.test.ts",
           "server/src/world/agent-activity-cache.test.ts",
           "server/src/service/agent-activity.test.ts",
           "server/src/connections/subscription-loop.test.ts",
@@ -175,7 +183,7 @@
         "checks": ["bun run check", "bun run verification:check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
       },
-      "evidenceDecision": "Retired manager owners cannot publish readiness. Subscription tests independently exercise stop-before-ready, stop-during-retry, coalesced drain and callback suppression. Focused acquisition adds direct exhaustive two-socket/two-owner interest traces plus deferred read, real dispatcher, reply-send and cleanup consumers; their bounded claims and exclusions are in verification/contracts/shared-acquisition.md.",
+      "evidenceDecision": "Retired manager owners cannot publish readiness. Subscription tests independently exercise stop-before-ready, stop-during-retry, coalesced drain and callback suppression. Focused acquisition adds direct exhaustive two-socket/two-owner interest traces plus deferred read, real dispatcher, reply-send and cleanup consumers; their bounded claims and exclusions are in verification/contracts/shared-acquisition.md. Desk watches add exhaustive bounded interest traces, deferred per-holder captured-trigger/failure cases, native session fences, two-browser declaration consumers and dispatcher/cleanup tests. The actual Desk browser fixture checks shared hooks and legacy fallback; bounds and excluded claims are in verification/contracts/shared-acquisition.md.",
       "promotion": {
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
@@ -961,6 +969,10 @@
       "requirement": "openspec/specs/world-surfaces/spec.md",
       "properties": "New turns invalidate old review marks; dedup and bounded observation; receipts remain session-qualified",
       "existingTests": [
+        "server/src/world/desk-watches.test.ts",
+        "server/src/world/desk-watch-read.test.ts",
+        "server/src/world/desk-watch-consumers.test.ts",
+        "server/src/service/desk-watches.test.ts",
         "web/src/world/DeskView.test.ts",
         "server/src/agent/turn-receipt.test.ts",
         "server/src/world/desk-state.test.ts",
@@ -981,11 +993,15 @@
       "status": "alternative-evidence",
       "remaining": "A summary is presentation evidence, not proof that external work succeeded; publication identity remains a separate operational guard.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
-      "evidenceDecision": "Fixture receipt parsing and real Desk browser routing/review tests directly check human-facing summaries and review intent. Shared Desk state (#164): direct registry cases cover bounded metadata, exact conditional Undo, owner/session replacement, expiry and older observations after live mutations. RPC tests revalidate the captured runtime and session after live pane admission. Two-WebSocket service and Desk browser regressions establish shared marks/recent opens and cross-browser Undo. Paired real-registry/browser-store consumers with 41 agents check unequal receipt polling coverage, filter changes, later native activity and service stops. Deferred native admissions check session replacement, return to the original fingerprint and observation eviction; the browser checks exact next-card focus after external-store publication; deferred client replies cover revision and reconnect epochs. These finite metadata transitions are exercised directly rather than adding a model that repeats the store; arbitrary external transport liveness remains excluded. Stable stop identities are checked across 13-hour timestamp/observation expiry for idle and done agents, including native counter progress after an unobserved working phase. The real fresh-snapshot callback carries agent.list data; pane-only identity, missing pane agent/session fields, and duplicate, malformed, mismatched or obsolete progress cases exercise the adapter. Metadata cannot manufacture a browser/RPC identity. Browser consumers retain Reviewed on display expiry and refresh receipts for new stable stop IDs while native status/activity remain unchanged. Deferred reads and failed refreshes leave the successor unmarkable against its predecessor report; repeated failure settles without an old report, and a late superseded response cannot publish. Town completion checks share the same service-memory model, and the service alone ends a check from its own host reads (busy ends it, a mark while busy is ignored), so no browser's late view orders it. Registry cases cover that rule, generation retirement and the bound. Two store clients over the real RPC handler and observation path cover cross-browser agreement, late reads in either order, a restart forgetting every check, and two Town projections agreeing on an inferred finish checked on one device. The real-process test awaits the published notice.",
+      "evidenceDecision": "Fixture receipt parsing and real Desk browser routing/review tests directly check human-facing summaries and review intent. Shared Desk state (#164): direct registry cases cover bounded metadata, exact conditional Undo, owner/session replacement, expiry and older observations after live mutations. RPC tests revalidate the captured runtime and session after live pane admission. Two-WebSocket service and Desk browser regressions establish shared marks/recent opens and cross-browser Undo. Paired real-registry/browser-store consumers with 41 agents check unequal receipt polling coverage, filter changes, later native activity and service stops. Deferred native admissions check session replacement, return to the original fingerprint and observation eviction; the browser checks exact next-card focus after external-store publication; deferred client replies cover revision and reconnect epochs. These finite metadata transitions are exercised directly rather than adding a model that repeats the store; arbitrary external transport liveness remains excluded. Stable stop identities are checked across 13-hour timestamp/observation expiry for idle and done agents, including native counter progress after an unobserved working phase. The real fresh-snapshot callback carries agent.list data; pane-only identity, missing pane agent/session fields, and duplicate, malformed, mismatched or obsolete progress cases exercise the adapter. Metadata cannot manufacture a browser/RPC identity. Browser consumers retain Reviewed on display expiry and refresh receipts for new stable stop IDs while native status/activity remain unchanged. Deferred reads and failed refreshes leave the successor unmarkable against its predecessor report; repeated failure settles without an old report, and a late superseded response cannot publish. Town completion checks share the same service-memory model, and the service alone ends a check from its own host reads (busy ends it, a mark while busy is ignored), so no browser's late view orders it. Registry cases cover that rule, generation retirement and the bound. Two store clients over the real RPC handler and observation path cover cross-browser agreement, late reads in either order, a restart forgetting every check, and two Town projections agreeing on an inferred finish checked on one device. The real-process test awaits the published notice. Desk watches add exhaustive bounded interest traces, deferred per-holder captured-trigger/failure cases, native session fences, two-browser declaration consumers and dispatcher/cleanup tests. The actual Desk browser fixture checks shared hooks and legacy fallback; bounds and excluded claims are in verification/contracts/shared-acquisition.md.",
       "partialEvidence": {
         "models": [],
         "contracts": ["verification/consumer-evidence.md"],
         "tests": [
+          "server/src/world/desk-watches.test.ts",
+          "server/src/world/desk-watch-read.test.ts",
+          "server/src/world/desk-watch-consumers.test.ts",
+          "server/src/service/desk-watches.test.ts",
           "web/src/world/DeskView.test.ts",
           "server/src/agent/turn-receipt.test.ts",
           "server/src/world/desk-state.test.ts",
@@ -1060,6 +1076,7 @@
       "partialEvidence": {
         "models": ["quint/runtime-leases.qnt"],
         "contracts": [
+          "verification/contracts/shared-acquisition.md",
           "verification/consumer-evidence.md",
           "verification/composition.md",
           "verification/contracts/terminal-settings.md"

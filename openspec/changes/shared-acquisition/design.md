@@ -238,20 +238,35 @@ refetches. A failed fetch is retried (D7).
 
 The browser's Desk keeps choosing its targets as today (urgency order, fair
 share between hosts, 16 screens and 40 receipts), then declares them with
-`world.desk.observe` instead of reading them. Screen targets are keyed by
-connection, generation, pane and agent session; receipt targets add the
-browser's current trigger (status, activity and observed stop).
+`world.desk.observe` instead of reading them. Every physical watch is keyed by
+kind, connection, generation, pane and the session fingerprint used by
+`receiptIdentity`. A receipt trigger (status, activity and observed stop) is
+per-holder declaration data, never part of that key.
 
 The service keeps one watch per target, with a holder count:
-- It reads a screen every 4 s, and a receipt every 20 s and whenever a holder's
-  trigger changes.
-- It keeps today's per-host queues and never overlaps two reads of the same kind
-  on one host.
-- It sends `world_desk_reads` to the holders when a result changes. A new
-  holder gets the latest result only once a read exists, never a placeholder.
-- Results for one target arrive in read order, because reads of one target
-  never overlap, so they need no revision.
-- It publishes nothing for a released target or a retired generation.
+- It reads a screen every 4 s, and a receipt every 20 s. Any holder's trigger
+  change makes one successor read due; changes during a read coalesce.
+- It keeps independent per-host queues and never overlaps two reads of the same
+  kind on one host, including while retired work settles.
+- At read start it captures each holder's declared trigger. Each holder receives
+  its own captured trigger in `world_desk_reads`; the browser stores
+  `receiptAfterRead(receipt, trigger)`. A holder that declared after read start
+  gets that actual result with trigger `null` (shown, never current), and its
+  declaration makes a successor read due.
+- A successful delivery is suppressed only when both its result and that
+  holder's captured trigger are unchanged. An identical receipt read for a new
+  stop must arrive so the stop can become markable.
+- Every failed read is delivered. The notice includes a consecutive failure
+  count for that holder's captured trigger, reset by success or a different
+  captured trigger. The browser independently keeps today's count for that
+  trigger and calls `receiptAfterError(previous, trigger, count)`; it never
+  substitutes a watch-level count for its own history.
+- A new holder gets the latest result only once a read exists, never a placeholder.
+  Results arrive in read order, because reads of one target never overlap, so
+  they need no revision.
+- Session validation surrounds native reads. It publishes nothing for a released
+  target, replaced session or retired generation. Last release clears cached
+  results, cancels queued reads and stops scheduling.
 
 A hidden page or a closed Desk releases its declarations. Search and lanes still
 don't release targets, as today. Hosts held by two browsers with different
@@ -377,8 +392,14 @@ All are bridge-global. Existing methods and controls keep their meaning.
   pane_id, session}], receipts: [{…, trigger}]}` → `{ok: true}`. It replaces
   this socket's Desk interest, with at most 16 screens and 40 receipts.
 - `world_desk_reads` `{type, kind: "screen" | "receipt", connection_id,
-  connection_generation, pane_id, session, result | error}`: a target's latest
-  read, in read order.
+  connection_generation, pane_id, session, trigger, result | error, failures?}`:
+  a target's latest read, in read order. `session` is the receipt session
+  fingerprint (or `null`), rather than the recency channel's session value.
+  `trigger` is this holder's value captured at read start, or `null` for a late
+  holder (also `null` for screens). Success includes `result`; failure includes
+  an error string and `failures`, counted per holder and captured trigger. Every
+  failed read arrives, even with identical error text. Browser failure currency
+  uses its own per-trigger count as described in D5.
 
 Pushes travel on the live socket, so they don't carry the service incarnation
 (`world-protocol-identity`). A lost socket reconnects and declares again.
