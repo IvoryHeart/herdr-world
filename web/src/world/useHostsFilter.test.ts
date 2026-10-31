@@ -50,6 +50,7 @@ if (process.env.WORLD_HOSTS_FILTER_TEST !== "1") {
     });
   const { createRoot } = await import("react-dom/client");
   const { useHostsFilter } = await import("./hostsFilter");
+  const { HostsControl } = await import("./HostsControl");
   const { worldLocalStorage } = await import("../browserStorage");
   const { store, __storeTesting, useStoreSelector } = await import("../store");
   const { bridge } = await import("../api");
@@ -73,7 +74,12 @@ if (process.env.WORLD_HOSTS_FILTER_TEST !== "1") {
       catalogue.map(({ id }) => id),
       ready,
     );
-    return null;
+    return createElement(HostsControl, {
+      connections: catalogue,
+      ids: filter.ids,
+      explanation: filter.explanation,
+      onChange: filter.setIds,
+    });
   }
   async function mount(saved: string, ready = false) {
     worldLocalStorage.setItem("worldHostsFilter.v1", saved);
@@ -125,6 +131,11 @@ if (process.env.WORLD_HOSTS_FILTER_TEST !== "1") {
       expect(filter.ids).toEqual(empty ? null : ["beta"]);
       expect(saved()).toBe(empty ? "null" : '["beta"]');
       expect(filter.explanation).toBe(
+        empty
+          ? "Some selected host profiles were removed. Showing All hosts."
+          : "",
+      );
+      expect(document.querySelector('[role="status"]')?.textContent ?? "").toBe(
         empty
           ? "Some selected host profiles were removed. Showing All hosts."
           : "",

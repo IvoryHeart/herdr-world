@@ -51,7 +51,10 @@ This reconciles the remaining baseline entries without treating a component mode
 selectors and `refreshConnections`. A deferred service reply plus 150 ms of test
 time proves saved beta survives an unready catalogue; successful populated and
 empty admission then preserve beta or restore All hosts with the exact removal
-explanation. Partial removal, remount persistence, malformed saved values,
+explanation. The hook renders the actual `HostsControl`: after empty admission,
+its status element must contain that explanation; populated admission must have
+no removal feedback. This headless renderer probe checks presence, not responsive
+geometry or focus. Partial removal, remount persistence, malformed saved values,
 deduplication and empty explicit scope have direct hook consumers. The service
 reply is synthetic: this does not prove transport parsing or browser rendering.
 `HostsFilter.test.ts` retains responsive controls, rendered scope/navigation and
