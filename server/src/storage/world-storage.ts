@@ -1,3 +1,4 @@
+import { createEffectStore } from "./effect-client";
 import { createRuntimeStatusPort } from "./runtime-status";
 import { createProfilePort } from "./profile-port";
 import { ANSWER_DELIVERY_VERB } from "../world/ask-delivery-types";
@@ -357,6 +358,7 @@ export async function openWorldLedger(
     },
     ledger,
     incarnation,
+    effects: createEffectStore(client.request, remember),
     outbox: {
       list: (kind, readyOnly) => refresh(undefined, kind, readyOnly),
       async notices(kind, after, limit = 60) {

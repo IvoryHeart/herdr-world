@@ -16,7 +16,7 @@ test("P4: every legacy verb × actor equals the independently recorded policy ta
     expect(ACTORS.map((actor) => verb.policy[actor]).join(" ")).toBe(
       baseline[key],
     );
-    expect(verb.queueable).toBe(false);
+    expect(verb.queueable).toBe(verb.channel === "effect");
   }
   expect(
     VERBS.filter((verb) => verb.channel === "cli")

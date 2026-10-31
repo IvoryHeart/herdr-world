@@ -10,6 +10,7 @@ import type {
 } from "./world-protocol";
 import type { AnswerActor, AnswerRecipient } from "../world/ask-delivery-types";
 import type { CliActor, LedgerAsk } from "../world/world-ledger";
+import type { EffectReply } from "../effects/types";
 const cleanups: (() => void)[] = [];
 afterEach(() => {
   for (const clean of cleanups.splice(0)) clean();
@@ -383,9 +384,12 @@ test("withdrawal cancels an unsent claim but preserves uncertainty after a possi
     ask.withdrawn = { at: 4000 };
   });
   expect(sent.call({ type: "outbox", id: active.id })?.state).toBe("uncertain");
+  expect(
+    sent.call<EffectReply>({ type: "effect-read", id: active.id }).effect,
+  ).toMatchObject({ ever_dispatched: true, not_sent: false });
 });
 
-test("unsupported operation versions and changed conditions are refused before dispatch", () => {
+test("changed recipient conditions are refused before dispatch", () => {
   const f = fixture();
   const claimed = claim(f);
   f.change((ask) => {
@@ -394,10 +398,19 @@ test("unsupported operation versions and changed conditions are refused before d
   expect(begin(f, claimed)).toMatchObject({ state: "refused" });
 });
 
-test("unsupported operation versions and revoked answering policy never dispatch", () => {
+test("unsupported versions block for migration and revoked answering policy never dispatches", () => {
   const unsupported = fixture({ version: 2 });
-  const claimed = claim(unsupported);
-  expect(begin(unsupported, claimed)).toMatchObject({ state: "refused" });
+  expect(claim(unsupported)).toBeNull();
+  expect(
+    unsupported.call<EffectReply>({
+      type: "effect-read",
+      id: unsupported.entry.id,
+    }).effect,
+  ).toMatchObject({
+    state: "needs-migration",
+    ever_dispatched: false,
+    contract: { version: 2 },
+  });
   const revoked = fixture({
     ownerOnly: false,
     answering: {

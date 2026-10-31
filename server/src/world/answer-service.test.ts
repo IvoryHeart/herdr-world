@@ -53,6 +53,7 @@ test.skipIf(process.platform !== "linux")(
     const service = createWorldCliService({
       ledger: () => f.storage.ledger,
       attention: () => f.storage.outbox,
+      effects: () => f.storage.effects,
       scheduler: f.scheduler,
       clock: f.clock,
       now: f.clock.now,
@@ -211,6 +212,8 @@ test("owner recovery requires a duplicate decision and fences stale decisions wi
   const service = createWorldCliService({
     ledger: () => f.storage.ledger,
     attention: () => f.storage.outbox,
+    effects: () => f.storage.effects,
+    incarnation: f.storage.incarnation,
     scheduler: f.scheduler,
     clock: f.clock,
     now: f.clock.now,

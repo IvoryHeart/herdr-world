@@ -222,7 +222,8 @@ async function fixture(
   });
   const dispatcher = createAnswerDispatcher({
     ledger: () => storage.ledger,
-    outbox: () => storage.outbox,
+    effects: () => storage.effects,
+    incarnation: storage.incarnation,
     recipients,
     clock,
     scheduler: {
@@ -266,6 +267,29 @@ async function fixture(
       )!,
   };
 }
+
+test("withdrawal after input submission preserves the actual saved-answer receipt", async () => {
+  const f = await fixture();
+  f.state.holdSubmission = true;
+  await f.answer();
+  f.time(4000);
+  const sending = f.dispatcher.wake();
+  await f.submitted.promise;
+  await f.storage.ledger.update((document) => {
+    document.asks[0]!.withdrawn = { at: 4000 };
+  });
+  f.sendGate.resolve();
+  await sending;
+  const entry = await f.entry();
+  expect(entry.state).toBe("delivered");
+  expect(await f.storage.effects.get(entry.id)).toMatchObject({
+    ever_dispatched: true,
+    cancel_requested: true,
+    not_sent: false,
+    receipt: { source: "herdr-chat" },
+  });
+  expect(f.prompts).toHaveLength(1);
+});
 
 test("an answer without wait queues one plain-text prompt after its durable deadline", async () => {
   const f = await fixture();

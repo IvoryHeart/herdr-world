@@ -75,7 +75,7 @@ approval. Future contract/gate changes require their own applicable review.
 
 ## Candidate commands and promotion
 
-The separate Behavioral verification candidate CI workflow runs all 12 models,
+The separate Behavioral verification candidate CI workflow runs all 14 models,
 actual replay, required per-seed witnesses, model/implementation fault controls
 and larger-bound/host-order sensitivity. It installs locked tooling and the
 hash-validated checker, records exact tool/input identities and retains manifests
@@ -92,7 +92,8 @@ continues to require identical full tool identities, including Java patch
 versions, across all model evidence.
 
 The canonical run has a 15-minute outer deadline; checker commands have a
-240-second deadline, Java has a 1 GiB heap and Node has a 512 MiB old-space cap.
+240-second deadline. Real SQLite effect replay has a separate 480-second command
+deadline; other replay workers retain 30 seconds. Java has a 1 GiB heap and Node has a 512 MiB old-space cap.
 These per-process limits are not a measurement of total peak memory. Local complete
 execution passed in approximately four minutes after the Ranger additions; Fresh Ubuntu candidate CI passed in 7m11s, with installation taking 6 seconds
 and complete model/replay/sensitivity execution 6m46s. These are observed wall

@@ -345,6 +345,7 @@ async function compose(
     board,
     ledger: () => storage.ledger(),
     attention: () => storage.attention(),
+    effects: () => storage.effects(),
     clock,
     scheduler,
     now: () => clock.now(),

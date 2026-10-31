@@ -11,7 +11,9 @@ stages. Legacy extension fields and owner-specific coercion/filtering remain
 supported. Schemas describe those existing boundaries; the namespace owners still
 validate domain payloads, current terminal witnesses, paths, capabilities and
 target state. Native selector fields remain optional where Herdr accepts an implicit
-selection. This migration adds no queue or automatic retry.
+selection. Interactive RPC and CLI declarations remain nonqueueable. Two private effect
+declarations, described in [World effects](world-effects.md), back the existing
+owner-alert and saved-answer outbox; they grant no new public actor permissions.
 
 The actors are the owner's authenticated browser, verified and unverified agent
 CLI callers, Ranger, reconcilers and automation. At these migrated public entries,

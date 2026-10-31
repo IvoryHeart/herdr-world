@@ -32,6 +32,7 @@ type Lease = AnswerLease;
 export function createWorldCliService(deps: {
   ledger(): LedgerStore;
   attention?(): WorldLedgerStorage["outbox"];
+  effects?(): WorldLedgerStorage["effects"];
   scheduler?: StoragePorts["scheduler"];
   now(): number;
   incarnation?: string;
@@ -142,10 +143,15 @@ export function createWorldCliService(deps: {
     }
   };
   if (deps.attention) {
+    if (!deps.incarnation)
+      throw new Error("Attention storage needs its storage incarnation");
+    if (!deps.effects)
+      throw new Error("Attention storage needs its effect store");
     if (!deps.scheduler)
       throw new Error("Attention storage needs the service scheduler");
     dispatcher = createAttentionDispatcher({
       outbox: deps.attention,
+      effects: deps.effects,
       scheduler: deps.scheduler,
       clock: deps.clock ?? {
         now,
@@ -165,8 +171,8 @@ export function createWorldCliService(deps: {
             connectionId: lease.connectionId,
             generation: lease.generation,
             isCurrent: () => lease.isCurrent(),
-            call: (method, params) =>
-              lease.runtime.herdr.call(method, params, 5000),
+            call: (method, params, beforeSend) =>
+              lease.runtime.herdr.call(method, params, 5000, beforeSend),
           }
         );
       },
@@ -177,7 +183,8 @@ export function createWorldCliService(deps: {
   if (deps.attention && deps.scheduler)
     answerDispatcher = createAnswerDispatcher({
       ledger,
-      outbox: deps.attention,
+      effects: deps.effects!,
+      incarnation,
       recipients,
       scheduler: deps.scheduler,
       clock: deps.clock ?? { now, monotonic: () => performance.now() },

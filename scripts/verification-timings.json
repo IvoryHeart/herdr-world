@@ -14,10 +14,12 @@
     "runtime-drain": 37.882,
     "runtime-leases": 46.514,
     "space-admission": 225.083,
-    "observation-base": 60.119497273
+    "observation-base": 60.119497273,
+    "effect-recovery": 199.5
   },
   "localSources": {
     "binding-resolution": "Focused maintained run: sum of command elapsedMs, including private TLC startup, three seeds (500 replay traces each), model fault and six code controls (2026-10-31).",
-    "observation-base": "Development exhaustive TLC with the pinned checker; 60.119497273 seconds including private checker startup. Existing entries retain their sourceRun."
+    "observation-base": "Development exhaustive TLC with the pinned checker; 60.119497273 seconds including private checker startup. Existing entries retain their sourceRun.",
+    "effect-recovery": "Complete local verification gate, all 13 canonical models; effect-recovery case 199.5 seconds including real SQLite replay and controls. Existing entries retain their sourceRun."
   }
 }

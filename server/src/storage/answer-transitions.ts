@@ -107,8 +107,9 @@ export function answerTransitions(
           at,
         );
       db.query(
-        "UPDATE outbox SET state='dispatching',claimed=0,evidence=? WHERE id=? AND claimed=1 AND attempt=?",
+        "UPDATE outbox SET state='dispatching',claimed=0,ever_dispatched=1,dispatch_targets=?,evidence=? WHERE id=? AND claimed=1 AND attempt=?",
       ).run(
+        JSON.stringify([{ capture: entry.target, fence }]),
         JSON.stringify({ ...entry.evidence, reason: "Dispatch checks passed" }),
         id,
         attempt,
@@ -211,7 +212,7 @@ export function answerTransitions(
           "Owner closed the claimed delivery before submission",
         );
       db.query(
-        "UPDATE outbox SET state=?,claimed=0,attempt=attempt+1,resolved_at=?,due_at=?,evidence=? WHERE id=? AND attempt=?",
+        "UPDATE outbox SET state=?,claimed=0,attempt=attempt+1,resolved_at=?,due_at=?,evidence=?,owner_retry_attempt=?,cancel_requested=? WHERE id=? AND attempt=?",
       ).run(
         action === "resend" ? "pending" : "cancelled",
         action === "resend" ? null : at,
@@ -222,8 +223,25 @@ export function answerTransitions(
               ? "Owner authorized a possible duplicate to the original recipient"
               : "Owner closed delivery; the answer remains readable",
         }),
+        action === "resend" ? attempt : null,
+        action === "close" ? 1 : 0,
         id,
         attempt,
+      );
+      db.query(
+        "INSERT INTO effect_decisions(intent_id,action,actor,reason,created_at,previous_version,operation_version) VALUES(?,?,?,?,?,NULL,NULL)",
+      ).run(
+        id,
+        action,
+        JSON.stringify({
+          kind: "browser",
+          subject: "owner",
+          evidence: { source: "world.ask.delivery.decide" },
+        }),
+        action === "resend"
+          ? "Owner authorized possible duplicate delivery"
+          : "Owner closed delivery",
+        at,
       );
       return attention(id);
     },

@@ -206,5 +206,7 @@
   "cli:group import": "deny acknowledge acknowledge deny deny deny",
   "source:github.pull-request.merge": "confirm deny deny deny deny deny",
   "source:github.pull-request.close": "confirm deny deny deny deny deny",
-  "source:github.pull-request.ready": "confirm deny deny deny deny deny"
+  "source:github.pull-request.ready": "confirm deny deny deny deny deny",
+  "effect:notification.show": "allow allow allow deny deny deny",
+  "effect:world.ask.deliver-answer": "allow allow deny deny deny deny"
 }

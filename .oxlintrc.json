@@ -321,6 +321,71 @@
           }
         ]
       }
+    },
+    {
+      "files": [
+        "server/src/effects/**/*.ts",
+        "server/src/storage/**/*.ts",
+        "server/src/world/answer-dispatch.ts",
+        "server/src/world/attention-dispatch.ts"
+      ],
+      "rules": {
+        "no-restricted-globals": [
+          "error",
+          {
+            "globals": [
+              {
+                "name": "Date",
+                "message": "Use the injected Clock and Scheduler ports."
+              },
+              {
+                "name": "performance",
+                "message": "Use the injected Clock and Scheduler ports."
+              },
+              {
+                "name": "setTimeout",
+                "message": "Use the injected Clock and Scheduler ports."
+              },
+              {
+                "name": "clearTimeout",
+                "message": "Use the injected Clock and Scheduler ports."
+              },
+              {
+                "name": "setInterval",
+                "message": "Use the injected Clock and Scheduler ports."
+              },
+              {
+                "name": "clearInterval",
+                "message": "Use the injected Clock and Scheduler ports."
+              },
+              {
+                "name": "setImmediate",
+                "message": "Use the injected Clock and Scheduler ports."
+              },
+              {
+                "name": "clearImmediate",
+                "message": "Use the injected Clock and Scheduler ports."
+              },
+              {
+                "name": "requestAnimationFrame",
+                "message": "Use the injected Clock and Scheduler ports."
+              }
+            ],
+            "checkGlobalObject": true
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "server/src/effects/**/*.test.ts",
+        "server/src/effects/testing/**/*.ts",
+        "server/src/storage/**/*.test.ts",
+        "server/src/storage/testing/**/*.ts"
+      ],
+      "rules": {
+        "no-restricted-globals": "off"
+      }
     }
   ]
 }
