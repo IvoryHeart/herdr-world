@@ -2574,6 +2574,67 @@
         "decision": "pending",
         "scope": "Effect recovery, real SQLite replay, time ports and server query definitions; independent review and required CI remain necessary."
       }
+    },
+    {
+      "id": "Q50",
+      "area": "Durable Board concerns and compatible consumers",
+      "owner": "server/src/storage/world-board.ts",
+      "requirement": "openspec/specs/world-storage/spec.md",
+      "properties": "Compact dense-observation metadata plans preserve completeness/current authority and committed-state reconciliation; queued retained-payload byte reservations through guards and actual RPC admission; atomic concern rows and identity bindings; committed-only cache/reply/events; independent edits, per-note and Group revision conflicts; queued runtime authority and move/undo concurrency; exact private once-only import; source/standalone crash recovery and close drain; native-keyed layout preferences retain existing policy",
+      "existingTests": [
+        "server/src/storage/board-writer.test.ts",
+        "server/src/storage/board-port.test.ts",
+        "server/src/rpc/board-admission.test.ts",
+        "server/src/world/snapshot-board-storage.test.ts",
+        "server/src/service/board-storage.test.ts",
+        "server/src/storage/board-crash.test.ts",
+        "server/src/rpc/board-storage.test.ts",
+        "server/src/world/board-storage-consumers.test.ts",
+        "server/src/world/board-store.test.ts",
+        "server/src/service/binding-storage.test.ts",
+        "server/src/world/binding-prune.test.ts",
+        "server/src/world/town-move.test.ts",
+        "server/src/world/world-cli-authorization.test.ts",
+        "server/src/rpc/group-revision.test.ts",
+        "server/src/service/world-service.test.ts"
+      ],
+      "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/549",
+      "technique": "direct-sqlite-recovery",
+      "assessment": "Actual SQLite operation permutations, SQL savepoint refusal, root/RPC/move/CLI consumers and source/standalone compiled crash schedules",
+      "status": "alternative-evidence",
+      "remaining": "Independent implementation/mapping review and native CI required. No physical power-loss, latency, exactly-once external effect, persisted runtime claims or new browser ID creation protocol is claimed.",
+      "requiredChecks": ["bun run check", "bun run verification:gate"],
+      "partialEvidence": {
+        "models": [],
+        "contracts": ["verification/contracts/board-storage.md"],
+        "tests": [
+          "server/src/storage/board-writer.test.ts",
+          "server/src/storage/board-port.test.ts",
+          "server/src/rpc/board-admission.test.ts",
+          "server/src/world/snapshot-board-storage.test.ts",
+          "server/src/service/board-storage.test.ts",
+          "server/src/storage/board-crash.test.ts",
+          "server/src/rpc/board-storage.test.ts",
+          "server/src/world/board-storage-consumers.test.ts",
+          "server/src/world/board-store.test.ts",
+          "server/src/service/binding-storage.test.ts",
+          "server/src/world/binding-prune.test.ts",
+          "server/src/world/town-move.test.ts",
+          "server/src/world/world-cli-authorization.test.ts",
+          "server/src/rpc/group-revision.test.ts",
+          "server/src/service/world-service.test.ts"
+        ],
+        "checks": [
+          "bun run test server/src/world/snapshot-board-storage.test.ts server/src/storage/board-port.test.ts server/src/rpc/board-admission.test.ts server/src/storage/board-writer.test.ts server/src/service/board-storage.test.ts server/src/storage/board-crash.test.ts server/src/rpc/board-storage.test.ts server/src/world/board-storage-consumers.test.ts",
+          "bun run verification:gate"
+        ],
+        "review": "The accepted delivery link records the approved identity/storage design, not implementation acceptance. Independent review and native CI are pending."
+      },
+      "evidenceDecision": "Real SQLite and process recovery establish the persistence boundary. Exhaustive operation orders and actual RPC/move/CLI consumers cover ordering and compatible projection without modeling the SQL engine. Existing binding/runtime models and mandatory browser consumers remain required. Assertion controls establish sensitivity separately.",
+      "promotion": {
+        "decision": "pending",
+        "scope": "Board physical storage split, initial import and unchanged identity/revision/consumer boundaries only; independent acceptance required."
+      }
     }
   ],
   "promotionReview": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",

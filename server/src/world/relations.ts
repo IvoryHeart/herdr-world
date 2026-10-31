@@ -1,10 +1,13 @@
+import { planBoardPatch } from "./board-plan";
 import {
   closedRelations,
   observedSpawnClaims,
   spawnClaimsToRecord,
+  SPAWNED_BY_TOKEN,
+  SPAWNED_BY_TERMINAL_TOKEN,
   type RelationObservation,
 } from "../../../shared/relations";
-import type { BoardDocument, BoardOp } from "./board-store";
+import type { BoardDocument, BoardOp, BoardStorePort } from "./board-store";
 import type { WorldSnapshotResult } from "./snapshot";
 
 /**
@@ -38,12 +41,24 @@ export function relationObservations(
             {
               pane_id: pane.pane_id,
               terminal_id: pane.terminal_id,
-              tokens: pane.tokens,
+              tokens: spawnTokens(pane.tokens),
             },
           ]
         : [],
     ),
   }));
+}
+
+/** Unrelated native token values are not inputs to relationship reconciliation. */
+function spawnTokens(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    return undefined;
+  const tokens = value as Record<string, unknown>;
+  return Object.fromEntries(
+    [SPAWNED_BY_TOKEN, SPAWNED_BY_TERMINAL_TOKEN]
+      .filter((key) => typeof tokens[key] === "string")
+      .map((key) => [key, tokens[key]]),
+  );
 }
 
 /** The claims a snapshot adds or changes, and what it shows closed, as Board operations. */
@@ -52,7 +67,14 @@ export function spawnRecordOps(
   result: WorldSnapshotResult,
   now: number,
 ): BoardOp[] {
-  const observations = relationObservations(result);
+  return spawnObservationOps(document, relationObservations(result), now);
+}
+
+function spawnObservationOps(
+  document: BoardDocument,
+  observations: readonly RelationObservation[],
+  now: number,
+): BoardOp[] {
   const closed = closedRelations(document.relations, observations);
   const claims = spawnClaimsToRecord(
     document.relations.spawns,
@@ -71,18 +93,30 @@ export function spawnRecordOps(
  * Board's store; written and published only when something changed. A
  * failure is logged: the snapshot reply goes out either way.
  */
-export function recordSpawnClaims(
-  store: {
-    get(): BoardDocument;
-    patch(ops: BoardOp[]): { revision: number };
-  },
+export async function recordSpawnClaims(
+  store: Pick<BoardStorePort, "get" | "patch">,
   snapshot: WorldSnapshotResult,
   publish: (revision: number) => void,
   logger: { warn(message: string, fields: { detail: string }): void },
-): void {
+  now: number = Date.now(),
+  isCurrent: (connectionId: string, generation: number) => boolean = () => true,
+): Promise<void> {
   try {
-    const ops = spawnRecordOps(store.get(), snapshot, Date.now());
-    if (ops.length) publish(store.patch(ops).revision);
+    const observations = relationObservations(snapshot);
+    let changed = false;
+    const document = await store.patch(
+      planBoardPatch([observations], (current) => {
+        const active = observations.map((host) => ({
+          ...host,
+          current:
+            host.current && isCurrent(host.connection_id, host.generation),
+        }));
+        const ops = spawnObservationOps(current, active, now);
+        changed = ops.length > 0;
+        return changed ? ops : null;
+      }),
+    );
+    if (changed) publish(document.revision);
   } catch (error) {
     logger.warn("World could not record spawn claims", {
       detail: String(error),

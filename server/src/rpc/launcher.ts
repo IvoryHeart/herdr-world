@@ -1,3 +1,4 @@
+import { planBoardPatch } from "../world/board-plan";
 import { moveWorkspaceIds } from "../world/move-workspace-ids";
 import { stampLaunchParent } from "../herdr/spawn-stamp";
 import { tabCardKey } from "../../../shared/terminalColor";
@@ -131,6 +132,8 @@ async function dispatchLauncherRpc(
           );
           settingsSaved = true;
           if (profile.color && result.tab_id) {
+            const tabId = result.tab_id,
+              terminalId = result.terminal_id;
             const workspaceIds = await moveWorkspaceIds(call, {
               workspace_id: String(p.workspace_id ?? ""),
             });
@@ -139,23 +142,36 @@ async function dispatchLauncherRpc(
                 "Launch runtime changed before saving appearance",
               );
             publishBoardChanged(
-              board().patch([
-                {
-                  op: "appearance.set",
-                  target: {
-                    connection_id: route.connectionId,
-                    kind: "tab",
-                    native_id: result.tab_id,
-                    witness: [result.terminal_id],
-                    color_key: tabCardKey(
-                      route.connectionId,
-                      result.tab_id,
-                      workspaceIds,
-                    ),
-                  },
-                  fields: { color: profile.color },
-                },
-              ]).revision,
+              (
+                await board().patch(
+                  planBoardPatch(
+                    [p, profile, result, [...workspaceIds]],
+                    () => {
+                      if (!requestIsCurrent())
+                        throw new Error(
+                          "Launch runtime changed before saving appearance",
+                        );
+                      return [
+                        {
+                          op: "appearance.set",
+                          target: {
+                            connection_id: route.connectionId,
+                            kind: "tab",
+                            native_id: tabId,
+                            witness: [terminalId],
+                            color_key: tabCardKey(
+                              route.connectionId,
+                              tabId,
+                              workspaceIds,
+                            ),
+                          },
+                          fields: { color: profile.color },
+                        },
+                      ];
+                    },
+                  ),
+                )
+              ).revision,
             );
           }
         } catch (error) {

@@ -1,4 +1,5 @@
-import type { BoardDocument, BoardOp, BoardStore } from "./board-store";
+import { planBoardPatch } from "./board-plan";
+import type { BoardDocument, BoardOp, BoardStorePort } from "./board-store";
 import type { WorldSnapshotResult } from "./snapshot";
 import { bindingListingAbsent } from "./binding-resolution";
 import { bindingPaneTerminals } from "./binding-pane-list";
@@ -51,11 +52,11 @@ type AppearanceReadHost = {
   call(method: string, params: Record<string, unknown>): Promise<unknown>;
   isCurrent(): boolean;
 };
-const pendingSnapshots = new WeakSet<BoardStore>();
+const pendingSnapshots = new WeakSet<BoardStorePort>();
 
 /** One background sweep per store preserves the aggregate snapshot response deadline. */
 export async function pruneSnapshotAppearance(
-  board: BoardStore,
+  board: BoardStorePort,
   before: BoardDocument,
   snapshot: WorldSnapshotResult,
   hostFor: (
@@ -104,9 +105,15 @@ export async function pruneSnapshotAppearance(
       current.has(before.appearance![key]!.connection_id),
     );
     if (!admitted.length) return;
-    const saved = board.patchIf(before.revision, [
-      { op: "appearance.prune", keys: admitted },
-    ]);
+    const saved = await board.patchIf(
+      before.revision,
+      planBoardPatch([before, admitted], () => {
+        const keys = admitted.filter((key) =>
+          hosts.get(before.appearance![key]!.connection_id)?.isCurrent(),
+        );
+        return keys.length ? [{ op: "appearance.prune", keys }] : null;
+      }),
+    );
     if (saved) changed(saved.revision);
   } finally {
     pendingSnapshots.delete(board);
@@ -129,7 +136,7 @@ async function currentTerminals(
 }
 /** A live complete native list proves terminal absence; a moving terminal remains retained. */
 export async function pruneGoneAppearance(
-  board: BoardStore,
+  board: BoardStorePort,
   connectionId: string,
   host: {
     call(method: string, params: Record<string, unknown>): Promise<unknown>;
@@ -149,6 +156,9 @@ export async function pruneGoneAppearance(
   if (!seen || !host.isCurrent()) return;
   const ops = absentOps(before, connectionId, seen);
   if (!ops.length) return;
-  const saved = board.patchIf(before.revision, ops);
+  const saved = await board.patchIf(
+    before.revision,
+    planBoardPatch([ops], () => (host.isCurrent() ? ops : null)),
+  );
   if (saved) host.changed(saved.revision);
 }

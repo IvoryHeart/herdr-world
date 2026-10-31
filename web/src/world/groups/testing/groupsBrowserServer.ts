@@ -215,6 +215,7 @@ export async function groupsBrowserServer(directory: string) {
           method,
           params,
           id: "groups-browser",
+          requestIsCurrent: () => !request.signal.aborted,
           services: {
             board: () => board,
             publishBoardChanged: () => {},

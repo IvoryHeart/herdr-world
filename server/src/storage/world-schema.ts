@@ -13,6 +13,7 @@ import {
 import { dirname, join } from "node:path";
 import { newWorldId } from "./world-identifiers";
 import { worldIdsMigration } from "./world-ids";
+import { worldBoardMigration } from "./world-board";
 import { runtimeStatusMigration } from "./runtime-status";
 import { worldProfilesMigration } from "./world-profiles";
 import { worldBindingsMigration } from "./world-bindings";
@@ -87,6 +88,7 @@ export const worldMigrations = [
   worldProfilesMigration,
   runtimeStatusMigration,
   effectsMigration,
+  worldBoardMigration,
 ] as const;
 
 /** A consistent private rollback copy before any noninitial migration. */

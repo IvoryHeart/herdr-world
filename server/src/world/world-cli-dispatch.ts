@@ -1,7 +1,8 @@
+import { planBoardPatch } from "./board-plan";
 import type { CliHost } from "./world-cli-actor";
 import type { WorldCliDeps } from "./world-cli";
 import type { CliActor, LedgerStore } from "./world-ledger";
-import type { BoardOp } from "./board-store";
+import type { BoardPatch } from "./board-store";
 import type { GroupMoveRequest } from "./world-cli-groups";
 
 export function guardCliHost(host: CliHost, recheck: () => void): CliHost {
@@ -35,9 +36,24 @@ export function guardCliCommand(
     board: {
       get: () => ({
         get: () => deps.board.get(),
-        patch: (ops: readonly BoardOp[]) => {
+        patch: (ops: BoardPatch) => {
           recheck();
-          return deps.board.patch(ops);
+          return deps.board.patch(
+            planBoardPatch([ops], (current) => {
+              recheck();
+              return typeof ops === "function" ? ops(current) : ops;
+            }),
+          );
+        },
+        patchIf: (revision: number, ops: BoardPatch) => {
+          recheck();
+          return deps.board.patchIf(
+            revision,
+            planBoardPatch([ops], (current) => {
+              recheck();
+              return typeof ops === "function" ? ops(current) : ops;
+            }),
+          );
         },
       }),
     },

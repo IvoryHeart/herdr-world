@@ -49,15 +49,18 @@ ID with other evidence is unconfirmed for a Board string; appearance's existing
 complete-list reclamation rule still applies. Weak empty workspace/tab anchors
 remain attached while their target exists and never authorize Send.
 
-The Board JSON document remains its compatible owner representation. Opening it
-captures only strings, appearance, tab colours and terminal interest into SQLite;
-subsequent binding changes are serialized and drained on close. All capture
+The compatible Board document is now a committed read projection over separate
+SQLite concern tables. Startup imports its exact backed-up legacy JSON once;
+subsequent Board writes and binding captures commit in the same worker savepoint.
+Only strings, appearance, qualified tab colours and terminal interest create
+bindings; layout preferences retain native-ID reuse behavior. All capture
 pages are prepared before any identity is reassigned. Inheritance requires one
 old match for the new record and one new match for that old record across the
 complete capture set, so splits, merges and page order cannot choose an ID.
-Get/patch RPCs wait for admitted captures before replying. An unchanged capture performs no
-import work, so layout edits do not create identities. Captures are paged by
-bytes/count through the bounded storage queue. Interrupted imports cannot resolve
+Get/patch RPCs expose acknowledged state; a patch replies only after its rows and
+bindings commit. An unchanged capture performs no binding import work, so layout
+edits do not create identities. Capture pages are bounded inside the atomic Board
+operation. Interrupted imports cannot resolve
 legacy targets until their World document has been reconciled. Import keys locate
 legacy records and never become new World IDs. Appearance moves keep their
 existing World record and binding IDs when exactly one disappearing legacy key
