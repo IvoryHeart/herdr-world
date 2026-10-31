@@ -50,12 +50,10 @@ export function manualClock(start = 10_000) {
   };
 }
 
-/** One synthetic host's connection: workspaces with tabs of the given agent states. */
-function connection(
-  connectionId: string,
+/** One synthetic host: each workspace with tabs of the given agent states. */
+export function office(
   rooms: Record<string, readonly string[]>,
-  isDefault: boolean,
-): WorldRuntimeConnection {
+): HerdrOfficeProjection {
   const workspaces: Workspace[] = Object.keys(rooms).map((id, index) => ({
     workspace_id: id,
     number: index + 1,
@@ -77,28 +75,25 @@ function connection(
         number: index + 1,
         label: `Tab ${index + 1}`,
         focused: index === 0,
-        pane_count: status.endsWith("+") ? 2 : 1,
-        agent_status: status.replace(/\+$/, ""),
+        pane_count: 1,
+        agent_status: status,
       });
-      // A status ending in "+" gives its tab a second pane (another seat).
-      const agentStatus = status.replace(/\+$/, "");
-      for (const suffix of status.endsWith("+") ? ["", "b"] : [""])
-        panes.push({
-          pane_id: `${tabId}:p${suffix}`,
-          terminal_id: `term-${tabId}${suffix}`,
-          workspace_id: id,
-          tab_id: tabId,
-          focused: suffix === "",
-          agent: "claude",
-          agent_status: agentStatus,
-          revision: 1,
-        });
+      panes.push({
+        pane_id: `${tabId}:p`,
+        terminal_id: `term-${tabId}`,
+        workspace_id: id,
+        tab_id: tabId,
+        focused: true,
+        agent: "claude",
+        agent_status: status,
+        revision: 1,
+      });
     });
-  return {
-    connectionId,
-    label: connectionId,
+  const connection: WorldRuntimeConnection = {
+    connectionId: "studio",
+    label: "studio",
     source: "saved-profile",
-    isDefault,
+    isDefault: true,
     state: "ready",
     generation: 1,
     snapshotGeneration: 1,
@@ -106,29 +101,12 @@ function connection(
     actionable: true,
     snapshot: { workspaces, tabs, panes, agents: [] },
   };
-}
-
-/** Synthetic hosts by name, each with its workspaces' tabs; the first is focused. */
-export function town(
-  hosts: Record<string, Record<string, readonly string[]>>,
-): HerdrOfficeProjection {
-  const names = Object.keys(hosts);
   return projectWorldOffice(
-    buildWorldObject(
-      names.map((name, index) => connection(name, hosts[name]!, index === 0)),
-      names[0]!,
-    ),
+    buildWorldObject([connection], "studio"),
     1,
     null,
     TOWN_PRESENTATION_BOUNDS,
   );
-}
-
-/** One synthetic host: each workspace with tabs of the given agent states. */
-export function office(
-  rooms: Record<string, readonly string[]>,
-): HerdrOfficeProjection {
-  return town({ studio: rooms });
 }
 
 export const working = (count: number) => Array<string>(count).fill("working");

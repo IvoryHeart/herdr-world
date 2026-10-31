@@ -5,6 +5,7 @@ import {
   createTownScreenResolver,
 } from "./townAmbient";
 import { drawTownSelectionEffects } from "./townSelectionEffects";
+import { townBubbleKind, townAgentChatting } from "./townBubbleKind";
 /**
  * Pixi renderer for the Office town.
  *
@@ -28,26 +29,17 @@ import {
   type WorldFrames,
 } from "../worldFrameScheduler";
 import { registerTownFrames } from "./townFrameLifecycle";
-import { createTownDragEffects } from "./townRendererDrag";
-import { createTownActorViews } from "./townRendererActors";
-import {
-  bakeTownBuilding,
-  bakeTownPod,
-  textureOf,
-  townOutdoor,
-  type BuildingView,
-  type PodView,
-} from "./townRendererScene";
-import {
-  townBakeDirty,
-  townBakeKeys,
-  type TownBakeKeys,
-} from "./scene/townSceneBake";
 import { diagnostics, type TownFrameTrace } from "./townDiagnostics";
 export type { TownFrameTrace } from "./townDiagnostics";
 import { DEVTOOLS } from "../devtools/flag";
 
 import { TownActors, townActorWorld, type TownActor } from "./townActors";
+import {
+  stepTownDrag,
+  townDragPhase,
+  townGroundedPose,
+  type TownDragMotion,
+} from "./townDragMotion";
 import type { TownMoveResult } from "./townMoves";
 import {
   TownCamera,
@@ -58,25 +50,36 @@ import {
 } from "./townCamera";
 import {
   TOWN_FACADE,
+  TOWN_AGENT_SCALE,
   TOWN_TILE as T,
+  townDeskSlots,
+  townDeskTable,
   townGeometryKey,
+  townSeat,
   type TownCell,
   type TownLayout,
 } from "./townLayout";
 import type { TownModel } from "./townModel";
-import type { TerminalColor } from "../terminalColor";
+import { TERMINAL_COLOR_HEX, type TerminalColor } from "../terminalColor";
 import { createTownLookResolver } from "./townAppearance";
 import {
+  paintTownFacade,
   paintTownGround,
-  townChosenCarpet,
-  townHostTheme,
+  paintTownInterior,
+  paintTownRoof,
+  TOWN_HOST_THEMES,
+  townCarpetOf,
+  townRoofOf,
   type TownHostTheme,
 } from "./townPaint";
 import {
   buildTownSprites,
+  townCanvas,
   townCharacter,
   townHash,
+  townLookFor,
   type TownCanvas,
+  type TownLook,
 } from "./townSprites";
 
 export type { TownRendererDiagnostics } from "./townDiagnostics";
@@ -127,6 +130,32 @@ const BLOCK_COLORS: Record<string, number> = {
   shell: 0x7fbf7a,
 };
 
+const textureCache = new WeakMap<TownCanvas, Texture>();
+function textureOf(canvas: TownCanvas) {
+  let texture = textureCache.get(canvas);
+  if (!texture) {
+    texture = new Texture({
+      source: new CanvasSource({ resource: canvas, scaleMode: "nearest" }),
+    });
+    textureCache.set(canvas, texture);
+  }
+  return texture;
+}
+
+let glowCanvas: TownCanvas | null = null;
+function glowTexture() {
+  if (!glowCanvas) {
+    const [canvas, g] = townCanvas(64, 64);
+    const gradient = g.createRadialGradient(32, 32, 1, 32, 32, 32);
+    gradient.addColorStop(0, "rgba(255,255,255,0.55)");
+    gradient.addColorStop(1, "rgba(255,255,255,0)");
+    g.fillStyle = gradient;
+    g.fillRect(0, 0, 64, 64);
+    glowCanvas = canvas;
+  }
+  return textureOf(glowCanvas);
+}
+
 const kindOf = (agent: OfficeAgent) => {
   const label =
     `${agent.harness ?? agent.displayLabel} ${agent.taskSummary ?? ""}`.toLowerCase();
@@ -136,6 +165,40 @@ const kindOf = (agent: OfficeAgent) => {
       ? "gemini"
       : "claude";
 };
+
+/** One seat's sprites: a top seat has a person and laptop lid, a bottom seat a screen and back. */
+type SeatView = {
+  top: boolean;
+  person: Sprite;
+  device: Sprite;
+  glow: Sprite;
+  /** Finished work left at the seat until the user checks it. */
+  papers: Sprite;
+};
+
+type PodView = {
+  container: Container;
+  deskKey: string;
+  seats: SeatView[];
+  item: Sprite | null;
+  cell: TownCell;
+};
+
+type BuildingView = {
+  hostKey: string;
+  container: Container;
+  interior: Sprite;
+  dim: Graphics;
+  dynamic: Container;
+  facade: Sprite;
+  stub: Sprite;
+  roof: Sprite;
+  roofAlpha: number;
+  pods: PodView[];
+  textures: Texture[];
+};
+
+type ActorView = { sprite: Sprite; shadow: Graphics; look: TownLook };
 
 /** Yield to the browser so pending input runs before the next setup step. */
 export const nextTownTask = () =>
@@ -236,6 +299,8 @@ export async function createTownRenderer(
     calm: false,
   };
   let buildings: BuildingView[] = [];
+  const actorViews = new Map<string, ActorView>();
+  const bubbles = new Map<string, Sprite>();
   let ownedTextures: Texture[] = [];
   let level: TownLevel = "overview";
   let disposed = false;
@@ -254,10 +319,7 @@ export async function createTownRenderer(
   outdoor.sortableChildren = true;
 
   const clearScene = () => {
-    for (const view of buildings) {
-      view.container.destroy({ children: true });
-      for (const texture of view.textures) texture.destroy(true);
-    }
+    for (const view of buildings) view.container.destroy({ children: true });
     buildings = [];
     buildingByHost.clear();
     groundLayer.removeChildren().forEach((child) => child.destroy());
@@ -266,23 +328,31 @@ export async function createTownRenderer(
     ownedTextures = [];
   };
 
-  /** A texture for a painted canvas; the scene's own unless a building's. */
-  const own = (canvas: TownCanvas, scene = true) => {
+  const own = (canvas: TownCanvas) => {
     const texture = new Texture({
       source: new CanvasSource({ resource: canvas, scaleMode: "nearest" }),
     });
-    if (scene) ownedTextures.push(texture);
+    ownedTextures.push(texture);
     return texture;
   };
 
-  const themeFor = (hostKey: string): TownHostTheme =>
-    townHostTheme(
-      hostKey,
-      model?.hosts.get(hostKey)?.deterministicSkin.themeIndex,
-      model?.placeColors.hosts.get(hostKey),
-    );
-  const carpetFor = (roomKey: string) =>
-    townChosenCarpet(model?.placeColors.rooms.get(roomKey));
+  const themeFor = (hostKey: string): TownHostTheme => {
+    const host = model?.hosts.get(hostKey);
+    const theme =
+      TOWN_HOST_THEMES[
+        (host?.deterministicSkin.themeIndex ?? townHash(hostKey)) %
+          TOWN_HOST_THEMES.length
+      ]!;
+    // A host's chosen colour is its roof; walls and floors keep the theme.
+    const chosen = model?.placeColors.hosts.get(hostKey);
+    return chosen
+      ? { ...theme, roof: townRoofOf(TERMINAL_COLOR_HEX[chosen]) }
+      : theme;
+  };
+  const carpetFor = (roomKey: string) => {
+    const chosen = model?.placeColors.rooms.get(roomKey);
+    return chosen ? townCarpetOf(TERMINAL_COLOR_HEX[chosen]) : undefined;
+  };
 
   const buildScene = () => {
     if (!layout || !model) return;
@@ -291,17 +361,83 @@ export async function createTownRenderer(
     pendingPods.clear();
     sceneLayer.addChild(outdoor);
     outdoor.zIndex = -1;
+    const add = (canvas: TownCanvas, x: number, y: number, z: number) => {
+      const sprite = new Sprite(textureOf(canvas));
+      sprite.position.set(x, y);
+      sprite.zIndex = z;
+      outdoor.addChild(sprite);
+      return sprite;
+    };
     // Trees, lamps and benches join the scene with the ground chunk under them.
-    outdoorItems = townOutdoor(layout, sprites, outdoor);
+    outdoorItems = [];
+    for (const tree of layout.trees)
+      outdoorItems.push({
+        x: tree.x * T,
+        y: tree.y * T,
+        place: () => {
+          const sprite = add(
+            sprites.trees[tree.variant]!,
+            tree.x * T + 8,
+            tree.y * T + 14,
+            tree.y * T + 14,
+          );
+          sprite.anchor.set(17 / 34, 43 / 44);
+        },
+      });
+    for (const lamp of layout.lamps)
+      outdoorItems.push({
+        x: lamp.x * T,
+        y: lamp.y * T,
+        place: () =>
+          add(sprites.lamp, lamp.x * T + 5, lamp.y * T - 22, lamp.y * T + 8),
+      });
+    for (const bush of layout.bushes)
+      outdoorItems.push({
+        x: bush.x * T,
+        y: bush.y * T,
+        place: () =>
+          add(sprites.bush, bush.x * T - 2, bush.y * T + 2, bush.y * T + 13),
+      });
+    for (const bench of layout.benches)
+      outdoorItems.push({
+        x: bench.x * T,
+        y: bench.y * T,
+        place: () =>
+          add(sprites.bench, bench.x * T, bench.y * T + 2, bench.y * T + 12),
+      });
+    outdoorItems.push({
+      x: layout.board.x * T,
+      y: layout.board.y * T,
+      place: () =>
+        add(
+          sprites.board,
+          layout!.board.x * T - 8,
+          layout!.board.y * T - 16,
+          layout!.board.y * T + 14,
+        ),
+    });
+    const fountain = new Graphics();
+    const fx = layout.plaza.x * T + 8;
+    const fy = layout.plaza.y * T + 4;
+    fountain
+      .ellipse(fx + 2, fy + 6, 26, 12)
+      .fill({ color: 0x000000, alpha: 0.18 })
+      .ellipse(fx, fy + 2, 25, 11)
+      .fill(0x9d978c)
+      .ellipse(fx, fy, 25, 11)
+      .fill(0xb9b2a5)
+      .ellipse(fx, fy, 20, 8)
+      .fill(0x4f9fd3)
+      .ellipse(fx, fy - 1, 15, 5)
+      .fill(0x6fb9e6)
+      .rect(fx - 3, fy - 14, 6, 14)
+      .fill(0x9d978c)
+      .rect(fx - 5, fy - 16, 10, 3)
+      .fill(0xb9b2a5);
+    fountain.zIndex = fy + 12;
+    outdoor.addChild(fountain);
 
     pendingBuildings = [...layout.buildings];
-    recordLayout();
-    agentViews.drop();
-  };
-
-  /** The layout and desk count the diagnostics report. */
-  const recordLayout = () => {
-    if (!layout) return;
     stats.desks = layout.buildings.reduce(
       (sum, b) =>
         sum +
@@ -321,49 +457,107 @@ export async function createTownRenderer(
       deskColumns: layout.shape.deskColumns,
       geometry: townGeometryKey(layout),
     };
+    for (const view of actorViews.values()) {
+      view.sprite.destroy();
+      view.shadow.destroy();
+    }
+    actorViews.clear();
   };
 
-  /** Walking agents' sprites live in their buildings; they return next frame. */
   /** Bake one building's textures and retained sprites the first time it is needed. */
   const buildBuilding = (building: TownLayout["buildings"][number]) => {
     if (!layout || !model) return;
-    const textures: Texture[] = [];
-    const { view, pendingCells } = bakeTownBuilding(building, {
-      theme: themeFor(building.hostKey),
-      stale: model.hosts.get(building.hostKey)?.stale ?? false,
-      sprites,
-      colorFor: deskColor,
-      carpetFor,
-      own: (canvas) => {
-        const texture = own(canvas, false);
-        textures.push(texture);
-        return texture;
-      },
-      textures,
-      roofAlpha: camera.z >= (camera.limits?.roof ?? 0) ? 0 : 1,
-    });
-    pendingPods.set(building.hostKey, pendingCells);
-    sceneLayer.addChild(view.container);
-    buildings.push(view);
-    buildingByHost.set(building.hostKey, view);
-    dimDirty = true;
-  };
+    {
+      const theme = themeFor(building.hostKey);
+      const stale = model.hosts.get(building.hostKey)?.stale ?? false;
+      const container = new Container();
+      container.zIndex = (building.y + building.h) * T + 4;
+      const interior = new Sprite(
+        own(
+          paintTownInterior(building, theme, {
+            table: sprites.table,
+            tableSmall: sprites.tableSmall,
+            chair: sprites.chair,
+            chairBack: sprites.chairBack,
+            colorFor: deskColor,
+            carpetFor,
+          }),
+        ),
+      );
+      interior.position.set(building.x * T, building.y * T);
+      const dim = new Graphics();
+      const dynamic = new Container();
+      dynamic.sortableChildren = true;
+      const facadeCanvas = paintTownFacade(building, theme);
+      const facade = new Sprite(own(facadeCanvas));
+      facade.position.set(building.x * T, (building.y + building.h) * T);
+      const [stubCanvas, stubContext] = townCanvas(facadeCanvas.width, 9);
+      stubContext.drawImage(facadeCanvas, 0, -23);
+      const stub = new Sprite(own(stubCanvas));
+      stub.position.set(building.x * T, (building.y + building.h) * T);
+      const roof = new Sprite(own(paintTownRoof(building, theme, stale)));
+      roof.position.set(building.x * T - 4, building.y * T - 12);
+      container.addChild(interior, dynamic, dim, stub, facade, roof);
 
-  /** Bake one building again (its colours or desks changed); the rest stay. */
-  const rebakeBuilding = (hostKey: string) => {
-    const view = buildingByHost.get(hostKey);
-    if (view) {
-      view.container.destroy({ children: true });
-      for (const texture of view.textures) texture.destroy(true);
-      buildings = buildings.filter((entry) => entry !== view);
-      buildingByHost.delete(hostKey);
+      for (const plant of building.plants) {
+        const sprite = new Sprite(textureOf(sprites.plant));
+        sprite.position.set(plant.x * T, (plant.y + 1) * T - 24);
+        sprite.zIndex = (plant.y + 1) * T - 2;
+        dynamic.addChild(sprite);
+      }
+      const L = building.lounge;
+      for (const [canvas, x, y] of [
+        [sprites.sofa, (L.x + 1) * T - 1, (L.y + 1) * T - 8],
+        [sprites.coffee, (L.x + 7) * T + 1, (L.y + 1) * T - 10],
+        [sprites.cooler, (L.x + 8) * T + 2, (L.y + 1) * T - 12],
+      ] as const) {
+        const sprite = new Sprite(textureOf(canvas));
+        sprite.position.set(x, y);
+        sprite.zIndex = (L.y + 2) * T - 2;
+        dynamic.addChild(sprite);
+      }
+      const counterX = building.doorX * T;
+      const counterY = (building.counter.y + 1) * T - 8;
+      const me = new Sprite(
+        textureOf(townCharacter(townLookFor("you"), "down", 0, "sit", false)),
+      );
+      me.position.set(counterX - 7, counterY - 11);
+      const meChair = new Sprite(textureOf(sprites.chair));
+      meChair.position.set(counterX - 7, counterY - 14);
+      const counter = new Sprite(textureOf(sprites.counter));
+      counter.position.set(counterX - 41, counterY);
+      const counterLid = new Sprite(textureOf(sprites.lid.claude!));
+      counterLid.position.set(counterX - 23, counterY - 4);
+      const reception = new Container();
+      reception.addChild(meChair, me, counter, counterLid);
+      reception.zIndex = (building.counter.y + 3) * T - 2;
+      dynamic.addChild(reception);
+
+      // Tables and chairs are baked into the interior; the detailed desk
+      // sprites (people, screens, glow) are created on demand from the room level.
+      const pods: PodView[] = [];
+      const pendingCells: TownCell[] = [];
+      for (const room of building.rooms)
+        for (const cell of room.cells)
+          if (cell.deskKey) pendingCells.push(cell);
+      pendingPods.set(building.hostKey, pendingCells);
+      sceneLayer.addChild(container);
+      buildings.push({
+        hostKey: building.hostKey,
+        container,
+        interior,
+        dim,
+        dynamic,
+        facade,
+        stub,
+        roof,
+        roofAlpha: camera.z >= (camera.limits?.roof ?? 0) ? 0 : 1,
+        pods,
+        textures: [],
+      });
+      buildingByHost.set(building.hostKey, buildings[buildings.length - 1]!);
+      dimDirty = true;
     }
-    pendingPods.delete(hostKey);
-    const building = layout?.buildings.find((b) => b.hostKey === hostKey);
-    pendingBuildings = pendingBuildings.filter((b) => b.hostKey !== hostKey);
-    if (building) pendingBuildings.push(building);
-    agentViews.drop(hostKey);
-    stats.buildingBakes += 1;
   };
 
   const GROUND_CHUNK = 512;
@@ -467,13 +661,120 @@ export async function createTownRenderer(
     return budget <= 0 || buildingBudget <= 0 || podsPending;
   };
 
-  const buildPod = (cell: TownCell, parent: Container): PodView =>
-    bakeTownPod(cell, parent, {
-      desk: model!.desks.get(cell.deskKey!) as OfficeDesk,
-      wood: deskColor(cell.deskKey!),
-      pinned: model!.deskPins.has(cell.deskKey!),
-      sprites,
+  const buildPod = (cell: TownCell, parent: Container): PodView => {
+    const desk = model!.desks.get(cell.deskKey!) as OfficeDesk;
+    const container = new Container();
+    const X = (cell.x + 1) * T;
+    const Y = cell.y * T;
+    container.zIndex = Y + 52;
+    const wood = deskColor(desk.key);
+    const make = (canvas: TownCanvas | null, x: number, y: number) => {
+      const sprite = new Sprite(canvas ? textureOf(canvas) : Texture.EMPTY);
+      sprite.position.set(x, y);
+      container.addChild(sprite);
+      return sprite;
+    };
+    const glow = (x: number, y: number, size: number) => {
+      const sprite = new Sprite(glowTexture());
+      sprite.anchor.set(0.5);
+      sprite.position.set(x, y);
+      sprite.width = sprite.height = size;
+      sprite.blendMode = "add";
+      sprite.visible = false;
+      return sprite;
+    };
+    const place = townDeskTable(cell.seats);
+    const shadow = new Graphics()
+      .rect(X + place.x + 4, Y + 50, place.w - 2, 4)
+      .fill({ color: 0x000000, alpha: 0.2 });
+    container.addChild(shadow);
+    const slots = townDeskSlots(cell.seats);
+    // Layered back to front: top chairs and people, the table, then laptops,
+    // screens, the people seen from behind and their chair backs.
+    for (const slot of slots)
+      if (slot.top) make(sprites.chair, X + slot.chairX, Y + 2);
+    // Seated agents keep their feet (facing) or head (from behind) in place.
+    const seated = (sprite: Sprite, x: number, y: number, top: boolean) => {
+      sprite.anchor.set(0.5, top ? 1 : 0);
+      sprite.position.set(x + 7, top ? y + 20 : y);
+      sprite.scale.set(TOWN_AGENT_SCALE);
+      return sprite;
+    };
+    const people = slots.map((slot) =>
+      slot.top ? seated(make(null, 0, 0), X + slot.chairX, Y + 5, true) : null,
+    );
+    make(
+      (cell.seats <= 2 ? sprites.tableSmall : sprites.table)[wood]!,
+      X + place.x,
+      Y + 17,
+    );
+    const devices = slots.map((slot) =>
+      make(
+        slot.top ? sprites.lidOff : null,
+        X + slot.chairX,
+        slot.top ? Y + 13 : Y + 26,
+      ),
+    );
+    const itemIndex = townHash(`${desk.key}:item`) % 4;
+    const itemX = X + (cell.seats <= 2 ? 41 : 29);
+    const item =
+      itemIndex === 0
+        ? make(sprites.mug, itemX + 1, Y + 22)
+        : itemIndex === 1
+          ? make(sprites.cactus, itemX, Y + 19)
+          : null;
+    const glows = slots.map((slot) =>
+      slot.top
+        ? glow(X + slot.chairX + 7, Y + 12, 38)
+        : glow(X + slot.chairX + 7, Y + 30, 30),
+    );
+    for (const sprite of glows) container.addChild(sprite);
+    // Beside the laptop or screen, on the table top.
+    const papers = slots.map((slot) => {
+      const sprite = make(
+        sprites.papers,
+        X + slot.chairX + 14,
+        slot.top ? Y + 18 : Y + 28,
+      );
+      sprite.visible = false;
+      return sprite;
     });
+    const backs = slots.map((slot) =>
+      slot.top
+        ? null
+        : seated(make(null, 0, 0), X + slot.chairX, Y + 34, false),
+    );
+    for (const slot of slots)
+      if (!slot.top) make(sprites.chairBack, X + slot.chairX, Y + 45);
+    // A pinned desk wears a pin on its table's corner.
+    if (model!.deskPins.has(desk.key)) {
+      const px = X + place.x + place.w - 3;
+      const py = Y + 18;
+      container.addChild(
+        new Graphics()
+          .moveTo(px, py)
+          .lineTo(px - 3, py + 6)
+          .stroke({ color: 0x3a3a3a, width: 1 })
+          .circle(px, py, 3)
+          .fill(0xe5534b)
+          .stroke({ color: 0xffffff, width: 1 }),
+      );
+    }
+    parent.addChild(container);
+    return {
+      container,
+      deskKey: desk.key,
+      seats: slots.map((slot, seat) => ({
+        top: slot.top,
+        person: (people[seat] ?? backs[seat])!,
+        device: devices[seat]!,
+        glow: glows[seat]!,
+        papers: papers[seat]!,
+      })),
+      item,
+      cell,
+    };
+  };
 
   const seatState = (deskKey: string, seat: number) => {
     const desk = model!.desks.get(deskKey);
@@ -589,22 +890,150 @@ export async function createTownRenderer(
   const blink = (key: string, onScreen: boolean) =>
     blinkFrame(key, clock, onScreen, ambient);
 
-  const agentViews = createTownActorViews({
-    camera,
-    actors,
-    sprites,
-    screenLayer,
-    model: () => model,
-    level: () => level,
-    clock: () => clock,
-    state: () => state,
-    ambient: () => ambient,
-    layoutCells: () => layoutCells,
-    buildingOf: (hostKey) => buildingByHost.get(hostKey),
-    lookOf,
-    blink,
-    visible,
-  });
+  const updateActors = (standingAlpha: number) => {
+    const live = new Set<string>();
+    for (const actor of actors.actors.values()) {
+      if (actor.mode === "seat") continue;
+      const building = buildingByHost.get(actor.hostKey);
+      if (!building || !building.container.visible) continue;
+      live.add(actor.key);
+      let view = actorViews.get(actor.key);
+      if (!view) {
+        const sprite = new Sprite(
+          textureOf(
+            townCharacter(lookOf(actor.key), actor.dir, 0, "stand", false),
+          ),
+        );
+        const shadow = new Graphics()
+          .rect(-5, -1, 10, 3)
+          .fill({ color: 0x000000, alpha: 0.22 });
+        sprite.anchor.set(0.5, 1);
+        sprite.scale.set(TOWN_AGENT_SCALE);
+        shadow.scale.set(TOWN_AGENT_SCALE, 1);
+        building.dynamic.addChild(shadow, sprite);
+        view = { sprite, shadow, look: lookOf(actor.key) };
+        actorViews.set(actor.key, view);
+      }
+      const moving = actor.mode === "walk";
+      const frame = moving ? Math.floor(actor.walked / 6) % 4 : 0;
+      const bob = moving && frame % 2 ? -1 : 0;
+      view.look = lookOf(actor.key);
+      view.sprite.position.set(
+        Math.round(actor.x),
+        Math.round(actor.y + 1 + bob),
+      );
+      view.sprite.zIndex = actor.y;
+      view.shadow.position.set(Math.round(actor.x), Math.round(actor.y));
+      view.shadow.zIndex = actor.y - 0.5;
+      view.sprite.alpha = view.shadow.alpha = standingAlpha;
+      view.sprite.visible = view.shadow.visible = standingAlpha > 0.02;
+      view.sprite.texture = textureOf(
+        townCharacter(
+          view.look,
+          actor.dir,
+          frame,
+          "stand",
+          blink(actor.key, actor.dir !== "up" && visible(view.sprite)),
+        ),
+      );
+    }
+    for (const [key, view] of actorViews)
+      if (!live.has(key)) {
+        view.sprite.destroy();
+        view.shadow.destroy();
+        actorViews.delete(key);
+      }
+  };
+
+  const updateBubbles = () => {
+    const scale = Math.min(4, Math.max(2, Math.round(camera.z * 1.5)));
+    const wanted = new Set<string>();
+    if (model && level !== "town")
+      for (const actor of actors.actors.values()) {
+        const agent = model.agents.get(actor.key);
+        if (!agent) continue;
+        const status = agent.semanticStatus;
+        const near = level === "room" || level === "desk";
+        const chatting = townAgentChatting(
+          agent.key,
+          clock,
+          level,
+          status,
+          actor.mode,
+          !state.calm && !camera.reducedMotion,
+        );
+        const kind = townBubbleKind(
+          status,
+          state.askingKeys?.has(agent.key) ?? false,
+          state.completionSeenKeys.has(agent.key),
+          level,
+          actor.mode,
+          chatting,
+          Math.floor(clock * 3),
+        );
+        let headX = actor.x;
+        let headY = actor.y - 20 * TOWN_AGENT_SCALE;
+        if (actor.mode === "seat") {
+          const seat = model.agentSeats.get(actor.key);
+          const cell = seat && layoutCells.get(seat.deskKey);
+          if (cell && seat) {
+            const geometry = townSeat(cell, seat.seat);
+            headX = geometry.cx;
+            headY = geometry.top
+              ? geometry.tableY + 24 - 20 * TOWN_AGENT_SCALE
+              : geometry.tableY + 33;
+          }
+        }
+        const point = camera.toScreen(headX, headY);
+        if (
+          point.x < -40 ||
+          point.y < -40 ||
+          point.x > camera.viewport.width + 40 ||
+          point.y > camera.viewport.height + 40
+        )
+          continue;
+        if (
+          near &&
+          status === "working" &&
+          actor.mode === "seat" &&
+          !state.askingKeys?.has(agent.key)
+        ) {
+          const phase = clock * 0.35 + (townHash(agent.key) % 97) / 97;
+          const fraction = phase - Math.floor(phase);
+          ambient.at(clock + ((chatting ? 0.33 : 1) - fraction) / 0.35);
+          if (chatting) ambient.every(3);
+        }
+        if (!kind) continue;
+        wanted.add(actor.key);
+        let bubble = bubbles.get(actor.key);
+        if (!bubble) {
+          bubble = new Sprite(Texture.EMPTY);
+          bubble.anchor.set(0.5, 1);
+          screenLayer.addChild(bubble);
+          bubbles.set(actor.key, bubble);
+        }
+        bubble.texture = textureOf(sprites.bubble[kind]);
+        const bubbleScale =
+          (kind === "blocked" || kind === "ask" || kind === "done") && !near
+            ? 2
+            : scale;
+        bubble.scale.set(bubbleScale);
+        const bounce =
+          kind === "blocked" && !camera.reducedMotion && !state.calm
+            ? Math.abs(Math.sin(clock * 4 + (townHash(actor.key) % 7))) * 3
+            : 0;
+        bubble.position.set(
+          Math.round(point.x),
+          Math.round(point.y - 2 - bounce),
+        );
+        if (kind === "blocked" && visible(bubble)) ambient.continuous();
+      }
+    for (const [key, bubble] of bubbles)
+      if (!wanted.has(key)) {
+        bubble.destroy();
+        bubbles.delete(key);
+      }
+  };
 
   let layoutCells = new Map<string, TownCell>();
 
@@ -747,8 +1176,8 @@ export async function createTownRenderer(
     const roofsMoving = updateRoofs(dt);
     cull();
     updatePods(deskBlend, camera.z >= 0.6, lite);
-    agentViews.update(Math.max(deskBlend, townBlend(0.35, 0.6, camera.z)));
-    agentViews.updateBubbles();
+    updateActors(Math.max(deskBlend, townBlend(0.35, 0.6, camera.z)));
+    updateBubbles();
     drawTownSelectionEffects(
       fxLayer,
       model,
@@ -761,7 +1190,7 @@ export async function createTownRenderer(
       ambient,
     );
     onFrame(camera, level); // before the drag, so a carry aims at this frame
-    const dragging = dragEffects.update(dt);
+    const dragging = updateDrag(dt);
     app.renderer.render(app.stage);
     stats.level = level;
     stats.zoom = camera.z;
@@ -776,7 +1205,7 @@ export async function createTownRenderer(
         (sum, b) => sum + b.pods.filter((pod) => pod.container.visible).length,
         0,
       ),
-      statuses: agentViews.bubbleCount(),
+      statuses: bubbles.size,
     };
     if (!stats.ready) stats.ready = true;
     const moving =
@@ -852,29 +1281,290 @@ export async function createTownRenderer(
   };
 
   /* ---------- drag and move effects ---------- */
+  type Puff = { x: number; y: number; vx: number; vy: number; life: number };
+  const puffs: Puff[] = [];
+  const quiet = () => camera.reducedMotion || state.calm;
+  /** Raise dust unless motion is quiet; true when it did. */
+  const puffAt = (x: number, y: number, count: number) => {
+    if (quiet()) return false;
+    for (let i = 0; i < count; i += 1) {
+      const angle = Math.PI * (0.9 + 1.2 * Math.random());
+      const speed = 18 + 34 * Math.random();
+      puffs.push({
+        x: x + (Math.random() - 0.5) * 24,
+        y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed * 0.5,
+        life: 0.45 + 0.3 * Math.random(),
+      });
+    }
+    return true;
+  };
+  type DragVisual = {
+    kind: "desk" | "agent";
+    key: string;
+    ghost: Container;
+    /** A carried agent, drawn kicking its legs. */
+    agent: { sprite: Sprite; look: TownLook } | null;
+    shadow: Graphics;
+    highlight: Graphics;
+    slot: Sprite | null;
+    dimmed: Container | null;
+    /** The desk snapshot made for this drag; cached textures are never ours. */
+    snapshot: Texture | null;
+  } & TownDragMotion;
+  let drag: DragVisual | null = null;
   const podOf = (deskKey: string) =>
     buildings.flatMap((b) => b.pods).find((pod) => pod.deskKey === deskKey);
-  const dragEffects = createTownDragEffects({
-    app,
-    camera,
-    sprites,
-    actors,
-    dragLayer,
-    puffLayer,
-    stats,
-    model: () => model,
-    layout: () => layout,
-    state: () => state,
-    layoutCells: () => layoutCells,
-    podOf,
-    deskColor,
-    lookOf,
-    clock: () => clock,
-    request,
-  });
-  const { beginDrag, moveDrag, endDrag, finishMove } = dragEffects;
+  const clearDrag = () => {
+    if (!drag) return;
+    if (drag.dimmed && !drag.dimmed.destroyed) drag.dimmed.alpha = 1;
+    // Cached textures (characters, tables) are shared with the scene: destroy
+    // only the sprites, and the snapshot made for this drag.
+    drag.ghost.destroy({ children: true });
+    drag.snapshot?.destroy(true);
+    drag.shadow.destroy();
+    drag.highlight.destroy();
+    drag.slot?.destroy();
+    drag = null;
+  };
+  const beginDrag = (
+    kind: "desk" | "agent",
+    key: string,
+    x: number,
+    y: number,
+  ) => {
+    clearDrag();
+    if (!model || !layout) return;
+    const ghost = new Container();
+    let home = { x, y };
+    let dimmed: Container | null = null;
+    let snapshot: Texture | null = null;
+    let image: Sprite;
+    if (kind === "desk") {
+      const cell = layoutCells.get(key);
+      const pod = podOf(key);
+      if (cell) home = { x: (cell.x + 3) * T, y: cell.y * T + 30 };
+      if (pod) {
+        // A snapshot of the desk as drawn, people and screens included.
+        snapshot = app.renderer.generateTexture(pod.container);
+        image = new Sprite(snapshot);
+        pod.container.alpha = 0.25;
+        dimmed = pod.container;
+      } else {
+        const seats = cell?.seats ?? 4;
+        image = new Sprite(
+          textureOf(
+            (seats <= 2 ? sprites.tableSmall : sprites.table)[deskColor(key)]!,
+          ),
+        );
+      }
+      image.anchor.set(0.5);
+      ghost.addChild(image);
+    } else {
+      const actor = actors.actors.get(key);
+      const seat = model.agentSeats.get(key);
+      const cell = seat && layoutCells.get(seat.deskKey);
+      if (cell && seat) {
+        const geometry = townSeat(cell, seat.seat);
+        home = { x: geometry.cx, y: geometry.seatedY - 10 };
+      } else if (actor) home = { x: actor.x, y: actor.y - 10 };
+      // Held by the scruff: it hangs from the top and swings.
+      image = new Sprite(
+        textureOf(townCharacter(lookOf(key), "down", 0, "stand", false)),
+      );
+      image.anchor.set(0.5, 0.1);
+      image.scale.set(TOWN_AGENT_SCALE);
+      image.y = -0.7 * 18 * TOWN_AGENT_SCALE;
+      ghost.addChild(image);
+    }
+    const shadow = new Graphics()
+      .ellipse(0, 0, kind === "desk" ? 30 : 8, kind === "desk" ? 6 : 3)
+      .fill({ color: 0x000000, alpha: 0.32 });
+    const highlight = new Graphics();
+    dragLayer.addChild(highlight, shadow, ghost);
+    drag = {
+      kind,
+      key,
+      ghost,
+      agent: kind === "agent" ? { sprite: image, look: lookOf(key) } : null,
+      shadow,
+      highlight,
+      slot: null,
+      home,
+      x: home.x,
+      y: home.y,
+      target: null,
+      dimmed,
+      snapshot,
+      // It lifts off from where it stood and springs after the pointer.
+      phase: { name: "drag", t: 0 },
+      shown: townGroundedPose(home.x, home.y),
+      vx: 0,
+      vy: 0,
+      lean: 0,
+    };
+    stats.drags.lifts += 1;
+    puffAt(
+      home.x,
+      home.y + (kind === "desk" ? 24 : 8),
+      kind === "desk" ? 8 : 4,
+    );
+    moveDrag(x, y, null);
+  };
+  const moveDrag = (
+    x: number,
+    y: number,
+    targetKey: string | null,
+    snap = false,
+  ) => {
+    if (!drag || !layout || drag.phase.name !== "drag") return;
+    drag.x = x;
+    drag.y = y - (drag.kind === "desk" ? 24 : 14);
+    drag.target = null;
+    drag.slot?.destroy();
+    drag.slot = null;
+    if (targetKey && drag.kind === "desk") {
+      // Another desk's slot when reordering in the room or grouping with
+      // that desk, or else the next free spot of the target room.
+      const room = layout.buildings
+        .flatMap((b) => b.rooms)
+        .find((candidate) => candidate.key === targetKey);
+      const cell =
+        layoutCells.get(targetKey) ??
+        room?.cells.find((candidate) => !candidate.deskKey);
+      if (cell) {
+        drag.target = {
+          x: (cell.x + 1) * T - 3,
+          y: cell.y * T + 2,
+          w: 70,
+          h: 57,
+        };
+      }
+      // Grouping keeps both desks: no ghost table takes the other's place.
+      if (cell && !snap) {
+        const seats = model?.desks.get(drag.key)?.paneDevices.length ?? 4;
+        const slot = new Sprite(
+          textureOf(
+            (seats <= 2 ? sprites.tableSmall : sprites.table)[
+              deskColor(drag.key)
+            ]!,
+          ),
+        );
+        slot.alpha = 0.35;
+        slot.position.set(
+          (cell.x + 1) * T + (seats <= 2 ? 14 : -1),
+          cell.y * T + 17,
+        );
+        dragLayer.addChildAt(slot, 1);
+        drag.slot = slot;
+      }
+    } else if (targetKey && drag.kind === "agent") {
+      const cell = layoutCells.get(targetKey);
+      if (cell)
+        drag.target = {
+          x: (cell.x + 1) * T - 3,
+          y: cell.y * T + 2,
+          w: 70,
+          h: 57,
+        };
+    }
+    request("drag");
+  };
+  const endDrag = (mode: "cancel" | "park") => {
+    if (!drag || drag.phase.name !== "drag") return;
+    drag.phase = townDragPhase(
+      drag,
+      mode === "park" && drag.target ? "park" : "back",
+    );
+    request("drag-end");
+  };
+  const finishMove = (result: TownMoveResult) => {
+    if (!drag) return;
+    // An uncertain move neither lands nor springs home: the ghost fades where
+    // it was dropped and the refreshed scene shows where the panes are.
+    if (result === "uncertain") {
+      drag.phase = townDragPhase(drag, "fade");
+      request("drag-uncertain");
+      return;
+    }
+    // Every move that lands raises dust when it touches down (see
+    // updateDrag), on its target or, without one, where it was dropped.
+    if (result === "moved") drag.phase = townDragPhase(drag, "land");
+    else {
+      drag.phase = townDragPhase(drag, "back");
+      stats.drags.returns += 1;
+    }
+    request("drag-result");
+  };
+  /** Advance drag effects and puffs; true while anything still moves. */
+  const updateDrag = (dt: number) => {
+    puffLayer.clear();
+    for (let i = puffs.length - 1; i >= 0; i -= 1) {
+      const puff = puffs[i]!;
+      puff.life -= dt;
+      if (puff.life <= 0) {
+        puffs.splice(i, 1);
+        continue;
+      }
+      puff.x += puff.vx * dt;
+      puff.y += puff.vy * dt;
+      puff.vx *= 0.9;
+      puff.vy *= 0.9;
+      puffLayer
+        .circle(puff.x, puff.y, 2 + (0.8 - puff.life) * 6)
+        .fill({ color: 0xe8dcc4, alpha: Math.min(0.5, puff.life) });
+    }
+    if (!drag) return puffs.length > 0;
+    const { pose, done, landed } = stepTownDrag(drag, dt, clock, quiet());
+    const desk = drag.kind === "desk";
+    // The ground under the ghost: its shadow, and where the dust rises.
+    const ground = desk ? 40 : 12;
+    if (landed) {
+      stats.drags.landings += 1;
+      if (puffAt(pose.x, pose.y + ground - 2, desk ? 16 : 8))
+        stats.drags.dust += 1;
+    }
+    if (done) {
+      clearDrag();
+      return puffs.length > 0;
+    }
+    const { x, y, tilt, alpha, scale, lift, squash } = pose;
+    const phase = drag.phase;
+    // Lifted, the ghost rises off its shadow, which spreads and fades.
+    drag.ghost.position.set(x, y - lift * (desk ? 14 : 10));
+    drag.ghost.rotation = tilt;
+    drag.ghost.alpha = alpha;
+    drag.ghost.scale.set(scale * Math.sqrt(squash), scale / Math.sqrt(squash));
+    drag.shadow.position.set(x, y + ground);
+    drag.shadow.scale.set(1 + 0.35 * lift);
+    drag.shadow.alpha = alpha * (1 - 0.4 * Math.min(1, lift));
+    if (drag.agent) {
+      // A carried agent swings from where it is held and kicks its legs.
+      const kicking = lift > 0.3 && phase.name !== "land";
+      const frame = kicking
+        ? Math.floor(clock * (Math.hypot(drag.vx, drag.vy) > 60 ? 12 : 5)) % 4
+        : 0;
+      drag.agent.sprite.texture = textureOf(
+        townCharacter(drag.agent.look, "down", frame, "stand", false),
+      );
+      drag.agent.sprite.rotation = kicking
+        ? Math.max(-0.5, Math.min(0.5, drag.vx * 0.002))
+        : 0;
+    }
+    drag.highlight.clear();
+    if (drag.target && phase.name !== "back") {
+      const pulse = 0.12 + 0.08 * Math.sin(clock * 4);
+      const r = drag.target;
+      drag.highlight
+        .rect(r.x, r.y, r.w, r.h)
+        .fill({ color: 0x7be08f, alpha: phase.name === "drag" ? 0.3 : pulse })
+        .stroke({ color: 0x7be08f, width: 1.5, alpha: 0.9 });
+    }
+    return true;
+  };
 
-  let bakeKeys: TownBakeKeys | null = null;
+  let sceneKey = "";
   return {
     beginDrag,
     moveDrag,
@@ -887,13 +1577,11 @@ export async function createTownRenderer(
     setScene(nextModel, nextLayout, nextState) {
       const layoutChanged = nextLayout !== layout;
       // Tables, carpets and roofs are baked with their colours (and tables
-      // with their pins), so a new colour, pin or host state may bake again.
+      // with their pins), so a new colour or pin rebuilds.
       const colorsChanged =
         nextModel.deskColors !== model?.deskColors ||
         nextModel.placeColors !== model?.placeColors ||
-        nextModel.deskPins !== model?.deskPins ||
-        // Roofs show a host's theme and whether it is stale.
-        nextModel.hosts !== model?.hosts;
+        nextModel.deskPins !== model?.deskPins;
       const first = !layout;
       model = nextModel;
       layout = nextLayout;
@@ -905,17 +1593,12 @@ export async function createTownRenderer(
         request("scene");
         return;
       }
-      // Bake again only what changed: the whole scene when the town's size
-      // or a building's rectangle changed, else just the changed buildings.
-      const keys = townBakeKeys(nextModel, nextLayout);
-      const dirty = townBakeDirty(bakeKeys, keys);
-      bakeKeys = keys;
-      if (dirty.scene) {
+      const places = nextModel.placeColors;
+      const key = `${[...places.rooms].join(",")}/${[...places.hosts].join(",")}/${nextLayout.width}x${nextLayout.height}:${nextLayout.buildings.map((b) => `${b.hostKey}@${b.x},${b.y},${b.w},${b.h}:${b.rooms.map((r) => r.cells.map((c) => (c.deskKey ? `${c.deskKey}#${c.seats}#${deskColor(c.deskKey)}${model!.deskPins.has(c.deskKey) ? "#pin" : ""}` : "-")).join(",")).join("|")}`).join(";")}`;
+      if (key !== sceneKey) {
+        sceneKey = key;
         buildScene();
         stats.sceneRenders += 1;
-      } else if (dirty.buildings.size) {
-        for (const hostKey of dirty.buildings) rebakeBuilding(hostKey);
-        recordLayout();
       }
       syncActors(first);
       dimDirty = true;
@@ -955,11 +1638,11 @@ export async function createTownRenderer(
       if (disposed) return;
       disposed = true;
       cancelAmbient();
-      dragEffects.clear();
+      clearDrag();
       motion.removeEventListener("change", onMotion);
       frames?.dispose();
       clearScene();
-      agentViews.dispose();
+      for (const bubble of bubbles.values()) bubble.destroy();
       app.destroy(true, { children: true, texture: false });
       stats.destroys += 1;
       stats.activeApplications = Math.max(0, stats.activeApplications - 1);

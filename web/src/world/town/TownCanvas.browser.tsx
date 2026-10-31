@@ -3236,24 +3236,11 @@ async function run() {
         )!
         .click();
     };
-    // A colour re-bakes only its own building, never the whole scene.
-    const scenes = diagnostics.sceneRenders;
-    const bakedOne = async (before: number, what: string) => {
-      await waitFor(
-        () => diagnostics.buildingBakes > before,
-        `${what} did not bake its building again`,
-      );
-      check(
-        diagnostics.sceneRenders === scenes,
-        `${what} rebuilt the whole scene (${diagnostics.sceneRenders - scenes} times)`,
-      );
-    };
     const roomSwatch = host.querySelector<HTMLButtonElement>(
       'button[aria-label^="Colour of room "]',
     );
     check(roomSwatch !== null, "a room offers its colour beside its name");
     if (roomSwatch) {
-      const bakes = diagnostics.buildingBakes;
       await pick(roomSwatch, "teal");
       await waitFor(
         () => Object.values(boardDocument.layout.colors ?? {}).includes("teal"),
@@ -3283,14 +3270,12 @@ async function run() {
         !card || card.style.getPropertyValue("--carpet") !== "",
         "the room card has a carpet colour",
       );
-      await bakedOne(bakes, "a room colour");
     }
     const buildingSwatch = host.querySelector<HTMLButtonElement>(
       'button[aria-label$="\'s building"], button[aria-label*="\'s building:"]',
     );
     check(buildingSwatch !== null, "a building offers its colour on reception");
     if (buildingSwatch) {
-      const bakes = diagnostics.buildingBakes;
       await pick(buildingSwatch, "pink");
       await waitFor(
         () =>
@@ -3299,7 +3284,6 @@ async function run() {
           ),
         "choosing a building colour did not save it under its host",
       );
-      await bakedOne(bakes, "a building colour");
     }
   }
 

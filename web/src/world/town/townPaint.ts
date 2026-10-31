@@ -13,7 +13,6 @@ import {
   type TownBuilding,
   type TownLayout,
 } from "./townLayout";
-import { TERMINAL_COLOR_HEX, type TerminalColor } from "../terminalColor";
 import {
   townCanvas,
   townHash,
@@ -56,28 +55,6 @@ export const townCarpetFor = (roomKey: string) =>
 export const townCarpetOf = (hex: string) => townShade(hex, -0.38);
 /** A host's chosen colour as its building's roof. */
 export const townRoofOf = (hex: string) => townShade(hex, -0.15);
-
-/**
- * A host's building theme: its skin's (else its key's hash), with its chosen
- * colour as the roof; walls and floors keep the theme.
- */
-export function townHostTheme(
-  hostKey: string,
-  themeIndex: number | undefined,
-  chosen: TerminalColor | undefined,
-): TownHostTheme {
-  const theme =
-    TOWN_HOST_THEMES[
-      (themeIndex ?? townHash(hostKey)) % TOWN_HOST_THEMES.length
-    ]!;
-  return chosen
-    ? { ...theme, roof: townRoofOf(TERMINAL_COLOR_HEX[chosen]) }
-    : theme;
-}
-
-/** A room's carpet from its chosen colour; none keeps the room's default. */
-export const townChosenCarpet = (chosen: TerminalColor | undefined) =>
-  chosen ? townCarpetOf(TERMINAL_COLOR_HEX[chosen]) : undefined;
 
 function ellipse(
   g: CanvasRenderingContext2D,

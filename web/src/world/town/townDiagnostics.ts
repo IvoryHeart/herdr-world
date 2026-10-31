@@ -20,8 +20,6 @@ export type TownRendererDiagnostics = {
   activeTickers: number;
   frames: number;
   sceneRenders: number;
-  /** Single buildings baked again after their colours, pins or desks changed. */
-  buildingBakes: number;
   ready: boolean;
   reducedMotion: boolean;
   interactionPaused: boolean;
@@ -76,7 +74,6 @@ export function diagnostics(): TownRendererDiagnostics {
     activeTickers: 0,
     frames: 0,
     sceneRenders: 0,
-    buildingBakes: 0,
     ready: false,
     reducedMotion: false,
     interactionPaused: false,
