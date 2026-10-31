@@ -8,6 +8,8 @@ import {
   type DeskClients,
 } from "./handoffs";
 import type { WorldLeafObject } from "./worldObject";
+import { useDeskWatch } from "./useDeskWatch";
+import type { DeskReadNotice } from "../../../shared/deskAcquisition";
 
 const MAX_PANES = 16;
 const POLL_MS = 4_000;
@@ -107,6 +109,21 @@ export function usePaneScreens(
     .join("\n");
 
   const clientScope = deskScope(clients);
+  const receive = useCallback(
+    (frame: DeskReadNotice, leaf: WorldLeafObject) => {
+      if (frame.error !== undefined) return;
+      const text = textOf(frame.result);
+      if (text === null) return;
+      const identity = screenIdentity(leaf);
+      setScreens((current) =>
+        current.get(identity) === text
+          ? current
+          : new Map(current).set(identity, text),
+      );
+    },
+    [],
+  );
+  const shared = useDeskWatch("screen", targets, clients, receive);
 
   useEffect(() => setScreens(new Map()), [clientScope]);
   useEffect(() => {
@@ -117,6 +134,7 @@ export function usePaneScreens(
       const kept = new Map([...current].filter(([key]) => live.has(key)));
       return kept.size === current.size ? current : kept;
     });
+    if (shared) return;
     const runners = deskHostGroups(targets).map((group) => {
       let timer: number | undefined;
       let polling = false;
@@ -192,7 +210,7 @@ export function usePaneScreens(
     };
     // targetKey captures every identity and status change of the polled panes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clients, queues, targetKey]);
+  }, [clients, queues, targetKey, shared]);
 
   return useCallback(
     (leaf: WorldLeafObject) => screens.get(screenIdentity(leaf)),

@@ -95,6 +95,19 @@ terminal without attempting an agent-metadata mutation. Reads use fair bounded a
 independent host queues. Pending reads keep
 their admission across refreshes; queued work coalesces to the latest observation.
 
+When `world_shared_acquisition` is negotiated, [useDeskWatch](useDeskWatch.ts)
+and [DeskWatchClient](deskWatchClient.ts) replace screen/receipt polling with
+whole socket declarations. The service's [watch registry](../../../server/src/world/desk-watches.ts)
+reads the union once per resource: kind, host, generation, pane and session
+fingerprint. Triggers belong to holders; each read carries that holder's trigger
+captured at read start. Late holders see the result with a null trigger, which
+cannot mark a current stop. Browsers count consecutive failures per captured
+trigger independently. Hidden/closed Desks release their targets. Without the
+capability, the existing 4 s screens and 20 s receipts remain; full-report reads
+stay on demand. The service does not advertise the capability until focused timer
+replacement is complete. [Shared watch tests](../../../server/src/world/desk-watch-consumers.test.ts)
+and the [Desk browser fixture](DeskView.browser.tsx) cover both paths.
+
 | Task | Open these owners | Focused evidence |
 | --- | --- | --- |
 | Lane routing, ordering or keyboard triage | `partitionDesk` and `DeskView` in [DeskView.tsx](DeskView.tsx); [DeskView.css](DeskView.css) styles `.desk-*`. | [Desk tests](DeskView.test.ts) |
