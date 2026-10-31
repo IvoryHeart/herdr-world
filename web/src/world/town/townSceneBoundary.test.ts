@@ -24,7 +24,12 @@ const ADAPTERS = [
 ];
 
 /** The scene model's modules; each is bundled on its own. */
-const ENTRIES = ["townScene.ts", "townSceneCamera.ts", "townInteraction.ts"];
+const ENTRIES = [
+  "townScene.ts",
+  "townSceneCamera.ts",
+  "townInteraction.ts",
+  "townSceneBake.ts",
+];
 
 test("the scene model's module graph has no framework, renderer or adapter", async () => {
   for (const entry of ENTRIES) {
@@ -39,9 +44,8 @@ test("the scene model's module graph has no framework, renderer or adapter", asy
     const sources = (JSON.parse(await map!.text()) as { sources: string[] })
       .sources;
     const files = sources.map((source) => relative(root, join(root, source)));
-    // Sanity: the graph is the module and the pure Town modules it uses.
+    // Sanity: the source map lists the module itself.
     expect(files).toContain(`${scene}/${entry}`);
-    expect(files).toContain("web/src/world/town/townLayout.ts");
     const outside = files.filter(
       (file) =>
         file.includes("node_modules") ||

@@ -29,6 +29,18 @@ import {
   type WorldFrames,
 } from "../worldFrameScheduler";
 import { registerTownFrames } from "./townFrameLifecycle";
+import {
+  bakeTownBuilding,
+  textureOf,
+  townOutdoor,
+  type BuildingView,
+  type PodView,
+} from "./townRendererScene";
+import {
+  townBakeDirty,
+  townBakeKeys,
+  type TownBakeKeys,
+} from "./scene/townSceneBake";
 import { diagnostics, type TownFrameTrace } from "./townDiagnostics";
 export type { TownFrameTrace } from "./townDiagnostics";
 import { DEVTOOLS } from "../devtools/flag";
@@ -63,10 +75,7 @@ import type { TownModel } from "./townModel";
 import { TERMINAL_COLOR_HEX, type TerminalColor } from "../terminalColor";
 import { createTownLookResolver } from "./townAppearance";
 import {
-  paintTownFacade,
   paintTownGround,
-  paintTownInterior,
-  paintTownRoof,
   TOWN_HOST_THEMES,
   townCarpetOf,
   townRoofOf,
@@ -77,7 +86,6 @@ import {
   townCanvas,
   townCharacter,
   townHash,
-  townLookFor,
   type TownCanvas,
   type TownLook,
 } from "./townSprites";
@@ -130,18 +138,6 @@ const BLOCK_COLORS: Record<string, number> = {
   shell: 0x7fbf7a,
 };
 
-const textureCache = new WeakMap<TownCanvas, Texture>();
-function textureOf(canvas: TownCanvas) {
-  let texture = textureCache.get(canvas);
-  if (!texture) {
-    texture = new Texture({
-      source: new CanvasSource({ resource: canvas, scaleMode: "nearest" }),
-    });
-    textureCache.set(canvas, texture);
-  }
-  return texture;
-}
-
 let glowCanvas: TownCanvas | null = null;
 function glowTexture() {
   if (!glowCanvas) {
@@ -164,38 +160,6 @@ const kindOf = (agent: OfficeAgent) => {
     : label.includes("gemini")
       ? "gemini"
       : "claude";
-};
-
-/** One seat's sprites: a top seat has a person and laptop lid, a bottom seat a screen and back. */
-type SeatView = {
-  top: boolean;
-  person: Sprite;
-  device: Sprite;
-  glow: Sprite;
-  /** Finished work left at the seat until the user checks it. */
-  papers: Sprite;
-};
-
-type PodView = {
-  container: Container;
-  deskKey: string;
-  seats: SeatView[];
-  item: Sprite | null;
-  cell: TownCell;
-};
-
-type BuildingView = {
-  hostKey: string;
-  container: Container;
-  interior: Sprite;
-  dim: Graphics;
-  dynamic: Container;
-  facade: Sprite;
-  stub: Sprite;
-  roof: Sprite;
-  roofAlpha: number;
-  pods: PodView[];
-  textures: Texture[];
 };
 
 type ActorView = { sprite: Sprite; shadow: Graphics; look: TownLook };
@@ -319,7 +283,10 @@ export async function createTownRenderer(
   outdoor.sortableChildren = true;
 
   const clearScene = () => {
-    for (const view of buildings) view.container.destroy({ children: true });
+    for (const view of buildings) {
+      view.container.destroy({ children: true });
+      for (const texture of view.textures) texture.destroy(true);
+    }
     buildings = [];
     buildingByHost.clear();
     groundLayer.removeChildren().forEach((child) => child.destroy());
@@ -328,11 +295,12 @@ export async function createTownRenderer(
     ownedTextures = [];
   };
 
-  const own = (canvas: TownCanvas) => {
+  /** A texture for a painted canvas; the scene's own unless a building's. */
+  const own = (canvas: TownCanvas, scene = true) => {
     const texture = new Texture({
       source: new CanvasSource({ resource: canvas, scaleMode: "nearest" }),
     });
-    ownedTextures.push(texture);
+    if (scene) ownedTextures.push(texture);
     return texture;
   };
 
@@ -361,83 +329,17 @@ export async function createTownRenderer(
     pendingPods.clear();
     sceneLayer.addChild(outdoor);
     outdoor.zIndex = -1;
-    const add = (canvas: TownCanvas, x: number, y: number, z: number) => {
-      const sprite = new Sprite(textureOf(canvas));
-      sprite.position.set(x, y);
-      sprite.zIndex = z;
-      outdoor.addChild(sprite);
-      return sprite;
-    };
     // Trees, lamps and benches join the scene with the ground chunk under them.
-    outdoorItems = [];
-    for (const tree of layout.trees)
-      outdoorItems.push({
-        x: tree.x * T,
-        y: tree.y * T,
-        place: () => {
-          const sprite = add(
-            sprites.trees[tree.variant]!,
-            tree.x * T + 8,
-            tree.y * T + 14,
-            tree.y * T + 14,
-          );
-          sprite.anchor.set(17 / 34, 43 / 44);
-        },
-      });
-    for (const lamp of layout.lamps)
-      outdoorItems.push({
-        x: lamp.x * T,
-        y: lamp.y * T,
-        place: () =>
-          add(sprites.lamp, lamp.x * T + 5, lamp.y * T - 22, lamp.y * T + 8),
-      });
-    for (const bush of layout.bushes)
-      outdoorItems.push({
-        x: bush.x * T,
-        y: bush.y * T,
-        place: () =>
-          add(sprites.bush, bush.x * T - 2, bush.y * T + 2, bush.y * T + 13),
-      });
-    for (const bench of layout.benches)
-      outdoorItems.push({
-        x: bench.x * T,
-        y: bench.y * T,
-        place: () =>
-          add(sprites.bench, bench.x * T, bench.y * T + 2, bench.y * T + 12),
-      });
-    outdoorItems.push({
-      x: layout.board.x * T,
-      y: layout.board.y * T,
-      place: () =>
-        add(
-          sprites.board,
-          layout!.board.x * T - 8,
-          layout!.board.y * T - 16,
-          layout!.board.y * T + 14,
-        ),
-    });
-    const fountain = new Graphics();
-    const fx = layout.plaza.x * T + 8;
-    const fy = layout.plaza.y * T + 4;
-    fountain
-      .ellipse(fx + 2, fy + 6, 26, 12)
-      .fill({ color: 0x000000, alpha: 0.18 })
-      .ellipse(fx, fy + 2, 25, 11)
-      .fill(0x9d978c)
-      .ellipse(fx, fy, 25, 11)
-      .fill(0xb9b2a5)
-      .ellipse(fx, fy, 20, 8)
-      .fill(0x4f9fd3)
-      .ellipse(fx, fy - 1, 15, 5)
-      .fill(0x6fb9e6)
-      .rect(fx - 3, fy - 14, 6, 14)
-      .fill(0x9d978c)
-      .rect(fx - 5, fy - 16, 10, 3)
-      .fill(0xb9b2a5);
-    fountain.zIndex = fy + 12;
-    outdoor.addChild(fountain);
+    outdoorItems = townOutdoor(layout, sprites, outdoor);
 
     pendingBuildings = [...layout.buildings];
+    recordLayout();
+    dropActorViews();
+  };
+
+  /** The layout and desk count the diagnostics report. */
+  const recordLayout = () => {
+    if (!layout) return;
     stats.desks = layout.buildings.reduce(
       (sum, b) =>
         sum +
@@ -457,6 +359,10 @@ export async function createTownRenderer(
       deskColumns: layout.shape.deskColumns,
       geometry: townGeometryKey(layout),
     };
+  };
+
+  /** Walking agents' sprites live in their buildings; they return next frame. */
+  const dropActorViews = () => {
     for (const view of actorViews.values()) {
       view.sprite.destroy();
       view.shadow.destroy();
@@ -467,97 +373,43 @@ export async function createTownRenderer(
   /** Bake one building's textures and retained sprites the first time it is needed. */
   const buildBuilding = (building: TownLayout["buildings"][number]) => {
     if (!layout || !model) return;
-    {
-      const theme = themeFor(building.hostKey);
-      const stale = model.hosts.get(building.hostKey)?.stale ?? false;
-      const container = new Container();
-      container.zIndex = (building.y + building.h) * T + 4;
-      const interior = new Sprite(
-        own(
-          paintTownInterior(building, theme, {
-            table: sprites.table,
-            tableSmall: sprites.tableSmall,
-            chair: sprites.chair,
-            chairBack: sprites.chairBack,
-            colorFor: deskColor,
-            carpetFor,
-          }),
-        ),
-      );
-      interior.position.set(building.x * T, building.y * T);
-      const dim = new Graphics();
-      const dynamic = new Container();
-      dynamic.sortableChildren = true;
-      const facadeCanvas = paintTownFacade(building, theme);
-      const facade = new Sprite(own(facadeCanvas));
-      facade.position.set(building.x * T, (building.y + building.h) * T);
-      const [stubCanvas, stubContext] = townCanvas(facadeCanvas.width, 9);
-      stubContext.drawImage(facadeCanvas, 0, -23);
-      const stub = new Sprite(own(stubCanvas));
-      stub.position.set(building.x * T, (building.y + building.h) * T);
-      const roof = new Sprite(own(paintTownRoof(building, theme, stale)));
-      roof.position.set(building.x * T - 4, building.y * T - 12);
-      container.addChild(interior, dynamic, dim, stub, facade, roof);
+    const textures: Texture[] = [];
+    const { view, pendingCells } = bakeTownBuilding(building, {
+      theme: themeFor(building.hostKey),
+      stale: model.hosts.get(building.hostKey)?.stale ?? false,
+      sprites,
+      colorFor: deskColor,
+      carpetFor,
+      own: (canvas) => {
+        const texture = own(canvas, false);
+        textures.push(texture);
+        return texture;
+      },
+      textures,
+      roofAlpha: camera.z >= (camera.limits?.roof ?? 0) ? 0 : 1,
+    });
+    pendingPods.set(building.hostKey, pendingCells);
+    sceneLayer.addChild(view.container);
+    buildings.push(view);
+    buildingByHost.set(building.hostKey, view);
+    dimDirty = true;
+  };
 
-      for (const plant of building.plants) {
-        const sprite = new Sprite(textureOf(sprites.plant));
-        sprite.position.set(plant.x * T, (plant.y + 1) * T - 24);
-        sprite.zIndex = (plant.y + 1) * T - 2;
-        dynamic.addChild(sprite);
-      }
-      const L = building.lounge;
-      for (const [canvas, x, y] of [
-        [sprites.sofa, (L.x + 1) * T - 1, (L.y + 1) * T - 8],
-        [sprites.coffee, (L.x + 7) * T + 1, (L.y + 1) * T - 10],
-        [sprites.cooler, (L.x + 8) * T + 2, (L.y + 1) * T - 12],
-      ] as const) {
-        const sprite = new Sprite(textureOf(canvas));
-        sprite.position.set(x, y);
-        sprite.zIndex = (L.y + 2) * T - 2;
-        dynamic.addChild(sprite);
-      }
-      const counterX = building.doorX * T;
-      const counterY = (building.counter.y + 1) * T - 8;
-      const me = new Sprite(
-        textureOf(townCharacter(townLookFor("you"), "down", 0, "sit", false)),
-      );
-      me.position.set(counterX - 7, counterY - 11);
-      const meChair = new Sprite(textureOf(sprites.chair));
-      meChair.position.set(counterX - 7, counterY - 14);
-      const counter = new Sprite(textureOf(sprites.counter));
-      counter.position.set(counterX - 41, counterY);
-      const counterLid = new Sprite(textureOf(sprites.lid.claude!));
-      counterLid.position.set(counterX - 23, counterY - 4);
-      const reception = new Container();
-      reception.addChild(meChair, me, counter, counterLid);
-      reception.zIndex = (building.counter.y + 3) * T - 2;
-      dynamic.addChild(reception);
-
-      // Tables and chairs are baked into the interior; the detailed desk
-      // sprites (people, screens, glow) are created on demand from the room level.
-      const pods: PodView[] = [];
-      const pendingCells: TownCell[] = [];
-      for (const room of building.rooms)
-        for (const cell of room.cells)
-          if (cell.deskKey) pendingCells.push(cell);
-      pendingPods.set(building.hostKey, pendingCells);
-      sceneLayer.addChild(container);
-      buildings.push({
-        hostKey: building.hostKey,
-        container,
-        interior,
-        dim,
-        dynamic,
-        facade,
-        stub,
-        roof,
-        roofAlpha: camera.z >= (camera.limits?.roof ?? 0) ? 0 : 1,
-        pods,
-        textures: [],
-      });
-      buildingByHost.set(building.hostKey, buildings[buildings.length - 1]!);
-      dimDirty = true;
+  /** Bake one building again (its colours or desks changed); the rest stay. */
+  const rebakeBuilding = (hostKey: string) => {
+    const view = buildingByHost.get(hostKey);
+    if (view) {
+      view.container.destroy({ children: true });
+      for (const texture of view.textures) texture.destroy(true);
+      buildings = buildings.filter((entry) => entry !== view);
+      buildingByHost.delete(hostKey);
     }
+    pendingPods.delete(hostKey);
+    const building = layout?.buildings.find((b) => b.hostKey === hostKey);
+    pendingBuildings = pendingBuildings.filter((b) => b.hostKey !== hostKey);
+    if (building) pendingBuildings.push(building);
+    dropActorViews();
+    stats.buildingBakes += 1;
   };
 
   const GROUND_CHUNK = 512;
@@ -1564,7 +1416,7 @@ export async function createTownRenderer(
     return true;
   };
 
-  let sceneKey = "";
+  let bakeKeys: TownBakeKeys | null = null;
   return {
     beginDrag,
     moveDrag,
@@ -1593,12 +1445,17 @@ export async function createTownRenderer(
         request("scene");
         return;
       }
-      const places = nextModel.placeColors;
-      const key = `${[...places.rooms].join(",")}/${[...places.hosts].join(",")}/${nextLayout.width}x${nextLayout.height}:${nextLayout.buildings.map((b) => `${b.hostKey}@${b.x},${b.y},${b.w},${b.h}:${b.rooms.map((r) => r.cells.map((c) => (c.deskKey ? `${c.deskKey}#${c.seats}#${deskColor(c.deskKey)}${model!.deskPins.has(c.deskKey) ? "#pin" : ""}` : "-")).join(",")).join("|")}`).join(";")}`;
-      if (key !== sceneKey) {
-        sceneKey = key;
+      // Bake again only what changed: the whole scene when the town's size
+      // or a building's rectangle changed, else just the changed buildings.
+      const keys = townBakeKeys(nextModel, nextLayout);
+      const dirty = townBakeDirty(bakeKeys, keys);
+      bakeKeys = keys;
+      if (dirty.scene) {
         buildScene();
         stats.sceneRenders += 1;
+      } else if (dirty.buildings.size) {
+        for (const hostKey of dirty.buildings) rebakeBuilding(hostKey);
+        recordLayout();
       }
       syncActors(first);
       dimDirty = true;
