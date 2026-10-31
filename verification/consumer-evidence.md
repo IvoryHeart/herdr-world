@@ -49,6 +49,12 @@ This reconciles the remaining baseline entries without treating a component mode
 
 `useWorldObservation.test.ts` mounts the production observation hook, actual
 watchlist store and actual host projection in an isolated DOM on controlled time.
+The harness now mounts the real Inspector controller, `useWorldVisualActions`
+and `CommandCombobox`: the actual publication callback carries the extension to
+the real Actions menu. Reopening the menu after each observation change checks
+its captured pending and unavailable-only detail text in the DOM. Two independent
+production publication mutants suppressing either state must fail those rendered
+assertions. This proves feedback presence, not browser geometry or trusted focus.
 Runtime observations are synthetic inputs supplied at the external-store read
 port; watchlist refresh consumes deferred synthetic service replies. Current
 healthy-host counts survive an unavailable peer; old/missing revisions stay

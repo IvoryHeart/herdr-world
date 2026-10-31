@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import { Window } from "happy-dom";
-import { act, createElement } from "react";
+import { act, createElement, useState } from "react";
 import type { WorldRuntimeConnection, WorldRuntimeState } from "./runtimeStore";
+import type { CommandExtension } from "../components/CommandCombobox";
+import type { WorldControlPlaneProps } from "./worldControlPlaneContract";
 import { installTestClock } from "./testing/testClock";
 
 if (process.env.WORLD_OBSERVATION_POLICY_TEST !== "1") {
@@ -26,6 +28,16 @@ if (process.env.WORLD_OBSERVATION_POLICY_TEST !== "1") {
     document: dom.document,
     navigator: dom.navigator,
     HTMLElement: dom.HTMLElement,
+    Element: dom.Element,
+    Node: dom.Node,
+    NodeFilter: dom.NodeFilter,
+    Event: dom.Event,
+    KeyboardEvent: dom.KeyboardEvent,
+    MouseEvent: dom.MouseEvent,
+    HTMLInputElement: dom.HTMLInputElement,
+    MutationObserver: dom.MutationObserver,
+    ResizeObserver: dom.ResizeObserver,
+    getComputedStyle: dom.getComputedStyle.bind(dom),
     CustomEvent: dom.CustomEvent,
     localStorage: dom.localStorage,
     sessionStorage: dom.sessionStorage,
@@ -48,7 +60,14 @@ if (process.env.WORLD_OBSERVATION_POLICY_TEST !== "1") {
       configurable: true,
     });
   const { createRoot } = await import("react-dom/client");
-  const { useWorldObservation } = await import("./useWorldObservation");
+  const { useWorldInspectorController } = await import(
+    "./useWorldInspectorController"
+  );
+  const { useWorldVisualActions } = await import("./useWorldVisualActions");
+  const { CommandCombobox } = await import("../components/CommandCombobox");
+  const { EMPTY_VISUAL_ACTION_EXTENSION } = await import(
+    "./worldControlPlaneContract"
+  );
   const { worldRuntimeStore } = await import("./runtimeStore");
   const { writeHostsFilter } = await import("./hostsFilter");
   const { worldLocalStorage } = await import("../browserStorage");
@@ -58,7 +77,7 @@ if (process.env.WORLD_OBSERVATION_POLICY_TEST !== "1") {
   const previousCall = bridge.call;
   let root: ReturnType<typeof createRoot>;
   let observed: WorldRuntimeState;
-  let observation: ReturnType<typeof useWorldObservation>;
+  let observation: ReturnType<typeof useWorldInspectorController>;
   let runtimeGet: ReturnType<typeof spyOn>;
   let reply: ReturnType<typeof Promise.withResolvers<unknown>> | null;
   const calls: string[] = [];
@@ -95,9 +114,51 @@ if (process.env.WORLD_OBSERVATION_POLICY_TEST !== "1") {
             },
     };
   }
+  const controllerProps: Omit<
+    WorldControlPlaneProps,
+    "onVisualActionExtensionReady"
+  > = {
+    creationIntentRevision: { current: 0 },
+    view: "board",
+    active: true,
+    inspectorConversations: [],
+    dockedInspectorId: null,
+    viewToolbarPortal: null,
+    onDockedInspectorIdChange: presented,
+    onInspectorConversationsChange: presented,
+    onInspectorTerminalPortal: presented,
+    onWorkspaceSurfaceSelectionReady: presented,
+    onInspectorPaneFocusReady: presented,
+    onActiveInspectorChange: presented,
+    onVisualArrangementControlReady: presented,
+    onGoToSpaces: presented,
+    onPresentedWorldChange: presented,
+  };
   function Harness() {
-    observation = useWorldObservation({ onPresentedWorldChange: presented });
-    return null;
+    const [extension, publish] = useState<CommandExtension>(
+      EMPTY_VISUAL_ACTION_EXTENSION,
+    );
+    observation = useWorldInspectorController({
+      ...controllerProps,
+      onVisualActionExtensionReady: publish,
+    });
+    useWorldVisualActions(observation);
+    return createElement(CommandCombobox, { extension });
+  }
+  async function renderedWatchFeedback() {
+    const trigger =
+      document.querySelector<HTMLButtonElement>(".command-trigger")!;
+    // Actions deliberately captures its extension on open. Reopen after each
+    // observation change, as the original browser checks did with Escape.
+    if (trigger.getAttribute("aria-expanded") === "true")
+      await act(() => trigger.click());
+    await act(() => trigger.click());
+    await act(() => clock.frame());
+    const item = [
+      ...document.querySelectorAll<HTMLElement>("[cmdk-item]"),
+    ].find((element) => element.dataset.value?.includes("visual-pinned-only"));
+    expect(item).toBeDefined();
+    return item!.querySelector(".command-item-detail")?.textContent ?? "";
   }
   const render = () => act(() => root.render(createElement(Harness)));
   const currentStatus =
@@ -155,6 +216,7 @@ if (process.env.WORLD_OBSERVATION_POLICY_TEST !== "1") {
 
   test("unavailable peer does not mask healthy counts; older revision stays pending until current", async () => {
     expect(observation.watchStatus).toBe(currentStatus);
+    expect(await renderedWatchFeedback()).toBe(currentStatus);
     observed = {
       ...observed,
       revision: 2,
@@ -166,6 +228,9 @@ if (process.env.WORLD_OBSERVATION_POLICY_TEST !== "1") {
     };
     await render();
     expect(observation.watchStatus).toBe(
+      "Watch availability pending for filtered hosts",
+    );
+    expect(await renderedWatchFeedback()).toBe(
       "Watch availability pending for filtered hosts",
     );
     await act(() => clock.advance(150));
@@ -204,6 +269,9 @@ if (process.env.WORLD_OBSERVATION_POLICY_TEST !== "1") {
       "offline",
     ]);
     expect(observation.watchStatus).toBe(
+      "0 pinned in filter · 0 admitted · 0 missing · 0 unresolved · 0 not admitted · 1 host unavailable",
+    );
+    expect(await renderedWatchFeedback()).toBe(
       "0 pinned in filter · 0 admitted · 0 missing · 0 unresolved · 0 not admitted · 1 host unavailable",
     );
     expect(store.get().activeConnectionId).toBe("alpha");
