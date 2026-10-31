@@ -1,7 +1,7 @@
 # Auto-sync runtime status storage
 
 Requirements: [World storage](../../openspec/specs/world-storage/spec.md).
-Q47 is candidate direct evidence. Independent review and native CI remain required.
+Q48 is candidate direct evidence. Independent review and native CI remain required.
 
 Allowed: existing connection-qualified schedule keys address independent typed
 last-run rows; one worker commits before cache/publication; refused operations

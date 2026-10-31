@@ -8,6 +8,81 @@ Maintain the browser command and access boundary. See
 
 ## Requirements
 
+### Requirement: Registered browser and agent verbs with actor policy
+
+Browser RPC methods, agent CLI commands and browser pull-request actions SHALL
+use a service-owned static registry with typed input/result schemas, required
+capabilities, preconditions, recovery class and policy for each actor. Policies
+SHALL be allow, acknowledge, confirm or deny. Adapters SHALL NOT grant themselves
+actor policy. Existing effective permissions and acknowledgement flags SHALL be
+preserved. Unregistered browser and CLI methods SHALL be refused before native
+dispatch; invalid declared inputs and missing unconditional acknowledgements SHALL
+be refused before runtime acquisition. Conditional target policy SHALL use the
+resolved target owner and retain existing preview and witness checks.
+
+The service SHALL recheck current socket/command authority and captured runtime
+currency before dispatch. Native browser forwarding SHALL recheck immediately
+before sending. The actors SHALL distinguish the owner's browser, verified and
+unverified agent CLI, assistant, reconcilers and automation; this registry SHALL
+NOT create an automation grant or widen internal assistant authority.
+Revocation SHALL prevent a new effect but SHALL NOT discard the outcome record
+of an effect already started. An already-applied Board change or undo SHALL
+finish its history record or, on a rejected write, restore only its unchanged
+revision. Uncertain writes SHALL NOT trigger rollback.
+
+#### Scenario: Unregistered method
+- **WHEN** the browser or agent CLI submits an unregistered method
+- **THEN** World refuses it without forwarding it to Herdr or an adapter
+
+#### Scenario: Existing acknowledgements
+- **WHEN** a CLI desk move lacks `--herdr`, an exclusive role replacement lacks
+  `--replace --yes`, or a one-time import lacks `--yes`
+- **THEN** the operation is refused before host acquisition
+- **AND** projected Room/Desk additions and moves that close a room retain their
+  target-dependent `--herdr` and `--allow-close-room` checks
+
+#### Scenario: Browser-only forge action
+- **WHEN** either CLI actor requests PR merge, close or ready
+- **THEN** World refuses it before contacting the forge
+- **AND** the owner's browser retains its existing confirmation flow
+
+#### Scenario: Authorization changes before native dispatch
+- **WHEN** the browser socket loses authority or its captured runtime retires
+  before a forwarded native command is sent
+- **THEN** World refuses the send on that runtime without falling back to another
+
+#### Scenario: Stop after a Board edit but before its history callback
+- **WHEN** an admitted Board edit is applied and its queued history callback runs
+  after the CLI service stops
+- **THEN** the applied edit retains its history and undo record and reports its
+  completed outcome rather than a refusal claiming no effect
+- **AND** a rejected history write restores only that exact Board revision,
+  preserving any newer edit
+
+### Requirement: Staged command evidence
+
+Command evidence SHALL distinguish accepted, stored, sent, observed, refused,
+failed and uncertain. Memory admission SHALL report accepted; stored SHALL
+require a durable commit receipt; sent SHALL require native acknowledgement and
+name its owning connection and runtime generation. Observed SHALL require an
+explicit observation identifier and SHALL NOT be inferred from successful dispatch.
+Legacy handlers MAY conservatively report accepted rather than claim an
+unproven stronger stage. Uncertain native input SHALL name its owning runtime
+and SHALL NOT be automatically retried.
+
+#### Scenario: Memory-only acceptance
+- **WHEN** a command completes against an in-memory store without a durable receipt
+- **THEN** its evidence reports accepted, not stored
+
+#### Scenario: Durable record committed
+- **WHEN** the durable ledger commits an ask, answer, result or change and supplies
+  the committed record's receipt
+- **THEN** its CLI reply can report stored with that receipt
+
+#### Scenario: Native acknowledgement lost
+- **WHEN** opaque native input may have been dispatched but no acknowledgement arrives
+- **THEN** World reports uncertain with the captured runtime and does not retry it
+
 ### Requirement: Narrow command exposure
 The World service SHALL expose only its documented browser RPC and resource operations, validate
 typed parameters and connection identity, and revalidate the selected runtime generation before

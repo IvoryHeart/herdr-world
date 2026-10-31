@@ -163,6 +163,7 @@ test("settings RPC errors carry their runtime connection identity", async () => 
       connection_generation: 6,
       id: "settings-id",
       error: { message: "unknown settings method: settings.unknown" },
+      command_evidence: { stage: "failed" },
     },
   ]);
 });
@@ -290,6 +291,7 @@ test("settings RPC suppresses a delayed result after replacement", async () => {
       connection_id: "remote-dev",
       id: "settings-delayed",
       error: { message: "connection changed during request" },
+      command_evidence: { stage: "failed" },
     },
   ]);
 });

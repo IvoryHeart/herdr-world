@@ -40,7 +40,6 @@ import {
   authorOf,
   busyPrs,
   type CrewSettings,
-  digest,
   isOnHold,
   mergeReady,
   plan,
@@ -403,7 +402,33 @@ describe("plan", () => {
     ]);
   });
 
-  test("a finished head is reviewed while the owner judges a CI rerun", () => {
+  test("a retained failure alone prompts the author to fix its cause", () => {
+    const actions = planned(
+      town({
+        head: SHA.reviewed,
+        posts: ["rev2", "rev-astra", "rev-opus"].map((name) =>
+          confirm(name, SHA.reviewed),
+        ),
+        attempts: [
+          {
+            runId: 11,
+            attempt: 1,
+            name: "Browser tests",
+            conclusion: "failure",
+            completedAt: NOW - 1,
+          },
+        ],
+      }),
+    );
+    const ci = actions.find((action) => action.kind === "ci");
+    expect(ci?.target).toBe("towncx");
+    expect(ci?.text).toContain("Browser tests: 1 failed attempt retained");
+    expect(ci?.text).toContain("Diagnose every CI failure and fix its cause");
+    expect(ci?.text).not.toContain("gh run rerun");
+    expect(actions.some((action) => action.kind === "ready")).toBe(false);
+  });
+
+  test("a finished head is reviewed while retained CI failures need fixing", () => {
     // As on #468: one check went green on a rerun, another still fails.
     const rerun = town({
       head: SHA.reviewed,
@@ -425,7 +450,7 @@ describe("plan", () => {
     const kinds = planned(rerun).map((a) => [a.kind, a.target]);
     expect(kinds).toContainEqual(["review", "rev2"]);
     expect(kinds).toContainEqual(["review", "rev-astra"]);
-    expect(kinds).toContainEqual(["judgment", "owner"]);
+    expect(kinds).not.toContainEqual(["judgment", "owner"]);
     expect(kinds).toContainEqual(["ci", "towncx"]);
     // Still running: the failure waits for the checks to finish; the
     // reviewers don't.
@@ -1003,6 +1028,47 @@ describe("delivery", () => {
       expect(prompts()).toHaveLength(1);
     });
 
+    test("an active fixer renews from the transcript in its author worktree", () => {
+      busyElsewhere();
+      passFixer(findings());
+      deps.progress = (_run, cwd) =>
+        cwd === worktree ? NOW + 89 * 60_000 : null;
+      passFixer(findings(), NOW + 90 * 60_000);
+      delete deps.progress;
+      expect(getRun(crew, 1)?.finishedAt).toBeNull();
+      passFixer(findings(), NOW + 179 * 60_000);
+      expect(getRun(crew, 1)?.exitCode).toBe(-124);
+      expect(fixes()).toHaveLength(1);
+    });
+
+    test("a timed-out fixer releases every linked step and never returns work to the author", () => {
+      busyElsewhere();
+      passFixer(
+        findings(SHA.reviewed, [
+          { name: "Delivery checks", state: "fail", required: true },
+        ]),
+      );
+      expect(fixes()).toHaveLength(1);
+      const steps = actionsIn(crew, ["running"]);
+      expect(steps).toHaveLength(2);
+      author("idle");
+      passFixer(
+        findings(SHA.reviewed, [
+          { name: "Delivery checks", state: "fail", required: true },
+        ]),
+        NOW + 90 * 60_000,
+      );
+      expect(activeRuns(crew)).toEqual([]);
+      for (const step of steps)
+        expect(getAction(crew, step.key)?.state).toBe("failed");
+      expect(getRun(crew, 1)?.exitCode).toBe(-124);
+      expect(prompts()).toEqual([]);
+      passFixer(findings(), NOW + 91 * 60_000);
+      expect(fixes()).toHaveLength(1);
+      expect(prompts()).toEqual([]);
+      expect(notices()).toHaveLength(1);
+    });
+
     test("a fixer that ends without pushing leaves the step to the author", () => {
       busyElsewhere();
       passFixer(findings());
@@ -1171,15 +1237,9 @@ describe("delivery", () => {
   test("a PR waiting on the owner is marked and signed once, and unmarked when it clears", () => {
     const rerun = town({
       head: SHA.reviewed,
-      posts: trio(SHA.reviewed),
-      attempts: [
-        {
-          runId: 11,
-          attempt: 1,
-          name: "Delivery checks",
-          conclusion: "failure",
-          completedAt: NOW - 600_000,
-        },
+      posts: [
+        ...trio(SHA.reviewed),
+        { reviewer: null, commit: SHA.reviewed, result: "0/1 resolved, 1 new" },
       ],
     });
     pass(rerun);
@@ -1188,15 +1248,13 @@ describe("delivery", () => {
       expect.objectContaining({
         state: "pending",
         context: "crew/needs-owner",
-        description: expect.stringContaining(
-          "Needs the owner: Delivery checks: 1 failed attempt retained",
-        ),
+        description: expect.stringContaining("Needs the owner:"),
       }),
     ]);
     expect(comments()).toHaveLength(1);
     const body = comments()[0]!.at(-1)!;
     expect(body).toStartWith("body=[crew] NEEDS-OWNER #7 at ");
-    // The owner judged it; the rerun is accepted, so the PR is READY.
+    // The unattributed finding is resolved, so the PR is READY.
     const judged = town({ head: SHA.reviewed, posts: trio(SHA.reviewed) });
     pass(judged, NOW + 120_000);
     expect(statuses().slice(1)).toEqual([
@@ -1241,7 +1299,7 @@ describe("delivery", () => {
     });
   });
 
-  test("a reviewer overdue while its PR is parked asks nothing of the owner", () => {
+  test("parked PRs still release timed-out runs and report their timeout", () => {
     const fresh = town({ head: SHA.reviewed, posts: [] });
     for (const parkedValue of [
       { ...fresh, labels: ["pod:town", "on-hold"] },
@@ -1258,15 +1316,15 @@ describe("delivery", () => {
       const owner = actionsIn(crew, ["pending", "sent"]).filter(
         (entry) => entry.target === "owner" || entry.target === "github",
       );
-      expect(owner).toEqual([]);
+      expect(owner.filter((entry) => entry.target === "owner")).toHaveLength(3);
+      expect(notices()).toHaveLength(3);
       expect(
         statuses().some(
           (entry) =>
             entry.context === "crew/needs-owner" && entry.state === "pending",
         ),
       ).toBe(false);
-      // The reviewers keep working.
-      expect(activeRuns(crew).length).toBeGreaterThan(0);
+      expect(activeRuns(crew)).toEqual([]);
     }
   });
 
@@ -2126,10 +2184,18 @@ describe("delivery", () => {
       ],
     });
     pass(value);
+    pass(value, NOW + 3 * 60_000 - 1);
+    expect(activeRuns(crew)).toHaveLength(1);
+    pass(value, NOW + 3 * 60_000);
+    setRunPid(crew, 1, 1234);
+    finishRun(crew, 1, 0, null, NOW + 4 * 60_000);
     pass(value, NOW + 4 * 60_000);
+    expect(getRun(crew, 1)?.finishedAt).toBe(NOW + 3 * 60_000);
     expect(closed).toEqual([]);
-    expect(spawned).toHaveLength(2);
-    expect(places[1]!.after).toBe("wP:p1");
+    expect(spawned).toHaveLength(1);
+    expect(getRun(crew, 1)?.exitCode).toBe(-124);
+    expect(notices()).toHaveLength(1);
+    expect(activeRuns(crew)).toEqual([]);
   });
 
   test("lists runs and reopens one as a chat with the run's own model", () => {
@@ -2283,7 +2349,7 @@ describe("delivery", () => {
     expect(actionsIn(crew, ["running"])).toHaveLength(3);
   });
 
-  test("a check stuck running goes to the author to rerun, once", () => {
+  test("a check stuck running goes to the author for diagnosis, once", () => {
     const stuck = town({
       head: SHA.reviewed,
       posts: [],
@@ -2307,7 +2373,7 @@ describe("delivery", () => {
       "towncx",
       "[crew -> towncx] ACT #7 ci @" +
         SHA.reviewed.slice(0, 7) +
-        ": World browser tests (4/6) has been running over 30 minutes, longer than CI takes; GitHub may have lost its status. Rerun it: gh run rerun --job 22",
+        ": World browser tests (4/6) has been running over 30 minutes, longer than CI takes; Diagnose the hang and fix its cause; do not silently retry: https://github.com/example-org/widgets/actions/runs/1/job/22",
     ]);
     // Reviewers started on the push and didn't wait for the check.
     expect(spawned.map((argv) => argv[6])).toEqual([
@@ -2434,14 +2500,10 @@ describe("delivery", () => {
     pass(two("fail"), NOW + 60_000);
     const ci = prompts().filter((argv) => argv.at(-1)!.includes(" ci @"));
     expect(ci).toHaveLength(1);
+    pass(two("fail"), NOW + 120_000);
     expect(
-      getAction(
-        crew,
-        actionsIn(crew, ["sent"]).find((entry) => entry.kind === "ci")!.key,
-      )!.key,
-    ).toBe(
-      `7:${SHA.reviewed}:ci:towncx:${digest([jobUrl(12), jobUrl(30)].sort().join(" "))}`,
-    );
+      prompts().filter((argv) => argv.at(-1)!.includes(" ci @")),
+    ).toHaveLength(1);
   });
 
   test("a stuck check on a PR with no author tells the owner once", () => {
@@ -2487,17 +2549,317 @@ describe("delivery", () => {
     expect(prompts()).toEqual([]);
   });
 
-  test("a reviewer past the limit is reported to the owner, not stopped", () => {
-    pass(town({ head: SHA.reviewed, posts: [] }));
+  test("a harness exit status 124 is not mistaken for a watcher timeout", () => {
+    const value = town({
+      head: SHA.reviewed,
+      posts: [
+        confirm("rev-astra", SHA.reviewed),
+        confirm("rev-opus", SHA.reviewed),
+      ],
+    });
+    pass(value);
+    finishRun(crew, 1, 124, null, NOW + 1);
+    pass(value, NOW + 2);
+    expect(spawned).toHaveLength(2);
+    expect(notices()).toEqual([]);
+    expect(getRun(crew, 1)?.exitCode).toBe(124);
+  });
+
+  test("recent harness work renews a bounded window without trusting PID liveness", () => {
     const value = town({ head: SHA.reviewed, posts: [] });
-    pass(value, NOW + 91 * 60_000);
-    pass(value, NOW + 92 * 60_000);
-    expect(killed).toEqual([]);
-    expect(activeRuns(crew)).toHaveLength(3);
-    const overdue = notices().filter((argv) =>
-      argv.join(" ").includes("without posting"),
+    pass(value);
+    setRunSession(crew, 1, "codex", "gpt-6.1-sol", "session-synthetic");
+    deps.progress = (run) => (run.id === 1 ? NOW + 89 * 60_000 : null);
+    pass(value, NOW + 90 * 60_000);
+    expect(getRun(crew, 1)?.finishedAt).toBeNull();
+    expect(activeRuns(crew).map((run) => run.id)).toEqual([1]);
+    expect(killed).toEqual([1002, 1003]);
+    // The same old progress cannot renew forever.
+    pass(value, NOW + 179 * 60_000);
+    expect(getRun(crew, 1)?.exitCode).toBe(-124);
+    expect(spawned).toHaveLength(3);
+    delete deps.progress;
+  });
+
+  test("progress survives a watcher restart without resetting the inactivity window", () => {
+    const path = join(root, "progress.sqlite");
+    crew.close();
+    crew = openCrewStore(path);
+    const value = town({ head: SHA.reviewed, posts: [] });
+    pass(value);
+    deps.progress = (run) => (run.id === 1 ? NOW + 80 * 60_000 : null);
+    pass(value, NOW + 81 * 60_000);
+    delete deps.progress;
+    crew.close();
+    crew = openCrewStore(path);
+    pass(value, NOW + 90 * 60_000);
+    expect(activeRuns(crew).map((run) => run.id)).toEqual([1]);
+    expect(getRun(crew, 1)?.progressAt).toBe(NOW + 80 * 60_000);
+    pass(value, NOW + 170 * 60_000);
+    expect(getRun(crew, 1)?.exitCode).toBe(-124);
+    expect(spawned).toHaveLength(3);
+  });
+
+  test("a late manual review RESULT clears its per-run cause", () => {
+    const id = addRun(
+      crew,
+      {
+        actionKey: "manual:synthetic",
+        reviewer: "rev2",
+        pr: 7,
+        head: SHA.reviewed,
+        log: "stdout",
+      },
+      NOW,
     );
-    expect(overdue).toHaveLength(3);
+    setRunPid(crew, id, 1234);
+    passOver([], NOW + 90 * 60_000, { prs: [8] });
+    pass(
+      town({ head: SHA.reviewed, posts: trio(SHA.reviewed) }),
+      NOW + 91 * 60_000,
+    );
+    expect(getRun(crew, id)?.result).toContain("RESULT #7");
+    expect(getRun(crew, id)?.exitCode).toBe(-124);
+    expect(calls.filter((argv) => argv[2] === "withdraw")).toHaveLength(1);
+  });
+
+  test("a pending source action cannot silently replace its expired reservation", () => {
+    const key = `manual:7:${SHA.reviewed}:rev2`;
+    addAction(
+      crew,
+      {
+        key,
+        pr: 7,
+        head: SHA.reviewed,
+        kind: "review",
+        target: "rev2",
+        text: "synthetic pending review",
+      },
+      NOW,
+    );
+    const id = addRun(
+      crew,
+      {
+        actionKey: key,
+        reviewer: "rev2",
+        pr: 7,
+        head: SHA.reviewed,
+        log: "stdout",
+      },
+      NOW,
+    );
+    setRunPid(crew, id, 1234);
+    passOver([], NOW + 90 * 60_000, { prs: [8] });
+    expect(getAction(crew, key)?.state).toBe("failed");
+    expect(notices()).toHaveLength(1);
+    expect(spawned).toEqual([]);
+  });
+
+  test("a completed manual review releases its reservation before timeout and keeps its chat", () => {
+    const id = addRun(
+      crew,
+      {
+        actionKey: `manual:7:${SHA.reviewed}:rev2`,
+        reviewer: "rev2",
+        pr: 7,
+        head: SHA.reviewed,
+        log: "stdout",
+      },
+      NOW - 5 * 60_000,
+    );
+    setRunPid(crew, id, 1234);
+    const value = town({ head: SHA.reviewed, posts: trio(SHA.reviewed) });
+    pass(value, NOW + 60_000);
+    expect(getRun(crew, id)).toMatchObject({
+      exitCode: 0,
+      finishedAt: NOW + 60_000,
+    });
+    expect(getRun(crew, id)?.result).toContain("RESULT #7");
+    expect(activeRuns(crew)).toEqual([]);
+    pass(value, NOW + 90 * 60_000);
+    expect(getRun(crew, id)?.exitCode).toBe(0);
+    expect(killed).toEqual([]);
+    expect(
+      notices().filter((argv) => argv.join(" ").includes("timed out")),
+    ).toEqual([]);
+  });
+
+  test("a persisted manual run reports its timeout once without any action row", () => {
+    const path = join(root, "manual.sqlite");
+    crew.close();
+    crew = openCrewStore(path);
+    const id = addRun(
+      crew,
+      {
+        actionKey: `manual:7:${SHA.reviewed}:rev2`,
+        reviewer: "rev2",
+        pr: 7,
+        head: SHA.reviewed,
+        log: "stdout",
+      },
+      NOW,
+    );
+    setRunPid(crew, id, 1234);
+    crew.close();
+    crew = openCrewStore(path);
+    passOver([], NOW + 90 * 60_000, { prs: [8] });
+    expect(activeRuns(crew)).toEqual([]);
+    expect(killed).toEqual([1234]);
+    expect(notices()).toHaveLength(1);
+    expect(notices()[0]?.join(" ")).toContain(`run ${id}`);
+    crew.close();
+    crew = openCrewStore(path);
+    passOver([], NOW + 91 * 60_000, { prs: [8] });
+    expect(notices()).toHaveLength(1);
+    expect(comments()).toHaveLength(1);
+  });
+
+  test("a reviewer expires at its bound, releases its slot and is never retried", () => {
+    const value = town({ head: SHA.reviewed, posts: [] });
+    pass(value);
+    pass(value, NOW + 90 * 60_000 - 1);
+    expect(activeRuns(crew)).toHaveLength(3);
+    expect(killed).toEqual([]);
+    const expiry = NOW + 90 * 60_000;
+    pass(value, expiry);
+    expect(activeRuns(crew)).toEqual([]);
+    expect(killed).toEqual([1001, 1002, 1003]);
+    expect(actionsIn(crew, ["failed"])).toHaveLength(3);
+    for (const id of [1, 2, 3])
+      expect(getRun(crew, id)).toMatchObject({
+        finishedAt: expiry,
+        exitCode: -124,
+      });
+    expect(notices()).toHaveLength(3);
+    expect(
+      notices().every((argv) => argv.join(" ").includes("timed out")),
+    ).toBe(true);
+    pass(value, expiry + 60_000);
+    expect(spawned).toHaveLength(3);
+    expect(notices()).toHaveLength(3);
+    expect(actionsIn(crew, ["failed"])).toHaveLength(3);
+  });
+
+  test("expiry releases slots for queued reviewers without retrying expired work", () => {
+    const limited = join(root, "one-slot.json");
+    writeFileSync(
+      limited,
+      JSON.stringify({
+        ...config,
+        roster: ROSTER,
+        crew: { ...SETTINGS, maxRuns: 1, runTimeoutMinutes: 1 },
+      }),
+    );
+    const value = town({ head: SHA.reviewed, posts: [] });
+    passOver([value], NOW, { configPath: limited });
+    passOver([value], NOW + 60_000, { configPath: limited });
+    expect(spawned.map((argv) => argv[6])).toEqual(["rev2", "rev-astra"]);
+    expect(getRun(crew, 1)?.exitCode).toBe(-124);
+    expect(activeRuns(crew).map((run) => run.reviewer)).toEqual(["rev-astra"]);
+  });
+
+  test("a timeout is recorded and reported even during another PR's scoped pass", () => {
+    const value = town({ head: SHA.reviewed, posts: [] });
+    pass(value);
+    passOver([], NOW + 90 * 60_000, { prs: [8] });
+    expect(activeRuns(crew)).toEqual([]);
+    expect(notices()).toHaveLength(3);
+    passOver([], NOW + 91 * 60_000, { prs: [8] });
+    expect(notices()).toHaveLength(3);
+    expect(calls.filter((argv) => argv[2] === "withdraw")).toEqual([]);
+  });
+
+  test("a completed reviewer keeps its chat when other reviewers expire", () => {
+    pass(town({ head: SHA.reviewed, posts: [] }));
+    const value = town({
+      head: SHA.reviewed,
+      posts: [confirm("rev2", SHA.reviewed)],
+    });
+    pass(value, NOW + 60_000);
+    pass(value, NOW + 90 * 60_000);
+    expect(killed).toEqual([1002, 1003]);
+    expect(getRun(crew, 1)).toMatchObject({
+      exitCode: 0,
+      finishedAt: NOW + 60_000,
+    });
+    expect(notices()).toHaveLength(2);
+  });
+
+  test("saved start times and failed timeout states survive watcher restarts", () => {
+    const storePath = join(root, "restart.sqlite");
+    crew.close();
+    crew = openCrewStore(storePath);
+    const value = town({ head: SHA.reviewed, posts: [] });
+    pass(value);
+    crew.close();
+    crew = openCrewStore(storePath);
+    pass(value, NOW + 90 * 60_000);
+    expect(activeRuns(crew)).toEqual([]);
+    crew.close();
+    crew = openCrewStore(storePath);
+    pass(value, NOW + 91 * 60_000);
+    expect(spawned).toHaveLength(3);
+    expect(actionsIn(crew, ["failed"])).toHaveLength(3);
+    expect(notices()).toHaveLength(3);
+  });
+
+  test("a late RESULT clears its timeout notice without erasing the timeout", () => {
+    const value = town({ head: SHA.reviewed, posts: [] });
+    pass(value);
+    pass(value, NOW + 90 * 60_000);
+    pass(
+      town({ head: SHA.reviewed, posts: [confirm("rev2", SHA.reviewed)] }),
+      NOW + 91 * 60_000,
+    );
+    expect(getRun(crew, 1)?.exitCode).toBe(-124);
+    expect(getRun(crew, 1)?.result).toContain("RESULT #7");
+    expect(getAction(crew, `7:${SHA.reviewed}:review:rev2`)?.state).toBe(
+      "done",
+    );
+    expect(calls.filter((argv) => argv[2] === "withdraw")).toHaveLength(1);
+    expect(spawned).toHaveLength(3);
+  });
+
+  test.each([0, -1, null, "90", 1e300])(
+    "an invalid runtime bound (%s) cannot disable expiry",
+    (runTimeoutMinutes) => {
+      const path = join(root, "invalid-bound.json");
+      writeFileSync(
+        path,
+        JSON.stringify({ ...config, crew: { runTimeoutMinutes } }),
+      );
+      expect(() => passOver([], NOW, { configPath: path })).toThrow(
+        "crew.runTimeoutMinutes",
+      );
+    },
+  );
+
+  test("a closing PR withdraws timeout notices without restarting its runs", () => {
+    const value = town({ head: SHA.reviewed, posts: [] });
+    pass(value);
+    pass(value, NOW + 90 * 60_000);
+    pass(
+      town({ head: SHA.reviewed, posts: [], state: "MERGED" }),
+      NOW + 91 * 60_000,
+    );
+    expect(calls.filter((argv) => argv[2] === "withdraw")).toHaveLength(3);
+    expect(actionsIn(crew, ["failed"])).toEqual([]);
+    expect(activeRuns(crew)).toEqual([]);
+    expect(spawned).toHaveLength(3);
+  });
+
+  test("a failed owner alert does not retain a slot or silently restart a timeout", () => {
+    const value = town({ head: SHA.reviewed, posts: [] });
+    pass(value);
+    refuse.add("ask");
+    pass(value, NOW + 90 * 60_000);
+    pass(value, NOW + 91 * 60_000);
+    expect(activeRuns(crew)).toEqual([]);
+    expect(spawned).toHaveLength(3);
+    expect(actionsIn(crew, ["failed"])).toHaveLength(6);
+    expect(readFileSync(join(dir, "feed.log"), "utf8")).toContain(
+      "World unavailable",
+    );
   });
 
   test("a hold pauses waiting steps and its release resumes them", () => {

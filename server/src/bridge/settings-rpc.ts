@@ -1,4 +1,5 @@
 import type { RuntimeStatusPort } from "../storage/runtime-status";
+import { commandReplies } from "../verbs/replies";
 import {
   WorktreeHookConfigError,
   type createWorktreeHookRunner,
@@ -102,21 +103,14 @@ export function createSettingsRpcHandler(args: {
     params: Record<string, unknown>,
     requestIsCurrent: () => boolean = () => true,
   ) {
-    const fail = (message: string) => {
-      const effectiveMessage = requestIsCurrent()
-        ? message
-        : CONNECTION_CHANGED_DURING_REQUEST;
-      args.markRpcError(ws, id, effectiveMessage);
-      return args.safeSend(
-        ws,
-        serialize({ id, error: { message: effectiveMessage } }),
-        `${method}-error`,
-      );
-    };
-    const reply = (result: unknown) =>
-      requestIsCurrent()
-        ? args.safeSend(ws, serialize({ id, result }), method)
-        : fail(CONNECTION_CHANGED_DURING_REQUEST);
+    const { fail, reply } = commandReplies({
+      id,
+      method,
+      current: requestIsCurrent,
+      error: (message) => args.markRpcError(ws, id, message),
+      send: (message, context) =>
+        args.safeSend(ws, serialize(message), context),
+    });
     try {
       if (!requestIsCurrent()) return fail(CONNECTION_CHANGED_DURING_REQUEST);
       if (method === "settings.terminal_transport.get") {

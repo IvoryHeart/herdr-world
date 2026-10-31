@@ -98,6 +98,7 @@ test("two browser dispatchers record only delivered focused replies to the share
     },
   });
   const services = {
+    clients: new Set([one, two]),
     connectionManager: manager,
     focusedAcquisition: acquisition,
     snapshotAdmission: { acknowledge: () => false },

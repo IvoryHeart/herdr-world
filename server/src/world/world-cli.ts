@@ -1,7 +1,10 @@
-import {
-  StorageOutcomeUnknown,
-  StorageWriteRejected,
-} from "../storage/world-protocol";
+import { StorageOutcomeUnknown } from "../storage/world-protocol";
+import { admitVerb, checkVerbResult, VerbRefusal } from "../verbs/admission";
+import { commandEvidence } from "../verbs/evidence";
+import { registeredVerb } from "../verbs/registry";
+import type { Admission } from "../verbs/types";
+import { guardCliCommand, guardCliHost } from "./world-cli-dispatch";
+import { createBoardChange } from "./world-cli-board-change";
 import {
   appearanceFor,
   appearanceKey,
@@ -75,7 +78,14 @@ export type WorldCliDeps = {
     patch(ops: readonly BoardOp[]): BoardDocument;
   };
   ledger: LedgerStore;
-  recordAnswer?(id: string, text: string, actor: CliActor): Promise<number>;
+  /** Only a durable committed store may issue this receipt. */
+  ledgerReceipt?(recordId: string): string | undefined;
+  recordAnswer?(
+    id: string,
+    text: string,
+    actor: CliActor,
+    recheck?: () => void,
+  ): Promise<number>;
   captureRecipient?(
     actor: CliActor,
   ): Promise<import("./ask-delivery-types").AnswerRecipient | undefined>;
@@ -84,13 +94,14 @@ export type WorldCliDeps = {
     occurrence: string,
     attempt: number,
     actor: CliActor,
+    recheck?: () => void,
   ): Promise<unknown>;
   incarnation?: string;
   hosts(): CliHost[];
   defaultConnectionId(): string | null;
   snapshot(): Promise<WorldSnapshotResult>;
   sources?(): Promise<GroupWorkSources>;
-  groupMove?(request: GroupMoveRequest): Promise<unknown>;
+  groupMove?(request: GroupMoveRequest, recheck?: () => void): Promise<unknown>;
   publishBoard(revision: number): void;
   /** Tell World's pages; `asks` when a question was asked or answered. */
   publishLedger(revision: number, asks?: boolean): void;
@@ -486,8 +497,16 @@ const BOARD_COMMANDS = new Set<WorldCliCommand>([
 
 export function createWorldCli(deps: WorldCliDeps) {
   const now = deps.now ?? Date.now;
+  // Outcome bookkeeping may finish an admitted effect; it grants no new effect.
+  const completion: Pick<WorldCliDeps, "ledger" | "publishLedger"> = {
+    get ledger() {
+      return deps.ledger;
+    },
+    publishLedger: deps.publishLedger,
+  };
 
-  const record = async (
+  const recordWithDeps = async (
+    deps: Pick<WorldCliDeps, "ledger" | "publishLedger">,
     actor: CliActor,
     command: string,
     summary: string,
@@ -510,7 +529,11 @@ export function createWorldCli(deps: WorldCliDeps) {
     return change;
   };
 
-  const patchBoard = (ops: BoardOp[], actor: CliActor) => {
+  const patchBoardWithDeps = (
+    deps: WorldCliDeps,
+    ops: BoardOp[],
+    actor: CliActor,
+  ) => {
     const sender: GroupSender = {
       label: actor.label,
       basis: actor.verified ? "inferred" : "reported",
@@ -537,34 +560,11 @@ export function createWorldCli(deps: WorldCliDeps) {
     return document;
   };
 
-  /**
-   * Change the Board, then record it. The two files cannot change together,
-   * so a change that cannot be recorded is taken back.
-   */
-  const changeBoard = async (
-    actor: CliActor,
-    ops: BoardOp[],
-    revert: BoardOp[],
-    write: (document: BoardDocument) => LedgerChange | Promise<LedgerChange>,
-  ) => {
-    const document = patchBoard(ops, actor);
-    try {
-      return await write(document);
-    } catch (error) {
-      if (!(error instanceof StorageWriteRejected)) throw error;
-      try {
-        // A browser may have edited the Board during the asynchronous write.
-        if (deps.board.get().revision === document.revision)
-          patchBoard(revert, actor);
-      } catch {
-        // The original error says more.
-      }
-      throw error;
-    }
-  };
+  const changeBoardWithDeps = createBoardChange(deps, patchBoardWithDeps);
 
   /** The host a command acts on, with its live topology. */
-  const topologyFor = async (
+  const topologyWithDeps = async (
+    deps: WorldCliDeps,
     host: CliHost | undefined,
     params: Record<string, unknown>,
   ): Promise<Topology> => {
@@ -627,11 +627,17 @@ export function createWorldCli(deps: WorldCliDeps) {
   };
 
   async function run(
+    deps: WorldCliDeps,
     command: WorldCliCommand,
     params: Record<string, unknown>,
     actor: CliActor,
     host: CliHost | undefined,
+    recheck: () => void,
   ): Promise<unknown> {
+    const record = recordWithDeps.bind(null, completion);
+    const patchBoard = patchBoardWithDeps.bind(null, deps);
+    const changeBoard = changeBoardWithDeps.bind(null, deps);
+    const topologyFor = topologyWithDeps.bind(null, deps);
     if (command.startsWith("group "))
       return runGroupCommand(command, params, {
         deps,
@@ -732,7 +738,7 @@ export function createWorldCli(deps: WorldCliDeps) {
             : change!.undo!;
           return changeBoard(actor, ops, change!.redo ?? [], async () => {
             const undone: LedgerChange = {
-              id: await deps.ledger.nextId("c"),
+              id: await completion.ledger.nextId("c"),
               at: now(),
               actor,
               command: "undo",
@@ -740,8 +746,8 @@ export function createWorldCli(deps: WorldCliDeps) {
               undo: null,
             };
             // One write records the undo and marks what it undid.
-            deps.publishLedger(
-              await deps.ledger.update((document) => {
+            completion.publishLedger(
+              await completion.ledger.update((document) => {
                 document.changes.push(undone);
                 const entry = document.changes.find((c) => c.id === id);
                 if (entry) entry.undone_by = undone.id;
@@ -784,6 +790,7 @@ export function createWorldCli(deps: WorldCliDeps) {
           refused("desks reorder only within one room");
         const insert = deskReorderIndex(order, tabId, ontoTab);
         if (insert === undefined) notFound(`tab ${tabId} changed; try again`);
+        recheck();
         if (insert !== null)
           await topology.host.call("tab.move", {
             tab_id: tabId,
@@ -877,6 +884,30 @@ export function createWorldCli(deps: WorldCliDeps) {
           request.params && typeof request.params === "object"
             ? request.params
             : {};
+        const verb = registeredVerb("cli", command);
+        const admission: Admission = {
+          // Actor verification itself reads Herdr. Both CLI actors must pass
+          // the common policy/flags first; verified-only commands are checked
+          // after identity resolution, before running their effects.
+          actor: "cli_verified",
+          authorized: () => !deps.signal?.aborted,
+          capabilities: () => new Set(["world"]),
+          preconditions: () => true,
+        };
+        const recheck = () => {
+          try {
+            admitVerb(verb, params, admission);
+            return verb;
+          } catch (error) {
+            if (error instanceof VerbRefusal) {
+              if (error.message.startsWith("invalid parameters"))
+                usage(error.message);
+              refused(error.message);
+            }
+            throw error;
+          }
+        };
+        const declaration = recheck();
         const paneId =
           typeof request.caller?.pane_id === "string" &&
           request.caller.pane_id.trim()
@@ -887,13 +918,27 @@ export function createWorldCli(deps: WorldCliDeps) {
           usage("HERDR_PANE_ID is not a Herdr pane ID");
         const identity = await identifyCaller(deps.hosts(), paneId, locate);
         actor = identity.actor;
+        admission.actor = actor.verified ? "cli_verified" : "cli_unverified";
+        recheck();
+        const evidence = commandEvidence(declaration);
         const result = await run(
+          guardCliCommand(deps, recheck),
           command as WorldCliCommand,
           params,
           actor,
-          identity.host,
+          identity.host && guardCliHost(identity.host, recheck),
+          recheck,
         );
-        return { ok: true, actor, result };
+        checkVerbResult(declaration, result);
+        const recordId =
+          result && typeof result === "object" && "id" in result
+            ? result.id
+            : undefined;
+        if (declaration.recovery !== "read" && typeof recordId === "string") {
+          const receipt = deps.ledgerReceipt?.(recordId);
+          if (receipt) evidence.record({ stage: "stored", receipt });
+        }
+        return { ok: true, actor, result, command_evidence: evidence.get() };
       } catch (error) {
         if (error instanceof CliError)
           return {
@@ -901,18 +946,28 @@ export function createWorldCli(deps: WorldCliDeps) {
             code: error.code,
             error: error.message,
             actor,
+            command_evidence: {
+              stage: error.code === "unavailable" ? "failed" : "refused",
+            },
             ...(error.result !== undefined ? { result: error.result } : {}),
           };
         const message = error instanceof Error ? error.message : String(error);
         // Board validation is the caller's to fix; anything else is Herdr or
         // the service failing.
         return message.startsWith("invalid board")
-          ? { ok: false, code: "refused", error: message, actor }
+          ? {
+              ok: false,
+              code: "refused",
+              error: message,
+              actor,
+              command_evidence: { stage: "refused" },
+            }
           : {
               ok: false,
               code: "unavailable",
               error: "Herdr or the World service could not do that; try again",
               actor,
+              command_evidence: { stage: "failed" },
             };
       }
     },

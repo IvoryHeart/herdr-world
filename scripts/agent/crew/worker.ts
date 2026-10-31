@@ -181,8 +181,8 @@ export function codexSessionOf(
   }
 }
 
-/** Codex's rollout files from the last two days' folders, newest first. */
-function recentRollouts(root = codexSessions()) {
+/** Codex rollouts, newest date folder first. Only discovery limits the days. */
+function codexRollouts(root = codexSessions(), dayLimit = Infinity) {
   const days: string[] = [];
   const below = (dir: string) =>
     existsSync(dir)
@@ -194,7 +194,7 @@ function recentRollouts(root = codexSessions()) {
   for (const year of below(root))
     for (const month of below(join(root, year)))
       for (const day of below(join(root, year, month))) {
-        if (days.length < 2) days.push(join(root, year, month, day));
+        if (days.length < dayLimit) days.push(join(root, year, month, day));
       }
   return days.flatMap((dir) =>
     readdirSync(dir)
@@ -209,7 +209,7 @@ export function findCodexSession(
   since: number,
   root = codexSessions(),
 ) {
-  for (const path of recentRollouts(root)) {
+  for (const path of codexRollouts(root, 2)) {
     if (statSync(path).mtimeMs < since) continue;
     const first = readFileSync(path, "utf8").split("\n", 1)[0] ?? "";
     const session = codexSessionOf(first, cwd, since);
@@ -269,23 +269,41 @@ export function codexUsage(rollout: string): Record<string, number> | null {
   return total;
 }
 
+export type SessionRoots = { claude?: string; codex?: string };
+
+/** Read the named harness session; file timestamps are not activity evidence. */
+export function readTranscript(
+  run: {
+    harness: string | null;
+    session: string | null;
+    cwd: string;
+  },
+  roots: SessionRoots = {},
+): string | null {
+  if (!run.session) return null;
+  try {
+    const path =
+      run.harness === "claude"
+        ? claudeTranscript(run.cwd, run.session, roots.claude)
+        : codexRollouts(roots.codex).find((file) =>
+            file.endsWith(`-${run.session}.jsonl`),
+          );
+    return path && existsSync(path) ? readFileSync(path, "utf8") : null;
+  } catch {
+    return null;
+  }
+}
+
 /** A run's token usage so far, from its harness's own session files. */
 export function readUsage(run: {
   harness: string | null;
   session: string | null;
   cwd: string;
 }): string | null {
-  if (!run.session) return null;
-  let usage: Record<string, number> | null = null;
-  if (run.harness === "claude") {
-    const path = claudeTranscript(run.cwd, run.session);
-    if (existsSync(path)) usage = claudeUsage(readFileSync(path, "utf8"));
-  } else {
-    const path = recentRollouts().find((file) =>
-      file.endsWith(`-${run.session}.jsonl`),
-    );
-    if (path) usage = codexUsage(readFileSync(path, "utf8"));
-  }
+  const transcript = readTranscript(run);
+  if (transcript === null) return null;
+  const usage =
+    run.harness === "claude" ? claudeUsage(transcript) : codexUsage(transcript);
   return usage ? JSON.stringify(usage) : null;
 }
 

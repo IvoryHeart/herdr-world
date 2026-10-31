@@ -23,11 +23,11 @@ export type CrewSettings = {
   neverPrompt: string[];
   /** Reviewer runs at once. */
   maxRuns: number;
-  /** A reviewer still working after this long, without posting, is the owner's call. */
+  /** A run without its completion evidence is stopped at this bound, without retry. */
   runTimeoutMinutes: number;
   /**
    * A check still running this long after the watcher first saw it is
-   * stuck, as when GitHub loses a finished job's status; the author reruns it.
+   * stuck; the author diagnoses its status and fixes the cause.
    */
   stallMinutes: number;
   /**
@@ -351,11 +351,11 @@ export function plan(
       "fix",
       `ACT #${pr} fix @${at}: findings from ${fixes.join(", ")}. Fix every finding in one pass, push, then reply on the PR signed by your seat with one line per finding naming its ID or exact file:line and fixing commit. The next round waits for every reply and 10 minutes without a push.`,
     );
-  const failing = verdict.conditions.find(
-    (entry) => entry.id === "checks" && entry.state === "unmet",
+  const failures = verdict.conditions.filter(
+    (entry) =>
+      ["checks", "ci-failures"].includes(entry.id) && entry.state === "unmet",
   );
-  // An attempt a rerun replaced neither holds the author back nor names
-  // the failure.
+  // Current and retained failures both require a diagnosis.
   const checks = currentChecks(input);
   // A run still going may replace the failure, as when a new push or label
   // cancels the run whose roll-up failed; the author hears once it settles.
@@ -366,22 +366,21 @@ export function plan(
     .map((check) => check.url ?? check.name)
     .sort()
     .join(" ");
-  if (failing && settled)
+  if (failures.length && settled)
     toAuthor(
       "ci",
-      `ACT #${pr} ci @${at}: ${failing.detail}. Rerun a listed flake once with gh run rerun <id> --failed; otherwise fix and push.`,
-      failedJobs || failing.detail,
+      `ACT #${pr} ci @${at}: ${failures.map((failure) => failure.detail).join("; ")}. Diagnose every CI failure and fix its cause; never rerun to clear a failure.`,
+      [failedJobs, ...failures.map((failure) => failure.detail)].join(" "),
     );
   // A check that never finishes holds every review back; keyed by its job,
   // so a rerun that sticks again is heard again.
   for (const check of running) {
     if (check.minutes < settings.stallMinutes) continue;
-    const job = /\/job\/(\d+)/u.exec(check.url)?.[1];
     toAuthor(
       "ci",
       // No minute count in the text: without an author it is an owner
       // notice keyed by its text, which must stay the same every pass.
-      `ACT #${pr} ci @${at}: ${check.name} has been running over ${settings.stallMinutes} minutes, longer than CI takes; GitHub may have lost its status. Rerun it: ${job ? `gh run rerun --job ${job}` : check.url}`,
+      `ACT #${pr} ci @${at}: ${check.name} has been running over ${settings.stallMinutes} minutes, longer than CI takes; Diagnose the hang and fix its cause; do not silently retry: ${check.url}`,
       check.url,
     );
   }
@@ -443,9 +442,18 @@ export function loadSettings(path: string): CrewSettings {
     crew?: Partial<CrewSettings>;
     roster?: CrewSettings["roster"];
   };
-  return {
+  const settings = {
     ...SETTINGS_DEFAULTS,
     ...raw.crew,
     roster: { ...raw.roster, ...raw.crew?.roster },
   };
+  if (
+    !Number.isFinite(settings.runTimeoutMinutes) ||
+    settings.runTimeoutMinutes <= 0 ||
+    !Number.isSafeInteger(settings.runTimeoutMinutes * 60_000)
+  )
+    throw new Error(
+      "crew.runTimeoutMinutes must be a positive finite number of minutes",
+    );
+  return settings;
 }

@@ -2,7 +2,7 @@
 
 Requirements: [World storage](../../openspec/specs/world-storage/spec.md),
 [terminal settings ownership](../../openspec/specs/world-surfaces/spec.md).
-Q46 is candidate direct evidence; independent review and native CI remain required.
+Q47 is candidate direct evidence; independent review and native CI remain required.
 
 Allowed: one worker persists validated profiles and chimes; revisions and cached
 reads advance only after COMMIT; independent edits accumulate within a group;

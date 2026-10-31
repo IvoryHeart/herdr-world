@@ -10,6 +10,46 @@ other than the shared skills (`bun run check:agents`).
 The crew itself, its marks and its watcher are described in
 [agent development](agent-development.md#act-on-readiness-with-agentcrew).
 
+Every CI failure is real and blocks readiness for that head, including a
+failure followed by a green rerun or a failed aggregate job. Diagnose its cause
+and fix it; do not rerun to get green. The gate has no flake list or rerun budget,
+and the watcher sends the author the retained failure evidence.
+
+## Run lifecycle
+
+The watcher reserves a slot when it records a run. Every reviewer, fixer,
+evaluator and selected process has the configured `crew.runTimeoutMinutes`
+inactivity limit (default 90). Fresh timestamped conversation, reasoning, tool
+calls/results and owner replies in its harness transcript renew this finite
+window. Healthy work can continue past reservation age 90 minutes; a live PID,
+file timestamp, token counter or heartbeat alone cannot renew it. Re-reading
+an old event does not extend it, and the last work timestamp survives restarts.
+This uses evidence of work rather than assuming a long reservation is hung.
+A worker that never reports its PID still has three minutes to start, even if
+it writes progress. On the first watcher pass at or after either bound, the
+run is finished
+with exit -124, its reported process is stopped and all linked steps fail. The
+slot is available to queued work on that same pass. A timeout never starts an
+automatic replacement or sends the failed steps back to the author.
+
+The watcher persists the timeout outcome and its per-run owner cause together,
+including for manual reviews or orphan runs without an action row. It reports
+that cause once through the existing owner ask and signed crew comment, with
+the run ID and bound. Holds, restarts and passes scoped to other PRs do not
+reset inactivity or suppress timeout reporting.
+If the alert cannot be delivered, the timeout and alert failure remain in the
+local ledger/feed; the slot stays released. Inspect `agent:crew runs --pr <N>`,
+`status`, the round's pane and its run log before deciding what to do next.
+Completion evidence observed before settlement releases the slot normally and
+keeps the completed chat, including a manual review with no action row. Manual
+completion requires a valid RESULT from its reviewer on its pinned head, posted
+after that run started. A known Codex session remains readable in its original
+date folder as newer session folders appear; only new-session discovery uses
+the two newest folders. Late worker finalization cannot erase a recorded
+timeout; a late valid reviewer RESULT clears its notice. A merged or closed PR
+retires the notice. The watcher must be running to perform this maintenance;
+starting it or resuming stopped sessions requires an explicit owner instruction.
+
 ## Review rounds and evaluation
 
 Round 1 reviews the whole PR. Every reviewer reads the linked issue and flags

@@ -186,19 +186,25 @@ export function createWorldCliService(deps: {
     });
   const cli = createWorldCli({
     recordAnswer: recordAnswer
-      ? async (id, text, actor) => {
-          const revision = await recordAnswer(id, text, answeringAgent(actor));
+      ? async (id, text, actor, recheck) => {
+          const revision = await recordAnswer(
+            id,
+            text,
+            answeringAgent(actor),
+            recheck,
+          );
           publishDelivery();
           return revision;
         }
       : undefined,
     captureRecipient: deps.attention ? recipients.capture : undefined,
-    acknowledgeAnswer: async (id, occurrence, attempt, actor) => {
+    acknowledgeAnswer: async (id, occurrence, attempt, actor, recheck) => {
       const entry = (await deps.attention?.().forRecord(id))?.find(
         (entry) => entry.kind === ANSWER_DELIVERY_VERB.name,
       );
       if (!entry)
         throw new CliError("not_found", "No retained answer delivery");
+      recheck?.();
       const acknowledged = await deps.attention!().acknowledge(
         entry.id,
         occurrence,
@@ -217,6 +223,18 @@ export function createWorldCliService(deps: {
     get ledger() {
       return ledger();
     },
+    ledgerReceipt: deps.attention
+      ? (recordId) => {
+          const committed = ledger().get();
+          return [
+            ...committed.asks,
+            ...committed.changes,
+            ...committed.results,
+          ].some((record) => record.id === recordId)
+            ? `world-ledger:${committed.revision}:${recordId}`
+            : undefined;
+        }
+      : undefined,
     // Herdr on this machine can be checked for the caller's processes.
     hosts: () =>
       deps
@@ -230,8 +248,24 @@ export function createWorldCliService(deps: {
               connection_id: lease.connectionId,
               generation: lease.generation,
               local: !lease.runtime.sshHost(),
-              call: (method: string, params: Record<string, unknown>) =>
-                lease.runtime.herdr.call(method, params, 5_000),
+              call: (
+                method: string,
+                params: Record<string, unknown>,
+                recheck?: () => void,
+              ) =>
+                lease.runtime.herdr.call(method, params, 5_000, () => {
+                  if (stopped.signal.aborted)
+                    throw new CliError(
+                      "refused",
+                      "verb authorization was revoked",
+                    );
+                  recheck?.();
+                  if (!lease.isCurrent())
+                    throw new CliError(
+                      "unavailable",
+                      "connection changed during command",
+                    );
+                }),
             },
           ];
         }),
@@ -242,7 +276,7 @@ export function createWorldCliService(deps: {
       return snapshots.snapshot({});
     },
     sources: deps.sources,
-    groupMove: (request) => {
+    groupMove: (request, recheck) => {
       const lease = deps.connections().readyRuntimeLease(request.connection_id);
       if (
         !lease?.isCurrent() ||
@@ -257,11 +291,27 @@ export function createWorldCliService(deps: {
         {
           connectionId: lease.connectionId,
           generation: lease.generation,
-          isCurrent: () => lease.isCurrent(),
+          isCurrent: () => {
+            recheck?.();
+            return lease.isCurrent();
+          },
           call: (method, params) =>
-            lease.runtime.herdr.call(method, params, 10_000),
+            lease.runtime.herdr.call(method, params, 10_000, () => {
+              recheck?.();
+              if (!lease.isCurrent())
+                throw new CliError(
+                  "refused",
+                  "The selected host reconnected. Read Groups again.",
+                );
+            }),
           queues: deps.townMoveQueues,
-          board,
+          board: {
+            ...board,
+            patch: (ops) => {
+              recheck?.();
+              return board.patch(ops);
+            },
+          },
           publishBoard: deps.publishBoard,
           onFollowError: () =>
             console.warn(

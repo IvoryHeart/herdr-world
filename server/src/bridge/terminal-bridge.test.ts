@@ -1247,6 +1247,7 @@ describe("terminal bridge sharing", () => {
         connection_id: "alpha",
         id: "stale-terminal",
         error: { message: "connection changed during request" },
+        command_evidence: { stage: "failed" },
       },
     ]);
     bridge.dispose();

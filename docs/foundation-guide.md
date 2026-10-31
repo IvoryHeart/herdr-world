@@ -40,6 +40,11 @@ see [History guidance](HISTORY.md#pane-scoped-codex-launches).
 
 ## Process and request path
 
+The [static verb registry](../server/src/verbs/registry.ts) owns browser RPC,
+agent CLI and browser forge-action admission. [Actor policies and staged evidence](world-verbs.md)
+map the declarations, preserved flags, owner validation and P4 compatibility tests.
+
+
 ```text
 server/src/index.ts
   -> service, harness, or Herdr CLI command (when requested)

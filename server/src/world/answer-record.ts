@@ -13,15 +13,25 @@ import { CliError } from "./world-cli-errors";
 /** Commit exactly one reference-only answer intent with its immutable answer. */
 export function createAnswerRecorder(deps: {
   ledger(): LedgerStore;
-  recipients: ReturnType<typeof createAskRecipients>;
+  recipients: Pick<
+    ReturnType<typeof createAskRecipients>,
+    "resolve" | "authorize"
+  >;
   now(): number;
 }) {
-  return async (id: string, text: string, actor: AnswerActor) => {
+  return async (
+    id: string,
+    text: string,
+    actor: AnswerActor,
+    recheck?: () => void,
+  ) => {
+    recheck?.();
     const original = deps.ledger().ask(id);
     if (!original) throw new CliError("not_found", `no question ${id}`);
     if (original.answer || original.withdrawn || original.dismissed)
       throw new CliError("refused", `${id} is already closed`);
     const resolution = await deps.recipients.resolve(original.recipient);
+    recheck?.();
     if (
       actor.kind === "agent" &&
       (await deps.recipients.authorize(actor, original)) !== "allowed"
@@ -30,10 +40,13 @@ export function createAnswerRecorder(deps: {
         "refused",
         "The answering agent could not be verified for this ask",
       );
+    recheck?.();
     const occurrence = await deps.ledger().nextId("a");
+    recheck?.();
     let effects: OutboxEffect[] = [];
     return deps.ledger().update(
       (document) => {
+        recheck?.();
         const ask = document.asks.find((entry) => entry.id === id);
         if (!ask) throw new CliError("not_found", `no question ${id}`);
         if (ask.answer || ask.withdrawn || ask.dismissed)

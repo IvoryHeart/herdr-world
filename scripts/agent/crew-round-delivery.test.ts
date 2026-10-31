@@ -200,3 +200,41 @@ test("a clean-reviewed PR carries review evidence over a synthetic-fixture-only 
     "READY",
   );
 });
+
+test("an evaluator times out without restarting its checkpoint", () => {
+  const f = setup();
+  f.pass();
+  f.pass(SHA.reviewed, NOW + 90 * 60_000);
+  expect(activeRuns(f.crew)).toEqual([]);
+  expect(getRun(f.crew, 1)).toMatchObject({
+    exitCode: -124,
+    finishedAt: NOW + 90 * 60_000,
+  });
+  expect(f.killed).toEqual([1001]);
+  f.pass(SHA.reviewed, NOW + 91 * 60_000);
+  expect(f.spawned).toHaveLength(1);
+  expect(
+    f.calls.filter(
+      (argv) =>
+        argv[0] === "herdr-world" &&
+        argv[1] === "ask" &&
+        argv.some((arg) => arg.includes("timed out")),
+    ),
+  ).toHaveLength(1);
+});
+
+test("a selected process times out without launching a replacement process", () => {
+  const f = setup();
+  f.pass();
+  f.comment(
+    `[evaluator]\nEvaluation: 2\nEvaluated commit: ${SHA.reviewed}\nProcess: visionary\nSeat: visionary\nReason: revisit the contract\nEVALUATION #7: no-go — design first`,
+  );
+  f.pass();
+  f.pass(SHA.reviewed, NOW + 90 * 60_000);
+  expect(activeRuns(f.crew)).toEqual([]);
+  expect(getRun(f.crew, 2)?.exitCode).toBe(-124);
+  expect(getRun(f.crew, 1)?.exitCode).toBe(0);
+  f.pass(SHA.reviewed, NOW + 91 * 60_000);
+  expect(f.spawned.map((argv) => argv[2])).toEqual(["evaluate", "process"]);
+  expect(f.killed).toEqual([1002]);
+});
