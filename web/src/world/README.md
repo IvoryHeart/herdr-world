@@ -505,3 +505,37 @@ desks it draws, not the tabs a workspace can have.
 | Captured sources, duplicate suppression and progress | [creationRequests.ts](../creationRequests.ts), `prepareQualifiedCreation`, `createQualifiedTab` and `createQualifiedWorkspace` in [store.ts](../store.ts) | [Creation store tests](../worldCreation.test.ts), [Shared creation browser matrix](SharedViewCreation.test.ts) |
 | Browser attachment ownership and presentation handoffs | [TerminalView.tsx](../components/TerminalView.tsx), source demand merging in [App.tsx](../App.tsx), [WorldTerminalPortalList.tsx](WorldTerminalPortalList.tsx) | [Creation store tests](../worldCreation.test.ts), [Terminal handoff tests](WorldTerminalHandoff.test.ts) |
 | Created-terminal admission and newer Inspector intent | `creationCompletion` in [useWorldCreatedTerminal.ts](useWorldCreatedTerminal.ts), [createdTerminalAdmission.ts](createdTerminalAdmission.ts) | [Admission tests](createdTerminalAdmission.test.ts), [Shared creation browser matrix](SharedViewCreation.test.ts) |
+
+## Incremental observation and consumed views
+
+The runtime store negotiates `world_observation_v1` and keeps unchanged host
+objects. Base admission lives in [observationBase.ts](observationBase.ts);
+missing bases recover with one complete request, foreign incarnations cannot
+reuse retained content, and Bridge qualification still fences publication. Only
+explicit base or snapshot-parameter refusals disable bases for that hello; transient
+database/read errors retain negotiated bases.
+Identical confirmations publish nothing. The debounce, one-in-flight/coalesced
+refresh, chunk transport and fallback refresh remain in place.
+
+[worldRoomCache.ts](worldRoomCache.ts) keys each room by its full observation
+slice and owner/presentation metadata. [appearance.ts](appearance.ts) and
+[worldWatches.ts](worldWatches.ts) preserve unaffected room identities.
+Town reuses canonical rooms and [bounded presentation](officeRoomPresentation.ts);
+Board reuses [room topology](board/boardRoom.ts). Mounted Town and Board consumers
+hold preparation interest; absent views do no topology preparation.
+[useWorldObservation.ts](useWorldObservation.ts) registers the same Hosts/watch/appearance
+projection used for presentation, so hidden hosts, rooms and unwatched panes do no
+view-room preparation. Watched-only host identity is shared by preparation and
+rendering when the source host and consumed rooms are unchanged. Aggregate World
+data remains available to shell and Inspector
+consumers. A scope change during cooperative preparation is revalidated before
+publication. On a switch,
+missing view models finish before presentation. This does not retire the shared
+Board document or retained Spaces. Profile looks are a separate reader, invalidated
+only when the effective look changes; seen marks and relations retain their existing
+reader-specific overlays and lifetimes.
+
+[Work-count and seeded equivalence tests](incrementalPreparation.test.ts) use the
+test clock and compare incremental output with complete preparation across
+observations, appearance, watches and seen marks. [Base tests](observationBase.test.ts)
+and [M1](../../../quint/observation-base.qnt) cover admission, qualification and recovery.

@@ -2,6 +2,7 @@
 export const verificationModels = [
   "space-admission",
   "browser-preparation",
+  "observation-base",
   "browser-refresh",
   "chunk-credits",
   "runtime-leases",

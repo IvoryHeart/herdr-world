@@ -428,3 +428,109 @@ change a view filter.
   arrive for A and session B sharing that pane ID
 - **THEN** publishing A uses A's maximum, and B's timestamp cannot erase it or apply
   to A
+
+### Requirement: Service incarnation and based aggregate replies
+
+Each World service start SHALL issue a random `service_incarnation`, sent in the
+WebSocket hello and every `world.snapshot` reply. The hello SHALL advertise
+`world_observation_v1`. Runtime generations and service incarnation SHALL remain
+separate fences; restarting both hosts at generation 1 SHALL NOT admit a base
+from the previous service as current.
+
+The service SHALL accept an optional `base` containing `service_incarnation` and
+at most 64 `hosts`, each with a unique `connection_id`, a nonnegative integer
+`generation`, and a nonempty opaque `token` of at most 64 characters. Invalid bases
+SHALL be refused before host acquisition, without default routing.
+
+Every reply SHALL include each host's token, null when no snapshot exists. Equal
+tokens SHALL identify equal projected snapshot content and producing generation.
+Only when incarnation, connection, runtime generation, snapshot generation and
+token all match the base SHALL the service omit topology with `unchanged: true`.
+A confirmation SHALL include current state, generation, snapshot generation,
+staleness, actionability and errors. Every other host SHALL receive a complete
+replacement through the bounded existing observation and chunk transport path.
+Service-side snapshot consumers SHALL continue to receive complete topology.
+
+#### Scenario: One host changes
+- **WHEN** a caller sends a base for two hosts and only one projected snapshot changes
+- **THEN** that host receives a complete replacement and its sibling receives a
+  confirmation with current metadata and no `snapshot` field
+
+#### Scenario: Unknown or foreign base
+- **WHEN** a base names an unknown token, another generation or another incarnation
+- **THEN** the service sends complete observations for every mismatching host
+
+#### Scenario: Older caller
+- **WHEN** a caller sends no base
+- **THEN** every catalogue host retains its complete snapshot as before
+
+### Requirement: Browser admission of based observation
+
+A browser SHALL send its held base only when the hello advertises
+`world_observation_v1`. It SHALL apply each reply as one publication, retaining
+unchanged content by identity and applying current metadata. A confirmation SHALL
+NOT restore actionability retired by the browser's qualified client.
+
+A confirmation for content no longer held SHALL discard the entire reply and
+trigger one request without a base. A changed incarnation SHALL prevent reuse of
+all old content, and replies from another incarnation SHALL be rejected. A base
+refusal SHALL disable further bases on that socket. Unrelated transient storage or
+read failures SHALL NOT disable negotiated bases. Existing coalescing, fallback
+refresh and chunk transport SHALL remain in place for negotiated and older clients.
+
+#### Scenario: Transient database failure
+- **WHEN** a based pull fails because the database is temporarily locked
+- **THEN** the browser retains negotiated bases for its next refresh
+
+#### Scenario: Host retires during a request
+- **WHEN** a reply confirms a host whose qualified runtime retired after the request
+- **THEN** its content is retained but remains stale and non-actionable, independently
+  of healthy sibling hosts
+
+#### Scenario: A retained base is missing
+- **WHEN** a confirmation names a host the browser no longer holds
+- **THEN** no partial reply is published and one complete recovery is requested
+
+#### Scenario: All hosts are unchanged
+- **WHEN** host content and metadata are unchanged
+- **THEN** no host, room or view model is rebuilt and no observation is published
+
+### Requirement: Incremental observation preparation
+
+Admitted observations and document or mark changes SHALL prepare only their readers.
+Rooms SHALL reuse their prepared presentation when their observation slice and
+owner/presentation inputs are unchanged. Appearance, relations, profiles, watches,
+seen marks and Town master SHALL invalidate only the readers of the changed inputs.
+Host and World counts, attention and summaries SHALL use per-room contributions.
+
+A view's topology SHALL be prepared only for mounted consumers and their consumed
+Hosts/watch projection. Changes outside that projection SHALL update aggregate World
+data without preparing hidden view rooms. The Board document
+SHALL remain available for appearance and relations in all views. A newly selected
+view SHALL finish missing model preparation before presentation. Incremental output
+SHALL equal complete preparation of the same observation, documents and marks.
+
+#### Scenario: One room changes
+- **WHEN** one agent changes status in a host with ten rooms
+- **THEN** only that room and dependent counts, attention and summaries are prepared,
+  and the other nine rooms retain their prepared presentation
+
+#### Scenario: Town is shown
+- **WHEN** an observation is admitted while only Town is mounted
+- **THEN** no Board topology is prepared, its document remains available, and switching
+  to Board finishes its topology before presentation
+
+#### Scenario: A change is outside the presented scope
+- **WHEN** Town or Board is mounted and only a host, room or pane hidden by Hosts or
+  watched-only changes
+- **THEN** aggregate observation remains current and no unchanged presented room is
+  prepared again
+
+#### Scenario: A profile look changes
+- **WHEN** a profile's look changes without an observation change
+- **THEN** readers showing that profile receive the new look and unrelated readers
+  retain their prepared presentation
+
+#### Scenario: Complete preparation equivalence
+- **WHEN** observations, documents and marks change in any supported sequence
+- **THEN** incremental presentation equals complete preparation of the latest inputs

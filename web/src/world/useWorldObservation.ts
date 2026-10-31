@@ -3,7 +3,7 @@ import { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { bridge } from "../api";
 import { worldLocalStorage } from "../browserStorage";
 import { shallowEqual, useStoreSelector } from "../store";
-import { useWorldRuntime } from "./runtimeStore";
+import { useWorldRuntime, worldRuntimeStore } from "./runtimeStore";
 import { buildWorldObject, worldObjectWithWatches } from "./worldObject";
 import { worldObjectForHosts, worldObjectForWatches } from "./worldFilters";
 import { useWorldWatchlist, WorldWatchlistStore } from "./watchlistStore";
@@ -81,6 +81,20 @@ export function useWorldObservation({ onPresentedWorldChange }: Input) {
         ? worldObjectForWatches(watchedWorld, watchlist.records)
         : watchedWorld,
     [pinnedOnly, watchedWorld, watchlist.records],
+  );
+  useLayoutEffect(
+    () =>
+      worldRuntimeStore.presentViewsFrom((aggregate) => {
+        const scoped = worldObjectForHosts(
+          worldWithAppearance(aggregate, appearance),
+          hostsFilter.ids,
+        );
+        const watched = worldObjectWithWatches(scoped, watchlist.records);
+        return pinnedOnly
+          ? worldObjectForWatches(watched, watchlist.records)
+          : watched;
+      }),
+    [appearance, hostsFilter.ids, pinnedOnly, watchlist.records],
   );
   useLayoutEffect(
     () => onPresentedWorldChange(presentedWorld),

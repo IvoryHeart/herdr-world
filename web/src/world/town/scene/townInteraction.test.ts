@@ -83,6 +83,8 @@ function setup(
   let ready = true;
   let hovered: string | null = null;
   let result: Promise<TownMoveResult> = Promise.resolve("moved");
+  /** Agents standing (walking, queued, lounging) where the renderer has them. */
+  const standing = new Map<string, Point>();
   const stage: TownStage = {
     camera,
     get level() {
@@ -90,7 +92,10 @@ function setup(
     },
     invalidate: (reason) => reasons.push(reason),
     roofAlpha: () => roofs,
-    actorPosition: () => null,
+    actorPosition: (key) => {
+      const at = standing.get(key);
+      return at ? { ...at, seated: false } : null;
+    },
     beginDrag: (...args) => log.push(["begin", ...args]),
     moveDrag: (...args) => log.push(["aim", ...args]),
     endDrag: (mode) => log.push(["end", mode]),
@@ -157,6 +162,7 @@ function setup(
     deskCentre,
     rooms,
     screen,
+    stand: (agentKey: string, world: Point) => standing.set(agentKey, world),
     setLevel: (next: TownLevel) => (level = next),
     setRoofs: (alpha: number) => (roofs = alpha),
     setReady: (next: boolean) => (ready = next),
@@ -469,6 +475,93 @@ function carry(t: ReturnType<typeof setup>, from: Point, to: Point) {
   t.moveTo(pointer, to);
   t.lift(pointer, to);
 }
+
+/** The agent seated first at room `room`'s desk `index`. */
+const agentAt = (t: ReturnType<typeof setup>, room: number, index: number) =>
+  t.model.desks.get(t.deskCell(room, index).deskKey!)!.paneDevices[0]!
+    .agentKey!;
+
+test("a carry looks through an agent walking over another room's floor", () => {
+  const t = setup();
+  const cell = t.deskCell(0, 0);
+  const room = t.rooms[1]!;
+  // An agent from the carried desk's own room walks across room 1's floor.
+  const walker = agentAt(t, 0, 1);
+  const feet = { x: room.x * T + 24, y: (room.y + room.h) * T - 4 };
+  t.stand(walker, feet);
+  const over = t.screen({ x: feet.x, y: feet.y - 6 });
+  expect(t.interaction.hitAt(over.x, over.y)).toEqual({
+    kind: "agent",
+    key: walker,
+    standing: true,
+  });
+  const pointer = t.press(t.deskCentre(cell));
+  t.moveTo(pointer, offset(t.deskCentre(cell), 20));
+  t.moveTo(pointer, over);
+  expect(last(t.ghost)?.[3]).toBe("move");
+  // Resting there is resting on room 1's floor, not on the walker's desk.
+  t.time.advance(TOWN_MAGNET_MS);
+  expect(last(t.ghost)?.[3]).toBe("move");
+  t.lift(pointer, over);
+  expect(t.moves).toEqual([
+    { kind: "desk", deskKey: cell.deskKey!, roomKey: room.key },
+  ]);
+});
+
+test("a carried agent lands on the desk drawn under an agent walking past", () => {
+  const t = setup({ level: "desk" });
+  const cell = t.deskCell(0, 0);
+  const agentKey = agentAt(t, 0, 0);
+  const seat = townSeat(cell, 0);
+  const from = t.screen({
+    x: seat.cx,
+    y: seat.top ? cell.y * T + 10 : cell.y * T + 45,
+  });
+  const other = t.deskCell(1, 0);
+  // An agent from room 2 walks past the middle of room 1's first desk.
+  const walker = agentAt(t, 2, 0);
+  const middle = { x: (other.x + 1) * T + 32, y: other.y * T + 30 };
+  t.stand(walker, { x: middle.x, y: middle.y + 2 });
+  const over = t.screen(middle);
+  expect(t.interaction.hitAt(over.x, over.y)?.kind).toBe("agent");
+  carry(t, from, over);
+  expect(t.moves).toEqual([
+    { kind: "agent", agentKey, deskKey: other.deskKey! },
+  ]);
+});
+
+test("an agent walking elsewhere is picked up where it walks, not at its empty chair", () => {
+  const t = setup({ level: "desk" });
+  const cell = t.deskCell(0, 0);
+  const walker = agentAt(t, 0, 0);
+  const seat = townSeat(cell, 0);
+  const chair = t.screen({
+    x: seat.cx,
+    y: seat.top ? cell.y * T + 10 : cell.y * T + 45,
+  });
+  expect(t.interaction.hitAt(chair.x, chair.y)).toEqual({
+    kind: "agent",
+    key: walker,
+  });
+  const room = t.rooms[1]!;
+  const feet = { x: room.x * T + 24, y: (room.y + room.h) * T - 4 };
+  t.stand(walker, feet);
+  // Its chair is drawn empty: it is the pane, with or without a carry.
+  for (const standing of [true, false])
+    expect(t.interaction.hitAt(chair.x, chair.y, standing)).toMatchObject({
+      kind: "pane",
+      deskKey: cell.deskKey,
+    });
+  const begun = () => t.log.filter(([kind]) => kind === "begin");
+  const atChair = t.press(chair);
+  t.moveTo(atChair, offset(chair, 20));
+  expect(last(begun())?.[1]).not.toBe("agent");
+  t.lift(atChair, { x: -10, y: -10 });
+  const seen = t.screen({ x: feet.x, y: feet.y - 6 });
+  const atWalker = t.press(seen);
+  t.moveTo(atWalker, offset(seen, 20));
+  expect(last(begun())?.slice(1, 3)).toEqual(["agent", walker]);
+});
 
 test("a desk dropped at once on a desk in its room takes that desk's place", () => {
   const t = setup();

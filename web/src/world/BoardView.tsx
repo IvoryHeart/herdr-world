@@ -1,3 +1,4 @@
+import { worldRuntimeStore } from "./runtimeStore";
 import { AppearanceAvatar } from "./AppearanceAvatar";
 import { visibleAppearanceColors, saveAppearance } from "./appearance";
 import { tabCardKey } from "../../../shared/terminalColor";
@@ -488,6 +489,7 @@ export default function BoardView({
 }) {
   // Topology updates render at low priority and in slices, so a large board
   // never holds up typing in a terminal.
+  useEffect(() => worldRuntimeStore.retainView("board"), []);
   const deferredWorld = useDeferredValue(world);
   const shownWorld = boardObservation(world, deferredWorld);
   const fullModel = useMemo(() => projectBoard(shownWorld), [shownWorld]);

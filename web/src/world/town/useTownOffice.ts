@@ -1,3 +1,4 @@
+import { worldRuntimeStore } from "../runtimeStore";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   createOfficeProjector,
@@ -11,6 +12,7 @@ import type { WorldObject } from "../worldObject";
 
 /** Town reveals the first 24 native-order tabs, then 20 more per expansion. */
 export function useTownOffice(world: WorldObject, selectedId: string | null) {
+  useEffect(() => worldRuntimeStore.retainView("town"), []);
   const projectOffice = useMemo(
     () => createOfficeProjector(TOWN_PRESENTATION_BOUNDS),
     [],

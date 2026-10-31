@@ -13,7 +13,7 @@ with the `openspec-sync-specs` skill.
 
 ## 2. Service incarnation
 
-- [ ] 2.1 Generate `service_incarnation` at each start and send it in the hello.
+- [x] 2.1 Generate `service_incarnation` at each start and send it in the hello.
   Verify with a direct test: two in-process services from the composition root
   (item 9) report different incarnations, while both connection managers start at
   generation 1.
@@ -25,34 +25,40 @@ with the `openspec-sync-specs` skill.
 
 ## 3. Observation v1 (stage 3)
 
-- [ ] 3.1 Compute host tokens in the snapshot service: a digest of the projected host
+Service/wire delivery implements 2.1, 3.1 and 3.2. The browser candidate adds
+3.3–3.7: negotiated bases, incremental room/view preparation, M1 and P6, and the
+additive coverage/spec/documentation mapping. Required gate results and independent
+review belong to its PR handoff; checked implementation tasks do not replace them.
+No v2 subscriptions or persisted-capture fences are implemented here.
+
+- [x] 3.1 Compute host tokens in the snapshot service: a digest of the projected host
   and its generation, cached per cache entry and projection key. Verify with:
   - a test that tokens are equal exactly when projected content and generation are
     equal;
   - the digest cost on the dense fixture, recorded in the PR.
-- [ ] 3.2 Accept `base` on `world.snapshot`, apply the service rule and advertise
+- [x] 3.2 Accept `base` on `world.snapshot`, apply the service rule and advertise
   `world_observation_v1`. Verify with tests that:
   - a confirmation is sent only when incarnation, generation and token all match;
   - a malformed base is refused without default routing;
   - a request without a base gets today's reply.
-- [ ] 3.3 Browser: send the base and apply each reply as one publication. Reuse
+- [x] 3.3 Browser: send the base and apply each reply as one publication. Reuse
   unchanged hosts, discard a confirmation for a dropped host, reset on a new
   incarnation, and stop sending bases after a refusal. Verify with runtime store tests
   and M1 replay.
-- [ ] 3.4 Incremental preparation, building on committee items 3 and 4. Each room's
+- [x] 3.4 Incremental preparation, building on committee items 3 and 4. Each room's
   fingerprint covers its observation slice and every document and mark it reads; host
   and world values come from per-room aggregates. Verify with P6:
   - an all-unchanged reply rebuilds and publishes nothing;
   - one status change prepares one room;
   - a profile look or appearance edit re-prepares only the rooms that read it;
   - the output equals a complete preparation of the same observation and documents.
-- [ ] 3.5 Prepare only consumed views (committee item 11), keeping the Board document
+- [x] 3.5 Prepare only consumed views (committee item 11), keeping the Board document
   for appearance and relations. Verify the consumer-inventory cases: Town without
   Board topology, and a view switch prepared before it is presented.
-- [ ] 3.6 Add the M1 `observation-base` model with replay, witnesses and controls.
+- [x] 3.6 Add the M1 `observation-base` model with replay, witnesses and controls.
   Update Q10, Q11, Q14, Q15 and Q20 in `verification/coverage.json`, and their
   contracts. Verify with a complete `bun run verification:gate`.
-- [ ] 3.7 Update `docs/ARCHITECTURE.md` (observation path) and `docs/knowledge-map.md`,
+- [x] 3.7 Update `docs/ARCHITECTURE.md` (observation path) and `docs/knowledge-map.md`,
   add a changelog fragment, and sync the v1 and preparation requirements into
   `runtime-federation`. Verify with `bun run check:docs`.
 
