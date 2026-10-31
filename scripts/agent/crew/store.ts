@@ -9,6 +9,9 @@ import type { Action } from "./plan";
  * and each fresh reviewer run. The gate's verdict store stays read-only here.
  */
 
+/** Watcher-owned timeout code, distinct from a harness exit status; never retried. */
+export const RUN_TIMEOUT_EXIT_CODE = -124;
+
 export type ActionState =
   /** Waiting for its seat to be idle, or for a reviewer run slot. */
   | "pending"
@@ -18,7 +21,7 @@ export type ActionState =
   | "running"
   /** A reviewer run finished. */
   | "done"
-  /** A reviewer run failed or timed out, past its retry. */
+  /** A reviewer run failed after its retry, or reached its bound. */
   | "failed"
   /** A newer head made it moot. */
   | "superseded";

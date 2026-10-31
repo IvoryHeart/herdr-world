@@ -1003,6 +1003,34 @@ describe("delivery", () => {
       expect(prompts()).toHaveLength(1);
     });
 
+    test("a timed-out fixer releases every linked step and never returns work to the author", () => {
+      busyElsewhere();
+      passFixer(
+        findings(SHA.reviewed, [
+          { name: "Delivery checks", state: "fail", required: true },
+        ]),
+      );
+      expect(fixes()).toHaveLength(1);
+      const steps = actionsIn(crew, ["running"]);
+      expect(steps).toHaveLength(2);
+      author("idle");
+      passFixer(
+        findings(SHA.reviewed, [
+          { name: "Delivery checks", state: "fail", required: true },
+        ]),
+        NOW + 90 * 60_000,
+      );
+      expect(activeRuns(crew)).toEqual([]);
+      for (const step of steps)
+        expect(getAction(crew, step.key)?.state).toBe("failed");
+      expect(getRun(crew, 1)?.exitCode).toBe(-124);
+      expect(prompts()).toEqual([]);
+      passFixer(findings(), NOW + 91 * 60_000);
+      expect(fixes()).toHaveLength(1);
+      expect(prompts()).toEqual([]);
+      expect(notices()).toHaveLength(1);
+    });
+
     test("a fixer that ends without pushing leaves the step to the author", () => {
       busyElsewhere();
       passFixer(findings());
@@ -1241,7 +1269,7 @@ describe("delivery", () => {
     });
   });
 
-  test("a reviewer overdue while its PR is parked asks nothing of the owner", () => {
+  test("parked PRs still release timed-out runs and report their timeout", () => {
     const fresh = town({ head: SHA.reviewed, posts: [] });
     for (const parkedValue of [
       { ...fresh, labels: ["pod:town", "on-hold"] },
@@ -1258,15 +1286,15 @@ describe("delivery", () => {
       const owner = actionsIn(crew, ["pending", "sent"]).filter(
         (entry) => entry.target === "owner" || entry.target === "github",
       );
-      expect(owner).toEqual([]);
+      expect(owner.filter((entry) => entry.target === "owner")).toHaveLength(3);
+      expect(notices()).toHaveLength(3);
       expect(
         statuses().some(
           (entry) =>
             entry.context === "crew/needs-owner" && entry.state === "pending",
         ),
       ).toBe(false);
-      // The reviewers keep working.
-      expect(activeRuns(crew).length).toBeGreaterThan(0);
+      expect(activeRuns(crew)).toEqual([]);
     }
   });
 
@@ -2126,10 +2154,18 @@ describe("delivery", () => {
       ],
     });
     pass(value);
+    pass(value, NOW + 3 * 60_000 - 1);
+    expect(activeRuns(crew)).toHaveLength(1);
+    pass(value, NOW + 3 * 60_000);
+    setRunPid(crew, 1, 1234);
+    finishRun(crew, 1, 0, null, NOW + 4 * 60_000);
     pass(value, NOW + 4 * 60_000);
+    expect(getRun(crew, 1)?.finishedAt).toBe(NOW + 3 * 60_000);
     expect(closed).toEqual([]);
-    expect(spawned).toHaveLength(2);
-    expect(places[1]!.after).toBe("wP:p1");
+    expect(spawned).toHaveLength(1);
+    expect(getRun(crew, 1)?.exitCode).toBe(-124);
+    expect(notices()).toHaveLength(1);
+    expect(activeRuns(crew)).toEqual([]);
   });
 
   test("lists runs and reopens one as a chat with the run's own model", () => {
@@ -2487,17 +2523,168 @@ describe("delivery", () => {
     expect(prompts()).toEqual([]);
   });
 
-  test("a reviewer past the limit is reported to the owner, not stopped", () => {
-    pass(town({ head: SHA.reviewed, posts: [] }));
+  test("a harness exit status 124 is not mistaken for a watcher timeout", () => {
+    const value = town({
+      head: SHA.reviewed,
+      posts: [
+        confirm("rev-astra", SHA.reviewed),
+        confirm("rev-opus", SHA.reviewed),
+      ],
+    });
+    pass(value);
+    finishRun(crew, 1, 124, null, NOW + 1);
+    pass(value, NOW + 2);
+    expect(spawned).toHaveLength(2);
+    expect(notices()).toEqual([]);
+    expect(getRun(crew, 1)?.exitCode).toBe(124);
+  });
+
+  test("a reviewer expires at its bound, releases its slot and is never retried", () => {
     const value = town({ head: SHA.reviewed, posts: [] });
-    pass(value, NOW + 91 * 60_000);
-    pass(value, NOW + 92 * 60_000);
-    expect(killed).toEqual([]);
+    pass(value);
+    pass(value, NOW + 90 * 60_000 - 1);
     expect(activeRuns(crew)).toHaveLength(3);
-    const overdue = notices().filter((argv) =>
-      argv.join(" ").includes("without posting"),
+    expect(killed).toEqual([]);
+    const expiry = NOW + 90 * 60_000;
+    pass(value, expiry);
+    expect(activeRuns(crew)).toEqual([]);
+    expect(killed).toEqual([1001, 1002, 1003]);
+    expect(actionsIn(crew, ["failed"])).toHaveLength(3);
+    for (const id of [1, 2, 3])
+      expect(getRun(crew, id)).toMatchObject({
+        finishedAt: expiry,
+        exitCode: -124,
+      });
+    expect(notices()).toHaveLength(3);
+    expect(
+      notices().every((argv) => argv.join(" ").includes("timed out")),
+    ).toBe(true);
+    pass(value, expiry + 60_000);
+    expect(spawned).toHaveLength(3);
+    expect(notices()).toHaveLength(3);
+    expect(actionsIn(crew, ["failed"])).toHaveLength(3);
+  });
+
+  test("expiry releases slots for queued reviewers without retrying expired work", () => {
+    const limited = join(root, "one-slot.json");
+    writeFileSync(
+      limited,
+      JSON.stringify({
+        ...config,
+        roster: ROSTER,
+        crew: { ...SETTINGS, maxRuns: 1, runTimeoutMinutes: 1 },
+      }),
     );
-    expect(overdue).toHaveLength(3);
+    const value = town({ head: SHA.reviewed, posts: [] });
+    passOver([value], NOW, { configPath: limited });
+    passOver([value], NOW + 60_000, { configPath: limited });
+    expect(spawned.map((argv) => argv[6])).toEqual(["rev2", "rev-astra"]);
+    expect(getRun(crew, 1)?.exitCode).toBe(-124);
+    expect(activeRuns(crew).map((run) => run.reviewer)).toEqual(["rev-astra"]);
+  });
+
+  test("a timeout is recorded and reported even during another PR's scoped pass", () => {
+    const value = town({ head: SHA.reviewed, posts: [] });
+    pass(value);
+    passOver([], NOW + 90 * 60_000, { prs: [8] });
+    expect(activeRuns(crew)).toEqual([]);
+    expect(notices()).toHaveLength(3);
+    passOver([], NOW + 91 * 60_000, { prs: [8] });
+    expect(notices()).toHaveLength(3);
+    expect(calls.filter((argv) => argv[2] === "withdraw")).toEqual([]);
+  });
+
+  test("a completed reviewer keeps its chat when other reviewers expire", () => {
+    pass(town({ head: SHA.reviewed, posts: [] }));
+    const value = town({
+      head: SHA.reviewed,
+      posts: [confirm("rev2", SHA.reviewed)],
+    });
+    pass(value, NOW + 60_000);
+    pass(value, NOW + 90 * 60_000);
+    expect(killed).toEqual([1002, 1003]);
+    expect(getRun(crew, 1)).toMatchObject({
+      exitCode: 0,
+      finishedAt: NOW + 60_000,
+    });
+    expect(notices()).toHaveLength(2);
+  });
+
+  test("saved start times and failed timeout states survive watcher restarts", () => {
+    const storePath = join(root, "restart.sqlite");
+    crew.close();
+    crew = openCrewStore(storePath);
+    const value = town({ head: SHA.reviewed, posts: [] });
+    pass(value);
+    crew.close();
+    crew = openCrewStore(storePath);
+    pass(value, NOW + 90 * 60_000);
+    expect(activeRuns(crew)).toEqual([]);
+    crew.close();
+    crew = openCrewStore(storePath);
+    pass(value, NOW + 91 * 60_000);
+    expect(spawned).toHaveLength(3);
+    expect(actionsIn(crew, ["failed"])).toHaveLength(3);
+    expect(notices()).toHaveLength(3);
+  });
+
+  test("a late RESULT clears its timeout notice without erasing the timeout", () => {
+    const value = town({ head: SHA.reviewed, posts: [] });
+    pass(value);
+    pass(value, NOW + 90 * 60_000);
+    pass(
+      town({ head: SHA.reviewed, posts: [confirm("rev2", SHA.reviewed)] }),
+      NOW + 91 * 60_000,
+    );
+    expect(getRun(crew, 1)?.exitCode).toBe(-124);
+    expect(getRun(crew, 1)?.result).toContain("RESULT #7");
+    expect(getAction(crew, `7:${SHA.reviewed}:review:rev2`)?.state).toBe(
+      "done",
+    );
+    expect(calls.filter((argv) => argv[2] === "withdraw")).toHaveLength(1);
+    expect(spawned).toHaveLength(3);
+  });
+
+  test.each([0, -1, null, "90", 1e300])(
+    "an invalid runtime bound (%s) cannot disable expiry",
+    (runTimeoutMinutes) => {
+      const path = join(root, "invalid-bound.json");
+      writeFileSync(
+        path,
+        JSON.stringify({ ...config, crew: { runTimeoutMinutes } }),
+      );
+      expect(() => passOver([], NOW, { configPath: path })).toThrow(
+        "crew.runTimeoutMinutes",
+      );
+    },
+  );
+
+  test("a closing PR withdraws timeout notices without restarting its runs", () => {
+    const value = town({ head: SHA.reviewed, posts: [] });
+    pass(value);
+    pass(value, NOW + 90 * 60_000);
+    pass(
+      town({ head: SHA.reviewed, posts: [], state: "MERGED" }),
+      NOW + 91 * 60_000,
+    );
+    expect(calls.filter((argv) => argv[2] === "withdraw")).toHaveLength(3);
+    expect(actionsIn(crew, ["failed"])).toEqual([]);
+    expect(activeRuns(crew)).toEqual([]);
+    expect(spawned).toHaveLength(3);
+  });
+
+  test("a failed owner alert does not retain a slot or silently restart a timeout", () => {
+    const value = town({ head: SHA.reviewed, posts: [] });
+    pass(value);
+    refuse.add("ask");
+    pass(value, NOW + 90 * 60_000);
+    pass(value, NOW + 91 * 60_000);
+    expect(activeRuns(crew)).toEqual([]);
+    expect(spawned).toHaveLength(3);
+    expect(actionsIn(crew, ["failed"])).toHaveLength(6);
+    expect(readFileSync(join(dir, "feed.log"), "utf8")).toContain(
+      "World unavailable",
+    );
   });
 
   test("a hold pauses waiting steps and its release resumes them", () => {

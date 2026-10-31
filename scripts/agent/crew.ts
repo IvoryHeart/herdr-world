@@ -67,6 +67,7 @@ import {
   setAction,
   setRunResult,
   type StoredAction,
+  RUN_TIMEOUT_EXIT_CODE,
 } from "./crew/store";
 
 /**
@@ -292,7 +293,12 @@ function act(
   const root = dirname(dirname(context.dir));
   const publicText = (text: string) => text.replaceAll(`${root}/`, "");
   const record = (entry: Action) => {
-    if (entry.target === "owner" && parked.has(entry.pr)) return;
+    if (
+      entry.target === "owner" &&
+      parked.has(entry.pr) &&
+      entry.key.split("|")[1] !== "timeout"
+    )
+      return;
     if (entry.target === "owner" && entry.kind === "judgment") {
       owe(causes, entry, root);
       // Its signed GitHub comment, posted once.
@@ -318,7 +324,7 @@ function act(
     const stuck =
       (known.state === "done" && now - known.updatedAt > STUCK_MS) ||
       known.state === "failed";
-    if (stuck)
+    if (stuck && runFor(crew, known)?.exitCode !== RUN_TIMEOUT_EXIT_CODE)
       record(
         notice(
           entry,
@@ -376,7 +382,12 @@ function act(
     );
   }
 
-  for (const waiting of actionsIn(crew, ["pending", "running"])) {
+  for (const waiting of actionsIn(crew, ["pending", "running", "failed"])) {
+    if (
+      waiting.state === "failed" &&
+      runFor(crew, waiting)?.exitCode !== RUN_TIMEOUT_EXIT_CODE
+    )
+      continue;
     if (prs.length && !observed.has(waiting.pr)) continue;
     if (
       heads.get(waiting.pr) === waiting.head ||
@@ -466,7 +477,7 @@ function act(
   // alone, and a paused action waits.
   const keys = new Set(planned.map((entry) => entry.key));
   const deliverable = (entry: StoredAction) =>
-    keys.has(entry.key.split("|")[0]!);
+    keys.has(entry.key.split("|")[0]!) || entry.key.split("|")[1] === "timeout";
   deliver(crew, settings, live, authors, deliverable, record, context, say);
   reconcileOwnerAsks(
     crew,
@@ -544,6 +555,13 @@ function oweHeldNotices(
  */
 function noticeHolds(crew: Database, entry: StoredAction) {
   const [parentKey, suffix] = entry.key.split("|");
+  if (suffix === "timeout") {
+    const parent = getAction(crew, parentKey!);
+    return (
+      parent?.state === "failed" &&
+      runFor(crew, parent)?.exitCode === RUN_TIMEOUT_EXIT_CODE
+    );
+  }
   if (!suffix?.startsWith("waits") && suffix !== "unreachable") return null;
   const parent = getAction(crew, parentKey!);
   const cause = parent?.detail ?? "";
@@ -585,29 +603,43 @@ function settleRuns(
   say: (text: string) => void,
 ) {
   for (const active of activeRuns(crew)) {
-    if (active.pid !== null && deps.alive(active.pid)) {
-      // A reviewer still working past the limit is the owner's to look at:
-      // it may be waiting on them, or they may be talking to it.
-      const action = getAction(crew, active.actionKey);
-      const minutes = Math.round((now - active.startedAt) / 60_000);
-      if (minutes > settings.runTimeoutMinutes && action?.state === "running")
-        record(
-          notice(
-            action,
-            "overdue",
-            `NEEDS-OWNER #${action.pr} at ${shortSha(action.head)}: ${active.cwd ? `${action.target}'s fixer has worked ${settings.runTimeoutMinutes}+ minutes without saying it is done` : `${action.target} has worked ${settings.runTimeoutMinutes}+ minutes without posting`}; look at its pane in the round's tab.`,
-          ),
-        );
+    const elapsed = now - active.startedAt;
+    if (
+      elapsed >= settings.runTimeoutMinutes * 60_000 ||
+      (active.pid === null && elapsed >= START_MS)
+    ) {
+      // Finish before signalling, so late PID reports and worker finalizers
+      // cannot reserve the slot again or overwrite the timeout evidence.
+      stopRun(crew, active.id, RUN_TIMEOUT_EXIT_CODE, now, deps);
       continue;
     }
-    if (active.pid === null && now - active.startedAt < START_MS) continue;
-    // A dead process needs no stop; one that reports its pid only now does.
-    if (active.pid !== null) finishRun(crew, active.id, -1, null, now);
-    else stopRun(crew, active.id, -2, now, deps);
+    if (active.pid !== null && deps.alive(active.pid)) continue;
+    if (active.pid === null) continue;
+    finishRun(crew, active.id, -1, null, now);
   }
   for (const running of actionsIn(crew, ["running"])) {
     const last = runFor(crew, running);
     if (!last || last.finishedAt === null) continue;
+    if (last.exitCode === RUN_TIMEOUT_EXIT_CODE) {
+      // Keep the run association for a fixer carrying several steps.
+      setAction(crew, running.key, "failed", now, `run ${last.id}`);
+      const bound =
+        last.pid === null
+          ? "startup limit (3 minutes without reporting a PID)"
+          : `runtime limit (${settings.runTimeoutMinutes} minutes)`;
+      if (running.key === last.actionKey)
+        record(
+          notice(
+            running,
+            "timeout",
+            `NEEDS-OWNER #${running.pr} at ${shortSha(running.head)}: run ${last.id} for ${running.target} timed out at its ${bound}; slot released, no automatic retry. Inspect its round pane and run log.`,
+          ),
+        );
+      say(
+        `#${running.pr} run ${last.id} for ${running.target} timed out; slot released without retry`,
+      );
+      continue;
+    }
     // A fixer that ended without pushing leaves the step to the author;
     // a head gets one fixer.
     if (last.cwd && AUTHOR_KINDS.has(running.kind)) {

@@ -10,6 +10,28 @@ other than the shared skills (`bun run check:agents`).
 The crew itself, its marks and its watcher are described in
 [agent development](agent-development.md#act-on-readiness-with-agentcrew).
 
+## Run lifecycle
+
+The watcher reserves a slot when it records a run. Every reviewer, fixer,
+evaluator and selected process has the configured `crew.runTimeoutMinutes`
+limit (default 90). A worker that never reports its PID has three minutes to
+start. On the first watcher pass at or after either bound, the run is finished
+with exit -124, its reported process is stopped and all linked steps fail. The
+slot is available to queued work on that same pass. A timeout never starts an
+automatic replacement or sends the failed steps back to the author.
+
+The watcher reports each timeout once through the existing owner ask and signed
+crew comment, including the run ID and bound. Holds, restarts and passes scoped
+to other PRs do not extend the saved start time or suppress timeout reporting.
+If the alert cannot be delivered, the timeout and alert failure remain in the
+local ledger/feed; the slot stays released. Inspect `agent:crew runs --pr <N>`,
+`status`, the round's pane and its run log before deciding what to do next.
+Completion evidence observed before settlement releases the slot normally and
+keeps the completed chat. Late worker finalization cannot erase a recorded
+timeout; a late valid reviewer RESULT clears its notice. A merged or closed PR
+retires the notice. The watcher must be running to perform this maintenance;
+starting it or resuming stopped sessions requires an explicit owner instruction.
+
 ## Review rounds and evaluation
 
 Round 1 reviews the whole PR. Every reviewer reads the linked issue and flags
