@@ -409,6 +409,16 @@ retries, resetting terminal input. [The pane-switcher fixture](../paneJump.brows
 provides those frames and checks that its terminals finished loading. Wait for a
 dialog's focused control before sending its next keyboard command.
 
+`useWorldObservation.test.ts` mounts the actual observation hook and watchlist
+store on test time. Synthetic runtime snapshots and deferred watchlist replies
+exercise old/missing admission revisions and unavailable-only host scopes. Its
+real Inspector controller publishes through `useWorldVisualActions` to the actual
+`CommandCombobox`; reopening the menu checks pending and unavailable-only detail
+text in the DOM. This checks feedback presence, not browser geometry or focus. The
+Actions browser suite retains desktop/phone menu rendering of current counts
+and unavailable-host feedback, plus existing qualified routing and focus checks.
+No Town case moves.
+
 `components/WorktreeLifecycleDialog.test.ts` mounts the actual lifecycle dialog
 in an isolated DOM with timers and frames installed before React DOM loads.
 Synthetic operational/service ports and explicit Inspector admission outcomes

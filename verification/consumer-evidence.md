@@ -62,6 +62,28 @@ feedback, focus and real terminal lifecycle, including every Town case. Existing
 store/Bridge and model consumers remain mandatory; the catalogue/filter
 composition adds direct finite evidence, not a new protocol/model claim.
 
+### Watch status consumer (Q18)
+
+`useWorldObservation.test.ts` mounts the production observation hook, actual
+watchlist store and actual host projection in an isolated DOM on controlled time.
+The harness now mounts the real Inspector controller, `useWorldVisualActions`
+and `CommandCombobox`: the actual publication callback carries the extension to
+the real Actions menu. Reopening the menu after each observation change checks
+its captured pending and unavailable-only detail text in the DOM. Two independent
+production publication mutants suppressing either state must fail those rendered
+assertions. This proves feedback presence, not browser geometry or trusted focus.
+Runtime observations are synthetic inputs supplied at the external-store read
+port; watchlist refresh consumes deferred synthetic service replies. Current
+healthy-host counts survive an unavailable peer; old/missing revisions stay
+pending, and an unavailable-only scope reports empty observed coverage without
+using hidden-host counts or sending mutations. A revision-advancing watchlist
+reply makes older observations pending at its named completion. These replace
+the pending-revision and offline-only assertions in `HostsFilter.actions.test.ts`.
+Desktop/phone browser cases still require the actual Actions menu to render the
+current counts and unavailable-host explanation; every other Actions/Town case
+stays. This does not prove service admission, topology production, transport or
+focus; existing mandatory consumers and model bounds remain.
+
 ### Chat source navigation (Q16)
 
 The source-link parser fixtures cover absolute/relative paths, encoded names,
