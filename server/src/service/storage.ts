@@ -18,6 +18,7 @@ import type { Clock, Scheduler } from "./ports";
  * folder stay plain files under DataPaths, outside this port.
  */
 export type WorldStorage = {
+  runtimeStatus: import("../storage/runtime-status").RuntimeStatusPort;
   bindings: import("../storage/world-bindings").WorldBindings;
   ids: import("../storage/world-ids").WorldIds;
   settings: GuiSettingsStore;
@@ -49,7 +50,6 @@ export const openStorage: OpenStorage = async (paths, { clock, scheduler }) => {
     now: () => clock.now(),
     log: (message: string) => console.warn(message),
   };
-  const settings = createGuiSettingsStore(paths.settings);
   const connections = new ConnectionProfileStore({ path: paths.connections });
   let board: BindingBoardStore | null = null;
   const bindingFailure = Promise.withResolvers<Error>();
@@ -58,9 +58,13 @@ export const openStorage: OpenStorage = async (paths, { clock, scheduler }) => {
       database: join(paths.root, "world.sqlite"),
       ledger: paths.ledger,
       profiles: paths.agentProfiles,
+      settings: paths.settings,
     },
     { clock, scheduler },
   );
+  const settings = createGuiSettingsStore(paths.settings, {
+    runtimeStatusMigrated: true,
+  });
   let profiles: ProfileStorePort | null = null;
   let closed = false;
   // Even construction can rename an unreadable JSON file: fence before it.
@@ -70,6 +74,7 @@ export const openStorage: OpenStorage = async (paths, { clock, scheduler }) => {
     return create();
   };
   return {
+    runtimeStatus: world.runtimeStatus,
     ids: world.ids,
     bindings: world.bindings,
     settings,

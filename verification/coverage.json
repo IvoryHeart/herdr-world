@@ -2425,6 +2425,57 @@
         "decision": "pending",
         "scope": "Agent profile/chime persistence and their existing legacy terminal-import metadata only; separate contract and implementation acceptance required."
       }
+    },
+    {
+      "id": "Q47",
+      "area": "Durable auto-sync runtime status",
+      "owner": "server/src/storage/runtime-status.ts",
+      "requirement": "openspec/specs/world-storage/spec.md",
+      "properties": "Committed-only connection-qualified runtime rows, independent operation/refusal ordering, exact private once-only import and atomic completion, configuration separation, scheduler interval/retirement and compatible RPC projection, close drain and restart; service clock/scheduler control eligibility, recorded time and cancellable generation-fenced polling",
+      "existingTests": [
+        "server/src/service/runtime-status-storage.test.ts",
+        "server/src/storage/runtime-status-writer.test.ts",
+        "server/src/storage/runtime-status-crash.test.ts",
+        "server/src/workspace/auto-sync-storage.test.ts",
+        "server/src/workspace/auto-sync.test.ts",
+        "server/src/config/gui-settings.test.ts",
+        "server/src/bridge/settings-rpc.test.ts",
+        "server/src/http/auth-process.test.ts",
+        "server/src/workspace/auto-sync-clock.test.ts",
+        "server/src/service/world-service.test.ts"
+      ],
+      "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/549",
+      "technique": "direct-sqlite-recovery",
+      "assessment": "Actual SQLite operation permutations, root/scheduler/RPC consumers and source/standalone compiled process-crash schedules",
+      "status": "alternative-evidence",
+      "remaining": "Independent implementation review and native CI required. No physical power-loss proof, exactly-once Git effect, new workflow engine or runtime-claim persistence is claimed.",
+      "requiredChecks": ["bun run check", "bun run verification:gate"],
+      "partialEvidence": {
+        "models": [],
+        "contracts": ["verification/contracts/runtime-status-storage.md"],
+        "tests": [
+          "server/src/service/runtime-status-storage.test.ts",
+          "server/src/storage/runtime-status-writer.test.ts",
+          "server/src/storage/runtime-status-crash.test.ts",
+          "server/src/workspace/auto-sync-storage.test.ts",
+          "server/src/workspace/auto-sync.test.ts",
+          "server/src/config/gui-settings.test.ts",
+          "server/src/bridge/settings-rpc.test.ts",
+          "server/src/http/auth-process.test.ts",
+          "server/src/workspace/auto-sync-clock.test.ts",
+          "server/src/service/world-service.test.ts"
+        ],
+        "checks": [
+          "bun run test server/src/service/runtime-status-storage.test.ts server/src/storage/runtime-status-writer.test.ts server/src/storage/runtime-status-crash.test.ts server/src/workspace/auto-sync-storage.test.ts server/src/workspace/auto-sync.test.ts server/src/config/gui-settings.test.ts server/src/bridge/settings-rpc.test.ts",
+          "bun run verification:gate"
+        ],
+        "review": "The accepted delivery link records the approved identity/storage design, not acceptance of this migration. Independent implementation/mapping review and CI are pending."
+      },
+      "evidenceDecision": "Direct real SQLite/process recovery establishes the persistence boundary; exhaustive operation orders and actual scheduler/RPC consumers address ordering and projection without modeling the SQL engine. Existing runtime and binding models remain required within their original scope. Compiled assertion controls establish sensitivity separately. Virtual-time SQLite evidence and actual runtime-constructor wiring checks cover service time, force and stop/restart; additional compiled controls bypass each time/scheduling boundary.",
+      "promotion": {
+        "decision": "pending",
+        "scope": "Auto-sync last-run persistence, legacy settings import and unchanged scheduler/RPC consumers only; independent acceptance required."
+      }
     }
   ],
   "promotionReview": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",

@@ -113,3 +113,38 @@ test("settings keys preserve legacy format and isolate connection identities", (
     "connection:alpha%3Alocal%3Abeta:local:same",
   );
 });
+
+test("a pre-migration CLI settings edit preserves legacy run status for the service import", async () => {
+  const root = await mkdtemp(join(tmpdir(), "settings-before-status-import-")),
+    path = join(root, "settings.json");
+  try {
+    const status = {
+      last_run_at: "2026-10-01T00:00:00.000Z",
+      last_status: "updated",
+      last_message: "Synthetic previous run",
+      last_branch: "feature/synthetic",
+    };
+    await writeFile(
+      path,
+      JSON.stringify({
+        version: 1,
+        workspace_auto_sync: {
+          "local:/synthetic/repo": {
+            enabled: true,
+            interval_minutes: 10,
+            ...status,
+          },
+        },
+      }),
+    );
+    const cli = createGuiSettingsStore(path);
+    await cli.update((s) => ({ ...s, title_suffix: "Synthetic CLI edit" }));
+    expect(
+      JSON.parse(await readFile(path, "utf8")).workspace_auto_sync[
+        "local:/synthetic/repo"
+      ],
+    ).toMatchObject(status);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

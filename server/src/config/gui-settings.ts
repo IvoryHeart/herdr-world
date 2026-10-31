@@ -61,7 +61,10 @@ function storedTitleSuffix(value: unknown): string {
   }
 }
 
-function normalizeGuiSettings(raw: unknown): GuiSettings {
+function normalizeGuiSettings(
+  raw: unknown,
+  runtimeStatusMigrated = false,
+): GuiSettings {
   const obj = raw && typeof raw === "object" ? (raw as any) : {};
   const repositories =
     obj.repositories && typeof obj.repositories === "object"
@@ -93,11 +96,6 @@ function normalizeGuiSettings(raw: unknown): GuiSettings {
   for (const [key, value] of Object.entries(workspaceAutoSync)) {
     if (!value || typeof value !== "object") continue;
     const entry = value as any;
-    const lastStatus = ["updated", "up_to_date", "skipped", "failed"].includes(
-      entry.last_status,
-    )
-      ? (entry.last_status as WorkspaceAutoSyncStatus)
-      : undefined;
     normalizedWorkspaceAutoSync[key] = {
       enabled: entry.enabled === true,
       interval_minutes:
@@ -111,13 +109,30 @@ function normalizeGuiSettings(raw: unknown): GuiSettings {
           ? entry.checkout_path
           : undefined,
       host: typeof entry.host === "string" ? entry.host : undefined,
-      last_run_at:
-        typeof entry.last_run_at === "string" ? entry.last_run_at : undefined,
-      last_status: lastStatus,
-      last_message:
-        typeof entry.last_message === "string" ? entry.last_message : undefined,
-      last_branch:
-        typeof entry.last_branch === "string" ? entry.last_branch : undefined,
+      ...(!runtimeStatusMigrated
+        ? {
+            last_run_at:
+              typeof entry.last_run_at === "string"
+                ? entry.last_run_at
+                : undefined,
+            last_status: [
+              "updated",
+              "up_to_date",
+              "skipped",
+              "failed",
+            ].includes(entry.last_status)
+              ? (entry.last_status as WorkspaceAutoSyncStatus)
+              : undefined,
+            last_message:
+              typeof entry.last_message === "string"
+                ? entry.last_message
+                : undefined,
+            last_branch:
+              typeof entry.last_branch === "string"
+                ? entry.last_branch
+                : undefined,
+          }
+        : {}),
     };
   }
   return {
@@ -155,8 +170,8 @@ export type GuiSettingsStore = {
   readonly path: string;
   read(): Promise<GuiSettings>;
   /**
-   * Read and persist under one queue slot so background status updates cannot
-   * overwrite a toggle changed by an RPC that completed at the same time.
+   * Serialize configuration read-modify-write so concurrent RPC edits retain
+   * each other. Runtime status has its own SQLite port after migration.
    */
   update(
     update: (current: GuiSettings) => GuiSettings | Promise<GuiSettings>,
@@ -169,7 +184,12 @@ export type GuiSettingsStore = {
   close(): Promise<void>;
 };
 
-export function createGuiSettingsStore(path: string): GuiSettingsStore {
+export function createGuiSettingsStore(
+  path: string,
+  options: {
+    /** Set only after the worker has imported legacy history. */ runtimeStatusMigrated?: boolean;
+  } = {},
+): GuiSettingsStore {
   let cached: GuiSettings | null = null;
   let mutationQueue: Promise<void> = Promise.resolve();
   let temporaryFileSequence = 0;
@@ -183,7 +203,10 @@ export function createGuiSettingsStore(path: string): GuiSettingsStore {
       return cached;
     }
     try {
-      cached = normalizeGuiSettings(JSON.parse(await file.text()));
+      cached = normalizeGuiSettings(
+        JSON.parse(await file.text()),
+        options.runtimeStatusMigrated,
+      );
     } catch (e) {
       serverLogger.child("settings").warn("ignoring invalid settings", {
         path,
@@ -200,7 +223,10 @@ export function createGuiSettingsStore(path: string): GuiSettingsStore {
   ): Promise<GuiSettings> {
     const temporaryPath = `${path}.${process.pid}.${++temporaryFileSequence}.tmp`;
     mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-    const normalized = normalizeGuiSettings(settings);
+    const normalized = normalizeGuiSettings(
+      settings,
+      options.runtimeStatusMigrated,
+    );
     try {
       if (!shouldCommit()) throw new Error("settings update cancelled");
       await writeFile(
