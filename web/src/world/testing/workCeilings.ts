@@ -5,7 +5,8 @@
  * stage; none depends on timing. A phase or kind missing from a ceiling allows
  * none of that work, so new work in a phase fails until a reviewed change
  * names and bounds it. The values are those measured on 2026-10-30, identical
- * on an unconstrained and a single-CPU run.
+ * on an unconstrained and a single-CPU run; Board's render commits were
+ * re-measured on 2026-10-31, at both widths also with single-core contention.
  */
 
 export type WorkByPhase = Record<string, Record<string, number>>;
@@ -110,7 +111,10 @@ export function concurrentWorkViolations(
         ]),
       ),
       {
-        render: { commits: width === 1440 ? 6 : 7 },
+        // Mount, the dense transition and its visible cards; at 390 pixels
+        // also the controls' measured layout. Frames publish nothing until
+        // placement, and only from committed renders (see BoardView).
+        render: { commits: width === 1440 ? 3 : 4 },
         refresh: { commits: 2 },
       },
       "Board",

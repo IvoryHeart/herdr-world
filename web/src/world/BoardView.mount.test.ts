@@ -9,9 +9,11 @@ if (!order) {
     ["placement-first", "immediate"],
     ["frame-first", "immediate"],
     ["frame-before-build", "immediate"],
+    ["frame-during-build", "immediate"],
     ["placement-first", "deferred"],
     ["frame-first", "deferred"],
     ["frame-before-build", "deferred"],
+    ["frame-during-build", "deferred"],
   ])(
     "dense Board mount: %s, %s read rejection",
     async (order, readTiming) => {
@@ -110,7 +112,14 @@ if (!order) {
     const style = document.head.appendChild(document.createElement("style"));
     style.textContent = ".board-controls-space { --board-control-phone: 1; }";
 
-    const { act, createElement: h, Profiler } = await import("react");
+    const {
+      act,
+      createElement: h,
+      Fragment,
+      Profiler,
+      startTransition,
+      useState,
+    } = await import("react");
     const { createRoot } = await import("react-dom/client");
     const { flushSync } = await import("react-dom");
     const { bridge } = await import("../api");
@@ -220,29 +229,86 @@ if (!order) {
     const root = createRoot(host);
     let commits = 0;
     try {
+      const gate = Promise.withResolvers<void>();
+      let gateRendered = false;
+      let holdBuild: (held: boolean) => void = () => {};
+      const Gate = () => {
+        const [held, setHeld] = useState(false);
+        holdBuild = setHeld;
+        if (held && !gateRendered) {
+          gateRendered = true;
+          throw gate.promise;
+        }
+        return null;
+      };
       const render = () =>
         root.render(
           h(
-            Profiler,
-            { id: "board", onRender: () => commits++ },
-            h(BoardView, {
-              world,
-              selectedId: null,
-              onSelect() {},
-              onOpen() {},
-              onNodeAnchorsChange() {},
-              onSelectedAnchorChange() {},
-            }),
+            Fragment,
+            null,
+            h(
+              Profiler,
+              { id: "board", onRender: () => commits++ },
+              h(BoardView, {
+                world,
+                selectedId: null,
+                onSelect() {},
+                onOpen() {},
+                onNodeAnchorsChange() {},
+                onSelectedAnchorChange() {},
+              }),
+            ),
+            h(Gate),
           ),
         );
-      await act(async () => {
-        if (order === "frame-before-build") {
+      if (order === "frame-during-build") {
+        // A dense transition renders in slices, so a frame can run after
+        // BoardView's render and before its commit. A sibling suspending in
+        // the same batch of transitions holds that render uncommitted while
+        // the frame armed at mount runs.
+        Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: false });
+        const turn = () => new Promise((resolve) => setImmediate(resolve));
+        try {
           flushSync(render);
+          startTransition(() => holdBuild(true));
+          for (let turns = 0; !gateRendered; turns++) {
+            if (turns > 1_000)
+              throw new Error("dense transition never rendered");
+            await turn();
+          }
+          expect(host.querySelector(".board-zone-label")).toBeNull();
+          expect(
+            frames.size > 0 ||
+              [...tasks.values()].some((task) => task.delay === 16),
+          ).toBe(true);
+          const heldCommits = commits;
           deliverFrame();
-        } else render();
-      });
+          // Anything that frame published would render and commit in these
+          // turns, ahead of the held transitions.
+          for (let turns = 0; turns < 20; turns++) await turn();
+          expect(commits).toBe(heldCommits);
+          gate.resolve();
+          for (
+            let turns = 0;
+            !host.querySelector(".board-zone-label");
+            turns++
+          ) {
+            if (turns > 1_000)
+              throw new Error("dense transition never committed");
+            await turn();
+          }
+        } finally {
+          Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+        }
+      } else
+        await act(async () => {
+          if (order === "frame-before-build") {
+            flushSync(render);
+            deliverFrame();
+          } else render();
+        });
       expect([...tasks.values()].some((task) => task.delay === 0)).toBe(true);
-      if (order !== "frame-before-build")
+      if (order === "placement-first" || order === "frame-first")
         expect([...tasks.values()].some((task) => task.delay === 16)).toBe(
           true,
         );
@@ -270,8 +336,8 @@ if (!order) {
         deliverFrame();
       });
       console.info(`${order}/${readTiming}: ${commits} Board commits`);
-      // Preserve ConcurrentContexts' accepted 390px render ceiling.
-      expect(commits).toBeLessThanOrEqual(7);
+      // Every order commits the same work: scheduling adds no commit.
+      expect(commits).toBe(5);
       expect(earlyFrameCommits).toBe(mountedCommits);
       expect(host.querySelectorAll(".board-card").length).toBeGreaterThan(0);
       expect(
