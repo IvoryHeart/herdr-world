@@ -1,4 +1,8 @@
 import type { ServerWebSocket } from "bun";
+import { admitVerb, checkVerbResult, VerbRefusal } from "../verbs/admission";
+import { commandEvidence } from "../verbs/evidence";
+import { registeredVerb } from "../verbs/registry";
+import type { Admission } from "../verbs/types";
 import {
   ConnectionRoutingError,
   createConnectionReplyPublisher,
@@ -125,6 +129,37 @@ async function handleRpc(
     safeSend(ws, payload, "invalid-request");
     return;
   }
+  const verb = registeredVerb("rpc", method);
+  const admission: Admission = {
+    actor: "browser",
+    authorized: () => services.clients.has(ws),
+    capabilities: () => new Set(["world", "runtime"]),
+    preconditions: () => true,
+  };
+  try {
+    admitVerb(verb, params ?? {}, admission);
+  } catch (error) {
+    const message = (error as Error).message;
+    markRpcError(ws, id, message);
+    const reply = {
+      id,
+      error: { message },
+      command_evidence: { stage: "refused" },
+    };
+    safeSend(
+      ws,
+      validationConnectionId
+        ? serializeConnectionEnvelope(
+            validationConnectionId,
+            reply,
+            validationConnectionGeneration,
+          )
+        : JSON.stringify(reply),
+      "verb-refused",
+    );
+    return;
+  }
+  const evidence = commandEvidence(verb);
   let route: ReturnType<typeof resolveRpcRoute<LegacyConnectionRuntime>>;
   try {
     route = resolveRpcRoute({
@@ -148,15 +183,25 @@ async function handleRpc(
           {
             id,
             error: { message },
+            command_evidence: { stage: "refused" },
           },
           connectionGeneration,
         )
-      : JSON.stringify({ id, error: { message } });
+      : JSON.stringify({
+          id,
+          error: { message },
+          command_evidence: { stage: "refused" },
+        });
     safeSend(ws, payload, "connection-routing-error");
     return connectionId ?? null;
   }
   const connectionId = route.scope === "connection" ? route.connectionId : null;
-  const requestIsCurrent = () => route.scope === "bridge" || route.isCurrent();
+  const requestIsCurrent = () =>
+    services.clients.has(ws) && (route.scope === "bridge" || route.isCurrent());
+  admission.preconditions = requestIsCurrent;
+  admission.capabilities = () =>
+    new Set(route.scope === "bridge" ? ["world"] : ["world", "runtime"]);
+  const recheck = () => admitVerb(verb, params ?? {}, admission);
   const encode = (message: Record<string, unknown>) =>
     route.scope === "connection"
       ? serializeConnectionEnvelope(
@@ -180,6 +225,9 @@ async function handleRpc(
     message: Record<string, unknown>,
     context: string,
   ): boolean => {
+    if (Object.hasOwn(message, "result") && !message.error)
+      checkVerbResult(verb, message.result);
+    message = { ...message, command_evidence: evidence.get() };
     const sent = replyPublisher
       ? replyPublisher.send(message, context)
       : safeSend(ws, encode(message), context);
@@ -205,6 +253,11 @@ async function handleRpc(
   const sendError = (context: string, error: unknown) => {
     const message = (error as Error).message;
     markRpcError(ws, id, message);
+    if (evidence.get().stage !== "uncertain")
+      evidence.record({
+        stage: error instanceof VerbRefusal ? "refused" : "failed",
+        reason: message,
+      });
     sendReply({ id, error: { message } }, context);
   };
 
@@ -226,6 +279,12 @@ async function handleRpc(
     handleConnectionsRpc,
     handleWorldRpc,
   ]) {
+    try {
+      recheck();
+    } catch (error) {
+      sendError("verb-refused", error);
+      return;
+    }
     const result = handle(rpc);
     if (result !== false && (await result) !== false) return;
   }
@@ -287,6 +346,7 @@ async function handleRpc(
         params,
         requestIsCurrent,
         async () => {
+          recheck();
           if (
             method === "workspace.create" &&
             params?.cwd != null &&
@@ -321,10 +381,17 @@ async function handleRpc(
     handleFilesRpc,
     handleGitRpc,
   ]) {
+    try {
+      recheck();
+    } catch (error) {
+      sendError("verb-refused", error);
+      return;
+    }
     const result = handle(connectionRpc);
     if (result !== false && (await result) !== false) return;
   }
   if (method.startsWith("terminal.")) {
+    recheck();
     return terminalBridge.handleTerminalRpc(
       ws,
       id,
@@ -334,9 +401,11 @@ async function handleRpc(
     );
   }
   if (method.startsWith("settings.")) {
+    recheck();
     return handleSettingsRpc(ws, id, method, params ?? {}, requestIsCurrent);
   }
   try {
+    recheck();
     if (FOCUSED_METHODS.includes(method as FocusedMethod)) {
       const result = await readFocusedList(
         connection,
@@ -346,7 +415,13 @@ async function handleRpc(
       sendReply({ id, result }, method);
       return;
     }
-    const rawResult = await herdr.call(method, params ?? {});
+    const rawResult = await herdr.call(method, params ?? {}, 8000, recheck);
+    if (verb.recovery !== "read")
+      evidence.record({
+        stage: "sent",
+        connection_id: route.connectionId,
+        connection_generation: route.generation,
+      });
     let result = rawResult;
     if (
       method === "integration.list" &&
@@ -359,6 +434,13 @@ async function handleRpc(
     }
     sendReply({ id, result }, method);
   } catch (e) {
+    if (verb.recovery === "opaque" && !(e instanceof VerbRefusal))
+      evidence.record({
+        stage: "uncertain",
+        connection_id: route.connectionId,
+        connection_generation: route.generation,
+        reason: (e as Error).message,
+      });
     sendError(`${method}-error`, e);
   }
 }

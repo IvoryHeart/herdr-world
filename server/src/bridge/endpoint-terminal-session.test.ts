@@ -2477,6 +2477,7 @@ describe("attached endpoint creation and input readiness", () => {
       expect(replies.find((r) => r.id === "input")).toEqual({
         id: "input",
         result: { ok: true },
+        command_evidence: { stage: "accepted" },
       });
     } finally {
       bridge.dispose();

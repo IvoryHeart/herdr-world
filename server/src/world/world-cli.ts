@@ -2,6 +2,10 @@ import {
   StorageOutcomeUnknown,
   StorageWriteRejected,
 } from "../storage/world-protocol";
+import { admitVerb, checkVerbResult, VerbRefusal } from "../verbs/admission";
+import { commandEvidence } from "../verbs/evidence";
+import { registeredVerb } from "../verbs/registry";
+import type { Admission } from "../verbs/types";
 import {
   appearanceFor,
   appearanceKey,
@@ -75,6 +79,8 @@ export type WorldCliDeps = {
     patch(ops: readonly BoardOp[]): BoardDocument;
   };
   ledger: LedgerStore;
+  /** Only a durable committed store may issue this receipt. */
+  ledgerReceipt?(recordId: string): string | undefined;
   recordAnswer?(id: string, text: string, actor: CliActor): Promise<number>;
   captureRecipient?(
     actor: CliActor,
@@ -877,6 +883,26 @@ export function createWorldCli(deps: WorldCliDeps) {
           request.params && typeof request.params === "object"
             ? request.params
             : {};
+        const verb = registeredVerb("cli", command);
+        const admission: Admission = {
+          // Actor verification itself reads Herdr. Both CLI actors must pass
+          // the common policy/flags first; verified-only commands are checked
+          // after identity resolution, before running their effects.
+          actor: "cli_verified",
+          authorized: () => !deps.signal?.aborted,
+          capabilities: () => new Set(["world"]),
+          preconditions: () => true,
+        };
+        try {
+          admitVerb(verb, params, admission);
+        } catch (error) {
+          if (error instanceof VerbRefusal) {
+            if (error.message.startsWith("invalid parameters"))
+              usage(error.message);
+            refused(error.message);
+          }
+          throw error;
+        }
         const paneId =
           typeof request.caller?.pane_id === "string" &&
           request.caller.pane_id.trim()
@@ -887,13 +913,30 @@ export function createWorldCli(deps: WorldCliDeps) {
           usage("HERDR_PANE_ID is not a Herdr pane ID");
         const identity = await identifyCaller(deps.hosts(), paneId, locate);
         actor = identity.actor;
+        admission.actor = actor.verified ? "cli_verified" : "cli_unverified";
+        try {
+          admitVerb(verb, params, admission);
+        } catch (error) {
+          if (error instanceof VerbRefusal) refused(error.message);
+          throw error;
+        }
+        const evidence = commandEvidence(verb);
         const result = await run(
           command as WorldCliCommand,
           params,
           actor,
           identity.host,
         );
-        return { ok: true, actor, result };
+        checkVerbResult(verb, result);
+        const recordId =
+          result && typeof result === "object" && "id" in result
+            ? result.id
+            : undefined;
+        if (verb.recovery !== "read" && typeof recordId === "string") {
+          const receipt = deps.ledgerReceipt?.(recordId);
+          if (receipt) evidence.record({ stage: "stored", receipt });
+        }
+        return { ok: true, actor, result, command_evidence: evidence.get() };
       } catch (error) {
         if (error instanceof CliError)
           return {
@@ -901,18 +944,28 @@ export function createWorldCli(deps: WorldCliDeps) {
             code: error.code,
             error: error.message,
             actor,
+            command_evidence: {
+              stage: error.code === "unavailable" ? "failed" : "refused",
+            },
             ...(error.result !== undefined ? { result: error.result } : {}),
           };
         const message = error instanceof Error ? error.message : String(error);
         // Board validation is the caller's to fix; anything else is Herdr or
         // the service failing.
         return message.startsWith("invalid board")
-          ? { ok: false, code: "refused", error: message, actor }
+          ? {
+              ok: false,
+              code: "refused",
+              error: message,
+              actor,
+              command_evidence: { stage: "refused" },
+            }
           : {
               ok: false,
               code: "unavailable",
               error: "Herdr or the World service could not do that; try again",
               actor,
+              command_evidence: { stage: "failed" },
             };
       }
     },

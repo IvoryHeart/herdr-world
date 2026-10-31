@@ -217,6 +217,18 @@ export function createWorldCliService(deps: {
     get ledger() {
       return ledger();
     },
+    ledgerReceipt: deps.attention
+      ? (recordId) => {
+          const committed = ledger().get();
+          return [
+            ...committed.asks,
+            ...committed.changes,
+            ...committed.results,
+          ].some((record) => record.id === recordId)
+            ? `world-ledger:${committed.revision}:${recordId}`
+            : undefined;
+        }
+      : undefined,
     // Herdr on this machine can be checked for the caller's processes.
     hosts: () =>
       deps
@@ -231,7 +243,13 @@ export function createWorldCliService(deps: {
               generation: lease.generation,
               local: !lease.runtime.sshHost(),
               call: (method: string, params: Record<string, unknown>) =>
-                lease.runtime.herdr.call(method, params, 5_000),
+                lease.runtime.herdr.call(method, params, 5_000, () => {
+                  if (!lease.isCurrent())
+                    throw new CliError(
+                      "unavailable",
+                      "connection changed during command",
+                    );
+                }),
             },
           ];
         }),
