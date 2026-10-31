@@ -157,6 +157,7 @@ export class TownInteraction {
               yield { key: agent.key, hostKey: agent.hostKey, ...position };
           }
         },
+        seated: (key) => stage.actorPosition(key)?.seated ?? true,
       },
       world.x,
       world.y,
