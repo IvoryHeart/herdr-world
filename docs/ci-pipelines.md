@@ -122,8 +122,10 @@ separate, non-blocking World latency trend workflow measures the dense suites on
 quiet runners for main pushes and `latency-trend`-labelled PRs and reports them
 beside main's recent runs on the same CPU model.
 
-The [Town golden-image report](SCREENSHOTS.md#town-golden-image-report) runs once
-per viewport in its own 15-minute advisory job. It shares the machine-wide browser
+The [Town golden-image report](SCREENSHOTS.md#town-golden-image-report) ordinarily runs once
+per viewport in its own 15-minute advisory job. The explicit stability input or
+`town-golden-stability` PR label selects twenty runs and the production-source
+visual mutant/restored-baseline control, with a 40-minute job ceiling. It shares the machine-wide browser
 queue locally, uploads current images and mismatch diffs even on failure, and never
 changes reference images in CI. Its opt-in test is excluded by default from visual
 acceptance in the protected gate; comparator and workflow unit tests run normally.

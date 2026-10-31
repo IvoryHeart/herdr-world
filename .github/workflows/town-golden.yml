@@ -7,6 +7,11 @@ on:
     push:
         branches: [main]
     workflow_dispatch:
+        inputs:
+            stability:
+                description: Twenty runs plus the production visual negative control
+                type: boolean
+                default: false
 
 permissions:
     contents: read
@@ -19,7 +24,7 @@ jobs:
     report:
         name: Town golden report (advisory)
         runs-on: ubuntu-24.04
-        timeout-minutes: 15
+        timeout-minutes: ${{ (inputs.stability || contains(github.event.pull_request.labels.*.name, 'town-golden-stability')) && 40 || 15 }}
         continue-on-error: true
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -39,8 +44,15 @@ jobs:
             - name: Compare five viewports
               env:
                   TOWN_GOLDEN: "1"
+                  TOWN_GOLDEN_RUNS: ${{ (inputs.stability || contains(github.event.pull_request.labels.*.name, 'town-golden-stability')) && '20' || '1' }}
                   TOWN_GOLDEN_OUTPUT: ${{ runner.temp }}/town-golden
               run: bun run test scripts/town-golden.browser.test.ts
+            - name: Verify a production visual mutant and restored baseline
+              if: inputs.stability || contains(github.event.pull_request.labels.*.name, 'town-golden-stability')
+              env:
+                  TOWN_GOLDEN_NEGATIVE_CONTROL: "1"
+                  TOWN_GOLDEN_CONTROL_OUTPUT: ${{ runner.temp }}/town-golden/negative-control
+              run: bun run test scripts/town-golden-negative.browser.test.ts
             - name: Summarize the comparison
               if: always()
               run: |
@@ -48,6 +60,9 @@ jobs:
                     cat "$RUNNER_TEMP/town-golden/summary.md" >> "$GITHUB_STEP_SUMMARY"
                   else
                     echo "Town golden images: no report produced; inspect the failed setup or capture step." >> "$GITHUB_STEP_SUMMARY"
+                  fi
+                  if test -f "$RUNNER_TEMP/town-golden/negative-control/summary.md"; then
+                    cat "$RUNNER_TEMP/town-golden/negative-control/summary.md" >> "$GITHUB_STEP_SUMMARY"
                   fi
             - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
               if: always()

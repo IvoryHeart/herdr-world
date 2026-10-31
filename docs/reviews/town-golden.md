@@ -22,7 +22,7 @@ AppArmor. The local capture wrapper disabled Chrome's sandbox for this isolated
 synthetic fixture. The CI installer uses the repository's AppArmor setup and
 keeps Chrome's sandbox enabled. No World or Herdr process is started by this test.
 
-## Verification
+## Local verification
 
 The focused comparator, viewport, queue, workflow and clock checks pass, including
 failure for a one-channel, one-level pixel change and mismatched dimensions.
@@ -96,3 +96,33 @@ look-and-feel signal; broader scene coverage is a future decision.
 The workflow starts advisory and is not a Delivery checks dependency. See the
 [runbook](../SCREENSHOTS.md#town-golden-image-report) for artifacts, refresh
 instructions and runtime/storage bounds.
+
+## Hosted acceptance and production visual control
+
+The committed twenty-run table above records local repeatability. Hosted
+acceptance uses the explicit stability workflow mode against unchanged goldens;
+its full 100-capture report retains renderer identity and source/run provenance.
+The same job mutates production grass paint, requires a nonzero child-test exit
+caused by changed pixels, restores the source and requires a passing baseline.
+It preserves the mutation patch, child logs, reports and mismatch images in its
+artifact. The runbook gives the reusable command and mode selection.
+
+Hosted run results and their exact candidate/run/artifact links belong in the PR
+review handoff. They are separate from the historical local receipts above.
+
+The initial hosted report matched four viewports exactly, then timed out in
+`Runtime.evaluate` before capturing portrait. Its report retained four
+zero-difference receipts and no portrait PNG. The local cost experiment kept all
+376 production scene steps but batched GPU rasterization to the first frame and
+checkpoint: all five original PNGs still matched exactly, with two GPU paints
+each, in 4.27 seconds versus roughly 49 seconds for full intermediate painting.
+The historical twenty-run reference above used full intermediate GPU painting.
+The batched fixture is guarded to at most two GPU paints and leaves production
+renderer code unchanged.
+
+The local full-path negative control passed with both full and batched GPU
+painting. The production grass mutant exited 1 with respectively 92,863;
+381,278; 483,424; 845,407; and 743,094 changed pixels at phone, laptop, half-width,
+wide and portrait viewports. The restored child exited 0 with zero differences
+at every viewport. Source SHA-256 and all reference PNG hashes were unchanged.
+The batched mutant/restored check took 9.03 seconds.

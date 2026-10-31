@@ -1,5 +1,6 @@
 import { clock } from "./install";
 import { createRoot } from "react-dom/client";
+import { WebGLRenderer } from "pixi.js";
 import { TownCanvas, type TownRoomActions } from "../../town/TownCanvas";
 import { buildWorldObject } from "../../worldObject";
 import {
@@ -63,6 +64,20 @@ async function prepare() {
   gl.finish();
   gl.getExtension("WEBGL_lose_context")?.loseContext();
 
+  // Keep every production scene/animation step, but rasterize only the first
+  // warm-up frame and the final checkpoint. Intermediate GPU paints are not
+  // observed by a still-image comparison and dominate SwiftShader CI cost.
+  const originalPaint = WebGLRenderer.prototype.render;
+  const paints = { count: 0, pending: () => {} };
+  WebGLRenderer.prototype.render = function (...args: unknown[]) {
+    const paint = () => {
+      paints.count++;
+      Reflect.apply(originalPaint, this, args);
+    };
+    if (paints.count === 0) paint();
+    else paints.pending = paint;
+  };
+
   const projection = projectWorldOffice(
     buildWorldObject(goldenConnections(), "host-0"),
     Date.now(),
@@ -94,6 +109,8 @@ async function prepare() {
   // Motion stays enabled. Fixed steps settle camera, roofs and walking actors;
   // elapsed simulation time is relative to the first production renderer frame.
   await clock.advance(6000);
+  paints.pending();
+  WebGLRenderer.prototype.render = originalPaint;
   const stats = window.__HERDR_TOWN_RENDERER__!;
   if (stats.lastError || stats.flying || stats.walking || stats.desks !== 16)
     throw new Error(`Town did not settle: ${JSON.stringify(stats)}`);
@@ -105,6 +122,7 @@ async function prepare() {
     firstFrame,
     captureAt: clock.now(),
     frames: stats.frames,
+    gpuPaints: paints.count,
     desks: stats.desks,
     layout: stats.layout,
   };

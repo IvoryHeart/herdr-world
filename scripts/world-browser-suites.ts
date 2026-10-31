@@ -17,7 +17,10 @@ export const worldLatencyTrendSuites = [
 ].map((name) => `web/src/world/${name}.test.ts`);
 
 // Opt-in report suites share the browser queue but never join protected shards.
-export const reportBrowserSuites = ["scripts/town-golden.browser.test.ts"];
+export const reportBrowserSuites = [
+  "scripts/town-golden.browser.test.ts",
+  "scripts/town-golden-negative.browser.test.ts",
+];
 
 /**
  * End-to-end consumers of the World runtime: a change to the runtime itself

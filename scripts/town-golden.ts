@@ -137,6 +137,10 @@ export async function runTownGolden(options: {
   const report = async () => {
     const result = {
       schema: 1,
+      sourceCommit: Bun.spawnSync(["git", "rev-parse", "HEAD"])
+        .stdout.toString()
+        .trim(),
+      ciRun: process.env.GITHUB_RUN_ID ?? null,
       runs,
       captures: receipts.length,
       seed: "0x746f776e",
@@ -269,6 +273,10 @@ export async function runTownGolden(options: {
               scene.dpr !== 1
             )
               throw new Error("Viewport or DPR mismatch");
+            if (scene.gpuPaints < 1 || scene.gpuPaints > 2)
+              throw new Error(
+                "Snapshot fixture exceeded its first/checkpoint GPU paint budget",
+              );
             const screenshot = await command("Page.captureScreenshot", {
               format: "png",
               captureBeyondViewport: false,

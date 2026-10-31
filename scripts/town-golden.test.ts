@@ -11,6 +11,10 @@ import {
   type ClockTarget,
 } from "../web/src/world/testing/testClock";
 import { resolve } from "node:path";
+import {
+  townVisualMutant,
+  verifyVisualControl,
+} from "./town-golden-negative-control";
 
 test("goldens cover the five PR screenshot viewports at bounded size", () => {
   expect(townGoldenViewports).toEqual(
@@ -81,7 +85,13 @@ test("report output cannot overwrite the stored references", async () => {
 });
 
 test("the report workflow stays advisory and retains diagnostic artifacts", async () => {
-  type Step = { name?: string; uses?: string; if?: string; run?: string };
+  type Step = {
+    name?: string;
+    uses?: string;
+    if?: string;
+    run?: string;
+    env?: Record<string, string>;
+  };
   const workflow = Bun.YAML.parse(
     await Bun.file(
       new URL("../.github/workflows/town-golden.yml", import.meta.url),
@@ -90,17 +100,31 @@ test("the report workflow stays advisory and retains diagnostic artifacts", asyn
     jobs: {
       report: {
         "continue-on-error": boolean;
-        "timeout-minutes": number;
+        "timeout-minutes": string;
         steps: Step[];
       };
     };
   };
   expect(workflow.jobs.report["continue-on-error"]).toBe(true);
-  expect(workflow.jobs.report["timeout-minutes"]).toBe(15);
+  expect(workflow.jobs.report["timeout-minutes"]).toContain("&& 40 || 15");
   const steps = workflow.jobs.report.steps;
   expect(steps.find((s) => s.name === "Compare five viewports")!.run).toBe(
     "bun run test scripts/town-golden.browser.test.ts",
   );
+  expect(
+    steps.find((s) => s.name === "Compare five viewports")!.env
+      ?.TOWN_GOLDEN_RUNS,
+  ).toContain("&& '20' || '1'");
+  const control = steps.find(
+    (s) => s.name === "Verify a production visual mutant and restored baseline",
+  )!;
+  expect(control.if).toContain("inputs.stability");
+  expect(control.run).toBe(
+    "bun run test scripts/town-golden-negative.browser.test.ts",
+  );
+  expect(
+    includesBrowserSuites(["scripts/town-golden-negative.browser.test.ts"]),
+  ).toBe(true);
   expect(
     steps.find((s) => s.uses?.startsWith("actions/upload-artifact"))!.if,
   ).toBe("always()");
@@ -112,4 +136,46 @@ test("the report workflow stays advisory and retains diagnostic artifacts", asyn
     jobs: { delivery: { needs: string[] } };
   };
   expect(ci.jobs.delivery.needs).not.toContain("town-golden");
+});
+
+test("the negative control changes exactly the production paint site", () => {
+  const source = 'before\ng.fillStyle = "#5c9a48";\nafter';
+  expect(townVisualMutant(source)).toBe(
+    'before\ng.fillStyle = "#e05a9b";\nafter',
+  );
+  expect(() => townVisualMutant("missing")).toThrow("one production");
+  expect(() => townVisualMutant(source + source)).toThrow("one production");
+});
+
+test("the full-path negative control rejects startup errors and false positive restores", () => {
+  const receipts = Array.from({ length: 5 }, (_, i) => ({
+    name: "viewport-" + i,
+    changedPixels: 1,
+    gpu: "SwiftShader",
+  }));
+  const mutant = {
+    browserVersion: "Chrome",
+    failures: ["Run 1, phone: 1 pixels differ"],
+    receipts,
+  };
+  const restored = {
+    browserVersion: "Chrome",
+    failures: [],
+    receipts: receipts.map((r) => ({ ...r, changedPixels: 0 })),
+  };
+  expect(() => verifyVisualControl(mutant, 1, restored, 0)).not.toThrow();
+  expect(() =>
+    verifyVisualControl(
+      { ...mutant, failures: ["CDP timed out"] },
+      1,
+      restored,
+      0,
+    ),
+  ).toThrow("specifically on changed pixels");
+  expect(() => verifyVisualControl(mutant, 0, restored, 0)).toThrow(
+    "specifically on changed pixels",
+  );
+  expect(() => verifyVisualControl(mutant, 1, mutant, 0)).toThrow(
+    "Restored production",
+  );
 });

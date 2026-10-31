@@ -34,6 +34,12 @@ The fixture fixes its random seed, wall clock, 16 ms frame clock, dark theme,
 WebGL initializes before mounting, then the production scene runs for 6,000 ms of
 test time after its first frame so actors, roofs, camera, textures and shaders
 settle before capture. CSS transitions and animations are disabled in this fixture.
+All production scene/animation steps run. A fixture-only Pixi render wrapper
+rasterizes the first warm-up frame and the final checkpoint; intermediate GPU
+paints are batched. Receipts record scene steps and GPU paints, with at most two
+GPU paints per capture. This preserves the original full-paint reference pixels
+while bounding SwiftShader cost; it does not exercise intermediate GPU frames.
+Existing renderer lifecycle and animation browser checks retain that coverage.
 Reference fonts are bundled subsets of the Linux fallback faces (Noto Sans and
 DejaVu Sans Mono); fixture-only aliases avoid host fontconfig and network fonts.
 Font licences and provenance are beside the fixture. Product fonts and styling
@@ -58,7 +64,7 @@ TOWN_GOLDEN=1 TOWN_GOLDEN_RUNS=20 TOWN_GOLDEN_OUTPUT=.agents/town-golden-stabili
 `CHROME_BIN` must name the pinned browser. A run uses a fresh Chrome profile;
 each viewport gets a new page. The ordinary report captures five images once;
 stability mode allows at most twenty runs (100 captures). The five images total
-under 12 million pixels at DPR 1; CI has a 15-minute job ceiling. Ordinary test
+under 12 million pixels at DPR 1; ordinary CI has a 15-minute job ceiling. Ordinary test
 gates skip the opt-in visual test, while the comparison's unit tests stay required.
 
 Outputs default to `.agents/town-golden/`: current images, JSON receipts, Markdown
@@ -74,6 +80,40 @@ Updates are refused in CI. Commit reviewed PNGs under
 directory. [Initial stability evidence](reviews/town-golden.md) records the
 reference and its limits. These test goldens are separate from release screenshots
 below, which still require real synthetic runtime work.
+
+### Hosted stability and production visual negative control
+
+Opt into hosted acceptance by applying the `town-golden-stability` PR label before
+pushing the candidate, or by selecting `stability: true` in workflow dispatch
+once the workflow is available on the default branch. Label changes alone do not
+start or cancel a report. Remove the label when later candidates need only the ordinary
+one-run report. Both modes stay advisory; the stability job has a finite 40-minute
+ceiling to cover twenty runs plus the negative control.
+
+Stability mode first compares 100 captures against unchanged stored goldens.
+It then temporarily changes the actual grass paint colour in
+`web/src/world/town/townPaint.ts` and runs the same five-viewport harness in a
+child test process. The child must exit nonzero specifically because pixels
+differ at every viewport; startup failures do not count. The control restores the
+production source byte-for-byte, runs the baseline again, requires exit zero and
+five exact matches, and verifies all golden file hashes are unchanged.
+
+To reproduce the negative control locally with the pinned `CHROME_BIN`:
+
+```bash
+TOWN_GOLDEN_NEGATIVE_CONTROL=1 \
+  bun run test scripts/town-golden-negative.browser.test.ts
+```
+
+The production paint file must be clean before this command. A `finally` block and
+signal handlers restore it, including on failure or interruption. The output
+defaults to `.agents/town-golden-control/` (override with
+`TOWN_GOLDEN_CONTROL_OUTPUT`). It includes `mutation.diff`, each child's exit code,
+logs and full capture report, the actual SwiftShader renderer strings, mismatch
+PNGs, and a restored-source/reference-hash check in `control.json`.
+CI places it inside the same `town-golden` artifact as the complete 100-capture
+report. Reports identify the checked-out source commit and GitHub run ID, so
+review evidence can be tied to the exact candidate without refreshing goldens.
 
 ## Prepare a reproducible scene
 
