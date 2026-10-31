@@ -99,10 +99,23 @@ function expectOwnFolders(
       expect(
         asks.every((row) => !row.body.includes(MARKERS[other])),
       ).toBeTrue();
+      const profiles = database
+        .query("SELECT body FROM agent_profiles")
+        .all() as {
+        body: string;
+      }[];
+      expect(
+        profiles.some(
+          (row) => JSON.parse(row.body).name === `${marker} profile`,
+        ),
+      ).toBeTrue();
+      expect(
+        profiles.every((row) => !row.body.includes(MARKERS[other])),
+      ).toBeTrue();
     } finally {
       database.close();
     }
-    expect(read("agent-profiles.json")).toContain(`${marker} profile`);
+    expect(existsSync(join(root, "agent-profiles.json"))).toBeFalse();
     expect(read("connections.json")).toContain(marker);
     expect(read("source-secrets.json")).toContain(`${marker}-jira-token`);
     expect(existsSync(join(root, "session-secret.json"))).toBeTrue();
@@ -224,13 +237,20 @@ test("a service whose storage cannot open releases its folder", async () => {
   rmSync(join(root, ".."), { recursive: true, force: true });
 });
 
-/** Fires every timer at once, as if each budget had run out. */
-const expired: Scheduler = {
-  schedule(callback) {
-    queueMicrotask(callback);
-    return { cancel() {} };
-  },
-};
+/** Keep background timers real; expire only budgets created during shutdown. */
+function expiringScheduler(): Scheduler & { expire(): void } {
+  let expired = false;
+  return {
+    expire: () => {
+      expired = true;
+    },
+    schedule(callback, delay) {
+      if (!expired) return systemScheduler.schedule(callback, delay);
+      queueMicrotask(callback);
+      return { cancel() {} };
+    },
+  };
+}
 
 /** Never fires: a stop that waits must be released by the work itself. */
 const never: Scheduler = { schedule: () => ({ cancel() {} }) };
@@ -332,6 +352,7 @@ test("stop fails a Herdr call still waiting before storage closes, whatever the 
   const control = join(top, "c.sock");
   const herdr = await holdingHerdr(control, "workspace.list");
   const events: string[] = [];
+  const scheduler = expiringScheduler();
   const started = await startTestService(
     root,
     { socketPath: control, clientSocketPath: join(top, "r.sock") },
@@ -356,7 +377,7 @@ test("stop fails a Herdr call still waiting before storage closes, whatever the 
           },
         },
       },
-      scheduler: expired,
+      scheduler,
       storage: storageClosing(() =>
         events.push(
           `storage closed (locked: ${existsSync(join(root, "instance.lock"))})`,
@@ -372,6 +393,7 @@ test("stop fails a Herdr call still waiting before storage closes, whatever the 
   expect(socket.hello.capabilities.world_shared_acquisition).toBe(true);
   void socket.call("workspace.list", {}).catch(() => {});
   await herdr.arrived;
+  scheduler.expire();
   await started.service.stop();
   expect(events).toEqual(["held call failed", "storage closed (locked: true)"]);
   await herdr.released;
@@ -455,13 +477,33 @@ test("stop ends a wait for an answer before storage closes", async () => {
 test("the service's clock times questions, answers and observations", async () => {
   const { top, root } = scratch("world-service-clock-");
   const at = 1_700_000_000_000;
+  const clock = { now: () => at, monotonic: () => performance.now() };
+  const scheduler: Scheduler = {
+    schedule: (callback, delay) => systemScheduler.schedule(callback, delay),
+  };
+  let runtimeOptions:
+    | Parameters<typeof createLegacyConnectionRuntime>[0]
+    | undefined;
   const started = await startTestService(
     root,
     {},
     {},
-    { clock: { now: () => at, monotonic: () => performance.now() } },
+    {
+      clock,
+      scheduler,
+      adapters: {
+        herdr: {
+          createRuntime(options) {
+            runtimeOptions = options;
+            return createLegacyConnectionRuntime(options);
+          },
+        },
+      },
+    },
   );
   await started.connected;
+  expect(runtimeOptions?.clock).toBe(clock);
+  expect(runtimeOptions?.scheduler).toBe(scheduler);
   const { result } = (await (
     await askThroughCli(started, "Clocked?")
   ).json()) as { result: { id: string } };
@@ -503,6 +545,7 @@ async function finishAfterStop(
   started: TestService,
   head: string[],
   body: string,
+  beforeStop: () => void,
 ): Promise<string> {
   const socket = net.createConnection({
     host: "127.0.0.1",
@@ -533,6 +576,7 @@ async function finishAfterStop(
       ].join("\r\n"),
     );
     await admitted.promise;
+    beforeStop();
     await started.service.stop({ keepListener: true });
     expect(
       existsSync(join(started.service.paths.root, "instance.lock")),
@@ -547,7 +591,8 @@ async function finishAfterStop(
 test("a request admitted before stop cannot write once storage has closed", async () => {
   const { top, root } = scratch("world-service-held-body-");
   // The drain budget runs out at once, so stop does not wait for the body.
-  const started = await startTestService(root, {}, {}, { scheduler: expired });
+  const scheduler = expiringScheduler();
+  const started = await startTestService(root, {}, {}, { scheduler });
   try {
     await started.connected;
     const cookie = await login(started.base, "world-service-test-password");
@@ -559,6 +604,7 @@ test("a request admitted before stop cannot write once storage has closed", asyn
         "X-Herdr-World-Settings: 1",
       ],
       JSON.stringify({ title_suffix: "after-close" }),
+      scheduler.expire,
     );
     expect(response).toContain("HTTP/1.1 500");
     expect(response).not.toContain("HTTP/1.1 200");
@@ -571,7 +617,8 @@ test("a request admitted before stop cannot write once storage has closed", asyn
 
 test("a request admitted before stop cannot open a store and set its file aside", async () => {
   const { top, root } = scratch("world-service-held-board-");
-  const started = await startTestService(root, {}, {}, { scheduler: expired });
+  const scheduler = expiringScheduler();
+  const started = await startTestService(root, {}, {}, { scheduler });
   // SQLite is eager; an admitted undo can still try to open the lazy Board.
   await started.service.storage.ledger().update((doc) =>
     doc.changes.push({
@@ -595,6 +642,7 @@ test("a request admitted before stop cannot open a store and set its file aside"
         `Authorization: Bearer ${readWorldCliToken(started.service.paths.sessionSecret)}`,
       ],
       JSON.stringify({ command: "undo", params: { id: "c-late-undo" } }),
+      scheduler.expire,
     );
     expect(response).not.toContain("HTTP/1.1 200");
     expect(readFileSync(board, "utf8")).toBe("{ invalid");

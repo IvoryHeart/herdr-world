@@ -15,6 +15,12 @@ port.on("message", (request: WorkerRequest) => {
         request.legacy,
         request.at,
         request.incarnation,
+        undefined,
+        request.legacyProfiles,
+        undefined,
+        request.legacySettings !== undefined
+          ? { path: request.legacySettings }
+          : undefined,
       );
       reply({ type: "ready", snapshot: writer.read() });
     } else if (request.type === "batch") {

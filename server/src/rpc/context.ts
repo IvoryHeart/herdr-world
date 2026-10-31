@@ -4,7 +4,7 @@ import type {
   resolveRpcRoute,
 } from "../connections/rpc-routing";
 import type { LegacyConnectionRuntime } from "../connections/runtime";
-import type { ProfileStore } from "../agent/profile-store";
+import type { ProfileStorePort } from "../agent/profile-store";
 import type { TerminalSettings } from "../agent/terminal-settings";
 import type { createAssistantService } from "../assistant/service";
 import type { WorldSnapshotAdmission } from "../bridge/world-snapshot-admission";
@@ -28,6 +28,8 @@ type DeskService = ReturnType<typeof createWorldDeskService>;
 
 /** What the rpc/ namespace handlers share with their World service. */
 export type RpcServices = {
+  bindings?: import("../storage/world-bindings").WorldBindings;
+  serviceIncarnation?: string;
   bindBoardRecipients(
     ops: readonly BoardOp[],
     observed: ReadonlyMap<string, ObservedAgent>,
@@ -49,7 +51,7 @@ export type RpcServices = {
     id: string | null | undefined,
     detail?: string,
   ): void;
-  profiles(): ProfileStore;
+  profiles(): ProfileStorePort;
   /** Per-terminal profile assignment and Town master, kept in Herdr. */
   terminalSettings(): TerminalSettings;
   publishBoardChanged(revision: number): void;

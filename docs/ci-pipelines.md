@@ -196,3 +196,8 @@ in `scripts/main-gate.test.ts`. Native, release and browser workflows retain the
 own platform and consumer tests. These finite scheduling and result-selection
 checks exercise the tooling directly; application model contracts and their
 mandatory consumers are unchanged.
+
+The native installer matrix also runs the auto-sync runtime-status crash suite.
+It repeats source and standalone embedded-worker import, commit, acknowledgement
+and drain schedules against each target's actual SQLite. These process-crash
+checks do not establish physical power-loss durability.

@@ -1,3 +1,5 @@
+import { systemClock, systemScheduler } from "../service/ports";
+import { memoryRuntimeStatus } from "../storage/testing/runtime-status";
 import { expect, spyOn, test } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
@@ -52,6 +54,9 @@ if (process.env.HERDR_WORLD_LINK_ROUTING_TEST !== "1") {
     const identity = (id: string) => ({ id, label: id, source: "test" });
     const factory = (id: string) => () => {
       const runtime = createLegacyConnectionRuntime({
+        clock: systemClock,
+        scheduler: systemScheduler,
+        runtimeStatus: memoryRuntimeStatus(),
         settings,
         identity: identity(id),
         config: {

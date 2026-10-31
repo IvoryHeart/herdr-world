@@ -1,5 +1,12 @@
+import { createRuntimeStatusPort } from "./runtime-status";
+import { createProfilePort } from "./profile-port";
 import { ANSWER_DELIVERY_VERB } from "../world/ask-delivery-types";
 import type { WorldIds } from "./world-ids";
+import type { BindingOperation } from "./world-bindings";
+import type {
+  LegacyBindingCapture,
+  LegacyBindingOperation,
+} from "./legacy-bindings";
 import { randomBytes } from "node:crypto";
 import {
   askClosed,
@@ -36,7 +43,12 @@ function diff<T extends { id: string }>(before: T[], after: T[]): Rows<T> {
 
 /** Independent instance; every read reflects only acknowledged SQLite commits. */
 export async function openWorldLedger(
-  paths: { database: string; ledger: string },
+  paths: {
+    database: string;
+    ledger: string;
+    profiles?: string;
+    settings?: string;
+  },
   ports: StoragePorts,
 ): Promise<WorldLedgerStorage> {
   const incarnation = randomBytes(16).toString("base64url");
@@ -46,6 +58,8 @@ export async function openWorldLedger(
     ports,
     undefined,
     incarnation,
+    paths.profiles,
+    paths.settings,
   );
   let document = client.snapshot.document;
   const byRecord = new Map<string, AttentionEntry[]>();
@@ -60,6 +74,26 @@ export async function openWorldLedger(
   let queued = 0;
   let closing = false;
   let closed: Promise<void> | undefined;
+  const profiles = createProfilePort(
+    client.snapshot.profiles ?? null,
+    <T>(request: StorageRequest) => {
+      if (closing)
+        return Promise.reject<T>(
+          new StorageWriteRejected("World storage is closing"),
+        );
+      return client.request<T>(request);
+    },
+  );
+  const runtimeStatus = createRuntimeStatusPort(
+    client.snapshot.runtimeStatus ?? {},
+    <T>(request: StorageRequest) => {
+      if (closing)
+        return Promise.reject<T>(
+          new StorageWriteRejected("World storage is closing"),
+        );
+      return client.request<T>(request);
+    },
+  );
   for (const entry of client.snapshot.attention) remember(entry);
   const transition = async (request: StorageRequest) => {
     const entry = await client.request<AttentionEntry | null>(request);
@@ -139,6 +173,15 @@ export async function openWorldLedger(
         ? Promise.reject(new StorageWriteRejected("World storage is closing"))
         : client.request<string>({ type: "issue-id", kind }),
   };
+  let bindingTail: Promise<void> = Promise.resolve();
+  let captureCount = 0,
+    captureBytes = 0;
+  const bindingRequest = <T>(operation: BindingOperation): Promise<T> =>
+    closing
+      ? Promise.reject(new StorageWriteRejected("World storage is closing"))
+      : bindingTail.then(() =>
+          client.request<T>({ type: "binding", operation }),
+        );
   const ledger: LedgerStore = {
     nextId: (kind) => ids.issue(kind),
     get: () => ({
@@ -219,7 +262,99 @@ export async function openWorldLedger(
     },
   };
   return {
+    runtimeStatus,
+    profiles,
     ids,
+    bindings: {
+      settled: () => bindingTail,
+      captureLegacy(captures) {
+        if (closing)
+          return Promise.reject(
+            new StorageWriteRejected("World storage is closing"),
+          );
+        const captured = structuredClone(captures);
+        if (
+          new Set(captured.map((capture) => capture.key)).size !==
+          captured.length
+        )
+          return Promise.reject(
+            new StorageWriteRejected("Duplicate legacy binding keys"),
+          );
+        const admittedBytes = Buffer.byteLength(JSON.stringify(captured));
+        if (
+          captureCount >= STORAGE_BOUNDS.queuedOperations ||
+          captureBytes + admittedBytes > STORAGE_BOUNDS.queuedBytes
+        )
+          return Promise.reject(
+            new StorageWriteRejected(
+              "World binding capture admission limit reached",
+            ),
+          );
+        captureCount++;
+        captureBytes += admittedBytes;
+        const operation = bindingTail.then(async () => {
+          const send = (operation: LegacyBindingOperation) =>
+            client.request<void>({
+              type: "binding",
+              operation: { type: "legacy", operation },
+            });
+          // Page by bytes as well as count: a single record has at most 64 witnesses.
+          const pages: LegacyBindingCapture[][] = [];
+          let page: LegacyBindingCapture[] = [],
+            bytes = 0;
+          for (const capture of captured) {
+            const size = Buffer.byteLength(JSON.stringify(capture));
+            if (size > STORAGE_BOUNDS.requestBytes / 2)
+              throw new StorageWriteRejected(
+                "World binding capture is too large",
+              );
+            if (
+              page.length &&
+              (page.length >= 64 ||
+                bytes + size > STORAGE_BOUNDS.requestBytes / 2)
+            ) {
+              pages.push(page);
+              page = [];
+              bytes = 0;
+            }
+            page.push(capture);
+            bytes += size;
+          }
+          if (page.length) pages.push(page);
+          await send({ type: "begin" });
+          for (const page of pages)
+            await send({
+              type: "prepare",
+              captures: page,
+            });
+          await send({ type: "plan" });
+          for (const page of pages)
+            await send({
+              type: "put",
+              keys: page.map((capture) => capture.key),
+            });
+          await send({ type: "finish" });
+        });
+        bindingTail = operation.finally(() => {
+          captureCount--;
+          captureBytes -= admittedBytes;
+        });
+        void bindingTail.catch(() => {}); // The caller observes failure; close still drains it.
+        return operation;
+      },
+      create: (input) => bindingRequest({ type: "create", input }),
+      get: (id) => bindingRequest({ type: "get", id }),
+      list: (page = {}) => bindingRequest({ type: "list", page }),
+      resolve: (id, event, current, expectedRevision) =>
+        bindingRequest({
+          type: "resolve",
+          id,
+          event,
+          current,
+          expectedRevision,
+        }),
+      remove: (id) => bindingRequest({ type: "remove", id }),
+    },
     ledger,
     incarnation,
     outbox: {
@@ -278,7 +413,11 @@ export async function openWorldLedger(
     close() {
       if (closed) return closed;
       closing = true;
-      closed = tail.then(() => client.close());
+      profiles.close();
+      runtimeStatus.close();
+      closed = Promise.allSettled([tail, bindingTail]).then(() =>
+        client.close(),
+      );
       return closed;
     },
   };

@@ -17,6 +17,12 @@ import { record, type RunProcess } from "./github";
  * browser only, not to its CLI, agent skill or MCP.
  */
 
+/** Link claims are display evidence; these verbs require GitHub's own qualified record. */
+export const PULL_REQUEST_AUTHORITY = {
+  source: "github",
+  linkClaims: false,
+} as const;
+
 const TIMEOUT_MS = 30_000;
 const MAX_DETAIL = 500;
 export const MAX_CLOSE_COMMENT = 4_000;
@@ -41,7 +47,12 @@ export async function runPullRequestVerb(
   /** Source generation/detail authority, owned by SourcesService. */
   admission: () => string | null = () => null,
 ): Promise<VerbOutcome> {
-  if (!actionablePullRequest(item) || !item.repo || item.number === undefined)
+  if (
+    item.source !== PULL_REQUEST_AUTHORITY.source ||
+    !actionablePullRequest(item) ||
+    !item.repo ||
+    item.number === undefined
+  )
     return { ok: false, detail: "World can't act on this pull request." };
   const target = [String(item.number), "--repo", item.repo];
   const initialBlock = admission();

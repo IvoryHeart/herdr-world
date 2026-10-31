@@ -8,6 +8,7 @@ import {
   type ImplementationFault,
 } from "./implementationMutation";
 import { replayObservationBase } from "./observation-base";
+import { replayBindingResolution } from "./binding-resolution";
 import { replayRuntimeControl } from "./runtime-control";
 import { replayBrowserPreparation } from "./browser-preparation";
 import { replayRuntimeDrain } from "./runtime-drain";
@@ -52,6 +53,30 @@ const artifacts = relative(root, output);
 const cli = quintCli;
 const cancellation = new AbortController();
 const cases = [
+  {
+    name: "binding-resolution",
+    witnesses: [
+      "restartUnconfirmed",
+      "worldRestartReattached",
+      "partialKept",
+      "closeEnded",
+      "allTerminalsGoneEnded",
+      "moveFollowed",
+      "lostReplyFollowedByTerminal",
+      "outsideMoveUnresolved",
+      "duplicateUnresolved",
+      "lookAlikeRejected",
+    ],
+    replay: replayBindingResolution,
+    mismatches: [
+      "binding.attached",
+      "binding.ambiguous",
+      "binding.target",
+      "binding.evidence",
+      "binding.authority",
+      "binding.absence",
+    ],
+  },
   {
     name: "observation-base",
     witnesses: [
@@ -303,9 +328,12 @@ const cases = [
 ] as const;
 type CommandResult = { code: number; ms: number; log: string; args: string[] };
 function replayTracesPerSeed(name: Model) {
-  return ["browser-preparation", "chunk-credits", "creation-flow"].includes(
-    name,
-  )
+  return [
+    "binding-resolution",
+    "browser-preparation",
+    "chunk-credits",
+    "creation-flow",
+  ].includes(name)
     ? 500
     : 100;
 }
@@ -768,11 +796,41 @@ export async function runReviewedQuintModels(
         model: item.name,
         files: files.map((file) => resolve(output, file)),
         mode: "mutation",
-        allowed: item.mismatches,
+        allowed:
+          item.name === "binding-resolution"
+            ? ["binding.attached"]
+            : item.mismatches,
         mutant: mutantBundle,
       });
       const killingTrace = killed.trace;
       const killingObservation = killed.observation;
+      const bindingControls = [];
+      if (item.name === "binding-resolution") {
+        for (const [fault, observation] of [
+          ["binding-duplicate", "binding.ambiguous"],
+          ["binding-listing-move", "binding.attached"],
+          ["binding-absence", "binding.absence"],
+          ["binding-partial", "binding.target"],
+          ["binding-authority", "binding.authority"],
+        ] as const) {
+          const mutant = await implementationMutation(item.name, fault);
+          const result = await replayWorker(
+            `binding-resolution-${fault}-control`,
+            {
+              model: item.name,
+              files: files.map((file) => resolve(output, file)),
+              mode: "mutation",
+              allowed: [observation],
+              mutant,
+            },
+          );
+          bindingControls.push({
+            fault,
+            trace: result.trace,
+            observation: result.observation,
+          });
+        }
+      }
       if (item.name === "observation-base") {
         const incarnation = await implementationMutation(
           item.name,
@@ -986,6 +1044,7 @@ export async function runReviewedQuintModels(
         },
       );
       const result = {
+        bindingControls,
         name: item.name,
         witnesses: witnessCounts,
         witnessesBySeed,

@@ -1,4 +1,5 @@
 import { replayObservationBase } from "../quint/observation-base";
+import { replayBindingResolution } from "../quint/binding-resolution";
 import { replayRuntimeControl } from "../quint/runtime-control";
 import { replayBrowserPreparation } from "../quint/browser-preparation";
 import { replayRuntimeDrain } from "../quint/runtime-drain";
@@ -41,6 +42,7 @@ async function replay(request: ReplayRequest, resultPath: string) {
       "runtime-drain",
       "runtime-control",
       "observation-base",
+      "binding-resolution",
       "browser-preparation",
       "browser-refresh",
       "space-admission",
@@ -62,6 +64,8 @@ async function replay(request: ReplayRequest, resultPath: string) {
   );
   const exports = request.mutant ? await import(request.mutant) : null;
   const execute = (states: Awaited<ReturnType<typeof loadTrace>>) => {
+    if (request.model === "binding-resolution")
+      return replayBindingResolution(states, exports?.resolveBinding);
     if (request.model === "observation-base")
       return replayObservationBase(
         states,
