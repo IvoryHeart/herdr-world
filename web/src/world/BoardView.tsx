@@ -573,7 +573,10 @@ export default function BoardView({
     stringFrom?: StringEnd;
   } | null>(null);
   const [pulses, setPulses] = useState(readPulses);
-  const [tracing, setTracing] = useState(false);
+  // The event trace exists only in development builds (devtools/flag.ts).
+  const trace = useMemo(() => (DEVTOOLS ? openTrace("board") : NO_TRACE), []);
+  // Read at mount: setting it from an effect re-rendered the Board once.
+  const [tracing, setTracing] = useState(() => trace.enabled);
   const [toast, setToast] = useState<{
     text: string;
     undo?: () => void;
@@ -617,9 +620,6 @@ export default function BoardView({
   const hostStart = useRef<{ key: string; anchor?: Point } | null>(null);
   useEffect(() => () => window.clearTimeout(holdTimer.current), []);
   const pinchStart = useRef<{ cam: Camera; mid: Point } | null>(null);
-  // The event trace exists only in development builds (devtools/flag.ts).
-  const trace = useMemo(() => (DEVTOOLS ? openTrace("board") : NO_TRACE), []);
-  useEffect(() => setTracing(trace.enabled), [trace]);
   const setTrace = (on: boolean) => {
     if (!DEVTOOLS) return;
     rememberTrace("board", trace, on);
@@ -660,12 +660,17 @@ export default function BoardView({
     onNodeAnchorsChange,
     onSelectedAnchorChange,
   });
-  anchorProps.current = {
-    conversationNodeIds,
-    selectedId,
-    onNodeAnchorsChange,
-    onSelectedAnchorChange,
-  };
+  // Refs that frames read are published at commit, never during render: a
+  // transition render can yield before committing (or never commit), and a
+  // frame in between must see the Board on screen, not that render's.
+  useLayoutEffect(() => {
+    anchorProps.current = {
+      conversationNodeIds,
+      selectedId,
+      onNodeAnchorsChange,
+      onSelectedAnchorChange,
+    };
+  });
   const loaded = useRef(false);
   const saveTimer = useRef(0);
   /** True while a layout save is waiting to go out. */
@@ -684,17 +689,20 @@ export default function BoardView({
     related,
     groupFrom,
   });
-  latest.current = {
-    model,
-    collapsed,
-    onSelect,
-    onOpen,
-    saved,
-    picked,
-    noteSelected,
-    related,
-    groupFrom,
-  };
+  // Published at commit (see anchorProps); before the effects that read it.
+  useLayoutEffect(() => {
+    latest.current = {
+      model,
+      collapsed,
+      onSelect,
+      onOpen,
+      saved,
+      picked,
+      noteSelected,
+      related,
+      groupFrom,
+    };
+  });
 
   const kindOf = (key: string, m: BoardModel) =>
     m.workspaceByKey.has(key) ? "workspace" : "tab";
@@ -1188,7 +1196,10 @@ export default function BoardView({
     );
   };
   const frameRef = useRef(frame);
-  frameRef.current = frame;
+  // A frame runs the committed render's closure (see anchorProps).
+  useLayoutEffect(() => {
+    frameRef.current = frame;
+  });
   // One loop per mount: a cleanup stops it for good, and React may mount a
   // component twice (development, remounts), so each mount makes its own.
   useEffect(() => {
@@ -3086,7 +3097,9 @@ export default function BoardView({
         keys.add(tab.key);
     return keys;
   }, [model, selectedId]);
-  selectedKeysRef.current = selectedKeys;
+  useLayoutEffect(() => {
+    selectedKeysRef.current = selectedKeys;
+  });
 
   /**
    * Colours the user chose. A tab is a terminal and always has its terminal
@@ -3116,7 +3129,10 @@ export default function BoardView({
     [...selectedKeys].find((key) => model.tabByKey.has(key)) ??
     [...selectedKeys].find((key) => model.workspaceByKey.has(key)) ??
     null;
-  barKey.current = noteSelected ? NOTE_PREFIX + noteSelected : colorKey;
+  const shownBarKey = noteSelected ? NOTE_PREFIX + noteSelected : colorKey;
+  useLayoutEffect(() => {
+    barKey.current = shownBarKey;
+  });
   // A pending Group… belongs to the tab whose bar offered it.
   useEffect(() => {
     if (groupFrom && groupFrom !== colorKey) setGroupFrom(null);

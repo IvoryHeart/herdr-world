@@ -27,7 +27,7 @@ const measured = (): ConcurrentWork => ({
     render: { observe: 1280 },
     "outside-stress": { unobserve: 1280 },
   },
-  boardRenderByPhase: { render: { commits: 6 }, refresh: { commits: 2 } },
+  boardRenderByPhase: { render: { commits: 3 }, refresh: { commits: 2 } },
   worldBuildUnits: 1_835_136,
   worldBuildMaxSliceNodes: 256,
   liveCardObservations: 0,

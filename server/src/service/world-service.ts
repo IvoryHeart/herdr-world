@@ -82,6 +82,8 @@ import { createWorldCliService } from "../world/world-cli-service";
 import { FocusedAcquisition } from "../world/focused-acquisition";
 import { readFocusedLists } from "../world/focused-lists";
 import { AgentActivityCache } from "../world/agent-activity-cache";
+import { DeskWatches } from "../world/desk-watches";
+import { readDeskWatch } from "../world/desk-watch-read";
 import { createBrowserClients, logDetail } from "./clients";
 import { listen } from "./listener";
 import type { Clock, Scheduler, WorldAdapters } from "./ports";
@@ -230,7 +232,10 @@ async function compose(
     logger,
     clock,
     forEachRuntime: (visit) => connectionManager.forEachCurrentRuntime(visit),
-    closed: (socket) => focusedAcquisition.release(socket),
+    closed: (socket) => {
+      focusedAcquisition.release(socket);
+      deskWatches.release(socket);
+    },
     countChanged: publishConnectionsChanged,
   });
   const { clients, safeSend, broadcast, clientLabel, markRpcError } = browsers;
@@ -391,6 +396,7 @@ async function compose(
     connectionBootstrap.defaultConnectionId,
     (status) => {
       focusedAcquisition.reconcile();
+      deskWatches.reconcile();
       publishConnectionsChanged();
       deskService.retire(status.id, status.generation);
       retireTerminalMarks(status.id, status.generation);
@@ -468,6 +474,25 @@ async function compose(
     },
     send: (socket, control) =>
       safeSend(socket, JSON.stringify({ control }), "world-focused-changed"),
+  });
+  const deskWatches = new DeskWatches<ServerWebSocket<unknown>>({
+    scheduler,
+    lease(target) {
+      const lease = connectionManager.readyRuntimeLease(target.connection_id);
+      if (
+        !lease ||
+        lease.generation !== target.connection_generation ||
+        !lease.isCurrent()
+      )
+        return null;
+      return {
+        isCurrent: lease.isCurrent,
+        read: (kind, target) =>
+          readDeskWatch(lease.runtime, kind, target, lease.isCurrent),
+      };
+    },
+    send: (socket, control) =>
+      safeSend(socket, JSON.stringify({ control }), "world-desk-reads"),
   });
   worldSnapshots = new WorldSnapshotService(
     connectionManager,
@@ -753,6 +778,7 @@ async function compose(
     connectionProfiles,
     focusedAcquisition,
     agentActivity,
+    deskWatches,
     conversationWatchers: browsers.conversationWatchers,
     getAssistantService,
     logger,
@@ -925,6 +951,7 @@ async function compose(
     // reconnect, push, Ranger start or wait for an answer begins.
     stopping = true;
     focusedAcquisition.stop();
+    deskWatches.stop();
     connectionProfiles.stopSupervision();
     webPush.stop();
     await worldCli.stop();
