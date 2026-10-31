@@ -1050,3 +1050,44 @@ Task edits preserve saved model, scope and agent references; a confirmed manual
 edit downgrades future execution to manual approval. Delete requires prior
 cancellation. Close-agent, close-pane and close-workspace previews recheck captured
 occupants before dispatch and do not delete checkout files or agent history.
+
+## Desk, watchlist and completion storage
+
+Desk review marks, recent opens and stop metadata, watchlist pins and checked
+completions live in `world.sqlite` in the instance data directory. All browsers
+share committed changes. Include the database in a stopped data-folder backup;
+its schema upgrade first preserves the existing private SQLite migration backup.
+
+After a restart or runtime replacement, saved records remain unresolved until
+World reads a complete, unambiguous list from the original connection. The same
+terminal and captured known session restore Desk/completion records. Watches
+follow the terminal across pane moves. A complete current terminal absence clears
+all three kinds; a positive known session replacement clears Desk and completion
+records. Missing session evidence and duplicate identities never attach a saved
+record. Renewed work or later native completion progress clears a completion
+check. Herdr restarting with new terminals therefore does not inherit old marks.
+
+Unpin removes its exact saved watch even while the host is unavailable. The browser
+carries the returned `watch_id`, so an older Unpin cannot remove a replacement.
+If the same saved watch reattaches after a runtime change, Unpin removes its
+current projection from the reply and every browser.
+Older API callers without this field can use an unambiguous runtime-qualified
+capture remembered by the current service; repeated reuse requires the returned
+ID. Disconnecting one host cannot restore its old projection when another host's
+storage write finishes. Pending Desk and completion commands also lose admission
+on observed agent replacement, including unknown identities and a return to the
+original session. Controls and their visible wording are unchanged.
+
+The first upgrade cannot adopt the stopped service's process memory: those stores
+had no file/export with original binding evidence. Current browsers only hold
+service projections. Obsolete browser-local Desk and completion keys are not
+imported, because they can predate newer clears and lack original binding proof.
+The first upgrade starts these families empty; subsequent committed marks survive
+restarts. Board layout/Town pinned cells use the separate Board migration. Ordinary
+Town placement and device preferences retain their current ownership.
+
+No terminal text, receipt content, credentials or runtime fences enter this family.
+Metadata retains its existing bounds (500 Desk records, 40 recent opens, 128 watches,
+4,096 completion checks). Without native progress, World cannot discover a complete
+work/completion cycle it never observed. Process-crash tests do not establish
+physical power-loss durability.

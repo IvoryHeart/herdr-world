@@ -219,13 +219,30 @@ Several claims SHALL coexist for one field.
 
 Each kind of World record SHALL declare what happens when its binding ends: archive,
 clear, keep unresolved, or move to "Needs a home". Durable identity alone SHALL NOT
-extend a record's lifetime. Records whose current contract clears them on restart or
-runtime replacement SHALL keep that contract until it is changed by its own approved
-requirement. This includes the watchlist, Desk marks and completion "seen".
+extend a record's lifetime. The owner-approved terminal-mark persistence changes
+Desk marks/recent opens, watchlist and completion seen to the following lifetimes:
+
+- Watchlist follows its witnessed terminal on its original source, including a
+  uniquely observed terminal move. Complete current absence clears it.
+- Desk metadata and completion seen also require a captured session when known;
+  explicit unknown session binds to terminal. Complete current terminal absence
+  or a positive different known session clears them. Missing session evidence
+  remains unresolved or unconfirmed and never silently retargets a saved mark.
+- Offline, partial, stale and duplicate observations preserve saved records but
+  attach nothing. Restart and runtime replacement hide the qualified projection
+  until a new complete unambiguous observation verifies the same evidence.
+- Fresh working/blocked evidence ends completion seen. Later native progress
+  ends a checked completion even if World missed the intervening work; older
+  progress cannot erase a newer check. Desk retains its exact-stop Undo,
+  bounded recency and stop-display expiry rules.
+- An explicit user mark may replace an unresolved capture for that terminal;
+  the old record is cleared, never inherited by the new identity.
 
 #### Scenario: Watchlist after a restart
-- **WHEN** World restarts after this change while its watchlist contract is unchanged
-- **THEN** the watchlist is empty, as before, even though durable bindings exist
+- **WHEN** World restarts and then verifies the original terminal in a complete,
+  current, unambiguous observation of its original source
+- **THEN** its saved watch reappears with the same World ID and a fresh runtime
+  projection; before verification it remains unresolved
 
 #### Scenario: A bound tab closes
 - **WHEN** a tab bound to a Board string is closed on the current runtime

@@ -7,6 +7,8 @@ export type WorldWatchRecord = {
   connection_generation: number;
   terminal_id: string;
   label: string;
+  /** Exact durable capture; absent only on memory-only compatibility registries. */
+  watch_id?: string;
 };
 
 export type WorldWatchlist = {
@@ -18,6 +20,35 @@ export class WorldWatchlistRegistry {
   private revision = 0;
   private records = new Map<string, WorldWatchRecord>();
 
+  fork() {
+    const next = new WorldWatchlistRegistry();
+    next.adopt(this);
+    return next;
+  }
+  adopt(next: WorldWatchlistRegistry) {
+    this.revision = next.revision;
+    this.records = new Map(
+      [...next.records].map(([key, value]) => [key, { ...value }]),
+    );
+  }
+  adoptConnection(connectionId: string, next: WorldWatchlistRegistry) {
+    this.replaceConnection(
+      connectionId,
+      next
+        .list()
+        .records.filter((record) => record.connection_id === connectionId),
+    );
+  }
+  replaceConnection(connectionId: string, records: WorldWatchRecord[]) {
+    const before = JSON.stringify(this.list().records);
+    const incoming = new Set(records.map(watchKey));
+    for (const [key, record] of this.records)
+      if (record.connection_id === connectionId && !incoming.has(key))
+        this.records.delete(key);
+    for (const record of records)
+      this.records.set(watchKey(record), { ...record });
+    if (JSON.stringify(this.list().records) !== before) this.revision++;
+  }
   list(): WorldWatchlist {
     return { revision: this.revision, records: [...this.records.values()] };
   }
@@ -40,12 +71,25 @@ export class WorldWatchlistRegistry {
       WorldWatchRecord,
       "connection_id" | "connection_generation" | "terminal_id"
     >,
+    committedRemoval = false,
   ): { changed: boolean; revision: number } {
     const key = watchKey(normalize({ ...identity, label: "Watch" }));
-    if (!this.records.delete(key))
+    if (!this.records.delete(key) && !committedRemoval)
       return { changed: false, revision: this.revision };
     this.revision += 1;
     return { changed: true, revision: this.revision };
+  }
+
+  /** Remove every current projection of a committed durable capture. */
+  removeCommittedCapture(id: string): WorldWatchRecord[] {
+    const removed: WorldWatchRecord[] = [];
+    for (const [key, record] of this.records)
+      if (record.watch_id === id) {
+        this.records.delete(key);
+        removed.push({ ...record });
+      }
+    this.revision++;
+    return removed;
   }
 
   retireConnectionGeneration(

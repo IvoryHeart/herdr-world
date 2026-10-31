@@ -134,8 +134,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     then finished agents' if none wait.
     The needs-you list becomes a bottom tray on phones and hides when no agent
     is blocked. Review marks acknowledge a specific completion in every browser
-    of this World, without certifying its correctness; a World restart
-    forgets them.
+    of this World, without certifying its correctness. They survive a World restart
+    and reappear after the same terminal and known session are verified.
   - **+**, **−** and **ALL** navigate between town, building, room and desk
     detail. Drag to pan; focused arrow keys pan too. Tap a room to zoom in.
     Phones stack buildings vertically; large towns can initially show roofs.
@@ -397,9 +397,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     Desk first, then each workspace by recent activity. **Reviewed** lists the
     latest stop you marked for each idle or done agent, newest first, with
     **Reopen**; marking offers **Undo** for that exact stop across browsers.
-    Marks, observed stops and recent opens are held in bounded service memory,
-    scoped by connection, runtime, terminal and agent session. They survive a
-    browser reload and clear on service restart or owner/session replacement;
+    Marks, observed stops and recent opens are saved in bounded World storage,
+    bound to their original connection, terminal and known agent session. They
+    survive reloads and service restarts, reappearing after fresh verification.
+    A terminal confirmed absent or a positive session replacement clears them;
     previous browser-local Desk marks are not imported. Marks agree even when
     browsers read different receipts; later stops or native activity need review.
     Review marks survive expiry of the stop's display time. Native state-change

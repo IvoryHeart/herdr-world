@@ -28,6 +28,7 @@ type DeskService = ReturnType<typeof createWorldDeskService>;
 
 /** What the rpc/ namespace handlers share with their World service. */
 export type RpcServices = {
+  persistentMarks?: import("../world/persistent-terminal-marks").PersistentTerminalMarks;
   clock: import("../service/ports").Clock;
   bindings?: import("../storage/world-bindings").WorldBindings;
   serviceIncarnation?: string;

@@ -1,3 +1,4 @@
+import { createTerminalMarksPort } from "./terminal-marks";
 import { createEffectStore } from "./effect-client";
 import { createBoardPort } from "./board-port";
 import { createRuntimeStatusPort } from "./runtime-status";
@@ -271,6 +272,15 @@ export async function openWorldLedger(
   };
   return {
     board,
+    terminalMarks: createTerminalMarksPort(
+      client.snapshot.terminalMarks ?? [],
+      <T>(request: StorageRequest) =>
+        closing
+          ? Promise.reject<T>(
+              new StorageWriteRejected("World storage is closing"),
+            )
+          : client.request<T>(request),
+    ),
     runtimeStatus,
     profiles,
     ids,

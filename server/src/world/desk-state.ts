@@ -25,7 +25,7 @@ const copyIdentity = (identity: DeskIdentity): DeskIdentity => ({
   agent_session_fingerprint: identity.agent_session_fingerprint,
 });
 
-type StoredDeskRecord = DeskRecord & { stateChangeSeq?: number };
+export type StoredDeskRecord = DeskRecord & { stateChangeSeq?: number };
 
 /** Browser-independent, process-local state. No transcript text is retained. */
 export class WorldDeskRegistry {
@@ -44,6 +44,70 @@ export class WorldDeskRegistry {
       stateChangeSeq?: number;
     }
   >();
+
+  fork() {
+    const next = new WorldDeskRegistry();
+    next.adopt(this);
+    return next;
+  }
+  adopt(next: WorldDeskRegistry) {
+    this.revision = next.revision;
+    this.ownershipRevision = next.ownershipRevision;
+    this.records = new Map(
+      [...next.records].map(([key, value]) => [key, { ...value }]),
+    );
+    this.recordByTerminal = new Map(next.recordByTerminal);
+    this.previous = new Map(
+      [...next.previous].map(([key, value]) => [key, { ...value }]),
+    );
+  }
+  adoptConnection(connectionId: string, next: WorldDeskRegistry) {
+    this.replaceConnection(
+      connectionId,
+      next
+        .storedRecords()
+        .filter((record) => record.connection_id === connectionId),
+    );
+    for (const [key, value] of this.previous)
+      if (value.identity.connection_id === connectionId)
+        this.previous.delete(key);
+    for (const [key, value] of next.previous)
+      if (value.identity.connection_id === connectionId)
+        this.previous.set(key, { ...value });
+    this.ownershipRevision = Math.max(
+      this.ownershipRevision,
+      next.ownershipRevision,
+    );
+    while (this.previous.size > DESK_OBSERVATION_LIMIT)
+      this.previous.delete(this.previous.keys().next().value!);
+  }
+  observedSession(
+    identity: Pick<
+      DeskIdentity,
+      "connection_id" | "connection_generation" | "terminal_id"
+    >,
+  ): string | null | undefined {
+    return this.previous.get(
+      terminalKey({ ...identity, agent_session_fingerprint: null }),
+    )?.identity.agent_session_fingerprint;
+  }
+  storedRecords(): StoredDeskRecord[] {
+    return [...this.records.values()].map((record) => ({ ...record }));
+  }
+  replaceConnection(connectionId: string, records: StoredDeskRecord[]) {
+    const before = JSON.stringify(this.list().records);
+    const incoming = new Map(
+      records.map((record) => [deskKey(record), record]),
+    );
+    for (const [key, record] of this.records)
+      if (record.connection_id === connectionId && !incoming.has(key))
+        this.remove(key);
+    for (const record of records) {
+      this.records.set(deskKey(record), { ...record });
+      this.recordByTerminal.set(terminalKey(record), deskKey(record));
+    }
+    if (JSON.stringify(this.list().records) !== before) this.revision++;
+  }
 
   list(): DeskState {
     return {

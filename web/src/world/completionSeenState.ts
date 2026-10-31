@@ -5,8 +5,8 @@ import type { OfficeAgent } from "./herdrOfficeProjection";
 /**
  * Town's checked completions live in the World service, so every browser of
  * this World agrees. Browsers only mark; the service ends a check when it
- * sees the agent working or asking again. It keeps checks in memory only: a
- * restart forgets them, and so does a new runtime generation of the host.
+ * sees the agent working or asking again. Saved checks reappear after fresh
+ * terminal/session verification following a service or runtime restart.
  */
 export type CompletionSeenState = {
   revision: number;

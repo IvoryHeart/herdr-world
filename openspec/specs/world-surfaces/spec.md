@@ -631,11 +631,18 @@ mounted Spaces or live terminal ownership.
 
 ### Requirement: Shared qualified pane watchlist
 
-World SHALL keep at most 128 terminal-backed watches in service memory, keyed by
-connection ID, runtime generation and terminal ID. Pins are shared across browser
-connections, survive a browser reload, and clear on service restart or runtime
-generation replacement. Pin validates a current live pane, while exact Unpin may
-remove an unavailable record. A watch is observational only and grants no resource
+World SHALL keep at most 128 terminal-backed watches in world.sqlite, keyed by
+store-issued World IDs and verified source bindings. Pins are shared across browser
+connections and survive browser reloads, service restarts and runtime replacement.
+Only a complete current unambiguous observation of the witnessed terminal on the
+original source SHALL attach a saved watch to a fresh runtime projection. Complete
+current terminal absence SHALL clear it. Pin validates a current live pane, while exact Unpin may
+remove an unavailable saved record. Replies SHALL include its `watch_id`; Unpin
+SHALL preserve that exact capture across retirement and SHALL NOT remove a newer
+replacement watch. If the same saved watch reattaches in a newer runtime generation,
+Unpin SHALL remove its current projection before replying and invalidate that
+generation so the reply, list and shared clients agree. Legacy tuples SHALL be accepted only while a remembered capture
+is unambiguous. A watch is observational only and grants no resource
 or mutation authority.
 
 #### Scenario: Native IDs collide across hosts
@@ -648,8 +655,8 @@ or mutation authority.
 The service SHALL return a process-local watchlist revision and notify browsers on
 real mutations. Browsers SHALL reload the list after connection and notification,
 reject older replies for that socket, and mark cached records unverified while
-disconnected. A reconnect SHALL accept a new empty revision-zero list after a
-service restart.
+disconnected. A reconnect SHALL accept a new revision-zero unresolved projection after a
+service restart and refresh after fresh binding resolution.
 
 #### Scenario: Service restart
 
@@ -926,16 +933,18 @@ to another session or a same-named pane on another host.
 ### Requirement: Shared bounded Desk state
 
 The World service SHALL hold review marks, observed stop times and recent Desk
-opens in process-local memory, shared by every connected browser. It SHALL retain
+opens in world.sqlite, shared by every connected browser after COMMIT. It SHALL retain
 at most 500 qualified metadata records, 40 recent-open timestamps and 4,096 prior
-agent-status observations. Each record SHALL belong to one connection ID, runtime
-generation, terminal ID and agent-session fingerprint (or the explicit unknown
-session identity). Review marks SHALL store only the latest marked stop per agent
+agent-status observations in memory. Each durable record SHALL have a World ID and
+a verified binding to its original source, terminal and known agent-session
+fingerprint (or terminal alone for explicit unknown session). Runtime generation
+SHALL qualify only the current projection and admitted work. Review marks SHALL store only the latest marked stop per agent
 session; Reviewed SHALL retain its existing latest-stop presentation for idle or
 done agents. Exact Undo SHALL remove only the stop it names, preserving any newer
 mark from another browser. Metadata SHALL survive browser reloads and host-filter
-changes, clear on service restart and retire on runtime or observed session
-replacement. Browser-local Desk metadata SHALL NOT be imported.
+changes and service restarts. Runtime replacement SHALL hide projections until
+fresh verification; complete current terminal absence or positive known session
+replacement SHALL clear records. Browser-local Desk metadata SHALL NOT be imported.
 A shared stop identity SHALL be independent of a browser's receipt polling or
 read failures: the same service stop and native activity observation SHALL have
 one identity with or without a receipt. A later observed stop or native activity
@@ -1622,12 +1631,15 @@ Because Herdr may report a finished agent as idle, Town SHALL also treat an
 agent it observes going from working or blocked to idle as done until checked.
 A check covers one completion: when the agent works, asks or finishes again,
 its next completion SHALL be unchecked. The World service SHALL hold checks in
-memory, keyed by connection, runtime generation and terminal, so every browser
+world.sqlite through World IDs and verified source bindings, so every browser
 of that World shows the same checks, including for a finish Town inferred. The
 service SHALL end a check when its own host reads show that agent working or
 blocked, and SHALL ignore a check made while they do, so no browser's late
-view can end or create a check for the wrong completion. A World restart, or a
-new runtime generation for that connection, SHALL forget the checks. Checks SHALL NOT represent approval or mutate Herdr. A desk SHALL show its sole
+view can end or create a check for the wrong completion. Checks SHALL survive a
+World restart or runtime replacement, remaining unresolved until the original
+terminal and captured session (when known) are verified. Complete current absence,
+a positive known session replacement or later native completion progress SHALL
+clear them; lower native progress SHALL NOT clear a newer check. Checks SHALL NOT represent approval or mutate Herdr. A desk SHALL show its sole
 agent's Herdr name when exactly one named agent occupies the tab; otherwise it
 SHALL show the tab label, or `Tab N` when the tab has no label. Each seat SHALL
 show its agent's or terminal's name at the desk level. An idle agent SHALL move to a lounge spot in its
@@ -1701,8 +1713,8 @@ and Board/Desk marks without inventing an agent harness or changing Herdr status
 #### Scenario: World restarts with checked completions
 
 - **WHEN** the World service restarts
-- **THEN** every browser shows the completions as unchecked again, because
-  checks are kept only in the service's memory
+- **THEN** saved checks remain unresolved until fresh identity verification
+- **AND** every browser shows the same restored checks after verification
 
 ### Requirement: Pinned Town desks
 

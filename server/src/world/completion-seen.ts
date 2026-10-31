@@ -21,9 +21,9 @@ export type CompletionSeen = {
 
 /**
  * Which finished agents a person has checked, shared by every browser of this
- * World. Process memory only: a restart forgets every mark, and a new runtime
- * generation retires its connection's marks, because terminal IDs are not
- * durable identities.
+ * World. This runtime-qualified projection is process memory; the durable
+ * coordinator saves verified captures separately and reattaches them only after
+ * fresh evidence. Runtime retirement clears the projection and busy observations.
  *
  * A check covers one completion. The service, not a browser, decides when it
  * ends: the host reads that every browser's view comes from show the agent
@@ -36,6 +36,51 @@ export class WorldCompletionSeenRegistry {
   /** Terminals last observed working or blocked. */
   private busy = new Set<string>();
 
+  fork() {
+    const next = new WorldCompletionSeenRegistry();
+    next.adopt(this);
+    return next;
+  }
+  adopt(next: WorldCompletionSeenRegistry) {
+    this.revision = next.revision;
+    this.records = new Map(
+      [...next.records].map(([key, value]) => [key, { ...value }]),
+    );
+    this.busy = new Set(next.busy);
+  }
+  adoptConnection(connectionId: string, next: WorldCompletionSeenRegistry) {
+    this.replaceConnection(
+      connectionId,
+      next
+        .list()
+        .records.filter((record) => record.connection_id === connectionId),
+    );
+    const owns = (key: string) =>
+      (JSON.parse(key) as [string])[0] === connectionId;
+    for (const key of this.busy) if (owns(key)) this.busy.delete(key);
+    for (const key of next.busy) if (owns(key)) this.busy.add(key);
+    while (this.busy.size > MAX_OBSERVED)
+      this.busy.delete(this.busy.keys().next().value!);
+  }
+  replaceConnection(connectionId: string, records: CompletionSeenIdentity[]) {
+    const before = JSON.stringify([...this.records.keys()]);
+    const old = this.records;
+    const incoming = new Set(records.map(completionSeenKey));
+    this.records = new Map(
+      [...old].filter(
+        ([key, record]) =>
+          record.connection_id !== connectionId || incoming.has(key),
+      ),
+    );
+    for (const record of records) {
+      const key = completionSeenKey(record);
+      this.records.set(
+        key,
+        old.get(key) ?? { ...record, revision: this.revision + 1 },
+      );
+    }
+    if (JSON.stringify([...this.records.keys()]) !== before) this.revision++;
+  }
   list(): CompletionSeen {
     return { revision: this.revision, records: [...this.records.values()] };
   }
