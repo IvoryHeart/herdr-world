@@ -138,11 +138,17 @@ test("the report workflow stays advisory and retains diagnostic artifacts", asyn
   expect(ci.jobs.delivery.needs).not.toContain("town-golden");
 });
 
-test("the negative control changes exactly the production paint site", () => {
-  const source = 'before\ng.fillStyle = "#5c9a48";\nafter';
+test("the negative control moves only the production zoom control by one pixel", () => {
+  const source =
+    ".other { right: 16px; }\n.town-zoom {\n  position: absolute;\n  right: 16px;\n}\n.after { right: 16px; }";
   expect(townVisualMutant(source)).toBe(
-    'before\ng.fillStyle = "#e05a9b";\nafter',
+    source.replace("  right: 16px;", "  right: 17px;"),
   );
+  expect(
+    [...source].filter(
+      (character, index) => townVisualMutant(source)[index] !== character,
+    ),
+  ).toHaveLength(1);
   expect(() => townVisualMutant("missing")).toThrow("one production");
   expect(() => townVisualMutant(source + source)).toThrow("one production");
 });

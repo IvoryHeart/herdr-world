@@ -102,7 +102,8 @@ instructions and runtime/storage bounds.
 The committed twenty-run table above records local repeatability. Hosted
 acceptance uses the explicit stability workflow mode against unchanged goldens;
 its full 100-capture report retains renderer identity and source/run provenance.
-The same job mutates production grass paint, requires a nonzero child-test exit
+The same job moves the production `.town-zoom` control one CSS pixel
+(`right: 16px` → `17px`), requires a nonzero child-test exit
 caused by changed pixels, restores the source and requires a passing baseline.
 It preserves the mutation patch, child logs, reports and mismatch images in its
 artifact. The runbook gives the reusable command and mode selection.
@@ -120,9 +121,20 @@ The historical twenty-run reference above used full intermediate GPU painting.
 The batched fixture is guarded to at most two GPU paints and leaves production
 renderer code unchanged.
 
-The local full-path negative control passed with both full and batched GPU
+The earlier grass-recolour full-path negative control passed with both full and batched GPU
 painting. The production grass mutant exited 1 with respectively 92,863;
 381,278; 483,424; 845,407; and 743,094 changed pixels at phone, laptop, half-width,
 wide and portrait viewports. The restored child exited 0 with zero differences
 at every viewport. Source SHA-256 and all reference PNG hashes were unchanged.
 The batched mutant/restored check took 9.03 seconds.
+
+The owner's smaller acceptance control supersedes that broad recolour: the
+current procedure changes only the production zoom control's right offset from
+16px to 17px at DPR 1 and 100% UI scale. Its mutation patch and structured
+one-pixel delta are retained with the CI mutant/restored reports.
+
+Locally, this one-pixel position control exited 1 with 8,898; 7,707; 8,340; 6,949;
+and 8,168 changed pixels at phone, laptop, half-width, wide and portrait. Restoring
+the original CSS exited 0 with all five exact matches; both the CSS SHA-256 and
+all golden PNG hashes were unchanged. The source patch contains only
+`right: 16px` → `right: 17px`.

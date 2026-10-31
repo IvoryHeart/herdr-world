@@ -3,15 +3,14 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-const sourcePath = "web/src/world/town/townPaint.ts";
-const originalColour = 'g.fillStyle = "#5c9a48";';
-const mutantColour = 'g.fillStyle = "#e05a9b";';
+const sourcePath = "web/src/world/town/town.css";
 
-/** Mutate production grass paint, never a fixture overlay or comparator input. */
+/** Move the production zoom control one CSS pixel; preserve every other byte. */
 export function townVisualMutant(source: string) {
-  if (source.split(originalColour).length !== 2)
-    throw new Error("Expected one production grass paint site");
-  return source.replace(originalColour, mutantColour);
+  const position = /(\.town-zoom\s*\{[^}]*\n[ \t]+right:[ \t]*)16px;/g;
+  if ([...source.matchAll(position)].length !== 1)
+    throw new Error("Expected one production .town-zoom right: 16px site");
+  return source.replace(position, (_match, prefix: string) => prefix + "17px;");
 }
 
 type Report = {
@@ -69,7 +68,7 @@ export async function runTownVisualControl(directory: string) {
     sourcePath,
   ]);
   if (clean.exitCode !== 0)
-    throw new Error("Production paint source must be clean before the control");
+    throw new Error("Production Town CSS must be clean before the control");
   const mutant = townVisualMutant(source);
   const sha = (text: string) => createHash("sha256").update(text).digest("hex");
   const fixtureImages = resolve("web/src/world/testing/town-golden/images");
@@ -128,15 +127,12 @@ export async function runTownVisualControl(directory: string) {
     };
   };
   try {
-    const line = source
-      .slice(0, source.indexOf(originalColour))
-      .split("\n").length;
-    await writeFile(
-      join(output, "mutation.diff"),
-      `--- a/${sourcePath}\n+++ b/${sourcePath}\n@@ -${line} +${line} @@\n-    ${originalColour}\n+    ${mutantColour}\n`,
-    );
     mutated = true;
     await writeFile(sourcePath, mutant);
+    const patch = Bun.spawnSync(["git", "diff", "--", sourcePath]);
+    if (patch.exitCode !== 0)
+      throw new Error("Could not record the production mutation");
+    await writeFile(join(output, "mutation.diff"), patch.stdout);
     let changed: Awaited<ReturnType<typeof capture>>;
     try {
       changed = await capture("mutant");
@@ -152,6 +148,13 @@ export async function runTownVisualControl(directory: string) {
       );
     const result = {
       sourcePath,
+      mutation: {
+        selector: ".town-zoom",
+        property: "right",
+        from: "16px",
+        to: "17px",
+        deltaCssPixels: 1,
+      },
       originalSha256: sha(source),
       mutantSha256: sha(mutant),
       restoredSha256: sha(await readFile(sourcePath, "utf8")),
@@ -177,7 +180,7 @@ export async function runTownVisualControl(directory: string) {
       );
     await writeFile(
       join(output, "summary.md"),
-      "Production Town visual negative control: **PASS**. Grass-colour mutant exited nonzero on changed pixels at all five viewports; restored source matched unchanged goldens. See control.json, both child reports/logs and mutant mismatch PNGs.\n",
+      "Production Town visual negative control: **PASS**. One-CSS-pixel zoom-control move (right: 16px to 17px) exited nonzero on changed pixels at all five viewports; restored source matched unchanged goldens. See control.json, both child reports/logs and mutant mismatch PNGs.\n",
     );
   } finally {
     restore();

@@ -91,8 +91,9 @@ one-run report. Both modes stay advisory; the stability job has a finite 40-minu
 ceiling to cover twenty runs plus the negative control.
 
 Stability mode first compares 100 captures against unchanged stored goldens.
-It then temporarily changes the actual grass paint colour in
-`web/src/world/town/townPaint.ts` and runs the same five-viewport harness in a
+It then temporarily moves the actual production `.town-zoom` control by one CSS
+pixel (`right: 16px` → `17px`) in `web/src/world/town/town.css`
+and runs the same five-viewport harness in a
 child test process. The child must exit nonzero specifically because pixels
 differ at every viewport; startup failures do not count. The control restores the
 production source byte-for-byte, runs the baseline again, requires exit zero and
@@ -105,7 +106,7 @@ TOWN_GOLDEN_NEGATIVE_CONTROL=1 \
   bun run test scripts/town-golden-negative.browser.test.ts
 ```
 
-The production paint file must be clean before this command. A `finally` block and
+The production CSS file must be clean before this command. A `finally` block and
 signal handlers restore it, including on failure or interruption. The output
 defaults to `.agents/town-golden-control/` (override with
 `TOWN_GOLDEN_CONTROL_OUTPUT`). It includes `mutation.diff`, each child's exit code,
