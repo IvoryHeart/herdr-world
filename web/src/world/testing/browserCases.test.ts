@@ -9,10 +9,10 @@ import {
 } from "./browserCases";
 
 test("World suite splitting preserves every retained viewport/operation/view case exactly once", () => {
-  expect(hostFilterCases).toHaveLength(120);
+  expect(hostFilterCases).toHaveLength(116);
   expect(
     new Set(hostFilterCases.map((item) => JSON.stringify(item))).size,
-  ).toBe(120);
+  ).toBe(116);
   expect(
     hostFilterCases.filter((item) => item.operation === "spaces-notifications"),
   ).toEqual([
@@ -28,7 +28,7 @@ test("World suite splitting preserves every retained viewport/operation/view cas
   const assigned = hostFilterGroups.flatMap((group) =>
     hostFilterCases.filter((item) => hostFilterGroup(item) === group),
   );
-  expect(assigned).toHaveLength(120);
+  expect(assigned).toHaveLength(116);
   expect(new Set(assigned)).toEqual(new Set(hostFilterCases));
   for (const group of hostFilterGroups)
     expect(assigned.some((item) => hostFilterGroup(item) === group)).toBe(true);
@@ -77,4 +77,18 @@ test("headless lifecycle policies leave browser resource routing and rendering o
       true,
     );
   }
+});
+
+test("catalogue admission policy moves headlessly while viewport controls and Town remain", () => {
+  expect(
+    hostFilterCases.some(({ operation }) =>
+      ["delayed-catalogue", "empty-catalogue"].includes(operation),
+    ),
+  ).toBe(false);
+  expect(
+    hostFilterCases.filter(({ operation }) => operation === "filters"),
+  ).toEqual([
+    { width: 1440, operation: "filters", view: "board" },
+    { width: 390, operation: "filters", view: "board" },
+  ]);
 });
