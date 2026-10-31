@@ -1,3 +1,4 @@
+import { useFocusedInspectorInterest } from "./useFocusedInspectorInterest";
 import {
   floatingTerminalGeometryId,
   readFloatingTerminalDock,
@@ -97,6 +98,7 @@ export function useWorldInspectorWindows({
   onInspectorConversationsChangeRef,
   onInspectorTerminalPortalRef,
 }: Input) {
+  useFocusedInspectorInterest(inspectorConversations);
   // Non-Inspector windows, such as Town's summary, share the manager.
   const { panels } = useWorldPanels();
   const [windowLayer, setWindowLayer] = useState<HTMLDivElement | null>(null);

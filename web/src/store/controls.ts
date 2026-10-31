@@ -4,7 +4,12 @@ import {
 } from "../../../shared/agentActivity";
 import { rememberedRecency, withCachedRecency } from "../agentRecency";
 import { bridge } from "../api";
-import { startFocusedInterest } from "./focusedInterest";
+import { refreshBridgeStatus, installCatalogueRefresh } from "./catalogue";
+import { scheduleRefresh } from "./refresh";
+import {
+  startFocusedInterest,
+  sharedAcquisitionEnabled,
+} from "./focusedInterest";
 import type { BridgeControlMsg } from "../bridgeControl";
 import {
   store,
@@ -55,6 +60,28 @@ export function handleStoreControl(control: BridgeControlMsg): void {
       control.reason ??
         "Another Herdr World client paused this connection. Resume when you want this browser to sync again.",
     );
+  } else if (
+    sharedAcquisitionEnabled() &&
+    !state.connectionPaused &&
+    control.type === "world_connections_changed"
+  ) {
+    if (Number.isSafeInteger(control.revision) && control.revision! >= 0)
+      void refreshBridgeStatus();
+  } else if (
+    sharedAcquisitionEnabled() &&
+    !state.connectionPaused &&
+    control.type === "world_focused_changed"
+  ) {
+    if (
+      state.catalogueReady &&
+      state.connections.some(
+        (owner) =>
+          owner.id === control.connection_id &&
+          owner.generation === control.connection_generation &&
+          owner.state === "ready",
+      )
+    )
+      scheduleRefresh(captureConnectionLease(control.connection_id));
   } else {
     handleAgentActivity(control);
   }
@@ -63,4 +90,5 @@ export function handleStoreControl(control: BridgeControlMsg): void {
 export function installStoreControls(): void {
   bridge.onControl(handleStoreControl);
   startFocusedInterest();
+  installCatalogueRefresh();
 }

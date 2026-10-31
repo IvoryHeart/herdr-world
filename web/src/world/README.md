@@ -77,6 +77,19 @@ The Chrome fixture uses the actual service handler/document store with synthetic
 Herdr responses and a test event stream; existing bridge/transport consumers
 retain responsibility for WebSocket and live Herdr behavior.
 
+## Focused acquisition and Inspector interest
+
+[Focused interest](../store/focusedInterest.ts) declares the visible active host
+and one reference per Inspector window through `store.holdFocusedOwner`.
+[useFocusedInspectorInterest](useFocusedInspectorInterest.ts) tracks window
+identity across filter/focus changes and releases on close. Each admitted window
+re-lists its owner after admission, including a preview of an already-closed tab;
+the controller's existing fresh-list evidence removes that window.
+[Controls](../store/controls.ts) qualify focused notices before scheduling a
+re-list. [Catalogue acquisition](../store/catalogue.ts) coalesces global notices
+and retries failed reads without a standing successful timer. Hidden pages keep
+Herdr event refreshes; return-to-page observes every held owner.
+
 ## Desk
 
 Desk follows the aggregate host filter. Receipt and screen reads capture each leaf's
@@ -104,8 +117,8 @@ captured at read start. Late holders see the result with a null trigger, which
 cannot mark a current stop. Browsers count consecutive failures per captured
 trigger independently. Hidden/closed Desks release their targets. Without the
 capability, the existing 4 s screens and 20 s receipts remain; full-report reads
-stay on demand. The service does not advertise the capability until focused timer
-replacement is complete. [Shared watch tests](../../../server/src/world/desk-watch-consumers.test.ts)
+stay on demand. The current service advertises the capability; older services
+keep legacy acquisition. [Shared watch tests](../../../server/src/world/desk-watch-consumers.test.ts)
 and the [Desk browser fixture](DeskView.browser.tsx) cover both paths.
 
 | Task | Open these owners | Focused evidence |

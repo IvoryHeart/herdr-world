@@ -55,6 +55,7 @@ import { worldRuntimeStore } from "./runtimeStore";
 import { CREATED_PANE_ADMISSION_TIMEOUT_MS } from "./officeRoomActions";
 import { buildWorldObject, worldObjectId } from "./worldObject";
 import WorldFoundationApp from "./WorldFoundationApp";
+import { runSharedInspectorChecks } from "./testing/sharedInspectorBrowser";
 import { worldInspectorWindowId } from "./worldTerminalPresentation";
 import type { BoardDocument, BoardOp } from "./board/boardDocument";
 import { interestKey } from "../../../shared/interest";
@@ -5139,7 +5140,7 @@ async function run() {
   );
   check(
     clippedVisualControls().length === 0,
-    "narrow Columns clipped title controls",
+    `narrow Columns clipped title controls: ${JSON.stringify({ clipped: clippedVisualControls(), scrollLeft: scrollingLayer.scrollLeft, scrollWidth: scrollingLayer.scrollWidth, clientWidth: scrollingLayer.clientWidth })}`,
   );
   narrowedVisualStage.style.width = "700px";
   narrowedVisualStage.style.height = "420px";
@@ -5998,6 +5999,7 @@ async function run() {
     await settle();
   }
   root.unmount();
+  await runSharedInspectorChecks(check);
 }
 
 run()

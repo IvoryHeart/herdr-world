@@ -4,9 +4,9 @@ The approved shared-acquisition change requires one observer per held runtime,
 interest independent of operation authority, and notices compared with each
 socket's received focused lists. The observer checkpoint delivers the service
 observer and catalogue notices; the recency checkpoint below adds shared readings
-and the browser maximum merge. The capability is not advertised yet, and browser
-timer removal remains pending. The Desk checkpoint below adds capability-gated
-shared reads without enabling the capability.
+and the browser maximum merge. The timer-removal checkpoint below enables the capability after completing
+focused browser notices, Inspector interest and failure-only recovery. Earlier
+checkpoints retained legacy acquisition until that activation.
 
 ## Required properties and scenarios
 
@@ -92,17 +92,17 @@ the real Bridge and focused store on two ready synthetic hosts. It checks scoped
 push admission without re-listing or focus changes, rejected sessions/generations,
 an older re-list, and a push during a deferred layout read. These direct tests
 establish the maximum operation and the real publication boundary; they do not
-claim transport liveness or enable the remaining browser T2 expected failures,
-whose remaining flows need Inspector interest, notices or timer removal. The
+claim transport liveness. At the recency checkpoint, the remaining browser T2
+flows still needed Inspector interest, notices and timer removal. The
 original recency and hide/show T2 cases are normal passing tests through actual
 active-owner declarations and holder-routed pushes; five unrelated expected
-failures remain. `web/src/store/recencyReconnect.test.ts` checks ordinary reconnect
+failures remained at that checkpoint. `web/src/store/recencyReconnect.test.ts` checks ordinary reconnect
 and generation-counter resets with older and unavailable readings, preserved
 ordering, and obsolete-generation rejection. `web/src/store/recencyCapability.test.ts`
 checks both initial capability absence and removal on reconnect. The real store
 initial-layout race retains A's maximum when B pushes for the same pane before A
 publishes. Active declarations retry a failed release once per period and stop
-on success. Q24 and Desk acquisition remain a later checkpoint.
+on success. Q24 maps the Desk checkpoint below.
 
 ## Desk checkpoint
 
@@ -145,3 +145,35 @@ external receipt summarization or filesystem timing. Browser bounds and fair
 selection, search/lane retention, existing review marks and full-report reads
 remain covered by the unchanged Desk regressions. No UI or aggregate refresh
 contract changes in this checkpoint.
+
+## Timer-removal checkpoint
+
+The boundary is the hello capability. The service's actual WebSocket hello
+advertises it; `server/src/service/world-service.test.ts` checks that handshake.
+All original T2 assertions in `web/src/store/pollReplacement.test.ts` are now
+normal tests. This preserves the original no-periodic-observation, marked-frame,
+focused notice, browser-count and runtime replacement properties, alongside
+status/layout/navigation/attachment/completion guards and rollback fallback.
+
+`web/src/store/sharedAcquisition.test.ts` drives the real Bridge/store on two
+synthetic hosts with a manual clock and completion signals. It checks independent
+Inspector references, a new hold on an already-held host, holder-routed recency,
+all-held-owner catch-up, obsolete/unknown owners, failed Inspector read retries,
+last-release/hide cancellation, burst notices behind a deferred catalogue read,
+and failure retries ending on success. `sharedBootstrap.test.ts` starts with both
+bootstrap lists failing and proves status recovery admits the host without a poll.
+
+The actual Chrome World handoff fixture adds an Inspector-controller consumer in
+`web/src/world/testing/sharedInspectorBrowser.tsx`. A stale aggregate preview is
+admitted without native focus; the hold starts a fresh qualified focused read and
+the real controller's absence effect removes the window. The fixture uses the
+existing browser driver and completion signals. Existing Desk Chrome shared-hook
+and fallback evidence remains required. The service read union follows each
+browser's existing selection bounds, not a new aggregate per-host cap.
+
+No new Quint model duplicates these browser/socket boundaries. Q04's maintained
+runtime ownership models and Q15's creation/preparation models remain binding;
+direct consumers cover the new admission, retry and publication schedules. The
+finite cases do not establish arbitrary transport liveness, all browser freeze
+behavior or external filesystem latency. Aggregate refresh, its 15-second
+fallback and retained Spaces mounting are unchanged.

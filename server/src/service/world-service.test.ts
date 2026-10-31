@@ -350,6 +350,7 @@ test("stop fails a Herdr call still waiting before storage closes, whatever the 
     started.base,
     await login(started.base, "world-service-test-password"),
   );
+  expect(socket.hello.capabilities.world_shared_acquisition).toBe(true);
   void socket.call("workspace.list", {}).catch(() => {});
   await herdr.arrived;
   await started.service.stop();
