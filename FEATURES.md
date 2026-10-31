@@ -3,6 +3,16 @@
 A Web/PWA client for a running [Herdr](https://herdr.dev) server.
 [Install it](./docs/DEPLOYMENT.md) or follow the [tutorial](./docs/TUTORIAL.md).
 
+Agent questions, answers and task results survive service restarts in the
+instance's private `world.sqlite`. The service sends owner alerts from a durable
+outbox; an interrupted send retains explicit uncertainty. Retrieve answers with
+`herdr-world ask get ID` or `--wait`. New asks from a verified local Linux
+agent can also receive the saved answer in their original Chat session without
+`--wait`. Town Summary’s Outbox keeps waiting, unconfirmed and not-sent deliveries separate
+from open questions; the owner can close a delivery or explicitly resend to the
+same session after accepting a possible duplicate. A changed session is skipped.
+See [migration and backups](./docs/DEPLOYMENT.md#durable-questions-results-and-backups).
+
 ## World update notifications
 
 - An available release notifies once per version in each browser profile and World
@@ -121,8 +131,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     **Next** opens the next waiting agent's window,
     then finished agents' if none wait.
     The needs-you list becomes a bottom tray on phones and hides when no agent
-    is blocked. Review marks acknowledge a specific completion in this browser,
-    without certifying its correctness.
+    is blocked. Review marks acknowledge a specific completion in every browser
+    of this World, without certifying its correctness; a World restart
+    forgets them.
   - **+**, **−** and **ALL** navigate between town, building, room and desk
     detail. Drag to pan; focused arrow keys pan too. Tap a room to zoom in.
     Phones stack buildings vertically; large towns can initially show roofs.
@@ -239,6 +250,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     start plainly and get the role in their first prompt. The editor shows the
     exact command. The new tab takes the profile's colour and its agent wears
     the profile's look in Town.
+  - Profile assignments and the Town master travel with their terminal in Herdr
+    and are shared by Worlds connected to that Herdr. Profiles and chimes stay
+    per World; an unknown profile shows its recorded name with the default look.
+    Closing the terminal or restarting Herdr ends its assignment and role.
+    The newest Town master assignment wins; moving the role still asks first.
   See the [New agent exercise](./docs/TUTORIAL.md#new-agent).
 - **Shared terminal appearance.** The title-bar icon opens the same editor in
   every view, including the Spaces tab strip and arranged window headers; a
@@ -283,15 +299,19 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     Undo compares that binding as well as its colour. An older undo that cannot
     establish continuity is refused; set the desired colour explicitly instead.
 - **Agent interest.** The button beside an agent's name in its Inspector
-  header in Town, Board and Spaces (or **⋯ → Attention** in mobile windows)
-  sets **Watching** (the default), **Muted**
-  or **Focused** for that agent, saved by the World service for its terminal on
+  header in Town, Board and Spaces (or **⋯ → Attention** in mobile windows) sets **Default (from groups)**, explicit
+  **Watch**, **Muted** or **Focused**, saved by the World service for its terminal on
   every device. Chimes
   read it: a muted agent never chimes, and while a focused agent is reachable
   only focused agents and the Town master's needs-you chime (Watching then
   says it is quiet). A focus on an offline host silences no one until the host
   is back. Interest never hides
-  anything from reception. It follows the terminal through moves, and goes
+  anything from reception. An explicit agent choice wins; otherwise Group Focus
+  beats Group Mute, with Default contributing no claim. Focus combines currently
+  reachable effective-focused agents and Group members. Hover explains the source
+  and any overridden group claim. Team/Pod controls live in Groups; v1 hides them
+  on Room/Desk. Group preferences survive away members and are removed atomically
+  with deletion. Individual interest follows the terminal through moves, and goes
   when its host shows the terminal has closed, including after reconnecting.
   A failed save shows an error and keeps the previous choice; reopen the
   button to retry.
@@ -569,6 +589,30 @@ related cards and groups a tab dropped on another tab, or chosen with
 **Group…** and a tap; **Ungroup** undoes it. Existing saved magnetic groups
 migrate automatically to kind Team; these controls continue to act on Teams.
 
+### Groups
+
+**Actions → Groups** opens the existing movable panel window (full screen on
+phones). Filter All/Pod/Team/Room/Desk, then open a row for member roles, live
+status, linked open PR cards, the ordered Now list and recent sender attribution.
+The roster shows shared reviewers with rings and warns above the Pod's open-PR
+limit without blocking edits. Unavailable work is unknown; failed refreshes are
+labelled cached. Away and ambiguous addresses never contribute live work/status.
+
+Town's open **Summary** shows a **Pods** section after Hosts and rooms, with
+the same status, first Now item and source-qualified PR warning. Tap a Pod to
+open or raise its Groups detail. Pod roll-ups do not add to reception counts.
+
+Create Teams/Pods, add/remove members, edit roles, name/Now/limit, delete with
+confirmation or explicitly promote a Team with a complete current address mapping.
+Exclusive-role transfers ask first. An edit or confirmation based on an older
+Board revision is refused and refreshes the roster. Add, Edit and Roles keep
+their drafts open until a write succeeds; after a conflict, review the current
+values and choose **Use current version** before explicitly saving again.
+Current-agent selection refuses a replaced agent or a duplicate Herdr name;
+rename duplicates or supply an explicit qualified address. Ambiguous member actions
+inspect a qualified match without treating it as resolved. Room/Desk membership
+belongs to Herdr and uses Town's move gestures or guarded CLI moves.
+
 ### Agent CLI (`herdr-world --skill`)
 
 Agents change World objects themselves from their pane, through the running
@@ -592,8 +636,18 @@ when piped, with stable exit codes:
   reaches reception when exactly one local Herdr has the pane it names. A new
   ask follows your chime, toast and OS notification preferences, naming its
   agent with the question's first line and **Open agent** for its exact
-  original seat. Another verified agent (never the asker) may answer a
-  question that is not owner-only.
+  original seat. Reception shows failed or uncertain owner-alert delivery while
+  keeping the saved question answerable. World commits a new ask and its attention intent together in
+  `world.sqlite`, then sends the owner alert through its captured Herdr connection.
+  Herdr's toasts, connected Worlds and phone notifications can receive it even
+  when no World tab is open. The CLI retains a fallback alert through the asking
+  pane's Herdr if World could not record it; it names the failure and exits 1.
+  When no alert is confirmed yet, exit 6 (`not_delivered`) carries the recorded ID;
+  `retrying: true` means the service will retry a temporary failure with backoff.
+  Closing the ask cancels a pending alert. Duplicates are possible after a lost
+  reply or restart. JSON preserves `recorded` and Herdr's `notified` evidence
+  (`null` for a repeated cause), including through `--wait`. Another verified agent (never
+  the asker) may answer a question that is not owner-only.
 - `ask withdraw ID` or `ask withdraw --key CAUSE`: the original verified asker
   withdraws a cleared cause, including when a creation reply lost its ask ID.
   Answering or withdrawing removes its question marks. `--key` keeps repeated
@@ -608,6 +662,19 @@ when piped, with stable exit codes:
   is display-only Herdr pane metadata, so it needs no `--herdr`; the parent
   it names is the child's claim.
 - `whoami`, `ls`, `history [--actor]`.
+- `group create|add|remove|lead|reviewers|now|list|show|delete|promote`:
+  World-owned Teams and Pods, with `pod` and `team` aliases. Lead/reviewer
+  edits follow the owner/FirstMate crew rule; sender claims are attribution,
+  not authenticated permission. Exclusive-role transfers need `--replace --yes`,
+  deletion needs `--yes`, and Team promotion needs a complete explicit address mapping.
+  `group show` includes recent sender attribution (128 changes retained globally).
+  Room/Desk groups are projected from Herdr. Adding with `--herdr` reuses Town's
+  move: Room moves the whole desk and prints every affected agent first; Desk
+  moves one pane. Results report confirmed Done/Partly done/Not done/Unknown
+  outcomes and locations, with no automatic retry on Unknown.
+  `group import FILE --yes` migrates one Pod table atomically and never overwrites
+  existing Pods; explicit address mappings handle away or annotated names.
+  `group list --kind pod --markdown` renders the roster; files are never synchronized.
 
 World checks who is calling: the CLI sends its `HERDR_PANE_ID`, and the
 service accepts it only when the calling process runs in that pane of a local

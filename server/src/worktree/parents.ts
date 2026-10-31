@@ -1,8 +1,7 @@
 import {
-  readGuiSettings,
   repoSettingsKey,
-  updateGuiSettings,
   type GuiSettings,
+  type GuiSettingsStore,
 } from "../config/gui-settings";
 
 const CUSTOM_SETTINGS_KEY = "worktree_parent_by_checkout";
@@ -95,14 +94,14 @@ export function createWorktreeParentStore({
   connectionId,
   herdr,
   sshHost,
-  readSettings = readGuiSettings,
-  updateSettings = updateGuiSettings,
+  readSettings,
+  updateSettings,
 }: {
   connectionId?: string;
   herdr: HerdrCaller;
   sshHost: () => string | undefined;
-  readSettings?: typeof readGuiSettings;
-  updateSettings?: typeof updateGuiSettings;
+  readSettings: () => Promise<GuiSettings>;
+  updateSettings: GuiSettingsStore["update"];
 }) {
   async function resolveWorktreeWorkspace(result: any): Promise<any | null> {
     const directWorkspace = result?.workspace;

@@ -1,6 +1,4 @@
 import { normalizeTitleSuffix } from "../../../shared/instanceName";
-import { defaultDataFile } from "./data-paths";
-import { worldEnv } from "./environment";
 import { dirname } from "node:path";
 import { mkdirSync } from "node:fs";
 import { rename, rm, writeFile } from "node:fs/promises";
@@ -44,14 +42,6 @@ export type GuiSettings = {
 
 export const DEFAULT_WORKSPACE_AUTO_SYNC_INTERVAL_MINUTES = 10;
 
-let cachedGuiSettings: GuiSettings | null = null;
-let settingsMutationQueue: Promise<void> = Promise.resolve();
-let temporaryFileSequence = 0;
-
-export function guiSettingsPath(): string {
-  return worldEnv("SETTINGS_PATH") ?? defaultDataFile("settings.json");
-}
-
 function defaultGuiSettings(): GuiSettings {
   return {
     version: 1,
@@ -71,7 +61,10 @@ function storedTitleSuffix(value: unknown): string {
   }
 }
 
-function normalizeGuiSettings(raw: unknown): GuiSettings {
+function normalizeGuiSettings(
+  raw: unknown,
+  runtimeStatusMigrated = false,
+): GuiSettings {
   const obj = raw && typeof raw === "object" ? (raw as any) : {};
   const repositories =
     obj.repositories && typeof obj.repositories === "object"
@@ -103,11 +96,6 @@ function normalizeGuiSettings(raw: unknown): GuiSettings {
   for (const [key, value] of Object.entries(workspaceAutoSync)) {
     if (!value || typeof value !== "object") continue;
     const entry = value as any;
-    const lastStatus = ["updated", "up_to_date", "skipped", "failed"].includes(
-      entry.last_status,
-    )
-      ? (entry.last_status as WorkspaceAutoSyncStatus)
-      : undefined;
     normalizedWorkspaceAutoSync[key] = {
       enabled: entry.enabled === true,
       interval_minutes:
@@ -121,13 +109,30 @@ function normalizeGuiSettings(raw: unknown): GuiSettings {
           ? entry.checkout_path
           : undefined,
       host: typeof entry.host === "string" ? entry.host : undefined,
-      last_run_at:
-        typeof entry.last_run_at === "string" ? entry.last_run_at : undefined,
-      last_status: lastStatus,
-      last_message:
-        typeof entry.last_message === "string" ? entry.last_message : undefined,
-      last_branch:
-        typeof entry.last_branch === "string" ? entry.last_branch : undefined,
+      ...(!runtimeStatusMigrated
+        ? {
+            last_run_at:
+              typeof entry.last_run_at === "string"
+                ? entry.last_run_at
+                : undefined,
+            last_status: [
+              "updated",
+              "up_to_date",
+              "skipped",
+              "failed",
+            ].includes(entry.last_status)
+              ? (entry.last_status as WorkspaceAutoSyncStatus)
+              : undefined,
+            last_message:
+              typeof entry.last_message === "string"
+                ? entry.last_message
+                : undefined,
+            last_branch:
+              typeof entry.last_branch === "string"
+                ? entry.last_branch
+                : undefined,
+          }
+        : {}),
     };
   }
   return {
@@ -160,72 +165,113 @@ function normalizeGuiSettings(raw: unknown): GuiSettings {
   };
 }
 
-export async function readGuiSettings(): Promise<GuiSettings> {
-  if (cachedGuiSettings) return cachedGuiSettings;
-  const path = guiSettingsPath();
-  const file = Bun.file(path);
-  if (!(await file.exists())) {
-    cachedGuiSettings = defaultGuiSettings();
-    return cachedGuiSettings;
-  }
-  try {
-    cachedGuiSettings = normalizeGuiSettings(JSON.parse(await file.text()));
-  } catch (e) {
-    serverLogger.child("settings").warn("ignoring invalid settings", {
-      path,
-      error: e,
-    });
-    cachedGuiSettings = defaultGuiSettings();
-  }
-  return cachedGuiSettings;
-}
+/** One World service's settings file, with its cache and write queue. */
+export type GuiSettingsStore = {
+  readonly path: string;
+  read(): Promise<GuiSettings>;
+  /**
+   * Serialize configuration read-modify-write so concurrent RPC edits retain
+   * each other. Runtime status has its own SQLite port after migration.
+   */
+  update(
+    update: (current: GuiSettings) => GuiSettings | Promise<GuiSettings>,
+    shouldCommit?: () => boolean,
+  ): Promise<GuiSettings>;
+  /**
+   * Refuse every later write, then settle once the queued writes finish:
+   * the service that owns this file is stopping.
+   */
+  close(): Promise<void>;
+};
 
-async function persistGuiSettings(
-  settings: GuiSettings,
-  shouldCommit: () => boolean,
-): Promise<GuiSettings> {
-  const path = guiSettingsPath();
-  const temporaryPath = `${path}.${process.pid}.${++temporaryFileSequence}.tmp`;
-  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-  const normalized = normalizeGuiSettings(settings);
-  try {
-    if (!shouldCommit()) throw new Error("settings update cancelled");
-    await writeFile(temporaryPath, `${JSON.stringify(normalized, null, 2)}\n`, {
-      mode: 0o600,
-      flag: "wx",
-    });
-    if (!shouldCommit()) throw new Error("settings update cancelled");
-    await rename(temporaryPath, path);
-  } catch (error) {
-    await rm(temporaryPath, { force: true }).catch(() => undefined);
-    throw error;
+export function createGuiSettingsStore(
+  path: string,
+  options: {
+    /** Set only after the worker has imported legacy history. */ runtimeStatusMigrated?: boolean;
+  } = {},
+): GuiSettingsStore {
+  let cached: GuiSettings | null = null;
+  let mutationQueue: Promise<void> = Promise.resolve();
+  let temporaryFileSequence = 0;
+  let closed = false;
+
+  async function read(): Promise<GuiSettings> {
+    if (cached) return cached;
+    const file = Bun.file(path);
+    if (!(await file.exists())) {
+      cached = defaultGuiSettings();
+      return cached;
+    }
+    try {
+      cached = normalizeGuiSettings(
+        JSON.parse(await file.text()),
+        options.runtimeStatusMigrated,
+      );
+    } catch (e) {
+      serverLogger.child("settings").warn("ignoring invalid settings", {
+        path,
+        error: e,
+      });
+      cached = defaultGuiSettings();
+    }
+    return cached;
   }
-  cachedGuiSettings = normalized;
-  return normalized;
-}
 
-function enqueueSettingsMutation<T>(operation: () => Promise<T>): Promise<T> {
-  const result = settingsMutationQueue.then(operation);
-  settingsMutationQueue = result.then(
-    () => undefined,
-    () => undefined,
-  );
-  return result;
-}
+  async function persist(
+    settings: GuiSettings,
+    shouldCommit: () => boolean,
+  ): Promise<GuiSettings> {
+    const temporaryPath = `${path}.${process.pid}.${++temporaryFileSequence}.tmp`;
+    mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
+    const normalized = normalizeGuiSettings(
+      settings,
+      options.runtimeStatusMigrated,
+    );
+    try {
+      if (!shouldCommit()) throw new Error("settings update cancelled");
+      await writeFile(
+        temporaryPath,
+        `${JSON.stringify(normalized, null, 2)}\n`,
+        { mode: 0o600, flag: "wx" },
+      );
+      if (!shouldCommit()) throw new Error("settings update cancelled");
+      await rename(temporaryPath, path);
+    } catch (error) {
+      await rm(temporaryPath, { force: true }).catch(() => undefined);
+      throw error;
+    }
+    cached = normalized;
+    return normalized;
+  }
 
-// Read and persist under one queue slot so background status updates cannot
-// overwrite a toggle changed by an RPC that completed at the same time.
-export function updateGuiSettings(
-  update: (current: GuiSettings) => GuiSettings | Promise<GuiSettings>,
-  shouldCommit: () => boolean = () => true,
-): Promise<GuiSettings> {
-  return enqueueSettingsMutation(async () => {
-    const current = await readGuiSettings();
-    if (!shouldCommit()) throw new Error("settings update cancelled");
-    const next = await update(current);
-    if (!shouldCommit()) throw new Error("settings update cancelled");
-    return persistGuiSettings(next, shouldCommit);
-  });
+  function enqueue<T>(operation: () => Promise<T>): Promise<T> {
+    const result = mutationQueue.then(operation);
+    mutationQueue = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
+  }
+
+  return {
+    path,
+    read,
+    update: (update, shouldCommit = () => true) =>
+      enqueue(async () => {
+        if (closed) throw new Error("World storage is closed");
+        // A close while this update runs cancels it before it commits.
+        const open = () => !closed && shouldCommit();
+        const current = await read();
+        if (!open()) throw new Error("settings update cancelled");
+        const next = await update(current);
+        if (!open()) throw new Error("settings update cancelled");
+        return persist(next, open);
+      }),
+    close() {
+      closed = true;
+      return mutationQueue;
+    },
+  };
 }
 
 export function terminalSurfaceCodecsEnabled(
@@ -278,9 +324,10 @@ export function workspaceAutoSyncSettingsKey(
 }
 
 export async function repoWorktreeHooksEnabled(
+  readSettings: () => Promise<GuiSettings>,
   repoKey?: string | null,
 ): Promise<boolean> {
   if (!repoKey) return true;
-  const settings = await readGuiSettings();
+  const settings = await readSettings();
   return settings.repositories[repoKey]?.worktree_hooks_enabled !== false;
 }

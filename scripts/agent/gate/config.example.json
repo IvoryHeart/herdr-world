@@ -5,9 +5,6 @@
     "pods": {},
     "prs": {}
   },
-  "flakes": ["Browser tests"],
-  "rerunBudget": 1,
-  "aggregateChecks": ["Delivery checks"],
   "roster": {
     "rev2": {
       "model": "gpt-6.1-sol",

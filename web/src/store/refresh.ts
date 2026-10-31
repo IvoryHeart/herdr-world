@@ -1,3 +1,5 @@
+import { bridge } from "../api";
+import { recordFocusedRead } from "./focusedInterest";
 import {
   state,
   set,
@@ -8,6 +10,7 @@ import {
 } from "../store";
 import { type Workspace, type Tab, type PaneLayout } from "../types";
 import { withAgentActivity } from "../agentOrder";
+import { recordObservedRecency } from "../agentRecency";
 import { forgetTerminalRelayViewportsExcept } from "../terminalResize";
 import { forgetTabLayoutsExcept, rememberTabLayout } from "../tabLayout";
 import { trackTaskCompletions, notifyCompletedTasks } from "./notifications";
@@ -118,13 +121,21 @@ async function refreshNow(
     seq: leaseSnapshot(lease).pendingFocusWorkspaceSeq,
     settledAt: leaseSnapshot(lease).pendingFocusWorkspaceSettledAt,
   };
+  let complete = true;
+  const options =
+    bridge.hello?.capabilities.world_shared_acquisition === true
+      ? { focusedObservation: true }
+      : undefined;
   try {
     const [wsRes, tabRes, paneRes, agentRes] = await Promise.all([
-      lease.client.call("workspace.list"),
-      lease.client.call("tab.list"),
-      lease.client.call("pane.list"),
+      lease.client.call("workspace.list", {}, undefined, options),
+      lease.client.call("tab.list", {}, undefined, options),
+      lease.client.call("pane.list", {}, undefined, options),
       // Older servers may omit agent metadata; ordinary navigation still works.
-      lease.client.call("agent.list").catch(() => null),
+      lease.client.call("agent.list", {}, undefined, options).catch(() => {
+        complete = false;
+        return null;
+      }),
     ]);
     if (!leaseIsCurrent(lease)) return;
     const workspaces: Workspace[] = wsRes?.workspaces ?? [];
@@ -290,18 +301,33 @@ async function refreshNow(
       delete next.endpointAvailability;
       queuedConnectionKeys.add(refreshKey);
     }
+    Object.assign(
+      next,
+      recordObservedRecency(
+        lease.connectionId,
+        leaseSnapshot(lease).agentActivity,
+        next.panes ?? [],
+        agentRes,
+        state.agentActivityHistory,
+      ),
+    );
     const patch = stabilizeRefreshPatch(leaseSnapshot(lease), next);
     if (
       !setForConnection(lease, {
         ...(patch ?? {}),
+        ...(next.agentActivityHistory && {
+          agentActivityHistory: next.agentActivityHistory,
+        }),
         lastTopologyObservationStartedAt: observationStartedAt,
       })
     ) {
       return;
     }
+    recordFocusedRead(lease, complete && next.error === null);
     notifyCompletedTasks(lease, completedPanes, workspaces, tabs);
   } catch (error) {
     setForConnection(lease, { error: (error as Error).message });
+    recordFocusedRead(lease, false);
   } finally {
     refreshingConnectionKeys.delete(refreshKey);
     refreshCompletions.delete(refreshKey);

@@ -4,15 +4,181 @@ Herdr World is one Bun-compiled service and same-origin Web/PWA application. It
 connects to one or more separately running Herdr servers through local sockets or
 OpenSSH. Users do not install Roamgate or a remote World bridge.
 
-Session cookies use a private random signing key under the World data directory.
-It persists across restarts and rotates when the configured credentials change,
-invalidating existing sessions. An instance-specific settings path isolates its
-signing state. Management commands do not create or rotate signing keys.
+Session cookies use a private random signing key, `session-secret.json` in the
+World data directory. It persists across restarts and rotates when the
+configured credentials change, invalidating existing sessions. Management
+commands do not create or rotate signing keys.
+
+One running World owns its data directory. A second World started on the same
+directory stops with `the data folder … is in use by World (pid …, port …)`
+instead of overwriting the first one's files. To run another instance, such as
+a development or preview World, give it its own directory with
+`HERDR_WORLD_DATA_DIR=/path/to/folder`. Every World data file then lives there
+unless a per-file override below names another path. Copy `connections.json`
+and `settings.json` into the new folder if the instance should reach the same
+Herdr hosts; never share the auth token, signing key, `web-push.json`, Board or
+ledger between running instances. Set it in the service's environment file to
+move the managed service: `herdr-world auth`, `url` and `service install` then
+use the login token in that folder. The lock is `instance.lock` in the data
+directory; a lock left by a World that is no longer running is taken over.
+
+### Durable questions, results and backups
+
+`world.sqlite` in that instance's data directory holds agent questions, answers,
+task-result notices, undo history, the attention outbox, agent profiles and chimes. One in-process worker
+owns it; SQLite uses WAL and `synchronous=FULL`. Responses acknowledge a durable
+commit. Grouping up to 32 operations or 5 ms reduces synchronization frequency;
+these settings do not promise a particular response latency on every platform.
+Configuration, connections and secrets remain private files.
+
+At startup, World checks `boards/world-ledger.json` (or the configured
+`HERDR_WORLD_LEDGER_PATH`). Before importing a changed file, it makes a private,
+byte-identical `<ledger>.<content-hash>.sqlite-import.bak` beside it. An unchanged
+file causes no import writes. Changed legacy files contribute only missing IDs;
+existing SQLite records take precedence. Historical imports create no alerts or answer sends.
+The original remains untouched. An unreadable legacy file is reported in the
+local service log and left alone; World uses its current store, and checks again
+after the file is repaired.
+New questions from a verified local Linux CLI caller capture the original
+connection, terminal and supported Chat session. Recording an answer atomically
+adds a reference-only `world.ask.deliver-answer` intent; it stores no second copy
+of the text. After a short grace period for CLI retrieval, World uses Chat's
+current lease, session and input checks to submit the saved answer. An offline
+host stays pending and is rechecked on return. A changed, ended or unverified
+asking session records not sent, leaving `ask get` available. Existing questions
+are not backfilled, and dismissals send no pane input. CLI callers on other
+platforms, SSH callers and asks without a supported verified binding remain
+retrieval-only.
+
+A possible pane send is **opaque**: after a crash or lost receipt World records
+uncertain and never automatically repeats it. Town Summary’s Outbox exposes
+those deliveries
+separately from unanswered questions. A compact Reception row counts only
+unconfirmed and not-sent answers to check; waiting-only deliveries leave the
+rail hidden. Each original host’s reception sign also shows its saved-answer
+letter count. Only the owner can authorize **Send again…**,
+with an explicit possible-duplicate confirmation and the same original recipient,
+or **Dismiss** or **Cancel send**, preserving the answer. Old decisions and acknowledgements
+cannot settle a newer attempt. A successful `ask`/`ask get` writes its answer to
+stdout before acknowledging receipt as the verified original asker. A failed
+stdout write sends no acknowledgement; a lost acknowledgement can leave a pane
+delivery pending or uncertain, so duplicate output remains possible. Herdr
+provides no operation-key deduplication or atomic expected-session prompt. A
+queued receipt proves submission to that reported session, not agent execution,
+model reading or exactly-once delivery. Owner alerts remain harmless-repeatable
+and may retry independently.
+
+Both paths now use the same versioned, fenced outbox. Each attempt gets the
+current service incarnation and a new attempt number, and re-resolves the
+captured connection/session before dispatch. Unsupported operation versions
+remain blocked for an explicit recorded migration; upgrading preserves receipts
+and external handles. The [effects guide](world-effects.md) describes recovery
+and the internal read contracts. No new browser control or workflow authoring
+API is introduced.
+
+The database location always follows the instance data directory; the legacy
+ledger override selects the import source.
+
+For a consistent backup, stop this World service, then copy its entire private
+data directory, including any SQLite WAL files and the configuration/secrets it
+needs. Back up an overridden legacy import source separately while migrating.
+Never copy only a live `world.sqlite`: committed data can still be in its WAL.
+Restore into a private directory with the service stopped. Before a future
+schema upgrade, World makes a private `world.sqlite.v<old-version>.<8-random-base32>.bak` snapshot. Each upgrade
+keeps a new snapshot, so restoring and upgrading again preserves earlier copies.
+An older binary refuses an unsupported newer schema. Restore that matching
+snapshot with the service stopped, after preserving the current whole-directory
+backup. Never overwrite a live database or mix WAL files from different copies.
+
+A binary predating SQLite uses the retained JSON and cannot see newer SQLite
+answers. On upgrading again, World merges missing legacy IDs; it never overwrites
+an existing SQLite record. Conflicting edits to the same record require explicit
+reconciliation from the preserved backups. Keep the JSON, content-hash import
+backups, schema snapshots and owner backups private. Remove migration backups
+only after verifying the upgrade and deciding that their rollback/reconciliation
+history is no longer needed.
+
+The change log retains at most 10,000 change references and expires them after
+24 hours on writes; an expired cursor or one from a previous service start must reset. It records IDs
+and tombstones, rather than another copy of question text. Open questions and
+unresolved attention intents survive independently. Finished attention entries
+are removed with their retained domain records.
+
+The service commits a dispatch claim before showing an owner alert on its
+captured connection's current runtime. No alternate connection is selected.
+`shown: true` finishes delivery. Definite `disabled`, `no_foreground_client` or
+unknown refusals finish without retry. `busy`, `rate_limited` and a missing
+current lease defer the alert with backoff from 30 seconds to 30 minutes. Each wait is armed for at most 60 seconds
+and rechecks wall time on wake, including after sleep. A removed connection is refused. Closing an ask cancels its pending alert.
+Timeouts and interrupted dispatch become visible `uncertain`; owner alerts may
+retry under the same backoff because duplicates are harmless. Reception shows
+failed/uncertain delivery on the saved question; `ask get ID --json` includes its
+evidence. Alert updates refresh that evidence without announcing the question
+again or changing its attention count.
+
+An answer is stored before acknowledgement and remains retrievable with
+`herdr-world ask get ID`; use `--wait` to wait for it. No pane-answer sends are queued by this foundation. Pane delivery without `--wait`, including visible uncertainty and owner
+resend/close decisions, is the [planned PR 2](ask-answer-delivery.md). An uncertain
+pane-answer attempt must never automatically replay.
 
 Optionally set `HERDR_WORLD_PIN` to 6–12 ASCII digits for convenience login on a
 trusted private network or VPN. Keep password/token recovery available. PIN login
 has separate per-client throttling and a global cooldown after ten failures;
 that cooldown does not block password/token login.
+
+### Agent profile storage
+
+Agent profiles, chimes, pending legacy terminal settings, their per-connection
+import flags and the Town master revision watermark live in `world.sqlite`.
+The profile editor and launcher use the same controls as before. Live terminal
+profile choices and master tokens remain in Herdr; restoring a World backup
+never makes its old settings authoritative over an already imported connection.
+
+On the first start using this store, World reads `agent-profiles.json` (or
+`HERDR_WORLD_AGENT_PROFILES_PATH`) and preserves exact bytes beside it as
+`<source>.<sha256>.sqlite-import.bak`, private to the service user. The rows and
+completion marker commit together before startup exposes profiles. A missing
+source seeds the starter profiles once. Later starts ignore the retained source,
+even if it changes; edits go only to SQLite and deleted starters stay deleted.
+The override now selects an import source, not a second writable store.
+
+Malformed initial input or an unsafe/conflicting backup stops startup without
+partial profile data. Preserve the source and backup, repair the initial source
+or move a conflicting backup safely aside, then restart. World never overwrites
+a conflicting backup. After successful import, recover profiles from a stopped,
+consistent whole-directory backup using the procedure above. A binary predating
+this profile migration sees only the retained JSON; its edits are not reimported
+after returning to the newer binary. Reconcile such edits explicitly from the
+preserved copies rather than deleting SQLite import records.
+
+### Auto-sync runtime status
+
+Auto-sync schedules, enabled switches, intervals, checkout paths and host
+configuration remain in `settings.json`. Last-run time, outcome, message and
+branch live in `world.sqlite`, keyed by the existing connection-qualified
+settings key. The settings RPC combines configuration with committed status, so
+the existing auto-sync controls and last-run display work as before. A background
+run never rewrites configuration, and a configuration change cannot overwrite
+its recorded result. Git operations keep their existing runtime and dirty-tree
+checks.
+
+At the first start using this store, World preserves exact settings bytes as a
+private `<settings>.<sha256>.runtime-status-import.bak`, then imports only the
+four status fields and its completion marker in one transaction. Configuration,
+`custom` values and secrets are not copied into SQLite. The original file stays
+untouched. After import, service configuration writes remove historical status
+fields from the JSON. Pre-start CLI edits retain legacy fields until the service
+can import them. A missing source initializes an empty status store once; later
+JSON edits never restore or replace SQLite status.
+
+Malformed initial settings or an unsafe/conflicting import backup stops startup
+without partial runtime rows. Preserve the source and backups, repair the initial
+settings or safely move a conflicting backup aside, then restart. After import,
+use the stopped whole-directory backup procedure above for recovery. An older
+binary sees retained JSON status; edits or results it records are not reimported
+when returning to this store. Runtime status is local history, not proof that a
+Git effect and its record committed together: a crash between them can leave the
+previous result and a later scheduled run. Runtime field claims remain in memory.
 
 ## Requirements
 
@@ -117,7 +283,8 @@ installing the RC. Candidates do not replace the stable GitHub Latest release or
 npm `latest` tag.
 
 This foundation starts with fresh World state. It uses
-`~/.config/herdr-world` (or `%APPDATA%\herdr-world`) and browser keys under
+`~/.config/herdr-world` (or `%APPDATA%\herdr-world`, or `HERDR_WORLD_DATA_DIR`
+when set) and browser keys under
 `herdr-world:foundation-v2:`. It does not read old Herdr World bridge profiles,
 Roamgate settings, or their browser preferences. Those files remain untouched for
 rollback. These World paths are stable across 0.2.x versions: an upgrade does not
@@ -126,6 +293,26 @@ unpacking a release archive, then removes it. Browser storage is tied to the Wor
 origin, so opening the same service through a different hostname or port shows that
 browser's separate state. Saved connection profiles and service settings remain in
 the service user's config directory.
+
+### Terminal profile settings migration
+
+Profile definitions and chimes live in [World SQLite storage](#agent-profile-storage).
+Current profile assignments and the Town master role live in four Herdr terminal tokens
+(`world_terminal`, `world_profile`, `world_profile_name`, `world_master`),
+readable by other clients of that Herdr. They survive pane moves and end with
+the terminal, including a Herdr restart. Each World resolves profile IDs
+against its own profiles; a missing profile keeps its recorded name and the
+default look.
+
+On the first complete current observation of each connection, World imports
+its matching legacy assignments once. Offline hosts wait until observed;
+absent terminals are dropped from the active projection. Existing valid token
+assignments take precedence. The SQLite migration preserves the source JSON in
+an exact hash-named backup; keep any older `.before-terminal-settings` backup too.
+Pending legacy assignments, per-connection import markers and the highest Town
+master revision are saved with the profiles in SQLite; do not remove these markers when restoring a World backup,
+or old assignments could be imported again. Restoring the pre-migration backup
+is for rollback to an older World.
 
 ### Replacing Herdr World 0.1.1 or earlier
 
@@ -370,12 +557,11 @@ herdr-world --ssh-host workbox
 owns the chosen room (`tab.create`, then `agent.start` with the profile's
 arguments, then a readiness wait and the first prompt). Agent kinds come from
 the host's Herdr (`server.agent_manifests`); an older Herdr offers Claude and
-Codex. Profiles are stored atomically, with owner-only permissions, in
-`~/.config/herdr-world/agent-profiles.json` on Unix or
-`%APPDATA%\herdr-world\agent-profiles.json` on Windows; override the path
-with `HERDR_WORLD_AGENT_PROFILES_PATH`. Profiles refuse text that looks like a
-credential and never hold one. The same file keeps your chime settings and who
-the Town master is; a device's own chime switch and volume stay in that
+Codex. Profiles and chimes commit atomically through the single worker into
+`world.sqlite` in the private instance data directory. Existing JSON is imported
+once; see [profile storage and recovery](#agent-profile-storage). Profiles refuse
+text that looks like a credential and never hold one. Current profile choices
+and the Town master role live in Herdr terminal tokens; a device's own chime switch and volume stay in that
 browser. Herdr reports `herdr notification show` without a pane, so World
 can't say which agent sent it.
 

@@ -1,7 +1,10 @@
 // Larger independent cases start first to keep a bounded worker pool occupied.
 export const verificationModels = [
+  "effect-recovery",
   "space-admission",
   "browser-preparation",
+  "observation-base",
+  "binding-resolution",
   "browser-refresh",
   "chunk-credits",
   "runtime-leases",

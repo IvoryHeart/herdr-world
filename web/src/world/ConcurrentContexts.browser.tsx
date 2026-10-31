@@ -66,6 +66,8 @@ const measurements = {
   validationMs: 0,
   worldBuildMs: 0,
   worldBuildSliceCount: 0,
+  /** Construction units: slices end on time as well, units do not. */
+  worldBuildUnits: 0,
   worldBuildMaxSliceNodes: 0,
   worldBuildMaxSliceDurationMs: 0,
   worldBuildCheckpoints: {} as Record<
@@ -75,7 +77,16 @@ const measurements = {
   treeProjectionMs: 0,
   boardProjectionMs: 0,
   officeProjectionMs: 0,
+  /** observe calls on a card the same observer already watched. */
+  repeatedCardRegistrations: 0,
+  /** Card observations still live after Board unmounts; must be none. */
+  liveCardObservations: -1,
+  /** Production World work (devtools counters) during each stress phase. */
+  worldWorkByPhase: {} as Record<string, Record<string, number>>,
 };
+// Count World model work in the production modules (devtools/renderer.ts).
+window.__HERDR_WORLD_RENDERER_DEBUG__ = "counters";
+let workAtPhaseStart: Record<string, number> = {};
 let stressPhase: string | null = null;
 function recordBoardRender(_id: string, _phase: string, duration: number) {
   const counts = (measurements.boardRenderByPhase[
@@ -106,9 +117,23 @@ FitAddon.prototype.fit = function () {
   recordTerminalWork("fit");
   return fitTerminal.call(this);
 };
+// Card targets each observer still watches: observe adds, unobserve removes
+// one, disconnect releases all. Teardown may use either release path.
+const liveCards = new Map<ResizeObserver, Set<Element>>();
+const disconnectObserver = ResizeObserver.prototype.disconnect;
+ResizeObserver.prototype.disconnect = function () {
+  liveCards.delete(this);
+  return disconnectObserver.call(this);
+};
 const observeCard = ResizeObserver.prototype.observe;
 ResizeObserver.prototype.observe = function (...args) {
   if (args[0].classList.contains("board-card")) {
+    let cards = liveCards.get(this);
+    if (!cards) liveCards.set(this, (cards = new Set()));
+    // Observing a card this observer already watches is a repeat, however
+    // many cards the browser's layout mounted.
+    if (cards.has(args[0])) measurements.repeatedCardRegistrations++;
+    cards.add(args[0]);
     const counts = (measurements.boardObserverWorkByPhase[
       stressPhase ?? "outside-stress"
     ] ??= {});
@@ -119,6 +144,7 @@ ResizeObserver.prototype.observe = function (...args) {
 const unobserveCard = ResizeObserver.prototype.unobserve;
 ResizeObserver.prototype.unobserve = function (...args) {
   if (args[0].classList.contains("board-card")) {
+    liveCards.get(this)?.delete(args[0]);
     const counts = (measurements.boardObserverWorkByPhase[
       stressPhase ?? "outside-stress"
     ] ??= {});
@@ -152,6 +178,7 @@ const longTasks = new PerformanceObserver((list) => {
 longTasks.observe({ type: "longtask", buffered: true });
 async function beginStress(phase: string) {
   stressPhase = phase;
+  workAtPhaseStart = { ...window.__HERDR_WORLD_WORK__ };
   performance.mark(`stress:${phase}:begin`);
   await fetch(`/input-ready?phase=${phase}`);
 }
@@ -166,6 +193,11 @@ async function finishStress() {
     `${stressPhase} input receipts`,
   );
   performance.mark(`stress:${stressPhase}:end`);
+  const work: Record<string, number> = {};
+  for (const [kind, total] of Object.entries(window.__HERDR_WORLD_WORK__ ?? {}))
+    if (total !== (workAtPhaseStart[kind] ?? 0))
+      work[kind] = total - (workAtPhaseStart[kind] ?? 0);
+  measurements.worldWorkByPhase[stressPhase!] = work;
   stressPhase = null;
 }
 const check = (condition: unknown, message: string) => {
@@ -457,6 +489,10 @@ async function run() {
     </div>,
   );
   await Promise.all([bothAttached.promise, filesStarted.promise]);
+  // The Inspector and its file preview load lazily; measure once both are in.
+  await waitForDom(
+    () => document.querySelector(".file-preview-file-content") !== null,
+  );
   await waitForDom(
     () => document.querySelectorAll(".xterm-helper-textarea").length === 2,
   );
@@ -530,6 +566,7 @@ async function run() {
     }
     measurements.worldBuildCheckpoints[checkpoint] = record;
     measurements.worldBuildSliceCount += 1;
+    measurements.worldBuildUnits += count;
     measurements.worldBuildMaxSliceNodes = Math.max(
       measurements.worldBuildMaxSliceNodes,
       count,
@@ -888,6 +925,10 @@ async function run() {
   );
   root.unmount();
   denseRoot.unmount();
+  measurements.liveCardObservations = [...liveCards.values()].reduce(
+    (total, cards) => total + cards.size,
+    0,
+  );
   scene.remove();
   fileHost.remove();
 }

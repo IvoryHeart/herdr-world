@@ -1,0 +1,68 @@
+.groups-summary-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.groups-summary button {
+  min-height: 32px;
+  padding: 5px 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--panel-2);
+  font: inherit;
+  cursor: pointer;
+}
+.groups-summary button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.groups-summary .groups-summary-pod {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 44px;
+  gap: 8px;
+  text-align: left;
+}
+.groups-summary-body {
+  display: grid;
+  flex: 1;
+  gap: 3px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.groups-summary small,
+.groups-summary-now {
+  color: var(--muted);
+}
+.groups-summary-dot {
+  flex: 0 0 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.groups-summary-dot[data-status="needs_you"] {
+  background: var(--yellow);
+}
+.groups-summary-dot[data-status="failed"] {
+  background: var(--red);
+}
+.groups-summary-dot[data-status="working"] {
+  background: var(--blue);
+}
+.groups-summary-dot[data-status="finished"] {
+  background: var(--green);
+}
+.groups-summary .group-over-limit {
+  color: var(--yellow);
+}
+@media (max-width: 600px) {
+  .groups-summary .groups-summary-pod {
+    flex-wrap: wrap;
+  }
+  .groups-summary-body {
+    flex-basis: calc(100% - 24px);
+  }
+}

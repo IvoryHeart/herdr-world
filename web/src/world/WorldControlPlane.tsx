@@ -13,6 +13,7 @@ import {
   WORLD_AGENT_PROFILES_EVENT,
 } from "./agentProfiles";
 import { DeskView } from "./DeskView";
+import { GroupsWindow } from "./groups/GroupsWindow";
 import {
   floatingTerminalGeometryId,
   writeFloatingTerminalDock,
@@ -45,6 +46,8 @@ import type {
   WorldObject,
   WorldObjectNode,
 } from "./worldObject";
+import { useWorldAnchorPresent, type WorldAnchorFeed } from "./worldAnchorFeed";
+import type { WorldConnectorTargetBounds } from "./worldConnectorGeometry";
 import type { WorldInspectorConversation } from "./worldTerminalPresentation";
 import { worldInspectorWindowId } from "./worldTerminalPresentation";
 
@@ -157,6 +160,23 @@ const WorldIntentConnector = lazyWithReload(
   () => import("./WorldIntentConnector"),
 );
 
+/** A conversation's connector, shown while its node has an anchor. */
+function ConversationConnector({
+  feed,
+  nodeId,
+  target,
+}: {
+  feed: WorldAnchorFeed;
+  nodeId: string;
+  target: WorldConnectorTargetBounds;
+}) {
+  return useWorldAnchorPresent(feed, nodeId) ? (
+    <Suspense fallback={null}>
+      <WorldIntentConnector feed={feed} nodeId={nodeId} target={target} />
+    </Suspense>
+  ) : null;
+}
+
 const WorldViewErrorBoundary = lazyWithReload("world-view-boundary", () =>
   import("./WorldViewErrorBoundary").then((module) => ({
     default: module.WorldViewErrorBoundary,
@@ -187,7 +207,6 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
     setFloatingInspectorPortals,
     intentOpening,
     intentError,
-    setSelectedVisualAnchor,
     visualConversationAnchors,
     setVisualConversationAnchors,
     floatingWindowAnchors,
@@ -282,6 +301,10 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
         world={aggregateWorld}
         onOpenTerminal={(nodeId) => void openTerminalById(nodeId)}
       />
+      <GroupsWindow
+        world={aggregateWorld}
+        onOpenTerminal={(id) => void openTerminalById(id)}
+      />
       <CreateWorkspaceDialog
         open={workspaceCreationOpen}
         initialDestination={workspaceCreationDestination}
@@ -362,7 +385,6 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                           setVisualConversationAnchors
                         }
                         onOpenTerminal={openTerminalById}
-                        onSelectedAnchorChange={setSelectedVisualAnchor}
                       />
                     </Suspense>
                   ) : (
@@ -378,7 +400,6 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                         conversationNodeIds={conversationNodeIds}
                         onSelect={selectNode}
                         onOpen={openNodeById}
-                        onSelectedAnchorChange={setSelectedVisualAnchor}
                         onNodeAnchorsChange={setVisualConversationAnchors}
                       />
                     </Suspense>
@@ -416,20 +437,16 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
             </p>
           ) : null}
           {visibleFloatingInspectors.map((conversation) => {
-            const source =
-              presentedWorld.nodeById.get(conversation.nodeId)?.generation ===
-              conversation.runtimeGeneration
-                ? visualConversationAnchors?.[conversation.nodeId]
-                : null;
             const target =
               floatingWindowAnchors[worldInspectorWindowId(conversation)];
-            return source && target ? (
-              <Suspense
+            return presentedWorld.nodeById.get(conversation.nodeId)
+              ?.generation === conversation.runtimeGeneration && target ? (
+              <ConversationConnector
                 key={worldInspectorWindowId(conversation)}
-                fallback={null}
-              >
-                <WorldIntentConnector source={source} target={target} />
-              </Suspense>
+                feed={visualConversationAnchors}
+                nodeId={conversation.nodeId}
+                target={target}
+              />
             ) : null;
           })}
           <WindowSurface

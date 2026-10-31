@@ -40,23 +40,45 @@ see [History guidance](HISTORY.md#pane-scoped-codex-launches).
 
 ## Process and request path
 
+The [static verb registry](../server/src/verbs/registry.ts) owns browser RPC,
+agent CLI and browser forge-action admission. [Actor policies and staged evidence](world-verbs.md)
+map the declarations, preserved flags, owner validation and P4 compatibility tests.
+
+
 ```text
 server/src/index.ts
   -> service, harness, or Herdr CLI command (when requested)
-  -> server configuration and World-owned persistence
-  -> Bun HTTP/WebSocket listener
-      -> origin and authentication admission
-      -> bridge-global RPC/HTTP or qualified connection route
-      -> one ConnectionRuntime -> Herdr control/render sockets
+  -> server configuration and the data folder's paths
+  -> createWorldService(deps): instance lock, signing secret, storage
+      -> Bun HTTP/WebSocket listener
+          -> origin and authentication admission
+          -> bridge-global RPC/HTTP or qualified connection route
+          -> one ConnectionRuntime -> Herdr control/render sockets
 
 web/src/main.tsx -> WorldFoundationApp -> mounted Spaces App
                           |                 -> focused connection store
                           -> aggregate runtime store -> WorldObject -> visual views
 ```
 
-The [service entry](../server/src/index.ts) dispatches service and harness commands
-before starting the listener. It composes authentication, profile management, Web
-Push, optional cost metrics, World snapshots and per-connection runtimes. The
+The [service entry](../server/src/index.ts) dispatches service and harness commands,
+loads the configuration and resolves the data folder's paths once. It owns the
+process: the logger level, the CPU profile, signals and exit. The
+[composition root](../server/src/service/world-service.ts), `createWorldService(deps)`,
+builds the service from explicit dependencies: configuration, data paths, a clock,
+a scheduler, storage and adapters (Herdr only). It composes authentication, profile
+management, Web Push, optional cost metrics, World snapshots and per-connection
+runtimes. `start()` binds the listener, then starts connections and Ranger. `stop()`
+admits nothing new (requests get 503 while the port stays bound), stops Ranger and
+the connections (failing Herdr calls still waiting), waits for in-flight requests,
+closes storage, releases the folder and closes the listener last. Once storage
+closes, every store refuses writes and unopened lazy families stay closed, so a
+request that outlived the drain cannot rename or write a file in a folder the
+service no longer owns. SQLite reads use the committed cache and cannot reopen
+the database, import JSON or run migrations after close. The entry keeps
+the listener until the process exits, because launchd's restart waits for the
+port to free before it starts the next process. The service never resolves a data
+path from the environment or the home folder, so tests run several services in one
+process. The
 [browser entry](../web/src/main.tsx) initializes preferences and mounts the World
 shell; [WorldFoundationApp](../web/src/world/WorldFoundationApp.tsx) keeps the
 [Spaces application](../web/src/App.tsx) mounted while Town, Board or Desk is
@@ -75,24 +97,42 @@ lifetime; Board draws DOM cards from [BoardView](../web/src/world/BoardView.tsx)
 identify each owner and its regression evidence. Shared styles load through the
 ordered [World style manifest](../web/src/world/world.css).
 
-Browser RPC admission and routing stay in `server/src/index.ts`. After those
+Browser RPC admission and routing live in [rpc-dispatch](../server/src/service/rpc-dispatch.ts),
+and the [listener](../server/src/service/listener.ts) owns HTTP routes and the browser
+socket. After those
 checks, [namespace handlers](../server/src/rpc/) handle bridge, connection profile,
 World, launcher, Board/Town, agent, file and Git/worktree methods. They receive the
 captured request and service dependencies through [context.ts](../server/src/rpc/context.ts);
-no handler imports service startup at runtime. The entry retains Windows guards,
+no handler imports service startup at runtime. The dispatcher retains Windows guards,
 workspace/tab creation pre-steps, terminal/settings forwarding and Herdr pass-through.
 `rpc/world.ts` reuses the CLI service for asks; `rpc/agent.ts` reuses the conversation
 dispatcher. PR actions retain their existing Sources HTTP path. Add RPC branches to
 the owning namespace and keep admission, lifetime and response publication in the
-entry. Existing [routing tests](../server/src/connections/protocol.test.ts) and
+dispatcher. Existing [routing tests](../server/src/connections/protocol.test.ts) and
 [session-link tests](../server/src/connections/session-link-routing.test.ts) cover
 captured connection identity and stale-generation rejection.
 
 ## Service ownership
 
+World-owned asks, results and attention use the asynchronous
+[SQLite ledger family](../server/src/storage/world-storage.ts). Its sole
+[worker](../server/src/storage/world-worker.ts) owns database access and grouped
+FULL commits; [the dispatcher](../server/src/world/attention-dispatch.ts) records
+dispatch before external effects. The [recovery contract](../verification/contracts/world-storage.md)
+maps finite crash schedules, compiled acceptance, import, replay retention and
+the effect-specific uncertainty rules. Configuration and secrets stay files;
+see [location and backups](DEPLOYMENT.md#durable-questions-results-and-backups).
+
+[Answer delivery without `--wait`](ask-answer-delivery.md) is a planned second
+slice. It specifies the original-session binding, Chat send-path reuse, verified
+asker acknowledgement, explicit uncertainty and owner recovery. Its acceptance
+cases are planned work, not evidence of shipped automatic pane delivery.
+
 | Area | Owner and responsibility | Focused evidence |
 | --- | --- | --- |
-| Configuration and private state | [server-config](../server/src/config/server-config.ts) parses listener, sockets, TLS and auth options; [data-paths](../server/src/config/data-paths.ts) owns World data paths and private-file publication; [gui-settings](../server/src/config/gui-settings.ts) stores service settings. | [Config tests](../server/src/config/server-config.test.ts), [data-path tests](../server/src/config/data-paths.test.ts), [settings tests](../server/src/config/gui-settings.test.ts) |
+| Service composition | [world-service](../server/src/service/world-service.ts) builds one service and owns its start, stop and drain; [ports](../server/src/service/ports.ts) define the clock, scheduler and adapter ports; [storage](../server/src/service/storage.ts) is the port for World-owned stores, with today's JSON files behind it; [instance-lock](../server/src/config/instance-lock.ts) gives each live service its own folder. | [Service tests](../server/src/service/world-service.test.ts), [lock tests](../server/src/config/instance-lock.test.ts) |
+| Configuration and private state | [server-config](../server/src/config/server-config.ts) parses listener, sockets, TLS and auth options; [data-paths](../server/src/config/data-paths.ts) resolves the data folder's paths once and owns private-file publication; [gui-settings](../server/src/config/gui-settings.ts) stores each service's settings. | [Config tests](../server/src/config/server-config.test.ts), [data-path tests](../server/src/config/data-paths.test.ts), [settings tests](../server/src/config/gui-settings.test.ts) |
+| Terminal profile settings | [Profile service wiring](../server/src/agent/profile-service.ts) owns publication and builds the reconciler from the service's own profile store and clock; [terminal settings](../server/src/agent/terminal-settings.ts) reconciles shared Herdr tokens, imports legacy assignments once and resolves Town master claims; [token helpers](../server/src/agent/terminal-tokens.ts) enforce the current terminal/lease and preserve settings through moves. Profiles and chimes remain per World. [Snapshot observation admission](../server/src/world/snapshot-observers.ts) supplies complete raw pane lists after clean current reads. | [Settings/convergence](../server/src/agent/terminal-settings.test.ts), [token validation/moves](../server/src/agent/terminal-tokens.test.ts), [disposable Herdr](../server/src/agent/terminal-settings.live.test.ts) |
 | Saved connections | [profiles](../server/src/connections/profiles.ts) validates and persists local/SSH profiles; [profile-service](../server/src/connections/profile-service.ts) applies startup overrides, profile operations and retry policy. | [Profile tests](../server/src/connections/profiles.test.ts), [service tests](../server/src/connections/profile-service.test.ts) |
 | Runtime lifetime | [manager](../server/src/connections/manager.ts) owns independent runtime generations and ready leases; [runtime](../server/src/connections/runtime.ts) composes one Herdr control client, terminal bridge, file/session handlers, subscriptions and caches per connection. | [Manager tests](../server/src/connections/manager.test.ts), [runtime tests](../server/src/connections/runtime.test.ts), [shutdown tests](../server/src/connections/shutdown.test.ts) |
 | SSH transport | [ssh-profile-runtime](../server/src/connections/ssh-profile-runtime.ts), [ssh-tunnel](../server/src/bridge/ssh-tunnel.ts) and [ssh-command](../server/src/bridge/ssh-command.ts) validate one OpenSSH destination and supervise its socket forwarding. | [SSH runtime tests](../server/src/connections/ssh-profile-runtime.test.ts), [tunnel tests](../server/src/bridge/ssh-tunnel.test.ts) |
@@ -148,12 +188,70 @@ preferences; [styles](../web/src/styles/) hold shared design tokens and base
 styles. Follow imports from the owning row before editing a similarly named
 component.
 
+The service's [focused acquisition owner](../server/src/world/focused-acquisition.ts)
+counts socket interest by connection and runtime generation and uses the injected
+scheduler for one observer per held runtime. The
+[shared list reader](../server/src/world/focused-lists.ts) keeps browser replies
+and observer enrichment identical; the dispatcher records only delivered, marked
+focused replies. [Direct tests](../server/src/service/focused-acquisition.test.ts)
+exercise two sockets through that dispatcher, including unmarked callers and
+failed sends. [Registry tests](../server/src/world/focused-acquisition.test.ts)
+cover bounded interest traces and in-flight retirement. The service advertises
+`world_shared_acquisition`; only older services retain the focused browser timer.
+The [activity cache](../server/src/world/agent-activity-cache.ts) shares bounded
+session-file readings without caching live agent status. Its publication and
+release paths use the same interest and lease fences. The browser's
+[recency merge](../web/src/agentRecency.ts) runs after layout acquisition, retaining
+any newer [activity push](../web/src/store/controls.ts) in its qualified
+connection partition. [Shared activity identities](../shared/agentActivity.ts)
+keep sessions from lending timestamps to replacements. Read-only maxima are keyed
+by complete identity outside runtime admission state, and survive a World restart
+that resets the service generation counter. The
+[focused interest controller](../web/src/store/focusedInterest.ts) declares the
+visible active host and independently held Inspector owners, releases them on
+hide and retries failed declarations without a standing successful timer. The
+[Inspector hook](../web/src/world/useFocusedInspectorInterest.ts) holds each
+window through the store, so filter/focus changes cannot retarget it. New holds
+and return-to-page refresh every eligible owner. The
+[catalogue coordinator](../web/src/store/catalogue.ts) coalesces notices into one
+fetch and one successor, with failure-only retries including bootstrap. Failed
+held re-lists use the same visibility/owner fences. The current hello gates
+declarations, notices and activity controls. The
+[restart regressions](../web/src/store/recencyReconnect.test.ts),
+[capability regressions](../web/src/store/recencyCapability.test.ts) and original
+[recency/hide T2 cases](../web/src/store/pollReplacement.test.ts) cover those paths.
+The [cache/observer consumer](../server/src/service/agent-activity.test.ts) and
+[real Bridge/store race tests](../web/src/store/agentActivity.test.ts) cover those
+boundaries.
+
+The [composed acquisition case](../server/src/service/shared-acquisition.test.ts)
+connects the real service to a real Bridge/store in a Worker plus a second native
+socket on two synthetic hosts. Its independent manual clocks and completion
+signals verify shared reads, notices and the focused parity outputs through the
+actual listener and composition root, including pending generation replacement.
+[Current runtime requirements](../openspec/specs/runtime-federation/spec.md)
+and [Desk requirements](../openspec/specs/world-surfaces/spec.md#requirement-bounded-desk-observation)
+contain the delivered acquisition contract.
+
+The [Desk watch owner](../server/src/world/desk-watches.ts) shares screen and
+receipt reads across socket declarations using the same injected scheduler.
+Its [queues](../server/src/world/desk-read-queues.ts) retain one active read per
+host and kind until settlement, and its
+[native reader](../server/src/world/desk-watch-read.ts) validates session identity
+on both sides of a read. Per-holder receipt triggers are captured at read start;
+late holders receive actual results with null triggers, followed by one successor.
+The [browser declaration controller](../web/src/world/deskWatchClient.ts) unions
+Desk hooks, releases on hide/close and fences current owners. The
+[hook adapter](../web/src/world/useDeskWatch.ts) enables it only for the shared
+capability. Without it, existing Desk polling continues. See [Desk evidence](../verification/contracts/shared-acquisition.md#desk-checkpoint)
+for the finite traces, two-browser consumers and real browser fallback checks.
+
 The [focused store](../web/src/store.ts) retains the shared mutable connection
 state and public command object. Its [types](../web/src/store/types.ts),
 [session transitions](../web/src/store/sessions.ts),
 [refresh scheduling](../web/src/store/refresh.ts),
 [notifications](../web/src/store/notifications.ts),
-[updates and polling](../web/src/store/updates.ts),
+[update checks and legacy polling](../web/src/store/updates.ts),
 [creation](../web/src/store/creation.ts),
 [qualified commands](../web/src/store/operations.ts),
 [React bindings](../web/src/store/react.ts) and

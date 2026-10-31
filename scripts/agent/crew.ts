@@ -1,3 +1,10 @@
+import {
+  completeManualReviews,
+  settleRuns,
+  stopRun,
+  timeoutHolds,
+  timeoutRun,
+} from "./crew/run-lifecycle";
 import { crewVerdict } from "./crew/round-readiness";
 import { parseOptions, USAGE } from "./crew/options";
 export { parseOptions } from "./crew/options";
@@ -55,7 +62,6 @@ import {
   finishRun,
   getAction,
   holdLock,
-  getRun,
   latestRun,
   openCrewStore,
   openLock,
@@ -67,6 +73,7 @@ import {
   setAction,
   setRunResult,
   type StoredAction,
+  RUN_TIMEOUT_EXIT_CODE,
 } from "./crew/store";
 
 /**
@@ -85,12 +92,8 @@ const AUTHOR_KINDS = new Set(["fix", "ci", "conflict", "screenshots"]);
 const RUN_KINDS = FRESH_KINDS;
 /** A finished reviewer run whose RESULT hasn't shown up by then is stuck. */
 const STUCK_MS = 15 * 60_000;
-/** Reviewer runs per action, the first included. */
-const RUN_ATTEMPTS = 2;
 /** Failed prompts to one seat before the owner hears about it. */
 const PROMPT_ATTEMPTS = 3;
-/** A run whose worker hasn't reported its pid by then never started. */
-const START_MS = 3 * 60_000;
 
 /**
  * Only a seat that is idle and not focused gets a prompt: a prompt types
@@ -292,7 +295,12 @@ function act(
   const root = dirname(dirname(context.dir));
   const publicText = (text: string) => text.replaceAll(`${root}/`, "");
   const record = (entry: Action) => {
-    if (entry.target === "owner" && parked.has(entry.pr)) return;
+    if (
+      entry.target === "owner" &&
+      parked.has(entry.pr) &&
+      entry.key.split("|")[1] !== "timeout"
+    )
+      return;
     if (entry.target === "owner" && entry.kind === "judgment") {
       owe(causes, entry, root);
       // Its signed GitHub comment, posted once.
@@ -318,7 +326,7 @@ function act(
     const stuck =
       (known.state === "done" && now - known.updatedAt > STUCK_MS) ||
       known.state === "failed";
-    if (stuck)
+    if (stuck && runFor(crew, known)?.exitCode !== RUN_TIMEOUT_EXIT_CODE)
       record(
         notice(
           entry,
@@ -341,6 +349,7 @@ function act(
       )
       .map((verdict) => [verdict.number, verdict.head]),
   );
+  completeManualReviews(crew, inputs, context.dir, now, deps);
   // A review is done once its RESULT is on GitHub for the head it was
   // given, whatever its session has done since: it may have posted just
   // before a newer push, or ended before this pass saw the post. A session
@@ -376,7 +385,30 @@ function act(
     );
   }
 
-  for (const waiting of actionsIn(crew, ["pending", "running"])) {
+  // Per-run timeout causes also cover manual reviews with no source action.
+  for (const entry of actionsIn(crew, ["pending", "sent", "failed"])) {
+    if (entry.target !== "owner") continue;
+    const run = timeoutRun(crew, entry);
+    if (!run) continue;
+    const claim = authors
+      .get(run.pr)
+      ?.posted.get(`${run.reviewer}:${run.head}`);
+    if (
+      claim &&
+      (!getAction(crew, run.actionKey) ||
+        REVIEW_KINDS.has(getAction(crew, run.actionKey)!.kind))
+    )
+      setRunResult(crew, run.id, claim.line);
+    if ((!prs.length || observed.has(run.pr)) && !heads.has(run.pr))
+      setAction(crew, entry.key, "superseded", now, entry.detail);
+  }
+
+  for (const waiting of actionsIn(crew, ["pending", "running", "failed"])) {
+    if (
+      waiting.state === "failed" &&
+      runFor(crew, waiting)?.exitCode !== RUN_TIMEOUT_EXIT_CODE
+    )
+      continue;
     if (prs.length && !observed.has(waiting.pr)) continue;
     if (
       heads.get(waiting.pr) === waiting.head ||
@@ -460,15 +492,20 @@ function act(
     say(`#${round.pr} closed round ${round.round}`);
   }
 
-  settleRuns(crew, settings, now, deps, record, say);
+  settleRuns(crew, settings, context.dir, now, deps, record, say);
   // Deliver only what this pass planned from fresh reads, and the owner
   // notices that belong to it: a scoped pass leaves other PRs' queued work
   // alone, and a paused action waits.
   const keys = new Set(planned.map((entry) => entry.key));
   const deliverable = (entry: StoredAction) =>
-    keys.has(entry.key.split("|")[0]!);
+    keys.has(entry.key.split("|")[0]!) || entry.key.split("|")[1] === "timeout";
   deliver(crew, settings, live, authors, deliverable, record, context, say);
-  reconcileOwnerAsks(crew, planned, context, say);
+  reconcileOwnerAsks(
+    crew,
+    planned,
+    { ...context, escalate: settings.escalate },
+    say,
+  );
 
   // A notice about a seat that still holds keeps the owner's mark on.
   oweHeldNotices(crew, causes, root, parked);
@@ -539,6 +576,7 @@ function oweHeldNotices(
  */
 function noticeHolds(crew: Database, entry: StoredAction) {
   const [parentKey, suffix] = entry.key.split("|");
+  if (suffix === "timeout") return timeoutHolds(crew, entry);
   if (!suffix?.startsWith("waits") && suffix !== "unreachable") return null;
   const parent = getAction(crew, parentKey!);
   const cause = parent?.detail ?? "";
@@ -551,86 +589,6 @@ function noticeHolds(crew: Database, entry: StoredAction) {
       (suffix === "waits" &&
         (cause === "no live seat" || cause === "never prompted")))
   );
-}
-
-/**
- * Marks a run finished, then stops whatever pid it has reported by then.
- * The worker reports its pid before it checks whether it was finished, so
- * every interleaving either stops it here or has it see itself finished.
- */
-function stopRun(
-  crew: Database,
-  id: number,
-  code: number,
-  now: number,
-  deps: Deps,
-) {
-  finishRun(crew, id, code, null, now);
-  const pid = getRun(crew, id)?.pid;
-  if (pid) deps.kill(pid);
-}
-
-/** Turns finished, crashed or overdue reviewer runs into action states. */
-function settleRuns(
-  crew: Database,
-  settings: CrewSettings,
-  now: number,
-  deps: Deps,
-  record: (entry: Action) => void,
-  say: (text: string) => void,
-) {
-  for (const active of activeRuns(crew)) {
-    if (active.pid !== null && deps.alive(active.pid)) {
-      // A reviewer still working past the limit is the owner's to look at:
-      // it may be waiting on them, or they may be talking to it.
-      const action = getAction(crew, active.actionKey);
-      const minutes = Math.round((now - active.startedAt) / 60_000);
-      if (minutes > settings.runTimeoutMinutes && action?.state === "running")
-        record(
-          notice(
-            action,
-            "overdue",
-            `NEEDS-OWNER #${action.pr} at ${shortSha(action.head)}: ${active.cwd ? `${action.target}'s fixer has worked ${settings.runTimeoutMinutes}+ minutes without saying it is done` : `${action.target} has worked ${settings.runTimeoutMinutes}+ minutes without posting`}; look at its pane in the round's tab.`,
-          ),
-        );
-      continue;
-    }
-    if (active.pid === null && now - active.startedAt < START_MS) continue;
-    // A dead process needs no stop; one that reports its pid only now does.
-    if (active.pid !== null) finishRun(crew, active.id, -1, null, now);
-    else stopRun(crew, active.id, -2, now, deps);
-  }
-  for (const running of actionsIn(crew, ["running"])) {
-    const last = runFor(crew, running);
-    if (!last || last.finishedAt === null) continue;
-    // A fixer that ended without pushing leaves the step to the author;
-    // a head gets one fixer.
-    if (last.cwd && AUTHOR_KINDS.has(running.kind)) {
-      setAction(
-        crew,
-        running.key,
-        "pending",
-        now,
-        `fixer exited ${last.exitCode}`,
-      );
-      say(
-        `#${running.pr} fixer for ${running.target} ended without pushing (exit ${last.exitCode}); the step waits for ${running.target}`,
-      );
-    } else if (last.exitCode === 0) {
-      setAction(crew, running.key, "done", now);
-      say(`#${running.pr} run ${running.target} finished (run ${last.id})`);
-    } else if (running.attempts < RUN_ATTEMPTS) {
-      setAction(crew, running.key, "pending", now, `exit ${last.exitCode}`);
-      say(
-        `#${running.pr} run ${running.target} exited ${last.exitCode}; retrying`,
-      );
-    } else {
-      setAction(crew, running.key, "failed", now, `exit ${last.exitCode}`);
-      say(
-        `#${running.pr} run ${running.target} failed (exit ${last.exitCode})`,
-      );
-    }
-  }
 }
 
 function deliver(

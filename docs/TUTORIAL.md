@@ -187,7 +187,21 @@ hosts stay usable.
    counts chip under the search bar): the **Town summary** window lists who
    needs you (blocked agents and open questions), unreviewed finishes and when each was last active, each host's
    rooms with their counts, and spend. Answer a question from its offered
-   options or type a reply. A blocked agent that also asked a question counts
+   options or type a reply. World saves the answer before confirming it, and
+   the agent can retrieve it with `herdr-world ask get ID` or `--wait`, including
+   after a restart. For new asks from a verified local Linux agent with a bound
+   Chat session, World also sends the saved answer there without needing
+   `--wait`. An offline host waits; a changed asking session is skipped.
+   **Outbox** in Town Summary keeps waiting, unconfirmed and
+   not-sent answers reachable without adding open questions. If a send is
+   uncertain, World will not retry it automatically. **Send again…** asks you to
+   accept a possible duplicate to the original session; **Dismiss** or **Cancel send**
+   stops delivery while preserving the answer for `ask get`. Submission to
+   Herdr does not prove the agent read or acted on it. Dismissals and older or
+   unverified asks remain retrieval-only.
+   Agent questions and results use the instance's `world.sqlite`;
+   [back it up with the service stopped](https://github.com/IvoryHeart/herdr-world/blob/main/docs/DEPLOYMENT.md#durable-questions-results-and-backups).
+   A blocked agent that also asked a question counts
    as two items needing you. Tap a room to show it in Town; on a phone, Summary
    closes first. Press **Summary** again to restore its minimized window or bring
    it to the front. Use **Back** to close the summary.
@@ -265,7 +279,8 @@ hosts stay usable.
    In the agent's window, the button beside its name sets its interest (on a
    phone, use **⋯ → Attention**):
    **Muted** stops its chimes, **Focused** lets only focused agents chime, and
-   **Watching** is the default. Its questions and results still arrive in
+   **Default (from groups)** inherits group intent, while **Watch** explicitly
+   overrides a group mute. Its questions and results still arrive in
    reception.
    **Next** cycles waiting agents, then finished agents when no other agent is
    waiting.
@@ -336,7 +351,9 @@ narrow the work you are following. The **Town calm motion** setting reduces
 ambient animation.
 
 A quiet **?** at reception means an agent has asked you a question with
-`herdr-world ask`. It stays there until answered, dismissed or withdrawn;
+`herdr-world ask`. The question also arrives as a Herdr notification, which
+reaches Herdr and, when you enabled them, your phone notifications. It stays
+at reception until answered, dismissed or withdrawn;
 tapping its reception entry opens that agent. Read the question first in
 **Needs you** or **Summary**, where it names the asking agent, then choose an
 option or type an answer. The waiting agent receives that answer. **Open agent**
@@ -345,8 +362,10 @@ answering it. A question marked unverified came from a process World could not
 confirm runs in that pane. Board and Desk show the same question mark. **!** means urgent
 blocking, while **✓** means a finish still needs checking.
 
-**Mark reviewed** acknowledges that completion in this browser. Opening a finished
-agent's terminal also clears its reception stop; neither action proves the result
+**Mark reviewed** acknowledges that completion in every browser connected to
+this World service, so your phone and desktop agree. The service keeps the mark
+in memory: restarting World, or Herdr starting a new runtime on that host,
+forgets it. Opening a finished agent's terminal also clears its reception stop; neither action proves the result
 is correct. A later completion can need review again. Read the explanation and
 check the diff using chapter 2 before treating the work as complete.
 
@@ -496,6 +515,11 @@ a starting brief and a look in Town. World starts it in a new tab for you.
    first (for example Claude asking whether to trust a new folder), the
    launcher says so and **Open its tab** lets you answer.
 
+The profile assignment follows its terminal when you move it and is shared
+with other Worlds connected to that Herdr. Each World uses its own profile
+of that ID; without one, it shows the recorded name with the default look.
+Closing the terminal or restarting Herdr ends the assignment.
+
 **You are done when:** an agent you started from a profile is answering in its
 own tab, dressed as you chose in Town.
 
@@ -511,6 +535,10 @@ own tab, dressed as you chose in Town.
    follow your latest sound choices.
 2. Under **Town master**, choose your coordinating agent (for example
    FirstMate) and tap **Make Town master**. Its chime is a sound of its own.
+   Worlds connected to the same Herdr share this role. The newest assignment
+   wins, and moving it from another live agent asks first. It ends when its
+   terminal closes or Herdr restarts. Offline claims wait for reconnection;
+   clearing the role requires every observed claimant to be reachable.
 3. Tap anywhere in World once (browsers start sound only after a tap). When an
    agent finishes or needs you, World chimes and a toast says who and why.
 
@@ -656,10 +684,75 @@ and the waiting agent carries on. An asker can withdraw a cleared question with
 `herdr-world ask withdraw <question-id>`, which clears its markers. If its
 creation reply was lost, `herdr-world ask withdraw --key <cause-key>` withdraws
 that asking occupant's retained question without creating another one.
-`herdr-world history` shows who changed what, and `herdr-world undo` takes
-back a World-side change. A change marked **unverified** came from a process
+`herdr-world history` shows Board edits, and `herdr-world undo` conditionally
+takes back a recorded Board change. A change marked **unverified** came from a process
 World could not place in the pane it named, or from a terminal that named no
 pane.
+
+Use `herdr-world pod create Chat` to create a crew Group, then
+`herdr-world pod add Chat agent://connection-a/builder` to add an agent's
+qualified address. `pod now Chat "Review first" "Ship"` records an ordered
+Now list; `group list` includes World-owned Teams/Pods and Herdr-owned Rooms/Desks.
+Lead/reviewer edits are reserved to you or FirstMate by crew rule; World records
+the sender claim and basis without authenticating that role. `group show Chat`
+shows recent attribution from the latest 128 Group changes, which are separate
+from Board undo. Deleting a Group needs `--yes` and leaves its agents running.
+
+`group add ROOM AGENT --herdr` moves the agent's whole desk: read the printed
+list of every affected agent before the move. Adding to a Desk moves one pane.
+Use `--allow-close-room` only when you also agree to close the source room when its last desk leaves.
+The result reports Done, Partly done, Not done or Unknown and observed locations.
+On Unknown, inspect Herdr before deciding what to do; never retry automatically.
+
+To migrate an existing crew table once, use `herdr-world group import pods.md
+--connection connection-a --yes`. The table needs Pod, Lead, Builders and
+Reviewers columns, with optional Now. If a name is away, ambiguous or annotated,
+supply `--mapping` as a JSON object from that exact table name to its qualified
+`agent://` address. The import is atomic and refuses existing Pod names. From
+then on, edit World through the CLI and render the table with `herdr-world group
+list --kind pod --markdown`; there is no two-way file synchronization.
+
+### Organize Groups
+
+Open **Actions → Groups**. Use the kind chips to find a Pod, Team, Room or Desk;
+tap a row for its members, status, open PR cards and Now list. On a phone, Back
+returns to the roster or closes the panel. On desktop the panel uses the same
+move, snap, maximize and window menu as your other World windows.
+
+Town's **Summary** also lists **Pods**, after Hosts and rooms and before Spend.
+Each row shows current status, the first Now item and the PR count or its
+cached/unknown state. Tap it to open that Pod in Groups, including when the
+Groups window is already open or minimized. Reception keeps its shared counts.
+
+Choose **New…** for a Pod or Team. In a Pod, **Add…** accepts a current agent or
+an explicit qualified address, including an away agent. **Roles…** changes roles;
+lead/reviewer edits follow the owner/FirstMate crew rule. Moving an exclusive
+lead/builder role asks first and keeps any other roles. An ambiguous address
+remains ambiguous: **Inspect** opens one current match; it does not pick its
+identity for membership. Rename duplicates in Herdr or explicitly replace the
+member with a distinct address.
+Selecting a current agent refuses duplicate Herdr names on the same connection.
+It also refuses to add a replacement that has appeared in the selected terminal;
+choose the agent again or supply the intended qualified address.
+
+**Edit pod…** changes its name, Now list and warning limit. **Promote to Pod…**
+shows every terminal-to-address mapping before preserving a Team's identity as a
+Pod. **Delete…** asks first and leaves agents running. If someone edits the Board
+while a form or confirmation is open, the write is refused and your draft stays
+open. Review the current values shown in the form, choose **Use current version**,
+then explicitly save again. Reviewing does not retry the write. Recent changes retain sender claims and their basis, or unknown attribution
+when no claim was supplied.
+
+A Team/Pod's Interest button offers **Default**, **Muted** and **Focused**.
+An agent's bell, or **⋯ → Attention** in a mobile window, offers **Default (from
+groups)** and explicit **Watch**, **Muted** and **Focused**. Default follows its
+groups; an explicit agent choice overrides them. Otherwise Group Focus
+wins over Mute. Focus adds reachable members to the other focused agents/groups;
+away or ambiguous members do not activate it. A focused group with no effective
+members online says so. Hover an agent's bell to see the source of its choice.
+Needs-you items and counts still arrive while muted. The Town master's needs-you
+can break the focus filter, while its explicit mute and device/motif switches
+still apply. Room/Desk interest controls are hidden in v1.
 
 ### Use Desk: answer, review and follow work
 

@@ -31,6 +31,7 @@ describe("worktree hook runner", () => {
       );
 
       const runner = createWorktreeHookRunner({
+        hooksEnabled: async () => true,
         herdr: { call: async () => ({}) },
         sshHost: () => undefined,
         runProcess: async () => ({ stdout: "", stderr: "" }),
@@ -65,6 +66,7 @@ describe("worktree hook runner", () => {
       );
 
       const runner = createWorktreeHookRunner({
+        hooksEnabled: async () => true,
         herdr: { call: async () => ({}) },
         sshHost: () => undefined,
         runProcess: async () => ({ stdout: "", stderr: "" }),
