@@ -12,7 +12,6 @@ const boardHosts = { "board.host-project": 64 };
 const snapshot = {
   "world.prepare": 1,
   "world.build-units": 917_568,
-  ...boardHosts,
 };
 // As measured at 1440 px on 2026-10-30.
 const measured = (): ConcurrentWork => ({
@@ -28,7 +27,7 @@ const measured = (): ConcurrentWork => ({
     "outside-stress": { unobserve: 1280 },
   },
   boardRenderByPhase: { render: { commits: 3 }, refresh: { commits: 2 } },
-  worldBuildUnits: 1_835_136,
+  worldBuildUnits: 2_359_424,
   worldBuildMaxSliceNodes: 256,
   liveCardObservations: 0,
   repeatedCardRegistrations: 0,
@@ -36,7 +35,7 @@ const measured = (): ConcurrentWork => ({
 
 test("the measured dense workload is within every ceiling", () => {
   expect(concurrentWorkViolations(measured(), 1440)).toEqual([]);
-  const stage = { ...snapshot, "board.project": 1 };
+  const stage = { ...snapshot, ...boardHosts, "board.project": 1 };
   expect(
     workViolations(
       { initial: stage, refresh: stage },
@@ -141,7 +140,7 @@ test("a slower runner cuts more slices but does no more work, so it passes", () 
   expect(concurrentWorkViolations(slow, 1440)).toEqual([]);
   slow.worldBuildUnits += 1;
   expect(concurrentWorkViolations(slow, 1440)).toEqual([
-    "world build units 1835137 > 1835136",
+    "world build units 2359425 > 2359424",
   ]);
 });
 
@@ -164,4 +163,14 @@ test("a static Town has no per-second draw allowance", () => {
   expect(
     workViolations({ idle: { draws: 64 } }, TOWN_STATIC_WORK_CEILINGS, "Town"),
   ).toEqual(["Town idle: draws 64 > 0"]);
+});
+
+test("Town has no allowance for unused Board topology preparation", () => {
+  expect(
+    workViolations(
+      { refresh: { "board.host-project": 1 } },
+      productionWorkCeilings("town"),
+      "Town",
+    ),
+  ).toEqual(["Town refresh: board.host-project 1 > 0"]);
 });

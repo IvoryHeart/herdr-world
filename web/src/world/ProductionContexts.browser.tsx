@@ -585,6 +585,8 @@ async function run() {
     }
   } else {
     const runtime = new WorldRuntimeStore(bridge);
+    // This fixture owns one mounted surface and its observation store.
+    const releaseView = runtime.retainView(view === "board" ? "board" : "town");
     const scene = document.body.appendChild(document.createElement("div"));
     scene.dataset.scene = view;
     scene.className = "world-stage-scroll";
@@ -756,6 +758,7 @@ async function run() {
       }
     }
     root.unmount();
+    releaseView();
     runtime.stop();
   }
   terminals.unmount();

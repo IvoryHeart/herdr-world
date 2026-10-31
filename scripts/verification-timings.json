@@ -12,6 +12,10 @@
     "runtime-control": 37.172,
     "runtime-drain": 37.882,
     "runtime-leases": 46.514,
-    "space-admission": 225.083
+    "space-admission": 225.083,
+    "observation-base": 60.119497273
+  },
+  "localSources": {
+    "observation-base": "Development exhaustive TLC with the pinned checker; 60.119497273 seconds including private checker startup. Existing entries retain their sourceRun."
   }
 }

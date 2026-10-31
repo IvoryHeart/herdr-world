@@ -1,3 +1,4 @@
+import { replayObservationBase } from "../quint/observation-base";
 import { replayRuntimeControl } from "../quint/runtime-control";
 import { replayBrowserPreparation } from "../quint/browser-preparation";
 import { replayRuntimeDrain } from "../quint/runtime-drain";
@@ -39,6 +40,7 @@ async function replay(request: ReplayRequest, resultPath: string) {
       "chunk-credits",
       "runtime-drain",
       "runtime-control",
+      "observation-base",
       "browser-preparation",
       "browser-refresh",
       "space-admission",
@@ -60,6 +62,12 @@ async function replay(request: ReplayRequest, resultPath: string) {
   );
   const exports = request.mutant ? await import(request.mutant) : null;
   const execute = (states: Awaited<ReturnType<typeof loadTrace>>) => {
+    if (request.model === "observation-base")
+      return replayObservationBase(
+        states,
+        exports?.WorldRuntimeStore,
+        exports?.WorldObservation,
+      );
     if (request.model === "ranger-recovery")
       return replayRangerRecovery(states, exports?.openTaskStorage);
     if (request.model === "ranger-authority")

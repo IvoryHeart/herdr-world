@@ -62,8 +62,28 @@ snapshot). Unknown bases and foreign incarnations use complete replacements.
 Malformed bases fail before acquisition. Service-side appearance and profile
 processing always sees the complete observation, before wire replacement.
 Callers without a base keep complete topology and the existing chunk admission.
-The browser currently continues to request complete snapshots; base application,
-incremental preparation and the M1 replay are the next delivery phase.
+The browser sends its held base only after negotiation. It applies each reply as
+one publication, retains unchanged host content by identity and rechecks current
+Bridge qualification after cooperative preparation. A lost retained base discards
+the reply and requests one complete recovery; a base refusal disables bases for
+that hello. Only explicit base or snapshot-parameter refusals trigger that
+fallback; unrelated storage/read errors retain negotiated bases. A different incarnation cannot reuse old content, and a reply from a
+foreign incarnation is rejected. An all-unchanged reply with identical host
+metadata prepares and publishes nothing.
+
+Changed hosts share unchanged observation records. Each room caches the complete
+slice it reads: workspace, tabs, panes, admitted agent metadata, coverage and the
+owner/generation/presentation fences. Appearance and watch overlays retain rooms
+they do not change. Town caches canonical and bounded room presentations, and
+Board caches room topology; host/world summaries use their per-room contributions.
+Only mounted Town/Board consumers request their respective preparation, using
+the same Hosts, watched-only and appearance projection they present. Changes outside
+that scope update the aggregate World without preparing hidden view rooms. A newly
+selected view builds any missing model before presentation; the Board document
+continues serving appearance and relations in every view. Profile looks compare
+the effective per-agent look, so unrelated profile revisions reuse prepared looks.
+Seen/finished marks keep their existing targeted overlay and reception/summary
+semantics. Spaces remains mounted and qualified operations retain their own leases.
 
 Host filters affect overview visibility only. Context-bound selectors and commands
 read and update connection partitions in the existing store. Each terminal has one
