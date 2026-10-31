@@ -652,3 +652,22 @@ test("blocked rows show supplied reasons and fall back for missing or blank labe
   expect(html).toContain("blocked: Approve the synthetic change");
   expect(html.match(/blocked: needs input/g)).toHaveLength(2);
 });
+
+test("the call rail stamps newly waiting agents with the time it is made", () => {
+  const projection = office({
+    alpha: ["blocked", "working"],
+    beta: ["blocked"],
+  });
+  const since = new Map<string, number>();
+  const entryOf = (key: string) =>
+    projection.roster.find((entry) => entry.agent.key === key);
+  const first = townCalls(projection.roster, since, [], entryOf, 1_000);
+  const waiting = first.filter((call) => call.kind === "blocked");
+  expect(waiting.length).toBeGreaterThan(0);
+  expect(waiting.every((call) => call.since === 1_000)).toBe(true);
+  // Still waiting later: they keep the time they started.
+  const later = townCalls(projection.roster, since, [], entryOf, 9_000);
+  expect(
+    later.filter((c) => c.kind === "blocked").every((c) => c.since === 1_000),
+  ).toBe(true);
+});

@@ -1,10 +1,17 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { actionablePullRequest } from "../../../../shared/pullRequests";
 import { useLayer } from "../../layerStack";
 import { PullRequestCard } from "../PullRequestCard";
 import { useWorldSources } from "../worldSources";
 import type { TownDeskBadge as Badge } from "./townBadges";
+import { TownHudContext } from "./useTownHud";
 import "./deskWorkBadge.css";
 
 /**
@@ -89,9 +96,10 @@ function BadgePopover({
     anchors: () => [anchor.current],
   });
   // Beside the badge, kept on screen, following it as the camera zooms and
-  // pans; a phone shows it as a bottom sheet.
+  // pans (each frame Town draws) and as the window resizes; a phone shows it
+  // as a bottom sheet.
+  const hud = useContext(TownHudContext);
   useLayoutEffect(() => {
-    let frame = 0;
     const follow = () => {
       const at = anchor.current?.getBoundingClientRect();
       const size = panel.current?.getBoundingClientRect();
@@ -111,11 +119,19 @@ function BadgePopover({
             : { left, top },
         );
       }
-      frame = requestAnimationFrame(follow);
     };
     follow();
-    return () => cancelAnimationFrame(frame);
-  }, [anchor]);
+    const stop = hud?.onFrame(follow);
+    window.addEventListener("resize", follow);
+    // Its card can change size as it loads.
+    const resized = new ResizeObserver(follow);
+    if (panel.current) resized.observe(panel.current);
+    return () => {
+      stop?.();
+      window.removeEventListener("resize", follow);
+      resized.disconnect();
+    };
+  }, [anchor, hud]);
   // Keyboard users land in the card once it is shown (it stays hidden until
   // placed); closing returns focus to the badge.
   const shown = place !== null || window.innerWidth < PHONE;
