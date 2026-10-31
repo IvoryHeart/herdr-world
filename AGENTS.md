@@ -110,13 +110,15 @@ bun install --frozen-lockfile
 Use focused tests and type checks when they answer a specific question. The
 pre-commit hook checks formatting and lint without writing files; the pre-push
 hook runs `bun run check:changed` for code changes: static checks, the affected
-unit tests and nearest World browser suites, and the unfiltered verification
-gate when its inputs change. CI shares the suite-selection rules and runs the full
+non-browser unit tests only. Browser suites and behavioral verification run in
+CI, where required `Delivery checks` blocks merges. Gate/configuration changes
+expand the local unit inventory; `HERDR_WORLD_PREPUSH=full` opts into all local lanes.
+CI shares the suite-selection rules and runs the full
 matrix on every main commit; `bun run check:delivery` runs it locally in parallel lanes. A Markdown-only follow-up uses `bun run check:docs`
 only when a passed code gate already covers its code, and a push that only merges
 `origin/main` (no edits beyond changelog fragments) runs `bun run check:static`.
 Heavy checks from every worktree share one machine-wide queue (one browser lane and
-one verification at a time; the timed latency lane alone); run browser suites via
+one verification at a time, two unit lanes; static checks bypass the queue); run browser suites via
 `bun run test <path>` so they queue too. A queued gate prints whom it waits for, so wait rather
 than bypass the hook.
 CI runs documentation checks for ordinary Markdown-only PR diffs. PRs limited
@@ -125,12 +127,19 @@ to `scripts/agent/**`, `docs/agent-development.md`, `docs/crew-runbook.md`,
 static checks and affected unit tests, without World suites, behavioral
 verification or native installers. `Delivery checks` and both protected macOS
 reports remain required. Other classified PRs run affected unit and nearest browser suites, verification
-for its inputs/contract owners, latency for World runtime/UI consumers, and native
-jobs for installation or binary inputs. Unknown paths, policy/configuration and
-main pushes run everything. Pre-push uses the same complete-PR classification.
+for its inputs/contract owners, the dense World suites for World runtime changes, and native
+jobs for installation or binary inputs. Unknown paths, executable gate/workflow
+policy, configuration and main pushes run everything. Contributor docs and skill
+Markdown use documentation checks or named consumers; browser shard-table edits
+retain all browser suites and inventory evidence. Model-free coverage owners run
+consumer tests and the cheap coverage check; model-backed owners select models. Pre-push uses the same complete-PR classification
+to select non-browser units only.
 CI splits units/web suites across two runners and verification across three model
-groups; each latency suite has its own runner. Verification aggregates require all
+groups balanced by measured work; no CI test asserts a wall-clock budget (the non-blocking World latency
+trend reports timing). Verification aggregates require all
 models, source/tool identity and each group's enforced resource accounting.
+Metadata events may reuse a passing scoped result only for the exact PR/base/head
+and identical recorded selection; failed or cancelled candidates cannot be reused.
 Leaf checks report failure when their job ends; `Delivery checks` remains the
 required aggregate, and protected report names and branch rules stay unchanged.
 After committing, run `bun run check:pr-body <file>` on the exact description

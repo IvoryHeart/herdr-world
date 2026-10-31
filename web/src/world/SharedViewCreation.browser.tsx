@@ -60,9 +60,6 @@ let heldAttachment: { terminalId: string; promise: Promise<void> } | null =
   null;
 let zoomedTabId: string | null = null;
 let lastCreated: Pane | null = null;
-// The service's fallback while Herdr changed during a snapshot: the cached
-// topology, stale and not actionable, on a host that is still ready.
-let staleObservation = false;
 function addTab(host: string, workspaceId: string, id: string) {
   const r = runtime.get(host)!;
   const number =
@@ -159,8 +156,8 @@ function worldSnapshot() {
       state: "ready",
       generation: 7,
       snapshot_generation: 7,
-      stale: staleObservation,
-      actionable: !staleObservation,
+      stale: false,
+      actionable: true,
       snapshot: {
         workspaces: workspaces(host),
         tabs: runtime.get(host)!.tabs,
@@ -700,32 +697,8 @@ async function run() {
     location.pathname === "/board",
     "Pending creation lost the current visual view",
   );
-  // A snapshot taken while Herdr creates the tab is briefly stale. That is not
-  // a newer selection, so the new terminal still opens once it is observed.
-  const staleCount = created;
-  const staleGate = Promise.withResolvers<void>();
-  heldMutation = staleGate.promise;
-  await action("New tab");
-  await until(
-    () =>
-      calls.filter(
-        (call) =>
-          call.method === "tab.create" || call.method === "workspace.create",
-      ).length ===
-      staleCount + 1,
-    "held creation before a stale observation",
-  );
-  staleObservation = true;
-  await worldRuntimeStore.refresh();
-  await settle();
-  staleObservation = false;
-  heldMutation = null;
-  staleGate.resolve();
-  await createdInspector(staleCount + 1);
-  check(
-    !store.get().notice?.detail?.includes("superseded"),
-    "A stale observation superseded the created terminal's focus",
-  );
+  // Stale-observation admission is covered by useWorldCreatedTerminal.test.ts.
+  // Retain the real Close-button intent wiring and rendered-Inspector check.
   const supersededCount = created;
   const supersededGate = Promise.withResolvers<void>();
   heldMutation = supersededGate.promise;

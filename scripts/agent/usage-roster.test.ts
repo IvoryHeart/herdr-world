@@ -28,7 +28,6 @@ test("roster accepts the agreed shared config shape and rejects invalid expectat
   expect(
     parseRoster({
       reviewers: { default: ["reviewer"] },
-      aggregateChecks: ["Delivery checks"],
       roster,
     }),
   ).toEqual(roster);

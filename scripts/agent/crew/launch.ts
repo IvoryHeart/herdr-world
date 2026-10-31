@@ -10,6 +10,7 @@ import {
   setRoundTab,
   setRunPane,
   setRunPid,
+  type Round,
 } from "./store";
 
 /** A round tab's name for a PR: its number and its branch's short name. */
@@ -39,6 +40,8 @@ export function launchRun(
     name: string;
     cwd?: string;
     branch: string | undefined;
+    /** Evaluator/process seats join the triggering review's existing tab. */
+    round?: Round;
   },
   argv: (id: number) => string[],
 ) {
@@ -49,7 +52,7 @@ export function launchRun(
     "runs",
     `${pr}-${run.name}${run.cwd ? "-fixer" : ""}-${shortSha(head)}-${now}.log`,
   );
-  const round = roundFor(crew, pr, head, now);
+  const round = run.round ?? roundFor(crew, pr, head, now);
   const panes = roundPanes(crew, pr, round.round);
   const id = addRun(
     crew,

@@ -1,5 +1,4 @@
 import {
-  continuingAppearance,
   parseAppearanceTarget,
   appearanceKey,
   type AppearanceTarget,
@@ -7,6 +6,7 @@ import {
 import { tabCardKey } from "../../../shared/terminalColor";
 import type { BoardDocument, BoardOp } from "./board-store";
 import type { WorldSnapshotResult } from "./snapshot";
+import { bindingWitnessMatches } from "./binding-resolution";
 
 /** Adopt only witness-less legacy colours; offline/incomplete reads never bind. */
 export function legacyAppearanceOps(
@@ -65,7 +65,10 @@ export function legacyAppearanceOps(
       if (
         !previous
           ? Boolean(document.layout.colors[color_key])
-          : continuingAppearance(previous, target) &&
+          : bindingWitnessMatches(
+              { terminals: previous.witness },
+              { native_id: target.native_id, terminals: target.witness },
+            ) &&
             (previous.color_key !== color_key ||
               [...previous.witness].sort().join("\n") !==
                 [...target.witness].sort().join("\n"))

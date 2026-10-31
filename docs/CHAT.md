@@ -371,7 +371,11 @@ text to the new session
 ([herdrdev/herdr#4764](https://github.com/herdrdev/herdr/issues/4764)).
 World cannot prevent that; it detects it and says what it knows.
 
-Each send leaves a receipt for the pane, bound to the session it was sent to:
+Each send leaves a receipt for the pane, bound to the session it was sent to.
+A receipt holds the message text, so World keeps receipts in memory only and
+never writes them to disk: after World restarts, pending bubbles and blue ticks
+are gone, and the bubble and tick tooltips say so.
+
 
 | State | Meaning | Shown |
 | --- | --- | --- |

@@ -1,14 +1,28 @@
+import { systemClock, systemScheduler } from "../service/ports";
+import { memoryRuntimeStatus } from "../storage/testing/runtime-status";
 import { expect, test } from "bun:test";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { silentLogger } from "../utils/logger";
 import { createLastStepBaselineStore } from "../workspace/git-diff";
 import { createLegacyConnectionRuntime } from "./runtime";
 import { parseHerdrTaskNotification } from "../../../web/src/herdrTaskNotification";
 import { createChimeCenter } from "../../../web/src/chimes/chimeCenter";
+import { createGuiSettingsStore } from "../config/gui-settings";
+
+const settings = createGuiSettingsStore(
+  join(mkdtempSync(join(tmpdir(), "runtime-settings-")), "settings.json"),
+);
 
 test("legacy runtime exposes and reports its configured connection identity", async () => {
   const events: Array<{ event: unknown; connectionId: string }> = [];
   const errors: Array<{ error: unknown; connectionId: string }> = [];
   const runtime = createLegacyConnectionRuntime({
+    clock: systemClock,
+    scheduler: systemScheduler,
+    runtimeStatus: memoryRuntimeStatus(),
+    settings,
     identity: { id: "remote-dev", label: "Remote Dev", source: "test" },
     config: {
       socketPath: "/tmp/m3-runtime-control.sock",
@@ -84,6 +98,10 @@ test.each([
     const completions: Array<{ workspaceId: string; connectionId: string }> =
       [];
     const runtime = createLegacyConnectionRuntime({
+      clock: systemClock,
+      scheduler: systemScheduler,
+      runtimeStatus: memoryRuntimeStatus(),
+      settings,
       identity: { id: "remote", label: "Remote", source: "test" },
       config: {
         socketPath: "/tmp/unused-step-completion-control.sock",
@@ -186,6 +204,10 @@ test("runtime stop drains an in-flight completion and suppresses publication", a
   });
   const events: unknown[] = [];
   const runtime = createLegacyConnectionRuntime({
+    clock: systemClock,
+    scheduler: systemScheduler,
+    runtimeStatus: memoryRuntimeStatus(),
+    settings,
     config: {
       socketPath: "/tmp/m3-runtime-stop-control.sock",
       clientSocketPath: "/tmp/m3-runtime-stop-client.sock",
@@ -247,6 +269,10 @@ test("layout subscription ACK and reconnect request browser reconciliation", asy
   const events: unknown[] = [];
   const subscriptions: Array<{ ack: () => void; close: () => void }> = [];
   const runtime = createLegacyConnectionRuntime({
+    clock: systemClock,
+    scheduler: systemScheduler,
+    runtimeStatus: memoryRuntimeStatus(),
+    settings,
     config: {
       socketPath: "/tmp/unused-layout-contract-control.sock",
       clientSocketPath: "/tmp/unused-layout-contract-client.sock",
@@ -315,6 +341,10 @@ test("layout subscription ACK and reconnect request browser reconciliation", asy
 
 test("Herdr without tab.move is not asked for tab.moved, which it would refuse", async () => {
   const runtime = createLegacyConnectionRuntime({
+    clock: systemClock,
+    scheduler: systemScheduler,
+    runtimeStatus: memoryRuntimeStatus(),
+    settings,
     config: {
       socketPath: "/tmp/unused-old-herdr-control.sock",
       clientSocketPath: "/tmp/unused-old-herdr-client.sock",
@@ -351,6 +381,10 @@ test("Herdr without tab.move is not asked for tab.moved, which it would refuse",
 
 test("a failed tab.move probe retries instead of dropping tab.moved", async () => {
   const runtime = createLegacyConnectionRuntime({
+    clock: systemClock,
+    scheduler: systemScheduler,
+    runtimeStatus: memoryRuntimeStatus(),
+    settings,
     config: {
       socketPath: "/tmp/unused-probe-retry-control.sock",
       clientSocketPath: "/tmp/unused-probe-retry-client.sock",
@@ -458,6 +492,10 @@ test("herdr notification source relays SemanticNotification and silences the sta
   const relayed = Promise.withResolvers<void>();
   const customRelayed = Promise.withResolvers<Record<string, unknown>>();
   const runtime = createLegacyConnectionRuntime({
+    clock: systemClock,
+    scheduler: systemScheduler,
+    runtimeStatus: memoryRuntimeStatus(),
+    settings,
     identity: { id: "local", label: "Local", source: "test" },
     config: {
       socketPath: join(tmpdir(), "herdr-world-notify-control-missing.sock"),
@@ -566,6 +604,10 @@ test("herdr notification source falls back to agent status on legacy Herdr", asy
   const taskEvents: unknown[] = [];
   const browserEvents: Array<{ event?: string; data?: unknown }> = [];
   const runtime = createLegacyConnectionRuntime({
+    clock: systemClock,
+    scheduler: systemScheduler,
+    runtimeStatus: memoryRuntimeStatus(),
+    settings,
     identity: { id: "legacy", label: "Legacy", source: "test" },
     config: {
       socketPath: "/tmp/herdr-world-legacy-notify-control.sock",
@@ -660,6 +702,10 @@ test("herdr notification source falls back to agent status on legacy Herdr", asy
 
 test("Windows runtimes refuse Unix-only helper groups", async () => {
   const runtime = createLegacyConnectionRuntime({
+    clock: systemClock,
+    scheduler: systemScheduler,
+    runtimeStatus: memoryRuntimeStatus(),
+    settings,
     config: {
       socketPath: "/tmp/m3-runtime-windows-control.sock",
       clientSocketPath: "/tmp/m3-runtime-windows-client.sock",

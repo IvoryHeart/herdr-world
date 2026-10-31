@@ -65,6 +65,28 @@ describe("simultaneous qualified runtime admission", () => {
     return { bridge, socket, currentSocket: () => Socket.instance };
   }
 
+  test("observation v1 hello admits an incarnation and rejects a capability without one", () => {
+    const { bridge, currentSocket } = setup();
+    bridge.disconnect();
+    bridge.connect();
+    currentSocket().receive({
+      hello: true,
+      bridge_protocol_version: 2,
+      default_connection_id: "alpha",
+      capabilities: { world_observation_v1: true },
+    });
+    expect(bridge.status).not.toBe("connected");
+    currentSocket().receive({
+      hello: true,
+      bridge_protocol_version: 2,
+      default_connection_id: "alpha",
+      service_incarnation: "synthetic-incarnation",
+      capabilities: { world_observation_v1: true },
+    });
+    expect(bridge.hello?.service_incarnation).toBe("synthetic-incarnation");
+    expect(bridge.status).toBe("connected");
+  });
+
   test.each([false, true])(
     "snapshot credit progresses beside input with starved background tasks and retirement=%j",
     async (retire) => {

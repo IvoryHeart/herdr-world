@@ -41,8 +41,8 @@ async function dispatchLauncherRpc(
     board,
     logger,
     profiles,
+    terminalSettings,
     publishBoardChanged,
-    publishProfilesChanged,
     publishWorldInvalidation,
   } = rpc.services;
   const { herdr, sshHost } = connection;
@@ -100,7 +100,7 @@ async function dispatchLauncherRpc(
         throw new Error("That profile no longer exists.");
       const call = (rpc: string, rpcParams: Record<string, unknown>) =>
         herdr.call(rpc, rpcParams, 70_000);
-      const result = await launchAgent(call, {
+      let result = await launchAgent(call, {
         workspace_id: String(p.workspace_id ?? ""),
         ...profileLaunch(profile ?? null, {
           kind: String(p.kind ?? ""),
@@ -114,17 +114,22 @@ async function dispatchLauncherRpc(
       if (
         profile &&
         result.terminal_id &&
+        result.pane_id &&
         route.scope === "connection" &&
         requestIsCurrent()
       ) {
+        let settingsSaved = false;
         try {
-          publishProfilesChanged(
-            profiles().assign({
+          await terminalSettings().assign(
+            {
               connection_id: route.connectionId,
+              connection_generation: route.generation,
+              pane_id: result.pane_id,
               terminal_id: result.terminal_id,
-              profile_id: profile.id,
-            }).revision,
+            },
+            profile,
           );
+          settingsSaved = true;
           if (profile.color && result.tab_id) {
             const workspaceIds = await moveWorkspaceIds(call, {
               workspace_id: String(p.workspace_id ?? ""),
@@ -154,6 +159,13 @@ async function dispatchLauncherRpc(
             );
           }
         } catch (error) {
+          if (!settingsSaved) {
+            result = {
+              ...result,
+              status: "failed",
+              message: `Agent started, but its profile settings were not saved: ${error instanceof Error ? error.message : String(error)}`,
+            };
+          }
           logger.warn("A launched agent kept no profile record", {
             detail: String(error),
           });

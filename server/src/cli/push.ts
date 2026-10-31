@@ -64,7 +64,10 @@ export function createPushCommand(
         );
         return EXIT_FAILURE;
       }
-      const path = webPushPath(setup.env, runtimeDataRoot(context.runtime));
+      const path = webPushPath(
+        setup.env,
+        runtimeDataRoot(context.runtime, setup.env),
+      );
       if (!existsSync(path)) {
         context.error(
           `herdr-world push: no push registry at ${displayPath(path, context.runtime)}; enable Task notifications in a browser first.`,

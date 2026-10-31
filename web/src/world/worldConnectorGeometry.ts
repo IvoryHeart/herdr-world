@@ -33,6 +33,29 @@ export type WorldConnectorTargetBounds = {
   bottom: number;
 };
 
+/** Whether two anchor sets would draw the same lines. */
+export function sameCanvasAnchors(
+  a: Readonly<Record<string, WorldCanvasAnchor>> | null,
+  b: Readonly<Record<string, WorldCanvasAnchor>> | null,
+): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  const keys = Object.keys(a);
+  if (keys.length !== Object.keys(b).length) return false;
+  return keys.every((key) => {
+    const left = a[key];
+    const right = b[key];
+    return (
+      !!left &&
+      !!right &&
+      left.x === right.x &&
+      left.y === right.y &&
+      left.visible === right.visible &&
+      left.edge === right.edge
+    );
+  });
+}
+
 export function preferredOfficeConnectorAnchor(
   anchors: WorldCanvasAnchors,
 ): WorldCanvasAnchor | null {

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ConnectionClient } from "../api";
 import { connectionClientScopeGeneration } from "../useConnectionClient";
 import type { WorldLeafObject, WorldObject } from "./worldObject";
+import { useDeskWatch } from "./useDeskWatch";
+import type { DeskReadNotice } from "../../../shared/deskAcquisition";
 
 /** Aggregate reads resolve the immutable owner of each observed leaf. */
 export type DeskClients =
@@ -194,7 +196,10 @@ export function receiptTrigger(leaf: WorldLeafObject, stopId?: string) {
 }
 
 /** A stored receipt and the agent state it was read for. */
-export type StoredReceipt = { receipt: TurnReceipt | null; trigger: string };
+export type StoredReceipt = {
+  receipt: TurnReceipt | null;
+  trigger: string | null;
+};
 
 /** What the Desk knows about one agent's latest stop. */
 export type ReceiptState = {
@@ -206,7 +211,7 @@ export type ReceiptState = {
 /** The stored entry after a successful read. */
 export function receiptAfterRead(
   receipt: TurnReceipt | null,
-  trigger: string,
+  trigger: string | null,
 ): StoredReceipt {
   return { receipt, trigger };
 }
@@ -220,7 +225,7 @@ export function receiptAfterRead(
  */
 export function receiptAfterError(
   previous: StoredReceipt | undefined,
-  trigger: string,
+  trigger: string | null,
   failures = 1,
 ): StoredReceipt {
   if (!previous) return { receipt: null, trigger };
@@ -308,7 +313,7 @@ export function useTurnReceipts(
   const fetched = useRef(new Map<string, string>());
   const due = useRef(new Set<string>());
   const failures = useRef(
-    new Map<string, { trigger: string; count: number }>(),
+    new Map<string, { trigger: string | null; count: number }>(),
   );
   const queues = useMemo(() => new DeskReadQueues(MAX_POLLED_AGENTS), []);
   const targets = pollingTargets(leaves);
@@ -320,13 +325,50 @@ export function useTurnReceipts(
     .join("\n");
 
   const clientScope = deskScope(clients);
+  const receive = useCallback(
+    (frame: DeskReadNotice, leaf: WorldLeafObject) => {
+      const identity = receiptIdentity(leaf),
+        trigger = frame.trigger;
+      if (frame.error !== undefined) {
+        const previous = failures.current.get(identity);
+        const count = previous?.trigger === trigger ? previous.count + 1 : 1;
+        failures.current.set(identity, { trigger, count });
+        setReceipts((current) =>
+          new Map(current).set(
+            identity,
+            receiptAfterError(current.get(identity), trigger, count),
+          ),
+        );
+        return;
+      }
+      if (!answersSession(frame.result, leaf)) return;
+      failures.current.delete(identity);
+      const turn = (frame.result as { turn?: unknown } | null)?.turn;
+      setReceipts((current) =>
+        new Map(current).set(
+          identity,
+          receiptAfterRead(isReceipt(turn) ? turn : null, trigger),
+        ),
+      );
+    },
+    [],
+  );
+  const shared = useDeskWatch("receipt", targets, clients, receive, (leaf) =>
+    receiptTrigger(leaf, stopIds.get(receiptIdentity(leaf))),
+  );
 
+  useEffect(() => {
+    fetched.current = new Map();
+    due.current = new Set();
+    failures.current = new Map();
+  }, [shared]);
   useEffect(() => {
     setReceipts(new Map());
     fetched.current = new Map();
     due.current = new Set();
   }, [clientScope]);
   useEffect(() => {
+    if (shared) return;
     const refresh = () => {
       if (document.visibilityState !== "hidden") setTick((v) => v + 1);
     };
@@ -336,7 +378,7 @@ export function useTurnReceipts(
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", refresh);
     };
-  }, []);
+  }, [shared]);
   useEffect(() => {
     if (tick > 0)
       for (const leaf of targets) due.current.add(receiptIdentity(leaf));
@@ -354,7 +396,7 @@ export function useTurnReceipts(
       const kept = new Map([...current].filter(([key]) => live.has(key)));
       return kept.size === current.size ? current : kept;
     });
-    if (document.visibilityState === "hidden") return;
+    if (shared || document.visibilityState === "hidden") return;
     const queue = targets.filter((leaf) => {
       const identity = receiptIdentity(leaf);
       return (
@@ -426,7 +468,7 @@ export function useTurnReceipts(
     };
     // requestKeys captures every identity and trigger; tick marks all due.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clients, queues, requestKeys, tick]);
+  }, [clients, queues, requestKeys, tick, shared]);
 
   const polled = new Set(targets.map(receiptIdentity));
   // Agents outside the polling bound have no receipt rather than a pending one.

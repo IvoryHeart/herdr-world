@@ -1,4 +1,8 @@
+import { parseSnapshotParameters } from "./snapshot-parameters";
+import { WorldObservation, parseObservationBase } from "./observation-v1";
+import * as observation from "./snapshot-observers";
 import { nativeId, priorityKey } from "./snapshot-identity";
+import { readHerdrSnapshot } from "../adapters/herdr";
 import { createHash } from "node:crypto";
 import { sanitizeConnectionError } from "../connections/manager";
 import type { ConnectionId, ConnectionStatus } from "../connections/types";
@@ -11,7 +15,6 @@ const MAX_AGENTS = 4_096;
 const MAX_CONCURRENT_CONNECTIONS = 4;
 const SNAPSHOT_RESPONSE_DEADLINE_MS = 20_000;
 const SNAPSHOT_FRESH_MS = 15_000;
-const MAX_PRIORITIES = 8;
 const MAX_PRESENTED_SPACES = 128;
 const MAX_PRESENTED_TABS_PER_SPACE = 8;
 const MAX_PRESENTED_LEAVES_PER_SPACE = 16;
@@ -204,86 +207,6 @@ function boundedReservedRelevantRecords(
   return records.filter((record) => admitted.has(record));
 }
 
-function parsePriorities(value: unknown): WorldSnapshotPriority[] {
-  if (value === undefined) return [];
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error("invalid World snapshot parameters");
-  }
-  const priorities = (value as Record<string, unknown>).priorities;
-  if (priorities === undefined) return [];
-  if (!Array.isArray(priorities) || priorities.length > MAX_PRIORITIES) {
-    throw new Error("invalid World snapshot priorities");
-  }
-  const result: WorldSnapshotPriority[] = [];
-  const seen = new Set<string>();
-  for (const value of priorities) {
-    if (!value || typeof value !== "object" || Array.isArray(value)) {
-      throw new Error("invalid World snapshot priority");
-    }
-    const item = value as Record<string, unknown>;
-    const connectionId = nativeId(item.connection_id);
-    const workspaceId = nativeId(item.workspace_id);
-    const paneId =
-      item.pane_id === undefined ? undefined : nativeId(item.pane_id);
-    const terminalId =
-      item.terminal_id === undefined ? undefined : nativeId(item.terminal_id);
-    if (
-      !connectionId ||
-      !workspaceId ||
-      paneId === null ||
-      terminalId === null
-    ) {
-      throw new Error("invalid World snapshot priority");
-    }
-    const priority = {
-      connection_id: connectionId,
-      workspace_id: workspaceId,
-      ...(paneId ? { pane_id: paneId } : {}),
-      ...(terminalId ? { terminal_id: terminalId } : {}),
-    };
-    const key = JSON.stringify(priority);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    result.push(priority);
-  }
-  return result;
-}
-
-function parseSnapshotParameters(value: unknown) {
-  const priorities = parsePriorities(value);
-  const params = value as Record<string, unknown> | undefined;
-  const selected = params?.selected_connection_id;
-  if (
-    params &&
-    Object.prototype.hasOwnProperty.call(params, "selected_connection_id") &&
-    !nativeId(selected)
-  ) {
-    throw new Error("invalid selected World connection");
-  }
-  return {
-    priorities,
-    selectedConnectionId: selected as string | undefined,
-    priorityConnectionIds: parsePriorityConnections(
-      params?.priority_connection_ids,
-    ),
-  };
-}
-
-function parsePriorityConnections(value: unknown): string[] {
-  if (value === undefined) return [];
-  if (!Array.isArray(value) || value.length > 128)
-    throw new Error("invalid World priority connections");
-  return [
-    ...new Set(
-      value.map((id) => {
-        if (!nativeId(id) || !/^[A-Za-z0-9][A-Za-z0-9._:-]*$/.test(id))
-          throw new Error("invalid World priority connection");
-        return id as string;
-      }),
-    ),
-  ];
-}
-
 function emptyStatusCounts(): WorldAgentStatusCounts {
   return { working: 0, idle: 0, blocked: 0, done: 0, unknown: 0 };
 }
@@ -395,8 +318,13 @@ function topologyCoverage(
 }
 
 export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
+  readonly observation: WorldObservation;
   private revision = 0;
   private readonly cache = new Map<string, CachedSnapshot>();
+  private readonly projections = new WeakMap<
+    RawHostSnapshot,
+    Map<string, WorldSnapshot>
+  >();
   private readonly invalidationVersions = new Map<string, number>();
   private readonly workByConnection = new Map<string, HostWork<Runtime>>();
   private readonly queue: HostWork<Runtime>[] = [];
@@ -421,14 +349,12 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
       revision: 0,
       records: [],
     }),
-    private readonly onFreshObservation?: (
-      connectionId: string,
-      generation: number,
-      panes: readonly Record<string, unknown>[],
-      observedAt: number,
-      agents: readonly Record<string, unknown>[],
-    ) => void,
-  ) {}
+    private readonly onFreshObservation?: observation.Fresh,
+    private readonly onCompleteObservation?: observation.Complete,
+    incarnation?: string,
+  ) {
+    this.observation = new WorldObservation(incarnation);
+  }
 
   invalidate(connectionId?: string): number {
     this.revision += 1;
@@ -444,6 +370,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
   }
 
   async snapshot(params?: unknown): Promise<WorldSnapshotResult> {
+    parseObservationBase(params);
     const {
       priorities: requestedPriorities,
       selectedConnectionId,
@@ -689,21 +616,9 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
     const observedAt = this.now();
     let outcome: HostOutcome;
     try {
-      const [workspace, tabs, panes, agents] = await Promise.allSettled([
-        work.lease.runtime.herdr.call("workspace.list", {}, 5_000),
-        work.lease.runtime.herdr.call("tab.list", {}, 5_000),
-        work.lease.runtime.herdr.call("pane.list", {}, 5_000),
-        work.lease.runtime.herdr.call("agent.list", {}, 5_000),
-      ]);
-      if (workspace.status === "rejected") throw workspace.reason;
-      if (tabs.status === "rejected") throw tabs.reason;
-      if (panes.status === "rejected") throw panes.reason;
-      const raw: RawHostSnapshot = [
-        workspace.value,
-        tabs.value,
-        panes.value,
-        agents.status === "fulfilled" ? agents.value : null,
-      ];
+      const raw: RawHostSnapshot = await readHerdrSnapshot(
+        work.lease.runtime.herdr,
+      );
       // An expired catalogue can complete every downstream read immediately.
       // Break that microtask chain before host projection/digest work so native
       // terminal input and socket replies get an ordinary event-loop turn.
@@ -735,6 +650,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
           dirty: this.wasInvalidatedSinceStart(work),
         });
         if (!this.wasInvalidatedSinceStart(work)) {
+          observation.complete(this.onCompleteObservation, work.lease, raw[2]);
           this.onFreshObservation?.(
             work.status.id,
             work.lease.generation,
@@ -861,10 +777,21 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
 
   private projectSnapshot(
     status: ConnectionStatus,
-    [workspaceResult, tabResult, paneResult, agentResult]: RawHostSnapshot,
+    raw: RawHostSnapshot,
     priorities: readonly WorldSnapshotPriority[],
     watchlist: WorldWatchlist,
   ): WorldSnapshot {
+    const key = JSON.stringify([
+      status.id,
+      status.generation,
+      priorityKey(status.id, priorities),
+      watchlist.revision,
+    ]);
+    let projections = this.projections.get(raw);
+    const cached = projections?.get(key);
+    if (cached) return cached;
+    if (!projections) this.projections.set(raw, (projections = new Map()));
+    const [workspaceResult, tabResult, paneResult, agentResult] = raw;
     const connectionPriorities = priorities.filter(
       ({ connection_id }) => connection_id === status.id,
     );
@@ -1072,6 +999,11 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
         admission_failed: matched - admitted,
       },
     };
+    // Concurrent browsers may request distinct projections of the same acquired host.
+    // Bound retained projection variants even if many sockets share one read.
+    if (projections.size >= 64)
+      projections.delete(projections.keys().next().value!);
+    projections.set(key, snapshot);
     return snapshot;
   }
 }

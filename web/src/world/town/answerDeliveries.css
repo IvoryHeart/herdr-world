@@ -1,0 +1,200 @@
+.answer-deliveries {
+  min-width: 0;
+  padding: 8px 0;
+  color: var(--town-text);
+}
+.answer-deliveries h3 {
+  scroll-margin-block-start: 8px;
+  margin: 0 0 6px;
+  font-size: 13px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.answer-deliveries h3 span {
+  font-size: 11px;
+  color: var(--town-muted);
+}
+.answer-deliveries-help {
+  color: var(--town-muted);
+  font-size: 12px;
+  margin: 0 0 8px;
+}
+.answer-deliveries-list {
+  display: grid;
+  gap: 8px;
+  max-height: 48vh;
+  overflow: auto;
+}
+.answer-delivery {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  background: var(--town-btn);
+  border: 1px solid var(--town-edge);
+  border-left: 3px solid var(--town-work);
+  border-radius: 6px;
+  padding: 10px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.answer-delivery-uncertain {
+  border-left-color: var(--town-wait);
+}
+.answer-delivery-refused {
+  border-left-color: var(--town-muted);
+}
+.answer-delivery p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+.answer-delivery-heading {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 8px;
+}
+.answer-delivery-heading > span,
+.answer-delivery-status {
+  color: var(--town-muted);
+}
+.answer-delivery-answer {
+  padding: 7px 8px;
+  border-radius: 4px;
+  background: var(--town-term);
+}
+.answer-delivery-answer > span {
+  display: block;
+  color: var(--town-muted);
+  font-size: 11px;
+  margin-bottom: 3px;
+}
+.answer-delivery details {
+  color: var(--town-muted);
+}
+.answer-delivery details p,
+.answer-delivery details ul {
+  margin: 8px 0 0;
+}
+.answer-delivery details ul {
+  padding-left: 16px;
+}
+.answer-delivery code {
+  white-space: normal;
+}
+.answer-delivery summary {
+  cursor: pointer;
+}
+.answer-delivery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+.answer-deliveries button {
+  color: var(--town-text);
+  font: inherit;
+  min-height: 30px;
+  background: var(--town-panel);
+  border: 1px solid var(--town-edge);
+  border-radius: 4px;
+  padding: 4px 9px;
+  cursor: pointer;
+}
+.answer-deliveries button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.answer-delivery-confirm {
+  display: grid;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--town-muted);
+}
+.answer-deliveries :focus-visible {
+  outline: 2px solid var(--town-accent);
+  outline-offset: 2px;
+}
+
+.answer-delivery summary {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+}
+.answer-delivery-delivered {
+  border-left-color: var(--town-done);
+}
+.answer-delivery-live {
+  min-height: 1em;
+  color: var(--town-muted);
+  font-size: 12px;
+}
+.answer-deliveries-list {
+  max-height: none;
+  overflow: visible;
+}
+.town-rail .town-outbox-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 5px 8px;
+  text-align: left;
+  font: inherit;
+  font-size: 11px;
+}
+.town-rail .town-outbox-collapsed {
+  display: inline-flex;
+  padding: 2px 4px;
+  color: var(--town-work);
+  font: inherit;
+  font-size: 11px;
+}
+.town-building-sign .town-reception-tags {
+  position: absolute;
+  right: -18px;
+  top: -12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.town-building-sign .town-reception-tags em {
+  position: static;
+}
+.town-building-sign .town-reception-letter {
+  min-height: 32px;
+  color: #08263b;
+  background: #6fc3ff;
+  border: 2px solid #16344b;
+  border-radius: 999px;
+  padding: 2px 6px;
+  font:
+    700 12px "Silkscreen",
+    ui-monospace,
+    monospace;
+  pointer-events: auto;
+  cursor: pointer;
+}
+@media (max-width: 640px) {
+  .town-rail .town-outbox-row {
+    flex: 1 0 100%;
+    min-height: 40px;
+    order: -1;
+  }
+  .answer-deliveries button,
+  .answer-delivery summary,
+  .town-building-sign .town-reception-letter {
+    min-height: 40px;
+  }
+}
+
+.answer-delivery summary::before {
+  content: "▸";
+  margin-right: 6px;
+}
+.answer-delivery details[open] summary::before {
+  content: "▾";
+}

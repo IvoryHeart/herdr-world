@@ -397,6 +397,7 @@ globalThis.fetch = (input, init) => {
           USERPROFILE: root,
           APPDATA: root,
           XDG_CONFIG_HOME: root,
+          HERDR_WORLD_DATA_DIR: undefined,
           PI_CODING_AGENT_DIR: join(root, "pi"),
           NODE_ENV: "production",
           HOST: "127.0.0.1",

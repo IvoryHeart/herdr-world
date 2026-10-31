@@ -8,11 +8,8 @@ export function selectedCITests(
   lane: string,
   shard?: string,
 ): string[] {
-  assert(
-    ["unit", "world", "web", "latency"].includes(lane),
-    "Unknown CI test lane",
-  );
-  let files = selection[lane as "unit" | "world" | "web" | "latency"];
+  assert(["unit", "world", "web"].includes(lane), "Unknown CI test lane");
+  let files = selection[lane as "unit" | "world" | "web"];
   assert(
     Array.isArray(files) &&
       files.every(
@@ -28,13 +25,6 @@ export function selectedCITests(
   if ((lane === "unit" || lane === "web") && shard) {
     assert(/^[12]\/2$/.test(shard), "Invalid test shard");
     files = files.filter((_, index) => index % 2 === Number(shard[0]) - 1);
-  }
-  if (lane === "latency" && shard) {
-    assert(
-      /^[1-6]$/.test(shard) && Number(shard) <= files.length,
-      "Invalid latency shard",
-    );
-    files = [files[Number(shard) - 1]!];
   }
   if (lane === "world" && shard) {
     const index = Number(shard) - 1;
@@ -59,13 +49,12 @@ if (import.meta.main) {
     const child = Bun.spawn(
       [
         process.execPath,
-        lane === "world" || lane === "latency"
+        lane === "world"
           ? "scripts/run-world-tests.ts"
           : "scripts/run-tests.ts",
         ...files,
         "--parallel=1",
-        `--max-concurrency=${lane === "latency" ? 1 : 2}`,
-        ...(lane === "latency" ? ["--retry=1"] : []),
+        "--max-concurrency=2",
         ...(lane === "web"
           ? [
               "--reporter=junit",

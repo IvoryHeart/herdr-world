@@ -20,10 +20,15 @@ import {
 const base = "a".repeat(40);
 const head = "b".repeat(40);
 const pr = { number: 126, base: { sha: base }, head: { sha: head } };
-const run = (id: number, baseSha = base) => ({
+const run = (
+  id: number,
+  baseSha = base,
+  conclusion: string | null = "success",
+) => ({
   id,
   run_attempt: 1,
   head_sha: head,
+  conclusion,
   pull_requests: [{ ...pr, base: { sha: baseSha } }],
 });
 const job = (full: string, result = "success", reused = false) => ({
@@ -189,23 +194,27 @@ test("documentation scope follows the PR diff and includes nested Markdown", () 
   }
 });
 
-test("behavioral contracts, agent policy and packaged notices cannot take the Markdown shortcut", () => {
+test("behavioral contracts and packaged notices cannot take the Markdown shortcut", () => {
   for (const path of [
     "verification/contracts/runtime-leases.md",
     "quint/README.md",
     "tools/quint/DEPENDENCY_NOTICES.md",
     "openspec/specs/runtime-federation/spec.md",
     "openspec/changes/archive/2026-10-14-adopt-quint-behavioral-verification/tasks.md",
-    "AGENTS.md",
-    ".agents/skills/candidate-delivery/SKILL.md",
-    "CONTRIBUTING.md",
     "THIRD_PARTY_NOTICES.md",
     "DEPENDENCY_NOTICES.md",
     "DEPENDENCY_LICENSES.md",
     "UPSTREAM.md",
   ])
     expect(isDocumentationPath(path)).toBe(false);
-  for (const path of ["README.md", "docs/guide.md", "CHANGELOG.md"])
+  for (const path of [
+    "README.md",
+    "docs/guide.md",
+    "CHANGELOG.md",
+    "AGENTS.md",
+    "CONTRIBUTING.md",
+    ".agents/skills/candidate-delivery/SKILL.md",
+  ])
     expect(isDocumentationPath(path)).toBe(true);
 });
 
@@ -299,3 +308,122 @@ test("every main push forces all suite classes even when a tracked doc is dirty"
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("metadata can reuse a passing scoped merge only with the identical selection", async () => {
+  const { selectValidation } = await import("./validation-scope");
+  const selection = selectValidation(
+    {
+      files: new Set(["scripts/example.test.ts"]),
+      gone: new Set(),
+      deps: new Map(),
+    },
+    ["scripts/example.test.ts"],
+  );
+  const proof = {
+    ...job("skipped", "success", true),
+    run_id: 3,
+    steps: [
+      ...job("skipped", "success", true).steps,
+      { name: "Verify applicable or reused results", conclusion: "success" },
+    ],
+  };
+  const attempt = (
+    recorded = selection,
+    result = "success",
+    parents = [base, head],
+  ) =>
+    canReuseFullCheck(
+      [run(3)],
+      4,
+      126,
+      base,
+      head,
+      "Delivery checks",
+      "Run full repository check",
+      async () => [{ ...proof, conclusion: result }],
+      async () => ({
+        checkoutSha: "d".repeat(40),
+        commitSha: "d".repeat(40),
+        parents,
+        validation: { mode: "scoped", selection: recorded },
+      }),
+      selection,
+    );
+  expect(await attempt()).toBe(true);
+  expect(
+    await attempt({ ...selection, verification: !selection.verification }),
+  ).toBe(false);
+  expect(await attempt({ ...selection, unit: ["scripts/new.test.ts"] })).toBe(
+    false,
+  );
+  expect(await attempt(selection, "failure")).toBe(false);
+  expect(await attempt(selection, "cancelled")).toBe(false);
+  expect(await attempt(selection, "success", [head, base])).toBe(false);
+});
+
+test.each(["full", "scoped"])(
+  "a newer unsuccessful workflow without a Delivery job blocks older %s success",
+  async (mode) => {
+    const { selectValidation } = await import("./validation-scope");
+    const selection = selectValidation(
+      {
+        files: new Set(["scripts/example.test.ts"]),
+        gone: new Set(),
+        deps: new Map(),
+      },
+      ["scripts/example.test.ts"],
+    );
+    for (const conclusion of [
+      "failure",
+      "cancelled",
+      "timed_out",
+      "action_required",
+      "startup_failure",
+      "stale",
+      "skipped",
+      null,
+    ]) {
+      const result = await canReuseFullCheck(
+        [run(3, base, conclusion), run(2)],
+        4,
+        126,
+        base,
+        head,
+        "Delivery checks",
+        "Run full repository check",
+        async (id) =>
+          id === 3
+            ? []
+            : [
+                {
+                  ...job(
+                    mode === "full" ? "success" : "skipped",
+                    "success",
+                    mode === "scoped",
+                  ),
+                  run_id: id,
+                  steps: [
+                    ...job(
+                      mode === "full" ? "success" : "skipped",
+                      "success",
+                      mode === "scoped",
+                    ).steps,
+                    {
+                      name: "Verify applicable or reused results",
+                      conclusion: "success",
+                    },
+                  ],
+                },
+              ],
+        async () => ({
+          checkoutSha: "d".repeat(40),
+          commitSha: "d".repeat(40),
+          parents: [base, head],
+          validation: { mode, selection },
+        }),
+        selection,
+      );
+      expect(result).toBe(false);
+    }
+  },
+);

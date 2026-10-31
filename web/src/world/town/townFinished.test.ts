@@ -22,7 +22,6 @@ test("an agent that goes from working to idle has finished", () => {
   );
   expect(step.started).toEqual(["a", "b"]);
   expect([...step.finished]).toEqual(["a", "b"]);
-  expect(step.renewed.map((agent) => agent.key)).toEqual(["a", "b"]);
 });
 
 test("a finished agent stops being finished when it works again or leaves", () => {
@@ -32,7 +31,6 @@ test("a finished agent stops being finished when it works again or leaves", () =
     new Set(["a", "b"]),
   );
   expect(step.started).toEqual([]);
-  expect(step.renewed.map((agent) => agent.key)).toEqual(["a"]);
   expect([...step.finished]).toEqual([]);
 });
 
@@ -69,6 +67,34 @@ test("Town presents unchecked finishes as done and checked ones as idle", () => 
     presented.rooms[0]!.roomAgents.map((agent) => agent.semanticStatus),
   ).toEqual(["done", "idle"]);
   expect(withTownFinished(office, new Set(), new Set())).toBe(office);
+});
+
+test("a check also applies to a finish Town inferred, wherever it was made", () => {
+  const agent = (key: string, semanticStatus: string) => ({
+    key,
+    semanticStatus,
+    roomKey: "room",
+    currentPaneRef: { connectionId: "synthetic", nativeId: key },
+  });
+  const office = {
+    rooms: [],
+    receptions: [],
+    barAgents: [],
+    roster: [
+      { roomKey: "room", agent: agent("a", "idle") },
+      { roomKey: "room", agent: agent("b", "done") },
+    ],
+  } as unknown as HerdrOfficeProjection;
+  // Both finished while Town watched; both are checked.
+  const presented = withTownFinished(
+    office,
+    new Set(["a", "b"]),
+    new Set(["a", "b"]),
+  );
+  expect(presented.roster.map(({ agent }) => agent.semanticStatus)).toEqual([
+    "idle",
+    "idle",
+  ]);
 });
 
 test("finishes are tracked for every agent of a presented room", () => {

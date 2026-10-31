@@ -420,7 +420,24 @@ export function prepareServiceAccess(
       readValue("HERDR_WORLD_TLS_KEY"),
     ),
   );
-  return { host, port, tls, usesFixedPassword: password.length > 0 };
+  return {
+    host,
+    port,
+    tls,
+    usesFixedPassword: password.length > 0,
+    tokenPath: serviceTokenPath(configPath, readValue("HERDR_WORLD_DATA_DIR")),
+  };
+}
+
+/**
+ * The generated login token of a service: in its data folder, beside its
+ * environment file unless HERDR_WORLD_DATA_DIR moves it.
+ */
+export function serviceTokenPath(
+  configPath: string,
+  dataDir: string | undefined,
+): string {
+  return join(dataDir ? resolve(dataDir) : dirname(configPath), "auth-token");
 }
 
 function printServiceAccess(
@@ -523,8 +540,7 @@ function installService(
   );
   const environmentCreated = ensureEnvironmentFile(paths.config);
   if (!access.usesFixedPassword) {
-    access.tokenPath = join(dirname(paths.config), "auth-token");
-    access.token = loadOrCreateAuthToken(access.tokenPath);
+    access.token = loadOrCreateAuthToken(access.tokenPath!);
   }
   if (paths.stdoutLog) mkdirSync(dirname(paths.stdoutLog), { recursive: true });
   const customSystemdExecStart =

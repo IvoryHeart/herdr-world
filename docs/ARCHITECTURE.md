@@ -6,6 +6,55 @@ This document describes Herdr World's current system contracts. See
 
 ## System overview
 
+The composition root exposes `WorldStorage.ids.issue(kind)` through the existing
+SQLite worker. IDs have a kind prefix and eight random base32 symbols and become
+visible only after their shared reservation commits. Existing SQLite/imported
+ledger IDs stay unchanged; reservations outlive record and replay trimming.
+See [World identity storage](world-identity.md) for allocation, restoration and
+the boundary with legacy JSON families and the claim read models.
+`WorldStorage.bindings` persists per-kind source evidence independently of runtime
+fences. Its resolver admits only complete current unambiguous matches; Board
+strings retain their World-move/qualified-absence policy, while appearance and
+interest retain complete-list terminal absence. Legacy Board captures drain
+through the same worker; interrupted imports cannot authorize targets. The Board
+Send RPC resolves its saved string before its existing recipient checks. Layout
+preferences never enter the binding store and retain native-ID reuse behavior.
+Conversation and source-service read models carry per-field status, session and PR
+link claims with provenance and explicit display rules. Channels remove only their
+own complete/retracted claims; runtime occupant replacement retires its read model.
+Claims remain in memory. Current connection/generation owners retire link claims
+independently of topology health; checkout evidence is runtime/host scoped and
+GitHub search completeness is explicit before omissions can remove a link claim.
+Saved/inferred claims never replace fresh native session
+qualification or GitHub's own action authority. Existing visible projections stay
+unchanged; see [runtime field claims](world-identity.md#runtime-field-claims).
+
+Agent profiles and chimes live in `world.sqlite` behind `WorldStorage.profiles`.
+The same worker validates and commits edits before RPC replies or the synchronous
+launch cache advance. Startup imports the configured `agent-profiles.json` once,
+with an exact private hash-named backup; subsequent starts use SQLite exclusively.
+The store also retains legacy terminal settings awaiting their one-time Herdr
+import, per-connection completion flags and the Town master revision watermark.
+Current terminal assignments and master tokens remain owned by Herdr. Config,
+connection profiles and secrets remain files. See [profile storage and recovery](DEPLOYMENT.md#agent-profile-storage).
+
+`WorldStorage.runtimeStatus` stores auto-sync last-run fields through that same
+writer. Each connection runtime receives the composition root's clock and
+scheduler. Auto-sync uses that clock for interval eligibility and recorded times,
+and cancellable scheduler jobs for its 30-second polling; stopping cancels the
+current job and fences callbacks from earlier starts. It reads its committed
+cache for interval decisions and awaits result persistence; settings RPCs join it to file-backed schedules. Status updates
+never rewrite configuration. First startup backs up settings and imports only
+runtime fields once; configuration and secrets remain files. See [runtime status
+and recovery](DEPLOYMENT.md#auto-sync-runtime-status).
+
+Runtime adapter registration and its data-only hello descriptors live in the
+[adapter registry](../server/src/adapters/registry.ts). Herdr remains the sole
+production runtime; its raw topology reads preserve today's snapshot behavior.
+See [runtime observation adapters](world-adapters.md) for declared schemas,
+limits, the provider-neutral admission boundary, conformance and production
+exclusion of the test-only synthetic source.
+
 Browsers cannot open Unix domain sockets or Windows named pipes directly. A
 Bun bridge serves the frontend, authenticates browsers, and connects to Herdr:
 
@@ -20,6 +69,15 @@ Bridge (Bun + TypeScript) -- node:net --> Herdr sockets
 terminal traffic. Browser RPC uses `{ id, method, params }` and returns either
 `{ id, result }` or `{ id, error }`, with connection identity attached to scoped
 traffic. Subscribed Herdr events are pushed as `{ event: ... }`.
+
+Browser RPC and agent CLI admission use the service-owned static
+[verb registry](world-verbs.md), with TypeBox schemas, actor policy, explicit effect
+acknowledgements and recovery declarations. Unknown browser methods are refused
+before runtime acquisition. Replies can add `command_evidence`: memory admission
+is `accepted`, durable records require a `stored` receipt, and acknowledged native
+dispatch is `sent` on its captured runtime. The registry preserves existing owner
+confirmation and target validation; [the verb guide](world-verbs.md#result-evidence)
+describes conservative legacy evidence and the remaining browser challenge gap.
 
 The bridge owns socket access, local/SSH runtimes, file/Git/worktree/hook/session
 operations, terminal and clipboard relay, optional observability-provider access,
@@ -43,6 +101,41 @@ result enters the cache only for its original current runtime generation and tri
 a coalesced refresh when its observed data changes. A current result may be reused for
 15 seconds unless that host receives an explicit topology invalidation. The browser
 uses one World WebSocket with a transport epoch independent of runtime generations.
+The hello advertises `world_observation_v1` and a random `service_incarnation`
+shared with snapshot replies. A caller may send `base: { service_incarnation,
+hosts: [{ connection_id, generation, token }] }` to `world.snapshot` (at most 64
+hosts, with tokens of at most 64 characters). The service hashes each projected
+host and its producing generation; digest reuse follows the projection cache.
+When incarnation, runtime generation, snapshot generation and token all match,
+the reply carries current host metadata and `unchanged: true`, omitting
+`snapshot`. Other hosts carry complete snapshots and tokens (null without a
+snapshot). Unknown bases and foreign incarnations use complete replacements.
+Malformed bases fail before acquisition. Service-side appearance and profile
+processing always sees the complete observation, before wire replacement.
+Callers without a base keep complete topology and the existing chunk admission.
+The browser sends its held base only after negotiation. It applies each reply as
+one publication, retains unchanged host content by identity and rechecks current
+Bridge qualification after cooperative preparation. A lost retained base discards
+the reply and requests one complete recovery; a base refusal disables bases for
+that hello. Only explicit base or snapshot-parameter refusals trigger that
+fallback; unrelated storage/read errors retain negotiated bases. A different incarnation cannot reuse old content, and a reply from a
+foreign incarnation is rejected. An all-unchanged reply with identical host
+metadata prepares and publishes nothing.
+
+Changed hosts share unchanged observation records. Each room caches the complete
+slice it reads: workspace, tabs, panes, admitted agent metadata, coverage and the
+owner/generation/presentation fences. Appearance and watch overlays retain rooms
+they do not change. Town caches canonical and bounded room presentations, and
+Board caches room topology; host/world summaries use their per-room contributions.
+Only mounted Town/Board consumers request their respective preparation, using
+the same Hosts, watched-only and appearance projection they present. Changes outside
+that scope update the aggregate World without preparing hidden view rooms. A newly
+selected view builds any missing model before presentation; the Board document
+continues serving appearance and relations in every view. Profile looks compare
+the effective per-agent look, so unrelated profile revisions reuse prepared looks.
+Seen/finished marks keep their existing targeted overlay and reception/summary
+semantics. Spaces remains mounted and qualified operations retain their own leases.
+
 Host filters affect overview visibility only. Context-bound selectors and commands
 read and update connection partitions in the existing store. Each terminal has one
 qualified presenter; Spaces/visual handoffs detach before admitting the new presenter.
@@ -56,6 +149,60 @@ request started no additional Herdr calls while inactive fetches remained in fli
 This is a partial-response measurement, not a maximum payload size. Each fully
 observed host still has its existing 512-workspace, 2,048-tab and 4,096-pane/agent
 record caps, so payload size grows with actual topology across the 64-profile limit.
+
+The service also supports explicit focused interest through
+`world.focused.observe`: each socket replaces up to 64 connection/generation
+owners, and an empty declaration releases them. One observer per held runtime
+reads the enriched workspace, tab, pane and agent lists 5 seconds after the
+previous read settles. Only successful replies to list requests marked
+`focused_observation: true` record what that socket received. An observation
+sends `world_focused_changed` to holders whose received lists differ, excluding
+agent activity timestamps and pane scroll positions. Last release, socket close,
+service stop and runtime retirement fence pending results. Profile changes,
+connection state/generation changes and browser count changes publish
+`world_connections_changed` with a service-local revision.
+
+Session-file activity is cached separately from live agent status for at most
+one observation period. Concurrent list readers share a pending activity read;
+the observer refreshes that reading and pushes a changed, session-qualified
+`world_agent_activity` map only to current holders. Last release discards the
+cache, and lease retirement or release during a read prevents publication.
+Browser connection partitions keep the maximum activity timestamp per pane,
+terminal, agent and session. A late list or layout reply cannot undo a push;
+status agreement gates only the native state sequence. Replaced sessions and
+runtime generations do not inherit unrelated identities' activity. Read-only
+maxima live outside runtime admission state, so restarting World and resetting
+its generation counters does not lower the same external agent session's recency.
+An admitted list rejoins only the exact connection, pane, terminal, agent and
+session; old-generation controls still fail admission. Multiple identities for
+one pane retain separate maxima while its first layout is pending.
+
+The service advertises `world_shared_acquisition`. A visible browser declares
+its active ready host and each open Inspector's qualified owner. Inspector
+references are independent of the active host and host filter. New admissions,
+including previews on an already-held host, re-list after admission; fresh
+qualified absence can then remove an already-closed preview. Hiding releases all
+interest; returning re-lists every held owner and fetches the catalogue.
+
+Focused re-lists mark only their four list request frames. Herdr events,
+resynchronization, own actions and admitted change notices still re-list through
+the existing scoped coalescer. Catalogue notices fetch `bridge.status` with one
+request in flight and at most one queued successor. Failed catalogue reads,
+including bootstrap, and failed held re-lists retry after five seconds while
+visible and current; success, release or retirement stops those retries.
+
+Desk declares its existing fair selections, at most 16 screens and 40 receipts
+per browser. The service reads their union once per kind, connection, generation,
+pane and session fingerprint, with independent host queues. Screens run every
+4 seconds; receipts every 20 seconds and when a holder's trigger changes.
+Triggers are captured per holder at read start; a late holder receives the actual
+result with a null trigger and makes one successor due. Last release stops work.
+
+There is no successful periodic browser re-list or catalogue fetch under this
+capability. Without it, the browser retains its 5-second focused timer and Desk's
+4-second/20-second reads. Capability removal on reconnect restores that fallback.
+The update check remains independent. Spaces stays mounted, and the aggregate
+refresh and 15-second fallback retain their existing behavior.
 
 Large aggregate replies negotiate bounded chunks on the same World WebSocket.
 Scoped acknowledgements can interleave between chunks; partial responses belong to
@@ -266,6 +413,29 @@ completion so callers check Herdr before retrying.
 Subscription acknowledgements, including reconnects, trigger fresh snapshots;
 events during refresh queue another refresh. This reconciles missed changes,
 not an atomic or replayable event log.
+
+## Per-terminal profile settings
+
+Herdr owns profile assignments and Town master claims as four namespaced
+metadata tokens on the terminal. `server/src/agent/terminal-tokens.ts` validates
+the terminal witness and all values, writes through the exact current lease,
+and checks that lease again after dispatch. The shared Town move path checks
+the moved terminal and restores keys only if Herdr dropped them.
+
+`server/src/agent/terminal-settings.ts` projects these tokens for browsers.
+After complete clean host observations, its separate reconciliation work
+imports legacy assignments once per connection and clears superseded master
+claims; it never delays snapshot delivery for those writes. Unreachable
+hosts retain unresolved observations; removing a connection retires its cached
+assignments and claims without changing the terminal tokens. Import eligibility
+is rechecked against the current terminal read, so a stale list cannot replace
+a newer assignment. Every valid revision learned through a current write or
+guarded cleanup read advances the clock watermark before the next allocation.
+The highest claim revision is durable
+with the profiles; assignments use `max(now, highest seen + 1)`, with ties
+broken by the greater terminal ID. Cross-machine clock skew remains a limit.
+Profiles and chimes stay World-local. Migration backup and rollback details
+are in [deployment](DEPLOYMENT.md#terminal-profile-settings-migration).
 
 ## Connection isolation
 

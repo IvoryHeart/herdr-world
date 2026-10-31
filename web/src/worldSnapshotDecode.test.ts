@@ -73,14 +73,22 @@ test("decoded hosts wait for browser admission before posting another payload", 
       connection_id: "beta",
       generation: 9,
       stale: true,
-      snapshot: { panes: [{ pane_id: "shared" }] },
+      token: "retained-host",
+      unchanged: true,
     },
   ];
   const running = scope.onmessage!({
-    data: [JSON.stringify({ revision: 3, connections })],
+    data: [
+      JSON.stringify({
+        revision: 3,
+        service_incarnation: "synthetic-service",
+        connections,
+      }),
+    ],
   });
   void running.catch(() => {});
   await first.promise;
+  expect(messages[0].header.service_incarnation).toBe("synthetic-service");
   await new Promise((resolve) => setTimeout(resolve, 0));
   expect(
     messages

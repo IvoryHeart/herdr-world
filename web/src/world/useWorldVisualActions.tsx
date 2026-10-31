@@ -15,6 +15,7 @@ import {
   Terminal,
 } from "lucide-react";
 import { openProfileEditor, requestAgentLaunch } from "./agentProfiles";
+import { openGroups } from "./groups/groupActions";
 import type { CommandExtension } from "../components/CommandCombobox";
 import { connectionSnapshot, endpointCreationReason, store } from "../store";
 import {
@@ -335,6 +336,14 @@ export function useWorldVisualActions(controller: WorldInspectorController) {
         detail: "Name, brain, skills, brief and look",
         keywords: ["profile", "persona", "character", "dress", "agent"],
         run: () => openProfileEditor(),
+      },
+      {
+        key: "visual-groups",
+        icon: <LayoutGrid size={15} />,
+        title: "Groups",
+        detail: "Pods, Teams, Rooms and Desks",
+        keywords: ["pod", "team", "groups", "roster"],
+        run: () => openGroups(),
       },
     ];
     const pinNode =
