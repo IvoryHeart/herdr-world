@@ -244,6 +244,15 @@ export class TownCamera {
     return this.flight !== null;
   }
 
+  /** Whether update() still has motion to step: a flight, a zoom easing or a fling. */
+  get moving() {
+    return (
+      this.flight !== null ||
+      this.z !== this.targetZ ||
+      Math.abs(this.velocity.x) + Math.abs(this.velocity.y) > 1
+    );
+  }
+
   stop() {
     this.flight = null;
     this.velocity = { x: 0, y: 0 };
