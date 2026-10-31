@@ -13,7 +13,7 @@ with the `openspec-sync-specs` skill.
 
 ## 2. Service incarnation
 
-- [ ] 2.1 Generate `service_incarnation` at each start and send it in the hello.
+- [x] 2.1 Generate `service_incarnation` at each start and send it in the hello.
   Verify with a direct test: two in-process services from the composition root
   (item 9) report different incarnations, while both connection managers start at
   generation 1.
@@ -25,12 +25,17 @@ with the `openspec-sync-specs` skill.
 
 ## 3. Observation v1 (stage 3)
 
-- [ ] 3.1 Compute host tokens in the snapshot service: a digest of the projected host
+Service/wire delivery implements 2.1, 3.1 and 3.2. The browser still requests
+complete snapshots. Browser base admission and incremental preparation (3.3–3.5),
+M1/P6 and their additive Q14 mapping (3.6), and the remaining spec sync (3.7)
+remain pending in the following coherent PRs. No v2 behavior is included.
+
+- [x] 3.1 Compute host tokens in the snapshot service: a digest of the projected host
   and its generation, cached per cache entry and projection key. Verify with:
   - a test that tokens are equal exactly when projected content and generation are
     equal;
   - the digest cost on the dense fixture, recorded in the PR.
-- [ ] 3.2 Accept `base` on `world.snapshot`, apply the service rule and advertise
+- [x] 3.2 Accept `base` on `world.snapshot`, apply the service rule and advertise
   `world_observation_v1`. Verify with tests that:
   - a confirmation is sent only when incarnation, generation and token all match;
   - a malformed base is refused without default routing;

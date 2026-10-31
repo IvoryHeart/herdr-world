@@ -428,3 +428,38 @@ change a view filter.
   arrive for A and session B sharing that pane ID
 - **THEN** publishing A uses A's maximum, and B's timestamp cannot erase it or apply
   to A
+
+### Requirement: Service incarnation and based aggregate replies
+
+Each World service start SHALL issue a random `service_incarnation`, sent in the
+WebSocket hello and every `world.snapshot` reply. The hello SHALL advertise
+`world_observation_v1`. Runtime generations and service incarnation SHALL remain
+separate fences; restarting both hosts at generation 1 SHALL NOT admit a base
+from the previous service as current.
+
+The service SHALL accept an optional `base` containing `service_incarnation` and
+at most 64 `hosts`, each with a unique `connection_id`, a nonnegative integer
+`generation`, and a nonempty opaque `token` of at most 64 characters. Invalid bases
+SHALL be refused before host acquisition, without default routing.
+
+Every reply SHALL include each host's token, null when no snapshot exists. Equal
+tokens SHALL identify equal projected snapshot content and producing generation.
+Only when incarnation, connection, runtime generation, snapshot generation and
+token all match the base SHALL the service omit topology with `unchanged: true`.
+A confirmation SHALL include current state, generation, snapshot generation,
+staleness, actionability and errors. Every other host SHALL receive a complete
+replacement through the bounded existing observation and chunk transport path.
+Service-side snapshot consumers SHALL continue to receive complete topology.
+
+#### Scenario: One host changes
+- **WHEN** a caller sends a base for two hosts and only one projected snapshot changes
+- **THEN** that host receives a complete replacement and its sibling receives a
+  confirmation with current metadata and no `snapshot` field
+
+#### Scenario: Unknown or foreign base
+- **WHEN** a base names an unknown token, another generation or another incarnation
+- **THEN** the service sends complete observations for every mismatching host
+
+#### Scenario: Older caller
+- **WHEN** a caller sends no base
+- **THEN** every catalogue host retains its complete snapshot as before
