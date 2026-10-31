@@ -1,6 +1,5 @@
-import type { TownLevel } from "./townCamera";
+import type { TownCamera, TownLevel } from "./townCamera";
 import { TOWN_FACADE, TOWN_TILE as T, type TownLayout } from "./townLayout";
-import type { TownRendererHandle } from "./townRenderer";
 
 /* ---------- DOM world layer ---------- */
 
@@ -22,7 +21,7 @@ export const NOTHING_VISIBLE: TownVisible = {
 
 /** Buildings within half a viewport of the screen, plus whether cards show. */
 export function townVisibleHosts(
-  camera: TownRendererHandle["camera"],
+  camera: TownCamera,
   layout: TownLayout,
   level: TownLevel,
 ): TownVisible {

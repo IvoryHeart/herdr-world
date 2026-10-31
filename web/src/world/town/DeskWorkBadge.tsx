@@ -1,10 +1,17 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { actionablePullRequest } from "../../../../shared/pullRequests";
 import { useLayer } from "../../layerStack";
 import { PullRequestCard } from "../PullRequestCard";
 import { useWorldSources } from "../worldSources";
 import type { TownDeskBadge as Badge } from "./townBadges";
+import { TownHudContext } from "./useTownHud";
 import "./deskWorkBadge.css";
 
 /**
@@ -71,7 +78,7 @@ const GAP = 6;
 const MARGIN = 8;
 const PHONE = 640;
 
-function BadgePopover({
+export function BadgePopover({
   anchor,
   onClose,
   children,
@@ -81,21 +88,23 @@ function BadgePopover({
   children: React.ReactNode;
 }) {
   const panel = useRef<HTMLDivElement | null>(null);
-  const [place, setPlace] = useState<{ left: number; top: number } | null>(
-    null,
-  );
+  // Only whether it is placed is React state: its place moves with the
+  // camera each drawn frame and is written to the panel directly.
+  const [placed, setPlaced] = useState(false);
   useLayer(true, onClose, {
     element: () => panel.current,
     anchors: () => [anchor.current],
   });
   // Beside the badge, kept on screen, following it as the camera zooms and
-  // pans; a phone shows it as a bottom sheet.
+  // pans (each frame Town draws) and as the window resizes; a phone shows it
+  // as a bottom sheet.
+  const hud = useContext(TownHudContext);
   useLayoutEffect(() => {
-    let frame = 0;
     const follow = () => {
       const at = anchor.current?.getBoundingClientRect();
-      const size = panel.current?.getBoundingClientRect();
-      if (at && size && window.innerWidth >= PHONE) {
+      const node = panel.current;
+      const size = node?.getBoundingClientRect();
+      if (at && node && size && window.innerWidth >= PHONE) {
         const left = Math.min(
           Math.max(MARGIN, at.left),
           window.innerWidth - size.width - MARGIN,
@@ -105,20 +114,26 @@ function BadgePopover({
           below + size.height <= window.innerHeight - MARGIN
             ? below
             : Math.max(MARGIN, at.top - GAP - size.height);
-        setPlace((current) =>
-          current?.left === left && current.top === top
-            ? current
-            : { left, top },
-        );
+        node.style.left = `${left}px`;
+        node.style.top = `${top}px`;
+        if (node.dataset.placed === undefined) setPlaced(true);
       }
-      frame = requestAnimationFrame(follow);
     };
     follow();
-    return () => cancelAnimationFrame(frame);
-  }, [anchor]);
+    const stop = hud?.onFrame(follow);
+    window.addEventListener("resize", follow);
+    // Its card can change size as it loads.
+    const resized = new ResizeObserver(follow);
+    if (panel.current) resized.observe(panel.current);
+    return () => {
+      stop?.();
+      window.removeEventListener("resize", follow);
+      resized.disconnect();
+    };
+  }, [anchor, hud]);
   // Keyboard users land in the card once it is shown (it stays hidden until
   // placed); closing returns focus to the badge.
-  const shown = place !== null || window.innerWidth < PHONE;
+  const shown = placed || window.innerWidth < PHONE;
   useEffect(() => {
     if (shown)
       panel.current?.querySelector<HTMLElement>("button, a[href]")?.focus();
@@ -129,8 +144,7 @@ function BadgePopover({
       className="town-badge-popover"
       role="dialog"
       aria-label="Pull request"
-      data-placed={place ? "" : undefined}
-      style={place ? { left: place.left, top: place.top } : undefined}
+      data-placed={placed ? "" : undefined}
     >
       {children}
     </div>

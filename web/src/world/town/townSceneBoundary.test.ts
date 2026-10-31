@@ -31,6 +31,7 @@ const ENTRIES = [
   "townSceneBake.ts",
   "townSceneActors.ts",
   "townSceneDiff.ts",
+  "townHud.ts",
 ];
 
 test("the scene model's module graph has no framework, renderer or adapter", async () => {
