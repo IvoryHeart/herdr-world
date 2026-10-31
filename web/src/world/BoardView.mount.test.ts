@@ -231,11 +231,12 @@ if (!order) {
     try {
       const gate = Promise.withResolvers<void>();
       let gateRendered = false;
+      let released = false;
       let holdBuild: (held: boolean) => void = () => {};
       const Gate = () => {
         const [held, setHeld] = useState(false);
         holdBuild = setHeld;
-        if (held && !gateRendered) {
+        if (held && !released) {
           gateRendered = true;
           throw gate.promise;
         }
@@ -264,42 +265,28 @@ if (!order) {
       if (order === "frame-during-build") {
         // A dense transition renders in slices, so a frame can run after
         // BoardView's render and before its commit. A sibling suspending in
-        // the same batch of transitions holds that render uncommitted while
-        // the frame armed at mount runs.
-        Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: false });
-        const turn = () => new Promise((resolve) => setImmediate(resolve));
-        try {
+        // the same batch of transitions holds that render uncommitted, until
+        // released, while the frame armed at mount runs.
+        await act(async () => {
           flushSync(render);
           startTransition(() => holdBuild(true));
-          for (let turns = 0; !gateRendered; turns++) {
-            if (turns > 1_000)
-              throw new Error("dense transition never rendered");
-            await turn();
-          }
-          expect(host.querySelector(".board-zone-label")).toBeNull();
-          expect(
-            frames.size > 0 ||
-              [...tasks.values()].some((task) => task.delay === 16),
-          ).toBe(true);
-          const heldCommits = commits;
-          deliverFrame();
-          // Anything that frame published would render and commit in these
-          // turns, ahead of the held transitions.
-          for (let turns = 0; turns < 20; turns++) await turn();
-          expect(commits).toBe(heldCommits);
+        });
+        expect(gateRendered).toBe(true);
+        expect(host.querySelector(".board-zone-label")).toBeNull();
+        expect(
+          frames.size > 0 ||
+            [...tasks.values()].some((task) => task.delay === 16),
+        ).toBe(true);
+        const heldCommits = commits;
+        await act(async () => deliverFrame());
+        expect(commits).toBe(heldCommits);
+        expect(host.querySelector(".board-zone-label")).toBeNull();
+        await act(async () => {
+          released = true;
           gate.resolve();
-          for (
-            let turns = 0;
-            !host.querySelector(".board-zone-label");
-            turns++
-          ) {
-            if (turns > 1_000)
-              throw new Error("dense transition never committed");
-            await turn();
-          }
-        } finally {
-          Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
-        }
+          await gate.promise;
+        });
+        expect(host.querySelector(".board-zone-label")).not.toBeNull();
       } else
         await act(async () => {
           if (order === "frame-before-build") {
