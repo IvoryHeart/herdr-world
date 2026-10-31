@@ -285,6 +285,23 @@ describe("cadence", () => {
       "at least 1 second",
     );
   });
+
+  test("low quota slows actual scheduling, including near a full-pass boundary", () => {
+    const cadence = { scope: [8], lastFull: NOW, busy: [8] };
+    const options = { interval: 300, busyInterval: 60 };
+    expect(afterPass(cadence, NOW + 590_000, [8], options, 1499).at).toBe(
+      NOW + 710_000,
+    );
+    expect(afterPass(cadence, NOW + 590_000, [], options, 1499).at).toBe(
+      NOW + 1190_000,
+    );
+    expect(afterPass(cadence, NOW + 60_000, null, options, 0).at).toBe(
+      NOW + 180_000,
+    );
+    expect(afterPass(cadence, NOW + 60_000, [8], options, 1500).at).toBe(
+      NOW + 120_000,
+    );
+  });
 });
 
 describe("plan", () => {
@@ -730,6 +747,7 @@ describe("delivery", () => {
       db?: typeof crew;
       lock?: typeof lock;
       configPath?: string;
+      mergeOnly?: boolean;
     } = {},
   ) =>
     crewPass({
@@ -746,6 +764,7 @@ describe("delivery", () => {
       now,
       deps,
       worker: ["bun", "crew.ts"],
+      mergeOnly: options.mergeOnly,
     });
   const pass = (value: GateInput, now = NOW) => passOver([value], now);
   const prompts = () => calls.filter((argv) => argv[2] === "prompt");
@@ -757,6 +776,48 @@ describe("delivery", () => {
         argv[2] !== "get" &&
         argv[2] !== "withdraw",
     );
+
+  test("merge-only budget mode preserves unresolved owner asks and marks without starting work", () => {
+    const value = town({
+      head: SHA.reviewed,
+      posts: [],
+      item: { branch: "unknown-author" },
+    });
+    const ownerAction = {
+      key: `7:${SHA.reviewed}:judgment:owner`,
+      pr: 7,
+      head: SHA.reviewed,
+      kind: "judgment" as const,
+      target: "owner",
+      text: "Owner judgment still required",
+    };
+    addAction(crew, ownerAction, NOW);
+    setAction(
+      crew,
+      ownerAction.key,
+      "sent",
+      NOW,
+      JSON.stringify({ ask: "q-example" }),
+    );
+    const pending = actionsIn(crew, ["pending", "sent"]).filter(
+      (entry) => entry.target === "owner",
+    );
+    expect(pending.length).toBeGreaterThan(0);
+    calls.length = 0;
+    passOver([value], NOW + 60_000, { mergeOnly: true });
+    expect(
+      actionsIn(crew, ["pending", "sent"]).filter(
+        (entry) => entry.target === "owner",
+      ),
+    ).toEqual(pending);
+    expect(
+      calls.some((argv) => argv[0] === "herdr-world" && argv[1] === "ask"),
+    ).toBe(false);
+    expect(
+      calls.some((argv) => argv.includes("context=crew/needs-owner")),
+    ).toBe(false);
+    expect(prompts()).toHaveLength(0);
+  });
 
   test("prompts an idle author once, however many passes run", () => {
     const value = town({
@@ -2307,7 +2368,7 @@ describe("delivery", () => {
       "towncx",
       "[crew -> towncx] ACT #7 ci @" +
         SHA.reviewed.slice(0, 7) +
-        ": World browser tests (4/6) has been running over 30 minutes, longer than CI takes; GitHub may have lost its status. Rerun it: gh run rerun --job 22",
+        ": World browser tests (4/6) has been running over 30 minutes, longer than CI takes; GitHub may have lost its status. Rerun it: gh run rerun --job 22. Don't watch CI; the crew watcher reports results. If waiting is unavoidable, use gh run watch --interval 120. No gh polling loops.",
     ]);
     // Reviewers started on the push and didn't wait for the check.
     expect(spawned.map((argv) => argv[6])).toEqual([

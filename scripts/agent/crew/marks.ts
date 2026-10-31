@@ -19,6 +19,7 @@ export function markHeads(
   inputs: GateInput[],
   causes: Map<number, string[]>,
   say: (text: string) => void,
+  contexts?: string[],
 ) {
   const { deps } = context;
   const repo = loadConfig(context.configPath).repo;
@@ -31,6 +32,7 @@ export function markHeads(
       settings,
       causes.get(verdict.number) ?? [],
     )) {
+      if (contexts && !contexts.includes(mark.context)) continue;
       if (!markDue(crew, verdict.number, verdict.head, mark)) continue;
       const result = deps.run([
         "gh",

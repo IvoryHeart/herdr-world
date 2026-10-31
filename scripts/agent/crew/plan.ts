@@ -369,7 +369,7 @@ export function plan(
   if (failing && settled)
     toAuthor(
       "ci",
-      `ACT #${pr} ci @${at}: ${failing.detail}. Rerun a listed flake once with gh run rerun <id> --failed; otherwise fix and push.`,
+      `ACT #${pr} ci @${at}: ${failing.detail}. Rerun a listed flake once with gh run rerun <id> --failed; otherwise fix and push. Don't watch CI; the crew watcher reports results. If waiting is unavoidable, use gh run watch --interval 120. No gh polling loops.`,
       failedJobs || failing.detail,
     );
   // A check that never finishes holds every review back; keyed by its job,
@@ -381,7 +381,7 @@ export function plan(
       "ci",
       // No minute count in the text: without an author it is an owner
       // notice keyed by its text, which must stay the same every pass.
-      `ACT #${pr} ci @${at}: ${check.name} has been running over ${settings.stallMinutes} minutes, longer than CI takes; GitHub may have lost its status. Rerun it: ${job ? `gh run rerun --job ${job}` : check.url}`,
+      `ACT #${pr} ci @${at}: ${check.name} has been running over ${settings.stallMinutes} minutes, longer than CI takes; GitHub may have lost its status. Rerun it: ${job ? `gh run rerun --job ${job}` : check.url}. Don't watch CI; the crew watcher reports results. If waiting is unavoidable, use gh run watch --interval 120. No gh polling loops.`,
       check.url,
     );
   }

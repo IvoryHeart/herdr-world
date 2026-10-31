@@ -10,6 +10,45 @@ other than the shared skills (`bun run check:agents`).
 The crew itself, its marks and its watcher are described in
 [agent development](agent-development.md#act-on-readiness-with-agentcrew).
 
+## GitHub API budget
+
+Every seat shares the owner's GitHub quota. After pushing, leave CI reporting to
+the crew watcher; do not run `gh` polling loops or watch CI yourself. If waiting
+is unavoidable, use `gh run watch --interval 120`.
+
+Each watcher pass reads the free `rate_limit` endpoint, then lists PRs once.
+The list's head SHA, base SHA, `updatedAt`, check identities/states, labels and
+mergeability qualify cached evidence. Unchanged PRs reuse their original detail
+timestamps; changed PRs and entries ten minutes old reread review history, runs
+and round-policy replies. Explicit `agent:gate merge-line` and `check-claim`
+continue to read fresh evidence. An unchanged pass before that safety reread
+uses at most two GitHub requests when it has no new actions to deliver.
+
+The crew SQLite store retains completed jobs by job ID, completed runs by run ID
+and attempt, and completed earlier-attempt job pages. A newer run attempt replaces
+the completed-run cache. Other REST reads send saved ETags with `If-None-Match`;
+authenticated 304 replies reuse the matching page and do not consume the primary
+quota. Pagination counts every page as a request. Failed reads never renew a
+cached detail timestamp.
+
+The budget uses the lower remaining REST/GraphQL quota. Below 1,500, busy passes
+are at least two minutes apart and full/idle passes at least ten minutes apart;
+longer configured intervals stay in force. Below 300, only settled, non-draft,
+unheld PRs with passing checks get expensive merge-readiness reads. Review/fix
+admission and author prompts pause; queued steps, running sessions, owner asks
+and owner marks stay intact until the budget recovers. Only merge-readiness
+marks are updated in this mode. A failed quota read fails that pass and uses
+the slower cadence rather than assuming capacity.
+
+Pass output records `github calls=N 304=N remaining=N`, including failed passes.
+`calls` counts requests, including the free quota read and 304s; subtract those to
+compare primary-quota consumption. Pagination is included. To measure a rollout,
+save the watcher output for one hour under normal crew load and sum `calls` and
+`304` over its pass lines; report the time window, pass count, total requests and
+requests per hour on the PR. Record the pre-change baseline separately; a
+code-derived estimate is not a live before/after measurement. The owner restarts
+the watcher after deployment.
+
 ## Review rounds and evaluation
 
 Round 1 reviews the whole PR. Every reviewer reads the linked issue and flags
@@ -250,6 +289,8 @@ You are <seat>. Task <item>: <title> (<issue link, or "no issue yet: file one fi
   While you are busy on another PR, a fresh fixer may do a step for you in
   that PR's worktree and reply signed `[fixer #N]`; keep a worktree you
   aren't working in committed, so the fixer can take it.
+- Don't watch CI or use gh polling loops; the crew watcher reports results.
+  If waiting is unavoidable, use `gh run watch --interval 120`.
 - Start every GitHub comment you post with `[<seat>]`, because every seat posts
   with the owner's account. A review is signed by its `Reviewer:` header.
 - Reach the owner only by asking in your own pane (`herdr-world ask` once #472

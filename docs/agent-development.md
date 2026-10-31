@@ -490,6 +490,14 @@ plans the next step for every PR in scope and takes each step once:
   already working finishes. Remove the hold to resume on the next pass, which
   plans the steps again. `status` lists held PRs as last read: the latest pass
   over every PR, updated by the busy passes since.
+- **GitHub quota.** Leave CI reporting to the watcher. Do not watch CI or run
+  `gh` polling loops; unavoidable waits use `gh run watch --interval 120`.
+  The watcher lists PRs once, reuses unchanged evidence for up to ten minutes,
+  caches completed Actions objects, and sends conditional REST requests.
+  Below 1,500 remaining it slows busy/full passes to at least 120/600 seconds;
+  below 300 it limits work to merge-readiness reads and marks while retaining
+  other queued work and owner requests. See the [budget and measurement
+  procedure](crew-runbook.md#github-api-budget).
 - **Which checks count.** An attempt that a later attempt of the same
   workflow replaced, as a rerun does, doesn't count. Same-name checks from
   runs the gate can't order, such as two workflows, all count: the gate keeps

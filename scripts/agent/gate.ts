@@ -167,19 +167,24 @@ export type Context = {
   run: Run;
   mirror: string;
   now: number;
+  observe?: typeof observe;
 };
 
 /** Read, judge and record in one transaction; nothing is kept if a read fails. */
 export function runPass(db: Database, context: Context, numbers: number[]) {
   const started = Date.now();
   const { config, run, mirror, now } = context;
-  const inputs = observe({ run, config, numbers, mirror, now }).map(
-    (input) => ({
-      ...input,
-      hold: activeHold(db, input.number),
-      waived: waivedSources(db, input.number),
-    }),
-  );
+  const inputs = (context.observe ?? observe)({
+    run,
+    config,
+    numbers,
+    mirror,
+    now,
+  }).map((input) => ({
+    ...input,
+    hold: activeHold(db, input.number),
+    waived: waivedSources(db, input.number),
+  }));
   const verdicts = inputs.map((input) => evaluate(input, config, now));
   // Elapsed wall time on the caller's clock, so tests can fix `now`.
   const finishedAt = now + (Date.now() - started);
