@@ -301,6 +301,8 @@ hosts stay usable.
    back, check both rooms before you carry on. Moving a room's last table
    closes that room, so Town asks first.
 8. Tables sit in the order of their tabs, left to right and then row by row.
+   A table's nameplate shows its sole agent's Herdr name when it has one;
+   otherwise it shows the tab's name, or `Tab N` for an unnamed tab.
    To change the order, drag a table onto another table in the same room: it
    takes that table's place, and the tables in between shift along. Drop it on
    the room's free spot to put it last of the tables shown. A room grows as

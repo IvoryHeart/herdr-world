@@ -44,10 +44,12 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   Each host is a building, each workspace a room, each tab a team table and each
   pane a seat. Rooms resize as tabs open and close; expanded rooms stay expanded
   as they shrink, until folded. Plain terminals show prompts. Additional panes beyond the drawn
-  seats remain available through the table's count and chooser. Each table
-  carries its tab's name on a nameplate at its front edge. Agents go by the
-  name Herdr gives them (`firstmate`), else their harness (`claude`); window
-  and Inspector titles put the name first (`firstmate · claude`).
+  seats remain available through the table's count and chooser. Each table's
+  nameplate shows its sole agent's Herdr name when exactly one named agent
+  occupies the tab; otherwise it shows the tab's name, or `Tab N` if unnamed.
+  Agents go by the name Herdr gives them (`firstmate`), else their harness
+  (`claude`); window and Inspector titles put the name first
+  (`firstmate · claude`).
   - The Town board counts agents working and finished, plus **items** needing
     you: blocked agents and open questions, matching the reception tray and
     call rail. A blocked agent with an open question contributes two items.

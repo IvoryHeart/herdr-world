@@ -150,6 +150,41 @@ describe("Pixel Office projection", () => {
     expect(agent.harness).toBe("claude");
   });
 
+  test("a desk prefers its sole named agent, then the tab label, then its number", () => {
+    const projectionFor = (
+      paneCount: number,
+      names: Array<string | undefined>,
+      tabLabel = "Claude",
+    ) => {
+      const source = connection(
+        "alpha",
+        [{ ...tab("shared", 1), label: tabLabel, pane_count: paneCount }],
+        Array.from({ length: paneCount }, (_, index) =>
+          pane("shared", "working", `claude-${index}`, index),
+        ),
+      );
+      source.snapshot!.agents = names.flatMap((name, index) =>
+        name
+          ? [
+              {
+                pane_id: `pane-shared-${index}`,
+                terminal_id: `terminal-shared-${index}`,
+                agent: `claude-${index}`,
+                name,
+              },
+            ]
+          : [],
+      );
+      return projectWorldOffice(buildWorldObject([source]), 1).rooms[0]!
+        .desks[0]!.displayLabel;
+    };
+
+    expect(projectionFor(1, ["example-seat"])).toBe("example-seat");
+    expect(projectionFor(1, [undefined])).toBe("Claude");
+    expect(projectionFor(2, ["first-seat", "second-seat"])).toBe("Claude");
+    expect(projectionFor(1, [undefined], "")).toBe("Tab 1");
+  });
+
   test("a reception chip names the waiting agent by its Herdr name", () => {
     const source = connection(
       "alpha",
