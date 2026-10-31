@@ -21,6 +21,13 @@ reviewed `package-lock.json`, outside application workspaces. Install it with
 `bun run verification:setup`; do not add checker binaries to the application or
 replace its lock with an unlocked global dependency.
 
+Behavioral verification CI uses Node 24.19.0 and Eclipse Temurin JDK
+21.0.13+9 (Linux x64). The shards and aggregate install that exact Java build
+through a commit-pinned `actions/setup-java`, reusing its runner tool cache when
+available. They do not select the runner image's preinstalled Java. Use the same
+build locally to reproduce CI tool identities; aggregation rejects differing
+tool identities, including Java patch versions.
+
 ## Validation
 
 **Fresh checkout:** install dependencies, then `bun run typecheck` to build/embed

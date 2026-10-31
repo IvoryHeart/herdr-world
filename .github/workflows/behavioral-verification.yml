@@ -8,6 +8,9 @@ on:
 permissions:
   contents: read
 
+env:
+  VERIFICATION_JAVA_VERSION: "21.0.13+9"
+
 concurrency:
   group: behavioral-verification-${{ github.event.pull_request.number || (github.event_name == 'push' && 'main-push') || github.ref }}
   cancel-in-progress: true
@@ -32,10 +35,12 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "24.19.0"
-      - name: Select runner Java 21
-        run: |
-          test -n "$JAVA_HOME_21_X64"
-          echo "$JAVA_HOME_21_X64/bin" >> "$GITHUB_PATH"
+      - name: Install pinned verification Java
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: ${{ env.VERIFICATION_JAVA_VERSION }}
+          architecture: x64
       - run: bun install --frozen-lockfile
       - name: Install locked development tooling and verified checker
         run: bun run verification:setup
@@ -73,6 +78,12 @@ jobs:
         with:
           bun-version: "1.4.3"
           no-cache: true
+      - name: Install pinned verification Java
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: ${{ env.VERIFICATION_JAVA_VERSION }}
+          architecture: x64
       - run: bun install --frozen-lockfile
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:

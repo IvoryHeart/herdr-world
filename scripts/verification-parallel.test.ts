@@ -89,11 +89,14 @@ test("canonical evidence requires every focused worker and one source/tool ident
         2,
       ),
     ).rejects.toThrow("Duplicate or omitted canonical models");
+    for (const tool of ["node", "java"] as const) {
+      const mismatched = structuredClone(records);
+      mismatched[1]!.manifest.tools[tool] = "other";
+      await expect(
+        aggregateVerificationEvidence(root, mismatched, expected, 2),
+      ).rejects.toThrow("different tool identities");
+    }
     const wrong = structuredClone(records);
-    wrong[1]!.manifest.tools.node = "other";
-    await expect(
-      aggregateVerificationEvidence(root, wrong, expected, 2),
-    ).rejects.toThrow("different tool identities");
     wrong[1]!.manifest = make("wrong-model");
     await expect(
       aggregateVerificationEvidence(root, wrong, expected, 2),
