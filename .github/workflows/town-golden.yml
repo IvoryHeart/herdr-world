@@ -1,0 +1,58 @@
+name: Town golden images
+
+# Advisory during the scene-model migration. Never a Delivery checks dependency.
+on:
+    pull_request:
+        types: [opened, synchronize, reopened]
+    push:
+        branches: [main]
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+concurrency:
+    group: town-golden-${{ github.event.pull_request.number || github.ref }}
+    cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+    report:
+        name: Town golden report (advisory)
+        runs-on: ubuntu-24.04
+        timeout-minutes: 15
+        continue-on-error: true
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  persist-credentials: false
+            - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+              with:
+                  bun-version: "1.4.3"
+                  no-cache: true
+            - run: bun install --frozen-lockfile
+            - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+              with:
+                  path: ~/.cache/herdr-test-chrome
+                  key: test-chrome-${{ hashFiles('tools/chrome/test-chrome.json') }}
+            - name: Install the pinned test Chrome
+              run: bun scripts/test-chrome.ts "$HOME/.cache/herdr-test-chrome"
+            - name: Compare five viewports
+              env:
+                  TOWN_GOLDEN: "1"
+                  TOWN_GOLDEN_OUTPUT: ${{ runner.temp }}/town-golden
+              run: bun run test scripts/town-golden.browser.test.ts
+            - name: Summarize the comparison
+              if: always()
+              run: |
+                  if test -f "$RUNNER_TEMP/town-golden/summary.md"; then
+                    cat "$RUNNER_TEMP/town-golden/summary.md" >> "$GITHUB_STEP_SUMMARY"
+                  else
+                    echo "Town golden images: no report produced; inspect the failed setup or capture step." >> "$GITHUB_STEP_SUMMARY"
+                  fi
+            - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+              if: always()
+              with:
+                  name: town-golden
+                  path: ${{ runner.temp }}/town-golden
+                  if-no-files-found: warn
+                  retention-days: 14

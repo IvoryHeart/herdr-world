@@ -14,6 +14,7 @@ for compatibility with branch rules.
 | CI on main | Validate the integrated main tree | PR success cannot prove the result of later merges |
 | Main gate | Classify failed push CI, rerun a recognized infrastructure failure once, or prepare an issue and revert | Does not merge a revert; green main resolves earlier alerts |
 | Web asset headroom | Compare PR asset deltas with current main and re-evaluate open PRs after merges | Catches concurrent budget consumption beyond one PR's tested base |
+| Town golden images | Compare five synthetic Town screenshots with stored reference PNGs on PR changes and main | Advisory, separate from Delivery checks; exact pixels with pinned Chrome, fonts, clock and SwiftShader |
 | Prepare Release | Generate and validate release files in a checkout, then open a PR and dispatch CI | Generated files need validation before review |
 | Publish Release and Release | Require reviewed, green main; create the tag; validate and package the tagged source before publishing | Publication and archive smoke tests cover artifacts beyond source checks |
 | Deploy Pages | Build and publish the documentation site and film | Site publication is separate from application release acceptance |
@@ -120,6 +121,12 @@ policy still selects the full matrix. Browser jobs use the pinned test Chrome
 separate, non-blocking World latency trend workflow measures the dense suites on
 quiet runners for main pushes and `latency-trend`-labelled PRs and reports them
 beside main's recent runs on the same CPU model.
+
+The [Town golden-image report](SCREENSHOTS.md#town-golden-image-report) runs once
+per viewport in its own 15-minute advisory job. It shares the machine-wide browser
+queue locally, uploads current images and mismatch diffs even on failure, and never
+changes reference images in CI. Its opt-in test is excluded by default from visual
+acceptance in the protected gate; comparator and workflow unit tests run normally.
 
 Three verification runners partition the complete accepted model inventory by
 longest-first measured work (`scripts/verification-timings.json`). Both tables

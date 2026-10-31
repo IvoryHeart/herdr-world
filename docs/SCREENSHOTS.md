@@ -5,6 +5,76 @@ release screenshots. Capture Herdr World's actual UI and work state. Show multip
 workspaces and agents where the view supports them. Keep real
 hosts, usernames, paths, sessions, and repository contents out of public assets.
 
+## PR screenshot viewports
+
+Use these CSS-pixel sizes for PR presentation evidence and the Town golden-image
+report. They match the existing synthetic Inspector capture helper. DPR is 1 for
+repeatable reference images; this does not claim high-DPR or mobile-device coverage.
+
+| Name | Width × height |
+| --- | --- |
+| Phone | 390 × 844 |
+| Mac laptop | 1512 × 982 |
+| Half-width Linux window | 1280 × 1440 |
+| Wide Linux monitor | 2560 × 1440 |
+| Portrait monitor | 1440 × 2560 |
+
+## Town golden-image report
+
+The advisory [Town golden images workflow](../.github/workflows/town-golden.yml)
+compares the production `TownCanvas` (Pixi scene and DOM overlays) with five stored
+PNGs on PR changes and main pushes. It is separate from required Delivery checks.
+The fixture contains only synthetic hosts, four rooms, sixteen desks and mixed
+working, blocked, finished and idle agents. It does not start World or Herdr,
+contact a runtime, or capture a user's browser. The surrounding World shell, rail,
+Inspector, gestures and runtime effects retain their existing tests.
+
+The fixture fixes its random seed, wall clock, 16 ms frame clock, dark theme,
+100% interface scale and DPR 1. Motion stays enabled. Fonts load before layout;
+WebGL initializes before mounting, then the production scene runs for 6,000 ms of
+test time after its first frame so actors, roofs, camera, textures and shaders
+settle before capture. CSS transitions and animations are disabled in this fixture.
+Reference fonts are bundled subsets of the Linux fallback faces (Noto Sans and
+DejaVu Sans Mono); fixture-only aliases avoid host fontconfig and network fonts.
+Font licences and provenance are beside the fixture. Product fonts and styling
+are unchanged. This reference deliberately selects those fallback faces rather
+than claiming every platform's system-font appearance.
+
+The report requires the checksum-pinned Linux x64 Chrome from
+`tools/chrome/test-chrome.json`, forces SwiftShader and sRGB, disables LCD text and
+font hinting, and compares decoded RGBA pixels exactly. There is **no tolerance**,
+mask or automatic golden refresh. Chrome, fonts and goldens must be reviewed
+together when the reference renderer changes.
+
+Install the pinned browser using the existing [development guidance](development.md#verification),
+then run through the browser queue:
+
+```bash
+TOWN_GOLDEN=1 bun run test scripts/town-golden.browser.test.ts
+TOWN_GOLDEN=1 TOWN_GOLDEN_RUNS=20 TOWN_GOLDEN_OUTPUT=.agents/town-golden-stability \
+  bun run test scripts/town-golden.browser.test.ts
+```
+
+`CHROME_BIN` must name the pinned browser. A run uses a fresh Chrome profile;
+each viewport gets a new page. The ordinary report captures five images once;
+stability mode allows at most twenty runs (100 captures). The five images total
+under 12 million pixels at DPR 1; CI has a 15-minute job ceiling. Ordinary test
+gates skip the opt-in visual test, while the comparison's unit tests stay required.
+
+Outputs default to `.agents/town-golden/`: current images, JSON receipts, Markdown
+summary and, on mismatches, expected/current/magenta-diff images. CI retains these
+for 14 days and puts the result in its job summary, including failures. Inspect
+the images and report rather than rerunning a mismatch to get green.
+
+For an intentional visual change, generate new images locally with
+`TOWN_GOLDEN=1 TOWN_GOLDEN_UPDATE=1 bun run test scripts/town-golden.browser.test.ts`,
+inspect all five images, then run the twenty comparisons without update mode.
+Updates are refused in CI. Commit reviewed PNGs under
+`web/src/world/testing/town-golden/images/`; do not commit the generated report
+directory. [Initial stability evidence](reviews/town-golden.md) records the
+reference and its limits. These test goldens are separate from release screenshots
+below, which still require real synthetic runtime work.
+
 ## Prepare a reproducible scene
 
 1. Use the World release or branch being documented and a compatible Herdr runtime (current captures use 0.9.3 / protocol 22).

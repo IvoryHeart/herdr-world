@@ -16,6 +16,9 @@ export const worldLatencyTrendSuites = [
   "ConcurrentContexts",
 ].map((name) => `web/src/world/${name}.test.ts`);
 
+// Opt-in report suites share the browser queue but never join protected shards.
+export const reportBrowserSuites = ["scripts/town-golden.browser.test.ts"];
+
 /**
  * End-to-end consumers of the World runtime: a change to the runtime itself
  * (WORLD_RUNTIME in validation-scope.ts) runs them even when the import graph
@@ -147,7 +150,7 @@ export function includesBrowserSuites(
 ): boolean {
   return includesSuites(
     args,
-    [...webBrowserSuites, ...worldBrowserSuites],
+    [...webBrowserSuites, ...worldBrowserSuites, ...reportBrowserSuites],
     root,
   );
 }
