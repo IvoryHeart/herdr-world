@@ -1,5 +1,6 @@
 import { interestKeyPrefix } from "../../../shared/interest";
 import { bindingListingAbsent } from "./binding-resolution";
+import { bindingPaneTerminals } from "./binding-pane-list";
 import { serverLogger } from "../utils/logger";
 import type { BoardDocument, BoardOp, BoardStore } from "./board-store";
 
@@ -65,14 +66,8 @@ export async function pruneGoneInterest(
       // One complete, unpaged listing from the current runtime.
       const listed = (await host.call("pane.list", {})) as { panes?: unknown };
       if (!host.isCurrent() || !Array.isArray(listed?.panes)) return;
-      const terminals = new Set<string>();
-      for (const pane of listed.panes) {
-        const terminal = (pane as { terminal_id?: unknown } | null)
-          ?.terminal_id;
-        if (typeof terminal !== "string" || !terminal) return;
-        if (terminals.has(terminal)) return;
-        terminals.add(terminal);
-      }
+      const terminals = bindingPaneTerminals(listed.panes);
+      if (!terminals) return;
       const ops = goneInterestOps(observed, connectionId, terminals);
       if (!ops.length) return;
       // A newer edit (even clearing and restoring the same choice) is never

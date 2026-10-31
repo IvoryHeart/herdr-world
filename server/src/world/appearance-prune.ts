@@ -1,22 +1,9 @@
 import type { BoardDocument, BoardOp, BoardStore } from "./board-store";
 import type { WorldSnapshotResult } from "./snapshot";
 import { bindingListingAbsent } from "./binding-resolution";
+import { bindingPaneTerminals } from "./binding-pane-list";
 const record = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
-function terminals(panes: unknown): Set<string> | null {
-  if (
-    !Array.isArray(panes) ||
-    panes.some(
-      (pane) =>
-        !record(pane) ||
-        typeof pane.terminal_id !== "string" ||
-        !pane.terminal_id,
-    )
-  )
-    return null;
-  const ids = panes.map((pane) => pane.terminal_id as string);
-  return new Set(ids).size === ids.length ? new Set(ids) : null;
-}
 function absentOps(
   document: BoardDocument,
   connectionId: string,
@@ -51,7 +38,7 @@ export function snapshotAppearancePruneOps(
       snapshot.coverage.workspaces !== snapshot.workspaces.length
     )
       return [];
-    const seen = terminals(snapshot.panes);
+    const seen = bindingPaneTerminals(snapshot.panes);
     return seen ? absentOps(document, connection.connection_id, seen) : [];
   });
   const keys = perConnection.flatMap((op) =>
@@ -136,7 +123,9 @@ async function currentTerminals(
   } catch {
     return null;
   }
-  return host.isCurrent() && record(result) ? terminals(result.panes) : null;
+  return host.isCurrent() && record(result)
+    ? bindingPaneTerminals(result.panes)
+    : null;
 }
 /** A live complete native list proves terminal absence; a moving terminal remains retained. */
 export async function pruneGoneAppearance(

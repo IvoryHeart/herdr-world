@@ -176,9 +176,14 @@ test("an interrupted legacy import cannot authorize a saved target before its ow
     if (reply.error) throw new Error(reply.error);
   };
   legacy({ type: "begin" });
-  legacy({ type: "put", captures: [{ key: "legacy-key", input }] });
+  legacy({ type: "prepare", captures: [{ key: "legacy-key", input }] });
+  legacy({ type: "plan" });
+  legacy({ type: "put", keys: ["legacy-key"] });
   legacy({ type: "finish" });
-  legacy({ type: "begin" }); // The process stops before the complete record listing finishes.
+  legacy({ type: "begin" }); // Planning is in memory; the durable import fence must survive process loss.
+  legacy({ type: "prepare", captures: [{ key: "legacy-key", input }] });
+  legacy({ type: "plan" });
+  expect(() => legacy({ type: "finish" })).toThrow("incomplete");
   writer.close();
   const store = await open(paths);
   const [saved] = await store.bindings.list();

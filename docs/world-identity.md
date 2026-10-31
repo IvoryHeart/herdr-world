@@ -51,8 +51,11 @@ remain attached while their target exists and never authorize Send.
 
 The Board JSON document remains its compatible owner representation. Opening it
 captures only strings, appearance, tab colours and terminal interest into SQLite;
-subsequent binding changes are serialized and drained on close. Get/patch RPCs
-wait for admitted captures before replying. An unchanged capture performs no
+subsequent binding changes are serialized and drained on close. All capture
+pages are prepared before any identity is reassigned. Inheritance requires one
+old match for the new record and one new match for that old record across the
+complete capture set, so splits, merges and page order cannot choose an ID.
+Get/patch RPCs wait for admitted captures before replying. An unchanged capture performs no
 import work, so layout edits do not create identities. Captures are paged by
 bytes/count through the bounded storage queue. Interrupted imports cannot resolve
 legacy targets until their World document has been reconciled. Import keys locate
@@ -64,6 +67,12 @@ Board Send first resolves its saved string against a complete current native pan
 list, then retains the existing fresh recipient/session and prompt checks. No
 other host is tried. This does not make Herdr's read-then-prompt atomic or add an
 exactly-once claim.
+
+Appearance and interest pruning check every reported pane, terminal and known
+session identity through the resolver's shared ambiguity predicate before forming
+an absence set. This includes snapshot proposals and their fresh native rechecks.
+Existing complete terminal-only projections retain their terminal-absence rule;
+missing pane IDs and explicit unknown sessions do not invent identities.
 
 Card positions, pins, folds, and workspace/host colours remain native-keyed layout
 preferences. They carry no binding and are inherited on ID reuse. The profile

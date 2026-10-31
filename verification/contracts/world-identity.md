@@ -111,8 +111,16 @@ representation. Imports use bounded pages and a persisted in-progress marker;
 an interrupted import cannot authorize its legacy bindings. A subsequent complete
 World-record import reconciles them. This complete World-owned record listing is
 not source topology absence. Compatibility aliases never become new World IDs.
-A uniquely witnessed appearance whose old legacy key disappeared can keep its
-World record and binding IDs after a move; ambiguous matches never merge.
+All bounded capture pages are prepared before the immutable continuity plan is
+computed and before any binding/alias mutation. An old-to-new and new-to-old
+match must both be unique; application pages cannot consume candidates in order.
+The plan is in memory, while the durable in-progress fence survives its loss.
+Incomplete application cannot finish or authorize legacy targets. A uniquely
+witnessed appearance can retain its IDs; splits and merges never choose an old
+identity. `legacy-binding-plan.test.ts` exhausts 256 two-record witness graphs,
+both appearance policies and both old/current record orders (2,048 cases).
+`legacy-binding-match.test.ts` drives real worker splits in both orders, across a
+64-record page boundary, and confirms that actual one-to-one moves retain both IDs.
 Unchanged identity preserves an ended state, and layout-only changes create no
 binding records. Close drains admitted captures. Storage failure stops the root.
 
@@ -131,6 +139,18 @@ inheriting layout/colour while a witnessed string is unconfirmed.
 `world/board-binding-send.test.ts` and `rpc/board-binding.test.ts` exercise the
 real storage/action consumer and actual RPC refusal before downstream input.
 These consumer mappings need independent acceptance as well as the model.
+
+Destructive appearance/interest consumers admit all reported native, terminal
+and known-session identities through the shared ambiguity rule before creating a
+terminal absence set. `binding-pane-list.test.ts` exhausts their identity
+projections (including terminal-only and explicit unknown-session cases).
+`binding-prune.test.ts` checks actual Board/SQLite capture retention for duplicate
+native/terminal/session data through both native consumers, snapshot proposals
+and fresh native rechecks. Complete unambiguous absence still reclaims records.
+These consumer tests retain their original generation/revision gates and the
+existing witness suites remain unchanged. Compiled controls removing the old
+record's outgoing uniqueness or dropping native/session admission must fail
+assertions; load or cleanup errors do not count as detection.
 
 ## Evidence and acceptance
 

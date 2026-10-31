@@ -1,6 +1,9 @@
 import type { Database } from "bun:sqlite";
 import type { BindingInput, SourceBinding } from "../world/binding-types";
-import { bindingWitnessMatches } from "../world/binding-resolution";
+import {
+  planLegacyBindings,
+  type LegacyBindingRow,
+} from "./legacy-binding-plan";
 import type { createWorldIds } from "./world-ids";
 
 /** Compatibility keys locate JSON records; they are never new World IDs. */
@@ -8,12 +11,12 @@ export type LegacyBindingCapture = {
   key: string;
   input: Omit<BindingInput, "record_id"> & { record_id?: string };
   ended?: boolean;
-  ambiguous?: boolean;
 };
 export type LegacyBindingOperation =
   | { type: "begin" }
-  | { type: "mark"; keys: string[] }
-  | { type: "put"; captures: LegacyBindingCapture[] }
+  | { type: "prepare"; captures: LegacyBindingCapture[] }
+  | { type: "plan" }
+  | { type: "put"; keys: string[] }
   | { type: "finish" };
 export const legacyBindingsSchema = `
 CREATE TABLE world_binding_legacy (
@@ -47,64 +50,80 @@ export function createLegacyBindingWriter(
       ...row,
       binding: JSON.parse(row.body) as SourceBinding,
     }));
+  let incoming: Map<string, LegacyBindingCapture> | null = null;
+  let plan: Map<string, LegacyBindingRow> | null = null;
+  const applied = new Set<string>();
   return (operation: LegacyBindingOperation) => {
     if (operation.type === "begin") {
       db.exec(
         "UPDATE world_binding_sync SET active=1; UPDATE world_binding_legacy SET present=0",
       );
+      incoming = new Map();
+      plan = null;
+      applied.clear();
       return;
     }
-    if (operation.type === "mark") {
-      for (const key of operation.keys)
+    if (!incoming) throw new Error("Legacy binding capture was not begun");
+    if (operation.type === "prepare") {
+      if (plan) throw new Error("Legacy binding capture is already planned");
+      const staged = structuredClone(operation.captures);
+      const keys = new Set<string>();
+      for (const capture of staged) {
+        if (
+          typeof capture.key !== "string" ||
+          !capture.key ||
+          capture.key.length > 4096 ||
+          (capture.ended !== undefined && typeof capture.ended !== "boolean") ||
+          keys.has(capture.key) ||
+          incoming.has(capture.key)
+        )
+          throw new Error("invalid legacy binding capture");
+        validate({
+          ...capture.input,
+          record_id: capture.input.record_id ?? "validation-only",
+        });
+        keys.add(capture.key);
+      }
+      for (const capture of staged)
         db.query("UPDATE world_binding_legacy SET present=1 WHERE key=?").run(
-          key,
+          capture.key,
         );
+      for (const capture of staged) incoming.set(capture.key, capture);
       return;
     }
+    if (operation.type === "plan") {
+      if (plan) throw new Error("Legacy binding capture is already planned");
+      plan = planLegacyBindings(read(), [...incoming.values()]);
+      return;
+    }
+    if (!plan) throw new Error("Legacy binding capture is not planned");
     if (operation.type === "finish") {
+      if (applied.size !== incoming.size)
+        throw new Error("Legacy binding capture is incomplete");
       db.exec(
         "DELETE FROM world_bindings WHERE id IN (SELECT binding_id FROM world_binding_legacy WHERE present=0); UPDATE world_binding_sync SET active=0",
       );
+      incoming = null;
+      plan = null;
+      applied.clear();
       return;
     }
-    const rows = read();
-    const byKey = new Map(rows.map((row) => [row.key, row]));
-    for (const capture of operation.captures) {
-      if (
-        typeof capture.key !== "string" ||
-        !capture.key ||
-        capture.key.length > 4096 ||
-        (capture.ended !== undefined && typeof capture.ended !== "boolean")
-      )
-        throw new Error("invalid legacy binding capture");
-      validate({
-        ...capture.input,
-        record_id: capture.input.record_id ?? "validation-only",
-      });
-      let saved = byKey.get(capture.key);
-      if (
-        !saved &&
-        !capture.ambiguous &&
-        ["appearance", "tab-colour"].includes(capture.input.policy)
-      ) {
-        // A renamed legacy key may follow its single witnessed appearance record.
-        // Records still present in the JSON document are never merged or stolen.
-        const candidates = rows.filter(
-          (row) =>
-            !row.present &&
-            row.binding.state !== "ended" &&
-            row.binding.policy === capture.input.policy &&
-            row.binding.adapter === capture.input.adapter &&
-            row.binding.instance === capture.input.instance &&
-            row.binding.kind === capture.input.kind &&
-            (!capture.input.record_id ||
-              capture.input.record_id === row.binding.record_id) &&
-            bindingWitnessMatches(row.binding.evidence, {
-              native_id: capture.input.native_id,
-              terminals: capture.input.evidence.terminals,
-            }),
-        );
-        if (candidates.length === 1) saved = candidates[0];
+    if (
+      new Set(operation.keys).size !== operation.keys.length ||
+      operation.keys.some((key) => !incoming!.has(key) || applied.has(key))
+    )
+      throw new Error("invalid legacy binding application page");
+    for (const key of operation.keys) {
+      const capture = incoming.get(key)!;
+      const saved = plan.get(key);
+      if (saved) {
+        const current = db
+          .query(
+            "SELECT json_extract(body,'$.revision') AS revision FROM world_bindings WHERE id=?",
+          )
+          .get(saved.binding.id) as { revision: number } | null;
+        if (!current || current.revision !== saved.binding.revision)
+          throw new Error("Legacy binding changed after planning");
       }
       let binding: SourceBinding;
       if (saved) {
@@ -148,14 +167,6 @@ export function createLegacyBindingWriter(
         db.query(
           "UPDATE world_binding_legacy SET key=?,present=1,ended=? WHERE binding_id=?",
         ).run(capture.key, capture.ended ? 1 : 0, binding.id);
-        byKey.delete(saved.key);
-        Object.assign(saved, {
-          key: capture.key,
-          present: 1,
-          ended: capture.ended ? 1 : 0,
-          binding,
-        });
-        byKey.set(capture.key, saved);
       } else {
         binding = create({
           ...capture.input,
@@ -171,16 +182,8 @@ export function createLegacyBindingWriter(
         db.query(
           "INSERT INTO world_binding_legacy(key,binding_id,present,ended) VALUES(?,?,1,?)",
         ).run(capture.key, binding.id, capture.ended ? 1 : 0);
-        const row = {
-          key: capture.key,
-          present: 1,
-          ended: capture.ended ? 1 : 0,
-          binding,
-          body: JSON.stringify(binding),
-        };
-        rows.push(row);
-        byKey.set(capture.key, row);
       }
     }
+    for (const key of operation.keys) applied.add(key);
   };
 }

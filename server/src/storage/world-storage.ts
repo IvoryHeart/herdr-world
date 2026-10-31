@@ -242,24 +242,6 @@ export async function openWorldLedger(
             new StorageWriteRejected("World storage is closing"),
           );
         const captured = structuredClone(captures);
-        const counts = new Map<string, number>();
-        const witnesses = (capture: LegacyBindingCapture) =>
-          capture.input.evidence.terminals.map((terminal) =>
-            JSON.stringify([
-              capture.input.adapter,
-              capture.input.instance,
-              capture.input.kind,
-              capture.input.policy,
-              terminal,
-            ]),
-          );
-        for (const capture of captured)
-          for (const key of witnesses(capture))
-            counts.set(key, (counts.get(key) ?? 0) + 1);
-        for (const capture of captured)
-          capture.ambiguous = witnesses(capture).some(
-            (key) => counts.get(key)! > 1,
-          );
         if (
           new Set(captured.map((capture) => capture.key)).size !==
           captured.length
@@ -311,10 +293,15 @@ export async function openWorldLedger(
           await send({ type: "begin" });
           for (const page of pages)
             await send({
-              type: "mark",
+              type: "prepare",
+              captures: page,
+            });
+          await send({ type: "plan" });
+          for (const page of pages)
+            await send({
+              type: "put",
               keys: page.map((capture) => capture.key),
             });
-          for (const page of pages) await send({ type: "put", captures: page });
           await send({ type: "finish" });
         });
         bindingTail = operation.finally(() => {
