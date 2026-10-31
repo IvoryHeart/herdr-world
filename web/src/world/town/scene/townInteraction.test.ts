@@ -656,3 +656,80 @@ test("staying on the same desk keeps the magnet's time; another desk restarts it
   t.time.advance(1);
   expect(last(t.ghost)?.[3]).toBe("group");
 });
+
+test("a desk held at the edge never snaps to desks the town scrolls under it", () => {
+  const t = setup();
+  const at = t.deskCentre(t.deskCell(0));
+  const pointer = t.press(at);
+  t.moveTo(pointer, offset(at, 20));
+  // Look below the town, then hold at the top edge in a desk column: the
+  // town scrolls down under a still pointer, its desks passing beneath it.
+  t.camera.jumpTo(t.camera.x, 1e6, t.camera.z);
+  if (t.draw().moved) t.interaction.reaim();
+  const edge = { x: at.x, y: 1 };
+  t.moveTo(pointer, edge);
+  const desks = new Set<string>();
+  const aims = new Set<string>();
+  for (let frame = 0; frame < 120; frame += 1) {
+    t.frames.step();
+    // The renderer draws the pan; a camera that moved re-aims the carry.
+    if (t.draw().moved) t.interaction.reaim();
+    t.time.advance(100);
+    const hit = t.interaction.hitAt(edge.x, edge.y);
+    if (hit?.kind === "desk") desks.add(hit.key);
+    aims.add(String(last(t.ghost)?.[3]));
+  }
+  // Desks did pass under it, each for longer than the magnet's wait.
+  expect(desks.size).toBeGreaterThan(1);
+  expect([...aims]).not.toContain("group");
+  // Once the town stops under it, resting on a desk still snaps.
+  t.moveTo(pointer, { x: 720, y: 450 });
+  const still = t.deskCentre(t.deskCell(1, 0));
+  t.moveTo(pointer, still);
+  t.frames.step();
+  if (t.draw().moved) t.interaction.reaim();
+  t.time.advance(TOWN_MAGNET_MS);
+  expect(last(t.ghost)?.[3]).toBe("group");
+});
+
+test("a camera that moves under a resting carry restarts the magnet's wait", () => {
+  const t = setup();
+  const cell = t.deskCell(0);
+  const onto = t.deskCentre(t.deskCell(1, 0));
+  const pointer = t.press(t.deskCentre(cell));
+  t.moveTo(pointer, offset(t.deskCentre(cell), 20));
+  t.moveTo(pointer, onto);
+  t.time.advance(TOWN_MAGNET_MS - 100);
+  // The town moves a little under the still pointer (the same desk stays
+  // under it) and that frame is drawn.
+  t.camera.x += 1 / t.camera.z;
+  expect(t.draw().moved).toBe(true);
+  t.interaction.reaim();
+  t.time.advance(100);
+  expect(last(t.ghost)?.[3]).not.toBe("group");
+});
+
+test("an edge pan restarts the magnet's wait between the renderer's draws", () => {
+  const t = setup();
+  const at = t.deskCentre(t.deskCell(0));
+  const pointer = t.press(at);
+  t.moveTo(pointer, offset(at, 20));
+  t.camera.jumpTo(t.camera.x, 1e6, t.camera.z);
+  if (t.draw().moved) t.interaction.reaim();
+  const edge = { x: at.x, y: 1 };
+  t.moveTo(pointer, edge);
+  const aims = new Set<string>();
+  const desks = new Set<string>();
+  // A slow renderer draws every eighth frame, longer apart than the magnet's
+  // wait; the edge pan runs every frame.
+  for (let frame = 0; frame < 160; frame += 1) {
+    t.frames.step();
+    if (frame % 8 === 0 && t.draw().moved) t.interaction.reaim();
+    t.time.advance(100);
+    const hit = t.interaction.hitAt(edge.x, edge.y);
+    if (hit?.kind === "desk") desks.add(hit.key);
+    aims.add(String(last(t.ghost)?.[3]));
+  }
+  expect(desks.size).toBeGreaterThan(1);
+  expect([...aims]).not.toContain("group");
+});
