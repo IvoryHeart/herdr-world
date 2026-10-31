@@ -567,13 +567,16 @@ Settings go under `crew` in the gate's `config.json`:
 - `authors` holds per-PR author overrides.
 - `neverPrompt` lists seats the watcher never prompts.
 - `maxRuns` (default 3) bounds the runs working at once. A run without its
-  completion evidence is stopped at `runTimeoutMinutes` (default 90, a positive
-  finite duration). On the first watcher pass at or after that bound, its slot
+  completion evidence is stopped after `runTimeoutMinutes` without meaningful
+  harness work (default 90, a positive finite duration). Conversation, reasoning,
+  tool calls/results and owner replies renew the window at their actual event
+  timestamps. A live PID, token counter, file timestamp or heartbeat does not.
+  On the first watcher pass at or after that inactivity bound, its slot
   is released, its actions fail and the owner receives one timeout notice. A
   worker that has not reported a PID has a separate three-minute startup bound.
   Neither timeout starts a replacement run or hands its steps back to the author.
-  The saved start time survives restarts; holds and PR-scoped passes do not
-  extend it. `stallMinutes` (default 30) is when a CI check counts as stuck.
+  The saved activity timestamp survives restarts; holds and PR-scoped passes
+  do not reset it. `stallMinutes` (default 30) is when a CI check counts as stuck.
 - The gate config's `roster` gives each seat its `model`, `effort` and,
   optionally, `harness` (`claude` or `codex`; by default the one that runs the
   model) and `persona` (its standing instructions, passed as Claude's appended
@@ -588,7 +591,9 @@ if the process dies. A second watcher or an overlapping `pass` waits, then
 reads after the first has acted. Each step is committed as soon as it happens,
 so a crash never forgets a prompt that was already sent. A scoped `pass --pr`
 acts only on the PRs it read, while timeout maintenance releases and reports
-expired runs even outside that scope. Run logs are kept in `runs/`; exit -124 in
+expired runs even outside that scope. Timeout outcomes and their per-run owner
+causes are committed together, including manual reviews without action rows.
+Run logs are kept in `runs/`; exit -124 in
 `runs` or `status` identifies a startup or runtime timeout. Completion evidence
 observed before timeout settlement releases a run normally and keeps its chat.
 A late worker exit cannot overwrite timeout evidence; a late valid RESULT clears

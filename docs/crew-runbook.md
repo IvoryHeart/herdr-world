@@ -14,15 +14,24 @@ The crew itself, its marks and its watcher are described in
 
 The watcher reserves a slot when it records a run. Every reviewer, fixer,
 evaluator and selected process has the configured `crew.runTimeoutMinutes`
-limit (default 90). A worker that never reports its PID has three minutes to
-start. On the first watcher pass at or after either bound, the run is finished
+inactivity limit (default 90). Fresh timestamped conversation, reasoning, tool
+calls/results and owner replies in its harness transcript renew this finite
+window. Healthy work can continue past reservation age 90 minutes; a live PID,
+file timestamp, token counter or heartbeat alone cannot renew it. Re-reading
+an old event does not extend it, and the last work timestamp survives restarts.
+This uses evidence of work rather than assuming a long reservation is hung.
+A worker that never reports its PID still has three minutes to start, even if
+it writes progress. On the first watcher pass at or after either bound, the
+run is finished
 with exit -124, its reported process is stopped and all linked steps fail. The
 slot is available to queued work on that same pass. A timeout never starts an
 automatic replacement or sends the failed steps back to the author.
 
-The watcher reports each timeout once through the existing owner ask and signed
-crew comment, including the run ID and bound. Holds, restarts and passes scoped
-to other PRs do not extend the saved start time or suppress timeout reporting.
+The watcher persists the timeout outcome and its per-run owner cause together,
+including for manual reviews or orphan runs without an action row. It reports
+that cause once through the existing owner ask and signed crew comment, with
+the run ID and bound. Holds, restarts and passes scoped to other PRs do not
+reset inactivity or suppress timeout reporting.
 If the alert cannot be delivered, the timeout and alert failure remain in the
 local ledger/feed; the slot stays released. Inspect `agent:crew runs --pr <N>`,
 `status`, the round's pane and its run log before deciding what to do next.

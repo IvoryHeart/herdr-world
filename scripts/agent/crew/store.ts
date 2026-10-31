@@ -59,6 +59,8 @@ export type StoredRun = {
   cwd: string | null;
   log: string;
   startedAt: number;
+  /** Last timestamped harness work; reading a transcript does not renew it. */
+  progressAt: number | null;
   finishedAt: number | null;
   exitCode: number | null;
   usage: string | null;
@@ -114,6 +116,7 @@ export function openCrewStore(path: string, busyMs = 120_000) {
     ["session", "TEXT"],
     ["result", "TEXT"],
     ["cwd", "TEXT"],
+    ["progress_at", "INTEGER"],
   ])
     if (!columns.includes(name))
       db.exec(`ALTER TABLE run ADD COLUMN ${name} ${type}`);
@@ -266,6 +269,7 @@ type RunRow = {
   cwd: string | null;
   log: string;
   started_at: number;
+  progress_at: number | null;
   finished_at: number | null;
   exit_code: number | null;
   usage: string | null;
@@ -289,6 +293,7 @@ function run(row: RunRow): StoredRun {
     cwd: row.cwd,
     log: row.log,
     startedAt: row.started_at,
+    progressAt: row.progress_at,
     finishedAt: row.finished_at,
     exitCode: row.exit_code,
     usage: row.usage,
@@ -319,6 +324,17 @@ export function addRun(
         entry.cwd ?? null,
         now,
       ).lastInsertRowid,
+  );
+}
+
+/** Progress only advances an unfinished run, from the source event's own time. */
+export function setRunProgress(db: Database, id: number, at: number) {
+  db.query(`UPDATE run SET progress_at = ? WHERE id = ? AND finished_at IS NULL
+    AND ? >= started_at AND ? > COALESCE(progress_at, started_at)`).run(
+    at,
+    id,
+    at,
+    at,
   );
 }
 

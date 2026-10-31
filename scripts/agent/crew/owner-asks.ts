@@ -1,14 +1,8 @@
 import type { Database } from "bun:sqlite";
 import type { Deps } from "./deps";
 import { digest, type Action } from "./plan";
-import {
-  actionsIn,
-  getAction,
-  runFor,
-  RUN_TIMEOUT_EXIT_CODE,
-  setAction,
-  type StoredAction,
-} from "./store";
+import { actionsIn, getAction, setAction, type StoredAction } from "./store";
+import { timeoutHolds } from "./run-lifecycle";
 import { reportOwnerDecision } from "./round-policy";
 
 type Receipt = {
@@ -81,13 +75,7 @@ function reply(result: ReturnType<Deps["run"]>) {
 /** Only these causes still need the owner, even after their ask has been sent. */
 function holds(crew: Database, entry: StoredAction, keys: Set<string>) {
   const [base, suffix] = entry.key.split("|");
-  if (suffix === "timeout") {
-    const parent = getAction(crew, base!);
-    return (
-      parent?.state === "failed" &&
-      runFor(crew, parent)?.exitCode === RUN_TIMEOUT_EXIT_CODE
-    );
-  }
+  if (suffix === "timeout") return timeoutHolds(crew, entry);
   if (!keys.has(base!)) return false;
   if (!suffix) return true;
   const parent = getAction(crew, base!);

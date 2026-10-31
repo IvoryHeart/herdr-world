@@ -269,23 +269,36 @@ export function codexUsage(rollout: string): Record<string, number> | null {
   return total;
 }
 
+/** Read the named harness session; file timestamps are not activity evidence. */
+export function readTranscript(run: {
+  harness: string | null;
+  session: string | null;
+  cwd: string;
+}): string | null {
+  if (!run.session) return null;
+  try {
+    const path =
+      run.harness === "claude"
+        ? claudeTranscript(run.cwd, run.session)
+        : recentRollouts().find((file) =>
+            file.endsWith(`-${run.session}.jsonl`),
+          );
+    return path && existsSync(path) ? readFileSync(path, "utf8") : null;
+  } catch {
+    return null;
+  }
+}
+
 /** A run's token usage so far, from its harness's own session files. */
 export function readUsage(run: {
   harness: string | null;
   session: string | null;
   cwd: string;
 }): string | null {
-  if (!run.session) return null;
-  let usage: Record<string, number> | null = null;
-  if (run.harness === "claude") {
-    const path = claudeTranscript(run.cwd, run.session);
-    if (existsSync(path)) usage = claudeUsage(readFileSync(path, "utf8"));
-  } else {
-    const path = recentRollouts().find((file) =>
-      file.endsWith(`-${run.session}.jsonl`),
-    );
-    if (path) usage = codexUsage(readFileSync(path, "utf8"));
-  }
+  const transcript = readTranscript(run);
+  if (transcript === null) return null;
+  const usage =
+    run.harness === "claude" ? claudeUsage(transcript) : codexUsage(transcript);
   return usage ? JSON.stringify(usage) : null;
 }
 

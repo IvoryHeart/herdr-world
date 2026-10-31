@@ -1003,6 +1003,19 @@ describe("delivery", () => {
       expect(prompts()).toHaveLength(1);
     });
 
+    test("an active fixer renews from the transcript in its author worktree", () => {
+      busyElsewhere();
+      passFixer(findings());
+      deps.progress = (_run, cwd) =>
+        cwd === worktree ? NOW + 89 * 60_000 : null;
+      passFixer(findings(), NOW + 90 * 60_000);
+      delete deps.progress;
+      expect(getRun(crew, 1)?.finishedAt).toBeNull();
+      passFixer(findings(), NOW + 179 * 60_000);
+      expect(getRun(crew, 1)?.exitCode).toBe(-124);
+      expect(fixes()).toHaveLength(1);
+    });
+
     test("a timed-out fixer releases every linked step and never returns work to the author", () => {
       busyElsewhere();
       passFixer(
@@ -2537,6 +2550,126 @@ describe("delivery", () => {
     expect(spawned).toHaveLength(2);
     expect(notices()).toEqual([]);
     expect(getRun(crew, 1)?.exitCode).toBe(124);
+  });
+
+  test("recent harness work renews a bounded window without trusting PID liveness", () => {
+    const value = town({ head: SHA.reviewed, posts: [] });
+    pass(value);
+    setRunSession(crew, 1, "codex", "gpt-6.1-sol", "session-synthetic");
+    deps.progress = (run) => (run.id === 1 ? NOW + 89 * 60_000 : null);
+    pass(value, NOW + 90 * 60_000);
+    expect(getRun(crew, 1)?.finishedAt).toBeNull();
+    expect(activeRuns(crew).map((run) => run.id)).toEqual([1]);
+    expect(killed).toEqual([1002, 1003]);
+    // The same old progress cannot renew forever.
+    pass(value, NOW + 179 * 60_000);
+    expect(getRun(crew, 1)?.exitCode).toBe(-124);
+    expect(spawned).toHaveLength(3);
+    delete deps.progress;
+  });
+
+  test("progress survives a watcher restart without resetting the inactivity window", () => {
+    const path = join(root, "progress.sqlite");
+    crew.close();
+    crew = openCrewStore(path);
+    const value = town({ head: SHA.reviewed, posts: [] });
+    pass(value);
+    deps.progress = (run) => (run.id === 1 ? NOW + 80 * 60_000 : null);
+    pass(value, NOW + 81 * 60_000);
+    delete deps.progress;
+    crew.close();
+    crew = openCrewStore(path);
+    pass(value, NOW + 90 * 60_000);
+    expect(activeRuns(crew).map((run) => run.id)).toEqual([1]);
+    expect(getRun(crew, 1)?.progressAt).toBe(NOW + 80 * 60_000);
+    pass(value, NOW + 170 * 60_000);
+    expect(getRun(crew, 1)?.exitCode).toBe(-124);
+    expect(spawned).toHaveLength(3);
+  });
+
+  test("a late manual review RESULT clears its per-run cause", () => {
+    const id = addRun(
+      crew,
+      {
+        actionKey: "manual:synthetic",
+        reviewer: "rev2",
+        pr: 7,
+        head: SHA.reviewed,
+        log: "stdout",
+      },
+      NOW,
+    );
+    setRunPid(crew, id, 1234);
+    passOver([], NOW + 90 * 60_000, { prs: [8] });
+    pass(
+      town({ head: SHA.reviewed, posts: trio(SHA.reviewed) }),
+      NOW + 91 * 60_000,
+    );
+    expect(getRun(crew, id)?.result).toContain("RESULT #7");
+    expect(getRun(crew, id)?.exitCode).toBe(-124);
+    expect(calls.filter((argv) => argv[2] === "withdraw")).toHaveLength(1);
+  });
+
+  test("a pending source action cannot silently replace its expired reservation", () => {
+    const key = `manual:7:${SHA.reviewed}:rev2`;
+    addAction(
+      crew,
+      {
+        key,
+        pr: 7,
+        head: SHA.reviewed,
+        kind: "review",
+        target: "rev2",
+        text: "synthetic pending review",
+      },
+      NOW,
+    );
+    const id = addRun(
+      crew,
+      {
+        actionKey: key,
+        reviewer: "rev2",
+        pr: 7,
+        head: SHA.reviewed,
+        log: "stdout",
+      },
+      NOW,
+    );
+    setRunPid(crew, id, 1234);
+    passOver([], NOW + 90 * 60_000, { prs: [8] });
+    expect(getAction(crew, key)?.state).toBe("failed");
+    expect(notices()).toHaveLength(1);
+    expect(spawned).toEqual([]);
+  });
+
+  test("a persisted manual run reports its timeout once without any action row", () => {
+    const path = join(root, "manual.sqlite");
+    crew.close();
+    crew = openCrewStore(path);
+    const id = addRun(
+      crew,
+      {
+        actionKey: `manual:7:${SHA.reviewed}:rev2`,
+        reviewer: "rev2",
+        pr: 7,
+        head: SHA.reviewed,
+        log: "stdout",
+      },
+      NOW,
+    );
+    setRunPid(crew, id, 1234);
+    crew.close();
+    crew = openCrewStore(path);
+    passOver([], NOW + 90 * 60_000, { prs: [8] });
+    expect(activeRuns(crew)).toEqual([]);
+    expect(killed).toEqual([1234]);
+    expect(notices()).toHaveLength(1);
+    expect(notices()[0]?.join(" ")).toContain(`run ${id}`);
+    crew.close();
+    crew = openCrewStore(path);
+    passOver([], NOW + 91 * 60_000, { prs: [8] });
+    expect(notices()).toHaveLength(1);
+    expect(comments()).toHaveLength(1);
   });
 
   test("a reviewer expires at its bound, releases its slot and is never retried", () => {
