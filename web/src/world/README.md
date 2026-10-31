@@ -163,7 +163,12 @@ on disposal. A restore while hidden remains pending until visibility returns.
 roof-covered scene at 1440 and 390 px. It first proves renderer readiness, then
 checks a coalesced state paint, smooth camera flight and visible pulses, return
 to sleep, native GPU context loss/restoration while sleeping and hidden, and
-destruction. The existing idle React-commit and moving-Inspector
+destruction. This renderer-only case bypasses shell mounting, waits for the
+renderer trace's camera/roof/actor/materialization causes to settle, and samples
+flight and pulses for eight frames each. Settling does not require ambient
+requests to stop: the unchanged zero-draw windows must detect those requests.
+This keeps software-GL work bounded without changing the acceptance timeout.
+The existing idle React-commit and moving-Inspector
 anchor cases remain. See the [idle-frame audit](../../../docs/town-idle-frames.md)
 for measured busy time, residual callback owners and paired synthetic captures.
 

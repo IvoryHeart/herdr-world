@@ -13,6 +13,7 @@ import { layoutTown, townShapeFor, TOWN_TILE } from "./townLayout";
 import { townModelFromProjection } from "./townModel";
 import { checkTownContextRecovery } from "./townContextRecovery.browser";
 import { createTownRenderer } from "./townRenderer";
+import type { TownFrameTrace } from "./townDiagnostics";
 import {
   advancePixiSystemTicker,
   holdPixiSystemTicker,
@@ -49,8 +50,15 @@ export async function checkTownIdleDraws(
     model.input,
     townShapeFor(innerWidth, innerHeight),
   );
-  const renderer = await createTownRenderer(element, () =>
-    advancePixiSystemTicker(),
+  let trace: TownFrameTrace | null = null;
+  const renderer = await createTownRenderer(
+    element,
+    () => advancePixiSystemTicker(),
+    undefined,
+    undefined,
+    (frame) => {
+      trace = frame;
+    },
   );
   holdPixiSystemTicker();
   const canvas = element.querySelector("canvas")!;
@@ -77,11 +85,19 @@ export async function checkTownIdleDraws(
     );
     renderer.invalidate();
     const town = () => window.__HERDR_TOWN_RENDERER__!;
+    // Wait for actual camera/roof/actor/materialization completion, not a
+    // fixed animation tail. Do not wait for next === null: unwanted ambient
+    // requests must reach the zero-draw assertions below.
+    const settle = () =>
+      clock.until(
+        () => trace !== null && trace.causes.length === 0,
+        "Town state transitions never settled",
+      );
     await clock.until(
       () => town().ready && town().frames > 0,
       "Town never drew a frame",
     );
-    await clock.advance(3000);
+    await settle();
     check(
       renderer.level === "town",
       "Static case must cover animated interiors with roofs",
@@ -113,35 +129,40 @@ export async function checkTownIdleDraws(
     // A state change must wake a sleeping scene and retain visible motion.
     const before = town().frames;
     const room = layout.buildings[0]!.rooms[0]!;
+    trace = null;
     camera.flyTo(
       (room.x + room.w / 2) * TOWN_TILE,
       (room.y + room.h / 2) * TOWN_TILE,
       camera.limits!.desk,
+      0.16,
     );
     renderer.invalidate("test-flight");
-    await clock.advance(500);
+    await clock.advance(128);
     check(
-      town().frames - before >= 20,
+      town().frames - before >= 6,
       "Camera flight lost its smooth frame cadence",
     );
-    await clock.advance(3000);
+    await settle();
     const animated = town().frames;
-    await clock.advance(2000);
+    // Eight frames distinguish a continuing pulse from a lone state paint.
+    // Drawing seconds of the same pulse adds GPU cost, not coverage.
+    await clock.advance(128);
     check(
       !town().flying && town().walking === 0,
       "Ambient measurement must be settled",
     );
     check(
-      town().frames - animated >= 100,
+      town().frames - animated >= 6,
       "Visible pulses lost their smooth frame cadence",
     );
+    trace = null;
     camera.jumpTo(
       (layout.width * TOWN_TILE) / 2,
       (layout.height * TOWN_TILE) / 2,
       camera.limits!.min,
     );
     renderer.invalidate("test-cover-again");
-    await clock.advance(3000);
+    await settle();
     const covered = town().frames;
     await clock.advance(1000);
     failures.push(
