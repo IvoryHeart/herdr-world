@@ -83,7 +83,14 @@ jobs:
           key: bun-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('bun.lock') }}
       - run: bun install --frozen-lockfile
       - name: Verify native SQLite and standalone compiled worker crash recovery
-        run: bun run test ./server/src/storage/world-storage.test.ts ./server/src/storage/world-storage-crash.test.ts ./server/src/storage/world-writer.test.ts
+        run: >-
+          bun run test
+          ./server/src/storage/world-storage.test.ts
+          ./server/src/storage/world-storage-crash.test.ts
+          ./server/src/storage/world-writer.test.ts
+          ./server/src/storage/answer-transitions.test.ts
+          ./server/src/storage/answer-migration.test.ts
+          ./server/src/storage/answer-delivery-crash.test.ts
       - name: Run native installer harness regressions
         if: runner.os == 'Windows'
         run: bun run test ./scripts/installer-upgrade.test.ts

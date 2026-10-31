@@ -1,3 +1,11 @@
+import { createAskRecipients, type AnswerLease } from "./ask-recipient";
+import { createAnswerRecorder } from "./answer-record";
+import { createAnswerDispatcher } from "./answer-dispatch";
+import {
+  ANSWER_DELIVERY_VERB,
+  answeringAgent,
+  validRecipient,
+} from "./ask-delivery-types";
 import { randomBytes } from "node:crypto";
 import { handleWorldCliEndpoint } from "../http/world-cli-endpoint";
 import { answerAsk, CliError, createWorldCli, dismissAsk } from "./world-cli";
@@ -19,21 +27,7 @@ import type { TownMoveContext } from "./town-move";
  * `world.ask.dismiss`).
  */
 /** A ready runtime of one connection, as the connection manager leases it. */
-type Lease = {
-  isCurrent(): boolean;
-  connectionId: string;
-  generation: number;
-  runtime: {
-    sshHost(): unknown;
-    herdr: {
-      call(
-        method: string,
-        params: Record<string, unknown>,
-        timeoutMs: number,
-      ): Promise<unknown>;
-    };
-  };
-};
+type Lease = AnswerLease;
 
 export function createWorldCliService(deps: {
   ledger(): LedgerStore;
@@ -70,6 +64,63 @@ export function createWorldCliService(deps: {
   const stopped = new AbortController();
   const incarnation = deps.incarnation ?? randomBytes(16).toString("base64url");
   let dispatcher: ReturnType<typeof createAttentionDispatcher> | undefined;
+  let answerDispatcher: ReturnType<typeof createAnswerDispatcher> | undefined;
+  let deliveryRevision = 0;
+  const recipients = createAskRecipients({
+    connections: deps.connections,
+    clock: deps.clock ?? { now, monotonic: () => performance.now() },
+    incarnation,
+  });
+  const recordAnswer = deps.attention
+    ? createAnswerRecorder({ ledger, recipients, now })
+    : undefined;
+  const publishDelivery = () =>
+    deps.broadcast(
+      JSON.stringify({
+        control: {
+          type: "world_ask_delivery_changed",
+          revision: ++deliveryRevision,
+          incarnation,
+        },
+      }),
+    );
+  const deliveryPage = async (after?: string) => {
+    const revision = deliveryRevision;
+    const page = (await deps
+      .attention?.()
+      .notices(ANSWER_DELIVERY_VERB.name, after, 60)) ?? {
+      entries: [],
+      checks: 0,
+      waiting: 0,
+      connections: {},
+    };
+    const entries = page.entries;
+    return {
+      revision,
+      incarnation,
+      counts: {
+        checks: page.checks,
+        waiting: page.waiting,
+        connections: page.connections,
+      },
+      deliveries: entries.flatMap((entry) => {
+        const ask = ledger().ask(entry.record_id);
+        return ask
+          ? [
+              {
+                ask,
+                delivery: ask.delivery?.answer,
+                can_resend:
+                  !ask.withdrawn &&
+                  validRecipient(ask.recipient) &&
+                  ["uncertain", "refused"].includes(entry.state),
+              },
+            ]
+          : [];
+      }),
+      next: entries.length === 60 ? entries.at(-1)!.id : null,
+    };
+  };
   // This query includes attention evidence as well as domain mutations.
   let queryRevision = ledger().get().revision;
   const openAsks = () => ({ ...ledger().openAsks(), revision: queryRevision });
@@ -85,7 +136,10 @@ export function createWorldCliService(deps: {
         },
       }),
     );
-    if (wake) void dispatcher?.wake();
+    if (wake) {
+      void dispatcher?.wake();
+      void answerDispatcher?.wake();
+    }
   };
   if (deps.attention) {
     if (!deps.scheduler)
@@ -120,7 +174,45 @@ export function createWorldCliService(deps: {
       log: (message) => console.warn(message),
     });
   }
+  if (deps.attention && deps.scheduler)
+    answerDispatcher = createAnswerDispatcher({
+      ledger,
+      outbox: deps.attention,
+      recipients,
+      scheduler: deps.scheduler,
+      clock: deps.clock ?? { now, monotonic: () => performance.now() },
+      changed: publishDelivery,
+      log: (message) => console.warn(message),
+    });
   const cli = createWorldCli({
+    recordAnswer: recordAnswer
+      ? async (id, text, actor) => {
+          const revision = await recordAnswer(id, text, answeringAgent(actor));
+          publishDelivery();
+          return revision;
+        }
+      : undefined,
+    captureRecipient: deps.attention ? recipients.capture : undefined,
+    acknowledgeAnswer: async (id, occurrence, attempt, actor) => {
+      const entry = (await deps.attention?.().forRecord(id))?.find(
+        (entry) => entry.kind === ANSWER_DELIVERY_VERB.name,
+      );
+      if (!entry)
+        throw new CliError("not_found", "No retained answer delivery");
+      const acknowledged = await deps.attention!().acknowledge(
+        entry.id,
+        occurrence,
+        attempt,
+        actor,
+      );
+      if (!acknowledged)
+        throw new CliError(
+          "refused",
+          "Only the verified original asker can acknowledge this exact answer",
+        );
+      publishDelivery();
+      return { acknowledged: true };
+    },
     board,
     get ledger() {
       return ledger();
@@ -189,6 +281,67 @@ export function createWorldCliService(deps: {
     /** A page's question method; undefined when `method` is not one. */
     async rpc(method: string, params: unknown): Promise<unknown> {
       if (method === "world.asks.get") return openAsks();
+      if (method === "world.ask.delivery.get") {
+        const p = (params ?? {}) as Record<string, unknown>;
+        if (
+          typeof p.id !== "string" ||
+          typeof p.occurrence !== "string" ||
+          p.id.length > 200 ||
+          p.occurrence.length > 200
+        )
+          throw new Error(
+            "An exact delivery read needs an ask and answer occurrence",
+          );
+        await deps.attention?.().forRecord(p.id);
+        const ask = ledger().ask(p.id);
+        return ask?.answer?.occurrence === p.occurrence
+          ? { ask, delivery: ask.delivery?.answer, can_resend: false }
+          : null;
+      }
+      if (method === "world.ask.deliveries.get") {
+        const p = (params ?? {}) as Record<string, unknown>;
+        if (
+          p.after !== undefined &&
+          (typeof p.after !== "string" || p.after.length > 200)
+        )
+          throw new Error("invalid delivery cursor");
+        return deliveryPage(p.after as string | undefined);
+      }
+      if (
+        method === "world.ask.delivery.resend" ||
+        method === "world.ask.delivery.close"
+      ) {
+        const p = (params ?? {}) as Record<string, unknown>;
+        if (
+          typeof p.id !== "string" ||
+          typeof p.occurrence !== "string" ||
+          !Number.isSafeInteger(p.attempt)
+        )
+          throw new Error(
+            "A delivery decision needs an ask, answer occurrence and attempt",
+          );
+        const resend = method === "world.ask.delivery.resend";
+        if (resend && p.confirm_duplicate !== true)
+          throw new Error(
+            "Resending may duplicate a prior submission; confirm that risk",
+          );
+        const entry = (await deps.attention?.().forRecord(p.id))?.find(
+          (entry) => entry.kind === ANSWER_DELIVERY_VERB.name,
+        );
+        if (
+          !entry ||
+          !(await deps.attention!().decide(
+            entry.id,
+            p.occurrence,
+            p.attempt as number,
+            resend ? "resend" : "close",
+          ))
+        )
+          throw new Error("Delivery changed; refresh before deciding");
+        publishDelivery();
+        void answerDispatcher?.wake();
+        return deliveryPage();
+      }
       if (method !== "world.ask.answer" && method !== "world.ask.dismiss")
         return undefined;
       const p = (params ?? {}) as Record<string, unknown>;
@@ -205,10 +358,13 @@ export function createWorldCliService(deps: {
       try {
         publishLedger(
           await (method === "world.ask.answer"
-            ? answerAsk(ledger(), p.id, answer, "owner", now())
+            ? recordAnswer
+              ? recordAnswer(p.id, answer, { kind: "owner" })
+              : answerAsk(ledger(), p.id, answer, "owner", now())
             : dismissAsk(ledger(), p.id, "owner", now())),
           true,
         );
+        if (method === "world.ask.answer") publishDelivery();
       } catch (error) {
         throw error instanceof CliError ? new Error(error.message) : error;
       }
@@ -226,6 +382,11 @@ export function createWorldCliService(deps: {
         bearerAuth,
         handle: async (body, locate) => {
           const reply = await cli.handle(body as never, locate);
+          if (
+            reply.ok &&
+            (body as { command?: unknown })?.command === "ask withdraw"
+          )
+            publishDelivery();
           if ((body as { command?: unknown })?.command !== "ask") return reply;
           if (!reply.ok) return { ...reply, recorded: false, notified: null };
           const result = reply.result as { id: string; created?: boolean };
@@ -249,11 +410,12 @@ export function createWorldCliService(deps: {
     },
     start: () => {
       void dispatcher?.wake();
+      void answerDispatcher?.wake();
     },
     /** Cancel held reads immediately, then drain already-started alerts. */
     async stop() {
       stopped.abort();
-      await dispatcher?.stop();
+      await Promise.all([dispatcher?.stop(), answerDispatcher?.stop()]);
     },
   };
 }

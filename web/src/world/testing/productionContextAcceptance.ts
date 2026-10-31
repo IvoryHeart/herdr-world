@@ -375,6 +375,21 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
                 "synthetic acceptance",
                 request.method === "terminal.input" ? request.id : undefined,
               );
+            if (request.method === "world.ask.deliveries.get") {
+              send(
+                ws,
+                JSON.stringify({
+                  id: request.id,
+                  result: {
+                    revision: 0,
+                    incarnation: "fixture",
+                    deliveries: [],
+                    next: null,
+                  },
+                }),
+              );
+              return;
+            }
             if (request.method === "world.snapshot") {
               const task = { stage: "snapshot", beginAt: Date.now(), endAt: 0 };
               if (diagnostic) serviceTasks.push(task);

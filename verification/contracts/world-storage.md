@@ -53,10 +53,11 @@ deduplication. Scope remains finite process-fault schedules, not a formal proof
 of every possible disk/process/receiver failure.
 
 Excluded claims: physical power-loss/OS-crash safety, native-memory-fault
-isolation, a latency SLA, downstream execution/read exactly once, and automatic
-pane-answer delivery. The latter is the planned `docs/ask-answer-delivery.md`
-follow-up; its identity, CLI-receipt and owner-recovery cases are not counted as
-executed coverage. Prior draft passes do not establish the reviewed repairs.
+isolation, a latency SLA and downstream execution/read exactly once. The separate
+[answer delivery contract](ask-answer-delivery.md) maps the implemented opaque
+answer verb and its real Chat, CLI-receipt and owner-recovery consumers. It
+requires its own independent acceptance. Prior draft passes do not establish
+the reviewed repairs.
 
 `world-identifiers.test.ts` checks store collision rejection and eight-symbol
 base32 IDs without clocks/counters. `service/storage-lifecycle.test.ts` checks

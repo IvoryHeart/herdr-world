@@ -673,7 +673,15 @@ export function createHerdrConversationSource(args: {
         },
       );
     },
-    send: async ({ pane_id, text, session_fingerprint, baseline }) => {
+    send: async ({
+      pane_id,
+      text,
+      session_fingerprint,
+      baseline,
+      beforeSubmit,
+      guard,
+      submitted,
+    }) => {
       if (!text.trim())
         return {
           status: "refused",
@@ -777,6 +785,27 @@ export function createHerdrConversationSource(args: {
           message:
             "Claude Code treats text that starts with “!” or “#” as a command, which Chat cannot check. Nothing was sent; use the Terminal tab.",
         };
+      if (beforeSubmit) {
+        if (!(await beforeSubmit())) return changed;
+        // The durable admission awaited a commit. Read the native session again
+        // so no earlier observation spans that await into an agent.prompt.
+        info = await agentInfo(pane_id);
+        const freshAgent = normalizeAgentName(stringValue(info?.agent));
+        const fresh =
+          info && SESSION_AGENTS.has(freshAgent)
+            ? paneBinding(freshAgent, info, args.context, verified)
+            : null;
+        if (!fresh?.fingerprint || fresh.fingerprint !== session_fingerprint)
+          return changed;
+        if (deliveries.full(pane_id))
+          return {
+            status: "refused",
+            reason: "unsettled",
+            message:
+              "Chat is still checking earlier messages. Nothing was sent.",
+          };
+      }
+      if (guard && (!info || !guard(info))) return changed;
       let result: unknown;
       const startedAt = Date.now();
       try {
@@ -827,6 +856,7 @@ export function createHerdrConversationSource(args: {
           : {}),
       });
       scheduleDeadline(pane_id);
+      submitted?.(landed?.fingerprint ?? null);
       return { status: "sent", delivery };
     },
   };

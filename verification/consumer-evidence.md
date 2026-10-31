@@ -20,10 +20,13 @@ required; prior baseline acceptance does not supply them.
 | Replay and domain state have separate retention | Row/age/service-incarnation cursor tests; pending asks/intents survive, finished effects trim with their records | Change references are not an exact historical record-body snapshot |
 | JSON import is private and idempotent | Exact hash-named backup, unchanged second open, changed-source missing-ID merge, malformed-source recovery and migration/application-ID refusal | Existing SQLite IDs win; conflicting downgrade edits need reconciliation |
 
-The [PR 2 design](../docs/ask-answer-delivery.md) specifies future pane delivery
-through Chat, verified asker acknowledgements and explicit owner resend/close.
-Those cases are not implemented or counted as executed coverage here. Existing
-conversation send-race and authority evidence remains mandatory.
+The [saved-answer delivery contract](contracts/ask-answer-delivery.md) adds a
+separate Q29 candidate for the declared opaque answer verb, verified stdout
+receipts and exact owner resend/close. A real SQLite transition matrix, actual
+Chat source/compiled crash schedules and service/CLI/browser consumers establish
+finite alternative evidence; no accepted Quint claim is expanded. Native CI and
+independent mapping/design review remain required. Herdr deduplication, power-loss
+safety and agent read/execution guarantees remain excluded.
 
 This reconciles the remaining baseline entries without treating a component model as a proof of its consumers. Each decision names the required real tests in `coverage.json`; existing accepted-delivery CI is baseline execution evidence. New candidate execution is reported in PR #188 and source-bound manifests. Environment-gated live/OS checks retain their prerequisites and may not be reported as locally executed. All Q01–Q43 mappings and alternatives are independently accepted in review 5516249164 within their stated bounds. Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); owner-approved PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding.
 

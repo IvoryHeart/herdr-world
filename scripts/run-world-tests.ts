@@ -49,6 +49,8 @@ const release = await acquireCheckSlot("browser", { lane: `world ${label}` });
 try {
   const began = performance.now();
   await buildWorldBrowserBundle("HostsFilter", directory);
+  if (files.some((path) => path.includes("AnswerDeliveries.browser")))
+    await buildWorldBrowserBundle("AnswerDeliveries", directory);
   if (files.some((path) => path.includes("ProductionContexts"))) {
     await buildWorldBrowserBundle("ProductionContexts", directory);
   }

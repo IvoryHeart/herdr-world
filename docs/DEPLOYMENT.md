@@ -35,10 +35,39 @@ At startup, World checks `boards/world-ledger.json` (or the configured
 `HERDR_WORLD_LEDGER_PATH`). Before importing a changed file, it makes a private,
 byte-identical `<ledger>.<content-hash>.sqlite-import.bak` beside it. An unchanged
 file causes no import writes. Changed legacy files contribute only missing IDs;
-existing SQLite records take precedence. Historical imports create no alerts.
+existing SQLite records take precedence. Historical imports create no alerts or answer sends.
 The original remains untouched. An unreadable legacy file is reported in the
 local service log and left alone; World uses its current store, and checks again
 after the file is repaired.
+New questions from a verified local Linux CLI caller capture the original
+connection, terminal and supported Chat session. Recording an answer atomically
+adds a reference-only `world.ask.deliver-answer` intent; it stores no second copy
+of the text. After a short grace period for CLI retrieval, World uses Chat's
+current lease, session and input checks to submit the saved answer. An offline
+host stays pending and is rechecked on return. A changed, ended or unverified
+asking session records not sent, leaving `ask get` available. Existing questions
+are not backfilled, and dismissals send no pane input. CLI callers on other
+platforms, SSH callers and asks without a supported verified binding remain
+retrieval-only.
+
+A possible pane send is **opaque**: after a crash or lost receipt World records
+uncertain and never automatically repeats it. Town Summary’s Outbox exposes
+those deliveries
+separately from unanswered questions. A compact Reception row counts only
+unconfirmed and not-sent answers to check; waiting-only deliveries leave the
+rail hidden. Each original host’s reception sign also shows its saved-answer
+letter count. Only the owner can authorize **Send again…**,
+with an explicit possible-duplicate confirmation and the same original recipient,
+or **Dismiss** or **Cancel send**, preserving the answer. Old decisions and acknowledgements
+cannot settle a newer attempt. A successful `ask`/`ask get` writes its answer to
+stdout before acknowledging receipt as the verified original asker. A failed
+stdout write sends no acknowledgement; a lost acknowledgement can leave a pane
+delivery pending or uncertain, so duplicate output remains possible. Herdr
+provides no operation-key deduplication or atomic expected-session prompt. A
+queued receipt proves submission to that reported session, not agent execution,
+model reading or exactly-once delivery. Owner alerts remain harmless-repeatable
+and may retry independently.
+
 The database location always follows the instance data directory; the legacy
 ledger override selects the import source.
 

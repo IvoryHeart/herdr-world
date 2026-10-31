@@ -1254,7 +1254,18 @@
         "server/src/storage/world-identifiers.test.ts",
         "server/src/service/storage-lifecycle.test.ts",
         "server/src/service/world-service.test.ts",
-        "web/src/world/town/TownRail.test.ts"
+        "web/src/world/town/TownRail.test.ts",
+        "server/src/storage/answer-transitions.test.ts",
+        "server/src/storage/answer-migration.test.ts",
+        "server/src/storage/answer-delivery-crash.test.ts",
+        "server/src/world/answer-dispatch.test.ts",
+        "server/src/world/answer-service.test.ts",
+        "server/src/cli/stdout.test.ts",
+        "server/src/agent/conversation-send-race.test.ts",
+        "web/src/world/worldAnswerDeliveries.test.ts",
+        "web/src/world/town/AnswerDeliveries.test.ts",
+        "web/src/world/AnswerDeliveries.browser.test.ts",
+        "web/src/world/town/answerOutbox.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/145",
       "technique": "alternative",
@@ -1325,16 +1336,42 @@
             "server/src/service/world-service.test.ts",
             "web/src/world/town/TownRail.test.ts"
           ],
-          "acceptance": "Complete scoped tests, integrated root lifecycle, independent review, full applicable delivery gate and native CI are required. Synthetic receiver deduplication is not attributed to Herdr.",
-          "plannedPR2": {
-            "design": "openspec/changes/ask-answer-delivery/design.md",
-            "status": "planned-not-executed",
-            "properties": [
-              "Verified original source/session binding through existing Chat send path",
-              "Exact-answer acknowledgement from original verified asker; explicit owner resend/close",
-              "No automatic replay after uncertain pane submission; no backfill of historical answers"
-            ]
-          }
+          "acceptance": "Complete scoped tests, integrated root lifecycle, independent review, full applicable delivery gate and native CI are required. Synthetic receiver deduplication is not attributed to Herdr."
+        },
+        {
+          "requirement": "openspec/changes/ask-answer-delivery/specs/ask-answer-delivery/spec.md",
+          "contract": "verification/contracts/ask-answer-delivery.md",
+          "owners": [
+            "server/src/world/answer-record.ts",
+            "server/src/world/ask-recipient.ts",
+            "server/src/world/answer-dispatch.ts",
+            "server/src/storage/answer-transitions.ts",
+            "server/src/storage/answer-attempts.ts",
+            "server/src/cli/stdout.ts",
+            "web/src/world/worldAnswerDeliveries.ts",
+            "web/src/world/town/AnswerDeliveries.tsx"
+          ],
+          "status": "candidate",
+          "properties": [
+            "Reference-only atomic intent; original qualified binding; no historical backfill",
+            "Opaque possible-send recovery; explicit original-recipient owner decisions with stale-attempt rejection",
+            "Successful stdout before exact verified asker receipt; independent Reception query without open-question count changes",
+            "Guarded Chat submission and honest queued-session evidence; no downstream dedupe or execution/read claims"
+          ],
+          "tests": [
+            "server/src/storage/answer-transitions.test.ts",
+            "server/src/storage/answer-migration.test.ts",
+            "server/src/storage/answer-delivery-crash.test.ts",
+            "server/src/world/answer-dispatch.test.ts",
+            "server/src/world/answer-service.test.ts",
+            "server/src/cli/stdout.test.ts",
+            "server/src/agent/conversation-send-race.test.ts",
+            "web/src/world/worldAnswerDeliveries.test.ts",
+            "web/src/world/town/AnswerDeliveries.test.ts",
+            "web/src/world/AnswerDeliveries.browser.test.ts",
+            "web/src/world/town/answerOutbox.test.ts"
+          ],
+          "acceptance": "Complete affected units, browser, source/compiled native and behavioral gates plus independent mapping/design review required; finite schedules do not prove power-loss or exactly-once delivery."
         }
       ],
       "promotion": {

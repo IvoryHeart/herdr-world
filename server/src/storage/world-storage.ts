@@ -1,3 +1,4 @@
+import { ANSWER_DELIVERY_VERB } from "../world/ask-delivery-types";
 import { newWorldId } from "./world-identifiers";
 import { randomBytes } from "node:crypto";
 import {
@@ -13,9 +14,11 @@ import {
   STORAGE_BOUNDS,
   StorageWriteRejected,
   type AttentionEntry,
+  type AttentionNotices,
   type LedgerCommit,
   type Rows,
   type StoragePorts,
+  type StorageRequest,
   type WorldLedgerStorage,
 } from "./world-protocol";
 
@@ -58,10 +61,20 @@ export async function openWorldLedger(
   let closing = false;
   let closed: Promise<void> | undefined;
   for (const entry of client.snapshot.attention) remember(entry);
-  const refresh = async (recordId?: string, kind?: string) => {
+  const transition = async (request: StorageRequest) => {
+    const entry = await client.request<AttentionEntry | null>(request);
+    if (entry) remember(entry);
+    return entry;
+  };
+  const refresh = async (
+    recordId?: string,
+    kind?: string,
+    readyOnly = false,
+  ) => {
     const entries = await client.request<AttentionEntry[]>({
       type: "outbox",
       kind,
+      ready_only: readyOnly,
       ...(recordId ? { record_id: recordId } : {}),
     });
     if (recordId) byRecord.delete(recordId);
@@ -74,6 +87,19 @@ export async function openWorldLedger(
     delete ask.delivery;
     for (const entry of byRecord.get(ask.id) ?? []) {
       const field = entry.kind === "ask.created" ? "notification" : null;
+      if (entry.kind === ANSWER_DELIVERY_VERB.name && entry.intent)
+        (ask.delivery ??= {}).answer = {
+          id: entry.id,
+          occurrence: entry.intent.params.answer_occurrence,
+          state: entry.claimed ? "claimed" : entry.state,
+          attempt: entry.attempt,
+          attempts: entry.attempts,
+          prior_uncertainty: entry.prior_uncertainty,
+          ...(entry.evidence ? { reason: entry.evidence.reason } : {}),
+          ...(entry.cli_received_at !== null
+            ? { received_at: entry.cli_received_at }
+            : {}),
+        };
       if (field)
         (ask.delivery ??= {})[field] = {
           state: entry.state,
@@ -84,7 +110,7 @@ export async function openWorldLedger(
   };
   const pinned = (id: string) =>
     (byRecord.get(id) ?? []).some((entry) => !attentionFinished(entry.state));
-  const trim = (next: LedgerDocument) => {
+  const trim = (next: LedgerDocument, protectedIds: ReadonlySet<string>) => {
     for (const [rows, max] of [
       [next.changes, LEDGER_LIMITS.changes],
       [next.results, LEDGER_LIMITS.results],
@@ -94,6 +120,7 @@ export async function openWorldLedger(
       for (let i = 0; i < rows.length && excess > 0; ) {
         const row = rows[i]!;
         if (
+          protectedIds.has(row.id) ||
           pinned(row.id) ||
           (rows === next.asks &&
             !askClosed(row as LedgerDocument["asks"][number]))
@@ -108,10 +135,13 @@ export async function openWorldLedger(
   };
   const ledger: LedgerStore = {
     nextId: (kind) =>
-      newWorldId(kind, (id) =>
-        [...document.asks, ...document.changes, ...document.results].some(
-          (row) => row.id === id,
-        ),
+      newWorldId(
+        kind,
+        (id) =>
+          document.asks.some((ask) => ask.answer?.occurrence === id) ||
+          [...document.asks, ...document.changes, ...document.results].some(
+            (row) => row.id === id,
+          ),
       ),
     get: () => ({
       ...structuredClone(document),
@@ -142,12 +172,13 @@ export async function openWorldLedger(
       const operation = tail.then(async () => {
         const next = structuredClone(document);
         change(next);
-        trim(next);
+        const declaredEffects =
+          typeof effects === "function" ? effects() : effects;
+        // A newly declared effect must not lose its domain record to this write's trim.
+        trim(next, new Set(declaredEffects.map((effect) => effect.record_id)));
         const asks = diff(document.asks, next.asks);
         const changes = diff(document.changes, next.changes);
         const results = diff(document.results, next.results);
-        const declaredEffects =
-          typeof effects === "function" ? effects() : effects;
         if (
           !declaredEffects.length &&
           ![asks, changes, results].some(
@@ -193,7 +224,23 @@ export async function openWorldLedger(
     ledger,
     incarnation,
     outbox: {
-      list: (kind) => refresh(undefined, kind),
+      list: (kind, readyOnly) => refresh(undefined, kind, readyOnly),
+      async notices(kind, after, limit = 60) {
+        const page = await client.request<AttentionNotices>({
+          type: "notices",
+          kind,
+          after,
+          limit,
+        });
+        for (const entry of page.entries) remember(entry);
+        return page;
+      },
+      beginDispatch: (id, attempt, fence) =>
+        transition({ type: "begin-dispatch", id, attempt, fence }),
+      acknowledge: (id, occurrence, attempt, actor) =>
+        transition({ type: "acknowledge", id, occurrence, attempt, actor }),
+      decide: (id, occurrence, attempt, action) =>
+        transition({ type: "decide", id, occurrence, attempt, action }),
       forRecord: (id) => refresh(id),
       async get(id) {
         const entry = await client.request<AttentionEntry | null>({

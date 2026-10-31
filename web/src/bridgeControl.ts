@@ -10,10 +10,13 @@ export interface BridgeControlMsg {
     | "world_desk_changed"
     | "world_board_changed"
     | "world_ledger_changed"
+    | "world_ask_delivery_changed"
     | "world_profiles_changed"
     | "agent_conversation_changed"
     | "world_agent_activity"
     | "world_desk_reads";
+  /** Answer delivery revisions belong to one service lifetime. */
+  incarnation?: string;
   kind?: DeskReadKind;
   session?: string | null;
   trigger?: string | null;

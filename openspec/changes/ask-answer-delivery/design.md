@@ -72,14 +72,17 @@ ask's stored answer to that ask's original bound asker. It uses Chat's guarded
 send path without making Chat sends or terminal input queueable.
 
 Capture the state condition when the answer is recorded: the original asker
-binding is attached with the same session fingerprint, and the ask still awaits
-delivery (not withdrawn or delivered). If that condition cannot be verified,
-record not sent and leave the answer available through `ask get`.
+binding has the same captured session fingerprint, and the ask still awaits
+delivery (not withdrawn or delivered). The merged world-effects offline-answer
+scenario governs an unavailable host: preserve the previously verified binding
+as unresolved and keep delivery pending until it can be checked. An outage alone
+cannot establish that the session changed. A confirmed ended/changed or never-
+verified binding records not sent, leaving the answer available through `ask get`.
 
 When the owner or an authorized other agent answers, one transaction commits:
 
 1. The immutable answer and its occurrence/revision.
-2. One `ask.answer` outbox entry keyed by kind and ask ID, carrying the captured
+2. One `world.ask.deliver-answer` outbox entry keyed by kind and ask ID, carrying the captured
    recipient binding, operation version, answering actor and authorization
    evidence, state condition and opaque origin. Parameters contain only ask ID
    and answer occurrence. The dispatcher reads current answer
@@ -139,6 +142,11 @@ CLI; it does not mean the model acted on it or a human read it.
 | Timeout, disconnect after possible submission, unknown reply, post-send session mismatch, crash in `dispatching` | `uncertain`; no automatic resend |
 | Old attempt reports after a newer authorized attempt | Ignore the stale receipt; it cannot finish the new attempt |
 
+Attempt detail retains the newest eight attempts plus the newest uncertain
+attempt, at most nine rows per intent. Older safe retries are pruned; a retained
+uncertainty marker prevents later pending/refused evidence from implying that no
+earlier send happened. Status/detail queries and their pages stay bounded.
+
 No age-only policy discards pending work. A failed state condition is resolved
 explicitly as not sent, rather than silently waiting for a different occupant.
 The answer's lifetime is independent of the attempt and change-log retention.
@@ -157,8 +165,11 @@ Constructing an HTTP response or buffering output does not prove receipt. The
 CLI can then send an authenticated internal acknowledgement
 through the same service route. The service checks the actor and occurrence and
 atomically settles a still-pending intent with evidence `received by asker CLI`.
-A missing acknowledgement is not proof of a read. Repeated acknowledgements are
-idempotent; stale ones cannot settle a newer occurrence or attempt.
+A missing acknowledgement is not proof of a read. The reply includes its current
+attempt fence, which the acknowledgement must echo along with the answer
+occurrence. Repeated acknowledgements are idempotent; stale ones cannot settle a
+newer occurrence or attempt. A claim that wins this race can make an older read
+receipt stale, so no exactly-once claim is made.
 
 If a pane send has already started when the CLI acknowledges, it cannot be
 retracted. Retain both pieces of evidence and permit that one in-flight send to
@@ -237,3 +248,24 @@ for already answered records. Ineligible legacy asks remain retrievable and
 record delivery refusal. Preserve pending/uncertain intents and evidence across
 upgrades; unsupported versions admit no effect. A downgrade requires the normal
 private storage backup and cannot silently resume an unsupported effect.
+
+### Reception interaction
+
+The authorized design uses one compact Outbox row in the existing rail, opening
+Town Summary at the Outbox heading. Only uncertain/refused answers contribute
+to that row and its inset; pending/claimed/dispatching answers stay in Summary.
+The original host's reception sign has a separate `✉N` tag for saved answer
+work. These counts never contribute to open questions or blocked agents.
+Aggregates cover the whole outbox even when its detail page is limited to 60.
+
+Claimed and dispatching both show Sending with no UI decision. Unconfirmed
+answers offer Send again with explicit duplicate confirmation, or Dismiss;
+pending answers offer Cancel send. Not-sent answers offer Dismiss and an
+explicit Open agent/terminal route only when the current original terminal can
+be located; that route never changes the saved send recipient or prefills input.
+Details expose bounded attempt evidence and retrieval. Focus moves into duplicate
+confirmation, back on Cancel, and to the next card/Outbox heading after removal;
+one polite status announces the result. Details have 32/40 pixel tap targets.
+A temporary Sent card requires an exact positive status read; CLI receipt is
+named separately. Up to five such cards live only in memory until another
+refresh. No Chat transcript badge is added in this PR.

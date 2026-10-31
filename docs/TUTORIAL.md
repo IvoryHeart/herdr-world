@@ -189,7 +189,17 @@ hosts stay usable.
    rooms with their counts, and spend. Answer a question from its offered
    options or type a reply. World saves the answer before confirming it, and
    the agent can retrieve it with `herdr-world ask get ID` or `--wait`, including
-   after a restart. Agent questions and results use the instance's `world.sqlite`;
+   after a restart. For new asks from a verified local Linux agent with a bound
+   Chat session, World also sends the saved answer there without needing
+   `--wait`. An offline host waits; a changed asking session is skipped.
+   **Outbox** in Town Summary keeps waiting, unconfirmed and
+   not-sent answers reachable without adding open questions. If a send is
+   uncertain, World will not retry it automatically. **Send again…** asks you to
+   accept a possible duplicate to the original session; **Dismiss** or **Cancel send**
+   stops delivery while preserving the answer for `ask get`. Submission to
+   Herdr does not prove the agent read or acted on it. Dismissals and older or
+   unverified asks remain retrieval-only.
+   Agent questions and results use the instance's `world.sqlite`;
    [back it up with the service stopped](https://github.com/IvoryHeart/herdr-world/blob/main/docs/DEPLOYMENT.md#durable-questions-results-and-backups).
    A blocked agent that also asked a question counts
    as two items needing you. Tap a room to show it in Town; on a phone, Summary
