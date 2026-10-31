@@ -1,3 +1,4 @@
+import { AnswerOutboxContext } from "./town/answerOutbox";
 import { askingKeysForWorld } from "./worldAskTargets";
 import { inspectTownTerminal, townTargetActionable } from "./town/townOpen";
 import { questMark, useAgentQuests } from "./agentQuests";
@@ -782,7 +783,7 @@ export default function TownView({
   );
 
   return (
-    <>
+    <AnswerOutboxContext.Provider value={townSummary.openOutbox}>
       {toolbarPortal ? createPortal(toolbar, toolbarPortal) : toolbar}
       <WorldSearchResults world={world} query={query} onSelect={onSelect} />
       {townSummary.window}
@@ -803,6 +804,9 @@ export default function TownView({
         <TownRail
           needsYouCount={townSummary.summary.counts.needsYou}
           asks={townSummary.summary.asks}
+          deliveryCount={townSummary.deliveryCount}
+          deliveryWaiting={townSummary.deliveryWaiting}
+          onOpenOutbox={townSummary.openOutbox}
           askActions={townSummary.askActions}
           collapsed={railCollapsed}
           onCollapsedChange={setRailCollapsed}
@@ -988,6 +992,6 @@ export default function TownView({
           closeRoom={closeRoom}
         />
       </div>
-    </>
+    </AnswerOutboxContext.Provider>
   );
 }

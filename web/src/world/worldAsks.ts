@@ -42,7 +42,7 @@ export type WorldAsk = {
     };
   };
   withdrawn?: { at: number };
-  answer?: { text: string; at: number; by: string };
+  answer?: { text: string; at: number; by: string; occurrence?: string };
   dismissed?: { at: number; by: string };
 };
 

@@ -688,11 +688,55 @@ export async function runWorldCommand(
       }
     }
   }
-  if (markdown && reply.ok)
-    context.log(renderGroupMarkdown(reply.result as GroupView[]));
-  else if (asJson) context.log(JSON.stringify(reply));
-  else if (reply.ok) context.log(human(command, reply));
-  else context.error(`herdr-world ${word}: ${reply.error ?? "failed"}`);
+  const line =
+    markdown && reply.ok
+      ? renderGroupMarkdown(reply.result as GroupView[])
+      : asJson
+        ? JSON.stringify(reply)
+        : reply.ok
+          ? human(command, reply)
+          : null;
+  if (line !== null) {
+    try {
+      if (context.output) await context.output(line);
+      else context.log(line);
+    } catch {
+      context.error("herdr-world: could not write standard output");
+      return EXIT_FAILURE;
+    }
+  } else context.error(`herdr-world ${word}: ${reply.error ?? "failed"}`);
+  if (
+    reply.ok &&
+    reply.actor?.verified &&
+    (command === "ask get" || command === "ask")
+  ) {
+    const ask = reply.result as
+      | {
+          id?: unknown;
+          answer?: { text?: unknown; occurrence?: unknown };
+          delivery?: { answer?: { occurrence?: unknown; attempt?: unknown } };
+        }
+      | undefined;
+    if (
+      typeof ask?.id === "string" &&
+      typeof ask.answer?.text === "string" &&
+      typeof ask.answer.occurrence === "string" &&
+      ask.delivery?.answer?.occurrence === ask.answer.occurrence &&
+      Number.isSafeInteger(ask.delivery.answer.attempt)
+    ) {
+      // The service re-verifies the original asker and occurrence. A lost ACK
+      // may leave a possible duplicate; it cannot turn a successful read into loss.
+      try {
+        await transport("ask acknowledge", {
+          id: ask.id,
+          occurrence: ask.answer.occurrence,
+          attempt: ask.delivery.answer.attempt,
+        });
+      } catch {
+        /* Retrieval already succeeded. */
+      }
+    }
+  }
   return reply.ok ? EXIT_OK : (CODE_EXIT[reply.code ?? ""] ?? EXIT_FAILURE);
 }
 

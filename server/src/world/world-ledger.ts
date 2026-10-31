@@ -1,3 +1,4 @@
+import type { AnswerRecipient } from "./ask-delivery-types";
 import type { OutboxEffect } from "../storage/world-protocol";
 import { existsSync, readFileSync, renameSync } from "node:fs";
 import { replaceDataFile } from "../config/data-paths";
@@ -65,12 +66,23 @@ export type LedgerAsk = {
   options: string[];
   /** Only the owner, in World, may answer. */
   owner_only: boolean;
-  answer?: { text: string; at: number; by: string };
+  recipient?: AnswerRecipient;
+  answer?: { text: string; at: number; by: string; occurrence?: string };
   /** Closed by the owner without an answer; the asker's `--wait` ends. */
   dismissed?: { at: number; by: string };
   /** Durable attention evidence; an uncertain answer is always retrievable. */
   delivery?: {
     notification?: { state: string; reason?: string };
+    answer?: {
+      id: string;
+      occurrence: string;
+      state: string;
+      attempt: number;
+      reason?: string;
+      received_at?: number;
+      prior_uncertainty?: boolean;
+      attempts?: import("../storage/world-protocol").AnswerAttempt[];
+    };
   };
 };
 
@@ -105,7 +117,7 @@ export type LedgerDocument = {
 
 /** Committed reads; writes may cross the asynchronous persistence boundary. */
 export interface LedgerStore {
-  nextId(kind: "c" | "q" | "r"): string;
+  nextId(kind: "c" | "q" | "r" | "a"): string;
   get(): LedgerDocument;
   ask(id: string): LedgerAsk | undefined;
   change(id: string): LedgerChange | undefined;
@@ -185,7 +197,7 @@ export class WorldLedger {
   }
 
   /** A short ID: a kind letter, the time and a counter, e.g. "c-lq3x9-1". */
-  nextId(kind: "c" | "q" | "r") {
+  nextId(kind: "c" | "q" | "r" | "a") {
     this.sequence += 1;
     return `${kind}-${this.now().toString(36)}-${this.sequence.toString(36)}`;
   }

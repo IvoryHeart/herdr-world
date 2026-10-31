@@ -23,11 +23,17 @@ terminal input SHALL remain direct and non-queueable.
 
 ### Requirement: Capture and recheck the original bound state
 
-At answer recording World SHALL capture that the original asker binding is
-attached with the same session fingerprint and the ask still awaits delivery,
-not withdrawn or delivered. After claiming, World SHALL recheck the answering
+At answer recording World SHALL capture the original verified binding's session
+fingerprint and that the ask still awaits delivery, not withdrawn or delivered.
+An offline/unobserved host SHALL keep that binding unresolved and delivery pending
+until it can be checked; an outage SHALL NOT count as a changed session. After claiming, World SHALL recheck the answering
 actor's current ask policy, target binding, preconditions and operation version.
 Unverifiable or changed state SHALL record not sent and preserve ask retrieval.
+
+#### Scenario: Answer recorded during an outage
+- **WHEN** the owner answers a previously bound ask while its original host is offline
+- **THEN** the intent remains pending without expiry
+- **AND** it sends only after that same session is verified on return
 
 #### Scenario: Reused pane or generation after restart
 - **WHEN** the native handle exists but the original source/session cannot be verified

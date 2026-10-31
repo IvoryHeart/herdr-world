@@ -61,6 +61,15 @@ Targets are on your own host; add --connection ID for another one.
          changes Herdr's tab order, so it needs --herdr; World cannot undo it
   ask "QUESTION" [--key CAUSE] [--options a,b,c] [--owner-only] [--wait [--timeout S]]
   ask get ID [--wait] | ask answer ID "ANSWER" | ask withdraw ID|--key CAUSE
+         New asks from a verified local Linux caller with a supported bound
+         Chat session can receive the saved answer there without --wait.
+         Offline delivery waits for that original session; a changed session
+         is skipped. Older, unverified and unsupported asks stay retrieval-only.
+         Always keep the ask ID: ask get reads the saved answer after restart.
+         Possible pane sends are never retried automatically. The owner can
+         close delivery or authorize a possible duplicate in Reception.
+         Successful stdout output acknowledges the exact answer as its verified
+         original asker; a lost acknowledgement may still cause duplicate output.
          another verified agent may answer, never the asker; --owner-only
          questions are answered only by the owner in World
          --key deduplicates one cause for your verified occupant. Withdraw

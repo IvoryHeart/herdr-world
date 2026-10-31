@@ -2,6 +2,7 @@
   "sourceRun": "https://github.com/IvoryHeart/herdr-world/actions/runs/41083467325",
   "units": "seconds; JUnit suite totals; Town groups sum their original testcase durations",
   "seconds": {
+    "AnswerDeliveries.browser": 10,
     "BoardView": 21.518,
     "ConcurrentContexts": 31.58,
     "DeskView.browser": 14.112,

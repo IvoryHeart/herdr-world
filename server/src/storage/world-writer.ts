@@ -1,3 +1,14 @@
+import {
+  recordAnswerAttempt,
+  answerAttemptEvidence,
+  recoverAttention,
+} from "./answer-attempts";
+import { answerTransitions } from "./answer-transitions";
+import {
+  ANSWER_DELIVERY_VERB,
+  isAnswerIntent,
+  originalAsker,
+} from "../world/ask-delivery-types";
 import { randomBytes } from "node:crypto";
 import { newWorldId } from "./world-identifiers";
 import { Database } from "bun:sqlite";
@@ -79,23 +90,7 @@ export function openWorldWriter(
     migrateWorldDatabase(db, path);
     db.exec("PRAGMA busy_timeout=5000");
     importLegacyLedger(db, legacy, at);
-    const interrupted = db
-      .query("SELECT id,attempt FROM outbox WHERE state='dispatching'")
-      .all() as { id: string; attempt: number }[];
-    if (interrupted.length)
-      db.transaction(() => {
-        for (const row of interrupted)
-          db.query(
-            "UPDATE outbox SET state='uncertain',due_at=?,evidence=? WHERE id=?",
-          ).run(
-            at + attentionRetryDelay(row.attempt),
-            JSON.stringify({
-              reason:
-                "Service stopped before the dispatch receipt; delivery is uncertain",
-            }),
-            row.id,
-          );
-      })();
+    recoverAttention(db, at);
   } catch (error) {
     db.close();
     throw error;
@@ -108,11 +103,17 @@ export function openWorldWriter(
       ...row,
       target: row.target ? JSON.parse(row.target as string) : null,
       evidence: row.evidence ? JSON.parse(row.evidence as string) : null,
+      intent: row.intent ? JSON.parse(row.intent as string) : null,
+      claimed: Boolean(row.claimed),
+      ...(row.kind === ANSWER_DELIVERY_VERB.name
+        ? answerAttemptEvidence(db, row.id as string, row.attempt as number)
+        : {}),
     }) as AttentionEntry;
   const attention = (id: string) => {
     const row = db.query("SELECT * FROM outbox WHERE id=?").get(id);
     return row ? decode(row as Record<string, unknown>) : null;
   };
+  const answer = answerTransitions(db, attention);
   const forRecord = (id: string) =>
     (
       db
@@ -188,6 +189,21 @@ export function openWorldWriter(
       for (const record of patch.put) {
         if (table === "asks") {
           const ask = record as LedgerAsk;
+          const stored = db
+            .query("SELECT body FROM asks WHERE id=?")
+            .get(ask.id) as { body: string } | null;
+          const previous = stored
+            ? (JSON.parse(stored.body) as LedgerAsk)
+            : null;
+          if (
+            previous?.answer &&
+            (!ask.answer ||
+              previous.answer.text !== ask.answer.text ||
+              previous.answer.at !== ask.answer.at ||
+              previous.answer.by !== ask.answer.by ||
+              previous.answer.occurrence !== ask.answer.occurrence)
+          )
+            throw new Error("A stored answer occurrence is immutable");
           const resolved =
             ask.answer?.at ?? ask.dismissed?.at ?? ask.withdrawn?.at ?? null;
           db.query(
@@ -196,18 +212,34 @@ export function openWorldWriter(
           if (resolved !== null) {
             for (const entry of forRecord(ask.id))
               if (
-                entry.kind === "ask.created" &&
-                (entry.state === "pending" || entry.state === "uncertain")
+                (entry.kind === "ask.created" &&
+                  (entry.state === "pending" || entry.state === "uncertain")) ||
+                (entry.kind === ANSWER_DELIVERY_VERB.name &&
+                  ask.withdrawn &&
+                  entry.state === "pending")
               ) {
                 db.query(
-                  "UPDATE outbox SET state='cancelled',resolved_at=?,evidence=? WHERE id=?",
+                  "UPDATE outbox SET state='cancelled',claimed=0,resolved_at=?,evidence=? WHERE id=?",
                 ).run(
                   write.at,
                   JSON.stringify({
-                    reason: "Question closed before its pending owner alert",
+                    reason:
+                      entry.kind === "ask.created"
+                        ? "Question closed before its pending owner alert"
+                        : "Asker withdrew before answer delivery",
                   }),
                   entry.id,
                 );
+                if (entry.kind === ANSWER_DELIVERY_VERB.name && entry.claimed)
+                  recordAnswerAttempt(
+                    db,
+                    entry.id,
+                    entry.attempt,
+                    "cancelled",
+                    entry.evidence?.fence,
+                    write.at,
+                    "Asker withdrew before submission",
+                  );
                 changed.add(entry.id);
               }
           }
@@ -233,8 +265,58 @@ export function openWorldWriter(
       const id = newWorldId("e", (candidate) =>
         Boolean(db.query("SELECT 1 FROM outbox WHERE id=?").get(candidate)),
       );
+      if (effect.kind === ANSWER_DELIVERY_VERB.name) {
+        const row = db
+          .query("SELECT body FROM asks WHERE id=?")
+          .get(effect.record_id) as { body: string } | null;
+        const ask = row && (JSON.parse(row.body) as LedgerAsk | null);
+        if (
+          !isAnswerIntent(effect.intent) ||
+          effect.recovery !== "opaque" ||
+          effect.initial_claim ||
+          effect.intent?.verb !== ANSWER_DELIVERY_VERB.name ||
+          effect.intent.params.ask_id !== effect.record_id ||
+          !ask?.answer?.occurrence ||
+          effect.intent.params.answer_occurrence !== ask.answer.occurrence ||
+          Object.keys(effect.intent.params).length !== 2 ||
+          effect.intent.origin !== "world.ask.answer" ||
+          effect.intent.condition?.awaiting_delivery !== true ||
+          Object.keys(effect.intent).some(
+            (key) =>
+              ![
+                "verb",
+                "version",
+                "origin",
+                "params",
+                "actor",
+                "condition",
+              ].includes(key),
+          ) ||
+          Object.keys(effect.intent.condition).some(
+            (key) => !["awaiting_delivery", "recipient"].includes(key),
+          ) ||
+          !Number.isSafeInteger(effect.intent.version) ||
+          effect.intent.version < 1 ||
+          !["owner", "agent"].includes(effect.intent.actor?.kind) ||
+          ask.withdrawn ||
+          ask.dismissed ||
+          (effect.intent.actor.kind === "agent" &&
+            (ask.owner_only ||
+              !effect.intent.actor.actor.verified ||
+              originalAsker(ask.recipient, effect.intent.actor.actor)))
+        )
+          throw new Error(
+            "Answer intent must reference its stored answer occurrence without copied text",
+          );
+      }
+      const state = effect.initial_claim
+        ? "dispatching"
+        : (effect.initial_state ?? "pending");
+      const due = effect.due_at ?? write.at;
+      if (!Number.isSafeInteger(due))
+        throw new Error("invalid intent deadline");
       db.query(
-        "INSERT INTO outbox(id,operation_id,kind,record_id,target,recovery,state,due_at,attempt,evidence,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(kind,record_id) DO NOTHING",
+        "INSERT INTO outbox(id,operation_id,kind,record_id,target,recovery,state,due_at,attempt,evidence,created_at,resolved_at,intent) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(kind,record_id) DO NOTHING",
       ).run(
         id,
         operationId,
@@ -242,16 +324,20 @@ export function openWorldWriter(
         effect.record_id,
         effect.target ? JSON.stringify(effect.target) : null,
         effect.recovery,
-        effect.initial_claim ? "dispatching" : "pending",
-        write.at,
+        state,
+        due,
         effect.initial_claim ? 1 : 0,
         effect.initial_claim
           ? JSON.stringify({
               reason: "Initial owner-alert attempt claimed with the ask",
               fence: effect.initial_claim,
             })
-          : null,
+          : effect.reason
+            ? JSON.stringify({ reason: effect.reason })
+            : null,
         write.at,
+        attentionFinished(state) ? write.at : null,
+        effect.intent ? JSON.stringify(effect.intent) : null,
       );
       for (const entry of forRecord(effect.record_id)) changed.add(entry.id);
     }
@@ -303,9 +389,75 @@ export function openWorldWriter(
         return read();
       case "write":
         return apply(request.write);
+      case "begin-dispatch":
+        return answer.begin(request.id, request.attempt, request.fence, at);
+      case "acknowledge":
+        return answer.acknowledge(
+          request.id,
+          request.occurrence,
+          request.attempt,
+          request.actor,
+          at,
+        );
+      case "decide":
+        return answer.decide(
+          request.id,
+          request.occurrence,
+          request.attempt,
+          request.action,
+          at,
+        );
+      case "notices": {
+        if (
+          !Number.isInteger(request.limit) ||
+          request.limit < 1 ||
+          request.limit > 100
+        )
+          throw new Error("invalid notice limit");
+        const entries = (
+          db
+            .query(
+              "SELECT * FROM outbox WHERE kind=? AND state NOT IN ('delivered','cancelled') AND (? IS NULL OR rowid < (SELECT rowid FROM outbox WHERE id=?)) ORDER BY rowid DESC LIMIT ?",
+            )
+            .all(
+              request.kind,
+              request.after ?? null,
+              request.after ?? null,
+              request.limit,
+            ) as Record<string, unknown>[]
+        ).map(decode);
+        const counts = db
+          .query(
+            "SELECT state,json_extract(target,'$.connection_id') AS connection_id,count(*) AS count FROM outbox WHERE kind=? AND state NOT IN ('delivered','cancelled') GROUP BY state,connection_id",
+          )
+          .all(request.kind) as {
+          state: string;
+          connection_id: string | null;
+          count: number;
+        }[];
+        let checks = 0,
+          waiting = 0;
+        const connections: Record<string, number> = Object.create(null);
+        for (const row of counts) {
+          if (["uncertain", "refused"].includes(row.state)) checks += row.count;
+          else waiting += row.count;
+          if (row.connection_id)
+            connections[row.connection_id] =
+              (connections[row.connection_id] ?? 0) + row.count;
+        }
+        return { entries, checks, waiting, connections };
+      }
       case "outbox": {
         if (request.id) return attention(request.id);
         if (request.record_id) return forRecord(request.record_id);
+        if (request.ready_only)
+          return (
+            db
+              .query(
+                "SELECT * FROM outbox WHERE claimed=0 AND (state='pending' OR (state='uncertain' AND recovery='repeatable')) AND kind=? ORDER BY due_at,id LIMIT 100",
+              )
+              .all(request.kind ?? "") as Record<string, unknown>[]
+          ).map(decode);
         const rows = request.kind
           ? db
               .query(
@@ -323,6 +475,7 @@ export function openWorldWriter(
         const entry = attention(request.id);
         if (
           !entry ||
+          entry.claimed ||
           entry.due_at > at ||
           (entry.state !== "pending" &&
             !(entry.state === "uncertain" && entry.recovery === "repeatable"))
@@ -334,7 +487,7 @@ export function openWorldWriter(
             .get(entry.record_id) as { resolved_at: number | null } | null;
           if (!ask || ask.resolved_at !== null) {
             db.query(
-              "UPDATE outbox SET state='cancelled',resolved_at=?,evidence=? WHERE id=?",
+              "UPDATE outbox SET state='cancelled',claimed=0,resolved_at=?,evidence=? WHERE id=?",
             ).run(
               at,
               JSON.stringify({
@@ -350,15 +503,28 @@ export function openWorldWriter(
           request.fence.connection_id !== entry.target?.connection_id
         )
           throw new Error("dispatch fence changed the captured connection");
+        const claimOnly = entry.kind === ANSWER_DELIVERY_VERB.name;
         db.query(
-          "UPDATE outbox SET state='dispatching',attempt=attempt+1,evidence=? WHERE id=?",
+          "UPDATE outbox SET state=?,claimed=?,attempt=attempt+1,evidence=? WHERE id=?",
         ).run(
+          claimOnly ? "pending" : "dispatching",
+          claimOnly ? 1 : 0,
           JSON.stringify({
             reason: "Dispatch claimed",
             ...(request.fence ? { fence: request.fence } : {}),
           }),
           entry.id,
         );
+        if (claimOnly)
+          recordAnswerAttempt(
+            db,
+            entry.id,
+            entry.attempt + 1,
+            "claimed",
+            request.fence,
+            at,
+            "Claimed for current checks",
+          );
         return attention(entry.id);
       }
       case "finish": {
@@ -367,7 +533,8 @@ export function openWorldWriter(
         const entry = attention(request.id);
         if (
           !entry ||
-          entry.state !== "dispatching" ||
+          (entry.state !== "dispatching" &&
+            !(entry.state === "pending" && entry.claimed)) ||
           entry.attempt !== request.attempt
         )
           return null;
@@ -376,18 +543,33 @@ export function openWorldWriter(
         if (!Number.isSafeInteger(due))
           throw new Error("invalid attention retry deadline");
         db.query(
-          "UPDATE outbox SET state=?,evidence=?,resolved_at=?,due_at=? WHERE id=? AND attempt=? AND state='dispatching'",
+          "UPDATE outbox SET state=?,claimed=0,evidence=?,resolved_at=?,due_at=? WHERE id=? AND attempt=?",
         ).run(
-          request.state,
+          entry.cli_received_at !== null ? "delivered" : request.state,
           JSON.stringify({
-            reason: request.reason,
+            reason:
+              entry.cli_received_at !== null
+                ? `Answer received by asker CLI; ${request.reason}`
+                : request.reason,
             ...(entry.evidence?.fence ? { fence: entry.evidence.fence } : {}),
           }),
-          attentionFinished(request.state) ? at : null,
+          entry.cli_received_at !== null || attentionFinished(request.state)
+            ? at
+            : null,
           due,
           request.id,
           request.attempt,
         );
+        if (entry.kind === ANSWER_DELIVERY_VERB.name)
+          recordAnswerAttempt(
+            db,
+            entry.id,
+            entry.attempt,
+            request.state,
+            entry.evidence?.fence,
+            at,
+            request.reason,
+          );
         return attention(entry.id);
       }
       case "replay":
@@ -442,7 +624,9 @@ export function openWorldWriter(
         [];
       if (
         requests.every(({ request }) =>
-          ["load", "outbox", "replay", "inspect"].includes(request.type),
+          ["load", "outbox", "notices", "replay", "inspect"].includes(
+            request.type,
+          ),
         )
       )
         return requests.map(({ ticket, request }) => {

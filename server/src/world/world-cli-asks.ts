@@ -35,7 +35,10 @@ function sameAsker(left: CliActor, right: CliActor) {
     left.verified &&
     right.verified &&
     left.connection_id === right.connection_id &&
-    left.connection_generation === right.connection_generation &&
+    (left.connection_generation === right.connection_generation ||
+      Boolean(
+        left.agent_session_fingerprint && right.agent_session_fingerprint,
+      )) &&
     left.pane_id === right.pane_id &&
     left.terminal_id === right.terminal_id &&
     left.agent_session_fingerprint === right.agent_session_fingerprint &&
@@ -191,6 +194,7 @@ export async function handleWorldAsk(
         refused(
           `you have ${LEDGER_LIMITS.asksPerActor} open questions; wait for answers`,
         );
+      const recipient = await deps.captureRecipient?.(asker);
       let id = deps.ledger.nextId("q");
       let created = true;
       deps.publishLedger(
@@ -223,6 +227,7 @@ export async function handleWorldAsk(
               id,
               at: now(),
               actor: asker,
+              ...(recipient ? { recipient } : {}),
               question,
               ...(key ? { key } : {}),
               options,
@@ -273,6 +278,18 @@ export async function handleWorldAsk(
       }
       return ask ?? notFound(`no question ${id}`);
     }
+    case "ask acknowledge": {
+      if (!deps.acknowledgeAnswer)
+        refused("Answer acknowledgement is unavailable");
+      if (!Number.isSafeInteger(params.attempt) || Number(params.attempt) < 0)
+        usage("an acknowledgement needs the observed attempt");
+      return deps.acknowledgeAnswer!(
+        text(params.id, "the question ID"),
+        text(params.occurrence, "the answer occurrence"),
+        params.attempt as number,
+        actor,
+      );
+    }
     case "ask answer": {
       const id = text(params.id, "the question ID");
       const answer = text(params.answer, "the answer");
@@ -292,7 +309,9 @@ export async function handleWorldAsk(
         refused("an agent cannot answer its own question");
       if (ask!.answer) refused(`${id} is already answered`);
       deps.publishLedger(
-        await answerAsk(deps.ledger, id, answer, actor.label, now()),
+        await (deps.recordAnswer
+          ? deps.recordAnswer(id, answer, actor)
+          : answerAsk(deps.ledger, id, answer, actor.label, now())),
         true,
       );
       return deps.ledger.ask(id);

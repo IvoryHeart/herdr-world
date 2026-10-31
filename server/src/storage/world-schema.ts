@@ -38,7 +38,22 @@ CREATE TABLE replay_changes (seq INTEGER PRIMARY KEY AUTOINCREMENT, operation_id
 CREATE INDEX replay_age ON replay_changes(committed_at);
 CREATE TABLE imports (name TEXT PRIMARY KEY,content_hash TEXT NOT NULL,completed_at INTEGER NOT NULL);
 `;
-export const worldMigrations = [migration1] as const;
+const migration2 = `
+ALTER TABLE outbox ADD COLUMN intent TEXT CHECK(intent IS NULL OR json_valid(intent));
+ALTER TABLE outbox ADD COLUMN claimed INTEGER NOT NULL DEFAULT 0 CHECK(claimed IN (0,1));
+ALTER TABLE outbox ADD COLUMN cli_received_at INTEGER;
+CREATE INDEX outbox_dispatch ON outbox(kind,claimed,state,due_at);
+CREATE TABLE answer_attempts (
+ intent_id TEXT NOT NULL REFERENCES outbox(id) ON DELETE CASCADE,
+ attempt INTEGER NOT NULL CHECK(attempt>0),
+ state TEXT NOT NULL CHECK(state IN ('claimed','pending','dispatching','delivered','uncertain','refused','cancelled')),
+ fence TEXT CHECK(fence IS NULL OR json_valid(fence)), created_at INTEGER NOT NULL, finished_at INTEGER,
+ reason TEXT NOT NULL, PRIMARY KEY(intent_id,attempt)
+);
+CREATE INDEX answer_attempt_status ON answer_attempts(intent_id,state,attempt);
+CREATE UNIQUE INDEX asks_answer_occurrence ON asks(json_extract(body,'$.answer.occurrence')) WHERE json_extract(body,'$.answer.occurrence') IS NOT NULL;
+`;
+export const worldMigrations = [migration1, migration2] as const;
 
 /** A consistent private rollback copy before any noninitial migration. */
 function backupMigration(db: Database, path: string, version: number) {

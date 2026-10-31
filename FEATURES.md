@@ -6,7 +6,12 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
 Agent questions, answers and task results survive service restarts in the
 instance's private `world.sqlite`. The service sends owner alerts from a durable
 outbox; an interrupted send retains explicit uncertainty. Retrieve answers with
-`herdr-world ask get ID` or `--wait`. See [migration and backups](./docs/DEPLOYMENT.md#durable-questions-results-and-backups).
+`herdr-world ask get ID` or `--wait`. New asks from a verified local Linux
+agent can also receive the saved answer in their original Chat session without
+`--wait`. Town Summary’s Outbox keeps waiting, unconfirmed and not-sent deliveries separate
+from open questions; the owner can close a delivery or explicitly resend to the
+same session after accepting a possible duplicate. A changed session is skipped.
+See [migration and backups](./docs/DEPLOYMENT.md#durable-questions-results-and-backups).
 
 ## World update notifications
 

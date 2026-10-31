@@ -1,3 +1,4 @@
+import { AnswerDeliverySign } from "./AnswerDeliverySign";
 import { Fragment, memo, useMemo } from "react";
 import { ChevronsLeft, ChevronsRight, Plus } from "lucide-react";
 import { ConnectionRecoveryBanner } from "../ConnectionRecoveryBanner";
@@ -222,17 +223,24 @@ export const TownWorldLayer = memo(function TownWorldLayer({
               ) : (
                 <span>{`${counts.rooms} rooms · ${counts.desks} desks · ${counts.working} working`}</span>
               )}
-              {queue.length ? (
-                <em aria-label={`${queue.length} need you`}>!{queue.length}</em>
-              ) : null}
-              {questionCount ? (
-                <em
-                  className="town-reception-question"
-                  aria-label={`${questionCount} owner questions`}
-                >
-                  ?{questionCount}
-                </em>
-              ) : null}
+              <div className="town-reception-tags">
+                {queue.length ? (
+                  <em aria-label={`${queue.length} need you`}>
+                    !{queue.length}
+                  </em>
+                ) : null}
+                {questionCount ? (
+                  <em
+                    className="town-reception-question"
+                    aria-label={`${questionCount} owner questions`}
+                  >
+                    ?{questionCount}
+                  </em>
+                ) : null}
+                {host ? (
+                  <AnswerDeliverySign connectionId={host.connectionId} />
+                ) : null}
+              </div>
             </TownBuildingSign>
             <div
               className={`town-reception${queue.length ? " town-reception-busy" : ""}`}

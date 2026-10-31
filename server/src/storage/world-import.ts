@@ -97,7 +97,21 @@ export function importLegacyLedger(
           ask.id,
           ask.at,
           ask.answer?.at ?? ask.dismissed?.at ?? ask.withdrawn?.at ?? null,
-          JSON.stringify(ask),
+          // A legacy import cannot attest a verified answer recipient.
+          JSON.stringify({
+            ...ask,
+            recipient: undefined,
+            delivery: undefined,
+            ...(ask.answer
+              ? {
+                  answer: {
+                    text: ask.answer.text,
+                    at: ask.answer.at,
+                    by: ask.answer.by,
+                  },
+                }
+              : {}),
+          }),
         ).changes;
     for (const [table, family] of [
       ["results", "results"],

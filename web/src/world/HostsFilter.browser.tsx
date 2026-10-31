@@ -2528,6 +2528,13 @@ async function run() {
     call: async (method, params = {}) => {
       calls.push(method);
       globals.push({ method, params });
+      if (method === "world.ask.deliveries.get")
+        return {
+          revision: 0,
+          incarnation: "fixture",
+          deliveries: [],
+          next: null,
+        };
       if (method === "world.snapshot")
         return operation === "worktree-resource-cold" && resourceWorkspaceOpen
           ? coldObservation.promise

@@ -357,14 +357,14 @@ test("migrations preserve a private consistent snapshot and refuse future/foreig
       "CREATE TABLE extension(value TEXT)",
     ]);
     expect(backupPath).toMatch(
-      /world\.sqlite\.v1\.[0-9a-hjkmnp-tv-z]{8}\.bak$/,
+      /world\.sqlite\.v[0-9]+\.[0-9a-hjkmnp-tv-z]{8}\.bak$/,
     );
     const backup = new Database(backupPath!, { readonly: true });
     try {
       expect(
         (backup.query("PRAGMA user_version").get() as { user_version: number })
           .user_version,
-      ).toBe(1);
+      ).toBe(worldMigrations.length);
     } finally {
       backup.close();
     }
@@ -443,7 +443,7 @@ test("restoring a migration snapshot can upgrade again without replacing the pri
     expect(
       (restored.query("PRAGMA user_version").get() as { user_version: number })
         .user_version,
-    ).toBe(2);
+    ).toBe(worldMigrations.length + 1);
   } finally {
     restored.close();
   }
@@ -460,12 +460,12 @@ test("a failed migration leaves the original version and a usable backup", () =>
         "CREATE TABLE partial(value TEXT); INVALID SQL",
       ]),
     ).toThrow(
-      /snapshot preserved at .*world\.sqlite\.v1\.[0-9a-hjkmnp-tv-z]{8}\.bak/,
+      /snapshot preserved at .*world\.sqlite\.v[0-9]+\.[0-9a-hjkmnp-tv-z]{8}\.bak/,
     );
     expect(
       (db.query("PRAGMA user_version").get() as { user_version: number })
         .user_version,
-    ).toBe(1);
+    ).toBe(worldMigrations.length);
     expect(
       db.query("SELECT name FROM sqlite_master WHERE name='partial'").get(),
     ).toBeNull();

@@ -1,3 +1,4 @@
+import type { AnswerIntent } from "../world/ask-delivery-types";
 import type {
   LedgerAsk,
   LedgerChange,
@@ -41,6 +42,18 @@ export type OutboxEffect = {
   recovery: EffectRecovery;
   target: AttentionTarget | null;
   initial_claim?: DispatchFence;
+  due_at?: number;
+  initial_state?: "pending" | "refused";
+  reason?: string;
+  intent?: AnswerIntent;
+};
+export type AnswerAttempt = {
+  attempt: number;
+  state: AttentionState | "claimed";
+  fence: DispatchFence | null;
+  created_at: number;
+  finished_at: number | null;
+  reason: string;
 };
 export type AttentionEntry = {
   id: string;
@@ -48,6 +61,11 @@ export type AttentionEntry = {
   kind: string;
   record_id: string;
   target: AttentionTarget | null;
+  intent: AnswerIntent | null;
+  claimed: boolean;
+  cli_received_at: number | null;
+  attempts?: AnswerAttempt[];
+  prior_uncertainty?: boolean;
   recovery: EffectRecovery;
   state: AttentionState;
   due_at: number;
@@ -75,7 +93,34 @@ export type LedgerCommit = {
 export type StorageRequest =
   | { type: "load" }
   | { type: "write"; write: LedgerWrite }
-  | { type: "outbox"; record_id?: string; id?: string; kind?: string }
+  | {
+      type: "outbox";
+      record_id?: string;
+      id?: string;
+      kind?: string;
+      ready_only?: boolean;
+    }
+  | { type: "notices"; kind: string; after?: string; limit: number }
+  | {
+      type: "begin-dispatch";
+      id: string;
+      attempt: number;
+      fence: DispatchFence;
+    }
+  | {
+      type: "acknowledge";
+      id: string;
+      occurrence: string;
+      attempt: number;
+      actor: import("../world/world-ledger").CliActor;
+    }
+  | {
+      type: "decide";
+      id: string;
+      occurrence: string;
+      attempt: number;
+      action: "resend" | "close";
+    }
   | { type: "claim"; id: string; fence?: DispatchFence }
   | {
       type: "finish";
@@ -104,9 +149,37 @@ export type ReplayPage = {
   watermark: number;
   changes: { seq: number; kind: string; record_id: string }[];
 };
+export type AttentionNotices = {
+  entries: AttentionEntry[];
+  checks: number;
+  waiting: number;
+  connections: Record<string, number>;
+};
 export type AttentionOutbox = {
   /** At most 100 pending/uncertain rows, ordered by deadline. */
-  list(kind?: string): Promise<AttentionEntry[]>;
+  list(kind?: string, readyOnly?: boolean): Promise<AttentionEntry[]>;
+  notices(
+    kind: string,
+    after?: string,
+    limit?: number,
+  ): Promise<AttentionNotices>;
+  beginDispatch(
+    id: string,
+    attempt: number,
+    fence: DispatchFence,
+  ): Promise<AttentionEntry | null>;
+  acknowledge(
+    id: string,
+    occurrence: string,
+    attempt: number,
+    actor: import("../world/world-ledger").CliActor,
+  ): Promise<AttentionEntry | null>;
+  decide(
+    id: string,
+    occurrence: string,
+    attempt: number,
+    action: "resend" | "close",
+  ): Promise<AttentionEntry | null>;
   get(id: string): Promise<AttentionEntry | null>;
   forRecord(id: string): Promise<AttentionEntry[]>;
   claim(id: string, fence?: DispatchFence): Promise<AttentionEntry | null>;

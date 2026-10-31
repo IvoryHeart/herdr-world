@@ -75,6 +75,16 @@ export type WorldCliDeps = {
     patch(ops: readonly BoardOp[]): BoardDocument;
   };
   ledger: LedgerStore;
+  recordAnswer?(id: string, text: string, actor: CliActor): Promise<number>;
+  captureRecipient?(
+    actor: CliActor,
+  ): Promise<import("./ask-delivery-types").AnswerRecipient | undefined>;
+  acknowledgeAnswer?(
+    id: string,
+    occurrence: string,
+    attempt: number,
+    actor: CliActor,
+  ): Promise<unknown>;
   incarnation?: string;
   hosts(): CliHost[];
   defaultConnectionId(): string | null;
@@ -106,6 +116,7 @@ export const WORLD_CLI_COMMANDS = [
   "town desk move",
   "ask",
   "ask get",
+  "ask acknowledge",
   "ask answer",
   "ask withdraw",
   "result",
@@ -789,6 +800,7 @@ export function createWorldCli(deps: WorldCliDeps) {
       }
       case "ask":
       case "ask get":
+      case "ask acknowledge":
       case "ask answer":
       case "ask withdraw":
         return handleWorldAsk(deps, command, params, actor, now);

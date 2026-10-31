@@ -544,3 +544,145 @@ describe("endpoint diagnostics", () => {
     }
   });
 });
+
+describe("answer stdout acknowledgements", () => {
+  const answered = {
+    ok: true,
+    actor: { label: "Fixture", verified: true },
+    result: {
+      id: "q-answer",
+      question: "Proceed?",
+      answer: {
+        text: "Proceed",
+        at: 1000,
+        by: "owner",
+        occurrence: "a-answer",
+      },
+      delivery: { answer: { occurrence: "a-answer", attempt: 0 } },
+    },
+  };
+  test("acknowledges this exact answer only after stdout completion", async () => {
+    const f = context();
+    const order: string[] = [];
+    const target = Object.assign(f.context, {
+      output: async (line: string) => {
+        order.push("write");
+        await Promise.resolve();
+        f.out.push(line);
+        order.push("complete");
+      },
+    });
+    const transport: WorldCliTransport = async (command, params) => {
+      if (command === "ask get") return answered;
+      expect(command).toBe("ask acknowledge");
+      expect(params).toEqual({
+        id: "q-answer",
+        occurrence: "a-answer",
+        attempt: 0,
+      });
+      order.push("ack");
+      return { ok: true };
+    };
+    expect(
+      await runWorldCommand(
+        "ask",
+        ["get", "q-answer", "--json"],
+        target,
+        transport,
+        false,
+      ),
+    ).toBe(0);
+    expect(order).toEqual(["write", "complete", "ack"]);
+    expect(JSON.parse(f.out[0]!).result.answer.text).toBe("Proceed");
+  });
+  test("failed stdout sends no acknowledgement", async () => {
+    const f = context();
+    const commands: string[] = [];
+    const target = Object.assign(f.context, {
+      output: async () => {
+        throw new Error("Broken output pipe");
+      },
+    });
+    const transport: WorldCliTransport = async (command) => {
+      commands.push(command);
+      return answered;
+    };
+    expect(
+      await runWorldCommand(
+        "ask",
+        ["get", "q-answer"],
+        target,
+        transport,
+        false,
+      ),
+    ).toBe(1);
+    expect(commands).toEqual(["ask get"]);
+  });
+  test("a lost acknowledgement does not fail an answer already written", async () => {
+    const f = context();
+    const commands: string[] = [];
+    const transport: WorldCliTransport = async (command) => {
+      commands.push(command);
+      if (command === "ask acknowledge") throw new Error("Lost receipt");
+      return answered;
+    };
+    expect(
+      await runWorldCommand(
+        "ask",
+        ["get", "q-answer"],
+        f.context,
+        transport,
+        true,
+      ),
+    ).toBe(0);
+    expect(f.out).toEqual(["Proceed"]);
+    expect(commands).toEqual(["ask get", "ask acknowledge"]);
+    expect(f.err).toEqual([]);
+  });
+  test("wait uses the same post-output acknowledgement and legacy answers do not invent one", async () => {
+    const f = context();
+    const commands: string[] = [];
+    const transport: WorldCliTransport = async (command) => {
+      commands.push(command);
+      return command === "ask"
+        ? {
+            ok: true,
+            recorded: true,
+            notified: { shown: true, reason: "shown" },
+            result: { id: "q-answer", created: true },
+          }
+        : answered;
+    };
+    expect(
+      await runWorldCommand(
+        "ask",
+        ["Proceed?", "--wait"],
+        f.context,
+        transport,
+        true,
+      ),
+    ).toBe(0);
+    expect(commands).toEqual(["ask", "ask get", "ask acknowledge"]);
+    const old = context();
+    const legacy: string[] = [];
+    expect(
+      await runWorldCommand(
+        "ask",
+        ["get", "q-old"],
+        old.context,
+        async (command) => {
+          legacy.push(command);
+          return {
+            ...answered,
+            result: {
+              ...answered.result,
+              answer: { text: "Old answer", at: 1000, by: "owner" },
+            },
+          };
+        },
+        true,
+      ),
+    ).toBe(0);
+    expect(legacy).toEqual(["ask get"]);
+  });
+});
