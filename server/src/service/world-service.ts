@@ -627,10 +627,13 @@ async function compose(
       let runtime: LegacyConnectionRuntime;
       try {
         runtime = adapters.herdr.createRuntime({
+          clock,
+          scheduler,
           identity,
           connectionGeneration: context.generation,
           config: profileConfig,
           settings,
+          runtimeStatus: storage.runtimeStatus,
           logger: logger.child("connection"),
           safeSend,
           broadcast,
@@ -759,6 +762,14 @@ async function compose(
     run: runSourceProcess,
     topology: async () =>
       worldSnapshots ? (await worldSnapshots.snapshot()).connections : [],
+    runtimeOwners: () =>
+      connectionManager
+        .list()
+        .flatMap(({ id, generation }) =>
+          connectionManager.currentRuntime(id)
+            ? [{ connection_id: id, generation }]
+            : [],
+        ),
     resolver: new CheckoutResolver(runSourceProcess, (connectionId) => {
       if (connectionId === STARTUP_DEFAULT_CONNECTION_ID && config.sshHost)
         return { kind: "ssh", destination: config.sshHost };
@@ -775,6 +786,8 @@ async function compose(
   const handleWorldSources = createSourcesHttpHandler(worldSources);
 
   const rpcServices: RpcServices = {
+    bindings: storage.bindings,
+    serviceIncarnation,
     bindBoardRecipients,
     board,
     clients,

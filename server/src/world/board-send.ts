@@ -13,6 +13,7 @@ import {
   decodeRecipient,
 } from "./board-recipient";
 import type { BoardDocument } from "./board-store";
+import { bindingWitnessMatches } from "./binding-resolution";
 
 export type HerdrCall = (
   method: string,
@@ -90,7 +91,12 @@ export async function sendNote(
           "changed",
           "That pane is no longer the one this note is strung to.",
         );
-  if (before.terminal_id !== request.terminal_id)
+  if (
+    !bindingWitnessMatches(
+      { terminals: [request.terminal_id] },
+      { native_id: request.pane_id, terminals: [before.terminal_id] },
+    )
+  )
     return refuse(
       "changed",
       "That pane is no longer the one this note is strung to.",

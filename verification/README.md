@@ -75,7 +75,7 @@ approval. Future contract/gate changes require their own applicable review.
 
 ## Candidate commands and promotion
 
-The separate Behavioral verification candidate CI workflow runs all 13 models,
+The separate Behavioral verification candidate CI workflow runs all 14 models,
 actual replay, required per-seed witnesses, model/implementation fault controls
 and larger-bound/host-order sensitivity. It installs locked tooling and the
 hash-validated checker, records exact tool/input identities and retains manifests

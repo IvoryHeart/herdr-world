@@ -1,5 +1,6 @@
 import { effectActions, validateEffectTrace } from "./effect-recovery";
 import { validateObservationTrace } from "./observation-traces";
+import { validateBindingTrace } from "./binding-resolution";
 import type { RecoveryState } from "./ranger-recovery";
 import type { AuthorityState } from "./ranger-authority";
 import type { PreparationState } from "./browser-preparation";
@@ -15,6 +16,7 @@ export type Model = (typeof verificationModels)[number];
 
 const actions = {
   "effect-recovery": effectActions,
+  "binding-resolution": [],
   "observation-base": [
     "init",
     "request",
@@ -180,6 +182,7 @@ export function validateTrace(
   );
   if (model === "effect-recovery") return validateEffectTrace(value);
   if (model === "observation-base") return validateObservationTrace(value);
+  if (model === "binding-resolution") return validateBindingTrace(value);
   assert(Array.isArray(value) && value.length > 1, "empty trace");
   for (const [index, state] of value.entries()) {
     record(state);

@@ -6,7 +6,8 @@ two private effect verbs queueable: `notification.show` for owner alerts and
 `world.ask.deliver-answer` for one saved answer and its original recipient.
 Interactive terminal input and Chat sends stay nonqueueable. This substrate
 provides no workflow authoring API or new browser controls. Its schema migration
-follows the permanent World ID registry and preserves existing reservations.
+follows the durable ID, binding, profile and runtime-status migrations, preserving
+all existing families and reservations.
 
 An intent stores validated reference parameters, its captured targets, actor and
 authorization evidence, stable idempotency key, operation version, preconditions

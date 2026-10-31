@@ -91,6 +91,7 @@ jobs:
           ./server/src/storage/answer-transitions.test.ts
           ./server/src/storage/answer-migration.test.ts
           ./server/src/storage/answer-delivery-crash.test.ts
+          ./server/src/storage/runtime-status-crash.test.ts
       - name: Run native installer harness regressions
         if: runner.os == 'Windows'
         run: bun run test ./scripts/installer-upgrade.test.ts

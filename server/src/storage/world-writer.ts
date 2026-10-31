@@ -16,8 +16,13 @@ import {
   isAnswerIntent,
   originalAsker,
 } from "../world/ask-delivery-types";
+import { readProfiles, executeProfileOperation } from "./world-profiles";
+import { importRuntimeStatus } from "./runtime-status-import";
+import { readRuntimeStatus, writeRuntimeStatus } from "./runtime-status";
+import { importLegacyProfiles } from "./profile-import";
 import { randomBytes } from "node:crypto";
 import { createWorldIds } from "./world-ids";
+import { createBindingWriter } from "./world-bindings";
 import { Database } from "bun:sqlite";
 import {
   chmodSync,
@@ -63,6 +68,12 @@ export function openWorldWriter(
   at: number,
   incarnation = randomBytes(16).toString("base64url"),
   bytes?: () => Uint8Array,
+  legacyProfiles?: string,
+  profileImportFault?: (stage: "before-commit" | "after-commit") => void,
+  runtimeImport?: {
+    path: string;
+    fault?: (stage: "before-commit" | "after-commit") => void;
+  },
   effectVerbs: EffectVerbLookup = productionEffectVerb,
 ) {
   assertSafeDataPath(path);
@@ -100,6 +111,10 @@ export function openWorldWriter(
     migrateWorldDatabase(db, path);
     db.exec("PRAGMA busy_timeout=5000");
     importLegacyLedger(db, legacy, at);
+    if (legacyProfiles !== undefined)
+      importLegacyProfiles(db, legacyProfiles, at, profileImportFault);
+    if (runtimeImport)
+      importRuntimeStatus(db, runtimeImport.path, at, runtimeImport.fault);
     migrateEffectContracts(db, effectVerbs);
     recoverAttention(db, at);
   } catch (error) {
@@ -107,6 +122,7 @@ export function openWorldWriter(
     throw error;
   }
   const ids = createWorldIds(db, bytes);
+  const bindings = createBindingWriter(db, ids);
   const revision = () =>
     (db.query("SELECT revision FROM ledger_meta").get() as { revision: number })
       .revision;
@@ -161,8 +177,12 @@ export function openWorldWriter(
       changes: rows("ledger_changes"),
       results: rows("results"),
     };
+    const profiles = readProfiles(db);
+    const runtimeStatus = readRuntimeStatus(db);
     return {
       document,
+      ...(profiles ? { profiles } : {}),
+      ...(runtimeStatus ? { runtimeStatus } : {}),
       attention: (
         db.query("SELECT * FROM outbox ORDER BY rowid").all() as Record<
           string,
@@ -440,6 +460,18 @@ export function openWorldWriter(
         return read();
       case "issue-id":
         return ids.issue(request.kind);
+      case "runtime-status":
+        if (
+          !db
+            .query("SELECT 1 FROM imports WHERE name='runtime-status-json'")
+            .get()
+        )
+          throw new Error("Runtime status was not initialized");
+        return writeRuntimeStatus(db, request.key, request.status);
+      case "profiles":
+        return executeProfileOperation(db, request.operation);
+      case "binding":
+        return bindings.execute(request.operation, at);
       case "write":
         return apply(request.write);
       case "begin-dispatch":

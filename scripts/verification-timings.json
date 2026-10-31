@@ -2,6 +2,7 @@
   "sourceRun": "https://github.com/IvoryHeart/herdr-world/actions/runs/41083467325",
   "units": "seconds; per-model ci-shard manifest elapsedMs divided by 1000",
   "seconds": {
+    "binding-resolution": 10.679,
     "browser-preparation": 72.123,
     "browser-refresh": 62.829,
     "chunk-assembly": 32.621,
@@ -17,6 +18,7 @@
     "effect-recovery": 199.5
   },
   "localSources": {
+    "binding-resolution": "Focused maintained run: sum of command elapsedMs, including private TLC startup, three seeds (500 replay traces each), model fault and six code controls (2026-10-31).",
     "observation-base": "Development exhaustive TLC with the pinned checker; 60.119497273 seconds including private checker startup. Existing entries retain their sourceRun.",
     "effect-recovery": "Complete local verification gate, all 13 canonical models; effect-recovery case 199.5 seconds including real SQLite replay and controls. Existing entries retain their sourceRun."
   }

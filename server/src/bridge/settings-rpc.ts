@@ -1,3 +1,4 @@
+import type { RuntimeStatusPort } from "../storage/runtime-status";
 import { commandReplies } from "../verbs/replies";
 import {
   WorktreeHookConfigError,
@@ -14,6 +15,7 @@ import {
   connectionSettingsPrefix,
   DEFAULT_WORKSPACE_AUTO_SYNC_INTERVAL_MINUTES,
   type GuiRepoSettings,
+  type GuiSettings,
   type GuiSettingsStore,
   repoWorktreeHooksEnabled,
   terminalSurfaceCodecsEnabled,
@@ -32,6 +34,7 @@ type ReadWorktreeHooks = ReturnType<
 export function createSettingsRpcHandler(args: {
   connectionId?: string;
   connectionGeneration?: number;
+  runtimeStatus: Pick<RuntimeStatusPort, "get">;
   /** The service's settings file. */
   settings: Pick<GuiSettingsStore, "path" | "read" | "update">;
   herdr: HerdrClient;
@@ -55,9 +58,21 @@ export function createSettingsRpcHandler(args: {
     detail?: string,
   ) => void;
 }) {
-  const readSettings = () => args.settings.read();
-  const updateSettings: GuiSettingsStore["update"] = (update, shouldCommit) =>
-    args.settings.update(update, shouldCommit);
+  // Project status only into wire replies; configuration callbacks stay file-only.
+  const projectSettings = (settings: GuiSettings): GuiSettings => ({
+    ...settings,
+    workspace_auto_sync: Object.fromEntries(
+      Object.entries(settings.workspace_auto_sync).map(([key, entry]) => [
+        key,
+        { ...entry, ...args.runtimeStatus.get(key) },
+      ]),
+    ),
+  });
+  const readSettings = async () => projectSettings(await args.settings.read());
+  const updateSettings: GuiSettingsStore["update"] = async (
+    update,
+    shouldCommit,
+  ) => projectSettings(await args.settings.update(update, shouldCommit));
   const serialize = (message: Record<string, unknown>) =>
     args.connectionId
       ? serializeConnectionEnvelope(
@@ -212,6 +227,7 @@ export function createSettingsRpcHandler(args: {
         }
         const settings = await readSettings();
         const entry = settings.workspace_auto_sync[key];
+        const status = args.runtimeStatus.get(key);
         return reply({
           workspace_id: workspaceId,
           workspace_label: workspace?.label,
@@ -221,10 +237,10 @@ export function createSettingsRpcHandler(args: {
           interval_minutes:
             entry?.interval_minutes ??
             DEFAULT_WORKSPACE_AUTO_SYNC_INTERVAL_MINUTES,
-          last_run_at: entry?.last_run_at,
-          last_status: entry?.last_status,
-          last_message: entry?.last_message,
-          last_branch: entry?.last_branch,
+          last_run_at: status?.last_run_at,
+          last_status: status?.last_status,
+          last_message: status?.last_message,
+          last_branch: status?.last_branch,
           running: args.workspaceAutoSyncIsRunning(key),
         });
       }
@@ -236,6 +252,7 @@ export function createSettingsRpcHandler(args: {
             .map(([key, entry]) => ({
               key,
               ...entry,
+              ...args.runtimeStatus.get(key),
               running: args.workspaceAutoSyncIsRunning(key),
             }))
             .sort((a, b) => a.key.localeCompare(b.key)),
@@ -277,7 +294,7 @@ export function createSettingsRpcHandler(args: {
         }
         const entry = updated.workspace_auto_sync[key];
         args.onWorkspaceAutoSyncSettingsChanged(key, enabled);
-        return reply({ key, ...entry });
+        return reply({ key, ...entry, ...args.runtimeStatus.get(key) });
       }
       if (method === "settings.workspace_auto_sync.update") {
         const workspaceId = String(params.workspace_id ?? "");
@@ -309,10 +326,6 @@ export function createSettingsRpcHandler(args: {
               DEFAULT_WORKSPACE_AUTO_SYNC_INTERVAL_MINUTES,
             checkout_path: root,
             host: args.sshHost(),
-            last_run_at: existing?.last_run_at,
-            last_status: existing?.last_status,
-            last_message: existing?.last_message,
-            last_branch: existing?.last_branch,
           };
           return {
             ...current,
@@ -332,6 +345,7 @@ export function createSettingsRpcHandler(args: {
           workspace_label: workspace?.label,
           key,
           ...entry,
+          ...args.runtimeStatus.get(key),
           running: args.workspaceAutoSyncIsRunning(key),
         });
       }

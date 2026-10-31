@@ -1,3 +1,4 @@
+import type { Clock, Scheduler } from "../service/ports";
 import { createAgentWorktree } from "../agent/worktree";
 import { createWorktreeGit } from "../agent/worktree-git";
 import {
@@ -117,11 +118,14 @@ type MarkRpcError = (
 ) => void;
 
 export function createLegacyConnectionRuntime(args: {
+  clock: Clock;
+  scheduler: Scheduler;
   identity?: ConnectionIdentity;
   connectionGeneration?: number;
   config: SshTunnelConfig;
   /** The owning service's settings file. */
   settings: GuiSettingsStore;
+  runtimeStatus: import("../storage/runtime-status").RuntimeStatusPort;
   logger?: Logger;
   safeSend: SafeSend;
   broadcast?: (payload: string, context?: string) => void;
@@ -238,6 +242,8 @@ export function createLegacyConnectionRuntime(args: {
     shQuote,
   });
   const workspaceAutoSync = createWorkspaceAutoSync({
+    clock: args.clock,
+    scheduler: args.scheduler,
     connectionId: identity.id,
     logger: logger.child("auto-sync"),
     formatError: sanitizeConnectionError,
@@ -249,7 +255,7 @@ export function createLegacyConnectionRuntime(args: {
     resolveWorkspaceGitRoot: async (workspaceId) =>
       files.resolveWorkspaceGitRoot({ workspace_id: workspaceId }),
     readSettings,
-    updateSettings,
+    runtimeStatus: args.runtimeStatus,
   });
   const worktreeHooks = unixOnlyHandlers(
     remotePlatform,
@@ -290,6 +296,7 @@ export function createLegacyConnectionRuntime(args: {
     onUnexpectedExit: args.onTransportExit,
   });
   const handleSettingsRpc = createSettingsRpcHandler({
+    runtimeStatus: args.runtimeStatus,
     connectionId: identity.id,
     connectionGeneration: args.connectionGeneration,
     settings: args.settings,

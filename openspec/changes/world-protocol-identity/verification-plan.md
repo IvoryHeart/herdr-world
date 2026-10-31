@@ -236,7 +236,7 @@ restart/offline/reattach, ended bindings and cancellation/revocation schedules.
 `effects/admission.test.ts` supplies P8 and the late final-guard schedules.
 Together these are the candidate M5 boundary, rather than a claim of exhaustive
 Cartesian exploration of two simultaneous external effects. Independent review
-must accept that composition boundary; Q47 and the recovery contract retain the
+must accept that composition boundary; Q49 and the recovery contract retain the
 required real consumer evidence. All four planned code-fault observations remain
 required in the canonical gate, alongside the opaque-replay model control.
 

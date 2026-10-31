@@ -11,7 +11,42 @@ SQLite worker. IDs have a kind prefix and eight random base32 symbols and become
 visible only after their shared reservation commits. Existing SQLite/imported
 ledger IDs stay unchanged; reservations outlive record and replay trimming.
 See [World identity storage](world-identity.md) for allocation, restoration and
-the boundary with legacy JSON families and the pending binding/claims work.
+the boundary with legacy JSON families and the claim read models.
+`WorldStorage.bindings` persists per-kind source evidence independently of runtime
+fences. Its resolver admits only complete current unambiguous matches; Board
+strings retain their World-move/qualified-absence policy, while appearance and
+interest retain complete-list terminal absence. Legacy Board captures drain
+through the same worker; interrupted imports cannot authorize targets. The Board
+Send RPC resolves its saved string before its existing recipient checks. Layout
+preferences never enter the binding store and retain native-ID reuse behavior.
+Conversation and source-service read models carry per-field status, session and PR
+link claims with provenance and explicit display rules. Channels remove only their
+own complete/retracted claims; runtime occupant replacement retires its read model.
+Claims remain in memory. Current connection/generation owners retire link claims
+independently of topology health; checkout evidence is runtime/host scoped and
+GitHub search completeness is explicit before omissions can remove a link claim.
+Saved/inferred claims never replace fresh native session
+qualification or GitHub's own action authority. Existing visible projections stay
+unchanged; see [runtime field claims](world-identity.md#runtime-field-claims).
+
+Agent profiles and chimes live in `world.sqlite` behind `WorldStorage.profiles`.
+The same worker validates and commits edits before RPC replies or the synchronous
+launch cache advance. Startup imports the configured `agent-profiles.json` once,
+with an exact private hash-named backup; subsequent starts use SQLite exclusively.
+The store also retains legacy terminal settings awaiting their one-time Herdr
+import, per-connection completion flags and the Town master revision watermark.
+Current terminal assignments and master tokens remain owned by Herdr. Config,
+connection profiles and secrets remain files. See [profile storage and recovery](DEPLOYMENT.md#agent-profile-storage).
+
+`WorldStorage.runtimeStatus` stores auto-sync last-run fields through that same
+writer. Each connection runtime receives the composition root's clock and
+scheduler. Auto-sync uses that clock for interval eligibility and recorded times,
+and cancellable scheduler jobs for its 30-second polling; stopping cancels the
+current job and fences callbacks from earlier starts. It reads its committed
+cache for interval decisions and awaits result persistence; settings RPCs join it to file-backed schedules. Status updates
+never rewrite configuration. First startup backs up settings and imports only
+runtime fields once; configuration and secrets remain files. See [runtime status
+and recovery](DEPLOYMENT.md#auto-sync-runtime-status).
 
 Runtime adapter registration and its data-only hello descriptors live in the
 [adapter registry](../server/src/adapters/registry.ts). Herdr remains the sole

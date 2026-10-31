@@ -9,7 +9,7 @@ import { effectContract } from "../effects/contracts";
 import { migrateWorldDatabase, worldMigrations } from "./world-schema";
 import type { EffectReply } from "../effects/types";
 
-test.each([2, 3])(
+test.each([2, 3, 6])(
   "v%s alert attempts and reserved IDs survive the effects migration",
   (version) => {
     const root = mkdtempSync(join(tmpdir(), "legacy-effect-"));
@@ -32,7 +32,7 @@ test.each([2, 3])(
         "INSERT INTO outbox(id,operation_id,kind,record_id,target,recovery,state,due_at,attempt,created_at) VALUES('e-legacy','o-legacy','ask.created','q-legacy',?,'repeatable','pending',1000,1,1000)",
       )
       .run(JSON.stringify({ connection_id: "example" }));
-    if (version === 3)
+    if (version >= 3)
       old.query("INSERT INTO world_ids(id) VALUES(?)").run("r-00000000");
     old.close();
     const writer = openWorldWriter(
@@ -79,7 +79,7 @@ test.each([2, 3])(
         expect(
           upgraded.query("SELECT id FROM world_ids WHERE id=?").get("e-legacy"),
         ).toEqual({ id: "e-legacy" });
-        if (version === 3)
+        if (version >= 3)
           expect(
             upgraded
               .query("SELECT id FROM world_ids WHERE id=?")

@@ -61,6 +61,9 @@ export function effectFixture(
     now,
     incarnation,
     undefined,
+    undefined,
+    undefined,
+    undefined,
     lookup,
   );
   const request = async <T>(request: StorageRequest): Promise<T> => {

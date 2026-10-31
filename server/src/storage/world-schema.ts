@@ -13,6 +13,9 @@ import {
 import { dirname, join } from "node:path";
 import { newWorldId } from "./world-identifiers";
 import { worldIdsMigration } from "./world-ids";
+import { runtimeStatusMigration } from "./runtime-status";
+import { worldProfilesMigration } from "./world-profiles";
+import { worldBindingsMigration } from "./world-bindings";
 import { assertSafeDataPath } from "../config/data-paths";
 
 export const WORLD_APPLICATION_ID = 0x574f524c;
@@ -54,7 +57,7 @@ CREATE TABLE answer_attempts (
 CREATE INDEX answer_attempt_status ON answer_attempts(intent_id,state,attempt);
 CREATE UNIQUE INDEX asks_answer_occurrence ON asks(json_extract(body,'$.answer.occurrence')) WHERE json_extract(body,'$.answer.occurrence') IS NOT NULL;
 `;
-const migration4 = `
+const effectsMigration = `
 ALTER TABLE outbox ADD COLUMN contract TEXT CHECK(contract IS NULL OR json_valid(contract));
 ALTER TABLE outbox ADD COLUMN receipt TEXT CHECK(receipt IS NULL OR json_valid(receipt));
 ALTER TABLE outbox ADD COLUMN external_handle TEXT CHECK(external_handle IS NULL OR json_valid(external_handle));
@@ -80,7 +83,10 @@ export const worldMigrations = [
   migration1,
   migration2,
   worldIdsMigration,
-  migration4,
+  worldBindingsMigration,
+  worldProfilesMigration,
+  runtimeStatusMigration,
+  effectsMigration,
 ] as const;
 
 /** A consistent private rollback copy before any noninitial migration. */

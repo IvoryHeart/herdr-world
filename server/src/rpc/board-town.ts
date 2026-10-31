@@ -2,6 +2,7 @@ import { checkAnchor } from "../world/board-anchor";
 import { linkedNoteText, sendNote } from "../world/board-send";
 import { executeTownMove } from "../world/town-move";
 import type { ConnectionRpcContext } from "./context";
+import { qualifyBoardSend } from "../world/board-binding-send";
 
 /** Board and Town actions on one connection (board.*, town.*). */
 export function handleBoardTownRpc(
@@ -59,23 +60,45 @@ async function dispatchBoardTownRpc(
       const p = (params ?? {}) as Record<string, unknown>;
       // Send what the saved board says, not the caller's copy: the string
       // and note must still be the ones the user saw.
-      const linked =
+      const readLinked = () =>
+        linkedNoteText(board().get(), {
+          connection_id: route.connectionId,
+          pane_id: String(p.pane_id ?? ""),
+          terminal_id: String(p.terminal_id ?? ""),
+          note_id: String(p.note_id ?? ""),
+          string_id: String(p.string_id ?? ""),
+          note_rev: Number(p.note_rev),
+        });
+      let linked =
         route.scope === "connection"
-          ? linkedNoteText(board().get(), {
-              connection_id: route.connectionId,
-              pane_id: String(p.pane_id ?? ""),
-              terminal_id: String(p.terminal_id ?? ""),
-              note_id: String(p.note_id ?? ""),
-              string_id: String(p.string_id ?? ""),
-              note_rev: Number(p.note_rev),
-            })
+          ? readLinked()
           : ({
               status: "refused",
               reason: "changed",
               message: "No host was named; nothing was sent.",
             } as const);
+      const attached =
+        "text" in linked &&
+        rpc.services.bindings &&
+        rpc.services.serviceIncarnation &&
+        (await qualifyBoardSend(rpc.services.bindings, {
+          record_id: String(p.string_id ?? ""),
+          slot: linked.end,
+          pane_id: String(p.pane_id ?? ""),
+          terminal_id: String(p.terminal_id ?? ""),
+          fence: {
+            adapter: "herdr",
+            instance: route.connectionId,
+            generation: route.generation,
+            service_incarnation: rpc.services.serviceIncarnation,
+          },
+          isCurrent: requestIsCurrent,
+          call: (method, params) => herdr.call(method, params, 10_000),
+        }));
+      // The note/string may change while its source listing or commit is awaited.
+      if (attached) linked = readLinked();
       const result =
-        "text" in linked
+        "text" in linked && attached
           ? await sendNote(
               (rpc, rpcParams) => herdr.call(rpc, rpcParams, 15_000),
               {
@@ -90,7 +113,14 @@ async function dispatchBoardTownRpc(
                 isCurrent: requestIsCurrent,
               },
             )
-          : linked;
+          : "text" in linked
+            ? {
+                status: "refused" as const,
+                reason: "changed" as const,
+                message:
+                  "That pane is no longer the one this note is strung to.",
+              }
+            : linked;
       // A confirmed replacement (or a newer token for the same agent)
       // becomes the string's recipient.
       if ("text" in linked && result.status === "sent" && result.recipient)

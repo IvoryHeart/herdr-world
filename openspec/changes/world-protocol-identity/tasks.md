@@ -115,7 +115,7 @@ No v2 subscriptions or persisted-capture fences are implemented here.
     candidate, with permanent shared reservations, exact record-ID import and
     stopped-backup/collision tests. Legacy Board/profile JSON-owned creation is
     unchanged; this task stays open until its remaining record families migrate.
-- [ ] 6.2 Build the binding resolver with per-kind declarations. Write Board strings,
+- [x] 6.2 Build the binding resolver with per-kind declarations. Write Board strings,
   appearance, tab colour and interest down with today's rules, and move them onto it
   without changing their visible states. Layout preferences stay off the resolver:
   Board card positions, pins and folds, and workspace and host colours stay keyed by
@@ -123,10 +123,20 @@ No v2 subscriptions or persisted-capture fences are implemented here.
   - M4 replay for both policies;
   - the existing Board and appearance witness tests, unchanged;
   - a test that a reused workspace ID still inherits its card layout and colour.
-- [ ] 6.3 Add claims for the multi-source fields, agent status and PR links, each with
+  - Part 2 implements the binding/store, compatibility captures, current consumer
+    mapping and M4. Focused M4 (1,500 real traces / 37,500 transitions, three seeds,
+    all witnesses and six compiled controls), all four property-test mutant kills,
+    and 125 complete consumer tests pass. Full-gate and independent acceptance
+    evidence belongs to its PR handoff; implementation completion is not review
+    acceptance. Task 6.4 stays open for the claims stage's remaining sync.
+- [x] 6.3 Add claims for the multi-source fields, agent status and PR links, each with
   its display rule. Verify each field: claims coexist, silence doesn't remove a claim,
   and authority is declared by the verb.
-- [ ] 6.4 Sync the `world-identity` requirements, and add the "Durable identity and
+  - Part 3 adds runtime provenance for status, PR links and native session IDs;
+    legacy visible projections remain unchanged. Direct source-ownership properties,
+    eight overlapping read schedules, actual transcript/link/service consumers and
+    seven compiled assertion controls pass. Independent review and CI remain required.
+- [x] 6.4 Sync the `world-identity` requirements, and add the "Durable identity and
   bindings" area to `verification/coverage.json`. Verify with a complete
   `bun run verification:gate`.
 

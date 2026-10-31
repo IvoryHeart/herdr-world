@@ -5,6 +5,11 @@ import type { Model } from "./traces";
 import { removeRuntimeStartGuard } from "./runtime-start-control";
 
 export type ImplementationFault =
+  | "binding-duplicate"
+  | "binding-listing-move"
+  | "binding-absence"
+  | "binding-partial"
+  | "binding-authority"
   | "primary"
   | "background-guard"
   | "catalogue"
@@ -30,6 +35,14 @@ export async function mutateImplementation(
       "effect-generation",
       "effect-not-sent",
     ],
+    "binding-resolution": [
+      "primary",
+      "binding-duplicate",
+      "binding-listing-move",
+      "binding-absence",
+      "binding-partial",
+      "binding-authority",
+    ],
     "observation-base": ["primary", "incarnation-reset"],
     "runtime-drain": ["primary", "background-guard"],
     "creation-flow": ["primary", "admission-fence"],
@@ -48,6 +61,7 @@ export async function mutateImplementation(
     "Unsupported model/fault combination",
   );
   const owners: Record<Model, string> = {
+    "binding-resolution": "server/src/world/binding-resolution.ts",
     "observation-base": "server/src/world/observation-v1.ts",
     "runtime-leases": "server/src/connections/manager.ts",
     "runtime-control": "server/src/connections/manager.ts",
@@ -112,6 +126,27 @@ export async function mutateImplementation(
         "idempotency_key: claimed.contract!.idempotency_key + (claimed.attempt > 1 ? '-retry' : ''),",
       );
     }
+  } else if (name === "binding-resolution") {
+    const mutations = {
+      primary: [
+        /evidence\.terminals\.some\(\(id\) =>\s*entity\.terminals\.includes\(id\)\)/,
+        "true",
+      ],
+      "binding-duplicate": [/if \(duplicate\)/, "if (false && duplicate)"],
+      "binding-listing-move": [
+        /policy\.listingMove && witnessed\.length === 1/,
+        "witnessed.length === 1",
+      ],
+      "binding-absence": [/bindingPolicies\[policy\]\.listingAbsence/, "true"],
+      "binding-partial": [
+        /if \(!event\.complete\)\s*return finish\("unresolved"\);/,
+        'if (!event.complete) { binding.native_id = "unverified"; return finish("unresolved"); }',
+      ],
+      "binding-authority": [/state === "attached"/, "true"],
+    } as const;
+    const [guard, replacement] = mutations[fault as keyof typeof mutations];
+    assert(guard.test(original), "binding mutation guard changed");
+    contents = original.replace(guard, replacement);
   } else if (name === "observation-base") {
     if (fault === "incarnation-reset") {
       const guard = /const held =\s*state.serviceIncarnation === incarnation/;
