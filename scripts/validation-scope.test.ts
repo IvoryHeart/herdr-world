@@ -8,10 +8,11 @@ import {
   repositorySelection,
   selectValidation,
 } from "./validation-scope";
-import type { Graph } from "./affected";
+import { buildGraph, gitChanges, type Graph } from "./affected";
+import { readCoverageScope } from "./coverage-scope";
 import {
   worldBrowserSuites,
-  worldTimedSuites,
+  worldRuntimeSuites,
   webBrowserSuites,
 } from "./world-browser-suites";
 import { selectedCITests } from "./ci-tests";
@@ -83,14 +84,13 @@ const graph: Graph = {
   ]),
 };
 
-test("browser Chat selects nearby consumers without verification, latency or platforms", () => {
+test("browser Chat selects nearby consumers without verification, runtime suites or platforms", () => {
   const selection = selectValidation(graph, [chat]);
   expect(selection).toMatchObject({
     full: false,
     tooling: false,
     verification: false,
     packaging: false,
-    latency: [],
     unit: [unit],
     world: [worldBrowserSuites[0]],
     web: [webBrowserSuites[0]],
@@ -103,13 +103,16 @@ test("owners and World runtime paths independently require their maintained suit
     selectValidation(graph, [scene], (path) => path === scene),
   ).toMatchObject({
     verification: true,
-    latency: worldTimedSuites,
     packaging: false,
+    world: worldBrowserSuites.filter(
+      (path) =>
+        path === worldBrowserSuites[0] || worldRuntimeSuites.includes(path),
+    ),
   });
   expect(selectValidation(graph, [native])).toMatchObject({
     verification: false,
     packaging: true,
-    latency: [],
+    world: [],
   });
   expect(selectValidation(graph, [native], () => true).verification).toBe(true);
 });
@@ -128,7 +131,7 @@ test("unknown paths, configuration and empty main selections run the full matrix
       full: true,
       verification: true,
       packaging: true,
-      latency: worldTimedSuites,
+      world: worldBrowserSuites,
     });
   }
   expect(
@@ -144,7 +147,6 @@ test("ordinary docs skip suites and the tooling exception still runs its fallbac
     unit: [],
     world: [],
     web: [],
-    latency: [],
   });
   expect(
     selectValidation(graph, ["scripts/agent/new.ts"], () => true),
@@ -152,9 +154,11 @@ test("ordinary docs skip suites and the tooling exception still runs its fallbac
     tooling: true,
     verification: false,
     packaging: false,
-    unit: ["scripts/agent/example.test.ts"],
+    unit: [
+      "scripts/agent/example.test.ts",
+      "scripts/verification-coverage.test.ts",
+    ],
     world: [],
-    latency: [],
   });
 });
 
@@ -165,10 +169,9 @@ test("rename deletions retain World and native obligations", () => {
     gone: new Set(gone),
     files: new Set([...graph.files, ...gone]),
   };
-  expect(selectValidation(renamed, [...gone, chat])).toMatchObject({
-    packaging: true,
-    latency: worldTimedSuites,
-  });
+  const selection = selectValidation(renamed, [...gone, chat]);
+  expect(selection.packaging).toBe(true);
+  expect(selection.world).toEqual(expect.arrayContaining(worldRuntimeSuites));
 });
 
 test("the CI runner executes only its selected lane and rejects invalid selectors", () => {
@@ -178,8 +181,7 @@ test("the CI runner executes only its selected lane and rejects invalid selector
     worldBrowserSuites[0]!,
   ]);
   expect(selectedCITests(selection, "world", "2")).toEqual([]);
-  expect(selectedCITests(selection, "latency")).toEqual([]);
-  for (const lane of ["invalid", "full", "__proto__"])
+  for (const lane of ["invalid", "full", "latency", "__proto__"])
     expect(() => selectedCITests(selection, lane)).toThrow();
   expect(() => selectedCITests(selection, "world", "0")).toThrow();
   expect(() =>
@@ -187,7 +189,7 @@ test("the CI runner executes only its selected lane and rejects invalid selector
   ).toThrow();
 });
 
-test("CI unit and web partitions are disjoint, exhaustive and keep each latency suite alone", () => {
+test("CI unit and web partitions are disjoint and exhaustive", () => {
   const selection = selectValidation(graph, ["package.json"]);
   for (const lane of ["unit", "web"] as const) {
     const first = selectedCITests(selection, lane, "1/2");
@@ -196,15 +198,9 @@ test("CI unit and web partitions are disjoint, exhaustive and keep each latency 
     expect(first.some((path) => second.includes(path))).toBe(false);
     expect(() => selectedCITests(selection, lane, "3/2")).toThrow();
   }
-  expect(
-    [1, 2, 3, 4, 5, 6].flatMap((index) =>
-      selectedCITests(selection, "latency", String(index)),
-    ),
-  ).toEqual(worldTimedSuites);
 });
 
 test("an incremental full-gate path escalates every suite even when absent from the final PR diff", () => {
-  const timed = new Set(worldTimedSuites);
   for (const paths of [[chat], ["README.md"], ["scripts/agent/new.ts"]]) {
     const selection = selectValidation(graph, paths, () => false, [
       "package.json",
@@ -212,10 +208,7 @@ test("an incremental full-gate path escalates every suite even when absent from 
     expect(selection.full).toBe(true);
     expect(selection.tooling).toBe(false);
     expect(selection.documentation).toBe(false);
-    expect(selection.world).toEqual(
-      worldBrowserSuites.filter((path) => !timed.has(path)),
-    );
-    expect(selection.latency).toEqual(worldTimedSuites);
+    expect(selection.world).toEqual(worldBrowserSuites);
     expect(selection.verification).toBe(true);
     expect(selection.packaging).toBe(true);
   }
@@ -231,7 +224,10 @@ test("build-version changes select native jobs because the module is compiled in
   };
   const selection = selectValidation(versionGraph, [version], () => true);
   expect(selection.full).toBe(false);
-  expect(selection.unit).toEqual([versionTest]);
+  expect(selection.unit).toEqual([
+    versionTest,
+    "scripts/verification-coverage.test.ts",
+  ]);
   expect(selection.packaging).toBe(true);
 });
 
@@ -276,7 +272,6 @@ test("an incremental-only deletion keeps the repository's affected unit scope", 
       world: [],
       worldShards: [],
       web: [],
-      latency: [],
       verification: false,
       packaging: false,
     };
@@ -287,4 +282,115 @@ test("an incremental-only deletion keeps the repository's affected unit scope", 
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("contributor docs and skill Markdown avoid full validation but retain named readers", () => {
+  const docs = [
+    "AGENTS.md",
+    "CONTRIBUTING.md",
+    ".agents/skills/example/SKILL.md",
+  ];
+  const reader = "scripts/policy.test.ts";
+  const policyGraph: Graph = {
+    ...graph,
+    files: new Set([...graph.files, ...docs, reader]),
+    deps: new Map([...graph.deps, [reader, new Set([docs[0]!])]]),
+  };
+  for (const path of docs) {
+    const selection = selectValidation(policyGraph, [path]);
+    expect(selection.full).toBe(false);
+    expect(selection.verification).toBe(false);
+    expect(selection.packaging).toBe(false);
+    if (path === docs[0]) expect(selection.unit).toContain(reader);
+  }
+});
+
+test("shard-table edits keep browser and inventory evidence without models or packaging", () => {
+  const table = "scripts/world-browser-suites.ts";
+  const check = "scripts/world-browser-suites.test.ts";
+  const shardGraph: Graph = {
+    ...graph,
+    files: new Set([...graph.files, table, check]),
+    deps: new Map([...graph.deps, [check, new Set([table])]]),
+  };
+  const selection = selectValidation(
+    shardGraph,
+    [table],
+    () => true,
+    [table],
+    () => false,
+  );
+  expect(selection.full).toBe(false);
+  expect(selection.unit).toContain(check);
+  expect(selection.unit).toContain("scripts/verification-coverage.test.ts");
+  expect(selection.world).toEqual(worldBrowserSuites);
+  expect(selection.web).toEqual(webBrowserSuites);
+  expect(selection.verification).toBe(false);
+  expect(selection.packaging).toBe(false);
+});
+
+test("model-free owners keep their consumer tests and cheap coverage while modeled owners run models", () => {
+  const path = "scripts/example.ts";
+  const check = "scripts/example.test.ts";
+  const ownerGraph: Graph = {
+    ...graph,
+    files: new Set([...graph.files, path, check]),
+    deps: new Map([...graph.deps, [check, new Set([path])]]),
+  };
+  const selection = selectValidation(
+    ownerGraph,
+    [path],
+    () => true,
+    [path],
+    () => false,
+  );
+  expect(selection.full).toBe(false);
+  expect(selection.verification).toBe(false);
+  expect(selection.unit).toEqual([
+    check,
+    "scripts/verification-coverage.test.ts",
+  ]);
+  expect(selectValidation(ownerGraph, [path], () => true).verification).toBe(
+    true,
+  );
+});
+
+test("the real shard-table graph does not mistake installer test imports for native distribution changes", () => {
+  const files = gitChanges(process.cwd(), "HEAD");
+  const realGraph = buildGraph(process.cwd(), files.tracked, files.deleted);
+  const coverage = readCoverageScope(process.cwd());
+  const paths = [
+    "scripts/world-browser-suites.ts",
+    "scripts/world-browser-suites.test.ts",
+    "CONTRIBUTING.md",
+  ];
+  const selection = selectValidation(
+    realGraph,
+    paths,
+    coverage.owns,
+    paths,
+    coverage.models,
+  );
+  expect(selection.full).toBe(false);
+  expect(selection.world).toEqual(worldBrowserSuites);
+  expect(selection.web).toEqual(webBrowserSuites);
+  expect(selection.packaging).toBe(false);
+  expect(selection.verification).toBe(false);
+  const fixture = "web/src/world/town/TownCanvas.browser.tsx";
+  const town = selectValidation(
+    realGraph,
+    [fixture],
+    coverage.owns,
+    [fixture],
+    coverage.models,
+  );
+  for (const path of worldBrowserSuites.filter((path) =>
+    path.includes("/town/TownCanvas"),
+  ))
+    expect(town.world).toContain(path);
+  const mixed = [...paths, "scripts/prepare-release.ts"];
+  expect(
+    selectValidation(realGraph, mixed, coverage.owns, mixed, coverage.models)
+      .packaging,
+  ).toBe(true);
 });

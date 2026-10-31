@@ -18,7 +18,7 @@ const chrome =
     : Bun.which("google-chrome") || Bun.which("chromium"));
 
 test.skipIf(!chrome)(
-  "World keeps navigator, managed windows, and terminal identities aligned",
+  "rendering, focus, geometry and terminal lifecycle: World navigator and managed windows",
   async () => {
     const dir = await mkdtemp(join(tmpdir(), "world-terminal-handoff-"));
     const assets = new Map<string, Blob>();
@@ -170,26 +170,48 @@ test.skipIf(!chrome)(
         define: { __HERDR_WORLD_VERSION__: JSON.stringify("9.8.7-test") },
         plugins: [
           {
-            name: "short-created-pane-deadline",
+            name: "created-opener-clock-and-completion",
             setup(builder) {
               builder.onLoad(
-                { filter: /officeRoomActions\.ts$/ },
+                { filter: /createdTerminalAdmission\.ts$/ },
                 async (args) => {
                   const source = await Bun.file(args.path).text();
-                  const declaration =
-                    /export const CREATED_PANE_ADMISSION_TIMEOUT_MS = 21_000;/;
-                  if (!declaration.test(source)) {
-                    throw new Error(
-                      "Created-pane deadline declaration changed",
-                    );
-                  }
-                  // The real 21-second policy is covered by officeRoomActions.test.ts.
-                  // This browser case verifies deadline cleanup without a real wait.
+                  if (
+                    !source.includes("const timer = setTimeout(") ||
+                    !source.includes("clearTimeout(timer);")
+                  )
+                    throw new Error("Created-terminal timer port changed");
                   return {
-                    contents: source.replace(
-                      declaration,
-                      "export const CREATED_PANE_ADMISSION_TIMEOUT_MS = 1_000;",
-                    ),
+                    contents:
+                      'import { admissionTimers } from "./testing/handoffAdmissionClock";\n' +
+                      source
+                        .replace(
+                          "const timer = setTimeout(",
+                          "const timer = admissionTimers.setTimeout(",
+                        )
+                        .replace(
+                          "clearTimeout(timer);",
+                          "admissionTimers.clearTimeout(timer);",
+                        ),
+                    loader: "ts",
+                  };
+                },
+              );
+              builder.onLoad(
+                { filter: /useWorldCreatedTerminal\.ts$/ },
+                async (args) => {
+                  const source = await Bun.file(args.path).text();
+                  if (source.split("await opening;").length !== 2)
+                    throw new Error(
+                      "Created-terminal opener completion changed",
+                    );
+                  return {
+                    contents:
+                      'import { createdOpenerCompleted } from "./testing/handoffAdmissionClock";\n' +
+                      source.replace(
+                        "await opening;",
+                        "try { await opening; } finally { createdOpenerCompleted(node.id); }",
+                      ),
                     loader: "ts",
                   };
                 },

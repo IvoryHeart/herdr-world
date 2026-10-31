@@ -43,6 +43,30 @@ describe("herdr-world auth", () => {
     );
   });
 
+  test("show, rotate and url use the service's own data folder", async () => {
+    cli = createTestCli();
+    const own = join(cli.home, "own-data");
+    mkdirSync(own, { recursive: true });
+    cli.writeConfig(`HOST=127.0.0.1\nHERDR_WORLD_DATA_DIR=${own}\n`);
+    writeFileSync(join(own, "auth-token"), `${TOKEN}\n`);
+    await runCli(["auth", "show", "--json", "--reveal"], cli.context);
+    expect(JSON.parse(cli.output.join("\n"))).toMatchObject({
+      token: TOKEN,
+      token_path: join(own, "auth-token"),
+    });
+    cli.output.length = 0;
+    expect(await runCli(["url"], cli.context)).toBe(EXIT_OK);
+    expect(cli.output.join("\n")).toContain(`?token=${TOKEN}`);
+    expect(await runCli(["auth", "rotate", "--no-restart"], cli.context)).toBe(
+      EXIT_OK,
+    );
+    const rotated = readFileSync(join(own, "auth-token"), "utf8").trim();
+    expect(rotated).toMatch(/^[a-f0-9]{64}$/);
+    expect(rotated).not.toBe(TOKEN);
+    // The default folder's credential is never created or changed.
+    expect(existsSync(tokenPath(cli))).toBe(false);
+  });
+
   test("rotate refuses services that use a fixed password", async () => {
     cli = createTestCli();
     cli.writeConfig("HERDR_WORLD_PASSWORD=correct-horse-battery\n");

@@ -12,6 +12,7 @@ import TownView from "../TownView";
 import { AgentLauncherDialog } from "../AgentLauncherDialog";
 import { WORLD_AGENT_LAUNCH_EVENT, type LaunchTarget } from "../agentProfiles";
 import { sharedAsksStore, type WorldAsk } from "../worldAsks";
+import type { AnswerNotice } from "../worldAnswerDeliveries";
 import { checkTownRoomPlates } from "./townRoomPlates.browser";
 import { checkTownRoomFold, tapTownControl } from "./townRoomFold.browser";
 import type { BoardDocument, BoardOp } from "../board/boardDocument";
@@ -29,7 +30,7 @@ import {
   type BridgeControlMsg,
   type ConnectionClient,
 } from "../../api";
-import { readCompletionSeen } from "../completionSeenState";
+import { completionSeenStore } from "../completionSeenState";
 import { worldSourcesStore } from "../worldSources";
 import "../world.css";
 import {
@@ -47,6 +48,7 @@ import {
   WORLD_OFFICE_PREFERENCES_CHANGED_EVENT,
   writeOfficePreferences,
 } from "../officePreferences";
+import { waitForElement } from "../testing/waitForElement";
 
 /*
  * Synthetic Office town fixture. `?mode=test` runs checks and posts them to
@@ -591,8 +593,63 @@ const ledger = {
     } as WorldAsk,
   ],
 };
+const answerDeliveries = {
+  revision: 0,
+  incarnation: "town-summary-fixture",
+  deliveries: [] as AnswerNotice[],
+};
+const publishAnswerDeliveries = () => {
+  answerDeliveries.revision++;
+  for (const handler of controls)
+    handler({
+      type: "world_ask_delivery_changed",
+      revision: answerDeliveries.revision,
+      incarnation: answerDeliveries.incarnation,
+    });
+};
 const askDismissals: string[] = [];
+/** The service's in-memory completion marks, as one World holds them. */
+const completionSeen = {
+  revision: 0,
+  records: [] as {
+    connection_id: string;
+    connection_generation: number;
+    terminal_id: string;
+    revision: number;
+  }[],
+};
 worldBridge.call = async (method, params) => {
+  if (method.startsWith("world.completion_seen.")) {
+    const identity = params as {
+      connection_id: string;
+      connection_generation: number;
+      terminal_id: string;
+    };
+    const index = completionSeen.records.findIndex(
+      (record) =>
+        record.connection_id === identity.connection_id &&
+        record.connection_generation === identity.connection_generation &&
+        record.terminal_id === identity.terminal_id,
+    );
+    if (method === "world.completion_seen.mark" && index < 0)
+      completionSeen.records.push({
+        connection_id: identity.connection_id,
+        connection_generation: identity.connection_generation,
+        terminal_id: identity.terminal_id,
+        revision: ++completionSeen.revision,
+      });
+    return structuredClone(completionSeen);
+  }
+  if (method === "world.ask.deliveries.get")
+    return structuredClone({
+      ...answerDeliveries,
+      counts: {
+        checks: answerDeliveries.deliveries.length,
+        waiting: 0,
+        connections: {},
+      },
+      next: null,
+    });
   if (method === "world.asks.get") return structuredClone(ledger);
   if (method === "world.ask.dismiss") {
     const id = String(params?.id);
@@ -1173,23 +1230,8 @@ async function run() {
       desk(selectedDeskId) !== undefined,
       "preferred room admission displaced the selected desk",
     );
-    host
-      .querySelector<HTMLButtonElement>('[aria-label="Show the whole town"]')!
-      .click();
-    await waitFor(
-      () => !diagnostics.flying && diagnostics.zoom < 1,
-      "navigation repeat setup did not return to overview",
-    );
-    if (window.innerWidth <= 640) summaryButton()!.click();
-    await waitFor(
-      () => roomButton() !== null,
-      "Summary did not reopen for the repeated room request",
-    );
-    roomButton()!.click();
-    await waitFor(
-      focused,
-      "a repeated room request did not move the camera again",
-    );
+    // A repeated request moving again, and no replay once its room leaves
+    // and returns, are scene rules (scene/townSceneCamera.test.ts).
     setWorld(worldFor(base.connections.slice(0, -1)));
     await waitFor(
       () => desk(targetId) === undefined,
@@ -1206,10 +1248,6 @@ async function run() {
     await waitFor(
       () => diagnostics.frames > beforeFrames,
       "restored topology never rendered",
-    );
-    check(
-      !diagnostics.flying,
-      "removed room navigation replayed on a new generation",
     );
     check(
       desk(selectedDeskId) !== undefined,
@@ -1271,10 +1309,17 @@ async function run() {
 
   if (scale === "fold-protected" && mode === "test") {
     const rendered = window.__HERDR_TOWN_RENDERER__!;
-    const card = [
-      ...host.querySelectorAll<HTMLButtonElement>(".town-room-card"),
-    ].find((candidate) =>
-      candidate.textContent?.includes("all-protected-room"),
+    const protectedRoomCard = () =>
+      [...host.querySelectorAll<HTMLButtonElement>(".town-room-card")].find(
+        (candidate) => candidate.textContent?.includes("all-protected-room"),
+      );
+    // Renderer readiness and completed target admission can precede this DOM
+    // commit (cards show only after the first frame's setVisible commits), so
+    // wait on the commit itself.
+    const card = await waitForElement(
+      host,
+      protectedRoomCard,
+      "the all-protected room overview card never mounted",
     );
     check(card !== undefined, "all-protected room has no overview card");
     if (card) {
@@ -1503,6 +1548,55 @@ async function run() {
     diagnostics.level === "overview",
     `default level is ${diagnostics.level}, expected overview`,
   );
+  // Observing the same town again reconciles no agent and builds no
+  // navigation; one agent's new status reconciles only its host's agents.
+  {
+    const observe = async () => {
+      const frames = diagnostics.frames;
+      setWorld(
+        worldFor(
+          base.connections.map((connection) => ({
+            ...connection,
+            snapshot: connection.snapshot && {
+              ...connection.snapshot,
+              panes: connection.snapshot.panes.map((pane) => ({ ...pane })),
+            },
+          })),
+        ),
+      );
+      await waitFor(
+        () => diagnostics.frames > frames,
+        "Town drew no frame after a new observation",
+      );
+    };
+    const reconciled = diagnostics.actorsReconciled;
+    const built = diagnostics.navigationsBuilt;
+    await observe();
+    check(
+      diagnostics.actorsReconciled === reconciled &&
+        diagnostics.navigationsBuilt === built,
+      `an unchanged observation reconciled ${diagnostics.actorsReconciled - reconciled} agents and built ${diagnostics.navigationsBuilt - built} navigation grids`,
+    );
+    const syncs = { ...diagnostics.hostSyncs };
+    // Any agent, to a status it does not have now.
+    const pane = base.agentPanes[0]!;
+    const status = pane.agent_status;
+    pane.agent_status = status === "working" ? "idle" : "working";
+    await observe();
+    const hosts = Object.keys(diagnostics.hostSyncs).filter(
+      (hostKey) => diagnostics.hostSyncs[hostKey] !== (syncs[hostKey] ?? 0),
+    );
+    check(
+      hosts.length === 1 && diagnostics.actorsReconciled > reconciled,
+      `one agent's status reconciled ${hosts.length} hosts' agents (${hosts.join(", ")})`,
+    );
+    check(
+      diagnostics.navigationsBuilt === built,
+      "a status change built navigation grids",
+    );
+    pane.agent_status = status;
+    await observe();
+  }
   check(
     [...host.querySelectorAll(".town-quest")].every(
       (pennant) => getComputedStyle(pennant).display === "none",
@@ -1586,13 +1680,66 @@ async function run() {
         getComputedStyle(summaryAsk).backgroundColor !== "rgba(0, 0, 0, 0)",
       "the Summary portal lost the shared question card colors",
     );
-    const sections = [...panelBody.querySelectorAll("h3")].map((heading) =>
-      heading.textContent?.replace(/\s*\d+$/, ""),
+    const checkSummarySections = (state: string) => {
+      const sections = [...panelBody.querySelectorAll("h3")].map((heading) =>
+        heading.textContent?.replace(/\s*\d+$/, ""),
+      );
+      check(
+        sections.join("|") ===
+          "Needs you|Outbox|Finished, not reviewed|Hosts and rooms|Pods|Spend",
+        `summary sections out of order (${state} Outbox): ${sections.join(", ")}`,
+      );
+    };
+    await waitFor(
+      () =>
+        panelBody
+          .querySelector('[aria-label="Outbox"]')
+          ?.textContent?.includes("No answers waiting here.") === true,
+      "the Summary's empty Outbox did not settle",
     );
+    checkSummarySections("empty");
+    answerDeliveries.deliveries = [
+      {
+        ask: {
+          ...structuredClone(ledger.asks[0]!),
+          id: "q-saved-answer",
+          question: "A saved question waiting for delivery",
+          answer: {
+            text: "The saved answer",
+            by: "owner",
+            at: Date.now(),
+            occurrence: "a-saved-answer",
+          },
+        },
+        delivery: { state: "uncertain", attempt: 1 },
+        can_resend: true,
+      },
+    ];
+    publishAnswerDeliveries();
+    await waitFor(
+      () =>
+        panelBody
+          .querySelector(".answer-delivery")
+          ?.textContent?.includes("The saved answer") === true,
+      "a populated Outbox did not reach the existing Summary",
+    );
+    checkSummarySections("populated");
     check(
-      sections.join("|") ===
-        "Needs you|Finished, not reviewed|Hosts and rooms|Spend",
-      `summary sections out of order: ${sections.join(", ")}`,
+      Number(
+        panelBody.querySelector("#town-summary-needs span")?.textContent,
+      ) === windowNeeds &&
+        panelBody.querySelectorAll(".town-ask").length === ledger.asks.length,
+      "answered Outbox work changed the Summary's open-question count",
+    );
+    answerDeliveries.deliveries = [];
+    publishAnswerDeliveries();
+    await waitFor(
+      () =>
+        panelBody.querySelector(".answer-delivery") === null &&
+        panelBody
+          .querySelector('[aria-label="Outbox"]')
+          ?.textContent?.includes("No answers waiting here.") === true,
+      "the Summary did not restore its empty Outbox",
     );
     check(
       panelBody.textContent?.includes("No cost data") === true,
@@ -1871,7 +2018,6 @@ async function run() {
       );
     }
     let expansionSteps = 0;
-    const foldTimings: { before: number; after: number; ms: number }[] = [];
     while (orbitDeskCount() < orbitDeskTotal) {
       const before = orbitDeskCount();
       const button = expand();
@@ -1880,7 +2026,6 @@ async function run() {
         `a partially expanded ${roomId} room lost its Expand tile`,
       );
       if (!button) break;
-      const tappedAt = performance.now();
       tapTownControl(button);
       await waitFor(
         () =>
@@ -1893,11 +2038,6 @@ async function run() {
           return `the next Expand click left ${roomId} at ${orbitDeskCount()} of ${orbitDeskTotal} desks (tile=${current?.textContent?.trim() ?? "missing"}; label=${current?.getAttribute("aria-label") ?? "missing"})`;
         },
       );
-      foldTimings.push({
-        before,
-        after: orbitDeskCount(),
-        ms: performance.now() - tappedAt,
-      });
       expansionSteps += 1;
       check(
         orbitDeskCount() - before <= 20,
@@ -1920,15 +2060,10 @@ async function run() {
       `expanding ${roomId} drew ${orbitDeskCount()} of ${orbitDeskTotal} desks`,
     );
     if (scale === "incremental") {
-      check(
-        foldTimings.every((entry) => entry.ms < 1000),
-        `explicit touch expansion waited for the ambient reflow hold: ${JSON.stringify(foldTimings)}`,
-      );
       const fold = roomElement?.querySelector<HTMLButtonElement>(
         `.town-fold-tile[aria-label="Fold ${roomLabel} back to 24 desks"]`,
       );
       check(fold !== null, "an expanded room offers Fold");
-      const foldTappedAt = performance.now();
       if (fold) tapTownControl(fold);
       await waitFor(
         () =>
@@ -1938,89 +2073,8 @@ async function run() {
           ) !== null,
         "one Fold click did not restore the 24-desk target",
       );
-      check(
-        performance.now() - foldTappedAt < 1000,
-        "explicit touch Fold waited for the ambient reflow hold",
-      );
-      // The explicit revision has now committed. A later background change
-      // must recover the ordinary hold, including the pause after release.
-      const beforeGrowth = diagnostics.layout!.geometry;
-      const desksBeforeGrowth = diagnostics.desks;
-      const stage = host.querySelector<HTMLElement>(".town-canvas-host")!;
-      const pressStage = (type: string) =>
-        stage.dispatchEvent(
-          new PointerEvent(type, {
-            bubbles: true,
-            pointerId: 79,
-            pointerType: "mouse",
-            button: 0,
-            buttons: type === "pointerdown" ? 1 : 0,
-            clientX: 20,
-            clientY: stage.getBoundingClientRect().bottom - 20,
-          }),
-        );
-      pressStage("pointerdown");
-      const snapshot = base.connections[1]!.snapshot!;
-      const grown = snapshot.workspaces[0]!.workspace_id;
-      const had = snapshot.tabs.filter(
-        (tab) => tab.workspace_id === grown,
-      ).length;
-      check(had < 24, "post-fold hold regression needs room capacity to grow");
-      for (let index = had; index < 24; index += 1) {
-        const tabId = `${grown}-tab-${index}`;
-        snapshot.tabs.push({
-          tab_id: tabId,
-          workspace_id: grown,
-          number: index + 1,
-          label: `task ${index + 1}`,
-          focused: false,
-          pane_count: 1,
-          agent_status: "unknown",
-        });
-        snapshot.panes.push({
-          pane_id: `${tabId}-pane-0`,
-          terminal_id: `${tabId}-terminal-0`,
-          workspace_id: grown,
-          tab_id: tabId,
-          focused: false,
-          agent: "",
-          agent_status: "",
-          revision: 1,
-        });
-      }
-      setWorld(
-        worldFor(
-          base.connections.map((connection) => ({
-            ...connection,
-            snapshot: connection.snapshot && {
-              ...connection.snapshot,
-              tabs: [...connection.snapshot.tabs],
-              panes: [...connection.snapshot.panes],
-            },
-          })),
-        ),
-      );
-      await new Promise((resolve) => setTimeout(resolve, 600));
-      check(
-        diagnostics.layout!.geometry === beforeGrowth,
-        "background growth reflowed during a press after an explicit fold",
-      );
-      pressStage("pointerup");
-      await new Promise((resolve) => setTimeout(resolve, 200));
-      check(
-        diagnostics.layout!.geometry === beforeGrowth,
-        "background growth ignored the quiet period after a post-fold release",
-      );
-      await waitFor(
-        () =>
-          diagnostics.layout!.geometry !== beforeGrowth &&
-          diagnostics.desks === desksBeforeGrowth + 24 - had,
-        "background growth never resumed after the post-fold hold and pause",
-      );
-      check(
-        diagnostics.lastError === null,
-        `renderer error after post-fold background growth: ${diagnostics.lastError}`,
-      );
+      // The reflow hold and its explicit Fold/Expand bypass are scene rules,
+      // checked headless in scene/townScene.test.ts.
       root.unmount();
       await settle();
       return;
@@ -2368,7 +2422,7 @@ async function run() {
   const [, , finishedDesk, finishedRoom, finishedHost] = finishedAgent!
     .getAttribute("aria-label")!
     .split(", ");
-  const seenBefore = [...readCompletionSeen(worldLocalStorage)].sort().join();
+  const seenBefore = [...completionSeenStore.get().identities].sort().join();
   [
     ...host.querySelectorAll<HTMLButtonElement>(
       '.world-semantic-target[data-kind="desk"]',
@@ -2399,7 +2453,7 @@ async function run() {
     "Terminal mode did not bring the agent to its desk",
   );
   check(
-    [...readCompletionSeen(worldLocalStorage)].sort().join() === seenBefore,
+    [...completionSeenStore.get().identities].sort().join() === seenBefore,
     "Terminal mode marked the finished agent reviewed",
   );
   writeOfficePreferences(worldLocalStorage, {
@@ -2482,21 +2536,8 @@ async function run() {
     opened.length = 0;
   }
 
-  // On a phone, home fits one building; − steps out to the whole town and +
-  // comes back.
-  if (phone) {
-    const home = diagnostics.zoom;
-    host.querySelector<HTMLButtonElement>('[aria-label="Zoom out"]')!.click();
-    await waitFor(
-      () => window.__HERDR_TOWN_RENDERER__!.zoom < home * 0.8,
-      "zoom out did not reach the whole town",
-    );
-    host.querySelector<HTMLButtonElement>('[aria-label="Zoom in"]')!.click();
-    await waitFor(
-      () => Math.abs(window.__HERDR_TOWN_RENDERER__!.zoom - home) < home * 0.05,
-      "zoom in did not return home",
-    );
-  }
+  // The zoom steps (on a phone, − to the whole town and + back home) are
+  // scene rules, checked headless in scene/townSceneCamera.test.ts.
 
   // The slow portrait case deliberately enters without overview cards. Earlier
   // interactions/expansion may also leave this scenario at a closer level.
@@ -2820,6 +2861,8 @@ async function run() {
           clientY: y,
         }),
       );
+    // A carry aiming at what is drawn under it after a pan is a scene rule,
+    // checked headless in scene/townInteraction.test.ts.
     press("pointerdown", at(fromDesk));
     await waitFor(
       () => host.querySelector(".town-drag-ghost") !== null,
@@ -2874,10 +2917,72 @@ async function run() {
     };
     let moved = false;
     const tried: string[] = [];
+    // Town's gesture trace for a lift failure below: collected passively, with
+    // no overlay, keeping only the last 20 non-frame events of each press.
+    const townTrace = window.__HERDR_TOWN_RENDERER__?.trace;
+    const traced = townTrace && {
+      enabled: townTrace.enabled,
+      record: townTrace.record,
+    };
+    const gestures: { kind: string; detail?: unknown }[] = [];
+    if (townTrace) {
+      townTrace.enabled = true;
+      townTrace.record = (kind, detail) => {
+        if (kind === "frame") return;
+        gestures.push({ kind, detail });
+        if (gestures.length > 20) gestures.shift();
+      };
+    }
     for (const room of phone && scale === "extended" ? [] : rooms) {
       const ghost = () => host.querySelector<HTMLElement>(".town-drag-ghost");
-      press("pointerdown", at(fromDesk));
-      await waitFor(() => ghost() !== null, "holding a desk did not lift it");
+      // On failure, say why: where the press landed against where the desk is
+      // now, and the camera at the press and after the wait. Diagnostic only:
+      // the wait is unchanged.
+      const camera = () => {
+        const renderer = window.__HERDR_TOWN_RENDERER__;
+        return {
+          level: renderer?.level,
+          zoom: Number(renderer?.zoom.toFixed(3)),
+          flying: renderer?.flying,
+          frames: renderer?.frames,
+        };
+      };
+      const pressedAt = at(fromDesk);
+      const cameraAtPress = camera();
+      gestures.length = 0;
+      const pressedTime = performance.now();
+      press("pointerdown", pressedAt);
+      await waitFor(
+        () => ghost() !== null,
+        () =>
+          `holding a desk did not lift it ${JSON.stringify({
+            room: room.dataset.id ?? room.getAttribute("aria-label"),
+            tried,
+            pressedAt,
+            deskNow: fromDesk.isConnected
+              ? (() => {
+                  const box = fromDesk.getBoundingClientRect();
+                  return {
+                    left: box.left,
+                    top: box.top,
+                    right: box.right,
+                    bottom: box.bottom,
+                    width: box.width,
+                    height: box.height,
+                    containsPress:
+                      pressedAt[0] >= box.left &&
+                      pressedAt[0] <= box.right &&
+                      pressedAt[1] >= box.top &&
+                      pressedAt[1] <= box.bottom,
+                  };
+                })()
+              : "detached",
+            heldMs: Math.round(performance.now() - pressedTime),
+            cameraAtPress,
+            cameraNow: camera(),
+            gestures: JSON.stringify(gestures).slice(0, 4000),
+          })}`,
+      );
       press("pointermove", floor(room));
       // The ghost judges the drop target on a later frame, whose timing
       // depends on the renderer (SwiftShader or the GPU); give it a few.
@@ -2917,6 +3022,10 @@ async function run() {
       moved = true;
       break;
     }
+    if (townTrace && traced) {
+      townTrace.enabled = traced.enabled;
+      townTrace.record = traced.record;
+    }
     if (!moved) {
       const target = await prepareTownEdgeDrop({
         host,
@@ -2952,6 +3061,9 @@ async function run() {
       moved,
       `no room took a carried desk (${rooms.length} visible; ${tried.join("; ")})`,
     );
+
+    // A press landing on what Town last drew after an undrawn pan (#553) is
+    // a scene rule, checked headless in scene/townInteraction.test.ts.
   } else check(false, "no two visible desks share a room");
 
   // Town shows no move icons; moving is by drag, hold or the keyboard.
@@ -3251,11 +3363,24 @@ async function run() {
         )!
         .click();
     };
+    // A colour re-bakes only its own building, never the whole scene.
+    const scenes = diagnostics.sceneRenders;
+    const bakedOne = async (before: number, what: string) => {
+      await waitFor(
+        () => diagnostics.buildingBakes > before,
+        `${what} did not bake its building again`,
+      );
+      check(
+        diagnostics.sceneRenders === scenes,
+        `${what} rebuilt the whole scene (${diagnostics.sceneRenders - scenes} times)`,
+      );
+    };
     const roomSwatch = host.querySelector<HTMLButtonElement>(
       'button[aria-label^="Colour of room "]',
     );
     check(roomSwatch !== null, "a room offers its colour beside its name");
     if (roomSwatch) {
+      const bakes = diagnostics.buildingBakes;
       await pick(roomSwatch, "teal");
       await waitFor(
         () => Object.values(boardDocument.layout.colors ?? {}).includes("teal"),
@@ -3285,12 +3410,14 @@ async function run() {
         !card || card.style.getPropertyValue("--carpet") !== "",
         "the room card has a carpet colour",
       );
+      await bakedOne(bakes, "a room colour");
     }
     const buildingSwatch = host.querySelector<HTMLButtonElement>(
       'button[aria-label$="\'s building"], button[aria-label*="\'s building:"]',
     );
     check(buildingSwatch !== null, "a building offers its colour on reception");
     if (buildingSwatch) {
+      const bakes = diagnostics.buildingBakes;
       await pick(buildingSwatch, "pink");
       await waitFor(
         () =>
@@ -3299,6 +3426,7 @@ async function run() {
           ),
         "choosing a building colour did not save it under its host",
       );
+      await bakedOne(bakes, "a building colour");
     }
   }
 

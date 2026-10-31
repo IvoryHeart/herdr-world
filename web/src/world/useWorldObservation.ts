@@ -1,14 +1,11 @@
+import { useAppearanceDocument, worldWithAppearance } from "./appearance";
 import { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { bridge } from "../api";
 import { worldLocalStorage } from "../browserStorage";
 import { shallowEqual, useStoreSelector } from "../store";
-import { useWorldRuntime } from "./runtimeStore";
-import {
-  buildWorldObject,
-  worldObjectForHosts,
-  worldObjectForWatches,
-  worldObjectWithWatches,
-} from "./worldObject";
+import { useWorldRuntime, worldRuntimeStore } from "./runtimeStore";
+import { buildWorldObject, worldObjectWithWatches } from "./worldObject";
+import { worldObjectForHosts, worldObjectForWatches } from "./worldFilters";
 import { useWorldWatchlist, WorldWatchlistStore } from "./watchlistStore";
 import { useHostsFilter } from "./hostsFilter";
 import {
@@ -24,6 +21,7 @@ type Input = Pick<WorldControlPlaneProps, "onPresentedWorldChange">;
 
 export function useWorldObservation({ onPresentedWorldChange }: Input) {
   const runtime = useWorldRuntime();
+  const appearance = useAppearanceDocument();
   const watchlistStore = useMemo(() => new WorldWatchlistStore(bridge), []);
   const watchlist = useWorldWatchlist(watchlistStore);
   const [pinnedOnly, setPinnedOnly] = useState(false);
@@ -60,11 +58,14 @@ export function useWorldObservation({ onPresentedWorldChange }: Input) {
     selectedWorldConnection?.actionable ?? false;
   const aggregateWorld = useMemo(
     () =>
-      buildWorldObject(
-        runtime.connections,
-        connectionSelection.activeConnectionId,
+      worldWithAppearance(
+        buildWorldObject(
+          runtime.connections,
+          connectionSelection.activeConnectionId,
+        ),
+        appearance,
       ),
-    [connectionSelection.activeConnectionId, runtime.connections],
+    [connectionSelection.activeConnectionId, runtime.connections, appearance],
   );
   const world = useMemo(
     () => worldObjectForHosts(aggregateWorld, hostsFilter.ids),
@@ -80,6 +81,20 @@ export function useWorldObservation({ onPresentedWorldChange }: Input) {
         ? worldObjectForWatches(watchedWorld, watchlist.records)
         : watchedWorld,
     [pinnedOnly, watchedWorld, watchlist.records],
+  );
+  useLayoutEffect(
+    () =>
+      worldRuntimeStore.presentViewsFrom((aggregate) => {
+        const scoped = worldObjectForHosts(
+          worldWithAppearance(aggregate, appearance),
+          hostsFilter.ids,
+        );
+        const watched = worldObjectWithWatches(scoped, watchlist.records);
+        return pinnedOnly
+          ? worldObjectForWatches(watched, watchlist.records)
+          : watched;
+      }),
+    [appearance, hostsFilter.ids, pinnedOnly, watchlist.records],
   );
   useLayoutEffect(
     () => onPresentedWorldChange(presentedWorld),

@@ -69,10 +69,8 @@ space fail halfway and leave debris. These rules keep each worktree small:
   `bun test` gets the same treatment through `bunfig.toml`. Runs killed outright
   are swept by the next run once their owner process is gone. Other programs'
   scratch directories, such as a desktop Chrome's, are never touched.
-- `check:changed`, `check:delivery`, `test:browser` and the World browser suites
-  refuse to start, with a message, when the worktree's filesystem or the temporary
-  directory has less than 3 GB free. Set `HERDR_WORLD_MIN_FREE_GB` to change the
-  floor (`0` turns it off); CI skips the guard.
+- Disk capacity is managed by the owner. Checks do not enforce a free-space
+  floor; `HERDR_WORLD_MIN_FREE_GB` has no effect.
 
 ## Deliver a change
 
@@ -126,12 +124,20 @@ CI and pre-push share a tooling-only allowlist: `scripts/agent/**` and its tests
 this guide, `docs/crew-runbook.md`, `docs/dispatch-runbook.md` and
 `changes/<slug>.md`. Every changed path in the complete PR must qualify; renames
 include both paths. This mode runs the full static lane and affected unit tests,
-including all source type checks, and skips World browser/latency, behavioral
+including all source type checks, and skips World browser suites, behavioral
 verification and native installation work. `Delivery checks` and the protected
 macOS reports still run. Other classified changes run their affected contracts and consumers under the
-same rules as pre-push; unknown paths and every main push keep the full matrix.
+shared selection rules, with pre-push limited to non-browser units; unknown paths and every main push keep the full matrix.
 Unit/web tests use two CI runners, behavioral models three groups with complete
-source-bound aggregation, and each latency suite remains isolated on its runner.
+source-bound aggregation. Model-free owners use affected consumer tests and the
+cheap coverage inventory check. Contributor/skill Markdown and browser shard-table
+edits avoid the full matrix; executable gate policy and every main push keep it.
+Metadata events can reuse a passing scoped run only with the same ordered
+selection and exact PR/base/head; missing proof validates afresh.
+World and model shards balance measured work; TownCanvas's 22 cases span five
+files with the same harness. See [the CI guide](ci-pipelines.md#shared-suite-plan-and-sharding)
+for timing sources and evidence boundaries. No CI test asserts a wall-clock budget (the World
+latency trend reports timing without gating).
 Leaf failures are visible before `Delivery checks` finishes; the crew's reaction
 to a first failure is a separate workflow concern. See [pipeline ownership](ci-pipelines.md) for result requirements.
 Fetch main before pushing: `check:size` evaluates the proposed merge against
@@ -219,17 +225,10 @@ check. The gate adds:
   when every later commit merges a commit already on main and replaying that
   merge reproduces its tree. Any other commit, including a resolved conflict,
   needs confirmation again. Being behind main never matters.
-- **CI attempts.** A check that went green on a rerun keeps its failed
-  attempts on record. Only a configured flake within its rerun budget stays
-  READY; any other rerun needs judgment.
-- **Aggregate checks.** Name roll-up jobs that only summarise other jobs in
-  `aggregateChecks`; they are never inferred. A named aggregate's failed
-  attempt is excused only when every other check that failed in that same run
-  attempt is a listed flake within its budget whose newest run passed; a
-  skipped or missing recovery doesn't count. If the aggregate failed alone,
-  beside any other failure, or in an attempt the gate can't place, it needs
-  judgment. A named aggregate is never treated as a flake, and the config is
-  refused if a check appears in both lists.
+- **CI failures.** Every failed execution on the current head blocks READY,
+  including earlier attempts replaced by green, running or skipped jobs and
+  failed roll-up checks. The gate retains this evidence. Diagnose and fix each
+  failure at its cause; no check has a flake exemption or rerun allowance.
 - **Holds.** A hold lasts across heads until it is released.
 
 `merge-line` and `check-claim` read the PR again before answering, so a hold,
@@ -244,8 +243,8 @@ head, conditions or notes.
 Configuration and state stay untracked in the primary checkout's
 `.agents/crew-gate/`, which every worktree shares:
 
-- `config.json` holds the repository, reviewers, flakes, rerun budget and
-  optional required and aggregate checks. Start from
+- `config.json` holds the repository, reviewers and
+  optional required checks. Start from
   [`config.example.json`](../scripts/agent/gate/config.example.json).
 - `gate.sqlite` keeps every pass config and replay input, reviewer claim,
   check attempt, decision and verdict transition indefinitely. Identical input
@@ -278,12 +277,52 @@ herdr-world ask withdraw q-example --json
 herdr-world ask withdraw --key dispatch:7:stuck --json
 ```
 
+A new question is committed to the instance's `world.sqlite` with its attention
+outbox entry. The service then alerts the owner through the captured Herdr
+connection (`notification.show`, sound `request`): Herdr's toasts, every World
+connected to that Herdr and Web Push. The JSON reply's `recorded` field says
+whether World recorded it and `notified` what Herdr reported (`null` when a
+repeated `--key` returned the recorded question without a new alert); both stay
+on the final `--wait` reply. Exit 6 (`not_delivered`) means World recorded the
+question but no alert was confirmed yet. `retrying: true` means the service
+will retry a temporary failure with bounded backoff; an eventual alert may still
+arrive. Closing the ask cancels a pending alert. A failure to record retains the
+CLI's fallback through the asking pane's Herdr, names the recording failure and
+exits 1. A lost service reply can therefore produce duplicate owner alerts.
+Report failures once; do not add a caller-side retry loop. Interrupted owner
+alerts retain `uncertain` evidence and may retry because duplicate alerts are
+harmless. Inspect `ask get ID --json` for the actual evidence. An answer is
+durable before acknowledgement and remains retrievable with `ask get` or
+`--wait`, including after a restart. Always save the question ID.
+
+New asks from a verified local Linux CLI caller can also receive their saved
+answer in the original supported Chat session without `--wait`. World captures
+the verified connection, terminal and session binding when the ask is created;
+it never learns a replacement recipient later. An offline host waits for that
+same binding to be checked on return. A changed or ended session records not
+sent. Asks created before binding capture was supported, unverified or
+unsupported callers and dismissals remain retrieval-only; there is no historical answer backfill. Successful stdout output
+by the verified original asker acknowledges the exact answer and observed
+attempt. Failed stdout sends no acknowledgement; a lost acknowledgement or a
+read/send race can still duplicate output.
+
+A possible pane send is opaque: `uncertain` never automatically replays. Town
+Summary's **Outbox** keeps that answer and its evidence reachable without
+reopening the question. Only the owner can choose **Send again…**, confirm a
+possible duplicate to the same original session, or **Dismiss** / **Cancel send**
+while preserving the answer for `ask get`. Sending in progress has no UI
+decision. Reception's compact row counts only unconfirmed/not-sent answers to
+check; waiting-only work appears in Summary and the host's letter tag. A native
+queue receipt does not prove agent reading or execution, and Herdr provides no
+operation-key deduplication. See [answer delivery and limits](ask-answer-delivery.md)
+and [data and backups](DEPLOYMENT.md#durable-questions-results-and-backups).
+
 `--key` deduplicates a cause for the verified asking occupant, including an
 answered cause. Repeat the same key while that cause persists. Save the returned
 question ID and withdraw it once the cause clears; a later occurrence may then
 create a fresh ask under the same key. Withdrawal is idempotent and restricted
-to the original verified connection, runtime, terminal and agent session. A
-withdrawn ask releases `--wait` with a `withdrawn` field and no invented answer;
+to the original verified connection, terminal and agent session; a replacement
+runtime must verify that same session. A withdrawn ask releases `--wait` with a `withdrawn` field and no invented answer;
 withdrawal preserves an answer that arrived first. The existing ledger retains
 both, and closed questions remain subject to its retention bound. If a creation
 reply is lost, `ask withdraw --key CAUSE` recovers the original occupant's
@@ -338,7 +377,8 @@ plans the next step for every PR in scope and takes each step once:
 | A required check fails and no check is still running | `ACT #N ci` prompt | The author's seat |
 | GitHub reports a conflict, or screenshots are missing | `ACT #N conflict` or `ACT #N screenshots` prompt | The author's seat |
 | A fix, ci or conflict step is due and the author seat is busy with another PR | A fresh fixer run in the PR's own worktree | The author seat's roster model |
-| A required reviewer has no RESULT, or a newer head needs confirming, and GitHub reports the head mergeable, whatever its checks | A fresh reviewer run | That reviewer's model |
+| A required reviewer has no RESULT, or finding replies and a quiet push admit a scoped later round, and GitHub reports the head mergeable | A fresh reviewer run | That reviewer's model |
+| Two more review rounds have not converged | A fresh evaluator; its go scopes the next round, or no-go starts a process and holds reviews | The evaluator roster seat |
 | READY, with every required reviewer confirmed on the head | The `crew/merge-ready` mark and a World ask with the PR and reason | The owner |
 | A judgment condition, an unknown author, an unsupported roster model, a stuck author seat or a reviewer run that posted nothing | The `crew/needs-owner` mark, one signed `[crew]` state comment and one World ask per distinct cause | The owner |
 
@@ -380,7 +420,9 @@ plans the next step for every PR in scope and takes each step once:
   once that RESULT is on GitHub: the watcher then records the result and the
   token usage (read from the harness's session files) and frees the slot. The
   session stays open in its pane as a chat. A confirmation reviews the delta
-  from that reviewer's last claimed commit. At most `maxRuns` reviewers work
+  from the last reviewed round's head, excluding imports from main and preserving
+  manual conflict resolutions. Every prompt checks the linked issue for scope drift.
+  At most `maxRuns` reviewers work
   at once. One that is still working after `runTimeoutMinutes` without posting
   is reported to the owner, not stopped. A session that crashes before
   posting is retried once. One that is quit, or exits cleanly, without a
@@ -391,9 +433,9 @@ plans the next step for every PR in scope and takes each step once:
   round. A round has its own Herdr tab, named like `#7 towncx-12-plates · r2`,
   with one pane per reviewer, named after the reviewer. Every reviewer stays
   in its pane until the PR merges or closes, so the owner can read and
-  question every round before merging. Only a reviewer still working when a
-  newer head arrives is stopped, since its review is stale; its pane says so
-  and gives the command to reopen it. If you quit a session yourself, its pane
+  question every round before merging. A newer head leaves the running round
+  pinned to its reviewed commit; a merge of main never stops it. A merge or
+  close of the PR stops outstanding runs. If you quit a session yourself, its pane
   gives the same command. A tab the owner closes is reopened for that round's
   next reviewer, and every tab a round used closes with it. If Herdr or git
   can't finish that cleanup, the round stays open and the next pass retries
@@ -408,12 +450,20 @@ plans the next step for every PR in scope and takes each step once:
   pass, so a merge can't land between opening a chat and recording it. A chat
   opened after the PR has closed removes its checkout when you exit it. Until
   then, `open` refuses a second chat on that run.
-- **Review on push.** Reviewers read the diff, not CI results, so a round
-  starts as soon as a new head is pushed and GitHub reports it mergeable, in
-  parallel with its checks: with busy passes, within about a minute of the
-  push. A failure still goes to the author as a `ci` step once the checks
-  settle, and a CI rerun the owner has to judge still asks them. READY and
-  `crew/merge-ready` still need green checks, any judgment and the reviews.
+- **Review rounds.** Round 1 starts when GitHub reports the head mergeable,
+  in parallel with checks. Later rounds require fresh replies to every open finding
+  and ten observed minutes without a push. Main-only merges, CI/test-harness
+  repairs and pushes outside findings' files are skipped while replies are
+  missing; answered findings proceed to scoped confirmation after quiet time.
+  Gate/workflow policy changes require scoped review, and every admitted round
+  needs all fresh results before merge readiness.
+  After every two non-converging rounds a fresh evaluator weighs the whole PR.
+  Its go names mandatory findings and follow-up issues; no-go starts a named
+  process and holds reviews and merge readiness until it reports back. See the
+  [crew runbook](crew-runbook.md#review-rounds-and-evaluation) for finding reply
+  IDs, roster setup, verdict/report lines and owner decisions at reception.
+  CI failures still go to the author once checks settle. READY and
+  `crew/merge-ready` still need green checks, resolved judgments and reviews.
 - **A fresh fixer for a busy author.** A seat works on one PR at a time, so
   when a PR's `fix`, `ci` or `conflict` step is due and its author seat is
   working (or blocked) on another PR, the watcher starts a fresh fixer
@@ -427,7 +477,7 @@ plans the next step for every PR in scope and takes each step once:
   command its brief gives, as after rerunning a flaky job without a push.
   Its session then stays open as a chat, and `open --run` reopens it in that
   worktree, under the pass lock. A fixer overtaken by someone else's push, or
-  whose PR merges or closes, is stopped like a stale reviewer.
+  whose PR merges or closes, is stopped; pinned reviewer sessions continue until the PR closes.
   - **Only on evidence that the author is elsewhere:** the seat's latest crew
     prompt was only about other PRs. One prompt carries every waiting step,
     so a prompt that included this PR means the author may be on it. A seat
@@ -441,8 +491,9 @@ plans the next step for every PR in scope and takes each step once:
     against `maxRuns` and `runTimeoutMinutes` like reviewers; screenshots stay
     with the author. A Codex fixer's session is the one created after it
     started, not the author's older one in the same worktree.
-- **What stops a step.** Only a newer head, a merge or a close supersedes a
-  waiting step or stops a running reviewer. On the same head, a CI rerun or
+- **What stops a step.** A newer head supersedes author steps; reviewer and
+  evaluator/process actions remain pinned until they post or the PR closes.
+  Evaluator holds survive pushes. On the same head, a CI rerun or
   an unknown mergeable state only pauses steps; they resume when the head is
   eligible again. A reviewer that has just posted finishes its run. A PR
   reopened on the same head is planned afresh.
@@ -453,8 +504,8 @@ plans the next step for every PR in scope and takes each step once:
   already working finishes. Remove the hold to resume on the next pass, which
   plans the steps again. `status` lists held PRs as last read: the latest pass
   over every PR, updated by the busy passes since.
-- **Which checks count.** An attempt that a later attempt of the same
-  workflow replaced, as a rerun does, doesn't count. Same-name checks from
+- **Which checks count.** Every CI failure on the head counts, including superseded
+  attempts. A later green execution cannot clear a failed execution. Same-name checks from
   runs the gate can't order, such as two workflows, all count: the gate keeps
   only the worst of them, but none has replaced another. The author gets a
   failure's `ci` step once no counted check is still running, so a failure in
@@ -463,10 +514,9 @@ plans the next step for every PR in scope and takes each step once:
   ellipsis); its key covers every counted failed job, so a new failure among
   them sends a new step.
 - **A check that never finishes.** GitHub sometimes loses a finished job's
-  status, and the check then shows as running for good, which holds every
-  review back. The watcher notes when it first sees each counted check
+  status, and the check then shows as running for good, which holds readiness back. The watcher notes when it first sees each counted check
   running. One still running after `stallMinutes` (default 30) goes to the
-  author as a `ci` step, with the `gh run rerun --job` command for it, or to
+  author as a `ci` step to diagnose and fix its cause, or to
   the owner once if the PR has no author seat. `pass --dry-run` shows these
   too, without recording anything.
 - **When a step repeats.** A CI step is keyed by the failed jobs, so a rerun
@@ -508,10 +558,17 @@ Settings go under `crew` in the gate's `config.json`:
 - `leads` maps each pod to its lead seat.
 - `authors` holds per-PR author overrides.
 - `neverPrompt` lists seats the watcher never prompts.
-- `maxRuns` (default 3) bounds the reviewers working at once, and
-  `runTimeoutMinutes` (default 90) is when one still working without posting
-  is reported to the owner. `stallMinutes` (default 30) is when a check still
-  running counts as stuck.
+- `maxRuns` (default 3) bounds the runs working at once. A run without its
+  completion evidence is stopped after `runTimeoutMinutes` without meaningful
+  harness work (default 90, a positive finite duration). Conversation, reasoning,
+  tool calls/results and owner replies renew the window at their actual event
+  timestamps. A live PID, token counter, file timestamp or heartbeat does not.
+  On the first watcher pass at or after that inactivity bound, its slot
+  is released, its actions fail and the owner receives one timeout notice. A
+  worker that has not reported a PID has a separate three-minute startup bound.
+  Neither timeout starts a replacement run or hands its steps back to the author.
+  The saved activity timestamp survives restarts; holds and PR-scoped passes
+  do not reset it. `stallMinutes` (default 30) is when a CI check counts as stuck.
 - The gate config's `roster` gives each seat its `model`, `effort` and,
   optionally, `harness` (`claude` or `codex`; by default the one that runs the
   model) and `persona` (its standing instructions, passed as Claude's appended
@@ -525,7 +582,18 @@ restart never prompts twice. Only one pass reads and acts at a time. It holds
 if the process dies. A second watcher or an overlapping `pass` waits, then
 reads after the first has acted. Each step is committed as soon as it happens,
 so a crash never forgets a prompt that was already sent. A scoped `pass --pr`
-acts only on the PRs it read. Run logs are kept in `runs/`. On GitHub the
+acts only on the PRs it read, while timeout maintenance releases and reports
+expired runs even outside that scope. Timeout outcomes and their per-run owner
+causes are committed together, including manual reviews without action rows.
+Run logs are kept in `runs/`; exit -124 in
+`runs` or `status` identifies a startup or runtime timeout. Completion evidence
+observed before timeout settlement releases a run normally and keeps its chat,
+including manual reviews without action rows. A manual RESULT must match its
+reviewer and pinned head and follow the run's start. Known Codex sessions are
+resolved across all date folders; the two-folder window applies only to discovery.
+A late worker exit cannot overwrite timeout evidence; a late valid RESULT clears
+the reviewer's timeout notice without starting another run. Closing or merging
+the PR retires its timeout notices. On GitHub the
 watcher only sets its two `crew/*` marks and posts its signed `[crew]`
 comments; it never pushes, merges or approves, and the fresh reviewers post
 their own reviews.
@@ -647,32 +715,26 @@ multi-step handoffs and review repairs. Use
 
 Run `bun run install-hooks` once per clone. The pre-commit hook checks format and
 lint, and the pre-push hook checks the candidate. Code changes get
-`bun run check:changed` (static checks and the affected tests; CI runs the full
-gate), and `HERDR_WORLD_PREPUSH=full` runs `bun run check:delivery` instead. A
+`bun run check:changed` (static checks and affected non-browser units; browser
+and behavioral acceptance run in CI under required `Delivery checks`), and `HERDR_WORLD_PREPUSH=full` runs `bun run check:delivery` instead. A
 Markdown-only follow-up may use `bun run check:docs` after this worktree has a
 passed code gate on an ancestor, and a push that only merges `origin/main` runs
 `bun run check:static` (see CONTRIBUTING for the exact rule). Worktrees share the
 same Git hook configuration.
 
 Agents in parallel worktrees share one machine-wide check queue: one browser lane
-and one behavioral verification at a time, two light lanes, and the timed
-(latency) lane alone on the whole machine. Within that lane, the delivery gate
-runs timed World browser files serially, matching CI’s latency shard while
-preserving each fixture’s concurrent-context checks and deadlines. Run browser
-suites through
-`bun run test <path>` or `bun run test:browser`, which queue, rather than a bare
-`bun test` on a browser file, which does not. A queued gate prints
-`[queue] <lane> waiting for <worktree> <lane> (pid, since)`. Do not bypass the
-hook because a gate is queued; the wait is shorter than the contention it avoids.
+for both World and other Chrome tests, one behavioral verification lane, and two
+light lanes for non-browser units. Static checks bypass the queue, so failures
+report without waiting for heavy work. No delivery lane takes the whole machine.
+Run browser suites through `bun run test <path>` or `bun run test:browser`, which
+queue, rather than a bare `bun test` on a browser file. A queued gate prints
+`[queue] <lane> waiting for <worktree> <lane> (pid, since)`. Wait for its result.
+Each run clears its lane logs, including skipped lanes, before starting checks.
 
 Direct test runs recognise canonical file and directory paths, including `./`,
-absolute paths and symlinks. A pending whole-machine lane reserves admission before
-waiting for running work, so later ordinary arrivals cannot continually overtake
-it. This reserves admission before heavy slots drain: light work also waits,
-even with free light slots, and can wait minutes behind a running heavy lane.
-Direct runs containing timed suites take every slot, including the default
-full test run and `test:world --shard=latency`. Unknown selections conservatively
-take the quiet lane; known browser-only selections take the browser slot.
+absolute paths and symlinks.
+Direct runs that may include a browser suite, including the default full test
+run and unknown selections, take the browser slot.
 Known value-taking flags such as `-t` and `--timeout` do not widen an explicit
 file selection; a flags-only invocation still selects Bun's full test run.
 Process exit releases both admission and slots through the kernel.
@@ -693,9 +755,9 @@ failure it prints a concise summary and the path to the complete retained log.
 Inspect that log only when needed, preserving the check's exit status. For
 review-only work, inspect exact-head CI evidence first. CI uses
 `bun run check:docs` for Markdown-only PR diffs and skips the macOS lifecycle
-on those diffs. On PR-description edits, a code PR can reuse successful full jobs on
-the exact base and head; if that proof is missing or failed, CI runs the full
-gate. The existing three required status names stay in place.
+on those diffs. On PR-description edits, a code PR can reuse a successful full
+job or an identically selected scoped job on the exact PR/base/head. Missing
+or failed proof runs fresh validation for the current scope. The existing three required status names stay in place.
 Run a local check only to investigate a specific gap or reproduce a finding; do
 not repeat a successful full gate on the same commit. When a command returns a
 running session, call `write_stdin` on that session with empty `chars` and

@@ -1,3 +1,5 @@
+import type { RuntimeStatusPort } from "../storage/runtime-status";
+import { commandReplies } from "../verbs/replies";
 import {
   WorktreeHookConfigError,
   type createWorktreeHookRunner,
@@ -13,11 +15,10 @@ import {
   connectionSettingsPrefix,
   DEFAULT_WORKSPACE_AUTO_SYNC_INTERVAL_MINUTES,
   type GuiRepoSettings,
-  guiSettingsPath,
-  readGuiSettings,
+  type GuiSettings,
+  type GuiSettingsStore,
   repoWorktreeHooksEnabled,
   terminalSurfaceCodecsEnabled,
-  updateGuiSettings,
   workspaceAutoSyncSettingsKey,
   workspaceRepoSettingsKey,
 } from "../config/gui-settings";
@@ -33,8 +34,9 @@ type ReadWorktreeHooks = ReturnType<
 export function createSettingsRpcHandler(args: {
   connectionId?: string;
   connectionGeneration?: number;
-  readSettings?: typeof readGuiSettings;
-  updateSettings?: typeof updateGuiSettings;
+  runtimeStatus: Pick<RuntimeStatusPort, "get">;
+  /** The service's settings file. */
+  settings: Pick<GuiSettingsStore, "path" | "read" | "update">;
   herdr: HerdrClient;
   sshHost: () => string | undefined;
   readWorktreeHooks: ReadWorktreeHooks;
@@ -56,8 +58,21 @@ export function createSettingsRpcHandler(args: {
     detail?: string,
   ) => void;
 }) {
-  const readSettings = args.readSettings ?? readGuiSettings;
-  const updateSettings = args.updateSettings ?? updateGuiSettings;
+  // Project status only into wire replies; configuration callbacks stay file-only.
+  const projectSettings = (settings: GuiSettings): GuiSettings => ({
+    ...settings,
+    workspace_auto_sync: Object.fromEntries(
+      Object.entries(settings.workspace_auto_sync).map(([key, entry]) => [
+        key,
+        { ...entry, ...args.runtimeStatus.get(key) },
+      ]),
+    ),
+  });
+  const readSettings = async () => projectSettings(await args.settings.read());
+  const updateSettings: GuiSettingsStore["update"] = async (
+    update,
+    shouldCommit,
+  ) => projectSettings(await args.settings.update(update, shouldCommit));
   const serialize = (message: Record<string, unknown>) =>
     args.connectionId
       ? serializeConnectionEnvelope(
@@ -88,21 +103,14 @@ export function createSettingsRpcHandler(args: {
     params: Record<string, unknown>,
     requestIsCurrent: () => boolean = () => true,
   ) {
-    const fail = (message: string) => {
-      const effectiveMessage = requestIsCurrent()
-        ? message
-        : CONNECTION_CHANGED_DURING_REQUEST;
-      args.markRpcError(ws, id, effectiveMessage);
-      return args.safeSend(
-        ws,
-        serialize({ id, error: { message: effectiveMessage } }),
-        `${method}-error`,
-      );
-    };
-    const reply = (result: unknown) =>
-      requestIsCurrent()
-        ? args.safeSend(ws, serialize({ id, result }), method)
-        : fail(CONNECTION_CHANGED_DURING_REQUEST);
+    const { fail, reply } = commandReplies({
+      id,
+      method,
+      current: requestIsCurrent,
+      error: (message) => args.markRpcError(ws, id, message),
+      send: (message, context) =>
+        args.safeSend(ws, serialize(message), context),
+    });
     try {
       if (!requestIsCurrent()) return fail(CONNECTION_CHANGED_DURING_REQUEST);
       if (method === "settings.terminal_transport.get") {
@@ -143,7 +151,7 @@ export function createSettingsRpcHandler(args: {
       }
       if (method === "settings.get") {
         const settings = await readSettings();
-        return reply({ settings, path: guiSettingsPath() });
+        return reply({ settings, path: args.settings.path });
       }
       if (method === "settings.worktree_hooks.get") {
         const workspaceId = String(params.workspace_id ?? "");
@@ -190,7 +198,7 @@ export function createSettingsRpcHandler(args: {
         return reply({
           workspace_id: workspaceId,
           key,
-          enabled: await repoWorktreeHooksEnabled(key),
+          enabled: await repoWorktreeHooksEnabled(readSettings, key),
           repo_name: workspace.worktree.repo_name,
           repo_root: workspace.worktree.repo_root,
           checkout_path: checkoutPath,
@@ -219,6 +227,7 @@ export function createSettingsRpcHandler(args: {
         }
         const settings = await readSettings();
         const entry = settings.workspace_auto_sync[key];
+        const status = args.runtimeStatus.get(key);
         return reply({
           workspace_id: workspaceId,
           workspace_label: workspace?.label,
@@ -228,10 +237,10 @@ export function createSettingsRpcHandler(args: {
           interval_minutes:
             entry?.interval_minutes ??
             DEFAULT_WORKSPACE_AUTO_SYNC_INTERVAL_MINUTES,
-          last_run_at: entry?.last_run_at,
-          last_status: entry?.last_status,
-          last_message: entry?.last_message,
-          last_branch: entry?.last_branch,
+          last_run_at: status?.last_run_at,
+          last_status: status?.last_status,
+          last_message: status?.last_message,
+          last_branch: status?.last_branch,
           running: args.workspaceAutoSyncIsRunning(key),
         });
       }
@@ -243,10 +252,11 @@ export function createSettingsRpcHandler(args: {
             .map(([key, entry]) => ({
               key,
               ...entry,
+              ...args.runtimeStatus.get(key),
               running: args.workspaceAutoSyncIsRunning(key),
             }))
             .sort((a, b) => a.key.localeCompare(b.key)),
-          path: guiSettingsPath(),
+          path: args.settings.path,
         });
       }
       if (method === "settings.workspace_auto_sync.update_key") {
@@ -284,7 +294,7 @@ export function createSettingsRpcHandler(args: {
         }
         const entry = updated.workspace_auto_sync[key];
         args.onWorkspaceAutoSyncSettingsChanged(key, enabled);
-        return reply({ key, ...entry });
+        return reply({ key, ...entry, ...args.runtimeStatus.get(key) });
       }
       if (method === "settings.workspace_auto_sync.update") {
         const workspaceId = String(params.workspace_id ?? "");
@@ -316,10 +326,6 @@ export function createSettingsRpcHandler(args: {
               DEFAULT_WORKSPACE_AUTO_SYNC_INTERVAL_MINUTES,
             checkout_path: root,
             host: args.sshHost(),
-            last_run_at: existing?.last_run_at,
-            last_status: existing?.last_status,
-            last_message: existing?.last_message,
-            last_branch: existing?.last_branch,
           };
           return {
             ...current,
@@ -339,6 +345,7 @@ export function createSettingsRpcHandler(args: {
           workspace_label: workspace?.label,
           key,
           ...entry,
+          ...args.runtimeStatus.get(key),
           running: args.workspaceAutoSyncIsRunning(key),
         });
       }

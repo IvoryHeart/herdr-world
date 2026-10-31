@@ -1,3 +1,4 @@
+import { LinkClaims } from "./link-claims";
 import type { PullRequestAction } from "../../../shared/pullRequests";
 import {
   freshPullRequestDetail,
@@ -69,6 +70,7 @@ type SourceRuntime = {
   id: WorldSourceId;
   label: string;
   items: WorkItem[];
+  pullRequestsComplete: boolean;
   state: WorldSourceState;
   detail: string;
   checkedAt: number;
@@ -89,6 +91,8 @@ export type SourcesServiceOptions = {
   run: RunProcess;
   fetchImpl?: FetchLike;
   topology(): Promise<TopologyConnection[]>;
+  /** Current managed runtime owners, independent of topology/lookup health. */
+  runtimeOwners?(): Pick<TopologyConnection, "connection_id" | "generation">[];
   resolver: CheckoutResolver;
   now?: () => number;
   refreshMs?: number;
@@ -137,6 +141,7 @@ export class SourcesService {
   #waitMs: number;
   #sources: Record<WorldSourceId, SourceRuntime>;
   #links: WorkLink[] = [];
+  #linkClaims = new LinkClaims();
   #linkedAt = 0;
   /** Bumped by a settings change; older refresh cycles then write nothing. */
   #epoch = 0;
@@ -157,6 +162,7 @@ export class SourcesService {
       id,
       label,
       items: [],
+      pullRequestsComplete: false,
       state: "not_connected",
       detail: "Checking…",
       checkedAt: 0,
@@ -234,6 +240,8 @@ export class SourcesService {
 
   /** What World has now, without refreshing. */
   current(): WorldSourcesSnapshot {
+    const owners = this.#options.runtimeOwners?.();
+    if (owners) this.#linkClaims.reconcileRuntimes(owners);
     const items = this.#items();
     const keys = new Set(items.map((item) => item.key));
     return {
@@ -242,6 +250,7 @@ export class SourcesService {
       sources: this.statuses(),
       items,
       links: this.#links.filter((link) => keys.has(link.itemKey)),
+      linkClaims: this.#linkClaims.values(),
       actions: [...this.#actions],
     };
   }
@@ -416,6 +425,7 @@ export class SourcesService {
     const source = this.#sources[id];
     source.generation += 1;
     source.refreshing = null;
+    source.pullRequestsComplete = false;
     source.checkedAt = 0;
     this.#linkedAt = 0;
     // A retired fetch keeps only its retired map, including on window changes.
@@ -444,10 +454,12 @@ export class SourcesService {
       source.checkedAt = now;
       if (result.ok) {
         source.items = result.items;
+        source.pullRequestsComplete = result.pullRequestsComplete === true;
         source.state = "connected";
         source.detail = connectedDetail(source.label, result.items.length);
         source.lastSuccessAt = now;
       } else {
+        source.pullRequestsComplete = false;
         // A missing prerequisite clears what it showed; a failed request
         // keeps the last items until the next refresh.
         if (result.state === "not_connected") source.items = [];
@@ -492,12 +504,25 @@ export class SourcesService {
     if (!force && this.#linkedAt && this.#now() - this.#linkedAt < this.#linkMs)
       return;
     const items = this.#items();
-    const topology = await this.#options.topology().catch(() => []);
-    const links = items.length
-      ? await linkWorkItems(topology, items, this.#options.resolver)
-      : [];
+    let catalogueComplete = true;
+    const topology = await this.#options.topology().catch(() => {
+      catalogueComplete = false;
+      return [];
+    });
+    const nextClaims = this.#linkClaims.fork();
+    const links = await linkWorkItems(topology, items, this.#options.resolver, {
+      claims: nextClaims,
+      observedAt: this.#now(),
+      completeItems:
+        this.#sources.github.state === "connected" &&
+        this.#sources.github.pullRequestsComplete,
+      catalogueComplete,
+    });
     if (epoch !== this.#epoch) return;
+    const owners = this.#options.runtimeOwners?.();
+    if (owners) nextClaims.reconcileRuntimes(owners);
     this.#links = links;
+    this.#linkClaims = nextClaims;
     this.#linkedAt = this.#now();
   }
 }

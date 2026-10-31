@@ -31,6 +31,11 @@ export type TownHitContext = {
     x: number;
     y: number;
   }>;
+  /**
+   * Whether an agent is drawn at its seat. One walking, queued or in the
+   * lounge leaves its chair empty, so the chair is its pane. Default: seated.
+   */
+  seated?: (agentKey: string) => boolean;
   zoom: number;
 };
 
@@ -89,7 +94,11 @@ export function townHitTest(
           if (Math.abs(x - cx) > 11 || !(top ? y < Y + 22 : y > Y + 34))
             continue;
           const device = desk?.paneDevices[seat];
-          if (device?.agentKey && context.model.agents.has(device.agentKey))
+          if (
+            device?.agentKey &&
+            context.model.agents.has(device.agentKey) &&
+            (context.seated?.(device.agentKey) ?? true)
+          )
             return { kind: "agent", key: device.agentKey };
           if (device)
             return { kind: "pane", key: device.key, deskKey: cell.deskKey };

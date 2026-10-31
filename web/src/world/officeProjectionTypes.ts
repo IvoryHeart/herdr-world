@@ -12,6 +12,7 @@ export type OfficeAgentDestination = "room" | "reception" | "bar";
 export type OfficeAgentPlacement = "seated" | "standing" | "waiting" | "bar";
 
 export type OfficeAgent = {
+  appearance?: { status?: string; avatar?: string };
   key: string;
   nodeId: string;
   currentPaneRef: OfficeQualifiedTarget;
@@ -62,6 +63,7 @@ export type OfficePaneRosterEntry = {
 };
 
 export type OfficeDesk = {
+  appearanceStatus?: string;
   key: string;
   hostKey: string;
   roomKey: string;

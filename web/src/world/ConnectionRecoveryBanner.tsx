@@ -1,6 +1,8 @@
 import { useState } from "react";
-import type { ConnectionLifecycleState } from "../api";
+import { bridge, type ConnectionLifecycleState } from "../api";
 import { reconnectConnectionProfile } from "../connectionProfiles";
+import { store } from "../store";
+import { worldRuntimeStore } from "./runtimeStore";
 import "./connectionRecovery.css";
 
 /** Reuse the existing profile recovery verb, always on the captured host ID. */
@@ -11,15 +13,12 @@ export async function reconnectCachedHost(
     refresh(): Promise<unknown>;
   },
 ) {
-  const call =
-    deps?.call ??
-    (async (method, params) =>
-      (await import("../api")).bridge.call(method, params));
+  const call = deps?.call ?? ((method, params) => bridge.call(method, params));
   const refresh =
     deps?.refresh ??
     (async () => {
-      await (await import("../store")).store.refreshConnections();
-      await (await import("./runtimeStore")).worldRuntimeStore.refresh();
+      await store.refreshConnections();
+      await worldRuntimeStore.refresh();
     });
   try {
     await reconnectConnectionProfile({ connectionId, call });

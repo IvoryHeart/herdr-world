@@ -148,14 +148,7 @@ describe("Profile store", () => {
 
   test("the profiles RPCs map to the store's writes; others don't", () => {
     const store = new ProfileStore(fresh());
-    const terminal = { connection_id: "local", terminal_id: "term_a" };
-    profileWrite("world.town_master.set")!(store, { terminal });
-    expect(store.get().town_master).toEqual(terminal);
-    expect(() =>
-      profileWrite("world.town_master.set")!(store, {
-        terminal: { ...terminal, terminal_id: "term_b" },
-      }),
-    ).toThrow("another agent is the Town master");
+    expect(profileWrite("world.town_master.set")).toBeNull();
     profileWrite("world.profiles.delete")!(store, { id: "designer" });
     expect(store.profile("designer")).toBeUndefined();
     expect(profileWrite("world.profiles.list")).toBeNull();

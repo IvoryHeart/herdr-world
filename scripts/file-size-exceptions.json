@@ -9,7 +9,6 @@
     "server/src/assistant/tasks.ts": 1703,
     "server/src/bridge/terminal-bridge.ts": 1610,
     "server/src/http/update.ts": 1088,
-    "server/src/index.ts": 1783,
     "server/src/workspace/git-diff.ts": 1363,
     "server/src/world/snapshot.ts": 1077,
     "site/styles.css": 2354,
@@ -22,25 +21,21 @@
     "web/src/components/ConnectionSwitcher.tsx": 1349,
     "web/src/components/DiffContentView.tsx": 1875,
     "web/src/components/DiffViewerPanel.tsx": 2288,
-    "web/src/components/FileExplorerDialog.tsx": 2460,
+    "web/src/components/FileExplorerDialog.tsx": 2454,
     "web/src/components/FilePreviewContent.tsx": 1237,
     "web/src/components/TerminalComposer.tsx": 1230,
     "web/src/components/TerminalView.tsx": 4282,
-    "web/src/components/WorkspaceInspectorHost.tsx": 1369,
+    "web/src/components/WorkspaceInspectorHost.tsx": 1363,
     "web/src/components/WorkspaceTree.tsx": 1311,
     "web/src/store.ts": 2964,
     "web/src/styles/layout/app.css": 1083,
-    "web/src/world/DeskView.tsx": 1185,
-    "web/src/world/TownView.tsx": 1450,
+    "web/src/world/DeskView.tsx": 1139,
     "web/src/world/board/board.css": 1419,
-    "web/src/world/herdrOfficeProjection.ts": 1303,
     "web/src/world/town/town.css": 1383,
-    "web/src/world/town/townRenderer.ts": 1674,
     "web/src/world/useWorldInspectorController.ts": 1136,
-    "web/src/world/worldObject.ts": 1216
+    "web/src/world/worldObject.ts": 1052
   },
   "unratcheted": {
-    "web/src/world/BoardView.tsx": "Until split B (pm decision 2026-10-23, so the open Board PRs can land): split B removes this entry and records the post-split size under limits.",
-    "web/src/world/town/TownCanvas.tsx": "Until split C (pm decision 2026-10-23, so the open Town PRs can land): split C removes this entry and records the post-split size under limits."
+    "web/src/world/BoardView.tsx": "Until split B (pm decision 2026-10-23, so the open Board PRs can land): split B removes this entry and records the post-split size under limits."
   }
 }

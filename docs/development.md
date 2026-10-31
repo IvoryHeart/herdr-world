@@ -17,6 +17,21 @@ Open <http://localhost:5173>. Vite proxies API and WebSocket traffic to the Worl
 service at <http://127.0.0.1:8788>. To use explicit Herdr sockets or SSH, pass service
 options after the workspace command or configure a profile in the UI.
 
+A development or preview World next to an installed one needs its own data
+folder: set `HERDR_WORLD_DATA_DIR` for that instance, and copy
+`connections.json` (and `settings.json`) into it once if it should reach the
+same Herdr hosts. A second World on an occupied folder refuses to start. Point
+its agent CLI at it with `HERDR_WORLD_URL` and the same `HERDR_WORLD_DATA_DIR`,
+which locates the CLI token. Tests never use your data folder: the test preload
+sets `HERDR_WORLD_DATA_DIR` under the run's temporary directory, and a test that
+starts World with its own `HOME` unsets it. To test the service end to end, start
+it in the test's own process with `startTestService`
+([test services](../server/src/service/testing/services.ts)), which gives it its own
+folder. Spawn `server/src/index.ts` only for what needs a real process: signals and
+exit codes, the lock between processes, a home folder of its own, or fakes on
+`PATH`. A test that saves source settings should switch the GitHub source off
+first, because `gh` keeps its own state in the process's home folder.
+
 ## Development tools
 
 World's event traces and renderer counters exist only in development builds:
@@ -39,12 +54,25 @@ bun run test:quick            # non-Chromium suite
 CHROME_BIN=/path/to/chromium bun run test:browser
 bun run test:world            # all World browser acceptance suites
 bun run test:world --shard=1/6 # reproduce one CI shard, one browser at a time
-bun run test:world --shard=latency # the latency-budget suites, as CI's quiet job runs them
 bun run test --web-browser    # Chrome-driven suites outside World, as CI's web job runs them
 bun run build:site            # landing page/tutorial
 bun run check                 # repository checks and tests
 bun run check:delivery        # full local gate, including behavioral verification
 ```
+
+Process fixtures run fake behavior in the test process where practical. The
+[diagnostics adapter](../scripts/browser-diagnostics.ts) and
+[native plugin dispatch](../server/src/config/plugin-command.ts) accept narrow
+process doubles with production defaults. Launcher and hook fixtures call the
+real status/scope producers in-process and retain CLI conformance cases.
+The [SSH process fixture](../server/src/connections/testing/inProcessSsh.ts) keeps
+forwarding in-process, with a private Unix-socket transport through `curl` and
+small shell shims so real PID death, reconnect isolation and socket cleanup stay
+covered. It requires `curl` on Unix. Real inherited-pipe and argv/exit regressions
+also keep lightweight shell children; Windows retains Bun for these OS-boundary
+fixtures because it has no required POSIX shell. Keep those boundary checks,
+assertions and deadlines when optimizing fake startup. Measure alternating
+baseline/candidate runs and report negligible or negative results honestly.
 
 The test wrapper runs ordinary files in parallel using up to eight available CPUs.
 Set `HERDR_TEST_PARALLEL`
@@ -55,6 +83,28 @@ tests with up to four file workers and one case per worker. World bundles are bu
 per run; each case retains its own server, fixture and fresh browser profile.
 Focused test files build a bundle once per file. Production responsiveness cases
 are serial within each file so their global diagnostic instrumentation cannot overlap.
+
+`useWorldObservation.test.ts` mounts the real observation hook on the test clock
+for watch revision and unavailable-host scope policy. Actions browser cases keep
+rendered watch feedback, qualified action wiring and focus at desktop/phone widths.
+
+Keep policy checks headless once a replacement test and its mapping in
+`verification/coverage.json` exist. Retained browser cases name the behavior that
+requires a browser: geometry, trusted input, focus, rendering, renderer lifecycle
+or visual comparison. For example, `useWorldCreatedTerminal.test.ts` mounts the
+production creation hook and the Inspector selection-lease effect on the test
+clock to check admission retries, deadline cancellation and stale observations.
+`WorldTerminalHandoff.test.ts` and
+`SharedViewCreation.test.ts` retain launcher wiring, focus, rendered Inspectors and
+real terminal ownership. Controlled opener tests do not replace browser evidence
+that the actual opener honors cancellation.
+`useHostsFilter.test.ts` runs the real Hosts hook and catalogue refresh on the
+test clock, including delayed/empty admission and saved-scope reconciliation.
+`HostsFilter.test.ts` retains responsive geometry, rendered navigation and removal
+feedback, Inspector focus and terminal lifecycle. Town cases stay in the browser.
+The handoff browser probe holds the real browser-local focus request, then uses
+controlled admission time and named opener completion for its cancellation
+check; see [the fixture clock guide](../web/src/world/README.md#browser-fixtures-on-test-time).
 
 **Known limitation: native sequential World browser runs.** Direct `bun test` runs
 across multiple `HostsFilter*.test.ts` or `ProductionContexts*.test.ts` files,
@@ -80,37 +130,55 @@ those paths are unaffected, including shards with one file worker.
 PR CI and Release run the remaining repository checks with one file worker and up
 to two concurrent cases, preserving the upstream test configuration. Both call the
 [shared World browser workflow](../.github/workflows/world-browser.yml), which runs
-six separate runners, each with one file worker and one active case,
-**Web browser tests** and **World latency budgets**. That job runs only the suites that assert
-wall-clock budgets (production contexts, concurrent contexts, terminal handoff):
-it waits until the runner is quiet after setup (`scripts/wait-for-quiet.ts`:
-three consecutive seconds at least 90% idle, at most 60 s) and then runs them one
-case at a time. A failed case runs once more (`--retry=1`): a hosted runner still
-produces the odd slow event, and the worst-event budgets are judged on one run.
-The shards never retry. The [shard inventory](../scripts/world-browser-suites.ts)
-includes all World browser suites, split between the six shards and the
-`latency` group; inventory checks reject missing or duplicate assignments. The
-required Delivery checks status succeeds only when repository validation, every
-World shard, the web browser job and the latency job pass. Markdown-only and exact-head reuse keep their existing shorter paths.
-Release packaging requires repository validation, all six shards, the web
-browser job and the latency job to pass. **Web browser tests** runs the
+six separate runners, each with one file worker and one active case, and
+**Web browser tests**. Browser jobs install the Chrome for Testing build pinned in
+[`tools/chrome/test-chrome.json`](../tools/chrome/test-chrome.json) (checksum
+verified, cached) and print its version and the runner's CPU, so a browser
+update is a reviewed change rather than a runner-image roll-out. Ubuntu 24.04
+and later deny unprivileged user namespaces to programs without an AppArmor
+profile, which aborts Chrome's sandbox outside the packaged path; on CI the
+installer loads a profile like the Chrome package's for the pinned binary, and
+then starts it headless once, so a browser that cannot start fails installation
+rather than every test. Locally it prints the two commands instead. No job retries a
+failed test. The [shard inventory](../scripts/world-browser-suites.ts) splits all
+World browser suites between the six shards; inventory checks reject missing or
+duplicate assignments. The required Delivery checks status succeeds only when
+repository validation, every World shard and the web browser job pass.
+Markdown-only and exact-head reuse keep their existing shorter paths.
+Release packaging requires repository validation, all six shards and the web
+browser job to pass. **Web browser tests** runs the
 Chrome-driven suites outside World (`webBrowserSuites` in the same inventory) one
 file at a time; an inventory check rejects an unlisted one.
 Prepare Release validates its generated working tree in one checkout with one file
 worker; it retains the complete World suite, with one active World case at a time.
 
 Each World run writes JUnit results and per-file timings under `.agents/delivery/`.
-CI uploads them as `world-browser-N-attempt-M` and `world-latency-attempt-M`
-artifacts, and the web job's JUnit results as `web-browser-attempt-M`, including on test failure. Compare
+CI uploads them as `world-browser-N-attempt-M` artifacts, and the web job's JUnit results as `web-browser-attempt-M`, including on test failure. Compare
 the slowest shard and total delivery time before changing the shard assignment or
 concurrency. The slowest file bounds the slowest shard, so add shards only when
 the slowest shard holds more than one long file. Keep all scenario combinations, dense
-fixtures, real deadline checks and input-latency budgets when rebalancing.
+fixtures, real deadline checks and work-count ceilings when rebalancing.
+
+No World test asserts a wall-clock number. The dense suites (production and
+concurrent contexts) assert what does not depend on the runner's speed: routing
+and generation of every input, one acknowledgement per input, frame coalescing,
+and ceilings on the work done per phase (terminal mounts, card observer
+registrations, Board commits, World preparations, construction units and
+projections, counted by dev-only counters in the production modules; see
+`web/src/world/testing/workCeilings.ts`). Their input delays go to the
+non-blocking [World latency trend](../.github/workflows/world-latency-trend.yml):
+on every main push, and on a pull request labelled `latency-trend`, it runs each
+of those suites alone on a quiet runner (`scripts/wait-for-quiet.ts`: three
+consecutive seconds at least 90% idle, at most 60 s) with the pinned Chrome, and
+its summary sets each p95 and worst delay beside the median of recent main runs
+on the same CPU model, marking a rise over 25% (`scripts/latency-trend.ts`).
+Hosted runners differ by CPU model and image, so a timing is comparable only
+within one; no branch rule requires the trend.
 
 Production responsiveness cases also save `world-production-*-inputs.json` in
 those CI artifacts. These lightweight timings correlate independently scheduled
 inputs with browser dispatch, service replies, browser acknowledgements and
-snapshot admission. Inspect them when a latency limit fails; CI keeps full Chrome
+snapshot admission. Inspect them when the latency trend flags a rise; CI keeps full Chrome
 timeline tracing disabled to avoid adding its recording cost to the benchmark.
 
 World browser harnesses use two bounded phases through
@@ -120,7 +188,7 @@ per-fixture deadline begins. The fixture budget still includes serving HTML and
 assets, application initialization, interaction and every assertion. Browser exit
 fails either phase immediately, and deadline timers are cleared on completion.
 The outer Bun timeout includes setup, the startup allowance, fixture execution
-and cleanup. Input latency, rendering and operation-specific limits are unchanged.
+and cleanup. Rendering and operation-specific limits are unchanged.
 
 This boundary addresses a confirmed first-case CI failure: Chrome reached its
 debugging endpoint after 18.4 seconds, connected after 25.5 seconds and requested
@@ -131,7 +199,7 @@ the repaired harness completed all Spaces assertions in 33.3 seconds, with the
 same 30-second fixture limit. This proves startup consumed the acceptance budget;
 it does not identify why Chrome initialization was slow on that runner. Diagnose
 any failure after the page request separately, using fixture progress or input
-artifacts, rather than extending an acceptance or latency limit.
+artifacts, rather than extending an acceptance limit.
 
 A separate compact Inspector failure occurred after page loading: the terminal
 handoff fixture checked `data-view="files"`, optionally clicked the Files back
@@ -260,6 +328,34 @@ From inside the child pane, `herdr-world spawned-by w1:p1` makes the same
 stamp through the running World service, which first checks that the caller
 runs in that pane.
 
+## Town move execution
+
+`server/src/world/town-move.ts` owns desk/pane move orchestration independently
+of the RPC transport. Its caller injects the captured connection ID/generation,
+current-runtime check, Herdr call, Board access/publication and the service's
+shared `townMoveQueues` map. It never looks up a default connection. A queued
+retired generation is refused before reading another runtime; the existing
+`moveDesk`/`movePane` functions reread topology after queue admission and keep
+their layout, last-room, rollback and uncertain-step rules. Source colours are
+captured at queue entry.
+
+Native movement and appearance/Board reconciliation finish in the same queue
+slot, matching the shared appearance contract. Both RPC and CLI capture
+colour intent at admission and read the latest fields after asynchronous probes,
+so operator edits survive native close cleanup and movement. Per-field edit
+revisions, bounded by current saved appearance bindings,
+distinguish an explicit reset from an untouched field during a move. After
+relocation, reconciliation replays the latest committed source/destination
+field values, preserving qualified saves addressed to the new native IDs as
+well as saves admitted against the old IDs. Compensation compares every alias
+that converges onto a restored native ID. Explicit colour intent survives
+native-close cleanup; a colour restoration supersedes that intent. This bookkeeping is transient;
+the persisted appearance schema stays the same. Successful moves follow confirmed
+replacement IDs; failed moves reconcile only observed terminal witnesses. Unknown locations
+are not guessed or retried. Board-follow errors are reported separately while
+the real move outcome is preserved. RPC keeps transport replies and synchronous
+unmatched-method decline. This extraction adds no user controls or camera policy.
+
 ## Stored Groups
 
 World stores Teams, Pods and generic kinds in the existing Board document's
@@ -323,8 +419,130 @@ Board byte cap, 500 groups, 32 members per group, 32 Pods per participating
 connection and bounded roles/attributes. Pods default to `open_pr_limit: 2`;
 `open_pr_limit` and ordered `queue` are intent, never enforced work limits.
 
-This is the model/store foundation. The Groups CLI, roster, frames and one-time
-import are delivered separately; existing user controls are unchanged.
+### Group projections and derived facts
+
+`shared/groupViews.ts` combines stored Groups with bounded Herdr observations
+and existing source work links. Room members are qualified Desk/tab refs; Desk
+members are qualified terminal refs. These projection refs stay separate from
+stored `GroupRef` and never enter `relations.groups`. Their view keys use a
+separate namespace, so a stored ID cannot shadow a Herdr projection. Cached
+Herdr groups remain visible as noncurrent observations without live roll-ups.
+
+`shared/groupObservations.ts` gives service and browser adapters the same
+admission rules. Only ready, actionable, nonstale snapshots from the current
+runtime generation supply live members. A Pod resolves using the actual
+`agent.list` name qualified by pane, terminal and harness, never a truncated
+display label or the harness name. Conflicting current names and mismatched
+session metadata do not select an occupant. Existing service/browser session
+fingerprint functions qualify work links identically.
+
+Away and ambiguous members contribute neither status nor work. Present
+terminals are deduplicated across member refs; status rolls up worst first:
+needs you, failed, working, finished, quiet, unknown. Open PRs are deduplicated
+from existing source links matched by connection, generation, pane and session;
+merged/closed PRs are excluded. A Pod defaults to a displayed limit of two,
+and exceeding the limit sets a warning without preventing any edit. GitHub's
+source status distinguishes current counts, stale cached work and unavailable
+counts; only current counts produce a limit warning. The Now
+list is the stored ordered queue. This read model copies no source facts into
+the Board and grants no downstream operation lease.
+
+The Groups CLI, roster and Town Summary use this read model rather than
+duplicating topology or source ownership.
+
+### Group CLI and Herdr membership moves
+
+`herdr-world group` supplies create, add, remove, lead, reviewers, now, list,
+show, delete and promote. `pod`/`team` aliases supply the kind. Names must resolve
+uniquely; explicit addresses preserve away Pod members. Teams require a current
+terminal on their connection. Promotion preserves identity and requires an
+explicit complete terminal-to-address mapping. An exclusive-role transfer needs
+`--replace --yes`; deleting needs `--yes` and never deletes agents.
+Lead/reviewer edits follow the owner/FirstMate crew rule across every verb.
+There is no caller identity allowlist or authenticated role gate. The actual
+CLI actor supplies the reported/inferred sender claim, or unknown when absent.
+Group changes use bounded `relations.group_changes`, outside Board CLI undo.
+
+`group import FILE --yes` reads one explicit Pod table on the CLI side (48000
+characters, at most 32 rows), with Lead/Builders/Reviewers and optional Now. It
+resolves names under the selected connection or accepts a caller-supplied JSON
+name-to-address mapping for away/annotated names. All creates are one Board
+transaction; duplicate role/Now columns, mismatched table columns, existing Pod
+names, unresolved names, caps or exclusivity conflicts refuse the entire import. No existing Group is overwritten and no background
+file watcher or synchronization exists. `group list --kind pod --markdown`
+renders qualified role refs and ordered Now items with escaped table content.
+Derived PR counts are display-only; this rendering is not a full Board backup.
+
+Room moves preserve a desk's chosen colour or its spawn-parent colour
+inheritance. Saved relations and colours are captured at queue admission; a
+colour or spawn claim changed after the preview is read at that boundary.
+
+Rooms/Desks remain unpersisted. Their create/delete/role edits are refused.
+`group add DESTINATION AGENT --herdr` reads a complete effect from the captured
+connection/generation before moving. Room moves print the whole desk and every
+agent; Desk moves print the selected pane and destination. JSON mode sends this
+preview to stderr and retains one JSON result on stdout. Its hash binds the
+qualified identities, names/sessions and destination; queue-entry rereading
+refuses a changed plan, and native move admission checks terminal witnesses.
+`--allow-close-room` separately opts into closing a source room's last desk.
+
+`group-move.ts` uses the same injected service-owned queue as RPC through
+`town-move.ts`, with no default-host fallback or RPC context dependency. The
+existing native rollback, uncertain-step handling and post-queue observed Board
+reconciliation apply unchanged. CLI results retain the real move outcome and
+confirmed locations: Done, Partly done, Not done, or Unknown. Failure returns a
+nonzero exit plus the structured result; Unknown is never automatically retried.
+
+### Groups panel
+
+`groups/GroupsWindow.tsx` mounts in WorldControlPlane inside the existing
+WorldPanels provider. Actions opens it with the `herdr-world:groups-open` event;
+spatial signs can supply the stable view key. It reuses the window manager and
+panel chrome. `useGroups` subscribes to existing runtime/source observations and
+owns only its reference-counted Board subscription; it never stops the shell's
+runtime owner. The detail reuses browser-only PullRequestCard controls.
+
+`shared/groupOps.ts` supplies the existing Group operation types to both browser
+and service. Forms and confirmations pass the reviewed Board revision through
+BoardDocumentStore and the optional `world.board.patch` revision parameter to
+BoardStore.patchIf. A stale revision returns current state/conflict without retry.
+Add captures that revision when its form opens, including before transfer
+confirmation. Add/Edit/Roles close only after their completion callback reports
+a successful write. A refused write keeps the draft and form-local error;
+adopting the refreshed revision requires an explicit review action and never
+dispatches a write itself. Current-agent Add captures its canonical ref and
+connection/generation/pane/terminal/name/session witness at selection, then
+revalidates without substituting a replacement. UI and CLI terminal selections
+must have one current Herdr name match on that connection before deriving a Pod
+address; an explicit qualified address remains intentional, including when away
+or ambiguous.
+Legacy callers omitting a revision keep their existing operation-specific rules.
+Browser edits without an explicit sender claim retain unknown attribution; the
+crew rule is explanatory, not a principal check. Ambiguous member inspection
+revalidates connection, generation, terminal, pane and session before opening,
+and never persists a tie-break or changes effective membership.
+
+### Group and agent Interest
+
+Board `layout.group_interest` stores Focus/Mute viewer intent by immutable stored
+Team/Pod ID, separate from membership and attrs. Default removes the overlay.
+Projected Room/Desk controls and persistence are refused in v1. Group deletion or
+Team dissolution removes its overlay in the same Board write; transient unresolved
+membership does not. The existing layout-entry cap includes these preferences.
+`board-interest.ts` owns parsing and writes without changing terminal pruning.
+
+Explicit terminal overrides now include watching (force-Watch); null/deletion means
+Default (from groups). Old absent records keep that meaning; no former explicit
+Watch is guessed. At read time an agent override wins, else group Focus beats
+Mute, else watching. `shared/groupInterest.ts` derives from current unambiguous
+members without copying terminal choices or changing status/reception. Focus is
+a union of reachable effective-focused terminals. The cached live reader keeps
+consumer identity for unrelated Board edits and resolves address restarts afresh.
+
+`useChimeHost` installs the live reader into the real chime source, and Inspector
+bells explain the winning claim and overrides. The existing `shouldChime` remains
+decisive: Town-master needs-you bypasses focus only, never mute, device-off,
+motif-off or seen. Reception and needs-you counts remain independent.
 
 ## Agent CLI
 
@@ -346,7 +564,11 @@ withdraws. A waiting CLI returns on answer, dismissal or withdrawal. Closed
 questions are retained and trimmed together. New verified asks carry their
 runtime, terminal, workspace and session identity into reception and
 notification targets; an unverified ask carries them, still marked
-unverified, only when exactly one local Herdr has the pane it claims. Asks
+unverified, only when exactly one local Herdr has the pane it claims and every
+other candidate local Herdr explicitly reports `pane_not_found`. A timeout,
+unavailable or unsupported host, or a malformed pane reply, leaves that ask in
+the question list without a reception or notification target. Remote hosts do
+not participate in this local placement check. Asks
 from agents also carry Herdr's agent name (`agent.get`). World announces newly
 observed asks once, and excludes closed asks from every open-question
 projection. Behind a reverse proxy on
@@ -362,7 +584,7 @@ naming no pane is not looked up and is labelled "terminal with no pane"; a
 claim that is not a Herdr pane ID is refused. Unverified callers share one
 allowance of open questions. A call through a proxy, such as the Vite dev
 server, reaches the service from the proxy's connection, so it is never
-verified: point `HERDR_WORLD_URL` at the service's own port. Changes, questions and results live
+verified: point `HERDR_WORLD_URL` at the service's own port. Board changes, questions and results live
 in `world-ledger.json` beside the Board file (`HERDR_WORLD_LEDGER_PATH`
 overrides it). To try it against a development service, run the CLI with the
 same `HOME` (or set `HERDR_WORLD_URL` to its loopback URL and

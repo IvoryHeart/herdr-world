@@ -1,6 +1,11 @@
 import { createRoot } from "react-dom/client";
 import { bridge } from "../api";
-import { store } from "../store";
+import { __storeTesting, store } from "../store";
+import {
+  readTerminalComposerDraft,
+  terminalComposerDraftKey,
+  writeTerminalComposerDraft,
+} from "../terminalComposer";
 import { copyTextWithFeedback } from "../copyText";
 import { AgentHistoryDrawer } from "./AgentHistoryDrawer";
 import "../styles/tokens.css";
@@ -18,65 +23,77 @@ async function settle() {
 async function run() {
   const originalConnection = bridge.connection;
   let toolFetches = 0;
+  let current = true;
+  const sends: unknown[] = [];
+  const draftKey = terminalComposerDraftKey("test", 7, "p");
+  __storeTesting.replaceState({
+    ...store.get(),
+    activeConnectionId: "test",
+    connectionGeneration: 3,
+    serverRuntimeGeneration: 7,
+  });
+  writeTerminalComposerDraft(draftKey, "Shared native draft");
   /** Replaces agent_session.get's answer while set. */
   let sessionAnswer: (() => Promise<unknown>) | null = null;
   bridge.connection = () => ({
     connectionId: "test",
-    generation: 1,
-    serverRuntimeGeneration: null,
-    isCurrent: () => true,
+    generation: 3,
+    serverRuntimeGeneration: 7,
+    isCurrent: () => current,
     acceptsServerGeneration: () => true,
-    call: async (method) =>
-      method === "agent_session.get"
-        ? sessionAnswer
-          ? sessionAnswer()
-          : { status: "ok", stats: { turns: 1, records: 3 } }
-        : method === "agent_history.entry"
-          ? (toolFetches++, { text: "Tool output ready" })
-          : {
-              status: "ok",
-              history_version: 2,
-              mode: "snapshot",
-              window_limit: 200,
-              cursor: { epoch: "test", revision: 1 },
-              entries: [
-                {
-                  id: "message-1",
-                  role: "assistant",
-                  kind: "message",
-                  text: "# Example\n\nA message for desktop layout verification.",
-                  sent_at: new Date(
-                    new Date().getFullYear(),
-                    8,
-                    20,
-                    17,
-                    38,
-                  ).toISOString(),
-                },
-                {
-                  id: "user-1",
-                  role: "user",
-                  kind: "message",
-                  text: "Searchable 中文 note from the user.",
-                  sent_at: new Date(
-                    new Date().getFullYear() - 1,
-                    0,
-                    2,
-                    0,
-                    5,
-                  ).toISOString(),
-                },
-                {
-                  id: "tool-1",
-                  role: "tool",
-                  kind: "tool_result",
-                  tool_name: "read",
-                  text: "",
-                  text_bytes: 17,
-                  sent_at: "2026-01-01T00:01:00Z",
-                },
-              ],
-            },
+    call: async (method, params) =>
+      method === "pane.send_input"
+        ? (sends.push(params), {})
+        : method === "agent_session.get"
+          ? sessionAnswer
+            ? sessionAnswer()
+            : { status: "ok", stats: { turns: 1, records: 3 } }
+          : method === "agent_history.entry"
+            ? (toolFetches++, { text: "Tool output ready" })
+            : {
+                status: "ok",
+                history_version: 2,
+                mode: "snapshot",
+                window_limit: 200,
+                cursor: { epoch: "test", revision: 1 },
+                entries: [
+                  {
+                    id: "message-1",
+                    role: "assistant",
+                    kind: "message",
+                    text: "# Example\n\nA message for desktop layout verification.",
+                    sent_at: new Date(
+                      new Date().getFullYear(),
+                      8,
+                      20,
+                      17,
+                      38,
+                    ).toISOString(),
+                  },
+                  {
+                    id: "user-1",
+                    role: "user",
+                    kind: "message",
+                    text: "Searchable 中文 note from the user.",
+                    sent_at: new Date(
+                      new Date().getFullYear() - 1,
+                      0,
+                      2,
+                      0,
+                      5,
+                    ).toISOString(),
+                  },
+                  {
+                    id: "tool-1",
+                    role: "tool",
+                    kind: "tool_result",
+                    tool_name: "read",
+                    text: "",
+                    text_bytes: 17,
+                    sent_at: "2026-01-01T00:01:00Z",
+                  },
+                ],
+              },
   });
   const container = document.createElement("div");
   container.style.cssText = "display:flex;height:600px;width:1000px";
@@ -207,6 +224,35 @@ async function run() {
         !!container.querySelector(".agent-history-chat"),
       "History must initially show Chat with its labeled view switch",
     );
+    const composer = () =>
+      container.querySelector<HTMLTextAreaElement>(
+        ".agent-history-composer textarea",
+      )!;
+    check(
+      composer().value === "Shared native draft",
+      "History must share the terminal's runtime-qualified draft, not its transport epoch",
+    );
+    container
+      .querySelector<HTMLButtonElement>(".agent-history-composer-send")!
+      .click();
+    await settle();
+    check(
+      sends.length === 1 && readTerminalComposerDraft(draftKey) === "",
+      "History must submit the captured pane draft exactly once",
+    );
+    writeTerminalComposerDraft(draftKey, "Keep after retirement");
+    await settle();
+    current = false;
+    container
+      .querySelector<HTMLButtonElement>(".agent-history-composer-send")!
+      .click();
+    await settle();
+    check(
+      sends.length === 1 &&
+        readTerminalComposerDraft(draftKey) === "Keep after retirement",
+      "Retired History input must refuse dispatch and restore the original draft",
+    );
+    current = true;
     // Exercise Chat at the same narrow desktop width before retaining the
     // Timeline card, filter, selection and keyboard regressions below.
     container.style.width = "640px";

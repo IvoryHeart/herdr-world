@@ -6,6 +6,7 @@ import type { ConnectionClient } from "../api";
 import "../styles/tokens.css";
 import "../styles/base.css";
 import { terminalFocusBlockedByOverlay } from "../terminalFocus";
+import { runSharedDeskWatchChecks } from "./testing/deskWatchBrowser";
 import { handoffId } from "./handoffs";
 import { DeskBoard } from "./DeskView";
 import { WorldDeskStore } from "./deskStateStore";
@@ -905,6 +906,8 @@ async function run() {
     !document.querySelector('[data-world-ask="q-desk"]'),
     "withdrawal clears Desk's question mark",
   );
+  flushSync(() => root.unmount());
+  await runSharedDeskWatchChecks(check);
 }
 
 run()

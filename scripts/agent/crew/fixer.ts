@@ -15,6 +15,7 @@ import {
   getRun,
   holdLock,
   latestPromptPrs,
+  RUN_TIMEOUT_EXIT_CODE,
   openCrewStore,
   openLock,
   setAction,
@@ -67,7 +68,7 @@ Rules:
 - Follow AGENTS.md and the candidate-delivery skill (.agents/skills/candidate-delivery/SKILL.md): fix every P1–P3 finding in one pass, with tests and docs as the change needs.
 - Push to ${branch} only. The pre-push hook runs the gate; wait for it and never bypass it. If the push is refused because the branch moved, stop and say so here; don't force-push.
 - Never use git stash: its stack is shared with every worktree.
-- After pushing, post one comment on the PR that starts with \`[fixer #${pr}]\`, then one line per finding or step naming its fixing commit. A step that needs no push, such as rerunning a flaky job, gets the same comment saying what you did.
+- After pushing, post one comment on the PR that starts with \`[fixer #${pr}]\`, then one line per finding or step naming its fixing commit. A step that needs no push gets the same comment saying what you found. Diagnose CI failures and fix their cause; never rerun a job to clear a failure.
 - When you are done, pushed or not, run \`${task.done}\` so the watcher hands the PR on.
 - To reach the owner, use \`herdr-world ask "QUESTION" --owner-only --wait\` from your own pane; no other channel.
 - Never merge, approve, use --admin, add labels, prompt or message another agent, or post local paths, hosts, usernames or session links.
@@ -219,7 +220,11 @@ export async function fix(options: Options, dir: string, deps: Deps) {
     return 143;
   }
   process.on("SIGTERM", () => {
-    show("── stopped: the PR merged or closed");
+    show(
+      getRun(crew, runId)?.exitCode === RUN_TIMEOUT_EXIT_CODE
+        ? "── stopped: run timed out; slot released without retry"
+        : "── stopped: the PR merged or closed",
+    );
     process.exit(143);
   });
   let code = 1;

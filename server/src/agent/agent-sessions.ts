@@ -104,6 +104,8 @@ export function createAgentSessionHandlers(args: {
     conversationWatch,
     previewLink: linker.preview,
     link: linker.link,
+    enrichActivity: (result: unknown) =>
+      enrichAgentActivity(result, args.files, resolverContext),
     listWithActivity: async (params: Record<string, unknown>) =>
       enrichAgentActivity(
         await args.herdrCall("agent.list", params),

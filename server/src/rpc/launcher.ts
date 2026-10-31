@@ -41,8 +41,8 @@ async function dispatchLauncherRpc(
     board,
     logger,
     profiles,
+    terminalSettings,
     publishBoardChanged,
-    publishProfilesChanged,
     publishWorldInvalidation,
   } = rpc.services;
   const { herdr, sshHost } = connection;
@@ -100,7 +100,7 @@ async function dispatchLauncherRpc(
         throw new Error("That profile no longer exists.");
       const call = (rpc: string, rpcParams: Record<string, unknown>) =>
         herdr.call(rpc, rpcParams, 70_000);
-      const result = await launchAgent(call, {
+      let result = await launchAgent(call, {
         workspace_id: String(p.workspace_id ?? ""),
         ...profileLaunch(profile ?? null, {
           kind: String(p.kind ?? ""),
@@ -111,34 +111,61 @@ async function dispatchLauncherRpc(
         }),
         isCurrent: requestIsCurrent,
       });
-      if (profile && result.terminal_id && route.scope === "connection") {
+      if (
+        profile &&
+        result.terminal_id &&
+        result.pane_id &&
+        route.scope === "connection" &&
+        requestIsCurrent()
+      ) {
+        let settingsSaved = false;
         try {
-          publishProfilesChanged(
-            profiles().assign({
+          await terminalSettings().assign(
+            {
               connection_id: route.connectionId,
+              connection_generation: route.generation,
+              pane_id: result.pane_id,
               terminal_id: result.terminal_id,
-              profile_id: profile.id,
-            }).revision,
+            },
+            profile,
           );
+          settingsSaved = true;
           if (profile.color && result.tab_id) {
             const workspaceIds = await moveWorkspaceIds(call, {
               workspace_id: String(p.workspace_id ?? ""),
             });
+            if (!requestIsCurrent())
+              throw new Error(
+                "Launch runtime changed before saving appearance",
+              );
             publishBoardChanged(
               board().patch([
                 {
-                  op: "card.color",
-                  key: tabCardKey(
-                    route.connectionId,
-                    result.tab_id,
-                    workspaceIds,
-                  ),
-                  color: profile.color,
+                  op: "appearance.set",
+                  target: {
+                    connection_id: route.connectionId,
+                    kind: "tab",
+                    native_id: result.tab_id,
+                    witness: [result.terminal_id],
+                    color_key: tabCardKey(
+                      route.connectionId,
+                      result.tab_id,
+                      workspaceIds,
+                    ),
+                  },
+                  fields: { color: profile.color },
                 },
               ]).revision,
             );
           }
         } catch (error) {
+          if (!settingsSaved) {
+            result = {
+              ...result,
+              status: "failed",
+              message: `Agent started, but its profile settings were not saved: ${error instanceof Error ? error.message : String(error)}`,
+            };
+          }
           logger.warn("A launched agent kept no profile record", {
             detail: String(error),
           });

@@ -1,3 +1,4 @@
+import { worldRuntimeStore } from "../runtimeStore";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   createOfficeProjector,
@@ -5,10 +6,13 @@ import {
   TOWN_PRESENTATION_BOUNDS,
 } from "../herdrOfficeProjection";
 import { useDeskPins } from "../useDeskPins";
+import { DEVTOOLS } from "../devtools/flag";
+import { countWorldWork } from "../devtools/renderer";
 import type { WorldObject } from "../worldObject";
 
 /** Town reveals the first 24 native-order tabs, then 20 more per expansion. */
 export function useTownOffice(world: WorldObject, selectedId: string | null) {
+  useEffect(() => worldRuntimeStore.retainView("town"), []);
   const projectOffice = useMemo(
     () => createOfficeProjector(TOWN_PRESENTATION_BOUNDS),
     [],
@@ -69,27 +73,26 @@ export function useTownOffice(world: WorldObject, selectedId: string | null) {
       return next;
     });
   }, []);
-  const observedOffice = useMemo(
-    (): HerdrOfficeProjection =>
-      projectOffice(
-        world,
-        Date.now(),
-        selectedId,
-        pinnedTabs,
-        expandedRooms,
-        roomFocus?.roomKey ?? null,
-        expandedDeskLimits,
-      ),
-    [
+  const observedOffice = useMemo((): HerdrOfficeProjection => {
+    if (DEVTOOLS) countWorldWork("office.project");
+    return projectOffice(
       world,
+      Date.now(),
       selectedId,
-      projectOffice,
       pinnedTabs,
       expandedRooms,
+      roomFocus?.roomKey ?? null,
       expandedDeskLimits,
-      roomFocus?.roomKey,
-    ],
-  );
+    );
+  }, [
+    world,
+    selectedId,
+    projectOffice,
+    pinnedTabs,
+    expandedRooms,
+    expandedDeskLimits,
+    roomFocus?.roomKey,
+  ]);
   const focusRoom = useCallback(
     (roomKey: string) => {
       const room = observedOffice.roomRoster.find(
