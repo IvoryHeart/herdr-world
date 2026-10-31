@@ -13,6 +13,7 @@ import {
 import { dirname, join } from "node:path";
 import { newWorldId } from "./world-identifiers";
 import { worldIdsMigration } from "./world-ids";
+import { worldProfilesMigration } from "./world-profiles";
 import { worldBindingsMigration } from "./world-bindings";
 import { assertSafeDataPath } from "../config/data-paths";
 
@@ -60,6 +61,7 @@ export const worldMigrations = [
   migration2,
   worldIdsMigration,
   worldBindingsMigration,
+  worldProfilesMigration,
 ] as const;
 
 /** A consistent private rollback copy before any noninitial migration. */

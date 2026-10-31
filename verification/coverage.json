@@ -2271,7 +2271,7 @@
       "area": "Durable identity and bindings",
       "owner": "server/src/world/binding-resolution.ts",
       "requirement": "openspec/specs/world-identity/spec.md",
-      "properties": "Store-issued random kind-prefixed IDs commit before acknowledgement; collisions across registered SQLite families retry; imports preserve IDs; reservations survive retention and restart; stopped backups use fresh entropy; per-kind verified continuity/absence, ambiguity refusal, unresolved preservation, fences separate from identity and attached-only action admission",
+      "properties": "Store-issued random kind-prefixed IDs commit before acknowledgement; collisions across registered SQLite families retry; imports preserve IDs; reservations survive retention and restart; stopped backups use fresh entropy; per-kind verified continuity/absence, ambiguity refusal, unresolved preservation, fences separate from identity and attached-only action admission; independent per-field channel ownership, source-owned complete removal, provenance, explicit display/verb authority, native IDs as occupant claims and stale-read refusal; title-witness replacement, runtime/terminal-local silence, runtime/host-scoped checkout evidence, independent runtime retirement and explicit PR-search completeness",
       "existingTests": [
         "server/src/storage/world-ids.test.ts",
         "server/src/storage/world-identifiers.test.ts",
@@ -2299,13 +2299,27 @@
         "server/src/world/appearance.test.ts",
         "server/src/world/appearance-prune.test.ts",
         "server/src/world/appearance-observation.test.ts",
-        "server/src/agent/terminal-settings.test.ts"
+        "server/src/agent/terminal-settings.test.ts",
+        "server/src/world/field-claims.test.ts",
+        "server/src/agent/agent-claims.test.ts",
+        "server/src/agent/conversation-claims.test.ts",
+        "server/src/agent/conversation-now.test.ts",
+        "server/src/agent/conversation-send-race.test.ts",
+        "server/src/agent/conversation-matrix.test.ts",
+        "server/src/sources/link-claims.test.ts",
+        "server/src/sources/links.test.ts",
+        "server/src/sources/service.test.ts",
+        "server/src/sources/actions.test.ts",
+        "server/src/sources/pullRequestFreshness.test.ts",
+        "server/src/sources/link-claims-boundaries.test.ts",
+        "server/src/sources/github-completeness.test.ts",
+        "server/src/agent/codex-claim-transitions.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/549",
       "technique": "binding-resolution",
-      "assessment": "M4 finite Board/appearance source transitions replay the actual resolver for three seeds, with every required witness and six compiled controls; direct policy tables and real SQLite/root/RPC consumers cover the remaining kinds and persistence boundaries",
+      "assessment": "M4 finite Board/appearance source transitions replay the actual resolver for three seeds, with every required witness and six compiled controls; direct policy tables and real SQLite/root/RPC consumers cover the remaining kinds and persistence boundaries; direct exhaustive claim ownership/read schedules and real conversation/link/service/action consumers cover runtime claims outside M4",
       "status": "modeled",
-      "remaining": "Claims and remaining JSON-owned ID creation are separate work. The model covers a single pane binding with two native/terminal IDs, two policies, two runtime generations and two service incarnations. Native prompt atomicity, physical power-loss safety and arbitrary external source behavior remain excluded.",
+      "remaining": "Remaining JSON-owned ID creation is separate work. Runtime claims use direct finite/consumer evidence, outside M4. The model covers a single pane binding with two native/terminal IDs, two policies, two runtime generations and two service incarnations. Native prompt atomicity, physical power-loss safety and arbitrary external source behavior remain excluded.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
       "partialEvidence": {
         "models": ["quint/binding-resolution.qnt"],
@@ -2337,7 +2351,21 @@
           "server/src/world/appearance.test.ts",
           "server/src/world/appearance-prune.test.ts",
           "server/src/world/appearance-observation.test.ts",
-          "server/src/agent/terminal-settings.test.ts"
+          "server/src/agent/terminal-settings.test.ts",
+          "server/src/world/field-claims.test.ts",
+          "server/src/agent/agent-claims.test.ts",
+          "server/src/agent/conversation-claims.test.ts",
+          "server/src/agent/conversation-now.test.ts",
+          "server/src/agent/conversation-send-race.test.ts",
+          "server/src/agent/conversation-matrix.test.ts",
+          "server/src/sources/link-claims.test.ts",
+          "server/src/sources/links.test.ts",
+          "server/src/sources/service.test.ts",
+          "server/src/sources/actions.test.ts",
+          "server/src/sources/pullRequestFreshness.test.ts",
+          "server/src/sources/link-claims-boundaries.test.ts",
+          "server/src/sources/github-completeness.test.ts",
+          "server/src/agent/codex-claim-transitions.test.ts"
         ],
         "checks": [
           "bun run verification:gate",
@@ -2345,10 +2373,57 @@
         ],
         "review": "The approved design and earlier ID candidate do not accept this binding extension; independent implementation review and CI remain required."
       },
-      "evidenceDecision": "M4 models semantic continuity, absence, ambiguity and recovery; actual SQLite/import/worker and Board action consumers establish their additional boundaries. Existing Board and appearance witness tests remain unchanged and mandatory.",
+      "evidenceDecision": "M4 models semantic continuity, absence, ambiguity and recovery; actual SQLite/import/worker and Board action consumers establish their additional boundaries. Existing Board and appearance witness tests remain unchanged and mandatory. Claims use an independent finite source-ownership oracle, eight overlapping read schedules and actual transcript/source-service consumers, with seven compiled controls; M4 remains scoped to bindings. Claim boundary regressions cover actual Codex title changes, current owner disposal, same-path cache replacement and truncated GitHub pages; an 81-case page-info oracle and seven additional compiled assertion controls establish these consumer boundaries. A 36-case actual-source Codex selector matrix and five more compiled controls cover report-to-first-title replacement, same-thread preservation and stale-report disagreement; known resolved thread IDs are tracked across both binding paths.",
       "promotion": {
         "decision": "pending",
-        "scope": "IDs and binding resolution, including legacy captures and Board action admission; independent review and CI required. Claims and remaining JSON ID creation are excluded."
+        "scope": "IDs and binding resolution, including legacy captures and Board action admission, plus runtime status/session/PR claims; independent review and CI required. Remaining JSON ID creation is excluded."
+      }
+    },
+    {
+      "id": "Q46",
+      "area": "Durable agent profiles and chimes",
+      "owner": "server/src/storage/world-profiles.ts",
+      "requirement": "openspec/specs/world-storage/spec.md",
+      "properties": "Committed-only profile/chime reads and RPC acknowledgement; fresh operation state and savepoint isolation; exact private once-only JSON import with atomic completion; durable master revision allocation and terminal import flags; closed admission, drain and restart; live terminal choices remain Herdr-owned",
+      "existingTests": [
+        "server/src/storage/profile-writer.test.ts",
+        "server/src/storage/profile-crash.test.ts",
+        "server/src/service/profile-storage.test.ts",
+        "server/src/rpc/profiles-storage.test.ts",
+        "server/src/agent/profile-store.test.ts",
+        "server/src/agent/terminal-settings.test.ts",
+        "server/src/service/storage.test.ts",
+        "server/src/service/world-service.test.ts"
+      ],
+      "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/549",
+      "technique": "direct-sqlite-recovery",
+      "assessment": "All 24 independent-edit/refusal orderings against real SQLite, actual service/RPC/terminal consumers and source/standalone compiled process-crash schedules",
+      "status": "alternative-evidence",
+      "remaining": "Independent implementation review and native CI remain required. No physical power-loss proof, new profile-ID creation protocol, live Herdr atomic token write or runtime-status migration is claimed.",
+      "requiredChecks": ["bun run check", "bun run verification:gate"],
+      "partialEvidence": {
+        "models": [],
+        "contracts": ["verification/contracts/agent-profile-storage.md"],
+        "tests": [
+          "server/src/storage/profile-writer.test.ts",
+          "server/src/storage/profile-crash.test.ts",
+          "server/src/service/profile-storage.test.ts",
+          "server/src/rpc/profiles-storage.test.ts",
+          "server/src/agent/profile-store.test.ts",
+          "server/src/agent/terminal-settings.test.ts",
+          "server/src/service/storage.test.ts",
+          "server/src/service/world-service.test.ts"
+        ],
+        "checks": [
+          "bun run test server/src/storage/profile-writer.test.ts server/src/storage/profile-crash.test.ts server/src/service/profile-storage.test.ts server/src/rpc/profiles-storage.test.ts server/src/agent/profile-store.test.ts server/src/agent/terminal-settings.test.ts server/src/service/storage.test.ts",
+          "bun run verification:gate"
+        ],
+        "review": "The accepted delivery link records the identity/storage design, not acceptance of this store migration; independent implementation review and CI are pending."
+      },
+      "evidenceDecision": "Real SQLite transactions, worker admission and standalone embedded-worker recovery are the relevant persistence boundary. Direct exhaustive operation permutations establish bounded ordering without duplicating the SQL engine in Quint. Existing runtime/binding models and terminal-setting consumers retain their original fences and authority claims. Compiled assertion controls test sensitivity separately; no model or synthetic receiver is credited with filesystem or external-runtime guarantees.",
+      "promotion": {
+        "decision": "pending",
+        "scope": "Agent profile/chime persistence and their existing legacy terminal-import metadata only; separate contract and implementation acceptance required."
       }
     }
   ],

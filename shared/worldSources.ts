@@ -142,6 +142,8 @@ export type WorldSourcesSnapshot = {
   sources: WorldSourceStatus[];
   items: WorkItem[];
   links: WorkLink[];
+  /** Backend provenance projection; existing links retain their display behavior. */
+  linkClaims?: import("./fieldClaims").LinkClaimProjection[];
   /** Pull request verbs run from World since the service started, newest first. */
   actions: PullRequestAction[];
 };

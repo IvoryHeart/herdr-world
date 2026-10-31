@@ -2,8 +2,9 @@
 
 ## Purpose
 
-Keep World-owned questions, answers, results and attention intents durable while
-retaining bootstrap configuration and secrets as private files.
+Keep World-owned questions, answers, results, attention intents, agent profiles
+and chimes durable while retaining bootstrap configuration and secrets as
+private files.
 
 ## Requirements
 
@@ -75,6 +76,43 @@ reject a foreign application ID. Configuration and secrets SHALL remain files.
 - **WHEN** startup follows a completed import
 - **THEN** it uses SQLite, performs no import writes for unchanged legacy input,
   and creates no historical alerts
+
+### Requirement: Durable World-owned agent profiles
+
+Agent profiles and chimes SHALL use the instance SQLite single writer through
+the storage port. Existing validation, profile IDs and revisioned RPC behavior
+SHALL remain compatible. Synchronous readers SHALL see only acknowledged commits;
+concurrent operations SHALL read fresh transaction-local state. A refused edit
+SHALL NOT undo another accepted operation in the same group.
+Pending legacy terminal assignments, per-connection import completion and the
+highest observed/written Town master revision SHALL persist in this family.
+Master revision allocation SHALL be atomic. Live terminal choices SHALL remain
+Herdr-owned, qualified by the current connection and generation.
+
+Before the first profile import, World SHALL preserve an exact private
+content-hash backup of the configured profile JSON. Domain rows and the import
+marker SHALL commit atomically. Missing source SHALL seed starters once.
+Malformed initial input or an unsafe/conflicting backup SHALL stop startup
+without partial profile rows, leaving the source and preserved backup intact.
+Once initialized, the family SHALL ignore retained JSON and SHALL NOT reseed
+deleted starters, rewrite the source or repeat the import. Configuration and
+secrets SHALL remain files. Close SHALL drain admitted profile writes, fence
+later writes and retain committed cached reads without reopening storage.
+
+#### Scenario: Concurrent edits and restart
+- **WHEN** independent profile and chime edits share a group with a refused edit
+- **THEN** accepted edits each advance the revision and survive restart together
+- **AND** the refused edit has no durable effect or optimistic cached state
+
+#### Scenario: Crash interrupts initial profile import
+- **WHEN** the process dies before or after the import COMMIT
+- **THEN** recovery has all profile rows and its marker or none of them
+- **AND** retry completes once without modifying the retained source
+
+#### Scenario: Retained JSON changes after migration
+- **WHEN** an initialized family starts with changed or malformed retained JSON
+- **THEN** it uses its committed SQLite profiles without import writes
+- **AND** it neither restores deleted profiles nor repeats a completed terminal import
 
 ### Requirement: Replay retention cannot resolve domain work
 

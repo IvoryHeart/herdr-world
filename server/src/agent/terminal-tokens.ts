@@ -108,13 +108,18 @@ export function paneOf(value: unknown): PaneRow {
     throw new Error("Herdr did not return a terminal");
   return result.pane;
 }
-export type TokenWrite = SettingTokens | ((pane: PaneRow) => SettingTokens);
+export type TokenWrite =
+  | SettingTokens
+  | ((pane: PaneRow) => SettingTokens | Promise<SettingTokens>);
 export async function writeTerminalTokens(
   lease: SettingsLease,
   paneId: string,
   terminalId: string,
   write: TokenWrite,
-  options: { expectedMaster?: number; onRead?: (pane: PaneRow) => void } = {},
+  options: {
+    expectedMaster?: number;
+    onRead?: (pane: PaneRow) => void | Promise<void>;
+  } = {},
 ): Promise<PaneRow | null> {
   const validate = (tokens: SettingTokens) => {
     for (const [key, value] of Object.entries(tokens))
@@ -132,14 +137,16 @@ export async function writeTerminalTokens(
   if (!lease.isCurrent()) throw new Error("terminal settings runtime changed");
   if (pane.pane_id !== paneId || pane.terminal_id !== terminalId)
     throw new Error("pane no longer holds the expected terminal");
-  options.onRead?.(pane);
+  await options.onRead?.(pane);
+  if (!lease.isCurrent()) throw new Error("terminal settings runtime changed");
   // A stale cleanup must not remove a claim replaced since its observation.
   if (
     options.expectedMaster !== undefined &&
     readTerminalSettings(pane).master !== options.expectedMaster
   )
     return null;
-  const tokens = typeof write === "function" ? write(pane) : write;
+  const tokens = typeof write === "function" ? await write(pane) : write;
+  if (!lease.isCurrent()) throw new Error("terminal settings runtime changed");
   validate(tokens);
   if (!Object.keys(tokens).length) return pane;
   await lease.runtime.herdr.call(

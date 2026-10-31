@@ -1,4 +1,4 @@
-import { ProfileStore } from "../agent/profile-store";
+import type { ProfileStorePort } from "../agent/profile-store";
 import type { DataPaths } from "../config/data-paths";
 import {
   createGuiSettingsStore,
@@ -29,8 +29,8 @@ export type WorldStorage = {
   attention(): AttentionOutbox;
   failed?: Promise<Error>;
   incarnation?: string;
-  /** Opened on first use. */
-  profiles(): ProfileStore;
+  /** Committed profile cache; SQLite import finishes before the listener binds. */
+  profiles(): ProfileStorePort;
   /**
    * Called last in stop: every family refuses later writes, unopened lazy
    * families stay closed, and queued writes settle.
@@ -43,7 +43,7 @@ export type OpenStorage = (
   ports: { clock: Clock; scheduler: Scheduler },
 ) => Promise<WorldStorage>;
 
-/** Private JSON configuration/Board/profiles and the worker-owned SQLite ledger. */
+/** Private JSON configuration/Board and worker-owned SQLite domain families. */
 export const openStorage: OpenStorage = async (paths, { clock, scheduler }) => {
   const options = {
     now: () => clock.now(),
@@ -54,10 +54,14 @@ export const openStorage: OpenStorage = async (paths, { clock, scheduler }) => {
   let board: BindingBoardStore | null = null;
   const bindingFailure = Promise.withResolvers<Error>();
   const world = await openWorldLedger(
-    { database: join(paths.root, "world.sqlite"), ledger: paths.ledger },
+    {
+      database: join(paths.root, "world.sqlite"),
+      ledger: paths.ledger,
+      profiles: paths.agentProfiles,
+    },
     { clock, scheduler },
   );
-  let profiles: ProfileStore | null = null;
+  let profiles: ProfileStorePort | null = null;
   let closed = false;
   // Even construction can rename an unreadable JSON file: fence before it.
   const open = <T>(store: T | null, create: () => T): T => {
@@ -85,11 +89,7 @@ export const openStorage: OpenStorage = async (paths, { clock, scheduler }) => {
     attention: () => world.outbox,
     failed: Promise.race([world.failed, bindingFailure.promise]),
     incarnation: world.incarnation,
-    profiles: () =>
-      (profiles = open(
-        profiles,
-        () => new ProfileStore(paths.agentProfiles, options),
-      )),
+    profiles: () => (profiles = open(profiles, () => world.profiles)),
     async close() {
       closed = true;
       board?.close();

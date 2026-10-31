@@ -75,13 +75,78 @@ Existing complete terminal-only projections retain their terminal-absence rule;
 missing pane IDs and explicit unknown sessions do not invent identities.
 
 Card positions, pins, folds, and workspace/host colours remain native-keyed layout
-preferences. They carry no binding and are inherited on ID reuse. The profile
-JSON family and existing browser record-creation protocol remain unchanged.
-Per-field claims and remaining JSON-owned ID creation are separate work. Desk
-marks, watchlists and completion seen state keep their current memory lifetimes.
+preferences. They carry no binding and are inherited on ID reuse. Profiles and chimes now use the
+[SQLite storage port](DEPLOYMENT.md#agent-profile-storage); their existing
+browser record-creation protocol remains unchanged. Store-issued profile and
+remaining JSON-owned ID creation are separate work. Desk marks, watchlists and
+completion seen state keep their current memory lifetimes.
 
 The [identity contract](../verification/contracts/world-identity.md) maps M4,
 mutation controls and mandatory consumers. The complete `verification:gate`
 checks all maintained models; a focused M4 run does not replace it. SQLite tests
 use temporary databases; Herdr/OS durability and production consumer behavior
 retain their separate integration and platform boundaries.
+
+
+## Runtime field claims
+
+Conversation replies carry additive `field_claims` for `agent_status` and `session`.
+The sources snapshot carries additive `linkClaims`, qualified by connection,
+runtime generation, pane, terminal and session, with a `pr_links` field. Each
+field exposes all `claims` and its declared `display` projection. Each claim has
+its value, delivery channel, author when known and different, observation time,
+reported/inferred basis, and an opaque source revision when available. Session
+and thread IDs describe an occupant; they never become World IDs.
+
+| Field | Sources | Display rule | Action authority |
+| --- | --- | --- | --- |
+| Agent status | Current Herdr agent report; World transcript inference | Reported status first; inference only when no report exists | Neither status claim selects a session |
+| PR links | Agent report through Herdr metadata; checkout branch matched to GitHub | Both links, retaining each source's provenance, including disagreement | Neither link authorizes merge, close or mark ready |
+| Session | Herdr's agent report; a complete Codex thread named by its current title; transcript resolution | Codex title when present, then report, then inference | Send uses the pane's fresh native report/title under its existing qualification checks |
+
+An open transcript tool or latest user message infers working; a latest assistant
+message with no open tool infers idle. No supported evidence means no inferred
+status. The transcript revision records the file observation used. PR branch
+claims keep the checkout read's actual time, including when the resolver reuses
+its cache. Checkout observations are scoped by connection, generation, host and
+path; a replacement never receives the prior runtime's cached evidence. An
+agent-reported PR retains the session fingerprint as its author and
+Herdr's state-change sequence when supplied. A reported URL need not appear in
+GitHub's fetched items to remain a claim.
+
+A channel replaces or retracts only its own claim. Omission of a reported
+session does not prove a new occupant or erase transcript/branch evidence. A
+successful complete read can
+remove that channel's omitted field; a failed read, a partial listing, another
+channel's silence, or ambiguous native identity cannot remove it. For example,
+a missing transcript retains prior inference, and a failed git lookup retains
+its prior branch claim while a complete metadata observation can independently
+remove the agent report. Complete native occupant absence, terminal/session
+replacement, and runtime disposal retire that occupant's read model. A positively
+resolved Codex title thread is compared with the preceding selected thread ID,
+whether it came from a native report, an earlier title or a resolved transcript.
+A different positive thread retires the preceding transcript claims even when its
+own transcript has not appeared. A matching thread or missing identity evidence
+preserves them. A stale native report cannot retire inference for an unchanged
+titled thread; the report remains as its own claim. A
+missing session witness can carry forward only on the same runtime and terminal.
+The source service reads live connection/generation owners separately from
+topology, so replacement/removal retires old link claims even while the replacement
+is offline, partially listed or still returning a stale snapshot. Older
+conversation reads cannot publish over a newer read, and retired source-service
+refreshes cannot publish their claim updates.
+
+GitHub connection health is separate from PR catalogue completeness. Every open-PR
+search must explicitly reach its last page, and every merged-page result must be
+known and reach its last page, before a missing branch match can remove an earlier
+claim. A successful bounded or unknown-completeness result can add a positive link
+but cannot prove absence. The existing list display stays bounded.
+
+These claims live in memory. They do not write `world.sqlite` or persist marks,
+watches or seen state. Existing `agent_status`, conversation binding/fingerprint,
+and reported-first Work links remain the compatibility projections, so current
+controls and rendering are unchanged. A `display` claim is observation evidence;
+it supplies neither a lease nor freshness for an action. PR verbs require
+GitHub's own qualified record and existing head/detail checks. Conversation Send
+re-reads the pane before applying its declared reported-session/title authority;
+it never acts from saved or inferred claim arrays.

@@ -57,7 +57,7 @@ export type ProfilesDocument = {
 
 export const MAX_ASSIGNMENTS = 256;
 
-function seeded(): ProfilesDocument {
+export function seededProfiles(): ProfilesDocument {
   return {
     version: 1,
     revision: 0,
@@ -162,12 +162,18 @@ export function parseProfilesDocument(value: unknown): ProfilesDocument {
   return document;
 }
 
+export type ProfileBacking = {
+  read(): ProfilesDocument;
+  commit(document: ProfilesDocument): void;
+  backupLegacySettings?(): void;
+};
+
 export class ProfileStore {
   private document: ProfilesDocument;
   #closed = false;
 
   constructor(
-    private readonly path: string,
+    private readonly path: string | ProfileBacking,
     private readonly options: {
       now?: () => number;
       log?: (message: string) => void;
@@ -177,7 +183,8 @@ export class ProfileStore {
   }
 
   private load(): ProfilesDocument {
-    if (!existsSync(this.path)) return seeded();
+    if (typeof this.path !== "string") return structuredClone(this.path.read());
+    if (!existsSync(this.path)) return seededProfiles();
     try {
       return parseProfilesDocument(JSON.parse(readFileSync(this.path, "utf8")));
     } catch (error) {
@@ -190,7 +197,7 @@ export class ProfileStore {
       this.options.log?.(
         `agent profiles unreadable (${String(error)}); kept at ${aside}`,
       );
-      return seeded();
+      return seededProfiles();
     }
   }
 
@@ -221,8 +228,25 @@ export class ProfileStore {
     });
   }
 
+  nextMasterRevision(minimum: number): number {
+    const revision = Math.max(
+      minimum,
+      this.settingsState().highest_master_revision + 1,
+    );
+    if (
+      !Number.isSafeInteger(revision) ||
+      !Number.isSafeInteger(minimum) ||
+      minimum < 0
+    )
+      throw new ProfileError("invalid Town master revision");
+    this.rememberMaster(revision);
+    return revision;
+  }
+
   backupLegacySettings() {
     if (this.#closed) throw new Error("World storage is closed");
+    if (typeof this.path !== "string")
+      return this.path.backupLegacySettings?.();
     if (!existsSync(this.path)) return;
     try {
       copyFileSync(
@@ -236,6 +260,8 @@ export class ProfileStore {
   }
 
   finishSettingsImport(connectionId: string) {
+    if (typeof connectionId !== "string" || !ID.test(connectionId))
+      throw new ProfileError("invalid profile import connection ID");
     const state = this.settingsState();
     if (state.imported_connections.includes(connectionId)) return;
     state.imported_connections.push(connectionId);
@@ -253,7 +279,9 @@ export class ProfileStore {
   private commit(next: ProfilesDocument) {
     if (this.#closed) throw new Error("World storage is closed");
     next.revision = this.document.revision + 1;
-    replaceDataFile(this.path, JSON.stringify(next));
+    if (typeof this.path === "string")
+      replaceDataFile(this.path, JSON.stringify(next));
+    else this.path.commit(next);
     this.document = next;
     return this.get();
   }
@@ -341,10 +369,29 @@ export class ProfileStore {
   }
 }
 
+type AsyncWrites = {
+  save(value: unknown): ProfilesDocument | Promise<ProfilesDocument>;
+  saveChimes(value: unknown): ProfilesDocument | Promise<ProfilesDocument>;
+  delete(id: string): ProfilesDocument | Promise<ProfilesDocument>;
+  assign(
+    value: ProfileAssignment,
+  ): ProfilesDocument | Promise<ProfilesDocument>;
+  setTownMaster(
+    value: unknown,
+    options?: { replace?: boolean },
+  ): ProfilesDocument | Promise<ProfilesDocument>;
+  rememberMaster(revision: number): void | Promise<void>;
+  nextMasterRevision(minimum: number): number | Promise<number>;
+  finishSettingsImport(connectionId: string): void | Promise<void>;
+};
+/** Cached reads are committed; asynchronous writes acknowledge their durable commit. */
+export type ProfileStorePort = Omit<ProfileStore, keyof AsyncWrites> &
+  AsyncWrites;
+
 type Write = (
-  store: ProfileStore,
+  store: ProfileStorePort,
   p: Record<string, unknown>,
-) => ProfilesDocument;
+) => ProfilesDocument | Promise<ProfilesDocument>;
 /** Profile/chime writes. Terminal settings use the current Herdr lease. */
 const WRITES: Record<string, Write> = {
   "world.profiles.save": (store, p) => store.save(p.profile),
@@ -356,7 +403,7 @@ const WRITES: Record<string, Write> = {
 export function profileWrite(method: string) {
   const write = Object.hasOwn(WRITES, method) ? WRITES[method] : undefined;
   return write
-    ? (store: ProfileStore, params: unknown) =>
+    ? (store: ProfileStorePort, params: unknown) =>
         write(store, (params ?? {}) as Record<string, unknown>)
     : null;
 }

@@ -1,5 +1,5 @@
 import type { createRevisionPublisher } from "../world/revision-publisher";
-import type { ProfileStore } from "./profile-store";
+import type { ProfileStorePort } from "./profile-store";
 import { TerminalSettings } from "./terminal-settings";
 import type { PaneRow, SettingsLease } from "./terminal-tokens";
 
@@ -10,8 +10,8 @@ export function createProfileServices(
     readyRuntimeLease(id: string): SettingsLease | null;
     list(): readonly { id: string }[];
   },
-  /** The service's profile store, opened on first use. */
-  profiles: () => ProfileStore,
+  /** The service's committed profile cache. */
+  profiles: () => ProfileStorePort,
   /** The service clock. */
   now: () => number,
   log: (message: string) => void = console.warn,

@@ -18,6 +18,7 @@ export async function openWorldClient(
   ports: StoragePorts,
   createWorker?: (url: URL) => Worker,
   incarnation = randomBytes(16).toString("base64url"),
+  legacyProfiles?: string,
 ) {
   // Bun bundles import.meta.url relative to the executable's main entry, whose
   // sibling storage/ directory contains the separately embedded worker entry.
@@ -119,7 +120,14 @@ export async function openWorldClient(
       );
     exited.resolve();
   });
-  send({ type: "open", path, legacy, at: ports.clock.now(), incarnation });
+  send({
+    type: "open",
+    path,
+    legacy,
+    ...(legacyProfiles !== undefined ? { legacyProfiles } : {}),
+    at: ports.clock.now(),
+    incarnation,
+  });
   let snapshot: StorageSnapshot;
   try {
     snapshot = await ready.promise;

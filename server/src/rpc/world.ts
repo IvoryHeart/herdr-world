@@ -208,7 +208,7 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
   const profilesWrite = profileWrite(method);
   if (profilesWrite) {
     try {
-      profilesWrite(profiles(), params);
+      await profilesWrite(profiles(), params);
       const result = terminalSettings().get();
       publishProfilesChanged(result.revision);
       sendReply({ id, result }, "world-profiles-write");
