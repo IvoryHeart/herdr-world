@@ -45,6 +45,17 @@ forwarding checks again immediately before socket send. Agent CLI checks flags
 before caller-identity acquisition, resolves the pane as today and checks its actor
 again before executing. Conditional native group policy uses the resolved owner;
 its existing preview, witness and room-closure checks remain authoritative.
+The request's live admission check travels through native sends, queued Board
+work and ledger mutation callbacks. Stopping the CLI service revokes it even
+while the captured runtime lease stays current; resumed work cannot make a new
+native dispatch or World mutation. Answer recording checks again after recipient
+resolution and when its queued ledger mutation runs.
+
+Recovery follows the actual handler effect. `terminal.scroll` is `opaque`
+because its page-key branch can send PageUp/PageDown bytes to an application.
+PR status (`git.pull_request`) and pane/terminal link resolution are `read`.
+`file.reveal` is `opaque`: launching the host file manager has no decisive
+recovery read. These declarations do not enable automatic retries.
 
 ## Result evidence
 
@@ -81,6 +92,11 @@ group, source, terminal and service suites retain the deeper semantic checks.
 The [browser call inventory](../server/src/verbs/policy.test.ts) parses production
 call expressions and refuses a missing registration. Dynamic Ranger RPC names are
 enumerated explicitly in the static table.
+The [CLI authorization schedules](../server/src/world/world-cli-authorization.test.ts)
+hold native reads/sends, snapshots and ledger callbacks across stop with a current
+lease. [Recovery consumers](../server/src/verbs/recovery.test.ts), dispatcher link
+resolution and the actual endpoint page-key/link tests check the declared classes
+against their handler paths.
 
 Run the focused boundary suite with `bun run test server/src/verbs/`. See
 [the behavioral contract](../verification/contracts/verb-policy.md) for the

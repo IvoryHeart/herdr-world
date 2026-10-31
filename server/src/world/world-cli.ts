@@ -6,6 +6,7 @@ import { admitVerb, checkVerbResult, VerbRefusal } from "../verbs/admission";
 import { commandEvidence } from "../verbs/evidence";
 import { registeredVerb } from "../verbs/registry";
 import type { Admission } from "../verbs/types";
+import { guardCliCommand, guardCliHost } from "./world-cli-dispatch";
 import {
   appearanceFor,
   appearanceKey,
@@ -81,7 +82,12 @@ export type WorldCliDeps = {
   ledger: LedgerStore;
   /** Only a durable committed store may issue this receipt. */
   ledgerReceipt?(recordId: string): string | undefined;
-  recordAnswer?(id: string, text: string, actor: CliActor): Promise<number>;
+  recordAnswer?(
+    id: string,
+    text: string,
+    actor: CliActor,
+    recheck?: () => void,
+  ): Promise<number>;
   captureRecipient?(
     actor: CliActor,
   ): Promise<import("./ask-delivery-types").AnswerRecipient | undefined>;
@@ -90,13 +96,14 @@ export type WorldCliDeps = {
     occurrence: string,
     attempt: number,
     actor: CliActor,
+    recheck?: () => void,
   ): Promise<unknown>;
   incarnation?: string;
   hosts(): CliHost[];
   defaultConnectionId(): string | null;
   snapshot(): Promise<WorldSnapshotResult>;
   sources?(): Promise<GroupWorkSources>;
-  groupMove?(request: GroupMoveRequest): Promise<unknown>;
+  groupMove?(request: GroupMoveRequest, recheck?: () => void): Promise<unknown>;
   publishBoard(revision: number): void;
   /** Tell World's pages; `asks` when a question was asked or answered. */
   publishLedger(revision: number, asks?: boolean): void;
@@ -493,7 +500,8 @@ const BOARD_COMMANDS = new Set<WorldCliCommand>([
 export function createWorldCli(deps: WorldCliDeps) {
   const now = deps.now ?? Date.now;
 
-  const record = async (
+  const recordWithDeps = async (
+    deps: WorldCliDeps,
     actor: CliActor,
     command: string,
     summary: string,
@@ -516,7 +524,11 @@ export function createWorldCli(deps: WorldCliDeps) {
     return change;
   };
 
-  const patchBoard = (ops: BoardOp[], actor: CliActor) => {
+  const patchBoardWithDeps = (
+    deps: WorldCliDeps,
+    ops: BoardOp[],
+    actor: CliActor,
+  ) => {
     const sender: GroupSender = {
       label: actor.label,
       basis: actor.verified ? "inferred" : "reported",
@@ -547,13 +559,14 @@ export function createWorldCli(deps: WorldCliDeps) {
    * Change the Board, then record it. The two files cannot change together,
    * so a change that cannot be recorded is taken back.
    */
-  const changeBoard = async (
+  const changeBoardWithDeps = async (
+    deps: WorldCliDeps,
     actor: CliActor,
     ops: BoardOp[],
     revert: BoardOp[],
     write: (document: BoardDocument) => LedgerChange | Promise<LedgerChange>,
   ) => {
-    const document = patchBoard(ops, actor);
+    const document = patchBoardWithDeps(deps, ops, actor);
     try {
       return await write(document);
     } catch (error) {
@@ -561,7 +574,7 @@ export function createWorldCli(deps: WorldCliDeps) {
       try {
         // A browser may have edited the Board during the asynchronous write.
         if (deps.board.get().revision === document.revision)
-          patchBoard(revert, actor);
+          patchBoardWithDeps(deps, revert, actor);
       } catch {
         // The original error says more.
       }
@@ -570,7 +583,8 @@ export function createWorldCli(deps: WorldCliDeps) {
   };
 
   /** The host a command acts on, with its live topology. */
-  const topologyFor = async (
+  const topologyWithDeps = async (
+    deps: WorldCliDeps,
     host: CliHost | undefined,
     params: Record<string, unknown>,
   ): Promise<Topology> => {
@@ -633,11 +647,16 @@ export function createWorldCli(deps: WorldCliDeps) {
   };
 
   async function run(
+    deps: WorldCliDeps,
     command: WorldCliCommand,
     params: Record<string, unknown>,
     actor: CliActor,
     host: CliHost | undefined,
   ): Promise<unknown> {
+    const record = recordWithDeps.bind(null, deps);
+    const patchBoard = patchBoardWithDeps.bind(null, deps);
+    const changeBoard = changeBoardWithDeps.bind(null, deps);
+    const topologyFor = topologyWithDeps.bind(null, deps);
     if (command.startsWith("group "))
       return runGroupCommand(command, params, {
         deps,
@@ -893,16 +912,20 @@ export function createWorldCli(deps: WorldCliDeps) {
           capabilities: () => new Set(["world"]),
           preconditions: () => true,
         };
-        try {
-          admitVerb(verb, params, admission);
-        } catch (error) {
-          if (error instanceof VerbRefusal) {
-            if (error.message.startsWith("invalid parameters"))
-              usage(error.message);
-            refused(error.message);
+        const recheck = () => {
+          try {
+            admitVerb(verb, params, admission);
+            return verb;
+          } catch (error) {
+            if (error instanceof VerbRefusal) {
+              if (error.message.startsWith("invalid parameters"))
+                usage(error.message);
+              refused(error.message);
+            }
+            throw error;
           }
-          throw error;
-        }
+        };
+        const declaration = recheck();
         const paneId =
           typeof request.caller?.pane_id === "string" &&
           request.caller.pane_id.trim()
@@ -914,25 +937,21 @@ export function createWorldCli(deps: WorldCliDeps) {
         const identity = await identifyCaller(deps.hosts(), paneId, locate);
         actor = identity.actor;
         admission.actor = actor.verified ? "cli_verified" : "cli_unverified";
-        try {
-          admitVerb(verb, params, admission);
-        } catch (error) {
-          if (error instanceof VerbRefusal) refused(error.message);
-          throw error;
-        }
-        const evidence = commandEvidence(verb);
+        recheck();
+        const evidence = commandEvidence(declaration);
         const result = await run(
+          guardCliCommand(deps, recheck),
           command as WorldCliCommand,
           params,
           actor,
-          identity.host,
+          identity.host && guardCliHost(identity.host, recheck),
         );
-        checkVerbResult(verb, result);
+        checkVerbResult(declaration, result);
         const recordId =
           result && typeof result === "object" && "id" in result
             ? result.id
             : undefined;
-        if (verb.recovery !== "read" && typeof recordId === "string") {
+        if (declaration.recovery !== "read" && typeof recordId === "string") {
           const receipt = deps.ledgerReceipt?.(recordId);
           if (receipt) evidence.record({ stage: "stored", receipt });
         }

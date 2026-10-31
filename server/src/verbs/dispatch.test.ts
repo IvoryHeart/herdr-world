@@ -3,6 +3,7 @@ import type { ServerWebSocket } from "bun";
 import { createRpcDispatcher } from "../service/rpc-dispatch";
 import type { RpcServices } from "../rpc/context";
 import { createLegacyRoutingLogger } from "../connections/protocol";
+import { registeredVerb } from "./registry";
 
 function setup() {
   const ws = {} as ServerWebSocket<unknown>;
@@ -132,4 +133,13 @@ test("RPC dispatch distinguishes acknowledged native effects from uncertain inpu
     connection_generation: 3,
     reason: "acknowledgement lost",
   });
+});
+
+test("native link resolution dispatches as a read without claiming a sent effect", async () => {
+  const s = setup();
+  await s.run("pane.link.resolve", { pane_id: "w1:p1", row: 1, col: 2 });
+  expect(s.calls).toEqual(["pane.link.resolve"]);
+  expect(s.replies.at(-1)?.result).toEqual({ ok: true });
+  expect(s.replies.at(-1)?.command_evidence).toEqual({ stage: "accepted" });
+  expect(registeredVerb("rpc", "pane.link.resolve")!.recovery).toBe("read");
 });

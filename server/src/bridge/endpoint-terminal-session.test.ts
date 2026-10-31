@@ -18,6 +18,7 @@ import { createTerminalBridge } from "./terminal-bridge";
 import { silentLogger } from "../utils/logger";
 import { inspectWorkspacePath } from "../workspace/path";
 import { EndpointCreationDeadline } from "./endpoint-creation";
+import { registeredVerb } from "../verbs/registry";
 import {
   dropCoalescedMessage,
   flushCoalescedMessages,
@@ -4168,6 +4169,7 @@ test("full page keys use semantic pane input even when history scrolling is unav
       { paneId: "w1:p1", code: 9, modifiers: 0 },
     ]);
     expect(requests).toEqual(["pane.focus"]);
+    expect(registeredVerb("rpc", "terminal.scroll")!.recovery).toBe("opaque");
   } finally {
     bridge.dispose();
   }
@@ -4725,6 +4727,9 @@ test("terminal.link.resolve requires this viewer's attachment and frame token", 
       regions: [],
       url: null,
     });
+    expect(registeredVerb("rpc", "terminal.link.resolve")!.recovery).toBe(
+      "read",
+    );
     await bridge.handleTerminalRpc(
       {} as ServerWebSocket<unknown>,
       "other-viewer",
