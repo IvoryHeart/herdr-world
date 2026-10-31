@@ -231,6 +231,7 @@ test.each(destinationEdits)(
       await handleAppearanceRpc({
         method: "world.appearance.patch",
         id: "destination-edit",
+        requestIsCurrent: state.context.isCurrent,
         params: {
           ...target,
           connection_generation: state.context.generation,

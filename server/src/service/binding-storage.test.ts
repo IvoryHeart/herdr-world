@@ -48,7 +48,7 @@ test("legacy bindings persist through the root; moves retain IDs and layout reus
       native_id: "pane-a",
       witness: ["terminal-a"],
     };
-    board.patch([{ op: "appearance.set", target, fields: {} }]);
+    await board.patch([{ op: "appearance.set", target, fields: {} }]);
     const before = await storage.bindings.list();
     expect(before).toHaveLength(3);
     const string = before.find((binding) => binding.policy === "board-string")!;
@@ -88,7 +88,7 @@ test("legacy bindings persist through the root; moves retain IDs and layout reus
       fence,
       reused!.binding.revision,
     );
-    board.patch([
+    await board.patch([
       {
         op: "appearance.relocate",
         from: target,

@@ -86,20 +86,36 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
           detail: String(error),
         }),
       );
-      recordSpawnClaims(board(), snapshot, publishBoardChanged, logger);
+      await recordSpawnClaims(
+        board(),
+        snapshot,
+        publishBoardChanged,
+        logger,
+        rpc.services.clock.now(),
+        (id, generation) => {
+          const lease = connectionManager.readyRuntimeLease(id);
+          return Boolean(
+            lease && lease.generation === generation && lease.isCurrent(),
+          );
+        },
+      );
       try {
-        const appearanceOps = legacyAppearanceOps(
-          board().get(),
-          snapshot,
-          (connectionId, generation) => {
-            const lease = connectionManager.readyRuntimeLease(connectionId);
-            return Boolean(
-              lease && lease.generation === generation && lease.isCurrent(),
-            );
-          },
-        );
-        if (appearanceOps.length)
-          publishBoardChanged(board().patch(appearanceOps).revision);
+        let changed = false;
+        const document = await board().patch((current) => {
+          const appearanceOps = legacyAppearanceOps(
+            current,
+            snapshot,
+            (connectionId, generation) => {
+              const lease = connectionManager.readyRuntimeLease(connectionId);
+              return Boolean(
+                lease && lease.generation === generation && lease.isCurrent(),
+              );
+            },
+          );
+          changed = appearanceOps.length > 0;
+          return changed ? appearanceOps : null;
+        });
+        if (changed) publishBoardChanged(document.revision);
       } catch (error) {
         logger.warn("World could not bind legacy tab colours", {
           detail: String(error),
@@ -148,20 +164,31 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
   }
   if (method === "world.board.patch") {
     try {
-      const { ops, observed } = clientBoardOps(
-        (params as { ops?: unknown } | undefined)?.ops,
-        board().get(),
-      );
+      let ops: import("../world/board-store").BoardOp[] = [];
+      let observed = new Map<
+        string,
+        import("../world/board-recipient").ObservedAgent
+      >();
+      const prepare = (
+        document: import("../world/board-store").BoardDocument,
+      ) => {
+        if (!rpc.requestIsCurrent())
+          throw new Error("Board request is no longer current");
+        ({ ops, observed } = clientBoardOps(
+          (params as { ops?: unknown } | undefined)?.ops,
+          document,
+        ));
+        return ops;
+      };
       const revision = (params as { revision?: unknown } | undefined)?.revision;
       if (
         revision !== undefined &&
         (!Number.isSafeInteger(revision) || Number(revision) < 0)
       )
         throw new Error("invalid Board revision");
-      const result =
-        revision === undefined
-          ? board().patch(ops)
-          : board().patchIf(Number(revision), ops);
+      const result = await (revision === undefined
+        ? board().patch(prepare)
+        : board().patchIf(Number(revision), prepare));
       if (!result)
         throw new BoardConflictError(
           "The Board changed. Review the current Group before editing again.",

@@ -126,17 +126,25 @@ async function dispatchBoardTownRpc(
       if ("text" in linked && result.status === "sent" && result.recipient)
         try {
           publishBoardChanged(
-            board().patch([
-              {
-                op: "anchor.recipient",
-                string_id: String(p.string_id ?? ""),
-                end: linked.end,
-                connection_id: route.connectionId,
-                pane_id: String(p.pane_id ?? ""),
-                terminal_id: String(p.terminal_id ?? ""),
-                recipient: result.recipient,
-              },
-            ]).revision,
+            (
+              await board().patch(() => {
+                if (!requestIsCurrent())
+                  throw new Error(
+                    "Board send runtime changed before saving recipient",
+                  );
+                return [
+                  {
+                    op: "anchor.recipient",
+                    string_id: String(p.string_id ?? ""),
+                    end: linked.end,
+                    connection_id: route.connectionId,
+                    pane_id: String(p.pane_id ?? ""),
+                    terminal_id: String(p.terminal_id ?? ""),
+                    recipient: result.recipient!,
+                  },
+                ];
+              })
+            ).revision,
           );
         } catch (error) {
           logger.warn("Board could not record a string's agent", {
@@ -164,6 +172,7 @@ async function dispatchBoardTownRpc(
           board: {
             get: () => board().get(),
             patch: (ops) => board().patch(ops),
+            patchIf: (revision, ops) => board().patchIf(revision, ops),
             captureColorChanges: () => board().captureColorChanges(),
             captureAppearanceChanges: () => board().captureAppearanceChanges(),
           },

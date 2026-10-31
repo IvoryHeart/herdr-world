@@ -12,7 +12,7 @@ import type { ConnectionManager } from "../connections/manager";
 import type { ConnectionProfileService } from "../connections/profile-service";
 import type { Logger } from "../utils/logger";
 import type { ObservedAgent } from "../world/board-recipient";
-import type { BoardOp, BoardStore } from "../world/board-store";
+import type { BoardOp, BoardStorePort } from "../world/board-store";
 import type { createMoveQueue } from "../world/desk-move";
 import type { createWorldDeskService } from "../world/desk-service";
 import type { WorldSnapshotService } from "../world/snapshot";
@@ -28,13 +28,14 @@ type DeskService = ReturnType<typeof createWorldDeskService>;
 
 /** What the rpc/ namespace handlers share with their World service. */
 export type RpcServices = {
+  clock: import("../service/ports").Clock;
   bindings?: import("../storage/world-bindings").WorldBindings;
   serviceIncarnation?: string;
   bindBoardRecipients(
     ops: readonly BoardOp[],
     observed: ReadonlyMap<string, ObservedAgent>,
   ): Promise<void>;
-  board(): BoardStore;
+  board(): BoardStorePort;
   clients: Set<Socket>;
   connectionManager: ConnectionManager<LegacyConnectionRuntime>;
   connectionProfiles: ConnectionProfileService<LegacyConnectionRuntime>;

@@ -56,7 +56,7 @@ type Context = {
   deps: WorldCliDeps;
   actor: CliActor;
   host?: CliHost;
-  patch(ops: GroupOp[]): BoardDocument;
+  patch(ops: GroupOp[]): BoardDocument | Promise<BoardDocument>;
 };
 const fail = (
   code: "usage" | "refused" | "not_found" | "unavailable",
@@ -268,7 +268,7 @@ export async function runGroupCommand(
       params.open_pr_limit === undefined
         ? undefined
         : { open_pr_limit: params.open_pr_limit as number };
-    const document = context.patch([
+    const document = await context.patch([
       {
         op: "group.create",
         id,
@@ -362,7 +362,7 @@ export async function runGroupCommand(
         members: [...members.values()],
       });
     }
-    const document = context.patch(ops);
+    const document = await context.patch(ops);
     return {
       revision: document.revision,
       imported: document.relations.groups.filter((group) =>
@@ -579,7 +579,7 @@ export async function runGroupCommand(
         replace,
       });
   } else return fail("usage", "unknown group command");
-  const document = context.patch(ops);
+  const document = await context.patch(ops);
   const updated = document.relations.groups.find(
     (entry) => entry.id === group.id,
   );

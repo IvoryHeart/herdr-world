@@ -2,11 +2,11 @@ import { interestKeyPrefix } from "../../../shared/interest";
 import { bindingListingAbsent } from "./binding-resolution";
 import { bindingPaneTerminals } from "./binding-pane-list";
 import { serverLogger } from "../utils/logger";
-import type { BoardDocument, BoardOp, BoardStore } from "./board-store";
+import type { BoardDocument, BoardOp, BoardStorePort } from "./board-store";
 
 /** Reconcile missed closes whenever a host becomes ready, including startup. */
 export async function reconcileReadyInterest(
-  board: BoardStore,
+  board: BoardStorePort,
   lease: {
     connectionId: string;
     runtime: {
@@ -47,7 +47,7 @@ export const closesTerminals = (eventName: string | null | undefined) =>
  * record. `changed` gets the board's new revision when something was dropped.
  */
 export async function pruneGoneInterest(
-  board: BoardStore,
+  board: BoardStorePort,
   connectionId: string,
   host: {
     call: (method: string, params: Record<string, unknown>) => Promise<unknown>;
@@ -72,7 +72,9 @@ export async function pruneGoneInterest(
       if (!ops.length) return;
       // A newer edit (even clearing and restoring the same choice) is never
       // removed using a listing that predates it: list again instead.
-      const saved = board.patchIf(observed.revision, ops);
+      const saved = await board.patchIf(observed.revision, () =>
+        host.isCurrent() ? ops : null,
+      );
       if (saved) return host.changed(saved.revision);
     } catch (error) {
       serverLogger.warn("Board could not drop gone terminals' interest", {

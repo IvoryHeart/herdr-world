@@ -17,6 +17,8 @@ import {
   originalAsker,
 } from "../world/ask-delivery-types";
 import { readProfiles, executeProfileOperation } from "./world-profiles";
+import { importBoard } from "./board-import";
+import { readBoard, executeBoardOperation } from "./world-board";
 import { importRuntimeStatus } from "./runtime-status-import";
 import { readRuntimeStatus, writeRuntimeStatus } from "./runtime-status";
 import { importLegacyProfiles } from "./profile-import";
@@ -75,6 +77,10 @@ export function openWorldWriter(
     fault?: (stage: "before-commit" | "after-commit") => void;
   },
   effectVerbs: EffectVerbLookup = productionEffectVerb,
+  boardImport?: {
+    path: string;
+    fault?: (stage: "before-commit" | "after-commit") => void;
+  },
 ) {
   assertSafeDataPath(path);
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
@@ -123,6 +129,13 @@ export function openWorldWriter(
   }
   const ids = createWorldIds(db, bytes);
   const bindings = createBindingWriter(db, ids);
+  try {
+    if (boardImport)
+      importBoard(db, boardImport.path, at, bindings, boardImport.fault);
+  } catch (error) {
+    db.close();
+    throw error;
+  }
   const revision = () =>
     (db.query("SELECT revision FROM ledger_meta").get() as { revision: number })
       .revision;
@@ -178,10 +191,12 @@ export function openWorldWriter(
       results: rows("results"),
     };
     const profiles = readProfiles(db);
+    const board = readBoard(db);
     const runtimeStatus = readRuntimeStatus(db);
     return {
       document,
       ...(profiles ? { profiles } : {}),
+      ...(board ? { board } : {}),
       ...(runtimeStatus ? { runtimeStatus } : {}),
       attention: (
         db.query("SELECT * FROM outbox ORDER BY rowid").all() as Record<
@@ -460,6 +475,8 @@ export function openWorldWriter(
         return read();
       case "issue-id":
         return ids.issue(request.kind);
+      case "board":
+        return executeBoardOperation(db, request.operation, bindings, at);
       case "runtime-status":
         if (
           !db

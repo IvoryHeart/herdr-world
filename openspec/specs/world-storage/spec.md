@@ -3,7 +3,7 @@
 ## Purpose
 
 Keep World-owned questions, answers, results, attention intents, agent profiles,
-chimes and auto-sync runtime status durable while retaining bootstrap configuration
+chimes, Board concerns and auto-sync runtime status durable while retaining bootstrap configuration
 and secrets as private files.
 
 ## Requirements
@@ -113,6 +113,48 @@ later writes and retain committed cached reads without reopening storage.
 - **WHEN** an initialized family starts with changed or malformed retained JSON
 - **THEN** it uses its committed SQLite profiles without import writes
 - **AND** it neither restores deleted profiles nor repeats a completed terminal import
+
+### Requirement: Durable Board concerns with compatible revisions and bindings
+
+World SHALL store Board notes, strings, appearance, layout concerns, interest and
+relations in separate SQLite tables through the instance's single asynchronous
+writer. Board patches SHALL remain all-or-none, retain existing document and
+per-note/Group conflict wire behavior, and commit identity captures with their
+records. Only acknowledged commits SHALL advance synchronous reads, replies or
+revision events. Independent edits SHALL use fresh transaction-local state;
+unchanged rows SHALL retain their row revision. Queued planning SHALL recheck
+captured runtime authority. Conditional undo SHALL NOT overwrite newer admitted
+edits, and native-move reconciliation SHALL preserve concurrent explicit fields.
+Existing identity binding policies SHALL remain unchanged. Layout positions,
+pins, folds and workspace/host colours SHALL remain native-keyed preferences.
+Runtime claims SHALL remain in memory. Existing valid Board document and patch
+capacity, including multibyte text, SHALL fit the bounded storage admission port.
+
+Before its initial import, World SHALL preserve exact private content-hash backup
+bytes of the configured Board JSON. Concern rows, ID reservations, bindings and
+the completion marker SHALL commit atomically before the listener starts. Missing
+JSON SHALL initialize empty state once. Malformed initial JSON or an unsafe or
+conflicting backup SHALL stop startup without partial Board data and leave the
+source intact. After initialization, SQLite SHALL take precedence over all
+retained JSON versions without reimport or source writes. Existing note, string
+and Group IDs SHALL survive import and remain reserved against generated reuse.
+Close SHALL drain admitted Board writes, refuse later writes and retain committed
+cached reads without reopening storage. Configuration and secrets remain files.
+
+#### Scenario: Independent note edits and a stale draft
+- **WHEN** independent notes are edited while another writer submits a stale note revision
+- **THEN** both independent edits commit and the stale draft receives the current document
+- **AND** its refused patch changes no concern rows or bindings
+
+#### Scenario: An edit is queued during native move reconciliation
+- **WHEN** an explicit appearance edit is admitted before a move's Board follow-up commits
+- **THEN** reconciliation rechecks its Board revision and preserves the explicit fields
+- **AND** no retired runtime can authorize queued metadata changes
+
+#### Scenario: Initial Board import or edit is interrupted
+- **WHEN** the process is killed before or after COMMIT
+- **THEN** recovery contains all affected records and bindings or none of them
+- **AND** import retry completes once without restoring later-deleted records or modifying the source
 
 ### Requirement: Durable auto-sync runtime status separate from configuration
 

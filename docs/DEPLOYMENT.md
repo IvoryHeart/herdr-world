@@ -25,7 +25,8 @@ directory; a lock left by a World that is no longer running is taken over.
 ### Durable questions, results and backups
 
 `world.sqlite` in that instance's data directory holds agent questions, answers,
-task-result notices, undo history, the attention outbox, agent profiles and chimes. One in-process worker
+task-result notices, undo history, the attention outbox, agent profiles, chimes,
+auto-sync runtime status and Board state. One in-process worker
 owns it; SQLite uses WAL and `synchronous=FULL`. Responses acknowledge a durable
 commit. Grouping up to 32 operations or 5 ms reduces synchronization frequency;
 these settings do not promise a particular response latency on every platform.
@@ -125,6 +126,33 @@ Optionally set `HERDR_WORLD_PIN` to 6–12 ASCII digits for convenience login on
 trusted private network or VPN. Keep password/token recovery available. PIN login
 has separate per-client throttling and a global cooldown after ten failures;
 that cooldown does not block password/token login.
+
+### Board storage
+
+Board notes, strings, appearance, layout preferences, interest and relations live
+in separate `world.sqlite` tables. The Board, Town, Spaces and CLI keep their
+existing controls and document/revision protocol. Saved strings, appearance,
+qualified tab colours and terminal interest use the existing identity bindings;
+layout positions, pins, folds and workspace/host colours remain native-keyed
+preferences. Runtime claims remain in memory.
+
+Before the first Board import, World preserves exact `boards/board.json` bytes
+(or `HERDR_WORLD_BOARD_PATH`) beside the source as
+`<source>.<sha256>.sqlite-import.bak`, private to the service user. Rows, bindings
+and the completion marker commit together before the listener starts. A missing
+source initializes an empty Board once. The override selects the legacy import
+source; new Board writes go only to the instance database. Later starts ignore
+all retained JSON versions, including malformed ones, and never restore deleted
+notes or overwrite SQLite edits.
+
+Malformed initial input or an unsafe/conflicting backup stops startup without
+partial Board data. Preserve the source and backup, repair the source or safely
+move a conflicting backup aside, then restart. World never overwrites a
+conflicting backup. Recover the migrated Board from a stopped, consistent
+whole-directory backup as described above. A binary predating this migration
+sees only retained JSON; its edits are not reimported when upgrading again.
+Reconcile such edits explicitly from preserved copies. Do not delete SQLite
+import records to force a replay.
 
 ### Agent profile storage
 

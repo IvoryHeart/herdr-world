@@ -4,7 +4,7 @@ import {
   spawnClaimsToRecord,
   type RelationObservation,
 } from "../../../shared/relations";
-import type { BoardDocument, BoardOp } from "./board-store";
+import type { BoardDocument, BoardOp, BoardStorePort } from "./board-store";
 import type { WorldSnapshotResult } from "./snapshot";
 
 /**
@@ -71,18 +71,30 @@ export function spawnRecordOps(
  * Board's store; written and published only when something changed. A
  * failure is logged: the snapshot reply goes out either way.
  */
-export function recordSpawnClaims(
-  store: {
-    get(): BoardDocument;
-    patch(ops: BoardOp[]): { revision: number };
-  },
+export async function recordSpawnClaims(
+  store: Pick<BoardStorePort, "get" | "patch">,
   snapshot: WorldSnapshotResult,
   publish: (revision: number) => void,
   logger: { warn(message: string, fields: { detail: string }): void },
-): void {
+  now: number = Date.now(),
+  isCurrent: (connectionId: string, generation: number) => boolean = () => true,
+): Promise<void> {
   try {
-    const ops = spawnRecordOps(store.get(), snapshot, Date.now());
-    if (ops.length) publish(store.patch(ops).revision);
+    let changed = false;
+    const document = await store.patch((current) => {
+      const active = {
+        ...snapshot,
+        connections: snapshot.connections.map((host) =>
+          isCurrent(host.connection_id, host.generation)
+            ? host
+            : { ...host, stale: true, actionable: false },
+        ),
+      };
+      const ops = spawnRecordOps(current, active, now);
+      changed = ops.length > 0;
+      return changed ? ops : null;
+    });
+    if (changed) publish(document.revision);
   } catch (error) {
     logger.warn("World could not record spawn claims", {
       detail: String(error),

@@ -15,10 +15,16 @@ the boundary with legacy JSON families and the claim read models.
 `WorldStorage.bindings` persists per-kind source evidence independently of runtime
 fences. Its resolver admits only complete current unambiguous matches; Board
 strings retain their World-move/qualified-absence policy, while appearance and
-interest retain complete-list terminal absence. Legacy Board captures drain
-through the same worker; interrupted imports cannot authorize targets. The Board
+interest retain complete-list terminal absence. Board rows and their complete
+binding captures commit atomically through the same worker; interrupted imports cannot authorize targets. The Board
 Send RPC resolves its saved string before its existing recipient checks. Layout
 preferences never enter the binding store and retain native-ID reuse behavior.
+`WorldStorage.board()` projects the existing Board document from separate SQLite
+tables for notes, strings, appearance, layout concerns, interest and relations.
+Queued mutations plan against acknowledged state; the worker validates each
+patch against its transaction-local document. Replies, revision events and the
+read cache advance after COMMIT. Per-note conflicts and revision-bound Group
+confirmations retain their existing wire responses. See [Board storage and recovery](DEPLOYMENT.md#board-storage).
 Conversation and source-service read models carry per-field status, session and PR
 link claims with provenance and explicit display rules. Channels remove only their
 own complete/retracted claims; runtime occupant replacement retires its read model.

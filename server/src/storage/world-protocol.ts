@@ -100,6 +100,7 @@ export type StorageRequest =
   | { type: "effect-read"; id?: string; verb?: string }
   | { type: "effect-transition"; change: EffectTransition }
   | { type: "load" }
+  | { type: "board"; operation: import("./world-board").BoardOperation }
   | {
       type: "runtime-status";
       key: string;
@@ -208,6 +209,7 @@ export type AttentionOutbox = {
   ): Promise<AttentionEntry | null>;
 };
 export type WorldLedgerStorage = {
+  board: import("../world/board-store").BoardStorePort;
   runtimeStatus: import("./runtime-status").RuntimeStatusPort;
   profiles: import("../agent/profile-store").ProfileStorePort;
   bindings: import("./world-bindings").WorldBindings;
@@ -232,6 +234,7 @@ export type WorkerRequest =
       legacy: string;
       legacyProfiles?: string;
       legacySettings?: string;
+      legacyBoard?: string;
       at: number;
       incarnation: string;
     }
@@ -242,6 +245,7 @@ export type WorkerRequest =
     }
   | { type: "close" };
 export type StorageSnapshot = {
+  board?: import("../world/board-store").BoardDocument;
   runtimeStatus?: Record<string, import("./runtime-status").AutoSyncRunStatus>;
   profiles?: import("../agent/profile-store").ProfilesDocument;
   document: LedgerDocument;
@@ -265,6 +269,7 @@ export const STORAGE_BOUNDS = {
   operations: 32,
   delayMs: 5,
   requestBytes: 1024 * 1024,
+  boardRequestBytes: 16 * 1024 * 1024,
   batchBytes: 4 * 1024 * 1024,
   queuedBytes: 16 * 1024 * 1024,
   queuedOperations: 256,

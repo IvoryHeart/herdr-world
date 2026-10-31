@@ -21,6 +21,10 @@ port.on("message", (request: WorkerRequest) => {
         request.legacySettings !== undefined
           ? { path: request.legacySettings }
           : undefined,
+        undefined,
+        request.legacyBoard !== undefined
+          ? { path: request.legacyBoard }
+          : undefined,
       );
       reply({ type: "ready", snapshot: writer.read() });
     } else if (request.type === "batch") {

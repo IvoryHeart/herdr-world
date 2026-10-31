@@ -1,7 +1,7 @@
 import { pruneGoneAppearance } from "./appearance-prune";
 import { serverLogger } from "../utils/logger";
 import { checkAnchor } from "./board-anchor";
-import { tabClosedOps, type BoardStore } from "./board-store";
+import { tabClosedOps, type BoardStorePort } from "./board-store";
 import { closesTerminals, pruneGoneInterest } from "./interest-prune";
 
 /** A host's current runtime, as the board's close handling reads it. */
@@ -18,7 +18,7 @@ type Host = {
  * a complete current native read proves all its terminal witnesses are gone.
  */
 export function afterHerdrClose(
-  board: BoardStore,
+  board: BoardStorePort,
   connectionId: string,
   eventName: string | null | undefined,
   event: unknown,
@@ -42,7 +42,7 @@ export function afterHerdrClose(
 }
 
 async function dropClosedTabSettings(
-  board: BoardStore,
+  board: BoardStorePort,
   connectionId: string,
   tabId: string,
   { call, isCurrent, changed }: Host,
@@ -72,7 +72,9 @@ async function dropClosedTabSettings(
       if (!isCurrent()) return;
       const ops = tabClosedOps(before, connectionId, tabId, absent);
       if (!ops.length) return;
-      const patched = board.patchIf(before.revision, ops);
+      const patched = await board.patchIf(before.revision, () =>
+        isCurrent() ? ops : null,
+      );
       if (patched) {
         changed(patched.revision);
         return;

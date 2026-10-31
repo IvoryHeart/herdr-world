@@ -28,7 +28,6 @@ import {
 } from "../connections/profiles";
 import {
   createLegacyRoutingLogger,
-  resolveReadyConnection,
   serializeHerdrEventEnvelope,
 } from "../connections/protocol";
 import type { LegacyConnectionRuntime } from "../connections/runtime";
@@ -60,12 +59,7 @@ import {
 import { runProcessWithCodeTimeout, shQuote } from "../utils/process-utils";
 import { createWorkspaceWorktree } from "../worktree/create";
 import { afterHerdrClose } from "../world/board-closing";
-import {
-  type ObservedAgent,
-  readPaneRecipient,
-  recipientOps,
-} from "../world/board-recipient";
-import type { BoardOp } from "../world/board-store";
+import { createBoardRecipientRecorder } from "./board-recipients";
 import type { createMoveQueue } from "../world/desk-move";
 import { createWorldDeskService } from "../world/desk-service";
 import { reconcileReadyInterest } from "../world/interest-prune";
@@ -306,38 +300,15 @@ async function compose(
     () => clock.now(),
   );
 
-  /**
-   * Record which agent each newly strung pane end is for: the agent the
-   * browser showed, confirmed by reading the pane on its host's current
-   * runtime (see recipientOps). Saving never waits for this; a string left
-   * unbound makes Send ask the user which agent to send to.
-   */
-  async function bindBoardRecipients(
-    ops: readonly BoardOp[],
-    observed: ReadonlyMap<string, ObservedAgent>,
-  ) {
-    const recorded = await recipientOps(
-      board().get(),
-      ops,
-      observed,
-      async (connectionId, paneId) => {
-        const { runtime, isCurrent } = resolveReadyConnection(
-          connectionManager,
-          connectionId,
-        );
-        const read = await readPaneRecipient(
-          (rpc, rpcParams) => runtime.herdr.call(rpc, rpcParams, 10_000),
-          paneId,
-        );
-        return isCurrent() ? read : null;
-      },
-    );
-    if (recorded.length) publishBoardChanged(board().patch(recorded).revision);
-  }
-
   const publishBoardChanged = revisionPublisher(
     "world_board_changed",
     "world-board",
+  );
+
+  const bindBoardRecipients = createBoardRecipientRecorder(
+    () => connectionManager,
+    board,
+    publishBoardChanged,
   );
 
   /** The agent CLI (world-cli-service.ts). */
@@ -786,6 +757,7 @@ async function compose(
   const handleWorldSources = createSourcesHttpHandler(worldSources);
 
   const rpcServices: RpcServices = {
+    clock,
     bindings: storage.bindings,
     serviceIncarnation,
     bindBoardRecipients,

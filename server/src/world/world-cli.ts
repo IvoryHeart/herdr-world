@@ -4,7 +4,7 @@ import { commandEvidence } from "../verbs/evidence";
 import { registeredVerb } from "../verbs/registry";
 import type { Admission } from "../verbs/types";
 import { guardCliCommand, guardCliHost } from "./world-cli-dispatch";
-import { createBoardChange } from "./world-cli-board-change";
+import { createBoardChange, authoredOps } from "./world-cli-board-change";
 import {
   appearanceFor,
   appearanceKey,
@@ -12,8 +12,7 @@ import {
 } from "../../../shared/appearance";
 import { handleWorldAsk } from "./world-cli-asks";
 export { answerAsk, ASK_WAIT_MAX_MS, dismissAsk } from "./world-cli-asks";
-import { teamMembers, type GroupSender } from "../../../shared/groups";
-import { isGroupOp } from "./board-groups";
+import { teamMembers } from "../../../shared/groups";
 import {
   GROUP_CLI_COMMANDS,
   runGroupCommand,
@@ -40,6 +39,8 @@ import {
 } from "../../../shared/terminalColor";
 import type {
   BoardDocument,
+  BoardPatch,
+  BoardStorePort,
   BoardOp,
   BoardPoint,
   CardColor,
@@ -73,10 +74,7 @@ import {
  */
 
 export type WorldCliDeps = {
-  board: {
-    get(): BoardDocument;
-    patch(ops: readonly BoardOp[]): BoardDocument;
-  };
+  board: Pick<BoardStorePort, "get" | "patch" | "patchIf">;
   ledger: LedgerStore;
   /** Only a durable committed store may issue this receipt. */
   ledgerReceipt?(recordId: string): string | undefined;
@@ -529,38 +527,33 @@ export function createWorldCli(deps: WorldCliDeps) {
     return change;
   };
 
-  const patchBoardWithDeps = (
+  const patchBoardWithDeps = async (
     deps: WorldCliDeps,
-    ops: BoardOp[],
+    ops: BoardPatch,
     actor: CliActor,
   ) => {
-    const sender: GroupSender = {
-      label: actor.label,
-      basis: actor.verified ? "inferred" : "reported",
-      via: "cli",
-    };
-    const bindings = Object.values(deps.board.get().appearance ?? {});
-    const document = deps.board.patch(
-      ops.map((op) => {
-        if (op.op === "card.color") {
-          const binding = bindings.find(
-            (record) => record.color_key === op.key,
-          );
-          if (binding)
-            return {
-              op: "appearance.set" as const,
-              target: parseAppearanceTarget(binding),
-              fields: { color: op.color },
-            };
-        }
-        return isGroupOp(op) ? { ...op, sender } : op;
-      }),
-    );
+    const document = await deps.board.patch(authoredOps(ops, actor));
     deps.publishBoard(document.revision);
     return document;
   };
-
-  const changeBoardWithDeps = createBoardChange(deps, patchBoardWithDeps);
+  const patchBoardIfWithDeps = async (
+    deps: WorldCliDeps,
+    revision: number,
+    ops: BoardPatch,
+    actor: CliActor,
+  ) => {
+    const document = await deps.board.patchIf(
+      revision,
+      authoredOps(ops, actor),
+    );
+    if (document) deps.publishBoard(document.revision);
+    return document;
+  };
+  const changeBoardWithDeps = createBoardChange(
+    deps,
+    patchBoardWithDeps,
+    patchBoardIfWithDeps,
+  );
 
   /** The host a command acts on, with its live topology. */
   const topologyWithDeps = async (
@@ -648,27 +641,27 @@ export function createWorldCli(deps: WorldCliDeps) {
     if (BOARD_COMMANDS.has(command))
       return queueBoard(async () => {
         const topology = await topologyFor(host, params);
-        const plan = planBoard(
-          command,
-          params,
-          deps.board.get(),
-          topology,
+        let plan: ReturnType<typeof planBoard>;
+        let revert: BoardOp[] = [];
+        return changeBoard(
           actor,
-        );
-        const revert =
-          plan.revert ??
-          (plan.regroup
-            ? regroupOps(deps.board.get(), plan.regroup)
-            : plan.undo);
-        return changeBoard(actor, plan.ops, revert, (document) =>
-          record(actor, command, plan.summary, plan.undo, {
-            expect: {
-              probe: plan.probe,
-              value: probeValue(document, plan.probe),
-            },
-            redo: plan.ops,
-            ...(plan.regroup ? { regroup: plan.regroup } : {}),
-          }),
+          (current) => {
+            plan = planBoard(command, params, current, topology, actor);
+            revert =
+              plan.revert ??
+              (plan.regroup ? regroupOps(current, plan.regroup) : plan.undo);
+            return plan.ops;
+          },
+          () => revert,
+          (document) =>
+            record(actor, command, plan.summary, plan.undo, {
+              expect: {
+                probe: plan.probe,
+                value: probeValue(document, plan.probe),
+              },
+              redo: plan.ops,
+              ...(plan.regroup ? { regroup: plan.regroup } : {}),
+            }),
         );
       });
     switch (command) {
@@ -725,36 +718,42 @@ export function createWorldCli(deps: WorldCliDeps) {
             refused(
               `${id} changed Herdr, which World cannot take back; make the opposite change instead`,
             );
-          const current = deps.board.get();
-          if (
-            change!.expect &&
-            probeValue(current, change!.expect.probe) !== change!.expect.value
-          )
-            refused(
-              `${change!.expect.probe.key} changed after ${id}; undo the later change first, or set it again`,
-            );
-          const ops = change!.regroup
-            ? regroupOps(current, change!.regroup)
-            : change!.undo!;
-          return changeBoard(actor, ops, change!.redo ?? [], async () => {
-            const undone: LedgerChange = {
-              id: await completion.ledger.nextId("c"),
-              at: now(),
-              actor,
-              command: "undo",
-              summary: `undid ${id}`,
-              undo: null,
-            };
-            // One write records the undo and marks what it undid.
-            completion.publishLedger(
-              await completion.ledger.update((document) => {
-                document.changes.push(undone);
-                const entry = document.changes.find((c) => c.id === id);
-                if (entry) entry.undone_by = undone.id;
-              }),
-            );
-            return undone;
-          });
+          return changeBoard(
+            actor,
+            (current) => {
+              if (
+                change!.expect &&
+                probeValue(current, change!.expect.probe) !==
+                  change!.expect.value
+              )
+                refused(
+                  `${change!.expect.probe.key} changed after ${id}; undo the later change first, or set it again`,
+                );
+              return change!.regroup
+                ? regroupOps(current, change!.regroup)
+                : change!.undo!;
+            },
+            change!.redo ?? [],
+            async () => {
+              const undone: LedgerChange = {
+                id: await completion.ledger.nextId("c"),
+                at: now(),
+                actor,
+                command: "undo",
+                summary: `undid ${id}`,
+                undo: null,
+              };
+              // One write records the undo and marks what it undid.
+              completion.publishLedger(
+                await completion.ledger.update((document) => {
+                  document.changes.push(undone);
+                  const entry = document.changes.find((c) => c.id === id);
+                  if (entry) entry.undone_by = undone.id;
+                }),
+              );
+              return undone;
+            },
+          );
         });
       case "town desk move": {
         if (params.herdr !== true)
