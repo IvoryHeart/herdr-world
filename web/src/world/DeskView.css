@@ -79,12 +79,65 @@
   gap: 6px;
 }
 .desk-host {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
   padding: 4px 9px;
   border: 1px solid var(--border, #343942);
   border-radius: 999px;
   color: var(--muted, #9da7b4);
   font-size: 11px;
   white-space: nowrap;
+}
+button.desk-host {
+  background: transparent;
+  cursor: pointer;
+}
+.desk-host-agents {
+  flex-basis: 100%;
+  min-width: 0;
+  max-height: 220px;
+  overflow: auto;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+}
+.desk-host-heading,
+.desk-host-agents li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+}
+.desk-host-agents p {
+  color: var(--muted);
+}
+.desk-host-agents ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.desk-host-agents li {
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+.desk-host-agents li > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.desk-host-agents small,
+.desk-host-agents li span {
+  display: block;
+  color: var(--muted);
+}
+.desk-host-agents button {
+  font: inherit;
+  cursor: pointer;
+  white-space: normal;
+}
+.desk-host-agents button:disabled {
+  cursor: default;
 }
 .desk-host.is-selected {
   border-color: var(--accent, #79a6ff);
@@ -662,7 +715,7 @@
   width: min(760px, 56%);
 }
 .desk.has-reading {
-  padding-right: calc(min(760px, 56%) + 24px);
+  padding-right: calc(50% + 24px);
 }
 .desk.has-reading .desk-lanes {
   grid-template-columns: minmax(0, 1fr);
@@ -674,9 +727,6 @@
 }
 .desk.has-reading .desk-lane ol {
   overflow: visible;
-}
-.desk.has-reading .desk-hosts {
-  display: none;
 }
 .desk.has-reading .desk-summary {
   flex-wrap: nowrap;
@@ -727,8 +777,8 @@
     font-size: 20px;
   }
   .desk-hosts {
-    flex: 0 0 auto;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
+    justify-content: flex-start;
   }
   .desk-modes {
     width: 100%;

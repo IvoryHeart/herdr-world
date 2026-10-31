@@ -1,5 +1,7 @@
 // First: the page runs on test time (see testing/testClock.ts).
 import { clock } from "./testing/installHostsFilterClock";
+import { runDeskRevealCancellationAcceptance } from "./testing/deskRevealCancellationAcceptance";
+import { runDeskRevealAcceptance } from "./testing/deskRevealAcceptance";
 import { checkTownIdleDraws } from "./town/townIdleDraws.browser";
 import { Profiler } from "react";
 import { flushSync } from "react-dom";
@@ -132,6 +134,12 @@ const resourceWorkspace: Workspace = {
     is_linked_worktree: true,
   },
 };
+const deskSession = {
+  source: "herdr:codex",
+  agent: "codex",
+  kind: "id",
+  value: "synthetic-desk-session",
+};
 const pane: Pane = {
   pane_id: "shared",
   terminal_id: "shared",
@@ -141,6 +149,11 @@ const pane: Pane = {
   ...(operation === "bare-navigator" ? {} : { agent: "codex" }),
   agent_status: "idle",
   revision: 1,
+  ...(operation === "desk-reveal"
+    ? {
+        agent_session: deskSession,
+      }
+    : {}),
 };
 const tab: Tab = {
   tab_id: "shared",
@@ -197,6 +210,7 @@ let catalogue =
     : ["alpha", "beta", "offline"];
 let heldNotificationGet: {
   host: string;
+  skip?: number;
   started(): void;
   wait: Promise<void>;
 } | null = null;
@@ -244,11 +258,14 @@ function snapshot() {
       is_default: id === "alpha",
       state: id === "offline" || offline ? "disconnected" : "ready",
       generation: 7,
-      snapshot_generation: id === "offline" ? null : 7,
-      stale: offline && id !== "offline",
+      snapshot_generation:
+        id === "offline" && operation !== "desk-reveal" ? null : 7,
+      stale:
+        (offline && id !== "offline") ||
+        (operation === "desk-reveal" && id === "offline"),
       actionable: !offline && id !== "offline",
       snapshot:
-        id === "offline"
+        id === "offline" && operation !== "desk-reveal"
           ? null
           : {
               workspaces: [
@@ -443,6 +460,36 @@ async function float(id: string) {
   await frame();
 }
 async function operationalScenario(unmount: () => void) {
+  if (operation === "desk-reveal") {
+    await runDeskRevealAcceptance({
+      check,
+      waitFor,
+      frame,
+      calls,
+      dispatches,
+      inspectorForHost,
+    });
+    await runDeskRevealCancellationAcceptance({
+      check,
+      waitFor,
+      frame,
+      calls,
+      dispatches,
+      inspectorForHost,
+      holdPaneRead(skip) {
+        const started = Promise.withResolvers<void>();
+        const release = Promise.withResolvers<void>();
+        heldNotificationGet = {
+          host: "beta",
+          skip,
+          started: () => started.resolve(),
+          wait: release.promise,
+        };
+        return { started: started.promise, release: () => release.resolve() };
+      },
+    });
+    return;
+  }
   if (operation === "town-idle") {
     await float("alpha");
     // Town must be drawing, so a quiet World below is idle, not broken.
@@ -2516,7 +2563,15 @@ async function run() {
   };
   bridge.onControl = () => () => {};
   bridge.onEvent = () => () => {};
-  bridge.onTerminal = () => () => {};
+  const terminalListeners = new Set<
+    (push: import("../api").TerminalPush) => void
+  >();
+  bridge.onTerminal = (listener) => {
+    terminalListeners.add(listener);
+    return () => {
+      terminalListeners.delete(listener);
+    };
+  };
   bridge.onTerminalClipboard = () => () => {};
   bridge.onTerminalClosed = () => () => {};
   const client: ConnectionClient = {
@@ -2528,6 +2583,8 @@ async function run() {
     call: async (method, params = {}) => {
       calls.push(method);
       globals.push({ method, params });
+      if (operation === "desk-reveal" && method.startsWith("world.desk."))
+        return { revision: 0, records: [] };
       if (method === "world.ask.deliveries.get")
         return {
           revision: 0,
@@ -2713,12 +2770,19 @@ async function run() {
                 }
               : layout,
         };
+      if (operation === "desk-reveal" && method === "agent_session.get")
+        return {
+          session: (pane as Pane & { agent_session: unknown }).agent_session,
+        };
       if (method === "pane.get") {
         if (heldNotificationGet?.host === id) {
           const held = heldNotificationGet;
-          heldNotificationGet = null;
-          held.started();
-          await held.wait;
+          if (held.skip) held.skip--;
+          else {
+            heldNotificationGet = null;
+            held.started();
+            await held.wait;
+          }
         }
         const target = (dense ? densePanes : fixturePanes).find(
           (value) => value.pane_id === params.pane_id,
@@ -2737,6 +2801,19 @@ async function run() {
         };
       if (method === "terminal.attach") {
         calls.push(`attached:${id}`);
+        if (operation === "desk-reveal")
+          for (const listener of terminalListeners)
+            listener({
+              connection_id: id,
+              connection_generation: generation ?? undefined,
+              terminal_id: String(params.terminal_id ?? "shared"),
+              width: Number(params.cols ?? 80),
+              height: Number(params.rows ?? 24),
+              full: true,
+              bytes: btoa(
+                `\x1b[2J\x1b[HSynthetic ${id} fixture terminal\r\nNo live agent output.\r\n`,
+              ),
+            });
         return {
           endpoint: {
             methods: [
@@ -2769,6 +2846,13 @@ async function run() {
       rejectResourceFocus
     )
       return false;
+    if (operation === "desk-reveal") {
+      try {
+        return await focusQualifiedTarget(target);
+      } finally {
+        calls.push(`focus:settled:${target.connectionId}`);
+      }
+    }
     return focusQualifiedTarget(target);
   };
   bridge.call = client.call;
@@ -2856,9 +2940,14 @@ async function run() {
       view.value = requestedView;
       view.dispatchEvent(new Event("change", { bubbles: true }));
       if (requestedView !== "spaces") {
-        const title = "Town";
+        const title = requestedView === "desk" ? "Desk" : "Town";
         await waitFor(
-          () => !!document.querySelector(`[aria-label="${title} controls"]`),
+          () =>
+            !!document.querySelector(
+              requestedView === "desk"
+                ? ".desk"
+                : `[aria-label="${title} controls"]`,
+            ),
           `${title} did not mount`,
         );
       }

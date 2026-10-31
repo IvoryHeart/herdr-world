@@ -42,12 +42,14 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
 
 - **Town** is the default view (`/town`); the root URL opens it too.
   Each host is a building, each workspace a room, each tab a team table and each
-  pane a seat. Rooms resize as tabs open and close; explicitly expanded rooms
-  keep their size until folded. Plain terminals show prompts. Additional panes beyond the drawn
-  seats remain available through the table's count and chooser. Each table
-  carries its tab's name on a nameplate at its front edge. Agents go by the
-  name Herdr gives them (`firstmate`), else their harness (`claude`); window
-  and Inspector titles put the name first (`firstmate · claude`).
+  pane a seat. Rooms resize as tabs open and close; expanded rooms stay expanded
+  as they shrink, until folded. Plain terminals show prompts. Additional panes beyond the drawn
+  seats remain available through the table's count and chooser. Each table's
+  nameplate shows its sole agent's Herdr name when exactly one named agent
+  occupies the tab; otherwise it shows the tab's name, or `Tab N` if unnamed.
+  Agents go by the name Herdr gives them (`firstmate`), else their harness
+  (`claude`); window and Inspector titles put the name first
+  (`firstmate · claude`).
   - The Town board counts agents working and finished, plus **items** needing
     you: blocked agents and open questions, matching the reception tray and
     call rail. A blocked agent with an open question contributes two items.
@@ -415,7 +417,13 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     workspace, tab, folder, request and report. Agents are named by the thread
     title their harness writes to the terminal when they have no Herdr name.
   - `J`/`K` move between cards; `Enter` opens the agent's Inspector using **Agents open** to
-    answer, review, or watch. Hosts outside the filter appear as summary chips.
+    answer, review, or watch. Expand an outside-filter host's summary chip to see
+    its agents. **Reveal & open [agent] on [host]** explicitly adds that host to
+    Hosts and opens that exact agent's Inspector while preserving existing open
+    resources. Host controls remain visible beside a reading pane and wrap below
+    the counts on phones. Cached, unavailable or replaced agents explain why they
+    cannot open. Leaving Desk or starting another opening cancels a pending
+    reveal permanently; supersession keeps current agents available to retry.
 - **Spaces** is the focused operational workspace: terminals, files, changes,
   annotations, worktrees, and Agent History for one selected connection.
 - **Town**, **Board** and **Desk** show the aggregate of local and SSH hosts.

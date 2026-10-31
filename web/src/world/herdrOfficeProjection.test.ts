@@ -150,6 +150,41 @@ describe("Pixel Office projection", () => {
     expect(agent.harness).toBe("claude");
   });
 
+  test("a desk prefers its sole named agent, then the tab label, then its number", () => {
+    const projectionFor = (
+      paneCount: number,
+      names: Array<string | undefined>,
+      tabLabel = "Claude",
+    ) => {
+      const source = connection(
+        "alpha",
+        [{ ...tab("shared", 1), label: tabLabel, pane_count: paneCount }],
+        Array.from({ length: paneCount }, (_, index) =>
+          pane("shared", "working", `claude-${index}`, index),
+        ),
+      );
+      source.snapshot!.agents = names.flatMap((name, index) =>
+        name
+          ? [
+              {
+                pane_id: `pane-shared-${index}`,
+                terminal_id: `terminal-shared-${index}`,
+                agent: `claude-${index}`,
+                name,
+              },
+            ]
+          : [],
+      );
+      return projectWorldOffice(buildWorldObject([source]), 1).rooms[0]!
+        .desks[0]!.displayLabel;
+    };
+
+    expect(projectionFor(1, ["example-seat"])).toBe("example-seat");
+    expect(projectionFor(1, [undefined])).toBe("Claude");
+    expect(projectionFor(2, ["first-seat", "second-seat"])).toBe("Claude");
+    expect(projectionFor(1, [undefined], "")).toBe("Tab 1");
+  });
+
   test("a reception chip names the waiting agent by its Herdr name", () => {
     const source = connection(
       "alpha",
@@ -879,7 +914,7 @@ describe("Pixel Office projection", () => {
     });
   });
 
-  test("an expanded room keeps Fold after closures below the folded target, then explicitly shrinks", () => {
+  test("an expanded room stays expanded while shrinking after closures below the folded target", () => {
     const worldFor = (count: number) => {
       const tabs = Array.from({ length: count }, (_, index) =>
         tab(`tab-${index}`, index + 1),
@@ -925,15 +960,18 @@ describe("Pixel Office projection", () => {
           shape,
           first.memory,
         );
-        expect(retained.layout.buildings[0]!.rooms[0]!.h).toBe(
+        expect(retained.layout.buildings[0]!.rooms[0]!.h).toBeLessThan(
           first.layout.buildings[0]!.rooms[0]!.h,
         );
+        expect(
+          retained.layout.buildings[0]!.rooms[0]!.foldActionCells,
+        ).toBeDefined();
         const folded = layoutTown(
           townModelFromProjection(project(small, new Set())).input,
           shape,
           retained.memory,
         );
-        expect(folded.layout.buildings[0]!.rooms[0]!.h).toBeLessThan(
+        expect(folded.layout.buildings[0]!.rooms[0]!.h).toBe(
           retained.layout.buildings[0]!.rooms[0]!.h,
         );
         expect(folded.layout.deskCells.size).toBe(count);

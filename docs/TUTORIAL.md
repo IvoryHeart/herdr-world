@@ -301,11 +301,13 @@ hosts stay usable.
    back, check both rooms before you carry on. Moving a room's last table
    closes that room, so Town asks first.
 8. Tables sit in the order of their tabs, left to right and then row by row.
+   A table's nameplate shows its sole agent's Herdr name when it has one;
+   otherwise it shows the tab's name, or `Tab N` for an unnamed tab.
    To change the order, drag a table onto another table in the same room: it
    takes that table's place, and the tables in between shift along. Drop it on
    the room's free spot to put it last of the tables shown. A room grows as
-   tabs open and ordinary rooms shrink to fit when tabs close. An expanded room
-   keeps its capacity through closures until you use **« Fold**. Rooms grow up
+   tabs open and rooms shrink to fit when tabs close. An expanded room stays
+   expanded as it shrinks until you use **« Fold**. Rooms grow up
    to eight tables wide on a wide screen, six on a portrait or half-width screen
    and four on a phone, then row by row. A folded room normally
    shows the first 24 tabs in the same order as Spaces. Use the room's bottom-right
@@ -775,6 +777,19 @@ World service and does not commit files or certify success. **Undo** restores
 that exact stop across those browsers. **Agents** lists all agents in your Hosts
 filter, with recently opened agents shared too. **Reviewed** shows each agent's
 latest marked stop while it remains idle or done; older stops are not retained.
+
+Hosts outside the filter appear as summary chips, including beside an open Desk
+reading pane. On phones, the host chips and expanded list wrap below the counts.
+Select a host chip to see its
+observed agents, then choose **Reveal & open [agent] on [host]**. This explicitly
+adds that host to your current Hosts selection and opens the selected agent's
+Inspector; previously opened Inspectors keep their own hosts and resources.
+Reading a summary leaves the filter unchanged. Cached or unavailable agents
+explain why they cannot open. If the runtime or agent session changes while the
+summary is open, reopen the summary to choose a current agent. Leaving Desk or
+starting another opening cancels a pending reveal; returning does not resume it.
+A superseded reveal leaves a current agent available to retry. A host or session
+that is actually unavailable still explains why it cannot open.
 
 Desk marks, observed stop times and recent opens live in bounded service memory.
 They survive browser reloads and changes to the Hosts filter, but clear when the

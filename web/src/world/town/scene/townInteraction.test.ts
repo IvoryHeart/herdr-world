@@ -810,6 +810,77 @@ test("a carry held at the edge never snaps, even with frames slower than the mag
   expect([...aims]).not.toContain("group");
 });
 
+/** Step the camera one frame, draw it and re-aim, as TownCanvas does. */
+const frame = (t: ReturnType<typeof setup>) => {
+  t.camera.update(0.05);
+  if (t.draw().moved) t.interaction.reaim();
+};
+
+for (const [motion, start] of [
+  ["a keyboard zoom", (t: ReturnType<typeof setup>) => t.view.key("+")],
+  [
+    "a flight",
+    (t: ReturnType<typeof setup>) =>
+      t.camera.flyTo(t.camera.x + 200, t.camera.y, t.camera.z),
+  ],
+] as const)
+  test(`a carry never groups while ${motion} is still to be drawn, however slow the frames`, () => {
+    const t = setup();
+    const cell = t.deskCell(0);
+    const other = t.deskCell(1, 0);
+    const pointer = t.press(t.deskCentre(cell));
+    t.moveTo(pointer, offset(t.deskCentre(cell), 20));
+    t.moveTo(pointer, t.deskCentre(other));
+    start(t);
+    expect(t.camera.moving).toBe(true);
+    // Frames further apart than the magnet's wait, while the camera moves.
+    for (let step = 0; step < 4 && t.camera.moving; step += 1) {
+      frame(t);
+      t.time.advance(TOWN_MAGNET_MS + 50);
+      expect(last(t.ghost)?.[3]).not.toBe("group");
+    }
+    while (t.camera.moving) frame(t);
+    // Settled: resting on the desk now groups after the ordinary wait.
+    const onto = t.deskCentre(other);
+    t.moveTo(pointer, onto);
+    t.time.advance(TOWN_MAGNET_MS - 1);
+    expect(last(t.ghost)?.[3]).not.toBe("group");
+    t.time.advance(1);
+    expect(last(t.ghost)?.[3]).toBe("group");
+    t.lift(pointer, onto);
+    expect(t.moves).toEqual([
+      { kind: "group", deskKey: cell.deskKey!, targetDeskKey: other.deskKey! },
+    ]);
+  });
+
+test("a magnet started before the camera moves waits for it to settle", () => {
+  const t = setup();
+  const cell = t.deskCell(0);
+  const onto = t.deskCentre(t.deskCell(1, 0));
+  const pointer = t.press(t.deskCentre(cell));
+  t.moveTo(pointer, offset(t.deskCentre(cell), 20));
+  t.moveTo(pointer, onto);
+  // The zoom begins, and its first frame has not come when the wait ends.
+  t.view.key("+");
+  t.time.advance(TOWN_MAGNET_MS + 50);
+  expect(last(t.ghost)?.[3]).not.toBe("group");
+  t.lift(pointer, onto);
+  expect(t.moves.some((move) => move.kind === "group")).toBe(false);
+});
+
+test("disposing a carry cancels its pending magnet", () => {
+  const t = setup();
+  const cell = t.deskCell(0);
+  const pointer = t.press(t.deskCentre(cell));
+  t.moveTo(pointer, offset(t.deskCentre(cell), 20));
+  t.moveTo(pointer, t.deskCentre(t.deskCell(1, 0)));
+  t.interaction.dispose();
+  expect(last(t.ghost)?.[0]).toBe("remove");
+  const aims = t.ghost.length;
+  t.time.advance(TOWN_MAGNET_MS + 50);
+  expect(t.ghost.length).toBe(aims);
+});
+
 test("a camera that moves under a resting carry restarts the magnet's wait", () => {
   const t = setup();
   const cell = t.deskCell(0);

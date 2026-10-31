@@ -845,8 +845,20 @@ Within the shared shell, Desk SHALL participate in the shell Actions menu, windo
 Inspectors it opens, and view-local failure isolation. On wide screens it SHALL select the agent shown
 in its reading pane only to dock that agent's Inspector; other selection-driven behavior
 (visual-route Action targets, the shared view-control search and watched visual projection) SHALL
-NOT apply to it. Managed hosts outside the filter
-SHALL appear only as non-actionable summaries drawn from the aggregate observation. Review marks, observed stops and recent opens SHALL be scoped to the connection, runtime generation,
+NOT apply to it. Managed hosts outside the filter SHALL appear as read-only summaries drawn from
+the aggregate observation. Expanding a summary SHALL list its observed agents without changing the
+filter or admitting receipt, screen or Inspector resources. Each current agent SHALL offer an
+explicit Reveal & open action naming the agent and destination host. After validating the captured
+connection, runtime, pane, terminal and agent session against the current observation and a qualified
+live pane read, this action SHALL add that host to the existing filter before opening that agent's
+Inspector. All hosts SHALL remain All hosts. Existing Inspectors and their resources SHALL retain
+their owning hosts. Qualified focus admission SHALL recheck the captured agent session before
+focusing. A later opening, leaving Desk or unmounting SHALL permanently supersede pending reveal
+reads and Inspector admission, including queued native focus; returning to Desk SHALL NOT revive
+them. Filter changes already explicitly applied SHALL remain. Supersession SHALL NOT classify a
+current agent as unavailable, disable its next reveal attempt or record a recent open. Cached, unavailable, retired or replaced agents SHALL explain their state and SHALL NOT
+open a replacement session, fall back to another host or broadcast an operation.
+Review marks, observed stops and recent opens SHALL be scoped to the connection, runtime generation,
 pane and agent session across host filter and operational focus changes, so they never carry over
 to another session or a same-named pane on another host.
 
@@ -891,6 +903,30 @@ to another session or a same-named pane on another host.
 - **WHEN** two filtered hosts expose the same native pane ID
 - **THEN** Desk triages both agents and reads each host's own receipt and screen, and reviewing one
   stop does not mark the other host's stop reviewed
+
+#### Scenario: Reveal an agent outside the host filter
+
+- **WHEN** an operator expands an outside-filter host summary and chooses Reveal & open for a current agent
+- **THEN** the action names that agent and host, validates its captured identity, adds the host to the existing
+  filter and opens its own Inspector while preserving previously open contexts and their resources
+- **AND** merely expanding the summary does not change the filter or read that agent's receipt or screen
+
+#### Scenario: An outside-filter agent retires before opening
+
+- **WHEN** an expanded summary is cached, its host becomes unavailable or its runtime or agent session changes
+- **THEN** Desk explains why the captured agent cannot open, without opening another host or replacement session
+
+#### Scenario: Leave and return while a reveal read is pending
+
+- **WHEN** an operator leaves Desk and returns before a captured live read completes
+- **THEN** the old reveal stays cancelled and cannot widen Hosts or open an Inspector
+
+#### Scenario: Supersede queued Inspector admission and retry
+
+- **WHEN** an operator leaves Desk, unmounts it or starts a newer reveal while Inspector admission is pending
+- **THEN** cancellation stops subsequent queued native focus dispatch and Inspector publication
+- **AND** already applied filter changes remain, current agents stay retryable and no recent open is recorded
+- **AND** genuine identity and live-read failures continue to explain why their captured agent cannot open
 
 ### Requirement: Shared bounded Desk state
 
@@ -1314,8 +1350,8 @@ building column. There SHALL be no hard expanded desk ceiling: repeated Expand
 actions SHALL eventually reveal every observed desk. While partially expanded,
 the room SHALL offer Fold alongside Expand, with separate non-overlapping targets
 of at least 40 CSS pixels, so one Fold click can restore the folded target at any step.
-An ordinary room's size SHALL follow its current desks and shrink when tabs
-close. An explicitly expanded room SHALL retain its capacity through tab
+An ordinary or explicitly expanded room's size SHALL follow its current desks
+and shrink when tabs close. An expanded room SHALL remain expanded after
 closures, including at or below 24 desks, until the user folds it. A folded
 room SHALL show exactly the first 24 observed tabs
 (or all tabs when fewer exist) in the same native tab order as Spaces. Each
@@ -1341,9 +1377,9 @@ without moving other desks, and a closed tab SHALL leave no gap: the desks after
 it in reading order SHALL close up in their existing order while the desks
 before it keep their spots. A room that reaches a new capacity step MAY shift
 later rooms and rows of the same building without reordering rooms, and its
-desks MAY reflow to the step's columns. Ordinary rooms SHALL resize to their
-current desk count; explicitly expanded rooms SHALL retain their capacity until
-Fold. Room placement SHALL be re-derived from native order when the scene is
+desks MAY reflow to the step's columns. Ordinary and explicitly expanded rooms
+SHALL resize to their current desk count; expanded rooms SHALL retain their
+expanded state until Fold. Room placement SHALL be re-derived from native order when the scene is
 rebuilt. Town SHALL take its shape from its container's size rather than one
 breakpoint: on a phone, rooms SHALL stack in one column and buildings in one
 vertical column; on a portrait screen or a half-width window, rooms SHALL form
@@ -1382,13 +1418,13 @@ waiting for that ambient quiet period.
 - **WHEN** a tab closes in an ordinary room
 - **THEN** the room resizes to fit its remaining desks
 
-#### Scenario: An expanded room keeps capacity through tab closures
+#### Scenario: An expanded room shrinks after tab closures
 
 - **WHEN** tabs close in an explicitly expanded room
-- **THEN** its capacity stays unchanged, even at or below 24 desks, until Fold
+- **THEN** its room resizes to fit its remaining desks and stays expanded
 - **AND WHEN** the user folds the room
-- **THEN** it resizes to fit its folded desks while retaining pinned cells and
-  its building column
+- **THEN** it shows its folded desks while retaining pinned cells and its
+  building column
 
 #### Scenario: A room fills its capacity step
 
@@ -1601,10 +1637,10 @@ view can end or create a check for the wrong completion. Checks SHALL survive a
 World restart or runtime replacement, remaining unresolved until the original
 terminal and captured session (when known) are verified. Complete current absence,
 a positive known session replacement or later native completion progress SHALL
-clear them; lower native progress SHALL NOT clear a newer check. Checks SHALL NOT
-represent approval or mutate Herdr. Desks
-SHALL carry their tab's name from the room level, and each seat its agent's or
-terminal's name at the desk level. An idle agent SHALL move to a lounge spot in its
+clear them; lower native progress SHALL NOT clear a newer check. Checks SHALL NOT represent approval or mutate Herdr. A desk SHALL show its sole
+agent's Herdr name when exactly one named agent occupies the tab; otherwise it
+SHALL show the tab label, or `Tab N` when the tab has no label. Each seat SHALL
+show its agent's or terminal's name at the desk level. An idle agent SHALL move to a lounge spot in its
 building, or remain seated with an idle cue when no spot is free. When an
 agent's status changes, it SHALL move to its new location, and an answered agent
 SHALL return to its seat. Location and movement SHALL be presentation only: they
@@ -1624,6 +1660,27 @@ SHALL include a current asking agent in Needs you regardless of working/idle
 status. A reception question entry SHALL open its original pane in one action. An
 asking shell pane, such as the watcher, SHALL receive a reception entry
 and Board/Desk marks without inventing an agent harness or changing Herdr status.
+
+#### Scenario: A desk has one named agent
+
+- **WHEN** a tab named `Claude` contains exactly one agent named `example-seat`
+- **THEN** its desk nameplate shows `example-seat`
+
+#### Scenario: A desk's agent has no Herdr name
+
+- **WHEN** a tab named `Claude` contains one agent with no Herdr name
+- **THEN** its desk nameplate shows `Claude`
+
+#### Scenario: A tab contains multiple agents
+
+- **WHEN** a tab named `Claude` contains more than one agent, even if one has a
+  Herdr name
+- **THEN** its desk nameplate shows `Claude`
+
+#### Scenario: A tab has no name to fall back to
+
+- **WHEN** a tab has no name and does not contain exactly one named agent
+- **THEN** its desk nameplate shows `Tab N` using the tab's number
 
 #### Scenario: An agent asks for input and is answered
 

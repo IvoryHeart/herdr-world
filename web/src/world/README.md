@@ -105,7 +105,30 @@ reads for a preceding stop cannot enable its successor's review mark. Display
 expiry alone does not invalidate a receipt. Shared Desk metadata belongs to agent
 panes; verified asking shells still appear in Needs you and open their original
 terminal without attempting an agent-metadata mutation. Reads use fair bounded admission and
-independent host queues. Pending reads keep
+independent host queues. [DeskOtherHosts.tsx](DeskOtherHosts.tsx) expands aggregate
+summaries without operational reads and captures the displayed agent sessions.
+[deskReveal.ts](deskReveal.ts) admits the captured runtime, pane, terminal and
+session through a qualified live pane read before widening Hosts and opening the
+Inspector through the existing session-checked focus queue. Queued live pane
+and session reads revalidate the full captured source, harness, identity kind
+and value before native focus. Stale or replaced
+occupants remain explained and disabled; existing Inspector ownership is unchanged.
+Desktop and phone shell consumers run in [HostsFilter.test.ts](HostsFilter.test.ts)
+with the [reveal acceptance](testing/deskRevealAcceptance.ts); finite admission
+and retirement cases run in [deskReveal.test.ts](deskReveal.test.ts). Shell reveal
+cases minimize the phone Inspector through its menu and check actual viewport
+bounds and pointer hits for host chips and expanded reveal actions at all five
+review viewports. Desk reserves the snapped right half for its reading pane,
+including on wide monitors. Each reveal owns an AbortController: Desk departure,
+unmount and a newer reveal permanently abort the previous request, including its
+Inspector admission. The qualified focus queue rechecks the opening intent before
+subsequent native calls. Supersession stays distinct from real identity/read
+failures and neither disables a healthy agent nor records a recent open.
+[Hook lifecycle regressions](testing/deskRevealHookAcceptance.tsx) hold reads and
+Inspector admission across exit/return, replacement and unmount; the
+[real shell cancellation cases](testing/deskRevealCancellationAcceptance.ts) hold
+both the initial read and queued native focus at all five viewports.
+Pending reads keep
 their admission across refreshes; queued work coalesces to the latest observation.
 
 When `world_shared_acquisition` is negotiated, [useDeskWatch](useDeskWatch.ts)
@@ -134,6 +157,8 @@ carpet and each tab a team table with one seat per pane. Its contract is in the
 World surfaces spec. Town still reuses a few modules named after the retired
 Office view (`herdrOfficeProjection.ts`, `officeRoomActions.ts`,
 `officePreferences.ts`, `officeObservability.ts`); the names are historical.
+A desk shows its agent's Herdr name when exactly one agent occupies the tab and
+has a name; unnamed and multi-agent tabs keep the tab label.
 
 | Task | Open these owners | Focused evidence |
 | --- | --- | --- |
