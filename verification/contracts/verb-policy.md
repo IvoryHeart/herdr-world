@@ -79,4 +79,4 @@ Run `bun run test server/src/verbs/` and the affected consumer suites. The norma
 pre-push `check:changed` and protected CI `Delivery checks` remain required; CI
 runs full selected behavioral verification for changed contract inputs. Independent
 PR review accepts this new boundary and its consumer mapping separately from the
-existing model acceptance. The new Q45 mapping is pending that review and CI.
+existing model acceptance. The new Q46 mapping is pending that review and CI.

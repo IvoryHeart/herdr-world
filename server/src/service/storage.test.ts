@@ -39,6 +39,7 @@ test("closed storage refuses every family's writes and keeps its files", async (
   const paths = resolveDataPaths({ HERDR_WORLD_DATA_DIR: root });
   try {
     const storage = await openStorage(paths, ports);
+    expect(await storage.ids.issue("n")).toMatch(/^n-[0-9a-z]{8}$/);
     await storage.settings.update((s) => ({ ...s, title_suffix: "before" }));
     storage.board().patch([note("before")]);
     await storage.ledger().update(() => {});
@@ -54,6 +55,7 @@ test("closed storage refuses every family's writes and keeps its files", async (
     const before = files.map((path) => readFileSync(path, "utf8"));
 
     await storage.close();
+    await expect(storage.ids.issue("n")).rejects.toThrow(/clos/i);
     const database = join(root, "world.sqlite");
     const sqliteBefore = readFileSync(database);
     const closed = "World storage is closed";

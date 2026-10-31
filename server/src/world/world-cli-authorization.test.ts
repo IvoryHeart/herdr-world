@@ -31,6 +31,20 @@ const scenarios = [
     command: "group create",
     params: { kind: "pod", name: "Example pod" },
   },
+  { at: "id", command: "ask", params: { question: "Example question?" } },
+  {
+    at: "id",
+    command: "board card pin",
+    params: { target: "tab:w1:t1", x: 1, y: 2 },
+    outcome: "record",
+  },
+  { at: "id", command: "undo", params: { id: "pending" }, outcome: "record" },
+  {
+    at: "id",
+    command: "town desk move",
+    params: { target: "tab:w1:t1", herdr: true },
+    outcome: "record",
+  },
   { at: "ledger", command: "ask", params: { question: "Example question?" } },
   {
     at: "ledger",
@@ -90,7 +104,11 @@ test.each(scenarios)(
       await release.promise;
     };
     const queuedLedger: LedgerStore = {
-      nextId: ledger.nextId.bind(ledger),
+      nextId: async (kind) => {
+        const id = await ledger.nextId(kind);
+        await waitAt("id");
+        return id;
+      },
       get: ledger.get.bind(ledger),
       ask: ledger.ask.bind(ledger),
       change: ledger.change.bind(ledger),
@@ -259,7 +277,7 @@ test.each(scenarios)(
   },
 );
 
-test.each(["recipient", "ledger"])(
+test.each(["recipient", "id", "ledger"])(
   "answer recording rechecks authorization after held %s work",
   async (at) => {
     const root = mkdtempSync(join(tmpdir(), "answer-authorization-"));
@@ -286,7 +304,11 @@ test.each(["recipient", "ledger"])(
     );
     const record = createAnswerRecorder({
       ledger: () => ({
-        nextId: ledger.nextId.bind(ledger),
+        nextId: async (kind) => {
+          const id = await ledger.nextId(kind);
+          await waitAt("id");
+          return id;
+        },
         get: ledger.get.bind(ledger),
         ask: ledger.ask.bind(ledger),
         change: ledger.change.bind(ledger),

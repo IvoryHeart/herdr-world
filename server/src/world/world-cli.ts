@@ -513,7 +513,7 @@ export function createWorldCli(deps: WorldCliDeps) {
     undo: BoardOp[] | null,
     extra: Partial<LedgerChange> = {},
   ) => {
-    const id = deps.ledger.nextId("c");
+    const id = await deps.ledger.nextId("c");
     const change: LedgerChange = {
       id,
       at: now(),
@@ -738,7 +738,7 @@ export function createWorldCli(deps: WorldCliDeps) {
             : change!.undo!;
           return changeBoard(actor, ops, change!.redo ?? [], async () => {
             const undone: LedgerChange = {
-              id: completion.ledger.nextId("c"),
+              id: await completion.ledger.nextId("c"),
               at: now(),
               actor,
               command: "undo",
@@ -821,7 +821,7 @@ export function createWorldCli(deps: WorldCliDeps) {
             : Number.isInteger(params.pr) && (params.pr as number) > 0
               ? (params.pr as number)
               : usage("--pr takes a pull request number");
-        const id = deps.ledger.nextId("r");
+        const id = await deps.ledger.nextId("r");
         const entry = {
           id,
           at: now(),

@@ -52,7 +52,7 @@ effect. Once a Board edit, undo or native command has already taken effect, its
 history/undo bookkeeping finishes through a private completion capability. A
 rejected history write restores a Board edit only while its exact revision is
 still current; newer edits are preserved, and an uncertain commit is never
-rolled back. Answer recording checks again after recipient resolution and when
+rolled back. Answer recording checks again after recipient resolution, durable ID issuance and when
 its queued ledger mutation runs, since that callback starts the answer effect.
 
 Recovery follows the actual handler effect. `terminal.scroll` is `opaque`

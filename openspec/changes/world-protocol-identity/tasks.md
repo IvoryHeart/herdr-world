@@ -111,6 +111,10 @@ No v2 subscriptions or persisted-capture fences are implemented here.
   the `world.sqlite` seat, whose draft issues UUIDs. Verify that:
   - new IDs don't collide with imported ones;
   - a restored copy of the data folder doesn't reissue IDs.
+  - SQLite allocator and ledger consumers are implemented in the first identity
+    candidate, with permanent shared reservations, exact record-ID import and
+    stopped-backup/collision tests. Legacy Board/profile JSON-owned creation is
+    unchanged; this task stays open until its remaining record families migrate.
 - [ ] 6.2 Build the binding resolver with per-kind declarations. Write Board strings,
   appearance, tab colour and interest down with today's rules, and move them onto it
   without changing their visible states. Layout preferences stay off the resolver:

@@ -6,6 +6,13 @@ This document describes Herdr World's current system contracts. See
 
 ## System overview
 
+The composition root exposes `WorldStorage.ids.issue(kind)` through the existing
+SQLite worker. IDs have a kind prefix and eight random base32 symbols and become
+visible only after their shared reservation commits. Existing SQLite/imported
+ledger IDs stay unchanged; reservations outlive record and replay trimming.
+See [World identity storage](world-identity.md) for allocation, restoration and
+the boundary with legacy JSON families and the pending binding/claims work.
+
 Runtime adapter registration and its data-only hello descriptors live in the
 [adapter registry](../server/src/adapters/registry.ts). Herdr remains the sole
 production runtime; its raw topology reads preserve today's snapshot behavior.

@@ -17,6 +17,7 @@ import type { Clock, Scheduler } from "./ports";
  * folder stay plain files under DataPaths, outside this port.
  */
 export type WorldStorage = {
+  ids: import("../storage/world-ids").WorldIds;
   settings: GuiSettingsStore;
   connections: ConnectionProfileStore;
   /** Opened on first use. */
@@ -62,6 +63,7 @@ export const openStorage: OpenStorage = async (paths, { clock, scheduler }) => {
     return create();
   };
   return {
+    ids: world.ids,
     settings,
     connections,
     board: () =>

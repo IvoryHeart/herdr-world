@@ -2268,6 +2268,50 @@
     },
     {
       "id": "Q45",
+      "area": "Durable identity and bindings",
+      "owner": "server/src/storage/world-ids.ts",
+      "requirement": "openspec/specs/world-identity/spec.md",
+      "properties": "Store-issued random kind-prefixed IDs commit before acknowledgement; collisions across registered SQLite families retry; imports preserve IDs; reservations survive retention and restart; stopped backups use fresh entropy",
+      "existingTests": [
+        "server/src/storage/world-ids.test.ts",
+        "server/src/storage/world-identifiers.test.ts",
+        "server/src/service/storage.test.ts",
+        "server/src/storage/world-storage.test.ts",
+        "server/src/storage/world-writer.test.ts",
+        "server/src/storage/world-storage-crash.test.ts",
+        "server/src/storage/answer-migration.test.ts",
+        "server/src/world/world-cli.test.ts"
+      ],
+      "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/549",
+      "technique": "direct-sqlite-identity",
+      "assessment": "Real temporary SQLite migration/import, forced collisions, retained reservations, stopped-copy restoration and finite commit-boundary failures, plus worker concurrency and root close fencing",
+      "status": "alternative-evidence",
+      "remaining": "This candidate covers only SQLite ID issuance. M4 source bindings, per-kind continuity/absence, claims and JSON-owned record migration remain pending. Random uniqueness outside the restored registry and physical power-loss safety are excluded.",
+      "requiredChecks": [
+        "bun run check",
+        "bun run test server/src/storage/world-ids.test.ts"
+      ],
+      "partialEvidence": {
+        "models": [],
+        "contracts": ["verification/contracts/world-identity.md"],
+        "tests": [
+          "server/src/storage/world-ids.test.ts",
+          "server/src/storage/world-identifiers.test.ts",
+          "server/src/service/storage.test.ts"
+        ],
+        "checks": [
+          "bun run test server/src/storage/world-ids.test.ts server/src/storage/world-identifiers.test.ts server/src/service/storage.test.ts"
+        ],
+        "review": "The accepted delivery is the approved design; this ID foundation awaits independent implementation review and CI."
+      },
+      "evidenceDecision": "Direct database and worker-port tests exercise the allocation, import and commit boundaries. M4 remains required for binding resolution in the next coherent candidate; existing recovery contracts and consumers remain mandatory.",
+      "promotion": {
+        "decision": "pending",
+        "scope": "SQLite allocator and ledger families only; independent review and CI required."
+      }
+    },
+    {
+      "id": "Q46",
       "area": "Verb registry and actor policy",
       "owner": "server/src/verbs/",
       "requirement": "openspec/specs/bridge-access/spec.md",

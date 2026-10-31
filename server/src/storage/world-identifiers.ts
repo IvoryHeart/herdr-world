@@ -8,6 +8,8 @@ export function newWorldId(
   exists: (id: string) => boolean,
   bytes: () => Uint8Array = () => randomBytes(8),
 ): string {
+  if (!/^[a-z]+$/.test(kind))
+    throw new Error("World ID kind must be lowercase letters");
   for (let tries = 0; tries < 64; tries++) {
     const entropy = bytes();
     if (entropy.length !== 8)
