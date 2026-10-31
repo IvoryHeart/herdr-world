@@ -14,6 +14,8 @@ export interface BridgeControlMsg {
     | "world_profiles_changed"
     | "agent_conversation_changed"
     | "world_agent_activity"
+    | "world_focused_changed"
+    | "world_connections_changed"
     | "world_desk_reads";
   /** Answer delivery revisions belong to one service lifetime. */
   incarnation?: string;

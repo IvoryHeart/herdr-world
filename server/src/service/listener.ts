@@ -454,6 +454,7 @@ export function listen(deps: ListenerDeps) {
               world_snapshot_chunks: true,
               world_snapshot_chunk_admission: true,
               world_snapshot: true,
+              world_shared_acquisition: true,
               embedded_assistant: true,
               herdr_task_notifications:
                 config.taskNotificationSource === "herdr",

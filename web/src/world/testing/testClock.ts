@@ -57,14 +57,14 @@ export type ClockTarget = Pick<
 export function installTestClock(
   target: ClockTarget = window,
   clockOf: { now(): number } = performance,
-  { running = false }: { running?: boolean } = {},
+  { running = false, startAt }: { running?: boolean; startAt?: number } = {},
 ): TestClock {
   const real = {
     setTimeout: globalThis.setTimeout.bind(globalThis),
     now: clockOf.now.bind(clockOf),
     MessageChannel: globalThis.MessageChannel,
   };
-  let now = real.now();
+  let now = startAt ?? real.now();
   let nextId = 1;
   const timers = new Map<number, Timer>();
   /** The running clock rests while nothing is scheduled; work wakes it. */

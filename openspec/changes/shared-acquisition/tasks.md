@@ -17,31 +17,26 @@ The service half of T2 is written first and must be green before task 3.1.
 
   Write the service cases from the design first, with two browser sockets and two simulated hosts. They include a one-off list call from another caller, which must not suppress a notice.
 - [x] 2.3 Activity cache and `world_agent_activity`: today's reading limits; `agent.list` reading the cache while it's fresh; the whole map on change, to holders only, never before a reading.
-- [ ] 2.4 Advertise `world_shared_acquisition`. Send `world_connections_changed` on profile changes, connection state or generation changes, and socket open or close.
+- [x] 2.4 Advertise `world_shared_acquisition`. Send `world_connections_changed` on profile changes, connection state or generation changes, and socket open or close.
 
-Focused registry and catalogue notices are implemented in the observer/notices
-part. Desk target reference counts and capability-gated consumers are implemented
-in the Desk part. Task 2.4 stays open until the browser notice and retry paths
-can replace the focused timer and advertise the capability together.
-Owner approval (1.4) is recorded in the implementation brief for merged #551.
-The recency slice also declares the visible active host and releases it on hide,
-including capability and reconnect handling. Inspector holds and the remaining
-catch-up work keep 3.4 open. The original recency and hide/show T2 cases are normal
-passing tests; the remaining five expected failures keep 3.5 open.
+The observer, recency, Desk and timer-removal parts implement the complete
+capability. Owner approval (1.4) is recorded in the implementation brief for
+merged #551. Every original T2 case is a normal passing test; Inspector interest,
+failed bootstrap, read retries and catalogue coalescing add direct consumers.
 
 ## 3. Browser
 
-- [ ] 3.1 Keep the metadata timer only when the hello lacks the capability; keep the update check, reconnection and return-to-page catch-up. Mark the focused re-list's four list calls with `focused_observation: true` on the frame, and no other call.
-- [ ] 3.2 Handle the notices, admitted only for ready owners with the matching generation:
+- [x] 3.1 Keep the metadata timer only when the hello lacks the capability; keep the update check, reconnection and return-to-page catch-up. Mark the focused re-list's four list calls with `focused_observation: true` on the frame, and no other call.
+- [x] 3.2 Handle the notices, admitted only for ready owners with the matching generation:
   - `world_focused_changed`: a scoped re-list;
   - `world_connections_changed`: `bridge.status`, one in flight and one queued.
 
   Retry a failed catalogue fetch or held re-list once per period until it succeeds (design D7).
 - [x] 3.3 Keep the latest recency time per pane, terminal, agent and session, from `agent.list` and from pushes, and join it into panes. Status agreement still gates `state_change_seq` only.
-- [ ] 3.4 Declare interest: the active connection plus Inspector owners, which hold and release through the store; an empty set when hidden; again after a generation is admitted.
+- [x] 3.4 Declare interest: the active connection plus Inspector owners, which hold and release through the store; an empty set when hidden; again after a generation is admitted.
   - Re-list on each new hold: an admitted Inspector conversation, and every held owner when the page is shown.
   - Add the T2 cases: an Inspector's hold declares its host and receives its recency, and a preview of an already-closed tab is removed.
-- [ ] 3.5 Flip every T2 expected failure to a normal test.
+- [x] 3.5 Flip every T2 expected failure to a normal test.
 
 ## 4. Desk
 
@@ -53,9 +48,17 @@ Desk tests cover two sockets sharing reads, per-holder captured triggers, late
 holders, unchanged receipts for new stops, per-trigger failures, and all 343
 length-three two-socket/two-owner interest traces. The actual Desk browser fixture
 checks shared hooks, visibility release and capability removal back to polling.
-The capability remains unadvertised until the timer-removal part.
+The timer-removal part advertises the capability for both focused and Desk paths.
 
 ## 5. Evidence and documentation
 
-- [ ] 5.1 Map the new tests in `verification/coverage.json` (Q04, Q15, Q24) and run the complete verification gate.
-- [ ] 5.2 Update the architecture and knowledge-map entries that describe polling. Add a changelog fragment for the lower idle cost.
+- [x] 5.1 Map the new tests in `verification/coverage.json` (Q04, Q15, Q24) and run the complete verification gate.
+- [x] 5.2 Update the architecture and knowledge-map entries that describe polling. Add a changelog fragment for the lower idle cost.
+
+- [x] 5.3 Join the real Bridge/store to createWorldService with two synthetic hosts and a second real socket, covering the composed parity and shared acquisition boundary.
+- [x] 5.4 Synchronize both delivered runtime-federation additions and the complete Bounded Desk observation into current specs, preserving their scenarios.
+
+The composed case runs a real Bridge/store in a Worker and a second native socket
+against createWorldService with two synthetic runtime adapters (architect-approved
+alternative to two stores). Both spec deltas are synchronized into current specs.
+The change remains active for independent review; archive follows acceptance.
