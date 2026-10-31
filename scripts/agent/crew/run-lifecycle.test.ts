@@ -1,8 +1,8 @@
 import { afterEach, expect, test } from "bun:test";
 import { cleanupDeliveries, setup } from "../crew-round-delivery-fixture";
-import { NOW, SHA } from "../gate/cases";
+import { NOW, SHA, input, confirm } from "../gate/cases";
 import { SETTINGS_DEFAULTS } from "./plan";
-import { settleRuns } from "./run-lifecycle";
+import { completeManualReviews, settleRuns } from "./run-lifecycle";
 import {
   actionsIn,
   activeRuns,
@@ -66,3 +66,38 @@ test("an interrupted timeout cannot lose the run's owner notification", () => {
   expect(actionsIn(f.crew, ["pending"])[0]?.key).toBe(`run:${id}|timeout`);
   expect(f.killed).toEqual([1234]);
 });
+
+test.each(["stale", "wrong-reviewer", "wrong-head", "ambiguous", "auxiliary"])(
+  "%s evidence cannot complete a fresh manual review",
+  (scenario) => {
+    const f = setup({ seedCycle: false });
+    const id = addRun(
+      f.crew,
+      {
+        actionKey:
+          scenario === "auxiliary" ? "auxiliary:synthetic" : "manual:synthetic",
+        reviewer: "rev2",
+        pr: 7,
+        head: SHA.reviewed,
+        log: "stdout",
+      },
+      scenario === "stale" ? NOW : NOW - 5 * 60_000,
+    );
+    const claim =
+      scenario === "ambiguous"
+        ? {
+            reviewer: "rev2",
+            commit: SHA.reviewed,
+            result: "cannot determine the outcome",
+          }
+        : confirm(
+            scenario === "wrong-reviewer" ? "rev-opus" : "rev2",
+            scenario === "wrong-head" ? SHA.fixed : SHA.reviewed,
+          );
+    const value = input({ head: SHA.reviewed, posts: [claim] });
+    completeManualReviews(f.crew, [value], ".", NOW + 60_000, f.deps);
+    expect(getRun(f.crew, id)?.finishedAt).toBeNull();
+    expect(getRun(f.crew, id)?.result).toBeNull();
+    expect(f.killed).toEqual([]);
+  },
+);

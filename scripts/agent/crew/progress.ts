@@ -1,5 +1,5 @@
 import type { StoredRun } from "./store";
-import { readTranscript } from "./worker";
+import { readTranscript, type SessionRoots } from "./worker";
 
 /** Timestamped conversation/tool work renews a finite inactivity window.
  * Heartbeats, token counters, file writes and PID liveness do not. */
@@ -46,8 +46,13 @@ export function lastProgress(
   return latest;
 }
 
-export function readProgress(run: StoredRun, cwd: string, now: number) {
-  const text = readTranscript({ ...run, cwd });
+export function readProgress(
+  run: StoredRun,
+  cwd: string,
+  now: number,
+  roots?: SessionRoots,
+) {
+  const text = readTranscript({ ...run, cwd }, roots);
   return text === null
     ? null
     : lastProgress(text, run.harness, run.startedAt, now);

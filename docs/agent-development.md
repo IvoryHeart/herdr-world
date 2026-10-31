@@ -595,7 +595,10 @@ expired runs even outside that scope. Timeout outcomes and their per-run owner
 causes are committed together, including manual reviews without action rows.
 Run logs are kept in `runs/`; exit -124 in
 `runs` or `status` identifies a startup or runtime timeout. Completion evidence
-observed before timeout settlement releases a run normally and keeps its chat.
+observed before timeout settlement releases a run normally and keeps its chat,
+including manual reviews without action rows. A manual RESULT must match its
+reviewer and pinned head and follow the run's start. Known Codex sessions are
+resolved across all date folders; the two-folder window applies only to discovery.
 A late worker exit cannot overwrite timeout evidence; a late valid RESULT clears
 the reviewer's timeout notice without starting another run. Closing or merging
 the PR retires its timeout notices. On GitHub the

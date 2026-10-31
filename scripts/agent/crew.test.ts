@@ -2642,6 +2642,35 @@ describe("delivery", () => {
     expect(spawned).toEqual([]);
   });
 
+  test("a completed manual review releases its reservation before timeout and keeps its chat", () => {
+    const id = addRun(
+      crew,
+      {
+        actionKey: `manual:7:${SHA.reviewed}:rev2`,
+        reviewer: "rev2",
+        pr: 7,
+        head: SHA.reviewed,
+        log: "stdout",
+      },
+      NOW - 5 * 60_000,
+    );
+    setRunPid(crew, id, 1234);
+    const value = town({ head: SHA.reviewed, posts: trio(SHA.reviewed) });
+    pass(value, NOW + 60_000);
+    expect(getRun(crew, id)).toMatchObject({
+      exitCode: 0,
+      finishedAt: NOW + 60_000,
+    });
+    expect(getRun(crew, id)?.result).toContain("RESULT #7");
+    expect(activeRuns(crew)).toEqual([]);
+    pass(value, NOW + 90 * 60_000);
+    expect(getRun(crew, id)?.exitCode).toBe(0);
+    expect(killed).toEqual([]);
+    expect(
+      notices().filter((argv) => argv.join(" ").includes("timed out")),
+    ).toEqual([]);
+  });
+
   test("a persisted manual run reports its timeout once without any action row", () => {
     const path = join(root, "manual.sqlite");
     crew.close();

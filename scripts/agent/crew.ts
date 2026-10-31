@@ -1,4 +1,5 @@
 import {
+  completeManualReviews,
   settleRuns,
   stopRun,
   timeoutHolds,
@@ -348,6 +349,7 @@ function act(
       )
       .map((verdict) => [verdict.number, verdict.head]),
   );
+  completeManualReviews(crew, inputs, context.dir, now, deps);
   // A review is done once its RESULT is on GitHub for the head it was
   // given, whatever its session has done since: it may have posted just
   // before a newer push, or ended before this pass saw the post. A session

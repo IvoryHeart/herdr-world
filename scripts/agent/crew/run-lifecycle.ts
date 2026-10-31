@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { shortSha } from "../../../shared/pullRequests";
+import type { GateInput } from "../gate/predicate";
 import type { Deps } from "./deps";
 import type { Action, CrewSettings } from "./plan";
 import { checkoutOf } from "./review";
@@ -13,12 +14,51 @@ import {
   RUN_TIMEOUT_EXIT_CODE,
   setAction,
   setRunProgress,
+  setRunResult,
   type StoredAction,
 } from "./store";
 
 const START_MS = 3 * 60_000;
 const RUN_ATTEMPTS = 2;
 const AUTHOR_KINDS = new Set(["fix", "ci", "conflict", "screenshots"]);
+
+/** Manual reviews have no source action; settle their own completion first. */
+export function completeManualReviews(
+  crew: Database,
+  inputs: GateInput[],
+  dir: string,
+  now: number,
+  deps: Deps,
+) {
+  const byPr = new Map(inputs.map((input) => [input.number, input]));
+  for (const run of activeRuns(crew)) {
+    if (!run.actionKey.startsWith("manual:") || getAction(crew, run.actionKey))
+      continue;
+    const input = byPr.get(run.pr);
+    if (!input) continue;
+    const claim = [
+      ...input.history,
+      ...(input.item?.pr?.reviewers ?? []),
+    ].findLast(
+      (claim) =>
+        claim.reviewer === run.reviewer &&
+        claim.commit === run.head &&
+        claim.at >= run.startedAt &&
+        claim.at <= now &&
+        claim.outcome !== "unknown" &&
+        claim.line.trim(),
+    );
+    if (!claim) continue;
+    setRunResult(crew, run.id, `RESULT #${run.pr}: ${claim.line.trim()}`);
+    finishRun(
+      crew,
+      run.id,
+      0,
+      deps.usage(run, run.cwd ?? checkoutOf(dir, run)),
+      now,
+    );
+  }
+}
 
 /** A durable timeout cause belongs to one run, whether it has actions or not. */
 export function timeoutRun(crew: Database, entry: Pick<Action, "key">) {
