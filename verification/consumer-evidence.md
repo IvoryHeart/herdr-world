@@ -45,6 +45,22 @@ This reconciles the remaining baseline entries without treating a component mode
 | Q32 File search and annotation drafts | Runtime-qualified late-result admission is the shared rule; real File Explorer tests exercise retired prefetch/preview and annotation tests retain durable checkout identity and stale anchors. Models: browser-preparation, runtime-leases. | Draft persistence intentionally uses durable checkout identity rather than transient generation; glob expansion and anchor reconstruction remain pure/fixture tests. |
 | Q37 Whole-service startup/shutdown | Manager shutdown prevents new starts and drains retained owners. Startup/shutdown tests verify listener availability, one shared drain and forced exit deadline. Models: runtime-control, runtime-drain. | Actual listener/process/service-manager lifecycle and forced-exit policy are integration/platform evidence; models do not prove OS termination. |
 
+### Watch status consumer (Q18)
+
+`useWorldObservation.test.ts` mounts the production observation hook, actual
+watchlist store and actual host projection in an isolated DOM on controlled time.
+Runtime observations are synthetic inputs supplied at the external-store read
+port; watchlist refresh consumes deferred synthetic service replies. Current
+healthy-host counts survive an unavailable peer; old/missing revisions stay
+pending, and an unavailable-only scope reports empty observed coverage without
+using hidden-host counts or sending mutations. A revision-advancing watchlist
+reply makes older observations pending at its named completion. These replace
+the pending-revision and offline-only assertions in `HostsFilter.actions.test.ts`.
+Desktop/phone browser cases still require the actual Actions menu to render the
+current counts and unavailable-host explanation; every other Actions/Town case
+stays. This does not prove service admission, topology production, transport or
+focus; existing mandatory consumers and model bounds remain.
+
 ### Chat source navigation (Q16)
 
 The source-link parser fixtures cover absolute/relative paths, encoded names,
