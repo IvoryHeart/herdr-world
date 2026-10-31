@@ -197,6 +197,20 @@ The [cache/observer consumer](../server/src/service/agent-activity.test.ts) and
 [real Bridge/store race tests](../web/src/store/agentActivity.test.ts) cover those
 boundaries.
 
+The [Desk watch owner](../server/src/world/desk-watches.ts) shares screen and
+receipt reads across socket declarations using the same injected scheduler.
+Its [queues](../server/src/world/desk-read-queues.ts) retain one active read per
+host and kind until settlement, and its
+[native reader](../server/src/world/desk-watch-read.ts) validates session identity
+on both sides of a read. Per-holder receipt triggers are captured at read start;
+late holders receive actual results with null triggers, followed by one successor.
+The [browser declaration controller](../web/src/world/deskWatchClient.ts) unions
+Desk hooks, releases on hide/close and fences current owners. The
+[hook adapter](../web/src/world/useDeskWatch.ts) enables it only for the shared
+capability; until the timer-removal part advertises it, existing Desk polling
+continues. See [Desk evidence](../verification/contracts/shared-acquisition.md#desk-checkpoint)
+for the finite traces, two-browser consumers and real browser fallback checks.
+
 The [focused store](../web/src/store.ts) retains the shared mutable connection
 state and public command object. Its [types](../web/src/store/types.ts),
 [session transitions](../web/src/store/sessions.ts),

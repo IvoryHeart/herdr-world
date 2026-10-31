@@ -9,7 +9,7 @@
 
 The service half of T2 is written first and must be green before task 3.1.
 
-- [ ] 2.1 Interest registry: per-socket declarations replaced whole, holder counts per owner and Desk target, release on hide and socket close, rejection of malformed declarations. Test it exhaustively over two sockets, two owners, visible, hidden and closed, and a generation bump.
+- [x] 2.1 Interest registry: per-socket declarations replaced whole, holder counts per owner and Desk target, release on hide and socket close, rejection of malformed declarations. Test it exhaustively over two sockets, two owners, visible, hidden and closed, and a generation bump.
 - [x] 2.2 Focused observer per held owner:
   - the enriched lists every 5 s, with no overlap and the lease and generation fence;
   - per-socket records of the lists last sent in replies to marked calls (`focused_observation`), and only those;
@@ -20,8 +20,9 @@ The service half of T2 is written first and must be green before task 3.1.
 - [ ] 2.4 Advertise `world_shared_acquisition`. Send `world_connections_changed` on profile changes, connection state or generation changes, and socket open or close.
 
 Focused registry and catalogue notices are implemented in the observer/notices
-part. Task 2.1 stays open for Desk target reference counts; task 2.4 stays open
-until the complete focused and Desk paths can advertise the capability together.
+part. Desk target reference counts and capability-gated consumers are implemented
+in the Desk part. Task 2.4 stays open until the browser notice and retry paths
+can replace the focused timer and advertise the capability together.
 Owner approval (1.4) is recorded in the implementation brief for merged #551.
 The recency slice also declares the visible active host and releases it on hide,
 including capability and reconnect handling. Inspector holds and the remaining
@@ -44,9 +45,15 @@ passing tests; the remaining five expected failures keep 3.5 open.
 
 ## 4. Desk
 
-- [ ] 4.1 Service screen and receipt watches: holder counts, per-host queues, `world_desk_reads` in read order, and no placeholder. Write the two-browser tests first.
-- [ ] 4.2 When the hello advertises `world_shared_acquisition`, Desk declares its chosen targets with `world.desk.observe` instead of reading them, and releases them on hide and close. Without it, Desk keeps its own 4 s and 20 s reads.
-- [ ] 4.3 Update the Desk browser fixture and the Desk tests that count reads, and cover the fallback without the capability.
+- [x] 4.1 Service screen and receipt watches: holder counts, per-host queues, `world_desk_reads` in read order, and no placeholder. Write the two-browser tests first.
+- [x] 4.2 When the hello advertises `world_shared_acquisition`, Desk declares its chosen targets with `world.desk.observe` instead of reading them, and releases them on hide and close. Without it, Desk keeps its own 4 s and 20 s reads.
+- [x] 4.3 Update the Desk browser fixture and the Desk tests that count reads, and cover the fallback without the capability.
+
+Desk tests cover two sockets sharing reads, per-holder captured triggers, late
+holders, unchanged receipts for new stops, per-trigger failures, and all 343
+length-three two-socket/two-owner interest traces. The actual Desk browser fixture
+checks shared hooks, visibility release and capability removal back to polling.
+The capability remains unadvertised until the timer-removal part.
 
 ## 5. Evidence and documentation
 
