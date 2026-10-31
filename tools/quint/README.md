@@ -18,8 +18,11 @@ not just a startup log line. Linux verifies ownership through `/proc`; macOS
 requires its standard `lsof` tool and separate runner evidence. Checker and replay workers have owned POSIX process groups,
 deadlines and TERM/KILL drain, including grandchildren and inherited pipes.
 
-Use Bun 1.4.3, Node 18+ and Java 17+ on POSIX systems; the measured local
-and candidate CI toolchain uses Node 24.19.0 and Java 21 on Linux. macOS requires
+Use Bun 1.4.3, Node 18+ and Java 17+ on POSIX systems. Candidate CI pins
+Node 24.19.0 and Eclipse Temurin JDK 21.0.13+9 on Linux x64 in every shard
+and the aggregate; use that exact build to reproduce CI tool identities.
+Java comes from commit-pinned `actions/setup-java`, independent of runner image
+updates. Aggregation rejects differing full tool identities. macOS requires
 its own runner evidence before claiming equivalent process/platform coverage:
 
 ```bash

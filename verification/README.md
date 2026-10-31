@@ -84,6 +84,13 @@ errors, timeouts and cleanup failures fail the candidate command. A cancelled ru
 cannot report success. Evidence from focused `--case` runs cannot substitute for
 the unfiltered canonical command.
 
+CI pins Eclipse Temurin JDK 21.0.13+9 for Linux x64 in every shard and the
+aggregate, using commit-pinned `actions/setup-java` and its runner tool cache.
+Node is pinned to 24.19.0. Java selection is independent of runner image updates;
+use that exact distribution and build locally when reproducing CI. Aggregation
+continues to require identical full tool identities, including Java patch
+versions, across all model evidence.
+
 The canonical run has a 15-minute outer deadline; checker commands have a
 240-second deadline, Java has a 1 GiB heap and Node has a 512 MiB old-space cap.
 These per-process limits are not a measurement of total peak memory. Local complete
