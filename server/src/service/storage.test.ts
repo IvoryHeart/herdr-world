@@ -44,14 +44,10 @@ test("closed storage refuses every family's writes and keeps its files", async (
     storage.board().patch([note("before")]);
     await storage.ledger().update(() => {});
     const [profile] = storage.profiles().get().profiles;
-    storage.profiles().save(profile);
+    await storage.profiles().save(profile);
+    expect(existsSync(paths.agentProfiles)).toBe(false);
     await storage.connections.save(registry("before"));
-    const files = [
-      paths.settings,
-      paths.board,
-      paths.agentProfiles,
-      paths.connections,
-    ];
+    const files = [paths.settings, paths.board, paths.connections];
     const before = files.map((path) => readFileSync(path, "utf8"));
 
     await storage.close();
@@ -64,8 +60,8 @@ test("closed storage refuses every family's writes and keeps its files", async (
     ).rejects.toThrow(closed);
     expect(() => storage.board().patch([note("after")])).toThrow(closed);
     await expect(storage.ledger().update(() => {})).rejects.toThrow("closing");
-    expect(() => storage.profiles().save(profile)).toThrow(closed);
-    // Backing up the legacy terminal settings copies the file: also a write.
+    await expect(storage.profiles().save(profile)).rejects.toThrow(closed);
+    // The import-backup entry point remains fenced after this family closes.
     expect(() => storage.profiles().backupLegacySettings()).toThrow(closed);
     expect(existsSync(`${paths.agentProfiles}.before-terminal-settings`)).toBe(
       false,
@@ -87,10 +83,7 @@ test("a family not opened before close stays closed and sets nothing aside", asy
   const root = mkdtempSync(join(tmpdir(), "world-storage-late-"));
   const paths = resolveDataPaths({ HERDR_WORLD_DATA_DIR: root });
   // Unreadable files: opening a family would set each one aside.
-  const families = [
-    ["board", paths.board],
-    ["profiles", paths.agentProfiles],
-  ] as const;
+  const families = [["board", paths.board]] as const;
   for (const [, path] of families) {
     mkdirSync(dirname(path), { recursive: true });
     writeFileSync(path, "{ invalid");
@@ -101,7 +94,7 @@ test("a family not opened before close stays closed and sets nothing aside", asy
     const storage = await openStorage(paths, ports);
     await storage.close();
     const before = listing();
-    for (const [family] of families)
+    for (const family of ["board", "profiles"] as const)
       expect(() => storage[family]()).toThrow("World storage is closed");
     expect(listing()).toEqual(before);
     for (const [, path] of families)

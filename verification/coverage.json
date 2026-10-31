@@ -2378,6 +2378,53 @@
         "decision": "pending",
         "scope": "IDs and binding resolution, including legacy captures and Board action admission, plus runtime status/session/PR claims; independent review and CI required. Remaining JSON ID creation is excluded."
       }
+    },
+    {
+      "id": "Q46",
+      "area": "Durable agent profiles and chimes",
+      "owner": "server/src/storage/world-profiles.ts",
+      "requirement": "openspec/specs/world-storage/spec.md",
+      "properties": "Committed-only profile/chime reads and RPC acknowledgement; fresh operation state and savepoint isolation; exact private once-only JSON import with atomic completion; durable master revision allocation and terminal import flags; closed admission, drain and restart; live terminal choices remain Herdr-owned",
+      "existingTests": [
+        "server/src/storage/profile-writer.test.ts",
+        "server/src/storage/profile-crash.test.ts",
+        "server/src/service/profile-storage.test.ts",
+        "server/src/rpc/profiles-storage.test.ts",
+        "server/src/agent/profile-store.test.ts",
+        "server/src/agent/terminal-settings.test.ts",
+        "server/src/service/storage.test.ts",
+        "server/src/service/world-service.test.ts"
+      ],
+      "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/549",
+      "technique": "direct-sqlite-recovery",
+      "assessment": "All 24 independent-edit/refusal orderings against real SQLite, actual service/RPC/terminal consumers and source/standalone compiled process-crash schedules",
+      "status": "alternative-evidence",
+      "remaining": "Independent implementation review and native CI remain required. No physical power-loss proof, new profile-ID creation protocol, live Herdr atomic token write or runtime-status migration is claimed.",
+      "requiredChecks": ["bun run check", "bun run verification:gate"],
+      "partialEvidence": {
+        "models": [],
+        "contracts": ["verification/contracts/agent-profile-storage.md"],
+        "tests": [
+          "server/src/storage/profile-writer.test.ts",
+          "server/src/storage/profile-crash.test.ts",
+          "server/src/service/profile-storage.test.ts",
+          "server/src/rpc/profiles-storage.test.ts",
+          "server/src/agent/profile-store.test.ts",
+          "server/src/agent/terminal-settings.test.ts",
+          "server/src/service/storage.test.ts",
+          "server/src/service/world-service.test.ts"
+        ],
+        "checks": [
+          "bun run test server/src/storage/profile-writer.test.ts server/src/storage/profile-crash.test.ts server/src/service/profile-storage.test.ts server/src/rpc/profiles-storage.test.ts server/src/agent/profile-store.test.ts server/src/agent/terminal-settings.test.ts server/src/service/storage.test.ts",
+          "bun run verification:gate"
+        ],
+        "review": "The accepted delivery link records the identity/storage design, not acceptance of this store migration; independent implementation review and CI are pending."
+      },
+      "evidenceDecision": "Real SQLite transactions, worker admission and standalone embedded-worker recovery are the relevant persistence boundary. Direct exhaustive operation permutations establish bounded ordering without duplicating the SQL engine in Quint. Existing runtime/binding models and terminal-setting consumers retain their original fences and authority claims. Compiled assertion controls test sensitivity separately; no model or synthetic receiver is credited with filesystem or external-runtime guarantees.",
+      "promotion": {
+        "decision": "pending",
+        "scope": "Agent profile/chime persistence and their existing legacy terminal-import metadata only; separate contract and implementation acceptance required."
+      }
     }
   ],
   "promotionReview": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",

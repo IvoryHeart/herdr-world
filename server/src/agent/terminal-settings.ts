@@ -1,6 +1,6 @@
 import type { AgentProfile } from "../../../shared/agentProfile";
 import {
-  ProfileStore,
+  type ProfileStorePort,
   type ProfileAssignment,
   type TerminalKey,
 } from "./profile-store";
@@ -30,7 +30,7 @@ export class TerminalSettings {
   private revision = 0;
 
   constructor(
-    private readonly store: ProfileStore,
+    private readonly store: ProfileStorePort,
     private readonly leaseFor: (id: string) => SettingsLease | null,
     private readonly changed: (revision: number) => void = () => {},
     private readonly now: () => number = Date.now,
@@ -137,12 +137,13 @@ export class TerminalSettings {
       { expectedMaster, onRead: (pane) => this.cachePane(target, pane) },
     );
     if (!pane) return;
-    this.cachePane(target, pane);
+    await this.cachePane(target, pane);
   }
 
-  private cachePane(target: TerminalTarget, pane: PaneRow) {
+  private async cachePane(target: TerminalTarget, pane: PaneRow) {
     const master = readTerminalSettings(pane).master;
-    if (master !== undefined) this.store.rememberMaster(master);
+    if (master !== undefined) await this.store.rememberMaster(master);
+    this.lease(target.connection_id, target.connection_generation);
     let host = this.hosts.get(target.connection_id);
     if (!host || host.generation !== target.connection_generation) {
       host = { generation: target.connection_generation, panes: [] };
@@ -158,12 +159,7 @@ export class TerminalSettings {
   }
 
   private nextRevision() {
-    const revision = Math.max(
-      this.now(),
-      this.store.settingsState().highest_master_revision + 1,
-    );
-    this.store.rememberMaster(revision);
-    return revision;
+    return this.store.nextMasterRevision(this.now());
   }
 
   /** Called only with a complete, clean pane list on the still-current lease. */
@@ -178,9 +174,9 @@ export class TerminalSettings {
       if (
         !this.store.settingsState().imported_connections.includes(connectionId)
       )
-        this.store.backupLegacySettings();
+        await this.store.backupLegacySettings();
       for (const claim of this.claims())
-        this.store.rememberMaster(claim.revision);
+        await this.store.rememberMaster(claim.revision);
       try {
         await this.importLegacy(connectionId, generation);
         await this.clearSuperseded();
@@ -209,7 +205,7 @@ export class TerminalSettings {
         !(legacy.town_master && same(legacy.town_master, target))
       )
         continue;
-      await this.write(target, (currentPane) => {
+      await this.write(target, async (currentPane) => {
         const settings = readTerminalSettings(currentPane);
         const tokens: SettingTokens = {};
         if (assignment && !settings.profile_id) {
@@ -228,13 +224,13 @@ export class TerminalSettings {
         )
           Object.assign(tokens, {
             world_terminal: terminalId,
-            world_master: String(this.nextRevision()),
+            world_master: String(await this.nextRevision()),
           });
         return tokens;
       });
     }
     this.lease(connectionId, generation);
-    this.store.finishSettingsImport(connectionId);
+    await this.store.finishSettingsImport(connectionId);
   }
 
   private async clearSuperseded() {
@@ -261,7 +257,7 @@ export class TerminalSettings {
         throw new Error("terminal settings cleanup observation is unavailable");
       for (const observed of listed.panes) {
         const revision = readTerminalSettings(observed).master;
-        if (revision !== undefined) this.store.rememberMaster(revision);
+        if (revision !== undefined) await this.store.rememberMaster(revision);
       }
       const pane = listed.panes.find(
         (p) => p.terminal_id === claim.terminal_id,
@@ -334,9 +330,9 @@ export class TerminalSettings {
           throw new Error("Town master requires a qualified terminal");
         if (current && !same(current, target) && params.replace !== true)
           throw new Error("another agent is the Town master");
-        await this.write(target, () => ({
+        await this.write(target, async () => ({
           world_terminal: target.terminal_id,
-          world_master: String(this.nextRevision()),
+          world_master: String(await this.nextRevision()),
         }));
       }
       // Clearing an unreachable superseded claim waits for its next observation.

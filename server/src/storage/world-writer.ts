@@ -9,6 +9,8 @@ import {
   isAnswerIntent,
   originalAsker,
 } from "../world/ask-delivery-types";
+import { readProfiles, executeProfileOperation } from "./world-profiles";
+import { importLegacyProfiles } from "./profile-import";
 import { randomBytes } from "node:crypto";
 import { createWorldIds } from "./world-ids";
 import { createBindingWriter } from "./world-bindings";
@@ -56,6 +58,8 @@ export function openWorldWriter(
   at: number,
   incarnation = randomBytes(16).toString("base64url"),
   bytes?: () => Uint8Array,
+  legacyProfiles?: string,
+  profileImportFault?: (stage: "before-commit" | "after-commit") => void,
 ) {
   assertSafeDataPath(path);
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
@@ -92,6 +96,8 @@ export function openWorldWriter(
     migrateWorldDatabase(db, path);
     db.exec("PRAGMA busy_timeout=5000");
     importLegacyLedger(db, legacy, at);
+    if (legacyProfiles !== undefined)
+      importLegacyProfiles(db, legacyProfiles, at, profileImportFault);
     recoverAttention(db, at);
   } catch (error) {
     db.close();
@@ -138,8 +144,10 @@ export function openWorldWriter(
       changes: rows("ledger_changes"),
       results: rows("results"),
     };
+    const profiles = readProfiles(db);
     return {
       document,
+      ...(profiles ? { profiles } : {}),
       attention: (
         db.query("SELECT * FROM outbox ORDER BY rowid").all() as Record<
           string,
@@ -383,6 +391,8 @@ export function openWorldWriter(
         return read();
       case "issue-id":
         return ids.issue(request.kind);
+      case "profiles":
+        return executeProfileOperation(db, request.operation);
       case "binding":
         return bindings.execute(request.operation, at);
       case "write":

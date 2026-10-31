@@ -99,10 +99,23 @@ function expectOwnFolders(
       expect(
         asks.every((row) => !row.body.includes(MARKERS[other])),
       ).toBeTrue();
+      const profiles = database
+        .query("SELECT body FROM agent_profiles")
+        .all() as {
+        body: string;
+      }[];
+      expect(
+        profiles.some(
+          (row) => JSON.parse(row.body).name === `${marker} profile`,
+        ),
+      ).toBeTrue();
+      expect(
+        profiles.every((row) => !row.body.includes(MARKERS[other])),
+      ).toBeTrue();
     } finally {
       database.close();
     }
-    expect(read("agent-profiles.json")).toContain(`${marker} profile`);
+    expect(existsSync(join(root, "agent-profiles.json"))).toBeFalse();
     expect(read("connections.json")).toContain(marker);
     expect(read("source-secrets.json")).toContain(`${marker}-jira-token`);
     expect(existsSync(join(root, "session-secret.json"))).toBeTrue();
