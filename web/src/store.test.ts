@@ -1393,6 +1393,184 @@ describe("independent qualified operational sessions", () => {
     });
   });
 
+  test.each(
+    [
+      { name: "unchanged", change: {}, expected: "opened" },
+      {
+        name: "changed value",
+        change: { value: "new-synthetic-id" },
+        expected: "refused",
+      },
+      {
+        name: "changed harness",
+        change: { source: "herdr:claude_code", agent: "claude_code" },
+        expected: "refused",
+      },
+      {
+        name: "changed source",
+        change: { source: "synthetic-replacement-source" },
+        expected: "refused",
+      },
+      { name: "changed kind", change: { kind: "path" }, expected: "refused" },
+    ].flatMap((scenario) =>
+      ["pane", "session"].map((replaceAt) => ({ ...scenario, replaceAt })),
+    ),
+  )(
+    "queued reveal preserves complete session identity: %j",
+    async ({ change, expected, replaceAt }) => {
+      const { revealDeskAgent } = await import("./world/deskReveal");
+      const { focusWorldNode } = await import(
+        "./world/worldInspectorSelection"
+      );
+      const { taskSummarySessionFingerprint } = await import(
+        "./world/worldObject"
+      );
+      await withIndependentClients(async (calls, held) => {
+        held.resolve({});
+        const capturedSession = {
+          source: "herdr:codex",
+          agent: "codex",
+          kind: "id",
+          value: "shared-synthetic-id",
+        };
+        const replacementSession = { ...capturedSession, ...change };
+        const captured = {
+          id: "beta-agent",
+          nativeId: "same-pane",
+          kind: "agent",
+          connectionId: "beta",
+          generation: 1,
+          hostLabel: "Synthetic beta",
+          actionable: true,
+          stale: false,
+          terminalId: "same-terminal",
+          workspaceId: "same-workspace",
+          tabId: "same-tab",
+          agentSessionFingerprint:
+            taskSummarySessionFingerprint(capturedSession),
+          pane: { ...pane("codex", "idle"), agent_session: capturedSession },
+        } as any;
+        const original = bridge.connection;
+        let paneReads = 0;
+        bridge.connection = ((id, generation) => {
+          const client = original(id, generation);
+          return {
+            ...client,
+            call: async (method: string, params?: Record<string, unknown>) => {
+              if (id === "beta" && method === "pane.get") {
+                paneReads++;
+                calls.push({ host: id, method });
+                return {
+                  pane: {
+                    ...captured.pane,
+                    agent_session:
+                      paneReads === 1 || replaceAt === "session"
+                        ? capturedSession
+                        : replacementSession,
+                  },
+                };
+              }
+              if (id === "beta" && method === "agent_session.get") {
+                calls.push({ host: id, method });
+                return { session: replacementSession };
+              }
+              return client.call(method, params);
+            },
+          };
+        }) as typeof bridge.connection;
+        const world = { nodeById: new Map([[captured.id, captured]]) } as any;
+        const result = await revealDeskAgent(captured, {
+          signal: new AbortController().signal,
+          world: () => world,
+          filter: () => ["alpha"],
+          client: () => bridge.connection("beta", 1),
+          reveal: () => {},
+          open: async (leaf, _world, session, signal) => {
+            await focusWorldNode(leaf, store, session, () => !signal.aborted);
+            return "opened";
+          },
+        }).catch(() => "refused");
+        expect(result).toBe(expected);
+        if (expected === "refused")
+          expect(
+            calls.some(
+              (c) =>
+                c.host === "beta" &&
+                (c.method === "workspace.focus" || c.method === "tab.focus"),
+            ),
+          ).toBe(false);
+      });
+    },
+  );
+  test.each(["pane.get", "agent_session.get", "workspace.focus", "tab.focus"])(
+    "aborting qualified focus during %s prevents subsequent dispatch and selection",
+    async (heldMethod) => {
+      await withIndependentClients(async (calls, heldWorkspace) => {
+        heldWorkspace.resolve({});
+        const snapshot = store.get();
+        __storeTesting.replaceState({
+          ...snapshot,
+          sessionsByConnectionId: {
+            ...snapshot.sessionsByConnectionId,
+            beta: {
+              ...snapshot.sessionsByConnectionId.beta,
+              selectedPaneId: null,
+            },
+          },
+        });
+        const original = bridge.connection;
+        const started = Promise.withResolvers<void>();
+        const held = Promise.withResolvers<void>();
+        const controller = new AbortController();
+        bridge.connection = ((id, generation) => {
+          const client = original(id, generation);
+          return {
+            ...client,
+            call: async (method: string, params?: Record<string, unknown>) => {
+              if (id === "beta" && method === heldMethod) {
+                started.resolve();
+                await held.promise;
+              }
+              return client.call(method, params);
+            },
+          };
+        }) as typeof bridge.connection;
+        try {
+          const focus = store.focusQualifiedTarget({
+            connectionId: "beta",
+            runtimeGeneration: 1,
+            workspaceId: "same-workspace",
+            paneId: "same-pane",
+            agentSessionId: "synthetic-replacement-session",
+            isCurrent: () => !controller.signal.aborted,
+          });
+          await started.promise;
+          controller.abort();
+          held.resolve();
+          expect(await focus).toBe(false);
+          const sequence = [
+            "pane.get",
+            "agent_session.get",
+            "workspace.focus",
+            "tab.focus",
+          ];
+          const forbidden = sequence.slice(sequence.indexOf(heldMethod) + 1);
+          expect(
+            calls.some(
+              (call) => call.host === "beta" && forbidden.includes(call.method),
+            ),
+          ).toBe(false);
+          expect(
+            store.get().sessionsByConnectionId.beta.selectedPaneId,
+          ).toBeNull();
+        } finally {
+          held.resolve();
+          bridge.connection = original;
+        }
+      });
+    },
+  );
+
   test("focuses a ready sibling host's colliding pane without replacing another session", async () => {
     await withIndependentClients(async (calls, held) => {
       const snapshot = partitionState();

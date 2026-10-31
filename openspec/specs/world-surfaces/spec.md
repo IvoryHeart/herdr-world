@@ -840,8 +840,20 @@ Within the shared shell, Desk SHALL participate in the shell Actions menu, windo
 Inspectors it opens, and view-local failure isolation. On wide screens it SHALL select the agent shown
 in its reading pane only to dock that agent's Inspector; other selection-driven behavior
 (visual-route Action targets, the shared view-control search and watched visual projection) SHALL
-NOT apply to it. Managed hosts outside the filter
-SHALL appear only as non-actionable summaries drawn from the aggregate observation. Review marks, observed stops and recent opens SHALL be scoped to the connection, runtime generation,
+NOT apply to it. Managed hosts outside the filter SHALL appear as read-only summaries drawn from
+the aggregate observation. Expanding a summary SHALL list its observed agents without changing the
+filter or admitting receipt, screen or Inspector resources. Each current agent SHALL offer an
+explicit Reveal & open action naming the agent and destination host. After validating the captured
+connection, runtime, pane, terminal and agent session against the current observation and a qualified
+live pane read, this action SHALL add that host to the existing filter before opening that agent's
+Inspector. All hosts SHALL remain All hosts. Existing Inspectors and their resources SHALL retain
+their owning hosts. Qualified focus admission SHALL recheck the captured agent session before
+focusing. A later opening, leaving Desk or unmounting SHALL permanently supersede pending reveal
+reads and Inspector admission, including queued native focus; returning to Desk SHALL NOT revive
+them. Filter changes already explicitly applied SHALL remain. Supersession SHALL NOT classify a
+current agent as unavailable, disable its next reveal attempt or record a recent open. Cached, unavailable, retired or replaced agents SHALL explain their state and SHALL NOT
+open a replacement session, fall back to another host or broadcast an operation.
+Review marks, observed stops and recent opens SHALL be scoped to the connection, runtime generation,
 pane and agent session across host filter and operational focus changes, so they never carry over
 to another session or a same-named pane on another host.
 
@@ -886,6 +898,30 @@ to another session or a same-named pane on another host.
 - **WHEN** two filtered hosts expose the same native pane ID
 - **THEN** Desk triages both agents and reads each host's own receipt and screen, and reviewing one
   stop does not mark the other host's stop reviewed
+
+#### Scenario: Reveal an agent outside the host filter
+
+- **WHEN** an operator expands an outside-filter host summary and chooses Reveal & open for a current agent
+- **THEN** the action names that agent and host, validates its captured identity, adds the host to the existing
+  filter and opens its own Inspector while preserving previously open contexts and their resources
+- **AND** merely expanding the summary does not change the filter or read that agent's receipt or screen
+
+#### Scenario: An outside-filter agent retires before opening
+
+- **WHEN** an expanded summary is cached, its host becomes unavailable or its runtime or agent session changes
+- **THEN** Desk explains why the captured agent cannot open, without opening another host or replacement session
+
+#### Scenario: Leave and return while a reveal read is pending
+
+- **WHEN** an operator leaves Desk and returns before a captured live read completes
+- **THEN** the old reveal stays cancelled and cannot widen Hosts or open an Inspector
+
+#### Scenario: Supersede queued Inspector admission and retry
+
+- **WHEN** an operator leaves Desk, unmounts it or starts a newer reveal while Inspector admission is pending
+- **THEN** cancellation stops subsequent queued native focus dispatch and Inspector publication
+- **AND** already applied filter changes remain, current agents stay retryable and no recent open is recorded
+- **AND** genuine identity and live-read failures continue to explain why their captured agent cannot open
 
 ### Requirement: Shared bounded Desk state
 

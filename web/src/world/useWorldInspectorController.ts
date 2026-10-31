@@ -1,3 +1,4 @@
+import type { AgentSessionIdentity } from "../types";
 import { useCreationProgress } from "../creationRequests";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { type WorkspaceSurfaceSelection } from "../App";
@@ -221,7 +222,7 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
     focusTarget = true,
     candidateWorld = world,
     signal?: AbortSignal,
-    agentSessionId?: string,
+    agentSession?: string | AgentSessionIdentity,
   ): Promise<boolean> => {
     if (signal?.aborted) return false;
     const next = id ? (candidateWorld.nodeById.get(id) ?? null) : null;
@@ -234,6 +235,9 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
           : null);
     const requestId = intentRequestRef.current + 1;
     intentRequestRef.current = requestId;
+    const isCurrentIntent = signal
+      ? () => !signal.aborted && intentRequestRef.current === requestId
+      : undefined;
     setIntentError(null);
     setVisualConversationAnchors(null);
     if (!next || next.kind === "host" || !next.actionable) {
@@ -257,7 +261,8 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
       setIntentOpening(true);
       const unbindAbort = bindSelectionIntentAbort(signal, requestId);
       try {
-        if (focusTarget) await focusWorldNode(next, store, agentSessionId);
+        if (focusTarget)
+          await focusWorldNode(next, store, agentSession, isCurrentIntent);
         if (signal?.aborted || intentRequestRef.current !== requestId)
           return false;
         const currentConversations = inspectorConversationsRef.current;
@@ -316,7 +321,8 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
     setIntentOpening(true);
     const unbindAbort = bindSelectionIntentAbort(signal, requestId);
     try {
-      if (focusTarget) await focusWorldNode(next, store, agentSessionId);
+      if (focusTarget)
+        await focusWorldNode(next, store, agentSession, isCurrentIntent);
       if (signal?.aborted || intentRequestRef.current !== requestId)
         return false;
       const currentConversations = inspectorConversationsRef.current;

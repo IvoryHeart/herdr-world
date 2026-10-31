@@ -777,6 +777,19 @@ that exact stop across those browsers. **Agents** lists all agents in your Hosts
 filter, with recently opened agents shared too. **Reviewed** shows each agent's
 latest marked stop while it remains idle or done; older stops are not retained.
 
+Hosts outside the filter appear as summary chips, including beside an open Desk
+reading pane. On phones, the host chips and expanded list wrap below the counts.
+Select a host chip to see its
+observed agents, then choose **Reveal & open [agent] on [host]**. This explicitly
+adds that host to your current Hosts selection and opens the selected agent's
+Inspector; previously opened Inspectors keep their own hosts and resources.
+Reading a summary leaves the filter unchanged. Cached or unavailable agents
+explain why they cannot open. If the runtime or agent session changes while the
+summary is open, reopen the summary to choose a current agent. Leaving Desk or
+starting another opening cancels a pending reveal; returning does not resume it.
+A superseded reveal leaves a current agent available to retry. A host or session
+that is actually unavailable still explains why it cannot open.
+
 Desk marks, observed stop times and recent opens live in bounded service memory.
 They survive browser reloads and changes to the Hosts filter, but clear when the
 World service restarts. A replacement runtime or agent session starts fresh.

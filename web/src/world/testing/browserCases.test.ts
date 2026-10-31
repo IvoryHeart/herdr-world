@@ -9,15 +9,24 @@ import {
 } from "./browserCases";
 
 test("World suite splitting preserves every retained viewport/operation/view case exactly once", () => {
-  expect(hostFilterCases).toHaveLength(116);
+  expect(hostFilterCases).toHaveLength(121);
   expect(
     new Set(hostFilterCases.map((item) => JSON.stringify(item))).size,
-  ).toBe(116);
+  ).toBe(121);
   expect(
     hostFilterCases.filter((item) => item.operation === "spaces-notifications"),
   ).toEqual([
     { width: 1440, operation: "spaces-notifications", view: "spaces" },
     { width: 390, operation: "spaces-notifications", view: "spaces" },
+  ]);
+  expect(
+    hostFilterCases.filter((item) => item.operation === "desk-reveal"),
+  ).toEqual([
+    { width: 390, height: 844, operation: "desk-reveal", view: "desk" },
+    { width: 1512, height: 982, operation: "desk-reveal", view: "desk" },
+    { width: 1280, height: 1440, operation: "desk-reveal", view: "desk" },
+    { width: 2560, height: 1440, operation: "desk-reveal", view: "desk" },
+    { width: 1440, height: 2560, operation: "desk-reveal", view: "desk" },
   ]);
   expect(
     hostFilterCases.filter((item) => item.operation === "town-idle-draws"),
@@ -28,7 +37,7 @@ test("World suite splitting preserves every retained viewport/operation/view cas
   const assigned = hostFilterGroups.flatMap((group) =>
     hostFilterCases.filter((item) => hostFilterGroup(item) === group),
   );
-  expect(assigned).toHaveLength(116);
+  expect(assigned).toHaveLength(121);
   expect(new Set(assigned)).toEqual(new Set(hostFilterCases));
   for (const group of hostFilterGroups)
     expect(assigned.some((item) => hostFilterGroup(item) === group)).toBe(true);
