@@ -1,4 +1,4 @@
-import { projectAgent, target } from "./officeAgent";
+import { officeDeskLabel, projectAgent, target } from "./officeAgent";
 import type { OfficeHost } from "./officeHost";
 import type {
   OfficeAgent,
@@ -6,11 +6,10 @@ import type {
   OfficePaneDevice,
   OfficeRoom,
 } from "./officeProjectionTypes";
-import {
-  boundedOptionalText,
-  type WorldAgentStatus,
-  type WorldLeafObject,
-  type WorldSpaceObject,
+import type {
+  WorldAgentStatus,
+  WorldLeafObject,
+  WorldSpaceObject,
 } from "./worldObject";
 
 /**
@@ -78,7 +77,7 @@ export function* constructRoom(
       tabRef: target(space, "tab", tab.tab_id),
       terminalSelectionKeys: leaves.map(({ id }) => id).sort(),
       observedGeneration: space.generation,
-      displayLabel: boundedOptionalText(tab.label, 100) ?? `Tab ${tab.number}`,
+      displayLabel: officeDeskLabel(leaves, tab),
       appearanceStatus: leaves[0]?.appearance?.status,
       order: index,
       stale: space.stale,
