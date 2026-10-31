@@ -274,6 +274,7 @@ export class TownInteraction {
   }
 
   dispose() {
+    this.clearMagnet();
     this.cancelHold?.();
     this.cancelHold = null;
     this.cancelEdge?.();
@@ -296,13 +297,9 @@ export class TownInteraction {
     if (!this.carrying || !this.ports.stage()) return;
     this.carryAt = at;
     const hit = this.hitAt(at.x, at.y, false);
-    // Held in the edge band, the town scrolls under the carry: it rests on
-    // no desk, however long a frame takes to come (see edgePan).
-    const edge = this.edgePush(at);
-    const under =
-      edge.dx || edge.dy
-        ? null
-        : townMagnetDesk(this.carrying, hit, this.ports.world().model);
+    const under = this.resting(at)
+      ? townMagnetDesk(this.carrying, hit, this.ports.world().model)
+      : null;
     if (under !== this.magnet?.key) {
       this.clearMagnet();
       if (under) {
@@ -311,6 +308,12 @@ export class TownInteraction {
           on: false,
           cancel: this.ports.clock.after(TOWN_MAGNET_MS, () => {
             if (!this.magnet || !this.carrying || !this.carryAt) return;
+            // The camera began moving since: the frame that settles it
+            // re-aims the carry and the wait starts again (reaim).
+            if (!this.resting(this.carryAt)) {
+              this.clearMagnet();
+              return;
+            }
             magnet.on = true;
             this.aim(
               this.hitAt(this.carryAt.x, this.carryAt.y, false),
@@ -322,6 +325,18 @@ export class TownInteraction {
       }
     }
     this.aim(hit, at);
+  }
+
+  /**
+   * Whether a carry at canvas point `at` rests where it is: not in the edge
+   * band, where the town scrolls under it, and with no camera motion still
+   * to draw (a zoom easing, a flight). The magnet's wait runs on the clock
+   * while motion runs on frames, so it only counts once the town is still,
+   * however long frames take to come.
+   */
+  private resting(at: Point) {
+    const edge = this.edgePush(at);
+    return !edge.dx && !edge.dy && !this.ports.stage()?.camera.moving;
   }
 
   /** How far a carry at canvas point `at` pans the town each frame. */
