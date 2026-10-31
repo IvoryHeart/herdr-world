@@ -92,6 +92,7 @@ export type LedgerCommit = {
 };
 export type StorageRequest =
   | { type: "load" }
+  | { type: "issue-id"; kind: string }
   | { type: "write"; write: LedgerWrite }
   | {
       type: "outbox";
@@ -192,6 +193,7 @@ export type AttentionOutbox = {
   ): Promise<AttentionEntry | null>;
 };
 export type WorldLedgerStorage = {
+  ids: import("./world-ids").WorldIds;
   ledger: LedgerStore;
   outbox: AttentionOutbox;
   incarnation: string;

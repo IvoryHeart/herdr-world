@@ -225,17 +225,10 @@ check. The gate adds:
   when every later commit merges a commit already on main and replaying that
   merge reproduces its tree. Any other commit, including a resolved conflict,
   needs confirmation again. Being behind main never matters.
-- **CI attempts.** A check that went green on a rerun keeps its failed
-  attempts on record. Only a configured flake within its rerun budget stays
-  READY; any other rerun needs judgment.
-- **Aggregate checks.** Name roll-up jobs that only summarise other jobs in
-  `aggregateChecks`; they are never inferred. A named aggregate's failed
-  attempt is excused only when every other check that failed in that same run
-  attempt is a listed flake within its budget whose newest run passed; a
-  skipped or missing recovery doesn't count. If the aggregate failed alone,
-  beside any other failure, or in an attempt the gate can't place, it needs
-  judgment. A named aggregate is never treated as a flake, and the config is
-  refused if a check appears in both lists.
+- **CI failures.** Every failed execution on the current head blocks READY,
+  including earlier attempts replaced by green, running or skipped jobs and
+  failed roll-up checks. The gate retains this evidence. Diagnose and fix each
+  failure at its cause; no check has a flake exemption or rerun allowance.
 - **Holds.** A hold lasts across heads until it is released.
 
 `merge-line` and `check-claim` read the PR again before answering, so a hold,
@@ -250,8 +243,8 @@ head, conditions or notes.
 Configuration and state stay untracked in the primary checkout's
 `.agents/crew-gate/`, which every worktree shares:
 
-- `config.json` holds the repository, reviewers, flakes, rerun budget and
-  optional required and aggregate checks. Start from
+- `config.json` holds the repository, reviewers and
+  optional required checks. Start from
   [`config.example.json`](../scripts/agent/gate/config.example.json).
 - `gate.sqlite` keeps every pass config and replay input, reviewer claim,
   check attempt, decision and verdict transition indefinitely. Identical input
@@ -511,8 +504,8 @@ plans the next step for every PR in scope and takes each step once:
   already working finishes. Remove the hold to resume on the next pass, which
   plans the steps again. `status` lists held PRs as last read: the latest pass
   over every PR, updated by the busy passes since.
-- **Which checks count.** An attempt that a later attempt of the same
-  workflow replaced, as a rerun does, doesn't count. Same-name checks from
+- **Which checks count.** Every CI failure on the head counts, including superseded
+  attempts. A later green execution cannot clear a failed execution. Same-name checks from
   runs the gate can't order, such as two workflows, all count: the gate keeps
   only the worst of them, but none has replaced another. The author gets a
   failure's `ci` step once no counted check is still running, so a failure in
@@ -521,10 +514,9 @@ plans the next step for every PR in scope and takes each step once:
   ellipsis); its key covers every counted failed job, so a new failure among
   them sends a new step.
 - **A check that never finishes.** GitHub sometimes loses a finished job's
-  status, and the check then shows as running for good, which holds every
-  review back. The watcher notes when it first sees each counted check
+  status, and the check then shows as running for good, which holds readiness back. The watcher notes when it first sees each counted check
   running. One still running after `stallMinutes` (default 30) goes to the
-  author as a `ci` step, with the `gh run rerun --job` command for it, or to
+  author as a `ci` step to diagnose and fix its cause, or to
   the owner once if the PR has no author seat. `pass --dry-run` shows these
   too, without recording anything.
 - **When a step repeats.** A CI step is keyed by the failed jobs, so a rerun

@@ -1,5 +1,6 @@
 import type { AnswerRecipient } from "./ask-delivery-types";
 import type { OutboxEffect } from "../storage/world-protocol";
+import { newWorldId } from "../storage/world-identifiers";
 import { existsSync, readFileSync, renameSync } from "node:fs";
 import { replaceDataFile } from "../config/data-paths";
 import type { TerminalRef } from "../../../shared/relations";
@@ -117,7 +118,7 @@ export type LedgerDocument = {
 
 /** Committed reads; writes may cross the asynchronous persistence boundary. */
 export interface LedgerStore {
-  nextId(kind: "c" | "q" | "r" | "a"): string;
+  nextId(kind: "c" | "q" | "r" | "a"): string | Promise<string>;
   get(): LedgerDocument;
   ask(id: string): LedgerAsk | undefined;
   change(id: string): LedgerChange | undefined;
@@ -150,7 +151,7 @@ const empty = (): LedgerDocument => ({
 
 export class WorldLedger {
   private document: LedgerDocument;
-  private sequence = 0;
+  private issued = new Set<string>();
   #closed = false;
 
   constructor(
@@ -196,10 +197,21 @@ export class WorldLedger {
     return (this.options.now ?? Date.now)();
   }
 
-  /** A short ID: a kind letter, the time and a counter, e.g. "c-lq3x9-1". */
+  /** Legacy JSON/fixture allocator; production reserves through WorldStorage. */
   nextId(kind: "c" | "q" | "r" | "a") {
-    this.sequence += 1;
-    return `${kind}-${this.now().toString(36)}-${this.sequence.toString(36)}`;
+    const id = newWorldId(
+      kind,
+      (candidate) =>
+        this.issued.has(candidate) ||
+        [
+          ...this.document.asks,
+          ...this.document.changes,
+          ...this.document.results,
+        ].some((row) => row.id === candidate) ||
+        this.document.asks.some((ask) => ask.answer?.occurrence === candidate),
+    );
+    this.issued.add(id);
+    return id;
   }
 
   get(): LedgerDocument {

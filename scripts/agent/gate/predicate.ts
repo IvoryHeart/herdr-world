@@ -29,17 +29,6 @@ export type GateConfig = {
     pods?: Record<string, string[]>;
     prs?: Record<string, string[]>;
   };
-  /** Check names whose failed attempt may be rerun once and stay READY. */
-  flakes: string[];
-  /** Failed attempts of an allowlisted check that a green rerun may cover. */
-  rerunBudget: number;
-  /**
-   * Checks that only summarise others, such as a required roll-up job. Never
-   * inferred: a named aggregate's failed attempt is excused only when every
-   * other check that failed in that same run attempt is a listed flake
-   * within budget.
-   */
-  aggregateChecks?: string[];
   /**
    * Required checks added to those GitHub's rules report. Set it, even to an
    * empty list, when the rules can't be read or require nothing.
@@ -171,7 +160,7 @@ export function evaluate(
         ),
     ...worldRules(item, now),
     ...requiredChecks(item, input.requiredChecks),
-    ...reruns(item, input.attempts, input.executions, config, notes),
+    ...ciFailures(item, input.attempts, input.executions, notes),
     ...findings(input, item, config, now, notes),
     input.hold
       ? condition("hold", "unmet", `Held: ${input.hold.reason}`)
@@ -319,32 +308,25 @@ export function latestChecks(
   return { latest, superseded, unordered };
 }
 
-/** A green rerun keeps its failed attempts on record; only known flakes pass. */
-function reruns(
+/** Every failed execution on this head remains blocking, even after a rerun. */
+function ciFailures(
   item: WorkItem,
   attempts: CheckAttempt[],
   executions: Record<string, Execution>,
-  config: GateConfig,
   notes: string[],
 ): Condition[] {
-  const { latest, superseded, unordered } = latestChecks(
+  const { superseded, unordered } = latestChecks(
     item.pr?.checks ?? [],
     executions,
   );
-  // Each failed job once, with the run attempt it failed in when known,
-  // whether the Actions attempts list or a superseded check run reported it.
-  const failures: { name: string; attempt: string | null }[] = [];
+  const failed = new Map<string, number>();
   const seen = new Set<number>();
-  const record = (
-    name: string,
-    job: number | null | undefined,
-    attempt: string | null,
-  ) => {
+  const record = (name: string, job: number | null | undefined) => {
     if (job != null) {
       if (seen.has(job)) return;
       seen.add(job);
     }
-    failures.push({ name, attempt });
+    failed.set(name, (failed.get(name) ?? 0) + 1);
   };
   for (const attempt of attempts)
     if (
@@ -352,48 +334,9 @@ function reruns(
         attempt.conclusion.toLowerCase(),
       )
     )
-      record(
-        attempt.name,
-        attempt.jobId,
-        `${attempt.runId}/${attempt.attempt}`,
-      );
-  // A rerun leaves the earlier execution's checks on the commit.
+      record(attempt.name, attempt.jobId);
   for (const check of superseded)
-    if (check.state === "fail") {
-      const id = jobId(check);
-      const execution = id === null ? undefined : executions[String(id)];
-      record(
-        check.name,
-        id,
-        execution ? `${execution.runId}/${execution.attempt}` : null,
-      );
-    }
-  const failed = new Map<string, number>();
-  for (const failure of failures)
-    failed.set(failure.name, (failed.get(failure.name) ?? 0) + 1);
-  const excusable = (name: string) =>
-    config.flakes.includes(name) &&
-    (failed.get(name) ?? 0) <= config.rerunBudget;
-  const latestState = new Map(latest.map((check) => [check.name, check.state]));
-  // A flake supports an aggregate only once its newest run actually passed:
-  // skipped, running, failed or missing is no recovery.
-  const recovered = (name: string) =>
-    excusable(name) && latestState.get(name) === "pass";
-  // An aggregate's failed attempt is excused only by recovered listed flakes
-  // failing in that same attempt; alone, beside anything else, or unplaced,
-  // it isn't.
-  const aggregateExcused = (name: string) =>
-    failures
-      .filter((failure) => failure.name === name)
-      .every((failure) => {
-        if (failure.attempt === null) return false;
-        const others = failures.filter(
-          (other) => other.attempt === failure.attempt && other.name !== name,
-        );
-        return (
-          others.length > 0 && others.every((other) => recovered(other.name))
-        );
-      });
+    if (check.state === "fail") record(check.name, jobId(check));
   const result: Condition[] = unordered.length
     ? [
         condition(
@@ -403,39 +346,16 @@ function reruns(
         ),
       ]
     : [];
-  for (const check of latest) {
-    const count = failed.get(check.name);
-    if (!count || check.state !== "pass") continue;
-    const retained = `${check.name}: ${count} failed attempt${count === 1 ? "" : "s"} retained`;
-    // A named aggregate is judged only by the aggregate rule, never as a flake.
-    if (config.aggregateChecks?.includes(check.name)) {
-      if (aggregateExcused(check.name))
-        notes.push(
-          `${retained}; each failed only with recovered listed flakes`,
-        );
-      else
-        result.push(
-          condition(
-            "aggregate",
-            "judgment",
-            `${retained}; green only after a rerun of an aggregate that failed beside more than recovered listed flakes`,
-            check.url,
-          ),
-        );
-    } else if (excusable(check.name)) notes.push(retained);
-    else
-      result.push(
-        condition(
-          "rerun",
-          "judgment",
-          `${retained}; green only after a rerun ${
-            config.flakes.includes(check.name)
-              ? "over budget"
-              : "of a check not on the flake list"
-          }`,
-          check.url,
-        ),
-      );
+  for (const [name, count] of failed) {
+    const retained = `${name}: ${count} failed attempt${count === 1 ? "" : "s"} retained`;
+    notes.push(retained);
+    result.push(
+      condition(
+        "ci-failures",
+        "unmet",
+        `${retained}; diagnose and fix the failure`,
+      ),
+    );
   }
   return result;
 }

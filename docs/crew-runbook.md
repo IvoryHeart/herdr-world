@@ -10,6 +10,11 @@ other than the shared skills (`bun run check:agents`).
 The crew itself, its marks and its watcher are described in
 [agent development](agent-development.md#act-on-readiness-with-agentcrew).
 
+Every CI failure is real and blocks readiness for that head, including a
+failure followed by a green rerun or a failed aggregate job. Diagnose its cause
+and fix it; do not rerun to get green. The gate has no flake list or rerun budget,
+and the watcher sends the author the retained failure evidence.
+
 ## Run lifecycle
 
 The watcher reserves a slot when it records a run. Every reviewer, fixer,
