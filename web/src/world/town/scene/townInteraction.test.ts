@@ -540,3 +540,119 @@ test("a trackpad pinch (ctrl wheel) zooms faster than a wheel step", () => {
   expect(pinch.camera.z / 1.2).toBeCloseTo(Math.exp(0.1), 2);
   expect(plain.camera.z / 1.2).toBeCloseTo(Math.exp(0.018), 2);
 });
+
+test("a release judges the drop where it lifts, without another move", () => {
+  const t = setup();
+  const cell = t.deskCell(0);
+  const floorOf = (room: (typeof t.rooms)[number]) =>
+    t.screen({ x: room.x * T + 4, y: (room.y + room.h) * T - 4 });
+  const pointer = t.press(t.deskCentre(cell));
+  t.moveTo(pointer, offset(t.deskCentre(cell), 20));
+  t.moveTo(pointer, floorOf(t.rooms[1]!));
+  // Lifted over another room: that room, not the one last aimed at.
+  t.lift(pointer, floorOf(t.rooms[2]!));
+  expect(t.moves).toEqual([
+    { kind: "desk", deskKey: cell.deskKey!, roomKey: t.rooms[2]!.key },
+  ]);
+});
+
+test("a release after a drawn pan judges the drop against the frame drawn now", () => {
+  const t = setup();
+  const cell = t.deskCell(0);
+  const [aimed, drawnThere] = [t.rooms[1]!, t.rooms[2]!];
+  const floor = (room: typeof aimed) => ({
+    x: room.x * T + 4,
+    y: (room.y + room.h) * T - 4,
+  });
+  const point = t.screen(floor(aimed));
+  const pointer = t.press(t.deskCentre(cell));
+  t.moveTo(pointer, offset(t.deskCentre(cell), 20));
+  t.moveTo(pointer, point);
+  // The camera moves (as an edge pan's last step can) and that frame is
+  // drawn: another room's floor is now under the still pointer.
+  const from = floor(aimed);
+  const to = floor(drawnThere);
+  t.camera.x += to.x - from.x;
+  t.camera.y += to.y - from.y;
+  t.draw();
+  t.lift(pointer, point);
+  expect(t.moves).toEqual([
+    { kind: "desk", deskKey: cell.deskKey!, roomKey: drawnThere.key },
+  ]);
+});
+
+test("a swipe keeps the ground under the finger, both ways", () => {
+  const t = setup();
+  const start = { x: 600, y: 4 };
+  const ground = t.camera.toWorld(start.x, start.y);
+  const pointer = t.press(start, "touch");
+  for (const [dx, dy] of [
+    [30, 20],
+    [-80, 45],
+  ] as const) {
+    const at = { x: start.x + dx, y: start.y + dy };
+    t.time.advance(16);
+    t.moveTo(pointer, at, "touch");
+    const under = t.camera.toScreen(ground.x, ground.y);
+    expect(under.x).toBeCloseTo(at.x);
+    expect(under.y).toBeCloseTo(at.y);
+  }
+  expect(t.reasons).toContain("pan");
+});
+
+test("a fast swipe flings the town on, and a new press stops it", () => {
+  const t = setup();
+  const pointer = t.press({ x: 900, y: 4 }, "touch");
+  for (let step = 1; step <= 4; step += 1) {
+    t.time.advance(16);
+    t.moveTo(pointer, { x: 900 - step * 40, y: 4 }, "touch");
+  }
+  t.lift(pointer, { x: 740, y: 4 });
+  expect(t.reasons).toContain("fling");
+  // Dragged left, the town keeps moving left: the camera moves right.
+  const x = t.camera.x;
+  t.camera.update(1 / 60);
+  expect(t.camera.x).toBeGreaterThan(x);
+  const pressed = t.press({ x: 900, y: 4 }, "touch");
+  const held = t.camera.x;
+  t.camera.update(1 / 60);
+  expect(t.camera.x).toBe(held);
+  t.interaction.up({ id: pressed, at: { x: 900, y: 4 }, cancel: true });
+});
+
+test("a pinch keeps the ground between the fingers under their midpoint as it moves", () => {
+  const t = setup();
+  const a = { x: 600, y: 4 };
+  const b = { x: 700, y: 4 };
+  const ground = t.camera.toWorld(650, 4);
+  const first = t.press(a, "touch");
+  const second = t.press(b, "touch", false);
+  t.moveTo(first, { x: 560, y: 80 }, "touch");
+  t.moveTo(second, { x: 780, y: 120 }, "touch");
+  const mid = { x: 670, y: 100 };
+  const under = t.camera.toScreen(ground.x, ground.y);
+  expect(under.x).toBeCloseTo(mid.x);
+  expect(under.y).toBeCloseTo(mid.y);
+});
+
+test("staying on the same desk keeps the magnet's time; another desk restarts it", () => {
+  const t = setup();
+  const cell = t.deskCell(0);
+  const other = t.deskCell(1, 0);
+  const third = t.deskCell(1, 1);
+  const pointer = t.press(t.deskCentre(cell));
+  t.moveTo(pointer, offset(t.deskCentre(cell), 20));
+  t.moveTo(pointer, t.deskCentre(other));
+  t.time.advance(TOWN_MAGNET_MS - 100);
+  // A small move on the same desk does not restart the wait.
+  t.moveTo(pointer, offset(t.deskCentre(other), 3));
+  t.time.advance(100);
+  expect(last(t.ghost)?.[3]).toBe("group");
+  // Moving to another desk starts a new wait there.
+  t.moveTo(pointer, t.deskCentre(third));
+  expect(last(t.ghost)?.[3]).not.toBe("group");
+  t.time.advance(TOWN_MAGNET_MS - 1);
+  expect(last(t.ghost)?.[3]).not.toBe("group");
+  t.time.advance(1);
+  expect(last(t.ghost)?.[3]).toBe("group");
+});
