@@ -1,6 +1,5 @@
-import { townRoomFocus } from "./townCamera";
+import type { TownCamera } from "./townCamera";
 import { TOWN_FACADE, TOWN_TILE as T, type TownLayout } from "./townLayout";
-import type { TownRendererHandle } from "./townRenderer";
 
 export function findCell(layout: TownLayout, deskKey: string) {
   const at = layout.deskCells.get(deskKey);
@@ -11,41 +10,7 @@ export function findCell(layout: TownLayout, deskKey: string) {
   return null;
 }
 
-export function zoomToRoom(
-  renderer: TownRendererHandle,
-  layout: TownLayout,
-  roomKey: string,
-) {
-  const room = layout.buildings
-    .flatMap((b) => b.rooms)
-    .find((r) => r.key === roomKey);
-  if (!room) return;
-  const camera = renderer.camera;
-  const z = roomZoom(camera, room);
-  const focus = townRoomFocus(room, camera.viewport, z);
-  camera.flyTo(focus.x, focus.y, z, 0.6);
-  renderer.invalidate("room");
-}
-
-export function zoomToBuilding(
-  renderer: TownRendererHandle,
-  layout: TownLayout,
-  hostKey: string,
-) {
-  const building = layout.buildings.find((b) => b.hostKey === hostKey);
-  if (!building) return;
-  const camera = renderer.camera;
-  const z = buildingZoom(camera, building);
-  camera.flyTo(
-    (building.x + building.w / 2) * T,
-    (building.y + (building.h + TOWN_FACADE) / 2) * T,
-    z,
-    0.8,
-  );
-  renderer.invalidate("building");
-}
-
-type TownCameraHandle = TownRendererHandle["camera"];
+type TownCameraHandle = TownCamera;
 
 export function roomZoom(
   camera: TownCameraHandle,

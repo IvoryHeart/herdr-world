@@ -1205,23 +1205,8 @@ async function run() {
       desk(selectedDeskId) !== undefined,
       "preferred room admission displaced the selected desk",
     );
-    host
-      .querySelector<HTMLButtonElement>('[aria-label="Show the whole town"]')!
-      .click();
-    await waitFor(
-      () => !diagnostics.flying && diagnostics.zoom < 1,
-      "navigation repeat setup did not return to overview",
-    );
-    if (window.innerWidth <= 640) summaryButton()!.click();
-    await waitFor(
-      () => roomButton() !== null,
-      "Summary did not reopen for the repeated room request",
-    );
-    roomButton()!.click();
-    await waitFor(
-      focused,
-      "a repeated room request did not move the camera again",
-    );
+    // A repeated request moving again, and no replay once its room leaves
+    // and returns, are scene rules (scene/townSceneCamera.test.ts).
     setWorld(worldFor(base.connections.slice(0, -1)));
     await waitFor(
       () => desk(targetId) === undefined,
@@ -1238,10 +1223,6 @@ async function run() {
     await waitFor(
       () => diagnostics.frames > beforeFrames,
       "restored topology never rendered",
-    );
-    check(
-      !diagnostics.flying,
-      "removed room navigation replayed on a new generation",
     );
     check(
       desk(selectedDeskId) !== undefined,
@@ -2428,21 +2409,8 @@ async function run() {
     opened.length = 0;
   }
 
-  // On a phone, home fits one building; − steps out to the whole town and +
-  // comes back.
-  if (phone) {
-    const home = diagnostics.zoom;
-    host.querySelector<HTMLButtonElement>('[aria-label="Zoom out"]')!.click();
-    await waitFor(
-      () => window.__HERDR_TOWN_RENDERER__!.zoom < home * 0.8,
-      "zoom out did not reach the whole town",
-    );
-    host.querySelector<HTMLButtonElement>('[aria-label="Zoom in"]')!.click();
-    await waitFor(
-      () => Math.abs(window.__HERDR_TOWN_RENDERER__!.zoom - home) < home * 0.05,
-      "zoom in did not return home",
-    );
-  }
+  // The zoom steps (on a phone, − to the whole town and + back home) are
+  // scene rules, checked headless in scene/townSceneCamera.test.ts.
 
   // The slow portrait case deliberately enters without overview cards. Earlier
   // interactions/expansion may also leave this scenario at a closer level.
