@@ -40,7 +40,6 @@ import {
   authorOf,
   busyPrs,
   type CrewSettings,
-  digest,
   isOnHold,
   mergeReady,
   plan,
@@ -403,7 +402,33 @@ describe("plan", () => {
     ]);
   });
 
-  test("a finished head is reviewed while the owner judges a CI rerun", () => {
+  test("a retained failure alone prompts the author to fix its cause", () => {
+    const actions = planned(
+      town({
+        head: SHA.reviewed,
+        posts: ["rev2", "rev-astra", "rev-opus"].map((name) =>
+          confirm(name, SHA.reviewed),
+        ),
+        attempts: [
+          {
+            runId: 11,
+            attempt: 1,
+            name: "Browser tests",
+            conclusion: "failure",
+            completedAt: NOW - 1,
+          },
+        ],
+      }),
+    );
+    const ci = actions.find((action) => action.kind === "ci");
+    expect(ci?.target).toBe("towncx");
+    expect(ci?.text).toContain("Browser tests: 1 failed attempt retained");
+    expect(ci?.text).toContain("Diagnose every CI failure and fix its cause");
+    expect(ci?.text).not.toContain("gh run rerun");
+    expect(actions.some((action) => action.kind === "ready")).toBe(false);
+  });
+
+  test("a finished head is reviewed while retained CI failures need fixing", () => {
     // As on #468: one check went green on a rerun, another still fails.
     const rerun = town({
       head: SHA.reviewed,
@@ -425,7 +450,7 @@ describe("plan", () => {
     const kinds = planned(rerun).map((a) => [a.kind, a.target]);
     expect(kinds).toContainEqual(["review", "rev2"]);
     expect(kinds).toContainEqual(["review", "rev-astra"]);
-    expect(kinds).toContainEqual(["judgment", "owner"]);
+    expect(kinds).not.toContainEqual(["judgment", "owner"]);
     expect(kinds).toContainEqual(["ci", "towncx"]);
     // Still running: the failure waits for the checks to finish; the
     // reviewers don't.
@@ -1171,15 +1196,9 @@ describe("delivery", () => {
   test("a PR waiting on the owner is marked and signed once, and unmarked when it clears", () => {
     const rerun = town({
       head: SHA.reviewed,
-      posts: trio(SHA.reviewed),
-      attempts: [
-        {
-          runId: 11,
-          attempt: 1,
-          name: "Delivery checks",
-          conclusion: "failure",
-          completedAt: NOW - 600_000,
-        },
+      posts: [
+        ...trio(SHA.reviewed),
+        { reviewer: null, commit: SHA.reviewed, result: "0/1 resolved, 1 new" },
       ],
     });
     pass(rerun);
@@ -1188,15 +1207,13 @@ describe("delivery", () => {
       expect.objectContaining({
         state: "pending",
         context: "crew/needs-owner",
-        description: expect.stringContaining(
-          "Needs the owner: Delivery checks: 1 failed attempt retained",
-        ),
+        description: expect.stringContaining("Needs the owner:"),
       }),
     ]);
     expect(comments()).toHaveLength(1);
     const body = comments()[0]!.at(-1)!;
     expect(body).toStartWith("body=[crew] NEEDS-OWNER #7 at ");
-    // The owner judged it; the rerun is accepted, so the PR is READY.
+    // The unattributed finding is resolved, so the PR is READY.
     const judged = town({ head: SHA.reviewed, posts: trio(SHA.reviewed) });
     pass(judged, NOW + 120_000);
     expect(statuses().slice(1)).toEqual([
@@ -2283,7 +2300,7 @@ describe("delivery", () => {
     expect(actionsIn(crew, ["running"])).toHaveLength(3);
   });
 
-  test("a check stuck running goes to the author to rerun, once", () => {
+  test("a check stuck running goes to the author for diagnosis, once", () => {
     const stuck = town({
       head: SHA.reviewed,
       posts: [],
@@ -2307,7 +2324,7 @@ describe("delivery", () => {
       "towncx",
       "[crew -> towncx] ACT #7 ci @" +
         SHA.reviewed.slice(0, 7) +
-        ": World browser tests (4/6) has been running over 30 minutes, longer than CI takes; GitHub may have lost its status. Rerun it: gh run rerun --job 22",
+        ": World browser tests (4/6) has been running over 30 minutes, longer than CI takes; Diagnose the hang and fix its cause; do not silently retry: https://github.com/example-org/widgets/actions/runs/1/job/22",
     ]);
     // Reviewers started on the push and didn't wait for the check.
     expect(spawned.map((argv) => argv[6])).toEqual([
@@ -2434,14 +2451,10 @@ describe("delivery", () => {
     pass(two("fail"), NOW + 60_000);
     const ci = prompts().filter((argv) => argv.at(-1)!.includes(" ci @"));
     expect(ci).toHaveLength(1);
+    pass(two("fail"), NOW + 120_000);
     expect(
-      getAction(
-        crew,
-        actionsIn(crew, ["sent"]).find((entry) => entry.kind === "ci")!.key,
-      )!.key,
-    ).toBe(
-      `7:${SHA.reviewed}:ci:towncx:${digest([jobUrl(12), jobUrl(30)].sort().join(" "))}`,
-    );
+      prompts().filter((argv) => argv.at(-1)!.includes(" ci @")),
+    ).toHaveLength(1);
   });
 
   test("a stuck check on a PR with no author tells the owner once", () => {

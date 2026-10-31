@@ -11,6 +11,42 @@ import {
 } from "./cases";
 import { evaluate, verdictState, type ConditionState } from "./predicate";
 
+test.each(["pass", "pending", "skipped"] as const)(
+  "a retained failure blocks a head even when its latest check is %s",
+  (state) => {
+    const verdict = evaluate(
+      input({
+        head: SHA.fixed,
+        posts: ["rev2", "rev-astra", "rev-opus"].map((name) =>
+          confirm(name, SHA.fixed),
+        ),
+        checks: [
+          { name: "Delivery checks", state: "pass", required: true },
+          { name: "Browser tests", state, required: false },
+        ],
+        attempts: [
+          {
+            runId: 11,
+            attempt: 1,
+            name: "Browser tests",
+            conclusion: "failure",
+            completedAt: NOW - 1,
+          },
+        ],
+      }),
+      config,
+      NOW,
+    );
+    expect(verdict.state).toBe("NOT_READY");
+    expect(verdict.conditions).toContainEqual({
+      id: "ci-failures",
+      state: "unmet",
+      detail:
+        "Browser tests: 1 failed attempt retained; diagnose and fix the failure",
+    });
+  },
+);
+
 describe("acceptance cases", () => {
   test.each(CASES.map((entry) => [entry.name, entry] as const))(
     "%s",
@@ -24,13 +60,13 @@ describe("acceptance cases", () => {
     },
   );
 
-  test("a retained flake failure and a carried claim are reported, not hidden", () => {
-    const flake = evaluate(
+  test("a retained CI failure and a carried claim are reported, not hidden", () => {
+    const failure = evaluate(
       CASES.find((entry) => entry.name.startsWith("A4 "))!.input,
       config,
       NOW,
     );
-    expect(flake.notes).toContain("Browser tests: 1 failed attempt retained");
+    expect(failure.notes).toContain("Browser tests: 1 failed attempt retained");
     const carried = evaluate(
       CASES.find((entry) => entry.name.startsWith("A3b"))!.input,
       config,
