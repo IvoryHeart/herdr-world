@@ -694,6 +694,27 @@ open. The PR still needs independent approval. This recipe is for PR delivery;
 other tasks can use a local-only handoff under the candidate-delivery skill.
 OpenSpec is used only when the task meets the repository's contract criteria above.
 
+## Run a delegator crew
+
+When one agent ("FirstMate") delegates to a crew of agents in Herdr panes, it
+uses the repo-local FirstMate skills. Each holds generic steps plus a short
+Config table of this repository's values, so it can be reused elsewhere:
+
+- [dispatch](../.agents/skills/firstmate-dispatch/SKILL.md): file briefs,
+  harness flags, worktree, roster and the two-minute health check.
+- [handoff](../.agents/skills/firstmate-handoff/SKILL.md): fixers on PR
+  branches, pausing and resuming around usage limits, restarts.
+- [review-loop](../.agents/skills/firstmate-review-loop/SKILL.md): two
+  independent reviewers, one fix pass, the READY checklist.
+- [machine-care](../.agents/skills/firstmate-machine-care/SKILL.md): load,
+  disk, orphaned Chrome and safe clean-up.
+- [merge-queue](../.agents/skills/firstmate-merge-queue/SKILL.md): verifying
+  READY, merge order, keeping PRs current, watching main.
+- [daily-briefing](../.agents/skills/firstmate-daily-briefing/SKILL.md): the
+  deterministic owner brief and the upstream report.
+
+The delegator's ledger, briefs and protocol stay untracked under `.agents/`.
+
 ## Keep agent work bounded
 
 For an independent PR or focused review repair, start a fresh agent session when
