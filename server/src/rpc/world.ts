@@ -1,7 +1,10 @@
 import { planBoardPatch } from "../world/board-plan";
 import { parseObservationBase } from "../world/observation-v1";
 import { pruneSnapshotAppearance } from "../world/appearance-prune";
-import { legacyAppearanceOps } from "../world/appearance-observation";
+import {
+  legacyAppearanceObservations,
+  legacyAppearanceObservationOps,
+} from "../world/appearance-observation";
 import { handleAppearanceRpc } from "./appearance";
 import { handleDeskRpc } from "./desk";
 import { handleCompletionSeenRpc } from "./completion-seen";
@@ -101,12 +104,13 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
         },
       );
       try {
+        const observations = legacyAppearanceObservations(snapshot);
         let changed = false;
         const document = await board().patch(
-          planBoardPatch([snapshot], (current) => {
-            const appearanceOps = legacyAppearanceOps(
+          planBoardPatch([observations], (current) => {
+            const appearanceOps = legacyAppearanceObservationOps(
               current,
-              snapshot,
+              observations,
               (connectionId, generation) => {
                 const lease = connectionManager.readyRuntimeLease(connectionId);
                 return Boolean(

@@ -134,6 +134,11 @@ queue, including client RPC parameters. Wrappers SHALL preserve reservations,
 and every completion, refusal or skipped plan SHALL release its reservation.
 Validation and runtime-authority rechecks SHALL still use acknowledged state
 when planning runs.
+Snapshot-driven metadata plans SHALL project only their consumer's observation
+inputs before reservation. Dense aggregate labels or agent metadata SHALL NOT
+prevent a small relationship or legacy appearance update. Projections SHALL
+preserve completeness, captured generation and current-runtime authority checks,
+and reconciliation SHALL still use acknowledged Board state when its plan runs.
 
 Before its initial import, World SHALL preserve exact private content-hash backup
 bytes of the configured Board JSON. Concern rows, ID reservations, bindings and

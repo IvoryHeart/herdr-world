@@ -3,6 +3,8 @@ import {
   closedRelations,
   observedSpawnClaims,
   spawnClaimsToRecord,
+  SPAWNED_BY_TOKEN,
+  SPAWNED_BY_TERMINAL_TOKEN,
   type RelationObservation,
 } from "../../../shared/relations";
 import type { BoardDocument, BoardOp, BoardStorePort } from "./board-store";
@@ -39,12 +41,24 @@ export function relationObservations(
             {
               pane_id: pane.pane_id,
               terminal_id: pane.terminal_id,
-              tokens: pane.tokens,
+              tokens: spawnTokens(pane.tokens),
             },
           ]
         : [],
     ),
   }));
+}
+
+/** Unrelated native token values are not inputs to relationship reconciliation. */
+function spawnTokens(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    return undefined;
+  const tokens = value as Record<string, unknown>;
+  return Object.fromEntries(
+    [SPAWNED_BY_TOKEN, SPAWNED_BY_TERMINAL_TOKEN]
+      .filter((key) => typeof tokens[key] === "string")
+      .map((key) => [key, tokens[key]]),
+  );
 }
 
 /** The claims a snapshot adds or changes, and what it shows closed, as Board operations. */
@@ -53,7 +67,14 @@ export function spawnRecordOps(
   result: WorldSnapshotResult,
   now: number,
 ): BoardOp[] {
-  const observations = relationObservations(result);
+  return spawnObservationOps(document, relationObservations(result), now);
+}
+
+function spawnObservationOps(
+  document: BoardDocument,
+  observations: readonly RelationObservation[],
+  now: number,
+): BoardOp[] {
   const closed = closedRelations(document.relations, observations);
   const claims = spawnClaimsToRecord(
     document.relations.spawns,
@@ -81,18 +102,16 @@ export async function recordSpawnClaims(
   isCurrent: (connectionId: string, generation: number) => boolean = () => true,
 ): Promise<void> {
   try {
+    const observations = relationObservations(snapshot);
     let changed = false;
     const document = await store.patch(
-      planBoardPatch([snapshot], (current) => {
-        const active = {
-          ...snapshot,
-          connections: snapshot.connections.map((host) =>
-            isCurrent(host.connection_id, host.generation)
-              ? host
-              : { ...host, stale: true, actionable: false },
-          ),
-        };
-        const ops = spawnRecordOps(current, active, now);
+      planBoardPatch([observations], (current) => {
+        const active = observations.map((host) => ({
+          ...host,
+          current:
+            host.current && isCurrent(host.connection_id, host.generation),
+        }));
+        const ops = spawnObservationOps(current, active, now);
         changed = ops.length > 0;
         return changed ? ops : null;
       }),

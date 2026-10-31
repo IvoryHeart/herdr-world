@@ -46,6 +46,13 @@ Runtime claims, configuration and secrets must not become Board records.
   deferred RPC path. Groups' eight browser viewports and the shared appearance
   desktop/phone browser exercise current HTTP-request predicates and the retained
   production guard.
+- `world/snapshot-board-storage.test.ts` uses the maintained dense World fixture
+  above 16 MiB with a real SQLite root. Small spawn updates and actual snapshot-RPC
+  legacy colour adoption use compact reserved observations. Dense partial reads
+  retain prior claims; complete current reads reclaim them. Queued edits precede
+  planning, retired runtimes cannot change records, and incomplete or previous
+  generations cannot authorize appearance adoption. Unrelated token metadata is
+  excluded from relationship projection; native IDs and witnesses retain policy.
 - `storage/board-crash.test.ts` kills source and standalone compiled processes
   before/after write/import COMMIT and after worker acknowledgement. It checks
   complete records/bindings/ID reservations, marker atomicity, integrity, repeated

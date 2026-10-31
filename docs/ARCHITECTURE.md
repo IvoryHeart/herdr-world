@@ -23,7 +23,10 @@ preferences never enter the binding store and retain native-ID reuse behavior.
 tables for notes, strings, appearance, layout concerns, interest and relations.
 Queued plans reserve bytes for retained payloads, including RPC parameters,
 before admission; guard wrappers preserve that reservation and every outcome
-releases it. Mutations plan against acknowledged state; the worker validates each
+releases it. Snapshot metadata plans retain compact native IDs, spawn tokens and
+appearance witnesses with completeness/generation fences; unrelated aggregate
+labels and agent metadata do not consume the Board admission budget. Mutations
+plan against acknowledged state; the worker validates each
 patch against its transaction-local document. Replies, revision events and the
 read cache advance after COMMIT. Per-note conflicts and revision-bound Group
 confirmations retain their existing wire responses. See [Board storage and recovery](DEPLOYMENT.md#board-storage).

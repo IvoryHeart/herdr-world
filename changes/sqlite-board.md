@@ -6,4 +6,5 @@
 
 ### Fixed
 
-- Bound retained payloads while Board edits wait for earlier commits.
+- Bound retained payloads while Board edits wait for earlier commits, preserving
+  small metadata updates from dense World observations.
