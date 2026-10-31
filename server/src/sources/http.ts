@@ -1,4 +1,6 @@
 import type { GuiSettings } from "../config/gui-settings";
+import { admitVerb, checkVerbResult } from "../verbs/admission";
+import { registeredVerb } from "../verbs/registry";
 import { MAX_CLOSE_COMMENT, type PullRequestVerbRequest } from "./actions";
 import {
   PullRequestVerbError,
@@ -46,9 +48,22 @@ export function createSourcesHttpHandler(service: SourcesService) {
       const verb = verbRequest(body);
       if (typeof verb === "string") return jsonError(verb, 400);
       try {
-        return jsonResponse(
-          await service.pullRequestVerb(body.key as string, verb),
+        const declaration = registeredVerb(
+          "source",
+          `github.pull-request.${verb.verb}`,
         );
+        admitVerb(declaration, body, {
+          actor: "browser",
+          authorized: () => !request.signal.aborted,
+          capabilities: () => new Set(["github"]),
+          preconditions: () => true,
+          // Preserve the existing browser confirmation protocol. A service-
+          // issued confirmation challenge requires a later browser migration.
+          browserConfirmed: true,
+        });
+        const result = await service.pullRequestVerb(body.key as string, verb);
+        checkVerbResult(declaration, result);
+        return jsonResponse(result);
       } catch (cause) {
         return cause instanceof PullRequestVerbError
           ? jsonError(cause.message, cause.status)

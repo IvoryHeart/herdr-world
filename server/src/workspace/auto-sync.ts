@@ -1,11 +1,12 @@
+import type { Clock, Scheduler } from "../service/ports";
+import type { RuntimeStatusPort } from "../storage/runtime-status";
 import type { HerdrClient } from "../bridge/herdr-client";
 import { gitShellCommandArgv } from "./git-shell";
 import {
   connectionSettingsPrefix,
   DEFAULT_WORKSPACE_AUTO_SYNC_INTERVAL_MINUTES,
   type GuiWorkspaceAutoSyncSettings,
-  readGuiSettings,
-  updateGuiSettings,
+  type GuiSettingsStore,
   workspaceAutoSyncSettingsKey,
 } from "../config/gui-settings";
 import {
@@ -225,6 +226,8 @@ export async function syncWorkspaceBranch({
 }
 
 export function createWorkspaceAutoSync(args: {
+  clock: Clock;
+  scheduler: Scheduler;
   connectionId?: string;
   formatError?: (error: unknown) => string;
   logger?: Logger;
@@ -234,13 +237,12 @@ export function createWorkspaceAutoSync(args: {
   runProcessWithCodeTimeout: RunProcessWithCodeTimeout;
   invalidateGitStatus: (root: string) => void;
   resolveWorkspaceGitRoot: (workspaceId: string) => Promise<{ root: string }>;
-  readSettings?: typeof readGuiSettings;
-  updateSettings?: typeof updateGuiSettings;
+  readSettings: GuiSettingsStore["read"];
+  runtimeStatus: Pick<RuntimeStatusPort, "get" | "put">;
   syncBranch?: typeof syncWorkspaceBranch;
 }) {
   const logger = args.logger ?? silentLogger;
-  const readSettings = args.readSettings ?? readGuiSettings;
-  const updateSettings = args.updateSettings ?? updateGuiSettings;
+  const { readSettings } = args;
   const syncBranch = args.syncBranch ?? syncWorkspaceBranch;
   const formatError =
     args.formatError ??
@@ -256,7 +258,7 @@ export function createWorkspaceAutoSync(args: {
     failureMessage: "workspace auto-sync tick failed",
     recoveryMessage: "workspace auto-sync tick recovered",
   });
-  let timer: ReturnType<typeof setInterval> | null = null;
+  let timer: ReturnType<Scheduler["schedule"]> | null = null;
   let started = false;
   let lifecycleGeneration = 0;
   let runningTask: Promise<void> | null = null;
@@ -285,28 +287,15 @@ export function createWorkspaceAutoSync(args: {
   async function recordResult(
     generation: number,
     key: string,
-    root: string,
-    host: string | undefined,
     result: SyncResult,
   ) {
     if (!current(generation)) return;
-    await updateSettings((settings) => {
-      if (!current(generation)) return settings;
-      const existing = settings.workspace_auto_sync[key];
-      if (!existing) return settings;
-      return {
-        ...settings,
-        workspace_auto_sync: {
-          ...settings.workspace_auto_sync,
-          [key]: {
-            ...existing,
-            ...result,
-            checkout_path: root,
-            host,
-            last_run_at: new Date().toISOString(),
-          },
-        },
-      };
+    const settings = await readSettings();
+    if (!current(generation) || !settings.workspace_auto_sync[key]) return;
+    await args.runtimeStatus.put(key, {
+      ...args.runtimeStatus.get(key),
+      ...result,
+      last_run_at: new Date(args.clock.now()).toISOString(),
     });
   }
 
@@ -387,8 +376,9 @@ export function createWorkspaceAutoSync(args: {
           continue;
         }
         const forced = forcedKeys.has(key);
-        const lastRunAt = entry.last_run_at
-          ? Date.parse(entry.last_run_at)
+        const lastRun = args.runtimeStatus.get(key);
+        const lastRunAt = lastRun?.last_run_at
+          ? Date.parse(lastRun.last_run_at)
           : Number.NaN;
         const intervalMs =
           (entry.interval_minutes ||
@@ -396,7 +386,7 @@ export function createWorkspaceAutoSync(args: {
         if (
           !forced &&
           Number.isFinite(lastRunAt) &&
-          Date.now() - lastRunAt < intervalMs
+          args.clock.now() - lastRunAt < intervalMs
         ) {
           continue;
         }
@@ -430,7 +420,7 @@ export function createWorkspaceAutoSync(args: {
         } finally {
           runningKeys.delete(key);
         }
-        await recordResult(generation, key, root, host, result);
+        await recordResult(generation, key, result);
         if (!current(generation)) return;
         const resultFields = {
           connection: connectionId,
@@ -473,12 +463,22 @@ export function createWorkspaceAutoSync(args: {
     return wrapped;
   }
 
+  function schedulePoll(generation: number) {
+    if (!current(generation)) return;
+    timer = args.scheduler.schedule(() => {
+      if (!current(generation)) return;
+      timer = null;
+      void tick();
+      schedulePoll(generation);
+    }, AUTO_SYNC_POLL_MS);
+  }
+
   function start() {
     if (started) return;
     started = true;
     lifecycleGeneration += 1;
     stopTask = null;
-    timer = setInterval(() => void tick(), AUTO_SYNC_POLL_MS);
+    schedulePoll(lifecycleGeneration);
     void tick();
   }
 
@@ -487,7 +487,7 @@ export function createWorkspaceAutoSync(args: {
     if (!started && !runningTask) return Promise.resolve();
     started = false;
     lifecycleGeneration += 1;
-    if (timer) clearInterval(timer);
+    timer?.cancel();
     timer = null;
     rerunRequested = false;
     forcedKeys.clear();

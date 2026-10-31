@@ -115,6 +115,13 @@ or Write), reasoning effort and the role and skills as developer instructions;
 for any other kind no options, with the role sent ahead of the first prompt.
 An empty choice SHALL leave the harness's default.
 
+Profile definitions SHALL stay per World. A launched terminal's profile
+assignment SHALL live in Herdr metadata and end with that terminal, as
+specified by Per-terminal settings live with the terminal in the current
+world-surfaces spec. Every World on that Herdr SHALL read the assignment,
+resolving its ID against its own profiles; a missing profile SHALL show
+the recorded name with the default look.
+
 #### Scenario: Edit a starter
 
 - **WHEN** the user changes the Builder starter's model and saves

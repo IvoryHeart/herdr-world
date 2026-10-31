@@ -1,4 +1,5 @@
 /** Town renderer counters for development tools and browser tests (townRenderer.ts). */
+import type { ViewTrace } from "../devtools/flag";
 import { worldRendererCountersEnabled } from "../devtools/renderer";
 import type { TownLevel } from "./townCamera";
 
@@ -11,12 +12,22 @@ export type TownFrameTrace = {
 };
 
 export type TownRendererDiagnostics = {
+  /** Town's event trace, so a fixture can read gestures without its overlay. */
+  trace?: ViewTrace;
   mounts: number;
   destroys: number;
   activeApplications: number;
   activeTickers: number;
   frames: number;
   sceneRenders: number;
+  /** Single buildings baked again after their colours, pins or desks changed. */
+  buildingBakes: number;
+  /** Navigation grids built (unchanged buildings keep theirs). */
+  navigationsBuilt: number;
+  /** Agents reconciled by actor syncs (unchanged hosts are skipped). */
+  actorsReconciled: number;
+  /** Actor syncs per host: how often each host's agents were reconciled. */
+  hostSyncs: Record<string, number>;
   ready: boolean;
   reducedMotion: boolean;
   interactionPaused: boolean;
@@ -71,6 +82,10 @@ export function diagnostics(): TownRendererDiagnostics {
     activeTickers: 0,
     frames: 0,
     sceneRenders: 0,
+    buildingBakes: 0,
+    navigationsBuilt: 0,
+    actorsReconciled: 0,
+    hostSyncs: {},
     ready: false,
     reducedMotion: false,
     interactionPaused: false,

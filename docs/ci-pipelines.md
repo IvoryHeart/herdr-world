@@ -9,11 +9,12 @@ for compatibility with branch rules.
 | Entry point | Responsibility | Deliberate boundary |
 | --- | --- | --- |
 | Local pre-commit | `check:commit`: no live `.agents/` files, read-only formatting and lint | Quick feedback before a commit; not a delivery gate |
-| Local pre-push | `check:changed`, expanding to the full gate for configuration or gate-policy changes | Affected tests save local work; CI remains authoritative |
+| Local pre-push | `check:changed`: static checks and affected non-browser units; gate/configuration changes run all non-browser units | Affected tests save local work; CI remains authoritative |
 | CI on a PR | Validate the proposed merge; check its description and changelog policy | One shared scope decision; native platforms and browser shards keep separate runners |
 | CI on main | Validate the integrated main tree | PR success cannot prove the result of later merges |
 | Main gate | Classify failed push CI, rerun a recognized infrastructure failure once, or prepare an issue and revert | Does not merge a revert; green main resolves earlier alerts |
 | Web asset headroom | Compare PR asset deltas with current main and re-evaluate open PRs after merges | Catches concurrent budget consumption beyond one PR's tested base |
+| Town golden images | Compare five synthetic Town screenshots with stored reference PNGs on PR changes and main | Advisory, separate from Delivery checks; exact pixels with pinned Chrome, fonts, clock and SwiftShader |
 | Prepare Release | Generate and validate release files in a checkout, then open a PR and dispatch CI | Generated files need validation before review |
 | Publish Release and Release | Require reviewed, green main; create the tag; validate and package the tagged source before publishing | Publication and archive smoke tests cover artifacts beyond source checks |
 | Deploy Pages | Build and publish the documentation site and film | Site publication is separate from application release acceptance |
@@ -28,7 +29,7 @@ for compatibility with branch rules.
 | `precommit` | Compatibility alias for `check:source`; not the Git pre-commit hook |
 | `check:static` | Notices, fragments, size, commit guard, all three source type checks, Bun type checks, production build, site and specs; defined once in `scripts/check-delivery.ts` |
 | `check` | Static lane followed by tests; CI separates browsers through its existing environment selection |
-| `check:changed` | Static lane plus affected tests and behavioral verification when required |
+| `check:changed` | Unqueued static lane plus affected non-browser units; browsers and verification run in CI |
 | `check:delivery` | Static lane plus all test lanes and behavioral verification |
 | `check:pr-body <file>` | CI knowledge-map and changelog policy against a committed PR diff and draft description; optional base ref follows the file |
 | `check:docs` | Notices, fragments, formatting, site and specs for qualifying Markdown changes |
@@ -44,24 +45,37 @@ commands to verify coverage, ordering and failure propagation without rebuilding
 
 Code events (`opened`, `synchronize`, `reopened`) receive fresh validation.
 Description edits and labels queue behind a running check instead of cancelling
-it. They may reuse only a successful full Delivery checks job for the same PR,
-base commit and head commit. GitHub's historical PR association can change, so
-it is not proof of the tested base. Reuse binds the selected full Delivery job
+it. They may reuse a successful full Delivery checks job, or a scoped job with the
+identical selection, for the same PR, base commit and head commit. GitHub's historical PR association can change, so
+it is not proof of the tested base. Reuse binds the selected Delivery job
 to its run and attempt, reads the full checkout SHA only from that job's checkout
 action log, and resolves the immutable merge commit. Its returned SHA must match
 the checkout SHA and its two ordered parents must match the requested base/head.
-Default leaf checkouts retain the original event's `GITHUB_SHA`. A newer failed
-full result prevents reuse of an older success; missing, ambiguous or expired
-logs and API errors fall back to full validation.
+Scoped jobs publish one `[delivery-proof]` record only after all applicable
+results pass. Reuse compares every selection field, including ordered test arrays
+(the order determines shards), and requires the scoped acceptance step to pass.
+A reused result is never fresh evidence. Default leaf checkouts retain the
+original event's `GITHUB_SHA`. A newer failed or cancelled candidate prevents
+reuse of an older success, even when its Delivery job was never created. A
+matching workflow must have succeeded before its job proof is considered;
+unfinished or other unsuccessful runs also fail closed. Missing, ambiguous or
+expired logs and API errors
+fall back to fresh validation for the current scope.
 The release-preview label can therefore request archives without repeating a
-successful full check. Other label changes still create workflow runs, but can
+successful applicable check. Other label changes still create workflow runs, but can
 take this same short path.
 
 Ordinary Markdown-only diffs receive documentation checks. Verification inputs or
-contract owners still require behavioral verification, even when their edits are Markdown. Packaged notices, agent policy,
-OpenSpec, verification and tooling do not qualify for this shortcut. macOS jobs
-still report their protected names in short runs, with their native build and
-lifecycle steps skipped. Their aggregate must succeed in every mode.
+model-backed contract owners still require behavioral verification, even when
+their edits are Markdown. Contributor instructions and skill Markdown receive
+documentation checks or their named consumer tests. Packaged notices, OpenSpec,
+verification and executable workflow policy do not qualify for this shortcut. macOS jobs
+still report both protected architecture names in short runs. When native
+packaging is not selected, those reports run on Ubuntu with native build and
+lifecycle steps skipped, so metadata reuse does not wait for a macOS runner.
+When packaging is selected, each report runs its complete native checks on
+its declared macOS architecture. Their aggregate must succeed in every mode;
+cancellation and missing reports still fail delivery.
 
 Tooling-only PRs use `scripts/validation-scope.ts` in CI and pre-push. The complete
 diff must contain only `scripts/agent/**` (including tests),
@@ -69,7 +83,7 @@ diff must contain only `scripts/agent/**` (including tests),
 `changes/<slug>.md`. Empty diffs and any other code path retain ordinary scope.
 Both sides of renames count. The mode runs the complete static lane and affected
 unit tests (or the agent test inventory for uncovered agent modules), and skips
-World browser/latency, behavioral verification, Windows installation and installer
+World browser suites, behavioral verification, Windows installation and installer
 upgrades. macOS jobs still report their protected names without native work.
 `Delivery checks` requires repository validation and macOS success, and the exact
 expected skips; failure, cancellation or missing results fail closed. It never
@@ -80,22 +94,48 @@ Main pushes and explicit full local gates always run everything.
 
 `validation-scope.ts` applies the affected import graph to the complete PR; unknown
 paths, workflow/gate policy and configuration select every suite. A full-gate
-incremental delta also escalates all suite families, including World and latency,
+incremental delta also escalates all suite families, including World,
 even when the triggering input was reverted out of the net PR diff. Verification
-runs for model/tooling/OpenSpec inputs or an inventory owner. World browser suites
+runs for model/tooling/OpenSpec inputs or an owner with a maintained model.
+Model-free alternative-evidence owners retain affected consumer tests and the
+cheap `scripts/verification-coverage.test.ts` inventory check. Coverage inventory
+edits limited to explicitly model-free areas use that check; changed model
+mappings, transitions out of a modeled status, changed schema metadata and an
+unavailable baseline retain the model gate. World browser suites
 are the nearest consumers; web suites come from their maintained inventory.
-World runtime/UI changes or a nearest timed World consumer select latency suites.
+World runtime changes also select the dense end-to-end World suites
+(`worldRuntimeSuites`: production and concurrent contexts, terminal handoff).
 Native checks cover install/plugin/package inputs, server/shared binary sources,
 compiled `scripts/build-version.ts` metadata and installation consumers. The
 agent-tooling exception remains explicit.
 
 Main and non-PR dispatches force the full plan. Code receives all static checks;
 ordinary docs receive `check:docs`. Non-browser tests and web suites are partitioned
-into two disjoint inventories. Six World shards keep their maintained membership,
-while only relevant shards/suites run. Each of the six latency files runs alone on
-a separate runner, retaining quiet admission and its single allowed retry.
+into two disjoint inventories. Six World shards use longest-first assignment
+from `scripts/world-browser-timings.json`; only relevant shards/suites run.
+TownCanvas retains all 22 parameter cases across five files sharing one harness.
+A browser shard-table edit runs the browser inventory tests and all registered
+World/web suites, without escalating to native or model work. Executable gate
+policy still selects the full matrix. Browser jobs use the pinned test Chrome
+(`tools/chrome/test-chrome.json`) and never retry. Timing is not a CI check: the
+separate, non-blocking World latency trend workflow measures the dense suites on
+quiet runners for main pushes and `latency-trend`-labelled PRs and reports them
+beside main's recent runs on the same CPU model.
 
-Three verification runners partition the complete accepted model inventory. Each
+The [Town golden-image report](SCREENSHOTS.md#town-golden-image-report) ordinarily runs once
+per viewport in its own 15-minute advisory job. The explicit stability input or
+`town-golden-stability` PR label selects twenty runs and the production-source
+visual mutant/restored-baseline control, with a 40-minute job ceiling. It shares the machine-wide browser
+queue locally, uploads current images and mismatch diffs even on failure, and never
+changes reference images in CI. Its opt-in test is excluded by default from visual
+acceptance in the protected gate; comparator and workflow unit tests run normally.
+
+Three verification runners partition the complete accepted model inventory by
+longest-first measured work (`scripts/verification-timings.json`). Both tables
+name their source CI run; update weights from retained JUnit/manifest durations
+when rebalancing, with each original case/model retained exactly once. Weights
+are planning estimates, not timing assertions; new model inputs require a weight.
+Changes to the shared assignment algorithm or model weights run verification. Each
 runs the maintained focused workers inside the enforced 4 GiB/no-swap/two-CPU
 envelope with the existing OOM/cancellation and diagnostic controls. The
 payload and supervisor occupy separate delegated cgroups: the memory limit and
@@ -107,7 +147,7 @@ current source/tool identity, and verifies every group's retained accounting.
 It publishes one canonical manifest including the three resource records. The
 single-machine canonical gate is unchanged and still rejects filters.
 
-`Repository validation`, `Web browser tests`, `World latency budgets`, `Behavioral
+`Repository validation`, `Web browser tests`, `Behavioral
 verification`, `Delivery checks` and both macOS report names remain. Leaf jobs
 report their check results immediately on completion; aggregate jobs require
 success from all applicable leaves. No crew automation or branch protection is
@@ -141,18 +181,23 @@ shared policy.
 3. Keep native installer and plugin lifecycle failures distinct: archives and
    service-manager behavior have different acceptance boundaries from browser
    tests. Do not remove them merely because they share checkout/build steps.
-4. Main gate fetches failed-job logs directly from GitHub's API. Terminal colour
-   escapes must reach its classifier even when a runner's `gh` version refuses
-   to print them. Unavailable logs never count as proof of an infrastructure
-   flake. A failure creating an alert is separate from the original CI failure.
+4. Main gate alerts on the first red main run; it never reruns one or classifies
+   a failure as a flake. Read the failed job, then fix or revert; rerun only
+   after a GitHub service failure. A failure creating an alert is separate from
+   the original CI failure.
 5. Read the current branch rules before calling a status blocking. The asset
    headroom workflow publishes a status independently; whether it blocks merging
    depends on repository settings.
 
 Workflow regressions live in `scripts/ci-workflow.test.ts`; scope and reuse in
 `scripts/ci-reuse-full-check.test.ts`; aggregate acceptance in
-`scripts/ci-delivery-result.test.ts`; Main gate classification in
-`scripts/main-gate.test.ts`. Native, release and browser workflows retain their
+`scripts/ci-delivery-result.test.ts`; Main gate alerts, reverts and resolution
+in `scripts/main-gate.test.ts`. Native, release and browser workflows retain their
 own platform and consumer tests. These finite scheduling and result-selection
 checks exercise the tooling directly; application model contracts and their
 mandatory consumers are unchanged.
+
+The native installer matrix also runs the auto-sync runtime-status crash suite.
+It repeats source and standalone embedded-worker import, commit, acknowledgement
+and drain schedules against each target's actual SQLite. These process-crash
+checks do not establish physical power-loss durability.

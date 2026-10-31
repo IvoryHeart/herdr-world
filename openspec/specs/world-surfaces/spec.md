@@ -969,18 +969,24 @@ duration or change the stop's identity.
 
 ### Requirement: Bounded Desk observation
 
-Desk SHALL partition and count every current actionable agent within the host filter. It SHALL read receipts for at most 40 agents
-and visible screens for at most 16 panes globally, choosing blocked, then done, working and idle agents
-first. Capacity SHALL be shared fairly among hosts within each urgency tier, with independent per-host
-queues. Failed or retired hosts SHALL NOT redirect reads to another host or prevent healthy hosts
-from being read. Pending reads SHALL retain active admission until settlement; status, activity and
-visibility refreshes SHALL coalesce queued work without overlapping reads of the same kind on one host.
-Receipts SHALL refresh on a status or activity change and every 20 seconds; screens SHALL refresh
-every 4 seconds. Reads SHALL stop while the page is hidden, including reads already queued, and resume when it is
-shown. Receipts and
-screen excerpts SHALL be keyed by connection, runtime generation, pane and agent session, so a
-replaced session never shows the previous session's text and a refresh does not remove a shown
-receipt.
+Desk SHALL partition and count every current actionable agent within the host filter. Each
+browser's Desk SHALL choose receipts for at most 40 agents and visible screens for at most 16 panes
+globally, choosing blocked, then done, working and idle agents first. Capacity SHALL be shared
+fairly among hosts within each urgency tier. When the World service advertises
+`world_shared_acquisition`, Desk SHALL declare its chosen targets to the service, which SHALL read
+each declared target once for all browsers that declare it, with independent per-host queues.
+Otherwise each browser's Desk SHALL read its chosen targets itself, with independent per-host
+queues, as before this change. Failed or retired hosts SHALL NOT redirect reads to another host or
+prevent healthy hosts from being read. Pending reads SHALL retain active admission until
+settlement; status, activity and visibility refreshes SHALL coalesce queued work without
+overlapping reads of the same kind on one host. Receipts SHALL refresh on a status or activity
+change and every 20 seconds; screens SHALL refresh every 4 seconds. While its page is hidden or its
+Desk is closed, a browser SHALL release its declarations, or stop its own reads including reads
+already queued, and resume when shown. The service SHALL stop reading a target that no browser
+declares, including reads already queued. A browser that starts declaring a target SHALL receive
+its latest result only once a read exists, never a placeholder. Receipts and screen excerpts SHALL
+be keyed by connection, runtime generation, pane and agent session, so a replaced session never
+shows the previous session's text and a refresh does not remove a shown receipt.
 
 #### Scenario: More agents than the read bound
 
@@ -996,8 +1002,27 @@ receipt.
 #### Scenario: Slow Desk host alongside a healthy host
 
 - **WHEN** a filtered host's receipt or screen read remains pending
-- **THEN** another host's receipts, review controls and screen polling progress independently,
+- **THEN** another host's receipts, review controls and screen reads progress independently,
   and equally urgent hosts share the bounded read admission fairly
+
+#### Scenario: Two browsers show the same Desk
+
+- **WHEN** two visible browsers show Desk for the same agents
+- **THEN** the service reads each declared screen once every 4 seconds and each declared receipt
+  once per refresh, and both browsers show the same results
+
+#### Scenario: Service without the capability
+
+- **WHEN** the World service does not advertise `world_shared_acquisition`, for example after a
+  rollback
+- **THEN** each browser's Desk reads its own chosen screens every 4 seconds and its receipts every
+  20 seconds and on a status or activity change, as before this change
+
+#### Scenario: One of two browsers stops showing Desk
+
+- **WHEN** one of two browsers showing the same Desk is hidden or closes Desk
+- **THEN** the other browser's screens and receipts keep refreshing, and the service stops a read
+  once no browser declares it
 
 ### Requirement: Creation from the current World view
 
@@ -1499,6 +1524,30 @@ repeat SHALL return the dismissed question, as it returns an answered one,
 until the asker withdraws it, and the watcher SHALL NOT ask again for a
 dismissed cause while that cause holds.
 
+The ask command SHALL alert the owner about each newly recorded question
+through the asking pane's Herdr with a request-sound notification naming the
+asker, the question and its ID, so the alert reaches Herdr's clients, every
+World connected to that Herdr and Web Push. A repeated cause that returns a
+retained ask SHALL NOT alert again. When the service cannot record a question,
+the command SHALL still send the alert, naming that failure, and SHALL exit
+`unavailable` (1) with the service's reason. When Herdr reports that no client
+was shown the alert, the command SHALL exit with `not_delivered` (6) and the
+recorded question ID instead of waiting, and SHALL NOT report success. Every
+ask reply SHALL state whether the question was recorded and what the alert
+reported, or that no alert was sent for a retained question, and a waiting
+reply SHALL keep that outcome through its answer, closure or timeout.
+
+#### Scenario: An ask alerts the owner through Herdr
+- **WHEN** an agent records a new question and its Herdr shows the alert
+- **THEN** the command succeeds and reports what Herdr showed
+- **AND** repeating the same cause key does not alert again
+
+#### Scenario: Nobody receives the alert
+- **WHEN** World records a question but Herdr reports that no client was shown
+  the alert
+- **THEN** the command exits `not_delivered` with the question ID and does not
+  wait for an answer
+
 #### Scenario: A crew cause needs an owner decision
 
 - **WHEN** a blocked author, READY PR or stuck dispatch is observed in one pass
@@ -1536,8 +1585,13 @@ terminal or marking it reviewed; a checked agent SHALL then go to the lounge.
 Because Herdr may report a finished agent as idle, Town SHALL also treat an
 agent it observes going from working or blocked to idle as done until checked.
 A check covers one completion: when the agent works, asks or finishes again,
-its next completion SHALL be unchecked. This browser-local state SHALL NOT
-represent approval or mutate Herdr. Desks
+its next completion SHALL be unchecked. The World service SHALL hold checks in
+memory, keyed by connection, runtime generation and terminal, so every browser
+of that World shows the same checks, including for a finish Town inferred. The
+service SHALL end a check when its own host reads show that agent working or
+blocked, and SHALL ignore a check made while they do, so no browser's late
+view can end or create a check for the wrong completion. A World restart, or a
+new runtime generation for that connection, SHALL forget the checks. Checks SHALL NOT represent approval or mutate Herdr. Desks
 SHALL carry their tab's name from the room level, and each seat its agent's or
 terminal's name at the desk level. An idle agent SHALL move to a lounge spot in its
 building, or remain seated with an idle cue when no spot is free. When an
@@ -1578,6 +1632,19 @@ and Board/Desk marks without inventing an agent harness or changing Herdr status
 - **WHEN** an agent becomes done
 - **THEN** it walks to its host's reception behind any waiting agents and shows a
   completion marker, and inspecting it does not change Herdr state
+
+#### Scenario: A completion checked on one device
+
+- **WHEN** the user checks a finished agent's completion on a phone while the
+  same World is open on a desktop
+- **THEN** the desktop shows that agent as checked too, and when the agent
+  works or asks again both devices show its next completion unchecked
+
+#### Scenario: World restarts with checked completions
+
+- **WHEN** the World service restarts
+- **THEN** every browser shows the completions as unchecked again, because
+  checks are kept only in the service's memory
 
 ### Requirement: Pinned Town desks
 
@@ -1947,6 +2014,15 @@ panes back into the original tab using their current IDs and report the outcome.
 It SHALL NOT retry an uncertain step, and if rollback fails it SHALL report the
 actual resulting topology.
 
+Service move adapters SHALL share one service-owned queue per connection and
+use the captured connection/generation without a default fallback. A queued
+retired generation SHALL be refused. Topology and source colours SHALL be read
+at queue admission. Board following SHALL retain its ordering after move
+serialization: confirmed replacement IDs may be followed, and failed moves
+SHALL reconcile only positively observed terminal witnesses. Unknown locations
+SHALL NOT be guessed. A Board-follow failure SHALL NOT replace the real move
+outcome with a success or discard partial/unknown topology.
+
 Town SHALL let the user reorder a desk within its room the same ways: dropping
 it on another desk of its room puts it in that desk's slot, as a tab dragged
 onto another in Spaces, and dropping it on the room's free spot puts it last of
@@ -2273,6 +2349,123 @@ authenticated-principal guarantee; a sender name SHALL NOT grant authority.
 - **WHEN** a client creates or changes a persisted group to Room or Desk
 - **THEN** World refuses it without changing the document or its history
 
+### Requirement: Group projections and derived facts
+
+World SHALL project Herdr workspaces as Room groups whose members are qualified
+Desk/tab refs, and Herdr tabs as Desk groups whose members are qualified terminal
+refs. These projected refs SHALL remain separate from stored Group refs and SHALL
+NOT be persisted in `relations.groups`. Projection keys SHALL distinguish stored
+and Herdr-owned groups even when their IDs coincide. Cached Herdr projections MAY
+remain visible but SHALL NOT contribute live status or work.
+
+Service and browser Group readers SHALL apply the same current-generation,
+freshness and identity rules. Pod addresses SHALL resolve against actual Herdr
+agent names qualified by connection, pane, terminal and matching session data
+when present. Display labels, shortened names, harness names and mismatched
+session metadata SHALL NOT substitute for agent identity. Conflicting matches
+SHALL remain unresolved.
+
+Group status SHALL count each present unambiguous terminal once and use the
+worst state in this order: needs you, failed, working, finished, quiet, unknown.
+Away and ambiguous members SHALL contribute neither status nor work. Open PRs
+SHALL derive from existing source links qualified by connection, runtime
+generation, pane and session, with duplicate and merged/closed PRs excluded.
+The open-PR limit SHALL default to two for Pods and warn rather than enforce.
+Readers SHALL distinguish current, stale cached and unavailable source work;
+only a current source count SHALL produce an open-PR-limit warning.
+The Now list SHALL preserve the stored queue order. These derived facts SHALL
+NOT mutate source records or grant downstream action authority.
+
+#### Scenario: The same native IDs occur on two connections
+
+- **WHEN** two current connections report equal workspace, tab or terminal IDs
+- **THEN** their projected memberships and work remain qualified by connection
+
+#### Scenario: An address is stale or ambiguous
+
+- **WHEN** a Pod member has no current exact identity or has multiple matches
+- **THEN** it contributes no live status or linked PRs and World guesses no occupant
+
+#### Scenario: Source links belong to the previous runtime or session
+
+- **WHEN** a pane's old-generation or old-session work link remains cached
+- **THEN** the replacement occupant's Group does not count that link
+
+### Requirement: Groups roster and detail
+
+World SHALL offer Actions → Groups in its existing panel window, with kind
+filters All/Pod/Team/Room/Desk and a phone roster/detail Back flow. Rows SHALL
+show kind/name, rolled-up status, lead/member/reviewer indicators, source-qualified
+open PR counts and the first Now item. Detail SHALL reuse linked PR cards and
+show member roles, the full ordered Now list and bounded recent attribution.
+World-owned Group edits SHALL support explicit membership/role changes,
+name/Now/limit edits, confirmed deletion and complete explicit Team promotion.
+Exclusive-role transfers SHALL ask first. A form or confirmation SHALL bind to
+the Board revision reviewed and SHALL refuse a stale write without automatic retry.
+Projected membership SHALL remain owned by Herdr. An ambiguous member's Inspect
+control SHALL revalidate the qualified current match without persisting a resolved
+address or contributing that match to membership roll-ups.
+
+The open Town Summary SHALL show Pods after Hosts/rooms and before Spend,
+using the same current Groups read model for status, first Now item and
+source-qualified open PR warnings. Activating a row SHALL open that Pod's
+Groups detail, restoring and raising an already-open Groups window. This
+section SHALL NOT change reception's shared calls/Asks items or counts.
+
+#### Scenario: Open a Pod from Town Summary
+
+- **WHEN** the user activates a Pod row in the open Town Summary
+- **THEN** its Groups detail opens or is restored and raised
+- **AND** cached or unavailable work remains labelled and reception counts do not change
+
+#### Scenario: Another client changes the roster during a role confirmation
+
+- **WHEN** the user confirms a Group edit against an older Board revision
+- **THEN** World returns the current document/conflict and changes no membership
+
+### Requirement: Group CLI
+
+The World CLI SHALL expose Group create/add/remove/lead/reviewers/now/list/show/
+delete/promote, with pod/team aliases. Stored create SHALL accept Team/Pod only.
+Names SHALL resolve uniquely; Pod addresses MAY remain away. Promotion SHALL
+require a complete explicit terminal-to-address mapping and preserve the Group
+identity. Exclusive-role transfers SHALL require explicit replacement confirmation.
+Deletion SHALL require confirmation and SHALL NOT delete agents. All edits SHALL
+retain actual sender claims and their basis in bounded recent Group history.
+Lead/reviewer edits SHALL be described as an owner/FirstMate crew rule, without
+claiming authenticated caller authorization. PR actions SHALL remain absent from
+the World CLI and its agent guide.
+
+Room/Desk create/delete/role edits SHALL be refused with Herdr guidance. A
+projected membership add SHALL require `--herdr`, an exact compatible current
+connection/generation, and a complete preview printed before mutation. Room add
+SHALL move the whole desk and name all affected agents; Desk add SHALL move one
+pane. The CLI SHALL use the same service-owned per-connection Town queue and
+native move orchestration as RPC, revalidate the preview at queue admission and
+refuse changed terminal witnesses. Closing the source's last room SHALL require
+separate opt-in. Existing rollback and observed Board reconciliation SHALL apply
+to failed partial moves. Results SHALL retain the actual outcome and confirmed
+locations as Done, Partly done, Not done or Unknown; Unknown SHALL NOT be retried
+automatically.
+
+#### Scenario: Another move or agent changes the printed effect
+
+- **WHEN** a queued Room/Desk CLI move no longer matches its printed preview
+- **THEN** no native move is made and the CLI asks the caller to read Groups again
+
+#### Scenario: A move loses its reply and topology cannot be observed
+
+- **WHEN** Herdr cannot confirm the result or current locations
+- **THEN** the CLI returns Unknown with a nonzero exit, preserves known evidence
+  and makes no automatic retry
+
+#### Scenario: Explicit one-time crew-table migration
+
+- **WHEN** a caller imports one Pod table with confirmation
+- **THEN** World resolves names without guessing, accepts explicit address mappings,
+  creates all Pods atomically or none, and refuses existing Pod names
+- **AND** later Markdown export is a rendering; no two-way file synchronization exists
+
 ### Requirement: Shared terminal appearance
 
 World SHALL provide a common appearance editor from terminal title bars on desktop
@@ -2415,8 +2608,8 @@ own colour MAY be reset.
 
 ### Requirement: Agent interest
 
-Each agent SHALL have the viewer's interest: watching (the default), muted or
-focused, chosen from a button beside the agent's name in its Inspector header in
+Each agent SHALL have Default (from groups), explicit Watch, Muted or Focused,
+chosen from a button beside the agent's name in its Inspector header in
 every view. Interest SHALL belong to the agent's terminal on its host, without
 the runtime generation, so it follows the terminal through moves and an agent
 restarted in that terminal keeps it, and each agent in a multi-pane tab has its
@@ -2429,7 +2622,22 @@ while a focused agent's terminal is shown on a ready host only focused agents
 and the Town master's needs-you SHALL chime; a focus World cannot reach SHALL
 NOT silence other agents, and SHALL apply again when its host is back. A
 watched agent's control SHALL say when it is quiet because another agent is
-focused. Interest SHALL NOT keep any item out of reception.
+focused. Interest SHALL NOT keep any item out of reception or change needs-you
+counts. An explicit agent choice SHALL override group claims; otherwise Group
+Focus SHALL beat Mute, with Default contributing no claim. Effective Focus SHALL
+be a union and count only currently reachable effective-focused members. Away
+and ambiguous addresses SHALL contribute no group intent. Hover guidance SHALL
+explain the source and overridden claims. Explicit Watch SHALL be stored distinctly
+from Default deletion; no meaning SHALL be inferred for old absent records.
+
+Stored Teams/Pods SHALL have Focus/Mute/Default viewer controls, saved separately
+as Board layout.group_interest by immutable Group ID, without copying member
+terminal preferences or writing membership attrs. Deletion or Team dissolution
+SHALL remove the overlay atomically; unresolved members SHALL retain it. Empty
+or offline Focus SHALL NOT silence everyone and the chip SHALL disclose no members
+online. Projected Room/Desk controls and persisted overlays SHALL be refused in v1.
+The Town-master needs-you exception SHALL bypass focus filtering only, never an
+explicit mute, device-off, motif-off or seen policy.
 
 #### Scenario: Mute an agent
 
@@ -3552,3 +3760,140 @@ SHALL NOT depend on this cached metadata.
 - **WHEN** terminal screen, Composer panel, Inspector navigation and a menu are open
 - **THEN** successive system Back actions close menu, navigation, panel and screen
   before returning to the prior route
+
+### Requirement: History terminal input preserves the pane draft
+
+Details' Chat history view SHALL share the selected pane's runtime-qualified,
+in-memory terminal Message draft and single-submission lock. Sending SHALL type
+into the captured pane through its admitted connection; a retired connection
+SHALL refuse dispatch and restore the draft. Image uploads SHALL retain successful
+paths in the original draft. A working, blocked or unknown agent SHALL require
+explicit **Send anyway** confirmation; repeated Enter SHALL NOT confirm. Primary
+Chat's conversation-binding and receipt requirements SHALL remain applicable.
+
+#### Scenario: History opens after a same-runtime reconnect
+
+- **WHEN** the transport epoch changes while the pane's runtime remains the same
+- **THEN** History SHALL show the terminal's existing draft and SHALL send it at most once
+- **AND** retirement during input SHALL NOT move the draft or dispatch to another connection
+
+#### Scenario: Codex readiness is unknown
+
+- **WHEN** Codex has an unknown, absent or unrecognized status and the user presses Enter or Send in History
+- **THEN** History SHALL show the terminal-input warning without dispatching the draft
+- **AND** repeated Enter or Send SHALL NOT confirm; a separate **Send anyway** activation SHALL be required
+
+### Requirement: Mobile shell agent commands require explicit selection
+
+Ordinary mobile shell panes SHALL offer editable agent launch commands beside
+Message and the Direct-mode hint. Preferences SHALL be isolated to this browser, connection and
+agent. Selection SHALL require an empty Message draft, validate a single-line
+command and send it once with Enter to the captured pane. Detection or editing
+SHALL NOT execute a command. Failed sends SHALL retain the command for recovery.
+Existing agent and pad panes SHALL NOT offer this launcher.
+
+#### Scenario: Selection fails after command detection
+
+- **WHEN** an eligible user chooses a command and the captured pane rejects input
+- **THEN** Message SHALL retain the command and report the error without retrying it
+- **AND** a connection or pane replacement SHALL dismiss obsolete detection results
+
+### Requirement: Per-terminal settings live with the terminal
+
+**Where they live.** A terminal's profile assignment and the Town master role SHALL be
+kept in Herdr metadata reported on that terminal's pane, not in World's files. Every
+World connected to that Herdr SHALL then read the same settings, and the settings SHALL
+end when the terminal ends, including on a Herdr restart.
+
+**Token rules.** World SHALL write these settings as namespaced tokens that:
+- name the terminal they were written for;
+- stay within Herdr's per-terminal token limits;
+- carry no TTL.
+
+World SHALL honour the tokens only while the pane holds that terminal. Before writing,
+World SHALL check that every value is non-empty, trimmed, free of control characters and
+within Herdr's value length, so that Herdr never silently changes it.
+
+**Writes.** World SHALL write only through the exact connection's current runtime
+lease. It SHALL first confirm that the pane still holds the expected terminal, and
+SHALL revalidate the lease after writing. A failed or refused write SHALL be shown and
+SHALL NOT be reported as saved. After a move World performs, it SHALL keep the settings
+on the moved terminal.
+
+**Unreachable hosts.** A host that is unreachable or stale SHALL leave its terminals'
+settings unresolved, never cleared.
+
+**Profiles.** Profiles and chimes SHALL stay owned by each World, persisted
+through its SQLite storage port. Current terminal assignments remain Herdr-owned.
+- A shared assignment SHALL resolve against this World's profiles.
+- An assignment naming a profile this World lacks SHALL show the recorded profile name
+  with the default look.
+
+**Town master.** At most one agent SHALL hold the Town master role across every host a
+World observes, and the newest assignment SHALL win.
+- A new claim's revision SHALL be the later of the current wall time and one more than
+  the highest revision that World has observed or written. World SHALL remember that
+  highest revision across its restarts.
+- The claim with the highest revision SHALL win; a tie SHALL go to the greater terminal
+  ID.
+- World SHALL clear superseded claims where it holds a current lease.
+- Moving the role away from another live agent SHALL still ask the owner first.
+
+**Migration.** World SHALL import each existing assignment once, when its connection is
+first observed complete on a ready runtime after this change. It SHALL:
+- drop an assignment whose terminal is absent from that observation;
+- keep the assignments of hosts not yet observed until they are;
+- record per connection that the import is done, so that no later start imports it
+  again.
+
+#### Scenario: Two Worlds share one Herdr
+- **WHEN** the owner launches an agent from a profile in one World while another World
+  observes the same Herdr
+- **THEN** both Worlds show that terminal's assignment, and the second World uses its
+  own profile of that ID or, without one, the recorded name with the default look
+
+#### Scenario: Herdr restarts
+- **WHEN** Herdr restarts and restores its panes with new terminals
+- **THEN** no restored pane carries the old assignment or Town master role
+
+#### Scenario: Pane moved by World
+- **WHEN** World moves an agent's pane to another desk
+- **THEN** the terminal keeps its assignment and role under its new pane ID
+
+#### Scenario: Host offline
+- **WHEN** a host holding the Town master goes offline and nothing else changes
+- **THEN** World keeps that claim unresolved, does not clear it, and resolves it again
+  when the host returns
+
+#### Scenario: The offline holder returns after a newer assignment
+- **WHEN** the owner gives the role to an agent on another host while the previous
+  holder's host is offline, and that host later returns
+- **THEN** the newer assignment keeps the role, and the returning claim is cleared as
+  superseded
+
+#### Scenario: World restarted while the holder was offline
+- **WHEN** World restarts while the holder's host is offline, and the owner then assigns
+  the role to another agent before that host returns
+- **THEN** the new assignment wins when the host returns, because its revision is newer
+
+#### Scenario: Town master assigned in two Worlds
+- **WHEN** two Worlds assign the role to different agents and each then observes both
+  claims
+- **THEN** both Worlds show the same holder, decided by revision and then terminal ID,
+  and the superseded claim is cleared
+
+#### Scenario: A value Herdr would change
+- **WHEN** a profile name contains control characters or is longer than Herdr keeps
+- **THEN** World writes a cleaned, shortened name it has validated, never a value Herdr
+  would silently truncate
+
+#### Scenario: Restart after a newer assignment
+- **WHEN** World restarts after an imported assignment was replaced through the tokens
+- **THEN** World does not import the legacy assignment again, and the newer assignment
+  stays
+
+#### Scenario: Write fails
+- **WHEN** Herdr refuses the token write, including past its per-terminal key limit, or
+  the runtime retires during it
+- **THEN** World shows the failure, does not show the setting as saved, and leaves the
+  previous setting in place

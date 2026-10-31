@@ -15,10 +15,16 @@ or agent sessions are used.
 | Wide, 2560 × 1440 | [wide](wide-2560x1440.webp) |
 | Portrait, 1440 × 2560 | [portrait](portrait-1440x2560.webp) |
 
-The phone, half-width, wide and portrait captures use PR source `11204307`.
-The laptop capture was retaken from `5c5495b` after the Town renderer reported
-all eight desk sprites visible (`animation.monitors === 8`), then visually
-checked for the room floor, building interior and desk sprites. All captures
-use Chromium at a 1× device scale factor with software WebGL. They show the
-synthetic closure transition; they do not claim native runtime or agent
-behavior.
+Refreshed on 2026-10-31 from the original PR head `8a65391b` merged
+with main `0f32b6a9`. The synthetic fixture mounts the current production
+TownCanvas and projection, clicks Expand to reveal 44 desks, then closes 36
+tabs through a topology update without remounting Town. Captures wait for the
+eight remaining desks, settled camera and actors, and an available Fold control.
+All five captures were inspected for furnished interiors and private data.
+The phone view retains desk zoom; its right edge is clipped by the viewport.
+
+Chrome for Testing 156.0.8078.80 runs with software WebGL, bundled reference
+fonts and a fixed test clock at a 1× device scale factor. These captures show
+the synthetic closure transition; they do not claim native runtime or agent
+behavior. Separately, the unchanged Town golden fixture matches all five
+committed references exactly (zero changed pixels).
