@@ -29,6 +29,15 @@ Saved/inferred claims never replace fresh native session
 qualification or GitHub's own action authority. Existing visible projections stay
 unchanged; see [runtime field claims](world-identity.md#runtime-field-claims).
 
+Agent profiles and chimes live in `world.sqlite` behind `WorldStorage.profiles`.
+The same worker validates and commits edits before RPC replies or the synchronous
+launch cache advance. Startup imports the configured `agent-profiles.json` once,
+with an exact private hash-named backup; subsequent starts use SQLite exclusively.
+The store also retains legacy terminal settings awaiting their one-time Herdr
+import, per-connection completion flags and the Town master revision watermark.
+Current terminal assignments and master tokens remain owned by Herdr. Config,
+connection profiles and secrets remain files. See [profile storage and recovery](DEPLOYMENT.md#agent-profile-storage).
+
 Runtime adapter registration and its data-only hello descriptors live in the
 [adapter registry](../server/src/adapters/registry.ts). Herdr remains the sole
 production runtime; its raw topology reads preserve today's snapshot behavior.

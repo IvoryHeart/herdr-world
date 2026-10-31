@@ -75,9 +75,10 @@ Existing complete terminal-only projections retain their terminal-absence rule;
 missing pane IDs and explicit unknown sessions do not invent identities.
 
 Card positions, pins, folds, and workspace/host colours remain native-keyed layout
-preferences. They carry no binding and are inherited on ID reuse. The profile
-JSON family and existing browser record-creation protocol remain unchanged.
-Remaining JSON-owned ID creation is separate work. Desk marks, watchlists and
+preferences. They carry no binding and are inherited on ID reuse. Profiles and chimes now use the
+[SQLite storage port](DEPLOYMENT.md#agent-profile-storage); their existing
+browser record-creation protocol remains unchanged. Store-issued profile and
+remaining JSON-owned ID creation are separate work. Desk marks, watchlists and
 completion seen state keep their current memory lifetimes.
 
 The [identity contract](../verification/contracts/world-identity.md) maps M4,

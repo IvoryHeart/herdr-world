@@ -93,6 +93,7 @@ export type LedgerCommit = {
 export type StorageRequest =
   | { type: "load" }
   | { type: "issue-id"; kind: string }
+  | { type: "profiles"; operation: import("./world-profiles").ProfileOperation }
   | { type: "binding"; operation: import("./world-bindings").BindingOperation }
   | { type: "write"; write: LedgerWrite }
   | {
@@ -194,6 +195,7 @@ export type AttentionOutbox = {
   ): Promise<AttentionEntry | null>;
 };
 export type WorldLedgerStorage = {
+  profiles: import("../agent/profile-store").ProfileStorePort;
   bindings: import("./world-bindings").WorldBindings;
   ids: import("./world-ids").WorldIds;
   ledger: LedgerStore;
@@ -213,6 +215,7 @@ export type WorkerRequest =
       type: "open";
       path: string;
       legacy: string;
+      legacyProfiles?: string;
       at: number;
       incarnation: string;
     }
@@ -223,6 +226,7 @@ export type WorkerRequest =
     }
   | { type: "close" };
 export type StorageSnapshot = {
+  profiles?: import("../agent/profile-store").ProfilesDocument;
   document: LedgerDocument;
   attention: AttentionEntry[];
 };
