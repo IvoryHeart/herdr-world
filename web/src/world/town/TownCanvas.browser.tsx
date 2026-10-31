@@ -2734,97 +2734,8 @@ async function run() {
           clientY: y,
         }),
       );
-    // A carry follows what is drawn under it: an arrow-key pan moves the
-    // town under a still finger, and once that is drawn the carry aims where
-    // the finger now is, as a move to the same point would. The town is first
-    // panned to bring the desk under the finger to the middle, clear of the
-    // edges where Town's own edge pan would aim the carry again; every pan is
-    // undone at the end.
-    {
-      const ghost = () => host.querySelector<HTMLElement>(".town-drag-ghost");
-      const undo = {
-        ArrowLeft: "ArrowRight",
-        ArrowRight: "ArrowLeft",
-        ArrowUp: "ArrowDown",
-        ArrowDown: "ArrowUp",
-      } as const;
-      const panned: (keyof typeof undo)[] = [];
-      // Pan once and wait until it is drawn; false at the camera's bound.
-      const pan = async (key: keyof typeof undo, record = true) => {
-        const [x, y] = at(ontoDesk);
-        const framesBefore = window.__HERDR_TOWN_RENDERER__?.frames ?? 0;
-        canvasHost.dispatchEvent(
-          new KeyboardEvent("keydown", { key, bubbles: true }),
-        );
-        await waitFor(
-          () =>
-            (window.__HERDR_TOWN_RENDERER__?.frames ?? 0) >= framesBefore + 2,
-          "Town drew no frame after an arrow-key pan",
-        );
-        const [nx, ny] = at(ontoDesk);
-        if (Math.abs(nx - x) + Math.abs(ny - y) < 30) return false;
-        if (record) panned.push(key);
-        return true;
-      };
-      const stage = canvasHost.getBoundingClientRect();
-      const middle = [
-        stage.left + stage.width / 2,
-        stage.top + stage.height / 2,
-      ] as const;
-      for (let step = 0; step < 40; step++) {
-        const [x, y] = at(ontoDesk);
-        const key =
-          Math.abs(middle[0] - x) > 40
-            ? middle[0] > x
-              ? "ArrowLeft"
-              : "ArrowRight"
-            : Math.abs(middle[1] - y) > 40
-              ? middle[1] > y
-                ? "ArrowUp"
-                : "ArrowDown"
-              : null;
-        if (!key || !(await pan(key))) break;
-      }
-      press("pointerdown", at(fromDesk));
-      await waitFor(
-        () => ghost() !== null,
-        "holding a desk did not lift it to carry under a pan",
-      );
-      const over = at(ontoDesk);
-      press("pointermove", over);
-      await waitFor(
-        () => ghost()?.dataset.valid === "true",
-        "a desk in its own room was not a drop target before the pan",
-      );
-      // Let the magnet snap first: it aims again when it does, which would
-      // hide a carry that ignored the pan.
-      await waitFor(
-        () => !ghost()!.textContent!.includes("’s place"),
-        "resting on a desk did not snap the magnet",
-      );
-      // Pan step by step until something else is drawn under the finger (a
-      // desk's seats reach past its table); at a bound, pan the other way.
-      let tested = false;
-      for (const key of ["ArrowLeft", "ArrowRight"] as const) {
-        for (let step = 0; step < 4 && !tested; step++) {
-          const before = ghost()!.textContent;
-          if (!(await pan(key))) break;
-          const aimed = ghost()!.textContent;
-          press("pointermove", over);
-          if (ghost()!.textContent === before) continue;
-          check(
-            aimed === ghost()!.textContent,
-            `after a drawn ${key} pan the carry aims at what is drawn under it (${aimed}; a move there aims at ${ghost()!.textContent})`,
-          );
-          tested = true;
-        }
-        if (tested) break;
-      }
-      check(tested, "no arrow-key pan put something else under the carry");
-      press("pointercancel", over);
-      await waitFor(() => ghost() === null, "a cancelled carry stayed up");
-      for (const key of panned.reverse()) await pan(undo[key], false);
-    }
+    // A carry aiming at what is drawn under it after a pan is a scene rule,
+    // checked headless in scene/townInteraction.test.ts.
     press("pointerdown", at(fromDesk));
     await waitFor(
       () => host.querySelector(".town-drag-ghost") !== null,
@@ -3024,74 +2935,8 @@ async function run() {
       `no room took a carried desk (${rooms.length} visible; ${tried.join("; ")})`,
     );
 
-    // A press lands on what Town last drew: an arrow-key pan not yet drawn
-    // (as an edge pan can be when a carry ends) leaves the drawn desk under
-    // the finger. Pan and press in one task, so no frame comes between; the
-    // press's target is read from Town's gesture trace and the press is then
-    // cancelled, before a hold could lift (and edge-pan) anything.
-    const shownDesk = [
-      ...host.querySelectorAll<HTMLElement>(
-        '.world-semantic-target[data-kind="desk"]',
-      ),
-    ].find((target) => {
-      const box = target.getBoundingClientRect();
-      return (
-        box.width > 0 &&
-        box.left > 0 &&
-        box.top > 0 &&
-        box.right < window.innerWidth &&
-        box.bottom < window.innerHeight
-      );
-    });
-    if (shownDesk && townTrace && traced) {
-      const arrow = (key: string) =>
-        canvasHost.dispatchEvent(
-          new KeyboardEvent("keydown", { key, bubbles: true }),
-        );
-      const pressed: unknown[] = [];
-      townTrace.enabled = true;
-      townTrace.record = (kind, detail) => {
-        if (kind === "input") pressed.push(detail);
-      };
-      // A camera at its bound does not pan one way; it then pans the other.
-      let panned = 0;
-      for (const [pan, back] of [
-        ["ArrowLeft", "ArrowRight"],
-        ["ArrowRight", "ArrowLeft"],
-      ] as const) {
-        const pressedAt = at(shownDesk);
-        pressed.length = 0;
-        arrow(pan);
-        press("pointerdown", pressedAt);
-        press("pointercancel", pressedAt);
-        const down = pressed[0] as
-          | { type?: string; target?: { key?: string } }
-          | undefined;
-        check(
-          down?.type === "down" &&
-            down.target?.key === shownDesk.dataset.targetKey,
-          `a press after an undrawn ${pan} pan hit the desk drawn under it (${JSON.stringify(down?.target)}, expected ${shownDesk.dataset.targetKey})`,
-        );
-        const framesBefore = window.__HERDR_TOWN_RENDERER__?.frames ?? 0;
-        await waitFor(
-          () =>
-            (window.__HERDR_TOWN_RENDERER__?.frames ?? 0) >= framesBefore + 2,
-          "Town drew no frame after the pan",
-        );
-        panned = at(shownDesk)[0] - pressedAt[0];
-        if (Math.abs(panned) > 30) {
-          arrow(back);
-          break;
-        }
-      }
-      townTrace.enabled = traced.enabled;
-      townTrace.record = traced.record;
-      // Drawn, the pan moved the desk well away from the pressed point.
-      check(
-        Math.abs(panned) > 30,
-        `neither arrow-key pan moved the drawn desk (${panned} px)`,
-      );
-    } else check(false, "no desk is drawn in view, or no Town trace");
+    // A press landing on what Town last drew after an undrawn pan (#553) is
+    // a scene rule, checked headless in scene/townInteraction.test.ts.
   } else check(false, "no two visible desks share a room");
 
   // Town shows no move icons; moving is by drag, hold or the keyboard.

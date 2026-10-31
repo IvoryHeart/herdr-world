@@ -24,7 +24,7 @@ const ADAPTERS = [
 ];
 
 /** The scene model's modules; each is bundled on its own. */
-const ENTRIES = ["townScene.ts", "townSceneCamera.ts"];
+const ENTRIES = ["townScene.ts", "townSceneCamera.ts", "townInteraction.ts"];
 
 test("the scene model's module graph has no framework, renderer or adapter", async () => {
   for (const entry of ENTRIES) {
