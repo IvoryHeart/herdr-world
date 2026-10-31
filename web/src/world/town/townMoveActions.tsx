@@ -4,7 +4,6 @@
  * move and group menus (townMoveMenu.ts, townTeamActions.ts).
  */
 
-import { useState } from "react";
 import { ConfirmDialog } from "../../components/ModalDialogs";
 import { inheritedColorKey } from "../../../../shared/terminalColor";
 import type { ViewTrace } from "../devtools/flag";
@@ -33,7 +32,20 @@ import {
 } from "./townMoves";
 import { townTeamActions } from "./townTeamActions";
 
-export function useTownMoves({
+/** The confirmation asked before a move closes its room. */
+export type TownMoveConfirm = { message: string; run(): void };
+
+/**
+ * Town's move state lives in TownView, where its hooks have always been
+ * called; these are the actions on it.
+ */
+export function townMoveActions({
+  moveFlow,
+  setMoveFlow,
+  movingKey,
+  setMovingKey,
+  moveConfirm,
+  setMoveConfirm,
   world,
   office,
   deskPins,
@@ -44,6 +56,14 @@ export function useTownMoves({
   toast,
   trace,
 }: {
+  /** A desk or agent move being chosen: what to move, then where. */
+  moveFlow: TownMoveFlow | null;
+  setMoveFlow(flow: TownMoveFlow | null): void;
+  /** The desk or agent being moved; further moves wait for it. */
+  movingKey: string | null;
+  setMovingKey(key: string | null): void;
+  moveConfirm: TownMoveConfirm | null;
+  setMoveConfirm(confirm: TownMoveConfirm | null): void;
   world: WorldObject;
   office: HerdrOfficeProjection;
   deskPins: DeskPins;
@@ -54,14 +74,6 @@ export function useTownMoves({
   toast(kind: "ok" | "error", text: string): void;
   trace: ViewTrace;
 }) {
-  /** A desk or agent move being chosen: what to move, then where. */
-  const [moveFlow, setMoveFlow] = useState<TownMoveFlow | null>(null);
-  /** The desk or agent being moved; further moves wait for it. */
-  const [movingKey, setMovingKey] = useState<string | null>(null);
-  const [moveConfirm, setMoveConfirm] = useState<{
-    message: string;
-    run(): void;
-  } | null>(null);
   const deskForKey = (key: string) =>
     office.deskRoster.find(({ desk }) => desk.key === key)?.desk ?? null;
   const reportMove = (
@@ -256,8 +268,6 @@ export function useTownMoves({
     </>
   );
   return {
-    moveFlow,
-    setMoveFlow,
     deskForKey,
     runDeskMove,
     runDeskReorder,

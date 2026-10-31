@@ -1,11 +1,11 @@
 /**
  * Town's room and seat actions: whether a seat or room can be created here
- * and why not, a room's or building's colour, and creating, renaming and
- * closing rooms through their dialogs. Each acts on the room's own
- * connection and generation, captured when its dialog opened.
+ * and why not, and creating, renaming and closing rooms through their
+ * dialogs. Each acts on the room's own connection and generation, captured
+ * when its dialog opened.
  */
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { CreateWorkspaceDialog } from "../../components/CreateWorkspaceDialog";
 import { ConfirmDialog, TextInputDialog } from "../../components/ModalDialogs";
 import {
@@ -20,12 +20,8 @@ import {
   officeRoomActionCapabilities,
   type OfficeCreationActionState,
 } from "../officeRoomActions";
-import { hostColorKey } from "../terminalColor";
-import { usePlaceColorChoices } from "../useTerminalColors";
 import type { WorldObject } from "../worldObject";
 import type { TownRoomActions } from "./TownCanvas";
-import { townRoomColorKey } from "./townModel";
-import { TOWN_HOST_THEMES } from "./townPaint";
 
 export type TownRoomDialog =
   | {
@@ -45,6 +41,8 @@ export function useTownRoomActions({
   office,
   creationSnapshot,
   creationProgress,
+  roomDialog,
+  setRoomDialog,
   beforeLaunch,
 }: {
   world: WorldObject;
@@ -52,10 +50,12 @@ export function useTownRoomActions({
   /** The store state creation readiness reads (endpointCreationReason). */
   creationSnapshot: Parameters<typeof connectionSnapshot>[0];
   creationProgress: ReturnType<typeof useCreationProgress>;
+  /** Town keeps the open dialog's state where it always has (hook order). */
+  roomDialog: TownRoomDialog | null;
+  setRoomDialog(dialog: TownRoomDialog | null): void;
   /** Called before a room's launcher opens (Town closes its peek). */
   beforeLaunch(): void;
 }) {
-  const [roomDialog, setRoomDialog] = useState<TownRoomDialog | null>(null);
   const roomForKey = (roomKey: string | null) =>
     roomKey
       ? (office.rooms.find(
@@ -191,26 +191,7 @@ export function useTownRoomActions({
       reportRoomActionFailure("Room close", cause);
     }
   };
-  const placeChoices = usePlaceColorChoices();
-  /** A room's or building's colour for the shared picker (see placeColor). */
-  const placeColorOf = (kind: "room" | "host", key: string) => {
-    if (kind === "room") {
-      const room = office.rooms.find((entry) => entry.key === key);
-      return room ? placeChoices(townRoomColorKey(room)) : null;
-    }
-    const host = office.hosts.find((entry) => entry.key === key);
-    if (!host) return null;
-    const theme =
-      TOWN_HOST_THEMES[
-        host.deterministicSkin.themeIndex % TOWN_HOST_THEMES.length
-      ]!;
-    return {
-      ...placeChoices(hostColorKey(host.connectionId)),
-      defaultHex: theme.roof,
-    };
-  };
   const roomActions = {
-    placeColor: placeColorOf,
     showCreateSeat,
     canCreateSeat,
     createSeatReason,
@@ -275,8 +256,6 @@ export function useTownRoomActions({
   return {
     roomForKey,
     roomActions,
-    roomDialog,
-    setRoomDialog,
     submitRenameRoom,
     closeRoom,
   };

@@ -19,10 +19,16 @@ import { useTownOffice } from "./town/useTownOffice";
 import { townFoldedActivity } from "./town/townFoldedActivity";
 import { TownCanvas } from "./town/TownCanvas";
 import type { TownQuestMark } from "./town/townQuestPennant";
-import { townDeskColorTarget } from "./town/townModel";
-import { resolveTerminal, type TerminalColor } from "./terminalColor";
+import { townDeskColorTarget, townRoomColorKey } from "./town/townModel";
+import { TOWN_HOST_THEMES } from "./town/townPaint";
+import {
+  hostColorKey,
+  resolveTerminal,
+  type TerminalColor,
+} from "./terminalColor";
 import {
   setTerminalColor,
+  usePlaceColorChoices,
   useTerminalColors,
   useWorldColorSource,
 } from "./useTerminalColors";
@@ -70,8 +76,13 @@ import {
 } from "./officePreferences";
 import { worldNodeOpenView } from "./worldInspectorSelection";
 import { useTownMaster } from "./town/useTownMaster";
-import { TownRoomDialogs, useTownRoomActions } from "./town/useTownRoomActions";
-import { useTownMoves } from "./town/useTownMoves";
+import {
+  TownRoomDialogs,
+  useTownRoomActions,
+  type TownRoomDialog,
+} from "./town/useTownRoomActions";
+import { townMoveActions, type TownMoveConfirm } from "./town/townMoveActions";
+import type { TownMoveFlow } from "./town/townMoveMenu";
 import type { WorldObject } from "./worldObject";
 import { WorldViewToolbar, worldSearchMatches } from "./WorldViewToolbar";
 import { officeRoomKeyForSelection } from "./officeRoomActions";
@@ -146,6 +157,7 @@ export default function TownView({
     readOfficePreferences(worldLocalStorage),
   );
   const preferencesRef = useRef(preferences);
+  const [roomDialog, setRoomDialog] = useState<TownRoomDialog | null>(null);
   const completionSeen = useCompletionSeen();
   const [sceneHover, setSceneHover] = useState<WorldCanvasHover | null>(null);
   const [observability, setObservability] = useState<OfficeObservability>(
@@ -232,13 +244,13 @@ export default function TownView({
   const {
     roomForKey,
     roomActions: townRoomActions,
-    roomDialog,
-    setRoomDialog,
     submitRenameRoom,
     closeRoom,
   } = useTownRoomActions({
     world,
     office,
+    roomDialog,
+    setRoomDialog,
     creationSnapshot,
     creationProgress,
     // A room's launcher opens over Town: close the peek first.
@@ -369,6 +381,24 @@ export default function TownView({
     useWorldColorSource(world),
   );
   const relations = useRelations(world);
+  const placeChoices = usePlaceColorChoices();
+  /** A room's or building's colour for the shared picker (see placeColor). */
+  const placeColorOf = (kind: "room" | "host", key: string) => {
+    if (kind === "room") {
+      const room = office.rooms.find((entry) => entry.key === key);
+      return room ? placeChoices(townRoomColorKey(room)) : null;
+    }
+    const host = office.hosts.find((entry) => entry.key === key);
+    if (!host) return null;
+    const theme =
+      TOWN_HOST_THEMES[
+        host.deterministicSkin.themeIndex % TOWN_HOST_THEMES.length
+      ]!;
+    return {
+      ...placeChoices(hostColorKey(host.connectionId)),
+      defaultHex: theme.roof,
+    };
+  };
   const deviceByKey = useMemo(
     () => lazyIndex(office.paneRoster, (entry) => entry.device.key),
     [office.paneRoster],
@@ -432,6 +462,11 @@ export default function TownView({
 
   /** The desk whose panes are listed, for a desk with more panes than seats. */
   const [chooser, setChooser] = useState<string | null>(null);
+  /** A desk or agent move being chosen: what to move, then where. */
+  const [moveFlow, setMoveFlow] = useState<TownMoveFlow | null>(null);
+  /** The desk or agent being moved; further moves wait for it. */
+  const [movingKey, setMovingKey] = useState<string | null>(null);
+  const [moveConfirm, setMoveConfirm] = useState<TownMoveConfirm | null>(null);
   /** The hover card being previewed: an agent and the point it sits by. */
   const [peek, setPeek] = useState<{
     key: string;
@@ -464,15 +499,19 @@ export default function TownView({
       : null;
   };
   const {
-    moveFlow,
-    setMoveFlow,
     deskForKey,
     runDeskMove,
     runDeskReorder,
     runAgentMove,
     teams,
     dialogs: moveDialogs,
-  } = useTownMoves({
+  } = townMoveActions({
+    moveFlow,
+    setMoveFlow,
+    movingKey,
+    setMovingKey,
+    moveConfirm,
+    setMoveConfirm,
     world,
     office,
     deskPins,
@@ -930,6 +969,7 @@ export default function TownView({
                 setChooser(deskKey);
               },
               ...townRoomActions,
+              placeColor: placeColorOf,
             }}
           />
         </div>
