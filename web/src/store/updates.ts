@@ -1,3 +1,4 @@
+import { bridge } from "../api";
 import { createUpdateNotificationHistory } from "../updateNotifications";
 import { worldLocalStorage, worldSessionStorage } from "../browserStorage";
 import {
@@ -263,6 +264,11 @@ let updateTimer: ReturnType<typeof setInterval> | null = null;
 const METADATA_POLL_MS = 5000;
 
 function startMetadataPolling() {
+  if (bridge.hello?.capabilities.world_shared_acquisition === true) {
+    if (metadataTimer) clearInterval(metadataTimer);
+    metadataTimer = null;
+    return;
+  }
   if (metadataTimer) return;
   metadataTimer = setInterval(() => {
     if (

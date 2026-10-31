@@ -191,8 +191,8 @@ and observer enrichment identical; the dispatcher records only delivered, marked
 focused replies. [Direct tests](../server/src/service/focused-acquisition.test.ts)
 exercise two sockets through that dispatcher, including unmarked callers and
 failed sends. [Registry tests](../server/src/world/focused-acquisition.test.ts)
-cover bounded interest traces and in-flight retirement. This substrate does not
-advertise the shared-acquisition capability yet, so the browser timer remains.
+cover bounded interest traces and in-flight retirement. The service advertises
+`world_shared_acquisition`; only older services retain the focused browser timer.
 The [activity cache](../server/src/world/agent-activity-cache.ts) shares bounded
 session-file readings without caching live agent status. Its publication and
 release paths use the same interest and lease fences. The browser's
@@ -203,15 +203,30 @@ keep sessions from lending timestamps to replacements. Read-only maxima are keye
 by complete identity outside runtime admission state, and survive a World restart
 that resets the service generation counter. The
 [focused interest controller](../web/src/store/focusedInterest.ts) declares the
-visible active host, releases it on hide and retries failed declarations without
-a standing successful timer. The current hello gates declarations and activity
-controls; Inspector holds remain a later part. The
+visible active host and independently held Inspector owners, releases them on
+hide and retries failed declarations without a standing successful timer. The
+[Inspector hook](../web/src/world/useFocusedInspectorInterest.ts) holds each
+window through the store, so filter/focus changes cannot retarget it. New holds
+and return-to-page refresh every eligible owner. The
+[catalogue coordinator](../web/src/store/catalogue.ts) coalesces notices into one
+fetch and one successor, with failure-only retries including bootstrap. Failed
+held re-lists use the same visibility/owner fences. The current hello gates
+declarations, notices and activity controls. The
 [restart regressions](../web/src/store/recencyReconnect.test.ts),
 [capability regressions](../web/src/store/recencyCapability.test.ts) and original
 [recency/hide T2 cases](../web/src/store/pollReplacement.test.ts) cover those paths.
 The [cache/observer consumer](../server/src/service/agent-activity.test.ts) and
 [real Bridge/store race tests](../web/src/store/agentActivity.test.ts) cover those
 boundaries.
+
+The [composed acquisition case](../server/src/service/shared-acquisition.test.ts)
+connects the real service to a real Bridge/store in a Worker plus a second native
+socket on two synthetic hosts. Its independent manual clocks and completion
+signals verify shared reads, notices and the focused parity outputs through the
+actual listener and composition root, including pending generation replacement.
+[Current runtime requirements](../openspec/specs/runtime-federation/spec.md)
+and [Desk requirements](../openspec/specs/world-surfaces/spec.md#requirement-bounded-desk-observation)
+contain the delivered acquisition contract.
 
 The [Desk watch owner](../server/src/world/desk-watches.ts) shares screen and
 receipt reads across socket declarations using the same injected scheduler.
@@ -223,8 +238,7 @@ late holders receive actual results with null triggers, followed by one successo
 The [browser declaration controller](../web/src/world/deskWatchClient.ts) unions
 Desk hooks, releases on hide/close and fences current owners. The
 [hook adapter](../web/src/world/useDeskWatch.ts) enables it only for the shared
-capability; until the timer-removal part advertises it, existing Desk polling
-continues. See [Desk evidence](../verification/contracts/shared-acquisition.md#desk-checkpoint)
+capability. Without it, existing Desk polling continues. See [Desk evidence](../verification/contracts/shared-acquisition.md#desk-checkpoint)
 for the finite traces, two-browser consumers and real browser fallback checks.
 
 The [focused store](../web/src/store.ts) retains the shared mutable connection
@@ -232,7 +246,7 @@ state and public command object. Its [types](../web/src/store/types.ts),
 [session transitions](../web/src/store/sessions.ts),
 [refresh scheduling](../web/src/store/refresh.ts),
 [notifications](../web/src/store/notifications.ts),
-[updates and polling](../web/src/store/updates.ts),
+[update checks and legacy polling](../web/src/store/updates.ts),
 [creation](../web/src/store/creation.ts),
 [qualified commands](../web/src/store/operations.ts),
 [React bindings](../web/src/store/react.ts) and

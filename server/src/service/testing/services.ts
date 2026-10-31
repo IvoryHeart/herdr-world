@@ -81,16 +81,19 @@ export async function browserSocket(base: string, cookie: string) {
     headers: { cookie },
   });
   const replies = new Map<string, (message: any) => void>();
-  await new Promise<void>((resolve, reject) => {
-    ws.onerror = () => reject(new Error("WebSocket failed"));
-    ws.onmessage = (event) => {
-      const message = JSON.parse(String(event.data));
-      if (message.hello) resolve();
-      if (typeof message.id === "string") replies.get(message.id)?.(message);
-    };
-  });
+  const hello = await new Promise<{ capabilities: Record<string, boolean> }>(
+    (resolve, reject) => {
+      ws.onerror = () => reject(new Error("WebSocket failed"));
+      ws.onmessage = (event) => {
+        const message = JSON.parse(String(event.data));
+        if (message.hello) resolve(message);
+        if (typeof message.id === "string") replies.get(message.id)?.(message);
+      };
+    },
+  );
   let sequence = 0;
   return {
+    hello,
     call(method: string, params?: unknown): Promise<any> {
       const id = `rpc-${++sequence}`;
       return new Promise((resolve, reject) => {

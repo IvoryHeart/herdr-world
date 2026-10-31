@@ -1,3 +1,5 @@
+import { bridge } from "../api";
+import { recordFocusedRead } from "./focusedInterest";
 import {
   state,
   set,
@@ -119,13 +121,21 @@ async function refreshNow(
     seq: leaseSnapshot(lease).pendingFocusWorkspaceSeq,
     settledAt: leaseSnapshot(lease).pendingFocusWorkspaceSettledAt,
   };
+  let complete = true;
+  const options =
+    bridge.hello?.capabilities.world_shared_acquisition === true
+      ? { focusedObservation: true }
+      : undefined;
   try {
     const [wsRes, tabRes, paneRes, agentRes] = await Promise.all([
-      lease.client.call("workspace.list"),
-      lease.client.call("tab.list"),
-      lease.client.call("pane.list"),
+      lease.client.call("workspace.list", {}, undefined, options),
+      lease.client.call("tab.list", {}, undefined, options),
+      lease.client.call("pane.list", {}, undefined, options),
       // Older servers may omit agent metadata; ordinary navigation still works.
-      lease.client.call("agent.list").catch(() => null),
+      lease.client.call("agent.list", {}, undefined, options).catch(() => {
+        complete = false;
+        return null;
+      }),
     ]);
     if (!leaseIsCurrent(lease)) return;
     const workspaces: Workspace[] = wsRes?.workspaces ?? [];
@@ -313,9 +323,11 @@ async function refreshNow(
     ) {
       return;
     }
+    recordFocusedRead(lease, complete && next.error === null);
     notifyCompletedTasks(lease, completedPanes, workspaces, tabs);
   } catch (error) {
     setForConnection(lease, { error: (error as Error).message });
+    recordFocusedRead(lease, false);
   } finally {
     refreshingConnectionKeys.delete(refreshKey);
     refreshCompletions.delete(refreshKey);
