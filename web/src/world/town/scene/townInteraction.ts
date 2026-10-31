@@ -296,7 +296,13 @@ export class TownInteraction {
     if (!this.carrying || !this.ports.stage()) return;
     this.carryAt = at;
     const hit = this.hitAt(at.x, at.y, false);
-    const under = townMagnetDesk(this.carrying, hit, this.ports.world().model);
+    // Held in the edge band, the town scrolls under the carry: it rests on
+    // no desk, however long a frame takes to come (see edgePan).
+    const edge = this.edgePush(at);
+    const under =
+      edge.dx || edge.dy
+        ? null
+        : townMagnetDesk(this.carrying, hit, this.ports.world().model);
     if (under !== this.magnet?.key) {
       this.clearMagnet();
       if (under) {
@@ -318,11 +324,10 @@ export class TownInteraction {
     this.aim(hit, at);
   }
 
-  /** Pan the town while a carry is held near an edge, each animation frame. */
-  private edgePan = () => {
-    this.cancelEdge = null;
+  /** How far a carry at canvas point `at` pans the town each frame. */
+  private edgePush(at: Point) {
     const stage = this.ports.stage();
-    if (!this.carrying || !this.carryAt || !stage) return;
+    if (!stage) return { dx: 0, dy: 0 };
     const { width, height, inset } = stage.camera.viewport;
     const push = (p: number, low: number, high: number) =>
       p < low + EDGE
@@ -330,8 +335,18 @@ export class TownInteraction {
         : p > high - EDGE
           ? -Math.min(1, (p - high + EDGE) / EDGE) * EDGE_SPEED
           : 0;
-    const dx = push(this.carryAt.x, inset.left, width - inset.right);
-    const dy = push(this.carryAt.y, inset.top, height - inset.bottom);
+    return {
+      dx: push(at.x, inset.left, width - inset.right),
+      dy: push(at.y, inset.top, height - inset.bottom),
+    };
+  }
+
+  /** Pan the town while a carry is held near an edge, each animation frame. */
+  private edgePan = () => {
+    this.cancelEdge = null;
+    const stage = this.ports.stage();
+    if (!this.carrying || !this.carryAt || !stage) return;
+    const { dx, dy } = this.edgePush(this.carryAt);
     if (dx || dy) {
       stage.camera.panBy(dx, dy);
       stage.invalidate("edge-pan");
