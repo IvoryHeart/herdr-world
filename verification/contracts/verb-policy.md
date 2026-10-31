@@ -32,8 +32,10 @@ spawn claims; a retired runtime sending; memory-only success labelled stored.
   host acquisition; memory-only replies stay accepted; unverified limits hold.
 - `server/src/world/world-cli-authorization.test.ts`: deterministic held native
   reads/sends, snapshots and queued ledger mutations across service stop retain a
-  current runtime lease but refuse the revoked command without effects. Answer
-  recording also rechecks after held recipient resolution and ledger work.
+  current runtime lease but refuse a new effect after revocation. Once an edit
+  has taken effect, Board/undo/native history records finish after stop; rejected
+  history writes restore only the exact applied Board revision, retaining newer
+  edits. Answer recording rechecks after held recipient resolution and ledger work.
 - `server/src/verbs/recovery.test.ts`, dispatcher link resolution and
   `server/src/bridge/endpoint-terminal-session.test.ts`: PR/link reads remain
   reads, file-manager launch is opaque, and the actual page-key path sends native
@@ -67,6 +69,9 @@ Review repair additionally demonstrated the authorization schedules failing on
 the original implementation and recovery assertions failing on the incorrect
 declarations; removing the answer-record guard or restoring those recovery
 declarations is a negative control.
+After-effect controls also restore the guarded history/undo writer, refuse
+compensation after stop, remove the rollback revision condition or admit a stopped
+no-op command. Each makes the corresponding held-ledger/read schedule fail.
 
 ## Required checks and acceptance
 

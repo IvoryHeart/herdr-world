@@ -2271,7 +2271,7 @@
       "area": "Verb registry and actor policy",
       "owner": "server/src/verbs/",
       "requirement": "openspec/specs/bridge-access/spec.md",
-      "properties": "Static browser/agent inventory; unchanged actor policy and acknowledgements; unknown methods refused before native acquisition; TypeBox admission; request-scoped dispatch/mutation authority and runtime recheck; effect-accurate recovery classes; evidence never overstates memory acceptance or native acknowledgement",
+      "properties": "Static browser/agent inventory; unchanged actor policy and acknowledgements; unknown methods refused before native acquisition; TypeBox admission; request-scoped new-effect authority and runtime recheck; already-started history completion and revision-fenced rollback; effect-accurate recovery classes; evidence never overstates memory acceptance or native acknowledgement",
       "existingTests": [
         "server/src/world/world-cli-authorization.test.ts",
         "server/src/verbs/recovery.test.ts",

@@ -47,9 +47,13 @@ again before executing. Conditional native group policy uses the resolved owner;
 its existing preview, witness and room-closure checks remain authoritative.
 The request's live admission check travels through native sends, queued Board
 work and ledger mutation callbacks. Stopping the CLI service revokes it even
-while the captured runtime lease stays current; resumed work cannot make a new
-native dispatch or World mutation. Answer recording checks again after recipient
-resolution and when its queued ledger mutation runs.
+while the captured runtime lease stays current; resumed work cannot start a new
+effect. Once a Board edit, undo or native command has already taken effect, its
+history/undo bookkeeping finishes through a private completion capability. A
+rejected history write restores a Board edit only while its exact revision is
+still current; newer edits are preserved, and an uncertain commit is never
+rolled back. Answer recording checks again after recipient resolution and when
+its queued ledger mutation runs, since that callback starts the answer effect.
 
 Recovery follows the actual handler effect. `terminal.scroll` is `opaque`
 because its page-key branch can send PageUp/PageDown bytes to an application.
@@ -94,7 +98,9 @@ call expressions and refuses a missing registration. Dynamic Ranger RPC names ar
 enumerated explicitly in the static table.
 The [CLI authorization schedules](../server/src/world/world-cli-authorization.test.ts)
 hold native reads/sends, snapshots and ledger callbacks across stop with a current
-lease. [Recovery consumers](../server/src/verbs/recovery.test.ts), dispatcher link
+lease. They distinguish refusing a new effect from finishing an applied edit's
+history, verify undo/native outcome records and exercise conditional rollback
+with a concurrent newer Board edit. [Recovery consumers](../server/src/verbs/recovery.test.ts), dispatcher link
 resolution and the actual endpoint page-key/link tests check the declared classes
 against their handler paths.
 

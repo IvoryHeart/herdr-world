@@ -25,6 +25,10 @@ currency before dispatch. Native browser forwarding SHALL recheck immediately
 before sending. The actors SHALL distinguish the owner's browser, verified and
 unverified agent CLI, assistant, reconcilers and automation; this registry SHALL
 NOT create an automation grant or widen internal assistant authority.
+Revocation SHALL prevent a new effect but SHALL NOT discard the outcome record
+of an effect already started. An already-applied Board change or undo SHALL
+finish its history record or, on a rejected write, restore only its unchanged
+revision. Uncertain writes SHALL NOT trigger rollback.
 
 #### Scenario: Unregistered method
 - **WHEN** the browser or agent CLI submits an unregistered method
@@ -46,6 +50,14 @@ NOT create an automation grant or widen internal assistant authority.
 - **WHEN** the browser socket loses authority or its captured runtime retires
   before a forwarded native command is sent
 - **THEN** World refuses the send on that runtime without falling back to another
+
+#### Scenario: Stop after a Board edit but before its history callback
+- **WHEN** an admitted Board edit is applied and its queued history callback runs
+  after the CLI service stops
+- **THEN** the applied edit retains its history and undo record and reports its
+  completed outcome rather than a refusal claiming no effect
+- **AND** a rejected history write restores only that exact Board revision,
+  preserving any newer edit
 
 ### Requirement: Staged command evidence
 

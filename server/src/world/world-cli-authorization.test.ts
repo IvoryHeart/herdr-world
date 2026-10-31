@@ -7,6 +7,8 @@ import { WorldLedger, type LedgerStore } from "./world-ledger";
 import { createWorldCliService } from "./world-cli-service";
 import type { WorldSnapshotResult } from "./snapshot";
 import { createAnswerRecorder } from "./answer-record";
+import { StorageWriteRejected } from "../storage/world-protocol";
+import { tabCardKey } from "../../../shared/terminalColor";
 
 const scenarios = [
   {
@@ -30,11 +32,50 @@ const scenarios = [
     params: { kind: "pod", name: "Example pod" },
   },
   { at: "ledger", command: "ask", params: { question: "Example question?" } },
+  {
+    at: "ledger",
+    command: "board card pin",
+    params: { target: "tab:w1:t1", x: 1, y: 2 },
+    outcome: "record",
+  },
+  {
+    at: "ledger",
+    command: "undo",
+    params: { id: "pending" },
+    outcome: "record",
+  },
+  {
+    at: "ledger",
+    command: "town desk move",
+    params: { target: "tab:w1:t1", herdr: true },
+    outcome: "record",
+  },
+  {
+    at: "ledger",
+    command: "board card pin",
+    params: { target: "tab:w1:t1", x: 1, y: 2 },
+    outcome: "rollback",
+  },
+  {
+    at: "ledger",
+    command: "board card pin",
+    params: { target: "tab:w1:t1", x: 1, y: 2 },
+    outcome: "superseded",
+  },
+  {
+    at: "tab-list",
+    command: "town desk move",
+    params: { target: "tab:w1:t2", herdr: true },
+  },
 ] as const;
 
 test.each(scenarios)(
-  "CLI stop at $at refuses $command before its effect despite a current lease",
-  async ({ at, command, params }) => {
+  "CLI stop at $at keeps $command and its outcome consistent with a current lease",
+  async (scenario) => {
+    const { at, command } = scenario;
+    let params: Record<string, unknown> = scenario.params;
+    const outcome = "outcome" in scenario ? scenario.outcome : "refused";
+    let holding = command !== "undo";
     const root = mkdtempSync(join(tmpdir(), "world-cli-authorization-"));
     const arrived = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();
@@ -44,7 +85,7 @@ test.each(scenarios)(
       persist: false,
     });
     const waitAt = async (boundary: string) => {
-      if (at !== boundary) return;
+      if (!holding || at !== boundary) return;
       arrived.resolve();
       await release.promise;
     };
@@ -56,6 +97,8 @@ test.each(scenarios)(
       openAsks: ledger.openAsks.bind(ledger),
       update: async (change) => {
         await waitAt("ledger");
+        if (holding && (outcome === "rollback" || outcome === "superseded"))
+          throw new StorageWriteRejected("Example history write rejected");
         return ledger.update(change);
       },
     };
@@ -125,9 +168,8 @@ test.each(scenarios)(
       publishBoard: () => {},
       broadcast: () => {},
     });
-    const before = board.get();
-    try {
-      const pending = service.http(
+    const request = (command: string, params: Record<string, unknown>) =>
+      service.http(
         new Request("http://world.invalid/api/world/cli", {
           method: "POST",
           body: JSON.stringify({ command, params }),
@@ -136,24 +178,79 @@ test.each(scenarios)(
         32100,
         () => true,
       );
+    const key = tabCardKey("example", "w1:t1", new Set(["w1"]));
+    try {
+      if (command === "undo") {
+        const seed = await request("board card pin", {
+          target: "tab:w1:t1",
+          x: 1,
+          y: 2,
+        });
+        expect(seed.status).toBe(200);
+        params = { id: (await seed.json()).result.id };
+        holding = true;
+      }
+      const before = board.get();
+      const pending = request(command, params);
       await arrived.promise;
+      if (outcome === "superseded")
+        board.patch([{ op: "layout.set", pinned: { [key]: { x: 9, y: 10 } } }]);
       await service.stop();
       expect(lease.isCurrent()).toBe(true);
       release.resolve();
       const response = await pending;
-      expect(response.status).toBe(403);
-      expect(await response.json()).toMatchObject({
-        ok: false,
-        code: "refused",
-        command_evidence: { stage: "refused" },
-      });
-      expect(writes).toEqual([]);
-      expect(board.get()).toEqual(before);
-      expect(ledger.get()).toMatchObject({
-        asks: [],
-        changes: [],
-        results: [],
-      });
+      expect(response.status).toBe(
+        outcome === "record" ? 200 : outcome === "refused" ? 403 : 503,
+      );
+      const body = await response.json();
+      if (outcome === "record") {
+        expect(body).toMatchObject({
+          ok: true,
+          command_evidence: { stage: "accepted" },
+        });
+        const changes = ledger.get().changes;
+        expect(changes).toHaveLength(command === "undo" ? 2 : 1);
+        expect(changes.at(-1)?.id).toBe(body.result.id);
+        expect(changes.at(-1)?.command).toBe(command);
+        if (command === "board card pin") {
+          expect(board.get().layout.pinned[key]).toEqual({ x: 1, y: 2 });
+          expect(changes[0]!.undo).toEqual([
+            { op: "layout.set", unpinned: [key] },
+          ]);
+        } else if (command === "undo") {
+          expect(board.get().layout.pinned[key]).toBeUndefined();
+          expect(changes[0]!.undone_by).toBe(body.result.id);
+        } else {
+          expect(changes[0]!.undo).toBeNull();
+        }
+      } else if (outcome === "rollback" || outcome === "superseded") {
+        expect(body).toMatchObject({
+          ok: false,
+          code: "unavailable",
+          command_evidence: { stage: "failed" },
+        });
+        expect(ledger.get().changes).toEqual([]);
+        if (outcome === "rollback")
+          expect(board.get().layout).toEqual(before.layout);
+        else expect(board.get().layout.pinned[key]).toEqual({ x: 9, y: 10 });
+      } else {
+        expect(body).toMatchObject({
+          ok: false,
+          code: "refused",
+          command_evidence: { stage: "refused" },
+        });
+        expect(board.get()).toEqual(before);
+        expect(ledger.get()).toMatchObject({
+          asks: [],
+          changes: [],
+          results: [],
+        });
+      }
+      expect(writes).toEqual(
+        command === "town desk move" && outcome === "record"
+          ? ["tab.move"]
+          : [],
+      );
     } finally {
       release.resolve();
       await service.stop();

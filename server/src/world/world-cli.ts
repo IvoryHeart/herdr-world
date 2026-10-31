@@ -1,12 +1,10 @@
-import {
-  StorageOutcomeUnknown,
-  StorageWriteRejected,
-} from "../storage/world-protocol";
+import { StorageOutcomeUnknown } from "../storage/world-protocol";
 import { admitVerb, checkVerbResult, VerbRefusal } from "../verbs/admission";
 import { commandEvidence } from "../verbs/evidence";
 import { registeredVerb } from "../verbs/registry";
 import type { Admission } from "../verbs/types";
 import { guardCliCommand, guardCliHost } from "./world-cli-dispatch";
+import { createBoardChange } from "./world-cli-board-change";
 import {
   appearanceFor,
   appearanceKey,
@@ -499,9 +497,16 @@ const BOARD_COMMANDS = new Set<WorldCliCommand>([
 
 export function createWorldCli(deps: WorldCliDeps) {
   const now = deps.now ?? Date.now;
+  // Outcome bookkeeping may finish an admitted effect; it grants no new effect.
+  const completion: Pick<WorldCliDeps, "ledger" | "publishLedger"> = {
+    get ledger() {
+      return deps.ledger;
+    },
+    publishLedger: deps.publishLedger,
+  };
 
   const recordWithDeps = async (
-    deps: WorldCliDeps,
+    deps: Pick<WorldCliDeps, "ledger" | "publishLedger">,
     actor: CliActor,
     command: string,
     summary: string,
@@ -555,32 +560,7 @@ export function createWorldCli(deps: WorldCliDeps) {
     return document;
   };
 
-  /**
-   * Change the Board, then record it. The two files cannot change together,
-   * so a change that cannot be recorded is taken back.
-   */
-  const changeBoardWithDeps = async (
-    deps: WorldCliDeps,
-    actor: CliActor,
-    ops: BoardOp[],
-    revert: BoardOp[],
-    write: (document: BoardDocument) => LedgerChange | Promise<LedgerChange>,
-  ) => {
-    const document = patchBoardWithDeps(deps, ops, actor);
-    try {
-      return await write(document);
-    } catch (error) {
-      if (!(error instanceof StorageWriteRejected)) throw error;
-      try {
-        // A browser may have edited the Board during the asynchronous write.
-        if (deps.board.get().revision === document.revision)
-          patchBoardWithDeps(deps, revert, actor);
-      } catch {
-        // The original error says more.
-      }
-      throw error;
-    }
-  };
+  const changeBoardWithDeps = createBoardChange(deps, patchBoardWithDeps);
 
   /** The host a command acts on, with its live topology. */
   const topologyWithDeps = async (
@@ -652,8 +632,9 @@ export function createWorldCli(deps: WorldCliDeps) {
     params: Record<string, unknown>,
     actor: CliActor,
     host: CliHost | undefined,
+    recheck: () => void,
   ): Promise<unknown> {
-    const record = recordWithDeps.bind(null, deps);
+    const record = recordWithDeps.bind(null, completion);
     const patchBoard = patchBoardWithDeps.bind(null, deps);
     const changeBoard = changeBoardWithDeps.bind(null, deps);
     const topologyFor = topologyWithDeps.bind(null, deps);
@@ -757,7 +738,7 @@ export function createWorldCli(deps: WorldCliDeps) {
             : change!.undo!;
           return changeBoard(actor, ops, change!.redo ?? [], async () => {
             const undone: LedgerChange = {
-              id: deps.ledger.nextId("c"),
+              id: completion.ledger.nextId("c"),
               at: now(),
               actor,
               command: "undo",
@@ -765,8 +746,8 @@ export function createWorldCli(deps: WorldCliDeps) {
               undo: null,
             };
             // One write records the undo and marks what it undid.
-            deps.publishLedger(
-              await deps.ledger.update((document) => {
+            completion.publishLedger(
+              await completion.ledger.update((document) => {
                 document.changes.push(undone);
                 const entry = document.changes.find((c) => c.id === id);
                 if (entry) entry.undone_by = undone.id;
@@ -809,6 +790,7 @@ export function createWorldCli(deps: WorldCliDeps) {
           refused("desks reorder only within one room");
         const insert = deskReorderIndex(order, tabId, ontoTab);
         if (insert === undefined) notFound(`tab ${tabId} changed; try again`);
+        recheck();
         if (insert !== null)
           await topology.host.call("tab.move", {
             tab_id: tabId,
@@ -945,6 +927,7 @@ export function createWorldCli(deps: WorldCliDeps) {
           params,
           actor,
           identity.host && guardCliHost(identity.host, recheck),
+          recheck,
         );
         checkVerbResult(declaration, result);
         const recordId =
