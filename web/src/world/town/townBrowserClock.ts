@@ -1,4 +1,4 @@
-import type { TownClock } from "./scene/ports";
+import type { TownClock, TownFrames } from "./scene/ports";
 
 /** The page's own clock, for the scene model in the browser. */
 export const townBrowserClock: TownClock = {
@@ -8,4 +8,12 @@ export const townBrowserClock: TownClock = {
     return () => window.clearTimeout(timer);
   },
   wall: () => Date.now(),
+};
+
+/** The page's animation frames. */
+export const townBrowserFrames: TownFrames = {
+  next(run) {
+    const frame = requestAnimationFrame(() => run());
+    return () => cancelAnimationFrame(frame);
+  },
 };

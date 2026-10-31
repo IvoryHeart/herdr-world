@@ -11,3 +11,9 @@ export type TownClock = {
   /** Epoch milliseconds, only for ages shown to the user. */
   wall(): number;
 };
+
+/** Animation frames, for mechanics that step once per frame (edge pan). */
+export type TownFrames = {
+  /** Run `run` on the next animation frame; the returned function cancels it. */
+  next(run: () => void): () => void;
+};
