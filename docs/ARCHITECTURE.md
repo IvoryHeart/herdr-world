@@ -38,6 +38,13 @@ import, per-connection completion flags and the Town master revision watermark.
 Current terminal assignments and master tokens remain owned by Herdr. Config,
 connection profiles and secrets remain files. See [profile storage and recovery](DEPLOYMENT.md#agent-profile-storage).
 
+`WorldStorage.runtimeStatus` stores auto-sync last-run fields through that same
+writer. The scheduler reads its committed cache for interval decisions and awaits
+result persistence; settings RPCs join it to file-backed schedules. Status updates
+never rewrite configuration. First startup backs up settings and imports only
+runtime fields once; configuration and secrets remain files. See [runtime status
+and recovery](DEPLOYMENT.md#auto-sync-runtime-status).
+
 Runtime adapter registration and its data-only hello descriptors live in the
 [adapter registry](../server/src/adapters/registry.ts). Herdr remains the sole
 production runtime; its raw topology reads preserve today's snapshot behavior.

@@ -1,3 +1,4 @@
+import { createRuntimeStatusPort } from "./runtime-status";
 import { createProfilePort } from "./profile-port";
 import { ANSWER_DELIVERY_VERB } from "../world/ask-delivery-types";
 import type { WorldIds } from "./world-ids";
@@ -42,7 +43,12 @@ function diff<T extends { id: string }>(before: T[], after: T[]): Rows<T> {
 
 /** Independent instance; every read reflects only acknowledged SQLite commits. */
 export async function openWorldLedger(
-  paths: { database: string; ledger: string; profiles?: string },
+  paths: {
+    database: string;
+    ledger: string;
+    profiles?: string;
+    settings?: string;
+  },
   ports: StoragePorts,
 ): Promise<WorldLedgerStorage> {
   const incarnation = randomBytes(16).toString("base64url");
@@ -53,6 +59,7 @@ export async function openWorldLedger(
     undefined,
     incarnation,
     paths.profiles,
+    paths.settings,
   );
   let document = client.snapshot.document;
   const byRecord = new Map<string, AttentionEntry[]>();
@@ -69,6 +76,16 @@ export async function openWorldLedger(
   let closed: Promise<void> | undefined;
   const profiles = createProfilePort(
     client.snapshot.profiles ?? null,
+    <T>(request: StorageRequest) => {
+      if (closing)
+        return Promise.reject<T>(
+          new StorageWriteRejected("World storage is closing"),
+        );
+      return client.request<T>(request);
+    },
+  );
+  const runtimeStatus = createRuntimeStatusPort(
+    client.snapshot.runtimeStatus ?? {},
     <T>(request: StorageRequest) => {
       if (closing)
         return Promise.reject<T>(
@@ -245,6 +262,7 @@ export async function openWorldLedger(
     },
   };
   return {
+    runtimeStatus,
     profiles,
     ids,
     bindings: {
@@ -396,6 +414,7 @@ export async function openWorldLedger(
       if (closed) return closed;
       closing = true;
       profiles.close();
+      runtimeStatus.close();
       closed = Promise.allSettled([tail, bindingTail]).then(() =>
         client.close(),
       );

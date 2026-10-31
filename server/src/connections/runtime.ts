@@ -122,6 +122,7 @@ export function createLegacyConnectionRuntime(args: {
   config: SshTunnelConfig;
   /** The owning service's settings file. */
   settings: GuiSettingsStore;
+  runtimeStatus: import("../storage/runtime-status").RuntimeStatusPort;
   logger?: Logger;
   safeSend: SafeSend;
   broadcast?: (payload: string, context?: string) => void;
@@ -249,7 +250,7 @@ export function createLegacyConnectionRuntime(args: {
     resolveWorkspaceGitRoot: async (workspaceId) =>
       files.resolveWorkspaceGitRoot({ workspace_id: workspaceId }),
     readSettings,
-    updateSettings,
+    runtimeStatus: args.runtimeStatus,
   });
   const worktreeHooks = unixOnlyHandlers(
     remotePlatform,
@@ -290,6 +291,7 @@ export function createLegacyConnectionRuntime(args: {
     onUnexpectedExit: args.onTransportExit,
   });
   const handleSettingsRpc = createSettingsRpcHandler({
+    runtimeStatus: args.runtimeStatus,
     connectionId: identity.id,
     connectionGeneration: args.connectionGeneration,
     settings: args.settings,

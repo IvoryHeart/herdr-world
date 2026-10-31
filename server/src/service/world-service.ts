@@ -630,6 +630,7 @@ async function compose(
           connectionGeneration: context.generation,
           config: profileConfig,
           settings,
+          runtimeStatus: storage.runtimeStatus,
           logger: logger.child("connection"),
           safeSend,
           broadcast,

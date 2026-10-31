@@ -92,6 +92,11 @@ export type LedgerCommit = {
 };
 export type StorageRequest =
   | { type: "load" }
+  | {
+      type: "runtime-status";
+      key: string;
+      status: import("./runtime-status").AutoSyncRunStatus;
+    }
   | { type: "issue-id"; kind: string }
   | { type: "profiles"; operation: import("./world-profiles").ProfileOperation }
   | { type: "binding"; operation: import("./world-bindings").BindingOperation }
@@ -195,6 +200,7 @@ export type AttentionOutbox = {
   ): Promise<AttentionEntry | null>;
 };
 export type WorldLedgerStorage = {
+  runtimeStatus: import("./runtime-status").RuntimeStatusPort;
   profiles: import("../agent/profile-store").ProfileStorePort;
   bindings: import("./world-bindings").WorldBindings;
   ids: import("./world-ids").WorldIds;
@@ -216,6 +222,7 @@ export type WorkerRequest =
       path: string;
       legacy: string;
       legacyProfiles?: string;
+      legacySettings?: string;
       at: number;
       incarnation: string;
     }
@@ -226,6 +233,7 @@ export type WorkerRequest =
     }
   | { type: "close" };
 export type StorageSnapshot = {
+  runtimeStatus?: Record<string, import("./runtime-status").AutoSyncRunStatus>;
   profiles?: import("../agent/profile-store").ProfilesDocument;
   document: LedgerDocument;
   attention: AttentionEntry[];

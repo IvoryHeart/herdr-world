@@ -143,6 +143,35 @@ this profile migration sees only the retained JSON; its edits are not reimported
 after returning to the newer binary. Reconcile such edits explicitly from the
 preserved copies rather than deleting SQLite import records.
 
+### Auto-sync runtime status
+
+Auto-sync schedules, enabled switches, intervals, checkout paths and host
+configuration remain in `settings.json`. Last-run time, outcome, message and
+branch live in `world.sqlite`, keyed by the existing connection-qualified
+settings key. The settings RPC combines configuration with committed status, so
+the existing auto-sync controls and last-run display work as before. A background
+run never rewrites configuration, and a configuration change cannot overwrite
+its recorded result. Git operations keep their existing runtime and dirty-tree
+checks.
+
+At the first start using this store, World preserves exact settings bytes as a
+private `<settings>.<sha256>.runtime-status-import.bak`, then imports only the
+four status fields and its completion marker in one transaction. Configuration,
+`custom` values and secrets are not copied into SQLite. The original file stays
+untouched. After import, service configuration writes remove historical status
+fields from the JSON. Pre-start CLI edits retain legacy fields until the service
+can import them. A missing source initializes an empty status store once; later
+JSON edits never restore or replace SQLite status.
+
+Malformed initial settings or an unsafe/conflicting import backup stops startup
+without partial runtime rows. Preserve the source and backups, repair the initial
+settings or safely move a conflicting backup aside, then restart. After import,
+use the stopped whole-directory backup procedure above for recovery. An older
+binary sees retained JSON status; edits or results it records are not reimported
+when returning to this store. Runtime status is local history, not proof that a
+Git effect and its record committed together: a crash between them can leave the
+previous result and a later scheduled run. Runtime field claims remain in memory.
+
 ## Requirements
 
 - A supported Linux, macOS, or Windows release, or Bun 1.4.1+ for a source build.

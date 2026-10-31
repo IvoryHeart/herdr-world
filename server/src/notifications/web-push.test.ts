@@ -1,3 +1,4 @@
+import { memoryRuntimeStatus } from "../storage/testing/runtime-status";
 import { expect, mock, test } from "bun:test";
 import { createECDH, randomBytes } from "node:crypto";
 import {
@@ -506,6 +507,7 @@ test.each(["older first", "newer first"])(
     );
     let lookupIndex = 0;
     const runtime = createLegacyConnectionRuntime({
+      runtimeStatus: memoryRuntimeStatus(),
       settings,
       config: {
         socketPath: join(dirname(f.path), "control.sock"),
@@ -609,6 +611,7 @@ test.each([
   let tabLabel = "Peter";
   const subscribed = Promise.withResolvers<void>();
   const runtime = createLegacyConnectionRuntime({
+    runtimeStatus: memoryRuntimeStatus(),
     settings,
     config: {
       socketPath: join(dirname(f.path), "control.sock"),

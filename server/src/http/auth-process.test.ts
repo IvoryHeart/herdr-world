@@ -312,10 +312,11 @@ test("instance naming is authenticated, persistent, and isolated from other inst
 test("instance name save failures preserve the current name and permit retry", async () => {
   const root = await mkdtemp(join(tmpdir(), "roamgate-instance-save-"));
   const blockedPath = join(root, "settings.json");
-  await mkdir(blockedPath);
   try {
     await withAuthServer(
       async (base) => {
+        // Import preflight must finish before injecting a runtime save failure.
+        await mkdir(blockedPath);
         const response = await fetch(`${base}/api/login`, {
           method: "POST",
           body: JSON.stringify({ password }),

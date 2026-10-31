@@ -1,3 +1,4 @@
+import { memoryRuntimeStatus } from "../storage/testing/runtime-status";
 import { expect, test } from "bun:test";
 import type { ServerWebSocket } from "bun";
 import type { GuiSettings } from "../config/gui-settings";
@@ -47,6 +48,7 @@ test("terminal transport settings validate input, persist by connection, and rec
   let cancelAfterWrite = false;
   let valid = true;
   const handler = createSettingsRpcHandler({
+    runtimeStatus: memoryRuntimeStatus(),
     connectionId: "alpha",
     connectionGeneration: 3,
     settings: {
@@ -131,6 +133,7 @@ test("terminal transport settings validate input, persist by connection, and rec
 test("settings RPC errors carry their runtime connection identity", async () => {
   const messages: string[] = [];
   const handler = createSettingsRpcHandler({
+    runtimeStatus: memoryRuntimeStatus(),
     settings: memorySettings(),
     connectionId: "remote-dev",
     connectionGeneration: 6,
@@ -187,6 +190,7 @@ test("settings RPC lists and mutates only its connection namespace", async () =>
   };
   const messages: any[] = [];
   const handler = createSettingsRpcHandler({
+    runtimeStatus: memoryRuntimeStatus(),
     connectionId: "alpha",
     settings: {
       path: "/settings.json",
@@ -252,6 +256,7 @@ test("settings RPC suppresses a delayed result after replacement", async () => {
   const messages: string[] = [];
   let current = true;
   const handler = createSettingsRpcHandler({
+    runtimeStatus: memoryRuntimeStatus(),
     settings: memorySettings(),
     connectionId: "remote-dev",
     herdr: {
@@ -307,6 +312,7 @@ test("settings RPC cancels a queued mutation after replacement", async () => {
   };
   const messages: string[] = [];
   const handler = createSettingsRpcHandler({
+    runtimeStatus: memoryRuntimeStatus(),
     connectionId: "alpha",
     settings: {
       path: "/settings.json",
@@ -363,6 +369,7 @@ test("hook settings expose selected config and errors without mislabeling native
   let invalid = false;
   const messages: any[] = [];
   const handler = createSettingsRpcHandler({
+    runtimeStatus: memoryRuntimeStatus(),
     settings: memorySettings(),
     herdr: {
       call: async () => ({

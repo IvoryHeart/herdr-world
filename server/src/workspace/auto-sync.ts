@@ -1,3 +1,4 @@
+import type { RuntimeStatusPort } from "../storage/runtime-status";
 import type { HerdrClient } from "../bridge/herdr-client";
 import { gitShellCommandArgv } from "./git-shell";
 import {
@@ -234,11 +235,11 @@ export function createWorkspaceAutoSync(args: {
   invalidateGitStatus: (root: string) => void;
   resolveWorkspaceGitRoot: (workspaceId: string) => Promise<{ root: string }>;
   readSettings: GuiSettingsStore["read"];
-  updateSettings: GuiSettingsStore["update"];
+  runtimeStatus: Pick<RuntimeStatusPort, "get" | "put">;
   syncBranch?: typeof syncWorkspaceBranch;
 }) {
   const logger = args.logger ?? silentLogger;
-  const { readSettings, updateSettings } = args;
+  const { readSettings } = args;
   const syncBranch = args.syncBranch ?? syncWorkspaceBranch;
   const formatError =
     args.formatError ??
@@ -283,28 +284,15 @@ export function createWorkspaceAutoSync(args: {
   async function recordResult(
     generation: number,
     key: string,
-    root: string,
-    host: string | undefined,
     result: SyncResult,
   ) {
     if (!current(generation)) return;
-    await updateSettings((settings) => {
-      if (!current(generation)) return settings;
-      const existing = settings.workspace_auto_sync[key];
-      if (!existing) return settings;
-      return {
-        ...settings,
-        workspace_auto_sync: {
-          ...settings.workspace_auto_sync,
-          [key]: {
-            ...existing,
-            ...result,
-            checkout_path: root,
-            host,
-            last_run_at: new Date().toISOString(),
-          },
-        },
-      };
+    const settings = await readSettings();
+    if (!current(generation) || !settings.workspace_auto_sync[key]) return;
+    await args.runtimeStatus.put(key, {
+      ...args.runtimeStatus.get(key),
+      ...result,
+      last_run_at: new Date().toISOString(),
     });
   }
 
@@ -385,8 +373,9 @@ export function createWorkspaceAutoSync(args: {
           continue;
         }
         const forced = forcedKeys.has(key);
-        const lastRunAt = entry.last_run_at
-          ? Date.parse(entry.last_run_at)
+        const lastRun = args.runtimeStatus.get(key);
+        const lastRunAt = lastRun?.last_run_at
+          ? Date.parse(lastRun.last_run_at)
           : Number.NaN;
         const intervalMs =
           (entry.interval_minutes ||
@@ -428,7 +417,7 @@ export function createWorkspaceAutoSync(args: {
         } finally {
           runningKeys.delete(key);
         }
-        await recordResult(generation, key, root, host, result);
+        await recordResult(generation, key, result);
         if (!current(generation)) return;
         const resultFields = {
           connection: connectionId,

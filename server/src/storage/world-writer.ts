@@ -10,6 +10,8 @@ import {
   originalAsker,
 } from "../world/ask-delivery-types";
 import { readProfiles, executeProfileOperation } from "./world-profiles";
+import { importRuntimeStatus } from "./runtime-status-import";
+import { readRuntimeStatus, writeRuntimeStatus } from "./runtime-status";
 import { importLegacyProfiles } from "./profile-import";
 import { randomBytes } from "node:crypto";
 import { createWorldIds } from "./world-ids";
@@ -60,6 +62,10 @@ export function openWorldWriter(
   bytes?: () => Uint8Array,
   legacyProfiles?: string,
   profileImportFault?: (stage: "before-commit" | "after-commit") => void,
+  runtimeImport?: {
+    path: string;
+    fault?: (stage: "before-commit" | "after-commit") => void;
+  },
 ) {
   assertSafeDataPath(path);
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
@@ -98,6 +104,8 @@ export function openWorldWriter(
     importLegacyLedger(db, legacy, at);
     if (legacyProfiles !== undefined)
       importLegacyProfiles(db, legacyProfiles, at, profileImportFault);
+    if (runtimeImport)
+      importRuntimeStatus(db, runtimeImport.path, at, runtimeImport.fault);
     recoverAttention(db, at);
   } catch (error) {
     db.close();
@@ -145,9 +153,11 @@ export function openWorldWriter(
       results: rows("results"),
     };
     const profiles = readProfiles(db);
+    const runtimeStatus = readRuntimeStatus(db);
     return {
       document,
       ...(profiles ? { profiles } : {}),
+      ...(runtimeStatus ? { runtimeStatus } : {}),
       attention: (
         db.query("SELECT * FROM outbox ORDER BY rowid").all() as Record<
           string,
@@ -391,6 +401,14 @@ export function openWorldWriter(
         return read();
       case "issue-id":
         return ids.issue(request.kind);
+      case "runtime-status":
+        if (
+          !db
+            .query("SELECT 1 FROM imports WHERE name='runtime-status-json'")
+            .get()
+        )
+          throw new Error("Runtime status was not initialized");
+        return writeRuntimeStatus(db, request.key, request.status);
       case "profiles":
         return executeProfileOperation(db, request.operation);
       case "binding":
