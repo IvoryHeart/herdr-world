@@ -23,29 +23,34 @@ const ADAPTERS = [
   "web/src/api.ts",
 ];
 
+/** The scene model's modules; each is bundled on its own. */
+const ENTRIES = ["townScene.ts", "townSceneCamera.ts"];
+
 test("the scene model's module graph has no framework, renderer or adapter", async () => {
-  const build = await Bun.build({
-    entrypoints: [join(root, scene, "townScene.ts")],
-    root,
-    target: "browser",
-    sourcemap: "external",
-  });
-  expect(build.success).toBe(true);
-  const map = build.outputs.find((output) => output.path.endsWith(".map"));
-  const sources = (JSON.parse(await map!.text()) as { sources: string[] })
-    .sources;
-  const files = sources.map((source) => relative(root, join(root, source)));
-  // Sanity: the graph is the scene and the pure Town modules it uses.
-  expect(files).toContain(`${scene}/townScene.ts`);
-  expect(files).toContain("web/src/world/town/townLayout.ts");
-  const outside = files.filter(
-    (file) =>
-      file.includes("node_modules") ||
-      file.endsWith(".tsx") ||
-      ADAPTERS.includes(file) ||
-      !(file.startsWith("shared/") || file.startsWith("web/src/world/")),
-  );
-  expect(outside).toEqual([]);
+  for (const entry of ENTRIES) {
+    const build = await Bun.build({
+      entrypoints: [join(root, scene, entry)],
+      root,
+      target: "browser",
+      sourcemap: "external",
+    });
+    expect(build.success).toBe(true);
+    const map = build.outputs.find((output) => output.path.endsWith(".map"));
+    const sources = (JSON.parse(await map!.text()) as { sources: string[] })
+      .sources;
+    const files = sources.map((source) => relative(root, join(root, source)));
+    // Sanity: the graph is the module and the pure Town modules it uses.
+    expect(files).toContain(`${scene}/${entry}`);
+    expect(files).toContain("web/src/world/town/townLayout.ts");
+    const outside = files.filter(
+      (file) =>
+        file.includes("node_modules") ||
+        file.endsWith(".tsx") ||
+        ADAPTERS.includes(file) ||
+        !(file.startsWith("shared/") || file.startsWith("web/src/world/")),
+    );
+    expect({ entry, outside }).toEqual({ entry, outside: [] });
+  }
 });
 
 /** Each probe line must be rejected by the scene's lint rule. */

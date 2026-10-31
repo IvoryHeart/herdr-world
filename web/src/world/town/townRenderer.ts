@@ -212,6 +212,8 @@ export async function createTownRenderer(
   onError?: (error: unknown) => void,
   /** Development builds: each frame's reasons, when they change. */
   onTrace?: (frame: TownFrameTrace) => void,
+  /** The scene's camera (scene/townSceneCamera.ts); the renderer steps it. */
+  camera = new TownCamera(),
 ): Promise<TownRendererHandle> {
   if (window.__HERDR_WORLD_FORCE_RENDERER_FAILURE__)
     throw new Error("renderer unavailable");
@@ -266,7 +268,6 @@ export async function createTownRenderer(
 
   await nextTownTask();
   const sprites = buildTownSprites();
-  const camera = new TownCamera();
   const actors = new TownActors();
   const motion = worldMotionPreference();
   camera.reducedMotion = motion.matches;

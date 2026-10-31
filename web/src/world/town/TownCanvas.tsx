@@ -1,11 +1,5 @@
 import "../worldAsks.css";
-import {
-  findCell,
-  zoomToRoom,
-  zoomToBuilding,
-  roomZoom,
-  buildingZoom,
-} from "./townCameraTargets";
+import { findCell } from "./townCameraTargets";
 import {
   NOTHING_VISIBLE,
   townVisibleHosts,
@@ -48,20 +42,17 @@ import type {
   WorldConversationAnchorTarget,
 } from "../worldConnectorGeometry";
 import type { OfficeObservability } from "../officeObservability";
-import { townRoomFocus, type TownLevel } from "./townCamera";
+import { TownCamera, type TownLevel } from "./townCamera";
 import { townHitKey, townHitTest, type TownHit } from "./townHitTest";
 import {
-  TOWN_FACADE,
   TOWN_TILE as T,
-  townGeometryKey,
-  townReflowShift,
   townSeat,
   townShapeFor,
   townShapeKey,
-  type TownLayout,
   type TownShape,
 } from "./townLayout";
 import { TownScene } from "./scene/townScene";
+import { TownSceneCamera, townViewport } from "./scene/townSceneCamera";
 import { townBrowserClock } from "./townBrowserClock";
 import type { TownSummary } from "./townSummary";
 import {
@@ -252,6 +243,13 @@ export function TownCanvas({
     () => new TownScene(townBrowserClock, () => wakeReflow((n) => n + 1)),
   );
   useEffect(() => () => scene.dispose(), [scene]);
+  // Where the camera goes; the renderer steps its motion each frame.
+  const [view] = useState(
+    () =>
+      new TownSceneCamera(savedCameras, (reason) =>
+        rendererRef.current?.invalidate(reason),
+      ),
+  );
   const semantics = scene.derive({
     projection,
     terminalColors,
@@ -406,7 +404,6 @@ export function TownCanvas({
         rendererRef.current?.invalidate("building-sign"),
       ),
   );
-  const lastCamera = useRef("");
   const hoverEntry = useCallback(
     (key: string | null, rect?: DOMRect) =>
       latest.current.onHover?.(
@@ -423,25 +420,12 @@ export function TownCanvas({
   // Only on-screen buildings keep DOM cards, plaques and receptions.
   const [visible, setVisible] = useState<TownVisible>(NOTHING_VISIBLE);
   const visibleKey = useRef(NOTHING_VISIBLE.key);
-  // The camera as last drawn. The canvas and its targets show this one until
-  // the next frame, so presses are hit-tested against it: a pan not yet drawn
-  // (an arrow key, an edge pan during a carry) must not move what is pressed.
-  const drawnCamera = useRef({ x: 0, y: 0, z: 0, width: 0, height: 0 });
   /** Aims a carried desk or agent again at the frame just drawn. */
   const reaimCarry = useRef<(() => void) | null>(null);
   const onFrame = (camera: TownRendererHandle["camera"], level: TownLevel) => {
-    const drawn = drawnCamera.current;
-    const moved =
-      drawn.x !== camera.x ||
-      drawn.y !== camera.y ||
-      drawn.z !== camera.z ||
-      drawn.width !== camera.viewport.width ||
-      drawn.height !== camera.viewport.height;
-    drawn.x = camera.x;
-    drawn.y = camera.y;
-    drawn.z = camera.z;
-    drawn.width = camera.viewport.width;
-    drawn.height = camera.viewport.height;
+    // The canvas and its targets show this camera until the next frame, so
+    // presses are hit-tested against it (view.drawn).
+    const { moved, posed } = view.drew(camera, level, latest.current.layout);
     // A camera that moved under a still carry (an edge pan, an arrow key)
     // puts something else under it: the target follows what is now drawn.
     if (moved) reaimCarry.current?.();
@@ -468,19 +452,9 @@ export function TownCanvas({
           for (const pennant of pennants.current) markAway(pennant, renderer);
       }
     }
-    const signature = `${camera.x.toFixed(1)},${camera.y.toFixed(1)},${camera.z.toFixed(4)}`;
-    const signatureChanged = signature !== lastCamera.current;
-    if (signatureChanged) {
-      lastCamera.current = signature;
-      savedCameras.set(townShapeKey(latest.current.layout.shape), {
-        x: camera.x,
-        y: camera.y,
-        z: camera.z,
-      });
-    }
     // Inspected agents walk under a still camera, so their lines follow every
     // drawn frame. World keeps unchanged anchors, so idle frames commit nothing.
-    if (signatureChanged || latest.current.conversationTargets.length > 0)
+    if (posed || latest.current.conversationTargets.length > 0)
       scheduleAnchors();
   };
   const onFrameRef = useRef(onFrame);
@@ -489,63 +463,10 @@ export function TownCanvas({
 
   const viewport = () => {
     const host = hostRef.current!;
-    const width = host.clientWidth || 1;
-    const height = host.clientHeight || 1;
-    const narrow = width < 640;
-    return {
-      width,
-      height,
-      inset: {
-        top: narrow ? 12 : 16,
-        right: narrow ? 12 : Math.max(72, latest.current.chrome.right),
-        bottom: narrow ? 12 : 16,
-        left: narrow ? 12 : Math.max(16, latest.current.chrome.left),
-      },
-    };
-  };
-
-  const frameHome = (
-    renderer: TownRendererHandle,
-    l: TownLayout,
-    animate: boolean,
-  ) => {
-    const limits = renderer.camera.limits;
-    if (!limits) return;
-    const record = () => {
-      const target = renderer.camera.flying ? null : renderer.camera;
-      homePose.current = target
-        ? { x: target.x, y: target.y, z: target.z }
-        : null;
-    };
-    if (l.formFactor === "narrow") {
-      const first = l.buildings[0];
-      const x = (l.width * T) / 2;
-      const focus = renderer.camera.focusPoint();
-      const y = first
-        ? first.y * T - 24 + (focus.y - viewport().inset.top) / limits.home
-        : (l.height * T) / 2;
-      if (animate) renderer.camera.flyTo(x, y, limits.home);
-      else renderer.camera.jumpTo(x, y, limits.home);
-    } else if (animate)
-      renderer.camera.flyTo((l.width * T) / 2, (l.height * T) / 2, limits.home);
-    else
-      renderer.camera.jumpTo(
-        (l.width * T) / 2,
-        (l.height * T) / 2,
-        limits.home,
-      );
-    if (!animate) record();
-    else homePose.current = null;
-    renderer.invalidate("home");
-  };
-  const homePose = useRef<{ x: number; y: number; z: number } | null>(null);
-  const atHome = (renderer: TownRendererHandle) => {
-    const home = homePose.current;
-    const camera = renderer.camera;
-    return (
-      home !== null &&
-      Math.abs(camera.z - home.z) < home.z * 0.01 &&
-      Math.hypot(camera.x - home.x, camera.y - home.y) * camera.z < 4
+    return townViewport(
+      host.clientWidth || 1,
+      host.clientHeight || 1,
+      latest.current.chrome,
     );
   };
 
@@ -553,11 +474,11 @@ export function TownCanvas({
   useEffect(() => {
     const renderer = rendererRef.current;
     if (!renderer || !hostRef.current) return;
-    const wasHome = atHome(renderer);
-    renderer.setViewport(viewport());
-    if (wasHome) frameHome(renderer, latest.current.layout, false);
+    view.reframe(latest.current.layout, viewport(), (next) =>
+      renderer.setViewport(next),
+    );
     // viewport() reads the latest chrome.
-  }, [chrome.left, chrome.right]);
+  }, [view, chrome.left, chrome.right]);
 
   const sceneState = () => ({
     selectedKey: latest.current.selectedKey,
@@ -574,6 +495,7 @@ export function TownCanvas({
     if (!host) return;
     let disposed = false;
     const abort = new AbortController();
+    const camera = new TownCamera();
     void createTownRenderer(
       host,
       (camera, level) => {
@@ -589,6 +511,7 @@ export function TownCanvas({
             })
         : undefined,
       DEVTOOLS ? (frame) => traceRef.current.record("frame", frame) : undefined,
+      camera,
     )
       .then(async (renderer) => {
         holdPixiSystemTicker();
@@ -602,17 +525,7 @@ export function TownCanvas({
         renderer.setViewport(viewport());
         const { model: m, layout: l } = latest.current;
         renderer.setScene(m, l, sceneState());
-        renderer.camera.configure(l, viewport());
-        const saved = savedCameras.get(townShapeKey(l.shape));
-        if (saved) {
-          renderer.camera.x = saved.x;
-          renderer.camera.y = saved.y;
-          renderer.camera.setZoom(
-            saved.z,
-            renderer.camera.viewport.width / 2,
-            renderer.camera.viewport.height / 2,
-          );
-        } else frameHome(renderer, l, false);
+        view.attach(camera, l, viewport());
         renderer.invalidate("ready");
         setReady(true);
       })
@@ -647,48 +560,19 @@ export function TownCanvas({
         cancelAnimationFrame(anchorFrame.current);
       latest.current.onAnchorChange?.(null);
       latest.current.onSelectedAnchorChange?.(null);
+      view.detach();
       rendererRef.current?.destroy();
       rendererRef.current = null;
     };
-  }, []);
+  }, [view]);
 
   useEffect(() => {
     const renderer = rendererRef.current;
     if (!renderer) return;
-    const shapeKey = townShapeKey(layout.shape);
-    const shapeChanged =
-      renderer.camera.limits !== null && shapeKey !== lastShape.current;
-    const previous = lastLayout.current;
     renderer.setScene(model, layout, sceneState());
-    renderer.camera.configure(layout, viewport());
-    if (shapeChanged) {
-      const saved = savedCameras.get(shapeKey);
-      if (saved) renderer.camera.jumpTo(saved.x, saved.y, saved.z);
-      else frameHome(renderer, layout, false);
-    } else if (
-      previous &&
-      previous !== layout &&
-      !renderer.camera.flying &&
-      townGeometryKey(previous) !== townGeometryKey(layout)
-    ) {
-      // Rooms moved: follow the room in view, so it stays where it was.
-      const camera = renderer.camera;
-      const focus = camera.focusPoint();
-      const shift = townReflowShift(
-        previous,
-        layout,
-        camera.toWorld(focus.x, focus.y),
-      );
-      if (shift.x || shift.y) {
-        const at = camera.toWorld(focus.x, focus.y);
-        camera.jumpTo(at.x + shift.x, at.y + shift.y, camera.z);
-        renderer.invalidate("reflow");
-      }
-    }
-    lastShape.current = shapeKey;
-    lastLayout.current = layout;
+    view.follow(layout, viewport());
     scheduleAnchors();
-  }, [model, layout]);
+  }, [view, model, layout]);
   // Presses, scrolls and zooms on the town hold back a reflow (see above).
   useEffect(() => {
     const host = hostRef.current;
@@ -707,8 +591,6 @@ export function TownCanvas({
       host.removeEventListener("wheel", touch, true);
     };
   }, [scene]);
-  const lastShape = useRef(townShapeKey(layout.shape));
-  const lastLayout = useRef<TownLayout | null>(null);
 
   useEffect(() => {
     rendererRef.current?.setState(sceneState());
@@ -754,7 +636,7 @@ export function TownCanvas({
       if (!renderer) return null;
       const { layout: l, model: m } = latest.current;
       // Before the first frame nothing is drawn; the live camera is all there is.
-      const shown = drawnCamera.current.z ? drawnCamera.current : null;
+      const shown = view.drawn.z ? view.drawn : null;
       const world = shown
         ? {
             x: shown.x + (x - shown.width / 2) / shown.z,
@@ -893,7 +775,7 @@ export function TownCanvas({
           (b) => b.hostKey === hit.key,
         );
         if (building && renderer.roofAlpha(building.hostKey) > 0.5) {
-          zoomToBuilding(renderer, latest.current.layout, building.hostKey);
+          view.zoomToBuilding(latest.current.layout, building.hostKey);
         }
         return;
       }
@@ -901,7 +783,7 @@ export function TownCanvas({
         const roomKey = hit.kind === "room" ? hit.key : hit.roomKey;
         latest.current.onActivateRoom(roomKey);
         if (renderer.level !== "desk")
-          zoomToRoom(renderer, latest.current.layout, roomKey);
+          view.zoomToRoom(latest.current.layout, roomKey);
         return;
       }
       const key = townHitKey(hit);
@@ -1141,39 +1023,11 @@ export function TownCanvas({
       host.removeEventListener("pointerleave", leave);
       host.removeEventListener("wheel", wheel);
     };
-  }, []);
+  }, [view]);
 
   const keyboard = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    const renderer = rendererRef.current;
-    if (!renderer || event.target !== event.currentTarget) return;
-    const step = 60;
-    const camera = renderer.camera;
-    if (event.key === "ArrowLeft") camera.panBy(step, 0);
-    else if (event.key === "ArrowRight") camera.panBy(-step, 0);
-    else if (event.key === "ArrowUp") camera.panBy(0, step);
-    else if (event.key === "ArrowDown") camera.panBy(0, -step);
-    else if (event.key === "+" || event.key === "=")
-      camera.zoomAt(1.3, camera.viewport.width / 2, camera.viewport.height / 2);
-    else if (event.key === "-")
-      camera.zoomAt(
-        1 / 1.3,
-        camera.viewport.width / 2,
-        camera.viewport.height / 2,
-      );
-    else return;
-    event.preventDefault();
-    renderer.invalidate("keyboard");
-  };
-
-  const zoomBy = (factor: number) => {
-    const renderer = rendererRef.current;
-    if (!renderer) return;
-    renderer.camera.zoomAt(
-      factor,
-      renderer.camera.viewport.width / 2,
-      renderer.camera.viewport.height / 2,
-    );
-    renderer.invalidate("zoom");
+    if (!rendererRef.current || event.target !== event.currentTarget) return;
+    if (view.key(event.key)) event.preventDefault();
   };
 
   /**
@@ -1191,153 +1045,18 @@ export function TownCanvas({
     };
   }, [ownsShellControls]);
   const stepZoom = (direction: 1 | -1) => {
-    const renderer = rendererRef.current;
-    const camera = renderer?.camera;
-    if (!renderer || !camera?.limits) return;
-    const limits = camera.limits;
-    const l = latest.current.layout;
-    const focus = camera.focusPoint();
-    const at = camera.toWorld(focus.x, focus.y);
-    const distance = (x: number, y: number, w: number, h: number) =>
-      Math.hypot(
-        Math.max(x * T - at.x, 0, at.x - (x + w) * T),
-        Math.max(y * T - at.y, 0, at.y - (y + h) * T),
-      );
-    const building = [...l.buildings].sort(
-      (a, b) =>
-        distance(a.x, a.y, a.w, a.h + TOWN_FACADE) -
-        distance(b.x, b.y, b.w, b.h + TOWN_FACADE),
-    )[0];
-    if (!building) return;
-    const room = [...building.rooms].sort(
-      (a, b) => distance(a.x, a.y, a.w, a.h) - distance(b.x, b.y, b.w, b.h),
-    )[0];
-    const cell = room
-      ? [...room.cells]
-          .filter((candidate) => candidate.deskKey)
-          .sort(
-            (a, b) => distance(a.x, a.y, 6, 4) - distance(b.x, b.y, 6, 4),
-          )[0]
-      : undefined;
-    // Steps out to in: the whole town (when it differs from home, as on a
-    // phone where home fits one building's width), home, the nearest
-    // building, its nearest room and a desk.
-    const whole = limits.all < limits.home * 0.93;
-    const steps: { z: number; go(z: number): void }[] = [
-      ...(whole
-        ? [
-            {
-              z: limits.all,
-              go: (z: number) =>
-                camera.flyTo((l.width * T) / 2, (l.height * T) / 2, z),
-            },
-          ]
-        : []),
-      { z: limits.home, go: () => frameHome(renderer, l, true) },
-      {
-        // Stop where the building's room summaries show, as on a phone, so
-        // the next step goes into a room.
-        z: Math.min(buildingZoom(camera, building), limits.card * 0.95),
-        go: (z) =>
-          camera.flyTo(
-            (building.x + building.w / 2) * T,
-            (building.y + (building.h + TOWN_FACADE) / 2) * T,
-            z,
-            0.7,
-          ),
-      },
-      ...(room
-        ? [
-            {
-              z: roomZoom(camera, room),
-              // A room larger than the view opens at its first desks, as
-              // when its card is chosen.
-              go: (z: number) => {
-                const focus = townRoomFocus(room, camera.viewport, z);
-                camera.flyTo(focus.x, focus.y, z, 0.6);
-              },
-            },
-          ]
-        : []),
-      ...(cell
-        ? [
-            {
-              z: Math.max(limits.desk * 1.2, limits.desk + 0.2),
-              go: (z: number) =>
-                camera.flyTo((cell.x + 3) * T, (cell.y + 2) * T, z, 0.6),
-            },
-          ]
-        : []),
-    ];
-    for (let i = 1; i < steps.length; i += 1)
-      steps[i]!.z = Math.min(
-        limits.max,
-        Math.max(steps[i]!.z, steps[i - 1]!.z * 1.2),
-      );
-    let step = 0;
-    steps.forEach(({ z }, index) => {
-      if (camera.z >= z * 0.93) step = index;
-    });
-    const next = step + direction;
-    if (next < 0) {
-      steps[0]!.go(steps[0]!.z);
-      return;
-    }
-    if (next >= steps.length) {
-      zoomBy(1.4);
-      return;
-    }
-    steps[next]!.go(steps[next]!.z);
-    renderer.invalidate("zoom-step");
+    if (rendererRef.current)
+      view.stepZoom(direction, latest.current.layout, viewport());
   };
 
-  const focusTarget = (target: TownTarget) => {
-    const renderer = rendererRef.current;
-    if (!renderer) return;
-    const camera = renderer.camera;
-    const centre = camera.toScreen(
-      target.rect.x + target.rect.width / 2,
-      target.rect.y + target.rect.height / 2,
-    );
-    const { width, height } = camera.viewport;
-    if (
-      centre.x < 40 ||
-      centre.y < 40 ||
-      centre.x > width - 40 ||
-      centre.y > height - 40 ||
-      renderer.level === "town"
-    ) {
-      const z = Math.max(camera.z, camera.limits?.card ?? camera.z);
-      camera.flyTo(
-        target.rect.x + target.rect.width / 2,
-        target.rect.y + target.rect.height / 2,
-        z,
-        0.4,
-      );
-      renderer.invalidate("focus");
-    }
-  };
+  const focusTarget = (target: TownTarget) => view.focusTarget(target);
 
-  const zoomToRoomKey = (roomKey: string) => {
-    const renderer = rendererRef.current;
-    if (renderer) zoomToRoom(renderer, latest.current.layout, roomKey);
-  };
+  const zoomToRoomKey = (roomKey: string) =>
+    view.zoomToRoom(latest.current.layout, roomKey);
   // A request waits for renderer setup and its admitted layout, then runs once.
-  const consumedRoomFocus = useRef<number | null>(null);
   useEffect(() => {
-    if (!roomFocus || !ready || consumedRoomFocus.current === roomFocus.seq)
-      return;
-    const renderer = rendererRef.current;
-    if (
-      !renderer ||
-      !layout.buildings.some((building) =>
-        building.rooms.some((room) => room.key === roomFocus.roomKey),
-      )
-    )
-      return;
-    zoomToRoom(renderer, layout, roomFocus.roomKey);
-    consumedRoomFocus.current = roomFocus.seq;
-  }, [roomFocus, ready, layout]);
+    if (ready) view.roomFocus(roomFocus, layout);
+  }, [view, roomFocus, ready, layout]);
 
   return (
     <div className="town-shell" ref={shellRef}>
@@ -1412,17 +1131,7 @@ export function TownCanvas({
           type="button"
           className="town-zoom-all"
           aria-label="Show the whole town"
-          onClick={() => {
-            const renderer = rendererRef.current;
-            if (!renderer?.camera.limits) return;
-            const l = latest.current.layout;
-            renderer.camera.flyTo(
-              (l.width * T) / 2,
-              (l.height * T) / 2,
-              renderer.camera.limits.all,
-            );
-            renderer.invalidate("fit");
-          }}
+          onClick={() => view.fitAll(latest.current.layout)}
         >
           ALL
         </button>
