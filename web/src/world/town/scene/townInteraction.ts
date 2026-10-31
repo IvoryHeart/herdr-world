@@ -258,10 +258,13 @@ export class TownInteraction {
 
   /**
    * The drawn camera moved under a still carry (an edge pan, an arrow key):
-   * the target follows what is now drawn.
+   * the target follows what is now drawn. Nothing rested on a desk while the
+   * town moved under the carry, so the magnet's wait starts again.
    */
   reaim() {
-    if (this.carryAt) this.carryTo(this.carryAt);
+    if (!this.carryAt) return;
+    this.clearMagnet();
+    this.carryTo(this.carryAt);
   }
 
   dispose() {
@@ -323,6 +326,8 @@ export class TownInteraction {
     if (dx || dy) {
       stage.camera.panBy(dx, dy);
       stage.invalidate("edge-pan");
+      // The town scrolls under the carry: it rests on no desk (see reaim).
+      this.clearMagnet();
       this.carryTo(this.carryAt);
     }
     this.cancelEdge = this.ports.frames.next(this.edgePan);
