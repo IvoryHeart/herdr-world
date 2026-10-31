@@ -12,6 +12,7 @@ import {
 } from "node:fs";
 import { dirname, join } from "node:path";
 import { newWorldId } from "./world-identifiers";
+import { worldIdsMigration } from "./world-ids";
 import { assertSafeDataPath } from "../config/data-paths";
 
 export const WORLD_APPLICATION_ID = 0x574f524c;
@@ -53,7 +54,11 @@ CREATE TABLE answer_attempts (
 CREATE INDEX answer_attempt_status ON answer_attempts(intent_id,state,attempt);
 CREATE UNIQUE INDEX asks_answer_occurrence ON asks(json_extract(body,'$.answer.occurrence')) WHERE json_extract(body,'$.answer.occurrence') IS NOT NULL;
 `;
-export const worldMigrations = [migration1, migration2] as const;
+export const worldMigrations = [
+  migration1,
+  migration2,
+  worldIdsMigration,
+] as const;
 
 /** A consistent private rollback copy before any noninitial migration. */
 function backupMigration(db: Database, path: string, version: number) {

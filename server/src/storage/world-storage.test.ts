@@ -253,7 +253,7 @@ test("a cursor from before close/reopen always resets, even at an in-range seque
   });
   expect(resumed.reset).toBe(true);
   expect(resumed.incarnation).not.toBe(page.incarnation);
-  expect(second.ledger.nextId("q")).toMatch(
+  expect(await second.ledger.nextId("q")).toMatch(
     /^q-[0123456789abcdefghjkmnpqrstvwxyz]{8}$/,
   );
 });

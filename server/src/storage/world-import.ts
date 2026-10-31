@@ -89,40 +89,48 @@ export function importLegacyLedger(
   db.exec("BEGIN IMMEDIATE");
   try {
     for (const ask of document.asks)
-      counts.asks += db
-        .query(
-          "INSERT OR IGNORE INTO asks(id,created_at,resolved_at,body) VALUES(?,?,?,?)",
-        )
-        .run(
-          ask.id,
-          ask.at,
-          ask.answer?.at ?? ask.dismissed?.at ?? ask.withdrawn?.at ?? null,
-          // A legacy import cannot attest a verified answer recipient.
-          JSON.stringify({
-            ...ask,
-            recipient: undefined,
-            delivery: undefined,
-            ...(ask.answer
-              ? {
-                  answer: {
-                    text: ask.answer.text,
-                    at: ask.answer.at,
-                    by: ask.answer.by,
-                  },
-                }
-              : {}),
-          }),
-        ).changes;
+      counts.asks += Number(
+        Boolean(
+          db
+            .query(
+              "INSERT OR IGNORE INTO asks(id,created_at,resolved_at,body) VALUES(?,?,?,?) RETURNING id",
+            )
+            .get(
+              ask.id,
+              ask.at,
+              ask.answer?.at ?? ask.dismissed?.at ?? ask.withdrawn?.at ?? null,
+              // A legacy import cannot attest a verified answer recipient.
+              JSON.stringify({
+                ...ask,
+                recipient: undefined,
+                delivery: undefined,
+                ...(ask.answer
+                  ? {
+                      answer: {
+                        text: ask.answer.text,
+                        at: ask.answer.at,
+                        by: ask.answer.by,
+                      },
+                    }
+                  : {}),
+              }),
+            ),
+        ),
+      );
     for (const [table, family] of [
       ["results", "results"],
       ["ledger_changes", "changes"],
     ] as const)
       for (const row of document[family])
-        counts[family] += db
-          .query(
-            `INSERT OR IGNORE INTO ${table}(id,created_at,body) VALUES(?,?,?)`,
-          )
-          .run(row.id, row.at, JSON.stringify(row)).changes;
+        counts[family] += Number(
+          Boolean(
+            db
+              .query(
+                `INSERT OR IGNORE INTO ${table}(id,created_at,body) VALUES(?,?,?) RETURNING id`,
+              )
+              .get(row.id, row.at, JSON.stringify(row)),
+          ),
+        );
     db.query("UPDATE ledger_meta SET revision=max(revision,?)+1").run(
       document.revision,
     );

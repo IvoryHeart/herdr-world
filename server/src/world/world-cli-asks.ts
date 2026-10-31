@@ -195,7 +195,7 @@ export async function handleWorldAsk(
           `you have ${LEDGER_LIMITS.asksPerActor} open questions; wait for answers`,
         );
       const recipient = await deps.captureRecipient?.(asker);
-      let id = deps.ledger.nextId("q");
+      let id = await deps.ledger.nextId("q");
       let created = true;
       deps.publishLedger(
         await deps.ledger.update(

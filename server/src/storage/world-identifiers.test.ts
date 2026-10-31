@@ -25,3 +25,14 @@ test("a broken random source fails instead of reusing an existing ID", () => {
     ),
   ).toThrow("collision");
 });
+
+test("malformed entropy and non-kind prefixes cannot form World IDs", () => {
+  expect(() =>
+    newWorldId(
+      "q",
+      () => false,
+      () => new Uint8Array(7),
+    ),
+  ).toThrow("eight");
+  expect(() => newWorldId("source/native", () => false)).toThrow("kind");
+});

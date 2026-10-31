@@ -1,5 +1,5 @@
 import { ANSWER_DELIVERY_VERB } from "../world/ask-delivery-types";
-import { newWorldId } from "./world-identifiers";
+import type { WorldIds } from "./world-ids";
 import { randomBytes } from "node:crypto";
 import {
   askClosed,
@@ -133,16 +133,14 @@ export async function openWorldLedger(
       }
     }
   };
+  const ids: WorldIds = {
+    issue: (kind) =>
+      closing
+        ? Promise.reject(new StorageWriteRejected("World storage is closing"))
+        : client.request<string>({ type: "issue-id", kind }),
+  };
   const ledger: LedgerStore = {
-    nextId: (kind) =>
-      newWorldId(
-        kind,
-        (id) =>
-          document.asks.some((ask) => ask.answer?.occurrence === id) ||
-          [...document.asks, ...document.changes, ...document.results].some(
-            (row) => row.id === id,
-          ),
-      ),
+    nextId: (kind) => ids.issue(kind),
     get: () => ({
       ...structuredClone(document),
       asks: document.asks.map(decoratedAsk),
@@ -221,6 +219,7 @@ export async function openWorldLedger(
     },
   };
   return {
+    ids,
     ledger,
     incarnation,
     outbox: {
