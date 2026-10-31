@@ -183,6 +183,36 @@ preferences; [styles](../web/src/styles/) hold shared design tokens and base
 styles. Follow imports from the owning row before editing a similarly named
 component.
 
+The service's [focused acquisition owner](../server/src/world/focused-acquisition.ts)
+counts socket interest by connection and runtime generation and uses the injected
+scheduler for one observer per held runtime. The
+[shared list reader](../server/src/world/focused-lists.ts) keeps browser replies
+and observer enrichment identical; the dispatcher records only delivered, marked
+focused replies. [Direct tests](../server/src/service/focused-acquisition.test.ts)
+exercise two sockets through that dispatcher, including unmarked callers and
+failed sends. [Registry tests](../server/src/world/focused-acquisition.test.ts)
+cover bounded interest traces and in-flight retirement. This substrate does not
+advertise the shared-acquisition capability yet, so the browser timer remains.
+The [activity cache](../server/src/world/agent-activity-cache.ts) shares bounded
+session-file readings without caching live agent status. Its publication and
+release paths use the same interest and lease fences. The browser's
+[recency merge](../web/src/agentRecency.ts) runs after layout acquisition, retaining
+any newer [activity push](../web/src/store/controls.ts) in its qualified
+connection partition. [Shared activity identities](../shared/agentActivity.ts)
+keep sessions from lending timestamps to replacements. Read-only maxima are keyed
+by complete identity outside runtime admission state, and survive a World restart
+that resets the service generation counter. The
+[focused interest controller](../web/src/store/focusedInterest.ts) declares the
+visible active host, releases it on hide and retries failed declarations without
+a standing successful timer. The current hello gates declarations and activity
+controls; Inspector holds remain a later part. The
+[restart regressions](../web/src/store/recencyReconnect.test.ts),
+[capability regressions](../web/src/store/recencyCapability.test.ts) and original
+[recency/hide T2 cases](../web/src/store/pollReplacement.test.ts) cover those paths.
+The [cache/observer consumer](../server/src/service/agent-activity.test.ts) and
+[real Bridge/store race tests](../web/src/store/agentActivity.test.ts) cover those
+boundaries.
+
 The [focused store](../web/src/store.ts) retains the shared mutable connection
 state and public command object. Its [types](../web/src/store/types.ts),
 [session transitions](../web/src/store/sessions.ts),

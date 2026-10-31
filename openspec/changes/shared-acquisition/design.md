@@ -181,7 +181,13 @@ values (D2).
   - the first render keeps today's recency;
   - pushes need no revision, because taking the latest time gives the same
     result in any order;
-  - a new generation starts empty.
+  - a new generation starts with empty operation/observation admission. A separate
+    read-only history may rejoin the exact connection, pane, terminal, agent and
+    session after admission; World restarting and resetting its counters does
+    not lower the same external session's maximum. This history grants no lease
+    or operation authority and never admits an obsolete-generation control;
+  - identities awaiting the first pane/layout publication retain independent
+    maxima, even when two sessions share the same pane ID in in-flight pushes.
 - **Sessions don't share times.** An entry for another agent session never
   applies, so a replaced session never inherits another's time.
 - **What changes in the join.** Today's rule that agent and pane status agree

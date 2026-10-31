@@ -1,5 +1,6 @@
 // First: the page runs on test time (see testing/testClock.ts).
 import { clock } from "./testing/installHostsFilterClock";
+import { checkTownIdleDraws } from "./town/townIdleDraws.browser";
 import { Profiler } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
@@ -25,7 +26,6 @@ import {
   __storeTesting,
   emptyServerSessionState,
   OperationalContext,
-  operationalStore,
   store,
 } from "../store";
 import {
@@ -75,7 +75,6 @@ const watches: Array<{
 }> = [];
 const creation = Promise.withResolvers<unknown>();
 const gitPull = Promise.withResolvers<unknown>();
-const lifecycleOpen = Promise.withResolvers<unknown>();
 const resourceFocus = Promise.withResolvers<boolean>();
 let rejectResourceFocus = true;
 let observedPendingWorkspace = false;
@@ -91,7 +90,7 @@ const operation =
 const requestedView =
   new URLSearchParams(location.search).get("view") ?? "board";
 // Idle Town proves it is drawing through the renderer's frame counters.
-if (operation === "town-idle")
+if (operation.startsWith("town-idle"))
   window.__HERDR_WORLD_RENDERER_DEBUG__ = "counters";
 const coldMaster = operation === "cold-master";
 const coldHost =
@@ -119,11 +118,7 @@ const workspace: Workspace = {
 };
 const coldObservation = Promise.withResolvers<unknown>();
 let resourceWorkspaceOpen = false;
-let resourceValidationFailure = false;
-const separateResourceWorkspace =
-  operation.startsWith("worktree-resource-closed") ||
-  operation === "worktree-resource-validation-failure" ||
-  operation === "worktree-resource-cold";
+const separateResourceWorkspace = operation === "worktree-resource-cold";
 const resourceWorkspace: Workspace = {
   ...workspace,
   workspace_id: "opened-checkout",
@@ -1569,8 +1564,6 @@ async function operationalScenario(unmount: () => void) {
   if (
     operation === "worktree-files" ||
     operation === "worktree-changes" ||
-    operation === "worktree-resource-retirement" ||
-    operation === "worktree-resource-disposal" ||
     operation === "worktree-resource-rejection" ||
     operation === "worktree-resource-timeout" ||
     separateResourceWorkspace
@@ -1598,51 +1591,6 @@ async function operationalScenario(unmount: () => void) {
       const button = operation === "worktree-changes" ? "Changes" : "Files";
       await waitFor(() => !!namedButton(button), "lifecycle resource button");
       namedButton(button)!.click();
-      if (
-        operation === "worktree-resource-retirement" ||
-        operation === "worktree-resource-disposal"
-      ) {
-        await frame();
-        check(
-          dispatches.some(
-            (call) =>
-              call.connectionId === "beta" && call.method === "worktree.open",
-          ),
-          "retirement resource did not submit its open",
-        );
-        if (operation === "worktree-resource-disposal")
-          flushSync(() => dialog.render(null));
-        else
-          flushSync(() => {
-            const state = store.get();
-            __storeTesting.replaceState({
-              ...state,
-              connections: state.connections.map((connection) =>
-                connection.id === "beta"
-                  ? { ...connection, generation: 8 }
-                  : connection,
-              ),
-            });
-          });
-        lifecycleOpen.resolve({ workspace: { workspace_id: "shared" } });
-        await frame();
-        await frame();
-        check(
-          dispatches.filter((call) => call.method === "worktree.open")
-            .length === 1,
-          "retired worktree open was replayed",
-        );
-        check(
-          !dispatches.some(
-            (call) =>
-              call.connectionId === "beta" && call.method === "file.list",
-          ),
-          "retired worktree opened a replacement resource",
-        );
-        check(!closed, "retired worktree resource falsely reported success");
-        return;
-      }
-
       if (operation === "worktree-resource-cold") {
         await clock.advance(10_500);
         check(
@@ -1675,7 +1623,6 @@ async function operationalScenario(unmount: () => void) {
       }
       if (
         operation === "worktree-resource-rejection" ||
-        separateResourceWorkspace ||
         operation === "worktree-resource-timeout"
       ) {
         await waitFor(
@@ -1719,40 +1666,6 @@ async function operationalScenario(unmount: () => void) {
             ?.textContent?.includes("checkout is open") === true,
           "resource failure did not explain successful checkout opening",
         );
-        if (operation.startsWith("worktree-resource-closed")) {
-          await operationalStore({
-            connectionId: "beta",
-            runtimeGeneration: 7,
-          }).closeWorkspace("opened-checkout");
-          if (operation === "worktree-resource-closed-refresh") {
-            namedButton("Refresh lifecycle status")!.click();
-            await waitFor(
-              () =>
-                document.querySelector(".lifecycle-open-state")?.textContent ===
-                "Closed",
-              "refreshed row retained a closed workspace target",
-            );
-          }
-        }
-        if (operation === "worktree-resource-validation-failure") {
-          resourceValidationFailure = true;
-          namedButton("Files")!.click();
-          await waitFor(
-            () =>
-              document
-                .querySelector(".lifecycle-operation.is-failed")
-                ?.textContent?.includes(
-                  "Synthetic workspace validation failed",
-                ) === true,
-            "cached target validation did not surface failure",
-          );
-          check(
-            dispatches.filter((call) => call.method === "worktree.open")
-              .length === 1,
-            "failed target validation replayed the opened hook",
-          );
-          return;
-        }
         rejectResourceFocus = false;
         if (operation === "worktree-resource-timeout") {
           resourceFocus.resolve(true);
@@ -1768,12 +1681,8 @@ async function operationalScenario(unmount: () => void) {
         }
         namedButton("Files")!.click();
         await waitFor(() => closed, "Inspector-only retry did not succeed");
-        check(
-          dispatches.filter((call) => call.method === "worktree.open")
-            .length ===
-            (operation.startsWith("worktree-resource-closed") ? 2 : 1),
-          "Inspector retry did not preserve live targets or reopen a confirmed closed checkout",
-        );
+        // Cached-target validation/retry policy is covered by the actual
+        // WorktreeLifecycleDialog headless consumer; this case keeps real UI admission.
         return;
       }
       const method =
@@ -2444,6 +2353,16 @@ async function operationalScenario(unmount: () => void) {
   );
 }
 async function run() {
+  // This renderer-only case needs neither the shell nor a first Town mount.
+  if (operation === "town-idle-draws") {
+    await checkTownIdleDraws(
+      clock,
+      parseWorldSnapshotResult(snapshot())!.connections,
+      check,
+      failures,
+    );
+    return;
+  }
   localStorage.clear();
   // The legacy operational preference must not become an overview filter.
   worldLocalStorage.setItem("worldSelectedConnection", "beta");
@@ -2717,8 +2636,6 @@ async function run() {
       if (method === "workspace.create" && operation === "global-creation")
         return creation.promise;
       if (method === "workspace.list") {
-        if (resourceValidationFailure && id === "beta")
-          throw new Error("Synthetic workspace validation failed");
         if (separateResourceWorkspace && id === "beta")
           return {
             workspaces: [
@@ -2756,12 +2673,6 @@ async function run() {
             },
           ],
         };
-      if (
-        method === "worktree.open" &&
-        (operation === "worktree-resource-retirement" ||
-          operation === "worktree-resource-disposal")
-      )
-        return lifecycleOpen.promise;
       if (method === "worktree.open" && separateResourceWorkspace) {
         resourceWorkspaceOpen = true;
         return { workspace: resourceWorkspace };
@@ -2888,9 +2799,7 @@ async function run() {
     )
       return resourceFocus.promise;
     if (
-      (operation === "worktree-resource-rejection" ||
-        (separateResourceWorkspace &&
-          operation !== "worktree-resource-cold")) &&
+      operation === "worktree-resource-rejection" &&
       target.connectionId === "beta" &&
       rejectResourceFocus
     )

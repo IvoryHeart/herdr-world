@@ -3652,7 +3652,7 @@ describe("basic Herdr 0.9 compatibility", () => {
 });
 
 describe("agent activity refresh", () => {
-  test("reloads server recency and tolerates unavailable agent metadata", async () => {
+  test("reloads recency and retains its maximum when metadata is older or unavailable", async () => {
     const originalConnection = bridge.connection;
     const snapshot = partitionState();
     let sequence = 42;
@@ -3699,10 +3699,15 @@ describe("agent activity refresh", () => {
       activity = 2345;
       await store.refresh();
       expect(store.get().panes[0]?.last_activity_at).toBe(2345);
+      activity = 1234;
+      await store.refresh();
+      expect(store.get().panes[0]?.last_activity_at).toBe(2345);
       unavailable = true;
       await store.refresh();
       expect(store.get().error).toBeNull();
-      expect(store.get().panes).toEqual(snapshot.panes);
+      expect(store.get().panes).toEqual(
+        snapshot.panes.map((pane) => ({ ...pane, last_activity_at: 2345 })),
+      );
     } finally {
       bridge.connection = originalConnection;
       __storeTesting.replaceState(partitionState());
