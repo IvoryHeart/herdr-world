@@ -124,8 +124,12 @@ export class TownInteraction {
     return this.gesture.pointers.has(id);
   }
 
-  /** What is under canvas point (x, y) as last drawn. */
-  hitAt(x: number, y: number): TownHit | null {
+  /**
+   * What is under canvas point (x, y) as last drawn. A carry looks through
+   * standing agents (`standing` false): one walking, queued or in the
+   * lounge is not where its desk or room is, and moves on by itself.
+   */
+  hitAt(x: number, y: number, standing = true): TownHit | null {
     const stage = this.ports.stage();
     if (!stage) return null;
     const { layout, model } = this.ports.world();
@@ -146,12 +150,14 @@ export class TownInteraction {
         zoom: shown?.z ?? stage.camera.z,
         roofAlpha: (hostKey) => stage.roofAlpha(hostKey),
         standing: function* () {
+          if (!standing) return;
           for (const agent of model.agents.values()) {
             const position = stage.actorPosition(agent.key);
             if (position && !position.seated)
               yield { key: agent.key, hostKey: agent.hostKey, ...position };
           }
         },
+        seated: (key) => stage.actorPosition(key)?.seated ?? true,
       },
       world.x,
       world.y,
@@ -289,7 +295,7 @@ export class TownInteraction {
   private carryTo(at: Point) {
     if (!this.carrying || !this.ports.stage()) return;
     this.carryAt = at;
-    const hit = this.hitAt(at.x, at.y);
+    const hit = this.hitAt(at.x, at.y, false);
     const under = townMagnetDesk(this.carrying, hit, this.ports.world().model);
     if (under !== this.magnet?.key) {
       this.clearMagnet();
@@ -300,7 +306,10 @@ export class TownInteraction {
           cancel: this.ports.clock.after(TOWN_MAGNET_MS, () => {
             if (!this.magnet || !this.carrying || !this.carryAt) return;
             magnet.on = true;
-            this.aim(this.hitAt(this.carryAt.x, this.carryAt.y), this.carryAt);
+            this.aim(
+              this.hitAt(this.carryAt.x, this.carryAt.y, false),
+              this.carryAt,
+            );
           }),
         };
         this.magnet = magnet;

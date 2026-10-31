@@ -50,6 +50,21 @@ result enters the cache only for its original current runtime generation and tri
 a coalesced refresh when its observed data changes. A current result may be reused for
 15 seconds unless that host receives an explicit topology invalidation. The browser
 uses one World WebSocket with a transport epoch independent of runtime generations.
+The hello advertises `world_observation_v1` and a random `service_incarnation`
+shared with snapshot replies. A caller may send `base: { service_incarnation,
+hosts: [{ connection_id, generation, token }] }` to `world.snapshot` (at most 64
+hosts, with tokens of at most 64 characters). The service hashes each projected
+host and its producing generation; digest reuse follows the projection cache.
+When incarnation, runtime generation, snapshot generation and token all match,
+the reply carries current host metadata and `unchanged: true`, omitting
+`snapshot`. Other hosts carry complete snapshots and tokens (null without a
+snapshot). Unknown bases and foreign incarnations use complete replacements.
+Malformed bases fail before acquisition. Service-side appearance and profile
+processing always sees the complete observation, before wire replacement.
+Callers without a base keep complete topology and the existing chunk admission.
+The browser currently continues to request complete snapshots; base application,
+incremental preparation and the M1 replay are the next delivery phase.
+
 Host filters affect overview visibility only. Context-bound selectors and commands
 read and update connection partitions in the existing store. Each terminal has one
 qualified presenter; Spaces/visual handoffs detach before admitting the new presenter.

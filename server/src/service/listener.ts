@@ -59,6 +59,7 @@ import type { Clock } from "./ports";
 
 /** What the HTTP and WebSocket listener uses from its service. */
 export type ListenerDeps = {
+  serviceIncarnation: string;
   config: ServerConfig;
   clock: Clock;
   logger: Logger;
@@ -442,6 +443,7 @@ export function listen(deps: ListenerDeps) {
           ws,
           JSON.stringify({
             hello: true,
+            service_incarnation: deps.serviceIncarnation,
             socket: config.socketPath,
             bridge_protocol_version: 2,
             adapters: productionAdapterDescriptors(),
@@ -454,6 +456,7 @@ export function listen(deps: ListenerDeps) {
               world_snapshot_chunks: true,
               world_snapshot_chunk_admission: true,
               world_snapshot: true,
+              world_observation_v1: true,
               world_shared_acquisition: true,
               embedded_assistant: true,
               herdr_task_notifications:
