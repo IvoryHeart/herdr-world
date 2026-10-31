@@ -122,8 +122,12 @@ a missing transcript retains prior inference, and a failed git lookup retains
 its prior branch claim while a complete metadata observation can independently
 remove the agent report. Complete native occupant absence, terminal/session
 replacement, and runtime disposal retire that occupant's read model. A positively
-resolved Codex title thread retires the preceding thread's transcript claims even
-when its own transcript has not appeared; a missing title alone does not. A
+resolved Codex title thread is compared with the preceding selected thread ID,
+whether it came from a native report, an earlier title or a resolved transcript.
+A different positive thread retires the preceding transcript claims even when its
+own transcript has not appeared. A matching thread or missing identity evidence
+preserves them. A stale native report cannot retire inference for an unchanged
+titled thread; the report remains as its own claim. A
 missing session witness can carry forward only on the same runtime and terminal.
 The source service reads live connection/generation owners separately from
 topology, so replacement/removal retires old link claims even while the replacement

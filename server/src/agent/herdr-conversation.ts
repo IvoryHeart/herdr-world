@@ -302,6 +302,7 @@ export function createHerdrConversationSource(args: {
         field_claims: claims.title(
           claimsCapture,
           titleClaim?.kind === "id" ? titleClaim.id : null,
+          bound?.binding === "reported",
         ),
         session_binding:
           bound?.binding ?? (resolved.session ? ("guessed" as const) : null),

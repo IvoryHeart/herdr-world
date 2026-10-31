@@ -150,3 +150,28 @@ test("missing title evidence preserves transcript claims until another thread is
     "thread-b",
   ]);
 });
+
+test("a resolved Codex transcript supplies the prior thread witness independently of a title", () => {
+  for (const next of [null, "thread-a", "thread-b"]) {
+    const claims = new AgentClaims(() => 100);
+    const info = { ...pane, agent: "codex", agent_session: null };
+    const first = claims.observe(claims.begin("pane-a"), info);
+    claims.title(first, null);
+    claims.transcript(first, {
+      ...transcript,
+      session: { ...native, agent: "codex", value: "thread-a" },
+    });
+    const second = claims.observe(claims.begin("pane-a"), info);
+    const result = claims.title(second, next);
+    expect(
+      result.session.claims
+        .filter((claim) => claim.source === "world.transcript")
+        .map((claim) => claim.value.value),
+    ).toEqual(next === "thread-b" ? [] : ["thread-a"]);
+    expect(
+      result.agent_status.claims
+        .filter((claim) => claim.source === "world.transcript")
+        .map((claim) => claim.value),
+    ).toEqual(next === "thread-b" ? [] : ["working"]);
+  }
+});

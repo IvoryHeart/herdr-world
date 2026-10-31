@@ -4,7 +4,7 @@ import type {
   NativeSessionClaim,
 } from "../../../shared/fieldClaims";
 import { FieldClaims } from "../world/field-claims";
-import { isRecord } from "./session-utils";
+import { isRecord, normalizeAgentName } from "./session-utils";
 
 export function reportedSessionClaim(
   info: Record<string, unknown> | null,
@@ -41,7 +41,7 @@ function revision(info: Record<string, unknown> | null) {
 type State = {
   subject: string;
   witness: string | null;
-  titleWitness: string | null;
+  threadWitness: string | null;
   status: FieldClaims<string>;
   session: FieldClaims<NativeSessionClaim>;
 };
@@ -51,7 +51,7 @@ function copyState(previous: State): State {
   const state: State = {
     subject: previous.subject,
     witness: previous.witness,
-    titleWitness: previous.titleWitness,
+    threadWitness: previous.threadWitness,
     status: new FieldClaims(),
     session: new FieldClaims(),
   };
@@ -81,8 +81,12 @@ export class AgentClaims {
       info?.agent ?? null,
     ]);
     const previous = this.#panes.get(ticket.pane);
+    // Codex selects its occupant after title/report qualification; a stale
+    // native report must not retire the transcript of an unchanged title.
     const witness =
-      native && native.value.kind !== "unknown"
+      native &&
+      native.value.kind !== "unknown" &&
+      normalizeAgentName(String(info?.agent ?? "")) !== "codex"
         ? JSON.stringify(native.value)
         : null;
     const state: State =
@@ -92,7 +96,7 @@ export class AgentClaims {
         : {
             subject,
             witness,
-            titleWitness: null,
+            threadWitness: null,
             status: new FieldClaims(),
             session: new FieldClaims(),
           };
@@ -127,6 +131,8 @@ export class AgentClaims {
     },
   ): AgentFieldClaims {
     capture = { ...capture, state: copyState(capture.state) };
+    const thread = this.#codexThread(value.session);
+    if (thread) this.#selectThread(capture.state, thread);
     const evidence = {
       source: "world.transcript",
       observed_at: this.now(),
@@ -146,13 +152,35 @@ export class AgentClaims {
     this.#commit(capture);
     return this.project(capture);
   }
-  title(capture: Capture, id: string | null): AgentFieldClaims {
-    capture.state = copyState(capture.state);
-    if (id && capture.state.titleWitness && capture.state.titleWitness !== id) {
-      capture.state.status.retract("world.transcript");
-      capture.state.session.retract("world.transcript");
+  #codexThread(session: NativeSessionClaim | null | undefined): string | null {
+    return session &&
+      normalizeAgentName(session.agent) === "codex" &&
+      session.kind === "id"
+      ? session.value
+      : null;
+  }
+  #selectThread(state: State, id: string) {
+    if (state.threadWitness && state.threadWitness !== id) {
+      state.status.retract("world.transcript");
+      state.session.retract("world.transcript");
     }
-    if (id) capture.state.titleWitness = id;
+    state.threadWitness = id;
+  }
+  title(
+    capture: Capture,
+    id: string | null,
+    useReported = false,
+  ): AgentFieldClaims {
+    capture.state = copyState(capture.state);
+    // Codex selects its positive title, else its qualified native report. An
+    // unchanged selected thread keeps evidence even if the other channel disagrees.
+    const reported = useReported
+      ? capture.state.session
+          .values()
+          .find((claim) => claim.source === "herdr.agent")?.value
+      : null;
+    const selected = id ?? this.#codexThread(reported);
+    if (selected) this.#selectThread(capture.state, selected);
     capture.state.session.observe(
       "herdr.title",
       id

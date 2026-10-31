@@ -6,7 +6,9 @@
 
 ### Fixed
 
-- Retire earlier transcript claims when a Codex title names a new thread, and keep
-  runtime replacement from borrowing a previous terminal's session or checkout.
+- Retire earlier transcript claims when a Codex title names a different thread,
+  including a transition from a reported session; preserve matching-thread claims
+  under a stale native report. Keep runtime replacement from borrowing a previous
+  terminal's session or checkout.
 - Retain PR-link evidence omitted from a successful truncated GitHub page, while
   retiring claims when their runtime or connection ends.

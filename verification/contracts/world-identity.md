@@ -198,9 +198,12 @@ physical durability, or an atomic downstream read-and-send.
 
 ### Claim replacement and complete-list boundaries
 
-A positively resolved Codex title thread is an occupant witness: replacing it
-retires the old transcript's status/session claims even before the new transcript
-exists. Missing title/session evidence alone is silence. A session fallback
+The selected Codex thread ID is an occupant witness across report, title and
+resolved-transcript paths. A new positive selection is compared with that prior
+ID; a different thread retires the old transcript's status/session claims even
+before its own transcript exists. A title takes precedence over a conflicting
+native report, which remains an independent claim. Matching or missing identity
+evidence preserves the transcript. Missing title/session evidence alone is silence. A session fallback
 requires the same connection, runtime and known terminal. Checkout observations
 are cached by connection, generation, host and path, and an in-flight read keeps
 its captured key. The source service reconciles current connection/generation
@@ -208,7 +211,19 @@ owners before publishing and in its current read, independently of link cadence,
 lookup success or topology completeness. Same-runtime offline/partial reads keep
 claims; a retired or removed runtime does not.
 
-`conversation-claims.test.ts` exercises the actual title A → B transition with
+`codex-claim-transitions.test.ts` runs 36 actual-source cases across initial
+report/title binding, current matching/different/missing titles and reports, and
+readable/unreadable transcripts. Its oracle follows the existing title-before-
+report contract independently of the claim implementation. It verifies report A
+→ first title B retirement, matching-thread preservation, missing evidence,
+new native selection without a title, and retention under a stale conflicting
+report. A direct helper case records a known thread from transcript resolution
+without an earlier title. Five additional compiled controls restore the reviewed
+owner, omit retirement, let a native report override a title, ignore qualified
+native fallback, or omit the resolved-thread witness. Each fails its named
+expectation; loader and setup errors do not count.
+
+`conversation-claims.test.ts` also exercises the actual title A → B transition with
 only A's transcript present; `agent-claims.test.ts` also keeps inference through
 missing title evidence. `sources/link-claims-boundaries.test.ts` covers terminal
 and generation replacement, same-path generation/host cache replacement,

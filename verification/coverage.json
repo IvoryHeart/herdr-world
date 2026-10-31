@@ -2312,7 +2312,8 @@
         "server/src/sources/actions.test.ts",
         "server/src/sources/pullRequestFreshness.test.ts",
         "server/src/sources/link-claims-boundaries.test.ts",
-        "server/src/sources/github-completeness.test.ts"
+        "server/src/sources/github-completeness.test.ts",
+        "server/src/agent/codex-claim-transitions.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/549",
       "technique": "binding-resolution",
@@ -2363,7 +2364,8 @@
           "server/src/sources/actions.test.ts",
           "server/src/sources/pullRequestFreshness.test.ts",
           "server/src/sources/link-claims-boundaries.test.ts",
-          "server/src/sources/github-completeness.test.ts"
+          "server/src/sources/github-completeness.test.ts",
+          "server/src/agent/codex-claim-transitions.test.ts"
         ],
         "checks": [
           "bun run verification:gate",
@@ -2371,7 +2373,7 @@
         ],
         "review": "The approved design and earlier ID candidate do not accept this binding extension; independent implementation review and CI remain required."
       },
-      "evidenceDecision": "M4 models semantic continuity, absence, ambiguity and recovery; actual SQLite/import/worker and Board action consumers establish their additional boundaries. Existing Board and appearance witness tests remain unchanged and mandatory. Claims use an independent finite source-ownership oracle, eight overlapping read schedules and actual transcript/source-service consumers, with seven compiled controls; M4 remains scoped to bindings. Claim boundary regressions cover actual Codex title changes, current owner disposal, same-path cache replacement and truncated GitHub pages; an 81-case page-info oracle and seven additional compiled assertion controls establish these consumer boundaries.",
+      "evidenceDecision": "M4 models semantic continuity, absence, ambiguity and recovery; actual SQLite/import/worker and Board action consumers establish their additional boundaries. Existing Board and appearance witness tests remain unchanged and mandatory. Claims use an independent finite source-ownership oracle, eight overlapping read schedules and actual transcript/source-service consumers, with seven compiled controls; M4 remains scoped to bindings. Claim boundary regressions cover actual Codex title changes, current owner disposal, same-path cache replacement and truncated GitHub pages; an 81-case page-info oracle and seven additional compiled assertion controls establish these consumer boundaries. A 36-case actual-source Codex selector matrix and five more compiled controls cover report-to-first-title replacement, same-thread preservation and stale-report disagreement; known resolved thread IDs are tracked across both binding paths.",
       "promotion": {
         "decision": "pending",
         "scope": "IDs and binding resolution, including legacy captures and Board action admission, plus runtime status/session/PR claims; independent review and CI required. Remaining JSON ID creation is excluded."
