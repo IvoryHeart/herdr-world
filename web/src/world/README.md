@@ -409,6 +409,16 @@ retries, resetting terminal input. [The pane-switcher fixture](../paneJump.brows
 provides those frames and checks that its terminals finished loading. Wait for a
 dialog's focused control before sending its next keyboard command.
 
+`useWorldObservation.test.ts` mounts the actual observation hook and watchlist
+store on test time. Synthetic runtime snapshots and deferred watchlist replies
+exercise old/missing admission revisions and unavailable-only host scopes. Its
+real Inspector controller publishes through `useWorldVisualActions` to the actual
+`CommandCombobox`; reopening the menu checks pending and unavailable-only detail
+text in the DOM. This checks feedback presence, not browser geometry or focus. The
+Actions browser suite retains desktop/phone menu rendering of current counts
+and unavailable-host feedback, plus existing qualified routing and focus checks.
+No Town case moves.
+
 `components/WorktreeLifecycleDialog.test.ts` mounts the actual lifecycle dialog
 in an isolated DOM with timers and frames installed before React DOM loads.
 Synthetic operational/service ports and explicit Inspector admission outcomes
@@ -419,6 +429,16 @@ publication, focus and browser file input/download behavior stay in
 `HostsFilter.resources.test.ts` and the existing store/runtime consumers. The
 resource inventory removes the five policy scenarios at both viewport widths;
 retained cases name their browser rendering, focus and file-input boundary.
+
+`useHostsFilter.test.ts` mounts the actual Hosts hook with the same production
+store selectors as the shell. Deferred `connections.list` replies and the test
+clock exercise initial readiness, successful empty admission and persisted scope
+reconciliation while rendering the actual `HostsControl` feedback. The empty
+admission must show the removal status and populated admission must omit it;
+this headless probe does not establish responsive geometry or focus. These replace
+the two catalogue-admission scenarios at desktop and phone widths; responsive controls,
+rendered navigation/feedback, Inspector focus, terminal lifecycle and Town checks
+stay in `HostsFilter.test.ts`.
 
 ## Inspector and windows
 

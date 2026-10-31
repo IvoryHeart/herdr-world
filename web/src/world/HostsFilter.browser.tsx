@@ -78,7 +78,6 @@ const gitPull = Promise.withResolvers<unknown>();
 const resourceFocus = Promise.withResolvers<boolean>();
 let rejectResourceFocus = true;
 let observedPendingWorkspace = false;
-let watchAdmissionOld = false;
 let downloadPublications = 0;
 let syntheticFileDeleted = false;
 const retiredMutation = Promise.withResolvers<Response>();
@@ -275,7 +274,7 @@ function snapshot() {
               ...(operation === "watch-unavailable"
                 ? {
                     watch_admission: {
-                      revision: watches.length - (watchAdmissionOld ? 1 : 0),
+                      revision: watches.length,
                       registered: 1,
                       missing: 0,
                       unresolved: 0,
@@ -1359,47 +1358,6 @@ async function operationalScenario(unmount: () => void) {
     check(
       document.body.textContent?.includes("1 host unavailable") === true,
       "Watch counts omitted the unavailable host explanation",
-    );
-    watchAdmissionOld = true;
-    const observedRevision = worldRuntimeStore.get().revision;
-    await worldRuntimeStore.refresh();
-    await waitFor(
-      () =>
-        worldRuntimeStore.get().revision > observedRevision &&
-        worldRuntimeStore
-          .get()
-          .connections.some(
-            (connection) =>
-              connection.snapshot?.watchAdmission?.revision ===
-              watches.length - 1,
-          ),
-      "The queued refresh did not observe the older watch admission revision",
-      10_000,
-    );
-    document.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
-    );
-    await frame();
-    await shellCommands();
-    await waitFor(
-      () =>
-        document.body.textContent?.includes(
-          "Watch availability pending for filtered hosts",
-        ) === true,
-      "An observed host with an older watch revision stopped reporting pending",
-    );
-    writeHostsFilter(["offline"]);
-    document.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
-    );
-    await frame();
-    await shellCommands();
-    await waitFor(
-      () =>
-        document.body.textContent?.includes(
-          "0 pinned in filter · 0 admitted",
-        ) === true,
-      "An unavailable-only filter remained pending instead of showing its empty observed coverage",
     );
     return;
   }
@@ -2835,17 +2793,6 @@ async function run() {
     },
   });
   await worldRuntimeStore.refresh();
-  const admissionScenario =
-    operation === "delayed-catalogue" || operation === "empty-catalogue";
-  const admittedState = store.get();
-  if (admissionScenario) {
-    writeHostsFilter(["beta"]);
-    __storeTesting.replaceState({
-      ...admittedState,
-      connections: [],
-      catalogueReady: false,
-    });
-  }
   const host = document.createElement("div");
   document.body.append(host);
   let root = createRoot(host);
@@ -2857,38 +2804,6 @@ async function run() {
     ),
   );
   try {
-    if (admissionScenario) {
-      await clock.advance(150);
-      check(
-        worldLocalStorage.getItem("worldHostsFilter.v1") === '["beta"]',
-        "unadmitted empty catalogue erased saved beta",
-      );
-      const previousCall = bridge.call;
-      bridge.call = (async () => ({
-        connections:
-          operation === "empty-catalogue" ? [] : admittedState.connections,
-      })) as typeof bridge.call;
-      await store.refreshConnections();
-      bridge.call = previousCall;
-      await frame();
-      const expected = operation === "empty-catalogue" ? "null" : '["beta"]';
-      check(
-        worldLocalStorage.getItem("worldHostsFilter.v1") === expected,
-        "successful current catalogue did not reconcile saved filter",
-      );
-      check(
-        store.get().catalogueReady,
-        "successful empty/initial catalogue not published as ready",
-      );
-      check(
-        document.body.textContent!.includes(
-          "selected host profiles were removed",
-        ) ===
-          (operation === "empty-catalogue"),
-        "incorrect removed-profile explanation",
-      );
-      return;
-    }
     await waitFor(
       () => !!document.querySelector('[aria-label="Board controls"]'),
       "Board did not mount",
