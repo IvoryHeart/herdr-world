@@ -2367,6 +2367,46 @@
         "decision": "pending",
         "scope": "Migrated browser RPC, agent CLI and browser forge policy only; independent review and CI required."
       }
+    },
+    {
+      "id": "Q47",
+      "area": "Durable effects and recovery",
+      "owner": "server/src/effects/",
+      "requirement": "openspec/specs/world-effects/spec.md",
+      "properties": "Atomic domain/intent commit; current incarnation and attempt CAS; fresh captured targets; no blind opaque retry or external run relaunch; stable keyed retries; decisive reconciliation; repeatable duplicates; current authorization; pinned operation versions; retained receipts and handles; durable wall deadlines",
+      "existingTests": [
+        "server/src/effects/recovery-matrix.test.ts",
+        "server/src/effects/admission.test.ts",
+        "server/src/storage/effect-contract.test.ts",
+        "server/src/world/attention-dispatch.test.ts",
+        "server/src/world/answer-dispatch.test.ts",
+        "server/src/storage/answer-delivery-crash.test.ts"
+      ],
+      "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/549",
+      "technique": "bounded-model-and-real-sqlite-crash-matrix",
+      "assessment": "M5 holds actual runner checkpoints and reopens real SQLite with a durable synthetic receiver; named source/compiled SIGKILL cases cover every recovery-matrix row. P8 drives wall deadlines and sleep deterministically.",
+      "status": "modeled",
+      "remaining": "Independent model, replay, consumer and query-contract acceptance is pending this PR review. Native filesystem/power loss, source deduplication and external run execution remain outside the bounded proof; the real source/compiled and existing Chat consumer tests remain required.",
+      "requiredChecks": ["bun run check", "bun run verification:gate"],
+      "partialEvidence": {
+        "models": ["quint/effect-recovery.qnt"],
+        "contracts": ["verification/contracts/effect-recovery.md"],
+        "tests": [
+          "server/src/effects/recovery-matrix.test.ts",
+          "server/src/effects/admission.test.ts",
+          "server/src/storage/answer-delivery-crash.test.ts"
+        ],
+        "checks": [
+          "bun run verification:gate",
+          "bun run test server/src/effects/",
+          "bun run test server/src/storage/answer-delivery-crash.test.ts"
+        ],
+        "review": "The delivery link is the merged specification, not implementation acceptance. Expanded M5 and consumer boundaries await independent review."
+      },
+      "promotion": {
+        "decision": "pending",
+        "scope": "Effect recovery, real SQLite replay, time ports and server query definitions; independent review and required CI remain necessary."
+      }
     }
   ],
   "promotionReview": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",

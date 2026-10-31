@@ -176,13 +176,13 @@ No v2 subscriptions or persisted-capture fences are implemented here.
 
 ## 8. Workflow substrate (item 15, then stage 5)
 
-- [ ] 8.1 Route substrate time through `Clock` and `Scheduler`, and add the lint rule
+- [x] 8.1 Route substrate time through `Clock` and `Scheduler`, and add the lint rule
   for core folders. Durable deadlines re-arm at least every 60 s. Verify with:
   - the lint failing on a direct `Date.now` in a core folder;
   - P8, including sleep across a deadline.
-- [ ] 8.2 Check in the recovery-matrix tests, red (committee item 15 exit). Verify that
+- [x] 8.2 Check in the recovery-matrix tests, red (committee item 15 exit). Verify that
   every row of the matrix in `design.md` §12 has a named test, including `repeatable`.
-- [ ] 8.3 Apply the target rule to the `world.sqlite` outbox: binding fields captured
+- [x] 8.3 Apply the target rule to the `world.sqlite` outbox: binding fields captured
   inline, no bare generation, and connection-only targets for owner alerts. Resolution
   follows the binding state: attached dispatches, unresolved waits, and ended or
   unconfirmed is "not sent" only before any dispatching. Verify with tests:
@@ -190,12 +190,13 @@ No v2 subscriptions or persisted-capture fences are implemented here.
     is attached;
   - an offline host keeps the intent pending;
   - a pane that closes after `dispatching` yields `uncertain`.
-- [ ] 8.4 Build the outbox, attempts, version pinning and durable deadlines on a
+- [x] 8.4 Build the outbox, attempts, version pinning and durable deadlines on a
   temporary `world.sqlite`. Verify with the matrix tests green and M5 replay with crash
   points.
 - [ ] 8.5 Define the substrate's ask, notice, intent and receipt queries (v2 gate,
-  item 2). Verify by approval in their PR.
-- [ ] 8.6 Sync the `world-effects` requirements, and add the effects area to
+  item 2). Verify by approval in their PR. Server definitions are implemented in
+  `server/src/effects/queries.ts`; this gate stays open for independent PR approval.
+- [x] 8.6 Sync the `world-effects` requirements, and add the effects area to
   `verification/coverage.json`. Verify with a complete `bun run verification:gate`.
 
 ## 9. World subscriptions v2 (stage 7)

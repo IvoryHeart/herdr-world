@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import type { AttemptFence } from "../effects/types";
 import { ANSWER_DELIVERY_VERB } from "../world/ask-delivery-types";
 import {
   attentionRetryDelay,
@@ -15,9 +16,22 @@ export function recordAnswerAttempt(
   fence: DispatchFence | null | undefined,
   at: number,
   reason: string,
+  attemptFence?: AttemptFence,
 ) {
+  const storedFence = attemptFence
+    ? null
+    : (db.query("SELECT attempt_fence FROM outbox WHERE id=?").get(id) as {
+        attempt_fence: string | null;
+      } | null);
+  const auditFence =
+    attemptFence ??
+    (storedFence?.attempt_fence
+      ? (JSON.parse(storedFence.attempt_fence) as AttemptFence)
+      : fence
+        ? { service_incarnation: fence.service_incarnation, attempt }
+        : null);
   db.query(
-    "INSERT INTO answer_attempts(intent_id,attempt,state,fence,created_at,finished_at,reason) VALUES(?,?,?,?,?,?,?) ON CONFLICT(intent_id,attempt) DO UPDATE SET state=excluded.state,fence=coalesce(excluded.fence,answer_attempts.fence),finished_at=excluded.finished_at,reason=excluded.reason",
+    "INSERT INTO answer_attempts(intent_id,attempt,state,fence,created_at,finished_at,reason,attempt_fence) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(intent_id,attempt) DO UPDATE SET state=excluded.state,fence=coalesce(excluded.fence,answer_attempts.fence),finished_at=excluded.finished_at,reason=excluded.reason,attempt_fence=coalesce(excluded.attempt_fence,answer_attempts.attempt_fence)",
   ).run(
     id,
     attempt,
@@ -26,6 +40,7 @@ export function recordAnswerAttempt(
     at,
     ["claimed", "dispatching"].includes(state) ? null : at,
     reason,
+    JSON.stringify(auditFence),
   );
   // Bound offline retry history without forgetting that an older send may have
   // happened: retain the newest eight attempts plus the newest uncertainty.
@@ -60,7 +75,7 @@ export function answerAttemptEvidence(
 export function recoverAttention(db: Database, at: number) {
   const rows = db
     .query(
-      "SELECT id,kind,attempt,state,evidence,cli_received_at FROM outbox WHERE state='dispatching' OR (state='pending' AND claimed=1)",
+      "SELECT id,kind,attempt,state,evidence,cli_received_at,contract,attempt_fence FROM outbox WHERE state='dispatching' OR (state='pending' AND claimed=1)",
     )
     .all() as {
     id: string;
@@ -69,6 +84,8 @@ export function recoverAttention(db: Database, at: number) {
     state: string;
     evidence: string | null;
     cli_received_at: number | null;
+    contract: string | null;
+    attempt_fence: string | null;
   }[];
   if (!rows.length) return;
   db.transaction(() => {
@@ -80,7 +97,7 @@ export function recoverAttention(db: Database, at: number) {
       const reason = unsent
         ? "Service stopped after claim; no submission began"
         : "Service stopped before the dispatch receipt; pane delivery is uncertain";
-      if (row.kind === ANSWER_DELIVERY_VERB.name)
+      if (row.kind === ANSWER_DELIVERY_VERB.name || row.contract)
         recordAnswerAttempt(
           db,
           row.id,
@@ -89,10 +106,13 @@ export function recoverAttention(db: Database, at: number) {
           evidence?.fence,
           at,
           reason,
+          row.attempt_fence
+            ? (JSON.parse(row.attempt_fence) as AttemptFence)
+            : undefined,
         );
       const received = row.cli_received_at !== null;
       db.query(
-        "UPDATE outbox SET state=?,claimed=0,resolved_at=?,due_at=?,evidence=? WHERE id=?",
+        "UPDATE outbox SET state=?,claimed=0,resolved_at=?,due_at=?,evidence=?,ever_dispatched=CASE WHEN ? THEN ever_dispatched ELSE 1 END WHERE id=?",
       ).run(
         received ? "delivered" : unsent ? "pending" : "uncertain",
         row.cli_received_at,
@@ -103,6 +123,7 @@ export function recoverAttention(db: Database, at: number) {
             ? "Answer received by asker CLI before restart; pane submission may also have happened"
             : reason,
         }),
+        unsent ? 1 : 0,
         row.id,
       );
     }

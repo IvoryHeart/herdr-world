@@ -47,7 +47,8 @@ export type Acknowledgement = {
 
 export type Verb = {
   name: string;
-  channel: "rpc" | "cli" | "source";
+  channel: "rpc" | "cli" | "source" | "effect";
+  version: number;
   input: TSchema;
   output: TSchema;
   capabilities: readonly string[];
@@ -55,7 +56,7 @@ export type Verb = {
   acknowledgements: readonly Acknowledgement[];
   preconditions: readonly string[];
   recovery: Recovery;
-  queueable: false;
+  queueable: boolean;
   stages: readonly Stage[];
 };
 

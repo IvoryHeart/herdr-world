@@ -1,5 +1,6 @@
 import { Type } from "typebox";
 import { cliVerbs } from "./cli";
+import { effectVerbs } from "./effects";
 import { declare, object, policies, result, text } from "./declaration";
 import { rpcVerbs } from "./rpc";
 import type { Verb } from "./types";
@@ -25,6 +26,7 @@ export const VERBS: readonly Verb[] = Object.freeze([
   ...rpcVerbs,
   ...cliVerbs,
   ...sourceVerbs,
+  ...effectVerbs,
 ]);
 const index = new Map(
   VERBS.map((verb) => [`${verb.channel}:${verb.name}`, verb]),

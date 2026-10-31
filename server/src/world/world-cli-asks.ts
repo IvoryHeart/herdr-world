@@ -166,9 +166,6 @@ export async function handleWorldAsk(
       const asker = await placeAsker(deps.hosts(), actor);
       const notificationConnection =
         asker.connection_id ?? deps.defaultConnectionId();
-      const notificationHost = deps
-        .hosts()
-        .find((host) => host.connection_id === notificationConnection);
       if (key) {
         const known = deps.ledger
           .get()
@@ -244,15 +241,6 @@ export async function handleWorldAsk(
                     target: notificationConnection
                       ? { connection_id: notificationConnection }
                       : null,
-                    ...(notificationHost && deps.incarnation
-                      ? {
-                          initial_claim: {
-                            connection_id: notificationHost.connection_id,
-                            generation: notificationHost.generation,
-                            service_incarnation: deps.incarnation,
-                          },
-                        }
-                      : {}),
                   },
                 ]
               : [],

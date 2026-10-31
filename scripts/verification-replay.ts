@@ -1,3 +1,4 @@
+import { replayEffectRecovery } from "../quint/effect-recovery";
 import { replayObservationBase } from "../quint/observation-base";
 import { replayRuntimeControl } from "../quint/runtime-control";
 import { replayBrowserPreparation } from "../quint/browser-preparation";
@@ -34,6 +35,7 @@ async function replay(request: ReplayRequest, resultPath: string) {
     [
       "runtime-leases",
       "ranger-recovery",
+      "effect-recovery",
       "ranger-authority",
       "creation-flow",
       "chunk-assembly",
@@ -67,6 +69,12 @@ async function replay(request: ReplayRequest, resultPath: string) {
         states,
         exports?.WorldRuntimeStore,
         exports?.WorldObservation,
+      );
+    if (request.model === "effect-recovery")
+      return replayEffectRecovery(
+        states,
+        exports?.createEffectRunner,
+        exports?.openWorldWriter,
       );
     if (request.model === "ranger-recovery")
       return replayRangerRecovery(states, exports?.openTaskStorage);

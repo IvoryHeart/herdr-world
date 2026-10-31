@@ -1,3 +1,4 @@
+import { replayEffectRecovery } from "./effect-recovery";
 import { verificationModels } from "./models";
 import {
   retainVerificationDiagnostics,
@@ -70,6 +71,43 @@ const cases = [
       "base.held",
       "base.incarnation",
       "base.requests",
+    ],
+  },
+  {
+    name: "effect-recovery",
+    witnesses: [
+      "keyedRetry",
+      "reconciled",
+      "reattached",
+      "repeated",
+      "opaqueStopped",
+      "claimReleased",
+      "permanentRefusal",
+      "migrationBlocked",
+      "migrated",
+      "cancelBefore",
+      "cancelAfter",
+      "revoked",
+      "offlineWaits",
+      "goneAfterDispatch",
+      "peerFenced",
+    ],
+    replay: replayEffectRecovery,
+    mismatches: [
+      "effect.phase",
+      "effect.attempt",
+      "effect.applied",
+      "effect.ever",
+      "effect.receipt",
+      "effect.authorized",
+      "effect.handle",
+      "effect.version",
+      "effect.fence",
+      "effect.target",
+      "effect.peer.cas",
+      "effect.peer.claimed",
+      "effect.peer.attempt",
+      "effect.notSent",
     ],
   },
   {
@@ -303,6 +341,7 @@ const cases = [
 ] as const;
 type CommandResult = { code: number; ms: number; log: string; args: string[] };
 function replayTracesPerSeed(name: Model) {
+  if (name === "effect-recovery") return 500;
   return ["browser-preparation", "chunk-credits", "creation-flow"].includes(
     name,
   )
@@ -450,7 +489,9 @@ async function replayWorker(
     ],
     {
       cwd: root,
-      timeoutMs: 30_000,
+      // Real SQLite replay performs durable commits and reopen/migration work.
+      // Keep its bound explicit; the outer case and gate limits still apply.
+      timeoutMs: request.model === "effect-recovery" ? 480_000 : 30_000,
       onOutput: (text) => {
         partialLog += text.replaceAll(root, "<checkout>");
       },
@@ -768,11 +809,40 @@ export async function runReviewedQuintModels(
         model: item.name,
         files: files.map((file) => resolve(output, file)),
         mode: "mutation",
-        allowed: item.mismatches,
+        allowed:
+          item.name === "effect-recovery"
+            ? ["effect.receipt"]
+            : item.mismatches,
         mutant: mutantBundle,
       });
       const killingTrace = killed.trace;
       const killingObservation = killed.observation;
+      const effectControls: {
+        fault: string;
+        trace: string;
+        observation: string;
+      }[] = [];
+      if (item.name === "effect-recovery") {
+        for (const [fault, observation] of [
+          ["effect-authorization", "effect.authorized"],
+          ["effect-generation", "effect.target"],
+          ["effect-not-sent", "effect.notSent"],
+        ] as const) {
+          const mutant = await implementationMutation(item.name, fault);
+          const result = await replayWorker(`${item.name}-${fault}-control`, {
+            model: item.name,
+            files: files.map((file) => resolve(output, file)),
+            mode: "mutation",
+            allowed: [observation],
+            mutant,
+          });
+          effectControls.push({
+            fault,
+            trace: result.trace,
+            observation: result.observation,
+          });
+        }
+      }
       if (item.name === "observation-base") {
         const incarnation = await implementationMutation(
           item.name,
@@ -1008,6 +1078,7 @@ export async function runReviewedQuintModels(
         ...(assemblyIndexControl ? { assemblyIndexControl } : {}),
         ...(creationAdmissionControl ? { creationAdmissionControl } : {}),
         ...(backgroundGuardControl ? { backgroundGuardControl } : {}),
+        ...(effectControls.length ? { effectControls } : {}),
         ...(exhaustiveConfigurations !== null
           ? { exhaustiveConfigurations }
           : {}),

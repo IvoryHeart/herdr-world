@@ -1,3 +1,4 @@
+import { createEffectStore } from "./effect-client";
 import { ANSWER_DELIVERY_VERB } from "../world/ask-delivery-types";
 import type { WorldIds } from "./world-ids";
 import { randomBytes } from "node:crypto";
@@ -222,6 +223,7 @@ export async function openWorldLedger(
     ids,
     ledger,
     incarnation,
+    effects: createEffectStore(client.request, remember),
     outbox: {
       list: (kind, readyOnly) => refresh(undefined, kind, readyOnly),
       async notices(kind, after, limit = 60) {

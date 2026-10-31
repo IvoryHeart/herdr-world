@@ -4,6 +4,13 @@ import {
   recoverAttention,
 } from "./answer-attempts";
 import { answerTransitions } from "./answer-transitions";
+import { effectTransitions } from "./effect-transitions";
+import { migrateEffectContracts } from "./effect-migration";
+import {
+  effectContract,
+  type EffectVerbLookup,
+  productionEffectVerb,
+} from "../effects/contracts";
 import {
   ANSWER_DELIVERY_VERB,
   isAnswerIntent,
@@ -30,6 +37,7 @@ import {
   attentionRetryDelay,
   STORAGE_BOUNDS,
   type AttentionEntry,
+  type AttentionState,
   type LedgerCommit,
   type LedgerWrite,
   type ReplayPage,
@@ -55,6 +63,7 @@ export function openWorldWriter(
   at: number,
   incarnation = randomBytes(16).toString("base64url"),
   bytes?: () => Uint8Array,
+  effectVerbs: EffectVerbLookup = productionEffectVerb,
 ) {
   assertSafeDataPath(path);
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
@@ -91,6 +100,7 @@ export function openWorldWriter(
     migrateWorldDatabase(db, path);
     db.exec("PRAGMA busy_timeout=5000");
     importLegacyLedger(db, legacy, at);
+    migrateEffectContracts(db, effectVerbs);
     recoverAttention(db, at);
   } catch (error) {
     db.close();
@@ -100,9 +110,22 @@ export function openWorldWriter(
   const revision = () =>
     (db.query("SELECT revision FROM ledger_meta").get() as { revision: number })
       .revision;
-  const decode = (row: Record<string, unknown>): AttentionEntry =>
-    ({
-      ...row,
+  const decode = (row: Record<string, unknown>): AttentionEntry => {
+    const legacy = { ...row };
+    for (const field of [
+      "contract",
+      "receipt",
+      "external_handle",
+      "dispatch_targets",
+      "ever_dispatched",
+      "cancel_requested",
+      "needs_migration",
+      "owner_retry_attempt",
+      "attempt_fence",
+    ])
+      delete legacy[field];
+    return {
+      ...legacy,
       target: row.target ? JSON.parse(row.target as string) : null,
       evidence: row.evidence ? JSON.parse(row.evidence as string) : null,
       intent: row.intent ? JSON.parse(row.intent as string) : null,
@@ -110,12 +133,14 @@ export function openWorldWriter(
       ...(row.kind === ANSWER_DELIVERY_VERB.name
         ? answerAttemptEvidence(db, row.id as string, row.attempt as number)
         : {}),
-    }) as AttentionEntry;
+    } as AttentionEntry;
+  };
   const attention = (id: string) => {
     const row = db.query("SELECT * FROM outbox WHERE id=?").get(id);
     return row ? decode(row as Record<string, unknown>) : null;
   };
   const answer = answerTransitions(db, attention);
+  const effects = effectTransitions(db, incarnation, attention, effectVerbs);
   const forRecord = (id: string) =>
     (
       db
@@ -206,33 +231,39 @@ export function openWorldWriter(
           if (resolved !== null) {
             for (const entry of forRecord(ask.id))
               if (
-                (entry.kind === "ask.created" &&
-                  (entry.state === "pending" || entry.state === "uncertain")) ||
-                (entry.kind === ANSWER_DELIVERY_VERB.name &&
-                  ask.withdrawn &&
-                  entry.state === "pending")
+                !attentionFinished(entry.state) &&
+                (entry.kind === "ask.created" ||
+                  (entry.kind === ANSWER_DELIVERY_VERB.name && ask.withdrawn))
               ) {
+                const effect = effects.get(entry.id);
+                const possible =
+                  effect?.ever_dispatched || entry.state === "dispatching";
+                const active = entry.state === "dispatching";
                 db.query(
-                  "UPDATE outbox SET state='cancelled',claimed=0,resolved_at=?,evidence=? WHERE id=?",
+                  "UPDATE outbox SET cancel_requested=1,state=?,claimed=0,resolved_at=?,evidence=? WHERE id=?",
                 ).run(
-                  write.at,
+                  active ? "dispatching" : possible ? "uncertain" : "cancelled",
+                  possible ? null : write.at,
                   JSON.stringify({
-                    reason:
-                      entry.kind === "ask.created"
+                    ...entry.evidence,
+                    reason: possible
+                      ? "Question closed after possible dispatch; the outcome is not undone"
+                      : entry.kind === "ask.created"
                         ? "Question closed before its pending owner alert"
                         : "Asker withdrew before answer delivery",
                   }),
                   entry.id,
                 );
-                if (entry.kind === ANSWER_DELIVERY_VERB.name && entry.claimed)
+                if (entry.claimed)
                   recordAnswerAttempt(
                     db,
                     entry.id,
                     entry.attempt,
-                    "cancelled",
+                    possible ? "uncertain" : "cancelled",
                     entry.evidence?.fence,
                     write.at,
-                    "Asker withdrew before submission",
+                    "Question closed before another submission",
+                    effect?.attempt_fence ?? undefined,
                   );
                 changed.add(entry.id);
               }
@@ -301,14 +332,28 @@ export function openWorldWriter(
             "Answer intent must reference its stored answer occurrence without copied text",
           );
       }
-      const state = effect.initial_claim
+      let state: AttentionState = effect.initial_claim
         ? "dispatching"
         : (effect.initial_state ?? "pending");
+      const domain = db
+        .query("SELECT body FROM asks WHERE id=?")
+        .get(effect.record_id) as { body: string } | null;
+      const contract = effectContract(
+        effect,
+        id,
+        domain ? (JSON.parse(domain.body) as LedgerAsk) : null,
+        effectVerbs,
+      );
+      if (contract && !contract.targets.length) {
+        if (effect.contract && effect.initial_state !== "refused")
+          throw new Error("a queued intent needs a captured target");
+        state = "refused";
+      }
       const due = effect.due_at ?? write.at;
       if (!Number.isSafeInteger(due))
         throw new Error("invalid intent deadline");
       db.query(
-        "INSERT INTO outbox(id,operation_id,kind,record_id,target,recovery,state,due_at,attempt,evidence,created_at,resolved_at,intent) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(kind,record_id) DO NOTHING",
+        "INSERT INTO outbox(id,operation_id,kind,record_id,target,recovery,state,due_at,attempt,evidence,created_at,resolved_at,intent,contract,ever_dispatched,needs_migration) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(kind,record_id) DO NOTHING",
       ).run(
         id,
         operationId,
@@ -330,6 +375,11 @@ export function openWorldWriter(
         write.at,
         attentionFinished(state) ? write.at : null,
         effect.intent ? JSON.stringify(effect.intent) : null,
+        contract ? JSON.stringify(contract) : null,
+        effect.initial_claim ? 1 : 0,
+        contract && effectVerbs(contract.verb)?.version !== contract.version
+          ? 1
+          : 0,
       );
       for (const entry of forRecord(effect.record_id)) changed.add(entry.id);
     }
@@ -377,6 +427,15 @@ export function openWorldWriter(
   }
   function execute(request: StorageRequest, at: number): unknown {
     switch (request.type) {
+      case "effect-read":
+        return request.id
+          ? {
+              effect: effects.get(request.id),
+              attention: attention(request.id),
+            }
+          : effects.list(request.verb);
+      case "effect-transition":
+        return effects.transition(request.change, at);
       case "load":
         return read();
       case "issue-id":
@@ -448,7 +507,7 @@ export function openWorldWriter(
           return (
             db
               .query(
-                "SELECT * FROM outbox WHERE claimed=0 AND (state='pending' OR (state='uncertain' AND recovery='repeatable')) AND kind=? ORDER BY due_at,id LIMIT 100",
+                "SELECT * FROM outbox WHERE needs_migration=0 AND cancel_requested=0 AND claimed=0 AND (state='pending' OR (state='uncertain' AND recovery='repeatable')) AND kind=? ORDER BY due_at,id LIMIT 100",
               )
               .all(request.kind ?? "") as Record<string, unknown>[]
           ).map(decode);
@@ -470,6 +529,8 @@ export function openWorldWriter(
         if (
           !entry ||
           entry.claimed ||
+          effects.get(request.id)?.state === "needs-migration" ||
+          effects.get(request.id)?.cancel_requested ||
           entry.due_at > at ||
           (entry.state !== "pending" &&
             !(entry.state === "uncertain" && entry.recovery === "repeatable"))
@@ -499,7 +560,7 @@ export function openWorldWriter(
           throw new Error("dispatch fence changed the captured connection");
         const claimOnly = entry.kind === ANSWER_DELIVERY_VERB.name;
         db.query(
-          "UPDATE outbox SET state=?,claimed=?,attempt=attempt+1,evidence=? WHERE id=?",
+          "UPDATE outbox SET state=?,claimed=?,attempt=attempt+1,evidence=?,ever_dispatched=CASE WHEN ? THEN ever_dispatched ELSE 1 END,attempt_fence=? WHERE id=?",
         ).run(
           claimOnly ? "pending" : "dispatching",
           claimOnly ? 1 : 0,
@@ -507,17 +568,23 @@ export function openWorldWriter(
             reason: "Dispatch claimed",
             ...(request.fence ? { fence: request.fence } : {}),
           }),
+          claimOnly ? 1 : 0,
+          JSON.stringify({
+            service_incarnation: incarnation,
+            attempt: entry.attempt + 1,
+          }),
           entry.id,
         );
-        if (claimOnly)
+        if (claimOnly || effects.get(entry.id)?.contract)
           recordAnswerAttempt(
             db,
             entry.id,
             entry.attempt + 1,
-            "claimed",
+            claimOnly ? "claimed" : "dispatching",
             request.fence,
             at,
             "Claimed for current checks",
+            { service_incarnation: incarnation, attempt: entry.attempt + 1 },
           );
         return attention(entry.id);
       }
@@ -618,9 +685,14 @@ export function openWorldWriter(
         [];
       if (
         requests.every(({ request }) =>
-          ["load", "outbox", "notices", "replay", "inspect"].includes(
-            request.type,
-          ),
+          [
+            "load",
+            "outbox",
+            "notices",
+            "replay",
+            "inspect",
+            "effect-read",
+          ].includes(request.type),
         )
       )
         return requests.map(({ ticket, request }) => {

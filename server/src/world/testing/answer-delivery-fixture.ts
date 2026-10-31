@@ -124,7 +124,8 @@ export async function productionAnswerFixture(
   });
   const dispatcher = createAnswerDispatcher({
     ledger: () => storage.ledger,
-    outbox: () => storage.outbox,
+    effects: () => storage.effects,
+    incarnation: storage.incarnation,
     recipients,
     clock,
     scheduler,

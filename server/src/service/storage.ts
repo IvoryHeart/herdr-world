@@ -9,6 +9,7 @@ import { BoardStore } from "../world/board-store";
 import type { LedgerStore } from "../world/world-ledger";
 import { openWorldLedger } from "../storage/world-storage";
 import type { AttentionOutbox } from "../storage/world-protocol";
+import type { EffectStore } from "../effects/types";
 import { join } from "node:path";
 import type { Clock, Scheduler } from "./ports";
 
@@ -25,6 +26,7 @@ export type WorldStorage = {
   /** Committed reads; SQLite is opened before the listener can bind. */
   ledger(): LedgerStore;
   attention(): AttentionOutbox;
+  effects(): EffectStore;
   failed?: Promise<Error>;
   incarnation?: string;
   /** Opened on first use. */
@@ -71,6 +73,7 @@ export const openStorage: OpenStorage = async (paths, { clock, scheduler }) => {
     // Eager committed cache only: this accessor never opens/imports/migrates.
     ledger: () => world.ledger,
     attention: () => world.outbox,
+    effects: () => world.effects,
     failed: world.failed,
     incarnation: world.incarnation,
     profiles: () =>

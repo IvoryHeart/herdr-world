@@ -1,3 +1,4 @@
+import type { EffectState } from "./effect-recovery";
 import type { BaseState } from "./observation-base";
 import type { DrainState } from "./runtime-drain";
 import type { CreditState } from "./chunk-credits";
@@ -37,6 +38,8 @@ type RefreshState = {
   status: string;
 };
 export type TraceState = CreditState & {
+  effect: EffectState;
+  incarnation: number;
   recovery: RecoveryState;
   authority: AuthorityState;
   creation: CreationState;

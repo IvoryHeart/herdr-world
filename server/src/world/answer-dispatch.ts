@@ -1,12 +1,16 @@
-import { ANSWER_DELIVERY_VERB, originalAsker } from "./ask-delivery-types";
+import {
+  ANSWER_DELIVERY_VERB,
+  originalAsker,
+  sameRecipient,
+} from "./ask-delivery-types";
 import type { LedgerAsk, LedgerStore } from "./world-ledger";
-import type { createAskRecipients } from "./ask-recipient";
+import type { createAskRecipients, RecipientResolution } from "./ask-recipient";
 import {
   attentionRetryDelay,
-  type AttentionEntry,
-  type AttentionOutbox,
   type StoragePorts,
 } from "../storage/world-protocol";
+import type { EffectEntry, EffectStore } from "../effects/types";
+import { createEffectRunner, type EffectDriver } from "../effects/runner";
 
 export function answerPrompt(ask: LedgerAsk) {
   const text = `Answer to ${ask.id}:\nQuestion: ${ask.question}\nAnswer from ${ask.answer?.by ?? "owner"}: ${ask.answer?.text ?? ""}`;
@@ -19,252 +23,150 @@ export function answerPrompt(ask: LedgerAsk) {
   };
 }
 
-/** One stored answer, one opaque effect. Only Chat owns the input submission. */
+/** Chat retains its late input boundary; the shared runner owns durable attempts. */
 export function createAnswerDispatcher(deps: {
   ledger(): LedgerStore;
-  outbox(): AttentionOutbox;
+  effects(): EffectStore;
+  incarnation: string;
   recipients: ReturnType<typeof createAskRecipients>;
   clock: StoragePorts["clock"];
   scheduler: StoragePorts["scheduler"];
   changed(): void;
   log(message: string): void;
 }) {
-  let stopped = false;
-  let requested = false;
-  let timer: { cancel(): void } | undefined;
-  let running: Promise<void> | null = null;
-  let planning = Promise.resolve();
-  const finish = async (
-    entry: AttentionEntry,
-    state: AttentionEntry["state"],
-    reason: string,
-  ) => {
-    const updated = await deps
-      .outbox()
-      .finish(
-        entry.id,
-        entry.attempt,
-        state,
-        reason,
-        deps.clock.now() + Math.min(60_000, attentionRetryDelay(entry.attempt)),
-      );
-    if (updated) deps.changed();
-  };
-  const sameAnswer = (entry: AttentionEntry) => {
+  const bindings = new Map<string, RecipientResolution>();
+  const sameAnswer = (entry: EffectEntry) => {
     const ask = deps.ledger().ask(entry.record_id);
     return ask &&
       ask.answer?.occurrence === entry.intent?.params.answer_occurrence &&
-      !ask.withdrawn
+      !ask.withdrawn &&
+      sameRecipient(ask.recipient, entry.intent?.condition.recipient)
       ? ask
       : null;
   };
-  async function dispatch(entry: AttentionEntry) {
-    if (
-      stopped ||
-      entry.state !== "pending" ||
-      entry.claimed ||
-      entry.due_at > deps.clock.now()
-    )
-      return;
-    const fence = deps.recipients.fence(entry.intent?.condition.recipient);
-    const claimed = await deps.outbox().claim(entry.id, fence);
-    if (!claimed?.claimed || claimed.state !== "pending") return;
-    const intent = claimed.intent;
-    if (
-      !intent ||
-      intent.verb !== ANSWER_DELIVERY_VERB.name ||
-      intent.version !== ANSWER_DELIVERY_VERB.version ||
-      claimed.recovery !== "opaque"
-    )
-      return finish(
-        claimed,
-        "refused",
-        "Unsupported answer delivery operation; use ask get",
+  const actorAllowed = (entry: EffectEntry) => {
+    const ask = sameAnswer(entry),
+      actor = entry.intent?.actor;
+    return Boolean(
+      ask &&
+        actor &&
+        (actor.kind === "owner" ||
+          (!ask.owner_only &&
+            actor.actor.verified &&
+            !originalAsker(ask.recipient, actor.actor))),
+    );
+  };
+  const driver: EffectDriver = {
+    async authorize(entry) {
+      const ask = sameAnswer(entry);
+      if (!ask || !entry.intent) return "refused";
+      const result = await deps.recipients.authorize(entry.intent.actor, ask);
+      return result === "pending" ? "wait" : result;
+    },
+    preconditions: (entry) => (sameAnswer(entry) ? "allowed" : "refused"),
+    async resolve(entry) {
+      const binding = await deps.recipients.resolve(
+        entry.intent?.condition.recipient,
       );
-    const ask = sameAnswer(claimed);
-    if (!ask)
-      return finish(
-        claimed,
-        "cancelled",
-        "This ask no longer awaits the captured answer",
-      );
-    let marked = false;
-    try {
-      const authorization = await deps.recipients.authorize(intent.actor, ask);
-      if (authorization !== "allowed")
-        return finish(
-          claimed,
-          authorization === "pending" ? "pending" : "refused",
-          authorization === "pending"
-            ? "Waiting to recheck the answering actor's current policy"
-            : "The answering actor is no longer authorized; use ask get",
-        );
-      const binding = await deps.recipients.resolve(intent.condition.recipient);
-      if (binding.state !== "attached")
-        return finish(
-          claimed,
-          binding.state === "unresolved" ? "pending" : "refused",
-          binding.reason,
-        );
-      if (!fence || stopped)
-        return finish(
-          claimed,
-          "pending",
-          "No current claimed lease; delivery remains pending",
-        );
-      const recipient = intent.condition.recipient!;
-      const prompt = answerPrompt(ask);
-      let confirmed = false;
-      const result =
-        await binding.lease.runtime.agentSessions!.conversation.send({
-          pane_id: recipient.pane_id,
-          text: prompt.text,
-          session_fingerprint: recipient.conversation.fingerprint,
-          baseline: binding.conversation.messages
-            .filter((message) => message.role === "user")
-            .map((message) => message.id),
-          beforeSubmit: async () => {
-            const current = sameAnswer(claimed);
-            if (
-              stopped ||
-              !binding.lease.isCurrent() ||
-              !current ||
-              (await deps.recipients.authorize(intent.actor, current)) !==
-                "allowed"
-            )
-              return false;
-            const started = await deps
-              .outbox()
-              .beginDispatch(claimed.id, claimed.attempt, fence);
-            if (started) deps.changed();
-            marked = started?.state === "dispatching";
-            return marked;
-          },
-          guard: (info) => {
-            const current = sameAnswer(claimed);
-            return (
-              !stopped &&
-              Boolean(
-                current &&
-                  (intent.actor.kind === "owner" ||
-                    (!current.owner_only &&
-                      intent.actor.actor.verified &&
-                      !originalAsker(current.recipient, intent.actor.actor))),
-              ) &&
-              deps.recipients.guard(recipient, binding.lease, info)
-            );
-          },
-          submitted: (fingerprint) => {
-            confirmed = fingerprint === recipient.conversation.fingerprint;
-          },
-        });
-      const current = await deps.outbox().get(claimed.id);
+      bindings.set(entry.id, binding);
+      if (binding.state !== "attached") return binding;
+      const fence = deps.recipients.fence(entry.intent?.condition.recipient);
       if (
-        !current ||
-        current.attempt !== claimed.attempt ||
-        (current.state !== "dispatching" &&
-          !(current.state === "pending" && current.claimed))
+        !fence ||
+        fence.generation !== binding.lease.generation ||
+        !entry.target
       )
-        return;
-      if (result.status === "sent")
-        return finish(
-          claimed,
-          marked && confirmed ? "delivered" : "uncertain",
-          marked && confirmed
-            ? prompt.pointer
-              ? "Original session queued the answer retrieval pointer"
-              : "Original session queued the stored answer"
-            : "Pane submission could not be confirmed for the original session; use ask get",
-        );
-      if (!sameAnswer(claimed))
-        return finish(
-          claimed,
-          "cancelled",
-          "The ask was withdrawn before submission; answer remains readable",
-        );
-      const retry =
-        stopped ||
-        !binding.lease.isCurrent() ||
-        ["blocked", "unsettled", "unavailable"].includes(result.reason);
-      return finish(
-        claimed,
-        retry ? "pending" : "refused",
-        retry
-          ? "Chat submitted nothing; waiting for admission on the original binding"
-          : "Chat refused the original recipient or state; nothing sent, use ask get",
+        return {
+          state: "unresolved",
+          reason: "The original runtime retired during preparation",
+        };
+      return { state: "attached", targets: [{ capture: entry.target, fence }] };
+    },
+    guard(entry, targets) {
+      const binding = bindings.get(entry.id);
+      return Boolean(
+        actorAllowed(entry) &&
+          binding?.state === "attached" &&
+          binding.lease.isCurrent() &&
+          targets[0]?.fence.generation === binding.lease.generation,
       );
-    } catch (error) {
-      deps.log(
-        `Answer delivery ${marked ? "submission" : "preparation"} failed: ${(error as Error).message}`,
-      );
-      return finish(
-        claimed,
-        marked ? "uncertain" : "pending",
-        marked
-          ? "A pane send may have happened; automatic replay is disabled, use ask get"
-          : "No submission began; waiting to check the original recipient again",
-      );
-    }
-  }
-  function plan() {
-    planning = planning
-      .then(async () => {
-        timer?.cancel();
-        timer = undefined;
-        if (stopped) return;
-        const next = (
-          await deps.outbox().list(ANSWER_DELIVERY_VERB.name, true)
-        )[0];
-        if (next && !stopped)
-          timer = deps.scheduler.schedule(
-            () => {
-              void wake();
+    },
+    async invoke(entry, context) {
+      const resolution = await driver.resolve(entry);
+      if (resolution.state !== "attached")
+        return {
+          state: resolution.state === "unresolved" ? "wait" : "refused",
+          reason: resolution.reason,
+        };
+      const binding = bindings.get(entry.id)!;
+      const ask = sameAnswer(entry),
+        recipient = entry.intent?.condition.recipient;
+      if (binding.state !== "attached" || !ask || !recipient)
+        return {
+          state: "refused",
+          reason: "Original answer binding is unavailable",
+        };
+      const prompt = answerPrompt(ask);
+      let marked = false,
+        confirmed = false;
+      try {
+        const result =
+          await binding.lease.runtime.agentSessions!.conversation.send({
+            pane_id: recipient.pane_id,
+            text: prompt.text,
+            session_fingerprint: recipient.conversation.fingerprint,
+            baseline: binding.conversation.messages
+              .filter((message) => message.role === "user")
+              .map((message) => message.id),
+            beforeSubmit: async () => {
+              marked = await context.beforeSubmit();
+              return marked && binding.lease.isCurrent();
             },
-            Math.min(60_000, Math.max(0, next.due_at - deps.clock.now())),
-          );
-      })
-      .catch((error) =>
-        deps.log(
-          `Answer delivery scheduling failed: ${(error as Error).message}`,
-        ),
-      );
-    return planning;
-  }
-  function wake(): Promise<void> {
-    if (stopped) return Promise.resolve();
-    requested = true;
-    if (running) return running;
-    timer?.cancel();
-    timer = undefined;
-    running = (async () => {
-      while (requested && !stopped) {
-        requested = false;
-        for (const entry of await deps
-          .outbox()
-          .list(ANSWER_DELIVERY_VERB.name, true)) {
-          if (stopped || entry.due_at > deps.clock.now()) break;
-          await dispatch(entry);
-        }
+            guard: (info) =>
+              actorAllowed(entry) &&
+              (!marked || context.guard()) &&
+              deps.recipients.guard(recipient, binding.lease, info),
+            submitted: (fingerprint) => {
+              confirmed = fingerprint === recipient.conversation.fingerprint;
+            },
+          });
+        if (result.status === "sent")
+          return marked && confirmed
+            ? {
+                state: "delivered",
+                receipt: {
+                  source: "herdr-chat",
+                  delivery_id: result.delivery.id,
+                  fingerprint: recipient.conversation.fingerprint,
+                  pointer: prompt.pointer,
+                },
+              }
+            : {
+                state: "uncertain",
+                reason:
+                  "Pane submission could not be confirmed for the original session; use ask get",
+              };
+        const retry =
+          !binding.lease.isCurrent() ||
+          ["blocked", "unsettled", "unavailable"].includes(result.reason);
+        return {
+          state: retry ? "wait" : "refused",
+          reason: retry
+            ? "Chat submitted nothing; waiting for admission on the original binding"
+            : "Chat refused the original recipient or state; nothing sent, use ask get",
+          not_submitted: true,
+        };
+      } finally {
+        bindings.delete(entry.id);
       }
-    })()
-      .catch((error) =>
-        deps.log(
-          `Answer delivery dispatch failed: ${(error as Error).message}`,
-        ),
-      )
-      .finally(async () => {
-        running = null;
-        await plan();
-      });
-    return running;
-  }
-  return {
-    wake,
-    async stop() {
-      stopped = true;
-      timer?.cancel();
-      timer = undefined;
-      await Promise.allSettled([running, planning]);
     },
   };
+  return createEffectRunner({
+    ...deps,
+    store: deps.effects(),
+    verb: ANSWER_DELIVERY_VERB.name,
+    retryDelay: (attempt) => Math.min(60_000, attentionRetryDelay(attempt)),
+    driver: (verb) => (verb === ANSWER_DELIVERY_VERB.name ? driver : undefined),
+    log: (error) => deps.log(`Answer delivery failed: ${String(error)}`),
+  });
 }

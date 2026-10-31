@@ -83,10 +83,11 @@ async function fixture() {
 }
 const base = (f: Awaited<ReturnType<typeof fixture>>) => ({
   outbox: () => f.storage.outbox,
+  effects: () => f.storage.effects,
   ledger: () => f.storage.ledger,
   clock: f.clock,
   scheduler: f.scheduler,
-  incarnation: "synthetic-service",
+  incarnation: f.storage.incarnation,
   hasConnection: () => true,
   changed() {},
   log() {},
@@ -188,7 +189,7 @@ test("busy retries follow persisted exponential deadlines and stop when the ask 
     doc.asks[0]!.withdrawn = { at: f.clock.now() };
   });
   await dispatcher.wake();
-  expect((await f.entry()).state).toBe("cancelled");
+  expect((await f.entry()).state).toBe("uncertain");
   expect(calls).toBe(8);
   expect(f.scheduled.filter((entry) => !entry.cancelled)).toEqual([]);
 });
@@ -257,7 +258,7 @@ test("missing leases defer on the original connection; removed connections are f
   f.advance(30_000);
   await dispatcher.wake();
   expect((await f.entry()).state).toBe("refused");
-  expect(ids).toEqual(["studio", "studio"]);
+  expect(ids).toEqual(["studio"]);
 });
 
 test("service replies for this ask without waiting for an unrelated alert drain", async () => {
@@ -268,6 +269,8 @@ test("service replies for this ask without waiting for an unrelated alert drain"
   const service = createWorldCliService({
     ledger: () => f.storage.ledger,
     attention: () => f.storage.outbox,
+    effects: () => f.storage.effects,
+    incarnation: f.storage.incarnation,
     scheduler: f.scheduler,
     clock: f.clock,
     now: f.clock.now,

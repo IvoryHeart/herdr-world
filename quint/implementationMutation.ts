@@ -14,13 +14,22 @@ export type ImplementationFault =
   | "qualified-generation"
   | "chunk-index"
   | "admission-fence"
-  | "incarnation-reset";
+  | "incarnation-reset"
+  | "effect-authorization"
+  | "effect-generation"
+  | "effect-not-sent";
 export async function mutateImplementation(
   name: Model,
   fault: ImplementationFault,
   { root, output }: { root: string; output: string },
 ) {
   const allowed: Partial<Record<Model, readonly ImplementationFault[]>> = {
+    "effect-recovery": [
+      "primary",
+      "effect-authorization",
+      "effect-generation",
+      "effect-not-sent",
+    ],
     "observation-base": ["primary", "incarnation-reset"],
     "runtime-drain": ["primary", "background-guard"],
     "creation-flow": ["primary", "admission-fence"],
@@ -51,16 +60,59 @@ export async function mutateImplementation(
     "creation-flow": "web/src/creationRequests.ts",
     "ranger-authority": "server/src/assistant/actions.ts",
     "ranger-recovery": "server/src/assistant/task-storage.ts",
+    "effect-recovery": "server/src/effects/runner.ts",
   };
   const owner =
-    name === "observation-base" && fault === "incarnation-reset"
-      ? "web/src/world/observationBase.ts"
-      : name === "creation-flow" && fault === "admission-fence"
-        ? "web/src/world/createdTerminalAdmission.ts"
-        : owners[name];
+    name === "effect-recovery" && fault === "effect-not-sent"
+      ? "server/src/storage/effect-transitions.ts"
+      : name === "observation-base" && fault === "incarnation-reset"
+        ? "web/src/world/observationBase.ts"
+        : name === "creation-flow" && fault === "admission-fence"
+          ? "web/src/world/createdTerminalAdmission.ts"
+          : owners[name];
   const original = await readFile(resolve(root, owner), "utf8");
   let contents: string;
-  if (name === "observation-base") {
+  if (name === "effect-recovery") {
+    if (fault === "effect-authorization") {
+      const guard = /await driver\.authorize\((claimed|current)\)/g;
+      assert.equal(
+        [...original.matchAll(guard)].length,
+        2,
+        "effect authorization boundaries changed",
+      );
+      contents = original.replace(guard, '"allowed"');
+    } else if (fault === "effect-generation") {
+      const guard = "targets: resolution.targets,";
+      assert.equal(
+        original.split(guard).length,
+        3,
+        "effect target qualification boundaries changed",
+      );
+      contents = original.replaceAll(
+        guard,
+        "targets: resolution.targets.map(target => ({ ...target, fence: { ...target.fence, generation: fence.attempt > 1 ? 999 : target.fence.generation } })),",
+      );
+    } else if (fault === "effect-not-sent") {
+      const guard =
+        /not_sent:\s*!row\.ever_dispatched &&\s*\["refused", "cancelled"\]\.includes\(legacy\.state\),/;
+      assert.match(original, guard, "not-sent evidence boundary changed");
+      contents = original.replace(
+        guard,
+        'not_sent: Boolean(row.ever_dispatched) || ["refused", "cancelled"].includes(legacy.state),',
+      );
+    } else {
+      const guard = "idempotency_key: claimed.contract!.idempotency_key,";
+      assert.equal(
+        original.split(guard).length,
+        2,
+        "durable key boundary changed",
+      );
+      contents = original.replace(
+        guard,
+        "idempotency_key: claimed.contract!.idempotency_key + (claimed.attempt > 1 ? '-retry' : ''),",
+      );
+    }
+  } else if (name === "observation-base") {
     if (fault === "incarnation-reset") {
       const guard = /const held =\s*state.serviceIncarnation === incarnation/;
       assert.match(original, guard);
@@ -242,11 +294,13 @@ export async function mutateImplementation(
     entrypoints: [
       resolve(
         root,
-        name === "creation-flow"
-          ? "quint/creation-subjects.ts"
-          : name === "observation-base"
-            ? "quint/observation-subjects.ts"
-            : owner,
+        name === "effect-recovery"
+          ? "quint/effect-subjects.ts"
+          : name === "creation-flow"
+            ? "quint/creation-subjects.ts"
+            : name === "observation-base"
+              ? "quint/observation-subjects.ts"
+              : owner,
       ),
     ],
     target: "bun",

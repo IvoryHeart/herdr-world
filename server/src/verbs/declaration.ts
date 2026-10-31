@@ -41,10 +41,12 @@ export function declare(
   capabilities: readonly string[],
   preconditions: readonly string[],
   acknowledgements: readonly Acknowledgement[] = [],
+  options: { queueable?: boolean; version?: number } = {},
 ): Verb {
   return Object.freeze({
     name,
     channel,
+    version: options.version ?? 1,
     input,
     output,
     recovery,
@@ -54,7 +56,7 @@ export function declare(
     acknowledgements: Object.freeze(
       acknowledgements.map((ack) => Object.freeze(ack)),
     ),
-    queueable: false,
+    queueable: options.queueable ?? false,
     stages: Object.freeze([
       "accepted",
       "stored",

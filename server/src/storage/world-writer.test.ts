@@ -193,7 +193,7 @@ test("history expiry preserves pending asks and intents, with no record-body cop
       kind: "ask.created",
       recovery: "repeatable",
       record_id: "q-pending",
-      target: null,
+      target: { connection_id: "example" },
     },
   ];
   request(writer, { type: "write", write: original });
@@ -251,7 +251,7 @@ test("row cap and service incarnation reject old and foreign cursors", () => {
   ).toBe(true);
 }, 60_000);
 
-test("attempt receipts are fenced; closure cancels atomically and trim removes finished effects", () => {
+test("attempt receipts are fenced; possible sends require explicit resolution before trim", () => {
   const writer = open();
   const first = write("op-ask", 0);
   first.asks.put.push(ask("q-ask"));
@@ -300,9 +300,23 @@ test("attempt receipts are fenced; closure cancels atomically and trim removes f
   expect(
     (request(writer, { type: "outbox", id: entry.id }).result as AttentionEntry)
       .state,
-  ).toBe("cancelled");
+  ).toBe("uncertain");
   const trim = write("op-trim", 2);
   trim.asks.remove.push("q-ask");
+  expect(request(writer, { type: "write", write: trim }).error).toContain(
+    "unresolved attention",
+  );
+  request(writer, {
+    type: "effect-transition",
+    change: {
+      action: "decide",
+      id: entry.id,
+      attempt: claimed.attempt,
+      outcome: "close",
+      actor: { kind: "browser", subject: "synthetic-owner", evidence: {} },
+      reason: "Owner resolved this possible notification",
+    },
+  });
   expect(request(writer, { type: "write", write: trim }).error).toBeUndefined();
   expect(request(writer, { type: "outbox", id: entry.id }).result).toBeNull();
 });
@@ -315,7 +329,7 @@ test("a retry deadline elapsed during a delayed commit remains immediately claim
       kind: "ask.created",
       record_id: "q-delay",
       recovery: "repeatable",
-      target: null,
+      target: { connection_id: "example" },
     },
   ];
   mutation.asks.put.push(ask("q-delay"));

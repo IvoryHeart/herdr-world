@@ -68,6 +68,14 @@ queued receipt proves submission to that reported session, not agent execution,
 model reading or exactly-once delivery. Owner alerts remain harmless-repeatable
 and may retry independently.
 
+Both paths now use the same versioned, fenced outbox. Each attempt gets the
+current service incarnation and a new attempt number, and re-resolves the
+captured connection/session before dispatch. Unsupported operation versions
+remain blocked for an explicit recorded migration; upgrading preserves receipts
+and external handles. The [effects guide](world-effects.md) describes recovery
+and the internal read contracts. No new browser control or workflow authoring
+API is introduced.
+
 The database location always follows the instance data directory; the legacy
 ledger override selects the import source.
 

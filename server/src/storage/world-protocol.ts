@@ -1,5 +1,10 @@
 import type { AnswerIntent } from "../world/ask-delivery-types";
 import type {
+  EffectContract,
+  EffectStore,
+  EffectTransition,
+} from "../effects/types";
+import type {
   LedgerAsk,
   LedgerChange,
   LedgerDocument,
@@ -46,6 +51,7 @@ export type OutboxEffect = {
   initial_state?: "pending" | "refused";
   reason?: string;
   intent?: AnswerIntent;
+  contract?: EffectContract;
 };
 export type AnswerAttempt = {
   attempt: number;
@@ -91,6 +97,8 @@ export type LedgerCommit = {
   removed_attention: string[];
 };
 export type StorageRequest =
+  | { type: "effect-read"; id?: string; verb?: string }
+  | { type: "effect-transition"; change: EffectTransition }
   | { type: "load" }
   | { type: "issue-id"; kind: string }
   | { type: "write"; write: LedgerWrite }
@@ -196,6 +204,7 @@ export type WorldLedgerStorage = {
   ids: import("./world-ids").WorldIds;
   ledger: LedgerStore;
   outbox: AttentionOutbox;
+  effects: EffectStore;
   incarnation: string;
   replay(
     cursor: { incarnation: string; seq: number } | null,

@@ -225,6 +225,21 @@ two policies:
   at named crash points. A scripted adapter implements each recovery class. This is
   committee test stage T4.
 
+### M5 implementation partition (2026-10-31 candidate)
+
+The model drives the full recovery state for one intent and an independent peer
+claim on the same real SQLite writer. This bounds the state product while testing
+per-intent coalescing and claim isolation. Each of the five recovery classes is
+fully driven across traces; the peer has a distinct domain record and key. The
+source/compiled SIGKILL matrix supplies every recovery-matrix row, including
+restart/offline/reattach, ended bindings and cancellation/revocation schedules.
+`effects/admission.test.ts` supplies P8 and the late final-guard schedules.
+Together these are the candidate M5 boundary, rather than a claim of exhaustive
+Cartesian exploration of two simultaneous external effects. Independent review
+must accept that composition boundary; Q47 and the recovery contract retain the
+required real consumer evidence. All four planned code-fault observations remain
+required in the canonical gate, alongside the opaque-replay model control.
+
 ## Property, exhaustive and direct suites (alternative evidence)
 
 | Suite | What it proves | Why not a model |

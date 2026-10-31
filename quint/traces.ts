@@ -1,3 +1,4 @@
+import { effectActions, validateEffectTrace } from "./effect-recovery";
 import { validateObservationTrace } from "./observation-traces";
 import type { RecoveryState } from "./ranger-recovery";
 import type { AuthorityState } from "./ranger-authority";
@@ -13,6 +14,7 @@ import { verificationModels } from "./models";
 export type Model = (typeof verificationModels)[number];
 
 const actions = {
+  "effect-recovery": effectActions,
   "observation-base": [
     "init",
     "request",
@@ -176,6 +178,7 @@ export function validateTrace(
       [3, 4, 6, 10].includes(domain.requestBound),
     "unsupported request domain",
   );
+  if (model === "effect-recovery") return validateEffectTrace(value);
   if (model === "observation-base") return validateObservationTrace(value);
   assert(Array.isArray(value) && value.length > 1, "empty trace");
   for (const [index, state] of value.entries()) {

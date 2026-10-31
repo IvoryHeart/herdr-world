@@ -54,10 +54,33 @@ CREATE TABLE answer_attempts (
 CREATE INDEX answer_attempt_status ON answer_attempts(intent_id,state,attempt);
 CREATE UNIQUE INDEX asks_answer_occurrence ON asks(json_extract(body,'$.answer.occurrence')) WHERE json_extract(body,'$.answer.occurrence') IS NOT NULL;
 `;
+const migration4 = `
+ALTER TABLE outbox ADD COLUMN contract TEXT CHECK(contract IS NULL OR json_valid(contract));
+ALTER TABLE outbox ADD COLUMN receipt TEXT CHECK(receipt IS NULL OR json_valid(receipt));
+ALTER TABLE outbox ADD COLUMN external_handle TEXT CHECK(external_handle IS NULL OR json_valid(external_handle));
+ALTER TABLE outbox ADD COLUMN dispatch_targets TEXT CHECK(dispatch_targets IS NULL OR json_valid(dispatch_targets));
+ALTER TABLE outbox ADD COLUMN ever_dispatched INTEGER NOT NULL DEFAULT 0 CHECK(ever_dispatched IN (0,1));
+ALTER TABLE outbox ADD COLUMN cancel_requested INTEGER NOT NULL DEFAULT 0 CHECK(cancel_requested IN (0,1));
+ALTER TABLE outbox ADD COLUMN needs_migration INTEGER NOT NULL DEFAULT 0 CHECK(needs_migration IN (0,1));
+ALTER TABLE outbox ADD COLUMN owner_retry_attempt INTEGER;
+ALTER TABLE outbox ADD COLUMN attempt_fence TEXT CHECK(attempt_fence IS NULL OR json_valid(attempt_fence));
+UPDATE outbox SET ever_dispatched=1 WHERE state IN ('dispatching','uncertain','delivered') OR (kind<>'world.ask.deliver-answer' AND attempt>0) OR EXISTS(SELECT 1 FROM answer_attempts WHERE intent_id=outbox.id AND state IN ('dispatching','uncertain','delivered'));
+ALTER TABLE answer_attempts ADD COLUMN receipt TEXT CHECK(receipt IS NULL OR json_valid(receipt));
+ALTER TABLE answer_attempts ADD COLUMN external_handle TEXT CHECK(external_handle IS NULL OR json_valid(external_handle));
+ALTER TABLE answer_attempts ADD COLUMN attempt_fence TEXT CHECK(attempt_fence IS NULL OR json_valid(attempt_fence));
+CREATE TABLE effect_decisions (
+ seq INTEGER PRIMARY KEY AUTOINCREMENT, intent_id TEXT NOT NULL REFERENCES outbox(id) ON DELETE CASCADE,
+ action TEXT NOT NULL, actor TEXT NOT NULL CHECK(json_valid(actor)), reason TEXT NOT NULL,
+ created_at INTEGER NOT NULL, previous_version INTEGER, operation_version INTEGER
+);
+CREATE INDEX effect_decisions_intent ON effect_decisions(intent_id,seq);
+CREATE INDEX effect_ready ON outbox(needs_migration,claimed,state,due_at);
+`;
 export const worldMigrations = [
   migration1,
   migration2,
   worldIdsMigration,
+  migration4,
 ] as const;
 
 /** A consistent private rollback copy before any noninitial migration. */
