@@ -57,7 +57,12 @@ async function fixture(root?: string, generation = 1) {
     time = 1000;
   const controls = new Set<(control: BridgeControlMsg) => void>();
   const notices: string[] = [];
-  const noticeRevisions: { type: string; revision: number }[] = [];
+  const noticeRevisions: {
+    type: string;
+    revision: number;
+    connectionId?: string;
+    generation?: number;
+  }[] = [];
   const hosts = new Map<
     string,
     { generation: number; current: boolean; panes: Record<string, unknown>[] }
@@ -100,7 +105,7 @@ async function fixture(root?: string, generation = 1) {
     failed: (error) => {
       throw error;
     },
-    changed(kind, revision) {
+    changed(kind, revision, connectionId, generation) {
       const type =
         kind === "desk"
           ? "world_desk_changed"
@@ -108,7 +113,7 @@ async function fixture(root?: string, generation = 1) {
             ? "world_watchlist_changed"
             : "world_completion_seen_changed";
       notices.push(type);
-      noticeRevisions.push({ type, revision });
+      noticeRevisions.push({ type, revision, connectionId, generation });
       for (const listener of controls) listener({ type, revision });
     },
   });
@@ -896,3 +901,52 @@ test("an exact watch ID removes an unresolved restart capture without source acc
   await again.observe();
   expect(again.registries.watchlist.list().records).toEqual([]);
 });
+
+for (const mode of ["watch ID", "legacy capture"] as const)
+  test(`old ${mode} removes the same watch reattached in generation 2 from both clients`, async () => {
+    const f = await fixture();
+    const clients = [
+      new WorldWatchlistStore(f.client),
+      new WorldWatchlistStore(f.client),
+    ];
+    for (const client of clients) client.start();
+    try {
+      await Promise.all(clients.map((client) => client.refresh()));
+      const pinned = (await f.client.call("world.watchlist.pin", {
+        ...f.identity,
+        label: "Continuous watch",
+      })) as { records: Record<string, unknown>[] };
+      const capture = pinned.records[0]!;
+      f.hosts.set("alpha", { generation: 2, current: true, panes: [pane()] });
+      f.marks.retire("alpha", 2, true);
+      await f.observeHost("alpha");
+      await Promise.all(clients.map((client) => client.refresh()));
+      for (const client of clients)
+        expect(client.get().records).toMatchObject([
+          { generation: 2, watchId: capture.watch_id },
+        ]);
+      const result = (await f.client.call(
+        "world.watchlist.unpin",
+        mode === "watch ID" ? capture : f.identity,
+      )) as { records: unknown[]; changed: boolean };
+      expect(result.changed).toBe(true);
+      expect(result.records).toEqual([]);
+      expect(
+        f.store.terminalMarks.list().filter((row) => row.kind === "watchlist"),
+      ).toEqual([]);
+      expect(await f.client.call("world.watchlist.list")).toMatchObject({
+        records: [],
+      });
+      await Promise.all(clients.map((client) => client.refresh()));
+      for (const client of clients)
+        expect(client.get()).toMatchObject({ records: [], verified: true });
+      const notice = f.noticeRevisions
+        .filter((notice) => notice.type === "world_watchlist_changed")
+        .at(-1)!;
+      expect(notice).toMatchObject({ connectionId: "alpha", generation: 2 });
+      await f.observeHost("alpha");
+      expect(f.registries.watchlist.list().records).toEqual([]);
+    } finally {
+      for (const client of clients) client.stop();
+    }
+  });

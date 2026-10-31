@@ -80,6 +80,18 @@ export class WorldWatchlistRegistry {
     return { changed: true, revision: this.revision };
   }
 
+  /** Remove every current projection of a committed durable capture. */
+  removeCommittedCapture(id: string): WorldWatchRecord[] {
+    const removed: WorldWatchRecord[] = [];
+    for (const [key, record] of this.records)
+      if (record.watch_id === id) {
+        this.records.delete(key);
+        removed.push({ ...record });
+      }
+    this.revision++;
+    return removed;
+  }
+
   retireConnectionGeneration(
     connectionId: string,
     generation: number,

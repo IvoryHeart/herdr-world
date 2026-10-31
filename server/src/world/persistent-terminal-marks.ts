@@ -327,12 +327,15 @@ export class PersistentTerminalMarks {
       const live = this.options.registries,
         before = revisions(live),
         draft = live.watchlist.fork();
-      draft.unpin(identity, true);
+      const removed = draft.removeCommittedCapture(row.id);
+      const affected = removed.sort(
+        (a, b) => b.connection_generation - a.connection_generation,
+      )[0];
       live.watchlist.adopt(draft);
       this.publish(
         before,
-        identity.connection_id,
-        identity.connection_generation,
+        affected?.connection_id ?? identity.connection_id,
+        affected?.connection_generation ?? identity.connection_generation,
       );
     });
   }

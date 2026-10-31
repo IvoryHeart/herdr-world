@@ -1069,6 +1069,8 @@ check. Herdr restarting with new terminals therefore does not inherit old marks.
 
 Unpin removes its exact saved watch even while the host is unavailable. The browser
 carries the returned `watch_id`, so an older Unpin cannot remove a replacement.
+If the same saved watch reattaches after a runtime change, Unpin removes its
+current projection from the reply and every browser.
 Older API callers without this field can use an unambiguous runtime-qualified
 capture remembered by the current service; repeated reuse requires the returned
 ID. Disconnecting one host cannot restore its old projection when another host's

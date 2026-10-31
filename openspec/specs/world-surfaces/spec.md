@@ -639,7 +639,9 @@ original source SHALL attach a saved watch to a fresh runtime projection. Comple
 current terminal absence SHALL clear it. Pin validates a current live pane, while exact Unpin may
 remove an unavailable saved record. Replies SHALL include its `watch_id`; Unpin
 SHALL preserve that exact capture across retirement and SHALL NOT remove a newer
-replacement watch. Legacy tuples SHALL be accepted only while a remembered capture
+replacement watch. If the same saved watch reattaches in a newer runtime generation,
+Unpin SHALL remove its current projection before replying and invalidate that
+generation so the reply, list and shared clients agree. Legacy tuples SHALL be accepted only while a remembered capture
 is unambiguous. A watch is observational only and grants no resource
 or mutation authority.
 

@@ -10,3 +10,5 @@
 - Refuse pending Desk/completion commands across observed session replacement,
   including unknown identities, and let exact Unpin remove unavailable saved
   watches without deleting a newer replacement.
+- Remove the current shared watch projection when an older exact Unpin names the
+  same saved watch after a runtime change.

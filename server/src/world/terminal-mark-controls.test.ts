@@ -15,6 +15,15 @@ const cases = [
   { name: "positive service consumers", entry: consumers },
   { name: "positive SQLite consumers", entry: storage },
   {
+    name: "reattached capture projection",
+    entry: consumers,
+    file: "persistent-terminal-marks.ts",
+    match: /const removed = draft\.removeCommittedCapture\(row\.id\);/,
+    replacement: "const removed = []; draft.unpin(identity, true);",
+    assertion:
+      "old watch ID removes the same watch reattached in generation 2 from both clients",
+  },
+  {
     name: "conditional Undo",
     entry: consumers,
     file: "desk-state.ts",

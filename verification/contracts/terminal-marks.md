@@ -23,6 +23,9 @@ not inherit this agent-session restriction.
 Unpin names the saved World record with `watch_id`, independently of projection
 membership or source availability. It can remove an unresolved restart capture,
 releases the 128-watch capacity, and never removes a newer replacement record.
+If that same record reattaches in a newer generation, exact Unpin removes its
+current projection before replying and invalidates the generation removed.
+The reply, list and shared clients therefore agree immediately after the commit.
 Legacy runtime-qualified tuples are accepted only while their remembered capture
 is unambiguous in this service; reuse requires the returned ID. Ownership tokens
 and legacy aliases are bounded process memory (8,192 and 4,096 entries), never
@@ -48,13 +51,15 @@ SQLite acknowledgement while another host retires, including global recency
 trimming, and check increasing notice revisions. Unknown Desk and omitted
 completion fingerprints are exercised through their real RPC handlers. Saved
 Unpin tests cover disconnection, restart before verification, capacity release,
-same/new-generation replacement and exact browser capture forwarding.
+same/new-generation replacement, same-ID reattachment in a newer generation,
+reply/list/two-client agreement, current-generation invalidation and exact browser
+capture forwarding.
 `service/terminal-marks.test.ts` checks the composition root, two real WebSockets,
 change notices and restart against the same database. `storage/terminal-marks-crash.test.ts`
 uses source and standalone compiled processes, killed before commit, after commit
 and after worker acknowledgement; admitted writes also drain on close. It checks
 complete record/binding pairs and integrity. Native installer CI includes these
-eight cases. Ten compiled production faults fail twelve named boundary assertions; two
+eight cases. Eleven compiled production faults fail thirteen named boundary assertions; two
 positive bundled suites establish the harness. Existing binding, Desk, watchlist, completion and browser consumers
 remain mandatory.
 
