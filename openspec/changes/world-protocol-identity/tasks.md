@@ -129,10 +129,14 @@ No v2 subscriptions or persisted-capture fences are implemented here.
     and 125 complete consumer tests pass. Full-gate and independent acceptance
     evidence belongs to its PR handoff; implementation completion is not review
     acceptance. Task 6.4 stays open for the claims stage's remaining sync.
-- [ ] 6.3 Add claims for the multi-source fields, agent status and PR links, each with
+- [x] 6.3 Add claims for the multi-source fields, agent status and PR links, each with
   its display rule. Verify each field: claims coexist, silence doesn't remove a claim,
   and authority is declared by the verb.
-- [ ] 6.4 Sync the `world-identity` requirements, and add the "Durable identity and
+  - Part 3 adds runtime provenance for status, PR links and native session IDs;
+    legacy visible projections remain unchanged. Direct source-ownership properties,
+    eight overlapping read schedules, actual transcript/link/service consumers and
+    seven compiled assertion controls pass. Independent review and CI remain required.
+- [x] 6.4 Sync the `world-identity` requirements, and add the "Durable identity and
   bindings" area to `verification/coverage.json`. Verify with a complete
   `bun run verification:gate`.
 

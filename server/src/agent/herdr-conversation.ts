@@ -1,3 +1,4 @@
+import { AgentClaims } from "./agent-claims";
 import { createPromptAnswerer } from "./prompt-answer";
 import { isSlashCommand } from "../../../shared/conversationInput";
 import { existsSync, type FSWatcher, watch } from "node:fs";
@@ -28,6 +29,7 @@ import { codexHome, type AgentSessionFileAccess } from "./session-file-access";
 import type { SessionProjectionCache } from "./session-projection-cache";
 import {
   SESSION_AGENTS,
+  codexTitleBinding,
   codexReportContradicted,
   searchCodexTitle,
   resolveAgentSessionInfo,
@@ -71,6 +73,7 @@ export function createHerdrConversationSource(args: {
   onDeliveriesChanged?: () => void;
 }): ConversationSource & { dispose(): void } {
   const deliveries = createDeliveryLedger();
+  const claims = new AgentClaims();
   // Sessions this pane has shown, so a sent message can still be checked in
   // its own transcript after the pane moves on, and in the ones it moved to.
   const sessions = new Map<
@@ -209,7 +212,9 @@ export function createHerdrConversationSource(args: {
       inference?: CodexInferenceBatch;
     },
   ) => {
+    const claimTicket = claims.begin(paneId);
     const info = listed ? listed.info : await agentInfo(paneId);
+    const claimsCapture = claims.observe(claimTicket, info);
     const agent = normalizeAgentName(stringValue(info?.agent));
     const base: Omit<Conversation, "status" | "unavailable"> = {
       conversation_version: 1,
@@ -217,6 +222,7 @@ export function createHerdrConversationSource(args: {
       pane_id: paneId,
       agent: agent || null,
       agent_status: stringValue(info?.agent_status) || null,
+      field_claims: claims.project(claimsCapture),
       terminal_title: stringValue(info?.terminal_title).trim() || null,
       running_tool: null,
       session_binding: null,
@@ -286,9 +292,17 @@ export function createHerdrConversationSource(args: {
       resolved.session?.source.endsWith("-local")
         ? null
         : paneBinding(agent, info, args.context);
+    const titleClaim =
+      agent === "codex"
+        ? codexTitleBinding(stringValue(info.terminal_title), args.context)
+        : null;
     return {
       base: {
         ...base,
+        field_claims: claims.title(
+          claimsCapture,
+          titleClaim?.kind === "id" ? titleClaim.id : null,
+        ),
         session_binding:
           bound?.binding ?? (resolved.session ? ("guessed" as const) : null),
         session_fingerprint: bound?.fingerprint ?? null,
@@ -301,13 +315,14 @@ export function createHerdrConversationSource(args: {
             : null,
       },
       resolved,
+      claimsCapture,
     };
   };
 
   const readShown = async (pane_id: string): Promise<Conversation> => {
     const step = await resolve(pane_id);
     if (!("resolved" in step)) return step;
-    const { base, resolved } = step;
+    const { base, resolved, claimsCapture } = step;
     // A new Codex thread has no transcript until its first message; it is
     // still the pane's conversation, so Chat keeps its composer.
     if (
@@ -326,6 +341,7 @@ export function createHerdrConversationSource(args: {
     try {
       const projection = await args.cache.get(resolved);
       const messages = conversationMessages(projection.entries);
+      const tool = runningTool(projection.entries);
       if (base.session_fingerprint)
         remember(
           base.session_fingerprint,
@@ -340,7 +356,22 @@ export function createHerdrConversationSource(args: {
         messages,
         latest: latestAssistantMessage(messages),
         quest: projection.quest,
-        running_tool: runningTool(projection.entries),
+        running_tool: tool,
+        field_claims: claims.transcript(claimsCapture, {
+          session: resolved.session,
+          status: tool
+            ? "working"
+            : messages.at(-1)?.role === "user"
+              ? "working"
+              : messages.at(-1)?.role === "assistant"
+                ? "idle"
+                : null,
+          revision: JSON.stringify([
+            projection.file.mtimeMs,
+            projection.file.size,
+            projection.file.changeToken ?? null,
+          ]),
+        }),
       } satisfies Conversation;
     } catch (error) {
       args.cache.invalidate(resolved);
@@ -517,6 +548,7 @@ export function createHerdrConversationSource(args: {
     dismiss: ({ pane_id, delivery_id }) =>
       deliveries.dismiss(pane_id, delivery_id),
     dispose: () => {
+      claims.clear();
       for (const timer of deadlines) clearTimeout(timer);
       deadlines.clear();
       codexWatch?.close();
@@ -616,6 +648,17 @@ export function createHerdrConversationSource(args: {
         const result = await args.herdrCall("agent.list", {});
         const agents =
           isRecord(result) && Array.isArray(result.agents) ? result.agents : [];
+        if (
+          isRecord(result) &&
+          Array.isArray(result.agents) &&
+          agents.every(
+            (agent) => isRecord(agent) && typeof agent.pane_id === "string",
+          ) &&
+          new Set(agents.map((agent) => agent.pane_id)).size === agents.length
+        )
+          claims.completePanes(
+            new Set(agents.map((agent) => agent.pane_id as string)),
+          );
         for (const agent of agents.filter(isRecord)) {
           const id = stringValue(agent.pane_id);
           if (id) listed.set(id, agent);

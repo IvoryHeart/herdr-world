@@ -181,6 +181,40 @@ next incarnation before it acts.
   if the binding is attached and its other checks pass
 
 
+### Requirement: Per-field claims
+
+A field that more than one source can report SHALL carry claims. Each claim SHALL
+record:
+- the value;
+- the source that delivered it, and its author when known and different;
+- when it was observed;
+- whether it was reported or inferred;
+- the source's revision, when the source has one.
+
+Several claims SHALL coexist for one field.
+- Each field SHALL declare the rule that chooses what to display.
+- A claim SHALL be removed only by its own source's complete listing or an explicit
+  retraction. Another source's silence SHALL NOT remove it.
+- A verb SHALL declare which claims authorize it, rather than using the most recent
+  claim.
+- A harness's native session or thread ID SHALL be a claim about the agent, never
+  World's identity for it.
+
+#### Scenario: Two sources disagree
+- **WHEN** Herdr reports an agent idle and World infers it working from its transcript
+- **THEN** both claims are kept with their sources, and the field's display rule
+  chooses what is shown
+
+#### Scenario: One source goes quiet
+- **WHEN** one source stops reporting a field that another source still reports
+- **THEN** the other source's claim remains, and the silent source's claim is removed
+  only by its own complete listing or retraction
+
+#### Scenario: Authority for a send
+- **WHEN** a send needs the agent session in a pane
+- **THEN** only the pane's current reported session authorizes it, not an inferred or
+  older claim
+
 ### Requirement: Explicit record lifetimes
 
 Each kind of World record SHALL declare what happens when its binding ends: archive,

@@ -1,3 +1,4 @@
+import { LinkClaims } from "./link-claims";
 import type { PullRequestAction } from "../../../shared/pullRequests";
 import {
   freshPullRequestDetail,
@@ -137,6 +138,7 @@ export class SourcesService {
   #waitMs: number;
   #sources: Record<WorldSourceId, SourceRuntime>;
   #links: WorkLink[] = [];
+  #linkClaims = new LinkClaims();
   #linkedAt = 0;
   /** Bumped by a settings change; older refresh cycles then write nothing. */
   #epoch = 0;
@@ -242,6 +244,7 @@ export class SourcesService {
       sources: this.statuses(),
       items,
       links: this.#links.filter((link) => keys.has(link.itemKey)),
+      linkClaims: this.#linkClaims.values(),
       actions: [...this.#actions],
     };
   }
@@ -493,11 +496,15 @@ export class SourcesService {
       return;
     const items = this.#items();
     const topology = await this.#options.topology().catch(() => []);
-    const links = items.length
-      ? await linkWorkItems(topology, items, this.#options.resolver)
-      : [];
+    const nextClaims = this.#linkClaims.fork();
+    const links = await linkWorkItems(topology, items, this.#options.resolver, {
+      claims: nextClaims,
+      observedAt: this.#now(),
+      completeItems: this.#sources.github.state === "connected",
+    });
     if (epoch !== this.#epoch) return;
     this.#links = links;
+    this.#linkClaims = nextClaims;
     this.#linkedAt = this.#now();
   }
 }

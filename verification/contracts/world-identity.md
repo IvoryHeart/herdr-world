@@ -2,8 +2,8 @@
 
 Requirement: [store-issued World IDs](../../openspec/specs/world-identity/spec.md).
 Approved full design: `openspec/changes/world-protocol-identity`, task 6 and M4.
-The maintained boundary covers the allocator and verified bindings. Claims and
-remaining JSON-owned ID creation are separate work.
+The maintained boundary covers the allocator, verified bindings and runtime field
+claims. Remaining JSON-owned ID creation is separate work.
 
 Allowed: any earlier ID format preserved on import; global registry collision
 retry; independent random allocation after restoring a stopped copy; permanent
@@ -152,6 +152,50 @@ existing witness suites remain unchanged. Compiled controls removing the old
 record's outgoing uniqueness or dropping native/session admission must fail
 assertions; load or cleanup errors do not count as detection.
 
+## Runtime field claims and direct evidence
+
+The current multi-source fields are agent status and PR links. Native harness
+session/thread IDs are additional claims about the occupant, never World IDs.
+The typed field policy declares channel precedence for status/session, both PR
+links with provenance, and reported-only session authority for named send verbs.
+Conversation Send still re-reads its pane and keeps its original title/session
+checks. PR verbs explicitly require GitHub's own record; a reported or inferred
+link is display evidence only. The old visible projections remain unchanged.
+
+`world/field-claims.test.ts` exhausts all 512 length-three sequences of report,
+partial silence, complete omission and explicit retraction across two channels.
+Its independent map oracle checks source ownership at every transition, detached
+input/output values, coexisting evidence, declared display and reported-only
+verb authority. `agent/agent-claims.test.ts` adds eight overlapping read schedules
+across same/replaced terminals, with old transcript completion before/after the
+new observation and transcript. It also checks native session replacement,
+complete native absence and runtime disposal. These direct finite checks cover
+source ownership and local publication order without expanding M4's atomic
+binding-resolution model; no new timing or liveness claim is made.
+
+`agent/conversation-claims.test.ts` reads an actual synthetic transcript through
+the real conversation source and cache. Herdr idle and inferred working coexist;
+removing the transcript keeps its earlier inference, and losing the current
+native session refuses Send without downstream input. Regressions also remove
+the reported session itself while preserving the other channel's evidence. Native IDs retain their
+full provenance as values. Existing conversation send/title/race tests remain
+mandatory consumers. `sources/link-claims.test.ts` drives the actual linker and
+service: disagreement survives, reported-first legacy links stay unchanged,
+metadata omission removes only its report, failed topology/git/source reads
+retain other claims, and only complete unambiguous native absence retires an
+occupant. A reported URL outside GitHub's own items remains visible evidence but
+cannot authorize a PR verb. Existing source/action/freshness consumers remain
+mandatory. Claim updates are staged with the source-service epoch so retired
+refreshes cannot write them.
+
+Seven compiled production controls remove partial-silence preservation, choose
+the last status instead of the declared first channel, admit inferred authority,
+ignore read ordering, reuse an occupant's evidence, admit ambiguous link topology,
+or omit open-tool status inference. Each fails the intended test assertion;
+loader/parser/cleanup failures are excluded. Claims live only in runtime memory;
+the evidence does not establish provider truth, arbitrary native event order,
+physical durability, or an atomic downstream read-and-send.
+
 ## Evidence and acceptance
 
 Run the unfiltered `bun run verification:gate` plus complete mandatory consumers
@@ -160,6 +204,6 @@ Manifests retain source/tool/input identity, per-seed replay witnesses, negative
 controls and resource accounting through the existing gate. Each model receives
 its measured shard weight; protected reports and branch rules are unchanged.
 Independent PR review and CI are required. The ID foundation's review does not
-accept the binding extension. Fields with several sources, JSON-owned ID creation,
+accept the binding or claim extensions. JSON-owned ID creation,
 physical power-loss safety, arbitrary provider/OS behavior and downstream
 exactly-once execution remain outside the model and this candidate.

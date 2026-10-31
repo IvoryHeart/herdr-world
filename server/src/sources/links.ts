@@ -1,3 +1,5 @@
+import { LinkClaims } from "./link-claims";
+import { bindingPaneTerminals } from "../world/binding-pane-list";
 import { isAbsolute } from "node:path";
 import type { WorkItem, WorkLink } from "../../../shared/worldSources";
 import { sshCommandArgv } from "../bridge/ssh-command";
@@ -27,6 +29,7 @@ export type TopologyConnection = {
   snapshot: {
     workspaces: Record<string, unknown>[];
     panes: Record<string, unknown>[];
+    coverage?: { panes: number };
   } | null;
 };
 
@@ -51,6 +54,8 @@ type Candidate = {
   sessionFingerprint: string | null;
   path: string | null;
   reportedPr: string | null;
+  terminalId: string | null;
+  sourceRevision?: string | number;
 };
 
 export class CheckoutResolver {
@@ -61,6 +66,13 @@ export class CheckoutResolver {
     private readonly hostOf: (connectionId: string) => CheckoutHost | null,
     private readonly now: () => number = Date.now,
   ) {}
+
+  observation(connectionId: string, path: string) {
+    const entry = this.#cache.get(`${connectionId}\0${path}`);
+    return entry && this.now() - entry.at < CHECKOUT_TTL_MS
+      ? structuredClone(entry)
+      : undefined;
+  }
 
   cached(connectionId: string, path: string): Checkout | null | undefined {
     const entry = this.#cache.get(`${connectionId}\0${path}`);
@@ -155,6 +167,12 @@ export function linkCandidates(connections: TopologyConnection[]): Candidate[] {
           : null,
         path,
         reportedPr: report?.reportedPr ?? null,
+        terminalId:
+          typeof pane.terminal_id === "string" ? pane.terminal_id : null,
+        ...(typeof pane.state_change_seq === "number" ||
+        typeof pane.state_change_seq === "string"
+          ? { sourceRevision: pane.state_change_seq }
+          : {}),
       });
     }
   }
@@ -165,12 +183,13 @@ export async function linkWorkItems(
   connections: TopologyConnection[],
   items: readonly WorkItem[],
   resolver: CheckoutResolver,
+  evidence?: { claims: LinkClaims; observedAt: number; completeItems: boolean },
 ): Promise<WorkLink[]> {
   const candidates = linkCandidates(connections);
   const pending = [
     ...new Map(
       candidates
-        .filter((candidate) => candidate.path)
+        .filter((candidate) => candidate.path && items.length > 0)
         .map((candidate) => [
           `${candidate.connectionId}\0${candidate.path}`,
           candidate,
@@ -206,7 +225,38 @@ export async function linkWorkItems(
       via,
     });
   };
+  const claimableConnections = new Set<string>();
+  if (evidence)
+    for (const connection of connections) {
+      const snapshot = connection.snapshot;
+      if (
+        connection.stale ||
+        !snapshot ||
+        (connection.snapshot_generation ?? connection.generation) !==
+          connection.generation ||
+        !bindingPaneTerminals(snapshot.panes)
+      )
+        continue;
+      claimableConnections.add(connection.connection_id);
+      if (snapshot.coverage?.panes === snapshot.panes.length)
+        evidence.claims.completePanes(
+          connection.connection_id,
+          connection.generation,
+          new Set(
+            candidates
+              .filter(
+                (candidate) =>
+                  candidate.connectionId === connection.connection_id,
+              )
+              .map((candidate) => candidate.paneId),
+          ),
+        );
+    }
   for (const candidate of candidates) {
+    const claimable =
+      evidence &&
+      candidate.terminalId &&
+      claimableConnections.has(candidate.connectionId);
     const reported = candidate.reportedPr
       ? byUrl.get(normalizedPrUrl(candidate.reportedPr))
       : undefined;
@@ -214,7 +264,35 @@ export async function linkWorkItems(
     const checkout = candidate.path
       ? resolver.cached(candidate.connectionId, candidate.path)
       : null;
-    if (!checkout) continue;
+    const observation = candidate.path
+      ? resolver.observation(candidate.connectionId, candidate.path)
+      : undefined;
+    const reportedClaim = candidate.reportedPr
+      ? {
+          value: normalizedPrUrl(candidate.reportedPr),
+          source: "herdr.metadata",
+          ...(candidate.sessionFingerprint
+            ? { author: candidate.sessionFingerprint }
+            : {}),
+          observed_at: evidence?.observedAt ?? 0,
+          basis: "reported" as const,
+          ...(candidate.sourceRevision !== undefined
+            ? { source_revision: candidate.sourceRevision }
+            : {}),
+        }
+      : null;
+    const subject = {
+      connectionId: candidate.connectionId,
+      generation: candidate.generation,
+      paneId: candidate.paneId,
+      terminalId: candidate.terminalId,
+      sessionFingerprint: candidate.sessionFingerprint,
+    };
+    if (!checkout) {
+      if (claimable)
+        evidence!.claims.observe(subject, reportedClaim, undefined);
+      continue;
+    }
     // The branch must live in one of the checkout's remotes: a fork's PR
     // shares its base repository with every upstream checkout, so a PR
     // without a known head repository links only when reported. Open pull
@@ -230,6 +308,21 @@ export async function linkWorkItems(
         (a, b) =>
           Number(a.lane === "merged") - Number(b.lane === "merged") ||
           b.updatedAt - a.updatedAt,
+      );
+    if (claimable)
+      evidence!.claims.observe(
+        subject,
+        reportedClaim,
+        evidence!.completeItems
+          ? matches[0]
+            ? {
+                value: matches[0].url,
+                source: "world.checkout",
+                observed_at: observation!.at,
+                basis: "inferred",
+              }
+            : null
+          : undefined,
       );
     if (matches[0] && !reported) add(candidate, matches[0], "branch");
     for (const [, key] of checkout.branch.toUpperCase().matchAll(TICKET_KEY)) {

@@ -1,3 +1,5 @@
+import { reportedSessionClaim } from "./agent-claims";
+import { claimAuthorizes } from "../world/field-claims";
 import { createHash } from "node:crypto";
 import { basename } from "node:path";
 import { taskSummarySessionFingerprint } from "../herdr/task-summary";
@@ -33,7 +35,15 @@ export function paneBinding(
       context,
       verified,
     );
-    if (title.kind === "id")
+    if (
+      title.kind === "id" &&
+      claimAuthorizes("session", "conversation.send", {
+        value: title.id,
+        source: "herdr.title",
+        observed_at: Date.now(),
+        basis: "reported",
+      })
+    )
       return {
         binding: "title",
         fingerprint: createHash("sha256")
@@ -43,14 +53,11 @@ export function paneBinding(
     // The title decides whenever it names a thread.
     if (title.kind !== "none") return { binding: "title", fingerprint: null };
   }
-  const session = isRecord(info.agent_session) ? info.agent_session : null;
-  if (
-    !session ||
-    ["source", "agent", "kind", "value"].some(
-      (key) => typeof session[key] !== "string" || !session[key],
-    )
-  )
+  // This claim is made from this fresh agent.get reply, never from the read model.
+  const current = reportedSessionClaim(info, Date.now());
+  if (!current || !claimAuthorizes("session", "conversation.send", current))
     return null;
+  const session = current.value;
   return {
     binding: "reported",
     fingerprint: taskSummarySessionFingerprint(
