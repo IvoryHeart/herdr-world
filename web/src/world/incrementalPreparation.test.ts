@@ -19,6 +19,7 @@ import {
   TOWN_PRESENTATION_BOUNDS,
 } from "./herdrOfficeProjection";
 import { projectBoard } from "./board/boardModel";
+import { worldObjectForHosts, worldObjectForWatches } from "./worldFilters";
 
 function changeFirstRoom(f: ReturnType<typeof observationFixture>) {
   const snapshot = f.raw.connections[0]!.snapshot!;
@@ -290,3 +291,89 @@ test("seeded observation, appearance, watch and seen sequences equal complete pr
     }
   }
 });
+
+for (const view of ["town", "board"] as const) {
+  for (const scope of ["hosts", "watches", "unwatched pane"] as const) {
+    test(`${view}: changes outside the consumed ${scope} projection prepare no view room`, async () => {
+      const f = observationFixture(2);
+      if (scope === "unwatched pane") {
+        const snapshot = f.raw.connections[0]!.snapshot!;
+        snapshot.panes.push({
+          ...snapshot.panes[0]!,
+          pane_id: "hidden-pane",
+          terminal_id: "hidden-terminal",
+        });
+        snapshot.tabs[0]!.pane_count = 2;
+        snapshot.workspaces[0]!.pane_count = 2;
+        snapshot.coverage.panes++;
+        snapshot.coverage.agent_panes++;
+        snapshot.coverage.status.working++;
+        snapshot.coverage.by_workspace[0]!.panes++;
+        snapshot.coverage.by_workspace[0]!.agent_panes++;
+        snapshot.coverage.by_workspace[0]!.status.working++;
+      }
+      const release = f.store.retainView(view);
+      f.store.setVisibleConnectionIds(["alpha"]);
+      const watches = [
+        { connectionId: "alpha", generation: 1, terminalId: "term-0" },
+      ];
+      const projectWorld = (world: ReturnType<typeof buildWorldObject>) => {
+        const shown = worldObjectForHosts(world, ["alpha"]);
+        return scope !== "hosts"
+          ? worldObjectForWatches(
+              worldObjectWithWatches(shown, watches),
+              watches,
+            )
+          : shown;
+      };
+      const releaseProjection =
+        scope !== "hosts" ? f.store.presentViewsFrom(projectWorld) : () => {};
+      try {
+        await f.store.refresh();
+        const town = createOfficeProjector(TOWN_PRESENTATION_BOUNDS);
+        const shown = () =>
+          projectWorld(buildWorldObject(f.store.get().connections));
+        const project = () =>
+          view === "town"
+            ? town(shown(), f.clock.now(), null)
+            : projectBoard(shown());
+        const before = project();
+        // Hosts hides beta entirely; watched-only hides alpha's second room.
+        const host = f.raw.connections[scope === "hosts" ? 1 : 0]!;
+        const changedPane = scope === "hosts" ? 0 : scope === "watches" ? 1 : 2;
+        host.snapshot!.panes[changedPane]!.agent_status = "blocked";
+        let after!: ReturnType<typeof project>;
+        const work = await countedWorldWork(async () => {
+          await f.store.refresh();
+          after = project();
+        });
+        expect(work["world.room-prepare"]).toBe(1);
+        expect(work["office.room-prepare"] ?? 0).toBe(0);
+        expect(work["office.room-project"] ?? 0).toBe(0);
+        expect(work["board.room-project"] ?? 0).toBe(0);
+        if (scope === "hosts") expect(work["board.host-project"] ?? 0).toBe(0);
+        if ("rooms" in before && "rooms" in after)
+          expect(after.rooms[0]).toBe(before.rooms[0]);
+        if ("workspaces" in before && "workspaces" in after)
+          expect(after.workspaces[0]).toBe(before.workspaces[0]);
+        expect(
+          f.store.get().connections[scope === "hosts" ? 1 : 0]!.snapshot!.panes[
+            changedPane
+          ]!.agent_status,
+        ).toBe("blocked");
+        // Expanding scope must expose current content, including the hidden change.
+        releaseProjection();
+        f.store.setVisibleConnectionIds(["alpha", "beta"]);
+        const all = buildWorldObject(f.store.get().connections);
+        expect(
+          projectBoard(all)
+            .tabs.flatMap((tab) => tab.panes)
+            .some((pane) => pane.status === "blocked"),
+        ).toBe(true);
+      } finally {
+        releaseProjection();
+        release();
+      }
+    });
+  }
+}

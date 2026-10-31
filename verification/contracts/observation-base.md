@@ -66,7 +66,13 @@ the service generation checks (`base.generation`) or browser incarnation reset
 
 P6 uses the test clock and production work counters. One status change prepares
 one room and dependent aggregates, preserving every other room presentation; a
-Town-only refresh prepares no Board topology. Appearance/watch changes retain
+Town-only refresh prepares no Board topology. Hosts and watched-only projection
+regressions cover hidden hosts, hidden rooms and unwatched panes in a shown room:
+aggregate World data updates while both view-room work counters stay zero. The
+runtime uses the same presentation projection and revalidates scope across yields.
+Explicit base/parameter refusals are separate from transient database/storage/read
+errors; those errors must preserve negotiated bases for the next read.
+Appearance/watch changes retain
 unaffected room inputs, while unrelated profile edits retain prepared actor looks.
 Seeded observation, appearance, watch and seen-mark sequences compare Town and Board
 with complete preparation. Relations, Town master and source data remain separate

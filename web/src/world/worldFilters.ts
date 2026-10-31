@@ -119,6 +119,14 @@ export function worldObjectForHosts(
   return filtered;
 }
 
+// Fingerprint only the consumed room projection. Even a change to an unwatched
+// pane in the same source room must retain its watched presentation. Workspace
+// lifetime and two variants bound retention, including qualification metadata.
+const watchedRooms = new WeakMap<
+  WorldSpaceObject["workspace"],
+  Map<string, WorldSpaceObject>
+>();
+
 /** Keeps ancestry for a browser-local watched-only presentation. */
 export function worldObjectForWatches(
   world: WorldObject,
@@ -148,21 +156,27 @@ export function worldObjectForWatches(
       for (const leaf of children)
         if (leaf.kind === "agent") status[leaf.status]++;
       const agents = children.filter((leaf) => leaf.kind === "agent").length;
-      return [
-        {
-          ...space,
-          children,
-          tabs,
-          coverage: {
-            spaces: 1,
-            tabs: tabs.length,
-            leaves: children.length,
-            agents,
-            shells: children.length - agents,
-            status,
-          },
+      const room = {
+        ...space,
+        children,
+        tabs,
+        coverage: {
+          spaces: 1,
+          tabs: tabs.length,
+          leaves: children.length,
+          agents,
+          shells: children.length - agents,
+          status,
         },
-      ];
+      };
+      const key = JSON.stringify(room);
+      let variants = watchedRooms.get(space.workspace);
+      if (!variants) watchedRooms.set(space.workspace, (variants = new Map()));
+      const cached = variants.get(key);
+      if (cached) return [cached];
+      if (variants.size >= 2) variants.delete(variants.keys().next().value!);
+      variants.set(key, room);
+      return [room];
     });
     if (!spaces.length) return [];
     const coverage = {

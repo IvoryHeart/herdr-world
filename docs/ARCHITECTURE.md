@@ -66,7 +66,8 @@ The browser sends its held base only after negotiation. It applies each reply as
 one publication, retains unchanged host content by identity and rechecks current
 Bridge qualification after cooperative preparation. A lost retained base discards
 the reply and requests one complete recovery; a base refusal disables bases for
-that hello. A different incarnation cannot reuse old content, and a reply from a
+that hello. Only explicit base or snapshot-parameter refusals trigger that
+fallback; unrelated storage/read errors retain negotiated bases. A different incarnation cannot reuse old content, and a reply from a
 foreign incarnation is rejected. An all-unchanged reply with identical host
 metadata prepares and publishes nothing.
 
@@ -75,7 +76,9 @@ slice it reads: workspace, tabs, panes, admitted agent metadata, coverage and th
 owner/generation/presentation fences. Appearance and watch overlays retain rooms
 they do not change. Town caches canonical and bounded room presentations, and
 Board caches room topology; host/world summaries use their per-room contributions.
-Only mounted Town/Board consumers request their respective preparation. A newly
+Only mounted Town/Board consumers request their respective preparation, using
+the same Hosts, watched-only and appearance projection they present. Changes outside
+that scope update the aggregate World without preparing hidden view rooms. A newly
 selected view builds any missing model before presentation; the Board document
 continues serving appearance and relations in every view. Profile looks compare
 the effective per-agent look, so unrelated profile revisions reuse prepared looks.

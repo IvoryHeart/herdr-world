@@ -511,7 +511,9 @@ desks it draws, not the tabs a workspace can have.
 The runtime store negotiates `world_observation_v1` and keeps unchanged host
 objects. Base admission lives in [observationBase.ts](observationBase.ts);
 missing bases recover with one complete request, foreign incarnations cannot
-reuse retained content, and Bridge qualification still fences publication.
+reuse retained content, and Bridge qualification still fences publication. Only
+explicit base or snapshot-parameter refusals disable bases for that hello; transient
+database/read errors retain negotiated bases.
 Identical confirmations publish nothing. The debounce, one-in-flight/coalesced
 refresh, chunk transport and fallback refresh remain in place.
 
@@ -520,7 +522,12 @@ slice and owner/presentation metadata. [appearance.ts](appearance.ts) and
 [worldWatches.ts](worldWatches.ts) preserve unaffected room identities.
 Town reuses canonical rooms and [bounded presentation](officeRoomPresentation.ts);
 Board reuses [room topology](board/boardRoom.ts). Mounted Town and Board consumers
-hold preparation interest; absent views do no topology preparation. On a switch,
+hold preparation interest; absent views do no topology preparation.
+[useWorldObservation.ts](useWorldObservation.ts) registers the same Hosts/watch/appearance
+projection used for presentation, so hidden hosts, rooms and unwatched panes do no
+view-room preparation. Aggregate World data remains available to shell and Inspector
+consumers. A scope change during cooperative preparation is revalidated before
+publication. On a switch,
 missing view models finish before presentation. This does not retire the shared
 Board document or retained Spaces. Profile looks are a separate reader, invalidated
 only when the effective look changes; seen marks and relations retain their existing

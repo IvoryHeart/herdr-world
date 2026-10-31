@@ -15,7 +15,12 @@ import {
 import type { Pane, Tab, Workspace } from "../types";
 import { prepareWorldBoard } from "./board/boardModel";
 import { prepareWorldOffice } from "./herdrOfficeProjection";
-import { prepareWorldObject, yieldWorldTask } from "./worldObject";
+import {
+  prepareWorldObject,
+  yieldWorldTask,
+  type WorldObject,
+} from "./worldObject";
+import { worldObjectForHosts } from "./worldFilters";
 import { DEVTOOLS } from "./devtools/flag";
 import { countWorldWork } from "./devtools/renderer";
 
@@ -414,6 +419,20 @@ export class WorldRuntimeStore {
   private observationHello: BridgeHello | null | undefined;
   private baseRefused = false;
   private readonly viewConsumers = new Map<"town" | "board", number>();
+  private viewProjection: ((world: WorldObject) => WorldObject) | null = null;
+  private viewScopeVersion = 0;
+  private visibleViewScope: readonly string[] | null = null;
+
+  /** The same Hosts/watch/appearance projection passed to mounted views. */
+  presentViewsFrom(project: (world: WorldObject) => WorldObject) {
+    this.viewProjection = project;
+    this.viewScopeVersion++;
+    return () => {
+      if (this.viewProjection !== project) return;
+      this.viewProjection = null;
+      this.viewScopeVersion++;
+    };
+  }
 
   retainView(view: "town" | "board") {
     this.viewConsumers.set(view, (this.viewConsumers.get(view) ?? 0) + 1);
@@ -430,9 +449,14 @@ export class WorldRuntimeStore {
 
   setVisibleConnectionIds(ids: readonly string[]) {
     const next = [...new Set(ids)].slice(0, 128);
-    if (JSON.stringify(next) === JSON.stringify(this.visibleConnectionIds))
+    if (
+      this.visibleViewScope !== null &&
+      JSON.stringify(next) === JSON.stringify(this.visibleConnectionIds)
+    )
       return;
     this.visibleConnectionIds = next;
+    this.visibleViewScope = next;
+    this.viewScopeVersion++;
     if (this.refreshInFlight) this.refreshQueued = true;
     else if (this.unlistenControl) this.scheduleRefresh();
   }
@@ -636,6 +660,7 @@ export class WorldRuntimeStore {
         );
         if (DEVTOOLS) countWorldWork("world.prepare");
         const selected = this.presentedSelection();
+        const viewScopeVersion = this.viewScopeVersion;
         const world = await prepareWorldObject(parsed.connections, current, {
           selectedConnectionId: selected,
           yieldTask: () => this.preparationYield("object"),
@@ -645,17 +670,29 @@ export class WorldRuntimeStore {
             : undefined,
         });
         if (!world) return;
+        const viewWorld =
+          this.viewConsumers.get("town") || this.viewConsumers.get("board")
+            ? this.viewProjection
+              ? this.viewProjection(world)
+              : worldObjectForHosts(world, this.visibleViewScope)
+            : world;
         if (this.viewConsumers.get("town"))
           await prepareWorldOffice(
-            world,
-            () => current() && !!this.viewConsumers.get("town"),
+            viewWorld,
+            () =>
+              current() &&
+              viewScopeVersion === this.viewScopeVersion &&
+              !!this.viewConsumers.get("town"),
             () => this.preparationYield("office"),
           );
         else await this.preparationYield("office");
         if (this.viewConsumers.get("board"))
           await prepareWorldBoard(
-            world,
-            () => current() && !!this.viewConsumers.get("board"),
+            viewWorld,
+            () =>
+              current() &&
+              viewScopeVersion === this.viewScopeVersion &&
+              !!this.viewConsumers.get("board"),
             () => this.preparationYield("board"),
           );
         else await this.preparationYield("board");
@@ -684,7 +721,12 @@ export class WorldRuntimeStore {
         });
         // A host focused during preparation is prepared too (only its
         // host and the index are built again).
-        if (!changed && this.presentedSelection() === selected) break;
+        if (
+          !changed &&
+          this.presentedSelection() === selected &&
+          viewScopeVersion === this.viewScopeVersion
+        )
+          break;
         parsed.connections = connections;
       }
       this.appliedPriorityVersion = Math.max(
@@ -739,7 +781,9 @@ export class WorldRuntimeStore {
           !base ||
           attempt !== 0 ||
           !(error instanceof Error) ||
-          !/base|param|unsupported/i.test(error.message)
+          !/^((invalid|unsupported) World (observation|snapshot) base|invalid World snapshot parameters)$/i.test(
+            error.message,
+          )
         )
           throw error;
         this.baseRefused = true;

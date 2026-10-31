@@ -474,8 +474,13 @@ NOT restore actionability retired by the browser's qualified client.
 A confirmation for content no longer held SHALL discard the entire reply and
 trigger one request without a base. A changed incarnation SHALL prevent reuse of
 all old content, and replies from another incarnation SHALL be rejected. A base
-refusal SHALL disable further bases on that socket. Existing coalescing, fallback
+refusal SHALL disable further bases on that socket. Unrelated transient storage or
+read failures SHALL NOT disable negotiated bases. Existing coalescing, fallback
 refresh and chunk transport SHALL remain in place for negotiated and older clients.
+
+#### Scenario: Transient database failure
+- **WHEN** a based pull fails because the database is temporarily locked
+- **THEN** the browser retains negotiated bases for its next refresh
 
 #### Scenario: Host retires during a request
 - **WHEN** a reply confirms a host whose qualified runtime retired after the request
@@ -498,7 +503,9 @@ owner/presentation inputs are unchanged. Appearance, relations, profiles, watche
 seen marks and Town master SHALL invalidate only the readers of the changed inputs.
 Host and World counts, attention and summaries SHALL use per-room contributions.
 
-A view's topology SHALL be prepared only for mounted consumers. The Board document
+A view's topology SHALL be prepared only for mounted consumers and their consumed
+Hosts/watch projection. Changes outside that projection SHALL update aggregate World
+data without preparing hidden view rooms. The Board document
 SHALL remain available for appearance and relations in all views. A newly selected
 view SHALL finish missing model preparation before presentation. Incremental output
 SHALL equal complete preparation of the same observation, documents and marks.
@@ -512,6 +519,12 @@ SHALL equal complete preparation of the same observation, documents and marks.
 - **WHEN** an observation is admitted while only Town is mounted
 - **THEN** no Board topology is prepared, its document remains available, and switching
   to Board finishes its topology before presentation
+
+#### Scenario: A change is outside the presented scope
+- **WHEN** Town or Board is mounted and only a host, room or pane hidden by Hosts or
+  watched-only changes
+- **THEN** aggregate observation remains current and no unchanged presented room is
+  prepared again
 
 #### Scenario: A profile look changes
 - **WHEN** a profile's look changes without an observation change

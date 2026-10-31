@@ -81,27 +81,35 @@ test("a lost base discards the whole reply and follows once with a complete requ
   expect(store.get().connections).toHaveLength(2);
 });
 
-test("a refused base falls back once and stays disabled only for that hello", async () => {
-  const { store, client, calls } = observationFixture();
-  await store.refresh();
-  const read = client.call;
-  let refused = 0;
-  client.call = async (method, params) => {
-    if (params?.base && refused++ === 0) {
-      calls.push(params);
-      throw new Error("invalid World snapshot base");
-    }
-    return read(method, params);
-  };
-  await store.refresh();
-  await store.refresh();
-  expect(calls[1]).toHaveProperty("base");
-  expect(calls[2]).not.toHaveProperty("base");
-  expect(calls[3]).not.toHaveProperty("base");
-  client.hello = { ...client.hello };
-  await store.refresh();
-  expect(calls[4]).toHaveProperty("base");
-});
+test.each([
+  "invalid World snapshot base",
+  "invalid World observation base",
+  "unsupported World observation base",
+  "invalid World snapshot parameters",
+])(
+  "a refused base (%s) falls back once and stays disabled only for that hello",
+  async (message) => {
+    const { store, client, calls } = observationFixture();
+    await store.refresh();
+    const read = client.call;
+    let refused = 0;
+    client.call = async (method, params) => {
+      if (params?.base && refused++ === 0) {
+        calls.push(params);
+        throw new Error(message);
+      }
+      return read(method, params);
+    };
+    await store.refresh();
+    await store.refresh();
+    expect(calls[1]).toHaveProperty("base");
+    expect(calls[2]).not.toHaveProperty("base");
+    expect(calls[3]).not.toHaveProperty("base");
+    client.hello = { ...client.hello };
+    await store.refresh();
+    expect(calls[4]).toHaveProperty("base");
+  },
+);
 
 test("unnegotiated clients retain complete snapshot behavior", async () => {
   const { store, client, calls } = observationFixture();
@@ -171,24 +179,35 @@ test.each(["token", "metadata", "duplicate", "null-token"])(
   },
 );
 
-test("a transient based-call failure retires observation without disabling negotiated bases", async () => {
-  const f = observationFixture();
-  await f.store.refresh();
-  const read = f.client.call;
-  let fail = true;
-  f.client.call = async (method, params) => {
-    if (fail) {
-      fail = false;
-      throw new Error("temporary read failure");
-    }
-    return read(method, params);
-  };
-  await f.store.refresh();
-  expect(f.store.get().status).toBe("error");
-  await f.store.refresh();
-  expect(f.store.get().status).toBe("ready");
-  expect(f.calls[1]).toHaveProperty("base");
-});
+test.each([
+  "temporary read failure",
+  "database is temporarily locked",
+  "unsupported database operation",
+  "parameter storage unavailable",
+])(
+  "a transient based-call failure (%s) does not disable negotiated bases",
+  async (message) => {
+    const f = observationFixture();
+    await f.store.refresh();
+    const read = f.client.call;
+    let fail = true;
+    f.client.call = async (method, params) => {
+      if (fail) {
+        fail = false;
+        f.calls.push(params ?? {});
+        throw new Error(message);
+      }
+      return read(method, params);
+    };
+    await f.store.refresh();
+    expect(f.store.get().status).toBe("error");
+    await f.store.refresh();
+    expect(f.store.get().status).toBe("ready");
+    expect(f.calls).toHaveLength(3);
+    expect(f.calls[1]).toHaveProperty("base");
+    expect(f.calls[2]).toHaveProperty("base");
+  },
+);
 
 test("a hello incarnation change during a read rejects the old reply independently of disconnect", async () => {
   const f = observationFixture();
