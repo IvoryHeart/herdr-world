@@ -1,9 +1,30 @@
-import { askSessionFingerprint } from "./world-cli-asks";
-import { CliError, type CliErrorCode } from "./world-cli-errors";
+import { StorageOutcomeUnknown } from "../storage/world-protocol";
+import { admitVerb, checkVerbResult, VerbRefusal } from "../verbs/admission";
+import { commandEvidence } from "../verbs/evidence";
+import { registeredVerb } from "../verbs/registry";
+import type { Admission } from "../verbs/types";
+import { guardCliCommand, guardCliHost } from "./world-cli-dispatch";
+import { createBoardChange } from "./world-cli-board-change";
+import {
+  appearanceFor,
+  appearanceKey,
+  parseAppearanceTarget,
+} from "../../../shared/appearance";
 import { handleWorldAsk } from "./world-cli-asks";
 export { answerAsk, ASK_WAIT_MAX_MS, dismissAsk } from "./world-cli-asks";
 import { teamMembers, type GroupSender } from "../../../shared/groups";
 import { isGroupOp } from "./board-groups";
+import {
+  GROUP_CLI_COMMANDS,
+  runGroupCommand,
+  type GroupMoveRequest,
+} from "./world-cli-groups";
+import { CliError } from "./world-cli-errors";
+import { usage, refused, notFound } from "./world-cli-errors";
+import type { WorldCliRequest, WorldCliResponse } from "./world-cli-protocol";
+export type { WorldCliRequest, WorldCliResponse } from "./world-cli-protocol";
+import type { GroupWorkSources } from "../../../shared/groupViews";
+export { CliError, type CliErrorCode } from "./world-cli-errors";
 import { randomUUID } from "node:crypto";
 import { stampSpawn } from "../herdr/spawn-stamp";
 import {
@@ -17,13 +38,20 @@ import {
   tabCardKey,
   TERMINAL_COLOR_NAMES,
 } from "../../../shared/terminalColor";
-import type { BoardDocument, BoardOp, BoardPoint } from "./board-store";
-import {
-  paneRoots,
-  runsInPane,
-  type CallerLocator,
-  type PaneProcessInfo,
-} from "./caller-identity";
+import type {
+  BoardDocument,
+  BoardOp,
+  BoardPoint,
+  CardColor,
+} from "./board-store";
+import type { CallerLocator } from "./caller-identity";
+import { identifyCaller, type CliHost } from "./world-cli-actor";
+export {
+  identifyCaller,
+  paneActor,
+  NO_PANE,
+  type CliHost,
+} from "./world-cli-actor";
 import type { WorldSnapshotResult } from "./snapshot";
 import {
   LEDGER_LIMITS,
@@ -32,68 +60,59 @@ import {
   type LedgerChange,
   type LedgerProbe,
   type ResultStatus,
-  type WorldLedger,
+  type LedgerStore,
 } from "./world-ledger";
 
 /**
  * The World service's side of the `herdr-world` agent CLI (cli/world.ts).
  * Agents change World objects themselves: Board cards and colours, desk order
  * in Town, spawn claims, questions for the owner and task results. Every
- * change is recorded with its actor and time; World-side changes can be
- * undone. Herdr changes need `herdr: true` and cannot be undone by World.
+ * Board change is recorded with its actor and time and can be conditionally
+ * undone. Groups retain bounded recent attribution, separate from Board undo. Herdr changes need `herdr: true` and cannot be undone by World.
  * Nothing here merges, deletes Herdr objects or reaches outside World.
  */
-
-/** A ready, current Herdr runtime the service can call. */
-export type CliHost = {
-  connection_id: string;
-  generation: number;
-  /** The Herdr runs on this machine, so its processes can be checked. */
-  local: boolean;
-  call(method: string, params: Record<string, unknown>): Promise<unknown>;
-};
 
 export type WorldCliDeps = {
   board: {
     get(): BoardDocument;
     patch(ops: readonly BoardOp[]): BoardDocument;
   };
-  ledger: WorldLedger;
+  ledger: LedgerStore;
+  /** Only a durable committed store may issue this receipt. */
+  ledgerReceipt?(recordId: string): string | undefined;
+  recordAnswer?(
+    id: string,
+    text: string,
+    actor: CliActor,
+    recheck?: () => void,
+  ): Promise<number>;
+  captureRecipient?(
+    actor: CliActor,
+  ): Promise<import("./ask-delivery-types").AnswerRecipient | undefined>;
+  acknowledgeAnswer?(
+    id: string,
+    occurrence: string,
+    attempt: number,
+    actor: CliActor,
+    recheck?: () => void,
+  ): Promise<unknown>;
+  incarnation?: string;
   hosts(): CliHost[];
   defaultConnectionId(): string | null;
   snapshot(): Promise<WorldSnapshotResult>;
+  sources?(): Promise<GroupWorkSources>;
+  groupMove?(request: GroupMoveRequest, recheck?: () => void): Promise<unknown>;
   publishBoard(revision: number): void;
   /** Tell World's pages; `asks` when a question was asked or answered. */
   publishLedger(revision: number, asks?: boolean): void;
   now?: () => number;
-};
-
-export type WorldCliRequest = {
-  command: string;
-  params?: Record<string, unknown>;
-  /** What the caller claims: its HERDR_PANE_ID. */
-  caller?: { pane_id?: unknown };
-};
-
-export { CliError } from "./world-cli-errors";
-export type { CliErrorCode } from "./world-cli-errors";
-
-export type WorldCliResponse =
-  | { ok: true; actor: CliActor; result: unknown }
-  | { ok: false; code: CliErrorCode; error: string; actor?: CliActor };
-
-const usage = (message: string): never => {
-  throw new CliError("usage", message);
-};
-const refused = (message: string): never => {
-  throw new CliError("refused", message);
-};
-const notFound = (message: string): never => {
-  throw new CliError("not_found", message);
+  /** Aborted when the service stops: calls that wait return early. */
+  signal?: AbortSignal;
 };
 
 /** The commands the endpoint accepts, as the CLI spells them. */
 export const WORLD_CLI_COMMANDS = [
+  ...GROUP_CLI_COMMANDS,
   "whoami",
   "ls",
   "history",
@@ -108,6 +127,7 @@ export const WORLD_CLI_COMMANDS = [
   "town desk move",
   "ask",
   "ask get",
+  "ask acknowledge",
   "ask answer",
   "ask withdraw",
   "result",
@@ -118,91 +138,8 @@ export type WorldCliCommand = (typeof WORLD_CLI_COMMANDS)[number];
 
 /* ---------- Identity ---------- */
 
-/**
- * A caller that named no pane. Any process can leave HERDR_PANE_ID unset, so
- * this is not the owner, only a terminal that did not say where it runs.
- */
-export const NO_PANE = "terminal with no pane";
-
 /** Herdr pane IDs, such as "w1:p2"; anything else is refused before use. */
 const PANE_ID = /^[A-Za-z0-9_-]{1,32}:[A-Za-z0-9_-]{1,32}$/;
-
-/**
- * Who is calling. Without HERDR_PANE_ID the caller is unverified with no
- * pane. With one, the claim is verified only when the calling process runs
- * in that pane of a local Herdr (searched for among the pane's own
- * processes); otherwise it is labelled unverified and acts on the default host.
- */
-export async function identifyCaller(
-  hosts: readonly CliHost[],
-  paneId: string | undefined,
-  locate: CallerLocator | null,
-): Promise<{ actor: CliActor; host?: CliHost }> {
-  if (!paneId) return { actor: { label: NO_PANE, verified: false } };
-  if (locate)
-    for (const host of hosts) {
-      if (!host.local) continue;
-      const info = (
-        (await host
-          .call("pane.process_info", { pane_id: paneId })
-          .catch(() => null)) as { process_info?: PaneProcessInfo } | null
-      )?.process_info;
-      const roots = paneRoots(info);
-      const chain = roots.length ? locate(roots) : null;
-      if (!chain || !runsInPane(chain, info)) continue;
-      return { actor: (await paneActor(host, paneId)).actor, host };
-    }
-  return {
-    actor: { label: `unverified ${paneId}`, verified: false, pane_id: paneId },
-  };
-}
-
-/**
- * The caller fields Herdr gives for a pane on `host`, as for a verified
- * caller there; `found` is false when the host has no such pane.
- */
-export async function paneActor(
-  host: CliHost,
-  paneId: string,
-): Promise<{ found: boolean; actor: CliActor }> {
-  const pane = (
-    (await host.call("pane.get", { pane_id: paneId }).catch(() => null)) as {
-      pane?: Record<string, unknown>;
-    } | null
-  )?.pane;
-  const agent = typeof pane?.agent === "string" ? pane.agent : undefined;
-  return {
-    found: Boolean(pane),
-    actor: {
-      label: `${agent ?? "terminal"} in ${paneId}`,
-      verified: true,
-      connection_id: host.connection_id,
-      connection_generation: host.generation,
-      pane_id: paneId,
-      ...(typeof pane?.terminal_id === "string"
-        ? { terminal_id: pane.terminal_id }
-        : {}),
-      ...(typeof pane?.workspace_id === "string"
-        ? { workspace_id: pane.workspace_id }
-        : {}),
-      ...(typeof pane?.agent_session === "object" && pane.agent_session !== null
-        ? {
-            agent_session_fingerprint: askSessionFingerprint(
-              pane.agent_session,
-            ),
-            ...(typeof (pane.agent_session as { value?: unknown }).value ===
-            "string"
-              ? {
-                  agent_session_id: (pane.agent_session as { value: string })
-                    .value,
-                }
-              : {}),
-          }
-        : {}),
-      ...(agent ? { agent } : {}),
-    },
-  };
-}
 
 /* ---------- Targets ---------- */
 
@@ -327,8 +264,24 @@ export function probeValue(document: BoardDocument, probe: LedgerProbe) {
       return JSON.stringify(document.layout.pinned[probe.key] ?? null);
     case "offset":
       return JSON.stringify(document.layout.offsets[probe.key] ?? null);
-    case "colour":
-      return JSON.stringify(document.layout.colors[probe.key] ?? null);
+    case "colour": {
+      const binding = Object.values(document.appearance ?? {}).find(
+        (record) => record.kind === "tab" && record.color_key === probe.key,
+      );
+      const color = document.layout.colors[probe.key] ?? null;
+      return JSON.stringify(
+        binding
+          ? {
+              color,
+              owner: [
+                binding.connection_id,
+                binding.native_id,
+                [...binding.witness].sort(),
+              ],
+            }
+          : color,
+      );
+    }
     case "group": {
       const group = probe.ref
         ? groupOf(document.relations.groups, probe.ref)
@@ -370,6 +323,7 @@ function regroupOps(
 type Planned = {
   ops: BoardOp[];
   undo: BoardOp[];
+  revert?: BoardOp[];
   summary: string;
   probe: LedgerProbe;
   regroup?: LedgerChange["regroup"];
@@ -434,9 +388,54 @@ function planBoard(
       const colour = command === "colour set" ? params.colour : null;
       if (colour !== null && !TERMINAL_COLOR_NAMES.includes(colour as never))
         usage(`colour: one of ${TERMINAL_COLOR_NAMES.join(", ")}`);
-      const before = document.layout.colors[key] ?? null;
+      let before: CardColor | null = document.layout.colors[key] ?? null;
+      let ops: BoardOp[] = [{ op: "card.color", key, color: colour as never }];
+      let revert: BoardOp[] | undefined;
+      if (target.kind !== "workspace") {
+        const native_id = target.kind === "tab" ? target.id : target.tab_id;
+        const witness = topology.panes
+          .filter((pane) => pane.tab_id === native_id)
+          .map((pane) => str(pane.terminal_id));
+        const identity = parseAppearanceTarget({
+          connection_id: topology.host.connection_id,
+          kind: "tab",
+          native_id,
+          witness,
+          color_key: key,
+        });
+        const previous = document.appearance?.[appearanceKey(identity)] ?? null;
+        if (previous)
+          before = appearanceFor(document.appearance, identity)
+            ? (document.layout.colors[previous.color_key ?? key] ?? null)
+            : null;
+        revert = [
+          ...new Set([
+            key,
+            ...(previous?.color_key ? [previous.color_key] : []),
+          ]),
+        ].map(
+          (key): BoardOp => ({
+            op: "card.color",
+            key,
+            color: document.layout.colors[key] ?? null,
+          }),
+        );
+        revert.push({
+          op: "appearance.restore",
+          key: appearanceKey(identity),
+          record: previous,
+        });
+        ops = [
+          {
+            op: "appearance.set",
+            target: identity,
+            fields: { color: colour as CardColor | null },
+          },
+        ];
+      }
       return {
-        ops: [{ op: "card.color", key, color: colour as never }],
+        ops,
+        ...(revert ? { revert } : {}),
         undo: [{ op: "card.color", key, color: before }],
         summary: colour ? `coloured ${key} ${colour}` : `reset ${key}'s colour`,
         probe: { aspect: "colour", key },
@@ -498,15 +497,23 @@ const BOARD_COMMANDS = new Set<WorldCliCommand>([
 
 export function createWorldCli(deps: WorldCliDeps) {
   const now = deps.now ?? Date.now;
+  // Outcome bookkeeping may finish an admitted effect; it grants no new effect.
+  const completion: Pick<WorldCliDeps, "ledger" | "publishLedger"> = {
+    get ledger() {
+      return deps.ledger;
+    },
+    publishLedger: deps.publishLedger,
+  };
 
-  const record = (
+  const recordWithDeps = async (
+    deps: Pick<WorldCliDeps, "ledger" | "publishLedger">,
     actor: CliActor,
     command: string,
     summary: string,
     undo: BoardOp[] | null,
     extra: Partial<LedgerChange> = {},
   ) => {
-    const id = deps.ledger.nextId("c");
+    const id = await deps.ledger.nextId("c");
     const change: LedgerChange = {
       id,
       at: now(),
@@ -517,49 +524,47 @@ export function createWorldCli(deps: WorldCliDeps) {
       ...extra,
     };
     deps.publishLedger(
-      deps.ledger.update((document) => document.changes.push(change)),
+      await deps.ledger.update((document) => document.changes.push(change)),
     );
     return change;
   };
 
-  const patchBoard = (ops: BoardOp[], actor: CliActor) => {
+  const patchBoardWithDeps = (
+    deps: WorldCliDeps,
+    ops: BoardOp[],
+    actor: CliActor,
+  ) => {
     const sender: GroupSender = {
       label: actor.label,
       basis: actor.verified ? "inferred" : "reported",
       via: "cli",
     };
+    const bindings = Object.values(deps.board.get().appearance ?? {});
     const document = deps.board.patch(
-      ops.map((op) => (isGroupOp(op) ? { ...op, sender } : op)),
+      ops.map((op) => {
+        if (op.op === "card.color") {
+          const binding = bindings.find(
+            (record) => record.color_key === op.key,
+          );
+          if (binding)
+            return {
+              op: "appearance.set" as const,
+              target: parseAppearanceTarget(binding),
+              fields: { color: op.color },
+            };
+        }
+        return isGroupOp(op) ? { ...op, sender } : op;
+      }),
     );
     deps.publishBoard(document.revision);
     return document;
   };
 
-  /**
-   * Change the Board, then record it. The two files cannot change together,
-   * so a change that cannot be recorded is taken back.
-   */
-  const changeBoard = (
-    actor: CliActor,
-    ops: BoardOp[],
-    revert: BoardOp[],
-    write: (document: BoardDocument) => LedgerChange,
-  ) => {
-    const document = patchBoard(ops, actor);
-    try {
-      return write(document);
-    } catch (error) {
-      try {
-        patchBoard(revert, actor);
-      } catch {
-        // The original error says more.
-      }
-      throw error;
-    }
-  };
+  const changeBoardWithDeps = createBoardChange(deps, patchBoardWithDeps);
 
   /** The host a command acts on, with its live topology. */
-  const topologyFor = async (
+  const topologyWithDeps = async (
+    deps: WorldCliDeps,
     host: CliHost | undefined,
     params: Record<string, unknown>,
   ): Promise<Topology> => {
@@ -581,7 +586,14 @@ export function createWorldCli(deps: WorldCliDeps) {
       !snapshot?.snapshot ||
       snapshot.stale ||
       !snapshot.actionable ||
-      snapshot.snapshot_generation !== chosen.generation
+      snapshot.snapshot_generation !== chosen.generation ||
+      !deps
+        .hosts()
+        .some(
+          (host) =>
+            host.connection_id === chosen.connection_id &&
+            host.generation === chosen.generation,
+        )
     )
       throw new CliError(
         "unavailable",
@@ -595,35 +607,70 @@ export function createWorldCli(deps: WorldCliDeps) {
     };
   };
 
+  let boardTail = Promise.resolve();
+  let boardOutcomeUnknown: StorageOutcomeUnknown | undefined;
+  const queueBoard = <T>(work: () => Promise<T>): Promise<T> => {
+    const result = boardTail.then(async () => {
+      if (boardOutcomeUnknown) throw boardOutcomeUnknown;
+      try {
+        return await work();
+      } catch (error) {
+        if (error instanceof StorageOutcomeUnknown) boardOutcomeUnknown = error;
+        throw error;
+      }
+    });
+    boardTail = result.then(
+      () => {},
+      () => {},
+    );
+    return result;
+  };
+
   async function run(
+    deps: WorldCliDeps,
     command: WorldCliCommand,
     params: Record<string, unknown>,
     actor: CliActor,
     host: CliHost | undefined,
+    recheck: () => void,
   ): Promise<unknown> {
-    if (BOARD_COMMANDS.has(command)) {
-      const topology = await topologyFor(host, params);
-      const plan = planBoard(
-        command,
-        params,
-        deps.board.get(),
-        topology,
+    const record = recordWithDeps.bind(null, completion);
+    const patchBoard = patchBoardWithDeps.bind(null, deps);
+    const changeBoard = changeBoardWithDeps.bind(null, deps);
+    const topologyFor = topologyWithDeps.bind(null, deps);
+    if (command.startsWith("group "))
+      return runGroupCommand(command, params, {
+        deps,
         actor,
-      );
-      const revert = plan.regroup
-        ? regroupOps(deps.board.get(), plan.regroup)
-        : plan.undo;
-      return changeBoard(actor, plan.ops, revert, (document) =>
-        record(actor, command, plan.summary, plan.undo, {
-          expect: {
-            probe: plan.probe,
-            value: probeValue(document, plan.probe),
-          },
-          redo: plan.ops,
-          ...(plan.regroup ? { regroup: plan.regroup } : {}),
-        }),
-      );
-    }
+        host,
+        patch: (ops) => patchBoard(ops, actor),
+      });
+    if (BOARD_COMMANDS.has(command))
+      return queueBoard(async () => {
+        const topology = await topologyFor(host, params);
+        const plan = planBoard(
+          command,
+          params,
+          deps.board.get(),
+          topology,
+          actor,
+        );
+        const revert =
+          plan.revert ??
+          (plan.regroup
+            ? regroupOps(deps.board.get(), plan.regroup)
+            : plan.undo);
+        return changeBoard(actor, plan.ops, revert, (document) =>
+          record(actor, command, plan.summary, plan.undo, {
+            expect: {
+              probe: plan.probe,
+              value: probeValue(document, plan.probe),
+            },
+            redo: plan.ops,
+            ...(plan.regroup ? { regroup: plan.regroup } : {}),
+          }),
+        );
+      });
     switch (command) {
       case "whoami":
         return actor;
@@ -666,47 +713,49 @@ export function createWorldCli(deps: WorldCliDeps) {
           )
           .slice(-limit);
       }
-      case "undo": {
-        const id = typeof params.id === "string" ? params.id : usage("undo ID");
-        const change = deps.ledger.change(id);
-        if (!change) notFound(`no change ${id}`);
-        if (change!.undone_by)
-          refused(`${id} was already undone by ${change!.undone_by}`);
-        if (!change!.undo)
-          refused(
-            `${id} changed Herdr, which World cannot take back; make the opposite change instead`,
-          );
-        const current = deps.board.get();
-        if (
-          change!.expect &&
-          probeValue(current, change!.expect.probe) !== change!.expect.value
-        )
-          refused(
-            `${change!.expect.probe.key} changed after ${id}; undo the later change first, or set it again`,
-          );
-        const ops = change!.regroup
-          ? regroupOps(current, change!.regroup)
-          : change!.undo!;
-        return changeBoard(actor, ops, change!.redo ?? [], () => {
-          const undone: LedgerChange = {
-            id: deps.ledger.nextId("c"),
-            at: now(),
-            actor,
-            command: "undo",
-            summary: `undid ${id}`,
-            undo: null,
-          };
-          // One write records the undo and marks what it undid.
-          deps.publishLedger(
-            deps.ledger.update((document) => {
-              document.changes.push(undone);
-              const entry = document.changes.find((c) => c.id === id);
-              if (entry) entry.undone_by = undone.id;
-            }),
-          );
-          return undone;
+      case "undo":
+        return queueBoard(async () => {
+          const id =
+            typeof params.id === "string" ? params.id : usage("undo ID");
+          const change = deps.ledger.change(id);
+          if (!change) notFound(`no change ${id}`);
+          if (change!.undone_by)
+            refused(`${id} was already undone by ${change!.undone_by}`);
+          if (!change!.undo)
+            refused(
+              `${id} changed Herdr, which World cannot take back; make the opposite change instead`,
+            );
+          const current = deps.board.get();
+          if (
+            change!.expect &&
+            probeValue(current, change!.expect.probe) !== change!.expect.value
+          )
+            refused(
+              `${change!.expect.probe.key} changed after ${id}; undo the later change first, or set it again`,
+            );
+          const ops = change!.regroup
+            ? regroupOps(current, change!.regroup)
+            : change!.undo!;
+          return changeBoard(actor, ops, change!.redo ?? [], async () => {
+            const undone: LedgerChange = {
+              id: await completion.ledger.nextId("c"),
+              at: now(),
+              actor,
+              command: "undo",
+              summary: `undid ${id}`,
+              undo: null,
+            };
+            // One write records the undo and marks what it undid.
+            completion.publishLedger(
+              await completion.ledger.update((document) => {
+                document.changes.push(undone);
+                const entry = document.changes.find((c) => c.id === id);
+                if (entry) entry.undone_by = undone.id;
+              }),
+            );
+            return undone;
+          });
         });
-      }
       case "town desk move": {
         if (params.herdr !== true)
           refused("moving a desk changes Herdr's tab order; add --herdr");
@@ -741,6 +790,7 @@ export function createWorldCli(deps: WorldCliDeps) {
           refused("desks reorder only within one room");
         const insert = deskReorderIndex(order, tabId, ontoTab);
         if (insert === undefined) notFound(`tab ${tabId} changed; try again`);
+        recheck();
         if (insert !== null)
           await topology.host.call("tab.move", {
             tab_id: tabId,
@@ -757,6 +807,7 @@ export function createWorldCli(deps: WorldCliDeps) {
       }
       case "ask":
       case "ask get":
+      case "ask acknowledge":
       case "ask answer":
       case "ask withdraw":
         return handleWorldAsk(deps, command, params, actor, now);
@@ -770,7 +821,7 @@ export function createWorldCli(deps: WorldCliDeps) {
             : Number.isInteger(params.pr) && (params.pr as number) > 0
               ? (params.pr as number)
               : usage("--pr takes a pull request number");
-        const id = deps.ledger.nextId("r");
+        const id = await deps.ledger.nextId("r");
         const entry = {
           id,
           at: now(),
@@ -781,7 +832,7 @@ export function createWorldCli(deps: WorldCliDeps) {
           ...(pr ? { pr } : {}),
         };
         deps.publishLedger(
-          deps.ledger.update((document) => document.results.push(entry)),
+          await deps.ledger.update((document) => document.results.push(entry)),
         );
         return entry;
       }
@@ -833,6 +884,30 @@ export function createWorldCli(deps: WorldCliDeps) {
           request.params && typeof request.params === "object"
             ? request.params
             : {};
+        const verb = registeredVerb("cli", command);
+        const admission: Admission = {
+          // Actor verification itself reads Herdr. Both CLI actors must pass
+          // the common policy/flags first; verified-only commands are checked
+          // after identity resolution, before running their effects.
+          actor: "cli_verified",
+          authorized: () => !deps.signal?.aborted,
+          capabilities: () => new Set(["world"]),
+          preconditions: () => true,
+        };
+        const recheck = () => {
+          try {
+            admitVerb(verb, params, admission);
+            return verb;
+          } catch (error) {
+            if (error instanceof VerbRefusal) {
+              if (error.message.startsWith("invalid parameters"))
+                usage(error.message);
+              refused(error.message);
+            }
+            throw error;
+          }
+        };
+        const declaration = recheck();
         const paneId =
           typeof request.caller?.pane_id === "string" &&
           request.caller.pane_id.trim()
@@ -843,26 +918,56 @@ export function createWorldCli(deps: WorldCliDeps) {
           usage("HERDR_PANE_ID is not a Herdr pane ID");
         const identity = await identifyCaller(deps.hosts(), paneId, locate);
         actor = identity.actor;
+        admission.actor = actor.verified ? "cli_verified" : "cli_unverified";
+        recheck();
+        const evidence = commandEvidence(declaration);
         const result = await run(
+          guardCliCommand(deps, recheck),
           command as WorldCliCommand,
           params,
           actor,
-          identity.host,
+          identity.host && guardCliHost(identity.host, recheck),
+          recheck,
         );
-        return { ok: true, actor, result };
+        checkVerbResult(declaration, result);
+        const recordId =
+          result && typeof result === "object" && "id" in result
+            ? result.id
+            : undefined;
+        if (declaration.recovery !== "read" && typeof recordId === "string") {
+          const receipt = deps.ledgerReceipt?.(recordId);
+          if (receipt) evidence.record({ stage: "stored", receipt });
+        }
+        return { ok: true, actor, result, command_evidence: evidence.get() };
       } catch (error) {
         if (error instanceof CliError)
-          return { ok: false, code: error.code, error: error.message, actor };
+          return {
+            ok: false,
+            code: error.code,
+            error: error.message,
+            actor,
+            command_evidence: {
+              stage: error.code === "unavailable" ? "failed" : "refused",
+            },
+            ...(error.result !== undefined ? { result: error.result } : {}),
+          };
         const message = error instanceof Error ? error.message : String(error);
         // Board validation is the caller's to fix; anything else is Herdr or
         // the service failing.
         return message.startsWith("invalid board")
-          ? { ok: false, code: "refused", error: message, actor }
+          ? {
+              ok: false,
+              code: "refused",
+              error: message,
+              actor,
+              command_evidence: { stage: "refused" },
+            }
           : {
               ok: false,
               code: "unavailable",
               error: "Herdr or the World service could not do that; try again",
               actor,
+              command_evidence: { stage: "failed" },
             };
       }
     },

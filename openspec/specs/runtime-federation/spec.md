@@ -214,3 +214,323 @@ SHALL include the executable and session so changing them prevents silent recove
 #### Scenario: Windows remote resource request
 - **WHEN** a Windows SSH runtime receives a Unix-only file, Git or history request
 - **THEN** World returns an unsupported-operation error without using another host
+
+### Requirement: Focused observation without per-client polling
+
+When the World service advertises `world_shared_acquisition`, a browser SHALL NOT re-list a
+managed connection or fetch the connection catalogue periodically. Its only timers that re-list a
+host or fetch the catalogue SHALL be a retry of a failed fetch or re-list, and a re-list's own
+debounce and follow-ups. Without that capability, the browser SHALL keep today's 5-second re-list
+and catalogue fetch.
+
+The focused store SHALL re-list an admitted owner's workspaces, tabs, panes and agents, and read
+that owner's active tab layout, after:
+- a Herdr event or World resynchronization admitted for that owner;
+- a World change notice for that owner;
+- the browser's own action on it;
+- a catalogue change that admits or replaces it;
+- reconnection;
+- the start of a hold on it: a change of active connection, each admitted Inspector
+  conversation, and every held owner when the page is shown.
+
+It SHALL fetch the connection catalogue and browser count after a catalogue change notice, after
+reconnection and when the page returns.
+
+For every owner that a visible browser holds, the World service SHALL keep these outputs current:
+- topology, labels, order, focus, agent status and presentation, agent names and pane tokens,
+  after the re-list that follows their Herdr event;
+- agent recency, git status, worktree parents, endpoint availability, workspace metadata and any
+  change whose Herdr event did not arrive, within one 5-second observation period, that
+  observation's bounded duration and one re-list;
+- the connection catalogue and browser count, within one fetch after the change.
+
+The service SHALL send a change notice to a browser only when its observation differs from the
+lists that browser last received for that owner. The focused re-list SHALL mark its four list
+calls on the request frame, and only replies to marked calls SHALL update that record. Replies to
+other callers of the same methods SHALL NOT. Activity times and pane scroll positions SHALL
+NOT count as differences. No browser reads a pane's scroll position, and on Herdr 0.9.3 it
+changes with output alone.
+
+Agent recency SHALL come from the service's reading of session-file activity. It SHALL reach the
+browser through `agent.list` and through pushed values, and SHALL NOT be pushed before a reading
+exists. For each pane, terminal, agent and agent session, a browser SHALL keep the latest time it
+has seen, so recency never moves backwards. An entry for another agent session SHALL NOT apply. Maxima SHALL be keyed by the
+complete identity through initial pane/layout admission. The browser SHALL retain
+read-only session maxima separately from runtime admission, so a World service
+restart that resets generation counters SHALL NOT lower the same external agent
+session's recency. Rejoining that data SHALL NOT admit operations or obsolete
+controls for a retired generation.
+
+Change notices and recency SHALL be admitted only for a ready owner whose generation matches the
+browser's catalogue. Herdr subscription loss, browser reconnection and runtime replacement SHALL
+be repaired by the existing resynchronization, catalogue fetch and re-list. A failed catalogue
+fetch, or a failed re-list of a held owner, SHALL be retried once per period until one succeeds,
+the owner is retired or released, or the page is hidden. Pending-focus settlement, browser-local
+navigation, attachment advertisements and completion tracking SHALL keep their existing rules. A
+bootstrap, reconnect or resynchronization observation SHALL NOT be reported as a completed task.
+
+#### Scenario: Idle host
+
+- **WHEN** a visible browser holds a host and nothing on that host changes for many periods
+- **THEN** the browser makes no re-list, catalogue fetch or other request for it, and its tree,
+  status and recency stay as they were
+
+#### Scenario: A pane prints output and nothing else changes
+
+- **WHEN** a held host's terminals print output, with no other change
+- **THEN** no browser receives a change notice or re-lists that host
+
+#### Scenario: Agent activity without a status change
+
+- **WHEN** an idle agent's session file records new activity and Herdr sends no event
+- **THEN** within one period, each browser holding that host orders that agent as most recently
+  active among idle agents, without re-listing the host
+
+#### Scenario: A browser starts holding a host after a quiet change
+
+- **WHEN** a browser hidden while an agent committed on a held host is shown again, and Herdr sent
+  no event for the commit
+- **THEN** it re-lists that host when it holds it again and shows the new git status, and the
+  service's next observation sends it no further notice for that change
+
+#### Scenario: Another caller lists the host
+
+- **WHEN** an agent commits on a held host without a Herdr event, and a dialog then lists that
+  host's workspaces before the next observation
+- **THEN** the next observation still sends a change notice to each browser whose focused store
+  hasn't received the commit, and its tree shows the new git status
+
+#### Scenario: Preview of a tab that has already closed
+
+- **WHEN** an Inspector preview is admitted for a tab that closed before the browser's last re-list
+  of that host
+- **THEN** admitting the preview re-lists its host, and the window is removed
+
+#### Scenario: Inspector on another host
+
+- **WHEN** a browser's active host is one connection and an open Inspector belongs to another
+- **THEN** both hosts' status, layouts and recency stay current, and neither host's update
+  selects, focuses or re-targets the other
+
+#### Scenario: Runtime replaced elsewhere
+
+- **WHEN** a host's runtime is replaced while this browser is idle, for example after an SSH
+  recovery, and that runtime's first events arrive before the browser admits it
+- **THEN** the browser receives a catalogue change notice, admits the new generation and re-lists
+  the host, which shows the changes those dropped events announced
+- **AND** no task is reported completed across the generations, and old-generation notices,
+  pushes and replies change nothing
+
+#### Scenario: Herdr event lost
+
+- **WHEN** Herdr reports lost events or its event subscription reconnects
+- **THEN** World resynchronizes after the new acknowledgement and every browser holding that host
+  re-lists it
+
+#### Scenario: Unannounced change
+
+- **WHEN** a host's lists or World-enriched fields change without a Herdr event, such as git status
+  after a commit
+- **THEN** within one period, each browser holding that host that hasn't received the change gets
+  one change notice and re-lists that host only
+
+#### Scenario: A re-list fails once
+
+- **WHEN** a held host's re-list fails, for example on a transient timeout
+- **THEN** the browser retries it within one period, shows the current topology once it succeeds,
+  and stops retrying
+
+#### Scenario: Another browser connects
+
+- **WHEN** a second browser connects to World
+- **THEN** the first browser's browser count changes after one catalogue fetch, without a timer
+
+#### Scenario: Page hidden and shown
+
+- **WHEN** a browser's page is hidden and later shown
+- **THEN** it holds nothing while hidden and still re-lists on admitted Herdr events
+- **AND** on return it declares its hosts again, re-lists each of them and fetches the catalogue
+
+#### Scenario: Service without the capability
+
+- **WHEN** the World service does not advertise `world_shared_acquisition`, for example after a
+  rollback
+- **THEN** the browser re-lists its active host and fetches the catalogue every 5 seconds, as
+  before this change
+
+### Requirement: Shared acquisition with reference-counted interest
+
+The World service SHALL acquire each focused observation, recency reading and declared Desk read
+at most once per period for all browsers. It SHALL publish each change to the browsers that hold
+it. Interest SHALL be keyed by connection ID and runtime generation, plus pane and agent session
+for session-scoped targets.
+
+A browser SHALL hold interest only while its page is visible. It SHALL hold its active connection,
+each connection that owns an open Inspector window, and the Desk targets it shows. It SHALL replace
+its whole declaration on every change and SHALL release it when hidden. The service SHALL count
+holders across sockets, and SHALL release a socket's declarations when that socket closes. When no
+holder remains, the service SHALL stop that acquisition and discard its cached results.
+
+The service SHALL keep, per socket and owner, a record of the lists it last sent that socket, and
+SHALL compare observations with that record (Focused observation without per-client polling). It
+SHALL NOT overlap two acquisitions of one resource. It SHALL NOT publish a result whose runtime
+lease or generation is no longer current, or whose last holder has released it. It SHALL NOT send
+a placeholder before a result exists. Malformed declarations SHALL be rejected and well-formed
+unknown owners ignored. Interest SHALL NOT grant operation authority, select or wake a host, or
+change a view filter.
+
+#### Scenario: Two browsers hold one host
+
+- **WHEN** two visible browsers hold the same host
+- **THEN** the service observes that host once per period, and each browser receives the notices
+  and recency for changes it has not yet received
+
+#### Scenario: A holder already re-listed after an event
+
+- **WHEN** a browser re-lists a host after a Herdr event, and the service's next observation shows
+  the same lists
+- **THEN** that browser receives no change notice for it
+
+#### Scenario: One of two browsers is hidden
+
+- **WHEN** one of two browsers holding a host is hidden
+- **THEN** the other keeps receiving notices and recency, the hidden one receives none, and the
+  service keeps observing the host once per period
+
+#### Scenario: Last holder leaves
+
+- **WHEN** the last browser holding a host closes its socket or is hidden
+- **THEN** the service stops observing that host and publishes nothing for it, including an
+  observation already in flight
+
+#### Scenario: Runtime replaced during an acquisition
+
+- **WHEN** a host's runtime generation changes while an observation or Desk read is in flight
+- **THEN** its result is not published, and acquisition for the new generation starts only when a
+  browser declares it
+
+#### Scenario: Declaration names a removed profile
+
+- **WHEN** a well-formed declaration names a connection that no longer exists
+- **THEN** that owner is ignored and the browser's other owners are still observed
+
+#### Scenario: World restarts while the external agent session remains
+
+- **WHEN** World restarts and resets its generation counters while the external
+  pane, terminal, agent and session remain identical
+- **THEN** after fresh runtime admission an older or unavailable reading does not
+  lower that identity's recency or its most-active-first ordering
+- **AND** controls for an obsolete generation remain rejected
+
+#### Scenario: Two sessions push while the initial layout is pending
+
+- **WHEN** an initial list captured session A and waits on its layout, and pushes
+  arrive for A and session B sharing that pane ID
+- **THEN** publishing A uses A's maximum, and B's timestamp cannot erase it or apply
+  to A
+
+### Requirement: Service incarnation and based aggregate replies
+
+Each World service start SHALL issue a random `service_incarnation`, sent in the
+WebSocket hello and every `world.snapshot` reply. The hello SHALL advertise
+`world_observation_v1`. Runtime generations and service incarnation SHALL remain
+separate fences; restarting both hosts at generation 1 SHALL NOT admit a base
+from the previous service as current.
+
+The service SHALL accept an optional `base` containing `service_incarnation` and
+at most 64 `hosts`, each with a unique `connection_id`, a nonnegative integer
+`generation`, and a nonempty opaque `token` of at most 64 characters. Invalid bases
+SHALL be refused before host acquisition, without default routing.
+
+Every reply SHALL include each host's token, null when no snapshot exists. Equal
+tokens SHALL identify equal projected snapshot content and producing generation.
+Only when incarnation, connection, runtime generation, snapshot generation and
+token all match the base SHALL the service omit topology with `unchanged: true`.
+A confirmation SHALL include current state, generation, snapshot generation,
+staleness, actionability and errors. Every other host SHALL receive a complete
+replacement through the bounded existing observation and chunk transport path.
+Service-side snapshot consumers SHALL continue to receive complete topology.
+
+#### Scenario: One host changes
+- **WHEN** a caller sends a base for two hosts and only one projected snapshot changes
+- **THEN** that host receives a complete replacement and its sibling receives a
+  confirmation with current metadata and no `snapshot` field
+
+#### Scenario: Unknown or foreign base
+- **WHEN** a base names an unknown token, another generation or another incarnation
+- **THEN** the service sends complete observations for every mismatching host
+
+#### Scenario: Older caller
+- **WHEN** a caller sends no base
+- **THEN** every catalogue host retains its complete snapshot as before
+
+### Requirement: Browser admission of based observation
+
+A browser SHALL send its held base only when the hello advertises
+`world_observation_v1`. It SHALL apply each reply as one publication, retaining
+unchanged content by identity and applying current metadata. A confirmation SHALL
+NOT restore actionability retired by the browser's qualified client.
+
+A confirmation for content no longer held SHALL discard the entire reply and
+trigger one request without a base. A changed incarnation SHALL prevent reuse of
+all old content, and replies from another incarnation SHALL be rejected. A base
+refusal SHALL disable further bases on that socket. Unrelated transient storage or
+read failures SHALL NOT disable negotiated bases. Existing coalescing, fallback
+refresh and chunk transport SHALL remain in place for negotiated and older clients.
+
+#### Scenario: Transient database failure
+- **WHEN** a based pull fails because the database is temporarily locked
+- **THEN** the browser retains negotiated bases for its next refresh
+
+#### Scenario: Host retires during a request
+- **WHEN** a reply confirms a host whose qualified runtime retired after the request
+- **THEN** its content is retained but remains stale and non-actionable, independently
+  of healthy sibling hosts
+
+#### Scenario: A retained base is missing
+- **WHEN** a confirmation names a host the browser no longer holds
+- **THEN** no partial reply is published and one complete recovery is requested
+
+#### Scenario: All hosts are unchanged
+- **WHEN** host content and metadata are unchanged
+- **THEN** no host, room or view model is rebuilt and no observation is published
+
+### Requirement: Incremental observation preparation
+
+Admitted observations and document or mark changes SHALL prepare only their readers.
+Rooms SHALL reuse their prepared presentation when their observation slice and
+owner/presentation inputs are unchanged. Appearance, relations, profiles, watches,
+seen marks and Town master SHALL invalidate only the readers of the changed inputs.
+Host and World counts, attention and summaries SHALL use per-room contributions.
+
+A view's topology SHALL be prepared only for mounted consumers and their consumed
+Hosts/watch projection. Changes outside that projection SHALL update aggregate World
+data without preparing hidden view rooms. The Board document
+SHALL remain available for appearance and relations in all views. A newly selected
+view SHALL finish missing model preparation before presentation. Incremental output
+SHALL equal complete preparation of the same observation, documents and marks.
+
+#### Scenario: One room changes
+- **WHEN** one agent changes status in a host with ten rooms
+- **THEN** only that room and dependent counts, attention and summaries are prepared,
+  and the other nine rooms retain their prepared presentation
+
+#### Scenario: Town is shown
+- **WHEN** an observation is admitted while only Town is mounted
+- **THEN** no Board topology is prepared, its document remains available, and switching
+  to Board finishes its topology before presentation
+
+#### Scenario: A change is outside the presented scope
+- **WHEN** Town or Board is mounted and only a host, room or pane hidden by Hosts or
+  watched-only changes
+- **THEN** aggregate observation remains current and no unchanged presented room is
+  prepared again
+
+#### Scenario: A profile look changes
+- **WHEN** a profile's look changes without an observation change
+- **THEN** readers showing that profile receive the new look and unrelated readers
+  retain their prepared presentation
+
+#### Scenario: Complete preparation equivalence
+- **WHEN** observations, documents and marks change in any supported sequence
+- **THEN** incremental presentation equals complete preparation of the latest inputs

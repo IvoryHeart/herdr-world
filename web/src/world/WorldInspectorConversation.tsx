@@ -1,3 +1,5 @@
+import { TerminalAppearanceEditor } from "./TerminalAppearanceEditor";
+import { leafAppearance, useAppearanceDocument } from "./appearance";
 import { useAgentWorktree } from "../useAgentWorktree";
 import { requestChatInputFocus } from "../chatFocus";
 import type { ManagedWindowControls } from "./windows/WindowControls";
@@ -22,7 +24,8 @@ import { worldLocalStorage } from "../browserStorage";
 import { type ActiveDiffSelection } from "../components/DiffViewerPanel";
 import { requestFilePreview } from "../components/fileExplorerResources";
 import type { ActiveFilePreviewSelection } from "../components/FilePreviewContent";
-import { WorkspaceInspectorHost } from "../components/WorkspaceInspectorHost";
+import { lazyWithReload } from "../lazyWithReload";
+import { InspectorLoadingShell } from "../components/InspectorLoadingShell";
 import { ThemeScope } from "../themeScope";
 import { AgentProfileLink } from "./AgentProfileLink";
 import { InspectorPaneMap } from "../components/InspectorPaneMap";
@@ -62,6 +65,12 @@ import {
   type InspectorTerminalFileRequest,
 } from "./inspectorTerminalHandoff";
 import { townPortrait } from "./town/townSprites";
+
+const WorkspaceInspectorHost = lazyWithReload("workspace-inspector", () =>
+  import("../components/WorkspaceInspectorHost").then((module) => ({
+    default: module.WorkspaceInspectorHost,
+  })),
+);
 
 const emptyDiff = (): ActiveDiffSelection => ({
   entry: null,
@@ -168,7 +177,8 @@ function InspectorResources({
     baseConnectionClient,
     "world-inspector",
   );
-  const { workspaces, tabs, panes, status, catalogueReady } = useStoreSelector(
+  const appearance = useAppearanceDocument();
+  const { workspaces, panes, tabs, status, catalogueReady } = useStoreSelector(
     (snapshot) => ({
       workspaces: snapshot.workspaces,
       tabs: snapshot.tabs,
@@ -537,7 +547,17 @@ function InspectorResources({
           className="workspace-inspector-slot"
           data-stale={presentationStale || undefined}
         >
-          <Suspense fallback={null}>
+          <Suspense
+            fallback={
+              <InspectorLoadingShell
+                title={conversation.label}
+                dock={conversation.dock}
+                floating={floating}
+                windowControls={windowControls}
+                onClose={onClose}
+              />
+            }
+          >
             <WorkspaceInspectorHost
               state={inspectorState}
               visible={Boolean(target)}
@@ -602,11 +622,51 @@ function InspectorResources({
               windowControls={windowControls}
               terminalColor={terminalColor}
               agentSettings={
-                conversation.context.kind === "agent" ? (
-                  <AgentProfileLink
+                conversation.tabId &&
+                conversation.paneId &&
+                conversation.terminalId &&
+                terminalColor ? (
+                  <TerminalAppearanceEditor
+                    key={JSON.stringify([
+                      conversation.connectionId,
+                      conversation.runtimeGeneration,
+                      conversation.tabId,
+                      conversation.paneId,
+                      conversation.terminalId,
+                    ])}
                     connectionId={conversation.connectionId}
+                    generation={conversation.runtimeGeneration}
+                    tabId={conversation.tabId}
+                    paneId={conversation.paneId}
                     terminalId={conversation.terminalId}
-                  />
+                    tabTerminals={
+                      panes.some((pane) => pane.tab_id === conversation.tabId)
+                        ? panes
+                            .filter(
+                              (pane) => pane.tab_id === conversation.tabId,
+                            )
+                            .map((pane) => pane.terminal_id)
+                        : [conversation.terminalId]
+                    }
+                    workspaceIds={workspaces.map(
+                      (workspace) => workspace.workspace_id,
+                    )}
+                    tabName={
+                      tabs.find((tab) => tab.tab_id === conversation.tabId)
+                        ?.label ??
+                      conversation.context.tabName ??
+                      "Terminal"
+                    }
+                    color={terminalColor}
+                    disabled={presentationStale}
+                  >
+                    {conversation.context.kind === "agent" ? (
+                      <AgentProfileLink
+                        connectionId={conversation.connectionId}
+                        terminalId={conversation.terminalId}
+                      />
+                    ) : null}
+                  </TerminalAppearanceEditor>
                 ) : undefined
               }
               paneMap={
@@ -645,14 +705,32 @@ function InspectorResources({
                   setDiffSelection(emptyDiff());
                 }
               }}
-              context={
-                townSkin && conversation.context.kind === "agent"
+              context={{
+                ...(townSkin && conversation.context.kind === "agent"
                   ? {
                       ...conversation.context,
                       portrait: townPortrait(conversation.nodeId),
                     }
-                  : conversation.context
-              }
+                  : conversation.context),
+                tabName:
+                  tabs.find((tab) => tab.tab_id === conversation.tabId)
+                    ?.label ??
+                  conversation.context.tabName ??
+                  "Terminal",
+                appearanceAvatar:
+                  conversation.paneId &&
+                  conversation.terminalId &&
+                  conversation.tabId
+                    ? leafAppearance(appearance, {
+                        connectionId: conversation.connectionId,
+                        tabId: conversation.tabId,
+                        nativeId: conversation.paneId,
+                        terminalId: conversation.terminalId,
+                        stale: presentationStale,
+                        actionable: !presentationStale,
+                      })?.avatar
+                    : undefined,
+              }}
               agentWorktree={worktree.view}
               presentationStale={presentationStale}
             />

@@ -1,8 +1,15 @@
+import { refreshBridgeStatus } from "./store/catalogue";
+import {
+  holdFocusedOwner,
+  refreshHeldOwners,
+  sharedAcquisitionEnabled,
+} from "./store/focusedInterest";
 import {
   focusTaskNotification,
   notificationPaneMatches,
   type NotificationFocusOptions,
 } from "./store/notificationFocus";
+import { installStoreControls } from "./store/controls";
 import {
   emptyServerSessionState,
   nextRecentPaneIds,
@@ -23,7 +30,6 @@ import {
   type State,
   type ServerSessionState,
   type StoreConnectionLease,
-  type BridgeStatus,
   type Notice,
   type QualifiedRuntimeTarget,
   type WorkspaceSourceTarget,
@@ -290,6 +296,9 @@ function setForConnection(
     );
     state = {
       ...state,
+      ...(patch.agentActivityHistory && {
+        agentActivityHistory: patch.agentActivityHistory,
+      }),
       sessionsByConnectionId: {
         ...state.sessionsByConnectionId,
         [lease.connectionId]: updated,
@@ -306,6 +315,9 @@ function wait(ms: number) {
 }
 let initialized = false;
 let catalogRequestSeq = 0;
+export function nextCatalogRequest() {
+  return ++catalogRequestSeq;
+}
 let appliedCatalogRequestSeq = 0;
 let catalogReadyForConnection = false;
 let terminalReattachPending = false;
@@ -326,34 +338,6 @@ function reportTaskNotificationFailure(error: unknown, version: number) {
     },
   });
   worldLocalStorage.setItem(TASK_NOTIFICATIONS_KEY, "false");
-}
-
-async function refreshBridgeStatus() {
-  if (state.connectionPaused || state.status !== "connected") return;
-  const requestSeq = ++catalogRequestSeq;
-  const epoch = bridge.connectionEpoch;
-  try {
-    const r = await bridge.call("bridge.status");
-    if (
-      state.connectionPaused ||
-      state.status !== "connected" ||
-      epoch !== bridge.connectionEpoch
-    )
-      return;
-    applyConnectionCatalog(r, requestSeq, epoch);
-    if (rearmTerminalAttachmentsAfterCatalog(catalogReadyForConnection)) {
-      scheduleRefresh();
-    }
-    const nextBridgeStatus: BridgeStatus = {
-      clients: Number(r?.clients ?? 0),
-      terminals: Array.isArray(r?.terminals) ? r.terminals : [],
-    };
-    if (!jsonDeepEqual(state.bridgeStatus, nextBridgeStatus)) {
-      set({ bridgeStatus: nextBridgeStatus });
-    }
-  } catch {
-    // Keep the last good count; status polling should never interrupt the UI.
-  }
 }
 
 function selectConnectionNow(connectionId: string, refresh = true): boolean {
@@ -429,7 +413,7 @@ function resetActiveConnectionLease(
   }
 }
 
-function applyConnectionCatalog(
+export function applyConnectionCatalog(
   result: unknown,
   requestSeq: number,
   epoch = bridge.connectionEpoch,
@@ -551,18 +535,23 @@ async function refreshConnectionCatalog(): Promise<boolean> {
   const requestSeq = ++catalogRequestSeq;
   const epoch = bridge.connectionEpoch;
   try {
-    return applyConnectionCatalog(
+    const admitted = applyConnectionCatalog(
       await bridge.call("connections.list"),
       requestSeq,
       epoch,
     );
+    if (!admitted && sharedAcquisitionEnabled()) void refreshBridgeStatus();
+    return admitted;
   } catch {
-    // The catalog is bridge-global and is retried on the next status poll.
+    if (sharedAcquisitionEnabled()) void refreshBridgeStatus();
+    // Legacy services retain their next status poll.
     return false;
   }
 }
 
-function rearmTerminalAttachmentsAfterCatalog(catalogReady: boolean): boolean {
+export function rearmTerminalAttachmentsAfterCatalog(
+  catalogReady: boolean,
+): boolean {
   if (
     !terminalReattachPending ||
     !catalogReady ||
@@ -1049,24 +1038,16 @@ export const store = {
     bridge.onEvent(handleHerdrEvent);
     bridge.onAssistantNotification(notifyRangerTask);
     bridge.onPopup(handlePopupPush);
-    bridge.onControl((control) => {
-      if (control.type === "pause_connection") {
-        store.pauseConnection(
-          control.reason ??
-            "Another Herdr World client paused this connection. Resume when you want this browser to sync again.",
-        );
-      }
-    });
-    // Browsers throttle timers in hidden tabs, which stalls the metadata
-    // poll that carries agent statuses. Catch up as soon as the page is
-    // visible, focused, or back online instead of waiting out the throttle.
+    installStoreControls();
+    // Catch up after a hidden/frozen page, keyboard focus or network recovery.
     const refreshOnReturn = () => {
       if (state.connectionPaused || state.status !== "connected") return;
       // Mobile OSes can silently kill the socket while the page is frozen;
       // probe now so reconnect and terminal re-attach start immediately
       // instead of waiting for the next heartbeat tick.
       bridge.probeConnectionNow();
-      void refreshNow();
+      if (sharedAcquisitionEnabled()) refreshHeldOwners();
+      else void refreshNow();
       void refreshBridgeStatus();
     };
     if (typeof document !== "undefined") {
@@ -1099,6 +1080,7 @@ export const store = {
   },
 
   refresh: refreshNow,
+  holdFocusedOwner,
 
   /** Refresh bridge-global profile/status metadata without changing selection. */
   refreshConnections: refreshConnectionCatalog,

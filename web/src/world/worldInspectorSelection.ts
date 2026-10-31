@@ -125,6 +125,7 @@ export function worldInspectorContext(
       : node.hostLabel,
     ...(leaf?.kind === "agent" ? { agent: leaf.pane.agent } : {}),
     ...(leaf?.agentName ? { agentName: leaf.agentName } : {}),
+    ...(leaf?.tabLabel ? { tabName: leaf.tabLabel } : {}),
     ...(leaf ? { statusTone: leaf.status } : {}),
     ...(leaf?.taskSummary ? { taskSummary: leaf.taskSummary } : {}),
   };

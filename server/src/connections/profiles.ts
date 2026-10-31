@@ -393,6 +393,7 @@ export type ConnectionProfileStoreOptions = {
 export class ConnectionProfileStore {
   readonly path: string;
   private writeQueue: Promise<void> = Promise.resolve();
+  #closed = false;
 
   constructor(private readonly options: ConnectionProfileStoreOptions = {}) {
     this.path = options.path ?? defaultConnectionProfilesPath();
@@ -462,15 +463,25 @@ export class ConnectionProfileStore {
     return validateConnectionRegistry(parsed);
   }
 
+  /** Refuse every later write, then settle once the queued ones finish. */
+  close(): Promise<void> {
+    this.#closed = true;
+    return this.writeQueue;
+  }
+
   save(registry: PersistedConnectionRegistry): Promise<void> {
     const validated = validateConnectionRegistry(registry);
-    const task = this.writeQueue.then(() => this.writeAtomic(validated));
+    const task = this.writeQueue.then(() => {
+      if (this.#closed) throw new Error("World storage is closed");
+      this.writeAtomic(validated);
+    });
     this.writeQueue = task.catch(() => undefined);
     return task;
   }
 
   clear(): Promise<void> {
     const task = this.writeQueue.then(() => {
+      if (this.#closed) throw new Error("World storage is closed");
       const parent = dirname(this.path);
       assertNotSymlink(parent);
       if (!existsSync(parent)) {

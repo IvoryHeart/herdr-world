@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, Server } from "lucide-react";
 import { WorkspaceTree } from "../components/WorkspaceTree";
 import { useLayoutPreferences } from "../layoutPreferences";
@@ -21,7 +21,8 @@ export function WorldNavigator({
   world: WorldObject;
   onSelect(node: WorldObjectNode, view?: InspectorView): void | Promise<void>;
 }) {
-  const projection = projectWorldTree(world);
+  // Every shell render reaches here; project only when the World changes.
+  const projection = useMemo(() => projectWorldTree(world), [world]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [selectionError, setSelectionError] = useState<string | null>(null);
   const selectionSequence = useRef(0);

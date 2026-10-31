@@ -8,6 +8,10 @@
  *
  * This is the only devtools file a release build contains.
  */
+// Declared here as well as in vite-env.d.ts: World modules that use DEVTOOLS
+// are also compiled by projects without the Vite types (scripts, quint).
+declare const __HERDR_WORLD_DEVTOOLS__: boolean | undefined;
+
 export const DEVTOOLS: boolean =
   typeof __HERDR_WORLD_DEVTOOLS__ === "undefined"
     ? true

@@ -62,13 +62,20 @@ export default defineConfig(({ mode }) => {
       outDir: "../server/public",
       emptyOutDir: true,
       rolldownOptions: {
+        // A dynamic import that another module also imports statically stays in
+        // the eager chunk, so the lazy boundary silently does nothing.
+        onLog(level, log, handler) {
+          if (log.code === "INEFFECTIVE_DYNAMIC_IMPORT")
+            throw new Error(log.message);
+          handler(level, log);
+        },
         output: {
           codeSplitting: {
             groups: [
               {
-                // Global assistant and workspace clients share this startup transport.
+                // Share startup transport and small agent RPC helpers without extra requests.
                 name: "bridge-client",
-                test: /src[\\/](?:api|connectionHttp|useConnectionClient)\.tsx?$/,
+                test: /src[\\/](?:api|connectionHttp|useConnectionClient|agentIntegrations|agentLauncher)\.tsx?$/,
               },
               {
                 // These startup preferences share storage; keep their small
@@ -77,9 +84,9 @@ export default defineConfig(({ mode }) => {
                 test: /src[\\/](?:browserStorage|layoutPreferences|shortcutPreferences)\.ts$/,
               },
               {
-                // Share startup React and icons without loading feature-only icons.
+                // Keep startup UI primitives together without loading feature-only icons.
                 name: "ui-runtime",
-                test: /node_modules[\\/](?:lucide-react|react|react-dom|scheduler)[\\/]/,
+                test: /(?:node_modules[\\/](?:lucide-react|react|react-dom|scheduler|@radix-ui|@floating-ui)[\\/]|src[\\/](?:utils\.ts|components[\\/]ui[\\/]popover\.tsx)$)/,
                 tags: ["$initial"],
               },
               {

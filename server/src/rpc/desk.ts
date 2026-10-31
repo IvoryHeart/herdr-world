@@ -5,6 +5,15 @@ import type { BridgeRpcContext } from "./context";
 /** Service-owned metadata only; this never sends input to an agent. */
 export async function handleDeskRpc(rpc: BridgeRpcContext): Promise<void> {
   const { id, method, params, sendReply, sendError } = rpc;
+  if (method === "world.desk.observe") {
+    try {
+      rpc.services.deskWatches.declare(rpc.ws, params);
+      sendReply({ id, result: { ok: true } }, method);
+    } catch (error) {
+      sendError("world-desk-observe-error", error);
+    }
+    return;
+  }
   const { worldDesk, publishDeskChanged, connectionManager } = rpc.services;
   const revision = worldDesk.list().revision;
   try {

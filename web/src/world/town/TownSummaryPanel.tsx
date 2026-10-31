@@ -1,4 +1,13 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { answerRecipientView } from "./answerOutbox";
+import { ConnectedAnswerDeliveries } from "./AnswerDeliveries";
+import { useAnswerDeliveryCounts } from "../worldAnswerDeliveries";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import type { HerdrOfficeProjection } from "../herdrOfficeProjection";
 import {
   formatOfficeCost,
@@ -7,6 +16,7 @@ import {
 } from "../officeObservability";
 import { WorldPanel } from "../windows/WorldPanel";
 import type { WorldObject } from "../worldObject";
+import { GroupsSummary } from "../groups/GroupsSummary";
 import {
   TownAsk,
   townRailInset,
@@ -27,7 +37,7 @@ import "./townSummaryPanel.css";
 
 /**
  * The Town summary's body, in attention order: who needs you, recent
- * finishes, hosts and their rooms, and spend. It renders the shared read
+ * finishes, hosts and their rooms, Pods, and spend. It renders the shared read
  * model (townSummary.ts); the window around it is the shared panel frame.
  */
 export function TownSummaryPanel({
@@ -36,6 +46,8 @@ export function TownSummaryPanel({
   onOpenAgent,
   onShowRoom,
   askActions,
+  groups,
+  deliveries,
 }: {
   summary: TownSummaryModel;
   now: number;
@@ -44,6 +56,8 @@ export function TownSummaryPanel({
   /** Move the Town camera to a room. */
   onShowRoom(roomKey: string): void;
   askActions: TownAskActions;
+  groups?: ReactNode;
+  deliveries?: ReactNode;
 }) {
   return (
     <div className="town-summary">
@@ -78,6 +92,7 @@ export function TownSummaryPanel({
           <p className="town-summary-empty">Nobody is waiting for you.</p>
         )}
       </section>
+      {deliveries}
       <section aria-labelledby="town-summary-finished">
         <h3 id="town-summary-finished">
           Finished, not reviewed <span>{summary.counts.finished}</span>
@@ -130,6 +145,7 @@ export function TownSummaryPanel({
           ))}
         </div>
       </section>
+      {groups}
       <section aria-labelledby="town-summary-spend">
         <h3 id="town-summary-spend">Spend</h3>
         {summary.spend.available ? (
@@ -246,6 +262,10 @@ export function useTownSummary({
   showRoom(roomKey: string): void;
 }): {
   summary: TownSummaryModel;
+  deliveries: ReactNode;
+  deliveryCount: number;
+  deliveryWaiting: number;
+  openOutbox(): void;
   railInset: number;
   askActions: TownAskActions;
   openTerminal(nodeId: string): void;
@@ -258,6 +278,20 @@ export function useTownSummary({
     window.addEventListener("resize", resize);
     return () => window.removeEventListener("resize", resize);
   }, []);
+  const { checks: deliveryCount, waiting: deliveryWaiting } =
+    useAnswerDeliveryCounts();
+  const [deliveryFocus, setDeliveryFocus] = useState(0);
+  const deliveries = (
+    <ConnectedAnswerDeliveries
+      focusKey={deliveryFocus}
+      recipient={(notice) => answerRecipientView(notice.ask, world, office)}
+      open={(target) => {
+        if (target.key === null) return;
+        if (target.terminal) openTerminal(target.key);
+        else openAgent(target.key);
+      }}
+    />
+  );
   const asksStore = sharedAsksStore();
   const asks = useWorldAsks(asksStore);
   const askers = useMemo(
@@ -295,12 +329,21 @@ export function useTownSummary({
   );
   const [isOpen, setOpen] = useState(false);
   const [focusKey, setFocusKey] = useState(0);
+  const openOutbox = useCallback(() => {
+    setOpen(true);
+    setFocusKey((key) => key + 1);
+    setDeliveryFocus((key) => key + 1);
+  }, []);
   return {
     summary,
+    deliveries,
+    deliveryCount,
+    deliveryWaiting,
+    openOutbox,
     railInset: townRailInset(
       viewportWidth,
       railCollapsed,
-      summary.counts.needsYou,
+      summary.counts.needsYou || deliveryCount,
     ),
     askActions,
     openTerminal,
@@ -317,6 +360,8 @@ export function useTownSummary({
       >
         <TownSummaryPanel
           summary={summary}
+          deliveries={deliveries}
+          groups={<GroupsSummary />}
           now={now}
           onOpenAgent={openAgent}
           askActions={askActions}

@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { store } from "../store";
+import { startAgentChimeInterest } from "../world/useAgentInterest";
 import { chimeDevice, CHIME_DEVICE_CHANGED_EVENT } from "./chimeCenter";
 import {
   chimeAudioReady,
@@ -89,11 +90,16 @@ export function startChimeHeartbeat(
 export function useChimeHost() {
   useEffect(() => {
     installChimeUnlock();
-    return startChimeHeartbeat(
+    const stopInterest = startAgentChimeInterest();
+    const stopHeartbeat = startChimeHeartbeat(
       navigator.serviceWorker,
       chimeDevice,
       chimeAudioReady,
       storeListening,
     );
+    return () => {
+      stopInterest();
+      stopHeartbeat();
+    };
   }, []);
 }

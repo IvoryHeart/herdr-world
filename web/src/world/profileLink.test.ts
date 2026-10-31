@@ -25,3 +25,23 @@ test("the agent-settings link edits the profile an agent was launched from", () 
   ] as const)
     expect(profileLinkFor(doc, conn, term)).toEqual({ label: "Profiles…" });
 });
+
+test("an assignment from another World keeps its recorded name without an editor target", () => {
+  expect(
+    profileLinkFor(
+      {
+        profiles: [],
+        assignments: [
+          {
+            connection_id: "local",
+            terminal_id: "t1",
+            profile_id: "builder",
+            profile_name: "Remote Builder",
+          },
+        ],
+      },
+      "local",
+      "t1",
+    ),
+  ).toEqual({ label: "Profile · Remote Builder" });
+});

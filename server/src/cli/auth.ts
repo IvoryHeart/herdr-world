@@ -1,7 +1,5 @@
 import { existsSync } from "node:fs";
-import { dirname, join } from "node:path";
 import { rotateAuthToken } from "../config/auth-token";
-import { worldEnv } from "../config/environment";
 import {
   revokeSessionSecret,
   sessionSecretPath,
@@ -20,6 +18,7 @@ import {
 } from "./command";
 import {
   accessUrls,
+  generatedTokenPath,
   readServiceAccess,
   readServiceSetup,
   restartRunningService,
@@ -87,8 +86,7 @@ export const authCommand: CliCommand = {
     const rest = args.slice(1);
     const setup = readServiceSetup(context.runtime);
     const secretPath = sessionSecretPath(
-      worldEnv("SETTINGS_PATH", setup.env),
-      runtimeDataRoot(context.runtime),
+      runtimeDataRoot(context.runtime, setup.env),
     );
 
     if (action === "show") {
@@ -150,7 +148,7 @@ export const authCommand: CliCommand = {
         return EXIT_FAILURE;
       }
       // The server reads the current location and migrates only when it is absent.
-      const tokenPath = join(dirname(setup.paths.config), "auth-token");
+      const tokenPath = generatedTokenPath(setup);
       const token = rotateAuthToken(tokenPath);
       context.log(
         `Rotated the login token in ${displayPath(tokenPath, context.runtime)}.`,

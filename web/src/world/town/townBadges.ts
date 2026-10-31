@@ -4,7 +4,7 @@ import {
   type WorldSourcesSnapshot,
 } from "../../../../shared/worldSources";
 import type { HerdrOfficeProjection } from "../herdrOfficeProjection";
-import { paneKey, workItemsByPane } from "../worldSources";
+import { paneKey, workItemsByPane } from "../workLinks";
 
 /**
  * A small badge on the desk of an agent working on a pull request or ticket:

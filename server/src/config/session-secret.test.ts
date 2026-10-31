@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { createHash, createHmac } from "node:crypto";
+import { createHmac } from "node:crypto";
 import {
   chmodSync,
   existsSync,
@@ -145,7 +145,7 @@ describe("session signing secret", () => {
     const home = tempHome();
     const appData = join(home, "AppData", "Roaming");
     const path = join(
-      dataRoot(home, process.platform, appData),
+      dataRoot(home, process.platform, appData, {}),
       "session-secret.json",
     );
     const script = `
@@ -160,6 +160,7 @@ describe("session signing secret", () => {
           HOME: home,
           USERPROFILE: home,
           APPDATA: appData,
+          HERDR_WORLD_DATA_DIR: undefined,
           HERDR_WORLD_SETTINGS_PATH: undefined,
           HERDR_GUI_SETTINGS_PATH: undefined,
         },
@@ -175,13 +176,12 @@ describe("session signing secret", () => {
     expect(storedState(path).secret).toBe(values[0]);
   });
 
-  test("isolates signing state by the effective settings path", () => {
+  test("keeps one signing state per data folder, whatever the settings path", () => {
     const home = tempHome();
     const appData = join(home, "AppData", "Roaming");
-    const root = dataRoot(home, process.platform, appData);
-    const settingsA = join(realpathSync(home), "a.json");
-    const settingsB = join(realpathSync(home), "b.json");
-    const load = (currentPath?: string, legacyPath?: string) => {
+    const root = dataRoot(home, process.platform, appData, {});
+    const own = join(realpathSync(home), "own-data");
+    const load = (settingsPath?: string, dataDir?: string) => {
       const child = Bun.spawnSync(
         [
           process.execPath,
@@ -195,8 +195,8 @@ describe("session signing secret", () => {
             HOME: home,
             USERPROFILE: home,
             APPDATA: appData,
-            HERDR_WORLD_SETTINGS_PATH: currentPath,
-            HERDR_GUI_SETTINGS_PATH: legacyPath,
+            HERDR_WORLD_SETTINGS_PATH: settingsPath,
+            HERDR_WORLD_DATA_DIR: dataDir,
           },
         },
       );
@@ -204,23 +204,14 @@ describe("session signing secret", () => {
       expect(child.exitCode).toBe(0);
       return child.stdout.toString().trim();
     };
-    const defaultSecret = load();
-    const secretA = load("./a.json");
-    const secretB = load(settingsB);
-    expect(new Set([defaultSecret, secretA, secretB]).size).toBe(3);
-    expect(load(settingsA, settingsB)).toBe(secretA);
-    expect(load(undefined, settingsA)).toBe(defaultSecret);
-    expect(load(settingsB)).toBe(secretB);
-    expect(load("", settingsA)).toBe(defaultSecret);
-    expect(storedState(join(root, "session-secret.json")).secret).toBe(
-      defaultSecret,
-    );
-    const hash = createHash("sha256").update(settingsA).digest("hex");
-    expect(storedState(join(root, `session-secret-${hash}.json`)).secret).toBe(
-      secretA,
-    );
-    expect(readdirSync(root)).toHaveLength(3);
-    expect(existsSync(settingsA)).toBeFalse();
+    const shared = load();
+    expect(load(join(home, "a.json"))).toBe(shared);
+    expect(load(join(home, "b.json"))).toBe(shared);
+    const separate = load(undefined, own);
+    expect(separate).not.toBe(shared);
+    expect(storedState(join(root, "session-secret.json")).secret).toBe(shared);
+    expect(storedState(join(own, "session-secret.json")).secret).toBe(separate);
+    expect(readdirSync(root)).toEqual(["session-secret.json"]);
   });
 
   test("fingerprints the credential set without mutating the caller", () => {
@@ -471,7 +462,7 @@ describe("session signing secret", () => {
 describe("revokeSessionSecret", () => {
   test("removes the secret so the next load signs with fresh material", () => {
     const root = join(tempHome(), ".config", "herdr-world");
-    const path = sessionSecretPath(undefined, root);
+    const path = sessionSecretPath(root);
     expect(path).toBe(join(root, "session-secret.json"));
     expect(revokeSessionSecret(path)).toBe(false);
     const original = loadOrCreateSessionSecret([password], path);
@@ -480,14 +471,8 @@ describe("revokeSessionSecret", () => {
     expect(loadOrCreateSessionSecret([password], path)).not.toBe(original);
   });
 
-  test("keys the path by the settings file like startup does", () => {
+  test("keys the path by the data folder like startup does", () => {
     const root = join(tempHome(), "data");
-    const settings = join(root, "custom-settings.json");
-    expect(sessionSecretPath(settings, root)).toBe(
-      join(
-        root,
-        `session-secret-${createHash("sha256").update(settings).digest("hex")}.json`,
-      ),
-    );
+    expect(sessionSecretPath(root)).toBe(join(root, "session-secret.json"));
   });
 });

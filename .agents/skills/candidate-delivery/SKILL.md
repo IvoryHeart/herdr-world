@@ -18,11 +18,13 @@ the whole repository for a scoped change.
 Commit with the existing read-only pre-commit format/lint guard when committing
 is part of the requested handoff. For PR delivery, push
 the complete candidate once and let the pre-push hook run
-`bun run check:changed` for code (gate or configuration changes select the full
-gate; the explicit agent-tooling allowlist shares CI's shorter path). A
+`bun run check:changed` for code: static checks and affected non-browser units.
+Gate or configuration changes run all non-browser units locally; browser and
+behavioral acceptance run in CI under required `Delivery checks`.
+`HERDR_WORLD_PREPUSH=full` explicitly opts into every local lane. A
 Markdown-only follow-up may use
 `bun run check:docs` when this worktree has a successful code gate on an ancestor. CI
-runs the applicable gate on the PR head, and reuses successful full results on
+runs the applicable gate on the PR head, and reuses successful full results or scoped results with identical selections on
 the exact PR, base and head for description edits and label changes. Do not run a separate final full check
 immediately before that push. For an explicitly local-only handoff, run one
 explicit `bun run check:delivery` instead. If a later repair changes code, begin a new

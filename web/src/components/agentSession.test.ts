@@ -4,6 +4,7 @@ import {
   downloadSession,
   downloadSessionAtif,
   exportSessionForConnection,
+  agentPromptWarning,
   agentStateKind,
   firstLinePreview,
   formatTokenTotal,
@@ -267,6 +268,28 @@ describe("agent session presentation", () => {
     expect(shouldShowAgentStatusLabel("working")).toBe(true);
     expect(shouldShowAgentStatusLabel("blocked")).toBe(true);
     expect(shouldShowAgentStatusLabel("done")).toBe(true);
+  });
+
+  test("warns before typing into an agent that is not at its prompt", () => {
+    expect(agentPromptWarning("codex", "idle")).toBeNull();
+    expect(agentPromptWarning("codex", "Done")).toBeNull();
+    expect(agentPromptWarning("codex", "working")).toStartWith(
+      "codex is still working.",
+    );
+    expect(agentPromptWarning("claude", "blocked")).toStartWith(
+      "claude is waiting on a prompt.",
+    );
+    expect(agentPromptWarning(undefined, "")).toStartWith(
+      "The agent's status is unknown.",
+    );
+    for (const status of ["unknown", undefined, "", "unrecognized"]) {
+      expect(agentPromptWarning("codex", status)).toStartWith(
+        "codex's status is unknown.",
+      );
+    }
+    expect(agentPromptWarning("claude", "unknown")).toStartWith(
+      "claude's status is unknown.",
+    );
   });
 
   test("groups setup records and subsequent activity into user turns", () => {

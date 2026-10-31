@@ -1,6 +1,12 @@
 import { expect, test } from "bun:test";
 import { handleInstanceSettings } from "./instance-settings";
 
+/** Every request here is refused before the settings file is read or written. */
+const untouched = {
+  read: () => Promise.reject(new Error("settings must not be read")),
+  update: () => Promise.reject(new Error("settings must not be written")),
+};
+
 function put(body: unknown, headers: Record<string, string> = {}) {
   return new Request("https://roamgate.example/api/instance-settings", {
     method: "PUT",
@@ -22,6 +28,7 @@ test("instance settings reject cross-site and simple browser writes", async () =
   for (const headers of rejectedHeaders) {
     const response = await handleInstanceSettings(
       put({ title_suffix: "Work" }, headers),
+      untouched,
     );
     expect(response.status).toBe(403);
     expect(response.headers.get("cache-control")).toBe("no-store");
@@ -29,6 +36,7 @@ test("instance settings reject cross-site and simple browser writes", async () =
   for (const method of ["POST", "DELETE", "OPTIONS", "HEAD"]) {
     const response = await handleInstanceSettings(
       new Request("https://roamgate.example/api/instance-settings", { method }),
+      untouched,
     );
     expect(response.status).toBe(405);
     expect(response.headers.get("allow")).toBe("GET, PUT");
@@ -44,7 +52,7 @@ test("invalid or oversized settings never reach persistence", async () => {
     { title_suffix: "x".repeat(33) },
     { title_suffix: "x\u0000" },
   ]) {
-    const response = await handleInstanceSettings(put(body));
+    const response = await handleInstanceSettings(put(body), untouched);
     expect(response.status).toBe(400);
     expect(typeof (await response.json()).error).toBe("string");
   }
@@ -57,6 +65,7 @@ test("invalid or oversized settings never reach persistence", async () => {
       },
       body: "{",
     }),
+    untouched,
   );
   expect(malformed.status).toBe(400);
   let cancelled = false;
@@ -76,6 +85,7 @@ test("invalid or oversized settings never reach persistence", async () => {
         },
       }),
     }),
+    untouched,
   );
   expect(oversized.status).toBe(413);
   expect(cancelled).toBe(true);
