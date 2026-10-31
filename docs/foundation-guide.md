@@ -66,8 +66,10 @@ runtimes. `start()` binds the listener, then starts connections and Ranger. `sto
 admits nothing new (requests get 503 while the port stays bound), stops Ranger and
 the connections (failing Herdr calls still waiting), waits for in-flight requests,
 closes storage, releases the folder and closes the listener last. Once storage
-closes, every store refuses writes, so a request that outlived the drain cannot
-write a folder the service no longer owns. The entry keeps
+closes, every store refuses writes and unopened lazy families stay closed, so a
+request that outlived the drain cannot rename or write a file in a folder the
+service no longer owns. SQLite reads use the committed cache and cannot reopen
+the database, import JSON or run migrations after close. The entry keeps
 the listener until the process exits, because launchd's restart waits for the
 port to free before it starts the next process. The service never resolves a data
 path from the environment or the home folder, so tests run several services in one
@@ -106,6 +108,20 @@ dispatcher. Existing [routing tests](../server/src/connections/protocol.test.ts)
 captured connection identity and stale-generation rejection.
 
 ## Service ownership
+
+World-owned asks, results and attention use the asynchronous
+[SQLite ledger family](../server/src/storage/world-storage.ts). Its sole
+[worker](../server/src/storage/world-worker.ts) owns database access and grouped
+FULL commits; [the dispatcher](../server/src/world/attention-dispatch.ts) records
+dispatch before external effects. The [recovery contract](../verification/contracts/world-storage.md)
+maps finite crash schedules, compiled acceptance, import, replay retention and
+the effect-specific uncertainty rules. Configuration and secrets stay files;
+see [location and backups](DEPLOYMENT.md#durable-questions-results-and-backups).
+
+[Answer delivery without `--wait`](ask-answer-delivery.md) is a planned second
+slice. It specifies the original-session binding, Chat send-path reuse, verified
+asker acknowledgement, explicit uncertainty and owner recovery. Its acceptance
+cases are planned work, not evidence of shipped automatic pane delivery.
 
 | Area | Owner and responsibility | Focused evidence |
 | --- | --- | --- |

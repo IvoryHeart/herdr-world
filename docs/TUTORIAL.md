@@ -187,7 +187,11 @@ hosts stay usable.
    counts chip under the search bar): the **Town summary** window lists who
    needs you (blocked agents and open questions), unreviewed finishes and when each was last active, each host's
    rooms with their counts, and spend. Answer a question from its offered
-   options or type a reply. A blocked agent that also asked a question counts
+   options or type a reply. World saves the answer before confirming it, and
+   the agent can retrieve it with `herdr-world ask get ID` or `--wait`, including
+   after a restart. Agent questions and results use the instance's `world.sqlite`;
+   [back it up with the service stopped](https://github.com/IvoryHeart/herdr-world/blob/main/docs/DEPLOYMENT.md#durable-questions-results-and-backups).
+   A blocked agent that also asked a question counts
    as two items needing you. Tap a room to show it in Town; on a phone, Summary
    closes first. Press **Summary** again to restore its minimized window or bring
    it to the front. Use **Back** to close the summary.

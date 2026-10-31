@@ -111,8 +111,11 @@ The watcher runs this checkout's own agent CLI (`server/src/index.ts`), never
 an older `herdr-world` on PATH. A failed owner ask is held as `failed` with the
 CLI's error, written to the feed once, and asked again only when the CLI's
 version or World's `whoami` answer changes; retrying unchanged would repeat
-the CLI's Herdr alert. An ask World recorded but nobody was alerted to (exit 6,
-`not_delivered`) stays recorded and is reported once. Set `crew.escalate` in
+a fallback Herdr alert. A recorded ask with no alert confirmed yet (exit 6,
+`not_delivered`) stays recorded and is reported once. `retrying: true` means
+World has scheduled a temporary-failure retry; the crew must not duplicate that
+retry loop. Closed asks cancel pending service alerts. Lost service replies can
+produce harmless duplicate owner alerts. Set `crew.escalate` in
 the gate config to a seat name, such as the FirstMate seat, to have each
 distinct failure also prompted to that seat once.
 

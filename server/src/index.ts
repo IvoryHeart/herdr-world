@@ -129,6 +129,13 @@ const shutdownController = createShutdownController({
   },
 });
 
+void service.failed?.then((error) => {
+  logger.error("World storage worker failed", {
+    error: sanitizeConnectionError(error),
+  });
+  void shutdownController.request(1);
+});
+
 function scheduleManagedShutdown(): void {
   const timer = setTimeout(() => {
     void shutdownController.request(0);

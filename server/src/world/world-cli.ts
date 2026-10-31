@@ -1,9 +1,12 @@
 import {
+  StorageOutcomeUnknown,
+  StorageWriteRejected,
+} from "../storage/world-protocol";
+import {
   appearanceFor,
   appearanceKey,
   parseAppearanceTarget,
 } from "../../../shared/appearance";
-import { askSessionFingerprint } from "./world-cli-asks";
 import { handleWorldAsk } from "./world-cli-asks";
 export { answerAsk, ASK_WAIT_MAX_MS, dismissAsk } from "./world-cli-asks";
 import { teamMembers, type GroupSender } from "../../../shared/groups";
@@ -38,12 +41,14 @@ import type {
   BoardPoint,
   CardColor,
 } from "./board-store";
-import {
-  paneRoots,
-  runsInPane,
-  type CallerLocator,
-  type PaneProcessInfo,
-} from "./caller-identity";
+import type { CallerLocator } from "./caller-identity";
+import { identifyCaller, type CliHost } from "./world-cli-actor";
+export {
+  identifyCaller,
+  paneActor,
+  NO_PANE,
+  type CliHost,
+} from "./world-cli-actor";
 import type { WorldSnapshotResult } from "./snapshot";
 import {
   LEDGER_LIMITS,
@@ -52,7 +57,7 @@ import {
   type LedgerChange,
   type LedgerProbe,
   type ResultStatus,
-  type WorldLedger,
+  type LedgerStore,
 } from "./world-ledger";
 
 /**
@@ -64,21 +69,13 @@ import {
  * Nothing here merges, deletes Herdr objects or reaches outside World.
  */
 
-/** A ready, current Herdr runtime the service can call. */
-export type CliHost = {
-  connection_id: string;
-  generation: number;
-  /** The Herdr runs on this machine, so its processes can be checked. */
-  local: boolean;
-  call(method: string, params: Record<string, unknown>): Promise<unknown>;
-};
-
 export type WorldCliDeps = {
   board: {
     get(): BoardDocument;
     patch(ops: readonly BoardOp[]): BoardDocument;
   };
-  ledger: WorldLedger;
+  ledger: LedgerStore;
+  incarnation?: string;
   hosts(): CliHost[];
   defaultConnectionId(): string | null;
   snapshot(): Promise<WorldSnapshotResult>;
@@ -119,107 +116,8 @@ export type WorldCliCommand = (typeof WORLD_CLI_COMMANDS)[number];
 
 /* ---------- Identity ---------- */
 
-/**
- * A caller that named no pane. Any process can leave HERDR_PANE_ID unset, so
- * this is not the owner, only a terminal that did not say where it runs.
- */
-export const NO_PANE = "terminal with no pane";
-
 /** Herdr pane IDs, such as "w1:p2"; anything else is refused before use. */
 const PANE_ID = /^[A-Za-z0-9_-]{1,32}:[A-Za-z0-9_-]{1,32}$/;
-
-/**
- * Who is calling. Without HERDR_PANE_ID the caller is unverified with no
- * pane. With one, the claim is verified only when the calling process runs
- * in that pane of a local Herdr (searched for among the pane's own
- * processes); otherwise it is labelled unverified and acts on the default host.
- */
-export async function identifyCaller(
-  hosts: readonly CliHost[],
-  paneId: string | undefined,
-  locate: CallerLocator | null,
-): Promise<{ actor: CliActor; host?: CliHost }> {
-  if (!paneId) return { actor: { label: NO_PANE, verified: false } };
-  if (locate)
-    for (const host of hosts) {
-      if (!host.local) continue;
-      const info = (
-        (await host
-          .call("pane.process_info", { pane_id: paneId })
-          .catch(() => null)) as { process_info?: PaneProcessInfo } | null
-      )?.process_info;
-      const roots = paneRoots(info);
-      const chain = roots.length ? locate(roots) : null;
-      if (!chain || !runsInPane(chain, info)) continue;
-      return { actor: (await paneActor(host, paneId)).actor, host };
-    }
-  return {
-    actor: { label: `unverified ${paneId}`, verified: false, pane_id: paneId },
-  };
-}
-
-/**
- * The caller fields Herdr gives for a pane on `host`, as for a verified
- * caller there. Only an explicit native not-found response proves absence;
- * failed or malformed reads leave the observation unknown.
- */
-export async function paneActor(
-  host: CliHost,
-  paneId: string,
-): Promise<{ state: "present" | "absent" | "unknown"; actor: CliActor }> {
-  let state: "present" | "absent" | "unknown" = "unknown";
-  let pane: Record<string, unknown> | undefined;
-  try {
-    const candidate = (
-      (await host.call("pane.get", { pane_id: paneId })) as {
-        pane?: Record<string, unknown>;
-      } | null
-    )?.pane;
-    if (
-      candidate?.pane_id === paneId &&
-      typeof candidate.terminal_id === "string" &&
-      candidate.terminal_id
-    ) {
-      pane = candidate;
-      state = "present";
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (/^pane_not_found(?::|$)/.test(message)) state = "absent";
-  }
-  const agent = typeof pane?.agent === "string" ? pane.agent : undefined;
-  return {
-    state,
-    actor: {
-      label: `${agent ?? "terminal"} in ${paneId}`,
-      verified: true,
-      connection_id: host.connection_id,
-      connection_generation: host.generation,
-      pane_id: paneId,
-      ...(typeof pane?.terminal_id === "string"
-        ? { terminal_id: pane.terminal_id }
-        : {}),
-      ...(typeof pane?.workspace_id === "string"
-        ? { workspace_id: pane.workspace_id }
-        : {}),
-      ...(typeof pane?.agent_session === "object" && pane.agent_session !== null
-        ? {
-            agent_session_fingerprint: askSessionFingerprint(
-              pane.agent_session,
-            ),
-            ...(typeof (pane.agent_session as { value?: unknown }).value ===
-            "string"
-              ? {
-                  agent_session_id: (pane.agent_session as { value: string })
-                    .value,
-                }
-              : {}),
-          }
-        : {}),
-      ...(agent ? { agent } : {}),
-    },
-  };
-}
 
 /* ---------- Targets ---------- */
 
@@ -578,7 +476,7 @@ const BOARD_COMMANDS = new Set<WorldCliCommand>([
 export function createWorldCli(deps: WorldCliDeps) {
   const now = deps.now ?? Date.now;
 
-  const record = (
+  const record = async (
     actor: CliActor,
     command: string,
     summary: string,
@@ -596,7 +494,7 @@ export function createWorldCli(deps: WorldCliDeps) {
       ...extra,
     };
     deps.publishLedger(
-      deps.ledger.update((document) => document.changes.push(change)),
+      await deps.ledger.update((document) => document.changes.push(change)),
     );
     return change;
   };
@@ -632,18 +530,21 @@ export function createWorldCli(deps: WorldCliDeps) {
    * Change the Board, then record it. The two files cannot change together,
    * so a change that cannot be recorded is taken back.
    */
-  const changeBoard = (
+  const changeBoard = async (
     actor: CliActor,
     ops: BoardOp[],
     revert: BoardOp[],
-    write: (document: BoardDocument) => LedgerChange,
+    write: (document: BoardDocument) => LedgerChange | Promise<LedgerChange>,
   ) => {
     const document = patchBoard(ops, actor);
     try {
-      return write(document);
+      return await write(document);
     } catch (error) {
+      if (!(error instanceof StorageWriteRejected)) throw error;
       try {
-        patchBoard(revert, actor);
+        // A browser may have edited the Board during the asynchronous write.
+        if (deps.board.get().revision === document.revision)
+          patchBoard(revert, actor);
       } catch {
         // The original error says more.
       }
@@ -695,6 +596,25 @@ export function createWorldCli(deps: WorldCliDeps) {
     };
   };
 
+  let boardTail = Promise.resolve();
+  let boardOutcomeUnknown: StorageOutcomeUnknown | undefined;
+  const queueBoard = <T>(work: () => Promise<T>): Promise<T> => {
+    const result = boardTail.then(async () => {
+      if (boardOutcomeUnknown) throw boardOutcomeUnknown;
+      try {
+        return await work();
+      } catch (error) {
+        if (error instanceof StorageOutcomeUnknown) boardOutcomeUnknown = error;
+        throw error;
+      }
+    });
+    boardTail = result.then(
+      () => {},
+      () => {},
+    );
+    return result;
+  };
+
   async function run(
     command: WorldCliCommand,
     params: Record<string, unknown>,
@@ -708,29 +628,32 @@ export function createWorldCli(deps: WorldCliDeps) {
         host,
         patch: (ops) => patchBoard(ops, actor),
       });
-    if (BOARD_COMMANDS.has(command)) {
-      const topology = await topologyFor(host, params);
-      const plan = planBoard(
-        command,
-        params,
-        deps.board.get(),
-        topology,
-        actor,
-      );
-      const revert =
-        plan.revert ??
-        (plan.regroup ? regroupOps(deps.board.get(), plan.regroup) : plan.undo);
-      return changeBoard(actor, plan.ops, revert, (document) =>
-        record(actor, command, plan.summary, plan.undo, {
-          expect: {
-            probe: plan.probe,
-            value: probeValue(document, plan.probe),
-          },
-          redo: plan.ops,
-          ...(plan.regroup ? { regroup: plan.regroup } : {}),
-        }),
-      );
-    }
+    if (BOARD_COMMANDS.has(command))
+      return queueBoard(async () => {
+        const topology = await topologyFor(host, params);
+        const plan = planBoard(
+          command,
+          params,
+          deps.board.get(),
+          topology,
+          actor,
+        );
+        const revert =
+          plan.revert ??
+          (plan.regroup
+            ? regroupOps(deps.board.get(), plan.regroup)
+            : plan.undo);
+        return changeBoard(actor, plan.ops, revert, (document) =>
+          record(actor, command, plan.summary, plan.undo, {
+            expect: {
+              probe: plan.probe,
+              value: probeValue(document, plan.probe),
+            },
+            redo: plan.ops,
+            ...(plan.regroup ? { regroup: plan.regroup } : {}),
+          }),
+        );
+      });
     switch (command) {
       case "whoami":
         return actor;
@@ -773,47 +696,49 @@ export function createWorldCli(deps: WorldCliDeps) {
           )
           .slice(-limit);
       }
-      case "undo": {
-        const id = typeof params.id === "string" ? params.id : usage("undo ID");
-        const change = deps.ledger.change(id);
-        if (!change) notFound(`no change ${id}`);
-        if (change!.undone_by)
-          refused(`${id} was already undone by ${change!.undone_by}`);
-        if (!change!.undo)
-          refused(
-            `${id} changed Herdr, which World cannot take back; make the opposite change instead`,
-          );
-        const current = deps.board.get();
-        if (
-          change!.expect &&
-          probeValue(current, change!.expect.probe) !== change!.expect.value
-        )
-          refused(
-            `${change!.expect.probe.key} changed after ${id}; undo the later change first, or set it again`,
-          );
-        const ops = change!.regroup
-          ? regroupOps(current, change!.regroup)
-          : change!.undo!;
-        return changeBoard(actor, ops, change!.redo ?? [], () => {
-          const undone: LedgerChange = {
-            id: deps.ledger.nextId("c"),
-            at: now(),
-            actor,
-            command: "undo",
-            summary: `undid ${id}`,
-            undo: null,
-          };
-          // One write records the undo and marks what it undid.
-          deps.publishLedger(
-            deps.ledger.update((document) => {
-              document.changes.push(undone);
-              const entry = document.changes.find((c) => c.id === id);
-              if (entry) entry.undone_by = undone.id;
-            }),
-          );
-          return undone;
+      case "undo":
+        return queueBoard(async () => {
+          const id =
+            typeof params.id === "string" ? params.id : usage("undo ID");
+          const change = deps.ledger.change(id);
+          if (!change) notFound(`no change ${id}`);
+          if (change!.undone_by)
+            refused(`${id} was already undone by ${change!.undone_by}`);
+          if (!change!.undo)
+            refused(
+              `${id} changed Herdr, which World cannot take back; make the opposite change instead`,
+            );
+          const current = deps.board.get();
+          if (
+            change!.expect &&
+            probeValue(current, change!.expect.probe) !== change!.expect.value
+          )
+            refused(
+              `${change!.expect.probe.key} changed after ${id}; undo the later change first, or set it again`,
+            );
+          const ops = change!.regroup
+            ? regroupOps(current, change!.regroup)
+            : change!.undo!;
+          return changeBoard(actor, ops, change!.redo ?? [], async () => {
+            const undone: LedgerChange = {
+              id: deps.ledger.nextId("c"),
+              at: now(),
+              actor,
+              command: "undo",
+              summary: `undid ${id}`,
+              undo: null,
+            };
+            // One write records the undo and marks what it undid.
+            deps.publishLedger(
+              await deps.ledger.update((document) => {
+                document.changes.push(undone);
+                const entry = document.changes.find((c) => c.id === id);
+                if (entry) entry.undone_by = undone.id;
+              }),
+            );
+            return undone;
+          });
         });
-      }
       case "town desk move": {
         if (params.herdr !== true)
           refused("moving a desk changes Herdr's tab order; add --herdr");
@@ -888,7 +813,7 @@ export function createWorldCli(deps: WorldCliDeps) {
           ...(pr ? { pr } : {}),
         };
         deps.publishLedger(
-          deps.ledger.update((document) => document.results.push(entry)),
+          await deps.ledger.update((document) => document.results.push(entry)),
         );
         return entry;
       }

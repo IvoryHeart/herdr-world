@@ -1,3 +1,7 @@
+import {
+  StorageOutcomeUnknown,
+  StorageWriteRejected,
+} from "../storage/world-protocol";
 import { appearanceFor } from "../../../shared/appearance";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, rmSync } from "node:fs";
@@ -256,13 +260,47 @@ describe("Board and colour changes", () => {
     ]);
     const before = board.get();
     ledger.update = () => {
-      throw new Error("Synthetic ledger write failure");
+      throw new StorageWriteRejected("Synthetic ledger write failure");
     };
     expect(
       await run("colour set", { target: "me", colour: "teal" }),
     ).toMatchObject({ ok: false });
     expect(board.get().appearance).toEqual(before.appearance);
     expect(board.get().layout.colors).toEqual(before.layout.colors);
+  });
+
+  test("asynchronous definite ledger refusal restores the Board", async () => {
+    const { board, ledger, run } = setup();
+    const before = board.get();
+    Object.defineProperty(ledger, "update", {
+      value: () =>
+        Promise.reject(
+          new StorageWriteRejected("Synthetic rolled-back operation"),
+        ),
+    });
+    expect(
+      await run("colour set", { target: "me", colour: "teal" }),
+    ).toMatchObject({ ok: false });
+    expect(board.get().layout.colors).toEqual(before.layout.colors);
+  });
+
+  test("unknown ledger outcomes never roll back or admit another queued Board mutation", async () => {
+    const { board, ledger, run } = setup();
+    Object.defineProperty(ledger, "update", {
+      value: () =>
+        Promise.reject(
+          new StorageOutcomeUnknown("Synthetic commit acknowledgement lost"),
+        ),
+    });
+    expect(
+      await run("colour set", { target: "me", colour: "teal" }),
+    ).toMatchObject({ ok: false });
+    const committedOrUnknown = board.get();
+    expect(committedOrUnknown.layout.colors["studio:w1:t1"]).toBe("teal");
+    expect(
+      await run("colour set", { target: "me", colour: "blue" }),
+    ).toMatchObject({ ok: false });
+    expect(board.get()).toEqual(committedOrUnknown);
   });
 
   test("colour observation from a retired host cannot authorize a binding", async () => {
@@ -807,16 +845,18 @@ describe("questions and results", () => {
       () => true,
     );
     const { result } = (await asked.json()) as { result: { id: string } };
-    expect(service.rpc("world.ask.dismiss", { id: result.id })).toMatchObject({
+    expect(
+      await service.rpc("world.ask.dismiss", { id: result.id }),
+    ).toMatchObject({
       asks: [],
     });
     expect(lines.at(-1)).toContain('"asks":true');
-    expect(() => service.rpc("world.ask.dismiss", {})).toThrow(
+    await expect(service.rpc("world.ask.dismiss", {})).rejects.toThrow(
       "a dismissal needs a question ID",
     );
-    expect(() =>
+    await expect(
       service.rpc("world.ask.answer", { id: result.id, answer: "Ship" }),
-    ).toThrow("dismissed by the owner");
+    ).rejects.toThrow("dismissed by the owner");
   });
 
   test("a cause is asked once, only its verified asker can withdraw, and recurrence is fresh", async () => {

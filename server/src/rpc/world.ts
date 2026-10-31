@@ -124,7 +124,7 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
     method === "world.ask.dismiss"
   ) {
     try {
-      sendReply({ id, result: worldCli.rpc(method, params) }, method);
+      sendReply({ id, result: await worldCli.rpc(method, params) }, method);
     } catch (error) {
       sendError(`${method}-error`, error);
     }

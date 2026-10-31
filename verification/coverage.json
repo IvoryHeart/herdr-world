@@ -1245,7 +1245,16 @@
         "web/src/taskNotifications.test.ts",
         "web/src/store/notificationFocus.test.ts",
         "web/src/world/worldAsks.test.ts",
-        "web/src/world/worldAskTargets.test.ts"
+        "web/src/world/worldAskTargets.test.ts",
+        "server/src/storage/world-storage.test.ts",
+        "server/src/storage/world-storage-crash.test.ts",
+        "server/src/storage/world-writer.test.ts",
+        "server/src/world/attention-dispatch.test.ts",
+        "server/src/cli/world.test.ts",
+        "server/src/storage/world-identifiers.test.ts",
+        "server/src/service/storage-lifecycle.test.ts",
+        "server/src/service/world-service.test.ts",
+        "web/src/world/town/TownRail.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/145",
       "technique": "alternative",
@@ -1253,21 +1262,81 @@
       "status": "alternative-evidence",
       "remaining": "Dedup is scoped to recorded occurrences/sessions; it does not make external push delivery exactly once.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
-      "evidenceDecision": "Real notification listener/push tests and durable task notification tests exercise session-safe clicks, endpoint validation and persist-before-dispatch/dedup across restart. Owner asks (#472): direct store and browser cases check one announcement per retained ask ID, initial-backlog suppression, revision/socket retirement, local OS delivery with Web Push selected and exact original-terminal/session notification admission. #493: store cases name the asker (Herdr's agent name, an unverified mark once) with the question's first line, announce an unverified ask only when the service placed it on one local pane, and never announce a dismissed ask; the asks store sends the owner's dismissal through world.ask.dismiss. These tests do not claim delivery while every browser is closed.",
+      "evidenceDecision": "Real notification listener/push tests and durable task notification tests exercise session-safe clicks, endpoint validation and persist-before-dispatch/dedup across restart. Owner asks (#472): direct store and browser cases check one announcement per retained ask ID, initial-backlog suppression, revision/socket retirement, local OS delivery with Web Push selected and exact original-terminal/session notification admission. #493: store cases name the asker (Herdr's agent name, an unverified mark once) with the question's first line, announce an unverified ask only when the service placed it on one local pane, and never announce a dismissed ask; the asks store sends the owner's dismissal through world.ask.dismiss. These tests do not claim delivery while every browser is closed. SQLite attention supplements this assessment under openspec/specs/world-storage/spec.md: finite source/compiled crash schedules prove acknowledged-answer retention, atomic outbox commits, one writer, import/reopen and explicit effect-class uncertainty. Owner alerts may repeat; uncertain pane answers never auto-replay. Synthetic receiver deduplication is not attributed to Herdr. Supplemental finite source/compiled recovery, root fail-stop, base32 allocation and Reception evidence require independent review under the World storage contract; accepted model claims are unchanged.",
       "partialEvidence": {
         "models": [],
-        "contracts": ["verification/consumer-evidence.md"],
+        "contracts": [
+          "verification/consumer-evidence.md",
+          "verification/contracts/world-storage.md"
+        ],
         "tests": [
           "server/src/notifications/web-push.test.ts",
           "server/src/notifications/herdr-notification-listener.test.ts",
           "web/src/taskNotifications.test.ts",
           "web/src/store/notificationFocus.test.ts",
           "web/src/world/worldAsks.test.ts",
-          "web/src/world/worldAskTargets.test.ts"
+          "web/src/world/worldAskTargets.test.ts",
+          "server/src/storage/world-storage.test.ts",
+          "server/src/storage/world-storage-crash.test.ts",
+          "server/src/storage/world-writer.test.ts",
+          "server/src/world/attention-dispatch.test.ts",
+          "server/src/cli/world.test.ts",
+          "server/src/storage/world-identifiers.test.ts",
+          "server/src/service/storage-lifecycle.test.ts",
+          "server/src/service/world-service.test.ts",
+          "web/src/world/town/TownRail.test.ts"
         ],
         "checks": ["bun run check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
       },
+      "supplementalContracts": [
+        {
+          "requirement": "openspec/specs/world-storage/spec.md",
+          "contract": "verification/contracts/world-storage.md",
+          "owners": [
+            "server/src/storage/world-storage.ts",
+            "server/src/storage/world-writer.ts",
+            "server/src/storage/world-client.ts",
+            "server/src/storage/world-schema.ts",
+            "server/src/world/attention-dispatch.ts",
+            "server/src/world/world-cli-service.ts",
+            "server/src/service/world-service.ts",
+            "server/src/storage/world-identifiers.ts",
+            "web/src/world/town/TownRail.tsx"
+          ],
+          "status": "candidate",
+          "properties": [
+            "Acknowledgement follows atomic domain/declared-outbox commit; exclusive worker ownership and drain/reopen",
+            "Finite process-crash recovery and explicit uncertain effect outcomes; worker failure stops the service",
+            "Owner alerts use original connection current leases, bounded backoff and closed-ask cancellation; CLI fallback remains",
+            "Idempotent private hash-backed import and separate history/domain retention; no unconsumed answer-send backlog",
+            "Store collision checks issue kind plus eight random base32 symbols without clocks/counters",
+            "Service-incarnation cursors reset across restart; deadline waits re-arm within 60 seconds",
+            "Reception exposes delivery-only changes at a newer query revision without re-announcement or extra attention counts"
+          ],
+          "tests": [
+            "server/src/storage/world-storage.test.ts",
+            "server/src/storage/world-storage-crash.test.ts",
+            "server/src/storage/world-writer.test.ts",
+            "server/src/world/attention-dispatch.test.ts",
+            "server/src/cli/world.test.ts",
+            "server/src/storage/world-identifiers.test.ts",
+            "server/src/service/storage-lifecycle.test.ts",
+            "server/src/service/world-service.test.ts",
+            "web/src/world/town/TownRail.test.ts"
+          ],
+          "acceptance": "Complete scoped tests, integrated root lifecycle, independent review, full applicable delivery gate and native CI are required. Synthetic receiver deduplication is not attributed to Herdr.",
+          "plannedPR2": {
+            "design": "openspec/changes/ask-answer-delivery/design.md",
+            "status": "planned-not-executed",
+            "properties": [
+              "Verified original source/session binding through existing Chat send path",
+              "Exact-answer acknowledgement from original verified asker; explicit owner resend/close",
+              "No automatic replay after uncertain pane submission; no backfill of historical answers"
+            ]
+          }
+        }
+      ],
       "promotion": {
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
@@ -1603,7 +1672,8 @@
         "server/src/connections/startup.test.ts",
         "server/src/connections/shutdown.test.ts",
         "server/src/config/service-manager.test.ts",
-        "server/src/service/world-service.test.ts"
+        "server/src/service/world-service.test.ts",
+        "server/src/service/storage-lifecycle.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/145",
       "technique": "shared-lifecycle",
@@ -1626,7 +1696,7 @@
         "checks": ["bun run check", "bun run verification:check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
       },
-      "evidenceDecision": "Manager shutdown prevents new starts and drains retained owners. Startup/shutdown tests verify listener availability, one shared drain and forced exit deadline. The composition root's stop admits nothing new while the port stays bound, stops Ranger and the connections (failing Herdr calls still waiting) and waits for startup and in-flight requests, then closes storage, whose stores refuse every later write, and releases the data folder; the listener closes last, and a process about to exit keeps it until exit. In-process service tests verify that order, a stop during startup, a held Herdr call, a held wait for an answer, a request admitted before stop that cannot write after storage closes, that a failed start releases the folder, and that another live service's folder is refused.",
+      "evidenceDecision": "Manager shutdown prevents new starts and drains retained owners. Startup/shutdown tests verify listener availability, one shared drain and forced exit deadline. The composition root's stop admits nothing new while the port stays bound, stops Ranger and the connections (failing Herdr calls still waiting) and waits for startup and in-flight requests, then closes storage, whose stores refuse every later write, and releases the data folder; the listener closes last, and a process about to exit keeps it until exit. In-process service tests verify that order, a stop during startup, a held Herdr call, a held wait for an answer, a request admitted before stop that cannot write after storage closes, that a failed start releases the folder, and that another live service's folder is refused. SQLite storage loss is a fail-stop dependency: real worker-loss signaling and an in-process root failure injection retain stopping-fence/storage/lock checks; compiled process-crash evidence stays separate.",
       "promotion": {
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",

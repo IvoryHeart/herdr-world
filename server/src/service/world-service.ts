@@ -342,7 +342,11 @@ async function compose(
   const worldCli = createWorldCliService({
     board,
     ledger: () => storage.ledger(),
+    attention: () => storage.attention(),
+    clock,
+    scheduler,
     now: () => clock.now(),
+    incarnation: storage.incarnation,
     connections: () => connectionManager,
     snapshots: () => worldSnapshots,
     sources: async () => worldSources.current(),
@@ -831,10 +835,24 @@ async function compose(
   let server: Server<{ sessionToken: string | null }> | null = null;
   let startTask: Promise<void> | null = null;
   let stopTask: Promise<void> | null = null;
+  void storage.failed
+    ?.then(async (error) => {
+      logger.error("World storage failed; stopping this service", {
+        error: sanitizeConnectionError(error),
+      });
+      stopTask ??= stopService();
+      await stopTask;
+    })
+    .catch((error) =>
+      logger.error("Storage-failure shutdown failed", {
+        error: sanitizeConnectionError(error),
+      }),
+    );
 
   return {
     paths,
     storage,
+    failed: storage.failed,
     /** The listener's port once started. */
     get port(): number | undefined {
       return server?.port;
@@ -878,6 +896,7 @@ async function compose(
           });
         },
       });
+      worldCli.start();
       return {
         port: server.port ?? config.port,
         connected: startTask!.catch(() => {}),
@@ -935,7 +954,7 @@ async function compose(
     deskWatches.stop();
     connectionProfiles.stopSupervision();
     webPush.stop();
-    worldCli.stop();
+    await worldCli.stop();
     // Drop browser sockets as a process exit does; pages reconnect.
     for (const ws of [...browsers.clients]) ws.terminate();
     try {

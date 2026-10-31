@@ -88,6 +88,15 @@ export function TownAsk({
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const notification = ask.delivery?.notification;
+  const deliveryMessage =
+    notification?.state === "uncertain"
+      ? "Owner alert delivery is uncertain. World will retry; your question is saved."
+      : notification?.state === "refused"
+        ? "Owner alert was not shown. Your question is saved."
+        : notification?.state === "pending" && notification.reason
+          ? "Owner alert is waiting to retry. Your question is saved."
+          : null;
   const asker = actions.askers.get(ask.id);
   const name = asker?.name ?? askerName(ask);
   const who = `${name}${ask.actor.verified ? "" : " (unverified)"}`;
@@ -162,7 +171,11 @@ export function TownAsk({
           Dismiss
         </button>
       </div>
-      {error ? <small role="alert">{error}</small> : null}
+      {error || deliveryMessage ? (
+        <small role={error ? "alert" : "status"}>
+          {error ?? deliveryMessage}
+        </small>
+      ) : null}
     </form>
   );
 }

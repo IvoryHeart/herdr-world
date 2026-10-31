@@ -1,11 +1,12 @@
-import { createHash } from "node:crypto";
 import { CliError } from "./world-cli-errors";
-import { paneActor, type CliHost, type WorldCliDeps } from "./world-cli";
+import type { CliHost, WorldCliDeps } from "./world-cli";
+import { paneActor } from "./world-cli-actor";
+export { askSessionFingerprint } from "./world-cli-actor";
 import {
   askClosed,
   LEDGER_LIMITS,
   type CliActor,
-  type WorldLedger,
+  type LedgerStore,
 } from "./world-ledger";
 
 export const ASK_WAIT_MAX_MS = 20_000;
@@ -27,16 +28,6 @@ const text = (
     usage(`${what} must be text of at most ${max} characters`);
   return (value as string).trim();
 };
-
-export function askSessionFingerprint(value: unknown): string | undefined {
-  if (!value || typeof value !== "object" || Array.isArray(value))
-    return undefined;
-  const session = value as Record<string, unknown>;
-  const fields = [session.source, session.agent, session.kind, session.value];
-  if (!fields.every((part) => typeof part === "string" && part.length > 0))
-    return undefined;
-  return createHash("sha256").update(JSON.stringify(fields)).digest("hex");
-}
 
 /** A cause key and withdrawal belong to the verified asking occupant. */
 function sameAsker(left: CliActor, right: CliActor) {
@@ -143,7 +134,7 @@ export async function handleWorldAsk(
         refused("only the verified asker can withdraw its question");
       if (ask.withdrawn) return ask;
       deps.publishLedger(
-        deps.ledger.update((document) => {
+        await deps.ledger.update((document) => {
           document.asks.find((entry) => entry.id === id)!.withdrawn = {
             at: now(),
           };
@@ -167,9 +158,14 @@ export async function handleWorldAsk(
         : [];
       if (options.length > LEDGER_LIMITS.options)
         usage(`at most ${LEDGER_LIMITS.options} options`);
-      // Herdr is asked first: from here to the insertion nothing waits, so
-      // concurrent asks cannot all pass the cause and allowance checks.
+      // Identity lookup may wait. Recheck keys/allowances inside the serialized
+      // ledger mutation, so concurrent requests cannot bypass admission.
       const asker = await placeAsker(deps.hosts(), actor);
+      const notificationConnection =
+        asker.connection_id ?? deps.defaultConnectionId();
+      const notificationHost = deps
+        .hosts()
+        .find((host) => host.connection_id === notificationConnection);
       if (key) {
         const known = deps.ledger
           .get()
@@ -195,24 +191,71 @@ export async function handleWorldAsk(
         refused(
           `you have ${LEDGER_LIMITS.asksPerActor} open questions; wait for answers`,
         );
-      const id = deps.ledger.nextId("q");
+      let id = deps.ledger.nextId("q");
+      let created = true;
       deps.publishLedger(
-        deps.ledger.update((document) =>
-          document.asks.push({
-            id,
-            at: now(),
-            actor: asker,
-            question,
-            ...(key ? { key } : {}),
-            options,
-            owner_only: params.owner_only === true,
-          }),
+        await deps.ledger.update(
+          (document) => {
+            if (key) {
+              const retained = document.asks.find(
+                (ask) =>
+                  ask.key === key &&
+                  !ask.withdrawn &&
+                  sameAsker(ask.actor, actor),
+              );
+              if (retained) {
+                id = retained.id;
+                created = false;
+                return;
+              }
+            }
+            const pending = document.asks.filter((ask) => !askClosed(ask));
+            if (pending.length >= LEDGER_LIMITS.asks)
+              refused("too many open questions; wait for answers");
+            if (
+              pending.filter((ask) => bucket(ask.actor) === bucket(actor))
+                .length >= LEDGER_LIMITS.asksPerActor
+            )
+              refused(
+                `you have ${LEDGER_LIMITS.asksPerActor} open questions; wait for answers`,
+              );
+            document.asks.push({
+              id,
+              at: now(),
+              actor: asker,
+              question,
+              ...(key ? { key } : {}),
+              options,
+              owner_only: params.owner_only === true,
+            });
+          },
+          () =>
+            created
+              ? [
+                  {
+                    kind: "ask.created",
+                    record_id: id,
+                    recovery: "repeatable",
+                    target: notificationConnection
+                      ? { connection_id: notificationConnection }
+                      : null,
+                    ...(notificationHost && deps.incarnation
+                      ? {
+                          initial_claim: {
+                            connection_id: notificationHost.connection_id,
+                            generation: notificationHost.generation,
+                            service_incarnation: deps.incarnation,
+                          },
+                        }
+                      : {}),
+                  },
+                ]
+              : [],
         ),
         true,
       );
-      // Only a new question alerts the owner (cli/world.ts); a known cause
-      // returns the recorded ask above.
-      return { id, created: true };
+      // The service dispatches the atomically enqueued attention entry.
+      return { id, created };
     }
     case "ask get": {
       const id = text(params.id, "the question ID");
@@ -249,7 +292,7 @@ export async function handleWorldAsk(
         refused("an agent cannot answer its own question");
       if (ask!.answer) refused(`${id} is already answered`);
       deps.publishLedger(
-        answerAsk(deps.ledger, id, answer, actor.label, now()),
+        await answerAsk(deps.ledger, id, answer, actor.label, now()),
         true,
       );
       return deps.ledger.ask(id);
@@ -259,7 +302,7 @@ export async function handleWorldAsk(
 
 /** Record an answer; returns the ledger revision. Used by the CLI and by World. */
 export function answerAsk(
-  ledger: WorldLedger,
+  ledger: LedgerStore,
   id: string,
   answer: string,
   by: string,
@@ -282,7 +325,7 @@ export function answerAsk(
  * cause stays closed, as an answered one does, until the asker withdraws it.
  */
 export function dismissAsk(
-  ledger: WorldLedger,
+  ledger: LedgerStore,
   id: string,
   by: string,
   at: number,

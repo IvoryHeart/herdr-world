@@ -30,7 +30,7 @@ test("standalone serves native assets without ambient config and retains source 
   }
   try {
     await mkdir(join(dir, "public/assets"), { recursive: true });
-    await mkdir(join(dir, "src"));
+    await mkdir(join(dir, "src/storage"), { recursive: true });
     await mkdir(runtimeDir);
     await mkdir(overrideDir);
     await Bun.write(join(dir, "public/index.html"), "embedded entry");
@@ -56,10 +56,21 @@ test("standalone serves native assets without ambient config and retains source 
     );
     await Bun.write(join(overrideDir, "index.html"), "external entry");
     await Bun.write(
+      join(dir, "src/storage/world-worker.ts"),
+      'import { parentPort } from "node:worker_threads"; parentPort!.postMessage("embedded worker");',
+    );
+    await Bun.write(
       join(dir, "src/index.ts"),
       `
 import { serveStatic } from ${JSON.stringify(fileURLToPath(new URL("../server/src/http/static-files.ts", import.meta.url)))};
+import { Worker } from "node:worker_threads";
 if (process.argv.includes("--crash")) throw new Error("source map probe");
+const embeddedWorker = new Worker(new URL("./storage/world-worker.ts", import.meta.url));
+const worker = await new Promise((resolve, reject) => {
+  embeddedWorker.once("message", resolve);
+  embeddedWorker.once("error", reject);
+});
+await embeddedWorker.terminate();
 const server = Bun.serve({
   hostname: "127.0.0.1", port: 0,
   fetch: request => serveStatic(request, process.argv[2]),
@@ -82,7 +93,7 @@ try {
       cache: response.headers.get("cache-control"), body: Buffer.from(await response.arrayBuffer()).toString("base64") });
   }
     console.log(JSON.stringify({ standalone: Bun.isStandaloneExecutable,
-    ambient: process.env.HERDR_WORLD_STANDALONE_TEST ?? null, results }));
+    ambient: process.env.HERDR_WORLD_STANDALONE_TEST ?? null, worker, results }));
 } finally { server.stop(true); }
 `,
     );
@@ -105,6 +116,7 @@ try {
     const result = JSON.parse(embedded.stdout);
     expect(result.standalone).toBe(true);
     expect(result.ambient).toBeNull();
+    expect(result.worker).toBe("embedded worker");
     expect(
       result.results.map((item: { status: number }) => item.status),
     ).toEqual([200, 200, 200, 200, 404, 200, 405, 400, 404]);
