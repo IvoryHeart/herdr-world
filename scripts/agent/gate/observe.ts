@@ -24,6 +24,7 @@ import {
   fetchPulls,
   overlap,
 } from "./git";
+import { reviewedPosts } from "./review-posts";
 import {
   fullOutcomes,
   jobId,
@@ -306,7 +307,8 @@ export function observe(options: {
       .map((check) => check.name);
     const evidence = reviewHistory(run, config.repo, number);
     const commits = commitsOf.get(number) ?? [];
-    const posts = trustedPosts(evidence.posts);
+    const rawPosts = trustedPosts(evidence.posts);
+    const posts = reviewedPosts(number, rawPosts, commits, head, mirror);
     // Full history, not the PR card's bounded window, decides findings.
     item.pr = {
       ...item.pr,
@@ -319,6 +321,7 @@ export function observe(options: {
       ...base,
       item,
       history,
+      reviewPosts: rawPosts,
       historyComplete: evidence.complete,
       outcomes: fullOutcomes(number, posts),
       requiredChecks: required && [...new Set([...required, ...flagged])],

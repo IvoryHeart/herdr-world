@@ -170,6 +170,12 @@ unique prefix; conflicting claims and ambiguous prefixes stay unknown. It
 never derives the reviewed head from timestamps. A historical RED/GREEN SHA
 mentioned in findings or comparison prose does not claim the reviewed head and
 cannot contradict formal review metadata or the canonical header.
+The crew gate separately handles reviews submitted after a push: when an
+unambiguous explicit reviewed SHA precedes GitHub's attached commit in the gate's
+git mirror, it binds the RESULT to that older SHA. The normal copy rule still
+decides whether it counts for the current head; authored changes require a fresh
+confirmation. Conflicting explicit declarations, unrelated histories and unknown
+ancestry stay unknown. This does not change World's conservative shared parser.
 RESULT-only evidence remains
 separately linked as unknown attribution; a later named review does not claim
 an earlier anonymous post. Correct the original post to attribute it. Positive
@@ -362,7 +368,7 @@ plans the next step for every PR in scope and takes each step once:
 | Findings are open on the head and every required reviewer has posted on it | One `ACT #N fix` prompt with the review URLs, so the author fixes in one pass | The author's seat |
 | A required check fails and no check is still running | `ACT #N ci` prompt | The author's seat |
 | GitHub reports a conflict, or screenshots are missing | `ACT #N conflict` or `ACT #N screenshots` prompt | The author's seat |
-| A fix, ci or conflict step is due and the author seat is busy with another PR | A fresh fixer run in the PR's own worktree | The author seat's roster model |
+| A fix, ci or conflict step is due and the author seat is absent or busy with another PR | A fresh fixer run in the PR's own worktree | The author seat's roster model |
 | A required reviewer has no RESULT, or finding replies and a quiet push admit a scoped later round, and GitHub reports the head mergeable | A fresh reviewer run | That reviewer's model |
 | Two more review rounds have not converged | A fresh evaluator; its go scopes the next round, or no-go starts a process and holds reviews | The evaluator roster seat |
 | READY, with every required reviewer confirmed on the head | The `crew/merge-ready` mark and a World ask with the PR and reason | The owner |
@@ -405,7 +411,9 @@ plans the next step for every PR in scope and takes each step once:
   in Herdr. It posts one review with the canonical header. The review is done
   once that RESULT is on GitHub: the watcher then records the result and the
   token usage (read from the harness's session files) and frees the slot. The
-  session stays open in its pane as a chat. A confirmation reviews the delta
+  worker then exits the interactive harness, retaining its saved session for
+  `open --run`. Its pane keeps the transcript and reopening command. Evaluators
+  exit after posting their checkpoint's verdict in the same way. A confirmation reviews the delta
   from the last reviewed round's head, excluding imports from main and preserving
   manual conflict resolutions. Every prompt checks the linked issue for scope drift.
   At most `maxRuns` reviewers work
@@ -414,12 +422,15 @@ plans the next step for every PR in scope and takes each step once:
   posting is retried once. One that is quit, or exits cleanly, without a
   RESULT on the head goes to the owner after 15 minutes. A post without a
   RESULT line doesn't count. A RESULT counts for the head it was given, even
-  if the session has ended or a newer head has arrived since.
+  if the session has ended or a newer head has arrived since. Completion uses
+  the task's explicit reviewed/evaluated commit, even when GitHub's submission
+  commit differs or the new head's ancestry cannot be reconciled. Finishing
+  the task does not carry its review to the new head or release a policy hold.
 - **Where reviewers show.** A PR is a pod, and each head it reviews is a
   round. A round has its own Herdr tab, named like `#7 towncx-12-plates · r2`,
-  with one pane per reviewer, named after the reviewer. Every reviewer stays
-  in its pane until the PR merges or closes, so the owner can read and
-  question every round before merging. A newer head leaves the running round
+  with one pane per reviewer, named after the reviewer. Each pane keeps its
+  transcript until the PR merges or closes; use `open --run` to ask a completed
+  reviewer questions. A newer head leaves the running round
   pinned to its reviewed commit; a merge of main never stops it. A merge or
   close of the PR stops outstanding runs. If you quit a session yourself, its pane
   gives the same command. A tab the owner closes is reopened for that round's
@@ -450,9 +461,9 @@ plans the next step for every PR in scope and takes each step once:
   IDs, roster setup, verdict/report lines and owner decisions at reception.
   CI failures still go to the author once checks settle. READY and
   `crew/merge-ready` still need green checks, resolved judgments and reviews.
-- **A fresh fixer for a busy author.** A seat works on one PR at a time, so
+- **A fresh fixer for an unavailable author.** A seat works on one PR at a time, so
   when a PR's `fix`, `ci` or `conflict` step is due and its author seat is
-  working (or blocked) on another PR, the watcher starts a fresh fixer
+  absent or working (or blocked) on another PR, the watcher starts a fresh fixer
   instead of waiting. It runs like a reviewer: a fresh, interactive session
   on the author seat's roster model and harness, in a pane of the PR head's
   round tab named `<seat> fixer`, briefed with the steps' messages, the PR and
@@ -464,10 +475,15 @@ plans the next step for every PR in scope and takes each step once:
   Its session then stays open as a chat, and `open --run` reopens it in that
   worktree, under the pass lock. A fixer overtaken by someone else's push, or
   whose PR merges or closes, is stopped; pinned reviewer sessions continue until the PR closes.
-  - **Only on evidence that the author is elsewhere:** the seat's latest crew
+  - **Only on evidence that the live author is elsewhere:** the seat's latest crew
     prompt was only about other PRs. One prompt carries every waiting step,
     so a prompt that included this PR means the author may be on it. A seat
-    the crew has never prompted keeps its steps too.
+    the crew has never prompted keeps its steps too. An absent author needs no
+    earlier prompt elsewhere, but only a successful, valid Herdr agent inventory
+    proves it is absent. A failed or malformed inventory read leaves author steps
+    waiting until discovery recovers. Its fixer waits silently for a run slot;
+    if a freed slot reveals a worktree or other blocker, the owner gets a notice
+    for that blocker, once while it holds. Never-prompt seats remain excluded.
   - **Only where it can't clash:** the step also waits for the author when the
     PR's worktree is missing, has uncommitted changes or isn't at the PR's
     head, the seat has no roster model, or no run slot is free.

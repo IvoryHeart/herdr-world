@@ -215,6 +215,7 @@ export async function review(options: Options, dir: string, deps: Deps) {
       prompt,
       checkout,
       show,
+      { exitOnResult: options.command !== "process" },
     ));
   } catch (error) {
     show(error instanceof Error ? error.message : String(error));
@@ -256,7 +257,8 @@ export function prMeta(pr: number, repo: string, deps: Deps) {
 /**
  * Runs a run's harness session in this pane's terminal, on its roster
  * entry, with the brief as its first message: the owner watches it work,
- * can type to it, and keeps it as a chat once it is done. Returns how it
+ * can type to it. Reviewers and evaluators exit once the watcher records
+ * their posted result; other sessions can stay as chats. Returns how it
  * ended and the tokens it used.
  */
 export async function runSession(
@@ -266,6 +268,13 @@ export async function runSession(
   prompt: string,
   cwd: string,
   show: (text: string) => void,
+  options: {
+    exitOnResult?: boolean;
+    spawn?: (
+      argv: string[],
+      cwd: string,
+    ) => Pick<ReturnType<typeof Bun.spawn>, "exited" | "kill">;
+  } = {},
 ) {
   const harness = harnessOf(model) ?? "codex";
   const session = harness === "claude" ? randomUUID() : null;
@@ -273,22 +282,45 @@ export async function runSession(
   const started = Date.now();
   // Ctrl-C in the pane is for the harness; this process waits for it.
   process.on("SIGINT", () => {});
-  const child = Bun.spawn(reviewerArgv(model, prompt, session), {
-    cwd,
-    stdio: ["inherit", "inherit", "inherit"],
-  });
+  const spawn =
+    options.spawn ??
+    ((argv: string[], directory: string) =>
+      Bun.spawn(argv, {
+        cwd: directory,
+        stdio: ["inherit", "inherit", "inherit"],
+      }));
+  const child = spawn(reviewerArgv(model, prompt, session), cwd);
   // Codex names its session itself; find it once its rollout exists.
   let named = harness !== "codex";
+  let finishing = false;
+  let forceStop: ReturnType<typeof setTimeout> | undefined;
   const finding = setInterval(() => {
-    if (named) return;
-    const found = findCodexSession(cwd, started - 5_000);
-    if (!found) return;
-    setRunSession(crew, runId, harness, model.model, found);
-    named = true;
+    if (!named) {
+      const found = findCodexSession(cwd, started - 5_000);
+      if (found) {
+        setRunSession(crew, runId, harness, model.model, found);
+        named = true;
+      }
+    }
+    const run = getRun(crew, runId);
+    if (
+      options.exitOnResult &&
+      !finishing &&
+      run?.result &&
+      run.finishedAt !== null
+    ) {
+      finishing = true;
+      child.kill("SIGTERM");
+      // An interactive harness must not keep its worker alive after posting.
+      forceStop = setTimeout(() => child.kill("SIGKILL"), 2_000);
+    }
   }, 3_000);
-  const code = await child.exited;
+  const exited = await child.exited;
   clearInterval(finding);
+  clearTimeout(forceStop);
   const run = getRun(crew, runId);
+  const code =
+    options.exitOnResult && run?.result && run.finishedAt !== null ? 0 : exited;
   const usage = readUsage({ harness, session: run?.session ?? null, cwd });
   show(
     `── session ended (exit ${code}) · ${run?.result ?? (run?.cwd ? "fixer" : "no RESULT posted")}`,

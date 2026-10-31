@@ -9,6 +9,7 @@ import type { WorkItem } from "../../../shared/worldSources";
 import {
   resultLine,
   resultOutcome,
+  type Post,
 } from "../../../server/src/sources/pullRequestDetail";
 
 /**
@@ -84,6 +85,8 @@ export type GateInput = {
   item?: WorkItem;
   /** Every reviewer claim on the PR, one per post, oldest first. */
   history: PullRequestReviewer[];
+  /** Trusted full posts, also used to finish tasks pinned to older heads. */
+  reviewPosts?: Post[];
   /** False when GitHub had more reviews or comments than the gate read. */
   historyComplete: boolean;
   /** Check names the base branch requires; null when unknown. */

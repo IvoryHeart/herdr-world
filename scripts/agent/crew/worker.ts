@@ -5,8 +5,8 @@ import { join } from "node:path";
 /**
  * A reviewer run: one fresh, interactive harness session per review or
  * confirmation in a Herdr pane, briefed with references to the work item
- * rather than a transcript. It posts its RESULT on GitHub and stays open,
- * so the owner can watch it work, steer it, and ask about it afterwards.
+ * rather than a transcript. It posts its RESULT on GitHub, then exits once
+ * the watcher records it. The saved session can be reopened for questions.
  */
 
 export type ReviewTask = {
@@ -51,7 +51,7 @@ Rules:
   RESULT #${pr}: x/y resolved, z new
   For a first review use 0/0 resolved and z = the number of findings. Use digits. Findings follow, one per line: P-level, file:line, the problem and the fix you expect.
 - Never push, merge, approve, use --admin, prompt or message another agent, or post session links.
-- Finish by printing only the RESULT line and the review URL. Then stay in this session: the owner may read your work here and ask you about it until the PR closes; answer, but take no further action unless asked.`;
+- After posting, finish by printing only the RESULT line and the review URL, then end your turn. The worker exits this session once the watcher records your result; the owner can reopen the saved session for questions.`;
 }
 
 /** Which harness runs a model: Claude models on Claude Code, GPT models on Codex. */

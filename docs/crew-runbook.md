@@ -140,7 +140,7 @@ ledger. Everything after the hand-off already runs without you:
 - the crew watcher (`bun run agent:crew -- watch`) starts fresh reviewers for
   the first round, then admits scoped rounds after finding replies and a quiet
   period (see [review rounds](#review-rounds-and-evaluation)), sends findings back to the author
-  seat (or to a fresh fixer when that seat is busy on another PR), and marks a head
+  seat (or to a fresh fixer when that seat is absent or busy on another PR), and marks a head
   `crew/merge-ready` or `crew/needs-owner`;
 - the owner merges, and only PRs whose head shows a green `crew/merge-ready`.
 

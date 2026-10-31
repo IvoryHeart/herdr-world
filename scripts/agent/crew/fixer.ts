@@ -26,7 +26,7 @@ import { harnessOf } from "./worker";
 
 /**
  * A fresh fixer: when a PR's fix, ci or conflict step is due and its author
- * seat is busy with other work, the watcher starts a fresh session on the
+ * seat is absent or busy with other work, the watcher starts a fresh session on the
  * author's roster model in the PR's own worktree. It fixes, pushes, replies
  * on the PR signed `[fixer #N]` and is done; the next round runs as usual.
  */
@@ -53,7 +53,7 @@ export type FixerTask = {
 
 export function fixerPrompt(task: FixerTask) {
   const { repo, pr, head, author, branch } = task;
-  return `You are a fresh fixer for Herdr World pull request #${pr}, started because its author seat ${author} is busy with other work. You do this one step for ${author} and are done.
+  return `You are a fresh fixer for Herdr World pull request #${pr}, started because its author seat ${author} is unavailable for this step. You do this one step for ${author} and are done.
 
 The crew watcher's step${task.steps.length > 1 ? "s" : ""} for ${author}:
 ${task.steps.map((step) => `- ${step}`).join("\n")}
@@ -110,10 +110,9 @@ export function fixerWorktree(
 }
 
 /**
- * Starts a fixer for each of a busy author's PRs that one may take: the
- * seat is busy, its latest prompt was only about other PRs (so it is
- * working on one of those), no fixer has worked
- * on this head yet, a run slot is free and the PR's worktree is clean at
+ * Starts a fixer for an absent author, or a busy author whose latest prompt
+ * was only about other PRs. No fixer may have worked on this head yet;
+ * a run slot must be free and the PR's worktree must be clean at
  * its head. Returns the steps handed to a fixer, and why the others wait.
  */
 export function startFixers(
@@ -127,7 +126,12 @@ export function startFixers(
 ) {
   const handed = new Set<string>();
   const waits = new Map<number, string>();
-  if (!BUSY.has(seat.status)) return { handed, waits };
+  const absent = seat.status === "absent";
+  if (
+    settings.neverPrompt.includes(seat.name) ||
+    (!absent && !BUSY.has(seat.status))
+  )
+    return { handed, waits };
   const model = settings.roster[seat.name];
   const byPr = new Map<number, StoredAction[]>();
   for (const entry of entries)
@@ -140,9 +144,9 @@ export function startFixers(
       ? `${seat.name} has no roster model`
       : !harnessOf(model)
         ? `no harness runs ${model.model}`
-        : !on.size
+        : !absent && !on.size
           ? `nothing shows what ${seat.name} is working on`
-          : on.has(pr)
+          : !absent && on.has(pr)
             ? `${seat.name} may be on this PR`
             : runsOf(crew, pr).some((run) => run.cwd && run.head === head)
               ? "a fixer already worked on this head"

@@ -33,12 +33,15 @@ import {
   plan,
 } from "./crew/plan";
 import { checkoutOf, openChat, review, runs } from "./crew/review";
+import { postedResult } from "./crew/run-results";
+import { evaluations } from "./crew/round-policy-store";
 import { markDue, markHeads } from "./crew/marks";
 import {
   crewCodeVersion,
   forgetOnExit,
   noticeStaleWatcher,
   type Seat,
+  seatInventory,
   seats,
   startSeat,
 } from "./crew/seats";
@@ -143,9 +146,12 @@ export function crewPass(context: PassContext) {
   // prompt that was already sent. A dry run changes nothing and takes no lock.
   const pass = () => {
     const { verdicts, inputs } = context.judge();
-    const live = seats(deps.run);
+    const live = seatInventory(deps.run);
     const names = [
-      ...new Set([...Object.keys(settings.roster), ...live.map((s) => s.name)]),
+      ...new Set([
+        ...Object.keys(settings.roster),
+        ...(live ?? []).map((s) => s.name),
+      ]),
     ];
     const byNumber = new Map(inputs.map((input) => [input.number, input]));
     // How long each running check of an in-scope PR has been running, as
@@ -176,7 +182,12 @@ export function crewPass(context: PassContext) {
         ...input.history,
         ...(input.item?.pr?.reviewers ?? []),
       ])
-        if (claim.reviewer && claim.commit && claim.line.trim())
+        if (
+          claim.reviewer &&
+          claim.commit &&
+          claim.line.trim() &&
+          claim.outcome !== "unknown"
+        )
           posted.set(`${claim.reviewer}:${claim.commit}`, {
             commit: claim.commit,
             source: claim.url,
@@ -277,7 +288,7 @@ function act(
   planned: Action[],
   verdicts: Verdict[],
   inputs: GateInput[],
-  live: Seat[],
+  live: Seat[] | null,
   authors: Map<number, Item>,
   say: (text: string) => void,
 ) {
@@ -316,7 +327,9 @@ function act(
     if (!RUN_KINDS.has(entry.kind)) continue;
     const known = getAction(crew, entry.key)!;
     const stuck =
-      (known.state === "done" && now - known.updatedAt > STUCK_MS) ||
+      (known.state === "done" &&
+        now - known.updatedAt > STUCK_MS &&
+        !latestRun(crew, entry.key)?.result) ||
       known.state === "failed";
     if (stuck)
       record(
@@ -343,23 +356,41 @@ function act(
   );
   // A review is done once its RESULT is on GitHub for the head it was
   // given, whatever its session has done since: it may have posted just
-  // before a newer push, or ended before this pass saw the post. A session
-  // still open stays in its pane as a chat until the PR closes.
+  // before a newer push, or ended before this pass saw the post. Finishing
+  // its recorded run also tells the worker to exit its harness session.
+  const byNumber = new Map(inputs.map((input) => [input.number, input]));
   for (const entry of actionsIn(crew, [
     "pending",
     "running",
     "failed",
     "done",
   ])) {
-    const claim = REVIEW_KINDS.has(entry.kind)
+    if (!REVIEW_KINDS.has(entry.kind) && entry.kind !== "evaluate") continue;
+    const run = latestRun(crew, entry.key);
+    if (entry.state === "done" && run?.result && run.finishedAt !== null)
+      continue;
+    const parsed = REVIEW_KINDS.has(entry.kind)
       ? authors.get(entry.pr)?.posted.get(`${entry.target}:${entry.head}`)
       : undefined;
+    const claim =
+      parsed && reviewClaimCounts(crew, entry, parsed.source)
+        ? parsed
+        : postedResult(
+            entry,
+            byNumber.get(entry.pr)?.reviewPosts ?? [],
+            entry.kind === "evaluate"
+              ? evaluations(crew, entry.pr).find(
+                  (evaluation) =>
+                    evaluation.head === entry.head &&
+                    entry.key.endsWith(`:evaluation-${evaluation.checkpoint}`),
+                )
+              : undefined,
+          );
     if (
       claim?.commit !== entry.head ||
       !reviewClaimCounts(crew, entry, claim.source)
     )
       continue;
-    const run = latestRun(crew, entry.key);
     if (run && run.result === null) setRunResult(crew, run.id, claim.line);
     if (run && run.finishedAt === null)
       finishRun(
@@ -372,7 +403,7 @@ function act(
     if (entry.state === "done") continue;
     setAction(crew, entry.key, "done", now);
     say(
-      `#${entry.pr} ${entry.target} posted ${claim.line}; its session stays open as a chat`,
+      `#${entry.pr} ${entry.target} posted ${claim.line}; its worker can exit`,
     );
   }
 
@@ -641,7 +672,7 @@ function settleRuns(
 function deliver(
   crew: Database,
   settings: CrewSettings,
-  live: Seat[],
+  live: Seat[] | null,
   authors: Map<number, Item>,
   deliverable: (entry: StoredAction) => boolean,
   record: (entry: Action) => void,
@@ -665,36 +696,50 @@ function deliver(
     if (AUTHOR_KINDS.has(entry.kind) && !fixing.has(entry.pr))
       bySeat.set(entry.target, [...(bySeat.get(entry.target) ?? []), entry]);
   for (const [name, entries] of bySeat) {
+    // A failed read says nothing about whether the author is still working.
+    if (live === null) {
+      for (const entry of entries) {
+        if (entry.detail === "seat inventory unreadable") continue;
+        setAction(crew, entry.key, "pending", now, "seat inventory unreadable");
+        say(`#${entry.pr} waiting for readable seat inventory for ${name}`);
+      }
+      continue;
+    }
     const why = promptable(
       live.find((seat) => seat.name === name),
       settings,
     );
     if (why) {
-      // A busy author's fix, ci and conflict steps can go to a fresh fixer.
+      // An absent or busy author's steps can go to a fresh fixer.
       const seat = live.find((candidate) => candidate.name === name);
       const branches = new Map(
         entries.map((entry) => [entry.pr, authors.get(entry.pr)?.branch]),
       );
-      const fixers = seat
-        ? startFixers(crew, context, settings, seat, entries, branches, say)
-        : { handed: new Set<string>(), waits: new Map<number, string>() };
+      const fixers = startFixers(
+        crew,
+        context,
+        settings,
+        seat ?? { name, status: "absent" },
+        entries,
+        branches,
+        say,
+      );
       for (const entry of entries) {
-        if (fixers.handed.has(entry.key) || entry.detail === why) continue;
-        setAction(crew, entry.key, "pending", now, why);
         const fixer = fixers.waits.get(entry.pr);
-        say(
-          `#${entry.pr} waiting for ${name} (${why}${fixer ? `; no fixer: ${fixer}` : ""})`,
-        );
+        const detail = fixer ? `${why}; no fixer: ${fixer}` : why;
+        if (fixers.handed.has(entry.key) || entry.detail === detail) continue;
+        setAction(crew, entry.key, "pending", now, detail);
+        say(`#${entry.pr} waiting for ${name} (${detail})`);
         if (
-          why === "no live seat" ||
+          (why === "no live seat" && fixer !== "no free run slot") ||
           why === "never prompted" ||
           why === "blocked"
         )
           record(
             notice(
               entry,
-              `waits-${digest(why)}`,
-              `#${entry.pr} waits for ${name} (${why}): ${entry.text}`,
+              `waits-${digest(detail)}`,
+              `#${entry.pr} waits for ${name} (${detail}): ${entry.text}`,
             ),
           );
       }

@@ -934,7 +934,11 @@ describe("delivery", () => {
     });
 
     test("the step waits for the author when a fixer could clash with them", () => {
-      const waits = (setup: () => void, configPath = fixerConfig) => {
+      const waits = (
+        setup: () => void,
+        why: string,
+        configPath = fixerConfig,
+      ) => {
         crew = openCrewStore(":memory:");
         spawned = [];
         busyElsewhere();
@@ -945,16 +949,16 @@ describe("delivery", () => {
           actionsIn(crew, ["pending"])
             .filter((a) => a.pr === 7)
             .map((a) => a.detail),
-        ).toEqual(["working"]);
+        ).toEqual([`working; no fixer: ${why}`]);
       };
       // The latest prompt was about this PR, alone or with another one
       // the author may have started on first: it may be on this one now.
-      waits(() => prompted([7], NOW - 30_000));
-      waits(() => prompted([7, 8], NOW - 30_000));
+      waits(() => prompted([7], NOW - 30_000), "towncx may be on this PR");
+      waits(() => prompted([7, 8], NOW - 30_000), "towncx may be on this PR");
       // Nothing shows what the author is working on.
       waits(() => {
         crew = openCrewStore(":memory:");
-      });
+      }, "nothing shows what towncx is working on");
       // Every run slot is taken.
       const full = join(root, "fixer-full.json");
       writeFileSync(
@@ -978,21 +982,22 @@ describe("delivery", () => {
             },
             NOW,
           ),
+        "no free run slot",
         full,
       );
       // Work in progress in the worktree, or a worktree off the head.
       waits(() => {
         dirty = " M web/src/App.tsx\n";
-      });
+      }, "its worktree has uncommitted changes");
       waits(() => {
         dirty = "";
         checkedOut = SHA.fixed;
-      });
+      }, "its worktree isn't at the PR's head");
       // No worktree has the branch.
       waits(() => {
         checkedOut = SHA.reviewed;
         worktrees = "";
-      });
+      }, "no worktree has agent/towncx-12-plates checked out");
       // An idle author takes the step themselves.
       crew = openCrewStore(":memory:");
       spawned = [];
