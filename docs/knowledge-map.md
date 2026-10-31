@@ -94,6 +94,16 @@ window, renderer and Message-draft retention. See the
 
 ## CI and release validation
 
+The advisory [Town golden-image report](SCREENSHOTS.md#town-golden-image-report)
+uses the [capture harness](../scripts/town-golden.ts), its
+[synthetic production Town fixture](../web/src/world/testing/town-golden/TownGolden.browser.tsx),
+[exact comparator and workflow tests](../scripts/town-golden.test.ts), and the
+[report-only workflow](../.github/workflows/town-golden.yml).
+The [production visual negative control](../scripts/town-golden-negative-control.ts)
+and [hosted acceptance procedure](SCREENSHOTS.md#hosted-stability-and-production-visual-negative-control)
+exercise the capture/failure/restoration path in the opt-in stability job.
+See [initial stability evidence](reviews/town-golden.md) for the reference's bounds.
+
 [Upstream automation](upstream-automation.md) covers Roamgate release detection,
 frozen integration PRs, independent Codex review, credentials and recovery.
 [Installer upgrade CI](release.md#pre-merge-installer-upgrades) builds proposed merges
