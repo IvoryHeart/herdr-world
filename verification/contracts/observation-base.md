@@ -29,12 +29,54 @@ and their WebSocket hello/RPC path, each with two synthetic generation-1 runtime
 It checks distinct incarnations, unchanged omission, changed-host replacement,
 full-reply equivalence, no-base compatibility and refusal before downstream reads.
 
-## Limits and remaining evidence
+## Browser mapping and M1
 
-This is the service/wire phase. Browser base application is not implemented here;
-the browser still requests complete replies. M1 `observation-base`, including
-browser replay through the real Bridge lease gate, required witnesses and negative
-controls, lands with browser admission in the following phase. Q14's accepted
-`browser-refresh` and `browser-preparation` models remain mandatory and unchanged.
-Q12/Q13 chunk credit and assembly mappings remain unchanged. No new model safety
-or browser work-count claim is made by this service-only candidate.
+`web/src/world/observationBase.ts` builds bases only for the negotiated hello and
+retained producing generation. Confirmations require their captured base and held
+content; missing content discards the response before preparation and triggers one
+full recovery. Refusal disables bases only for that hello. Incarnation changes
+cannot share content. `runtimeStore.ts` retains the observation epoch, one request
+in flight and staged per-owner Bridge revalidation. No unchanged confirmation can
+revive a retired lease. Identical metadata and objects produce no publication.
+
+`quint/observation-base.qnt` checks `replyEqualsFresh`, `noResurrection`,
+`incarnationReset` and `confirmationHeld`. Its two-host domain has generations 1–2,
+tokens 0–2, incarnations 0–1, observation epochs 0–2 and at most six wire pulls, including complete recovery.
+Source updates linearize while a request is outstanding, before reply construction;
+post-reply qualification retirement is separate. Dropping held content commutes with
+reply construction and is represented after it. Request/reply temporaries are cleared
+after application, while freshness and held-content checks retain their computed
+results; this removes history that cannot affect a later request, without changing
+the properties or domain. No temporal liveness or unbounded-schedule claim is made.
+
+`quint/observation-base.ts` exhausts the real service rule with independently forged
+incarnation/generation/token combinations, then replays controlled replies through
+the real runtime store and real Bridge qualification gate. It observes host identity,
+producing generation, content token, actionability and service-incarnation content
+provenance at every boundary. Eviction is a controlled local held-content stimulus;
+it is not claimed as a new production eviction API. Missing-base recovery is checked
+as one publication. `unchangedSkip`, `oneHostReplaced`, `incarnationChanged`,
+`retiredDuringRequest` and `discardedConfirmation` are required on production replay
+for seeds 42, 73 and 103. BROKEN confirms by token without generation; its
+counterexample must fail `base.generation` on real replay. Compiled controls remove
+the service generation checks (`base.generation`) or browser incarnation reset
+(`base.incarnation`). Production sources are never mutated.
+
+## Incremental preparation and consumer boundaries
+
+P6 uses the test clock and production work counters. One status change prepares
+one room and dependent aggregates, preserving every other room presentation; a
+Town-only refresh prepares no Board topology. Appearance/watch changes retain
+unaffected room inputs, while unrelated profile edits retain prepared actor looks.
+Seeded observation, appearance, watch and seen-mark sequences compare Town and Board
+with complete preparation. Relations, Town master and source data remain separate
+readers; topology preparation does not fingerprint or invalidate data it never reads.
+Their existing consumer suites remain mandatory. The Board document remains mounted
+for appearance and relations. Existing Spaces mounting and operational lease checks
+are unchanged. Switching views finishes missing models before they are presented.
+
+Q14 adds M1 and P6; accepted `browser-refresh` and `browser-preparation` scopes stay
+mandatory and unchanged. Q12/Q13 continue to cover the unchanged chunk credit and
+assembly paths. Dense browser tests retain rendering, input responsiveness, terminal
+and resource consumer claims beyond the finite model. New M1/P6 mapping acceptance
+requires independent review; historical reviews do not approve these additions.

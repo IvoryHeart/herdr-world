@@ -50,7 +50,7 @@
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
         "scope": "Accepted documented bounds, mandatory consumers and excluded claims; final implementation/gate/resource acceptance is recorded in review 5517420140."
       },
-      "evidenceDecision": "Shared appearance consumes captured ready leases and revalidates currency after native reads; its direct admission matrix supplements the unchanged manager model/replay and does not expand that model’s domain."
+      "evidenceDecision": "Shared appearance consumes captured ready leases and revalidates currency after native reads; its direct admission matrix supplements the unchanged manager model/replay and does not expand that model\u2019s domain."
     },
     {
       "id": "Q02",
@@ -424,17 +424,19 @@
         "server/src/world/observation-v1.test.ts",
         "server/src/world/snapshot-observation.test.ts",
         "server/src/service/observation-v1.test.ts",
-        "server/src/world/snapshot-terminal-settings.test.ts"
+        "server/src/world/snapshot-terminal-settings.test.ts",
+        "web/src/world/observationBase.test.ts",
+        "quint/observation-base.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/145",
       "technique": "observation",
       "assessment": "late host lease admission, four-slot bound and independent sibling progress",
-      "status": "alternative-evidence",
+      "status": "shared-model",
       "remaining": "Snapshot integration is the selected consumer evidence for manager authority; no exhaustive claim over arbitrary host topology or transport schedules.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
-      "evidenceDecision": "Real snapshot tests exercise retirement during construction, expired catalogue scheduling, failed-host stale topology and healthy sibling publication with bounded synthetic transports. Fresh Desk observation callbacks run once at successful host admission with the read-start time; cache reuse, invalidation and retirement never replay those observations.",
+      "evidenceDecision": "Real snapshot tests exercise retirement during construction, expired catalogue scheduling, failed-host stale topology and healthy sibling publication with bounded synthetic transports. Fresh Desk observation callbacks run once at successful host admission with the read-start time; cache reuse, invalidation and retirement never replay those observations. Observation v1 adds bounded base admission and/or incremental consumer evidence; historical acceptance remains scoped to the existing models and consumers. M1/P6 additions require independent candidate review. Service scheduling progress and Q12/Q13 transport claims are unchanged.",
       "partialEvidence": {
-        "models": [],
+        "models": ["quint/observation-base.qnt"],
         "contracts": [
           "verification/consumer-evidence.md",
           "verification/contracts/observation-progress.md",
@@ -445,7 +447,9 @@
           "server/src/world/observation-v1.test.ts",
           "server/src/world/snapshot-observation.test.ts",
           "server/src/service/observation-v1.test.ts",
-          "server/src/world/snapshot-terminal-settings.test.ts"
+          "server/src/world/snapshot-terminal-settings.test.ts",
+          "web/src/world/observationBase.test.ts",
+          "quint/observation-base.test.ts"
         ],
         "checks": ["bun run check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
@@ -464,7 +468,8 @@
       "properties": "Priority hosts cannot permanently displace background hosts",
       "existingTests": [
         "server/src/world/snapshot.test.ts",
-        "server/src/world/snapshot-terminal-settings.test.ts"
+        "server/src/world/snapshot-terminal-settings.test.ts",
+        "web/src/world/observationBase.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/145",
       "technique": "observation",
@@ -472,16 +477,18 @@
       "status": "alternative-evidence",
       "remaining": "These are explicit adversarial scheduling scenarios, not a liveness proof. Eventual progress assumes completed transport turns; stalled-owner deadlines and capacity remain implementation tests.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
-      "evidenceDecision": "Real controlled scheduling tests exercise 32 hosts, three stalled priority owners, slot release, repeated invalidation rotation, overlapping priorities and cached hosts without refetch.",
+      "evidenceDecision": "Real controlled scheduling tests exercise 32 hosts, three stalled priority owners, slot release, repeated invalidation rotation, overlapping priorities and cached hosts without refetch. Observation v1 adds bounded base admission and/or incremental consumer evidence; historical acceptance remains scoped to the existing models and consumers. M1/P6 additions require independent candidate review. Service scheduling progress and Q12/Q13 transport claims are unchanged.",
       "partialEvidence": {
         "models": [],
         "contracts": [
           "verification/consumer-evidence.md",
-          "verification/contracts/observation-progress.md"
+          "verification/contracts/observation-progress.md",
+          "verification/contracts/observation-base.md"
         ],
         "tests": [
           "server/src/world/snapshot.test.ts",
-          "server/src/world/snapshot-terminal-settings.test.ts"
+          "server/src/world/snapshot-terminal-settings.test.ts",
+          "web/src/world/observationBase.test.ts"
         ],
         "checks": ["bun run check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
@@ -567,8 +574,13 @@
       "area": "Browser aggregate refresh",
       "owner": "web/src/world/runtimeStore.ts",
       "requirement": "openspec/specs/runtime-federation/spec.md",
-      "properties": "One request in flight; invalidations coalesce; old epoch cannot publish; disconnect revokes actionability",
-      "existingTests": ["web/src/world/runtimeStore.test.ts"],
+      "properties": "One request in flight; invalidations coalesce; old epoch cannot publish; disconnect revokes actionability; based confirmations require held content and current incarnation; no resurrection; unchanged replies publish nothing; only affected rooms and consumed views prepare",
+      "existingTests": [
+        "web/src/world/runtimeStore.test.ts",
+        "web/src/world/observationBase.test.ts",
+        "web/src/world/incrementalPreparation.test.ts",
+        "quint/observation-base.test.ts"
+      ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/145",
       "technique": "observation",
       "assessment": "decode/preparation/admission boundaries, failure, priorities and per-host retirement",
@@ -578,23 +590,31 @@
       "partialEvidence": {
         "models": [
           "quint/browser-refresh.qnt",
-          "quint/browser-preparation.qnt"
+          "quint/browser-preparation.qnt",
+          "quint/observation-base.qnt"
         ],
         "contracts": [
           "verification/contracts/browser-refresh.md",
-          "verification/contracts/browser-preparation.md"
+          "verification/contracts/browser-preparation.md",
+          "verification/contracts/observation-base.md"
         ],
         "checks": [
           "bun run verification:check",
           "bun run verification:typecheck"
         ],
-        "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
+        "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory.",
+        "tests": [
+          "web/src/world/observationBase.test.ts",
+          "web/src/world/incrementalPreparation.test.ts",
+          "quint/observation-base.test.ts"
+        ]
       },
       "promotion": {
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
         "scope": "Accepted documented bounds, mandatory consumers and excluded claims; final implementation/gate/resource acceptance is recorded in review 5517420140."
-      }
+      },
+      "evidenceDecision": " Observation v1 adds bounded base admission and/or incremental consumer evidence; historical acceptance remains scoped to the existing models and consumers. M1/P6 additions require independent candidate review. Service scheduling progress and Q12/Q13 transport claims are unchanged."
     },
     {
       "id": "Q15",
@@ -616,7 +636,8 @@
         "web/src/world/HostsFilter.test.ts",
         "web/src/store.test.ts",
         "web/src/useConnectionClient.test.ts",
-        "web/src/world/ConcurrentContexts.test.ts"
+        "web/src/world/ConcurrentContexts.test.ts",
+        "web/src/world/observationBase.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/145",
       "technique": "qualified-operation",
@@ -625,11 +646,16 @@
       "remaining": "React context binding and all operation kinds remain actual consumer tests; generic readiness is insufficient to select an operational target.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
       "partialEvidence": {
-        "models": ["quint/creation-flow.qnt", "quint/browser-preparation.qnt"],
+        "models": [
+          "quint/creation-flow.qnt",
+          "quint/browser-preparation.qnt",
+          "quint/observation-base.qnt"
+        ],
         "contracts": [
           "verification/consumer-evidence.md",
           "verification/composition.md",
-          "verification/contracts/shared-acquisition.md"
+          "verification/contracts/shared-acquisition.md",
+          "verification/contracts/observation-base.md"
         ],
         "tests": [
           "server/src/service/shared-acquisition.test.ts",
@@ -645,12 +671,13 @@
           "web/src/world/HostsFilter.test.ts",
           "web/src/store.test.ts",
           "web/src/useConnectionClient.test.ts",
-          "web/src/world/ConcurrentContexts.test.ts"
+          "web/src/world/ConcurrentContexts.test.ts",
+          "web/src/world/observationBase.test.ts"
         ],
         "checks": ["bun run check", "bun run verification:check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
       },
-      "evidenceDecision": "useHostsFilter.test.ts replaces the desktop/phone delayed-catalogue and empty-catalogue policy cases with the actual hook, production store selectors and refreshConnections admission on test time. Deferred connections.list replies prove saved beta survives until admission; successful empty admission restores All hosts with the removal explanation. The actual HostsControl renders that status after empty admission and omits it after populated admission; this headless DOM consumer proves presence, not geometry or focus. Partial pruning, remount persistence and nonempty scope normalization have direct consumers. HostsFilter.test.ts retains responsive geometry, rendered scope/navigation/feedback, focus and terminal lifecycle; all Town cases remain mandatory. This adds direct policy evidence without extending creation/preparation model claims. Captured owner/generation and colliding native IDs are exercised through real store/Bridge replay. Store and concurrent-context tests verify inactive-host operations and context isolation. Shared recency uses 48 list/push order combinations, exact session identity checks and actual two-host Bridge/store publication races, including two sessions during initial layout admission, service counter resets with retained ordering, capability removal and declaration-driven recency/hide T2 parity; see verification/contracts/shared-acquisition.md for bounds. Timer removal activates all original T2 assertions, with two-host Inspector/reference/retry consumers, deferred catalogue coalescing, failed bootstrap recovery and actual Chrome preview-removal effects. The actual service hello advertises the capability. See verification/contracts/shared-acquisition.md for bounds and excluded liveness claims. The composed acceptance now runs createWorldService with two synthetic hosts, a real Bridge/store Worker and a second real WebSocket, checking the parity outputs, shared native acquisition, notices, Desk references and retirement in flight; original T2 bodies/harnesses remain unchanged. Current specs include both complete shared-acquisition deltas.",
+      "evidenceDecision": "useHostsFilter.test.ts replaces the desktop/phone delayed-catalogue and empty-catalogue policy cases with the actual hook, production store selectors and refreshConnections admission on test time. Deferred connections.list replies prove saved beta survives until admission; successful empty admission restores All hosts with the removal explanation. The actual HostsControl renders that status after empty admission and omits it after populated admission; this headless DOM consumer proves presence, not geometry or focus. Partial pruning, remount persistence and nonempty scope normalization have direct consumers. HostsFilter.test.ts retains responsive geometry, rendered scope/navigation/feedback, focus and terminal lifecycle; all Town cases remain mandatory. This adds direct policy evidence without extending creation/preparation model claims. Captured owner/generation and colliding native IDs are exercised through real store/Bridge replay. Store and concurrent-context tests verify inactive-host operations and context isolation. Shared recency uses 48 list/push order combinations, exact session identity checks and actual two-host Bridge/store publication races, including two sessions during initial layout admission, service counter resets with retained ordering, capability removal and declaration-driven recency/hide T2 parity; see verification/contracts/shared-acquisition.md for bounds. Timer removal activates all original T2 assertions, with two-host Inspector/reference/retry consumers, deferred catalogue coalescing, failed bootstrap recovery and actual Chrome preview-removal effects. The actual service hello advertises the capability. See verification/contracts/shared-acquisition.md for bounds and excluded liveness claims. The composed acceptance now runs createWorldService with two synthetic hosts, a real Bridge/store Worker and a second real WebSocket, checking the parity outputs, shared native acquisition, notices, Desk references and retirement in flight; original T2 bodies/harnesses remain unchanged. Current specs include both complete shared-acquisition deltas. Observation v1 adds bounded base admission and/or incremental consumer evidence; historical acceptance remains scoped to the existing models and consumers. M1/P6 additions require independent candidate review. Service scheduling progress and Q12/Q13 transport claims are unchanged.",
       "promotion": {
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
@@ -750,7 +777,7 @@
         ],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
       },
-      "evidenceDecision": "useWorldCreatedTerminal.test.ts replaces the WorldTerminalHandoff browser policy checks for overlapping created-seat focus, transient retry and the admission deadline/late completion, and SharedViewCreation stale-observation admission. It mounts the production creation hook and the Inspector controller’s extracted selection-lease effect, drives real coordinateCreation and admitCreatedTerminal with controlled time, and supplies deferred opener outcomes. Stale observations preserve intent while disconnect, replacement and removal retire it. Browser consumers still cover launcher wiring, actual opener cancellation, focus, layout, rendering and terminal ownership; no Q39/Q43 input or latency claim moves. v0.8.5: Asynchronous naming remains a presentation input to qualified creation. DOM schedules exercise editing before suggestion, close/reopen, obsolete results and rejected loading; existing creation models and consumer gates remain mandatory.",
+      "evidenceDecision": "useWorldCreatedTerminal.test.ts replaces the WorldTerminalHandoff browser policy checks for overlapping created-seat focus, transient retry and the admission deadline/late completion, and SharedViewCreation stale-observation admission. It mounts the production creation hook and the Inspector controller\u2019s extracted selection-lease effect, drives real coordinateCreation and admitCreatedTerminal with controlled time, and supplies deferred opener outcomes. Stale observations preserve intent while disconnect, replacement and removal retire it. Browser consumers still cover launcher wiring, actual opener cancellation, focus, layout, rendering and terminal ownership; no Q39/Q43 input or latency claim moves. v0.8.5: Asynchronous naming remains a presentation input to qualified creation. DOM schedules exercise editing before suggestion, close/reopen, obsolete results and rejected loading; existing creation models and consumer gates remain mandatory.",
       "promotion": {
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
@@ -843,7 +870,8 @@
       "properties": "Same native ID on different hosts never aliases; child ancestry and omission counts stay consistent",
       "existingTests": [
         "web/src/world/worldObject.test.ts",
-        "web/src/world/treeProjection.test.ts"
+        "web/src/world/treeProjection.test.ts",
+        "web/src/world/incrementalPreparation.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/145",
       "technique": "alternative",
@@ -858,16 +886,18 @@
         ],
         "contracts": [
           "verification/consumer-evidence.md",
-          "verification/composition.md"
+          "verification/composition.md",
+          "verification/contracts/observation-base.md"
         ],
         "tests": [
           "web/src/world/worldObject.test.ts",
-          "web/src/world/treeProjection.test.ts"
+          "web/src/world/treeProjection.test.ts",
+          "web/src/world/incrementalPreparation.test.ts"
         ],
         "checks": ["bun run check", "bun run verification:check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
       },
-      "evidenceDecision": "Real object preparation and allocation preserve qualified host identity; object/tree tests check dense cancellation, colliding IDs and ancestry projection.",
+      "evidenceDecision": "Real object preparation and allocation preserve qualified host identity; object/tree tests check dense cancellation, colliding IDs and ancestry projection. Observation v1 adds bounded base admission and/or incremental consumer evidence; historical acceptance remains scoped to the existing models and consumers. M1/P6 additions require independent candidate review. Service scheduling progress and Q12/Q13 transport claims are unchanged.",
       "promotion": {
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",

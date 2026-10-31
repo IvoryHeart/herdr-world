@@ -29,20 +29,26 @@ export function workViolations(
 
 /** Board's projection of a 64-host dense snapshot's hosts. */
 const BOARD_HOSTS = { "board.host-project": 64 };
-/** Preparing one dense snapshot in production (runtimeStore.ts). */
+/** Dense legacy full replies: 32,768 rooms and 262,144 pane fingerprints. */
 const ONE_SNAPSHOT = {
   "world.prepare": 1,
   // Construction units (host and node batches), not slices: a slice also
   // ends after 8 ms.
-  "world.build-units": 917_568,
-  ...BOARD_HOSTS,
+  "world.build-units": 1_179_712,
+  "world.room-prepare": 32_768,
 };
 
 /** ProductionContexts: one preparation and one view projection per stage. */
 export function productionWorkCeilings(view: string): WorkByPhase {
   const stage = {
     ...ONE_SNAPSHOT,
-    ...(view === "board" ? { "board.project": 1 } : { "office.project": 1 }),
+    ...(view === "board"
+      ? { ...BOARD_HOSTS, "board.project": 1, "board.room-project": 32_768 }
+      : {
+          "office.project": 1,
+          "office.room-prepare": 32_768,
+          "office.room-project": 128,
+        }),
   };
   if (view === "board") return { initial: stage, refresh: stage };
   // Terminal colours are derived once per colour hook when its inputs change
@@ -94,11 +100,26 @@ export function concurrentWorkViolations(
       {
         // The fixture prepares and projects the snapshot once (its own
         // preparation calls count units below, not here).
-        projection: { ...BOARD_HOSTS, "board.project": 1, "tree.project": 1 },
+        projection: {
+          ...BOARD_HOSTS,
+          "board.project": 1,
+          "tree.project": 1,
+          "world.room-prepare": 32_768,
+          "office.room-prepare": 32_768,
+          "office.room-project": 128,
+          "board.room-project": 32_768,
+        },
         // Mounting Board projects its World once.
         render: { "board.project": 1 },
         // A status refresh prepares the new snapshot and Board projects it.
-        refresh: { ...BOARD_HOSTS, "board.project": 1 },
+        refresh: {
+          ...BOARD_HOSTS,
+          "board.project": 1,
+          "world.room-prepare": 32_768,
+          "office.room-prepare": 32_768,
+          "office.room-project": 128,
+          "board.room-project": 32_768,
+        },
         // Terminal output does no World work at all.
       },
       "world work",
@@ -163,8 +184,8 @@ export function concurrentWorkViolations(
         ? "card observers: live observations after unmount were not recorded"
         : `card observers: ${measured.liveCardObservations} still observed after unmount`,
     );
-  if (measured.worldBuildUnits > 1_835_136)
-    violations.push(`world build units ${measured.worldBuildUnits} > 1835136`);
+  if (measured.worldBuildUnits > 2_359_424)
+    violations.push(`world build units ${measured.worldBuildUnits} > 2359424`);
   if (measured.worldBuildMaxSliceNodes > 256)
     violations.push(
       `world build slice of ${measured.worldBuildMaxSliceNodes} nodes > 256`,

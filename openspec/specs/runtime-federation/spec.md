@@ -463,3 +463,61 @@ Service-side snapshot consumers SHALL continue to receive complete topology.
 #### Scenario: Older caller
 - **WHEN** a caller sends no base
 - **THEN** every catalogue host retains its complete snapshot as before
+
+### Requirement: Browser admission of based observation
+
+A browser SHALL send its held base only when the hello advertises
+`world_observation_v1`. It SHALL apply each reply as one publication, retaining
+unchanged content by identity and applying current metadata. A confirmation SHALL
+NOT restore actionability retired by the browser's qualified client.
+
+A confirmation for content no longer held SHALL discard the entire reply and
+trigger one request without a base. A changed incarnation SHALL prevent reuse of
+all old content, and replies from another incarnation SHALL be rejected. A base
+refusal SHALL disable further bases on that socket. Existing coalescing, fallback
+refresh and chunk transport SHALL remain in place for negotiated and older clients.
+
+#### Scenario: Host retires during a request
+- **WHEN** a reply confirms a host whose qualified runtime retired after the request
+- **THEN** its content is retained but remains stale and non-actionable, independently
+  of healthy sibling hosts
+
+#### Scenario: A retained base is missing
+- **WHEN** a confirmation names a host the browser no longer holds
+- **THEN** no partial reply is published and one complete recovery is requested
+
+#### Scenario: All hosts are unchanged
+- **WHEN** host content and metadata are unchanged
+- **THEN** no host, room or view model is rebuilt and no observation is published
+
+### Requirement: Incremental observation preparation
+
+Admitted observations and document or mark changes SHALL prepare only their readers.
+Rooms SHALL reuse their prepared presentation when their observation slice and
+owner/presentation inputs are unchanged. Appearance, relations, profiles, watches,
+seen marks and Town master SHALL invalidate only the readers of the changed inputs.
+Host and World counts, attention and summaries SHALL use per-room contributions.
+
+A view's topology SHALL be prepared only for mounted consumers. The Board document
+SHALL remain available for appearance and relations in all views. A newly selected
+view SHALL finish missing model preparation before presentation. Incremental output
+SHALL equal complete preparation of the same observation, documents and marks.
+
+#### Scenario: One room changes
+- **WHEN** one agent changes status in a host with ten rooms
+- **THEN** only that room and dependent counts, attention and summaries are prepared,
+  and the other nine rooms retain their prepared presentation
+
+#### Scenario: Town is shown
+- **WHEN** an observation is admitted while only Town is mounted
+- **THEN** no Board topology is prepared, its document remains available, and switching
+  to Board finishes its topology before presentation
+
+#### Scenario: A profile look changes
+- **WHEN** a profile's look changes without an observation change
+- **THEN** readers showing that profile receive the new look and unrelated readers
+  retain their prepared presentation
+
+#### Scenario: Complete preparation equivalence
+- **WHEN** observations, documents and marks change in any supported sequence
+- **THEN** incremental presentation equals complete preparation of the latest inputs

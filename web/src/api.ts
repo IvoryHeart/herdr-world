@@ -1,3 +1,4 @@
+import { isBridgeHello } from "./bridgeHello";
 import type { BridgeControlMsg } from "./bridgeControl";
 export type { BridgeControlMsg } from "./bridgeControl";
 import type { ConnectionClient } from "./connectionClient";
@@ -187,6 +188,7 @@ export function parseConnectionSummary(
 
 export interface BridgeHello {
   hello: true;
+  service_incarnation?: string;
   socket?: string;
   bridge_protocol_version: number;
   default_connection_id: string;
@@ -194,6 +196,7 @@ export interface BridgeHello {
     connection_id?: boolean;
     connection_scoped_http?: boolean;
     connection_runtime_generation?: boolean;
+    world_observation_v1?: boolean;
     world_snapshot_chunks?: boolean;
     world_snapshot_chunk_admission?: boolean;
     file_reveal?: boolean;
@@ -338,52 +341,6 @@ function scopedPayload<T extends object>(
     connection_id: connectionId,
     ...(validGeneration ? { connection_generation: connectionGeneration } : {}),
   };
-}
-
-function isBridgeHello(value: unknown): value is BridgeHello {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const message = value as Record<string, unknown>;
-  if (
-    message.hello !== true ||
-    !Number.isSafeInteger(message.bridge_protocol_version) ||
-    typeof message.default_connection_id !== "string" ||
-    message.default_connection_id.length === 0 ||
-    !message.capabilities ||
-    typeof message.capabilities !== "object" ||
-    Array.isArray(message.capabilities)
-  ) {
-    return false;
-  }
-  for (const field of [
-    "connection_id",
-    "connection_generation",
-    "id",
-    "result",
-    "error",
-    "event",
-    "control",
-    "terminal",
-    "terminal_clipboard",
-    "assistant",
-    "assistant_notification",
-  ]) {
-    if (Object.prototype.hasOwnProperty.call(message, field)) return false;
-  }
-  const capabilities = message.capabilities as Record<string, unknown>;
-  for (const capability of [
-    "connection_id",
-    "connection_scoped_http",
-    "connection_runtime_generation",
-    "herdr_task_notifications",
-    "world_snapshot_chunks",
-    "world_snapshot_chunk_admission",
-    "embedded_assistant",
-    "file_reveal",
-  ]) {
-    const value = capabilities[capability];
-    if (value !== undefined && typeof value !== "boolean") return false;
-  }
-  return true;
 }
 
 /**
