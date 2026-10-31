@@ -420,6 +420,14 @@ publication, focus and browser file input/download behavior stay in
 resource inventory removes the five policy scenarios at both viewport widths;
 retained cases name their browser rendering, focus and file-input boundary.
 
+`useHostsFilter.test.ts` mounts the actual Hosts hook with the same production
+store selectors as the shell. Deferred `connections.list` replies and the test
+clock exercise initial readiness, successful empty admission and persisted scope
+reconciliation without rendering the application. These replace the two
+catalogue-admission scenarios at desktop and phone widths; responsive controls,
+rendered navigation/feedback, Inspector focus, terminal lifecycle and Town checks
+stay in `HostsFilter.test.ts`.
+
 ## Inspector and windows
 
 | Task | Open these owners | Focused evidence |
