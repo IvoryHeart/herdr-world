@@ -10,9 +10,8 @@
  * Frames are handled in order, so a frame the browser must ignore is followed
  * by one it applies before the check.
  *
- * `test.failing` marks behaviour the contract requires and today's code lacks;
- * the implementation flips each one. The other cases guard behaviour that must
- * not change when the timer goes.
+ * All cases are normal parity tests for the shared path. The last case
+ * also guards legacy acquisition after capability removal.
  */
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { sortAgentPanes } from "../agentOrder";
@@ -292,14 +291,14 @@ test("a failed re-list is retried within one period", async () => {
   await retried;
 });
 
-test.failing("no browser timer re-lists a host or fetches the catalogue", async () => {
+test("no browser timer re-lists a host or fetches the catalogue", async () => {
   const since = world.calls.length;
   await clock.advance(12 * PERIOD_MS);
   await clock.flushTimeouts();
   expect(observations(since)).toEqual([]);
 });
 
-test.failing("the focused re-list marks its four list calls", async () => {
+test("the focused re-list marks its four list calls", async () => {
   // Only marked replies update the service's record of what this browser
   // received; other callers of the same methods leave it alone (design D1).
   const since = world.calls.length;
@@ -361,7 +360,7 @@ test("recency moves without a status change, with no re-list", async () => {
   expect(activityOf("p-alpha-b")).toBe(2_000);
 });
 
-test.failing("a focused change notice re-lists that host only", async () => {
+test("a focused change notice re-lists that host only", async () => {
   const since = world.calls.length;
   const host = world.host("alpha");
   host.workspaces[0]!.worktree!.git_status = gitStatus("feature", true);
@@ -383,7 +382,7 @@ test.failing("a focused change notice re-lists that host only", async () => {
   expect(observations(since, "beta")).toEqual([]);
 });
 
-test.failing("another browser connecting updates the browser count", async () => {
+test("another browser connecting updates the browser count", async () => {
   world.clients = 2;
   const fetched = world.nextCall("bridge.status");
   world.control({
@@ -416,7 +415,7 @@ test("hiding the page releases interest; showing it declares again", async () =>
   }
 });
 
-test.failing("a runtime replaced elsewhere is repaired by the catalogue notice", async () => {
+test("a runtime replaced elsewhere is repaired by the catalogue notice", async () => {
   const host = world.host("alpha");
   host.generation = 8;
   const created = agentPane("alpha", "new", "claude", "idle");

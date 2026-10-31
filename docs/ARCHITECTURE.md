@@ -91,17 +91,32 @@ An admitted list rejoins only the exact connection, pane, terminal, agent and
 session; old-generation controls still fail admission. Multiple identities for
 one pane retain separate maxima while its first layout is pending.
 
-The browser declares its active ready host only while visible and only when the
-current hello advertises `world_shared_acquisition`. Hiding releases it; return,
-active-host changes and reconnection replace the declaration. One request stays
-in flight, failures retry after five seconds, and a success stops retries. Pushed
-activity is also gated by the current hello, so capability removal on reconnect
-restores fallback acquisition without accepting in-flight activity controls.
+The service advertises `world_shared_acquisition`. A visible browser declares
+its active ready host and each open Inspector's qualified owner. Inspector
+references are independent of the active host and host filter. New admissions,
+including previews on an already-held host, re-list after admission; fresh
+qualified absence can then remove an already-closed preview. Hiding releases all
+interest; returning re-lists every held owner and fetches the catalogue.
 
-This service substrate does not yet advertise `world_shared_acquisition`; the
-browser retains its existing focused timer until Inspector interest, Desk watches
-and the timer gate are delivered together. Spaces remains mounted and the
-aggregate refresh and 15-second fallback retain their existing behavior.
+Focused re-lists mark only their four list request frames. Herdr events,
+resynchronization, own actions and admitted change notices still re-list through
+the existing scoped coalescer. Catalogue notices fetch `bridge.status` with one
+request in flight and at most one queued successor. Failed catalogue reads,
+including bootstrap, and failed held re-lists retry after five seconds while
+visible and current; success, release or retirement stops those retries.
+
+Desk declares its existing fair selections, at most 16 screens and 40 receipts
+per browser. The service reads their union once per kind, connection, generation,
+pane and session fingerprint, with independent host queues. Screens run every
+4 seconds; receipts every 20 seconds and when a holder's trigger changes.
+Triggers are captured per holder at read start; a late holder receives the actual
+result with a null trigger and makes one successor due. Last release stops work.
+
+There is no successful periodic browser re-list or catalogue fetch under this
+capability. Without it, the browser retains its 5-second focused timer and Desk's
+4-second/20-second reads. Capability removal on reconnect restores that fallback.
+The update check remains independent. Spaces stays mounted, and the aggregate
+refresh and 15-second fallback retain their existing behavior.
 
 Large aggregate replies negotiate bounded chunks on the same World WebSocket.
 Scoped acknowledgements can interleave between chunks; partial responses belong to

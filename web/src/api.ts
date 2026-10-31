@@ -555,7 +555,7 @@ export class Bridge {
       connectionId,
       generation,
       serverRuntimeGeneration,
-      call: (method, params = {}, timeoutMs = RPC_TIMEOUT_MS) => {
+      call: (method, params = {}, timeoutMs = RPC_TIMEOUT_MS, options) => {
         if (!this.helloAcceptedForSocket) {
           return Promise.reject(new Error("bridge hello is unavailable"));
         }
@@ -589,6 +589,7 @@ export class Bridge {
           params,
           timeoutMs,
           legacyActiveLease,
+          options?.focusedObservation === true,
         );
       },
       isCurrent,
@@ -1178,6 +1179,7 @@ export class Bridge {
     params: Record<string, unknown>,
     timeoutMs: number | null,
     legacyActiveLease = false,
+    focusedObservation = false,
   ): Promise<any> {
     const ws = this.ws;
     if (!ws || ws.readyState !== WebSocket.OPEN) {
@@ -1232,6 +1234,14 @@ export class Bridge {
             id,
             method,
             params,
+            ...(focusedObservation &&
+            connectionId !== null &&
+            this._hello?.capabilities.world_shared_acquisition === true &&
+            ["workspace.list", "tab.list", "pane.list", "agent.list"].includes(
+              method,
+            )
+              ? { focused_observation: true }
+              : {}),
             ...(connectionId === null &&
             method === "world.snapshot" &&
             this._hello?.capabilities.world_snapshot_chunks === true
@@ -1274,6 +1284,7 @@ export class Bridge {
     params: Record<string, unknown>,
     timeoutMs: number | null,
     legacyActiveLease = false,
+    focusedObservation = false,
   ): Promise<any> {
     if (isBridgeGlobalMethod(method)) {
       return Promise.reject(
@@ -1288,6 +1299,7 @@ export class Bridge {
       params,
       timeoutMs,
       legacyActiveLease,
+      focusedObservation,
     );
   }
 
