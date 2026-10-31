@@ -40,6 +40,7 @@ export type BindingOperation =
       id: string;
       event: BindingEvent;
       current: BindingFence | null;
+      expectedRevision: number;
     }
   | { type: "remove"; id: string };
 export type WorldBindings = {
@@ -53,6 +54,7 @@ export type WorldBindings = {
     id: string,
     event: BindingEvent,
     current: BindingFence | null,
+    expectedRevision: number,
   ): Promise<BindingResolution | null>;
   remove(id: string): Promise<void>;
 };
@@ -211,6 +213,7 @@ export function createBindingWriter(
     const binding: SourceBinding = {
       ...input,
       id: ids.issue("b"),
+      revision: 0,
       state: "unresolved",
       checked_at: null,
     };
@@ -264,6 +267,13 @@ export function createBindingWriter(
           const saved = read(operation.id);
           if (!saved) return null;
           if (
+            !Number.isSafeInteger(operation.expectedRevision) ||
+            operation.expectedRevision < 0
+          )
+            fail();
+          if (operation.expectedRevision !== saved.revision)
+            return { binding: capture(saved), target: null };
+          if (
             db
               .query(
                 "SELECT 1 FROM world_binding_sync s JOIN world_binding_legacy l ON l.binding_id=? WHERE s.active=1",
@@ -277,6 +287,7 @@ export function createBindingWriter(
             operation.current,
             at,
           );
+          result.binding.revision = saved.revision + 1;
           db.query("UPDATE world_bindings SET body=? WHERE id=?").run(
             JSON.stringify(result.binding),
             operation.id,

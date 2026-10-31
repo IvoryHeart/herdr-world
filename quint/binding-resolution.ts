@@ -96,6 +96,7 @@ export async function replayBindingResolution(
   let b = states[0]!.binding;
   let saved: SourceBinding = {
     id: "b-fixture",
+    revision: 0,
     record_id: "n-fixture",
     slot: "to",
     policy: b.policy === "board" ? "board-string" : "appearance",

@@ -327,8 +327,14 @@ export async function openWorldLedger(
       create: (input) => bindingRequest({ type: "create", input }),
       get: (id) => bindingRequest({ type: "get", id }),
       list: (page = {}) => bindingRequest({ type: "list", page }),
-      resolve: (id, event, current) =>
-        bindingRequest({ type: "resolve", id, event, current }),
+      resolve: (id, event, current, expectedRevision) =>
+        bindingRequest({
+          type: "resolve",
+          id,
+          event,
+          current,
+          expectedRevision,
+        }),
       remove: (id) => bindingRequest({ type: "remove", id }),
     },
     ledger,

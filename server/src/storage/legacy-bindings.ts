@@ -139,6 +139,8 @@ export function createLegacyBindingWriter(
               : "unresolved",
           checked_at: kept ? saved.binding.checked_at : null,
         };
+        if (JSON.stringify(binding) !== JSON.stringify(saved.binding))
+          binding.revision = saved.binding.revision + 1;
         db.query("UPDATE world_bindings SET body=? WHERE id=?").run(
           JSON.stringify(binding),
           binding.id,

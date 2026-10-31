@@ -27,6 +27,9 @@ instance, entity kind, native ID and terminal/session evidence. Listing/get read
 are unresolved captures. `resolve` returns an ephemeral qualified target only
 when fresh evidence attaches; callers recheck the exact runtime lease before
 acting. Incarnation and generation are request/target fences, never durable identity.
+Each binding has a separate record revision. A caller captures that revision
+before reading a source and supplies it to `resolve`; a newer binding edit
+refuses the old observation without changing the saved binding.
 An explicit unknown session is represented by terminal evidence without a session
 fingerprint. Labels, directories and agent kinds prove no continuity.
 

@@ -95,6 +95,15 @@ qualified target. The caller must still check its exact lease before dispatch.
 `world-bindings.test.ts` covers persistence/reopen, independent record slots,
 bounded pages, strict identity/observation validation, permanent ID retirement,
 close fencing and interrupted legacy-import recovery.
+`storage/binding-order.test.ts` exhausts both commit orderings for an observation
+and an explicit record edit, with present/absent reads under all four policies
+(16 schedules). A captured record revision must match before resolution writes;
+a conflict returns no target and leaves the newer record untouched. Removing
+that comparison in a compiled production mutant must fail the real SQLite
+ordering assertion. The Board Send consumer also rebinds during its native read
+and checks that the older worker request cannot change the new binding. This
+direct finite database check covers the read/edit boundary outside M4's atomic
+resolve transitions; it does not add source-observation ordering guarantees.
 
 The lazy `BindingBoardStore` projects existing Board strings, appearance/tab
 colour and agent-interest captures into SQLite while keeping the JSON owner

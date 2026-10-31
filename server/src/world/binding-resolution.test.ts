@@ -22,6 +22,7 @@ export const binding = (
   policy: BindingPolicy = "board-string",
 ): SourceBinding => ({
   id: "b-fixture",
+  revision: 0,
   record_id: "n-fixture",
   slot: "to",
   policy,

@@ -19,6 +19,7 @@ export type BindingInput = BindingIdentity & {
 };
 export type SourceBinding = BindingInput & {
   id: string;
+  revision: number;
   state: "attached" | "unresolved" | "unconfirmed" | "ended";
   checked_at: number | null;
 };

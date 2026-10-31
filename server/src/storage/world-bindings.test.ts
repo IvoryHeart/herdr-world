@@ -69,6 +69,7 @@ test("bindings persist with store IDs and must resolve again after reopening", a
       entities: [{ native_id: "pane-a", terminals: ["terminal-a"] }],
     },
     fence,
+    saved!.revision,
   );
   expect(result?.target?.native_id).toBe("pane-a");
   await first.close();
@@ -89,6 +90,7 @@ test("bindings persist with store IDs and must resolve again after reopening", a
           entities: [{ native_id: "pane-a", terminals: ["terminal-a"] }],
         },
         { ...fence, service_incarnation: "service-b" },
+        result!.binding.revision,
       )
     )?.binding.state,
   ).toBe("attached");
@@ -139,6 +141,7 @@ test("binding storage refuses fences in identity, invalid policies, malformed ob
         saved.id,
         { type: "listing", fence, complete: true, entities: [null] } as never,
         fence,
+        saved.revision,
       ),
     ),
   ).toMatch(/binding/);
@@ -188,6 +191,7 @@ test("an interrupted legacy import cannot authorize a saved target before its ow
       entities: [{ native_id: "pane-a", terminals: ["terminal-a"] }],
     },
     fence,
+    saved!.revision,
   );
   expect(result?.binding.state).toBe("unresolved");
   expect(result?.target).toBeNull();
@@ -226,6 +230,7 @@ test("an ambiguous legacy rename never chooses which new record inherits the old
         ],
       },
       fence,
+      row.revision,
     );
     expect(resolved?.binding.state).toBe("unresolved");
     expect(resolved?.target).toBeNull();

@@ -32,6 +32,9 @@ test("saved Board sends require an exact unambiguous current listing on the orig
   let current = true;
   let rows = [pane];
   let retireDuringRead = false;
+  let rebindDuringRead = false,
+    bindingId = "",
+    rebindRevision = -1;
   const request = {
     record_id: "legacy-string",
     slot: "to",
@@ -42,11 +45,30 @@ test("saved Board sends require an exact unambiguous current listing on the orig
     async call(method: string) {
       expect(method).toBe("pane.list");
       if (retireDuringRead) current = false;
+      if (rebindDuringRead) {
+        const latest = await store.bindings.get(bindingId);
+        const rebound = await store.bindings.resolve(
+          bindingId,
+          {
+            type: "user-keep",
+            target: {
+              adapter: "herdr",
+              instance: "studio",
+              kind: "pane",
+              native_id: "pane-b",
+              evidence: { terminals: ["terminal-b"] },
+            },
+          },
+          fence,
+          latest!.revision,
+        );
+        rebindRevision = rebound!.binding.revision;
+      }
       return { panes: rows };
     },
   };
   try {
-    await store.bindings.create({
+    const saved = await store.bindings.create({
       record_id: request.record_id,
       slot: "to",
       policy: "board-string",
@@ -56,6 +78,7 @@ test("saved Board sends require an exact unambiguous current listing on the orig
       native_id: "pane-a",
       evidence: { terminals: ["terminal-a"] },
     });
+    bindingId = saved.id;
     expect(await qualifyBoardSend(store.bindings, request)).toBe(true);
     rows = [pane, { ...pane, pane_id: "pane-b" }];
     expect(await qualifyBoardSend(store.bindings, request)).toBe(false);
@@ -72,6 +95,14 @@ test("saved Board sends require an exact unambiguous current listing on the orig
     ).toBe(false);
     retireDuringRead = true;
     expect(await qualifyBoardSend(store.bindings, request)).toBe(false);
+    retireDuringRead = false;
+    current = true;
+    rebindDuringRead = true;
+    expect(await qualifyBoardSend(store.bindings, request)).toBe(false);
+    expect(await store.bindings.get(bindingId)).toMatchObject({
+      native_id: "pane-b",
+      revision: rebindRevision,
+    });
   } finally {
     await store.close();
     rmSync(root, { recursive: true, force: true });

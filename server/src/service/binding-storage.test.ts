@@ -73,6 +73,7 @@ test("legacy bindings persist through the root; moves retain IDs and layout reus
         entities: [{ native_id: "workspace-a", terminals: ["terminal-b"] }],
       },
       fence,
+      string.revision,
     );
     expect(reused?.binding.state).toBe("unconfirmed");
     expect(reused?.target).toBeNull();
@@ -85,6 +86,7 @@ test("legacy bindings persist through the root; moves retain IDs and layout reus
       string.id,
       { type: "absence", via: "close", native_id: "workspace-a", fence },
       fence,
+      reused!.binding.revision,
     );
     board.patch([
       {

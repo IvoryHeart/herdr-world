@@ -57,6 +57,7 @@ export async function qualifyBoardSend(
     saved.id,
     { type: "listing", fence: request.fence, complete: true, entities },
     request.fence,
+    saved.revision,
   );
   return (
     request.isCurrent() && resolution?.target?.native_id === request.pane_id
