@@ -1,4 +1,4 @@
-/** Process-local Desk state, qualified independently of the browser's host filter. */
+/** Current Desk projection of durable metadata, qualified independently of the browser's host filter. */
 export type DeskIdentity = {
   connection_id: string;
   connection_generation: number;

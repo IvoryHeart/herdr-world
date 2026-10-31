@@ -97,6 +97,10 @@ export type LedgerCommit = {
   removed_attention: string[];
 };
 export type StorageRequest =
+  | {
+      type: "terminal-mark";
+      operation: import("./terminal-marks").TerminalMarkOperation;
+    }
   | { type: "effect-read"; id?: string; verb?: string }
   | { type: "effect-transition"; change: EffectTransition }
   | { type: "load" }
@@ -209,6 +213,7 @@ export type AttentionOutbox = {
   ): Promise<AttentionEntry | null>;
 };
 export type WorldLedgerStorage = {
+  terminalMarks: import("./terminal-marks").TerminalMarksPort;
   board: import("../world/board-store").BoardStorePort;
   runtimeStatus: import("./runtime-status").RuntimeStatusPort;
   profiles: import("../agent/profile-store").ProfileStorePort;
@@ -245,6 +250,7 @@ export type WorkerRequest =
     }
   | { type: "close" };
 export type StorageSnapshot = {
+  terminalMarks?: import("./terminal-marks").SavedTerminalMark[];
   board?: import("../world/board-store").BoardDocument;
   runtimeStatus?: Record<string, import("./runtime-status").AutoSyncRunStatus>;
   profiles?: import("../agent/profile-store").ProfilesDocument;

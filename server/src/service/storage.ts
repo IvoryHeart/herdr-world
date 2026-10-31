@@ -18,6 +18,7 @@ import type { Clock, Scheduler } from "./ports";
  * folder stay plain files under DataPaths, outside this port.
  */
 export type WorldStorage = {
+  terminalMarks: import("../storage/terminal-marks").TerminalMarksPort;
   runtimeStatus: import("../storage/runtime-status").RuntimeStatusPort;
   bindings: import("../storage/world-bindings").WorldBindings;
   ids: import("../storage/world-ids").WorldIds;
@@ -71,6 +72,7 @@ export const openStorage: OpenStorage = async (paths, { clock, scheduler }) => {
     return create();
   };
   return {
+    terminalMarks: world.terminalMarks,
     runtimeStatus: world.runtimeStatus,
     ids: world.ids,
     bindings: world.bindings,

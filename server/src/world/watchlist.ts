@@ -18,6 +18,27 @@ export class WorldWatchlistRegistry {
   private revision = 0;
   private records = new Map<string, WorldWatchRecord>();
 
+  fork() {
+    const next = new WorldWatchlistRegistry();
+    next.adopt(this);
+    return next;
+  }
+  adopt(next: WorldWatchlistRegistry) {
+    this.revision = next.revision;
+    this.records = new Map(
+      [...next.records].map(([key, value]) => [key, { ...value }]),
+    );
+  }
+  replaceConnection(connectionId: string, records: WorldWatchRecord[]) {
+    const before = JSON.stringify(this.list().records);
+    const incoming = new Set(records.map(watchKey));
+    for (const [key, record] of this.records)
+      if (record.connection_id === connectionId && !incoming.has(key))
+        this.records.delete(key);
+    for (const record of records)
+      this.records.set(watchKey(record), { ...record });
+    if (JSON.stringify(this.list().records) !== before) this.revision++;
+  }
   list(): WorldWatchlist {
     return { revision: this.revision, records: [...this.records.values()] };
   }

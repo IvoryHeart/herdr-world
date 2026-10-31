@@ -252,3 +252,29 @@ answer to a different ask.
 #### Scenario: Allocator draws an existing ID
 - **WHEN** a generated ID already exists in the store
 - **THEN** allocation draws another ID rather than replacing the existing record
+
+### Requirement: Durable terminal marks
+
+Desk review marks/recent opens, watchlist and completion seen SHALL use bounded
+World-ID rows paired atomically with verified bindings in the single SQLite writer.
+Their current wire projections and shared change notices SHALL publish only after
+COMMIT and after captured runtime currency is rechecked. Restart captures SHALL
+remain unresolved until current complete unambiguous original-source evidence
+attaches them under each kind's declared lifetime. No runtime generation or service
+incarnation SHALL be stored as durable identity. A refused row operation SHALL NOT
+roll back neighboring accepted operations; close SHALL drain admitted writes.
+
+There is no current file-owned or browser-owned state to import. The first upgrade
+SHALL start empty rather than inventing continuity for old process memory or
+obsolete browser keys. Subsequent starts SHALL retain committed rows and World IDs.
+Board layout and ordinary Town placement SHALL NOT enter this family.
+
+#### Scenario: Restart after acknowledgement
+- **WHEN** a process dies after acknowledging a terminal mark
+- **THEN** SQLite retains its complete record and binding
+- **AND** it reappears only after fresh identity verification
+
+#### Scenario: Runtime retires while storage replies
+- **WHEN** a mark commits but its captured runtime retires before publication
+- **THEN** the old projection is not published and the saved binding must be
+  freshly verified before it appears in another runtime

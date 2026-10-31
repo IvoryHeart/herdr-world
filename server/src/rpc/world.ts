@@ -272,6 +272,35 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
       ) {
         throw new Error("invalid World watch identity");
       }
+      if (rpc.services.persistentMarks) {
+        const watch = {
+          connection_id: connectionId,
+          connection_generation: generation as number,
+          terminal_id: terminalId,
+        };
+        const before = worldWatchlist.list().revision;
+        if (method === "world.watchlist.unpin")
+          await rpc.services.persistentMarks.unpin(watch);
+        else
+          await rpc.services.persistentMarks.mutate(watch, (draft) => {
+            draft.watchlist.pin({
+              ...watch,
+              label:
+                typeof identity?.label === "string" ? identity.label : "Watch",
+            });
+          });
+        sendReply(
+          {
+            id,
+            result: {
+              ...worldWatchlist.list(),
+              changed: worldWatchlist.list().revision !== before,
+            },
+          },
+          "world-watchlist",
+        );
+        return;
+      }
       if (method === "world.watchlist.unpin") {
         const result = worldWatchlist.unpin({
           connection_id: connectionId,

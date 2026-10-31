@@ -17,7 +17,9 @@ export async function handleDeskRpc(rpc: BridgeRpcContext): Promise<void> {
   const { worldDesk, publishDeskChanged, connectionManager } = rpc.services;
   const revision = worldDesk.list().revision;
   try {
-    worldDesk.expire(Date.now());
+    if (method === "world.desk.get" && rpc.services.persistentMarks)
+      await rpc.services.persistentMarks.expire();
+    else if (!rpc.services.persistentMarks) worldDesk.expire(Date.now());
     if (method !== "world.desk.get") {
       if (method !== "world.desk.review" && method !== "world.desk.open")
         throw new Error("unknown Desk operation");
@@ -28,6 +30,34 @@ export async function handleDeskRpc(rpc: BridgeRpcContext): Promise<void> {
         reviewed?: unknown;
         stop_id?: unknown;
       };
+      if (rpc.services.persistentMarks) {
+        await rpc.services.persistentMarks.mutate(
+          identity,
+          (draft, pane, now) => {
+            if (
+              !pane.agent ||
+              deskSessionFingerprint(pane.agent_session) !==
+                identity.agent_session_fingerprint
+            )
+              throw new Error("Desk agent session changed");
+            if (method === "world.desk.review") {
+              if (
+                typeof mutation.reviewed !== "boolean" ||
+                typeof mutation.stop_id !== "string"
+              )
+                throw new Error("invalid Desk review mark");
+              draft.desk.mark(
+                identity,
+                mutation.stop_id,
+                mutation.reviewed,
+                now,
+              );
+            } else draft.desk.open(identity, now);
+          },
+        );
+        sendReply({ id, result: worldDesk.list() }, "world-desk");
+        return;
+      }
       const lease = connectionManager.readyRuntimeLease(identity.connection_id);
       if (
         !lease ||
@@ -69,6 +99,7 @@ export async function handleDeskRpc(rpc: BridgeRpcContext): Promise<void> {
     sendError("world-desk-error", error);
   } finally {
     const next = worldDesk.list().revision;
-    if (next !== revision) publishDeskChanged(next);
+    if (!rpc.services.persistentMarks && next !== revision)
+      publishDeskChanged(next);
   }
 }

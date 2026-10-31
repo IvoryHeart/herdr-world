@@ -41,6 +41,8 @@ The declared policies are:
 | Appearance | World's moves and a uniquely witnessed terminal in a complete listing | Every witnessed terminal absent from a complete current list | Clear |
 | Tab colour | Appearance's paths | Appearance's absence or observed tab close | Drop |
 | Agent interest | Its terminal on its original source | Complete current pane list omits the terminal | Drop |
+| Watchlist | Uniquely witnessed terminal on its original source | Complete current terminal absence | Clear |
+| Desk marks/recent opens and completion seen | Witnessed terminal and captured known session; explicit unknown binds to terminal | Complete current terminal absence or positive known session replacement | Clear |
 
 Offline, partial, filtered and stale observations preserve saved native IDs and
 witnesses and authorize nothing. Duplicate native IDs, terminals or sessions make
@@ -82,7 +84,7 @@ preferences. They carry no binding and are inherited on ID reuse. Profiles and c
 [SQLite storage port](DEPLOYMENT.md#agent-profile-storage); their existing
 browser record-creation protocol remains unchanged. Store-issued profile and
 remaining JSON-owned ID creation are separate work. Desk marks, watchlists and
-completion seen state keep their current memory lifetimes.
+completion seen state now use the [durable terminal-mark family](DEPLOYMENT.md#desk-watchlist-and-completion-storage).
 
 The [identity contract](../verification/contracts/world-identity.md) maps M4,
 mutation controls and mandatory consumers. The complete `verification:gate`

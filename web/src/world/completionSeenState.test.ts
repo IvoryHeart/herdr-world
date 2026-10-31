@@ -80,7 +80,7 @@ function service() {
         },
       ],
     );
-  /** The service restarts; every browser reconnects to an empty one. */
+  /** The projection restarts unresolved; every browser first sees an empty list. */
   const restart = () => {
     marks = start();
     for (const listener of statuses) listener("connected");
@@ -170,7 +170,7 @@ describe("completion seen on the service", () => {
     expect(checked(desktop, "t1")).toBe(true);
   });
 
-  test("a service restart forgets every mark, as documented", async () => {
+  test("reconnect accepts an empty revision-zero unresolved service projection", async () => {
     const { browser, restart } = service();
     const phone = await browser();
     const desktop = await browser();

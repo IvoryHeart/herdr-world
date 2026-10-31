@@ -11,6 +11,15 @@ type CompletionSeenRpc = {
   sendReply: (message: Record<string, unknown>, context: string) => boolean;
   sendError: (context: string, error: unknown) => void;
   services: {
+    persistentMarks?: {
+      mutate(
+        identity: import("../world/completion-seen").CompletionSeenIdentity,
+        action: (
+          draft: { seen: WorldCompletionSeenRegistry },
+          pane: Record<string, unknown>,
+        ) => void,
+      ): Promise<void>;
+    };
     worldCompletionSeen: WorldCompletionSeenRegistry;
     publishCompletionSeenChanged: (revision: number) => void;
     connectionManager: {
@@ -39,6 +48,18 @@ export async function handleCompletionSeenRpc(
     if (method === "world.completion_seen.mark") {
       if (!validCompletionSeenIdentity(params))
         throw new Error("invalid completion seen identity");
+      if (rpc.services.persistentMarks) {
+        await rpc.services.persistentMarks.mutate(params, (draft, pane) => {
+          if (!pane.agent)
+            throw new Error("completion seen target is not an agent");
+          draft.seen.mark(params);
+        });
+        sendReply(
+          { id, result: worldCompletionSeen.list() },
+          "world-completion-seen",
+        );
+        return;
+      }
       // Marks belong to the runtime generation that ran the work.
       const lease = connectionManager.readyRuntimeLease(params.connection_id);
       if (

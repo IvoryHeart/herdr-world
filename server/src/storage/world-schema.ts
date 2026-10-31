@@ -1,3 +1,4 @@
+import { terminalMarksMigration } from "./terminal-marks";
 import type { Database } from "bun:sqlite";
 import {
   chmodSync,
@@ -89,6 +90,7 @@ export const worldMigrations = [
   runtimeStatusMigration,
   effectsMigration,
   worldBoardMigration,
+  terminalMarksMigration,
 ] as const;
 
 /** A consistent private rollback copy before any noninitial migration. */

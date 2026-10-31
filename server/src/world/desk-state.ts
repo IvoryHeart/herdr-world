@@ -25,7 +25,7 @@ const copyIdentity = (identity: DeskIdentity): DeskIdentity => ({
   agent_session_fingerprint: identity.agent_session_fingerprint,
 });
 
-type StoredDeskRecord = DeskRecord & { stateChangeSeq?: number };
+export type StoredDeskRecord = DeskRecord & { stateChangeSeq?: number };
 
 /** Browser-independent, process-local state. No transcript text is retained. */
 export class WorldDeskRegistry {
@@ -44,6 +44,40 @@ export class WorldDeskRegistry {
       stateChangeSeq?: number;
     }
   >();
+
+  fork() {
+    const next = new WorldDeskRegistry();
+    next.adopt(this);
+    return next;
+  }
+  adopt(next: WorldDeskRegistry) {
+    this.revision = next.revision;
+    this.ownershipRevision = next.ownershipRevision;
+    this.records = new Map(
+      [...next.records].map(([key, value]) => [key, { ...value }]),
+    );
+    this.recordByTerminal = new Map(next.recordByTerminal);
+    this.previous = new Map(
+      [...next.previous].map(([key, value]) => [key, { ...value }]),
+    );
+  }
+  storedRecords(): StoredDeskRecord[] {
+    return [...this.records.values()].map((record) => ({ ...record }));
+  }
+  replaceConnection(connectionId: string, records: StoredDeskRecord[]) {
+    const before = JSON.stringify(this.list().records);
+    const incoming = new Map(
+      records.map((record) => [deskKey(record), record]),
+    );
+    for (const [key, record] of this.records)
+      if (record.connection_id === connectionId && !incoming.has(key))
+        this.remove(key);
+    for (const record of records) {
+      this.records.set(deskKey(record), { ...record });
+      this.recordByTerminal.set(terminalKey(record), deskKey(record));
+    }
+    if (JSON.stringify(this.list().records) !== before) this.revision++;
+  }
 
   list(): DeskState {
     return {

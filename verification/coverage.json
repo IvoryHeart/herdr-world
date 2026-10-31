@@ -1032,6 +1032,13 @@
       "requirement": "openspec/specs/world-surfaces/spec.md",
       "properties": "New turns invalidate old review marks; dedup and bounded observation; receipts remain session-qualified",
       "existingTests": [
+        "server/src/storage/terminal-marks.test.ts",
+        "server/src/storage/terminal-marks-crash.test.ts",
+        "server/src/world/persistent-terminal-marks.test.ts",
+        "server/src/world/terminal-mark-bindings.test.ts",
+        "server/src/world/terminal-mark-controls.test.ts",
+        "server/src/service/terminal-marks.test.ts",
+
         "server/src/service/shared-acquisition.test.ts",
         "web/src/store/sharedAcquisition.test.ts",
         "web/src/store/sharedBootstrap.test.ts",
@@ -1060,11 +1067,21 @@
       "status": "alternative-evidence",
       "remaining": "A summary is presentation evidence, not proof that external work succeeded; publication identity remains a separate operational guard.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
-      "evidenceDecision": "Fixture receipt parsing and real Desk browser routing/review tests directly check human-facing summaries and review intent. Shared Desk state (#164): direct registry cases cover bounded metadata, exact conditional Undo, owner/session replacement, expiry and older observations after live mutations. RPC tests revalidate the captured runtime and session after live pane admission. Two-WebSocket service and Desk browser regressions establish shared marks/recent opens and cross-browser Undo. Paired real-registry/browser-store consumers with 41 agents check unequal receipt polling coverage, filter changes, later native activity and service stops. Deferred native admissions check session replacement, return to the original fingerprint and observation eviction; the browser checks exact next-card focus after external-store publication; deferred client replies cover revision and reconnect epochs. These finite metadata transitions are exercised directly rather than adding a model that repeats the store; arbitrary external transport liveness remains excluded. Stable stop identities are checked across 13-hour timestamp/observation expiry for idle and done agents, including native counter progress after an unobserved working phase. The real fresh-snapshot callback carries agent.list data; pane-only identity, missing pane agent/session fields, and duplicate, malformed, mismatched or obsolete progress cases exercise the adapter. Metadata cannot manufacture a browser/RPC identity. Browser consumers retain Reviewed on display expiry and refresh receipts for new stable stop IDs while native status/activity remain unchanged. Deferred reads and failed refreshes leave the successor unmarkable against its predecessor report; repeated failure settles without an old report, and a late superseded response cannot publish. Town completion checks share the same service-memory model, and the service alone ends a check from its own host reads (busy ends it, a mark while busy is ignored), so no browser's late view orders it. Registry cases cover that rule, generation retirement and the bound. Two store clients over the real RPC handler and observation path cover cross-browser agreement, late reads in either order, a restart forgetting every check, and two Town projections agreeing on an inferred finish checked on one device. The real-process test awaits the published notice. Desk watches add exhaustive bounded interest traces, deferred per-holder captured-trigger/failure cases, native session fences, two-browser declaration consumers and dispatcher/cleanup tests. The actual Desk browser fixture checks shared hooks and legacy fallback; bounds and excluded claims are in verification/contracts/shared-acquisition.md. Timer removal activates all original T2 assertions, with two-host Inspector/reference/retry consumers, deferred catalogue coalescing, failed bootstrap recovery and actual Chrome preview-removal effects. The actual service hello advertises the capability. See verification/contracts/shared-acquisition.md for bounds and excluded liveness claims. The composed acceptance now runs createWorldService with two synthetic hosts, a real Bridge/store Worker and a second real WebSocket, checking the parity outputs, shared native acquisition, notices, Desk references and retirement in flight; original T2 bodies/harnesses remain unchanged. Current specs include both complete shared-acquisition deltas.",
+      "evidenceDecision": "Fixture receipt parsing and real Desk browser routing/review tests directly check human-facing summaries and review intent. Shared Desk state (#164): direct registry cases cover bounded metadata, exact conditional Undo, owner/session replacement, expiry and older observations after live mutations. RPC tests revalidate the captured runtime and session after live pane admission. Two-WebSocket service and Desk browser regressions establish shared marks/recent opens and cross-browser Undo. Paired real-registry/browser-store consumers with 41 agents check unequal receipt polling coverage, filter changes, later native activity and service stops. Deferred native admissions check session replacement, return to the original fingerprint and observation eviction; the browser checks exact next-card focus after external-store publication; deferred client replies cover revision and reconnect epochs. These finite metadata transitions are exercised directly rather than adding a model that repeats the store; arbitrary external transport liveness remains excluded. Stable stop identities are checked across 13-hour timestamp/observation expiry for idle and done agents, including native counter progress after an unobserved working phase. The real fresh-snapshot callback carries agent.list data; pane-only identity, missing pane agent/session fields, and duplicate, malformed, mismatched or obsolete progress cases exercise the adapter. Metadata cannot manufacture a browser/RPC identity. Browser consumers retain Reviewed on display expiry and refresh receipts for new stable stop IDs while native status/activity remain unchanged. Deferred reads and failed refreshes leave the successor unmarkable against its predecessor report; repeated failure settles without an old report, and a late superseded response cannot publish. Town completion checks now share the durable terminal-mark family (Q51), and the service alone ends a check from its own host reads (busy ends it, a mark while busy is ignored), so no browser's late view orders it. Registry cases cover that rule, generation retirement and the bound. Two store clients over the real RPC handler and observation path cover cross-browser agreement, late reads in either order, an unresolved restart projection, with Q51 checking fresh verified restoration, and two Town projections agreeing on an inferred finish checked on one device. The real-process test awaits the published notice. Desk watches add exhaustive bounded interest traces, deferred per-holder captured-trigger/failure cases, native session fences, two-browser declaration consumers and dispatcher/cleanup tests. The actual Desk browser fixture checks shared hooks and legacy fallback; bounds and excluded claims are in verification/contracts/shared-acquisition.md. Timer removal activates all original T2 assertions, with two-host Inspector/reference/retry consumers, deferred catalogue coalescing, failed bootstrap recovery and actual Chrome preview-removal effects. The actual service hello advertises the capability. See verification/contracts/shared-acquisition.md for bounds and excluded liveness claims. The composed acceptance now runs createWorldService with two synthetic hosts, a real Bridge/store Worker and a second real WebSocket, checking the parity outputs, shared native acquisition, notices, Desk references and retirement in flight; original T2 bodies/harnesses remain unchanged. Current specs include both complete shared-acquisition deltas.",
       "partialEvidence": {
         "models": [],
-        "contracts": ["verification/consumer-evidence.md"],
+        "contracts": [
+          "verification/consumer-evidence.md",
+          "verification/contracts/terminal-marks.md"
+        ],
         "tests": [
+          "server/src/storage/terminal-marks.test.ts",
+          "server/src/storage/terminal-marks-crash.test.ts",
+          "server/src/world/persistent-terminal-marks.test.ts",
+          "server/src/world/terminal-mark-bindings.test.ts",
+          "server/src/world/terminal-mark-controls.test.ts",
+          "server/src/service/terminal-marks.test.ts",
+
           "server/src/service/shared-acquisition.test.ts",
           "web/src/store/sharedAcquisition.test.ts",
           "web/src/store/sharedBootstrap.test.ts",
@@ -2273,6 +2290,7 @@
       "requirement": "openspec/specs/world-identity/spec.md",
       "properties": "Store-issued random kind-prefixed IDs commit before acknowledgement; collisions across registered SQLite families retry; imports preserve IDs; reservations survive retention and restart; stopped backups use fresh entropy; per-kind verified continuity/absence, ambiguity refusal, unresolved preservation, fences separate from identity and attached-only action admission; independent per-field channel ownership, source-owned complete removal, provenance, explicit display/verb authority, native IDs as occupant claims and stale-read refusal; title-witness replacement, runtime/terminal-local silence, runtime/host-scoped checkout evidence, independent runtime retirement and explicit PR-search completeness",
       "existingTests": [
+        "server/src/world/terminal-mark-bindings.test.ts",
         "server/src/storage/world-ids.test.ts",
         "server/src/storage/world-identifiers.test.ts",
         "server/src/service/storage.test.ts",
@@ -2634,6 +2652,49 @@
       "promotion": {
         "decision": "pending",
         "scope": "Board physical storage split, initial import and unchanged identity/revision/consumer boundaries only; independent acceptance required."
+      }
+    },
+    {
+      "id": "Q51",
+      "area": "Durable Desk, watchlist and completion metadata",
+      "owner": "server/src/storage/terminal-marks.ts",
+      "requirement": "openspec/specs/world-storage/spec.md",
+      "properties": "Stable World IDs and atomic verified bindings; unresolved restart recovery; ambiguous evidence never attaches; per-kind terminal/session lifetimes; committed-only shared projection; exact Undo, bounded recency and close drain",
+      "existingTests": [
+        "server/src/storage/terminal-marks.test.ts",
+        "server/src/storage/terminal-marks-crash.test.ts",
+        "server/src/world/persistent-terminal-marks.test.ts",
+        "server/src/world/terminal-mark-bindings.test.ts",
+        "server/src/world/terminal-mark-controls.test.ts",
+        "server/src/service/terminal-marks.test.ts"
+      ],
+      "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/549",
+      "technique": "direct-sqlite-recovery",
+      "assessment": "192 finite binding combinations, 24 SQL operation/refusal orders, two browser stores per family, actual service/two WebSockets, eight source/standalone crash schedules and seven compiled production controls",
+      "status": "alternative-evidence",
+      "remaining": "Independent implementation/mapping review and native CI remain required. No physical power-loss or all-remote-schedules claim. Old process memory and obsolete browser keys cannot be adopted safely.",
+      "requiredChecks": ["bun run check", "bun run verification:gate"],
+      "partialEvidence": {
+        "models": [],
+        "contracts": ["verification/contracts/terminal-marks.md"],
+        "tests": [
+          "server/src/storage/terminal-marks.test.ts",
+          "server/src/storage/terminal-marks-crash.test.ts",
+          "server/src/world/persistent-terminal-marks.test.ts",
+          "server/src/world/terminal-mark-bindings.test.ts",
+          "server/src/world/terminal-mark-controls.test.ts",
+          "server/src/service/terminal-marks.test.ts"
+        ],
+        "checks": [
+          "bun run test server/src/storage/terminal-marks.test.ts server/src/storage/terminal-marks-crash.test.ts server/src/world/persistent-terminal-marks.test.ts server/src/world/terminal-mark-bindings.test.ts server/src/world/terminal-mark-controls.test.ts server/src/service/terminal-marks.test.ts",
+          "bun run verification:gate"
+        ],
+        "review": "The delivery link records the storage/identity design, not acceptance of these new lifetimes. Owner approved persistence in the brief; independent review and native CI are pending."
+      },
+      "evidenceDecision": "The maintained binding/runtime models remain required within their accepted scope. New per-kind declarations are exhaustively checked directly; real SQLite savepoints and process schedules exercise actual storage and acknowledgement boundaries rather than modeling SQL. Source and compiled negative controls must fail named assertions, never loaders. Multi-row repair may retain a committed prefix, freshly resolved on restart; one user mutation acknowledges only after all resulting writes finish. Production service and browser-store consumers retain ownership/ordering checks.",
+      "promotion": {
+        "decision": "pending",
+        "scope": "The three terminal-mark stores and approved lifetime changes only; Board layout remains with Q50. Independent review required."
       }
     }
   ],

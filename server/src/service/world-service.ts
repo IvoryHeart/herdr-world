@@ -1,3 +1,4 @@
+import { createSharedTerminalMarks } from "./terminal-mark-service";
 import { randomUUID } from "node:crypto";
 import { rmSync } from "node:fs";
 import type { Server, ServerWebSocket } from "bun";
@@ -61,7 +62,6 @@ import { createWorkspaceWorktree } from "../worktree/create";
 import { afterHerdrClose } from "../world/board-closing";
 import { createBoardRecipientRecorder } from "./board-recipients";
 import type { createMoveQueue } from "../world/desk-move";
-import { createWorldDeskService } from "../world/desk-service";
 import { reconcileReadyInterest } from "../world/interest-prune";
 import { serializeWorldInvalidation } from "../world/invalidation";
 import { OfficeObservabilityService } from "../world/observability";
@@ -72,7 +72,6 @@ import {
 } from "../world/observability-http";
 import { createRevisionPublisher } from "../world/revision-publisher";
 import { WorldSnapshotService } from "../world/snapshot";
-import { createTerminalMarks } from "../world/terminal-marks";
 import { createWorldCliService } from "../world/world-cli-service";
 import { FocusedAcquisition } from "../world/focused-acquisition";
 import { readFocusedLists } from "../world/focused-lists";
@@ -282,9 +281,6 @@ async function compose(
   const readyConnectionGenerations = new Map<string, number>();
   let worldSnapshots: WorldSnapshotService<LegacyConnectionRuntime> | null =
     null;
-  const deskService = createWorldDeskService((line) =>
-    broadcast(line, "world-desk"),
-  );
   const board = () => storage.board();
   const revisionPublisher = createRevisionPublisher(clients, safeSend);
   // Profiles stay World's; per-terminal settings live in Herdr pane metadata.
@@ -330,10 +326,21 @@ async function compose(
   });
 
   const {
-    retire: retireTerminalMarks,
     observe: observeHost,
+    retire: retireTerminalMarks,
+    close: closeTerminalMarks,
     ...terminalMarks
-  } = createTerminalMarks(revisionPublisher, deskService.observe);
+  } = createSharedTerminalMarks({
+    storage: storage.terminalMarks,
+    incarnation: serviceIncarnation,
+    publisher: revisionPublisher,
+    broadcast: (line) => broadcast(line, "world-desk"),
+    lease: (connectionId) => connectionManager.readyRuntimeLease(connectionId),
+    now: () => clock.now(),
+    invalidate: publishWorldInvalidation,
+    logger,
+    stop: () => (stopTask ??= stopService()),
+  });
 
   function publishWorldInvalidation(
     connectionId: string,
@@ -372,8 +379,11 @@ async function compose(
       focusedAcquisition.reconcile();
       deskWatches.reconcile();
       publishConnectionsChanged();
-      deskService.retire(status.id, status.generation);
-      retireTerminalMarks(status.id, status.generation);
+      retireTerminalMarks(
+        status.id,
+        status.generation,
+        status.state === "ready",
+      );
       publishWorldInvalidation(status.id, status.generation);
       const fields = {
         connection: status.id,
@@ -781,8 +791,6 @@ async function compose(
     snapshotAdmission,
     townMoveQueues,
     ...terminalMarks,
-    worldDesk: deskService.registry,
-    publishDeskChanged: deskService.publish,
     worldCli,
     worldSnapshots,
   };
@@ -958,6 +966,7 @@ async function compose(
       await drained();
     } finally {
       try {
+        await closeTerminalMarks();
         storageOpen = false;
         await storage.close();
       } finally {

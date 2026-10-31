@@ -36,6 +36,37 @@ export class WorldCompletionSeenRegistry {
   /** Terminals last observed working or blocked. */
   private busy = new Set<string>();
 
+  fork() {
+    const next = new WorldCompletionSeenRegistry();
+    next.adopt(this);
+    return next;
+  }
+  adopt(next: WorldCompletionSeenRegistry) {
+    this.revision = next.revision;
+    this.records = new Map(
+      [...next.records].map(([key, value]) => [key, { ...value }]),
+    );
+    this.busy = new Set(next.busy);
+  }
+  replaceConnection(connectionId: string, records: CompletionSeenIdentity[]) {
+    const before = JSON.stringify([...this.records.keys()]);
+    const old = this.records;
+    const incoming = new Set(records.map(completionSeenKey));
+    this.records = new Map(
+      [...old].filter(
+        ([key, record]) =>
+          record.connection_id !== connectionId || incoming.has(key),
+      ),
+    );
+    for (const record of records) {
+      const key = completionSeenKey(record);
+      this.records.set(
+        key,
+        old.get(key) ?? { ...record, revision: this.revision + 1 },
+      );
+    }
+    if (JSON.stringify([...this.records.keys()]) !== before) this.revision++;
+  }
   list(): CompletionSeen {
     return { revision: this.revision, records: [...this.records.values()] };
   }

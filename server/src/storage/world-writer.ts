@@ -1,3 +1,4 @@
+import { createTerminalMarkWriter, readTerminalMarks } from "./terminal-marks";
 import {
   recordAnswerAttempt,
   answerAttemptEvidence,
@@ -129,6 +130,7 @@ export function openWorldWriter(
   }
   const ids = createWorldIds(db, bytes);
   const bindings = createBindingWriter(db, ids);
+  const terminalMarks = createTerminalMarkWriter(db, ids, bindings);
   try {
     if (boardImport)
       importBoard(db, boardImport.path, at, bindings, boardImport.fault);
@@ -195,6 +197,7 @@ export function openWorldWriter(
     const runtimeStatus = readRuntimeStatus(db);
     return {
       document,
+      terminalMarks: readTerminalMarks(db),
       ...(profiles ? { profiles } : {}),
       ...(board ? { board } : {}),
       ...(runtimeStatus ? { runtimeStatus } : {}),
@@ -462,6 +465,8 @@ export function openWorldWriter(
   }
   function execute(request: StorageRequest, at: number): unknown {
     switch (request.type) {
+      case "terminal-mark":
+        return terminalMarks(request.operation, at);
       case "effect-read":
         return request.id
           ? {

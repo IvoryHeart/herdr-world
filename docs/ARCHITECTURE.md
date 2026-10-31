@@ -6,6 +6,13 @@ This document describes Herdr World's current system contracts. See
 
 ## System overview
 
+`WorldStorage.terminalMarks` stores Desk marks/recent opens, watchlist and completion
+seen as bounded rows paired with verified bindings. Service admission serializes
+mutations, rechecks runtime currency across storage waits, and publishes the old
+RPC projections/change notices only after COMMIT. Restart captures are unresolved
+until complete unambiguous original-source evidence verifies terminal/session
+continuity. No runtime fence is a durable key. See [storage and migration limits](DEPLOYMENT.md#desk-watchlist-and-completion-storage).
+
 The composition root exposes `WorldStorage.ids.issue(kind)` through the existing
 SQLite worker. IDs have a kind prefix and eight random base32 symbols and become
 visible only after their shared reservation commits. Existing SQLite/imported
