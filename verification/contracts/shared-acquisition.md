@@ -128,7 +128,11 @@ controllers to the actual service watches, proving union acquisition, trigger
 updates, hide/show, last-owner release, capability removal and identity admission.
 `server/src/service/desk-watches.test.ts` drives the actual dispatcher and browser
 cleanup tracker: declarations do not select a runtime and last socket cleanup
-cancels scheduling. The real Chrome Desk fixture additionally runs the React
+cancels scheduling. Cached-send-failure churn uses the real safe-send cleanup
+path with an active read and a queued successor: last drop and shutdown leave no
+holders, queued jobs, timers or retained watches after settlement. A separate
+shutdown regression removes declaration bookkeeping to check defensive retirement
+from the watch map itself. The real Chrome Desk fixture additionally runs the React
 hooks with a synthetic bridge and event completion signals. It checks no direct
 shared reads or placeholders, captured-trigger currency, a deliberately unrelated
 wire failure count, screen delivery, visibility release, unmount's final empty

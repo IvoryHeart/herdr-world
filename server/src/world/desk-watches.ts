@@ -114,6 +114,7 @@ export class DeskWatches<Socket> {
       if (!next.has(key)) this.remove(socket, key);
     if (next.size) this.declarations.set(socket, new Set(next.keys()));
     else this.declarations.delete(socket);
+    const cached: { watch: Watch<Socket>; outcome: Outcome }[] = [];
     for (const [key, { kind, target }] of next) {
       let watch = this.watches.get(key);
       if (!watch) {
@@ -138,10 +139,15 @@ export class DeskWatches<Socket> {
         }
       } else {
         watch.holders.set(socket, { token: {}, trigger, failures: 0 });
-        if (watch.latest) this.deliver(watch, socket, watch.latest);
+        if (watch.latest) cached.push({ watch, outcome: watch.latest });
         if (kind === "receipt" || !watch.latest) this.arm(watch, 0);
       }
     }
+    // Sending can synchronously close the socket and release its declaration.
+    // Install all holders first so cleanup can find every resource; subsequent
+    // cached deliveries become no-ops once that socket has been released.
+    for (const { watch, outcome } of cached)
+      this.deliver(watch, socket, outcome);
   }
 
   release(socket: Socket): void {
@@ -158,7 +164,9 @@ export class DeskWatches<Socket> {
 
   stop(): void {
     this.stopped = true;
-    for (const socket of [...this.declarations.keys()]) this.release(socket);
+    // The watch map owns scheduling, even if declaration bookkeeping is lost.
+    for (const watch of this.watches.values()) this.retire(watch);
+    this.declarations.clear();
   }
 
   private retire(watch: Watch<Socket>): void {
