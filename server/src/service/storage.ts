@@ -5,7 +5,8 @@ import {
   type GuiSettingsStore,
 } from "../config/gui-settings";
 import { ConnectionProfileStore } from "../connections/profiles";
-import { BoardStore } from "../world/board-store";
+import type { BoardStore } from "../world/board-store";
+import { BindingBoardStore } from "../storage/binding-board-store";
 import type { LedgerStore } from "../world/world-ledger";
 import { openWorldLedger } from "../storage/world-storage";
 import type { AttentionOutbox } from "../storage/world-protocol";
@@ -17,6 +18,7 @@ import type { Clock, Scheduler } from "./ports";
  * folder stay plain files under DataPaths, outside this port.
  */
 export type WorldStorage = {
+  bindings: import("../storage/world-bindings").WorldBindings;
   ids: import("../storage/world-ids").WorldIds;
   settings: GuiSettingsStore;
   connections: ConnectionProfileStore;
@@ -49,7 +51,8 @@ export const openStorage: OpenStorage = async (paths, { clock, scheduler }) => {
   };
   const settings = createGuiSettingsStore(paths.settings);
   const connections = new ConnectionProfileStore({ path: paths.connections });
-  let board: BoardStore | null = null;
+  let board: BindingBoardStore | null = null;
+  const bindingFailure = Promise.withResolvers<Error>();
   const world = await openWorldLedger(
     { database: join(paths.root, "world.sqlite"), ledger: paths.ledger },
     { clock, scheduler },
@@ -64,14 +67,23 @@ export const openStorage: OpenStorage = async (paths, { clock, scheduler }) => {
   };
   return {
     ids: world.ids,
+    bindings: world.bindings,
     settings,
     connections,
     board: () =>
-      (board = open(board, () => new BoardStore(paths.board, options))),
+      (board = open(board, () => {
+        const store = new BindingBoardStore(
+          paths.board,
+          options,
+          world.bindings,
+        );
+        void store.failed.then(bindingFailure.resolve);
+        return store;
+      })),
     // Eager committed cache only: this accessor never opens/imports/migrates.
     ledger: () => world.ledger,
     attention: () => world.outbox,
-    failed: world.failed,
+    failed: Promise.race([world.failed, bindingFailure.promise]),
     incarnation: world.incarnation,
     profiles: () =>
       (profiles = open(

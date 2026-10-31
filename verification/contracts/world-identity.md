@@ -2,7 +2,8 @@
 
 Requirement: [store-issued World IDs](../../openspec/specs/world-identity/spec.md).
 Approved full design: `openspec/changes/world-protocol-identity`, task 6 and M4.
-This first candidate covers the SQLite allocator, not source binding resolution.
+The maintained boundary covers the allocator and verified bindings. Claims and
+remaining JSON-owned ID creation are separate work.
 
 Allowed: any earlier ID format preserved on import; global registry collision
 retry; independent random allocation after restoring a stopped copy; permanent
@@ -45,14 +46,91 @@ the complete ID suite: ignoring the registry collision check (six tests fail)
 and omitting the reservation insert (three tests fail). Parser/import failures
 are not counted. The original source is restored after each control run.
 
-## Pending boundary and acceptance
+## Binding requirements and M4 mapping
 
-M4 binding-resolution, per-kind continuity/absence, ambiguity, field claims and
-JSON-owned record migration remain outside this candidate. Board strings,
-appearance, layout inheritance and transient marks retain their existing rules.
-Those follow-up candidates must add the model/replay adapter, unchanged mandatory
-consumers and negative controls and run the complete verification gate.
+Allowed: reattachment after World restarts when the original evidence is still
+present; World-witnessed moves; appearance following a unique terminal in a
+complete listing; Board strings remaining unresolved after outside moves; only
+kind-declared absence ending a binding; explicit owner decisions; weak empty
+workspace/tab anchors remaining non-sendable; native-key layout inheritance.
+Forbidden: guessing by labels/cwd/agent kind, attaching reused IDs without their
+witness, attaching or ending from ambiguous observations, changing saved identity
+on partial/offline reads, using a saved fence as identity, and dispatching from
+an unresolved/unconfirmed/ended capture.
 
-Run `bun run test server/src/storage/world-ids.test.ts`, the complete affected
-consumer files and the applicable delivery gate. Independent PR review and CI
-are required; the merged design is not implementation acceptance.
+`quint/binding-resolution.qnt` models one pane binding under both Board and
+appearance policies. Its two native IDs and two terminals, current/partial/offline
+health, two runtime generations and two service incarnations cover complete and
+partial observation, offline, Herdr/World restart, World move, lost move reply,
+outside move, observed close, qualified not-found, duplicate identity, user
+keep/detach and a look-alike. It makes no temporal-liveness claim.
+
+The intended properties are no unverified retarget, only declared absence,
+no attachment from ID reuse, ambiguity refusal, unresolved identity preservation
+and attached-only actions. `quint/binding-resolution.ts` replays through the
+actual resolver and compares state, saved native ID, evidence and ephemeral
+authority. Required witnesses on each seed are restartUnconfirmed,
+worldRestartReattached, partialKept, closeEnded, allTerminalsGoneEnded,
+moveFollowed, lostReplyFollowedByTerminal, outsideMoveUnresolved,
+duplicateUnresolved and lookAlikeRejected. Simulation uses 500 samples and at
+most 25 transitions for seeds 42/73/103; 500 traces per seed are replayed. New absence and lost-reply witnesses require
+actual ending/retargeting transitions, rather than later repeated observations.
+TLC explores the finite domain. The model BROKEN fault treats an old pane's
+absence as Board absence, and its counterexample must disagree with production.
+
+Six compiled source controls test witness comparison, duplicate admission,
+Board listing-move refusal, listing-absence policy, partial-observation identity
+preservation and attached-only target issuance. Each must fail a named replay
+observation, not parser/loader/cleanup checks. The direct exhaustive policy tests
+cover all four record policies, foreign fences, known/unknown session evidence,
+weak anchors, ended lifetimes and explicit decisions. Every resolution property
+test must be killed by at least one matching production mutant.
+
+## Durable and consumer boundaries
+
+`WorldStorage.bindings` reserves binding IDs through the same single SQLite
+worker and stores no incarnation, generation or transport epoch in identity.
+Reads expose unresolved captures; only a fresh resolution supplies an ephemeral
+qualified target. The caller must still check its exact lease before dispatch.
+`world-bindings.test.ts` covers persistence/reopen, independent record slots,
+bounded pages, strict identity/observation validation, permanent ID retirement,
+close fencing and interrupted legacy-import recovery.
+
+The lazy `BindingBoardStore` projects existing Board strings, appearance/tab
+colour and agent-interest captures into SQLite while keeping the JSON owner
+representation. Imports use bounded pages and a persisted in-progress marker;
+an interrupted import cannot authorize its legacy bindings. A subsequent complete
+World-record import reconciles them. This complete World-owned record listing is
+not source topology absence. Compatibility aliases never become new World IDs.
+A uniquely witnessed appearance whose old legacy key disappeared can keep its
+World record and binding IDs after a move; ambiguous matches never merge.
+Unchanged identity preserves an ended state, and layout-only changes create no
+binding records. Close drains admitted captures. Storage failure stops the root.
+
+The Board Send RPC resolves the saved string against a complete native pane list
+on its captured source/runtime, including duplicate terminal/session refusal,
+then uses the existing recipient and fresh send checks. Neither the binding nor
+this extra read makes Herdr's final read/prompt atomic. A failed/stale/partial
+read never proves absence or allows fallback to another connection.
+
+Mandatory existing consumers remain unchanged: Board store/anchor/recipient/send
+witness tests; appearance observation/move/pruning and colour/close tests;
+terminal-settings tests; and existing browser Board/appearance projections.
+`service/binding-storage.test.ts` additionally checks actual root persistence,
+World-record/binding ID continuity, interrupted recovery and workspace-ID reuse
+inheriting layout/colour while a witnessed string is unconfirmed.
+`world/board-binding-send.test.ts` and `rpc/board-binding.test.ts` exercise the
+real storage/action consumer and actual RPC refusal before downstream input.
+These consumer mappings need independent acceptance as well as the model.
+
+## Evidence and acceptance
+
+Run the unfiltered `bun run verification:gate` plus complete mandatory consumers
+and the applicable delivery gate. A focused M4 pass is development evidence only.
+Manifests retain source/tool/input identity, per-seed replay witnesses, negative
+controls and resource accounting through the existing gate. Each model receives
+its measured shard weight; protected reports and branch rules are unchanged.
+Independent PR review and CI are required. The ID foundation's review does not
+accept the binding extension. Fields with several sources, JSON-owned ID creation,
+physical power-loss safety, arbitrary provider/OS behavior and downstream
+exactly-once execution remain outside the model and this candidate.

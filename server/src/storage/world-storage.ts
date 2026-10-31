@@ -1,5 +1,10 @@
 import { ANSWER_DELIVERY_VERB } from "../world/ask-delivery-types";
 import type { WorldIds } from "./world-ids";
+import type { BindingOperation } from "./world-bindings";
+import type {
+  LegacyBindingCapture,
+  LegacyBindingOperation,
+} from "./legacy-bindings";
 import { randomBytes } from "node:crypto";
 import {
   askClosed,
@@ -139,6 +144,15 @@ export async function openWorldLedger(
         ? Promise.reject(new StorageWriteRejected("World storage is closing"))
         : client.request<string>({ type: "issue-id", kind }),
   };
+  let bindingTail: Promise<void> = Promise.resolve();
+  let captureCount = 0,
+    captureBytes = 0;
+  const bindingRequest = <T>(operation: BindingOperation): Promise<T> =>
+    closing
+      ? Promise.reject(new StorageWriteRejected("World storage is closing"))
+      : bindingTail.then(() =>
+          client.request<T>({ type: "binding", operation }),
+        );
   const ledger: LedgerStore = {
     nextId: (kind) => ids.issue(kind),
     get: () => ({
@@ -220,6 +234,103 @@ export async function openWorldLedger(
   };
   return {
     ids,
+    bindings: {
+      settled: () => bindingTail,
+      captureLegacy(captures) {
+        if (closing)
+          return Promise.reject(
+            new StorageWriteRejected("World storage is closing"),
+          );
+        const captured = structuredClone(captures);
+        const counts = new Map<string, number>();
+        const witnesses = (capture: LegacyBindingCapture) =>
+          capture.input.evidence.terminals.map((terminal) =>
+            JSON.stringify([
+              capture.input.adapter,
+              capture.input.instance,
+              capture.input.kind,
+              capture.input.policy,
+              terminal,
+            ]),
+          );
+        for (const capture of captured)
+          for (const key of witnesses(capture))
+            counts.set(key, (counts.get(key) ?? 0) + 1);
+        for (const capture of captured)
+          capture.ambiguous = witnesses(capture).some(
+            (key) => counts.get(key)! > 1,
+          );
+        if (
+          new Set(captured.map((capture) => capture.key)).size !==
+          captured.length
+        )
+          return Promise.reject(
+            new StorageWriteRejected("Duplicate legacy binding keys"),
+          );
+        const admittedBytes = Buffer.byteLength(JSON.stringify(captured));
+        if (
+          captureCount >= STORAGE_BOUNDS.queuedOperations ||
+          captureBytes + admittedBytes > STORAGE_BOUNDS.queuedBytes
+        )
+          return Promise.reject(
+            new StorageWriteRejected(
+              "World binding capture admission limit reached",
+            ),
+          );
+        captureCount++;
+        captureBytes += admittedBytes;
+        const operation = bindingTail.then(async () => {
+          const send = (operation: LegacyBindingOperation) =>
+            client.request<void>({
+              type: "binding",
+              operation: { type: "legacy", operation },
+            });
+          // Page by bytes as well as count: a single record has at most 64 witnesses.
+          const pages: LegacyBindingCapture[][] = [];
+          let page: LegacyBindingCapture[] = [],
+            bytes = 0;
+          for (const capture of captured) {
+            const size = Buffer.byteLength(JSON.stringify(capture));
+            if (size > STORAGE_BOUNDS.requestBytes / 2)
+              throw new StorageWriteRejected(
+                "World binding capture is too large",
+              );
+            if (
+              page.length &&
+              (page.length >= 64 ||
+                bytes + size > STORAGE_BOUNDS.requestBytes / 2)
+            ) {
+              pages.push(page);
+              page = [];
+              bytes = 0;
+            }
+            page.push(capture);
+            bytes += size;
+          }
+          if (page.length) pages.push(page);
+          await send({ type: "begin" });
+          for (const page of pages)
+            await send({
+              type: "mark",
+              keys: page.map((capture) => capture.key),
+            });
+          for (const page of pages) await send({ type: "put", captures: page });
+          await send({ type: "finish" });
+        });
+        bindingTail = operation.finally(() => {
+          captureCount--;
+          captureBytes -= admittedBytes;
+        });
+        void bindingTail.catch(() => {}); // The caller observes failure; close still drains it.
+        return operation;
+      },
+      create: (input) => bindingRequest({ type: "create", input }),
+      get: (id) => bindingRequest({ type: "get", id }),
+      list: (page = {}) => bindingRequest({ type: "list", page }),
+      resolve: (id, event, current) =>
+        bindingRequest({ type: "resolve", id, event, current }),
+      remove: (id) => bindingRequest({ type: "remove", id }),
+    },
     ledger,
     incarnation,
     outbox: {
@@ -278,7 +389,9 @@ export async function openWorldLedger(
     close() {
       if (closed) return closed;
       closing = true;
-      closed = tail.then(() => client.close());
+      closed = Promise.allSettled([tail, bindingTail]).then(() =>
+        client.close(),
+      );
       return closed;
     },
   };

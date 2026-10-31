@@ -11,6 +11,7 @@ import {
 } from "../world/ask-delivery-types";
 import { randomBytes } from "node:crypto";
 import { createWorldIds } from "./world-ids";
+import { createBindingWriter } from "./world-bindings";
 import { Database } from "bun:sqlite";
 import {
   chmodSync,
@@ -97,6 +98,7 @@ export function openWorldWriter(
     throw error;
   }
   const ids = createWorldIds(db, bytes);
+  const bindings = createBindingWriter(db, ids);
   const revision = () =>
     (db.query("SELECT revision FROM ledger_meta").get() as { revision: number })
       .revision;
@@ -381,6 +383,8 @@ export function openWorldWriter(
         return read();
       case "issue-id":
         return ids.issue(request.kind);
+      case "binding":
+        return bindings.execute(request.operation, at);
       case "write":
         return apply(request.write);
       case "begin-dispatch":

@@ -1,5 +1,6 @@
 import type { BoardDocument, BoardOp, BoardStore } from "./board-store";
 import type { WorldSnapshotResult } from "./snapshot";
+import { bindingListingAbsent } from "./binding-resolution";
 const record = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
 function terminals(panes: unknown): Set<string> | null {
@@ -25,7 +26,7 @@ function absentOps(
     .filter(
       ([, entry]) =>
         entry.connection_id === connectionId &&
-        entry.witness.every((id) => !seen.has(id)),
+        bindingListingAbsent("appearance", entry.witness, seen),
     )
     .map(([key]) => key);
   return keys.length ? [{ op: "appearance.prune", keys }] : [];

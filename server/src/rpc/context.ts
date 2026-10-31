@@ -28,6 +28,8 @@ type DeskService = ReturnType<typeof createWorldDeskService>;
 
 /** What the rpc/ namespace handlers share with their World service. */
 export type RpcServices = {
+  bindings?: import("../storage/world-bindings").WorldBindings;
+  serviceIncarnation?: string;
   bindBoardRecipients(
     ops: readonly BoardOp[],
     observed: ReadonlyMap<string, ObservedAgent>,

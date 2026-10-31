@@ -13,6 +13,7 @@ import {
 import { dirname, join } from "node:path";
 import { newWorldId } from "./world-identifiers";
 import { worldIdsMigration } from "./world-ids";
+import { worldBindingsMigration } from "./world-bindings";
 import { assertSafeDataPath } from "../config/data-paths";
 
 export const WORLD_APPLICATION_ID = 0x574f524c;
@@ -58,6 +59,7 @@ export const worldMigrations = [
   migration1,
   migration2,
   worldIdsMigration,
+  worldBindingsMigration,
 ] as const;
 
 /** A consistent private rollback copy before any noninitial migration. */

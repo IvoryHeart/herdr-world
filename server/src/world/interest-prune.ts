@@ -1,4 +1,5 @@
 import { interestKeyPrefix } from "../../../shared/interest";
+import { bindingListingAbsent } from "./binding-resolution";
 import { serverLogger } from "../utils/logger";
 import type { BoardDocument, BoardOp, BoardStore } from "./board-store";
 
@@ -69,6 +70,7 @@ export async function pruneGoneInterest(
         const terminal = (pane as { terminal_id?: unknown } | null)
           ?.terminal_id;
         if (typeof terminal !== "string" || !terminal) return;
+        if (terminals.has(terminal)) return;
         terminals.add(terminal);
       }
       const ops = goneInterestOps(observed, connectionId, terminals);
@@ -100,7 +102,8 @@ export function goneInterestOps(
   return Object.keys(document.layout.interest)
     .filter(
       (key) =>
-        key.startsWith(prefix) && !terminals.has(key.slice(prefix.length)),
+        key.startsWith(prefix) &&
+        bindingListingAbsent("interest", [key.slice(prefix.length)], terminals),
     )
     .map((key) => ({ op: "interest.set", key, interest: null }));
 }

@@ -138,7 +138,9 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
   }
   if (method === "world.board.get") {
     try {
-      sendReply({ id, result: board().get() }, "world-board-get");
+      const document = board().get();
+      await rpc.services.bindings?.settled();
+      sendReply({ id, result: document }, "world-board-get");
     } catch (error) {
       sendError("world-board-get-error", error);
     }
@@ -166,6 +168,7 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
           board().get(),
         );
       publishBoardChanged(result.revision);
+      await rpc.services.bindings?.settled();
       sendReply({ id, result: { document: result } }, "world-board-patch");
       void bindBoardRecipients(ops, observed).catch((error) =>
         logger.warn("Board could not record a string's agent", {

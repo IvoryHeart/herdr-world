@@ -774,6 +774,8 @@ async function compose(
   const handleWorldSources = createSourcesHttpHandler(worldSources);
 
   const rpcServices: RpcServices = {
+    bindings: storage.bindings,
+    serviceIncarnation,
     bindBoardRecipients,
     board,
     clients,

@@ -12,6 +12,13 @@ visible only after their shared reservation commits. Existing SQLite/imported
 ledger IDs stay unchanged; reservations outlive record and replay trimming.
 See [World identity storage](world-identity.md) for allocation, restoration and
 the boundary with legacy JSON families and the pending binding/claims work.
+`WorldStorage.bindings` persists per-kind source evidence independently of runtime
+fences. Its resolver admits only complete current unambiguous matches; Board
+strings retain their World-move/qualified-absence policy, while appearance and
+interest retain complete-list terminal absence. Legacy Board captures drain
+through the same worker; interrupted imports cannot authorize targets. The Board
+Send RPC resolves its saved string before its existing recipient checks. Layout
+preferences never enter the binding store and retain native-ID reuse behavior.
 
 Runtime adapter registration and its data-only hello descriptors live in the
 [adapter registry](../server/src/adapters/registry.ts). Herdr remains the sole
