@@ -1,3 +1,4 @@
+import { TownSceneDiff } from "./scene/townSceneDiff";
 import {
   projectWorldOffice,
   TOWN_PRESENTATION_BOUNDS,
@@ -72,7 +73,7 @@ export async function checkTownIdleDraws(
       openHostKey: null,
       calm: false,
     };
-    renderer.setScene(model, layout, state);
+    renderer.apply(new TownSceneDiff().next(model, layout, state));
     renderer.setViewport({
       width: innerWidth,
       height: innerHeight,

@@ -33,6 +33,7 @@ import {
   type TownShape,
 } from "./townLayout";
 import { TownScene } from "./scene/townScene";
+import { TownSceneDiff } from "./scene/townSceneDiff";
 import { TownSceneCamera, townViewport } from "./scene/townSceneCamera";
 import { TownInteraction } from "./scene/townInteraction";
 import { townBrowserClock, townBrowserFrames } from "./townBrowserClock";
@@ -221,6 +222,8 @@ export function TownCanvas({
   );
   // The scene model derives what the town is; a held reflow wakes it again.
   const [, wakeReflow] = useState(0);
+  // What the renderer has applied, and so what it must apply next.
+  const [diff] = useState(() => new TownSceneDiff());
   const [scene] = useState(
     () => new TownScene(townBrowserClock, () => wakeReflow((n) => n + 1)),
   );
@@ -506,7 +509,9 @@ export function TownCanvas({
         rendererRef.current = renderer;
         renderer.setViewport(viewport());
         const { model: m, layout: l } = latest.current;
-        renderer.setScene(m, l, sceneState());
+        // A new renderer has applied nothing: its first frame places all.
+        diff.reset();
+        renderer.apply(diff.next(m, l, sceneState()));
         view.attach(camera, l, viewport());
         renderer.invalidate("ready");
         setReady(true);
@@ -546,15 +551,15 @@ export function TownCanvas({
       rendererRef.current?.destroy();
       rendererRef.current = null;
     };
-  }, [view]);
+  }, [view, diff]);
 
   useEffect(() => {
     const renderer = rendererRef.current;
     if (!renderer) return;
-    renderer.setScene(model, layout, sceneState());
+    renderer.apply(diff.next(model, layout, sceneState()));
     view.follow(layout, viewport());
     scheduleAnchors();
-  }, [view, model, layout]);
+  }, [view, diff, model, layout]);
   // Presses, scrolls and zooms on the town hold back a reflow (see above).
   useEffect(() => {
     const host = hostRef.current;
@@ -575,9 +580,18 @@ export function TownCanvas({
   }, [scene]);
 
   useEffect(() => {
-    rendererRef.current?.setState(sceneState());
+    const { model: m, layout: l } = latest.current;
+    rendererRef.current?.apply(diff.next(m, l, sceneState()));
     scheduleAnchors();
-  }, [selectedKey, hover, completionSeenKeys, summonedKeys, askingKeys, calm]);
+  }, [
+    diff,
+    selectedKey,
+    hover,
+    completionSeenKeys,
+    summonedKeys,
+    askingKeys,
+    calm,
+  ]);
 
   // Re-report after any render, so anchors World cleared come back. World
   // keeps unchanged anchors, so a report alone never renders again.
