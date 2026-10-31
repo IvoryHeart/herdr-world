@@ -88,3 +88,76 @@ test("real conversation replies preserve status/session provenance through a mis
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("a positively named Codex thread replaces transcript claims even before its new transcript exists", async () => {
+  const root = await mkdtemp(join(tmpdir(), "codex-claim-switch-"));
+  const first = "019a0000-0000-7000-8000-000000000001";
+  const second = "019a0000-0000-7000-8000-000000000002";
+  const path = join(root, `rollout-${first}.jsonl`);
+  let thread = first;
+  const files = {
+    ...localAgentSessionFiles,
+    findCodexSessionById: async (id: string) =>
+      id === first ? localAgentSessionFiles.statFile(path) : null,
+    findCodexSessionByPrefix: async (id: string) =>
+      first.startsWith(id) ? localAgentSessionFiles.statFile(path) : null,
+  };
+  const source = createHerdrConversationSource({
+    herdrCall: async () => ({
+      agent: {
+        pane_id: "pane-a",
+        terminal_id: "terminal-a",
+        agent: "codex",
+        terminal_title: `Synthetic ${thread}`,
+      },
+    }),
+    files,
+    context: createAgentSessionResolverContext(),
+    cache: createSessionProjectionCache(files),
+  });
+  try {
+    await writeFile(
+      path,
+      [
+        {
+          type: "session_meta",
+          payload: { id: first, cwd: "/synthetic/widgets" },
+        },
+        {
+          type: "response_item",
+          timestamp: "2026-01-01T00:00:00Z",
+          payload: {
+            type: "function_call",
+            call_id: "synthetic-call",
+            name: "synthetic-tool",
+            arguments: "{}",
+          },
+        },
+      ]
+        .map((record) => JSON.stringify(record))
+        .join("\n") + "\n",
+    );
+    const old = await source.read({ pane_id: "pane-a" });
+    expect(
+      old.field_claims!.agent_status.claims.map((claim) => claim.value),
+    ).toEqual(["working"]);
+    expect(
+      old.field_claims!.session.claims.some(
+        (claim) => claim.source === "world.transcript",
+      ),
+    ).toBe(true);
+    thread = second;
+    const current = await source.read({ pane_id: "pane-a" });
+    expect(current.session_label).toContain(second);
+    expect(current.field_claims!.agent_status.claims).toEqual([]);
+    expect(
+      current.field_claims!.session.claims.map((claim) => [
+        claim.source,
+        claim.value.value,
+      ]),
+    ).toEqual([["herdr.title", second]]);
+  } finally {
+    source.dispose();
+    await rm(root, { recursive: true, force: true });
+  }
+});

@@ -196,6 +196,43 @@ loader/parser/cleanup failures are excluded. Claims live only in runtime memory;
 the evidence does not establish provider truth, arbitrary native event order,
 physical durability, or an atomic downstream read-and-send.
 
+### Claim replacement and complete-list boundaries
+
+A positively resolved Codex title thread is an occupant witness: replacing it
+retires the old transcript's status/session claims even before the new transcript
+exists. Missing title/session evidence alone is silence. A session fallback
+requires the same connection, runtime and known terminal. Checkout observations
+are cached by connection, generation, host and path, and an in-flight read keeps
+its captured key. The source service reconciles current connection/generation
+owners before publishing and in its current read, independently of link cadence,
+lookup success or topology completeness. Same-runtime offline/partial reads keep
+claims; a retired or removed runtime does not.
+
+`conversation-claims.test.ts` exercises the actual title A → B transition with
+only A's transcript present; `agent-claims.test.ts` also keeps inference through
+missing title evidence. `sources/link-claims-boundaries.test.ts` covers terminal
+and generation replacement, same-path generation/host cache replacement,
+stale/missing/partial replacement topology, removed connections, immediate actual
+service owner retirement, and failed-catalogue versus complete-empty semantics.
+
+A connected GitHub source supplies positive observations, not an automatic
+completeness proof. `pullRequestsComplete` is true only when all three open-PR
+searches explicitly have no next page, all merged page row sets are known, and
+the merged search also reaches its last page. The 1,000-result search cap,
+unknown page info and any omitted row set cannot prove absence. The linker admits
+positive matches from partial data while retaining earlier claims on omission.
+`github-completeness.test.ts` exhausts 81 four-search page-info combinations and
+checks missing row sets and the actual merged-page cap. The actual source-service
+regression advances through two successful truncated 50-item responses, retaining
+the omitted branch claim, then a complete result that authorizes its removal.
+
+Seven additional compiled controls replace the actual title owner with the
+reviewed version, borrow a predecessor's session, drop cache generation scope,
+skip runtime retirement, read only cached owners, treat connection health as
+completeness, or bypass completeness proof. Each must fail an expectation in its
+named boundary test; TypeErrors and loader/parser errors do not count. These
+checks supplement the unchanged M4 domain with direct source/owner evidence.
+
 ## Evidence and acceptance
 
 Run the unfiltered `bun run verification:gate` plus complete mandatory consumers

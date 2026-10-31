@@ -80,11 +80,13 @@ test("actual linker retains both reported and inferred PR claims while keeping i
     connections = topology(),
     items = [item(1), item(2)],
     completeItems = true,
+    catalogueComplete = true,
   ) =>
     linkWorkItems(connections, items, resolver, {
       claims,
       observedAt: now,
       completeItems,
+      catalogueComplete,
     });
   const links = await observe();
   expect(links.map((link) => [link.itemKey, link.via])).toEqual([
@@ -117,7 +119,7 @@ test("actual linker retains both reported and inferred PR claims while keeping i
   expect(
     claims.values()[0]!.pr_links.claims.map((claim) => claim.value),
   ).toEqual([item(2).url]);
-  await observe([], [], false); // A failed topology read and another source's silence remove nothing.
+  await observe([], [], false, false); // A failed topology read and another source's silence remove nothing.
   expect(
     claims.values()[0]!.pr_links.claims.map((claim) => claim.value),
   ).toEqual([item(2).url]);

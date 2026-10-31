@@ -20,12 +20,18 @@ export class LinkClaims {
   ) {
     const key = this.#key(subject),
       previous = this.#entries.get(key);
-    // Missing native session evidence is silence, not evidence of a new occupant.
+    const sameRuntimeTerminal =
+      previous &&
+      subject.terminalId !== null &&
+      previous.subject.connectionId === subject.connectionId &&
+      previous.subject.generation === subject.generation &&
+      previous.subject.terminalId === subject.terminalId;
+    // Missing evidence retains a witness only within the same runtime and terminal.
     subject = {
       ...subject,
       sessionFingerprint:
         subject.sessionFingerprint ??
-        previous?.subject.sessionFingerprint ??
+        (sameRuntimeTerminal ? previous.subject.sessionFingerprint : null) ??
         null,
     };
     const entry =
@@ -39,6 +45,16 @@ export class LinkClaims {
     if (branch !== undefined)
       entry.claims.observe("world.checkout", branch ?? undefined, true);
     this.#entries.set(key, entry);
+  }
+  reconcileRuntimes(
+    owners: readonly { connection_id: string; generation: number }[],
+  ) {
+    const current = new Map(
+      owners.map((owner) => [owner.connection_id, owner.generation]),
+    );
+    for (const [key, entry] of this.#entries)
+      if (current.get(entry.subject.connectionId) !== entry.subject.generation)
+        this.#entries.delete(key);
   }
   completePanes(
     connectionId: string,

@@ -2271,7 +2271,7 @@
       "area": "Durable identity and bindings",
       "owner": "server/src/world/binding-resolution.ts",
       "requirement": "openspec/specs/world-identity/spec.md",
-      "properties": "Store-issued random kind-prefixed IDs commit before acknowledgement; collisions across registered SQLite families retry; imports preserve IDs; reservations survive retention and restart; stopped backups use fresh entropy; per-kind verified continuity/absence, ambiguity refusal, unresolved preservation, fences separate from identity and attached-only action admission; independent per-field channel ownership, source-owned complete removal, provenance, explicit display/verb authority, native IDs as occupant claims and stale-read refusal",
+      "properties": "Store-issued random kind-prefixed IDs commit before acknowledgement; collisions across registered SQLite families retry; imports preserve IDs; reservations survive retention and restart; stopped backups use fresh entropy; per-kind verified continuity/absence, ambiguity refusal, unresolved preservation, fences separate from identity and attached-only action admission; independent per-field channel ownership, source-owned complete removal, provenance, explicit display/verb authority, native IDs as occupant claims and stale-read refusal; title-witness replacement, runtime/terminal-local silence, runtime/host-scoped checkout evidence, independent runtime retirement and explicit PR-search completeness",
       "existingTests": [
         "server/src/storage/world-ids.test.ts",
         "server/src/storage/world-identifiers.test.ts",
@@ -2310,7 +2310,9 @@
         "server/src/sources/links.test.ts",
         "server/src/sources/service.test.ts",
         "server/src/sources/actions.test.ts",
-        "server/src/sources/pullRequestFreshness.test.ts"
+        "server/src/sources/pullRequestFreshness.test.ts",
+        "server/src/sources/link-claims-boundaries.test.ts",
+        "server/src/sources/github-completeness.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/549",
       "technique": "binding-resolution",
@@ -2359,7 +2361,9 @@
           "server/src/sources/links.test.ts",
           "server/src/sources/service.test.ts",
           "server/src/sources/actions.test.ts",
-          "server/src/sources/pullRequestFreshness.test.ts"
+          "server/src/sources/pullRequestFreshness.test.ts",
+          "server/src/sources/link-claims-boundaries.test.ts",
+          "server/src/sources/github-completeness.test.ts"
         ],
         "checks": [
           "bun run verification:gate",
@@ -2367,7 +2371,7 @@
         ],
         "review": "The approved design and earlier ID candidate do not accept this binding extension; independent implementation review and CI remain required."
       },
-      "evidenceDecision": "M4 models semantic continuity, absence, ambiguity and recovery; actual SQLite/import/worker and Board action consumers establish their additional boundaries. Existing Board and appearance witness tests remain unchanged and mandatory. Claims use an independent finite source-ownership oracle, eight overlapping read schedules and actual transcript/source-service consumers, with seven compiled controls; M4 remains scoped to bindings.",
+      "evidenceDecision": "M4 models semantic continuity, absence, ambiguity and recovery; actual SQLite/import/worker and Board action consumers establish their additional boundaries. Existing Board and appearance witness tests remain unchanged and mandatory. Claims use an independent finite source-ownership oracle, eight overlapping read schedules and actual transcript/source-service consumers, with seven compiled controls; M4 remains scoped to bindings. Claim boundary regressions cover actual Codex title changes, current owner disposal, same-path cache replacement and truncated GitHub pages; an 81-case page-info oracle and seven additional compiled assertion controls establish these consumer boundaries.",
       "promotion": {
         "decision": "pending",
         "scope": "IDs and binding resolution, including legacy captures and Board action admission, plus runtime status/session/PR claims; independent review and CI required. Remaining JSON ID creation is excluded."

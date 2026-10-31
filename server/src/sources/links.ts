@@ -67,34 +67,54 @@ export class CheckoutResolver {
     private readonly now: () => number = Date.now,
   ) {}
 
-  observation(connectionId: string, path: string) {
-    const entry = this.#cache.get(`${connectionId}\0${path}`);
-    return entry && this.now() - entry.at < CHECKOUT_TTL_MS
-      ? structuredClone(entry)
-      : undefined;
+  #key(
+    connectionId: string,
+    path: string,
+    generation: number,
+    host: CheckoutHost | null,
+  ) {
+    return JSON.stringify([connectionId, generation, host, path]);
   }
-
-  cached(connectionId: string, path: string): Checkout | null | undefined {
-    const entry = this.#cache.get(`${connectionId}\0${path}`);
-    return entry && this.now() - entry.at < CHECKOUT_TTL_MS
-      ? entry.checkout
-      : undefined;
+  #current(key: string) {
+    const entry = this.#cache.get(key);
+    return entry && this.now() - entry.at < CHECKOUT_TTL_MS ? entry : undefined;
   }
-
-  async resolve(connectionId: string, path: string): Promise<Checkout | null> {
-    const known = this.cached(connectionId, path);
-    if (known !== undefined) return known;
-    const checkout = await this.#read(connectionId, path).catch(() => null);
-    this.#cache.set(`${connectionId}\0${path}`, { at: this.now(), checkout });
+  observation(connectionId: string, path: string, generation = 0) {
+    const entry = this.#current(
+      this.#key(connectionId, path, generation, this.hostOf(connectionId)),
+    );
+    return entry ? structuredClone(entry) : undefined;
+  }
+  cached(
+    connectionId: string,
+    path: string,
+    generation = 0,
+  ): Checkout | null | undefined {
+    return this.#current(
+      this.#key(connectionId, path, generation, this.hostOf(connectionId)),
+    )?.checkout;
+  }
+  async resolve(
+    connectionId: string,
+    path: string,
+    generation = 0,
+  ): Promise<Checkout | null> {
+    const host = this.hostOf(connectionId);
+    const key = this.#key(connectionId, path, generation, host);
+    const known = this.#current(key);
+    if (known) return known.checkout;
+    const checkout = await this.#read(host, path).catch(() => null);
+    this.#cache.set(key, { at: this.now(), checkout });
     if (this.#cache.size > MAX_LOOKUPS * 8) {
       const oldest = this.#cache.keys().next().value;
       if (oldest !== undefined) this.#cache.delete(oldest);
     }
     return checkout;
   }
-
-  async #read(connectionId: string, path: string): Promise<Checkout | null> {
-    const host = this.hostOf(connectionId);
+  async #read(
+    host: CheckoutHost | null,
+    path: string,
+  ): Promise<Checkout | null> {
     if (!host) return null;
     const quoted = shQuote(path);
     const command = `GIT_TERMINAL_PROMPT=0 git -C ${quoted} symbolic-ref --quiet --short HEAD && GIT_TERMINAL_PROMPT=0 git -C ${quoted} remote -v`;
@@ -183,15 +203,26 @@ export async function linkWorkItems(
   connections: TopologyConnection[],
   items: readonly WorkItem[],
   resolver: CheckoutResolver,
-  evidence?: { claims: LinkClaims; observedAt: number; completeItems: boolean },
+  evidence?: {
+    claims: LinkClaims;
+    observedAt: number;
+    completeItems: boolean;
+    catalogueComplete?: boolean;
+  },
 ): Promise<WorkLink[]> {
+  if (evidence && evidence.catalogueComplete !== false)
+    evidence.claims.reconcileRuntimes(connections);
   const candidates = linkCandidates(connections);
   const pending = [
     ...new Map(
       candidates
         .filter((candidate) => candidate.path && items.length > 0)
         .map((candidate) => [
-          `${candidate.connectionId}\0${candidate.path}`,
+          JSON.stringify([
+            candidate.connectionId,
+            candidate.generation,
+            candidate.path,
+          ]),
           candidate,
         ]),
     ).values(),
@@ -201,7 +232,9 @@ export async function linkWorkItems(
     await Promise.all(
       pending
         .slice(index, index + CONCURRENCY)
-        .map(({ connectionId, path }) => resolver.resolve(connectionId, path!)),
+        .map(({ connectionId, path, generation }) =>
+          resolver.resolve(connectionId, path!, generation),
+        ),
     );
   const pullRequests = items.filter((item) => item.kind === "pull_request");
   const byUrl = new Map(pullRequests.map((item) => [item.url, item]));
@@ -261,12 +294,14 @@ export async function linkWorkItems(
       ? byUrl.get(normalizedPrUrl(candidate.reportedPr))
       : undefined;
     if (reported) add(candidate, reported, "reported");
-    const checkout = candidate.path
-      ? resolver.cached(candidate.connectionId, candidate.path)
-      : null;
     const observation = candidate.path
-      ? resolver.observation(candidate.connectionId, candidate.path)
+      ? resolver.observation(
+          candidate.connectionId,
+          candidate.path,
+          candidate.generation,
+        )
       : undefined;
+    const checkout = observation?.checkout;
     const reportedClaim = candidate.reportedPr
       ? {
           value: normalizedPrUrl(candidate.reportedPr),
@@ -313,16 +348,16 @@ export async function linkWorkItems(
       evidence!.claims.observe(
         subject,
         reportedClaim,
-        evidence!.completeItems
-          ? matches[0]
-            ? {
-                value: matches[0].url,
-                source: "world.checkout",
-                observed_at: observation!.at,
-                basis: "inferred",
-              }
-            : null
-          : undefined,
+        matches[0]
+          ? {
+              value: matches[0].url,
+              source: "world.checkout",
+              observed_at: observation!.at,
+              basis: "inferred",
+            }
+          : evidence!.completeItems
+            ? null
+            : undefined,
       );
     if (matches[0] && !reported) add(candidate, matches[0], "branch");
     for (const [, key] of checkout.branch.toUpperCase().matchAll(TICKET_KEY)) {

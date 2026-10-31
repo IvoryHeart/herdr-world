@@ -119,3 +119,34 @@ test("runtime disposal, complete agent absence and native occupant replacement r
       .claims,
   ).toHaveLength(1);
 });
+
+test("missing title evidence preserves transcript claims until another thread is positively named", () => {
+  const claims = new AgentClaims(() => 100);
+  const capture = claims.observe(claims.begin("pane-a"), {
+    ...pane,
+    agent_session: null,
+  });
+  claims.title(capture, "thread-a");
+  claims.transcript(capture, transcript);
+  const silent = claims.observe(claims.begin("pane-a"), {
+    ...pane,
+    agent_session: null,
+  });
+  const retained = claims.title(silent, null);
+  expect(
+    retained.agent_status.claims.some(
+      (claim) => claim.source === "world.transcript",
+    ),
+  ).toBe(true);
+  const next = claims.observe(claims.begin("pane-a"), {
+    ...pane,
+    agent_session: null,
+  });
+  const replaced = claims.title(next, "thread-b");
+  expect(replaced.agent_status.claims.map((claim) => claim.source)).toEqual([
+    "herdr.agent",
+  ]);
+  expect(replaced.session.claims.map((claim) => claim.value.value)).toEqual([
+    "thread-b",
+  ]);
+});

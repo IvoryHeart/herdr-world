@@ -41,6 +41,7 @@ function revision(info: Record<string, unknown> | null) {
 type State = {
   subject: string;
   witness: string | null;
+  titleWitness: string | null;
   status: FieldClaims<string>;
   session: FieldClaims<NativeSessionClaim>;
 };
@@ -50,6 +51,7 @@ function copyState(previous: State): State {
   const state: State = {
     subject: previous.subject,
     witness: previous.witness,
+    titleWitness: previous.titleWitness,
     status: new FieldClaims(),
     session: new FieldClaims(),
   };
@@ -90,6 +92,7 @@ export class AgentClaims {
         : {
             subject,
             witness,
+            titleWitness: null,
             status: new FieldClaims(),
             session: new FieldClaims(),
           };
@@ -145,6 +148,11 @@ export class AgentClaims {
   }
   title(capture: Capture, id: string | null): AgentFieldClaims {
     capture.state = copyState(capture.state);
+    if (id && capture.state.titleWitness && capture.state.titleWitness !== id) {
+      capture.state.status.retract("world.transcript");
+      capture.state.session.retract("world.transcript");
+    }
+    if (id) capture.state.titleWitness = id;
     capture.state.session.observe(
       "herdr.title",
       id

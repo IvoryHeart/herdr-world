@@ -22,7 +22,10 @@ preferences never enter the binding store and retain native-ID reuse behavior.
 Conversation and source-service read models carry per-field status, session and PR
 link claims with provenance and explicit display rules. Channels remove only their
 own complete/retracted claims; runtime occupant replacement retires its read model.
-Claims remain in memory. Saved/inferred claims never replace fresh native session
+Claims remain in memory. Current connection/generation owners retire link claims
+independently of topology health; checkout evidence is runtime/host scoped and
+GitHub search completeness is explicit before omissions can remove a link claim.
+Saved/inferred claims never replace fresh native session
 qualification or GitHub's own action authority. Existing visible projections stay
 unchanged; see [runtime field claims](world-identity.md#runtime-field-claims).
 

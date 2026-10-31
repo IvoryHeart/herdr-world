@@ -107,20 +107,35 @@ An open transcript tool or latest user message infers working; a latest assistan
 message with no open tool infers idle. No supported evidence means no inferred
 status. The transcript revision records the file observation used. PR branch
 claims keep the checkout read's actual time, including when the resolver reuses
-its cache. An agent-reported PR retains the session fingerprint as its author and
+its cache. Checkout observations are scoped by connection, generation, host and
+path; a replacement never receives the prior runtime's cached evidence. An
+agent-reported PR retains the session fingerprint as its author and
 Herdr's state-change sequence when supplied. A reported URL need not appear in
 GitHub's fetched items to remain a claim.
 
 A channel replaces or retracts only its own claim. Omission of a reported
-session does not prove a new occupant or erase transcript/branch evidence. A successful complete read can
+session does not prove a new occupant or erase transcript/branch evidence. A
+successful complete read can
 remove that channel's omitted field; a failed read, a partial listing, another
 channel's silence, or ambiguous native identity cannot remove it. For example,
 a missing transcript retains prior inference, and a failed git lookup retains
 its prior branch claim while a complete metadata observation can independently
 remove the agent report. Complete native occupant absence, terminal/session
-replacement, and runtime disposal retire that occupant's read model. Older
+replacement, and runtime disposal retire that occupant's read model. A positively
+resolved Codex title thread retires the preceding thread's transcript claims even
+when its own transcript has not appeared; a missing title alone does not. A
+missing session witness can carry forward only on the same runtime and terminal.
+The source service reads live connection/generation owners separately from
+topology, so replacement/removal retires old link claims even while the replacement
+is offline, partially listed or still returning a stale snapshot. Older
 conversation reads cannot publish over a newer read, and retired source-service
 refreshes cannot publish their claim updates.
+
+GitHub connection health is separate from PR catalogue completeness. Every open-PR
+search must explicitly reach its last page, and every merged-page result must be
+known and reach its last page, before a missing branch match can remove an earlier
+claim. A successful bounded or unknown-completeness result can add a positive link
+but cannot prove absence. The existing list display stays bounded.
 
 These claims live in memory. They do not write `world.sqlite` or persist marks,
 watches or seen state. Existing `agent_status`, conversation binding/fingerprint,
