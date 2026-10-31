@@ -1,6 +1,7 @@
 import {
   emptyStatusCounts,
   type WorldLeafObject,
+  type WorldHostObject,
   type WorldObject,
   type WorldObjectNode,
   type WorldSpaceObject,
@@ -127,6 +128,11 @@ const watchedRooms = new WeakMap<
   Map<string, WorldSpaceObject>
 >();
 
+// Preparation and rendering share the same projected host when its source and
+// ordered consumed rooms are unchanged. The source key includes current owner
+// metadata; changing health/generation cannot reuse a prior host presentation.
+const watchedHosts = new WeakMap<WorldHostObject, WorldHostObject>();
+
 /** Keeps ancestry for a browser-local watched-only presentation. */
 export function worldObjectForWatches(
   world: WorldObject,
@@ -179,6 +185,12 @@ export function worldObjectForWatches(
       return [room];
     });
     if (!spaces.length) return [];
+    const cached = watchedHosts.get(host);
+    if (
+      cached?.spaces.length === spaces.length &&
+      spaces.every((space, i) => space === cached.spaces[i])
+    )
+      return [cached];
     const coverage = {
       spaces: spaces.length,
       tabs: 0,
@@ -195,7 +207,9 @@ export function worldObjectForWatches(
       ) as (keyof typeof coverage.status)[])
         coverage.status[key] += space.coverage.status[key];
     }
-    return [{ ...host, spaces, coverage }];
+    const watchedHost = { ...host, spaces, coverage };
+    watchedHosts.set(host, watchedHost);
+    return [watchedHost];
   });
   const spaces = hosts.flatMap((host) => host.spaces);
   const leaves = spaces.flatMap((space) => space.children);

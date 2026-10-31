@@ -525,7 +525,9 @@ Board reuses [room topology](board/boardRoom.ts). Mounted Town and Board consume
 hold preparation interest; absent views do no topology preparation.
 [useWorldObservation.ts](useWorldObservation.ts) registers the same Hosts/watch/appearance
 projection used for presentation, so hidden hosts, rooms and unwatched panes do no
-view-room preparation. Aggregate World data remains available to shell and Inspector
+view-room preparation. Watched-only host identity is shared by preparation and
+rendering when the source host and consumed rooms are unchanged. Aggregate World
+data remains available to shell and Inspector
 consumers. A scope change during cooperative preparation is revalidated before
 publication. On a switch,
 missing view models finish before presentation. This does not retire the shared

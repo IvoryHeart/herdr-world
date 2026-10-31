@@ -68,7 +68,9 @@ P6 uses the test clock and production work counters. One status change prepares
 one room and dependent aggregates, preserving every other room presentation; a
 Town-only refresh prepares no Board topology. Hosts and watched-only projection
 regressions cover hidden hosts, hidden rooms and unwatched panes in a shown room:
-aggregate World data updates while both view-room work counters stay zero. The
+aggregate World data updates while both view-room work counters stay zero. A
+hidden-host change also retains the watched visible host and performs zero Board
+host preparation across cooperative preparation and rendering. The
 runtime uses the same presentation projection and revalidates scope across yields.
 Explicit base/parameter refusals are separate from transient database/storage/read
 errors; those errors must preserve negotiated bases for the next read.

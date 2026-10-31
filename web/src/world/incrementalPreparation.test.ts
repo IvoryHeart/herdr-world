@@ -293,7 +293,12 @@ test("seeded observation, appearance, watch and seen sequences equal complete pr
 });
 
 for (const view of ["town", "board"] as const) {
-  for (const scope of ["hosts", "watches", "unwatched pane"] as const) {
+  for (const scope of [
+    "hosts",
+    "watched host",
+    "watches",
+    "unwatched pane",
+  ] as const) {
     test(`${view}: changes outside the consumed ${scope} projection prepare no view room`, async () => {
       const f = observationFixture(2);
       if (scope === "unwatched pane") {
@@ -339,8 +344,10 @@ for (const view of ["town", "board"] as const) {
             : projectBoard(shown());
         const before = project();
         // Hosts hides beta entirely; watched-only hides alpha's second room.
-        const host = f.raw.connections[scope === "hosts" ? 1 : 0]!;
-        const changedPane = scope === "hosts" ? 0 : scope === "watches" ? 1 : 2;
+        const hiddenHost = scope === "hosts" || scope === "watched host";
+        const hostIndex = hiddenHost ? 1 : 0;
+        const host = f.raw.connections[hostIndex]!;
+        const changedPane = hiddenHost ? 0 : scope === "watches" ? 1 : 2;
         host.snapshot!.panes[changedPane]!.agent_status = "blocked";
         let after!: ReturnType<typeof project>;
         const work = await countedWorldWork(async () => {
@@ -351,15 +358,18 @@ for (const view of ["town", "board"] as const) {
         expect(work["office.room-prepare"] ?? 0).toBe(0);
         expect(work["office.room-project"] ?? 0).toBe(0);
         expect(work["board.room-project"] ?? 0).toBe(0);
-        if (scope === "hosts") expect(work["board.host-project"] ?? 0).toBe(0);
+        if (hiddenHost) {
+          expect(work["board.host-project"] ?? 0).toBe(0);
+          if ("workspaces" in before && "workspaces" in after)
+            expect(after.hosts[0]).toBe(before.hosts[0]);
+        }
         if ("rooms" in before && "rooms" in after)
           expect(after.rooms[0]).toBe(before.rooms[0]);
         if ("workspaces" in before && "workspaces" in after)
           expect(after.workspaces[0]).toBe(before.workspaces[0]);
         expect(
-          f.store.get().connections[scope === "hosts" ? 1 : 0]!.snapshot!.panes[
-            changedPane
-          ]!.agent_status,
+          f.store.get().connections[hostIndex]!.snapshot!.panes[changedPane]!
+            .agent_status,
         ).toBe("blocked");
         // Expanding scope must expose current content, including the hidden change.
         releaseProjection();
@@ -377,3 +387,48 @@ for (const view of ["town", "board"] as const) {
     });
   }
 }
+
+test("watched host reuse follows consumed rooms and current runtime metadata", async () => {
+  const f = observationFixture(2);
+  await f.store.refresh();
+  let watches = [
+    { connectionId: "alpha", generation: 1, terminalId: "term-0" },
+  ];
+  const shown = () =>
+    worldObjectForWatches(
+      worldObjectWithWatches(
+        worldObjectForHosts(buildWorldObject(f.store.get().connections), [
+          "alpha",
+        ]),
+        watches,
+      ),
+      watches,
+    );
+  const first = shown().hosts[0]!;
+  expect(shown().hosts[0]).toBe(first);
+  watches = [
+    ...watches,
+    { connectionId: "beta", generation: 1, terminalId: "term-0" },
+  ];
+  expect(shown().hosts[0]).toBe(first);
+  watches = [{ connectionId: "alpha", generation: 1, terminalId: "term-1" }];
+  const second = shown().hosts[0]!;
+  expect(second).not.toBe(first);
+  expect(second.spaces[0]!.children[0]!.terminalId).toBe("term-1");
+  expect(shown().hosts[0]).toBe(second);
+  f.raw.connections[0]!.generation = 2;
+  f.raw.connections[0]!.snapshot_generation = 2;
+  await f.store.refresh();
+  expect(shown().hosts).toHaveLength(0);
+  watches = [{ connectionId: "alpha", generation: 2, terminalId: "term-1" }];
+  const current = shown().hosts[0]!;
+  expect(current).not.toBe(second);
+  expect(current.generation).toBe(2);
+  f.raw.connections[0]!.stale = true;
+  f.raw.connections[0]!.actionable = false;
+  await f.store.refresh();
+  const retired = shown().hosts[0]!;
+  expect(retired).not.toBe(current);
+  expect(retired.actionable).toBe(false);
+  expect(retired.stale).toBe(true);
+});
