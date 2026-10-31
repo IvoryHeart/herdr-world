@@ -14,7 +14,7 @@ import {
 import { TownBoard } from "./TownBoard";
 import { TownTeamsLayer, TownWorldLayer } from "./TownWorldLayer";
 import { TownBuildingSigns } from "./townBuildingSigns";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { TownMoveResult } from "./townMoves";
 import {
   TOWN_MAGNET_MS,
@@ -51,7 +51,6 @@ import type { OfficeObservability } from "../officeObservability";
 import { townRoomFocus, type TownLevel } from "./townCamera";
 import { townHitKey, townHitTest, type TownHit } from "./townHitTest";
 import {
-  layoutTown,
   TOWN_FACADE,
   TOWN_TILE as T,
   townGeometryKey,
@@ -59,22 +58,11 @@ import {
   townSeat,
   townShapeFor,
   townShapeKey,
-  townPinCell,
   type TownLayout,
-  type TownPlacementMemory,
   type TownShape,
 } from "./townLayout";
-import {
-  keepPlaceColors,
-  NO_PLACE_COLORS,
-  townDeskColors,
-  townDeskPins,
-  townModelFromProjection,
-  townPlaceColors,
-  type TownPlaceColors,
-  townPinnedCells,
-  type TownDeskPin,
-} from "./townModel";
+import { TownScene } from "./scene/townScene";
+import { townBrowserClock } from "./townBrowserClock";
 import type { TownSummary } from "./townSummary";
 import {
   createTownRenderer,
@@ -86,17 +74,11 @@ import {
   holdPixiSystemTicker,
 } from "./pixiSystemTicker";
 import type { TownTarget } from "./townTargets";
-import type { TerminalColor, TerminalColors } from "../terminalColor";
-import { townTeams } from "./townTeams";
+import type { TerminalColors } from "../terminalColor";
 import type { Relation } from "../../../../shared/relations";
 import type { TerminalPlace } from "../relations";
 import { placeDeskPin, type DeskPins } from "../useDeskPins";
 import { useWorldSources } from "../worldSources";
-import {
-  sameTownBadges,
-  townDeskBadges,
-  type TownDeskBadge,
-} from "./townBadges";
 import {
   NO_FOLDED_ACTIVITY,
   type TownFoldedActivity,
@@ -162,12 +144,6 @@ export type TownRoomActions = {
 
 /** Camera kept across Office visits within one page session. */
 const savedCameras = new Map<string, { x: number; y: number; z: number }>();
-
-/**
- * A reflow that moves rooms or buildings waits this long after the user's last
- * press, scroll or zoom, so the town does not shift under a hand or eye.
- */
-const REFLOW_IDLE_MS = 1200;
 
 const NO_COLORS: TerminalColors = {};
 const NO_RELATIONS = { relations: [], places: new Map() };
@@ -264,136 +240,39 @@ export function TownCanvas({
   const [failure, setFailure] = useState(false);
   const [ready, setReady] = useState(false);
   const sources = useWorldSources();
-  const badgesRef = useRef<ReadonlyMap<string, TownDeskBadge>>(new Map());
-  const deskBadges = useMemo(() => {
-    const next = townDeskBadges(projection, sources);
-    if (!sameTownBadges(next, badgesRef.current)) badgesRef.current = next;
-    return badgesRef.current;
-  }, [projection, sources]);
   // The town's shape follows its container, measured on every resize.
   const [shape, setShape] = useState<TownShape>(() =>
     typeof window !== "undefined"
       ? townShapeFor(window.innerWidth, window.innerHeight)
       : townShapeFor(1440, 900),
   );
-  const memoryRef = useRef<{ shape: string; memory: TownPlacementMemory }>({
-    shape: townShapeKey(shape),
-    memory: new Map(),
-  });
-  const topology = useMemo(
-    () => townModelFromProjection(projection),
-    [projection],
-  );
-  // Colours ride on the model but not its layout input: a new colour repaints
-  // tables without placing the town again.
-  const lastDeskColors = useRef<ReadonlyMap<string, TerminalColor>>(new Map());
-  const lastPlaceColors = useRef<TownPlaceColors>(NO_PLACE_COLORS);
-  const colouredModel = useMemo(() => {
-    // The same colours keep the same map, so status updates never rebuild.
-    const next = townDeskColors(projection, terminalColors);
-    const last = lastDeskColors.current;
-    if (
-      next.size !== last.size ||
-      [...next].some(([key, color]) => last.get(key) !== color)
-    )
-      lastDeskColors.current = next;
-    lastPlaceColors.current = keepPlaceColors(
-      lastPlaceColors.current,
-      townPlaceColors(projection, terminalColors),
-    );
-    return {
-      ...topology,
-      deskColors: lastDeskColors.current,
-      placeColors: lastPlaceColors.current,
-    };
-  }, [topology, projection, terminalColors]);
-  // Pins ride on the model too; the same pins keep the same map.
-  const lastDeskPins = useRef<ReadonlyMap<string, TownDeskPin>>(new Map());
-  const model = useMemo(() => {
-    const next = townDeskPins(projection, deskPins);
-    const last = lastDeskPins.current;
-    if (
-      next.size !== last.size ||
-      [...next].some(([key, pin]) => {
-        const was = last.get(key);
-        return (
-          !was ||
-          was.key !== pin.key ||
-          was.cell?.col !== pin.cell?.col ||
-          was.cell?.row !== pin.cell?.row
-        );
-      })
-    )
-      lastDeskPins.current = next;
-    return { ...colouredModel, deskPins: lastDeskPins.current };
-  }, [colouredModel, projection, deskPins]);
-  const pinnedCells = useMemo(
-    () => townPinnedCells(model.deskPins),
-    [model.deskPins],
-  );
-  const placed = useMemo(() => {
-    const key = townShapeKey(shape);
-    const previous =
-      memoryRef.current.shape === key ? memoryRef.current.memory : new Map();
-    const result = layoutTown(model.input, shape, previous, pinnedCells);
-    memoryRef.current = { shape: key, memory: result.memory };
-    return result.layout;
-    // Placement depends only on topology and pins, not on agent status.
-  }, [model.input, shape, pinnedCells]);
-  // While the user presses, scrolls or zooms, a reflow that would move rooms
-  // or buildings waits until they pause (then the camera follows the room in
-  // view). Explicit Fold/Expand applies immediately; its admission and revision
-  // arrive in the same render. A held layout must still name only valid desks.
-  const inputAt = useRef(0);
-  const pressing = useRef(false);
-  const shownLayout = useRef<TownLayout | null>(null);
-  const appliedFoldRevision = useRef(foldRevision);
-  useEffect(() => {
-    appliedFoldRevision.current = foldRevision;
-  }, [foldRevision]);
+  // The scene model derives what the town is; a held reflow wakes it again.
   const [, wakeReflow] = useState(0);
-  const held = shownLayout.current;
-  const holding =
-    foldRevision === appliedFoldRevision.current &&
-    held !== null &&
-    held !== placed &&
-    townShapeKey(held.shape) === townShapeKey(placed.shape) &&
-    (pressing.current ||
-      performance.now() - inputAt.current < REFLOW_IDLE_MS) &&
-    townGeometryKey(held) !== townGeometryKey(placed) &&
-    held.buildings.every((b) =>
-      b.rooms.every((r) =>
-        r.cells.every((c) => !c.deskKey || model.desks.has(c.deskKey)),
-      ),
-    );
-  const layout = holding ? held : placed;
-  shownLayout.current = layout;
-  useEffect(() => {
-    if (!holding) return;
-    const timer = window.setTimeout(
-      () => wakeReflow((n) => n + 1),
-      REFLOW_IDLE_MS / 3,
-    );
-    return () => window.clearTimeout(timer);
-  });
-  const teams = useMemo(
-    () => townTeams(model, layout, relations.relations, relations.places),
-    [model, layout, relations],
+  const [scene] = useState(
+    () => new TownScene(townBrowserClock, () => wakeReflow((n) => n + 1)),
   );
+  useEffect(() => () => scene.dispose(), [scene]);
+  const semantics = scene.derive({
+    projection,
+    terminalColors,
+    deskPins,
+    relations,
+    sources,
+    shape,
+    foldRevision,
+  });
+  const { model, placed, layout, teams, targets, deskBadges, blockedSince } =
+    semantics;
   // A desk just pinned keeps the cell it has; save it so it stays there.
-  const placing = useRef(new Set<string>());
+  const deskPinned = model.deskPins;
   useEffect(() => {
-    for (const [deskKey, pin] of model.deskPins) {
-      if (pin.cell || placing.current.has(pin.key)) continue;
-      const cell = townPinCell(layout, placed, deskKey);
-      if (!cell) continue;
-      placing.current.add(pin.key);
-      void placeDeskPin(pin.key, { col: cell.col, row: cell.row }).finally(() =>
-        placing.current.delete(pin.key),
-      );
-    }
-  }, [layout, placed, model.deskPins]);
-  const blockedSince = useRef(new Map<string, number>());
+    for (const { pinKey, cell } of scene.pinPlacements(
+      deskPinned,
+      layout,
+      placed,
+    ))
+      void placeDeskPin(pinKey, cell).finally(() => scene.pinPlaced(pinKey));
+  }, [scene, layout, placed, deskPinned]);
   const [hover, setHover] = useState<string | null>(null);
   const latest = useRef({
     chrome,
@@ -437,15 +316,6 @@ export function TownCanvas({
     onSelectedAnchorChange,
     roomActions,
   };
-
-  // Track when agents became blocked so reception and the rail share age order.
-  const now = Date.now();
-  for (const agent of model.agents.values()) {
-    if (agent.semanticStatus === "blocked") {
-      if (!blockedSince.current.has(agent.key))
-        blockedSince.current.set(agent.key, now);
-    } else blockedSince.current.delete(agent.key);
-  }
 
   const anchorFrame = useRef<number | null>(null);
   const reportAnchors = () => {
@@ -823,17 +693,9 @@ export function TownCanvas({
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
-    const touch = () => {
-      inputAt.current = performance.now();
-    };
-    const down = () => {
-      pressing.current = true;
-      touch();
-    };
-    const up = () => {
-      pressing.current = false;
-      touch();
-    };
+    const touch = () => scene.touch();
+    const down = () => scene.pointerDown();
+    const up = () => scene.pointerUp();
     host.addEventListener("pointerdown", down, true);
     window.addEventListener("pointerup", up, true);
     window.addEventListener("pointercancel", up, true);
@@ -844,7 +706,7 @@ export function TownCanvas({
       window.removeEventListener("pointercancel", up, true);
       host.removeEventListener("wheel", touch, true);
     };
-  }, []);
+  }, [scene]);
   const lastShape = useRef(townShapeKey(layout.shape));
   const lastLayout = useRef<TownLayout | null>(null);
 
@@ -1506,14 +1368,13 @@ export function TownCanvas({
           foldedActivity={foldedActivity}
           askingKeys={askingKeys}
           onActivateAsk={onActivateAsk}
-          teams={teams}
           model={model}
           layout={layout}
           visible={visible}
           signs={signs}
           onHoverEntry={hoverEntry}
           selectedKey={selectedKey}
-          blockedSince={blockedSince.current}
+          blockedSince={blockedSince}
           roomActions={roomActions}
           selectedRoomKey={selectedRoomKey}
           onSelect={onSelect}
@@ -1523,6 +1384,7 @@ export function TownCanvas({
             zoomToRoomKey(key);
           }}
           onFocusTarget={focusTarget}
+          targets={targets}
           deskBadges={deskBadges}
           quests={quests}
           renderer={rendererRef}

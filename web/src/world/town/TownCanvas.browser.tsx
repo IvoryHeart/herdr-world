@@ -1910,7 +1910,6 @@ async function run() {
       );
     }
     let expansionSteps = 0;
-    const foldTimings: { before: number; after: number; ms: number }[] = [];
     while (orbitDeskCount() < orbitDeskTotal) {
       const before = orbitDeskCount();
       const button = expand();
@@ -1919,7 +1918,6 @@ async function run() {
         `a partially expanded ${roomId} room lost its Expand tile`,
       );
       if (!button) break;
-      const tappedAt = performance.now();
       tapTownControl(button);
       await waitFor(
         () =>
@@ -1932,11 +1930,6 @@ async function run() {
           return `the next Expand click left ${roomId} at ${orbitDeskCount()} of ${orbitDeskTotal} desks (tile=${current?.textContent?.trim() ?? "missing"}; label=${current?.getAttribute("aria-label") ?? "missing"})`;
         },
       );
-      foldTimings.push({
-        before,
-        after: orbitDeskCount(),
-        ms: performance.now() - tappedAt,
-      });
       expansionSteps += 1;
       check(
         orbitDeskCount() - before <= 20,
@@ -1959,15 +1952,10 @@ async function run() {
       `expanding ${roomId} drew ${orbitDeskCount()} of ${orbitDeskTotal} desks`,
     );
     if (scale === "incremental") {
-      check(
-        foldTimings.every((entry) => entry.ms < 1000),
-        `explicit touch expansion waited for the ambient reflow hold: ${JSON.stringify(foldTimings)}`,
-      );
       const fold = roomElement?.querySelector<HTMLButtonElement>(
         `.town-fold-tile[aria-label="Fold ${roomLabel} back to 24 desks"]`,
       );
       check(fold !== null, "an expanded room offers Fold");
-      const foldTappedAt = performance.now();
       if (fold) tapTownControl(fold);
       await waitFor(
         () =>
@@ -1977,89 +1965,8 @@ async function run() {
           ) !== null,
         "one Fold click did not restore the 24-desk target",
       );
-      check(
-        performance.now() - foldTappedAt < 1000,
-        "explicit touch Fold waited for the ambient reflow hold",
-      );
-      // The explicit revision has now committed. A later background change
-      // must recover the ordinary hold, including the pause after release.
-      const beforeGrowth = diagnostics.layout!.geometry;
-      const desksBeforeGrowth = diagnostics.desks;
-      const stage = host.querySelector<HTMLElement>(".town-canvas-host")!;
-      const pressStage = (type: string) =>
-        stage.dispatchEvent(
-          new PointerEvent(type, {
-            bubbles: true,
-            pointerId: 79,
-            pointerType: "mouse",
-            button: 0,
-            buttons: type === "pointerdown" ? 1 : 0,
-            clientX: 20,
-            clientY: stage.getBoundingClientRect().bottom - 20,
-          }),
-        );
-      pressStage("pointerdown");
-      const snapshot = base.connections[1]!.snapshot!;
-      const grown = snapshot.workspaces[0]!.workspace_id;
-      const had = snapshot.tabs.filter(
-        (tab) => tab.workspace_id === grown,
-      ).length;
-      check(had < 24, "post-fold hold regression needs room capacity to grow");
-      for (let index = had; index < 24; index += 1) {
-        const tabId = `${grown}-tab-${index}`;
-        snapshot.tabs.push({
-          tab_id: tabId,
-          workspace_id: grown,
-          number: index + 1,
-          label: `task ${index + 1}`,
-          focused: false,
-          pane_count: 1,
-          agent_status: "unknown",
-        });
-        snapshot.panes.push({
-          pane_id: `${tabId}-pane-0`,
-          terminal_id: `${tabId}-terminal-0`,
-          workspace_id: grown,
-          tab_id: tabId,
-          focused: false,
-          agent: "",
-          agent_status: "",
-          revision: 1,
-        });
-      }
-      setWorld(
-        worldFor(
-          base.connections.map((connection) => ({
-            ...connection,
-            snapshot: connection.snapshot && {
-              ...connection.snapshot,
-              tabs: [...connection.snapshot.tabs],
-              panes: [...connection.snapshot.panes],
-            },
-          })),
-        ),
-      );
-      await new Promise((resolve) => setTimeout(resolve, 600));
-      check(
-        diagnostics.layout!.geometry === beforeGrowth,
-        "background growth reflowed during a press after an explicit fold",
-      );
-      pressStage("pointerup");
-      await new Promise((resolve) => setTimeout(resolve, 200));
-      check(
-        diagnostics.layout!.geometry === beforeGrowth,
-        "background growth ignored the quiet period after a post-fold release",
-      );
-      await waitFor(
-        () =>
-          diagnostics.layout!.geometry !== beforeGrowth &&
-          diagnostics.desks === desksBeforeGrowth + 24 - had,
-        "background growth never resumed after the post-fold hold and pause",
-      );
-      check(
-        diagnostics.lastError === null,
-        `renderer error after post-fold background growth: ${diagnostics.lastError}`,
-      );
+      // The reflow hold and its explicit Fold/Expand bypass are scene rules,
+      // checked headless in scene/townScene.test.ts.
       root.unmount();
       await settle();
       return;
