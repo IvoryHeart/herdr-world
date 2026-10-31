@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { EMPTY_WORLD_SOURCES } from "../../worldSources";
+import type { WorldSourcesSnapshot } from "../../../../../shared/worldSources";
 import type { Pane, Tab, Workspace } from "../../../types";
 import {
   projectWorldOffice,
@@ -10,8 +10,25 @@ import type { WorldRuntimeConnection } from "../../runtimeStore";
 import { terminalColorKey, type TerminalColors } from "../../terminalColor";
 import type { DeskPins } from "../../useDeskPins";
 import { buildWorldObject } from "../../worldObject";
-import { townGeometryKey, townShapeFor } from "../townLayout";
-import { townDeskColorTarget } from "../townModel";
+import type { Relation } from "../../../../../shared/relations";
+import type { TerminalPlace } from "../../relations";
+import {
+  layoutTown,
+  townGeometryKey,
+  townShapeFor,
+  townShapeKey,
+  type TownPlacementMemory,
+} from "../townLayout";
+import {
+  townDeskColors,
+  townDeskColorTarget,
+  townDeskPins,
+  townModelFromProjection,
+  townPinnedCells,
+  townPlaceColors,
+} from "../townModel";
+import { townTargets } from "../townTargets";
+import { townTeams } from "../townTeams";
 import type { TownClock } from "./ports";
 import {
   TOWN_REFLOW_IDLE_MS,
@@ -117,6 +134,14 @@ function office(
 
 const working = (count: number) => Array<string>(count).fill("working");
 const NO_RELATIONS = { relations: [], places: new Map() };
+const NO_SOURCES: WorldSourcesSnapshot = {
+  observedAt: 0,
+  refreshing: false,
+  sources: [],
+  items: [],
+  links: [],
+  actions: [],
+};
 
 function inputs(
   projection: HerdrOfficeProjection,
@@ -127,7 +152,7 @@ function inputs(
     terminalColors: {},
     deskPins: {},
     relations: NO_RELATIONS,
-    sources: EMPTY_WORLD_SOURCES,
+    sources: NO_SOURCES,
     shape: townShapeFor(1440, 900),
     foldRevision: 0,
     ...rest,
@@ -338,4 +363,205 @@ test("dispose cancels a pending wake", () => {
   scene.dispose();
   time.advance(TOWN_REFLOW_IDLE_MS);
   expect(wakes()).toBe(0);
+});
+
+/* ---------- semantic equivalence with the previous TownCanvas ---------- */
+
+/**
+ * What TownCanvas derived before the scene model, composed from the same pure
+ * modules without its identity caches: model with colours and pins, placement
+ * with memory per shape, teams and accessible targets.
+ */
+function previousTownCanvas() {
+  let memory: { shape: string; memory: TownPlacementMemory } | null = null;
+  return (next: TownSemanticInputs) => {
+    const { projection, terminalColors, deskPins, relations, shape } = next;
+    const model = {
+      ...townModelFromProjection(projection),
+      deskColors: townDeskColors(projection, terminalColors),
+      placeColors: townPlaceColors(projection, terminalColors),
+      deskPins: townDeskPins(projection, deskPins),
+    };
+    const key = townShapeKey(shape);
+    const placed = layoutTown(
+      model.input,
+      shape,
+      memory?.shape === key ? memory.memory : new Map(),
+      townPinnedCells(model.deskPins),
+    );
+    memory = { shape: key, memory: placed.memory };
+    const teams = townTeams(
+      model,
+      placed.layout,
+      relations.relations,
+      relations.places,
+    );
+    return {
+      model,
+      placed: placed.layout,
+      teams,
+      targets: townTargets(model, placed.layout, teams.deskTeams),
+    };
+  };
+}
+
+const ROOMS = ["alpha", "beta", "gamma", "delta"];
+
+/** Desks in `alpha` and `beta` joined by a manual group. */
+function grouped(projection: HerdrOfficeProjection) {
+  const ids = new Set(ROOMS);
+  const ref = (tab: string) => ({
+    connection_id: "studio",
+    terminal_id: `term-${tab}`,
+  });
+  const place = (workspace: string, tab: string): TerminalPlace => ({
+    connectionId: "studio",
+    workspaceId: workspace,
+    tabId: tab,
+    workspaceIds: ids,
+    paneId: `${tab}:p`,
+  });
+  const relation: Relation = {
+    key: "pair",
+    a: ref("alpha:t0"),
+    b: ref("beta:t0"),
+    evidence: [
+      {
+        kind: "manual",
+        sor: "world",
+        source: "group-1",
+        observed_at: null,
+        current: true,
+      },
+    ],
+    strength: 1,
+  };
+  expect(projection.rooms.length).toBeGreaterThan(1);
+  return {
+    relations: [relation],
+    places: new Map([
+      ["studio\u0000term-alpha:t0", place("alpha", "alpha:t0")],
+      ["studio\u0000term-beta:t0", place("beta", "beta:t0")],
+    ]),
+  };
+}
+
+test("the scene derives what TownCanvas derived, through a sequence of updates", () => {
+  const wide = townShapeFor(1440, 900);
+  const phone = townShapeFor(390, 844);
+  const quiet = office({
+    alpha: working(2),
+    beta: working(2),
+    gamma: working(2),
+    delta: working(2),
+  });
+  const grownAlpha = office({
+    alpha: ["blocked", ...working(23)],
+    beta: working(2),
+    gamma: working(2),
+    delta: working(2),
+  });
+  const grownBeta = office({
+    alpha: ["blocked", ...working(23)],
+    beta: ["done", ...working(7)],
+    gamma: working(2),
+    delta: working(2),
+  });
+  const colors: TerminalColors = {
+    "studio:alpha": "teal",
+    "@host:studio": "pink",
+    [terminalColorKey(
+      townDeskColorTarget(grownAlpha, grownAlpha.rooms[1]!.desks[0]!)!,
+    )]: "orange",
+  };
+  const relations = grouped(grownAlpha);
+  const pinnedDesk = grownAlpha.rooms[2]!.desks[1]!;
+  const pinKey = terminalColorKey(townDeskColorTarget(grownAlpha, pinnedDesk)!);
+  const steps: TownSemanticInputs[] = [
+    inputs(quiet, { shape: wide }),
+    inputs(grownAlpha, { shape: wide, terminalColors: colors, relations }),
+    inputs(grownAlpha, {
+      shape: wide,
+      terminalColors: colors,
+      relations,
+      deskPins: { [pinKey]: { cell: { col: 0, row: 0 } } },
+    }),
+    inputs(grownAlpha, { shape: phone, terminalColors: colors, relations }),
+    inputs(grownBeta, { shape: wide, terminalColors: colors, relations }),
+  ];
+  const { scene } = setup();
+  const previous = previousTownCanvas();
+  for (const [index, step] of steps.entries()) {
+    const now = scene.derive(step);
+    const then = previous(step);
+    const at = `step ${index}`;
+    expect(now.holding, at).toBe(false);
+    expect(now.layout, at).toBe(now.placed);
+    expect(now.placed, at).toEqual(then.placed);
+    expect(now.model.deskColors, at).toEqual(then.model.deskColors);
+    expect(now.model.placeColors, at).toEqual(then.model.placeColors);
+    expect(now.model.deskPins, at).toEqual(then.model.deskPins);
+    expect(now.teams, at).toEqual(then.teams);
+    expect(now.targets, at).toEqual(then.targets);
+  }
+});
+
+test("the moved semantic records carry their content, not only their identity", () => {
+  const { scene } = setup();
+  const four = (alpha: readonly string[]) =>
+    office({
+      alpha,
+      beta: working(2),
+      gamma: working(2),
+      delta: working(2),
+    });
+  const quiet = four(working(2));
+  const grownAlpha = four(["blocked", ...working(23)]);
+  const relations = grouped(grownAlpha);
+  scene.derive(inputs(quiet));
+  const shown = scene.derive(
+    inputs(grownAlpha, {
+      relations,
+      terminalColors: { "studio:alpha": "teal", "@host:studio": "pink" },
+    }),
+  );
+  // Placement memory: a live scene keeps its columns, unlike a fresh layout.
+  const fresh = layoutTown(
+    shown.model.input,
+    townShapeFor(1440, 900),
+    new Map(),
+    new Map(),
+  );
+  expect(townGeometryKey(fresh.layout)).not.toBe(townGeometryKey(shown.placed));
+  // Teams: the grouped desks share a team.
+  const [alphaDesk, betaDesk] = [
+    grownAlpha.rooms[0]!.desks[0]!.key,
+    grownAlpha.rooms[1]!.desks[0]!.key,
+  ];
+  expect(shown.teams.deskTeams.get(alphaDesk)).toBeDefined();
+  expect(shown.teams.deskTeams.get(alphaDesk)).toBe(
+    shown.teams.deskTeams.get(betaDesk),
+  );
+  // Place colours: the room and the building take their chosen colours.
+  expect(shown.model.placeColors.rooms.get(grownAlpha.rooms[0]!.key)).toBe(
+    "teal",
+  );
+  expect(shown.model.placeColors.hosts.get(grownAlpha.hosts[0]!.key)).toBe(
+    "pink",
+  );
+  // Targets: every desk and room, labelled and activatable.
+  const desks = shown.targets.filter((target) => target.kind === "desk");
+  expect(desks).toHaveLength(24 + 2 + 2 + 2);
+  expect(desks.every((target) => target.canActivate)).toBe(true);
+  const rooms = shown.targets.filter((target) => target.kind === "room");
+  expect(rooms.map((target) => target.label.split(",")[0])).toEqual([
+    "Room alpha",
+    "Room beta",
+    "Room gamma",
+    "Room delta",
+  ]);
+  const waiting = shown.targets.find(
+    (target) => target.kind === "agent" && target.label.includes("needs input"),
+  );
+  expect(waiting).toBeDefined();
 });

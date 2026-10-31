@@ -236,34 +236,88 @@
       }
     },
     {
-      "files": ["web/src/world/town/scene/**/*.ts"],
+      "files": ["web/src/world/town/scene/**/*.{ts,tsx,mts,cts,js,jsx}"],
       "rules": {
         "no-restricted-globals": [
           "error",
+          { "name": "Date", "message": "Read time through TownClock." },
           { "name": "performance", "message": "Read time through TownClock." },
           { "name": "setTimeout", "message": "Defer through TownClock.after." },
           {
+            "name": "clearTimeout",
+            "message": "Defer through TownClock.after."
+          },
+          {
             "name": "setInterval",
+            "message": "Defer through TownClock.after."
+          },
+          {
+            "name": "clearInterval",
+            "message": "Defer through TownClock.after."
+          },
+          {
+            "name": "setImmediate",
+            "message": "Defer through TownClock.after."
+          },
+          {
+            "name": "queueMicrotask",
             "message": "Defer through TownClock.after."
           },
           {
             "name": "requestAnimationFrame",
             "message": "Frames come from the renderer's scheduler."
           },
+          {
+            "name": "cancelAnimationFrame",
+            "message": "Frames come from the renderer's scheduler."
+          },
+          {
+            "name": "requestIdleCallback",
+            "message": "Defer through TownClock.after."
+          },
           { "name": "window", "message": "The scene model is headless." },
-          { "name": "document", "message": "The scene model is headless." }
+          { "name": "document", "message": "The scene model is headless." },
+          { "name": "navigator", "message": "The scene model is headless." },
+          { "name": "globalThis", "message": "The scene model is headless." },
+          { "name": "self", "message": "The scene model is headless." },
+          { "name": "process", "message": "The scene model is headless." }
         ],
         "no-restricted-properties": [
           "error",
           {
-            "object": "Date",
-            "property": "now",
-            "message": "Read wall time through TownClock.wall."
-          },
-          {
             "object": "Math",
             "property": "random",
             "message": "Use the scene's seed."
+          }
+        ],
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "../../worldSources",
+                "message": "The sources store is a browser adapter; use workLinks."
+              }
+            ],
+            "patterns": [
+              {
+                "group": [
+                  "react",
+                  "react/*",
+                  "react-dom",
+                  "react-dom/*",
+                  "lucide-react",
+                  "pixi.js",
+                  "pixi.js/*",
+                  "node:*",
+                  "**/townBrowserClock",
+                  "**/townRenderer",
+                  "**/pixiSystemTicker",
+                  "**/worldFrameScheduler"
+                ],
+                "message": "The scene model is headless: no framework, renderer, platform or clock adapter."
+              }
+            ]
           }
         ]
       }
