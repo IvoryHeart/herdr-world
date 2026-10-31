@@ -140,7 +140,7 @@ Office view (`herdrOfficeProjection.ts`, `officeRoomActions.ts`,
 | View composition, room dialogs and creation | [TownView.tsx](TownView.tsx) owns taps, peeks, replies through World's terminal composer, toasts, room dialogs and seat/room creation and mounts [TownCanvas.tsx](town/TownCanvas.tsx). | [Town browser fixture](town/TownCanvas.browser.tsx), [room-action tests](officeRoomActions.test.ts) |
 | Needs-you rail and peek | [TownRail.tsx](town/TownRail.tsx) and [TownPeek.tsx](town/TownPeek.tsx); [townChat.ts](town/townChat.ts) reads pane screens and sends one-tap answers through each pane's own connection and generation; [terminalComposerRequest.ts](terminalComposerRequest.ts) asks the pane's terminal to open its composer. | [Town browser fixture](town/TownCanvas.browser.tsx) |
 | Herdr-to-Town data | [herdrOfficeProjection.ts](herdrOfficeProjection.ts) projects qualified topology and pane devices with `TOWN_PRESENTATION_BOUNDS`; [townModel.ts](town/townModel.ts) indexes presented rooms, desks, seats and per-room counts. | [Projection tests](herdrOfficeProjection.test.ts) |
-| Town scene model | [scene/townScene.ts](town/scene/townScene.ts) derives what the town is, headless: the model with colours and pins, placement with its memory per shape, the reflow hold and its explicit Fold/Expand bypass, teams, accessible targets, desk badges and blocked-since times. It reads time only through the [clock port](town/scene/ports.ts). A lint rule keeps browser clocks, timers, globals, frameworks, renderers and adapters out of `town/scene/`, and [a boundary test](town/townSceneBoundary.test.ts) checks that rule and the scene's whole module graph; `TownCanvas` is its adapter and passes the page clock ([townBrowserClock.ts](town/townBrowserClock.ts)). [scene/townSceneCamera.ts](town/scene/townSceneCamera.ts) owns where the camera goes: home and re-framing, keys, the zoom steps, focus, room requests, the drawn camera and the pose kept per shape; the renderer receives that camera and steps its motion. [scene/townInteraction.ts](town/scene/townInteraction.ts) carries out pointer and wheel input through World's gesture machine (holds, the magnet, edge pan, drops and pinches) with the renderer, drag ghost and callbacks as ports, and animation frames through a frames port; `TownCanvas` only reads DOM events. HUD topics move here in a later step ([#522](https://github.com/IvoryHeart/herdr-world/issues/522)). | [Scene tests](town/scene/townScene.test.ts), [camera tests](town/scene/townSceneCamera.test.ts), [interaction tests](town/scene/townInteraction.test.ts), [bake tests](town/scene/townSceneBake.test.ts), [boundary test](town/townSceneBoundary.test.ts) |
+| Town scene model | [scene/townScene.ts](town/scene/townScene.ts) derives what the town is, headless: the model with colours and pins, placement with its memory per shape, the reflow hold and its explicit Fold/Expand bypass, teams, accessible targets, desk badges and blocked-since times. It reads time only through the [clock port](town/scene/ports.ts). A lint rule keeps browser clocks, timers, globals, frameworks, renderers and adapters out of `town/scene/`, and [a boundary test](town/townSceneBoundary.test.ts) checks that rule and the scene's whole module graph; `TownCanvas` is its adapter and passes the page clock ([townBrowserClock.ts](town/townBrowserClock.ts)). [scene/townSceneCamera.ts](town/scene/townSceneCamera.ts) owns where the camera goes: home and re-framing, keys, the zoom steps, focus, room requests, the drawn camera and the pose kept per shape; the renderer receives that camera and steps its motion. [scene/townInteraction.ts](town/scene/townInteraction.ts) carries out pointer and wheel input through World's gesture machine (holds, the magnet, edge pan, drops and pinches) with the renderer, drag ghost and callbacks as ports, and animation frames through a frames port; `TownCanvas` only reads DOM events. [scene/townSceneDiff.ts](town/scene/townSceneDiff.ts) hands the renderer each frame with its dirty sets (`apply`): bakes from [scene/townSceneBake.ts](town/scene/townSceneBake.ts) and the hosts whose agents to reconcile from [scene/townSceneActors.ts](town/scene/townSceneActors.ts); unchanged buildings keep their navigation. [scene/townHud.ts](town/scene/townHud.ts) holds what the HUD shows (`visible`, `level`, a 15 s `ages` clock), publishing only on change through `useTownHud`, follows drawn frames for HUD elements outside React (the badge popover) and computes the anchors for World's connector lines ([#522](https://github.com/IvoryHeart/herdr-world/issues/522)). | [Scene tests](town/scene/townScene.test.ts), [camera tests](town/scene/townSceneCamera.test.ts), [interaction tests](town/scene/townInteraction.test.ts), [bake tests](town/scene/townSceneBake.test.ts), [actor tests](town/scene/townSceneActors.test.ts), [diff tests](town/scene/townSceneDiff.test.ts), [HUD tests](town/scene/townHud.test.ts), [boundary test](town/townSceneBoundary.test.ts) |
 | Town placement | [townLayout.ts](town/townLayout.ts) places buildings, rooms, desk cells, lounge and reception from native order, keeping desks in place while a scene is live. | [Layout tests](town/townLayout.test.ts) |
 | Pointer input | `TownCanvas` reads pointer events and [scene/townInteraction.ts](town/scene/townInteraction.ts) hit-tests the canvas as last drawn and feeds World's shared gesture machine; [townGesture.ts](town/townGesture.ts) holds Town's targets (a hit, and the desk or agent a drag would carry) and thresholds. | [Shared cases](interaction/gesture.test.ts), [Town browser test](town/TownCanvas.test.ts) |
 | Camera and zoom levels | [townCamera.ts](town/townCamera.ts) owns pan, zoom about a point, flights and the town/overview/room/desk thresholds; [townCameraTargets.ts](town/townCameraTargets.ts) resolves desk cells and room/building zoom targets. | [Camera tests](town/townCamera.test.ts) |
@@ -409,6 +409,16 @@ retries, resetting terminal input. [The pane-switcher fixture](../paneJump.brows
 provides those frames and checks that its terminals finished loading. Wait for a
 dialog's focused control before sending its next keyboard command.
 
+`useWorldObservation.test.ts` mounts the actual observation hook and watchlist
+store on test time. Synthetic runtime snapshots and deferred watchlist replies
+exercise old/missing admission revisions and unavailable-only host scopes. Its
+real Inspector controller publishes through `useWorldVisualActions` to the actual
+`CommandCombobox`; reopening the menu checks pending and unavailable-only detail
+text in the DOM. This checks feedback presence, not browser geometry or focus. The
+Actions browser suite retains desktop/phone menu rendering of current counts
+and unavailable-host feedback, plus existing qualified routing and focus checks.
+No Town case moves.
+
 `components/WorktreeLifecycleDialog.test.ts` mounts the actual lifecycle dialog
 in an isolated DOM with timers and frames installed before React DOM loads.
 Synthetic operational/service ports and explicit Inspector admission outcomes
@@ -495,3 +505,37 @@ desks it draws, not the tabs a workspace can have.
 | Captured sources, duplicate suppression and progress | [creationRequests.ts](../creationRequests.ts), `prepareQualifiedCreation`, `createQualifiedTab` and `createQualifiedWorkspace` in [store.ts](../store.ts) | [Creation store tests](../worldCreation.test.ts), [Shared creation browser matrix](SharedViewCreation.test.ts) |
 | Browser attachment ownership and presentation handoffs | [TerminalView.tsx](../components/TerminalView.tsx), source demand merging in [App.tsx](../App.tsx), [WorldTerminalPortalList.tsx](WorldTerminalPortalList.tsx) | [Creation store tests](../worldCreation.test.ts), [Terminal handoff tests](WorldTerminalHandoff.test.ts) |
 | Created-terminal admission and newer Inspector intent | `creationCompletion` in [useWorldCreatedTerminal.ts](useWorldCreatedTerminal.ts), [createdTerminalAdmission.ts](createdTerminalAdmission.ts) | [Admission tests](createdTerminalAdmission.test.ts), [Shared creation browser matrix](SharedViewCreation.test.ts) |
+
+## Incremental observation and consumed views
+
+The runtime store negotiates `world_observation_v1` and keeps unchanged host
+objects. Base admission lives in [observationBase.ts](observationBase.ts);
+missing bases recover with one complete request, foreign incarnations cannot
+reuse retained content, and Bridge qualification still fences publication. Only
+explicit base or snapshot-parameter refusals disable bases for that hello; transient
+database/read errors retain negotiated bases.
+Identical confirmations publish nothing. The debounce, one-in-flight/coalesced
+refresh, chunk transport and fallback refresh remain in place.
+
+[worldRoomCache.ts](worldRoomCache.ts) keys each room by its full observation
+slice and owner/presentation metadata. [appearance.ts](appearance.ts) and
+[worldWatches.ts](worldWatches.ts) preserve unaffected room identities.
+Town reuses canonical rooms and [bounded presentation](officeRoomPresentation.ts);
+Board reuses [room topology](board/boardRoom.ts). Mounted Town and Board consumers
+hold preparation interest; absent views do no topology preparation.
+[useWorldObservation.ts](useWorldObservation.ts) registers the same Hosts/watch/appearance
+projection used for presentation, so hidden hosts, rooms and unwatched panes do no
+view-room preparation. Watched-only host identity is shared by preparation and
+rendering when the source host and consumed rooms are unchanged. Aggregate World
+data remains available to shell and Inspector
+consumers. A scope change during cooperative preparation is revalidated before
+publication. On a switch,
+missing view models finish before presentation. This does not retire the shared
+Board document or retained Spaces. Profile looks are a separate reader, invalidated
+only when the effective look changes; seen marks and relations retain their existing
+reader-specific overlays and lifetimes.
+
+[Work-count and seeded equivalence tests](incrementalPreparation.test.ts) use the
+test clock and compare incremental output with complete preparation across
+observations, appearance, watches and seen marks. [Base tests](observationBase.test.ts)
+and [M1](../../../quint/observation-base.qnt) cover admission, qualification and recovery.

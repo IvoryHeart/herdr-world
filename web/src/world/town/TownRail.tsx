@@ -402,6 +402,8 @@ export function townCalls(
   since: Map<string, number>,
   unseenCompletions: readonly OfficeAgent[],
   entryOf: (agentKey: string) => OfficeRosterEntry | undefined,
+  /** When this list is made: newly waiting agents start waiting now. */
+  now: number = Date.now(),
 ): TownCall[] {
   const live = new Set<string>();
   const blocked: TownCall[] = [];
@@ -409,7 +411,7 @@ export function townCalls(
     const { agent } = entry;
     if (agent.semanticStatus !== "blocked" || agent.stale) continue;
     live.add(agent.key);
-    if (!since.has(agent.key)) since.set(agent.key, Date.now());
+    if (!since.has(agent.key)) since.set(agent.key, now);
     blocked.push({
       agent,
       kind: "blocked",
@@ -431,7 +433,7 @@ export function townCalls(
           {
             agent,
             kind: "done",
-            since: Date.now(),
+            since: now,
             hostKey: entry.hostKey,
             hostLabel: entry.hostLabel,
             roomKey: entry.roomKey,

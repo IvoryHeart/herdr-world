@@ -1,3 +1,4 @@
+import type { BaseState } from "./observation-base";
 import type { DrainState } from "./runtime-drain";
 import type { CreditState } from "./chunk-credits";
 import type { AssemblyState } from "./chunk-assembly";
@@ -46,7 +47,8 @@ export type TraceState = CreditState & {
   op: string;
   target: number;
   hosts: Host[];
-  s: RefreshState;
+  s: RefreshState & BaseState;
+  host: number;
   present: number[];
   relevant: number[];
   bound: number;

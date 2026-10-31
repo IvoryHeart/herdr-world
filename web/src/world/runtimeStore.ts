@@ -1,6 +1,13 @@
+import {
+  decodeObservationHost,
+  MissingObservationBase,
+  observationBase,
+  sameObservationHost,
+} from "./observationBase";
 import { useSyncExternalStore } from "react";
 import {
   type BridgeControlMsg,
+  type BridgeHello,
   bridge,
   type ConnectionLifecycleState,
   type ConnectionStatus,
@@ -8,7 +15,12 @@ import {
 import type { Pane, Tab, Workspace } from "../types";
 import { prepareWorldBoard } from "./board/boardModel";
 import { prepareWorldOffice } from "./herdrOfficeProjection";
-import { prepareWorldObject, yieldWorldTask } from "./worldObject";
+import {
+  prepareWorldObject,
+  yieldWorldTask,
+  type WorldObject,
+} from "./worldObject";
+import { worldObjectForHosts } from "./worldFilters";
 import { DEVTOOLS } from "./devtools/flag";
 import { countWorldWork } from "./devtools/renderer";
 
@@ -69,6 +81,7 @@ export type WorldRuntimeWatchAdmission = {
 };
 
 export type WorldRuntimeConnection = {
+  token?: string | null;
   connectionId: string;
   label: string;
   source: string;
@@ -84,6 +97,7 @@ export type WorldRuntimeConnection = {
 };
 
 export type WorldRuntimeState = {
+  serviceIncarnation?: string;
   status: "idle" | "loading" | "ready" | "error";
   revision: number;
   observedAt: number;
@@ -92,6 +106,7 @@ export type WorldRuntimeState = {
 };
 
 type WorldRuntimeClient = {
+  readonly hello?: BridgeHello | null;
   connection?(
     connectionId: string,
     generation: number,
@@ -329,6 +344,9 @@ export function parseWorldSnapshotResult(
     connections.push(connection);
   }
   return {
+    ...(typeof item.service_incarnation === "string"
+      ? { serviceIncarnation: item.service_incarnation }
+      : {}),
     revision: item.revision as number,
     observedAt: item.observed_at,
     connections,
@@ -340,6 +358,7 @@ async function prepareWorldSnapshotResult(
   value: unknown,
   current: () => boolean,
   yieldTask: () => Promise<void> = yieldWorldTask,
+  decode = parseConnection,
 ): Promise<Omit<WorldRuntimeState, "status" | "error"> | null> {
   const item = record(value);
   if (!item || !Array.isArray(item.connections)) return null;
@@ -348,7 +367,12 @@ async function prepareWorldSnapshotResult(
   const seen = new Set<string>();
   for (const value of item.connections) {
     if (!current()) return null;
-    const connection = parseConnection(value);
+    const connection = decode(value);
+    if (
+      decode !== parseConnection &&
+      (!connection || seen.has(connection.connectionId))
+    )
+      throw new Error("invalid World observation catalogue");
     if (connection && !seen.has(connection.connectionId)) {
       seen.add(connection.connectionId);
       header.connections.push(connection);
@@ -357,6 +381,21 @@ async function prepareWorldSnapshotResult(
   }
   return current() ? header : null;
 }
+
+export type WorldRuntimeTimers = {
+  after(callback: () => void, ms: number): () => void;
+  every(callback: () => void, ms: number): () => void;
+};
+const runtimeTimers: WorldRuntimeTimers = {
+  after(callback, ms) {
+    const timer = setTimeout(callback, ms);
+    return () => clearTimeout(timer);
+  },
+  every(callback, ms) {
+    const timer = setInterval(callback, ms);
+    return () => clearInterval(timer);
+  },
+};
 
 export class WorldRuntimeStore {
   private state: WorldRuntimeState = INITIAL_STATE;
@@ -368,8 +407,8 @@ export class WorldRuntimeStore {
   private observationEpoch = 0;
   private refreshInFlight: Promise<void> | null = null;
   private refreshQueued = false;
-  private invalidationTimer: ReturnType<typeof setTimeout> | null = null;
-  private fallbackTimer: ReturnType<typeof setInterval> | null = null;
+  private invalidationTimer: (() => void) | null = null;
+  private fallbackTimer: (() => void) | null = null;
   private unlistenControl: (() => void) | null = null;
   private unlistenStatus: (() => void) | null = null;
   private priorities: WorldRuntimePriority[] = [];
@@ -377,14 +416,47 @@ export class WorldRuntimeStore {
   private appliedPriorityVersion = 0;
   private selectedConnectionId: string | null = null;
   private presentedSelection: () => string | null = () => null;
+  private observationHello: BridgeHello | null | undefined;
+  private baseRefused = false;
+  private readonly viewConsumers = new Map<"town" | "board", number>();
+  private viewProjection: ((world: WorldObject) => WorldObject) | null = null;
+  private viewScopeVersion = 0;
+  private visibleViewScope: readonly string[] | null = null;
+
+  /** The same Hosts/watch/appearance projection passed to mounted views. */
+  presentViewsFrom(project: (world: WorldObject) => WorldObject) {
+    this.viewProjection = project;
+    this.viewScopeVersion++;
+    return () => {
+      if (this.viewProjection !== project) return;
+      this.viewProjection = null;
+      this.viewScopeVersion++;
+    };
+  }
+
+  retainView(view: "town" | "board") {
+    this.viewConsumers.set(view, (this.viewConsumers.get(view) ?? 0) + 1);
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      this.viewConsumers.set(view, (this.viewConsumers.get(view) ?? 1) - 1);
+    };
+  }
+
   private visibleConnectionIds: string[] = [];
   private openConnectionIds: string[] = [];
 
   setVisibleConnectionIds(ids: readonly string[]) {
     const next = [...new Set(ids)].slice(0, 128);
-    if (JSON.stringify(next) === JSON.stringify(this.visibleConnectionIds))
+    if (
+      this.visibleViewScope !== null &&
+      JSON.stringify(next) === JSON.stringify(this.visibleConnectionIds)
+    )
       return;
     this.visibleConnectionIds = next;
+    this.visibleViewScope = next;
+    this.viewScopeVersion++;
     if (this.refreshInFlight) this.refreshQueued = true;
     else if (this.unlistenControl) this.scheduleRefresh();
   }
@@ -394,6 +466,7 @@ export class WorldRuntimeStore {
     private readonly preparationYield: (
       stage: "decode" | "object" | "office" | "board",
     ) => Promise<void> = yieldWorldTask,
+    private readonly timers: WorldRuntimeTimers = runtimeTimers,
   ) {}
 
   get = () => this.state;
@@ -417,7 +490,7 @@ export class WorldRuntimeStore {
         this.invalidateObservation("World service disconnected");
       }
     });
-    this.fallbackTimer = setInterval(
+    this.fallbackTimer = this.timers.every(
       () => void this.refresh(),
       FALLBACK_REFRESH_MS,
     );
@@ -431,8 +504,8 @@ export class WorldRuntimeStore {
     this.unlistenStatus?.();
     this.unlistenControl = null;
     this.unlistenStatus = null;
-    if (this.invalidationTimer) clearTimeout(this.invalidationTimer);
-    if (this.fallbackTimer) clearInterval(this.fallbackTimer);
+    this.invalidationTimer?.();
+    this.fallbackTimer?.();
     this.invalidationTimer = null;
     this.fallbackTimer = null;
   }
@@ -533,7 +606,7 @@ export class WorldRuntimeStore {
     const priorityVersion = this.priorityVersion;
     const priorities = this.priorities;
     try {
-      const response = await this.client.call("world.snapshot", {
+      const params = {
         priority_connection_ids: [
           ...new Set([
             // Open owners outrank the overview. With All hosts, promoting
@@ -552,16 +625,33 @@ export class WorldRuntimeStore {
           ...(priority.paneId ? { pane_id: priority.paneId } : {}),
           ...(priority.terminalId ? { terminal_id: priority.terminalId } : {}),
         })),
-      });
-      if (observationEpoch !== this.observationEpoch) return;
-      const parsed = await prepareWorldSnapshotResult(
-        response,
-        () => observationEpoch === this.observationEpoch,
-        () => this.preparationYield("decode"),
-      );
+      };
+      const parsed = await this.readObservation(params, observationEpoch);
       if (observationEpoch !== this.observationEpoch) return;
       if (!parsed) throw new Error("invalid World snapshot response");
       const current = () => observationEpoch === this.observationEpoch;
+      if (
+        this.state.status === "ready" &&
+        parsed.serviceIncarnation &&
+        parsed.serviceIncarnation === this.state.serviceIncarnation &&
+        parsed.connections.length === this.state.connections.length &&
+        parsed.connections.every(
+          (host, i) =>
+            host === this.state.connections[i] &&
+            this.withConnectionHealth(host) === host &&
+            (!host.actionable ||
+              !this.client.connection ||
+              this.client
+                .connection(host.connectionId, host.generation)
+                .isCurrent()),
+        )
+      ) {
+        this.appliedPriorityVersion = Math.max(
+          this.appliedPriorityVersion,
+          priorityVersion,
+        );
+        return;
+      }
       // Preparation yields to input and lifecycle events. Revalidate each
       // captured owner after those boundaries without retiring healthy siblings.
       for (;;) {
@@ -570,6 +660,7 @@ export class WorldRuntimeStore {
         );
         if (DEVTOOLS) countWorldWork("world.prepare");
         const selected = this.presentedSelection();
+        const viewScopeVersion = this.viewScopeVersion;
         const world = await prepareWorldObject(parsed.connections, current, {
           selectedConnectionId: selected,
           yieldTask: () => this.preparationYield("object"),
@@ -579,12 +670,32 @@ export class WorldRuntimeStore {
             : undefined,
         });
         if (!world) return;
-        await prepareWorldOffice(world, current, () =>
-          this.preparationYield("office"),
-        );
-        await prepareWorldBoard(world, current, () =>
-          this.preparationYield("board"),
-        );
+        const viewWorld =
+          this.viewConsumers.get("town") || this.viewConsumers.get("board")
+            ? this.viewProjection
+              ? this.viewProjection(world)
+              : worldObjectForHosts(world, this.visibleViewScope)
+            : world;
+        if (this.viewConsumers.get("town"))
+          await prepareWorldOffice(
+            viewWorld,
+            () =>
+              current() &&
+              viewScopeVersion === this.viewScopeVersion &&
+              !!this.viewConsumers.get("town"),
+            () => this.preparationYield("office"),
+          );
+        else await this.preparationYield("office");
+        if (this.viewConsumers.get("board"))
+          await prepareWorldBoard(
+            viewWorld,
+            () =>
+              current() &&
+              viewScopeVersion === this.viewScopeVersion &&
+              !!this.viewConsumers.get("board"),
+            () => this.preparationYield("board"),
+          );
+        else await this.preparationYield("board");
         if (!current()) return;
         let changed = false;
         const connections = parsed.connections.map((connection) => {
@@ -610,7 +721,12 @@ export class WorldRuntimeStore {
         });
         // A host focused during preparation is prepared too (only its
         // host and the index are built again).
-        if (!changed && this.presentedSelection() === selected) break;
+        if (
+          !changed &&
+          this.presentedSelection() === selected &&
+          viewScopeVersion === this.viewScopeVersion
+        )
+          break;
         parsed.connections = connections;
       }
       this.appliedPriorityVersion = Math.max(
@@ -627,6 +743,87 @@ export class WorldRuntimeStore {
         error instanceof Error ? error.message : String(error),
       );
     }
+  }
+
+  private async readObservation(
+    params: Record<string, unknown>,
+    epoch: number,
+  ) {
+    const hello = this.client.hello;
+    if (hello !== this.observationHello) {
+      if (
+        hello?.service_incarnation &&
+        this.state.serviceIncarnation &&
+        hello.service_incarnation !== this.state.serviceIncarnation
+      )
+        this.connectionHealth.clear();
+      this.observationHello = hello;
+      this.baseRefused = false;
+    }
+    const incarnation =
+      hello?.capabilities.world_observation_v1 === true
+        ? hello.service_incarnation
+        : undefined;
+    let base =
+      incarnation && !this.baseRefused
+        ? observationBase(this.state, incarnation)
+        : undefined;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      let response: unknown;
+      try {
+        response = await this.client.call("world.snapshot", {
+          ...params,
+          ...(base ? { base } : {}),
+        });
+      } catch (error) {
+        if (epoch !== this.observationEpoch) return null;
+        if (
+          !base ||
+          attempt !== 0 ||
+          !(error instanceof Error) ||
+          !/^((invalid|unsupported) World (observation|snapshot) base|invalid World snapshot parameters)$/i.test(
+            error.message,
+          )
+        )
+          throw error;
+        this.baseRefused = true;
+        base = undefined;
+        continue;
+      }
+      if (epoch !== this.observationEpoch) return null;
+      if (incarnation && this.client.hello?.service_incarnation !== incarnation)
+        throw new Error("World observation service incarnation mismatch");
+      if (
+        incarnation &&
+        Array.isArray(record(response)?.connections) &&
+        (record(response)!.connections as unknown[]).length > 64
+      )
+        throw new Error("invalid World observation catalogue");
+      if (incarnation && record(response)?.service_incarnation !== incarnation)
+        throw new Error("World observation service incarnation mismatch");
+      try {
+        return await prepareWorldSnapshotResult(
+          response,
+          () => epoch === this.observationEpoch,
+          () => this.preparationYield("decode"),
+          incarnation
+            ? (row) =>
+                decodeObservationHost(
+                  row,
+                  this.state,
+                  incarnation,
+                  base,
+                  parseConnection,
+                )
+            : parseConnection,
+        );
+      } catch (error) {
+        if (!(error instanceof MissingObservationBase) || attempt !== 0)
+          throw error;
+        base = undefined;
+      }
+    }
+    return null;
   }
 
   private observeConnectionHealth(control: BridgeControlMsg) {
@@ -669,13 +866,17 @@ export class WorldRuntimeStore {
         (!connection.actionable || health.state === "ready"))
     )
       return connection;
-    return {
+    const next = {
       ...connection,
       generation: health.generation,
       state: health.state,
       stale: connection.snapshot !== null,
       actionable: false,
     };
+    const held = this.state.connections.find(
+      (c) => c.connectionId === connection.connectionId,
+    );
+    return held && sameObservationHost(held, next) ? held : next;
   }
 
   private invalidateObservation(message: string) {
@@ -700,7 +901,7 @@ export class WorldRuntimeStore {
 
   private scheduleRefresh() {
     if (this.invalidationTimer) return;
-    this.invalidationTimer = setTimeout(() => {
+    this.invalidationTimer = this.timers.after(() => {
       this.invalidationTimer = null;
       void this.refresh();
     }, INVALIDATION_DEBOUNCE_MS);

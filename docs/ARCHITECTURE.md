@@ -50,6 +50,41 @@ result enters the cache only for its original current runtime generation and tri
 a coalesced refresh when its observed data changes. A current result may be reused for
 15 seconds unless that host receives an explicit topology invalidation. The browser
 uses one World WebSocket with a transport epoch independent of runtime generations.
+The hello advertises `world_observation_v1` and a random `service_incarnation`
+shared with snapshot replies. A caller may send `base: { service_incarnation,
+hosts: [{ connection_id, generation, token }] }` to `world.snapshot` (at most 64
+hosts, with tokens of at most 64 characters). The service hashes each projected
+host and its producing generation; digest reuse follows the projection cache.
+When incarnation, runtime generation, snapshot generation and token all match,
+the reply carries current host metadata and `unchanged: true`, omitting
+`snapshot`. Other hosts carry complete snapshots and tokens (null without a
+snapshot). Unknown bases and foreign incarnations use complete replacements.
+Malformed bases fail before acquisition. Service-side appearance and profile
+processing always sees the complete observation, before wire replacement.
+Callers without a base keep complete topology and the existing chunk admission.
+The browser sends its held base only after negotiation. It applies each reply as
+one publication, retains unchanged host content by identity and rechecks current
+Bridge qualification after cooperative preparation. A lost retained base discards
+the reply and requests one complete recovery; a base refusal disables bases for
+that hello. Only explicit base or snapshot-parameter refusals trigger that
+fallback; unrelated storage/read errors retain negotiated bases. A different incarnation cannot reuse old content, and a reply from a
+foreign incarnation is rejected. An all-unchanged reply with identical host
+metadata prepares and publishes nothing.
+
+Changed hosts share unchanged observation records. Each room caches the complete
+slice it reads: workspace, tabs, panes, admitted agent metadata, coverage and the
+owner/generation/presentation fences. Appearance and watch overlays retain rooms
+they do not change. Town caches canonical and bounded room presentations, and
+Board caches room topology; host/world summaries use their per-room contributions.
+Only mounted Town/Board consumers request their respective preparation, using
+the same Hosts, watched-only and appearance projection they present. Changes outside
+that scope update the aggregate World without preparing hidden view rooms. A newly
+selected view builds any missing model before presentation; the Board document
+continues serving appearance and relations in every view. Profile looks compare
+the effective per-agent look, so unrelated profile revisions reuse prepared looks.
+Seen/finished marks keep their existing targeted overlay and reception/summary
+semantics. Spaces remains mounted and qualified operations retain their own leases.
+
 Host filters affect overview visibility only. Context-bound selectors and commands
 read and update connection partitions in the existing store. Each terminal has one
 qualified presenter; Spaces/visual handoffs detach before admitting the new presenter.

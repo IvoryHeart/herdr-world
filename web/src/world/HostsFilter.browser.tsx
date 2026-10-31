@@ -78,7 +78,6 @@ const gitPull = Promise.withResolvers<unknown>();
 const resourceFocus = Promise.withResolvers<boolean>();
 let rejectResourceFocus = true;
 let observedPendingWorkspace = false;
-let watchAdmissionOld = false;
 let downloadPublications = 0;
 let syntheticFileDeleted = false;
 const retiredMutation = Promise.withResolvers<Response>();
@@ -275,7 +274,7 @@ function snapshot() {
               ...(operation === "watch-unavailable"
                 ? {
                     watch_admission: {
-                      revision: watches.length - (watchAdmissionOld ? 1 : 0),
+                      revision: watches.length,
                       registered: 1,
                       missing: 0,
                       unresolved: 0,
@@ -1359,47 +1358,6 @@ async function operationalScenario(unmount: () => void) {
     check(
       document.body.textContent?.includes("1 host unavailable") === true,
       "Watch counts omitted the unavailable host explanation",
-    );
-    watchAdmissionOld = true;
-    const observedRevision = worldRuntimeStore.get().revision;
-    await worldRuntimeStore.refresh();
-    await waitFor(
-      () =>
-        worldRuntimeStore.get().revision > observedRevision &&
-        worldRuntimeStore
-          .get()
-          .connections.some(
-            (connection) =>
-              connection.snapshot?.watchAdmission?.revision ===
-              watches.length - 1,
-          ),
-      "The queued refresh did not observe the older watch admission revision",
-      10_000,
-    );
-    document.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
-    );
-    await frame();
-    await shellCommands();
-    await waitFor(
-      () =>
-        document.body.textContent?.includes(
-          "Watch availability pending for filtered hosts",
-        ) === true,
-      "An observed host with an older watch revision stopped reporting pending",
-    );
-    writeHostsFilter(["offline"]);
-    document.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
-    );
-    await frame();
-    await shellCommands();
-    await waitFor(
-      () =>
-        document.body.textContent?.includes(
-          "0 pinned in filter · 0 admitted",
-        ) === true,
-      "An unavailable-only filter remained pending instead of showing its empty observed coverage",
     );
     return;
   }

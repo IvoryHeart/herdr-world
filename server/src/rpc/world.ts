@@ -1,3 +1,4 @@
+import { parseObservationBase } from "../world/observation-v1";
 import { pruneSnapshotAppearance } from "../world/appearance-prune";
 import { legacyAppearanceOps } from "../world/appearance-observation";
 import { handleAppearanceRpc } from "./appearance";
@@ -55,6 +56,7 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
   if (method === "world.snapshot") {
     let transfer: ReturnType<WorldSnapshotAdmission["open"]> | undefined;
     try {
+      const base = parseObservationBase(params);
       const snapshots = worldSnapshots;
       if (!snapshots) throw new Error("World snapshot service is unavailable");
       if (
@@ -105,7 +107,7 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
       }
       await sendWorldSnapshotReply(
         id,
-        snapshot,
+        snapshots.observation.reply(snapshot, base),
         req.accept_world_snapshot_chunks === true,
         (payload) => safeSend(ws, payload, "world-snapshot"),
         () => clients.has(ws),

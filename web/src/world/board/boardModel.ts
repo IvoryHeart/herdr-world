@@ -1,3 +1,4 @@
+import { projectBoardRoom } from "./boardRoom";
 import type { ConnectionLifecycleState } from "../../api";
 import type {
   WorldAgentStatus,
@@ -145,71 +146,9 @@ function projectHost(host: WorldHostObject): HostProjection {
     for (const space of host.spaces) {
       const workspaceKey = boardKey(space.connectionId, space.nativeId);
       boardHost.workspaceKeys.push(workspaceKey);
-      // Tabs in Herdr's native order; a tab with no admitted pane is still a
-      // card, so every admitted tab stays reachable.
-      const panesByTab = new Map<string, BoardPane[]>();
-      for (const leaf of space.children) {
-        const list = panesByTab.get(leaf.tabId) ?? [];
-        list.push({
-          key: boardKey(leaf.connectionId, leaf.nativeId),
-          status: leaf.stale ? "unknown" : leaf.status,
-          isAgent: leaf.kind === "agent",
-          leaf,
-        });
-        panesByTab.set(leaf.tabId, list);
-      }
-      const tabKeys: string[] = [];
-      const statuses: WorldAgentStatus[] = [];
-      const squares: BoardSquare[] = [];
-      const tabById = new Map(space.tabs.map((tab) => [tab.tab_id, tab]));
-      const order = [...tabById.keys()];
-      for (const tabId of panesByTab.keys())
-        if (!tabById.has(tabId)) order.push(tabId);
-      for (const tabId of order) {
-        const tab = tabById.get(tabId);
-        const panes = panesByTab.get(tabId) ?? [];
-        const key = boardTabKey(space.connectionId, tabId, workspaceIds);
-        tabKeys.push(key);
-        // Shells never colour a tab: their status says nothing about work.
-        const paneStatuses = panes
-          .filter((pane) => pane.isAgent)
-          .map((pane) => pane.status);
-        statuses.push(...paneStatuses);
-        for (const pane of panes)
-          squares.push({ status: pane.status, isAgent: pane.isAgent });
-        tabs.push({
-          key,
-          workspaceKey,
-          hostKey,
-          nativeId: tabId,
-          label: tab?.label || panes[0]?.leaf.tabLabel || tabId,
-          status: mostUrgentStatus(paneStatuses),
-          shellOnly: panes.length > 0 && panes.every((pane) => !pane.isAgent),
-          stale: space.stale,
-          actionable: space.actionable,
-          panes,
-        });
-      }
-      workspaces.push({
-        key: workspaceKey,
-        hostKey,
-        connectionId: space.connectionId,
-        generation: space.generation,
-        nativeId: space.nativeId,
-        label: space.label,
-        stale: space.stale,
-        actionable: space.actionable,
-        tabKeys,
-        statuses: statuses.sort(boardStatusOrder),
-        squares: squares.sort((a, b) =>
-          a.isAgent !== b.isAgent
-            ? a.isAgent
-              ? -1
-              : 1
-            : boardStatusOrder(a.status, b.status),
-        ),
-        space,
-      });
+      const room = projectBoardRoom(space, hostKey, workspaceIds);
+      workspaces.push(room.workspace);
+      tabs.push(...room.tabs);
     }
     const result = { host: boardHost, workspaces, tabs };
     projected.set(host, result);

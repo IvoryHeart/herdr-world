@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { rmSync } from "node:fs";
 import type { Server, ServerWebSocket } from "bun";
 import { createProfileServices } from "../agent/profile-service";
@@ -164,6 +165,7 @@ async function compose(
   let stopping = false;
   // Cleared when storage closes: no write may reach the folder after it.
   let storageOpen = true;
+  const serviceIncarnation = storage.incarnation ?? randomUUID();
   const snapshotAdmission = new WorldSnapshotAdmission();
   /** Town moves run one at a time per connection (see world/desk-move). */
   const townMoveQueues = new Map<string, ReturnType<typeof createMoveQueue>>();
@@ -503,6 +505,7 @@ async function compose(
     () => terminalMarks.worldWatchlist.list(),
     observeHost,
     observeTerminalSettings,
+    serviceIncarnation,
   );
 
   const assistantContext = createAssistantContext({
@@ -867,6 +870,7 @@ async function compose(
       server = bindListenerBeforeConnectionStart({
         bindListener: () =>
           listen({
+            serviceIncarnation,
             config,
             clock,
             logger,

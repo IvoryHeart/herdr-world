@@ -1,10 +1,4 @@
 import "../worldAsks.css";
-import { findCell } from "./townCameraTargets";
-import {
-  NOTHING_VISIBLE,
-  townVisibleHosts,
-  type TownVisible,
-} from "./townVisibleHosts";
 import { TownBoard } from "./TownBoard";
 import { TownTeamsLayer, TownWorldLayer } from "./TownWorldLayer";
 import { TownBuildingSigns } from "./townBuildingSigns";
@@ -25,14 +19,11 @@ import type {
 } from "../worldConnectorGeometry";
 import type { OfficeObservability } from "../officeObservability";
 import { TownCamera, type TownLevel } from "./townCamera";
-import {
-  TOWN_TILE as T,
-  townSeat,
-  townShapeFor,
-  townShapeKey,
-  type TownShape,
-} from "./townLayout";
+import { townShapeFor, townShapeKey, type TownShape } from "./townLayout";
 import { TownScene } from "./scene/townScene";
+import { TownSceneDiff } from "./scene/townSceneDiff";
+import { TownHud, townScreenAnchor, townWorldAnchor } from "./scene/townHud";
+import { TownHudContext, useTownHud } from "./useTownHud";
 import { TownSceneCamera, townViewport } from "./scene/townSceneCamera";
 import { TownInteraction } from "./scene/townInteraction";
 import { townBrowserClock, townBrowserFrames } from "./townBrowserClock";
@@ -221,6 +212,8 @@ export function TownCanvas({
   );
   // The scene model derives what the town is; a held reflow wakes it again.
   const [, wakeReflow] = useState(0);
+  // What the renderer has applied, and so what it must apply next.
+  const [diff] = useState(() => new TownSceneDiff());
   const [scene] = useState(
     () => new TownScene(townBrowserClock, () => wakeReflow((n) => n + 1)),
   );
@@ -297,7 +290,7 @@ export function TownCanvas({
     roomActions,
   };
 
-  const anchorFrame = useRef<number | null>(null);
+  const anchorFrame = useRef<(() => void) | null>(null);
   const reportAnchors = () => {
     const { onAnchorChange: report, onSelectedAnchorChange: reportSelected } =
       latest.current;
@@ -305,58 +298,15 @@ export function TownCanvas({
     const host = hostRef.current;
     if ((!report && !reportSelected) || !renderer || !host) return;
     const rect = host.getBoundingClientRect();
-    const camera = renderer.camera;
-    const toAnchor = (
-      world: { x: number; y: number } | null,
-    ): WorldCanvasAnchor | null => {
-      if (!world) return null;
-      const screen = camera.toScreen(world.x, world.y);
-      const x = rect.left + screen.x;
-      const y = rect.top + screen.y;
-      const visible =
-        x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
-      const edge: WorldCanvasAnchor["edge"] = visible
-        ? null
-        : x < rect.left
-          ? "left"
-          : x > rect.right
-            ? "right"
-            : y < rect.top
-              ? "top"
-              : "bottom";
-      return {
-        x: Math.min(rect.right - 10, Math.max(rect.left + 10, x)),
-        y: Math.min(rect.bottom - 10, Math.max(rect.top + 10, y)),
-        visible,
-        edge,
-      };
-    };
+    const { model: m, layout: l } = latest.current;
     const worldAnchor = (key: string | null): WorldCanvasAnchors => {
-      if (!key) return { agent: null, workbench: null };
-      const { model: m, layout: l } = latest.current;
-      const position = renderer.actorPosition(key);
-      let agent: { x: number; y: number } | null = null;
-      if (position) {
-        if (position.seated) {
-          const seat = m.agentSeats.get(key);
-          const cell = seat && findCell(l, seat.deskKey);
-          if (seat && cell) {
-            const geometry = townSeat(cell, seat.seat);
-            agent = {
-              x: geometry.cx,
-              y: geometry.top ? geometry.tableY + 6 : geometry.tableY + 40,
-            };
-          }
-        } else agent = { x: position.x, y: position.y - 12 };
-      }
-      const deskKey = m.desks.has(key)
-        ? key
-        : (m.agentSeats.get(key)?.deskKey ?? m.devices.get(key)?.deskKey);
-      const cell = deskKey ? findCell(l, deskKey) : null;
-      const workbench = cell
-        ? { x: (cell.x + 3) * T, y: cell.y * T + 28 }
-        : null;
-      return { agent: toAnchor(agent), workbench: toAnchor(workbench) };
+      const at = townWorldAnchor(key, m, l, (agentKey) =>
+        renderer.actorPosition(agentKey),
+      );
+      return {
+        agent: townScreenAnchor(at.agent, renderer.camera, rect),
+        workbench: townScreenAnchor(at.workbench, renderer.camera, rect),
+      };
     };
     if (report) {
       const anchors: WorldConversationAnchors = {};
@@ -373,7 +323,7 @@ export function TownCanvas({
   reportRef.current = reportAnchors;
   const scheduleAnchors = () => {
     if (anchorFrame.current !== null) return;
-    anchorFrame.current = requestAnimationFrame(() => {
+    anchorFrame.current = townBrowserFrames.next(() => {
       anchorFrame.current = null;
       reportRef.current();
     });
@@ -399,9 +349,10 @@ export function TownCanvas({
       ),
     [],
   );
+  // What the HUD shows; drawn frames reach React only when it changes.
+  const [hud] = useState(() => new TownHud(townBrowserClock));
   // Only on-screen buildings keep DOM cards, plaques and receptions.
-  const [visible, setVisible] = useState<TownVisible>(NOTHING_VISIBLE);
-  const visibleKey = useRef(NOTHING_VISIBLE.key);
+  const visible = useTownHud(hud, "visible");
   /** Aims a carried desk or agent again at the frame just drawn. */
   const reaimCarry = useRef<(() => void) | null>(null);
   const onFrame = (camera: TownRendererHandle["camera"], level: TownLevel) => {
@@ -412,11 +363,7 @@ export function TownCanvas({
     // puts something else under it: the target follows what is now drawn.
     if (moved) reaimCarry.current?.();
     const layer = worldRef.current;
-    const nextVisible = townVisibleHosts(camera, latest.current.layout, level);
-    if (nextVisible.key !== visibleKey.current) {
-      visibleKey.current = nextVisible.key;
-      setVisible(nextVisible);
-    }
+    hud.drew(camera, level, latest.current.layout);
     if (layer) {
       const tx = camera.viewport.width / 2 - camera.x * camera.z;
       const ty = camera.viewport.height / 2 - camera.y * camera.z;
@@ -434,6 +381,7 @@ export function TownCanvas({
           for (const pennant of pennants.current) markAway(pennant, renderer);
       }
     }
+    hud.framed();
     // Inspected agents walk under a still camera, so their lines follow every
     // drawn frame. World keeps unchanged anchors, so idle frames commit nothing.
     if (posed || latest.current.conversationTargets.length > 0)
@@ -506,7 +454,9 @@ export function TownCanvas({
         rendererRef.current = renderer;
         renderer.setViewport(viewport());
         const { model: m, layout: l } = latest.current;
-        renderer.setScene(m, l, sceneState());
+        // A new renderer has applied nothing: its first frame places all.
+        diff.reset();
+        renderer.apply(diff.next(m, l, sceneState()));
         view.attach(camera, l, viewport());
         renderer.invalidate("ready");
         setReady(true);
@@ -538,23 +488,23 @@ export function TownCanvas({
       disposed = true;
       abort.abort();
       observer.disconnect();
-      if (anchorFrame.current !== null)
-        cancelAnimationFrame(anchorFrame.current);
+      anchorFrame.current?.();
+      anchorFrame.current = null;
       latest.current.onAnchorChange?.(null);
       latest.current.onSelectedAnchorChange?.(null);
       view.detach();
       rendererRef.current?.destroy();
       rendererRef.current = null;
     };
-  }, [view]);
+  }, [view, diff]);
 
   useEffect(() => {
     const renderer = rendererRef.current;
     if (!renderer) return;
-    renderer.setScene(model, layout, sceneState());
+    renderer.apply(diff.next(model, layout, sceneState()));
     view.follow(layout, viewport());
     scheduleAnchors();
-  }, [view, model, layout]);
+  }, [view, diff, model, layout]);
   // Presses, scrolls and zooms on the town hold back a reflow (see above).
   useEffect(() => {
     const host = hostRef.current;
@@ -575,9 +525,18 @@ export function TownCanvas({
   }, [scene]);
 
   useEffect(() => {
-    rendererRef.current?.setState(sceneState());
+    const { model: m, layout: l } = latest.current;
+    rendererRef.current?.apply(diff.next(m, l, sceneState()));
     scheduleAnchors();
-  }, [selectedKey, hover, completionSeenKeys, summonedKeys, askingKeys, calm]);
+  }, [
+    diff,
+    selectedKey,
+    hover,
+    completionSeenKeys,
+    summonedKeys,
+    askingKeys,
+    calm,
+  ]);
 
   // Re-report after any render, so anchors World cleared come back. World
   // keeps unchanged anchors, so a report alone never renders again.
@@ -773,32 +732,35 @@ export function TownCanvas({
         aria-hidden={!ready}
       >
         <TownTeamsLayer teams={teams} />
-        <TownWorldLayer
-          foldedActivity={foldedActivity}
-          askingKeys={askingKeys}
-          onActivateAsk={onActivateAsk}
-          model={model}
-          layout={layout}
-          visible={visible}
-          signs={signs}
-          onHoverEntry={hoverEntry}
-          selectedKey={selectedKey}
-          blockedSince={blockedSince}
-          roomActions={roomActions}
-          selectedRoomKey={selectedRoomKey}
-          onSelect={onSelect}
-          onActivate={onActivateAgent}
-          onActivateRoom={(key) => {
-            onActivateRoom(key);
-            zoomToRoomKey(key);
-          }}
-          onFocusTarget={focusTarget}
-          targets={targets}
-          deskBadges={deskBadges}
-          quests={quests}
-          renderer={rendererRef}
-          pennants={pennants.current}
-        />
+        <TownHudContext.Provider value={hud}>
+          <TownWorldLayer
+            hud={hud}
+            foldedActivity={foldedActivity}
+            askingKeys={askingKeys}
+            onActivateAsk={onActivateAsk}
+            model={model}
+            layout={layout}
+            visible={visible}
+            signs={signs}
+            onHoverEntry={hoverEntry}
+            selectedKey={selectedKey}
+            blockedSince={blockedSince}
+            roomActions={roomActions}
+            selectedRoomKey={selectedRoomKey}
+            onSelect={onSelect}
+            onActivate={onActivateAgent}
+            onActivateRoom={(key) => {
+              onActivateRoom(key);
+              zoomToRoomKey(key);
+            }}
+            onFocusTarget={focusTarget}
+            targets={targets}
+            deskBadges={deskBadges}
+            quests={quests}
+            renderer={rendererRef}
+            pennants={pennants.current}
+          />
+        </TownHudContext.Provider>
       </div>
       <TownBoard
         model={model}

@@ -1,11 +1,13 @@
 import { AnswerDeliverySign } from "./AnswerDeliverySign";
-import { Fragment, memo, useEffect, useMemo, useState } from "react";
+import { Fragment, memo, useMemo } from "react";
 import { ChevronsLeft, ChevronsRight, Plus } from "lucide-react";
 import { ConnectionRecoveryBanner } from "../ConnectionRecoveryBanner";
 import { ColorSwatchButton } from "../../components/ColorSwatch";
 import { TOWN_DESK_EXPANSION_STEP } from "../herdrOfficeProjection";
 import { TERMINAL_COLOR_HEX } from "../terminalColor";
 import { DeskWorkBadge } from "./DeskWorkBadge";
+import type { TownHud } from "./scene/townHud";
+import { useTownAges } from "./useTownHud";
 import { TownBuildingSign } from "./TownBuildingSign";
 import type { TownBuildingSigns } from "./townBuildingSigns";
 import type { TownRoomActions } from "./TownCanvas";
@@ -73,6 +75,7 @@ export const TownTeamsLayer = memo(function TownTeamsLayer({
   );
 });
 export const TownWorldLayer = memo(function TownWorldLayer({
+  hud,
   model,
   foldedActivity,
   askingKeys,
@@ -95,6 +98,8 @@ export const TownWorldLayer = memo(function TownWorldLayer({
   pennants,
   signs,
 }: {
+  /** The HUD store: the ages clock. */
+  hud: TownHud;
   signs: TownBuildingSigns;
   model: TownModel;
   askingKeys: ReadonlySet<string>;
@@ -134,13 +139,8 @@ export const TownWorldLayer = memo(function TownWorldLayer({
     return byHost;
   }, [model.projection.paneRoster, askingKeys]);
   const attention = townAttention(model, blockedSince, askingKeys);
-  const now = Date.now();
-  const [, tick] = useState(0);
-  useEffect(() => {
-    if (!attention.length) return;
-    const timer = window.setInterval(() => tick((value) => value + 1), 15_000);
-    return () => window.clearInterval(timer);
-  }, [attention.length]);
+  // Waiting ages move on every 15 s while anyone waits (scene/townHud.ts).
+  const now = useTownAges(hud, attention.length > 0);
   const selectedHost = selectedRoomKey
     ? model.rooms.get(selectedRoomKey)?.hostKey
     : undefined;

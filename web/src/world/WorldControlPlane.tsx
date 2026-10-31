@@ -46,6 +46,8 @@ import type {
   WorldObject,
   WorldObjectNode,
 } from "./worldObject";
+import { useWorldAnchorPresent, type WorldAnchorFeed } from "./worldAnchorFeed";
+import type { WorldConnectorTargetBounds } from "./worldConnectorGeometry";
 import type { WorldInspectorConversation } from "./worldTerminalPresentation";
 import { worldInspectorWindowId } from "./worldTerminalPresentation";
 
@@ -157,6 +159,23 @@ const WorldIntentConnector = lazyWithReload(
   "world-intent-connector",
   () => import("./WorldIntentConnector"),
 );
+
+/** A conversation's connector, shown while its node has an anchor. */
+function ConversationConnector({
+  feed,
+  nodeId,
+  target,
+}: {
+  feed: WorldAnchorFeed;
+  nodeId: string;
+  target: WorldConnectorTargetBounds;
+}) {
+  return useWorldAnchorPresent(feed, nodeId) ? (
+    <Suspense fallback={null}>
+      <WorldIntentConnector feed={feed} nodeId={nodeId} target={target} />
+    </Suspense>
+  ) : null;
+}
 
 const WorldViewErrorBoundary = lazyWithReload("world-view-boundary", () =>
   import("./WorldViewErrorBoundary").then((module) => ({
@@ -418,20 +437,16 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
             </p>
           ) : null}
           {visibleFloatingInspectors.map((conversation) => {
-            const source =
-              presentedWorld.nodeById.get(conversation.nodeId)?.generation ===
-              conversation.runtimeGeneration
-                ? visualConversationAnchors?.[conversation.nodeId]
-                : null;
             const target =
               floatingWindowAnchors[worldInspectorWindowId(conversation)];
-            return source && target ? (
-              <Suspense
+            return presentedWorld.nodeById.get(conversation.nodeId)
+              ?.generation === conversation.runtimeGeneration && target ? (
+              <ConversationConnector
                 key={worldInspectorWindowId(conversation)}
-                fallback={null}
-              >
-                <WorldIntentConnector source={source} target={target} />
-              </Suspense>
+                feed={visualConversationAnchors}
+                nodeId={conversation.nodeId}
+                target={target}
+              />
             ) : null;
           })}
           <WindowSurface
