@@ -2659,8 +2659,9 @@
       "area": "Durable Desk, watchlist and completion metadata",
       "owner": "server/src/storage/terminal-marks.ts",
       "requirement": "openspec/specs/world-storage/spec.md",
-      "properties": "Stable World IDs and atomic verified bindings; unresolved restart recovery; ambiguous evidence never attaches; per-kind terminal/session lifetimes; committed-only shared projection; exact Undo, bounded recency and close drain",
+      "properties": "Stable World IDs and atomic verified bindings; unresolved restart recovery; ambiguous evidence never attaches; per-kind terminal/session lifetimes; committed-only shared projection; cross-connection retirement and monotonic notice revisions; unknown-session ownership admission; exact unavailable-watch removal and stale capture protection; exact Undo, bounded recency and close drain",
       "existingTests": [
+        "web/src/world/watchlistStore.test.ts",
         "server/src/storage/terminal-marks.test.ts",
         "server/src/storage/terminal-marks-crash.test.ts",
         "server/src/world/persistent-terminal-marks.test.ts",
@@ -2670,7 +2671,7 @@
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/549",
       "technique": "direct-sqlite-recovery",
-      "assessment": "192 finite binding combinations, 24 SQL operation/refusal orders, two browser stores per family, actual service/two WebSockets, eight source/standalone crash schedules and seven compiled production controls",
+      "assessment": "192 finite binding combinations, 24 SQL operation/refusal orders, two browser stores per family, actual service/two WebSockets, eight source/standalone crash schedules and ten compiled production faults and twelve named negative controls",
       "status": "alternative-evidence",
       "remaining": "Independent implementation/mapping review and native CI remain required. No physical power-loss or all-remote-schedules claim. Old process memory and obsolete browser keys cannot be adopted safely.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
@@ -2678,6 +2679,7 @@
         "models": [],
         "contracts": ["verification/contracts/terminal-marks.md"],
         "tests": [
+          "web/src/world/watchlistStore.test.ts",
           "server/src/storage/terminal-marks.test.ts",
           "server/src/storage/terminal-marks-crash.test.ts",
           "server/src/world/persistent-terminal-marks.test.ts",
@@ -2691,7 +2693,7 @@
         ],
         "review": "The delivery link records the storage/identity design, not acceptance of these new lifetimes. Owner approved persistence in the brief; independent review and native CI are pending."
       },
-      "evidenceDecision": "The maintained binding/runtime models remain required within their accepted scope. New per-kind declarations are exhaustively checked directly; real SQLite savepoints and process schedules exercise actual storage and acknowledgement boundaries rather than modeling SQL. Source and compiled negative controls must fail named assertions, never loaders. Multi-row repair may retain a committed prefix, freshly resolved on restart; one user mutation acknowledges only after all resulting writes finish. Production service and browser-store consumers retain ownership/ordering checks.",
+      "evidenceDecision": "The maintained binding/runtime models remain required within their accepted scope. New per-kind declarations are exhaustively checked directly; real SQLite savepoints and process schedules exercise actual storage and acknowledgement boundaries rather than modeling SQL. Source and compiled negative controls must fail named assertions, never loaders. Deferred real-SQLite operations cover another connection retiring/replacing while publication waits, including global recency trimming and monotonic revisions. RPC consumers fence explicit unknown and omitted completion fingerprints across replacement/return; terminal watch continuity is separate. Exact World watch IDs permit disconnected/restart removal, release capacity and refuse stale replacements; the browser forwards captured IDs. Multi-row repair may retain a committed prefix, freshly resolved on restart; one user mutation acknowledges only after all resulting writes finish. Production service and browser-store consumers retain ownership/ordering checks.",
       "promotion": {
         "decision": "pending",
         "scope": "The three terminal-mark stores and approved lifetime changes only; Board layout remains with Q50. Independent review required."

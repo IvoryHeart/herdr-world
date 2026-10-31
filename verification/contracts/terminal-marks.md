@@ -13,6 +13,20 @@ their captured session when known. Explicit unknown session binds to terminal.
 Complete current terminal absence clears each kind. Positive known-session
 replacement clears Desk and seen; watchlist survives. Busy evidence or later
 native completion progress ends seen. Exact Undo retains a newer review mark.
+Publication merges the operation's connection into the latest live projection;
+another connection's retirement and every published revision remain monotonic.
+Pending Desk/completion commands capture an ownership token even for unknown or
+omitted request fingerprints. Observed replacement invalidates it permanently,
+including a return to the original session. Terminal-scoped watch admission does
+not inherit this agent-session restriction.
+
+Unpin names the saved World record with `watch_id`, independently of projection
+membership or source availability. It can remove an unresolved restart capture,
+releases the 128-watch capacity, and never removes a newer replacement record.
+Legacy runtime-qualified tuples are accepted only while their remembered capture
+is unambiguous in this service; reuse requires the returned ID. Ownership tokens
+and legacy aliases are bounded process memory (8,192 and 4,096 entries), never
+persistent runtime identity.
 
 Forbidden: attaching duplicate pane, terminal or session evidence; inferring
 continuity from names, paths or reused pane IDs; publication before commit;
@@ -29,13 +43,18 @@ replacement, unknown session, missed native progress, two real browser stores
 per family, exact Undo, refused writes, retirement during acknowledgement and native admission across a replaced
 then restored session. The 40-open bound spans sources and equal-time actions. Display expiry commits without a source read;
 expiry/Unpin replies and background writes cannot cross a disconnect and restore
-an old projection.
+an old projection. Cross-connection disconnect/replacement tests hold a real
+SQLite acknowledgement while another host retires, including global recency
+trimming, and check increasing notice revisions. Unknown Desk and omitted
+completion fingerprints are exercised through their real RPC handlers. Saved
+Unpin tests cover disconnection, restart before verification, capacity release,
+same/new-generation replacement and exact browser capture forwarding.
 `service/terminal-marks.test.ts` checks the composition root, two real WebSockets,
 change notices and restart against the same database. `storage/terminal-marks-crash.test.ts`
 uses source and standalone compiled processes, killed before commit, after commit
 and after worker acknowledgement; admitted writes also drain on close. It checks
 complete record/binding pairs and integrity. Native installer CI includes these
-eight cases. Seven compiled production faults each fail named assertions; two
+eight cases. Ten compiled production faults fail twelve named boundary assertions; two
 positive bundled suites establish the harness. Existing binding, Desk, watchlist, completion and browser consumers
 remain mandatory.
 

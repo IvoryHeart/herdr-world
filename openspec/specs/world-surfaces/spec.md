@@ -637,7 +637,10 @@ connections and survive browser reloads, service restarts and runtime replacemen
 Only a complete current unambiguous observation of the witnessed terminal on the
 original source SHALL attach a saved watch to a fresh runtime projection. Complete
 current terminal absence SHALL clear it. Pin validates a current live pane, while exact Unpin may
-remove an unavailable record. A watch is observational only and grants no resource
+remove an unavailable saved record. Replies SHALL include its `watch_id`; Unpin
+SHALL preserve that exact capture across retirement and SHALL NOT remove a newer
+replacement watch. Legacy tuples SHALL be accepted only while a remembered capture
+is unambiguous. A watch is observational only and grants no resource
 or mutation authority.
 
 #### Scenario: Native IDs collide across hosts

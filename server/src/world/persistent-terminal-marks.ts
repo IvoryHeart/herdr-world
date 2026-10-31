@@ -19,7 +19,11 @@ import {
   observeDeskPanes,
 } from "./desk-observation";
 import { WorldDeskRegistry, type StoredDeskRecord } from "./desk-state";
-import { WorldWatchlistRegistry, type WorldWatchRecord } from "./watchlist";
+import {
+  watchKey,
+  WorldWatchlistRegistry,
+  type WorldWatchRecord,
+} from "./watchlist";
 import {
   WorldCompletionSeenRegistry,
   type CompletionSeenIdentity,
@@ -27,6 +31,7 @@ import {
 
 type Identity = CompletionSeenIdentity & {
   agent_session_fingerprint?: string | null;
+  watch_id?: string;
 };
 export type MarkRegistries = {
   desk: WorldDeskRegistry;
@@ -86,11 +91,65 @@ export class PersistentTerminalMarks {
   private queued = 0;
   private closed = false;
   private runtimeEpoch = new Map<string, number>();
+  private ownership = new Map<
+    string,
+    {
+      connectionId: string;
+      generation: number;
+      terminal: string;
+      known: boolean;
+      present: boolean;
+      session: string | null;
+      token: object;
+    }
+  >();
+  private watchCaptures = new Map<string, string | null>();
+  private rememberWatch(record: WorldWatchRecord) {
+    if (!record.watch_id) return;
+    const key = watchKey(record),
+      prior = this.watchCaptures.get(key);
+    this.watchCaptures.set(
+      key,
+      prior === undefined || prior === record.watch_id ? record.watch_id : null,
+    );
+    while (this.watchCaptures.size > 4096)
+      this.watchCaptures.delete(this.watchCaptures.keys().next().value!);
+  }
+  private recordOwner(
+    identity: Identity,
+    session: string | null,
+    known = true,
+    present = true,
+  ) {
+    const key = watchKey(identity),
+      prior = this.ownership.get(key);
+    if (
+      prior &&
+      prior.session === session &&
+      prior.known === known &&
+      prior.present === present
+    )
+      return prior;
+    const owner = {
+      connectionId: identity.connection_id,
+      generation: identity.connection_generation,
+      terminal: identity.terminal_id,
+      known,
+      present,
+      session,
+      token: {},
+    };
+    this.ownership.delete(key);
+    this.ownership.set(key, owner);
+    while (this.ownership.size > 8192)
+      this.ownership.delete(this.ownership.keys().next().value!);
+    return owner;
+  }
   private admissions = new Set<{
     connectionId: string;
     generation: number;
     terminal: string;
-    session?: string;
+    owner?: { key: string; token: object };
     valid: boolean;
   }>();
   constructor(private readonly options: Options) {}
@@ -144,6 +203,12 @@ export class PersistentTerminalMarks {
         connectionId,
         (this.runtimeEpoch.get(connectionId) ?? 0) + 1,
       );
+    for (const [key, owner] of this.ownership)
+      if (
+        owner.connectionId === connectionId &&
+        (!ready || owner.generation !== generation)
+      )
+        this.ownership.delete(key);
     for (const guard of this.admissions)
       if (
         guard.connectionId === connectionId &&
@@ -172,21 +237,44 @@ export class PersistentTerminalMarks {
       (guard) =>
         guard.connectionId === connectionId && guard.generation === generation,
     );
-    if (guards.length) {
+    const owners = [...this.ownership.values()].filter(
+      (owner) =>
+        owner.connectionId === connectionId && owner.generation === generation,
+    );
+    if (guards.length || owners.length) {
       const lease = this.options.lease(connectionId);
       if (lease?.generation === generation && lease.isCurrent()) {
         const entities = terminalEntities(panes),
           ambiguous =
             entities.some((entity) => !entity.native_id) ||
             bindingObservationAmbiguous(entities);
+        const byTerminal = new Map(
+          entities.flatMap((entity) =>
+            entity.terminals.map((terminal) => [terminal, entity] as const),
+          ),
+        );
+        for (const owner of owners) {
+          const entity = byTerminal.get(owner.terminal);
+          if (ambiguous) owner.token = {};
+          else
+            this.recordOwner(
+              {
+                connection_id: connectionId,
+                connection_generation: generation,
+                terminal_id: owner.terminal,
+              },
+              entity?.session ?? null,
+              true,
+              Boolean(entity),
+            );
+        }
         for (const guard of guards) {
-          const entity = entities.find((entity) =>
-            entity.terminals.includes(guard.terminal),
-          );
+          const entity = byTerminal.get(guard.terminal);
           guard.valid &&=
             !ambiguous &&
             Boolean(entity) &&
-            (!guard.session || entity?.session === guard.session);
+            (!guard.owner ||
+              this.ownership.get(guard.owner.key)?.token === guard.owner.token);
         }
       }
     }
@@ -220,21 +308,26 @@ export class PersistentTerminalMarks {
     });
   }
   unpin(identity: Identity) {
+    // Freeze the exact capture before waiting behind another admitted operation.
+    const capture =
+      identity.watch_id ?? this.watchCaptures.get(watchKey(identity));
     return this.enqueue(async () => {
-      const live = this.options.registries;
-      if (!live.watchlist.fork().unpin(identity).changed) return;
+      if (!capture) return;
       const row = this.options.storage
         .list()
         .find(
           (row) =>
+            row.id === capture &&
             row.kind === "watchlist" &&
             row.binding.instance === identity.connection_id &&
             row.binding.evidence.terminals[0] === identity.terminal_id,
         );
-      if (row) await this.options.storage.remove(row.id, row.revision);
-      const before = revisions(live),
+      if (!row) return;
+      await this.options.storage.remove(row.id, row.revision);
+      const live = this.options.registries,
+        before = revisions(live),
         draft = live.watchlist.fork();
-      draft.unpin(identity);
+      draft.unpin(identity, true);
       live.watchlist.adopt(draft);
       this.publish(
         before,
@@ -251,6 +344,7 @@ export class PersistentTerminalMarks {
       pane: Record<string, unknown>,
       at: number,
     ) => void,
+    scope: "agent" | "terminal" = "agent",
   ) {
     return this.enqueue(async () => {
       const lease = this.options.lease(identity.connection_id);
@@ -260,13 +354,21 @@ export class PersistentTerminalMarks {
         !lease.isCurrent()
       )
         throw new Error("terminal mark target is unavailable");
+      const ownerKey = watchKey(identity);
+      const observed = this.options.registries.desk.observedSession(identity);
+      const initial = Object.hasOwn(identity, "agent_session_fingerprint")
+        ? identity.agent_session_fingerprint
+        : observed;
+      const owner =
+        scope === "agent"
+          ? (this.ownership.get(ownerKey) ??
+            this.recordOwner(identity, initial ?? null, initial !== undefined))
+          : undefined;
       const guard = {
         connectionId: identity.connection_id,
         generation: identity.connection_generation,
         terminal: identity.terminal_id,
-        ...(typeof identity.agent_session_fingerprint === "string"
-          ? { session: identity.agent_session_fingerprint }
-          : {}),
+        ...(owner ? { owner: { key: ownerKey, token: owner.token } } : {}),
         valid: true,
       };
       this.admissions.add(guard);
@@ -284,6 +386,11 @@ export class PersistentTerminalMarks {
         );
         if (matches.length !== 1)
           throw new Error("terminal mark target is ambiguous or absent");
+        if (guard.owner)
+          guard.owner.token = this.recordOwner(
+            identity,
+            deskSessionFingerprint(matches[0]!.agent_session),
+          ).token;
         const at = this.options.now();
         await this.apply(
           identity.connection_id,
@@ -304,6 +411,8 @@ export class PersistentTerminalMarks {
     connectionId?: string,
     generation?: number,
   ) {
+    for (const watch of this.options.registries.watchlist.list().records)
+      this.rememberWatch(watch);
     const after = revisions(this.options.registries);
     (["desk", "watchlist", "completion-seen"] as const).forEach((kind, i) => {
       if (before[i] !== after[i])
@@ -385,7 +494,7 @@ export class PersistentTerminalMarks {
           ...row.body,
         } as StoredDeskRecord);
       if (row.kind === "watchlist")
-        watches.push({ ...identity, label: row.body.label! });
+        watches.push({ ...identity, label: row.body.label!, watch_id: row.id });
       if (row.kind === "completion-seen") {
         const sequence = statusByTerminal.get(terminal)?.sequence;
         if (
@@ -535,6 +644,14 @@ export class PersistentTerminalMarks {
         current: fence,
       });
       savedById.set(committed.id, committed);
+      if (committed.kind === "watchlist")
+        this.rememberWatch({
+          connection_id: connectionId,
+          connection_generation: generation,
+          terminal_id: candidate.terminal,
+          label: committed.body.label!,
+          watch_id: committed.id,
+        });
     }
     ensureCurrent();
     const committed = new Map(
@@ -549,19 +666,12 @@ export class PersistentTerminalMarks {
           row,
         ]),
     );
-    const connections = new Set(
-      [
-        ...draft.desk.list().records,
-        ...draft.watchlist.list().records,
-        ...draft.seen.list().records,
-      ].map((record) => record.connection_id),
-    );
-    for (const connection of connections) {
+    const align = (view: MarkRegistries, connection: string) => {
       const retained = (kind: MarkKind, terminal: string) =>
         committed.get(JSON.stringify([connection, kind, terminal]));
-      draft.desk.replaceConnection(
+      view.desk.replaceConnection(
         connection,
-        draft.desk
+        view.desk
           .storedRecords()
           .filter(
             (record) =>
@@ -573,19 +683,23 @@ export class PersistentTerminalMarks {
             ...retained("desk", record.terminal_id)!.body,
           })),
       );
-      draft.watchlist.replaceConnection(
+      view.watchlist.replaceConnection(
         connection,
-        draft.watchlist
+        view.watchlist
           .list()
           .records.filter(
             (record) =>
               record.connection_id === connection &&
               retained("watchlist", record.terminal_id),
-          ),
+          )
+          .map((record) => ({
+            ...record,
+            watch_id: retained("watchlist", record.terminal_id)!.id,
+          })),
       );
-      draft.seen.replaceConnection(
+      view.seen.replaceConnection(
         connection,
-        draft.seen
+        view.seen
           .list()
           .records.filter(
             (record) =>
@@ -593,11 +707,31 @@ export class PersistentTerminalMarks {
               retained("completion-seen", record.terminal_id),
           ),
       );
-    }
+    };
+    // Normalize committed rows before merging, so one publication advances from
+    // the latest live revision and never installs another connection's old state.
+    align(draft, connectionId);
+    const published = {
+      desk: live.desk.fork(),
+      watchlist: live.watchlist.fork(),
+      seen: live.seen.fork(),
+    };
+    published.desk.adoptConnection(connectionId, draft.desk);
+    published.watchlist.adoptConnection(connectionId, draft.watchlist);
+    published.seen.adoptConnection(connectionId, draft.seen);
+    const connections = new Set(
+      [
+        ...published.desk.list().records,
+        ...published.watchlist.list().records,
+        ...published.seen.list().records,
+      ].map((record) => record.connection_id),
+    );
+    for (const connection of connections)
+      if (connection !== connectionId) align(published, connection);
     const before = revisions(live);
-    live.desk.adopt(draft.desk);
-    live.watchlist.adopt(draft.watchlist);
-    live.seen.adopt(draft.seen);
+    live.desk.adopt(published.desk);
+    live.watchlist.adopt(published.watchlist);
+    live.seen.adopt(published.seen);
     this.publish(before, connectionId, generation);
   }
 }

@@ -21,9 +21,9 @@ export type CompletionSeen = {
 
 /**
  * Which finished agents a person has checked, shared by every browser of this
- * World. Process memory only: a restart forgets every mark, and a new runtime
- * generation retires its connection's marks, because terminal IDs are not
- * durable identities.
+ * World. This runtime-qualified projection is process memory; the durable
+ * coordinator saves verified captures separately and reattaches them only after
+ * fresh evidence. Runtime retirement clears the projection and busy observations.
  *
  * A check covers one completion. The service, not a browser, decides when it
  * ends: the host reads that every browser's view comes from show the agent
@@ -47,6 +47,20 @@ export class WorldCompletionSeenRegistry {
       [...next.records].map(([key, value]) => [key, { ...value }]),
     );
     this.busy = new Set(next.busy);
+  }
+  adoptConnection(connectionId: string, next: WorldCompletionSeenRegistry) {
+    this.replaceConnection(
+      connectionId,
+      next
+        .list()
+        .records.filter((record) => record.connection_id === connectionId),
+    );
+    const owns = (key: string) =>
+      (JSON.parse(key) as [string])[0] === connectionId;
+    for (const key of this.busy) if (owns(key)) this.busy.delete(key);
+    for (const key of next.busy) if (owns(key)) this.busy.add(key);
+    while (this.busy.size > MAX_OBSERVED)
+      this.busy.delete(this.busy.keys().next().value!);
   }
   replaceConnection(connectionId: string, records: CompletionSeenIdentity[]) {
     const before = JSON.stringify([...this.records.keys()]);

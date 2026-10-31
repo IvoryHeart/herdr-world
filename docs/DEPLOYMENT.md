@@ -1067,6 +1067,15 @@ records. Missing session evidence and duplicate identities never attach a saved
 record. Renewed work or later native completion progress clears a completion
 check. Herdr restarting with new terminals therefore does not inherit old marks.
 
+Unpin removes its exact saved watch even while the host is unavailable. The browser
+carries the returned `watch_id`, so an older Unpin cannot remove a replacement.
+Older API callers without this field can use an unambiguous runtime-qualified
+capture remembered by the current service; repeated reuse requires the returned
+ID. Disconnecting one host cannot restore its old projection when another host's
+storage write finishes. Pending Desk and completion commands also lose admission
+on observed agent replacement, including unknown identities and a return to the
+original session. Controls and their visible wording are unchanged.
+
 The first upgrade cannot adopt the stopped service's process memory: those stores
 had no file/export with original binding evidence. Current browsers only hold
 service projections. Obsolete browser-local Desk and completion keys are not

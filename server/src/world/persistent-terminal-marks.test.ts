@@ -57,30 +57,40 @@ async function fixture(root?: string, generation = 1) {
     time = 1000;
   const controls = new Set<(control: BridgeControlMsg) => void>();
   const notices: string[] = [];
+  const noticeRevisions: { type: string; revision: number }[] = [];
+  const hosts = new Map<
+    string,
+    { generation: number; current: boolean; panes: Record<string, unknown>[] }
+  >();
   let held:
     | {
         entered: ReturnType<typeof Promise.withResolvers<void>>;
         release: ReturnType<typeof Promise.withResolvers<void>>;
       }
     | undefined;
-  const lease = () => ({
-    generation,
-    isCurrent: () => current,
-    runtime: {
-      herdr: {
-        call: async () => {
-          const captured = structuredClone(panes),
-            pending = held;
-          held = undefined;
-          if (pending) {
-            pending.entered.resolve();
-            await pending.release.promise;
-          }
-          return { panes: captured };
+  const lease = (connectionId = "alpha") => {
+    const host = hosts.get(connectionId),
+      capturedGeneration = host?.generation ?? generation;
+    return {
+      generation: capturedGeneration,
+      isCurrent: () =>
+        host ? host.current && host.generation === capturedGeneration : current,
+      runtime: {
+        herdr: {
+          call: async () => {
+            const captured = structuredClone(host?.panes ?? panes),
+              pending = held;
+            held = undefined;
+            if (pending) {
+              pending.entered.resolve();
+              await pending.release.promise;
+            }
+            return { panes: captured };
+          },
         },
       },
-    },
-  });
+    };
+  };
   const marks = new PersistentTerminalMarks({
     storage: store.terminalMarks,
     incarnation: "synthetic-incarnation",
@@ -98,6 +108,7 @@ async function fixture(root?: string, generation = 1) {
             ? "world_watchlist_changed"
             : "world_completion_seen_changed";
       notices.push(type);
+      noticeRevisions.push({ type, revision });
       for (const listener of controls) listener({ type, revision });
     },
   });
@@ -182,6 +193,35 @@ async function fixture(root?: string, generation = 1) {
     close,
     client,
     notices,
+    noticeRevisions,
+    hosts,
+    setCurrent(value: boolean) {
+      current = value;
+    },
+    observeHost(connectionId: string) {
+      const host = hosts.get(connectionId)!;
+      return marks.observe(connectionId, host.generation, host.panes, ++time);
+    },
+    seedHost(connectionId: string) {
+      const host = hosts.get(connectionId)!,
+        owner = {
+          ...identity,
+          connection_id: connectionId,
+          connection_generation: host.generation,
+        };
+      const agent = {
+        ...owner,
+        agent_session_fingerprint: deskSessionFingerprint(
+          host.panes[0]!.agent_session,
+        ),
+      };
+      return marks.mutate(agent, (draft) => {
+        draft.desk.mark(agent, "stop-a", true, ++time);
+        draft.desk.open(agent, ++time);
+        draft.watchlist.pin({ ...owner, label: "Synthetic watch" });
+        draft.seen.mark(owner);
+      });
+    },
     advance(ms: number) {
       time += ms;
     },
@@ -589,4 +629,270 @@ test("a background write admitted before a disconnect waits for a new verificati
   f.store.terminalMarks.put = put;
   await f.observe();
   expect(f.registries.desk.list().records[0]!.reviewed_stop).toBe("stop-a");
+});
+
+for (const replacement of [false, true])
+  test(`publication preserves another connection's ${replacement ? "replacement" : "disconnect"} and monotonic notices`, async () => {
+    const f = await fixture();
+    const beta = {
+      generation: 1,
+      current: true,
+      panes: [pane()] as Record<string, unknown>[],
+    };
+    f.hosts.set("beta", beta);
+    await f.seedHost("beta");
+    await f.seed();
+    const entered = Promise.withResolvers<void>(),
+      release = Promise.withResolvers<void>(),
+      put = f.store.terminalMarks.put;
+    f.store.terminalMarks.put = async (input) => {
+      const row = await put(input);
+      entered.resolve();
+      await release.promise;
+      return row;
+    };
+    const pending = f.marks.mutate(f.deskIdentity, (draft) => {
+      draft.desk.mark(f.deskIdentity, "next-alpha-stop", true, 2000);
+    });
+    await entered.promise;
+    if (replacement) {
+      beta.generation = 2;
+      beta.panes = [pane("session-b")];
+    } else beta.current = false;
+    f.marks.retire("beta", beta.generation, replacement);
+    release.resolve();
+    await pending;
+    for (const registry of [
+      f.registries.desk,
+      f.registries.watchlist,
+      f.registries.seen,
+    ])
+      expect(
+        registry
+          .list()
+          .records.some((record) => record.connection_id === "beta"),
+      ).toBe(false);
+    expect(
+      f.store.terminalMarks
+        .list()
+        .filter((row) => row.binding.instance === "beta"),
+    ).toHaveLength(3);
+    for (const type of new Set(f.notices)) {
+      const revisions = f.noticeRevisions
+        .filter((notice) => notice.type === type)
+        .map((notice) => notice.revision);
+      expect(
+        revisions.every(
+          (revision, index) => index === 0 || revision > revisions[index - 1]!,
+        ),
+      ).toBe(true);
+    }
+  });
+test("global open trimming does not reattach a connection retired during another source's commit", async () => {
+  const f = await fixture(),
+    beta = {
+      generation: 1,
+      current: true,
+      panes: [pane()] as Record<string, unknown>[],
+    };
+  f.hosts.set("beta", beta);
+  await f.seedHost("beta");
+  for (let index = 0; index < 39; index++) {
+    const identity = { ...f.deskIdentity, connection_id: `source-${index}` };
+    await f.marks.mutate(identity, (draft) => {
+      draft.desk.open(identity, 2000 + index);
+    });
+  }
+  const entered = Promise.withResolvers<void>(),
+    release = Promise.withResolvers<void>(),
+    put = f.store.terminalMarks.put;
+  f.store.terminalMarks.put = async (input) => {
+    const row = await put(input);
+    entered.resolve();
+    await release.promise;
+    return row;
+  };
+  const pending = f.marks.mutate(f.deskIdentity, (draft) => {
+    draft.desk.open(f.deskIdentity, 3000);
+  });
+  await entered.promise;
+  beta.current = false;
+  f.marks.retire("beta", 1, false);
+  release.resolve();
+  await pending;
+  for (const registry of [
+    f.registries.desk,
+    f.registries.watchlist,
+    f.registries.seen,
+  ])
+    expect(
+      registry.list().records.some((record) => record.connection_id === "beta"),
+    ).toBe(false);
+  expect(
+    f.store.terminalMarks
+      .list()
+      .filter((row) => row.kind === "desk" && row.body.opened_at != null),
+  ).toHaveLength(40);
+  expect(
+    f.store.terminalMarks
+      .list()
+      .find((row) => row.kind === "desk" && row.binding.instance === "beta")
+      ?.body,
+  ).toMatchObject({ reviewed_stop: "stop-a", opened_at: null });
+  f.store.terminalMarks.put = put;
+  beta.current = true;
+  await f.observeHost("beta");
+  expect(
+    f.registries.desk
+      .list()
+      .records.find((record) => record.connection_id === "beta"),
+  ).toMatchObject({ reviewed_stop: "stop-a", opened_at: null });
+});
+for (const kind of ["unknown Desk", "completion"] as const)
+  test(`pending ${kind} RPC refuses replacement followed by the original ownership`, async () => {
+    const f = await fixture();
+    const initial =
+      kind === "unknown Desk" ? { ...pane(), agent_session: null } : pane();
+    f.setPanes([initial]);
+    await f.observe();
+    const held = f.holdRead();
+    const pending =
+      kind === "unknown Desk"
+        ? f.client.call("world.desk.review", {
+            ...f.identity,
+            agent_session_fingerprint: null,
+            reviewed: true,
+            stop_id: "stale-unknown-stop",
+          })
+        : f.client.call("world.completion_seen.mark", f.identity);
+    await held.entered.promise;
+    f.setPanes([pane("replacement-session")]);
+    const replacement = f.observe();
+    f.setPanes([initial]);
+    const restored = f.observe();
+    held.release.resolve();
+    const outcome = await pending.then(
+      () => "accepted",
+      () => "refused",
+    );
+    await Promise.all([replacement, restored]);
+    expect(outcome).toBe("refused");
+    expect(
+      f.registries.desk
+        .list()
+        .records.some(
+          (record) => record.reviewed_stop === "stale-unknown-stop",
+        ),
+    ).toBe(false);
+  });
+test("a terminal-scoped watch admission may span an agent-session replacement", async () => {
+  const f = await fixture();
+  await f.observe();
+  const held = f.holdRead();
+  const pending = f.client.call("world.watchlist.pin", {
+    ...f.identity,
+    label: "Terminal watch",
+  });
+  await held.entered.promise;
+  f.setPanes([pane("replacement-session")]);
+  const observing = f.observe();
+  held.release.resolve();
+  await pending;
+  await observing;
+  expect(f.registries.watchlist.list().records).toHaveLength(1);
+});
+test("exact Unpin removes a disconnected saved capture and it cannot return after reconnect or restart", async () => {
+  const f = await fixture();
+  const reply = (await f.client.call("world.watchlist.pin", {
+    ...f.identity,
+    label: "Saved watch",
+  })) as { records: Record<string, unknown>[] };
+  const capture = reply.records[0]!;
+  f.setCurrent(false);
+  f.marks.retire("alpha", 1, false);
+  await f.client.call("world.watchlist.unpin", capture);
+  expect(
+    f.store.terminalMarks.list().filter((row) => row.kind === "watchlist"),
+  ).toEqual([]);
+  f.setCurrent(true);
+  await f.observe();
+  expect(f.registries.watchlist.list().records).toEqual([]);
+  await f.close();
+  const again = await fixture(f.root);
+  await again.observe();
+  expect(again.registries.watchlist.list().records).toEqual([]);
+});
+test("unavailable Unpin releases the global watch capacity", async () => {
+  const f = await fixture();
+  for (let index = 0; index < 128; index++)
+    await f.client.call("world.watchlist.pin", {
+      ...f.identity,
+      connection_id: `source-${index}`,
+      label: "Saved watch",
+    });
+  f.marks.retire("source-0", 1, false);
+  await f.client.call("world.watchlist.unpin", {
+    ...f.identity,
+    connection_id: "source-0",
+  });
+  expect(
+    f.store.terminalMarks.list().filter((row) => row.kind === "watchlist"),
+  ).toHaveLength(127);
+  await f.client.call("world.watchlist.pin", {
+    ...f.identity,
+    connection_id: "new-source",
+    label: "Replacement capacity",
+  });
+  expect(
+    f.store.terminalMarks.list().filter((row) => row.kind === "watchlist"),
+  ).toHaveLength(128);
+});
+for (const generation of [1, 2])
+  test(`an older watch capture cannot remove its replacement in generation ${generation}`, async () => {
+    const f = await fixture();
+    const first = (await f.client.call("world.watchlist.pin", {
+      ...f.identity,
+      label: "First",
+    })) as { records: Record<string, unknown>[] };
+    const old = first.records[0]!;
+    await f.client.call("world.watchlist.unpin", old);
+    f.hosts.set("alpha", { generation, current: true, panes: [pane()] });
+    f.marks.retire("alpha", generation, true);
+    const second = (await f.client.call("world.watchlist.pin", {
+      ...f.identity,
+      connection_generation: generation,
+      label: "Second",
+    })) as { records: Record<string, unknown>[] };
+    const current = second.records[0]!;
+    expect(typeof old.watch_id).toBe("string");
+    expect(current.watch_id).not.toBe(old.watch_id);
+    await f.client.call("world.watchlist.unpin", old);
+    await f.client.call("world.watchlist.unpin", f.identity);
+    expect(
+      f.store.terminalMarks
+        .list()
+        .filter((row) => row.kind === "watchlist")
+        .map((row) => row.id),
+    ).toEqual([current.watch_id as string]);
+    await f.client.call("world.watchlist.unpin", current);
+    expect(
+      f.store.terminalMarks.list().filter((row) => row.kind === "watchlist"),
+    ).toEqual([]);
+  });
+test("an exact watch ID removes an unresolved restart capture without source access", async () => {
+  const first = await fixture();
+  const reply = (await first.client.call("world.watchlist.pin", {
+    ...first.identity,
+    label: "Saved watch",
+  })) as { records: Record<string, unknown>[] };
+  const capture = reply.records[0]!;
+  await first.close();
+  const again = await fixture(first.root);
+  again.setCurrent(false);
+  expect(again.registries.watchlist.list().records).toEqual([]);
+  await again.client.call("world.watchlist.unpin", capture);
+  expect(again.store.terminalMarks.list()).toEqual([]);
+  again.setCurrent(true);
+  await again.observe();
+  expect(again.registries.watchlist.list().records).toEqual([]);
 });

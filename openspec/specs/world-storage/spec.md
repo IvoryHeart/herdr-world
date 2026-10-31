@@ -268,6 +268,11 @@ There is no current file-owned or browser-owned state to import. The first upgra
 SHALL start empty rather than inventing continuity for old process memory or
 obsolete browser keys. Subsequent starts SHALL retain committed rows and World IDs.
 Board layout and ordinary Town placement SHALL NOT enter this family.
+Publication SHALL merge against the latest live state without restoring another
+connection's retired projection or decreasing its notice revisions. Pending agent
+commands SHALL be fenced by observed ownership even when session identity is
+unknown or omitted. Exact saved-watch removal SHALL remain available while its
+source is unavailable and SHALL NOT delete a replacement record.
 
 #### Scenario: Restart after acknowledgement
 - **WHEN** a process dies after acknowledging a terminal mark

@@ -16,6 +16,41 @@ function response(revision: number, terminalId = "terminal-a") {
 }
 
 describe("WorldWatchlistStore", () => {
+  test("Unpin carries the exact saved capture and never substitutes a newer watch ID", async () => {
+    let capture = "w-original",
+      revision = 1;
+    const sent: Record<string, unknown>[] = [];
+    const store = new WorldWatchlistStore({
+      call: async (method, params) => {
+        if (method === "world.watchlist.unpin") sent.push(params!);
+        return {
+          revision,
+          records: response(revision).records.map((record) => ({
+            ...record,
+            watch_id: capture,
+          })),
+        };
+      },
+      onControl: () => () => {},
+      onStatus: () => () => {},
+    });
+    await store.refresh();
+    const original = store.get().records[0]!;
+    expect(original.watchId).toBe("w-original");
+    await store.mutate("world.watchlist.unpin", {
+      connectionId: "host-a",
+      generation: 1,
+      terminalId: "terminal-a",
+      label: "Synthetic",
+    });
+    expect(sent[0]!.watch_id).toBe("w-original");
+    capture = "w-replacement";
+    revision = 2;
+    await store.refresh();
+    await store.mutate("world.watchlist.unpin", original);
+    expect(sent[1]!.watch_id).toBe("w-original");
+    expect(store.get().records[0]!.watchId).toBe("w-replacement");
+  });
   test("colliding watched terminals remain separately qualified and one mutation carries only its captured owner", async () => {
     const records = ["alpha", "beta"].map((connection_id) => ({
       connection_id,

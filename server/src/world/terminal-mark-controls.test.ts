@@ -74,6 +74,54 @@ const cases = [
     replacement: "false",
     assertion: "SQLite revision fences reject stale edits and deletes",
   },
+  {
+    name: "cross-connection publication",
+    entry: consumers,
+    file: "persistent-terminal-marks.ts",
+    match: /const published = \{[\s\S]*?\};/,
+    replacement: "const published = draft;",
+    assertion:
+      "publication preserves another connection's disconnect and monotonic notices",
+  },
+  {
+    name: "unknown ownership admission",
+    entry: consumers,
+    file: "persistent-terminal-marks.ts",
+    match: /guard\.valid &&=/,
+    replacement: "guard.valid ||=",
+    assertion:
+      "pending unknown Desk RPC refuses replacement followed by the original ownership",
+  },
+  {
+    name: "completion ownership admission",
+    entry: consumers,
+    file: "persistent-terminal-marks.ts",
+    match: /guard\.valid &&=/,
+    replacement: "guard.valid ||=",
+    assertion:
+      "pending completion RPC refuses replacement followed by the original ownership",
+  },
+  {
+    name: "unavailable saved removal",
+    entry: consumers,
+    file: "persistent-terminal-marks.ts",
+    match: /if \(!capture\) return;/,
+    replacement:
+      "if (!this.options.registries.watchlist.list().records.some(record => record.connection_id === identity.connection_id && record.connection_generation === identity.connection_generation && record.terminal_id === identity.terminal_id)) return; if (!capture) return;",
+    assertion:
+      "exact Unpin removes a disconnected saved capture and it cannot return after reconnect or restart",
+  },
+  {
+    name: "exact watch identity",
+    entry: consumers,
+    file: "persistent-terminal-marks.ts",
+    match:
+      /const capture =\s*identity\.watch_id \?\? this\.watchCaptures\.get\(watchKey\(identity\)\);/,
+    replacement:
+      'const capture = this.options.storage.list().find(row => row.kind === "watchlist" && row.binding.instance === identity.connection_id && row.binding.evidence.terminals[0] === identity.terminal_id)?.id;',
+    assertion:
+      "an older watch capture cannot remove its replacement in generation 1",
+  },
 ];
 for (const [index, control] of cases.entries())
   test(`compiled terminal-mark control: ${control.name}`, async () => {

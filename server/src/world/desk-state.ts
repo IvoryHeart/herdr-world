@@ -61,6 +61,36 @@ export class WorldDeskRegistry {
       [...next.previous].map(([key, value]) => [key, { ...value }]),
     );
   }
+  adoptConnection(connectionId: string, next: WorldDeskRegistry) {
+    this.replaceConnection(
+      connectionId,
+      next
+        .storedRecords()
+        .filter((record) => record.connection_id === connectionId),
+    );
+    for (const [key, value] of this.previous)
+      if (value.identity.connection_id === connectionId)
+        this.previous.delete(key);
+    for (const [key, value] of next.previous)
+      if (value.identity.connection_id === connectionId)
+        this.previous.set(key, { ...value });
+    this.ownershipRevision = Math.max(
+      this.ownershipRevision,
+      next.ownershipRevision,
+    );
+    while (this.previous.size > DESK_OBSERVATION_LIMIT)
+      this.previous.delete(this.previous.keys().next().value!);
+  }
+  observedSession(
+    identity: Pick<
+      DeskIdentity,
+      "connection_id" | "connection_generation" | "terminal_id"
+    >,
+  ): string | null | undefined {
+    return this.previous.get(
+      terminalKey({ ...identity, agent_session_fingerprint: null }),
+    )?.identity.agent_session_fingerprint;
+  }
   storedRecords(): StoredDeskRecord[] {
     return [...this.records.values()].map((record) => ({ ...record }));
   }

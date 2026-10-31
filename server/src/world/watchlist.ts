@@ -7,6 +7,8 @@ export type WorldWatchRecord = {
   connection_generation: number;
   terminal_id: string;
   label: string;
+  /** Exact durable capture; absent only on memory-only compatibility registries. */
+  watch_id?: string;
 };
 
 export type WorldWatchlist = {
@@ -27,6 +29,14 @@ export class WorldWatchlistRegistry {
     this.revision = next.revision;
     this.records = new Map(
       [...next.records].map(([key, value]) => [key, { ...value }]),
+    );
+  }
+  adoptConnection(connectionId: string, next: WorldWatchlistRegistry) {
+    this.replaceConnection(
+      connectionId,
+      next
+        .list()
+        .records.filter((record) => record.connection_id === connectionId),
     );
   }
   replaceConnection(connectionId: string, records: WorldWatchRecord[]) {
@@ -61,9 +71,10 @@ export class WorldWatchlistRegistry {
       WorldWatchRecord,
       "connection_id" | "connection_generation" | "terminal_id"
     >,
+    committedRemoval = false,
   ): { changed: boolean; revision: number } {
     const key = watchKey(normalize({ ...identity, label: "Watch" }));
-    if (!this.records.delete(key))
+    if (!this.records.delete(key) && !committedRemoval)
       return { changed: false, revision: this.revision };
     this.revision += 1;
     return { changed: true, revision: this.revision };

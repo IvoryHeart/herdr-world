@@ -85,6 +85,11 @@ preferences. They carry no binding and are inherited on ID reuse. Profiles and c
 browser record-creation protocol remains unchanged. Store-issued profile and
 remaining JSON-owned ID creation are separate work. Desk marks, watchlists and
 completion seen state now use the [durable terminal-mark family](DEPLOYMENT.md#desk-watchlist-and-completion-storage).
+Watch replies carry the World record's `watch_id` for exact removal even while
+unresolved; a runtime-qualified tuple alone cannot distinguish a reused capture.
+Pending agent commands use separate process-local ownership tokens, including
+explicit unknown identities. These tokens fence admission without extending any
+saved record's lifetime.
 
 The [identity contract](../verification/contracts/world-identity.md) maps M4,
 mutation controls and mandatory consumers. The complete `verification:gate`
