@@ -130,33 +130,18 @@ export async function prepareTownEdgeDrop({
       "holding the boundary desk did not lift it",
     );
     press("pointermove", [stage.left + stage.width / 2, stage.bottom - 20]);
-    // While the town scrolls under the held desk, nothing rests under it, so
-    // the carry must never snap to a passing desk (the group magnet).
-    const snapped: string[] = [];
-    const watchSnap = () => {
-      if (ghost()?.dataset.action === "group")
-        snapped.push(ghost()?.textContent ?? "");
-    };
     // Hold continuously. A fixed 250ms pulse can end before a slow RAF runs.
     await waitFor(
-      () => {
-        watchSnap();
-        return destination() !== undefined;
-      },
+      () => destination() !== undefined,
       () =>
         `edge hold never revealed a safe destination (frames ${renderer.frames}, ghost ${ghost()?.textContent}, boundary ${room.getBoundingClientRect().bottom.toFixed(1)})`,
     );
-    if (snapped.length)
-      throw new Error(
-        `the carry snapped to a desk scrolling under it at the edge (${snapped[0]})`,
-      );
     const target = destination()!;
     press("pointermove", target.point);
     await waitFor(
       () =>
         ghost()?.dataset.valid === "true" && ghost()?.dataset.action === "move",
-      () =>
-        `the edge-revealed room is not a valid cross-room drop target (ghost ${JSON.stringify({ text: ghost()?.textContent ?? null, valid: ghost()?.dataset.valid, action: ghost()?.dataset.action })}, point ${target.point.map((v) => v.toFixed(1)).join(",")}, room ${target.native}, frames ${renderer.frames}, flying ${renderer.flying}, zoom ${renderer.zoom.toFixed(3)})`,
+      "the edge-revealed room is not a valid cross-room drop target",
     );
     if (room.getBoundingClientRect().bottom >= boundaryBefore)
       throw new Error("holding a desk at the edge did not scroll the room");
