@@ -296,19 +296,40 @@ will retry a temporary failure with bounded backoff; an eventual alert may still
 arrive. Closing the ask cancels a pending alert. A failure to record retains the
 CLI's fallback through the asking pane's Herdr, names the recording failure and
 exits 1. A lost service reply can therefore produce duplicate owner alerts.
-Report failures once; do not add a caller-side retry loop. Interrupted dispatch
-is recorded as `uncertain`; inspect `ask get ID --json` for its evidence. An
-answer is durable before acknowledgement and remains retrievable with `ask get`
-or `--wait`. [Automatic pane-answer delivery](ask-answer-delivery.md) is PR 2;
-an uncertain pane send must never auto-replay.
-See [data and backups](DEPLOYMENT.md#durable-questions-results-and-backups).
+Report failures once; do not add a caller-side retry loop. Interrupted owner
+alerts retain `uncertain` evidence and may retry because duplicate alerts are
+harmless. Inspect `ask get ID --json` for the actual evidence. An answer is
+durable before acknowledgement and remains retrievable with `ask get` or
+`--wait`, including after a restart. Always save the question ID.
+
+New asks from a verified local Linux CLI caller can also receive their saved
+answer in the original supported Chat session without `--wait`. World captures
+the verified connection, terminal and session binding when the ask is created;
+it never learns a replacement recipient later. An offline host waits for that
+same binding to be checked on return. A changed or ended session records not
+sent. Asks created before binding capture was supported, unverified or
+unsupported callers and dismissals remain retrieval-only; there is no historical answer backfill. Successful stdout output
+by the verified original asker acknowledges the exact answer and observed
+attempt. Failed stdout sends no acknowledgement; a lost acknowledgement or a
+read/send race can still duplicate output.
+
+A possible pane send is opaque: `uncertain` never automatically replays. Town
+Summary's **Outbox** keeps that answer and its evidence reachable without
+reopening the question. Only the owner can choose **Send again…**, confirm a
+possible duplicate to the same original session, or **Dismiss** / **Cancel send**
+while preserving the answer for `ask get`. Sending in progress has no UI
+decision. Reception's compact row counts only unconfirmed/not-sent answers to
+check; waiting-only work appears in Summary and the host's letter tag. A native
+queue receipt does not prove agent reading or execution, and Herdr provides no
+operation-key deduplication. See [answer delivery and limits](ask-answer-delivery.md)
+and [data and backups](DEPLOYMENT.md#durable-questions-results-and-backups).
 
 `--key` deduplicates a cause for the verified asking occupant, including an
 answered cause. Repeat the same key while that cause persists. Save the returned
 question ID and withdraw it once the cause clears; a later occurrence may then
 create a fresh ask under the same key. Withdrawal is idempotent and restricted
-to the original verified connection, runtime, terminal and agent session. A
-withdrawn ask releases `--wait` with a `withdrawn` field and no invented answer;
+to the original verified connection, terminal and agent session; a replacement
+runtime must verify that same session. A withdrawn ask releases `--wait` with a `withdrawn` field and no invented answer;
 withdrawal preserves an answer that arrived first. The existing ledger retains
 both, and closed questions remain subject to its retention bound. If a creation
 reply is lost, `ask withdraw --key CAUSE` recovers the original occupant's

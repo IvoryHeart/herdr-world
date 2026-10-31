@@ -12,6 +12,7 @@ import TownView from "../TownView";
 import { AgentLauncherDialog } from "../AgentLauncherDialog";
 import { WORLD_AGENT_LAUNCH_EVENT, type LaunchTarget } from "../agentProfiles";
 import { sharedAsksStore, type WorldAsk } from "../worldAsks";
+import type { AnswerNotice } from "../worldAnswerDeliveries";
 import { checkTownRoomPlates } from "./townRoomPlates.browser";
 import { checkTownRoomFold, tapTownControl } from "./townRoomFold.browser";
 import type { BoardDocument, BoardOp } from "../board/boardDocument";
@@ -592,6 +593,20 @@ const ledger = {
     } as WorldAsk,
   ],
 };
+const answerDeliveries = {
+  revision: 0,
+  incarnation: "town-summary-fixture",
+  deliveries: [] as AnswerNotice[],
+};
+const publishAnswerDeliveries = () => {
+  answerDeliveries.revision++;
+  for (const handler of controls)
+    handler({
+      type: "world_ask_delivery_changed",
+      revision: answerDeliveries.revision,
+      incarnation: answerDeliveries.incarnation,
+    });
+};
 const askDismissals: string[] = [];
 /** The service's in-memory completion marks, as one World holds them. */
 const completionSeen = {
@@ -625,6 +640,16 @@ worldBridge.call = async (method, params) => {
       });
     return structuredClone(completionSeen);
   }
+  if (method === "world.ask.deliveries.get")
+    return structuredClone({
+      ...answerDeliveries,
+      counts: {
+        checks: answerDeliveries.deliveries.length,
+        waiting: 0,
+        connections: {},
+      },
+      next: null,
+    });
   if (method === "world.asks.get") return structuredClone(ledger);
   if (method === "world.ask.dismiss") {
     const id = String(params?.id);
@@ -1606,13 +1631,66 @@ async function run() {
         getComputedStyle(summaryAsk).backgroundColor !== "rgba(0, 0, 0, 0)",
       "the Summary portal lost the shared question card colors",
     );
-    const sections = [...panelBody.querySelectorAll("h3")].map((heading) =>
-      heading.textContent?.replace(/\s*\d+$/, ""),
+    const checkSummarySections = (state: string) => {
+      const sections = [...panelBody.querySelectorAll("h3")].map((heading) =>
+        heading.textContent?.replace(/\s*\d+$/, ""),
+      );
+      check(
+        sections.join("|") ===
+          "Needs you|Outbox|Finished, not reviewed|Hosts and rooms|Pods|Spend",
+        `summary sections out of order (${state} Outbox): ${sections.join(", ")}`,
+      );
+    };
+    await waitFor(
+      () =>
+        panelBody
+          .querySelector('[aria-label="Outbox"]')
+          ?.textContent?.includes("No answers waiting here.") === true,
+      "the Summary's empty Outbox did not settle",
     );
+    checkSummarySections("empty");
+    answerDeliveries.deliveries = [
+      {
+        ask: {
+          ...structuredClone(ledger.asks[0]!),
+          id: "q-saved-answer",
+          question: "A saved question waiting for delivery",
+          answer: {
+            text: "The saved answer",
+            by: "owner",
+            at: Date.now(),
+            occurrence: "a-saved-answer",
+          },
+        },
+        delivery: { state: "uncertain", attempt: 1 },
+        can_resend: true,
+      },
+    ];
+    publishAnswerDeliveries();
+    await waitFor(
+      () =>
+        panelBody
+          .querySelector(".answer-delivery")
+          ?.textContent?.includes("The saved answer") === true,
+      "a populated Outbox did not reach the existing Summary",
+    );
+    checkSummarySections("populated");
     check(
-      sections.join("|") ===
-        "Needs you|Finished, not reviewed|Hosts and rooms|Pods|Spend",
-      `summary sections out of order: ${sections.join(", ")}`,
+      Number(
+        panelBody.querySelector("#town-summary-needs span")?.textContent,
+      ) === windowNeeds &&
+        panelBody.querySelectorAll(".town-ask").length === ledger.asks.length,
+      "answered Outbox work changed the Summary's open-question count",
+    );
+    answerDeliveries.deliveries = [];
+    publishAnswerDeliveries();
+    await waitFor(
+      () =>
+        panelBody.querySelector(".answer-delivery") === null &&
+        panelBody
+          .querySelector('[aria-label="Outbox"]')
+          ?.textContent?.includes("No answers waiting here.") === true,
+      "the Summary did not restore its empty Outbox",
     );
     check(
       panelBody.textContent?.includes("No cost data") === true,

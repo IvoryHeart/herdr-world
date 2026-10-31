@@ -1295,7 +1295,12 @@
         "web/src/world/worldAnswerDeliveries.test.ts",
         "web/src/world/town/AnswerDeliveries.test.ts",
         "web/src/world/AnswerDeliveries.browser.test.ts",
-        "web/src/world/town/answerOutbox.test.ts"
+        "web/src/world/town/answerOutbox.test.ts",
+        "web/src/world/town/TownCanvas.test.ts",
+        "web/src/world/town/TownCanvas.extended.test.ts",
+        "web/src/world/town/TownCanvas.portrait.test.ts",
+        "web/src/world/town/TownCanvas.fold.test.ts",
+        "web/src/world/town/TownCanvas.navigation.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/145",
       "technique": "alternative",
@@ -1399,7 +1404,12 @@
             "web/src/world/worldAnswerDeliveries.test.ts",
             "web/src/world/town/AnswerDeliveries.test.ts",
             "web/src/world/AnswerDeliveries.browser.test.ts",
-            "web/src/world/town/answerOutbox.test.ts"
+            "web/src/world/town/answerOutbox.test.ts",
+            "web/src/world/town/TownCanvas.test.ts",
+            "web/src/world/town/TownCanvas.extended.test.ts",
+            "web/src/world/town/TownCanvas.portrait.test.ts",
+            "web/src/world/town/TownCanvas.fold.test.ts",
+            "web/src/world/town/TownCanvas.navigation.test.ts"
           ],
           "acceptance": "Complete affected units, browser, source/compiled native and behavioral gates plus independent mapping/design review required; finite schedules do not prove power-loss or exactly-once delivery."
         }

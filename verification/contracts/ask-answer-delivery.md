@@ -51,7 +51,11 @@ all-schedule proofs.
 CLI tests check successful output before ACK, broken pipes, lost acknowledgements
 and other readers. Actual Chat race tests retain current session/lease fencing
 and its queued-session receipt. Browser store tests retire old service replies;
-component and five-viewport Chrome tests check reachable answered notices with
+the maintained `TownCanvas.browser.tsx` Summary consumer checks section order
+and question counts with both an empty and populated Outbox. Its complete
+baseline, extended, portrait, fold and navigation browser suites retain their
+other layout, reception and navigation assertions. Component and five-viewport
+Chrome tests check reachable answered notices with
 zero open questions, bounded pages and explicit duplicate confirmation/cancel.
 Whole-outbox aggregates keep older actionable items reachable beyond the first
 page. The compact row counts only unconfirmed/not-sent work; waiting-only sends
