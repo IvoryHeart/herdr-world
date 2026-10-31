@@ -323,7 +323,7 @@ test.failing("the focused re-list marks its four list calls", async () => {
   expect(lists.filter((call) => !call.focusedObservation)).toEqual([]);
 });
 
-test.failing("recency moves without a status change, with no re-list", async () => {
+test("recency moves without a status change, with no re-list", async () => {
   const since = world.calls.length;
   const activityOf = (paneId: string) =>
     paneOf("alpha", paneId)?.last_activity_at;
@@ -398,7 +398,7 @@ test.failing("another browser connecting updates the browser count", async () =>
   );
 });
 
-test.failing("hiding the page releases interest; showing it declares again", async () => {
+test("hiding the page releases interest; showing it declares again", async () => {
   const alpha = { connection_id: "alpha", connection_generation: 7 };
   try {
     expect(lastDeclaredOwners()).toContainEqual(alpha);

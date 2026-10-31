@@ -50,6 +50,14 @@ async function dispatchAgentRpc(
         connection,
         "agent.list",
         params ?? {},
+        {
+          cache: rpc.services.agentActivity,
+          owner: {
+            connection_id: route.connectionId,
+            connection_generation: route.generation,
+          },
+          isCurrent: route.isCurrent,
+        },
       );
       sendReply({ id, result }, "agent-list");
     } catch (e) {

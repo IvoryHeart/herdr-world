@@ -39,7 +39,12 @@ changes with output alone.
 Agent recency SHALL come from the service's reading of session-file activity. It SHALL reach the
 browser through `agent.list` and through pushed values, and SHALL NOT be pushed before a reading
 exists. For each pane, terminal, agent and agent session, a browser SHALL keep the latest time it
-has seen, so recency never moves backwards. An entry for another agent session SHALL NOT apply.
+has seen, so recency never moves backwards. An entry for another agent session SHALL NOT apply. Maxima SHALL be keyed by the
+complete identity through initial pane/layout admission. The browser SHALL retain
+read-only session maxima separately from runtime admission, so a World service
+restart that resets generation counters SHALL NOT lower the same external agent
+session's recency. Rejoining that data SHALL NOT admit operations or obsolete
+controls for a retired generation.
 
 Change notices and recency SHALL be admitted only for a ready owner whose generation matches the
 browser's catalogue. Herdr subscription loss, browser reconnection and runtime replacement SHALL
@@ -193,3 +198,18 @@ change a view filter.
 
 - **WHEN** a well-formed declaration names a connection that no longer exists
 - **THEN** that owner is ignored and the browser's other owners are still observed
+
+#### Scenario: World restarts while the external agent session remains
+
+- **WHEN** World restarts and resets its generation counters while the external
+  pane, terminal, agent and session remain identical
+- **THEN** after fresh runtime admission an older or unavailable reading does not
+  lower that identity's recency or its most-active-first ordering
+- **AND** controls for an obsolete generation remain rejected
+
+#### Scenario: Two sessions push while the initial layout is pending
+
+- **WHEN** an initial list captured session A and waits on its layout, and pushes
+  arrive for A and session B sharing that pane ID
+- **THEN** publishing A uses A's maximum, and B's timestamp cannot erase it or apply
+  to A
