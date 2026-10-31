@@ -2580,9 +2580,11 @@
       "area": "Durable Board concerns and compatible consumers",
       "owner": "server/src/storage/world-board.ts",
       "requirement": "openspec/specs/world-storage/spec.md",
-      "properties": "Atomic concern rows and identity bindings; committed-only cache/reply/events; independent edits, per-note and Group revision conflicts; queued runtime authority and move/undo concurrency; exact private once-only import; source/standalone crash recovery and close drain; native-keyed layout preferences retain existing policy",
+      "properties": "Queued retained-payload byte reservations through guards and actual RPC admission; atomic concern rows and identity bindings; committed-only cache/reply/events; independent edits, per-note and Group revision conflicts; queued runtime authority and move/undo concurrency; exact private once-only import; source/standalone crash recovery and close drain; native-keyed layout preferences retain existing policy",
       "existingTests": [
         "server/src/storage/board-writer.test.ts",
+        "server/src/storage/board-port.test.ts",
+        "server/src/rpc/board-admission.test.ts",
         "server/src/service/board-storage.test.ts",
         "server/src/storage/board-crash.test.ts",
         "server/src/rpc/board-storage.test.ts",
@@ -2606,6 +2608,8 @@
         "contracts": ["verification/contracts/board-storage.md"],
         "tests": [
           "server/src/storage/board-writer.test.ts",
+          "server/src/storage/board-port.test.ts",
+          "server/src/rpc/board-admission.test.ts",
           "server/src/service/board-storage.test.ts",
           "server/src/storage/board-crash.test.ts",
           "server/src/rpc/board-storage.test.ts",
@@ -2619,7 +2623,7 @@
           "server/src/service/world-service.test.ts"
         ],
         "checks": [
-          "bun run test server/src/storage/board-writer.test.ts server/src/service/board-storage.test.ts server/src/storage/board-crash.test.ts server/src/rpc/board-storage.test.ts server/src/world/board-storage-consumers.test.ts",
+          "bun run test server/src/storage/board-port.test.ts server/src/rpc/board-admission.test.ts server/src/storage/board-writer.test.ts server/src/service/board-storage.test.ts server/src/storage/board-crash.test.ts server/src/rpc/board-storage.test.ts server/src/world/board-storage-consumers.test.ts",
           "bun run verification:gate"
         ],
         "review": "The accepted delivery link records the approved identity/storage design, not implementation acceptance. Independent review and native CI are pending."

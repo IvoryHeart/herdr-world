@@ -1,3 +1,4 @@
+import { planBoardPatch } from "../world/board-plan";
 import { checkAnchor } from "../world/board-anchor";
 import { linkedNoteText, sendNote } from "../world/board-send";
 import { executeTownMove } from "../world/town-move";
@@ -127,23 +128,25 @@ async function dispatchBoardTownRpc(
         try {
           publishBoardChanged(
             (
-              await board().patch(() => {
-                if (!requestIsCurrent())
-                  throw new Error(
-                    "Board send runtime changed before saving recipient",
-                  );
-                return [
-                  {
-                    op: "anchor.recipient",
-                    string_id: String(p.string_id ?? ""),
-                    end: linked.end,
-                    connection_id: route.connectionId,
-                    pane_id: String(p.pane_id ?? ""),
-                    terminal_id: String(p.terminal_id ?? ""),
-                    recipient: result.recipient!,
-                  },
-                ];
-              })
+              await board().patch(
+                planBoardPatch([linked, result, p, route], () => {
+                  if (!requestIsCurrent())
+                    throw new Error(
+                      "Board send runtime changed before saving recipient",
+                    );
+                  return [
+                    {
+                      op: "anchor.recipient",
+                      string_id: String(p.string_id ?? ""),
+                      end: linked.end,
+                      connection_id: route.connectionId,
+                      pane_id: String(p.pane_id ?? ""),
+                      terminal_id: String(p.terminal_id ?? ""),
+                      recipient: result.recipient!,
+                    },
+                  ];
+                }),
+              )
             ).revision,
           );
         } catch (error) {

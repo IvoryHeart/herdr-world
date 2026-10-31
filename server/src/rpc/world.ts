@@ -1,3 +1,4 @@
+import { planBoardPatch } from "../world/board-plan";
 import { parseObservationBase } from "../world/observation-v1";
 import { pruneSnapshotAppearance } from "../world/appearance-prune";
 import { legacyAppearanceOps } from "../world/appearance-observation";
@@ -101,20 +102,22 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
       );
       try {
         let changed = false;
-        const document = await board().patch((current) => {
-          const appearanceOps = legacyAppearanceOps(
-            current,
-            snapshot,
-            (connectionId, generation) => {
-              const lease = connectionManager.readyRuntimeLease(connectionId);
-              return Boolean(
-                lease && lease.generation === generation && lease.isCurrent(),
-              );
-            },
-          );
-          changed = appearanceOps.length > 0;
-          return changed ? appearanceOps : null;
-        });
+        const document = await board().patch(
+          planBoardPatch([snapshot], (current) => {
+            const appearanceOps = legacyAppearanceOps(
+              current,
+              snapshot,
+              (connectionId, generation) => {
+                const lease = connectionManager.readyRuntimeLease(connectionId);
+                return Boolean(
+                  lease && lease.generation === generation && lease.isCurrent(),
+                );
+              },
+            );
+            changed = appearanceOps.length > 0;
+            return changed ? appearanceOps : null;
+          }),
+        );
         if (changed) publishBoardChanged(document.revision);
       } catch (error) {
         logger.warn("World could not bind legacy tab colours", {
@@ -169,17 +172,18 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
         string,
         import("../world/board-recipient").ObservedAgent
       >();
-      const prepare = (
-        document: import("../world/board-store").BoardDocument,
-      ) => {
-        if (!rpc.requestIsCurrent())
-          throw new Error("Board request is no longer current");
-        ({ ops, observed } = clientBoardOps(
-          (params as { ops?: unknown } | undefined)?.ops,
-          document,
-        ));
-        return ops;
-      };
+      const prepare = planBoardPatch(
+        [params],
+        (document: import("../world/board-store").BoardDocument) => {
+          if (!rpc.requestIsCurrent())
+            throw new Error("Board request is no longer current");
+          ({ ops, observed } = clientBoardOps(
+            (params as { ops?: unknown } | undefined)?.ops,
+            document,
+          ));
+          return ops;
+        },
+      );
       const revision = (params as { revision?: unknown } | undefined)?.revision;
       if (
         revision !== undefined &&

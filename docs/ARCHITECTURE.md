@@ -21,7 +21,9 @@ Send RPC resolves its saved string before its existing recipient checks. Layout
 preferences never enter the binding store and retain native-ID reuse behavior.
 `WorldStorage.board()` projects the existing Board document from separate SQLite
 tables for notes, strings, appearance, layout concerns, interest and relations.
-Queued mutations plan against acknowledged state; the worker validates each
+Queued plans reserve bytes for retained payloads, including RPC parameters,
+before admission; guard wrappers preserve that reservation and every outcome
+releases it. Mutations plan against acknowledged state; the worker validates each
 patch against its transaction-local document. Replies, revision events and the
 read cache advance after COMMIT. Per-note conflicts and revision-bound Group
 confirmations retain their existing wire responses. See [Board storage and recovery](DEPLOYMENT.md#board-storage).

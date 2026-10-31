@@ -1,3 +1,4 @@
+import { planBoardPatch } from "./board-plan";
 import { parseAppearanceTarget } from "../../../shared/appearance";
 import type { GroupSender } from "../../../shared/groups";
 import { isGroupOp } from "./board-groups";
@@ -25,7 +26,7 @@ export function createBoardChange(
     request: WorldCliDeps,
     actor: CliActor,
     ops: BoardPatch,
-    revert: BoardPatch,
+    revert: () => BoardPatch,
     write: (document: BoardDocument) => LedgerChange | Promise<LedgerChange>,
   ) => {
     const document = await patch(request, ops, actor);
@@ -35,7 +36,7 @@ export function createBoardChange(
       if (!(error instanceof StorageWriteRejected)) throw error;
       try {
         // Only restore our exact edit. A later browser edit belongs to its owner.
-        await patchIf(completion, document.revision, revert, actor);
+        await patchIf(completion, document.revision, revert(), actor);
       } catch {
         // Keep the original storage failure; an uncertain write is never undone.
       }
@@ -44,8 +45,8 @@ export function createBoardChange(
   };
 }
 
-export const authoredOps =
-  (input: BoardPatch, actor: CliActor) => (current: BoardDocument) => {
+export const authoredOps = (input: BoardPatch, actor: CliActor) =>
+  planBoardPatch([input, actor], (current: BoardDocument) => {
     const ops = typeof input === "function" ? input(current) : input;
     if (ops === null) return null;
     const sender: GroupSender = {
@@ -66,4 +67,4 @@ export const authoredOps =
       }
       return isGroupOp(op) ? { ...op, sender } : op;
     });
-  };
+  });

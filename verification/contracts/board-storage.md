@@ -11,6 +11,9 @@ COMMIT. Independent edits accumulate; a refused patch changes nothing. Planning
 callbacks read acknowledged state, recheck captured authority and conditional
 undo never overwrites a later admitted edit. Native probes invalidated by a Board
 edit are retried before move reconciliation. Close drains accepted writes.
+Plans reserve retained input bytes before admission, including unvalidated RPC
+params. Guard wrappers inherit reservations; accepted, refused, skipped and
+uncertain outcomes release them while preserving delayed validation/authority.
 
 Forbidden: optimistic publication, partial records/bindings, lost independent
 edits, weakened runtime guards, stale-note overwrite, undo over a newer edit,
@@ -35,6 +38,14 @@ Runtime claims, configuration and secrets must not become Board records.
   retirement with the real root. `world/board-storage-consumers.test.ts` exercises
   queued appearance edits during native moves and CLI history compensation
   racing an admitted browser edit.
+- `storage/board-port.test.ts` compares explicit and guarded planning admission
+  for four valid multibyte patches exceeding the queue budget in aggregate. It
+  checks release after commit, no-op, revision mismatch, planning/write refusal,
+  note conflict and uncertain outcome, and refuses an unmeasured callback.
+  `rpc/board-admission.test.ts` reproduces that budget boundary through the actual
+  deferred RPC path. Groups' eight browser viewports and the shared appearance
+  desktop/phone browser exercise current HTTP-request predicates and the retained
+  production guard.
 - `storage/board-crash.test.ts` kills source and standalone compiled processes
   before/after write/import COMMIT and after worker acknowledgement. It checks
   complete records/bindings/ID reservations, marker atomicity, integrity, repeated

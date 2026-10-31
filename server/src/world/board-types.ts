@@ -173,10 +173,13 @@ export type BoardOp =
       recipient: string;
     };
 
-/** Server-only planning runs against the latest committed cache before admission. */
-export type BoardPatch =
-  | readonly BoardOp[]
-  | ((document: BoardDocument) => readonly BoardOp[] | null);
+/** Server-only planning retains a measured payload while awaiting committed state. */
+export type BoardPlanner = ((
+  document: BoardDocument,
+) => readonly BoardOp[] | null) & {
+  readonly retainedBytes: number;
+};
+export type BoardPatch = readonly BoardOp[] | BoardPlanner;
 export type BoardBacking = {
   read(): BoardDocument;
   commit(document: BoardDocument): void;

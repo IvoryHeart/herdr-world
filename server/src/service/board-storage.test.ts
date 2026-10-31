@@ -1,3 +1,4 @@
+import { planBoardPatch } from "../world/board-plan";
 import { afterEach, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { createHash } from "node:crypto";
@@ -217,11 +218,16 @@ test("queued planning and conditional compensation use the latest committed Boar
     } as BoardOp,
   ]);
   let compensated = false;
-  const compensate = board.patchIf(revision, () => {
-    compensated = true;
-    return [{ op: "card.color", key: "studio:workspace-a", color: "red" }];
-  });
-  const planning = board.patch((doc) => [note("note-b", doc.notes[0]!.text)]);
+  const compensate = board.patchIf(
+    revision,
+    planBoardPatch([], () => {
+      compensated = true;
+      return [{ op: "card.color", key: "studio:workspace-a", color: "red" }];
+    }),
+  );
+  const planning = board.patch(
+    planBoardPatch([], (doc) => [note("note-b", doc.notes[0]!.text)]),
+  );
   const results = await Promise.all([edit, compensate, planning]);
   expect(results[1]).toBeNull();
   expect(compensated).toBe(false);

@@ -1,3 +1,4 @@
+import { planBoardPatch } from "../world/board-plan";
 import {
   parseAppearanceTarget,
   parseAppearanceFields,
@@ -94,11 +95,13 @@ export async function handleAppearanceRpc(
     if (!continuingAppearance(target, observed) || !lease.isCurrent())
       throw new Error("Appearance target changed");
     if (fields) {
-      const document = await board().patch(() => {
-        if (!lease.isCurrent() || !rpc.requestIsCurrent())
-          throw new Error("Appearance target changed");
-        return [{ op: "appearance.set", target: observed, fields }];
-      });
+      const document = await board().patch(
+        planBoardPatch([params, observed, fields], () => {
+          if (!lease.isCurrent() || !rpc.requestIsCurrent())
+            throw new Error("Appearance target changed");
+          return [{ op: "appearance.set", target: observed, fields }];
+        }),
+      );
       publishBoardChanged(document.revision);
       sendReply({ id, result: { document } }, method);
     } else {

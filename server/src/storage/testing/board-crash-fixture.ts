@@ -1,3 +1,4 @@
+import { planBoardPatch } from "../../world/board-plan";
 import { writeSync } from "node:fs";
 import { join } from "node:path";
 import { openWorldWriter } from "../world-writer";
@@ -73,19 +74,21 @@ if (phase.startsWith("import-")) {
     stopAt(phase);
   } else {
     const writes = Array.from({ length: 33 }, (_, i) =>
-      store.board.patch((doc) => [
-        {
-          op: "note.put",
-          note: {
-            id: "note-a",
-            text: `Synthetic ${i}`,
-            color: "yellow",
-            x: 1,
-            y: 2,
+      store.board.patch(
+        planBoardPatch([i], (doc) => [
+          {
+            op: "note.put",
+            note: {
+              id: "note-a",
+              text: `Synthetic ${i}`,
+              color: "yellow",
+              x: 1,
+              y: 2,
+            },
+            rev: doc.notes[0]?.rev,
           },
-          rev: doc.notes[0]?.rev,
-        },
-      ]),
+        ]),
+      ),
     );
     const closing = store.close();
     await Promise.all(writes);

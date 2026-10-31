@@ -1,3 +1,4 @@
+import { planBoardPatch } from "./board-plan";
 import { pruneGoneAppearance } from "./appearance-prune";
 import { serverLogger } from "../utils/logger";
 import { checkAnchor } from "./board-anchor";
@@ -72,8 +73,9 @@ async function dropClosedTabSettings(
       if (!isCurrent()) return;
       const ops = tabClosedOps(before, connectionId, tabId, absent);
       if (!ops.length) return;
-      const patched = await board.patchIf(before.revision, () =>
-        isCurrent() ? ops : null,
+      const patched = await board.patchIf(
+        before.revision,
+        planBoardPatch([ops], () => (isCurrent() ? ops : null)),
       );
       if (patched) {
         changed(patched.revision);

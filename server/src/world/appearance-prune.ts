@@ -1,3 +1,4 @@
+import { planBoardPatch } from "./board-plan";
 import type { BoardDocument, BoardOp, BoardStorePort } from "./board-store";
 import type { WorldSnapshotResult } from "./snapshot";
 import { bindingListingAbsent } from "./binding-resolution";
@@ -104,12 +105,15 @@ export async function pruneSnapshotAppearance(
       current.has(before.appearance![key]!.connection_id),
     );
     if (!admitted.length) return;
-    const saved = await board.patchIf(before.revision, () => {
-      const keys = admitted.filter((key) =>
-        hosts.get(before.appearance![key]!.connection_id)?.isCurrent(),
-      );
-      return keys.length ? [{ op: "appearance.prune", keys }] : null;
-    });
+    const saved = await board.patchIf(
+      before.revision,
+      planBoardPatch([before, admitted], () => {
+        const keys = admitted.filter((key) =>
+          hosts.get(before.appearance![key]!.connection_id)?.isCurrent(),
+        );
+        return keys.length ? [{ op: "appearance.prune", keys }] : null;
+      }),
+    );
     if (saved) changed(saved.revision);
   } finally {
     pendingSnapshots.delete(board);
@@ -152,8 +156,9 @@ export async function pruneGoneAppearance(
   if (!seen || !host.isCurrent()) return;
   const ops = absentOps(before, connectionId, seen);
   if (!ops.length) return;
-  const saved = await board.patchIf(before.revision, () =>
-    host.isCurrent() ? ops : null,
+  const saved = await board.patchIf(
+    before.revision,
+    planBoardPatch([ops], () => (host.isCurrent() ? ops : null)),
   );
   if (saved) host.changed(saved.revision);
 }

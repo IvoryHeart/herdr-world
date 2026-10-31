@@ -47,7 +47,7 @@ export function createBoardPort(
       );
     const bytes =
       typeof input === "function"
-        ? 0
+        ? input.retainedBytes
         : Buffer.byteLength(
             JSON.stringify({
               type: "board",
@@ -58,6 +58,8 @@ export function createBoardPort(
             }),
           );
     if (
+      !Number.isSafeInteger(bytes) ||
+      bytes < 0 ||
       bytes > STORAGE_BOUNDS.boardRequestBytes ||
       pendingBytes + bytes > STORAGE_BOUNDS.queuedBytes
     )

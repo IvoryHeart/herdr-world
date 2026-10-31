@@ -1,3 +1,4 @@
+import { planBoardPatch } from "../world/board-plan";
 import { moveWorkspaceIds } from "../world/move-workspace-ids";
 import { stampLaunchParent } from "../herdr/spawn-stamp";
 import { tabCardKey } from "../../../shared/terminalColor";
@@ -142,29 +143,34 @@ async function dispatchLauncherRpc(
               );
             publishBoardChanged(
               (
-                await board().patch(() => {
-                  if (!requestIsCurrent())
-                    throw new Error(
-                      "Launch runtime changed before saving appearance",
-                    );
-                  return [
-                    {
-                      op: "appearance.set",
-                      target: {
-                        connection_id: route.connectionId,
-                        kind: "tab",
-                        native_id: tabId,
-                        witness: [terminalId],
-                        color_key: tabCardKey(
-                          route.connectionId,
-                          tabId,
-                          workspaceIds,
-                        ),
-                      },
-                      fields: { color: profile.color },
+                await board().patch(
+                  planBoardPatch(
+                    [p, profile, result, [...workspaceIds]],
+                    () => {
+                      if (!requestIsCurrent())
+                        throw new Error(
+                          "Launch runtime changed before saving appearance",
+                        );
+                      return [
+                        {
+                          op: "appearance.set",
+                          target: {
+                            connection_id: route.connectionId,
+                            kind: "tab",
+                            native_id: tabId,
+                            witness: [terminalId],
+                            color_key: tabCardKey(
+                              route.connectionId,
+                              tabId,
+                              workspaceIds,
+                            ),
+                          },
+                          fields: { color: profile.color },
+                        },
+                      ];
                     },
-                  ];
-                })
+                  ),
+                )
               ).revision,
             );
           }

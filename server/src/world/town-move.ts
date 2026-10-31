@@ -1,3 +1,4 @@
+import { planBoardPatch } from "./board-plan";
 import {
   createMoveQueue,
   moveDesk,
@@ -158,81 +159,91 @@ async function followMove(
     // Read after every asynchronous native probe so concurrent field/string edits survive.
     let planned = false,
       changed = false;
-    const saved = await context.board.patchIf(before.revision, (current) => {
-      if (!context.isCurrent()) return null;
-      planned = true;
-      const following =
-        result.status === "moved" && current.appearance
-          ? appearanceForMove(
-              current,
-              context.connectionId,
-              observed,
-              movedTab,
-              result,
-            )
-          : current;
-      const chosen = capturedMoveColors(
-        colorsBefore,
-        current,
-        context.connectionId,
-        colorChanged,
-      );
-      const carried =
-        result.status === "moved" && current.appearance
-          ? appearanceForMove(
-              { ...current, layout: { ...current.layout, colors: chosen } },
-              context.connectionId,
-              observed,
-              movedTab,
-              result,
-            ).layout.colors
-          : chosen;
-      const ops =
-        result.status === "moved"
-          ? moveFollowOps(
-              following,
-              context.connectionId,
-              movedTab,
-              result,
-              movedTab
-                ? {
-                    before: carried,
-                    workspaceIds,
-                    inherited:
-                      request.kind === "desk" &&
-                      request.inherited_color === true,
-                  }
-                : undefined,
-            )
-          : reconcileOps(current, context.connectionId, result.topology ?? []);
-      if (result.status === "failed" && current.appearance)
-        ops.push(
-          ...reconciledAppearanceOps(
-            { ...current, layout: { ...current.layout, colors: chosen } },
+    const saved = await context.board.patchIf(
+      before.revision,
+      planBoardPatch(
+        [before, request, result, colorsBefore, [...workspaceIds], observed],
+        (current) => {
+          if (!context.isCurrent()) return null;
+          planned = true;
+          const following =
+            result.status === "moved" && current.appearance
+              ? appearanceForMove(
+                  current,
+                  context.connectionId,
+                  observed,
+                  movedTab,
+                  result,
+                )
+              : current;
+          const chosen = capturedMoveColors(
+            colorsBefore,
+            current,
             context.connectionId,
-            result.topology ?? [],
-            workspaceIds,
-          ),
-        );
-      ops.push(
-        ...moveAppearanceEditOps(
-          following,
-          ops,
-          appearanceChanged,
-          result.status === "moved" && movedTab
-            ? {
-                connectionId: context.connectionId,
-                from: movedTab,
-                to: result.tab_id,
+            colorChanged,
+          );
+          const carried =
+            result.status === "moved" && current.appearance
+              ? appearanceForMove(
+                  { ...current, layout: { ...current.layout, colors: chosen } },
+                  context.connectionId,
+                  observed,
+                  movedTab,
+                  result,
+                ).layout.colors
+              : chosen;
+          const ops =
+            result.status === "moved"
+              ? moveFollowOps(
+                  following,
+                  context.connectionId,
+                  movedTab,
+                  result,
+                  movedTab
+                    ? {
+                        before: carried,
+                        workspaceIds,
+                        inherited:
+                          request.kind === "desk" &&
+                          request.inherited_color === true,
+                      }
+                    : undefined,
+                )
+              : reconcileOps(
+                  current,
+                  context.connectionId,
+                  result.topology ?? [],
+                );
+          if (result.status === "failed" && current.appearance)
+            ops.push(
+              ...reconciledAppearanceOps(
+                { ...current, layout: { ...current.layout, colors: chosen } },
+                context.connectionId,
+                result.topology ?? [],
                 workspaceIds,
-              }
-            : null,
-        ),
-      );
-      if (!context.isCurrent()) return null;
-      changed = ops.length > 0;
-      return changed ? ops : null;
-    });
+              ),
+            );
+          ops.push(
+            ...moveAppearanceEditOps(
+              following,
+              ops,
+              appearanceChanged,
+              result.status === "moved" && movedTab
+                ? {
+                    connectionId: context.connectionId,
+                    from: movedTab,
+                    to: result.tab_id,
+                    workspaceIds,
+                  }
+                : null,
+            ),
+          );
+          if (!context.isCurrent()) return null;
+          changed = ops.length > 0;
+          return changed ? ops : null;
+        },
+      ),
+    );
     if (!planned) continue;
     if (!changed) return;
     if (saved) {

@@ -1,3 +1,4 @@
+import { planBoardPatch } from "./board-plan";
 import {
   closedRelations,
   observedSpawnClaims,
@@ -81,19 +82,21 @@ export async function recordSpawnClaims(
 ): Promise<void> {
   try {
     let changed = false;
-    const document = await store.patch((current) => {
-      const active = {
-        ...snapshot,
-        connections: snapshot.connections.map((host) =>
-          isCurrent(host.connection_id, host.generation)
-            ? host
-            : { ...host, stale: true, actionable: false },
-        ),
-      };
-      const ops = spawnRecordOps(current, active, now);
-      changed = ops.length > 0;
-      return changed ? ops : null;
-    });
+    const document = await store.patch(
+      planBoardPatch([snapshot], (current) => {
+        const active = {
+          ...snapshot,
+          connections: snapshot.connections.map((host) =>
+            isCurrent(host.connection_id, host.generation)
+              ? host
+              : { ...host, stale: true, actionable: false },
+          ),
+        };
+        const ops = spawnRecordOps(current, active, now);
+        changed = ops.length > 0;
+        return changed ? ops : null;
+      }),
+    );
     if (changed) publish(document.revision);
   } catch (error) {
     logger.warn("World could not record spawn claims", {

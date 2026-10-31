@@ -129,6 +129,11 @@ Existing identity binding policies SHALL remain unchanged. Layout positions,
 pins, folds and workspace/host colours SHALL remain native-keyed preferences.
 Runtime claims SHALL remain in memory. Existing valid Board document and patch
 capacity, including multibyte text, SHALL fit the bounded storage admission port.
+Queued plans SHALL reserve their retained payload bytes before entering the
+queue, including client RPC parameters. Wrappers SHALL preserve reservations,
+and every completion, refusal or skipped plan SHALL release its reservation.
+Validation and runtime-authority rechecks SHALL still use acknowledged state
+when planning runs.
 
 Before its initial import, World SHALL preserve exact private content-hash backup
 bytes of the configured Board JSON. Concern rows, ID reservations, bindings and

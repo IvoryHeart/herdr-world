@@ -1,3 +1,4 @@
+import { planBoardPatch } from "./board-plan";
 import type { CliHost } from "./world-cli-actor";
 import type { WorldCliDeps } from "./world-cli";
 import type { CliActor, LedgerStore } from "./world-ledger";
@@ -37,17 +38,22 @@ export function guardCliCommand(
         get: () => deps.board.get(),
         patch: (ops: BoardPatch) => {
           recheck();
-          return deps.board.patch((current) => {
-            recheck();
-            return typeof ops === "function" ? ops(current) : ops;
-          });
+          return deps.board.patch(
+            planBoardPatch([ops], (current) => {
+              recheck();
+              return typeof ops === "function" ? ops(current) : ops;
+            }),
+          );
         },
         patchIf: (revision: number, ops: BoardPatch) => {
           recheck();
-          return deps.board.patchIf(revision, (current) => {
-            recheck();
-            return typeof ops === "function" ? ops(current) : ops;
-          });
+          return deps.board.patchIf(
+            revision,
+            planBoardPatch([ops], (current) => {
+              recheck();
+              return typeof ops === "function" ? ops(current) : ops;
+            }),
+          );
         },
       }),
     },

@@ -1,3 +1,4 @@
+import { planBoardPatch } from "../world/board-plan";
 import { afterEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -139,10 +140,12 @@ test("queued RPC admission and destructive pruning recheck runtime authority bef
     },
   ]);
   const before = board.get();
-  const retire = board.patch(() => {
-    f.retire();
-    return null;
-  });
+  const retire = board.patch(
+    planBoardPatch([], () => {
+      f.retire();
+      return null;
+    }),
+  );
   const rpc = f.rpc([{ op: "note.put", note }]);
   await Promise.all([retire, rpc]);
   expect(f.errors).toHaveLength(1);
@@ -152,10 +155,12 @@ test("queued RPC admission and destructive pruning recheck runtime authority bef
   await pruneGoneAppearance(board, "studio", {
     isCurrent: () => live,
     call: async () => {
-      void board.patch(() => {
-        live = false;
-        return null;
-      });
+      void board.patch(
+        planBoardPatch([], () => {
+          live = false;
+          return null;
+        }),
+      );
       return { panes: [] };
     },
     changed: (revision) => f.published.push(revision),

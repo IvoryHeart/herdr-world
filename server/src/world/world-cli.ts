@@ -1,3 +1,4 @@
+import { planBoardPatch } from "./board-plan";
 import { StorageOutcomeUnknown } from "../storage/world-protocol";
 import { admitVerb, checkVerbResult, VerbRefusal } from "../verbs/admission";
 import { commandEvidence } from "../verbs/evidence";
@@ -645,13 +646,13 @@ export function createWorldCli(deps: WorldCliDeps) {
         let revert: BoardOp[] = [];
         return changeBoard(
           actor,
-          (current) => {
+          planBoardPatch([params, topology, actor], (current) => {
             plan = planBoard(command, params, current, topology, actor);
             revert =
               plan.revert ??
               (plan.regroup ? regroupOps(current, plan.regroup) : plan.undo);
             return plan.ops;
-          },
+          }),
           () => revert,
           (document) =>
             record(actor, command, plan.summary, plan.undo, {
@@ -720,7 +721,7 @@ export function createWorldCli(deps: WorldCliDeps) {
             );
           return changeBoard(
             actor,
-            (current) => {
+            planBoardPatch([change, params], (current) => {
               if (
                 change!.expect &&
                 probeValue(current, change!.expect.probe) !==
@@ -732,8 +733,8 @@ export function createWorldCli(deps: WorldCliDeps) {
               return change!.regroup
                 ? regroupOps(current, change!.regroup)
                 : change!.undo!;
-            },
-            change!.redo ?? [],
+            }),
+            () => change!.redo ?? [],
             async () => {
               const undone: LedgerChange = {
                 id: await completion.ledger.nextId("c"),

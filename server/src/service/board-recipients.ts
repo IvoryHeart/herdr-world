@@ -1,3 +1,4 @@
+import { planBoardPatch } from "../world/board-plan";
 import type { ReadyConnectionRegistry } from "../connections/protocol";
 import { resolveReadyConnection } from "../connections/protocol";
 import type { LegacyConnectionRuntime } from "../connections/runtime";
@@ -43,10 +44,12 @@ export function createBoardRecipientRecorder(
     );
     if (recorded.length) {
       let changed = false;
-      const document = await board().patch(() => {
-        changed = witnesses.every((current) => current());
-        return changed ? recorded : null;
-      });
+      const document = await board().patch(
+        planBoardPatch([recorded], () => {
+          changed = witnesses.every((current) => current());
+          return changed ? recorded : null;
+        }),
+      );
       if (changed) publishBoardChanged(document.revision);
     }
   };

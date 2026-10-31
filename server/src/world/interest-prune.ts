@@ -1,3 +1,4 @@
+import { planBoardPatch } from "./board-plan";
 import { interestKeyPrefix } from "../../../shared/interest";
 import { bindingListingAbsent } from "./binding-resolution";
 import { bindingPaneTerminals } from "./binding-pane-list";
@@ -72,8 +73,9 @@ export async function pruneGoneInterest(
       if (!ops.length) return;
       // A newer edit (even clearing and restoring the same choice) is never
       // removed using a listing that predates it: list again instead.
-      const saved = await board.patchIf(observed.revision, () =>
-        host.isCurrent() ? ops : null,
+      const saved = await board.patchIf(
+        observed.revision,
+        planBoardPatch([ops], () => (host.isCurrent() ? ops : null)),
       );
       if (saved) return host.changed(saved.revision);
     } catch (error) {

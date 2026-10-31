@@ -123,7 +123,7 @@ test("CLI history refusal cannot compensate over a browser edit already admitted
         deps,
         { label: "Synthetic actor", verified: false },
         [{ op: "card.color", key: "studio:workspace-a", color: "pink" }],
-        [{ op: "card.color", key: "studio:workspace-a", color: null }],
+        () => [{ op: "card.color", key: "studio:workspace-a", color: null }],
         () => {
           browser = board.patch([
             { op: "card.color", key: "studio:workspace-a", color: "teal" },
