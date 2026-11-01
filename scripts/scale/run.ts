@@ -47,11 +47,6 @@ if (
   throw new Error("rounds must be 1..20; seconds must be 1..60");
 if (process.env.CI)
   throw new Error("On-demand scale harness is intentionally disabled in CI");
-if (existsSync(out) && readdirSync(out).length)
-  throw new Error(
-    "Scale output already contains evidence; choose a fresh --out directory",
-  );
-mkdirSync(out, { recursive: true, mode: 0o700 });
 const release = await acquireAllCheckSlots({
   lane: "on-demand synthetic scale harness",
 });
@@ -59,11 +54,8 @@ const requestedShape = value("shape", thin ? "recorded-current" : "all");
 const selected = shapes.filter(
   (s) => requestedShape === "all" || s.id === requestedShape,
 );
-if (!selected.length) {
-  release();
-  throw new Error("Unknown shape");
-}
 const rows: any[] = [];
+let ownsOutput = false;
 const save = (row: any) => {
   rows.push(row);
   writeFileSync(join(out, "results.json"), JSON.stringify(rows, null, 2));
@@ -78,6 +70,15 @@ const save = (row: any) => {
   );
 };
 try {
+  if (!selected.length) throw new Error("Unknown shape");
+  // A preceding queued run may have filled this path while admission waited.
+  // Reject before owning output so the catch cannot mix failure generations.
+  if (existsSync(out) && readdirSync(out).length)
+    throw new Error(
+      "Scale output already contains evidence; choose a fresh --out directory",
+    );
+  mkdirSync(out, { recursive: true, mode: 0o700 });
+  ownsOutput = true;
   if (args.includes("--build")) {
     for (const [command, cwd] of [
       [["bun", "x", "vite", "build", "--sourcemap"], "web"],
@@ -440,10 +441,11 @@ try {
     JSON.stringify({ complete: true, rows: rows.length }),
   );
 } catch (error) {
-  writeFileSync(
-    join(out, "failure.json"),
-    JSON.stringify({ error: String(error), completedRows: rows.length }),
-  );
+  if (ownsOutput)
+    writeFileSync(
+      join(out, "failure.json"),
+      JSON.stringify({ error: String(error), completedRows: rows.length }),
+    );
   throw error;
 } finally {
   release();

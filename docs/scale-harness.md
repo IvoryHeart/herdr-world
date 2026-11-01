@@ -128,5 +128,8 @@ OS and owner workload remain outside the cooperating queue. Rank measured owners
 and these limits before proposing future budgets; this harness sets none.
 
 Choose a fresh `--out` directory for another run. The runner refuses to overwrite
-existing evidence, so a failed attempt cannot inherit an earlier completion marker.
+existing evidence after acquiring the shared queue. A rejected queued run writes
+no identity, result or failure marker into another run's output. Failures after
+owning fresh output retain their diagnostic marker. Chrome scratch cleanup also
+covers a synchronous executable-start failure.
 Profile diagnostics use the same 100-note persisted restart workload as timed controls.
