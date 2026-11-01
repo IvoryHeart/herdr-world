@@ -17,8 +17,9 @@ function capture(binary: string, args: string[]) {
   };
 }
 
+/** The managed service's environment file folder, whatever this process's HERDR_WORLD_DATA_DIR. */
 function configDir(): string {
-  return dataRoot();
+  return dataRoot(homedir(), process.platform, process.env.APPDATA, {});
 }
 
 // URL/status are read-only and never consult another product's storage.
@@ -62,7 +63,9 @@ export function computeUrl(dir = configDir()): string {
     homedir(),
   );
   let url = browserUrlFor(access.host, access.port, access.tls);
-  const tokenPath = readableConfigFile(dir, "auth-token");
+  // The service's own token, which its HERDR_WORLD_DATA_DIR may move.
+  const tokenPath = access.tokenPath!;
+  assertSafeDataPath(tokenPath);
   if (!access.usesFixedPassword && existsSync(tokenPath)) {
     // Match the managed URL command: invalid credentials are never published.
     try {
@@ -156,6 +159,11 @@ export async function runPluginCommand(
   args: string[],
   version: string,
   binary = process.execPath,
+  runNative: (
+    binary: string,
+    args: string[],
+  ) => { status: number | null; error?: Error } = (file, argv) =>
+    spawnSync(file, argv, { stdio: "inherit" }),
 ): Promise<number | null> {
   // Existing Herdr installations cache this filename and direct verb argv.
   // Keep the native binary usable as their compatibility launcher, while all
@@ -199,9 +207,7 @@ export async function runPluginCommand(
               ? ["uninstall"]
               : null;
     if (serviceArgs) {
-      const result = spawnSync(binary, ["service", ...serviceArgs], {
-        stdio: "inherit",
-      });
+      const result = runNative(binary, ["service", ...serviceArgs]);
       if (result.error)
         console.error(`herdr-world plugin: ${result.error.message}`);
       return result.status ?? 1;

@@ -29,7 +29,7 @@ export type RunProcess = (
 ) => Promise<ProcessResult>;
 
 export type SourceRefresh =
-  | { ok: true; items: WorkItem[] }
+  | { ok: true; items: WorkItem[]; pullRequestsComplete?: boolean }
   | { ok: false; state: "not_connected" | "error"; detail: string };
 
 const TIMEOUT_MS = 20_000;
@@ -76,6 +76,7 @@ const search = (alias: string, query: string, first: number, body: string) =>
   `${alias}: search(type: ISSUE, first: ${first}, query: ${JSON.stringify(query)}) { ${body} }`;
 const PR_NODES = `nodes { ... on PullRequest { ${PR_FIELDS} } }`;
 const MERGED_NODES = `pageInfo { hasNextPage endCursor } ${PR_NODES}`;
+const OPEN_NODES = `pageInfo { hasNextPage } ${PR_NODES}`;
 
 function mergedQuery(now: number, days: number) {
   const since = new Date(now - days * 86_400_000)
@@ -87,9 +88,9 @@ function mergedQuery(now: number, days: number) {
 export function githubQuery(now: number, mergedDays = DEFAULT_MERGED_DAYS) {
   const issue = `nodes { ... on Issue { number title url updatedAt repository { nameWithOwner } } }`;
   return `query {
-  ${search("authored", "is:pr is:open author:@me archived:false", PAGE, PR_NODES)}
-  ${search("reviewing", "is:pr is:open review-requested:@me archived:false", PAGE, PR_NODES)}
-  ${search("assigned", "is:pr is:open assignee:@me archived:false", PAGE, PR_NODES)}
+  ${search("authored", "is:pr is:open author:@me archived:false", PAGE, OPEN_NODES)}
+  ${search("reviewing", "is:pr is:open review-requested:@me archived:false", PAGE, OPEN_NODES)}
+  ${search("assigned", "is:pr is:open assignee:@me archived:false", PAGE, OPEN_NODES)}
   ${search("merged", mergedQuery(now, mergedDays), MERGED_PAGE, MERGED_NODES)}
   ${search("issues", "is:issue is:open assignee:@me archived:false", PAGE, issue)}
 }`;
@@ -156,8 +157,9 @@ export async function refreshGitHub(
   try {
     const data = await query(githubQuery(now, mergedDays));
     // Every pull request merged in the window, a hundred at a time. A
-    // failed page fails the refresh, so the last complete list stays.
+    // failed page fails the refresh, so the last successful list stays.
     const merged = [...nodes(data.merged)];
+    let mergedRowsKnown = Array.isArray(record(data.merged).nodes);
     let page = record(record(data.merged).pageInfo);
     for (
       let pages = 1;
@@ -168,6 +170,7 @@ export async function refreshGitHub(
       const next = record(
         (await query(mergedPageQuery(now, mergedDays, page.endCursor))).merged,
       );
+      mergedRowsKnown &&= Array.isArray(next.nodes);
       merged.push(...nodes(next));
       page = record(next.pageInfo);
     }
@@ -175,7 +178,15 @@ export async function refreshGitHub(
       data: { ...data, merged: { nodes: merged } },
     });
     await readDetails(items, details, query, now);
-    return { ok: true, items };
+    const complete =
+      mergedRowsKnown &&
+      page.hasNextPage === false &&
+      ["authored", "reviewing", "assigned"].every(
+        (alias) =>
+          Array.isArray(record(data[alias]).nodes) &&
+          record(record(data[alias]).pageInfo).hasNextPage === false,
+      );
+    return { ok: true, items, pullRequestsComplete: complete };
   } catch {
     return { ok: false, state: "error", detail: GITHUB_FAILED };
   }

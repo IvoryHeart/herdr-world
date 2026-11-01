@@ -1,3 +1,4 @@
+import type { AgentSessionIdentity } from "../types";
 import { useCreationProgress } from "../creationRequests";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { type WorkspaceSurfaceSelection } from "../App";
@@ -16,7 +17,7 @@ import {
 } from "../workspaceResource";
 import { worldRuntimeStore, type WorldRuntimePriority } from "./runtimeStore";
 import { buildWorldObject, type WorldObjectNode } from "./worldObject";
-import type { WorldCanvasAnchor } from "./worldConnectorGeometry";
+import { createWorldAnchorFeed } from "./worldAnchorFeed";
 import type { WorldConnectorTargetBounds } from "./worldConnectorGeometry";
 import {
   reconcileWorldInspectorConversation,
@@ -36,7 +37,6 @@ import {
   worldInspectorContext,
   worldIntentInitialView,
   defaultOpenView,
-  ownerReady,
   selectionShowsProfile,
   snapshotPriorityForConversation,
   snapshotPriorityForSurface,
@@ -47,6 +47,7 @@ import { type WorldControlPlaneProps } from "./worldControlPlaneContract";
 import { useWorldObservation } from "./useWorldObservation";
 import { useWorldInspectorWindows } from "./useWorldInspectorWindows";
 import { useWorldCreatedTerminal } from "./useWorldCreatedTerminal";
+import { useWorldInspectorIntentLease } from "./useWorldInspectorIntentLease";
 
 export function useWorldInspectorController(props: WorldControlPlaneProps) {
   const {
@@ -93,9 +94,10 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
   >({});
   const [intentOpening, setIntentOpening] = useState(false);
   const [intentError, setIntentError] = useState<string | null>(null);
-  const [, setSelectedVisualAnchor] = useState<WorldCanvasAnchor | null>(null);
-  const [visualConversationAnchors, setVisualConversationAnchors] =
-    useState<Record<string, WorldCanvasAnchor> | null>(null);
+  // Views report anchors after every render and frame. They move with a
+  // walking agent or the camera, so they bypass React (worldAnchorFeed.ts).
+  const [visualConversationAnchors] = useState(createWorldAnchorFeed);
+  const setVisualConversationAnchors = visualConversationAnchors.set;
   const [floatingWindowAnchors, setFloatingWindowAnchors] = useState<
     Record<string, WorldConnectorTargetBounds | null>
   >({});
@@ -220,7 +222,7 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
     focusTarget = true,
     candidateWorld = world,
     signal?: AbortSignal,
-    agentSessionId?: string,
+    agentSession?: string | AgentSessionIdentity,
   ): Promise<boolean> => {
     if (signal?.aborted) return false;
     const next = id ? (candidateWorld.nodeById.get(id) ?? null) : null;
@@ -233,8 +235,10 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
           : null);
     const requestId = intentRequestRef.current + 1;
     intentRequestRef.current = requestId;
+    const isCurrentIntent = signal
+      ? () => !signal.aborted && intentRequestRef.current === requestId
+      : undefined;
     setIntentError(null);
-    setSelectedVisualAnchor(null);
     setVisualConversationAnchors(null);
     if (!next || next.kind === "host" || !next.actionable) {
       setSelection(next);
@@ -257,7 +261,8 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
       setIntentOpening(true);
       const unbindAbort = bindSelectionIntentAbort(signal, requestId);
       try {
-        if (focusTarget) await focusWorldNode(next, store, agentSessionId);
+        if (focusTarget)
+          await focusWorldNode(next, store, agentSession, isCurrentIntent);
         if (signal?.aborted || intentRequestRef.current !== requestId)
           return false;
         const currentConversations = inspectorConversationsRef.current;
@@ -316,7 +321,8 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
     setIntentOpening(true);
     const unbindAbort = bindSelectionIntentAbort(signal, requestId);
     try {
-      if (focusTarget) await focusWorldNode(next, store, agentSessionId);
+      if (focusTarget)
+        await focusWorldNode(next, store, agentSession, isCurrentIntent);
       if (signal?.aborted || intentRequestRef.current !== requestId)
         return false;
       const currentConversations = inspectorConversationsRef.current;
@@ -648,7 +654,6 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
     setIntentOpening(false);
     setIntentError(null);
     setSelection(null);
-    setSelectedVisualAnchor(null);
     setVisualConversationAnchors(null);
   };
 
@@ -753,7 +758,6 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
         setIntentOpening(false);
         setIntentError(null);
         setSelection(null);
-        setSelectedVisualAnchor(null);
         setVisualConversationAnchors(null);
       } else if (selectedWindowId) {
         const replacement = retained.find(
@@ -775,6 +779,7 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
     onInspectorConversationsChange,
     onInspectorTerminalPortal,
     selection,
+    setVisualConversationAnchors,
     world,
   ]);
 
@@ -1036,17 +1041,16 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
     onDockedInspectorIdChange(null);
   };
 
-  const selectedLeaseCurrent = ownerReady(selected, connectionSelection);
   // Only a host that disconnects or restarts cancels opening. A snapshot taken
   // while Herdr changes (a tab being created, for example) is briefly stale and
   // not actionable; treating that as new intent would cancel the new tab's
   // terminal opening, and admission already waits for an actionable snapshot.
-  useEffect(() => {
-    if (selected && !selectedLeaseCurrent) {
-      intentRequestRef.current += 1;
-      setIntentOpening(false);
-    }
-  }, [selectedLeaseCurrent, selected, intentRequestRef]);
+  useWorldInspectorIntentLease(
+    selected,
+    connectionSelection.connections,
+    intentRequestRef,
+    setIntentOpening,
+  );
 
   return {
     ...props,
@@ -1075,7 +1079,6 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
     setIntentOpening,
     intentError,
     setIntentError,
-    setSelectedVisualAnchor,
     visualConversationAnchors,
     setVisualConversationAnchors,
     floatingWindowAnchors,

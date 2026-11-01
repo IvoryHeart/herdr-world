@@ -1,0 +1,379 @@
+[
+  {
+    "command": "group create",
+    "verified": true,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "group add",
+    "verified": true,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "group remove",
+    "verified": true,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "group lead",
+    "verified": true,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "group reviewers",
+    "verified": true,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "group now",
+    "verified": true,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "group list",
+    "verified": true,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "group show",
+    "verified": true,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "group delete",
+    "verified": true,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "group promote",
+    "verified": true,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "group import",
+    "verified": true,
+    "ok": false,
+    "code": "usage",
+    "effects": []
+  },
+  {
+    "command": "whoami",
+    "verified": true,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "ls",
+    "verified": true,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "history",
+    "verified": true,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "undo",
+    "verified": true,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "board card move",
+    "verified": true,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "board card pin",
+    "verified": true,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "board card unpin",
+    "verified": true,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "board card group",
+    "verified": true,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "board card ungroup",
+    "verified": true,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "colour set",
+    "verified": true,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "colour reset",
+    "verified": true,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "town desk move",
+    "verified": true,
+    "ok": true,
+    "effects": ["tab.move"]
+  },
+  {
+    "command": "ask",
+    "verified": true,
+    "ok": true,
+    "effects": ["agent.get"]
+  },
+  {
+    "command": "ask get",
+    "verified": true,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "ask acknowledge",
+    "verified": true,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "ask answer",
+    "verified": true,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "ask withdraw",
+    "verified": true,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "result",
+    "verified": true,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "result ls",
+    "verified": true,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "spawned-by",
+    "verified": true,
+    "ok": true,
+    "effects": ["pane.report_metadata"]
+  },
+  {
+    "command": "group create",
+    "verified": false,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "group add",
+    "verified": false,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "group remove",
+    "verified": false,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "group lead",
+    "verified": false,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "group reviewers",
+    "verified": false,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "group now",
+    "verified": false,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "group list",
+    "verified": false,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "group show",
+    "verified": false,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "group delete",
+    "verified": false,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "group promote",
+    "verified": false,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "group import",
+    "verified": false,
+    "ok": false,
+    "code": "usage",
+    "effects": []
+  },
+  {
+    "command": "whoami",
+    "verified": false,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "ls",
+    "verified": false,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "history",
+    "verified": false,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "undo",
+    "verified": false,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "board card move",
+    "verified": false,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "board card pin",
+    "verified": false,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "board card unpin",
+    "verified": false,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "board card group",
+    "verified": false,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "board card ungroup",
+    "verified": false,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "colour set",
+    "verified": false,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "colour reset",
+    "verified": false,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "town desk move",
+    "verified": false,
+    "ok": true,
+    "effects": ["tab.move"]
+  },
+  {
+    "command": "ask",
+    "verified": false,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "ask get",
+    "verified": false,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "ask acknowledge",
+    "verified": false,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "ask answer",
+    "verified": false,
+    "ok": false,
+    "code": "refused",
+    "effects": []
+  },
+  {
+    "command": "ask withdraw",
+    "verified": false,
+    "ok": false,
+    "code": "refused",
+    "effects": []
+  },
+  {
+    "command": "result",
+    "verified": false,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "result ls",
+    "verified": false,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "spawned-by",
+    "verified": false,
+    "ok": false,
+    "code": "refused",
+    "effects": []
+  }
+]

@@ -62,6 +62,13 @@ export default defineConfig(({ mode }) => {
       outDir: "../server/public",
       emptyOutDir: true,
       rolldownOptions: {
+        // A dynamic import that another module also imports statically stays in
+        // the eager chunk, so the lazy boundary silently does nothing.
+        onLog(level, log, handler) {
+          if (log.code === "INEFFECTIVE_DYNAMIC_IMPORT")
+            throw new Error(log.message);
+          handler(level, log);
+        },
         output: {
           codeSplitting: {
             groups: [

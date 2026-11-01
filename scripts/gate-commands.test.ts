@@ -10,6 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { acquireAllCheckSlots, acquireCheckSlot } from "./check-lock";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 
@@ -19,6 +20,7 @@ function exercise(
   paths?: string[],
   incremental = false,
   ciMerge = false,
+  extraEnv: Record<string, string> = {},
 ) {
   const directory = mkdtempSync(join(tmpdir(), "gate-commands-"));
   const record = join(directory, "commands");
@@ -59,6 +61,11 @@ function exercise(
         join(directory, "scripts/agent/other.test.ts"),
         "// another agent regression\n",
       );
+      mkdirSync(join(directory, "web/src"), { recursive: true });
+      writeFileSync(
+        join(directory, "web/src/uiScale.test.ts"),
+        "// " + ["CHROME", "BIN"].join("_") + " browser fixture\n",
+      );
       git("add", ".");
       git("commit", "-qm", "base");
       git("update-ref", "refs/remotes/origin/main", "HEAD");
@@ -92,6 +99,15 @@ function exercise(
         args = [...args, `--base=${remote}`];
       }
     }
+    const laneDir = join(directory, ".agents/delivery/lanes");
+    if (args[0] === "scripts/check-delivery.ts") {
+      mkdirSync(laneDir, { recursive: true });
+      for (const lane of ["static", "unit", "browser", "quiet", "verification"])
+        writeFileSync(
+          join(laneDir, `${lane}.log`),
+          "stale output from previous run\n".repeat(1000),
+        );
+    }
     const command =
       args[0] === "scripts/check-delivery.ts"
         ? [join(root, args[0]), ...args.slice(1)]
@@ -99,14 +115,21 @@ function exercise(
     const result = spawnSync(process.execPath, command, {
       cwd: directory,
       encoding: "utf8",
+      timeout: 5000,
       env: {
         ...process.env,
         CI: "true",
         PATH: `${directory}:${process.env.PATH ?? ""}`,
         GATE_COMMANDS: record,
         GATE_FAIL_ON: failOn,
+        ...extraEnv,
       },
     });
+    if (result.status !== null && args[0] === "scripts/check-delivery.ts")
+      for (const lane of ["static", "unit", "browser", "quiet", "verification"])
+        expect(
+          readFileSync(join(laneDir, `${lane}.log`), "utf8"),
+        ).not.toContain("stale output");
     if (incremental) expect(result.stdout).not.toContain("tooling-only");
     return {
       status: result.status,
@@ -235,5 +258,98 @@ test("an uncovered agent module runs the entire agent test inventory without hea
         /run-world-tests|verification:gate/.test(cmd),
       ),
     ).toBe(false);
+  }
+});
+
+test("pre-push keeps all non-browser units for gate changes and leaves heavy suites to CI", () => {
+  const result = exercise(["scripts/check-delivery.ts"], "", ["package.json"]);
+  expect(result.status).toBe(0);
+  expect(result.commands).toContain(
+    "scripts/run-tests.ts scripts/agent/example.test.ts scripts/agent/other.test.ts",
+  );
+  expect(
+    result.commands.some((cmd) =>
+      /uiScale|run-world-tests|verification:gate/.test(cmd),
+    ),
+  ).toBe(false);
+  const full = exercise(["scripts/check-delivery.ts", "--full"], "", [
+    "package.json",
+  ]);
+  expect(full.status).toBe(0);
+  expect(full.commands).toContain(
+    "scripts/run-tests.ts web/src/uiScale.test.ts --parallel=2",
+  );
+  expect(full.commands).toContain("run verification:gate");
+  expect(
+    full.commands.some((cmd) => cmd.startsWith("scripts/run-world-tests.ts")),
+  ).toBe(true);
+});
+
+test("static failures report while all heavy check slots are held, regardless of a disk floor", async () => {
+  const runtime = mkdtempSync(join(tmpdir(), "static-queue-"));
+  const release = await acquireAllCheckSlots({
+    lane: "heavy fixture",
+    dir: join(runtime, "herdr-world-checks"),
+    env: {},
+  });
+  try {
+    const result = exercise(
+      ["scripts/check-delivery.ts", "--static"],
+      "check:size",
+      undefined,
+      false,
+      false,
+      {
+        CI: "",
+        HERDR_WORLD_CHECK_LOCK: "",
+        XDG_RUNTIME_DIR: runtime,
+        HERDR_WORLD_MIN_FREE_GB: "999999999",
+      },
+    );
+    expect(result.status).toBe(1);
+    expect(result.commands).toEqual([
+      "run notices:check",
+      "run changelog:check",
+      "run check:size",
+    ]);
+  } finally {
+    release();
+    rmSync(runtime, { recursive: true, force: true });
+  }
+});
+
+test("Chrome lanes share the browser slot while unit and verification work hold their slots", async () => {
+  const runtime = mkdtempSync(join(tmpdir(), "chrome-queue-"));
+  const options = {
+    lane: "heavy fixture",
+    dir: join(runtime, "herdr-world-checks"),
+    env: {},
+  };
+  const unit = await acquireCheckSlot("light", options);
+  const verification = await acquireCheckSlot("verification", options);
+  try {
+    const result = exercise(
+      ["scripts/check-delivery.ts", "--browser"],
+      "",
+      ["package.json"],
+      false,
+      false,
+      {
+        CI: "",
+        HERDR_WORLD_CHECK_LOCK: "",
+        XDG_RUNTIME_DIR: runtime,
+      },
+    );
+    expect(result.status).toBe(0);
+    expect(result.commands).toContain(
+      "scripts/run-tests.ts web/src/uiScale.test.ts --parallel=2",
+    );
+    expect(
+      result.commands.some((cmd) => /verification:gate|^run /.test(cmd)),
+    ).toBe(false);
+  } finally {
+    verification();
+    unit();
+    rmSync(runtime, { recursive: true, force: true });
   }
 });

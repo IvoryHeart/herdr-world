@@ -1,5 +1,8 @@
 import { expect, test } from "bun:test";
-import { worldBrowserShards } from "./world-browser-suites";
+import {
+  worldBrowserShards,
+  worldLatencyTrendSuites,
+} from "./world-browser-suites";
 
 type WorkflowStep = {
   name?: string;
@@ -189,37 +192,56 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
   expect(workflow.jobs.validate).toBeUndefined();
 });
 
-test("latency budgets run alone in a dedicated, quiet job that gates delivery", () => {
-  const latency = worldWorkflow.jobs["latency-shards"];
-  expect(latency?.needs).toBeUndefined();
-  expect(latency?.if).toBe(
-    "toJSON(fromJSON(inputs.selection).latency) != '[]'",
-  );
-  expect(latency?.strategy?.matrix?.shard).toEqual([1, 2, 3, 4, 5, 6]);
-  expect(worldWorkflow.jobs["world-latency"].needs).toBe("latency-shards");
-  expect(latency?.["continue-on-error"] ?? false).toBe(false);
-  for (const step of latency?.steps ?? [])
-    expect(step["continue-on-error"] ?? false).toBe(false);
-  const runs = (latency?.steps ?? []).flatMap((step) =>
-    step.run ? [step.run] : [],
-  );
-  // Quiet first, then only the latency group, one case at a time, with one
-  // retry for a failed case (#230); the shards never retry.
-  expect(runs).toEqual([
-    "bun install --frozen-lockfile",
-    "bun scripts/wait-for-quiet.ts",
-    "bun scripts/ci-tests.ts latency ${{ matrix.shard }}",
+test("no timing gates delivery: browser jobs use the pinned Chrome and never retry", () => {
+  expect(worldWorkflow.jobs["latency-shards"]).toBeUndefined();
+  expect(worldWorkflow.jobs["world-latency"]).toBeUndefined();
+  expect(JSON.stringify(worldWorkflow)).not.toContain("--retry");
+  expect(JSON.stringify(worldWorkflow)).not.toContain("latency");
+  for (const name of ["world-browser", "web-shards"]) {
+    const runs = worldWorkflow.jobs[name]!.steps.flatMap((step) =>
+      step.run ? [step.run] : [],
+    );
+    const chrome = runs.indexOf(
+      'bun scripts/test-chrome.ts "$HOME/.cache/herdr-test-chrome"',
+    );
+    expect(chrome).toBeGreaterThan(-1);
+    expect(chrome).toBeLessThan(
+      runs.findIndex((run) => run.startsWith("bun scripts/ci-tests.ts")),
+    );
+  }
+});
+
+test("the latency trend measures the trend suites on quiet runners and reports without gating", async () => {
+  const trend = Bun.YAML.parse(
+    await Bun.file(
+      new URL("../.github/workflows/world-latency-trend.yml", import.meta.url),
+    ).text(),
+  ) as {
+    on: Record<string, unknown>;
+    permissions: Record<string, string>;
+    jobs: Record<string, WorkflowJob>;
+  };
+  expect(Object.keys(trend.on).sort()).toEqual([
+    "pull_request",
+    "push",
+    "workflow_dispatch",
   ]);
-  expect(JSON.stringify(worldWorkflow.jobs["world-browser"])).not.toContain(
-    "--retry",
-  );
+  expect(trend.permissions).toEqual({ contents: "read", actions: "read" });
+  const measure = trend.jobs.measure!;
   expect(
-    latency?.steps.find((step) =>
-      step.uses?.startsWith("actions/upload-artifact@"),
+    (measure.strategy?.matrix?.suite ?? []).map(
+      (suite) => `web/src/world/${suite}.test.ts`,
     ),
-  ).toMatchObject({ if: "always()" });
-  // Delivery depends on the whole World workflow, which includes this job.
-  expect(workflow.jobs.delivery?.needs).toContain("world-browser");
+  ).toEqual(worldLatencyTrendSuites);
+  const runs = measure.steps.flatMap((step) => (step.run ? [step.run] : []));
+  const quiet = runs.indexOf("bun scripts/wait-for-quiet.ts");
+  expect(quiet).toBeGreaterThan(
+    runs.indexOf('bun scripts/test-chrome.ts "$HOME/.cache/herdr-test-chrome"'),
+  );
+  expect(runs[quiet + 1]).toContain("--parallel=1 --max-concurrency=1");
+  expect(JSON.stringify(trend)).not.toContain("--retry");
+  // Nothing required waits on it.
+  expect(JSON.stringify(workflow)).not.toContain("world-latency-trend");
 });
 
 test("all World browser shards and the web browser suites run independently and retain failure evidence", () => {
@@ -361,6 +383,15 @@ test("CI exercises the real plugin-managed launchd lifecycle on both protected a
         step.name === "Exercise the real plugin-managed launchd lifecycle",
     )?.if,
   ).toBe("needs.validation-scope.outputs.packaging == 'true'");
+  expect(launchd?.["runs-on"]).toBe(
+    "${{ needs.validation-scope.outputs.packaging == 'true' && matrix.runner || 'ubuntu-latest' }}",
+  );
+  for (const step of launchd?.steps ?? []) {
+    if (step.run)
+      expect(step.if).toBe(
+        "needs.validation-scope.outputs.packaging == 'true'",
+      );
+  }
   expect(launchd?.needs).toBe("validation-scope");
   expect(
     launchd?.steps.some(
@@ -485,6 +516,7 @@ test("red main runs open one alert and an unmerged revert; green runs resolve it
       };
     };
     jobs: Record<string, WorkflowJob>;
+    permissions?: Record<string, string>;
   };
   expect(gate.on.workflow_run).toEqual({
     workflows: ["CI"],
@@ -499,6 +531,14 @@ test("red main runs open one alert and an unmerged revert; green runs resolve it
   const script = alert.steps.at(-1)!;
   expect(script.run).toContain("bun scripts/main-gate.ts");
   expect(script.run).not.toContain("gh pr merge");
+  // The gate dispatches CI on the revert it prepares, which needs Actions write.
+  const gateSource = await Bun.file(
+    new URL("./main-gate.ts", import.meta.url),
+  ).text();
+  expect(gateSource).toContain('"workflow", "run", "CI"');
+  expect(gate.permissions?.actions).toBe("write");
+  // Nothing reruns a red run.
+  expect(gateSource).not.toContain('"run", "rerun"');
 });
 
 test("the shared plan controls scoped jobs and always preserves protected delivery", () => {

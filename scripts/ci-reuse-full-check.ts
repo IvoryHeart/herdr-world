@@ -1,5 +1,10 @@
 import { appendFileSync } from "node:fs";
 import {
+  validationProofFromLog,
+  sameValidationSelection,
+  type ValidationProof,
+} from "./ci-validation-proof";
+import {
   repositorySelection,
   fullValidationSelection,
   isDocumentationPath,
@@ -20,11 +25,13 @@ type TestedSource = {
   checkoutSha: string;
   commitSha: string;
   parents: string[];
+  validation?: ValidationProof;
 };
 type Run = {
   id: number;
   run_attempt: number;
   head_sha: string;
+  conclusion: string | null;
   pull_requests: Array<{
     number: number;
     base: { sha: string };
@@ -32,7 +39,7 @@ type Run = {
   }>;
 };
 
-/** A metadata edit may reuse only a successful full job on this exact PR/base/head. */
+/** Reuse passing full or identically selected scoped evidence on this exact PR/base/head. */
 export async function canReuseFullCheck(
   runs: Run[],
   currentRunId: number,
@@ -43,6 +50,7 @@ export async function canReuseFullCheck(
   fullStepName: string,
   jobsForRun: (runId: number) => Promise<Job[]>,
   testedSourceForJob: (jobId: number) => Promise<TestedSource | undefined>,
+  selection?: ValidationSelection,
 ): Promise<boolean> {
   for (const run of [...runs].sort((left, right) => right.id - left.id)) {
     if (
@@ -56,6 +64,9 @@ export async function canReuseFullCheck(
       )
     )
       continue;
+    // A failed or unfinished candidate may have no aggregate job at all.
+    // Its workflow result is still a barrier to older passing evidence.
+    if (run.conclusion !== "success") return false;
     const job = (await jobsForRun(run.id)).find(({ name }) => name === jobName);
     if (!job) continue;
     if (job.run_id !== run.id || job.run_attempt !== run.run_attempt)
@@ -64,23 +75,38 @@ export async function canReuseFullCheck(
     const reuseStep = job.steps.find(
       ({ name }) => name === "Determine validation scope",
     );
+    if (job.conclusion !== "success") return false;
     if (
-      fullStep?.conclusion === "skipped" &&
-      reuseStep?.conclusion === "success"
+      fullStep?.conclusion !== "success" &&
+      fullStep?.conclusion !== "skipped"
     )
-      continue;
-    if (job.conclusion !== "success" || fullStep?.conclusion !== "success")
       return false;
-    // Run PR associations can change after a base update. The completed job's
-    // checkout log and the immutable merge commit's parents bind its source.
     const source = await testedSourceForJob(job.id);
-    return (
-      source !== undefined &&
-      source.checkoutSha === source.commitSha &&
-      source.parents.length === 2 &&
-      source.parents[0] === baseSha &&
-      source.parents[1] === headSha
+    // PR associations are mutable; the checkout commit's ordered parents bind
+    // the actual tested merge even when the job used a scoped plan.
+    if (
+      !source ||
+      source.checkoutSha !== source.commitSha ||
+      source.parents.length !== 2 ||
+      source.parents[0] !== baseSha ||
+      source.parents[1] !== headSha
+    )
+      return false;
+    if (fullStep.conclusion === "success") return true;
+    if (reuseStep?.conclusion !== "success") return false;
+    const applicable = job.steps.find(
+      ({ name }) => name === "Verify applicable or reused results",
     );
+    if (source.validation?.mode === "scoped")
+      return (
+        applicable?.conclusion === "success" &&
+        selection !== undefined &&
+        sameValidationSelection(source.validation.selection, selection)
+      );
+    // Reused successes are not fresh evidence. Older jobs without a proof
+    // record cannot establish scoped success, but may lead to a full run.
+    if (!source.validation || source.validation.mode === "reuse") continue;
+    return false;
   }
   return false;
 }
@@ -180,7 +206,7 @@ export function writeValidationOutputs(
     [
       `mode=${mode}`,
       `selection=${JSON.stringify(selection)}`,
-      `world=${active && !!(selection.world.length + selection.web.length + selection.latency.length)}`,
+      `world=${active && !!(selection.world.length + selection.web.length)}`,
       `verification=${active && selection.verification}`,
       `packaging=${active && selection.packaging}`,
     ].join("\n") + "\n",
@@ -270,8 +296,10 @@ if (import.meta.main) {
               checkoutSha: commit,
               commitSha: data.sha,
               parents: data.parents.map(({ sha }) => sha),
+              validation: validationProofFromLog(log),
             };
           },
+          selection,
         );
       },
       selection.tooling,

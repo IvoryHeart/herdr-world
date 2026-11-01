@@ -121,3 +121,41 @@ test("camera reserves the rail for open questions and respects tray/collapse bou
   expect(townRailInset(640, false, 1)).toBe(0);
   expect(townRailInset(641, false, 1)).toBe(252);
 });
+
+for (const state of ["uncertain", "refused", "pending"] as const)
+  test(`Reception keeps owner-alert ${state} evidence visible on the stored question`, () => {
+    const html = renderToStaticMarkup(
+      createElement(TownRail, {
+        needsYouCount: 1,
+        asks: [
+          {
+            id: "q-evidence",
+            at: 0,
+            actor: { label: "Fixture", verified: true },
+            question: "Still stored?",
+            options: [],
+            owner_only: true,
+            delivery: {
+              notification: { state, reason: "Synthetic delivery evidence" },
+            },
+          },
+        ],
+        calls: [],
+        activeKey: null,
+        now: 60_000,
+        onPeek() {},
+        onOpen() {},
+        collapsed: false,
+        onCollapsedChange() {},
+      }),
+    );
+    expect(html).toContain('role="status"');
+    expect(html).toContain(
+      "your question is saved".replace(
+        "your",
+        state === "uncertain" ? "your" : "Your",
+      ),
+    );
+    expect(html).toContain("Still stored?");
+    expect(html).toContain("NEEDS YOU <b>1</b>");
+  });

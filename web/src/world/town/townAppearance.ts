@@ -1,12 +1,17 @@
 import { avatarLook } from "../../../../shared/appearance";
-import { profileLookFor, profilesSnapshot, townLookOf } from "../agentProfiles";
+import { profileFor, profilesSnapshot, townLookOf } from "../agentProfiles";
 import type { OfficeAgent } from "../herdrOfficeProjection";
 import { townLookFor, type TownLook } from "./townSprites";
 /** Keep frame reads allocation-free; retired immutable agent objects can be collected. */
 export function createTownLookResolver(readProfiles = profilesSnapshot) {
   const cache = new WeakMap<
     OfficeAgent,
-    { revision: number; avatar: string | undefined; look: TownLook }
+    {
+      revision: number;
+      key: string;
+      avatar: string | undefined;
+      look: TownLook;
+    }
   >();
   return (agent: OfficeAgent | undefined, key: string): TownLook => {
     if (!agent) return townLookFor(key);
@@ -22,11 +27,17 @@ export function createTownLookResolver(readProfiles = profilesSnapshot) {
       return previous.look;
     const override = avatarLook(avatar),
       terminal = agent.currentTerminalRef;
-    const look = override
-      ? townLookOf(override)
-      : profileLookFor(profiles, terminal.connectionId, terminal.nativeId) ||
-        townLookFor(key);
-    cache.set(agent, { revision, avatar, look });
+    const input =
+      override ??
+      profileFor(profiles, terminal.connectionId, terminal.nativeId)?.look;
+    const inputKey = input ? JSON.stringify(input) : key;
+    const look =
+      previous?.key === inputKey
+        ? previous.look
+        : input
+          ? townLookOf(input)
+          : townLookFor(key);
+    cache.set(agent, { revision, avatar, key: inputKey, look });
     return look;
   };
 }

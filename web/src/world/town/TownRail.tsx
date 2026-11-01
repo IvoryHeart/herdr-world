@@ -5,6 +5,7 @@ import { askerName, type WorldAsk } from "../worldAsks";
 import type { TownAsker } from "./townAskers";
 import { townPortrait } from "./townSprites";
 import "./townAsks.css";
+import "./answerDeliveries.css";
 
 /** The same room/host wording in Town's peek and Summary. */
 export function townLocation(
@@ -88,6 +89,15 @@ export function TownAsk({
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const notification = ask.delivery?.notification;
+  const deliveryMessage =
+    notification?.state === "uncertain"
+      ? "Owner alert delivery is uncertain. World will retry; your question is saved."
+      : notification?.state === "refused"
+        ? "Owner alert was not shown. Your question is saved."
+        : notification?.state === "pending" && notification.reason
+          ? "Owner alert is waiting to retry. Your question is saved."
+          : null;
   const asker = actions.askers.get(ask.id);
   const name = asker?.name ?? askerName(ask);
   const who = `${name}${ask.actor.verified ? "" : " (unverified)"}`;
@@ -162,7 +172,11 @@ export function TownAsk({
           Dismiss
         </button>
       </div>
-      {error ? <small role="alert">{error}</small> : null}
+      {error || deliveryMessage ? (
+        <small role={error ? "alert" : "status"}>
+          {error ?? deliveryMessage}
+        </small>
+      ) : null}
     </form>
   );
 }
@@ -183,8 +197,14 @@ export function TownRail({
   onCollapsedChange,
   asks = [],
   askActions = NO_ASK_ACTIONS,
+  onOpenOutbox,
+  deliveryWaiting = 0,
+  deliveryCount = 0,
 }: {
   needsYouCount: number;
+  onOpenOutbox?(): void;
+  deliveryWaiting?: number;
+  deliveryCount?: number;
   asks?: readonly WorldAsk[];
   askActions?: TownAskActions;
   collapsed: boolean;
@@ -202,7 +222,7 @@ export function TownRail({
   const calls = allCalls.slice(0, RAIL_LIMIT);
   const hidden = allCalls.length - calls.length;
   // Nothing waiting: the rail steps out of the way entirely.
-  if (!waiting) return null;
+  if (!waiting && !deliveryCount) return null;
   const toggle = () => {
     const next = !collapsed;
     onCollapsedChange(next);
@@ -261,7 +281,25 @@ export function TownRail({
     >
       <div className="town-rail-head">
         <span>
-          NEEDS YOU <b>{waiting}</b>
+          {waiting ? (
+            <>
+              NEEDS YOU <b>{waiting}</b>
+              {collapsed && deliveryCount ? (
+                <button
+                  type="button"
+                  className="town-outbox-collapsed"
+                  aria-label={`Outbox, ${deliveryCount} answers to check. Open summary.`}
+                  onClick={onOpenOutbox}
+                >
+                  ✉{deliveryCount}
+                </button>
+              ) : null}
+            </>
+          ) : (
+            <>
+              OUTBOX <b>{deliveryCount}</b>
+            </>
+          )}
         </span>
         <button
           type="button"
@@ -284,6 +322,20 @@ export function TownRail({
             <TownAsk key={ask.id} ask={ask} now={now} actions={askActions} />
           ))}
         </div>
+      ) : null}
+      {!collapsed && deliveryCount ? (
+        <button
+          type="button"
+          className="town-outbox-row"
+          aria-label={`Outbox, ${deliveryCount} ${deliveryCount === 1 ? "answer" : "answers"} to check. Open summary.`}
+          onClick={onOpenOutbox}
+        >
+          <span>
+            ✉ Outbox · {deliveryCount} to check
+            {deliveryWaiting ? ` · ${deliveryWaiting} waiting` : ""}
+          </span>
+          <span aria-hidden="true">›</span>
+        </button>
       ) : null}
       {calls.length ? (
         <>
@@ -333,7 +385,7 @@ export function TownRail({
           </div>
           {hidden ? <p className="town-rail-empty">+{hidden} more</p> : null}
         </>
-      ) : asks.length ? null : (
+      ) : asks.length || deliveryCount ? null : (
         <p className="town-rail-empty">Nobody is waiting on you.</p>
       )}
     </aside>
@@ -350,6 +402,8 @@ export function townCalls(
   since: Map<string, number>,
   unseenCompletions: readonly OfficeAgent[],
   entryOf: (agentKey: string) => OfficeRosterEntry | undefined,
+  /** When this list is made: newly waiting agents start waiting now. */
+  now: number = Date.now(),
 ): TownCall[] {
   const live = new Set<string>();
   const blocked: TownCall[] = [];
@@ -357,7 +411,7 @@ export function townCalls(
     const { agent } = entry;
     if (agent.semanticStatus !== "blocked" || agent.stale) continue;
     live.add(agent.key);
-    if (!since.has(agent.key)) since.set(agent.key, Date.now());
+    if (!since.has(agent.key)) since.set(agent.key, now);
     blocked.push({
       agent,
       kind: "blocked",
@@ -379,7 +433,7 @@ export function townCalls(
           {
             agent,
             kind: "done",
-            since: Date.now(),
+            since: now,
             hostKey: entry.hostKey,
             hostLabel: entry.hostLabel,
             roomKey: entry.roomKey,

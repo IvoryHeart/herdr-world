@@ -49,6 +49,8 @@ export type Conversation = {
   pane_id: string;
   agent: string | null;
   agent_status: string | null;
+  /** Additive runtime evidence; legacy status and Send qualification remain separate. */
+  field_claims?: import("../../../shared/fieldClaims").AgentFieldClaims;
   session_binding: ConversationBinding;
   /** The bound session; null for a guess. Send refuses when it changes. */
   session_fingerprint: string | null;
@@ -232,6 +234,12 @@ export interface ConversationSource {
       session_fingerprint: string;
       /** IDs of the user messages Chat showed; saves a reread over SSH. */
       baseline?: readonly string[];
+      /** Internal durable consumers admit immediately before native submission. */
+      beforeSubmit?: () => Promise<boolean>;
+      /** Rechecked synchronously against the final native agent observation. */
+      guard?: (info: Record<string, unknown>) => boolean;
+      /** Actual native queued-recipient evidence, never an execution/read receipt. */
+      submitted?: (fingerprint: string | null) => void;
     },
   ): Promise<ConversationSendResult>;
   /**

@@ -28,7 +28,7 @@ changes on desktop or mobile. **Requires a running Herdr server.**
   Board's **Work** lens and on Town desks, with confirmed merge, close and mark
   ready actions.
 - **A clearer Town.** Rooms follow Spaces' tab order and resize as tabs open or close;
-  explicitly expanded rooms keep their size until folded;
+  expanded rooms stay expanded as they shrink when tabs close, until folded;
   pin desks, colour hosts, workspaces and terminals, and open **Summary** for
   everything needing you. Every view opens in Zen.
 - **Herdr setup.** The published 0.2.7 standalone installer installs or upgrades
@@ -96,7 +96,8 @@ opened from Town, Board or Desk. See [Chat](./docs/CHAT.md) and the
    standalone installer installs or upgrades Herdr to the verified release; set
    `HERDR_WORLD_SKIP_HERDR=1` to leave yours untouched. With npm or a Windows
    archive, run `herdr-world herdr upgrade --install` once if needed.
-   `herdr-world herdr setup` starts Herdr as a user service.
+   `herdr-world herdr setup` configures future startup as a user service and starts
+   Herdr if down; an already-running server keeps running without a restart.
 2. On Linux or macOS, install Herdr World with the standalone installer:
 
    ```bash

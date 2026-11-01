@@ -2,9 +2,91 @@ import {
   continuingAppearance,
   parseAppearanceTarget,
   type AppearanceRecord,
+  appearanceKey,
+  type AppearanceFields,
+  type AppearanceTarget,
 } from "../../../shared/appearance";
 import { tabCardKey } from "../../../shared/terminalColor";
 import type { BoardDocument, BoardOp, CardColor } from "./board-store";
+import type { AppearanceChanges } from "./appearance-edits";
+
+/** Replay the latest field writes after alias relocation, including explicit resets. */
+export function moveAppearanceEditOps(
+  document: BoardDocument,
+  ops: readonly BoardOp[],
+  changes: AppearanceChanges,
+  movedTab: {
+    connectionId: string;
+    from: string;
+    to: string;
+    workspaceIds: ReadonlySet<string>;
+  } | null,
+): BoardOp[] {
+  const pairs = new Map<
+    string,
+    { sources: AppearanceTarget[]; target: AppearanceTarget }
+  >();
+  for (const op of ops) {
+    if (op.op !== "appearance.relocate") continue;
+    const key = appearanceKey(op.target),
+      previous = pairs.get(key);
+    pairs.set(key, {
+      sources: [...(previous?.sources ?? []), op.from],
+      target: op.target,
+    });
+  }
+  if (movedTab) {
+    const key = appearanceKey({
+      connection_id: movedTab.connectionId,
+      kind: "tab",
+      native_id: movedTab.to,
+    });
+    const target = document.appearance?.[key];
+    // A first destination save can exist without any source appearance to relocate.
+    if (
+      target &&
+      !pairs.has(key) &&
+      ops.some((op) => op.op === "card.color" && op.key === target.color_key)
+    ) {
+      const from = document.appearance?.[
+        appearanceKey({ ...target, native_id: movedTab.from })
+      ] ?? {
+        ...target,
+        native_id: movedTab.from,
+        color_key: tabCardKey(
+          movedTab.connectionId,
+          movedTab.from,
+          movedTab.workspaceIds,
+        ),
+      };
+      pairs.set(key, { sources: [from], target });
+    }
+  }
+  return [...pairs.values()].flatMap(({ sources, target }): BoardOp[] => {
+    const candidates = [
+      changes(target),
+      ...sources
+        .filter((from) => appearanceKey(from) !== appearanceKey(target))
+        .map(changes),
+    ];
+    const fields: AppearanceFields = Object.fromEntries(
+      (["color", "status", "avatar"] as const).flatMap((field) => {
+        const latest = candidates.reduce<
+          ReturnType<AppearanceChanges>[typeof field]
+        >((latest, candidate) => {
+          const write = candidate[field];
+          return write && (!latest || write.revision > latest.revision)
+            ? write
+            : latest;
+        }, undefined);
+        return latest ? [[field, latest.value]] : [];
+      }),
+    );
+    return Object.keys(fields).length
+      ? [{ op: "appearance.set", target, fields }]
+      : [];
+  });
+}
 
 /** A current native list gates both appearance and the colour a move carries. */
 export function appearanceForMove(

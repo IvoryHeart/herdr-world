@@ -26,14 +26,19 @@ export type TownDropTarget = {
   action?: "move" | "reorder" | "group" | "ungroup";
 };
 
-/** What a held press picks up: a desk or a seated agent, zoomed in. */
+/**
+ * What a held press picks up: a seated agent zoomed in, or a desk from the
+ * room-card zoom (overview) in, where desks are already finger-sized.
+ */
 export function townDragFor(
   hit: TownHit | null,
   model: TownModel,
   level: TownLevel,
 ): TownDrag | null {
-  if (!hit || (level !== "room" && level !== "desk")) return null;
+  if (!hit || level === "town") return null;
+  const zoomedIn = level === "room" || level === "desk";
   if (hit.kind === "agent") {
+    if (!zoomedIn) return null;
     const agent = model.agents.get(hit.key);
     const seat = model.agentSeats.get(hit.key);
     if (!agent || !seat || !agent.canOpenInSpaces || agent.stale) return null;

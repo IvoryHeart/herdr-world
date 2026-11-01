@@ -1,8 +1,20 @@
 import {
+  interests,
+  groupInterests,
+  applyBoardInterest,
+  pruneGroupInterest,
+  checkGroupInterest,
+} from "./board-interest";
+import {
   colorFollowOps,
   trackColorEdits,
   type ColorEdit,
 } from "./board-color-moves";
+import {
+  captureAppearanceChanges,
+  trackAppearanceEdits,
+  type AppearanceEdits,
+} from "./appearance-edits";
 import { movedAppearanceOps } from "./appearance-observation";
 import {
   restoreAppearance,
@@ -10,10 +22,6 @@ import {
   relocateAppearance,
   applyAppearance,
   parseAppearanceRecords,
-  type AppearanceFields,
-  type AppearanceTarget,
-  type AppearanceRecords,
-  type AppearanceRecord,
 } from "../../../shared/appearance";
 import {
   checkStoredGroups,
@@ -27,9 +35,7 @@ import {
   type GroupOp,
 } from "./board-groups";
 import { existsSync, readFileSync, renameSync } from "node:fs";
-import { join } from "node:path";
-import { dataRoot, replaceDataFile } from "../config/data-paths";
-import { worldEnv } from "../config/environment";
+import { replaceDataFile } from "../config/data-paths";
 import { RECIPIENT_MAX, type ObservedAgent } from "./board-recipient";
 import { cardKey, tabCardKey } from "../../../shared/terminalColor";
 import {
@@ -40,11 +46,6 @@ import {
   type SpawnClaim,
   type TerminalRef,
 } from "../../../shared/relations";
-import {
-  isInterestKey,
-  STORED_INTERESTS,
-  type StoredInterest,
-} from "../../../shared/interest";
 
 /**
  * Board's saved state: layout, notes and strings. One document for the World
@@ -54,163 +55,23 @@ import {
  * agent only when the user sends one.
  */
 
-export type BoardPoint = { x: number; y: number };
-export type NoteColor = "yellow" | "pink" | "blue" | "green";
-export type BoardAnchorKind = "workspace" | "tab" | "pane";
-
-/** A Herdr target, with the terminal IDs last seen in it as a witness. */
-export type BoardAnchor = {
-  connection_id: string;
-  kind: BoardAnchorKind;
-  native_id: string;
-  witness: string[];
-  /**
-   * For a pane, the agent the string was made for (board-recipient.ts).
-   * Only the service sets it; absent until the service has read the pane.
-   */
-  recipient?: string;
-};
-export type BoardEnd = { note: string } | { anchor: BoardAnchor };
-
-export type BoardNote = {
-  id: string;
-  text: string;
-  color: NoteColor;
-  x: number;
-  y: number;
-  rev: number;
-};
-export type BoardString = {
-  id: string;
-  from: BoardEnd;
-  to: BoardEnd;
-  /** Its target is gone (Herdr said so); it waits in Needs a home. */
-  detached?: boolean;
-};
-/** Colours the user gives workspace and tab cards; status colours are separate. */
-export type CardColor =
-  | "red"
-  | "orange"
-  | "yellow"
-  | "green"
-  | "teal"
-  | "blue"
-  | "purple"
-  | "pink";
-export type BoardLayoutDocument = {
-  anchors: Record<string, BoardPoint>;
-  offsets: Record<string, BoardPoint>;
-  pinned: Record<string, BoardPoint>;
-  folded: string[];
-  /** Card key to the colour the user chose for it. */
-  colors: Record<string, CardColor>;
-  /**
-   * Town desks the user pinned, by their tab's card key: a pinned desk keeps
-   * its cell (null until Town first places it), and its agents stay at it.
-   */
-  desk_pins: Record<string, DeskPin>;
-  /** Terminal key (shared/interest.ts) to the viewer's muted or focused. */
-  interest: Record<string, StoredInterest>;
-};
-/** A desk's cell in its Town room: column and row, from the top left. */
-export type DeskCell = { col: number; row: number };
-export type DeskPin = { cell: DeskCell | null };
-export type BoardDocument = {
-  appearance?: AppearanceRecords;
-  version: 1;
-  revision: number;
-  layout: BoardLayoutDocument;
-  notes: BoardNote[];
-  strings: BoardString[];
-  /** Which terminals know each other (shared/relations.ts). */
-  relations: RelationsDocument;
-};
-
-export type BoardOp =
-  | { op: "appearance.prune"; keys: string[] }
-  | { op: "appearance.set"; target: AppearanceTarget; fields: AppearanceFields }
-  | {
-      op: "appearance.relocate";
-      from: AppearanceTarget;
-      target: AppearanceTarget;
-    }
-  | { op: "appearance.restore"; key: string; record: AppearanceRecord | null }
-  | {
-      op: "note.put";
-      note: Omit<BoardNote, "rev">;
-      /** The revision the client edited; omitted when creating. */
-      rev?: number;
-    }
-  | { op: "note.delete"; id: string; rev: number }
-  | { op: "string.put"; string: BoardString }
-  | { op: "string.delete"; id: string }
-  | {
-      op: "string.detach";
-      id: string;
-      /**
-       * Detach only if this end still names this target: a move may have
-       * rewritten the string while the absence check was in flight.
-       */
-      if_anchor?: {
-        end: "from" | "to";
-        connection_id: string;
-        kind: "workspace" | "tab" | "pane";
-        native_id: string;
-      };
-    }
-  | {
-      op: "layout.set";
-      anchors?: Record<string, BoardPoint>;
-      offsets?: Record<string, BoardPoint>;
-      pinned?: Record<string, BoardPoint>;
-      /** Keys that are no longer pinned. */
-      unpinned?: string[];
-      folded?: string[];
-      /**
-       * Replace anchors, offsets and pinned positions instead of merging, so
-       * entries for cards that are gone do not accumulate. The browser holds
-       * the whole layout, including hosts that are offline.
-       */
-      replace?: boolean;
-    }
-  | { op: "card.color"; key: string; color: CardColor | null }
-  /** Pin a Town desk; a null cell is filled in by Town (`desk.place`). */
-  | { op: "desk.pin"; key: string; cell: DeskCell | null }
-  | { op: "desk.unpin"; key: string }
-  /** Record where Town put a pinned desk; only a desk still pinned, unplaced. */
-  | { op: "desk.place"; key: string; cell: DeskCell }
-  /** Mute or focus an agent's terminal, or return it to watching with null. */
-  | { op: "interest.set"; key: string; interest: StoredInterest | null }
-  | {
-      op: "anchor.witness";
-      string_id: string;
-      end: "from" | "to";
-      witness: string[];
-    }
-  | GroupOp
-  | {
-      /** Service only: the spawn claims it saw on Herdr panes. */
-      op: "spawn.record";
-      claims: SpawnClaim[];
-    }
-  | {
-      /** Service only: drop claims and group members whose terminals closed. */
-      op: "relations.prune";
-      children: TerminalRef[];
-      members: TerminalRef[];
-    }
-  | {
-      /** Service only: record which agent a pane end is for. */
-      op: "anchor.recipient";
-      string_id: string;
-      end: "from" | "to";
-      /** Applies only while the end still names this host, pane and terminal. */
-      connection_id: string;
-      pane_id: string;
-      terminal_id: string;
-      recipient: string;
-    };
-
+import type {
+  BoardPoint,
+  NoteColor,
+  BoardAnchorKind,
+  BoardAnchor,
+  BoardEnd,
+  BoardNote,
+  BoardString,
+  CardColor,
+  DeskCell,
+  DeskPin,
+  BoardDocument,
+  BoardOp,
+  BoardPatch,
+  BoardBacking,
+} from "./board-types";
+export type * from "./board-types";
 /**
  * Operations as a browser may send them: which agent a string is for is the
  * service's to record, so a client cannot set or claim it. A pane anchor may
@@ -323,15 +184,12 @@ export function emptyBoardDocument(): BoardDocument {
       colors: {},
       desk_pins: {},
       interest: {},
+      group_interest: {},
     },
     notes: [],
     strings: [],
     relations: { spawns: [], groups: [] },
   };
-}
-
-export function defaultBoardPath() {
-  return worldEnv("BOARD_PATH") ?? join(dataRoot(), "boards", "board.json");
 }
 
 /* ---------- Validation ---------- */
@@ -405,17 +263,7 @@ function deskPins(value: unknown): Record<string, DeskPin> {
   }
   return out;
 }
-function interests(value: unknown): Record<string, StoredInterest> {
-  if (value === undefined) return {};
-  if (!isObject(value)) fail("interest must be an object");
-  const out: Record<string, StoredInterest> = {};
-  for (const [key, entry] of Object.entries(value)) {
-    text(key, "interest key", BOARD_LIMITS.key);
-    if (!STORED_INTERESTS.includes(entry as StoredInterest)) fail("interest");
-    out[key] = entry as StoredInterest;
-  }
-  return out;
-}
+
 function anchor(value: unknown): BoardAnchor {
   if (!isObject(value)) fail("anchor must be an object");
   if (!KINDS.includes(value.kind as BoardAnchorKind)) fail("anchor kind");
@@ -530,7 +378,8 @@ export function parseBoardDocument(value: unknown): BoardDocument {
       // Boards saved before desk pins have none.
       desk_pins: deskPins(layout.desk_pins),
       // Boards saved before interest have none: every agent is watched.
-      interest: interests(layout.interest),
+      interest: interests(layout.interest, BOARD_LIMITS.key),
+      group_interest: groupInterests(layout.group_interest, BOARD_LIMITS.key),
     },
     notes: notes.map((entry) => {
       const rev =
@@ -559,7 +408,8 @@ function checkBounds(document: BoardDocument) {
     layout.folded.length +
     Object.keys(layout.colors).length +
     Object.keys(layout.desk_pins).length +
-    Object.keys(layout.interest).length;
+    Object.keys(layout.interest).length +
+    Object.keys(layout.group_interest ?? {}).length;
   if (entries > BOARD_LIMITS.layoutEntries)
     fail(`at most ${BOARD_LIMITS.layoutEntries} layout entries`);
   const noteIds = new Set(document.notes.map((entry) => entry.id));
@@ -578,6 +428,7 @@ function checkBounds(document: BoardDocument) {
   const children = new Set(spawns.map((claim) => terminalKey(claim.child)));
   if (children.size !== spawns.length) fail("one spawn claim per child");
   checkStoredGroups(groups);
+  checkGroupInterest(document);
   if (
     document.relations.group_changes?.some(
       (event) => event.revision > document.revision,
@@ -590,10 +441,12 @@ function checkBounds(document: BoardDocument) {
 
 export class BoardStore {
   private document: BoardDocument;
+  #closed = false;
   private readonly colorEdits = new Map<string, ColorEdit>();
+  private readonly appearanceEdits: AppearanceEdits = new Map();
 
   constructor(
-    private readonly path: string = defaultBoardPath(),
+    private readonly path: string | BoardBacking,
     private readonly options: {
       now?: () => number;
       log?: (message: string) => void;
@@ -603,6 +456,7 @@ export class BoardStore {
   }
 
   private load(): BoardDocument {
+    if (typeof this.path !== "string") return structuredClone(this.path.read());
     if (!existsSync(this.path)) return emptyBoardDocument();
     try {
       return parseBoardDocument(JSON.parse(readFileSync(this.path, "utf8")));
@@ -636,32 +490,57 @@ export class BoardStore {
     };
   }
 
+  captureAppearanceChanges() {
+    return captureAppearanceChanges(
+      this.appearanceEdits,
+      this.document.revision,
+      () => this.document,
+    );
+  }
+
   /**
    * Apply every operation or none. A note edit made against an older note
    * revision is refused with the current document, so a second client never
    * overwrites a newer note.
    */
-  patch(ops: readonly BoardOp[]): BoardDocument {
+  patch(input: BoardPatch): BoardDocument {
+    if (this.#closed) throw new Error("World storage is closed");
+    const ops = typeof input === "function" ? input(this.get()) : input;
+    if (ops === null) return this.get();
     if (!Array.isArray(ops) || ops.length > BOARD_LIMITS.ops)
       fail(`1 to ${BOARD_LIMITS.ops} operations`);
     const next = structuredClone(this.document);
     const now = (this.options.now ?? Date.now)();
     for (const op of ops) applyOp(next, op, this.document, now);
+    pruneGroupInterest(next);
     next.revision = this.document.revision + 1;
     checkBounds(next);
     const payload = JSON.stringify(next);
     if (payload.length > BOARD_LIMITS.bytes) fail("the board is too large");
-    replaceDataFile(this.path, payload);
+    if (typeof this.path === "string") replaceDataFile(this.path, payload);
+    else this.path.commit(next);
     this.document = next;
     trackColorEdits(this.colorEdits, ops, next);
+    trackAppearanceEdits(this.appearanceEdits, ops, next);
     return this.get();
   }
+  /** Refuse every later change: the service that owns this file stopped. */
+  close(): void {
+    this.#closed = true;
+  }
+
   /**
    * Apply the operations only if the board is still at `revision`; null when
    * a newer edit landed meanwhile, so the caller can read again.
    */
-  patchIf(revision: number, ops: readonly BoardOp[]): BoardDocument | null {
-    return this.document.revision === revision ? this.patch(ops) : null;
+  settled(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  patchIf(revision: number, ops: BoardPatch): BoardDocument | null {
+    if (this.document.revision !== revision) return null;
+    const next = typeof ops === "function" ? ops(this.get()) : ops;
+    return next === null ? null : this.patch(next);
   }
 }
 
@@ -675,6 +554,10 @@ function applyOp(
   if (isGroupOp(op)) {
     try {
       applyGroupOp(next.relations, op as GroupOp, now, current.revision + 1);
+      if (op.op === "group.delete" && next.layout.group_interest)
+        delete next.layout.group_interest[
+          (op as Extract<GroupOp, { op: "group.delete" }>).id
+        ];
     } catch (error) {
       fail((error as Error).message);
     }
@@ -824,15 +707,10 @@ function applyOp(
       if (pin && !pin.cell) pin.cell = cell;
       return;
     }
-    case "interest.set": {
-      const key = text(op.key, "interest key", BOARD_LIMITS.key);
-      if (!isInterestKey(key)) fail("interest key");
-      if (op.interest === null) delete next.layout.interest[key];
-      else if (STORED_INTERESTS.includes(op.interest))
-        next.layout.interest[key] = op.interest;
-      else fail("interest");
+    case "interest.set":
+    case "group.interest":
+      applyBoardInterest(next, op, BOARD_LIMITS.key);
       return;
-    }
     case "anchor.witness": {
       const target = next.strings.find((entry) => entry.id === op.string_id);
       const side = target?.[op.end === "to" ? "to" : "from"];

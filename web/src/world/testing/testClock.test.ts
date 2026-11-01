@@ -253,3 +253,26 @@ describe("test clock", () => {
     );
   });
 });
+
+test("capture keeps native paint callbacks separate from manual scene frames", async () => {
+  const pending = new Map<number, FrameRequestCallback>();
+  const target = {
+    requestAnimationFrame(callback: FrameRequestCallback) {
+      pending.set(7, callback);
+      return 7;
+    },
+    cancelAnimationFrame(id: number) {
+      pending.delete(id);
+    },
+  } as ClockTarget;
+  const clock = installTestClock(target, { now: () => 0 });
+  let native = 0,
+    scene = 0;
+  const id = clock.real.requestAnimationFrame!(() => native++);
+  target.requestAnimationFrame(() => scene++);
+  await clock.frame();
+  expect(scene).toBe(1);
+  expect(native).toBe(0);
+  clock.real.cancelAnimationFrame!(id);
+  expect(pending.size).toBe(0);
+});

@@ -5,6 +5,7 @@ import {
 } from "../bridge/protocol-compat";
 import { createSshTunnelManager, SshTunnelError } from "../bridge/ssh-tunnel";
 import { ThinClient } from "../bridge/thin-client";
+import { systemScheduler, type Scheduler } from "../service/ports";
 import { runProcess } from "../utils/process-utils";
 import {
   ConnectionManager,
@@ -106,7 +107,7 @@ export type ConnectionProfileListItem = ReturnType<
 > &
   PublicConnectionProfile;
 
-type RetryTimer = { cancel(): void };
+type RetryTimer = ReturnType<Scheduler["schedule"]>;
 
 export class ConnectionProbeError extends Error {
   constructor(
@@ -117,6 +118,21 @@ export class ConnectionProbeError extends Error {
     super(message, options);
     this.name = "ConnectionProbeError";
   }
+}
+
+/** Native local transport failures only; arbitrary error text is not retry intent. */
+function retryableLocalSocketError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const code = (error as NodeJS.ErrnoException).code;
+  return (
+    /^(?:ENOENT|ECONNREFUSED|ECONNRESET|ETIMEDOUT|EPIPE)$/.test(code ?? "") ||
+    /^(?:ENOENT|ECONNREFUSED|ECONNRESET|ETIMEDOUT|EPIPE):/.test(
+      error.message,
+    ) ||
+    /^(?:timeout: ping|connection closed before response: ping|timed out waiting for Herdr protocol \d+ handshake|thin client connection closed during handshake)$/.test(
+      error.message,
+    )
+  );
 }
 
 export type ConnectionRetryOptions = {
@@ -168,7 +184,11 @@ export async function testConnectionSockets(
         /(?:protocol .*not supported|rejected thin-client protocol|welcomed protocol|unsupported encoding|bincode:|invalid protocol version)/i.test(
           message,
         );
-      throw new ConnectionProbeError(message, !permanent, { cause: error });
+      throw new ConnectionProbeError(
+        message,
+        !permanent && retryableLocalSocketError(error),
+        { cause: error },
+      );
     }
     return {
       ok: true,
@@ -237,6 +257,7 @@ export class ConnectionProfileService<
       createRuntime: ConnectionProfileRuntimeFactory<Runtime>;
       testProfile?: typeof testConnectionProfile;
       retry?: ConnectionRetryOptions;
+      changed?(): void;
     },
   ) {
     this.registry = args.bootstrap.persistedRegistry;
@@ -254,12 +275,7 @@ export class ConnectionProfileService<
     );
     this.retryStableResetMs = Math.max(1, args.retry?.stableResetMs ?? 30_000);
     this.retryRandom = args.retry?.random ?? Math.random;
-    this.retrySchedule =
-      args.retry?.schedule ??
-      ((callback, delayMs) => {
-        const timer = setTimeout(callback, delayMs);
-        return { cancel: () => clearTimeout(timer) };
-      });
+    this.retrySchedule = args.retry?.schedule ?? systemScheduler.schedule;
     for (const registration of args.bootstrap.registrations) {
       this.profiles.set(registration.profile.id, registration);
       args.manager.register({
@@ -284,11 +300,14 @@ export class ConnectionProfileService<
     const state = this.retryStates.get(connectionId);
     return Boolean(
       !this.supervisionStopped &&
-        entry?.profile.type === "ssh" &&
+        entry &&
         state?.enabled &&
         state.attempt < this.retryMaxAttempts &&
-        ((error instanceof SshTunnelError && error.retryable) ||
-          (error instanceof ConnectionProbeError && error.retryable)),
+        ((entry.profile.type === "ssh" &&
+          error instanceof SshTunnelError &&
+          error.retryable) ||
+          (error instanceof ConnectionProbeError && error.retryable) ||
+          (entry.profile.type === "local" && retryableLocalSocketError(error))),
     );
   }
 
@@ -382,6 +401,7 @@ export class ConnectionProfileService<
       this.registry = nextRegistry;
       if (migration) {
         this.args.manager.setDefault(profile.id);
+        this.disableRetry(STARTUP_DEFAULT_CONNECTION_ID);
         await this.args.manager.unregister(STARTUP_DEFAULT_CONNECTION_ID);
         this.profiles.delete(STARTUP_DEFAULT_CONNECTION_ID);
       }
@@ -682,8 +702,8 @@ export class ConnectionProfileService<
   }
 
   private enableRetry(connectionId: string): void {
-    const entry = this.requireProfile(connectionId);
-    if (entry.profile.type !== "ssh" || this.supervisionStopped) return;
+    this.requireProfile(connectionId);
+    if (this.supervisionStopped) return;
     const state = this.retryState(connectionId);
     state.token += 1;
     state.retryTimer?.cancel();
@@ -721,10 +741,11 @@ export class ConnectionProfileService<
     connectionId: string,
     resetRetry: boolean,
   ): Promise<void> {
-    const entry = this.requireProfile(connectionId);
-    if (entry.profile.type === "ssh" && resetRetry) {
+    this.requireProfile(connectionId);
+    if (resetRetry) {
       this.enableRetry(connectionId);
     }
+    const token = this.retryStates.get(connectionId)?.token;
     const generationBeforeStart =
       this.args.manager.status(connectionId).generation;
     try {
@@ -733,6 +754,13 @@ export class ConnectionProfileService<
         this.markStable(connectionId);
       }
     } catch (error) {
+      // A disconnect, replacement or shutdown can finish before a rejected
+      // startup settles. Its old continuation must not schedule new work.
+      if (
+        this.retryStates.get(connectionId)?.token !== token ||
+        !this.args.manager.has(connectionId)
+      )
+        throw error;
       // A transport can report its own exit while startup is still awaiting a
       // functional socket probe. That callback advances the generation and
       // marks reconnecting before it queues a retry. Use that durable manager
@@ -763,10 +791,11 @@ export class ConnectionProfileService<
     const delayMs = Math.floor(windowMs / 2 + random * (windowMs / 2));
     state.attempt += 1;
     const token = state.token;
+    const generation = this.args.manager.status(connectionId).generation;
     state.retryTimer = this.retrySchedule(() => {
-      if (!state.enabled || state.token !== token) return;
+      if (!this.retryCurrent(connectionId, state, token, generation)) return;
       state.retryTimer = null;
-      void this.runScheduledRetry(connectionId, state, token);
+      void this.runScheduledRetry(connectionId, state, token, generation);
     }, delayMs);
     return true;
   }
@@ -775,6 +804,7 @@ export class ConnectionProfileService<
     connectionId: string,
     state: RetryState,
     token: number,
+    generation: number,
   ): Promise<void> {
     try {
       // A timer may fire before the failed runtime has finished cleanup. Wait
@@ -782,15 +812,30 @@ export class ConnectionProfileService<
       // uncancellable manager.start() behind stopTask.
       await this.args.manager.retireFailedRuntime(connectionId);
     } catch (cleanupError) {
-      if (state.enabled && state.token === token) {
+      if (this.retryCurrent(connectionId, state, token, generation)) {
         this.scheduleRetry(connectionId, cleanupError);
       }
       return;
     }
-    if (!state.enabled || state.token !== token) return;
+    if (!this.retryCurrent(connectionId, state, token, generation)) return;
     // startManaged owns failure classification and generation-based duplicate
     // suppression for both initial and timer-triggered startups.
     await this.startManaged(connectionId, false).catch(() => undefined);
+  }
+
+  private retryCurrent(
+    connectionId: string,
+    state: RetryState,
+    token: number,
+    generation: number,
+  ): boolean {
+    return (
+      state.enabled &&
+      state.token === token &&
+      this.args.manager.has(connectionId) &&
+      this.args.manager.status(connectionId).generation === generation &&
+      this.args.manager.status(connectionId).state === "reconnecting"
+    );
   }
 
   private item(connectionId: string): ConnectionProfileListItem {
@@ -831,7 +876,11 @@ export class ConnectionProfileService<
   }
 
   private mutate<T>(operation: () => Promise<T>): Promise<T> {
-    const task = this.mutationQueue.then(operation);
+    const task = this.mutationQueue.then(async () => {
+      const result = await operation();
+      this.args.changed?.();
+      return result;
+    });
     this.mutationQueue = task.then(
       () => undefined,
       () => undefined,

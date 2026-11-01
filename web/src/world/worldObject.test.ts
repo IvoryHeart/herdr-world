@@ -1,14 +1,16 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import type { WorldRuntimeConnection } from "./runtimeStore";
+import { countedWorldWork } from "./testing/countedWorldWork";
+import { workViolations } from "./testing/workCeilings";
 import {
   buildWorldObject,
   prepareWorldObject,
   taskSummarySessionFingerprint,
   worldObjectForConnection,
-  worldObjectForHosts,
-  worldObjectForWatches,
   worldObjectId,
+  type WorldObject,
 } from "./worldObject";
+import { worldObjectForHosts, worldObjectForWatches } from "./worldFilters";
 
 test("aggregate indexing yields and retires before indexing every dense leaf", async () => {
   const owner = connection("alpha");
@@ -32,6 +34,42 @@ test("aggregate indexing yields and retires before indexing every dense leaf", a
     { checkpoint: "host", count: 1 },
     { checkpoint: "node-batch", count: 256 },
   ]);
+});
+
+test("construction work units do not depend on the clock; slices do", async () => {
+  // The browser suites bound units, not slices: a slice also ends after 8 ms.
+  const measure = async (step: number) => {
+    const owner = connection(`clock-${step}`);
+    const pane = owner.snapshot!.panes[0]!;
+    owner.snapshot!.panes = Array.from({ length: 4096 }, (_, index) => ({
+      ...pane,
+      pane_id: `clock-${step}-${index}`,
+      terminal_id: `clock-${step}-terminal-${index}`,
+    }));
+    let now = 0;
+    const clock = spyOn(performance, "now").mockImplementation(
+      () => (now += step),
+    );
+    const slices: number[] = [];
+    try {
+      await prepareWorldObject([owner], undefined, {
+        yieldTask: async () => {},
+        onWorkSlice: (_checkpoint, count) => slices.push(count),
+      });
+    } finally {
+      clock.mockRestore();
+    }
+    return {
+      slices: slices.length,
+      units: slices.reduce((sum, count) => sum + count, 0),
+      largest: Math.max(...slices),
+    };
+  };
+  const frozen = await measure(0);
+  const slow = await measure(9);
+  expect(slow.slices).toBeGreaterThan(frozen.slices);
+  expect(slow.units).toBe(frozen.units);
+  expect(frozen.largest).toBeLessThanOrEqual(256);
 });
 
 test("dense host construction yields and cancels before allocating every leaf", async () => {
@@ -104,6 +142,69 @@ test("chunked aggregate indexing preserves complete ordered topology and stale h
       prepared!.nodes.find((item) => item.id === node.id),
     );
   }
+});
+
+test("the presented host's variant is prepared, so render builds no World", async () => {
+  const hosts = ["alpha", "beta", "gamma"].map((id) => connection(id));
+  const prepared = await prepareWorldObject(hosts, undefined, {
+    selectedConnectionId: "beta",
+    yieldTask: async () => {},
+  });
+  let presented: WorldObject | undefined;
+  const render = await countedWorldWork(() => {
+    // The shell, the views and their selection callbacks.
+    for (let reader = 0; reader < 3; reader += 1)
+      presented = buildWorldObject(hosts, "beta");
+  });
+  expect(workViolations({ render }, { render: {} }, "World")).toEqual([]);
+  expect(presented).toBe(prepared!);
+  // As the synchronous build presents it: beta active, its peers not.
+  const copies = hosts.map((host) => ({ ...host }));
+  expect(prepared).toEqual(buildWorldObject(copies, "beta"));
+  expect(
+    prepared!.hosts.map(({ connectionId, hostState }) => [
+      connectionId,
+      hostState,
+    ]),
+  ).toEqual([
+    ["alpha", "ready-inactive"],
+    ["beta", "active"],
+    ["gamma", "ready-inactive"],
+  ]);
+  // Unprepared input still builds, and the counter sees it.
+  const unprepared = await countedWorldWork(() =>
+    buildWorldObject(
+      hosts.map((host) => ({ ...host })),
+      "beta",
+    ),
+  );
+  expect(unprepared).toEqual({ "world.sync-build": 1 });
+});
+
+test("a host filter queries the World's index and is shared by its presenters", () => {
+  const world = buildWorldObject(
+    ["alpha", "beta", "gamma"].map((id) => connection(id)),
+    "alpha",
+  );
+  const filtered = worldObjectForHosts(world, ["gamma", "alpha"]);
+  // The shell and the views filter the same World by the same hosts.
+  expect(worldObjectForHosts(world, ["gamma", "alpha"])).toBe(filtered);
+  const rebuilt = new Map(filtered.nodes.map((node) => [node.id, node]));
+  for (const node of world.nodes) {
+    expect(filtered.nodeById.get(node.id)).toBe(rebuilt.get(node.id));
+    expect(filtered.nodeById.has(node.id)).toBe(rebuilt.has(node.id));
+  }
+  expect(filtered.nodeById.get("unknown")).toBeUndefined();
+  expect(filtered.nodeById.size).toBe(rebuilt.size);
+  expect([...filtered.nodeById]).toEqual([...rebuilt]);
+  expect([...filtered.nodeById.keys()]).toEqual([...rebuilt.keys()]);
+  expect([...filtered.nodeById.values()]).toEqual([...rebuilt.values()]);
+  const visited: string[] = [];
+  filtered.nodeById.forEach((_node, id) => visited.push(id));
+  expect(visited).toEqual([...rebuilt.keys()]);
+  const beta = worldObjectForHosts(world, ["beta"]);
+  expect(beta.hosts.map(({ connectionId }) => connectionId)).toEqual(["beta"]);
+  expect(worldObjectForHosts(world, null)).toBe(world);
 });
 
 function connection(

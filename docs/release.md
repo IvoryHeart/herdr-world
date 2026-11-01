@@ -224,8 +224,8 @@ Run the generated Ruby formula/launcher regressions when changing this policy.
 4. The Release workflow revalidates metadata and repository tests with one file
    worker and at most two concurrent cases. Its World browser tests use the same
    [World browser workflow](../.github/workflows/world-browser.yml) as PR CI: six
-   shards, the web browser job and the quiet latency-budget job, each with one file
-   worker per runner. Every shard, the web and latency jobs and repository validation must pass
+   shards and the web browser job, each with one file worker per runner and the
+   pinned test Chrome. Every shard, the web job and repository validation must pass
    before any platform package builds. Prepare Release validates its generated
    working tree in one checkout with one file worker and retains the complete World
    suite; its World cases run one at a time.

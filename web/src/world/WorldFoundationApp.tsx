@@ -34,11 +34,8 @@ import {
   writeInspectorPreferences,
 } from "../workspaceResource";
 import { useWorldRuntime, worldRuntimeStore } from "./runtimeStore";
-import {
-  buildWorldObject,
-  type WorldObject,
-  worldObjectForHosts,
-} from "./worldObject";
+import { buildWorldObject, type WorldObject } from "./worldObject";
+import { worldObjectForHosts } from "./worldFilters";
 import { useHostsFilter } from "./hostsFilter";
 import { HostsControl } from "./HostsControl";
 import { WorldNavigator } from "./WorldNavigator";
@@ -236,6 +233,10 @@ export default function WorldFoundationApp() {
   ]);
 
   useEffect(() => {
+    // The shell and views present the focused host's variant of the World.
+    worldRuntimeStore.presentSelectionFrom(
+      () => store.get().activeConnectionId,
+    );
     worldRuntimeStore.start();
     return () => worldRuntimeStore.stop();
   }, []);

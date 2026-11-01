@@ -8,6 +8,7 @@ import {
 } from "./protocol";
 
 export type ConnectionRpcRequest = {
+  focused_observation?: unknown;
   accept_world_snapshot_chunks?: unknown;
   accept_world_snapshot_chunk_admission?: unknown;
   id: string;

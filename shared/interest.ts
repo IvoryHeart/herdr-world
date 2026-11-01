@@ -1,13 +1,19 @@
-/** The viewer's interest in an agent; absent means watching. */
+/** The viewer's effective interest in an agent. Absence inherits group intent. */
 export type Interest = "watching" | "muted" | "focused";
 
 /**
- * What World's service stores: watching is the default and is not stored.
+ * Explicit agent overrides. Watching forces Watch; deletion means Default.
  * Muted stops an agent's chimes (its items still enter reception); focused
  * lets only focused agents chime, with the Town master's needs-you.
  */
-export type StoredInterest = Exclude<Interest, "watching">;
-export const STORED_INTERESTS: readonly StoredInterest[] = ["muted", "focused"];
+export type StoredInterest = Interest;
+export const STORED_INTERESTS: readonly StoredInterest[] = [
+  "watching",
+  "muted",
+  "focused",
+];
+/** Group Default is absence; there is no group-level force-Watch. */
+export type GroupInterest = "muted" | "focused";
 
 /**
  * Interest belongs to the seat: the terminal on its host, with no runtime

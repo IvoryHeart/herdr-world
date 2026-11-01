@@ -1,0 +1,100 @@
+name: World latency trend
+
+# Input delays of the dense World browser suites, measured one suite per quiet
+# runner with the pinned test Chrome, and set beside recent main runs on the
+# same CPU model. It reports and never blocks: CI's World shards assert what
+# does not depend on the runner, and no branch rule requires this workflow.
+# Main pushes add to the baseline; a pull request is measured while it carries
+# the latency-trend label.
+on:
+    push:
+        branches: [main]
+    pull_request:
+        types: [labeled, synchronize]
+    workflow_dispatch:
+
+permissions:
+    contents: read
+    actions: read
+
+concurrency:
+    group: world-latency-trend-${{ github.event.pull_request.number || github.ref }}
+    cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+    measure:
+        name: Measure ${{ matrix.suite }}
+        if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'latency-trend')
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        strategy:
+            fail-fast: false
+            # worldLatencyTrendSuites in scripts/world-browser-suites.ts
+            matrix:
+                suite:
+                    - ProductionContexts.board
+                    - ProductionContexts.town
+                    - ProductionContexts.animated
+                    - ConcurrentContexts
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  persist-credentials: false
+            - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+              with:
+                  bun-version: "1.4.3"
+                  no-cache: true
+            - run: bun install --frozen-lockfile
+            - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+              with:
+                  path: ~/.cache/herdr-test-chrome
+                  key: test-chrome-${{ hashFiles('tools/chrome/test-chrome.json') }}
+            - name: Install the pinned test Chrome
+              run: bun scripts/test-chrome.ts "$HOME/.cache/herdr-test-chrome"
+            - name: Record the runner's CPU model
+              run: echo "WORLD_LATENCY_TREND_CPU=$(lscpu | sed -n 's/^Model name:[[:space:]]*//p' | head -1)" >> "$GITHUB_ENV"
+            - name: Wait for the runner to go quiet
+              run: bun scripts/wait-for-quiet.ts
+            - name: Measure, one case at a time
+              env:
+                  WORLD_LATENCY_TREND_FILE: ${{ runner.temp }}/latency/${{ matrix.suite }}.jsonl
+              run: |
+                  mkdir -p "$RUNNER_TEMP/latency"
+                  bun scripts/run-world-tests.ts "web/src/world/${{ matrix.suite }}.test.ts" --parallel=1 --max-concurrency=1
+            - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+              with:
+                  name: latency-${{ matrix.suite }}
+                  path: ${{ runner.temp }}/latency
+                  if-no-files-found: error
+                  retention-days: 30
+
+    report:
+        name: Report
+        needs: measure
+        if: always() && needs.measure.result != 'skipped'
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  persist-credentials: false
+            - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+              with:
+                  bun-version: "1.4.3"
+                  no-cache: true
+            - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+              with:
+                  pattern: latency-*
+                  path: latency
+                  merge-multiple: true
+            - name: Compare with recent main runs on the same CPU
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  GH_REPO: ${{ github.repository }}
+              run: bun scripts/latency-trend.ts latency >> "$GITHUB_STEP_SUMMARY"
+            # The baseline later runs compare against.
+            - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+              with:
+                  name: world-latency-trend
+                  path: latency
+                  if-no-files-found: error
+                  retention-days: 90

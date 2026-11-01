@@ -1,10 +1,13 @@
+import { planBoardPatch } from "./board-plan";
 import { interestKeyPrefix } from "../../../shared/interest";
+import { bindingListingAbsent } from "./binding-resolution";
+import { bindingPaneTerminals } from "./binding-pane-list";
 import { serverLogger } from "../utils/logger";
-import type { BoardDocument, BoardOp, BoardStore } from "./board-store";
+import type { BoardDocument, BoardOp, BoardStorePort } from "./board-store";
 
 /** Reconcile missed closes whenever a host becomes ready, including startup. */
 export async function reconcileReadyInterest(
-  board: BoardStore,
+  board: BoardStorePort,
   lease: {
     connectionId: string;
     runtime: {
@@ -45,7 +48,7 @@ export const closesTerminals = (eventName: string | null | undefined) =>
  * record. `changed` gets the board's new revision when something was dropped.
  */
 export async function pruneGoneInterest(
-  board: BoardStore,
+  board: BoardStorePort,
   connectionId: string,
   host: {
     call: (method: string, params: Record<string, unknown>) => Promise<unknown>;
@@ -64,18 +67,16 @@ export async function pruneGoneInterest(
       // One complete, unpaged listing from the current runtime.
       const listed = (await host.call("pane.list", {})) as { panes?: unknown };
       if (!host.isCurrent() || !Array.isArray(listed?.panes)) return;
-      const terminals = new Set<string>();
-      for (const pane of listed.panes) {
-        const terminal = (pane as { terminal_id?: unknown } | null)
-          ?.terminal_id;
-        if (typeof terminal !== "string" || !terminal) return;
-        terminals.add(terminal);
-      }
+      const terminals = bindingPaneTerminals(listed.panes);
+      if (!terminals) return;
       const ops = goneInterestOps(observed, connectionId, terminals);
       if (!ops.length) return;
       // A newer edit (even clearing and restoring the same choice) is never
       // removed using a listing that predates it: list again instead.
-      const saved = board.patchIf(observed.revision, ops);
+      const saved = await board.patchIf(
+        observed.revision,
+        planBoardPatch([ops], () => (host.isCurrent() ? ops : null)),
+      );
       if (saved) return host.changed(saved.revision);
     } catch (error) {
       serverLogger.warn("Board could not drop gone terminals' interest", {
@@ -100,7 +101,8 @@ export function goneInterestOps(
   return Object.keys(document.layout.interest)
     .filter(
       (key) =>
-        key.startsWith(prefix) && !terminals.has(key.slice(prefix.length)),
+        key.startsWith(prefix) &&
+        bindingListingAbsent("interest", [key.slice(prefix.length)], terminals),
     )
     .map((key) => ({ op: "interest.set", key, interest: null }));
 }

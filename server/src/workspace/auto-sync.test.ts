@@ -1,3 +1,5 @@
+import { systemClock, systemScheduler } from "../service/ports";
+import { memoryRuntimeStatus } from "../storage/testing/runtime-status";
 import { describe, expect, test } from "bun:test";
 import { shQuote } from "../utils/process-utils";
 import { createWorkspaceAutoSync, syncWorkspaceBranch } from "./auto-sync";
@@ -264,6 +266,8 @@ describe("workspace auto-sync lifecycle", () => {
       let syncCalls = 0;
       const updatedKeys: string[] = [];
       const autoSync = createWorkspaceAutoSync({
+        clock: systemClock,
+        scheduler: systemScheduler,
         connectionId,
         herdr: {
           call: async () => ({
@@ -280,14 +284,12 @@ describe("workspace auto-sync lifecycle", () => {
         invalidateGitStatus: () => undefined,
         resolveWorkspaceGitRoot: async () => ({ root: "/repo" }),
         readSettings: async () => settings,
-        updateSettings: async (update) => {
-          const updated = await update(settings);
-          for (const [key, entry] of Object.entries(
-            updated.workspace_auto_sync,
-          )) {
-            if (entry.last_run_at) updatedKeys.push(key);
-          }
-          return updated;
+        runtimeStatus: {
+          ...memoryRuntimeStatus(),
+          put: async (key, status) => {
+            updatedKeys.push(key);
+            return status;
+          },
         },
         syncBranch: async () => {
           syncCalls += 1;
@@ -314,6 +316,8 @@ describe("workspace auto-sync lifecycle", () => {
     let workspaceCalls = 0;
     const settings = autoSyncSettings();
     const autoSync = createWorkspaceAutoSync({
+      clock: systemClock,
+      scheduler: systemScheduler,
       herdr: {
         call: async () => {
           workspaceCalls += 1;
@@ -334,9 +338,12 @@ describe("workspace auto-sync lifecycle", () => {
       },
       resolveWorkspaceGitRoot: async () => ({ root: "/repo" }),
       readSettings: async () => settings,
-      updateSettings: async (update) => {
-        updateCalls += 1;
-        return update(settings);
+      runtimeStatus: {
+        ...memoryRuntimeStatus(),
+        put: async (_key, status) => {
+          updateCalls++;
+          return status;
+        },
       },
       syncBranch: async () => {
         syncCalls += 1;
@@ -374,6 +381,8 @@ describe("workspace auto-sync lifecycle", () => {
     let updateCalls = 0;
     const settings = autoSyncSettings();
     const autoSync = createWorkspaceAutoSync({
+      clock: systemClock,
+      scheduler: systemScheduler,
       herdr: {
         call: () => workspaceResult.promise,
       } as any,
@@ -387,9 +396,12 @@ describe("workspace auto-sync lifecycle", () => {
       invalidateGitStatus: () => undefined,
       resolveWorkspaceGitRoot: async () => ({ root: "/repo" }),
       readSettings: async () => settings,
-      updateSettings: async (update) => {
-        updateCalls += 1;
-        return update(settings);
+      runtimeStatus: {
+        ...memoryRuntimeStatus(),
+        put: async (_key, status) => {
+          updateCalls++;
+          return status;
+        },
       },
       syncBranch: async () => {
         syncCalls += 1;

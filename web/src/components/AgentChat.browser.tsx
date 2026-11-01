@@ -13,6 +13,7 @@ import { EMPTY_WORLD_SOURCES, worldSourcesStore } from "../world/worldSources";
 import "../styles/tokens.css";
 import "../styles/base.css";
 import "../styles/vendor.css";
+import "./WorkspaceInspectorFrame.css";
 import "./WorkspaceInspectorHost.css";
 import "../world/windows/windows.css";
 

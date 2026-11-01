@@ -288,7 +288,8 @@ jobs:
     launchd:
         name: macOS launchd plugin lifecycle (${{ matrix.arch }})
         needs: validation-scope
-        runs-on: ${{ matrix.runner }}
+        # Short paths only publish protected reports; native checks keep macOS.
+        runs-on: ${{ needs.validation-scope.outputs.packaging == 'true' && matrix.runner || 'ubuntu-latest' }}
         timeout-minutes: 20
         strategy:
             fail-fast: false

@@ -1,3 +1,5 @@
+import { LinkClaims } from "./link-claims";
+import { bindingPaneTerminals } from "../world/binding-pane-list";
 import { isAbsolute } from "node:path";
 import type { WorkItem, WorkLink } from "../../../shared/worldSources";
 import { sshCommandArgv } from "../bridge/ssh-command";
@@ -27,6 +29,7 @@ export type TopologyConnection = {
   snapshot: {
     workspaces: Record<string, unknown>[];
     panes: Record<string, unknown>[];
+    coverage?: { panes: number };
   } | null;
 };
 
@@ -51,6 +54,8 @@ type Candidate = {
   sessionFingerprint: string | null;
   path: string | null;
   reportedPr: string | null;
+  terminalId: string | null;
+  sourceRevision?: string | number;
 };
 
 export class CheckoutResolver {
@@ -62,27 +67,54 @@ export class CheckoutResolver {
     private readonly now: () => number = Date.now,
   ) {}
 
-  cached(connectionId: string, path: string): Checkout | null | undefined {
-    const entry = this.#cache.get(`${connectionId}\0${path}`);
-    return entry && this.now() - entry.at < CHECKOUT_TTL_MS
-      ? entry.checkout
-      : undefined;
+  #key(
+    connectionId: string,
+    path: string,
+    generation: number,
+    host: CheckoutHost | null,
+  ) {
+    return JSON.stringify([connectionId, generation, host, path]);
   }
-
-  async resolve(connectionId: string, path: string): Promise<Checkout | null> {
-    const known = this.cached(connectionId, path);
-    if (known !== undefined) return known;
-    const checkout = await this.#read(connectionId, path).catch(() => null);
-    this.#cache.set(`${connectionId}\0${path}`, { at: this.now(), checkout });
+  #current(key: string) {
+    const entry = this.#cache.get(key);
+    return entry && this.now() - entry.at < CHECKOUT_TTL_MS ? entry : undefined;
+  }
+  observation(connectionId: string, path: string, generation = 0) {
+    const entry = this.#current(
+      this.#key(connectionId, path, generation, this.hostOf(connectionId)),
+    );
+    return entry ? structuredClone(entry) : undefined;
+  }
+  cached(
+    connectionId: string,
+    path: string,
+    generation = 0,
+  ): Checkout | null | undefined {
+    return this.#current(
+      this.#key(connectionId, path, generation, this.hostOf(connectionId)),
+    )?.checkout;
+  }
+  async resolve(
+    connectionId: string,
+    path: string,
+    generation = 0,
+  ): Promise<Checkout | null> {
+    const host = this.hostOf(connectionId);
+    const key = this.#key(connectionId, path, generation, host);
+    const known = this.#current(key);
+    if (known) return known.checkout;
+    const checkout = await this.#read(host, path).catch(() => null);
+    this.#cache.set(key, { at: this.now(), checkout });
     if (this.#cache.size > MAX_LOOKUPS * 8) {
       const oldest = this.#cache.keys().next().value;
       if (oldest !== undefined) this.#cache.delete(oldest);
     }
     return checkout;
   }
-
-  async #read(connectionId: string, path: string): Promise<Checkout | null> {
-    const host = this.hostOf(connectionId);
+  async #read(
+    host: CheckoutHost | null,
+    path: string,
+  ): Promise<Checkout | null> {
     if (!host) return null;
     const quoted = shQuote(path);
     const command = `GIT_TERMINAL_PROMPT=0 git -C ${quoted} symbolic-ref --quiet --short HEAD && GIT_TERMINAL_PROMPT=0 git -C ${quoted} remote -v`;
@@ -155,6 +187,12 @@ export function linkCandidates(connections: TopologyConnection[]): Candidate[] {
           : null,
         path,
         reportedPr: report?.reportedPr ?? null,
+        terminalId:
+          typeof pane.terminal_id === "string" ? pane.terminal_id : null,
+        ...(typeof pane.state_change_seq === "number" ||
+        typeof pane.state_change_seq === "string"
+          ? { sourceRevision: pane.state_change_seq }
+          : {}),
       });
     }
   }
@@ -165,14 +203,26 @@ export async function linkWorkItems(
   connections: TopologyConnection[],
   items: readonly WorkItem[],
   resolver: CheckoutResolver,
+  evidence?: {
+    claims: LinkClaims;
+    observedAt: number;
+    completeItems: boolean;
+    catalogueComplete?: boolean;
+  },
 ): Promise<WorkLink[]> {
+  if (evidence && evidence.catalogueComplete !== false)
+    evidence.claims.reconcileRuntimes(connections);
   const candidates = linkCandidates(connections);
   const pending = [
     ...new Map(
       candidates
-        .filter((candidate) => candidate.path)
+        .filter((candidate) => candidate.path && items.length > 0)
         .map((candidate) => [
-          `${candidate.connectionId}\0${candidate.path}`,
+          JSON.stringify([
+            candidate.connectionId,
+            candidate.generation,
+            candidate.path,
+          ]),
           candidate,
         ]),
     ).values(),
@@ -182,7 +232,9 @@ export async function linkWorkItems(
     await Promise.all(
       pending
         .slice(index, index + CONCURRENCY)
-        .map(({ connectionId, path }) => resolver.resolve(connectionId, path!)),
+        .map(({ connectionId, path, generation }) =>
+          resolver.resolve(connectionId, path!, generation),
+        ),
     );
   const pullRequests = items.filter((item) => item.kind === "pull_request");
   const byUrl = new Map(pullRequests.map((item) => [item.url, item]));
@@ -206,15 +258,76 @@ export async function linkWorkItems(
       via,
     });
   };
+  const claimableConnections = new Set<string>();
+  if (evidence)
+    for (const connection of connections) {
+      const snapshot = connection.snapshot;
+      if (
+        connection.stale ||
+        !snapshot ||
+        (connection.snapshot_generation ?? connection.generation) !==
+          connection.generation ||
+        !bindingPaneTerminals(snapshot.panes)
+      )
+        continue;
+      claimableConnections.add(connection.connection_id);
+      if (snapshot.coverage?.panes === snapshot.panes.length)
+        evidence.claims.completePanes(
+          connection.connection_id,
+          connection.generation,
+          new Set(
+            candidates
+              .filter(
+                (candidate) =>
+                  candidate.connectionId === connection.connection_id,
+              )
+              .map((candidate) => candidate.paneId),
+          ),
+        );
+    }
   for (const candidate of candidates) {
+    const claimable =
+      evidence &&
+      candidate.terminalId &&
+      claimableConnections.has(candidate.connectionId);
     const reported = candidate.reportedPr
       ? byUrl.get(normalizedPrUrl(candidate.reportedPr))
       : undefined;
     if (reported) add(candidate, reported, "reported");
-    const checkout = candidate.path
-      ? resolver.cached(candidate.connectionId, candidate.path)
+    const observation = candidate.path
+      ? resolver.observation(
+          candidate.connectionId,
+          candidate.path,
+          candidate.generation,
+        )
+      : undefined;
+    const checkout = observation?.checkout;
+    const reportedClaim = candidate.reportedPr
+      ? {
+          value: normalizedPrUrl(candidate.reportedPr),
+          source: "herdr.metadata",
+          ...(candidate.sessionFingerprint
+            ? { author: candidate.sessionFingerprint }
+            : {}),
+          observed_at: evidence?.observedAt ?? 0,
+          basis: "reported" as const,
+          ...(candidate.sourceRevision !== undefined
+            ? { source_revision: candidate.sourceRevision }
+            : {}),
+        }
       : null;
-    if (!checkout) continue;
+    const subject = {
+      connectionId: candidate.connectionId,
+      generation: candidate.generation,
+      paneId: candidate.paneId,
+      terminalId: candidate.terminalId,
+      sessionFingerprint: candidate.sessionFingerprint,
+    };
+    if (!checkout) {
+      if (claimable)
+        evidence!.claims.observe(subject, reportedClaim, undefined);
+      continue;
+    }
     // The branch must live in one of the checkout's remotes: a fork's PR
     // shares its base repository with every upstream checkout, so a PR
     // without a known head repository links only when reported. Open pull
@@ -230,6 +343,21 @@ export async function linkWorkItems(
         (a, b) =>
           Number(a.lane === "merged") - Number(b.lane === "merged") ||
           b.updatedAt - a.updatedAt,
+      );
+    if (claimable)
+      evidence!.claims.observe(
+        subject,
+        reportedClaim,
+        matches[0]
+          ? {
+              value: matches[0].url,
+              source: "world.checkout",
+              observed_at: observation!.at,
+              basis: "inferred",
+            }
+          : evidence!.completeItems
+            ? null
+            : undefined,
       );
     if (matches[0] && !reported) add(candidate, matches[0], "branch");
     for (const [, key] of checkout.branch.toUpperCase().matchAll(TICKET_KEY)) {

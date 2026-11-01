@@ -1,4 +1,20 @@
-export const hostFilterCases = [
+export const hostFilterCases: {
+  width: number;
+  height?: number;
+  operation: string;
+  view: string;
+}[] = [
+  ...[
+    { width: 390, height: 844 },
+    { width: 1512, height: 982 },
+    { width: 1280, height: 1440 },
+    { width: 2560, height: 1440 },
+    { width: 1440, height: 2560 },
+  ].map((viewport) => ({
+    ...viewport,
+    operation: "desk-reveal",
+    view: "desk",
+  })),
   ...[1440, 390].flatMap((width) => [
     ...[
       "pending-inspector-scope",
@@ -9,6 +25,8 @@ export const hostFilterCases = [
     { width, operation: "spaces-navigator", view: "spaces" },
     { width, operation: "spaces-notifications", view: "spaces" },
     { width, operation: "bare-navigator", view: "town" },
+    { width, operation: "town-idle", view: "town" },
+    { width, operation: "town-idle-draws", view: "town" },
   ]),
   ...[1440, 390].flatMap((width) =>
     // Town's room tap only zooms (it never opens an Inspector), so the
@@ -24,8 +42,6 @@ export const hostFilterCases = [
       "filters",
       "cold-host",
       "navigator",
-      "delayed-catalogue",
-      "empty-catalogue",
       "nonempty-filter",
       "actions",
       "watches",
@@ -47,12 +63,7 @@ export const hostFilterCases = [
       "worktree",
       "worktree-files",
       "worktree-changes",
-      "worktree-resource-retirement",
-      "worktree-resource-disposal",
       "worktree-resource-rejection",
-      "worktree-resource-closed-refresh",
-      "worktree-resource-closed-retry",
-      "worktree-resource-validation-failure",
       "worktree-resource-cold",
       "worktree-resource-timeout",
     ].map((operation) => ({ width, operation, view: "board" })),
@@ -64,6 +75,7 @@ export const hostFilterCases = [
     "arrangement-retirement",
     "close-all",
   ].map((operation) => ({ width: 1440, operation, view: "board" })),
+  { width: 1440, operation: "town-walk-anchor", view: "town" },
   { width: 1440, operation: "cold-master", view: "town" },
   { width: 1440, operation: "cold-master-connect", view: "town" },
   ...[1440, 390].flatMap((width) =>

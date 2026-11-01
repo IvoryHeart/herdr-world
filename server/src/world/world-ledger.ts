@@ -1,7 +1,8 @@
+import type { AnswerRecipient } from "./ask-delivery-types";
+import type { OutboxEffect } from "../storage/world-protocol";
+import { newWorldId } from "../storage/world-identifiers";
 import { existsSync, readFileSync, renameSync } from "node:fs";
-import { join } from "node:path";
-import { dataRoot, replaceDataFile } from "../config/data-paths";
-import { worldEnv } from "../config/environment";
+import { replaceDataFile } from "../config/data-paths";
 import type { TerminalRef } from "../../../shared/relations";
 import type { BoardOp } from "./board-store";
 
@@ -66,9 +67,24 @@ export type LedgerAsk = {
   options: string[];
   /** Only the owner, in World, may answer. */
   owner_only: boolean;
-  answer?: { text: string; at: number; by: string };
+  recipient?: AnswerRecipient;
+  answer?: { text: string; at: number; by: string; occurrence?: string };
   /** Closed by the owner without an answer; the asker's `--wait` ends. */
   dismissed?: { at: number; by: string };
+  /** Durable attention evidence; an uncertain answer is always retrievable. */
+  delivery?: {
+    notification?: { state: string; reason?: string };
+    answer?: {
+      id: string;
+      occurrence: string;
+      state: string;
+      attempt: number;
+      reason?: string;
+      received_at?: number;
+      prior_uncertainty?: boolean;
+      attempts?: import("../storage/world-protocol").AnswerAttempt[];
+    };
+  };
 };
 
 /** An answered, dismissed or withdrawn question is closed. */
@@ -100,6 +116,19 @@ export type LedgerDocument = {
   results: LedgerResult[];
 };
 
+/** Committed reads; writes may cross the asynchronous persistence boundary. */
+export interface LedgerStore {
+  nextId(kind: "c" | "q" | "r" | "a"): string | Promise<string>;
+  get(): LedgerDocument;
+  ask(id: string): LedgerAsk | undefined;
+  change(id: string): LedgerChange | undefined;
+  openAsks(): { revision: number; asks: LedgerAsk[] };
+  update(
+    change: (document: LedgerDocument) => void,
+    effects?: readonly OutboxEffect[] | (() => readonly OutboxEffect[]),
+  ): number | Promise<number>;
+}
+
 export const LEDGER_LIMITS = {
   changes: 2000,
   asks: 500,
@@ -112,12 +141,6 @@ export const LEDGER_LIMITS = {
   task: 120,
 };
 
-export function defaultLedgerPath() {
-  return (
-    worldEnv("LEDGER_PATH") ?? join(dataRoot(), "boards", "world-ledger.json")
-  );
-}
-
 const empty = (): LedgerDocument => ({
   version: 1,
   revision: 0,
@@ -128,10 +151,11 @@ const empty = (): LedgerDocument => ({
 
 export class WorldLedger {
   private document: LedgerDocument;
-  private sequence = 0;
+  private issued = new Set<string>();
+  #closed = false;
 
   constructor(
-    private readonly path: string = defaultLedgerPath(),
+    private readonly path: string,
     private readonly options: {
       now?: () => number;
       log?: (message: string) => void;
@@ -173,10 +197,21 @@ export class WorldLedger {
     return (this.options.now ?? Date.now)();
   }
 
-  /** A short ID: a kind letter, the time and a counter, e.g. "c-lq3x9-1". */
-  nextId(kind: "c" | "q" | "r") {
-    this.sequence += 1;
-    return `${kind}-${this.now().toString(36)}-${this.sequence.toString(36)}`;
+  /** Legacy JSON/fixture allocator; production reserves through WorldStorage. */
+  nextId(kind: "c" | "q" | "r" | "a") {
+    const id = newWorldId(
+      kind,
+      (candidate) =>
+        this.issued.has(candidate) ||
+        [
+          ...this.document.asks,
+          ...this.document.changes,
+          ...this.document.results,
+        ].some((row) => row.id === candidate) ||
+        this.document.asks.some((ask) => ask.answer?.occurrence === candidate),
+    );
+    this.issued.add(id);
+    return id;
   }
 
   get(): LedgerDocument {
@@ -205,8 +240,14 @@ export class WorldLedger {
     };
   }
 
+  /** Refuse every later change: the service that owns this file stopped. */
+  close(): void {
+    this.#closed = true;
+  }
+
   /** Change the document and save it; returns the new revision. */
   update(change: (document: LedgerDocument) => void): number {
+    if (this.#closed) throw new Error("World storage is closed");
     const next = structuredClone(this.document);
     change(next);
     next.revision = this.document.revision + 1;

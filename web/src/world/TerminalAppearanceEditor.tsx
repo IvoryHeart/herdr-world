@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import {
   appearanceFor,
   AVATAR_CHOICES,
@@ -64,19 +64,16 @@ export function TerminalAppearanceEditor(props: TerminalAppearanceEditorProps) {
   };
   const savedStatus = appearanceFor(document?.appearance, tab)?.status ?? "";
   const avatar = appearanceFor(document?.appearance, pane)?.avatar;
-  const [name, setName] = useState(tabName),
-    [status, setStatus] = useState(savedStatus);
-  const [nameDirty, setNameDirty] = useState(false),
-    [statusDirty, setStatusDirty] = useState(false);
+  // A draft is null until edited, so a field shows the shared value. Deriving
+  // it, rather than copying the value in an effect, keeps a remote change that
+  // lands just before a keystroke from overwriting what the keystroke typed.
+  const [nameDraft, setNameDraft] = useState<string | null>(null),
+    [statusDraft, setStatusDraft] = useState<string | null>(null);
+  const name = nameDraft ?? tabName,
+    status = statusDraft ?? savedStatus;
   const [busy, setBusy] = useState(false),
     [error, setError] = useState<string | null>(null),
     [notice, setNotice] = useState("");
-  useEffect(() => {
-    if (!nameDirty) setName(tabName);
-  }, [tabName, nameDirty]);
-  useEffect(() => {
-    if (!statusDirty) setStatus(savedStatus);
-  }, [savedStatus, statusDirty]);
   const run = async (action: () => Promise<void>, success: string) => {
     setBusy(true);
     setError(null);
@@ -106,7 +103,7 @@ export function TerminalAppearanceEditor(props: TerminalAppearanceEditorProps) {
             event.preventDefault();
             void run(async () => {
               await renameAppearanceTab(tab, name);
-              setNameDirty(false);
+              setNameDraft(null);
             }, "Native tab name saved");
           }}
         >
@@ -116,13 +113,10 @@ export function TerminalAppearanceEditor(props: TerminalAppearanceEditorProps) {
               aria-label="Tab name"
               value={name}
               maxLength={160}
-              onChange={(event) => {
-                setName(event.target.value);
-                setNameDirty(true);
-              }}
+              onChange={(event) => setNameDraft(event.target.value)}
             />
           </label>
-          <button type="submit" disabled={!name.trim() || !nameDirty}>
+          <button type="submit" disabled={!name.trim() || nameDraft === null}>
             Save name
           </button>
         </form>
@@ -147,7 +141,7 @@ export function TerminalAppearanceEditor(props: TerminalAppearanceEditorProps) {
             event.preventDefault();
             void run(async () => {
               await save(tab, { status });
-              setStatusDirty(false);
+              setStatusDraft(null);
             }, "Tab status saved");
           }}
         >
@@ -157,13 +151,10 @@ export function TerminalAppearanceEditor(props: TerminalAppearanceEditorProps) {
               aria-label="Tab status message"
               value={status}
               maxLength={160}
-              onChange={(event) => {
-                setStatus(event.target.value);
-                setStatusDirty(true);
-              }}
+              onChange={(event) => setStatusDraft(event.target.value)}
             />
           </label>
-          <button type="submit" disabled={!statusDirty}>
+          <button type="submit" disabled={statusDraft === null}>
             Save status
           </button>
           <button
@@ -172,8 +163,7 @@ export function TerminalAppearanceEditor(props: TerminalAppearanceEditorProps) {
             onClick={() =>
               void run(async () => {
                 await save(tab, { status: null });
-                setStatus("");
-                setStatusDirty(false);
+                setStatusDraft(null);
               }, "Tab status reset")
             }
           >

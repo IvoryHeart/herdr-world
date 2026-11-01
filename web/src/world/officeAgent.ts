@@ -8,6 +8,8 @@ import type {
   WorldLeafObject,
   WorldSpaceObject,
 } from "./worldObject";
+import type { Tab } from "../types";
+import { boundedOptionalText } from "./worldObject";
 import { stableNumber } from "./stableNumber";
 export function projectAgent(
   leaf: WorldLeafObject & { kind: "agent" },
@@ -46,6 +48,28 @@ export function projectAgent(
     canOpenInSpaces: leaf.capabilities.openSpaces,
     characterIndex: stableNumber(leaf.id) % 12,
   };
+}
+
+export function singleNamedAgentLabelInTab(
+  children: readonly WorldLeafObject[],
+  tabId: string,
+): string | undefined {
+  const agents = children.filter(
+    (leaf): leaf is WorldLeafObject & { kind: "agent" } =>
+      leaf.kind === "agent" && leaf.tabId === tabId,
+  );
+  return agents.length === 1 ? agents[0]?.agentName : undefined;
+}
+
+export function officeDeskLabel(
+  children: readonly WorldLeafObject[],
+  tab: Pick<Tab, "tab_id" | "label" | "number">,
+): string {
+  return (
+    singleNamedAgentLabelInTab(children, tab.tab_id) ??
+    boundedOptionalText(tab.label, 100) ??
+    `Tab ${tab.number}`
+  );
 }
 
 export function target(

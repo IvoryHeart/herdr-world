@@ -1,3 +1,5 @@
+import type { AgentSessionIdentity } from "../types";
+import type { QualifiedFocusTarget } from "../store/types";
 import { type WorkspaceSurfaceSelection } from "../App";
 import { type ConnectionSummary } from "../api";
 import { store } from "../store";
@@ -294,12 +296,7 @@ type WorldFocusStore = {
   };
   selectConnection(connectionId: string): boolean;
   refresh(): Promise<unknown>;
-  focusQualifiedTarget(target: {
-    connectionId: string;
-    runtimeGeneration: number;
-    workspaceId: string;
-    paneId: string | null;
-  }): Promise<boolean>;
+  focusQualifiedTarget(target: QualifiedFocusTarget): Promise<boolean>;
 };
 
 type WorldEventTarget = Pick<EventTarget, "dispatchEvent">;
@@ -364,8 +361,13 @@ function worldNodeLeaseIsCurrent(
 export async function focusWorldNode(
   node: WorldObjectNode,
   focusStore: WorldFocusStore = store,
-  agentSessionId?: string,
+  agentSession?: string | AgentSessionIdentity,
+  isCurrent?: () => boolean,
 ) {
+  if (isCurrent?.() === false)
+    throw new Error("Inspector activation was superseded");
+  const agentSessionId =
+    typeof agentSession === "string" ? agentSession : agentSession?.value;
   const target = workspaceTarget(node);
   if (!target) throw new Error("Select a space, agent, or terminal first");
   const connection = focusStore
@@ -387,8 +389,19 @@ export async function focusWorldNode(
     runtimeGeneration: node.generation,
     workspaceId: target.workspaceId,
     paneId: target.paneId,
-    ...(agentSessionId ? { agentSessionId } : {}),
+    ...(isCurrent ? { isCurrent } : {}),
+    ...(typeof agentSession === "object" ? { agentSession } : {}),
+    ...(agentSessionId
+      ? {
+          agentSessionId,
+          ...(node.kind === "agent" || node.kind === "terminal"
+            ? { terminalId: node.terminalId }
+            : {}),
+        }
+      : {}),
   });
+  if (isCurrent?.() === false)
+    throw new Error("Inspector activation was superseded");
   if (!focused) {
     throw new Error("The selected item could not be focused");
   }

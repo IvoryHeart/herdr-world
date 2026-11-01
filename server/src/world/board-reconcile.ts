@@ -1,4 +1,5 @@
 import type { BoardDocument, BoardEnd, BoardOp } from "./board-store";
+import { bindingObservationAmbiguous } from "./binding-resolution";
 
 /**
  * After a move that failed (and maybe rolled back), panes can sit under new
@@ -13,6 +14,15 @@ export function reconcileOps(
   connectionId: string,
   topology: readonly { terminal_id: string; pane_id: string; tab_id: string }[],
 ): BoardOp[] {
+  if (
+    bindingObservationAmbiguous(
+      topology.map((row) => ({
+        native_id: row.pane_id,
+        terminals: [row.terminal_id],
+      })),
+    )
+  )
+    return [];
   const byTerminal = new Map(
     topology.map((entry) => [entry.terminal_id, entry]),
   );

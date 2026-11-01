@@ -30,6 +30,12 @@ jobs:
                   bun-version: "1.4.3"
                   no-cache: true
             - run: bun install --frozen-lockfile
+            - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+              with:
+                  path: ~/.cache/herdr-test-chrome
+                  key: test-chrome-${{ hashFiles('tools/chrome/test-chrome.json') }}
+            - name: Install the pinned test Chrome
+              run: bun scripts/test-chrome.ts "$HOME/.cache/herdr-test-chrome"
             - name: Run World browser shard
               env:
                   WORLD_TRACE_PREFIX: .agents/delivery/world-production
@@ -70,6 +76,12 @@ jobs:
                   bun-version: "1.4.3"
                   no-cache: true
             - run: bun install --frozen-lockfile
+            - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+              with:
+                  path: ~/.cache/herdr-test-chrome
+                  key: test-chrome-${{ hashFiles('tools/chrome/test-chrome.json') }}
+            - name: Install the pinned test Chrome
+              run: bun scripts/test-chrome.ts "$HOME/.cache/herdr-test-chrome"
             - name: Run web browser suites
               env:
                   HERDR_TEST_PARALLEL: "1"
@@ -94,59 +106,4 @@ jobs:
         steps:
             - env:
                   RESULT: ${{ needs.web-shards.result }}
-              run: test "$RESULT" = success
-
-    # Suites with wall-clock budgets (input latency, frame counts) on a runner
-    # of their own: nothing else runs, it waits for the machine to go quiet
-    # after setup, and it runs one case at a time. A case that fails is run
-    # once more (owner decision, #230): a hosted runner still produces the
-    # odd slow event, and the worst-event budgets are judged on one run.
-    latency-shards:
-        name: World latency suite (${{ matrix.shard }}/6)
-        if: toJSON(fromJSON(inputs.selection).latency) != '[]'
-        runs-on: ubuntu-latest
-        timeout-minutes: 15
-        strategy:
-            fail-fast: false
-            matrix:
-                shard: [1, 2, 3, 4, 5, 6]
-        steps:
-            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-              with:
-                  persist-credentials: false
-            - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-              with:
-                  bun-version: "1.4.3"
-                  no-cache: true
-            - run: bun install --frozen-lockfile
-            - name: Wait for the runner to go quiet
-              run: bun scripts/wait-for-quiet.ts
-            - name: Run World latency suites
-              env:
-                  WORLD_TRACE_PREFIX: .agents/delivery/world-production
-                  WORLD_TIMINGS_ONLY: "1"
-                  HERDR_CI_SELECTION: ${{ inputs.selection }}
-                  HERDR_WORLD_TEST_LABEL: shard-latency-${{ matrix.shard }}
-              run: bun scripts/ci-tests.ts latency ${{ matrix.shard }}
-            - name: Upload World latency results and timings
-              if: always()
-              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-              with:
-                  name: world-latency-${{ matrix.shard }}-attempt-${{ github.run_attempt }}
-                  path: |
-                      .agents/delivery/world-shard-*.xml
-                      .agents/delivery/world-shard-*.timings.json
-                      .agents/delivery/world-production-*-inputs.json
-                  include-hidden-files: true
-                  if-no-files-found: warn
-                  retention-days: 7
-
-    world-latency:
-        name: World latency budgets
-        needs: latency-shards
-        if: always() && toJSON(fromJSON(inputs.selection).latency) != '[]'
-        runs-on: ubuntu-latest
-        steps:
-            - env:
-                  RESULT: ${{ needs.latency-shards.result }}
               run: test "$RESULT" = success

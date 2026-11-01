@@ -3,8 +3,8 @@
  *
  * Where an agent stands follows its authoritative status: seated while working,
  * unknown; at its host reception while blocked (oldest first) or finished
- * (after the waiting agents); and in the lounge while idle. When reception or
- * the lounge is full, the rest stay at their desks. An agent the user opened
+ * (after the waiting agents); and in the bar (the lounge) while idle. When
+ * reception or the bar is full, the rest stay at their desks. An agent the user opened
  * (summoned) walks back to its desk whatever its status, until that status
  * changes. An agent at a pinned desk never goes to the lounge: it leaves its
  * desk only to wait at reception (blocked, or finished and not yet seen), and
@@ -79,6 +79,7 @@ export class TownNavigation {
         if (y < 2 || x === 0 || x === w - 1) this.grid[y * w + x] = Infinity;
     const L = building.lounge;
     for (const dx of [1, 2, 3, 7, 8]) this.block(L.x + dx, L.y + 1);
+    for (let x = L.bar.x; x < L.bar.x + L.bar.w; x += 1) this.block(x, L.bar.y);
     for (
       let x = building.counter.x;
       x < building.counter.x + building.counter.w;
@@ -195,23 +196,59 @@ export type TownActorWorld = {
   cells: ReadonlyMap<string, TownCell>;
   buildings: ReadonlyMap<string, TownBuilding>;
   navigation: ReadonlyMap<string, TownNavigation>;
+  /** What each building's navigation was built from (townNavigationKey). */
+  navigationKeys: ReadonlyMap<string, string>;
+  /** The hosts whose navigation was built for this world, not reused. */
+  built: ReadonlySet<string>;
 };
 
+/** Everything a building's navigation grid is built from. */
+export function townNavigationKey(building: TownBuilding) {
+  const { x, y, w, h, lounge, counter, plants, rooms } = building;
+  const desks = rooms.flatMap((room) =>
+    room.cells.filter((cell) => cell.deskKey).map((cell) => [cell.x, cell.y]),
+  );
+  return JSON.stringify([
+    x,
+    y,
+    w,
+    h,
+    [lounge.x, lounge.y, lounge.bar.x, lounge.bar.y, lounge.bar.w],
+    [counter.x, counter.y, counter.w],
+    plants.map((plant) => [plant.x, plant.y]),
+    desks,
+  ]);
+}
+
+/**
+ * The actors' world for a layout and model. A building whose navigation
+ * inputs are unchanged since `previous` keeps its navigation grid.
+ */
 export function townActorWorld(
   layout: TownLayout,
   model: TownModel,
+  previous?: TownActorWorld | null,
 ): TownActorWorld {
   const cells = new Map<string, TownCell>();
   const buildings = new Map<string, TownBuilding>();
   const navigation = new Map<string, TownNavigation>();
+  const navigationKeys = new Map<string, string>();
+  const built = new Set<string>();
   for (const building of layout.buildings) {
     buildings.set(building.hostKey, building);
-    navigation.set(building.hostKey, new TownNavigation(building));
+    const key = townNavigationKey(building);
+    const kept =
+      previous?.navigationKeys.get(building.hostKey) === key
+        ? previous.navigation.get(building.hostKey)
+        : undefined;
+    if (!kept) built.add(building.hostKey);
+    navigation.set(building.hostKey, kept ?? new TownNavigation(building));
+    navigationKeys.set(building.hostKey, key);
     for (const room of building.rooms)
       for (const cell of room.cells)
         if (cell.deskKey) cells.set(cell.deskKey, cell);
   }
-  return { layout, model, cells, buildings, navigation };
+  return { layout, model, cells, buildings, navigation, navigationKeys, built };
 }
 
 /** Owns every actor; `sync` reconciles goals and `step` advances movement. */
@@ -226,15 +263,22 @@ export class TownActors {
     return this.clock;
   }
 
+  /** How many actors the last `sync` reconciled. */
+  reconciled = 0;
+
   /**
    * Reconcile actors with a new model or layout. `instant` skips walking;
    * `summoned` agents go to their desks rather than reception or the lounge.
+   * With `hosts`, only those hosts' agents are reconciled: the caller vouches
+   * that nothing any other host's actors read has changed
+   * (scene/townSceneActors.ts), so a full sync would leave them as they are.
    */
   sync(
     world: TownActorWorld,
     instant: boolean,
     summoned: ReadonlySet<string> = this.summoned,
     asking: ReadonlySet<string> = this.asking,
+    hosts?: ReadonlySet<string>,
   ) {
     const previousWorld = this.world;
     this.world = world;
@@ -243,7 +287,9 @@ export class TownActors {
     const { model } = world;
     const seen = new Set<string>();
     const fresh = new Set<string>();
+    const included = (hostKey: string) => !hosts || hosts.has(hostKey);
     for (const agent of model.agents.values()) {
+      if (!included(agent.hostKey)) continue;
       const seat = model.agentSeats.get(agent.key);
       const cell = seat ? world.cells.get(seat.deskKey) : undefined;
       const building = world.buildings.get(agent.hostKey);
@@ -316,31 +362,42 @@ export class TownActors {
       if (agent.semanticStatus !== "done") actor.doneSince = 0;
     }
     for (const key of [...this.actors.keys()])
-      if (!seen.has(key)) {
+      if (!seen.has(key) && included(this.actors.get(key)!.hostKey)) {
         const actor = this.actors.get(key)!;
         if (actor.spot) actor.spot = null;
         this.actors.delete(key);
       }
-    this.assignGoals(instant, fresh, world.layout !== previousWorld?.layout);
+    this.assignGoals(
+      instant,
+      fresh,
+      world.layout !== previousWorld?.layout,
+      included,
+    );
   }
 
   private assignGoals(
     instantAll: boolean,
     fresh: ReadonlySet<string>,
     layoutChanged: boolean,
+    included: (hostKey: string) => boolean,
   ) {
     const world = this.world;
     if (!world) return;
     const { model } = world;
+    // Lounge spots and reception queues belong to one host each.
+    const actors = [...this.actors.values()].filter((actor) =>
+      included(actor.hostKey),
+    );
+    this.reconciled = actors.length;
     const loungeTaken = new Map<string, Set<string>>();
-    for (const actor of this.actors.values())
+    for (const actor of actors)
       if (actor.spot) {
         const taken = loungeTaken.get(actor.hostKey) ?? new Set();
         taken.add(spotKey(actor.spot));
         loungeTaken.set(actor.hostKey, taken);
       }
     const queues = new Map<string, TownActor[]>();
-    for (const actor of this.actors.values()) {
+    for (const actor of actors) {
       const agent = model.agents.get(actor.key)!;
       if (
         (agent.semanticStatus !== "blocked" &&
@@ -372,7 +429,7 @@ export class TownActors {
         .slice(0, building.queue.length)
         .forEach((actor, slot) => queueSlots.set(actor.key, slot));
     }
-    for (const actor of this.actors.values()) {
+    for (const actor of actors) {
       const agent = model.agents.get(actor.key)!;
       const seat = model.agentSeats.get(actor.key)!;
       const building = world.buildings.get(actor.hostKey)!;
@@ -495,7 +552,11 @@ export class TownActors {
         target.tile[0],
         target.tile[1],
       );
-      actor.path = (path ?? [target.tile]).map(([x, y]) => tileCenter(x, y));
+      // Already in the goal tile (an empty path), still walk to its centre:
+      // arriving off-centre would leave the actor where a later settle snaps.
+      actor.path = (path?.length ? path : [target.tile]).map(([x, y]) =>
+        tileCenter(x, y),
+      );
       actor.mode = "walk";
     };
     if (actor.mode === "seat") {

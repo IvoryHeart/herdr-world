@@ -2,8 +2,15 @@ import {
   type EndpointAvailability,
   type EndpointAdvertisement,
 } from "../endpointAvailability";
+import type { AgentActivityMap } from "../../../shared/agentActivity";
 import { type BrowserNavigation } from "../browserNavigation";
-import { type Workspace, type Tab, type Pane, type PaneLayout } from "../types";
+import {
+  type AgentSessionIdentity,
+  type Workspace,
+  type Tab,
+  type Pane,
+  type PaneLayout,
+} from "../types";
 import {
   type PopupStatePush,
   type ConnectionStatus,
@@ -31,6 +38,7 @@ export interface ServerSessionState {
   workspaces: Workspace[];
   tabs: Tab[];
   panes: Pane[];
+  agentActivity: AgentActivityMap;
   layout: PaneLayout | null;
   selectedPaneId: string | null;
   recentPaneIds: string[];
@@ -63,6 +71,8 @@ export interface State extends ServerSessionState {
   activeConnectionId: string;
   connectionGeneration: number;
   sessionsByConnectionId: Record<string, ServerSessionState>;
+  /** Browser-only identity maxima, independent of service incarnation and operation leases. */
+  agentActivityHistory?: Record<string, AgentActivityMap>;
   notice: Notice | null;
   taskNotificationsEnabled: boolean;
   taskNotificationPreferences: TaskNotificationPreferences;
@@ -145,6 +155,8 @@ export interface QualifiedFocusTarget {
   /** Browser-local intent captured before asynchronous notification admission. */
   navigationRevision?: number;
   agentSessionId?: string;
+  /** Complete occupant identity retained across queued Desk admission. */
+  agentSession?: AgentSessionIdentity;
   connectionId: string;
   runtimeGeneration: number;
   workspaceId: string;

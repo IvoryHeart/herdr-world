@@ -1,3 +1,9 @@
+import { connectCapture } from "./connectCapture";
+import {
+  captureScene,
+  resizeCapture,
+  type CaptureOptions,
+} from "./captureScene";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -24,69 +30,27 @@ export async function captureResumeViewports(
   port: string,
   directory: string,
   state: string,
+  options: Pick<CaptureOptions, "view" | "content" | "timeoutMs"> = {},
 ) {
-  const targets = (await (
-    await fetch(`http://127.0.0.1:${port}/json/list`)
-  ).json()) as { type: string; webSocketDebuggerUrl: string }[];
-  const socket = new WebSocket(
-    targets.find((target) => target.type === "page")!.webSocketDebuggerUrl,
-  );
-  await new Promise<void>((resolve, reject) => {
-    socket.onopen = () => resolve();
-    socket.onerror = () => reject(new Error("Capture connection failed"));
-  });
-  let nextId = 0;
-  const pending = new Map<
-    number,
-    { resolve(value: any): void; reject(error: Error): void }
-  >();
-  socket.onmessage = (event) => {
-    const message = JSON.parse(String(event.data)),
-      request = pending.get(message.id);
-    if (!request) return;
-    pending.delete(message.id);
-    if (message.error) request.reject(new Error(message.error.message));
-    else request.resolve(message.result);
-  };
-  const command = (method: string, params = {}) =>
-    new Promise<any>((resolve, reject) => {
-      const id = ++nextId;
-      pending.set(id, { resolve, reject });
-      socket.send(JSON.stringify({ id, method, params }));
-    });
+  const { command, close } = await connectCapture(port);
   await mkdir(directory, { recursive: true });
   const receipts = [];
   try {
     for (const viewport of resumeViewports) {
-      await command("Emulation.setDeviceMetricsOverride", {
-        width: viewport.width,
-        height: viewport.height,
-        deviceScaleFactor: 1,
-        mobile: viewport.name === "phone",
-      });
-      await command("Runtime.evaluate", {
-        expression: "new Promise(resolve => setTimeout(resolve, 600))",
-        awaitPromise: true,
-      });
-      const actual = await command("Runtime.evaluate", {
-        expression: "({ width: innerWidth, height: innerHeight })",
-        returnByValue: true,
-      });
-      if (
-        actual.result.value.width !== viewport.width ||
-        actual.result.value.height !== viewport.height
-      )
-        throw new Error(`Viewport mismatch: ${viewport.name}`);
-      const screenshot = await command("Page.captureScreenshot", {
-        format: "png",
-        captureBeyondViewport: false,
+      await resizeCapture(command, viewport.width, viewport.height);
+      const screenshot = await captureScene(command, {
+        ...viewport,
+        ...options,
       });
       const filename = `${state}-${viewport.name}.png`;
-      await Bun.write(
-        join(directory, filename),
-        Buffer.from(screenshot.data, "base64"),
-      );
-      receipts.push({ ...viewport, state, filename });
+      await Bun.write(join(directory, filename), screenshot.bytes);
+      receipts.push({
+        ...viewport,
+        state,
+        filename,
+        receipt: screenshot.receipt,
+        sanity: screenshot.sanity,
+      });
     }
     await Bun.write(
       join(directory, `${state}.json`),
@@ -101,7 +65,13 @@ export async function captureResumeViewports(
       ),
     );
   } finally {
-    await command("Emulation.clearDeviceMetricsOverride");
-    socket.close();
+    try {
+      await command("Runtime.evaluate", {
+        expression: "window.__HERDR_WORLD_CAPTURE__?.invalidate()",
+      });
+      await command("Emulation.clearDeviceMetricsOverride");
+    } finally {
+      close();
+    }
   }
 }

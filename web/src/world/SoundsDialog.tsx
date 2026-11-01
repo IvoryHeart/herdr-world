@@ -24,15 +24,18 @@ import {
   setTownMaster,
   useAgentProfiles,
   type TerminalKey,
+  type TerminalTarget,
 } from "./agentProfiles";
 import type { WorldLeafObject, WorldObject } from "./worldObject";
 import "./agentProfiles.css";
 
 const leafName = (leaf: WorldLeafObject) =>
   leaf.agentName ?? leaf.agentLabel ?? leaf.tabLabel ?? leaf.terminalId;
-const keyOf = (leaf: WorldLeafObject): TerminalKey => ({
+const keyOf = (leaf: WorldLeafObject): TerminalTarget => ({
   connection_id: leaf.connectionId,
   terminal_id: leaf.terminalId,
+  connection_generation: leaf.generation,
+  pane_id: leaf.pane.pane_id,
 });
 const sameKey = (a: TerminalKey | null, leaf: WorldLeafObject) =>
   Boolean(

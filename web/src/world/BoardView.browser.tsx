@@ -8,6 +8,7 @@ import { sharedAsksStore, type WorldAsk } from "./worldAsks";
 import { fixturePullRequest as detailedPr } from "./testing/pullRequestFixture";
 // First: the page runs on test time (see testing/testClock.ts).
 import { clock } from "./testing/installTestClock";
+import { setCapturePaintFrameForTesting } from "./useDrawReadiness";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import BoardView, { __boardDraftsTesting } from "./BoardView";
@@ -311,7 +312,10 @@ function apply(ops: BoardOp[]) {
       if (op.color) colors[op.key] = op.color;
       else delete colors[op.key];
       next.layout.colors = colors;
-    } else if (op.op === "group.join" || op.op === "group.leave") {
+    } else if (
+      (op.op === "group.join" && "target" in op) ||
+      (op.op === "group.leave" && "members" in op)
+    ) {
       const relations = next.relations ?? { spawns: [], groups: [] };
       relations.groups =
         op.op === "group.join"
@@ -3344,6 +3348,31 @@ if (mode === "preview")
 if (mode === "test")
   run()
     .catch((error) => failures.push(String(error)))
-    .finally(() =>
-      fetch("/result", { method: "POST", body: JSON.stringify(failures) }),
-    );
+    .finally(() => {
+      // Optional evidence is requested after assertions on this manual clock.
+      const capture = window.__HERDR_WORLD_CAPTURE__;
+      if (capture) {
+        setCapturePaintFrameForTesting((callback) => {
+          const id = clock.real.requestAnimationFrame!(callback);
+          return () => clock.real.cancelAnimationFrame!(id);
+        });
+        const wait = capture.wait.bind(capture);
+        capture.wait = (options) => {
+          let finished = false;
+          let frame = 0;
+          const pump = async () => {
+            await clock.frame();
+            if (!finished) frame = clock.real.requestAnimationFrame!(pump);
+          };
+          frame = clock.real.requestAnimationFrame!(pump);
+          return wait(options).finally(() => {
+            finished = true;
+            clock.real.cancelAnimationFrame!(frame);
+          });
+        };
+      }
+      return fetch("/result", {
+        method: "POST",
+        body: JSON.stringify(failures),
+      });
+    });

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   preferredOfficeConnectorAnchor,
+  sameCanvasAnchors,
   worldConnectorPath,
   worldConnectorTargetPoint,
 } from "./worldConnectorGeometry";
@@ -30,5 +31,26 @@ describe("World Inspector connector geometry", () => {
     expect(worldConnectorPath({ x: 100, y: 300 }, { x: 500, y: 300 })).toBe(
       "M 100 300 C 280 300, 320 300, 500 300",
     );
+  });
+
+  test("treats freshly built but equal anchor sets as the same", () => {
+    const anchor = { x: 420, y: 210, visible: true, edge: null } as const;
+    expect(sameCanvasAnchors({ a: anchor }, { a: { ...anchor } })).toBe(true);
+    expect(sameCanvasAnchors({}, {})).toBe(true);
+    expect(sameCanvasAnchors(null, null)).toBe(true);
+    expect(sameCanvasAnchors(null, {})).toBe(false);
+    expect(sameCanvasAnchors({ a: anchor }, { b: anchor })).toBe(false);
+    expect(sameCanvasAnchors({ a: anchor }, { a: anchor, b: anchor })).toBe(
+      false,
+    );
+    expect(sameCanvasAnchors({ a: anchor }, { a: { ...anchor, y: 211 } })).toBe(
+      false,
+    );
+    expect(
+      sameCanvasAnchors(
+        { a: anchor },
+        { a: { ...anchor, visible: false, edge: "left" } },
+      ),
+    ).toBe(false);
   });
 });

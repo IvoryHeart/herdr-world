@@ -1,3 +1,4 @@
+import { presentWorldRooms } from "./worldPresentation";
 import { useEffect, useRef } from "react";
 import {
   appearanceFor,
@@ -14,7 +15,11 @@ import {
   type BoardDocumentStore,
 } from "./board/boardDocument";
 import type { WorldRuntimeConnection } from "./runtimeStore";
-import type { WorldLeafObject, WorldObject } from "./worldObject";
+import type {
+  WorldLeafObject,
+  WorldObject,
+  WorldSpaceObject,
+} from "./worldObject";
 
 export function useAppearanceDocument(
   store: BoardDocumentStore = sharedBoardStore(),
@@ -117,6 +122,10 @@ export function leafAppearance(
     ? { status: tab?.status, avatar: pane?.avatar }
     : undefined;
 }
+const appearanceRooms = new WeakMap<
+  WorldSpaceObject,
+  { key: string; room: WorldSpaceObject }
+>();
 export function worldWithAppearance(
   world: WorldObject,
   document: Pick<BoardDocument, "appearance"> | null,
@@ -132,30 +141,35 @@ export function worldWithAppearance(
     ids.push(leaf.terminalId);
     witnesses.set(key, ids);
   }
-  const leaves = world.leaves.map((leaf) => ({
-    ...leaf,
-    appearance: leafAppearance(document, leaf, witnesses.get(keyOf(leaf))),
-  }));
-  const leafById = new Map(leaves.map((leaf) => [leaf.id, leaf]));
-  const spaces = world.spaces.map((space) => ({
-    ...space,
-    children: space.children.map((leaf) => leafById.get(leaf.id)!),
-  }));
-  const spaceById = new Map(spaces.map((space) => [space.id, space]));
-  const hosts = world.hosts.map((host) => ({
-    ...host,
-    spaces: host.spaces.map((space) => spaceById.get(space.id)!),
-  }));
-  const nodes = [...hosts, ...spaces, ...leaves];
-  return {
-    ...world,
-    hosts,
-    spaces,
-    leaves,
-    nodes,
-    nodeById: new Map(nodes.map((node) => [node.id, node])),
-  };
+  return presentWorldRooms(world, (space) => {
+    const appearances = space.children.map((leaf) =>
+      leafAppearance(document, leaf, witnesses.get(keyOf(leaf))),
+    );
+    if (
+      appearances.every(
+        (appearance, i) =>
+          JSON.stringify(appearance) ===
+          JSON.stringify(space.children[i]!.appearance),
+      )
+    )
+      return space;
+    const key = JSON.stringify(appearances),
+      prior = appearanceRooms.get(space);
+    if (prior?.key === key) return prior.room;
+    const room = {
+      ...space,
+      children: space.children.map((leaf, i) => {
+        const appearance = appearances[i];
+        return JSON.stringify(appearance) === JSON.stringify(leaf.appearance)
+          ? leaf
+          : { ...leaf, appearance };
+      }),
+    };
+    appearanceRooms.set(space, { key, room });
+    return room;
+  });
 }
+
 export type AppearanceIdentity = AppearanceTarget & {
   connection_generation: number;
 };

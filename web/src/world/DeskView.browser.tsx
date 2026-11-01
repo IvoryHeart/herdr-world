@@ -1,3 +1,5 @@
+import { checkDeskRevealHook } from "./testing/deskRevealHookAcceptance";
+import { checkDeskOtherHosts } from "./testing/deskOtherHostsAcceptance";
 import { bridge } from "../api";
 import { sharedAsksStore, type WorldAsk } from "./worldAsks";
 import { flushSync } from "react-dom";
@@ -6,6 +8,7 @@ import type { ConnectionClient } from "../api";
 import "../styles/tokens.css";
 import "../styles/base.css";
 import { terminalFocusBlockedByOverlay } from "../terminalFocus";
+import { runSharedDeskWatchChecks } from "./testing/deskWatchBrowser";
 import { handoffId } from "./handoffs";
 import { DeskBoard } from "./DeskView";
 import { WorldDeskStore } from "./deskStateStore";
@@ -905,6 +908,10 @@ async function run() {
     !document.querySelector('[data-world-ask="q-desk"]'),
     "withdrawal clears Desk's question mark",
   );
+  await checkDeskOtherHosts(check);
+  await checkDeskRevealHook(check);
+  flushSync(() => root.unmount());
+  await runSharedDeskWatchChecks(check);
 }
 
 run()

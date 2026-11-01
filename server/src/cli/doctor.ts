@@ -389,7 +389,10 @@ function pushCheck(context: CliContext, setup: ServiceSetup): Check {
       hint: "Use a mailto: address or an HTTPS URL.",
     };
   }
-  const path = webPushPath(setup.env, runtimeDataRoot(context.runtime));
+  const path = webPushPath(
+    setup.env,
+    runtimeDataRoot(context.runtime, setup.env),
+  );
   if (!existsSync(path))
     return {
       name: "Web Push",

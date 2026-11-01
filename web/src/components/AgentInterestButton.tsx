@@ -14,6 +14,17 @@ export function useAgentInterestChoice(
   return {
     current: interest.interestOf(connectionId, terminalId),
     quiet: interest.anyFocused,
+    override: interest.overrideOf(connectionId, terminalId),
+    description: interest.descriptionOf(connectionId, terminalId),
+    onDefault: async () => {
+      const error = await setAgentInterest(connectionId, terminalId, null);
+      if (error)
+        store.notify({
+          kind: "error",
+          message: "Agent interest could not be saved",
+          detail: error,
+        });
+    },
     onInterest: async (next) => {
       const error = await setAgentInterest(connectionId, terminalId, next);
       if (error)

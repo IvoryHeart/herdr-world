@@ -10,7 +10,7 @@ import {
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { main } from "./gate";
+import { loadConfig, main } from "./gate";
 import { CASES, config, confirm, input, NOW, SHA } from "./gate/cases";
 import type { Run } from "./gate/observe";
 import { evaluate } from "./gate/predicate";
@@ -308,12 +308,11 @@ beforeEach(() => {
 
 describe("pass", () => {
   test("reads GitHub and git and records READY from full review history", async () => {
-    world.retried = true;
     const first = await cli(["pass"]);
     expect(first.text).toContain("pass 1: 1 pull request(s)");
     expect(first.text).toMatch(/#7\tREADY/u);
     const explain = await cli(["explain", "7"]);
-    expect(explain.text).toContain("Browser tests: 1 failed attempt retained");
+    expect(explain.text).not.toContain("failed attempt retained");
     expect(explain.text).toContain("native approval");
     expect(explain.text).toContain("claim    rev-opus confirmed");
     expect((await cli(["pass"], NOW + 60_000)).code).toBe(0);
@@ -330,7 +329,7 @@ describe("pass", () => {
     expect(text).toContain("Delivery checks");
   });
 
-  test("a failed run superseded by a newer green run is a retained attempt, not a failure", async () => {
+  test("a failed run superseded by a newer green run still blocks readiness", async () => {
     world.checks = [
       {
         name: "Delivery checks",
@@ -358,7 +357,7 @@ describe("pass", () => {
       102: { run_id: 2, run_attempt: 1 },
     };
     const { text } = await cli(["pass"]);
-    expect(text).toMatch(/#7\tNEEDS_JUDGMENT/u);
+    expect(text).toMatch(/#7\tNOT_READY/u);
     expect(text).toContain("Delivery checks: 1 failed attempt retained");
   });
 
@@ -911,19 +910,18 @@ describe("store", () => {
     }
   });
 
-  test("a check listed as both a flake and an aggregate is refused", async () => {
+  test("obsolete failure exemptions have no effect on loaded configuration", () => {
     writeFileSync(
       configPath,
       JSON.stringify({
         ...config,
         remote,
         flakes: ["Delivery checks"],
+        rerunBudget: 100,
         aggregateChecks: ["Delivery checks"],
       }),
     );
-    await expect(cli(["pass"])).rejects.toThrow(
-      "Delivery checks as both a flake and an aggregate",
-    );
+    expect(loadConfig(configPath)).toEqual({ ...config, remote });
   });
 
   test("hold needs a reason", async () => {

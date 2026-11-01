@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { balanceShards } from "./balance-shards";
+import timings from "./verification-timings.json";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { relative, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -23,9 +25,11 @@ export function verificationShard(index: number): string[] {
     Number.isInteger(index) && index >= 1 && index <= CI_VERIFICATION_SHARDS,
     "Invalid verification shard",
   );
-  return verificationModels.filter(
-    (_, offset) => offset % CI_VERIFICATION_SHARDS === index - 1,
-  );
+  return balanceShards(
+    verificationModels,
+    timings.seconds,
+    CI_VERIFICATION_SHARDS,
+  )[index - 1]!;
 }
 
 type Case = {

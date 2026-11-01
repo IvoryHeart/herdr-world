@@ -1,12 +1,40 @@
 # Consumer and alternative evidence decisions
 
+## SQLite attention candidate
+
+The [World storage contract](contracts/world-storage.md) supplements Q29 with a
+new candidate. Existing Q01–Q43 acceptance does not accept this addition. Its
+source and standalone compiled crash tests exercise real SQLite and external
+effect boundaries; no abstract model is substituted for filesystem durability.
+Required acceptance covers bounded alert retry/cancellation and 60-second
+re-arming, preserved CLI fallback, no unconsumed answer intents, worker fail-stop,
+short collision-checked IDs and lean incarnation-scoped history/outbox retention.
+Independent review and the complete applicable delivery/platform gate remain
+required; prior baseline acceptance does not supply them.
+
+| Producer guarantee | Required consumer evidence | Limit |
+| --- | --- | --- |
+| One worker commits rows and declared effects atomically before acknowledgement | Real temporary SQLite crash/reopen, concurrent opener refusal, final-group drain and integrated root shutdown | Process crashes do not establish power-loss safety |
+| Pending/uncertain owner alerts retry only under their declared policy | Dispatcher tests for final refusals, temporary-failure backoff, closed-ask cancellation, same-connection current leases and own-ask response isolation | Owner alerts can duplicate; native Herdr has no operation-key deduplication |
+| New asks are stored even when the first alert is not confirmed | CLI tests for actual `notified` evidence, `retrying`, retained IDs and fallback when recording fails | A timed-out recording request may have committed and can also produce a fallback alert |
+| Replay and domain state have separate retention | Row/age/service-incarnation cursor tests; pending asks/intents survive, finished effects trim with their records | Change references are not an exact historical record-body snapshot |
+| JSON import is private and idempotent | Exact hash-named backup, unchanged second open, changed-source missing-ID merge, malformed-source recovery and migration/application-ID refusal | Existing SQLite IDs win; conflicting downgrade edits need reconciliation |
+
+The [saved-answer delivery contract](contracts/ask-answer-delivery.md) adds a
+separate Q29 candidate for the declared opaque answer verb, verified stdout
+receipts and exact owner resend/close. A real SQLite transition matrix, actual
+Chat source/compiled crash schedules and service/CLI/browser consumers establish
+finite alternative evidence; no accepted Quint claim is expanded. Native CI and
+independent mapping/design review remain required. Herdr deduplication, power-loss
+safety and agent read/execution guarantees remain excluded.
+
 This reconciles the remaining baseline entries without treating a component model as a proof of its consumers. Each decision names the required real tests in `coverage.json`; existing accepted-delivery CI is baseline execution evidence. New candidate execution is reported in PR #188 and source-bound manifests. Environment-gated live/OS checks retain their prerequisites and may not be reported as locally executed. All Q01–Q43 mappings and alternatives are independently accepted in review 5516249164 within their stated bounds. Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); owner-approved PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding.
 
 ## Shared model consumers
 
 | Area | Mapping and required consumer evidence | Limits |
 | --- | --- | --- |
-| Q02 Profile service and persistence | Manager replacement and drain guarantees are consumed by profile persistence/retry admission; real profile tests retain default persistence, rollback and cancellation during cleanup. Models: runtime-control, runtime-drain. | Persistence atomicity and retry clock/jitter remain real integration evidence; manager readiness alone does not prove catalogue consistency. |
+| Q02 Profile service and persistence | Manager replacement and drain guarantees are consumed by profile persistence/retry admission; real profile tests retain default persistence, rollback and cancellation during cleanup. Local recovery consumers cover capped backoff, explicit Reconnect, cancellation tokens and manager generations; the production native-socket fixture covers late readiness, non-actionable failed topology and fresh qualified admission. Models: runtime-control, runtime-drain. | Persistence atomicity and retry clock/jitter remain real integration evidence; manager readiness alone does not prove catalogue consistency. |
 | Q03 SSH supervision | Manager currency and drain fence late transport completion. Real supervisor/tunnel tests exercise process exits, cancellation, reconnect classification and private path ownership. Models: runtime-leases, runtime-drain. | Real OpenSSH, OS process and Windows transport semantics remain platform checks; the manager model does not simulate SSH. |
 | Q04 Subscriptions | Retired manager owners cannot publish readiness. Subscription tests independently exercise stop-before-ready, stop-during-retry, coalesced drain and callback suppression. Models: runtime-leases, runtime-drain. | Subscription retry progress requires actual timers and transport behavior; model producer guarantees do not prove callback consumers. |
 | Q05 RPC/HTTP routing | Qualified manager leases supply dispatch authority. Protocol and HTTP tests check malformed/stale generations, explicit rejection, legacy omission and cancellation of stale streams. The session-link routing fixture combines the real manager, RPC dispatcher, runtime handlers and filesystem lookup with a synthetic external transport; identical pane IDs stay isolated, and replacement during confirmation or immediately before transport dispatch cannot report a link. Models: runtime-leases, runtime-control. | No model substitutes for endpoint parsing or HTTP stream cancellation; legacy compatibility is scoped separately from explicit admission. |
@@ -19,6 +47,45 @@ This reconciles the remaining baseline entries without treating a component mode
 | Q25 History/task/checkout reports | Captured runtime authority applies to checkout report reads. Real history/task parsers and checkout tests check transcript order and exact live session identity. Codex protocol/inference/cache fixtures directly exercise complete bounded discovery, visible-pane uniqueness, recent unloaded competitors, freshness, evidence changes, title precedence, contradictory reports, batched final snapshots, unavailable backoff, connection/generation isolation and refusal of inferred message/answer authority. Compressed Codex fixtures cover local/SSH representation changes, plain-file precedence, duplicate rejection, bounded decoded prefixes, malformed data and original exports through History/Chat handlers. Claude SSH fixtures exercise production POSIX discovery/stat/read payloads on a disposable filesystem with synthetic Herdr read/send/receipt and stale-session guards, refusing duplicate or malformed results and isolating connection targets. This is adapter evidence, not native SSH/Claude acceptance. Models: runtime-leases. | Session identity is a distinct consumer guard; parsing external formats and evaluating inference evidence use direct protocol/fixture tests, not a manager guarantee. Unseen clients can make a daemon guess wrong. A guess never proves client identity, cannot send or answer, and cannot persist a link. |
 | Q32 File search and annotation drafts | Runtime-qualified late-result admission is the shared rule; real File Explorer tests exercise retired prefetch/preview and annotation tests retain durable checkout identity and stale anchors. Models: browser-preparation, runtime-leases. | Draft persistence intentionally uses durable checkout identity rather than transient generation; glob expansion and anchor reconstruction remain pure/fixture tests. |
 | Q37 Whole-service startup/shutdown | Manager shutdown prevents new starts and drains retained owners. Startup/shutdown tests verify listener availability, one shared drain and forced exit deadline. Models: runtime-control, runtime-drain. | Actual listener/process/service-manager lifecycle and forced-exit policy are integration/platform evidence; models do not prove OS termination. |
+
+### Hosts scope admission (Q15)
+
+`useHostsFilter.test.ts` mounts the production hook with the shell's actual store
+selectors and `refreshConnections`. A deferred service reply plus 150 ms of test
+time proves saved beta survives an unready catalogue; successful populated and
+empty admission then preserve beta or restore All hosts with the exact removal
+explanation. The hook renders the actual `HostsControl`: after empty admission,
+its status element must contain that explanation; populated admission must have
+no removal feedback. This headless renderer probe checks presence, not responsive
+geometry or focus. Partial removal, remount persistence, malformed saved values,
+deduplication and empty explicit scope have direct hook consumers. The service
+reply is synthetic: this does not prove transport parsing or browser rendering.
+`HostsFilter.test.ts` retains responsive controls, rendered scope/navigation and
+feedback, focus and real terminal lifecycle, including every Town case. Existing
+store/Bridge and model consumers remain mandatory; the catalogue/filter
+composition adds direct finite evidence, not a new protocol/model claim.
+
+### Watch status consumer (Q18)
+
+`useWorldObservation.test.ts` mounts the production observation hook, actual
+watchlist store and actual host projection in an isolated DOM on controlled time.
+The harness now mounts the real Inspector controller, `useWorldVisualActions`
+and `CommandCombobox`: the actual publication callback carries the extension to
+the real Actions menu. Reopening the menu after each observation change checks
+its captured pending and unavailable-only detail text in the DOM. Two independent
+production publication mutants suppressing either state must fail those rendered
+assertions. This proves feedback presence, not browser geometry or trusted focus.
+Runtime observations are synthetic inputs supplied at the external-store read
+port; watchlist refresh consumes deferred synthetic service replies. Current
+healthy-host counts survive an unavailable peer; old/missing revisions stay
+pending, and an unavailable-only scope reports empty observed coverage without
+using hidden-host counts or sending mutations. A revision-advancing watchlist
+reply makes older observations pending at its named completion. These replace
+the pending-revision and offline-only assertions in `HostsFilter.actions.test.ts`.
+Desktop/phone browser cases still require the actual Actions menu to render the
+current counts and unavailable-host explanation; every other Actions/Town case
+stays. This does not prove service admission, topology production, transport or
+focus; existing mandatory consumers and model bounds remain.
 
 ### Chat source navigation (Q16)
 
@@ -44,6 +111,28 @@ a new model would not establish Markdown parsing or CodeMirror line targeting.
 Filesystem containment and symlink admission remain the existing service adapter's
 responsibility and retain their current real filesystem tests.
 
+### Worktree resource handoff (Q16, Q34)
+
+`WorktreeLifecycleDialog.test.ts` replaces the HostsFilter resource scenarios for
+runtime retirement/disposal during `worktree.open`, closed-target refresh/retry
+and failed workspace validation, plus the remembered-live-target retry count.
+It mounts the production dialog and uses the real `requestWorkspaceInspector`
+on the fixture clock. Synthetic service/operational ports deliberately return
+late results without fencing, so the dialog's own cancellation/current-client
+checks must prevent an Inspector request. Explicit admission rejection exercises
+its recoverable opened-workspace state, target validation and retry decisions.
+Accepting the retried admission after both Refresh and direct validation must
+close the dialog exactly once after two checkout opens; accepting a remembered
+live target closes it without another checkout open.
+Each moved scenario has a production-code negative control.
+
+The controlled receiver does not publish a real Inspector or prove RPC binding.
+The retained desktop/phone Files and Changes routes, rejection rendering/focus,
+native file input and download lifecycle stay in `HostsFilter.resources.test.ts`;
+existing store/lease consumers remain required. These finite component policies
+add direct evidence to the existing runtime/cache boundary without a new model
+or a claim about arbitrary concurrent workspace/transport schedules.
+
 ## Direct implementation, browser and platform alternatives
 
 | Area | Selected evidence and reason | Limits |
@@ -53,16 +142,16 @@ responsibility and retain their current real filesystem tests.
 | Q10 Aggregate observation | Real snapshot tests exercise retirement during construction, expired catalogue scheduling, failed-host stale topology and healthy sibling publication with bounded synthetic transports. | Snapshot integration is the selected consumer evidence for manager authority; no exhaustive claim over arbitrary host topology or transport schedules. |
 | Q11 Observation scheduling | Real controlled scheduling tests exercise 32 hosts, three stalled priority owners, slot release, repeated invalidation rotation, overlapping priorities and cached hosts without refetch. | These are explicit adversarial scheduling scenarios, not a liveness proof. Eventual progress assumes completed transport turns; stalled-owner deadlines and capacity remain implementation tests. |
 | Q22 Tab/pane layout, pins and reorder | Direct pure layout/pin/reorder tests plus queued visible-layout retirement tests cover owner-keyed state; Q21 adds bounded window reducer exploration. | All tab cardinalities and asynchronous native layout responses are not exhausted; captured generation checks retain their implementation regressions. |
-| Q24 Desk receipts and review marks | Fixture receipts retain their tests. Shared service metadata adds direct bounds/expiry/conditional-Undo and session-replacement tests; captured-lease RPC tests, two-WebSocket service tests, cross-browser Desk UI tests and deferred revision/socket-epoch schedules check the real producer and consumer boundaries. Fresh-observation callback admission remains covered by Q10. The 41-agent paired registry/store projection checks marks in both directions with unequal polling coverage, filter changes and later native activity/stops. Native progress counters from the already-fetched agent.list rows detect complete turns between snapshots, including after observation expiry; pane-only harness/session identity and matching metadata keep observation aligned with browser projection and RPC admission. Missing pane identity is never supplied by an agent row; qualified adapter and snapshot wiring cases reject ambiguous or stale progress. Stable stop IDs keep unchanged Done and Idle review marks across 13-hour display-time expiry; the real browser consumes expiry and new-stop publications. Deferred RPC cases fence session replacement, return to an original fingerprint and bounded-observation eviction; the actual Desk browser checks next-card focus for keyboard and button marks when publication precedes the awaited continuation. Real receipt/browser consumers include stable stop IDs in refresh and currency, reject late preceding-stop reads, keep marking disabled through pending/first failed refresh, and discard the old report when repeated failure settles as unreadable. Expiring only a display time does not refetch an unchanged stop. | A summary is presentation evidence, not proof that external work succeeded. The finite metadata rules are tested directly; this adds no claim of arbitrary transport liveness or authenticated user identity. |
+| Q24 Desk receipts and review marks | Outside-filter reveal adds finite live-read and deferred-retirement identity cases plus desktop/phone shell consumers for explicit filter widening and independent Inspector ownership. Fixture receipts retain their tests. Shared service metadata adds direct bounds/expiry/conditional-Undo and session-replacement tests; captured-lease RPC tests, two-WebSocket service tests, cross-browser Desk UI tests and deferred revision/socket-epoch schedules check the real producer and consumer boundaries. Fresh-observation callback admission remains covered by Q10. The 41-agent paired registry/store projection checks marks in both directions with unequal polling coverage, filter changes and later native activity/stops. Native progress counters from the already-fetched agent.list rows detect complete turns between snapshots, including after observation expiry; pane-only harness/session identity and matching metadata keep observation aligned with browser projection and RPC admission. Missing pane identity is never supplied by an agent row; qualified adapter and snapshot wiring cases reject ambiguous or stale progress. Stable stop IDs keep unchanged Done and Idle review marks across 13-hour display-time expiry; the real browser consumes expiry and new-stop publications. Deferred RPC cases fence session replacement, return to an original fingerprint and bounded-observation eviction; the actual Desk browser checks next-card focus for keyboard and button marks when publication precedes the awaited continuation. Real receipt/browser consumers include stable stop IDs in refresh and currency, reject late preceding-stop reads, keep marking disabled through pending/first failed refresh, and discard the old report when repeated failure settles as unreadable. Expiring only a display time does not refetch an unchanged stop. | A summary is presentation evidence, not proof that external work succeeded. The finite metadata rules are tested directly; this adds no claim of arbitrary transport liveness or authenticated user identity. |
 | Q29 Task notifications and Web Push | Real notification listener/push tests and durable task notification tests exercise session-safe clicks, endpoint validation and persist-before-dispatch/dedup across restart. Finite harness-support cases and the real shell handoff consumer cover the Agents open preference and Terminal fallback using the admitted pane, including qualified sibling-host Spaces routing and an agent omitted from the aggregate view. Immediate refusal preserves the current Inspector; a session turnover during queued admission restores it unless another user action replaced it. A delayed older Beta request cannot retire, focus or activate after newer Gamma admission; native-queue and post-focus cancellation cases exercise the same captured request guard. The real hook and admission helper also cover an older retirement followed by an unavailable, session-refused or focus-refused successor: the original Inspector returns, a newer user selection is preserved, and successful Gamma presentation survives the canceled predecessor. Existing runtime/session replacement and navigation-retirement cases retain the authority boundary. | Presentation preference adds no new ownership or recovery protocol, so direct consumer cases complement the existing admission tests. Dedup is scoped to recorded occurrences/sessions; it does not make external push delivery exactly once. |
 | Q30 Browser authentication | Real HTTP tests exercise authentication, PIN/rate budgets, cookies and browser admission; real request/response semantics are the security boundary. | No new abstract authentication model replaces protocol/security tests; trusted-single-user and supported deployment assumptions remain unchanged. |
 | Q31 Files/uploads/previews | Real filesystem/upload/path tests exercise traversal, native cwd, publication and cancellation using owned synthetic fixtures. | Filesystem permissions, symlink/path and upload semantics require implementation/platform evidence; no universal filesystem or remote atomicity claim. |
 | Q33 Git actions/auto-sync | Real Git repositories and process tests exercise dirty-tree refusal, fetch/merge failures, qualified actions and synchronization. | Git/network/platform behavior and uncommitted user changes are not represented by an abstract branch flag. |
 | Q34 Worktree create/remove/hooks | Real worktree/hook tests exercise fetch-before-create, failed fetch, one in-flight removal and retry after failure. | Native Git/filesystem/hook execution is required; shared-operation examples are bounded integration evidence, not all concurrent worktree schedules. |
 | Q35 Settings/private-file publication | Owned filesystem and fresh-process tests exercise private namespaces, permissions, settings publication and durable secrets. | Actual rename/fsync/permission behavior remains platform-dependent; unsupported power-loss guarantees are not inferred. |
-| Q36 Herdr setup/service/update | Real setup/update/service tests exercise verified assets, replacement failures, request budgets and installation ownership. Native compiled plugin fixtures with isolated homes and no Bun exercise every frozen verb and canonical service routing; system installer fixtures reject corrupt/mismatched releases and restore binaries on failed launcher promotion. | OS service managers and downloaded artifacts require supported-platform CI/live evidence; environment-gated checks must report prerequisites/skips. |
+| Q36 Herdr setup/service/update | Real setup/update/service tests exercise verified assets, replacement failures, request budgets and installation ownership. Native compiled plugin fixtures with isolated homes and no Bun exercise every frozen verb and canonical service routing; system installer fixtures reject corrupt/mismatched releases and restore binaries on failed launcher promotion. Explicit persistent setup has CLI/confirmed-HTTP bootstrap tests and per-platform registration-only command traces; running setup never activates or replaces the live process. | OS service managers and downloaded artifacts require supported-platform CI/live evidence; environment-gated checks must report prerequisites/skips. |
 | Q38 Optional metrics/cache work | Real provider/HTTP/cache tests exercise bounded read-only observation, unavailable providers, coalescing and validated credential-free configuration. | Metrics do not grant operation authority; provider availability and network deadlines are observed integration behavior. |
-| Q39 Renderer and lazy-module lifetime | Real rendering-resource and browser/lazy-module tests exercise graphics destruction, shared texture ownership and reload/lifetime behavior. | GPU/browser/URL behavior requires the actual implementation; arbitrary device/driver failure schedules are excluded. |
+| Q39 Renderer and lazy-module lifetime | Real rendering-resource and browser/lazy-module tests exercise graphics destruction, shared texture ownership and reload/lifetime behavior. The Town idle-draw case uses native WebGL context loss/restoration with controlled visibility and test time to check repaint after sleep, deferred hidden recovery, return to sleep and disposal. | GPU/browser/URL behavior requires the actual implementation; arbitrary device/driver failure schedules are excluded. |
 | Q40 Binary/control protocol parsing | Wire fixtures and actual endpoint/thin-client/Herdr parsers exercise protocol versions, truncation, close buffering and codec negotiation. | Chunk ownership has maintained models; byte parsing remains direct fixture/protocol evidence across supported versions, not all byte strings. |
 | Q41 Release/package/CI orchestration | Real packaging/installer/release/CI tests exercise archive validation and dependency gates; actual platform/release workflows supply distribution evidence. | Local tests cannot establish every packaged platform or published asset. Protected validation and release checks remain required. |
 | Q42 Preferences/filters/shortcuts | Pure bounded key parsing and browser storage tests exercise namespaces, canonicalization, quotas and newest explicit preference. | Storage quota/browser implementation behavior remains direct evidence; preferences do not authorize downstream operations. |
@@ -83,11 +172,167 @@ attribution. Existing relation/store/CLI tests retain terminal grouping,
 pruning and undo; the browser adapter also proves Pod-only data does not scan
 terminal topology or enable magnetic Ungroup.
 
+Group form properties require preserving reviewed intent across concurrent edits:
+Add binds the Board revision when opened and retains it through confirmation;
+Add/Edit/Roles keep their drafts until a successful write, expose conflicts in
+the form, and accept a refreshed Board revision only through explicit review without retry.
+`GroupsWindow.test.ts` executes the real forms and Board store at desktop/phone
+and owner viewports: another client's Team assignment is preserved by a stale
+Add, a pre-confirmation edit refuses transfer, and retained drafts save only on
+explicit resubmission. A replacement in the selected terminal cannot retarget a
+Pod address. `groupActions.test.ts` also checks captured generation/session/name
+witnesses and same-connection duplicate-name refusal. Real browser interaction
+and atomic Board conflicts directly exercise this finite contract; they do not
+establish arbitrary UI schedules or authenticated crew roles.
+
+Group read-model properties come from the Group projections and derived facts
+requirement. `shared/groupViews.test.ts` enumerates all 36 pairs of the six
+roll-up states and covers qualified Room/Desk projections, separate stored
+refs, deduplicated members/work, away/ambiguous exclusion and generation/session
+work-link matching. `shared/groupObservations.test.ts` exercises both actual
+service and browser adapters against the same fixtures: current-generation
+admission, canonical full agent names, replacement-session refusal, conflicting
+names and no display/harness fallback. These are bounded observation and pure
+projection checks, not runtime leases or a proof of source completeness.
+
 Direct exhaustive and service evidence fits these pure finite validation rules
 and the existing atomic Board write. No new scheduling or authenticated caller
 protocol is introduced. Board/Town browser checks remain necessary for real
 layout and gesture outcomes. This does not prove human-only role editing,
-permanent audit retention, or future Groups CLI/roster behavior.
+permanent audit retention, or untested Groups roster behavior.
+
+### Shared Town move execution (Q43)
+
+The existing Town desk/agent move contract supplies the properties: one queue
+per captured connection, retired-generation refusal, topology/colour capture at
+queue admission, unchanged rollback/uncertain-step behavior, and Board following
+only from confirmed or positively observed topology. `town-move.test.ts` uses
+the actual RPC adapter and native move functions to check the injected shared
+queue, a retired queued generation, known partial-failure reconciliation,
+unknown topology without retry/anchor guessing, and the shared appearance
+contract's reconciliation before the next queued move starts. This supersedes
+the pre-appearance extraction's outside-queue following order.
+Existing `desk-move.test.ts` retains
+the full native move/rollback fixtures. The fixture was moved unchanged to a
+shared test helper. These controlled promise schedules and actual transformations
+are direct bounded adapter evidence, not a general temporal progress proof.
+
+### Group CLI and shared Town moves (Q43)
+
+The CLI's allowed/forbidden cases follow the stored/projected Group ownership
+requirements: aliases do not change kind, ambiguous names never choose a member,
+lead/builder transfers need explicit confirmation, and promotion requires every
+terminal-to-address mapping. `world-cli-groups.test.ts` exercises the actual
+service edits, retained deletion attribution and role preservation;
+`cli/world-groups.test.ts` checks parser intent and preview-before-mutation output.
+These edits have recent Group attribution rather than Board ledger undo. Markdown tests add explicit table parsing/escaped rendering, duplicate role/Now-column and separator-width refusal, and actual service all-or-none import, existing-name refusal, role-conflict rollback and sender attribution; the CLI test proves only the selected file is read and piped Markdown stays Markdown. No file watcher or resynchronization is introduced.
+Terminal/pane selections for add/lead/reviewers refuse a Pod address when its
+Herdr name matches multiple current terminals on that connection; actual service
+tests cover each command, preserve Board state on refusal, and retain intentional
+explicit-address edits.
+
+`group-move.test.ts` drives the real native move orchestration and the actual CLI
+HTTP service. A controlled queue blocker demonstrates the same injected queue as
+RPC, changed occupants refuse before any move, retired queued leases make zero
+Herdr calls, and terminal witnesses refuse changes after preflight.
+Room/Desk preview witnesses include only explicit pane/terminal/tab/workspace
+identities, name and session, rather than incidental runtime rows. Both move
+paths accept status/focus/revision-only changes; changed occupants and missing
+destinations still refuse before a native move. Known partial
+failure reconciles Board anchors from observed terminals; lost replies with
+unreadable topology return Unknown without retry. `town-move.test.ts` retains
+move-and-document serialization checks, while native desk/pane tests retain
+rollback, last-room consent and uncertain-step contracts. Actual native move
+regressions add spawn claims and explicit colours after the preview: the moved
+desk keeps its explicit choice or retains parent inheritance without saving a
+new default override.
+A delayed-probe regression changes colour and status during a post-move probe;
+CLI movement preserves both latest fields at the witnessed destination, using
+the same appearance reconciliation as RPC.
+Real appearance-RPC schedules in `town-move.test.ts` admit saves against the new
+native tab/pane IDs while moves are pending, then retain destination status,
+colour and avatar updates/resets through reconciliation. Partial patches keep
+untouched source fields, and a first destination save needs no source record.
+`appearance-edits.test.ts` checks per-field commit ordering, reset versus no
+write, effective compensation values, both alias insertion orders converging
+onto a third rollback ID, identity replacement/pruning and history
+bounded by live bindings. These extend the existing direct move/RPC evidence;
+they do not add a persisted schema or authenticated-principal protocol.
+Field ordering is a finite choice within the existing atomic Board writes;
+commit-order permutations and the actual RPC schedule exercise that choice
+without duplicating its reducer in a separate model.
+The Group conflict consumer also checks an unrelated Group's edit: the hint
+identifies the whole Board, retains the current Group values and still requires
+explicit review. Source roll-up tests
+distinguish current, stale and unknown work so unavailable counts cannot claim
+a confirmed limit warning.
+
+Direct finite cases and controlled promise schedules are the proportionate
+alternative here: they execute the production transforms and adapters, rather
+than modeling a duplicate CLI parser. This does not authenticate sender claims,
+prove every external Herdr interleaving, or extend the bounded history into an
+audit. The revision-only publisher extraction has no contract impact: it preserves the exact type/revision payload, explicit send context, synchronous error behavior and live client iteration. Full required registry/consumer verification remains a batch-close check.
+
+
+### Groups roster and revision-bound edits (Q43)
+
+Group action tests cover explicit pooled-role transfer plans, unknown browser
+sender attribution, projected-owner refusal, complete promotion admission and
+unavailable PR counts. The real BoardDocumentStore/RPC/BoardStore adapter test
+proves stale reviewed revisions cannot delete or change a newer Group and return
+the current document. The panel's registered browser suite uses real panel/window
+components and the actual service Group store/handler: kind filters, away and
+ambiguous states, linked PR warnings and a competing edit during confirmation at
+actual 320/360/390/430/1280/1440/1512/2560 CSS-pixel widths and explicit heights. The fixture includes the required
+snapshot coverage and asserts admission of its current connection before UI
+checks. It waits for rendered edit controls, inspects a qualified ambiguous match
+without resolving membership, and checks every member after a refused transfer.
+Synthetic roster/detail captures for phone, laptop, wide, half-width and portrait
+layouts live in [Groups evidence](../docs/evidence/groups-roster/README.md).
+Final batch checks and independent acceptance remain required.
+
+The shared GroupOp move is type-only and has no contract impact. The optional
+Board revision guard preserves legacy omitted-revision behavior and synchronous
+unmatched namespace decline. Direct finite adapter cases fit this existing atomic
+revision mechanism; actual panel, gesture and device behavior require the browser
+consumer evidence separately.
+
+### Effective Group Interest (Q43)
+
+Requirements supply explicit agent override precedence, Group Focus/Mute/Default,
+current unambiguous resolution and effective reachable-focus union. Direct tests
+exhaust all 36 two-group/agent combinations, away/ambiguity exclusion and source
+explanations. The actual reader covers address restart, force-Watch and stable
+consumer identity on unrelated Board edits. With no effective Focus claim,
+Default/Mute/Watch reader regressions require no runtime-pane enumeration;
+focused claims retain the same current-terminal reachability checks. Real Board persistence tests cover
+separate overlays, atomic deletion/dissolution, promotion identity, projection
+refusal and opaque ID safety. A real browser-store/chime-source installer test
+proves an explicit mute reaches actual chime decisions and force-Watch restores
+sound; existing shared shouldChime, chime center, host/device and prune consumers
+retain Town-master, motif, seen, device and current-topology boundaries. The
+registered panel consumer exercises Default/Watch controls through both the bell
+and mobile Attention menu, restoration of Group Focus through Default, and
+unchanged needs-you counts at all eight actual viewports. The real Inspector
+handoff browser also requires the exact four mobile Attention choices and retains
+cross-view persistence and failed-save checks. No terminal choice is copied from membership.
+These finite precedence and existing atomic-storage adapters warrant direct
+exhaustive evidence rather than a separate model of the same small table.
+
+### Pods in Town Summary (Q43)
+
+Direct rendering checks use the shared Group projection and the actual Summary
+panel to cover Pod-only rows, first Now item, current PR warnings, cached/unknown
+work, loading/error/empty distinction, placement between Hosts and Spend, and
+unchanged reception markup. The production hook mounts the optional section only
+while Summary is open. The actual Town browser fixture retains an exact section
+order check including Pods between Hosts/rooms and Spend. The registered Groups
+browser fixture exercises its real
+Groups-open event and shared panel focus path, including minimized-window restore,
+at all eight actual viewports. Final batch verification and review remain delivery
+acceptance. This adds a projection consumer, not
+a new membership, ordering or recovery protocol, so direct consumer evidence is
+appropriate alongside the existing Summary and panel tests.
 
 ### Mobile Board Work controls (Q43)
 
@@ -497,3 +742,55 @@ Move-colour schedules include explicit edits and resets both before and after
 native close cleanup. Closed-tab colour/pin tests interleave unrelated writes at
 both native absence reads, require fresh checks after revision conflicts, preserve
 a replacement tab, and cover runtime retirement and the three-attempt bound.
+
+### Revision-qualified capture (Q39)
+
+Allowed sequence: committed surface/mount and requested viewport → required
+fonts/images → owner draw without pending semantic layout/materialization →
+browser paint opportunity → current receipt → screenshot → unchanged receipt →
+artifact. Obsolete asset/frame callbacks, hidden/retired owners, held reflow,
+pre-resize evidence and deadline failures cannot authorize output. Actor/ambient
+motion need not stop. Revision includes semantic commits and viewport epochs;
+it is local to a mount, not the aggregate transport's snapshot generation.
+
+`drawReadiness.test.ts` directly controls resources, frames and deadlines, including
+revision/resize replacement, hidden/unmounted owners and bounded coalesced resource
+work. Revision/deadline cancellation abandons obsolete waiters: replacement captures
+succeed without releasing an old image/font promise. `captureAssets.test.ts` checks
+that cancellation removes browser load listeners, and stale decode cannot complete
+a retired waiter. `BoardView.test.ts` registers the actual production Town/Board/Desk consumer
+in `testing/captureReadinessBrowser.ts`: held image/font responses, current-dimension
+receipts, valid empty views, missing/blank output, screenshot-time replacement and
+never-ready failure with an empty output directory, then same-owner recovery after
+removing the still-unresolved image. The actual optional Board writer has a missing
+card negative control that leaves no PNG; populated handoff, Board and answer-gallery
+entry points all supply visible content expectations. Optional five-size evidence
+uses the same helper. Manual-clock Board evidence drives scene frames from
+`TestClock.real` native callbacks and uses native paint barriers; its clock regression
+keeps simulated draw work separate from native paint delivery. This direct alternative is appropriate for browser/GPU
+integration; no new Quint model is claimed. Existing Q39 lifecycle and Q43
+layout/work-bound consumers remain required, including all Town groups and dense
+production contexts. Sampled colour sanity is only a cheap negative control;
+it cannot establish semantic scene completeness or arbitrary device/load behavior.
+
+### Current Desk stops and durable reviews (Q24/Q51)
+
+The [terminal-mark contract](contracts/terminal-marks.md#current-stop-coverage-and-retention)
+derives current-stop identity, display-only expiry, verified known-session restart,
+unknown no-carry and current/history/byte accounting before mapping. Real SQLite,
+production RPC, two browser stores and compiled fault controls cover the finite
+identity/persistence boundaries. Maintained 10-source inputs fit the unchanged
+frame with headroom; dense native input is explicitly refused before capture,
+without a composed dense success claim. These checks complement existing binding
+and runtime models; no SQL abstraction replaces actual savepoint/worker evidence.
+Completion-seen remains compatible pending the separately gated migration.
+
+PR #622 review repairs add real SQLite recovery re-entry, durable unknown-owner
+supersession across restart, atomic canonical-capacity refusal, shrinking-before-
+growth admission and whole-list malformed native input refusal to Q24/Q51.
+Four additional compiled controls demonstrate sensitivity. The binding validator
+is exported for shared ingress validation without changing its acceptance rules;
+its existing model contract is unchanged. Full required verification and the
+independent revised consumer-mapping review remain required.
+Whole-host observation age is checked before native ownership/absence admission
+and again when queued work runs, preserving newer accepted review authority.

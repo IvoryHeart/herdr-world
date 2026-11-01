@@ -1,6 +1,14 @@
 import { expect, test } from "bun:test";
+import type { BoardDocument } from "./board/boardDocument";
 import type { WorldRuntimeConnection } from "./runtimeStore";
-import { mayInherit } from "./useTerminalColors";
+import { countedWorldWork } from "./testing/countedWorldWork";
+import { workViolations, type WorkByPhase } from "./testing/workCeilings";
+import type { TerminalColors } from "./terminalColor";
+import {
+  mayInherit,
+  terminalColorsSnapshot,
+  type TerminalColorsSnapshot,
+} from "./useTerminalColors";
 
 const connection = (
   panes: { pane_id: string; terminal_id: string; tokens?: unknown }[],
@@ -31,4 +39,47 @@ test("colours are derived only while a saved claim joins listed terminals", () =
   expect(mayInherit(saved, [connection([])])).toBe(false);
   expect(mayInherit(saved, [connection([child])])).toBe(false);
   expect(mayInherit(saved, [connection([child, parent])])).toBe(true);
+});
+
+test("colours are derived again only when the document or connections change", async () => {
+  const board = (colors: Record<string, string>) =>
+    ({ layout: { colors } }) as unknown as BoardDocument;
+  let document = board({ tab: "red" });
+  let connections = [connection([])];
+  const store = { get: () => ({ document }) };
+  const runtime = { get: () => ({ connections }) };
+  const last: TerminalColorsSnapshot = { colors: Object.freeze({}) };
+  const observed: WorkByPhase = {};
+  let colors: TerminalColors | undefined;
+  const phase = async (name: string, reads: number) => {
+    observed[name] = await countedWorldWork(() => {
+      for (let read = 0; read < reads; read += 1)
+        colors = terminalColorsSnapshot(last, store, runtime);
+    });
+    return colors;
+  };
+  const first = await phase("first-read", 1);
+  // React reads the snapshot on every render and store notification.
+  expect(await phase("unchanged", 1000)).toBe(first);
+  document = board({ tab: "red" });
+  // An edit that changes no colour keeps the colours' identity.
+  expect(await phase("other-board-edit", 10)).toBe(first);
+  document = board({ tab: "blue" });
+  expect(await phase("colour-edit", 10)).toEqual({ tab: "blue" });
+  connections = [connection([])];
+  await phase("refresh", 10);
+  const once = { "colors.derive": 1 };
+  expect(
+    workViolations(
+      observed,
+      {
+        "first-read": once,
+        "other-board-edit": once,
+        "colour-edit": once,
+        refresh: once,
+      },
+      "colours",
+    ),
+  ).toEqual([]);
+  expect(observed.refresh).toEqual(once);
 });

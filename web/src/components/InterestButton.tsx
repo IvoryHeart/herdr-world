@@ -16,6 +16,10 @@ export type InterestChoice = {
   onInterest(next: Interest): void;
   /** Another agent is focused, so a watched agent stays quiet for now. */
   quiet?: boolean;
+  /** Agent choices distinguish a forced Watch from inherited Default. */
+  override?: Interest | null;
+  onDefault?(): void;
+  description?: string;
 };
 
 export const INTEREST_CHOICES: { id: Interest; label: string; hint: string }[] =
@@ -31,14 +35,15 @@ export function InterestButton({
   current,
   onInterest,
   quiet = false,
+  override,
+  onDefault,
+  description,
   className,
 }: InterestChoice & { className?: string }) {
   const [open, setOpen] = useState(false);
   const Icon = ICONS[current];
   const held = quiet && current === "watching";
-  const label = `${INTEREST_CHOICES.find((choice) => choice.id === current)!.label}${
-    held ? ", quiet while an agent is focused" : ""
-  }`;
+  const label = `${description ?? INTEREST_CHOICES.find((choice) => choice.id === current)!.label}${held ? ", quiet while an agent is focused" : ""}`;
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -60,6 +65,23 @@ export function InterestButton({
         collisionPadding={8}
       >
         <div className="interest-choices" role="group" aria-label="Interest">
+          {onDefault && (
+            <button
+              type="button"
+              className="interest-choice"
+              aria-pressed={override === null}
+              onClick={() => {
+                setOpen(false);
+                onDefault();
+              }}
+            >
+              <Eye size={15} aria-hidden="true" />
+              <span>
+                <b>Default (from groups)</b>
+                <small>Use group Focus or Mute; otherwise watch</small>
+              </span>
+            </button>
+          )}
           {INTEREST_CHOICES.map((choice) => {
             const ChoiceIcon = ICONS[choice.id];
             return (
@@ -67,15 +89,25 @@ export function InterestButton({
                 key={choice.id}
                 type="button"
                 className="interest-choice"
-                aria-pressed={current === choice.id}
+                aria-pressed={
+                  onDefault ? override === choice.id : current === choice.id
+                }
                 onClick={() => {
                   setOpen(false);
-                  if (choice.id !== current) onInterest(choice.id);
+                  if (
+                    choice.id !== current ||
+                    (onDefault && override !== choice.id)
+                  )
+                    onInterest(choice.id);
                 }}
               >
                 <ChoiceIcon size={15} aria-hidden="true" />
                 <span>
-                  <b>{choice.label}</b>
+                  <b>
+                    {onDefault && choice.id === "watching"
+                      ? "Watch"
+                      : choice.label}
+                  </b>
                   <small>
                     {quiet && choice.id === "watching"
                       ? "Quiet while an agent is focused"

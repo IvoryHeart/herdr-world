@@ -84,10 +84,8 @@ import {
   type DiffViewerPanelProps,
 } from "./DiffViewerPanel";
 import { FileExplorerPanel } from "./FileExplorerDialog";
-import {
-  type ActiveFilePreviewSelection,
-  FilePreviewContent,
-} from "./FilePreviewContent";
+import type { ActiveFilePreviewSelection } from "./FilePreviewContent";
+import { InspectorFilePreview } from "./LazyFilePreviewContent";
 import { FilePreviewTabs } from "./FilePreviewTabs";
 import { workspaceInspectorLayout } from "./workspaceInspectorLayout";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
@@ -95,6 +93,8 @@ import { changedCount, checkoutLabel } from "./inspectorCheckout";
 import { useAgentInterestChoice } from "./AgentInterestButton";
 import { InterestButton } from "./InterestButton";
 import { InspectorSplitResizer } from "./InspectorSplitResizer";
+import "./WorkspaceInspectorActions.css";
+import "./WorkspaceInspectorFrame.css";
 import "./WorkspaceInspectorHost.css";
 
 const DiffContentView = lazyWithReload("diff-content-view", () =>
@@ -1030,7 +1030,7 @@ export function WorkspaceInspectorHost({
                     )?.focus()
                   }
                 />
-                <FilePreviewContent
+                <InspectorFilePreview
                   entry={fileSelection.entry}
                   preview={fileSelection.preview}
                   loading={fileSelection.loading}

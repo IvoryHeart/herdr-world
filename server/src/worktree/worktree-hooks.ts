@@ -1,9 +1,6 @@
 import { lstat, readFile } from "node:fs/promises";
 import { sshCommandArgv } from "../bridge/ssh-command";
-import {
-  repoWorktreeHooksEnabled,
-  workspaceRepoSettingsKey,
-} from "../config/gui-settings";
+import { workspaceRepoSettingsKey } from "../config/gui-settings";
 import {
   uniqueStrings,
   checkoutPath as workspaceCheckoutPath,
@@ -75,7 +72,8 @@ export function createWorktreeHookRunner(args: {
   runProcess: RunProcess;
   runProcessWithCode: RunProcessWithCode;
   shQuote: (value: string) => string;
-  hooksEnabled?: (repoKey?: string | null) => Promise<boolean>;
+  /** Whether the owning service's settings enable hooks for a repository. */
+  hooksEnabled: (repoKey?: string | null) => Promise<boolean>;
 }) {
   function repoSettingsKey(workspace: any): string | null {
     return workspaceRepoSettingsKey(
@@ -191,8 +189,7 @@ export function createWorktreeHookRunner(args: {
     };
     assertCurrent();
     if (!hookArgs.checkoutPath) return { event, status: "skipped" };
-    const hooksEnabled = args.hooksEnabled ?? repoWorktreeHooksEnabled;
-    const enabled = await hooksEnabled(hookArgs.repoSettingsKey);
+    const enabled = await args.hooksEnabled(hookArgs.repoSettingsKey);
     assertCurrent();
     if (hookArgs.expected && enabled !== hookArgs.expected.enabled) {
       return { event, status: "skipped", reason: "hooks_enabled_changed" };
@@ -226,7 +223,7 @@ export function createWorktreeHookRunner(args: {
     }
     if (
       hookArgs.expected &&
-      (await hooksEnabled(hookArgs.repoSettingsKey)) !==
+      (await args.hooksEnabled(hookArgs.repoSettingsKey)) !==
         hookArgs.expected.enabled
     ) {
       return { event, status: "skipped", reason: "hooks_enabled_changed" };
@@ -396,6 +393,7 @@ export function createWorktreeHookRunner(args: {
   }
 
   return {
+    hooksEnabled: args.hooksEnabled,
     readWorktreeHooks,
     runWorktreeHook,
     worktreeRemoveHookContext,

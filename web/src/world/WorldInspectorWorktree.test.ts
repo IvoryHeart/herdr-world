@@ -31,6 +31,7 @@ if (process.env.INSPECTOR_WORKTREE_DOM_TEST !== "1") {
       Element: browser.Element,
       Node: browser.Node,
       localStorage: browser.localStorage,
+      sessionStorage: browser.sessionStorage,
       IS_REACT_ACT_ENVIRONMENT: true,
     }))
       Object.defineProperty(globalThis, key, {
@@ -140,12 +141,19 @@ if (process.env.INSPECTOR_WORKTREE_DOM_TEST !== "1") {
       typeof import("../components/WorkspaceInspectorHost").WorkspaceInspectorHost
     >;
     let shown!: InspectorProps;
-    mock.module("../components/WorkspaceInspectorHost", () => ({
-      WorkspaceInspectorHost: (props: InspectorProps) => {
-        shown = props;
-        return createElement("div");
-      },
-    }));
+    // The Inspector's code loads lazily; hold it back to see the window
+    // while it downloads.
+    const hostLoaded = Promise.withResolvers<void>();
+    mock.module("../components/WorkspaceInspectorHost", async () => {
+      await hostLoaded.promise;
+      return {
+        WorkspaceInspectorHost: (props: InspectorProps) => {
+          shown = props;
+          return createElement("div");
+        },
+      };
+    });
+    let closes = 0;
     const View = (await import("./WorldInspectorConversation")).default;
     const host = document.createElement("div");
     document.body.append(host);
@@ -182,12 +190,36 @@ if (process.env.INSPECTOR_WORKTREE_DOM_TEST !== "1") {
       floating: true,
       terminalActive: false,
       onChange() {},
-      onClose() {},
+      onClose() {
+        closes += 1;
+      },
       onResourceFocus() {},
       onTerminalPortalChange() {},
     };
     try {
       await act(async () => root.render(createElement(View, props)));
+      // The shell is the Inspector's own frame and bar, so World's window,
+      // Town and phone styles apply before and after the code arrives.
+      const shell = document.querySelector(
+        'aside.workspace-inspector.workspace-inspector-right[aria-busy="true"]',
+      );
+      expect(
+        shell?.querySelector(":scope > header.workspace-inspector-head"),
+      ).not.toBeNull();
+      expect(
+        shell?.querySelector(
+          ".workspace-inspector-identity > .workspace-inspector-repo",
+        )?.textContent,
+      ).toBe("Example");
+      shell
+        ?.querySelector<HTMLElement>('[aria-label="Close Workspace Inspector"]')
+        ?.click();
+      expect(closes).toBe(1);
+      await act(async () => {
+        hostLoaded.resolve();
+        await hostLoaded.promise;
+      });
+      expect(document.querySelector('[aria-busy="true"]')).toBeNull();
       expect(shown.agentWorktree?.target?.candidateId).toBe("old-root");
       await act(async () => shown.onSelectFileTab("same.txt"));
       expect(shown.fileSelection.loading).toBe(true);

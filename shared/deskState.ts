@@ -1,4 +1,4 @@
-/** Process-local Desk state, qualified independently of the browser's host filter. */
+/** Current Desk projection of durable metadata, qualified independently of the browser's host filter. */
 export type DeskIdentity = {
   connection_id: string;
   connection_generation: number;
@@ -14,7 +14,22 @@ export type DeskRecord = DeskIdentity & {
 };
 export type DeskState = { revision: number; records: DeskRecord[] };
 
-export const DESK_RECORD_LIMIT = 500;
+/** Current stops follow source/session lifetime. Only inactive history is counted. */
+export const DESK_HISTORY_LIMIT = 500;
+/** Leave 256 KiB of headroom below the existing 1 MiB frame ceiling. */
+export const DESK_METADATA_MAX_BYTES = 768 * 1024;
+export function deskMetadataBytes(value: unknown) {
+  return new TextEncoder().encode(JSON.stringify(value)).byteLength;
+}
+export function assertDeskMetadataSize(value: unknown) {
+  assertDeskMetadataByteCount(deskMetadataBytes(value));
+}
+export function assertDeskMetadataByteCount(bytes: number) {
+  if (bytes > DESK_METADATA_MAX_BYTES)
+    throw new Error(
+      "Desk capacity exceeded: metadata exceeds the 768 KiB budget (1 MiB frame limit unchanged)",
+    );
+}
 export const DESK_OPENS_LIMIT = 40;
 export const DESK_OBSERVATION_LIMIT = 4096;
 export const DESK_IDLE_WINDOW_MS = 12 * 60 * 60_000;
@@ -49,8 +64,7 @@ export function parseDeskState(value: unknown): DeskState | null {
   if (
     !Number.isSafeInteger(state.revision) ||
     state.revision < 0 ||
-    !Array.isArray(state.records) ||
-    state.records.length > DESK_RECORD_LIMIT
+    !Array.isArray(state.records)
   )
     return null;
   const seen = new Set<string>();
@@ -78,5 +92,5 @@ export function parseDeskState(value: unknown): DeskState | null {
       return null;
     seen.add(deskKey(record));
   }
-  return state;
+  return deskMetadataBytes(state) <= DESK_METADATA_MAX_BYTES ? state : null;
 }

@@ -29,8 +29,20 @@ export type WorldAsk = {
   question: string;
   options: string[];
   owner_only: boolean;
+  delivery?: {
+    notification?: {
+      state:
+        | "pending"
+        | "dispatching"
+        | "delivered"
+        | "uncertain"
+        | "refused"
+        | "cancelled";
+      reason?: string;
+    };
+  };
   withdrawn?: { at: number };
-  answer?: { text: string; at: number; by: string };
+  answer?: { text: string; at: number; by: string; occurrence?: string };
   dismissed?: { at: number; by: string };
 };
 
@@ -51,7 +63,7 @@ export function askerName(ask: WorldAsk) {
 export const askClosed = (ask: WorldAsk) =>
   Boolean(ask.answer || ask.dismissed || ask.withdrawn);
 
-/** The open questions at a ledger revision (`world.asks.get`). */
+/** Open questions and attention evidence at a service query revision. */
 type OpenAsks = { revision: number; asks: WorldAsk[] };
 
 export type AsksClient = {
