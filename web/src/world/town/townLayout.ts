@@ -101,7 +101,7 @@ const BUS_STOP_CLEARANCE = 4;
 /** The reserved town-hall lot's height; its width is a minimum building's. */
 const TOWN_HALL_HEIGHT = 18;
 /** Phones keep the reception board in the yard above each building. */
-const PHONE_BOARD_ROWS = 8;
+export const TOWN_PHONE_BOARD_ROWS = 8;
 export const TOWN_FACADE = 2;
 
 /**
@@ -560,7 +560,10 @@ export function layoutTown(
   for (const row of rowsOfLots) {
     const tallest = Math.max(...row.map((lot) => lot.h));
     const top =
-      road + ROAD_GAP + YARD + (formFactor === "narrow" ? PHONE_BOARD_ROWS : 0);
+      road +
+      ROAD_GAP +
+      YARD +
+      (formFactor === "narrow" ? TOWN_PHONE_BOARD_ROWS : 0);
     const roadY = top + tallest + TOWN_FACADE + YARD;
     let x = MARGIN;
     for (const lot of row) {

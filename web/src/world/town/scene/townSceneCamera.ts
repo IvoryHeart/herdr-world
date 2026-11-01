@@ -15,6 +15,7 @@ import {
 } from "../townCamera";
 import {
   TOWN_FACADE,
+  TOWN_PHONE_BOARD_ROWS,
   TOWN_TILE as T,
   townGeometryKey,
   townReflowShift,
@@ -102,7 +103,9 @@ export class TownSceneCamera {
       const x = first ? (first.x + first.w / 2) * T : (layout.width * T) / 2;
       const focus = camera.focusPoint();
       const y = first
-        ? first.y * T - 24 + (focus.y - viewport.inset.top) / limits.home
+        ? (first.y - TOWN_PHONE_BOARD_ROWS) * T -
+          24 +
+          (focus.y - viewport.inset.top) / limits.home
         : (layout.height * T) / 2;
       if (animate) camera.flyTo(x, y, limits.home);
       else camera.jumpTo(x, y, limits.home);

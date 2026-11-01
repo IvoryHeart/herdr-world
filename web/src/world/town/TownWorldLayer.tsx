@@ -600,8 +600,9 @@ export const TownWorldLayer = memo(function TownWorldLayer({
         <div
           className="town-new-room-wrap"
           style={{
-            left: (newRoomBuilding.x + 18) * T,
-            top: (newRoomBuilding.y + 3) * T,
+            // In the lobby beside the front door, clear of the counter.
+            left: (newRoomBuilding.entryX + 2) * T,
+            top: (newRoomBuilding.y + 2) * T,
           }}
         >
           <button

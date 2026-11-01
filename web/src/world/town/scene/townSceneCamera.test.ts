@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import type { HerdrOfficeProjection } from "../../herdrOfficeProjection";
 import { TownCamera } from "../townCamera";
 import {
+  TOWN_PHONE_BOARD_ROWS,
   layoutTown,
   TOWN_TILE as T,
   townGeometryKey,
@@ -91,15 +92,16 @@ test("a wide town opens at home: every building, centred", () => {
   expect(reasons).toEqual(["home"]);
 });
 
-test("a phone opens at home: the first building's top under the top inset", () => {
+test("a phone opens at home: the first reception board under the top inset", () => {
   const { view, layout, viewport, camera } = setup(PHONE);
   expect(layout.formFactor).toBe("narrow");
   view.attach(camera, layout, viewport);
   const first = layout.buildings[0]!;
   expect(camera.z).toBe(camera.limits!.home);
-  expect(camera.toScreen(0, first.y * T - 24).y).toBeCloseTo(
-    viewport.inset.top,
-  );
+  // The reception board stands in the yard above the building.
+  expect(
+    camera.toScreen(0, (first.y - TOWN_PHONE_BOARD_ROWS) * T - 24).y,
+  ).toBeCloseTo(viewport.inset.top);
   expect(view.atHome()).toBe(true);
 });
 
