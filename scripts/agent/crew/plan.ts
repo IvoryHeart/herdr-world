@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { shortSha } from "../../../shared/pullRequests";
 import { type GateInput, latestChecks, type Verdict } from "../gate/predicate";
 import { harnessOf } from "./worker";
+import { validateReviewSettings, type ReviewStart } from "./review-boundary";
 
 /**
  * What the crew watcher does about one pull request's verdict, and its
@@ -23,6 +24,10 @@ export type CrewSettings = {
   neverPrompt: string[];
   /** Whether READY generates an owner ask; mechanical marks remain independent. */
   readyAsk: boolean;
+  /** Explicit per-PR adoption head/time; earlier RESULTs remain history only. */
+  reviewStarts: Record<string, ReviewStart>;
+  /** Coordinator for review plumbing, distinct from explicit owner decisions. */
+  reviewJudgmentSeat?: string;
   /** Reviewer runs at once. */
   maxRuns: number;
   /** A run without its completion evidence is stopped at this bound, without retry. */
@@ -76,6 +81,8 @@ export type Action = {
   text: string;
   /** A confirmation: the reviewer's last claimed commit. */
   since?: string;
+  /** A real owner choice, such as an evaluator's Process: owner. */
+  ownerDecision?: true;
 };
 
 export const SETTINGS_DEFAULTS: CrewSettings = {
@@ -85,6 +92,7 @@ export const SETTINGS_DEFAULTS: CrewSettings = {
   authors: {},
   neverPrompt: [],
   readyAsk: true,
+  reviewStarts: {},
   maxRuns: 3,
   runTimeoutMinutes: 90,
   stallMinutes: 30,
@@ -255,7 +263,7 @@ export function marks(
           context: NEEDS_OWNER,
           state: "pending",
           description: short(
-            `Needs the owner: ${causes[0]}${causes.length > 1 ? ` (+${causes.length - 1} more)` : ""}`,
+            `${settings.reviewJudgmentSeat ? "Judgment pending" : "Needs the owner"}: ${causes[0]}${causes.length > 1 ? ` (+${causes.length - 1} more)` : ""}`,
           ),
         }
       : {
@@ -454,6 +462,7 @@ export function loadSettings(path: string): CrewSettings {
   };
   if (typeof settings.readyAsk !== "boolean")
     throw new Error("crew.readyAsk must be a boolean");
+  validateReviewSettings(settings);
   if (
     !Number.isFinite(settings.runTimeoutMinutes) ||
     settings.runTimeoutMinutes <= 0 ||

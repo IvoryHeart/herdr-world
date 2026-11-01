@@ -4,12 +4,14 @@ import {
   reviewCycles,
   saveCycle,
 } from "./round-policy-store";
-import { actionsIn, getAction, openRounds, roundFor, runsOf } from "./store";
+import { actionsIn, getAction, openRounds, runsOf } from "./store";
 import type { Action } from "./plan";
+import { roundAfterStart, reviewRound } from "./review-boundary";
 
 /** Upgrade old stores from real reviewer runs, excluding fixer/auxiliary runs. */
 export function adoptCycles(context: RoundContext) {
   const { crew, input, now, dryRun } = context;
+  const start = context.settings.reviewStarts[String(input.number)];
   let cycles = reviewCycles(crew, input.number);
   if (cycles.length) return cycles;
   const runs = runsOf(crew, input.number);
@@ -21,7 +23,9 @@ export function adoptCycles(context: RoundContext) {
     "failed",
   ]);
   for (const round of openRounds(crew).filter(
-    (round) => round.pr === input.number,
+    (round) =>
+      round.pr === input.number &&
+      roundAfterStart(crew, input.number, round.round, start),
   )) {
     const assigned = actions.filter(
       (action) =>
@@ -108,7 +112,7 @@ export function adoptCycles(context: RoundContext) {
         continue;
       const round = dryRun
         ? { round: cycles.length + 1 }
-        : roundFor(crew, input.number, head, now);
+        : reviewRound(crew, input.number, head, now, start);
       const cycle: ReviewCycle = {
         pr: input.number,
         head,

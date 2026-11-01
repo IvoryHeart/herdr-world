@@ -257,7 +257,8 @@ export function openFindings(input: GateInput, posts: CrewPost[]): Finding[] {
           respondAfter,
         });
       for (const line of post.body.split("\n")) {
-        if (!/\bP[123]\b/u.test(line)) continue;
+        if (!/^\s*(?:(?:[-*]|\d+[.)]|#{1,6})\s+)?[*_`]*P[123]\b/u.test(line))
+          continue;
         const location =
           /(?:`|\s|\(|^)((?:[\w.@-]+\/)*[\w.@-]+):(\d+)/u.exec(line) ??
           /(?:`|\s|\(|^)((?:[\w.@-]+\/)*[\w.@-]+\.[\w.-]+)/u.exec(line);
