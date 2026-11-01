@@ -616,7 +616,7 @@ or host-key policy. Fixed keepalives end established sessions that stop answerin
 
 The service also supports explicit local and reverse port-forward RPCs for an
 authenticated loopback browser, bound to its selected connection and runtime.
-The web controls arrive in the later web/mobile integration part. A forward ends
+The web controls arrive in the later web/mobile integration part. The loopback peer check is a scope restriction, not a security boundary or proof of the browser’s location. Authentication remains the access boundary; an authenticated terminal can already run forwarding commands. Forwarding controls remain local-machine only; LAN/mobile forwarding requires a later owner decision. A forward ends
 with its owning runtime and is never automatically reopened. Local forwards bind
 loopback. Reverse forwards request remote loopback, but the host's `GatewayPorts
 yes` policy can expose the remote listener to its network; check that host's SSH

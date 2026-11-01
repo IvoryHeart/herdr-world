@@ -328,6 +328,8 @@ async function handleRpc(
         throw new Error(
           "Port forwarding requires an explicit connection and runtime generation",
         );
+      // Forwarding controls are scoped to loopback peers; authentication above
+      // remains the access boundary. A proxy peer does not prove browser location.
       if (!isLoopbackAddress(ws.remoteAddress))
         throw new Error(
           "Port forwarding requires a browser connected over loopback",

@@ -32,9 +32,10 @@ test("forward dispatch requires a loopback browser and explicit current runtime 
     });
     await manager.start(id);
   }
+  const clients = new Set([local, remote]);
   const dispatch = createRpcDispatcher(
     {
-      clients: new Set([local, remote]),
+      clients,
       connectionManager: manager,
       snapshotAdmission: { acknowledge: () => false },
       markRpcError() {},
@@ -75,6 +76,13 @@ test("forward dispatch requires a loopback browser and explicit current runtime 
       connection_id: "beta",
       connection_generation: generation,
     });
+    expect(called).toEqual(["beta"]);
+    clients.delete(local);
+    await call(local, {
+      connection_id: "beta",
+      connection_generation: generation,
+    });
+    expect(sent.at(-1).error).toBeDefined();
     expect(called).toEqual(["beta"]);
   } finally {
     await manager.stopAll();

@@ -616,7 +616,7 @@ The service owns a shared, memory-only registry of at most 32 live forwards.
 RPCs requiring an explicit current connection ID and runtime generation and a
 loopback WebSocket peer. They never fall through to Herdr or the default profile.
 List, close and runtime shutdown are scoped to the captured owner; retiring an old
-generation cannot close a replacement's forward. No forward is restored automatically.
+generation cannot close a replacement's forward. No forward is restored automatically. The loopback peer check is a scope restriction, not a security boundary or proof of the browser’s location. Authentication remains the access boundary; an authenticated terminal can already run forwarding commands. Forwarding controls remain local-machine only; LAN/mobile forwarding requires a later owner decision.
 Retiring runtimes await their forward children, escalate termination within a bounded
 deadline and report unconfirmed exits; closing children still consume the live-process
 budget. Each forward has an independent supervised OpenSSH process, so opening one never
