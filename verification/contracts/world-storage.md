@@ -30,6 +30,19 @@ real-FULL-sync history fixture has an explicit watchdog, not a latency claim.
 hash-named private import backup, changed-source missing-ID merge, malformed
 legacy input and recovered uncertainty.
 
+The storage, Board, profile, runtime-status, terminal-mark and answer-delivery
+crash consumers share `storage/testing/crash-harness.ts`. It separates compilation,
+seed initialization and ordered fault-child setup from their existing 5/30/60-second
+recovery budgets. Answer delivery retains its later 30-second recovery subprocess
+and current-run authority/class assertions. The shared helper preserves marker and
+clean-exit checks, bounds kill/reap/stream cleanup, and emits failure-only
+compile/spawn/marker/kill/reopen timings. `storage/testing/crash-harness.test.ts`
+checks these lifecycle boundaries and exceptional cleanup with controlled time
+and process doubles; these controls do not establish SQLite or native-platform
+recovery. Every real crash suite remains required and the native installer storage
+command includes profiles alongside the other five suites. No recovery, identity,
+external-effect or latency claim is expanded by this test-lifecycle refactor.
+
 `attention-dispatch.test.ts` must check claim commit before Herdr, final versus
 temporary refusals, bounded backoff, closed-ask cancellation, lease retirement,
 notification rebinding only on the original connection and own-ask response
