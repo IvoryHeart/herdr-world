@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { HerdrOfficeProjection } from "../../herdrOfficeProjection";
-import { TownCamera } from "../townCamera";
+import { TownCamera, townHostsWidth } from "../townCamera";
 import {
   TOWN_PHONE_BOARD_ROWS,
   layoutTown,
@@ -81,9 +81,22 @@ test("a wide town opens at home: every building, centred", () => {
   const { view, layout, viewport, camera, reasons } = setup();
   view.attach(camera, layout, viewport);
   expect(camera.z).toBe(camera.limits!.home);
-  // The town's centre sits at the focus point, between the panels' insets.
+  // The hosts' centre sits at the focus point, between the panels' insets;
+  // the reserved town-hall lot lies beyond them, and ALL shows it.
+  expect(camera.limits!.home).toBeGreaterThanOrEqual(camera.limits!.all);
+  const usable = viewport.width - viewport.inset.left - viewport.inset.right;
+  const fits = layout.width * T * camera.z <= usable;
+  if (!fits)
+    expect(camera.toScreen(0, 0).x).toBeLessThanOrEqual(
+      viewport.inset.left + 0.01,
+    );
   const centre = camera.toScreen(
-    (layout.width * T) / 2,
+    fits
+      ? (layout.width * T) / 2
+      : Math.max(
+          (townHostsWidth(layout) * T) / 2,
+          (camera.focusPoint().x - viewport.inset.left) / camera.z,
+        ),
     (layout.height * T) / 2,
   );
   expect(centre.x).toBeCloseTo(camera.focusPoint().x);

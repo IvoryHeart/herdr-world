@@ -9,6 +9,7 @@
 import { buildingZoom, roomZoom } from "../townCameraTargets";
 import {
   TownCamera,
+  townHostsWidth,
   townRoomFocus,
   type TownLevel,
   type TownViewport,
@@ -109,18 +110,23 @@ export class TownSceneCamera {
         : (layout.height * T) / 2;
       if (animate) camera.flyTo(x, y, limits.home);
       else camera.jumpTo(x, y, limits.home);
-    } else if (animate)
-      camera.flyTo(
-        (layout.width * T) / 2,
-        (layout.height * T) / 2,
-        limits.home,
-      );
-    else
-      camera.jumpTo(
-        (layout.width * T) / 2,
-        (layout.height * T) / 2,
-        limits.home,
-      );
+    } else {
+      // The hosts' buildings, centred but never past the town's left edge;
+      // ALL frames the whole town.
+      const focus = camera.focusPoint();
+      const usable =
+        viewport.width - viewport.inset.left - viewport.inset.right;
+      const x =
+        layout.width * T * limits.home <= usable
+          ? (layout.width * T) / 2
+          : Math.max(
+              (townHostsWidth(layout) * T) / 2,
+              (focus.x - viewport.inset.left) / limits.home,
+            );
+      const y = (layout.height * T) / 2;
+      if (animate) camera.flyTo(x, y, limits.home);
+      else camera.jumpTo(x, y, limits.home);
+    }
     this.home =
       !animate && !camera.flying
         ? { x: camera.x, y: camera.y, z: camera.z }

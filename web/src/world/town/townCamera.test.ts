@@ -4,6 +4,7 @@ import {
   townLevel,
   townRoomFocus,
   townZoomLimits,
+  townHostsWidth,
 } from "./townCamera";
 import { layoutTown } from "./townLayout";
 
@@ -38,7 +39,12 @@ test("desktop default fits every building at the overview level", () => {
   expect(townLevel(limits.home, limits)).toBe("overview");
   const camera = new TownCamera();
   camera.configure(layout, desktop);
-  camera.jumpTo((layout.width * 16) / 2, (layout.height * 16) / 2, limits.home);
+  // Home frames the hosts' buildings; the town-hall lot may lie beyond.
+  camera.jumpTo(
+    (townHostsWidth(layout) * 16) / 2,
+    (layout.height * 16) / 2,
+    limits.home,
+  );
   for (const building of layout.buildings) {
     const topLeft = camera.toScreen(building.x * 16, building.y * 16);
     const bottomRight = camera.toScreen(
