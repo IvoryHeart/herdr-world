@@ -378,7 +378,11 @@ of marks, each with one glyph, colour and word: **•** Working, **!** Needs you
 **Mark reviewed** acknowledges that completion in one record on this World
 service, so Town, Desk, Needs you, your phone and your desktop agree. World saves the mark across
 restarts. It reappears after World verifies the same terminal and known agent
-session; a replacement session or later completion needs review again.
+session; a replacement session or later completion needs review again. Old
+separate completion checks transfer only with the same known session and native
+completion sequence. Work without session proof may need review once after an
+upgrade. If World cannot yet verify its Desk stop, retry Mark reviewed when the
+connection is ready.
 Opening a finished agent's terminal also clears its reception stop; neither action proves the result
 is correct. A later completion can need review again. Read the explanation and
 check the diff using chapter 2 before treating the work as complete.

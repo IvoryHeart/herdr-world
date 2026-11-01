@@ -346,6 +346,7 @@ async function compose(
     close: closeTerminalMarks,
     ...terminalMarks
   } = createSharedTerminalMarks({
+    scheduler,
     storage: storage.terminalMarks,
     incarnation: serviceIncarnation,
     publisher: revisionPublisher,

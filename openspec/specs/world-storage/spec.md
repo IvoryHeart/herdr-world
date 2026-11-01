@@ -255,7 +255,7 @@ answer to a different ask.
 
 ### Requirement: Durable terminal marks
 
-Desk review marks/recent opens, watchlist and completion seen SHALL use bounded
+Desk review marks/recent opens and watchlist SHALL use bounded
 World-ID rows paired atomically with verified bindings in the single SQLite writer.
 Their current wire projections and shared change notices SHALL publish only after
 COMMIT and after captured runtime currency is rechecked. Restart captures SHALL
@@ -298,8 +298,24 @@ unassociated historical captures for the same terminal, using separate World IDs
 and original bindings. No durable runtime/incarnation identity SHALL be invented.
 Capacity refusals SHALL preserve every current capture, publish no partial
 projection, acknowledge no failed mutation and keep the service available.
-The existing completion-seen API and schema-v9 family SHALL remain available;
-migration/retirement belongs to the separately gated compatible-Chat follow-up.
+Schema 10 SHALL atomically retire the completion-seen operational row kind and
+verbs after compatible Chat rebuild delivery, preserving original Desk/watch rows
+and bindings. Legacy receipts SHALL enter a private service-only draining archive,
+never a Desk response or a new verb/UI. It SHALL retain at most 4,096 receipts,
+oldest-first eviction, with a separate 64 MiB canonical serialized-row budget;
+exceeding that budget SHALL refuse upgrade with a labelled error and leave schema
+9 intact. The existing 1 MiB frame ceiling SHALL NOT increase.
+
+A receipt SHALL resolve only after fresh complete unambiguous evidence from the
+same connection ID, terminal and known session, with an unchanged native
+state-change sequence. The normal canonical current-stop Desk review and receipt
+removal SHALL commit atomically. Unknown-session receipts SHALL never resolve;
+missing sequence proof SHALL defer. Positive ownership replacement, unknown
+ownership or changed sequence SHALL permanently disqualify the old receipt even
+if its former proof returns after restart. Current/newer review and exact Undo
+SHALL be preserved. Unresolved receipts SHALL drain on complete fresh
+original-source terminal absence or 30 days after the original migration time.
+The archive SHALL accept no new receipts; a later release removes the table.
 
 Re-entering source recovery SHALL protect known captures again before history
 trimming, even after prior successful observation. Admitting unknown ownership

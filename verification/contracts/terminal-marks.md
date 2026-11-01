@@ -8,19 +8,15 @@ Allowed: store-issued record IDs and source bindings commit with bounded metadat
 in the existing SQLite worker. Restart captures remain unresolved until a fresh,
 complete, unambiguous observation of the original source verifies them. Runtime
 generation and service incarnation qualify work and projections, never durable
-identity. Watchlist follows the terminal; Desk and completion checks also require
-their captured session when known. Completion checks retain their compatible
-terminal-scoped unknown-session rule. Unknown-session Desk captures require live
+identity. Watchlist follows the terminal; Desk requires its captured known session. Unknown-session Desk captures require live
 process ownership; terminal-only evidence cannot restore their review after
 World/runtime restart, null-to-known ownership or a returning known fingerprint
 after an intervening owner. Old acknowledgements stay unassociated in history.
 Complete current terminal absence clears each kind. Positive known-session
-replacement ends Desk captures as non-reattachable history and clears seen;
-watchlist survives. Busy evidence or later
-native completion progress ends seen. Exact Undo retains a newer review mark.
+replacement ends Desk captures as non-reattachable history while watchlist survives. Native completion progress names a new Desk stop. Exact Undo retains a newer review mark.
 Publication merges the operation's connection into the latest live projection;
 another connection's retirement and every published revision remain monotonic.
-Pending Desk/completion commands capture an ownership token even for unknown or
+Pending Desk commands capture an ownership token even for unknown or
 omitted request fingerprints. Observed replacement invalidates it permanently,
 including a return to the original session. Terminal-scoped watch admission does
 not inherit this agent-session restriction.
@@ -45,16 +41,15 @@ layout ownership.
 
 Evidence uses actual temporary SQLite, the worker and production RPC handlers.
 `storage/terminal-marks.test.ts` checks stable IDs, unresolved restart capture and
-storage integrity, all 24 independent-family/refusal orders and revision fences. `world/persistent-terminal-marks.test.ts` exercises all three
+storage integrity, all 6 independent-family/refusal orders and revision fences. `world/persistent-terminal-marks.test.ts` exercises all three
 identity ambiguities, complete absence/reuse, terminal moves, positive session
 replacement, unknown session, missed native progress, two real browser stores
-per family, exact Undo, refused writes, retirement during acknowledgement and native admission across a replaced
+per active family, exact Undo, refused writes, retirement during acknowledgement and native admission across a replaced
 then restored session. The 40-open bound spans sources and equal-time actions. Display expiry commits without a source read;
 expiry/Unpin replies and background writes cannot cross a disconnect and restore
 an old projection. Cross-connection disconnect/replacement tests hold a real
 SQLite acknowledgement while another host retires, including global recency
-trimming, and check increasing notice revisions. Unknown Desk and omitted
-completion fingerprints are exercised through their real RPC handlers. Saved
+trimming, and check increasing notice revisions. Unknown and known Desk fingerprints are exercised through their real RPC handlers. Saved
 Unpin tests cover disconnection, restart before verification, capacity release,
 same/new-generation replacement, same-ID reattachment in a newer generation,
 reply/list/two-client agreement, current-generation invalidation and exact browser
@@ -65,7 +60,7 @@ uses source and standalone compiled processes, killed before commit, after commi
 and after worker acknowledgement; admitted writes also drain on close. It checks
 complete record/binding pairs and integrity. Native installer CI includes these
 eight cases. Eleven compiled production faults fail thirteen named boundary assertions; two
-positive bundled suites establish the harness. Existing binding, Desk, watchlist, completion and browser consumers
+positive bundled suites establish the harness. Existing binding, Desk, watchlist and browser consumers
 remain mandatory.
 
 Direct finite transitions, real SQL savepoints and process schedules provide
@@ -127,10 +122,9 @@ and compiled fault tests exercise these identity and persistence boundaries;
 a second model of SQL would not establish the actual worker/SQLite behavior.
 Run the complete unfiltered `bun run verification:gate` and required consumers.
 
-Part 1 retains completion_seen and the schema-v9 terminal_marks family. Its
-one-time review migration and API/table-family retirement are explicitly held
-until the compatible Chat rebuild and stop coverage merge; no retirement claim
-is made here. The supported native schema has no checkable runtime-instance
+The compatible Chat rebuild and Part 1 stop coverage have merged. Schema 10
+retires the operational completion row kind, RPC verbs, binding declaration,
+notice and browser fallback. Desk/watch remain the active row family. The supported native schema has no checkable runtime-instance
 signal, so null-session review continuity through restart remains excluded.
 
 ## Review repair: recovery, replacement, atomic refusal and malformed ingress
@@ -144,7 +138,7 @@ on the actual snapshot-to-persistence path without fatal callback or false
 absence; a retired runtime cannot poison the current projection with an invalid
 observation; and an older unknown listing cannot end a newer accepted review. Four compiled faults restore each reviewed defect and
 must fail its regression. This extends the finite direct evidence, not native
-runtime-instance proof or the separately gated completion migration.
+runtime-instance proof.
 
 Storage admission and preflight share canonical unresolved-binding byte counts.
 A changed binding reserves the remaining width of a JSON number (at most 24
@@ -156,3 +150,48 @@ Crash/storage-fault prefix evidence remains distinct from atomic capacity
 refusal. Native listing validation uses the same binding writer validator and
 Desk identity bounds, rejects the complete listing rather than filtering it,
 and never converts arbitrary storage failures into benign input refusals.
+
+## Draining legacy-review archive
+
+Properties: one atomic/idempotent schema-9 upgrade preserves original Desk/watch
+rows, bindings, IDs, row order, revisions and open recency byte-for-byte. Original
+migration 9 remains historical. Legacy receipts leave the operational family and
+binding APIs; their original metadata enters a private archive with no public
+verb, UI or Desk/wire projection. Retention is newest 4,096 receipts, oldest-first
+on overflow, with its own 64 MiB canonical serialized-row budget. An excessive
+archive refuses upgrade with a labelled error and leaves schema 9 intact.
+No new receipt is inserted after migration. Resolution, fresh complete original
+source terminal absence, or 30 days after the original migration drains it;
+offline sources do not extend the deadline. A later release removes the table.
+
+Resolution requires a fresh complete unambiguous observation after migration:
+same connection ID, terminal, known session and unchanged native state-change
+sequence. Activity uses the same pane/matched-agent normalization as the World
+leaf, so the canonical stop shape remains `stop:[observed_stop_id,activity]`.
+There is no synthetic transition time. Unknown legacy sessions never resolve;
+missing sequence defers. Positive replacement, unknown ownership, changed
+sequence or busy status disqualifies the receipt permanently, including return
+to the former proof after restart. Review plus receipt deletion share one SQLite
+savepoint/acknowledgement; binding or capacity refusal rolls both back. Existing
+newer Desk review and explicit Undo win. Current/history/queue/frame bounds stay
+independent and unchanged; archive proof batches contain at most 32 targets.
+
+Mapping: `storage/legacy-reviews.test.ts` exercises historical schema 9, exact
+preservation, rollback, idempotence, count/byte limits, archive expiry and refused
+atomic resolution. `world/legacy-review-resolution.test.ts` runs production
+admission, actual SQLite worker/RPC and two browser stores through known carry,
+unknown/no-sequence no-carry, null-to-known, replacement and return, changed or
+missing native sequence, ambiguity, original-source absence, newer review/Undo,
+scheduled offline expiry and retirement during acknowledgement. A crash between
+archive proof and Desk checkpoint cannot forget disqualification. Three added
+compiled worker faults remove session, sequence and expiry fences and must fail
+those named assertions; a positive archive bundle validates the harness.
+`rpc/review-retirement.test.ts` checks retired methods are unregistered and receive
+the existing unknown-method refusal. Browser helper/Needs you/Town consumers
+exercise authoritative Desk refresh, exact shown-stop review and retry without
+terminal-only or last-activity-only success. Existing service/two-WebSocket,
+source/standalone crash, stop coverage/resource and mandatory ordering consumers
+remain required. Direct real-SQLite/finite consumers exercise these properties;
+a duplicate SQL model would not strengthen the actual transaction boundary.
+No native runtime-instance proof, null-session restart continuity, physical
+power-loss or dense composed success is claimed.

@@ -1078,17 +1078,16 @@ occupants before dispatch and do not delete checkout files or agent history.
 
 ## Desk, watchlist and completion storage
 
-Desk review marks, recent opens and stop metadata, watchlist pins and checked
-completions live in `world.sqlite` in the instance data directory. All browsers
+Desk review marks, recent opens and stop metadata, watchlist pins live in `world.sqlite` in the instance data directory. All browsers
 share committed changes. Include the database in a stopped data-folder backup;
 its schema upgrade first preserves the existing private SQLite migration backup.
 
 After a restart or runtime replacement, saved records remain unresolved until
 World reads a complete, unambiguous list from the original connection. The same
-terminal and captured known session restore Desk/completion records. Watches
+terminal and captured known session restore Desk records. Watches
 follow the terminal across pane moves. A complete current terminal absence clears
-watch/completion records and ends the Desk capture; a positive known session
-replacement ends Desk history and clears completion checks. Ended Desk captures
+watch records and ends the Desk capture; a positive known session
+replacement ends the old Desk capture as history. Ended Desk captures
 are unassociated history and cannot attach again. Missing known-session evidence
 and duplicate identities never attach that saved Desk capture. Agents first seen
 stopped receive a fresh stop identity without inventing a historical stop time.
@@ -1100,8 +1099,8 @@ proof. Their acknowledgements stay in unassociated history; fresh observation
 gets a new current stop. Admitting an unknown agent durably ends an earlier
 known capture, preserving its acknowledgement as ended history; a later World
 restart cannot forget that replacement. A null-to-known owner never inherits
-the earlier review. Renewed work or later native completion progress clears a completion
-check. Herdr restarting with new terminals therefore does not inherit old marks.
+the earlier review. Renewed work or later native completion progress names a new
+Desk stop. Herdr restarting with new terminals therefore does not inherit old marks.
 
 Unpin removes its exact saved watch even while the host is unavailable. The browser
 carries the returned `watch_id`, so an older Unpin cannot remove a replacement.
@@ -1110,7 +1109,7 @@ current projection from the reply and every browser.
 Older API callers without this field can use an unambiguous runtime-qualified
 capture remembered by the current service; repeated reuse requires the returned
 ID. Disconnecting one host cannot restore its old projection when another host's
-storage write finishes. Pending Desk and completion commands also lose admission
+storage write finishes. Pending Desk commands also lose admission
 on observed agent replacement, including unknown identities and a return to the
 original session. Controls and their visible wording are unchanged.
 
@@ -1129,7 +1128,7 @@ known-session restart captures stay unresolved/protected during source recovery,
 and are classified only by fresh observation or confirmed unavailability.
 Entering reconnect recovery protects known captures again before any history
 trimming, including sources already observed earlier in the process. There
-are still at most 40 recent opens, 128 watches and 4,096 completion checks. Desk
+are still at most 40 recent opens and 128 watches. Desk
 wire metadata and serialized SQLite rows each have a 768 KiB budget, leaving
 headroom below the unchanged 1 MiB frame ceiling. History yields first to the byte
 budget; if current metadata alone exceeds it, World reports `Desk capacity
@@ -1141,7 +1140,31 @@ growth, so a capacity-refused observation cannot leave a committed prefix.
 Malformed native identities refuse the whole observation before writes or
 absence classification. The refusal is nonfatal, leaves existing rows intact,
 and clears after a valid current observation; no partial filtered listing can
-prove terminal absence. Completion checks remain compatible
-until the separate reviewed-record migration/retirement is delivered. Without native progress, World cannot discover a complete
+prove terminal absence. Without native progress, World cannot discover a complete
 work/completion cycle it never observed. Process-crash tests do not establish
 physical power-loss durability.
+
+### Upgrade from separate completion checks
+
+Schema 10 retires `world.completion_seen.list` and `.mark`: Town, Desk and Needs
+you use only Desk's stop-qualified review. Upgrade atomically preserves the
+original Desk/watch rows and bindings. A private service-only archive retains at
+most the newest 4,096 legacy receipts, with a separate 64 MiB canonical serialized
+row budget. A budget violation refuses the upgrade with a labelled error and
+leaves schema 9 intact; it never raises the 1 MiB frame limit. Receipts never
+appear in Desk responses and add no controls or service verbs.
+
+After upgrade, a fresh complete unambiguous observation can convert a receipt
+only for the same connection ID, terminal, known session and unchanged native
+state-change sequence. It marks the current canonical Desk stop in the same
+SQLite transaction that removes the receipt. Replacement, unknown ownership or
+native progress permanently disqualifies it; a newer Desk review or exact Undo
+cannot be overwritten. Unknown-session receipts never transfer review, because
+Herdr exposes no checkable runtime-instance proof. Such work can need review once
+again after upgrade. Missing sequence proof defers conversion.
+
+Unresolved receipts drain when a fresh complete original-source observation proves
+the terminal gone, or 30 days after migration, even if the source stays offline.
+Restart retains the original migration deadline. The archive accepts no new
+receipts; a later release will remove its table. Ordinary Desk history and current
+stop protection keep their existing independent bounds.

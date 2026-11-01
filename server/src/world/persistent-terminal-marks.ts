@@ -20,24 +20,27 @@ import {
   WorldWatchlistRegistry,
   type WorldWatchRecord,
 } from "./watchlist";
-import {
-  WorldCompletionSeenRegistry,
-  type CompletionSeenIdentity,
-} from "./completion-seen";
 import { deskHistoryEvictions, estimateDeskWrite } from "./desk-retention";
+import {
+  legacyReviewCandidates,
+  legacyReviewBudgetBody,
+} from "./legacy-review-resolution";
+import type { Scheduler } from "../service/ports";
 import {
   terminalEntities,
   TerminalMarkObservationRefused,
 } from "./terminal-mark-observation";
 
-type Identity = CompletionSeenIdentity & {
+type Identity = Pick<
+  WorldWatchRecord,
+  "connection_id" | "connection_generation" | "terminal_id"
+> & {
   agent_session_fingerprint?: string | null;
   watch_id?: string;
 };
 export type MarkRegistries = {
   desk: WorldDeskRegistry;
   watchlist: WorldWatchlistRegistry;
-  seen: WorldCompletionSeenRegistry;
 };
 type Lease = {
   generation: number;
@@ -58,6 +61,7 @@ type Options = {
   registries: MarkRegistries;
   lease(connectionId: string): Lease | null | undefined;
   now(): number;
+  scheduler?: Scheduler;
   changed(
     kind: MarkKind,
     revision: number,
@@ -71,7 +75,6 @@ const key = (kind: MarkKind, terminal: string) =>
 const revisions = (r: MarkRegistries) => [
   r.desk.list().revision,
   r.watchlist.list().revision,
-  r.seen.list().revision,
 ];
 
 /** Serial admission, committed publication, and unresolved restart captures. */
@@ -85,6 +88,22 @@ export class PersistentTerminalMarks {
   private deskCaptures = new Map<string, string>();
   private deskRefusals = new Map<string, string>();
   private recoveringSources: Set<string>;
+  private archiveTimer?: { cancel(): void };
+  private armArchiveExpiry() {
+    this.archiveTimer?.cancel();
+    this.archiveTimer = undefined;
+    const expiry = this.options.storage.archiveStatus().expires_at;
+    if (this.closed || !this.options.scheduler || expiry === null) return;
+    this.archiveTimer = this.options.scheduler.schedule(
+      () => {
+        this.archiveTimer = undefined;
+        void this.expire()
+          .catch(this.options.failed)
+          .finally(() => this.armArchiveExpiry());
+      },
+      Math.min(60_000, Math.max(0, expiry - this.options.now())),
+    );
+  }
   assertDeskAvailable() {
     const refusal = this.deskRefusals.values().next().value;
     if (refusal) throw new Error(refusal);
@@ -173,6 +192,7 @@ export class PersistentTerminalMarks {
         )
         .map((row) => row.binding.instance),
     );
+    this.armArchiveExpiry();
   }
   private enqueue<T>(work: () => Promise<T>): Promise<T> {
     if (this.closed || this.queued >= 256)
@@ -192,12 +212,16 @@ export class PersistentTerminalMarks {
   }
   async close() {
     this.closed = true;
+    this.archiveTimer?.cancel();
+    this.archiveTimer = undefined;
     await this.tail;
   }
   expire() {
     return this.enqueue(async () => {
       const at = this.options.now();
+      const expiry = this.options.storage.archiveStatus().expires_at;
       if (
+        !(expiry !== null && at >= expiry) &&
         !this.options.storage
           .list()
           .some(
@@ -215,6 +239,7 @@ export class PersistentTerminalMarks {
       draft.expire(at);
       live.desk.adopt(draft);
       this.publish(before);
+      this.armArchiveExpiry();
     });
   }
   /** Runtime replacement hides the projection; saved identity waits for a fresh list. */
@@ -259,7 +284,6 @@ export class PersistentTerminalMarks {
       connectionId,
       ready ? generation : -1,
     );
-    r.seen.retireConnectionGeneration(connectionId, ready ? generation : -1);
     this.publish(before, connectionId, generation);
     if (!this.closed)
       void this.enqueue(async () => {
@@ -504,7 +528,7 @@ export class PersistentTerminalMarks {
     for (const watch of this.options.registries.watchlist.list().records)
       this.rememberWatch(watch);
     const after = revisions(this.options.registries);
-    (["desk", "watchlist", "completion-seen"] as const).forEach((kind, i) => {
+    (["desk", "watchlist"] as const).forEach((kind, i) => {
       if (before[i] !== after[i])
         this.options.changed(kind, after[i]!, connectionId, generation);
     });
@@ -551,6 +575,16 @@ export class PersistentTerminalMarks {
     const savedRows = this.options.storage.list();
     const savedById = new Map(savedRows.map((row) => [row.id, row]));
     const admitted = admittedAgentPanes(panes, agents);
+    const legacy = !ambiguous
+      ? await legacyReviewCandidates(
+          this.options.storage,
+          connectionId,
+          panes,
+          admitted,
+          isCurrent,
+        )
+      : { proofs: new Map(), resolvable: new Set<string>() };
+    if (!isCurrent()) throw new Error("terminal mark runtime retired");
     const unknownOwners = new Set(
       admitted
         .filter((agent) => agent.session === null)
@@ -609,21 +643,16 @@ export class PersistentTerminalMarks {
     const draft = {
       desk: live.desk.fork(),
       watchlist: live.watchlist.fork(),
-      seen: live.seen.fork(),
     };
     const deskCaptures = new Map(this.deskCaptures);
     for (const [capture] of deskCaptures)
       if (JSON.parse(capture)[0] === connectionId) deskCaptures.delete(capture);
     const desk: StoredDeskRecord[] = [],
-      watches: WorldWatchRecord[] = [],
-      checks: CompletionSeenIdentity[] = [];
+      watches: WorldWatchRecord[] = [];
     const entityByTerminal = new Map(
       entities.flatMap((entity) =>
         entity.terminals.map((terminal) => [terminal, entity] as const),
       ),
-    );
-    const statusByTerminal = new Map(
-      admitted.map((agent) => [agent.terminalId, agent]),
     );
     for (const row of active.values()) {
       const terminal = row.binding.evidence.terminals[0]!;
@@ -643,43 +672,18 @@ export class PersistentTerminalMarks {
       }
       if (row.kind === "watchlist")
         watches.push({ ...identity, label: row.body.label!, watch_id: row.id });
-      if (row.kind === "completion-seen") {
-        const sequence = statusByTerminal.get(terminal)?.sequence;
-        if (
-          row.body.stateChangeSeq !== undefined &&
-          Number.isSafeInteger(sequence) &&
-          Number(sequence) > row.body.stateChangeSeq
-        )
-          continue;
-        checks.push(identity);
-      }
     }
     draft.desk.replaceConnection(connectionId, desk);
     draft.watchlist.replaceConnection(connectionId, watches);
-    draft.seen.replaceConnection(connectionId, checks);
-    if (!ambiguous) {
+    if (!ambiguous)
       observeDeskPanes(draft.desk, connectionId, generation, panes, at, agents);
-      for (const agent of admitted) {
-        const seenSequence = active.get(
-          key("completion-seen", agent.terminalId),
-        )?.body.stateChangeSeq;
-        if (
-          seenSequence !== undefined &&
-          Number.isSafeInteger(agent.sequence) &&
-          Number(agent.sequence) < seenSequence
-        )
-          continue;
-        draft.seen.observe(
-          {
-            connection_id: connectionId,
-            connection_generation: generation,
-            terminal_id: agent.terminalId,
-          },
-          agent.status === "working" || agent.status === "blocked",
-        );
-      }
-    }
     draft.desk.expire(at);
+    const reviewsBeforeAction = new Map(
+      draft.desk
+        .storedRecords()
+        .filter((record) => record.connection_id === connectionId)
+        .map((record) => [record.terminal_id, record.reviewed_stop]),
+    );
     action?.(draft);
     const candidates = new Map<
       string,
@@ -707,20 +711,6 @@ export class PersistentTerminalMarks {
     for (const record of draft.watchlist.list().records)
       if (record.connection_id === connectionId)
         add("watchlist", record.terminal_id, { label: record.label });
-    for (const record of draft.seen.list().records)
-      if (record.connection_id === connectionId) {
-        const prior = active.get(key("completion-seen", record.terminal_id));
-        const sequence =
-          prior?.body.stateChangeSeq ??
-          statusByTerminal.get(record.terminal_id)?.sequence;
-        add(
-          "completion-seen",
-          record.terminal_id,
-          Number.isSafeInteger(sequence)
-            ? { stateChangeSeq: Number(sequence) }
-            : {},
-        );
-      }
     // Only relevant entities cross the bounded writer queue. Global ambiguity was
     // checked above, before reducing this complete observation to a target proof.
     const ensureCurrent = () => {
@@ -754,13 +744,18 @@ export class PersistentTerminalMarks {
       if (!entity || ambiguous) continue;
       if (
         prior &&
+        !legacy.resolvable.has(candidate.terminal) &&
         JSON.stringify(prior.body) === JSON.stringify(candidate.body) &&
         prior.binding.native_id === savedById.get(prior.id)?.binding.native_id
       )
         continue;
       const estimate = estimateDeskWrite(
         prior,
-        candidate.body,
+        legacyReviewBudgetBody(
+          candidate.body,
+          legacy.proofs.get(candidate.terminal),
+          legacy.resolvable.has(candidate.terminal),
+        ),
         entity,
         connectionId,
         at,
@@ -802,6 +797,7 @@ export class PersistentTerminalMarks {
       if (!entity || ambiguous) continue;
       if (
         prior &&
+        !legacy.resolvable.has(candidate.terminal) &&
         JSON.stringify(prior.body) === JSON.stringify(candidate.body) &&
         prior.binding.native_id === savedById.get(prior.id)?.binding.native_id
       )
@@ -820,24 +816,21 @@ export class PersistentTerminalMarks {
         await this.options.storage.remove(conflict.id, conflict.revision);
         savedById.delete(conflict.id);
       }
-      const rows = [...savedById.values()],
-        limit = 4096;
-      if (!prior && candidate.kind === "completion-seen") {
-        const sameKind = rows.filter((row) => row.kind === candidate.kind);
-        if (sameKind.length >= limit) {
-          ensureCurrent();
-          await this.options.storage.remove(
-            sameKind[0]!.id,
-            sameKind[0]!.revision,
-          );
-          savedById.delete(sameKind[0]!.id);
-        }
-      }
       ensureCurrent();
       const committed = await this.options.storage.put({
         ...(prior ? { id: prior.id, revision: prior.revision } : {}),
         kind: candidate.kind,
         body: candidate.body,
+        ...(candidate.kind === "desk" && legacy.proofs.has(candidate.terminal)
+          ? {
+              legacy_review: {
+                ...legacy.proofs.get(candidate.terminal)!,
+                review_changed:
+                  (reviewsBeforeAction.get(candidate.terminal) ?? null) !==
+                  candidate.body.reviewed_stop,
+              },
+            }
+          : {}),
         target: {
           adapter: "herdr",
           instance: connectionId,
@@ -918,16 +911,6 @@ export class PersistentTerminalMarks {
             watch_id: retained("watchlist", record.terminal_id)!.id,
           })),
       );
-      view.seen.replaceConnection(
-        connection,
-        view.seen
-          .list()
-          .records.filter(
-            (record) =>
-              record.connection_id === connection &&
-              retained("completion-seen", record.terminal_id),
-          ),
-      );
     };
     // Normalize committed rows before merging, so one publication advances from
     // the latest live revision and never installs another connection's old state.
@@ -935,16 +918,13 @@ export class PersistentTerminalMarks {
     const published = {
       desk: live.desk.fork(),
       watchlist: live.watchlist.fork(),
-      seen: live.seen.fork(),
     };
     published.desk.adoptConnection(connectionId, draft.desk);
     published.watchlist.adoptConnection(connectionId, draft.watchlist);
-    published.seen.adoptConnection(connectionId, draft.seen);
     const connections = new Set(
       [
         ...published.desk.list().records,
         ...published.watchlist.list().records,
-        ...published.seen.list().records,
       ].map((record) => record.connection_id),
     );
     for (const connection of connections)
@@ -952,7 +932,6 @@ export class PersistentTerminalMarks {
     const before = revisions(live);
     live.desk.adopt(published.desk);
     live.watchlist.adopt(published.watchlist);
-    live.seen.adopt(published.seen);
     if (!ambiguous) this.recoveringSources.delete(connectionId);
     for (const [capture, id] of this.deskCaptures)
       if (JSON.parse(capture)[0] === connectionId || !committedById.has(id))
@@ -962,5 +941,6 @@ export class PersistentTerminalMarks {
         this.deskCaptures.set(capture, id);
     this.deskRefusals.delete(connectionId);
     this.publish(before, connectionId, generation);
+    this.armArchiveExpiry();
   }
 }

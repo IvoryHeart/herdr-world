@@ -92,19 +92,22 @@ function stores(records: DeskRecord[] = []) {
       return true;
     },
   } as unknown as WorldDeskStore;
-  const seen = {
-    markTerminal: async (...args: unknown[]) => {
-      calls.push(["world.completion_seen.mark", ...args]);
-      return true;
+  store.refresh = async () => {
+    calls.push(["world.desk.get"]);
+  };
+  return {
+    calls,
+    store,
+    replace: (next: DeskRecord[]) => {
+      records = next;
     },
   };
-  return { calls, store, seen };
 }
 
 test("Mark reviewed sends the stop the caller showed", async () => {
-  const { calls, store, seen } = stores();
-  const leaf = agent("done");
-  expect(await markReviewed(store, seen, leaf, "stop:shown")).toBe(true);
+  const leaf = agent("done"),
+    { calls, store } = stores([record(leaf)]);
+  expect(await markReviewed(store, leaf, "stop:shown")).toBe(true);
   expect(calls).toEqual([
     [
       "world.desk.review",
@@ -114,44 +117,60 @@ test("Mark reviewed sends the stop the caller showed", async () => {
   ]);
 });
 
-test("Mark reviewed names the current stop when the service saw it, or by the last activity", async () => {
-  const leaf = agent("done");
-  const seenStop = record(leaf);
-  const observed = stores([seenStop]);
-  await markReviewed(observed.store, observed.seen, leaf);
-  expect(observed.calls).toEqual([
+test("Mark reviewed uses the current qualified Desk stop without changing its shape", async () => {
+  const leaf = agent("done"),
+    current = record(leaf);
+  const { calls, store } = stores([current]);
+  await markReviewed(store, leaf);
+  expect(calls).toEqual([
     [
       "world.desk.review",
       deskIdentity(leaf),
-      { stop_id: reviewStop(leaf, seenStop), reviewed: true },
+      { stop_id: reviewStop(leaf, current), reviewed: true },
     ],
   ]);
-  // No stop seen by the service: Herdr's last activity still names it.
-  const active = stores();
-  await markReviewed(active.store, active.seen, leaf);
-  expect(active.calls[0]![0]).toBe("world.desk.review");
 });
 
-test("work Desk cannot name a stop for takes the terminal's completion check", async () => {
-  const leaf = {
-    ...agent("done"),
-    lastActivityAt: undefined,
-  } as WorldLeafObject;
-  const { calls, store, seen } = stores();
-  expect(reviewStopKnown(leaf, undefined)).toBe(false);
-  expect(await markReviewed(store, seen, leaf)).toBe(true);
-  // Needs you passes the stop it showed; a stop naming nothing still checks.
-  await markReviewed(store, seen, leaf, reviewStop(leaf, undefined));
-  expect(calls).toEqual([
-    ["world.completion_seen.mark", "local", 3, "terminal-1"],
-    ["world.completion_seen.mark", "local", 3, "terminal-1"],
-  ]);
+test("missing or unverified Desk stops refresh authoritatively and never mark by terminal or activity alone", async () => {
+  for (const leaf of [
+    agent("done"),
+    { ...agent("done"), lastActivityAt: undefined } as WorldLeafObject,
+  ]) {
+    const { calls, store } = stores();
+    expect(reviewStopKnown(leaf, undefined)).toBe(false);
+    expect(await markReviewed(store, leaf)).toBe(false);
+    expect(await markReviewed(store, leaf, reviewStop(leaf, undefined))).toBe(
+      false,
+    );
+    expect(calls).toEqual([["world.desk.get"], ["world.desk.get"]]);
+  }
+  const leaf = agent("done"),
+    f = stores([record(leaf)]);
+  f.store.get = () => ({
+    revision: 1,
+    records: [record(leaf)],
+    verified: false,
+    error: null,
+  });
+  expect(await markReviewed(f.store, leaf)).toBe(false);
+  expect(f.calls).toEqual([["world.desk.get"]]);
 });
 
-test("a completion check counts as reviewed until the service ends it", () => {
+test("a refreshed same-identity stop can be reviewed, but a replacement cannot", async () => {
   const leaf = agent("done");
-  expect(awaitsReview(leaf, undefined, NOW, true)).toBe(false);
-  expect(awaitsReview(leaf, undefined, NOW, false)).toBe(true);
+  for (const replacement of [false, true]) {
+    const f = stores();
+    f.store.refresh = async () => {
+      f.replace([
+        record(
+          leaf,
+          replacement ? { agent_session_fingerprint: "replacement" } : {},
+        ),
+      ]);
+    };
+    expect(await markReviewed(f.store, leaf)).toBe(!replacement);
+    expect(f.calls.length).toBe(replacement ? 0 : 1);
+  }
 });
 
 test("Town's reviewed agents stay the same set while nothing changed", () => {

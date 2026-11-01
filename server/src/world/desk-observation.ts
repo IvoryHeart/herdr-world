@@ -61,6 +61,7 @@ export function admittedAgentPanes(
     session: string | null;
     status: ReturnType<typeof observedAgentStatus>;
     sequence: unknown;
+    lastActivityAt: number | null;
   }[] = [];
   for (const pane of panes) {
     if (
@@ -77,6 +78,7 @@ export function admittedAgentPanes(
     const agentSession = deskSessionFingerprint(candidate?.agent_session);
     const agent =
       candidate && agentSession === paneSession ? candidate : undefined;
+    const activity = pane.last_activity_at ?? agent?.last_activity_at;
     admitted.push({
       terminalId: pane.terminal_id,
       session: paneSession,
@@ -86,6 +88,12 @@ export function admittedAgentPanes(
           : pane.agent_status,
       ),
       sequence: agent?.state_change_seq ?? pane.state_change_seq,
+      lastActivityAt:
+        typeof activity === "number" &&
+        Number.isFinite(activity) &&
+        activity > 0
+          ? activity
+          : null,
     });
   }
   return admitted;
