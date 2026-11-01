@@ -106,7 +106,13 @@
         "server/src/connections/ssh-preflight-recovery.test.ts",
         "server/src/utils/process-utils.test.ts",
         "server/src/bridge/ssh-tunnel.test.ts",
-        "server/src/bridge/ssh-windows.test.ts"
+        "server/src/bridge/ssh-windows.test.ts",
+        "server/src/bridge/ssh-owner.test.ts",
+        "server/src/bridge/ssh-sessions.test.ts",
+        "server/src/bridge/ssh-master.test.ts",
+        "server/src/bridge/ssh-openssh.test.ts",
+        "server/src/bridge/forward-owner.test.ts",
+        "server/src/bridge/ssh-forward.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
       "technique": "shared-lifecycle",
@@ -125,12 +131,18 @@
           "server/src/connections/ssh-preflight-recovery.test.ts",
           "server/src/utils/process-utils.test.ts",
           "server/src/bridge/ssh-tunnel.test.ts",
-          "server/src/bridge/ssh-windows.test.ts"
+          "server/src/bridge/ssh-windows.test.ts",
+          "server/src/bridge/ssh-owner.test.ts",
+          "server/src/bridge/ssh-sessions.test.ts",
+          "server/src/bridge/ssh-master.test.ts",
+          "server/src/bridge/ssh-openssh.test.ts",
+          "server/src/bridge/forward-owner.test.ts",
+          "server/src/bridge/ssh-forward.test.ts"
         ],
         "checks": ["bun run check", "bun run verification:check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
       },
-      "evidenceDecision": "Manager currency and drain fence late transport completion. Real supervisor/tunnel tests exercise process exits, cancellation, reconnect classification and private path ownership.",
+      "evidenceDecision": "Manager currency and drain fence late transport completion. Real supervisor/tunnel tests exercise process exits, cancellation, reconnect classification and private path ownership. Candidate Roamgate transport consumers add explicit master/forward ownership, bounded session scheduling and qualified status reconciliation checks; existing model bounds and native-platform exclusions remain unchanged. Independent candidate acceptance is still required.",
       "promotion": {
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
@@ -213,7 +225,9 @@
       "existingTests": [
         "server/src/connections/protocol.test.ts",
         "server/src/connections/session-link-routing.test.ts",
-        "server/src/connections/http-routing.test.ts"
+        "server/src/connections/http-routing.test.ts",
+        "server/src/bridge/forward-rpc.test.ts",
+        "server/src/service/forward-dispatch.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/145",
       "technique": "qualified-operation",
@@ -230,12 +244,14 @@
         "tests": [
           "server/src/connections/protocol.test.ts",
           "server/src/connections/session-link-routing.test.ts",
-          "server/src/connections/http-routing.test.ts"
+          "server/src/connections/http-routing.test.ts",
+          "server/src/bridge/forward-rpc.test.ts",
+          "server/src/service/forward-dispatch.test.ts"
         ],
         "checks": ["bun run check", "bun run verification:check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
       },
-      "evidenceDecision": "Qualified manager leases supply dispatch authority. Protocol and HTTP tests check malformed/stale generations, explicit rejection, legacy omission and cancellation of stale streams.",
+      "evidenceDecision": "Qualified manager leases supply dispatch authority. Protocol and HTTP tests check malformed/stale generations, explicit rejection, legacy omission and cancellation of stale streams. Candidate Roamgate transport consumers add explicit master/forward ownership, bounded session scheduling and qualified status reconciliation checks; existing model bounds and native-platform exclusions remain unchanged. Independent candidate acceptance is still required.",
       "promotion": {
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
@@ -1046,7 +1062,6 @@
         "server/src/world/terminal-mark-bindings.test.ts",
         "server/src/world/terminal-mark-controls.test.ts",
         "server/src/service/terminal-marks.test.ts",
-
         "server/src/service/shared-acquisition.test.ts",
         "web/src/store/sharedAcquisition.test.ts",
         "web/src/store/sharedBootstrap.test.ts",
@@ -1099,7 +1114,6 @@
           "server/src/world/terminal-mark-bindings.test.ts",
           "server/src/world/terminal-mark-controls.test.ts",
           "server/src/service/terminal-marks.test.ts",
-
           "server/src/service/shared-acquisition.test.ts",
           "web/src/store/sharedAcquisition.test.ts",
           "web/src/store/sharedBootstrap.test.ts",
@@ -1637,7 +1651,10 @@
         "server/src/workspace/diff-base.test.ts",
         "server/src/workspace/files.test.ts",
         "web/src/components/DiffViewerPanel.test.ts",
-        "web/src/gitDiffSummaryStore.test.ts"
+        "web/src/gitDiffSummaryStore.test.ts",
+        "server/src/workspace/status.test.ts",
+        "server/src/workspace/git-diff.test.ts",
+        "web/src/store/gitStatusPush.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
       "technique": "alternative",
@@ -1645,7 +1662,7 @@
       "status": "alternative-evidence",
       "remaining": "Git/network/platform behavior and uncommitted user changes are not represented by an abstract branch flag.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
-      "evidenceDecision": "Real Git repositories and process tests exercise dirty-tree refusal, fetch/merge failures, qualified actions and synchronization.",
+      "evidenceDecision": "Real Git repositories and process tests exercise dirty-tree refusal, fetch/merge failures, qualified actions and synchronization. Candidate Roamgate transport consumers add explicit master/forward ownership, bounded session scheduling and qualified status reconciliation checks; existing model bounds and native-platform exclusions remain unchanged. Independent candidate acceptance is still required.",
       "partialEvidence": {
         "models": [],
         "contracts": ["verification/consumer-evidence.md"],
@@ -1656,7 +1673,10 @@
           "server/src/workspace/diff-base.test.ts",
           "server/src/workspace/files.test.ts",
           "web/src/components/DiffViewerPanel.test.ts",
-          "web/src/gitDiffSummaryStore.test.ts"
+          "web/src/gitDiffSummaryStore.test.ts",
+          "server/src/workspace/status.test.ts",
+          "server/src/workspace/git-diff.test.ts",
+          "web/src/store/gitStatusPush.test.ts"
         ],
         "checks": ["bun run check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."

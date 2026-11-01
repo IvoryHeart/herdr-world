@@ -1398,3 +1398,11 @@ mouse-aware apps with Option-drag (macOS) or Shift-drag (elsewhere).
 - Windows Herdr 0.9.1+ hosts over SSH from Linux/macOS World, with native terminal
   and workspace actions. Unix-only remote file and Git tools remain unavailable.
 - Optional private-network PIN login with independent session signing and recovery.
+
+## SSH responsiveness
+
+SSH runtimes share a private command connection while terminal transport stays
+independent. Background reads leave command slots available for interactive work;
+Git status refreshes in the background, and large untracked-file lists avoid a
+command per file. Stalled sessions end through keepalives. See
+[SSH setup and operator controls](docs/DEPLOYMENT.md#ssh-command-sharing-and-port-forwards).

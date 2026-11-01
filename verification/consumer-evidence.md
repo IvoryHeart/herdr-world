@@ -794,3 +794,23 @@ its existing model contract is unchanged. Full required verification and the
 independent revised consumer-mapping review remain required.
 Whole-host observation age is checked before native ownership/absence admission
 and again when queued work runs, preserving newer accepted review authority.
+
+### Roamgate transport candidate (Q03, Q05, Q33, Q40)
+
+The existing runtime-leases/control/drain models retain their accepted bounds.
+Candidate direct consumers add same-destination master isolation, generation-scoped
+forward list/close/retirement and attempt replacement, loopback and explicit owner
+admission, bounded interactive/background queues, deadlines, retry-safe reads and
+no replay of mutations. Real OpenSSH `-G` resolves the generated policy; a controlled
+SSH executable checks process execution and retry, not a live remote server.
+Herdr framing fixtures exercise UTF-8 and the exact 1 MiB boundary on Bun.connect
+and node:net while retaining runtime-stop cancellation. The store consumer checks
+inactive-host status pushes, obsolete generations and an overlapping older catalogue.
+
+Direct protocol/process/consumer fixtures answer these new concrete boundaries more
+accurately than adding SSH or byte parsers to a lifecycle model. They do not establish
+all OS/OpenSSH behavior, arbitrary scheduler interleavings, live remote forwarding,
+GatewayPorts enforcement or native agent acceptance. Those remain platform and
+isolated integration evidence in the [whole-system plan](../docs/reviews/roamgate-sync-test-plan.md).
+Full applicable CI and independent consumer review are required; this candidate
+extends evidence, not the historical promotion approval.

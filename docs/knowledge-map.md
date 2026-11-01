@@ -292,3 +292,16 @@ in [the service](../server/src/assistant/service.ts) and
 [bounded Thinking display](../web/src/components/AssistantThinking.tsx) share the
 [workspace-assistant contract](../openspec/specs/workspace-assistant/spec.md);
 [the tutorial](TUTORIAL.md#ranger-steer-or-queue-a-message) describes their use.
+
+Roamgate transport integration routes through the [service forwarding owner](../server/src/service/forward-service.ts),
+[qualified forwarding RPC](../server/src/bridge/forward-rpc.ts),
+[SSH command sessions](../server/src/bridge/ssh-sessions.ts),
+[private master lifecycle](../server/src/bridge/ssh-master.ts),
+[background RPC lanes](../web/src/rpcLanes.ts) and
+[checkout status pushes](../web/src/gitStatusPush.ts).
+Ownership consumers are [SSH routing](../server/src/bridge/ssh-owner.test.ts),
+[forward generations](../server/src/bridge/forward-owner.test.ts),
+[dispatch admission](../server/src/service/forward-dispatch.test.ts) and
+[inactive-host status reconciliation](../web/src/store/gitStatusPush.test.ts).
+The [integration test plan](reviews/roamgate-sync-test-plan.md) keeps whole-system
+acceptance separate from the transport part's evidence.

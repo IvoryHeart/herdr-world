@@ -33,6 +33,7 @@ import { handleGitRpc } from "../rpc/git";
 import { handleLauncherRpc } from "../rpc/launcher";
 import { handleWorldRpc } from "../rpc/world";
 import { inspectWorkspacePath } from "../workspace/path";
+import { isLoopbackAddress } from "../workspace/file-manager";
 import { readFocusedList } from "../world/focused-lists";
 import {
   FOCUSED_METHODS,
@@ -316,6 +317,35 @@ async function handleRpc(
     return;
   }
   const { sshHost, herdr, handleSettingsRpc, terminalBridge } = connection;
+
+  if (method.startsWith("forward.")) {
+    try {
+      recheck();
+      if (
+        req.connection_id === undefined ||
+        req.connection_generation === undefined
+      )
+        throw new Error(
+          "Port forwarding requires an explicit connection and runtime generation",
+        );
+      if (!isLoopbackAddress(ws.remoteAddress))
+        throw new Error(
+          "Port forwarding requires a browser connected over loopback",
+        );
+      if (!connection.handleForwardRpc)
+        throw new Error("Port forwarding is unavailable");
+      return await connection.handleForwardRpc(
+        ws,
+        id,
+        method,
+        params ?? {},
+        requestIsCurrent,
+      );
+    } catch (error) {
+      sendError("forward-error", error);
+      return;
+    }
+  }
 
   if (
     method === "workspace.path" ||

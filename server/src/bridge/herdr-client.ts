@@ -1,8 +1,75 @@
 import { EventEmitter } from "node:events";
 import * as net from "node:net";
+import { type Logger, serverLogger } from "../utils/logger";
 
 const MAX_NDJSON_LINE_BYTES = 1024 * 1024;
 const SUBSCRIPTION_ACK_TIMEOUT_MS = 8000;
+
+/** The one-shot socket a call writes its request to. */
+type OneShotSocket = {
+  /** Bytes the socket took; the rest waits for `drain`. */
+  write(data: Buffer): number;
+  terminate(): void;
+};
+
+type OneShotHandlers = {
+  open(socket: OneShotSocket): void;
+  drain(socket: OneShotSocket): void;
+  data(chunk: Uint8Array): void;
+  close(): void;
+  error(error: Error & { code?: string }): void;
+};
+
+/**
+ * Bun.connect where it can: under Bun, a node:net unix socket sometimes
+ * delivers a one-shot response about 100 ms late. Windows keeps node:net,
+ * which reaches Herdr's named pipes.
+ */
+function connectOneShot(
+  path: string,
+  handlers: OneShotHandlers,
+  useBunSocket = process.platform !== "win32",
+): void {
+  if (!useBunSocket) {
+    const socket = net.createConnection({ path });
+    const wrapped: OneShotSocket = {
+      // node:net queues whatever the socket buffer cannot take yet.
+      write: (data) => {
+        socket.write(data);
+        return data.length;
+      },
+      terminate: () => socket.destroy(),
+    };
+    socket.on("connect", () => handlers.open(wrapped));
+    socket.on("data", (chunk: Buffer) => handlers.data(chunk));
+    socket.on("close", () => handlers.close());
+    socket.on("error", (error) => handlers.error(error));
+    return;
+  }
+  let wrapped: OneShotSocket | null = null;
+  const wrap = (socket: import("bun").Socket<undefined>) =>
+    (wrapped ??= {
+      write: (data) => socket.write(data),
+      terminate: () => socket.terminate(),
+    });
+  Bun.connect({
+    unix: path,
+    socket: {
+      open: (socket) => handlers.open(wrap(socket)),
+      drain: (socket) => handlers.drain(wrap(socket)),
+      data: (_socket, chunk) => handlers.data(chunk),
+      close: () => handlers.close(),
+      error: (_socket, error) => handlers.error(error),
+    },
+  }).catch((error: Error) => handlers.error(error));
+}
+
+/**
+ * The longest request line Herdr reads, not counting its newline (1 MiB,
+ * found by trying against Herdr 0.9.0: a 1 MiB line is answered, one byte
+ * more is dropped without an answer).
+ */
+export const HERDR_MAX_REQUEST_BYTES = 1024 * 1024;
 
 /** Subscription selector: a bare event type or a parameterized subscription. */
 export type HerdrSubscription =
@@ -25,9 +92,23 @@ export class HerdrClient extends EventEmitter {
   /** One-shot calls still waiting for Herdr, by their finishers. */
   readonly #pending = new Set<(error: Error) => void>();
   #closed = false;
+  private logger: Logger;
+  private connectionId: string | undefined;
+  /** Bun.connect for one-shot calls; false keeps node:net, as on Windows. */
+  private useBunSocket: boolean;
 
-  constructor(private socketPath: string) {
+  constructor(
+    private socketPath: string,
+    options: {
+      logger?: Logger;
+      connectionId?: string;
+      useBunSocket?: boolean;
+    } = {},
+  ) {
     super();
+    this.logger = options.logger ?? serverLogger.child("herdr");
+    this.connectionId = options.connectionId;
+    this.useBunSocket = options.useBunSocket ?? process.platform !== "win32";
   }
 
   /**
@@ -51,16 +132,41 @@ export class HerdrClient extends EventEmitter {
       .toString(36)
       .slice(2, 6)}`;
     const pending = this.#pending;
+    // What the socket has not taken yet. A Bun socket write takes only
+    // what fits in the socket buffer, and a long request (a long message
+    // sent with pane.send_input) does not fit in one; Herdr waits for the
+    // whole line.
+    const request = JSON.stringify({ id: requestId, method, params }) + "\n";
+    let unsent = Buffer.from(request);
+    // Herdr drops a request line over 1 MiB without answering, so refuse it
+    // before connecting or arming the timeout.
+    const lineBytes = unsent.length - 1;
+    if (lineBytes > HERDR_MAX_REQUEST_BYTES) {
+      return Promise.reject(
+        new Error(
+          `${method}: too large for Herdr (${Math.ceil(lineBytes / 1024)} KiB, at most 1024)`,
+        ),
+      );
+    }
     return new Promise((resolve, reject) => {
       if (this.#closed) {
         reject(new Error("Herdr connection stopped"));
         return;
       }
-      const s = net.createConnection({ path: this.socketPath });
+      let s: OneShotSocket | null = null;
       let buf = "";
       let done = false;
+      const decoder = new TextDecoder();
       const abort = (error: Error) => finish(error);
       pending.add(abort);
+      // Debug timing: total call time, plus write -> first response byte,
+      // which isolates the round trip and Herdr's own wait from the connect.
+      const logger = this.logger;
+      const connectionId = this.connectionId;
+      const startedAt = performance.now();
+      let writtenAt: number | null = null;
+      let firstByteAt: number | null = null;
+      let responseBytes = 0;
 
       const timer = setTimeout(
         () => finish(new Error(`timeout: ${method}`)),
@@ -76,30 +182,38 @@ export class HerdrClient extends EventEmitter {
           // One-shot RPCs never reuse the socket. Force closure so a peer that
           // keeps its readable side half-open cannot retain our descriptor
           // after a timeout or malformed response.
-          s.destroy();
+          s?.terminate();
         } catch {
           /* already closed */
+        }
+        if (logger.enabled("debug")) {
+          const finishedAt = performance.now();
+          logger.debug("herdr call", {
+            connection: connectionId,
+            method,
+            status: err ? "error" : "ok",
+            req_bytes: Buffer.byteLength(request),
+            resp_bytes: responseBytes,
+            total_ms: Math.round(finishedAt - startedAt),
+            connect_ms:
+              writtenAt === null
+                ? undefined
+                : Math.round(writtenAt - startedAt),
+            first_byte_ms:
+              writtenAt === null || firstByteAt === null
+                ? undefined
+                : Math.round(firstByteAt - writtenAt),
+            error: err?.message,
+          });
         }
         if (err) reject(err);
         else resolve(val);
       }
 
-      s.on("error", (e) =>
-        finish(new Error(`${(e as any).code ?? "error"}: ${e.message}`)),
-      );
-      s.on("connect", () => {
-        if (done) return;
-        try {
-          beforeSend?.();
-          s.write(JSON.stringify({ id: requestId, method, params }) + "\n");
-        } catch (error) {
-          finish(
-            error instanceof Error ? error : new Error("RPC dispatch rejected"),
-          );
-        }
-      });
-      s.on("data", (chunk) => {
-        buf += chunk.toString("utf8");
+      const onData = (chunk: Uint8Array) => {
+        firstByteAt ??= performance.now();
+        responseBytes += chunk.byteLength;
+        buf += decoder.decode(chunk, { stream: true });
         const i = buf.indexOf("\n");
         if (i === -1) {
           if (Buffer.byteLength(buf) > MAX_NDJSON_LINE_BYTES) {
@@ -144,12 +258,52 @@ export class HerdrClient extends EventEmitter {
         } else {
           finish(undefined, envelope.result);
         }
-      });
-      s.on("close", () => {
-        if (!done) {
-          finish(new Error(`connection closed before response: ${method}`));
+      };
+      const sendRest = (socket: OneShotSocket) => {
+        while (unsent.length) {
+          const written = socket.write(unsent);
+          // A full socket buffer: drain() sends the rest.
+          if (written <= 0) return;
+          unsent = unsent.subarray(written);
         }
-      });
+        writtenAt = performance.now();
+      };
+      const fail = (error: unknown, fallback: string) =>
+        finish(error instanceof Error ? error : new Error(fallback));
+      connectOneShot(
+        this.socketPath,
+        {
+          open(socket) {
+            s = socket;
+            if (done) {
+              socket.terminate();
+              return;
+            }
+            try {
+              beforeSend?.();
+              sendRest(socket);
+            } catch (error) {
+              fail(error, "RPC dispatch rejected");
+            }
+          },
+          drain(socket) {
+            if (done || !unsent.length) return;
+            try {
+              sendRest(socket);
+            } catch (error) {
+              fail(error, "RPC write failed");
+            }
+          },
+          data: onData,
+          close() {
+            finish(new Error(`connection closed before response: ${method}`));
+          },
+          error(e) {
+            finish(new Error(`${e.code ?? "error"}: ${e.message}`));
+          },
+        },
+        this.useBunSocket,
+      );
     });
   }
 

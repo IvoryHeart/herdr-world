@@ -542,3 +542,41 @@ SHALL equal complete preparation of the same observation, documents and marks.
 #### Scenario: Complete preparation equivalence
 - **WHEN** observations, documents and marks change in any supported sequence
 - **THEN** incremental presentation equals complete preparation of the latest inputs
+
+### Requirement: Runtime-owned SSH command sharing and forwarding
+
+World SHALL bind each reused SSH command connection to its owning runtime's private
+control path, preserve the service user's OpenSSH policy, and never substitute a
+master belonging to another connection or generation. Background command sessions
+SHALL leave capacity for interactive commands; queueing and any safe read retry
+SHALL spend the caller's deadline. Mutating commands SHALL NOT be retried after an
+ambiguous master failure.
+
+On-demand local and reverse forwards SHALL require an authenticated loopback browser,
+an explicit connection ID and current runtime generation. The service SHALL own
+forward state independently of views, bound live processes and discovery, refuse
+reverse exposure of its own listener/development proxy, and stop only the retiring
+runtime's forwards without automatically reopening them. Remote loopback is a
+requested bind subject to the SSH server's GatewayPorts policy.
+
+#### Scenario: Two runtimes use the same SSH destination
+
+- **WHEN** both runtimes have command masters and one runtime stops
+- **THEN** commands retain their own runtime's master or open a fresh connection
+  to their original destination, without borrowing the other master's transport
+
+#### Scenario: A retired forward request finishes after replacement
+
+- **WHEN** an old runtime's forward becomes ready after its request loses authority
+- **THEN** its own attempt is closed and cannot report success or close a newer attempt
+
+#### Scenario: A browser requests another runtime's forward
+
+- **WHEN** a browser's captured connection/generation differs from a forward's owner
+- **THEN** its scoped list omits that forward and its close request cannot stop it
+
+#### Scenario: A status push overlaps an older catalogue read
+
+- **WHEN** checkout status changes on a current inactive connection during a browser refresh
+- **THEN** that connection retains the newer status over the older catalogue reply,
+  without changing a different connection with the same checkout path

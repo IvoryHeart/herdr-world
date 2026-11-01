@@ -5,6 +5,8 @@ import type { Server, ServerWebSocket } from "bun";
 import { createProfileServices } from "../agent/profile-service";
 import { createAssistantContext } from "../assistant/context";
 import { HerdrClient } from "../bridge/herdr-client";
+import { createServiceForwards } from "./forward-service";
+import { sweepOrphanedSshMasters } from "../bridge/ssh-master";
 import type { SshTunnelConfig } from "../bridge/ssh-tunnel";
 import { WorldSnapshotAdmission } from "../bridge/world-snapshot-admission";
 import { authTokenPrintCommand } from "../config/auth-token";
@@ -79,7 +81,7 @@ import { readFocusedLists } from "../world/focused-lists";
 import { AgentActivityCache } from "../world/agent-activity-cache";
 import { DeskWatches } from "../world/desk-watches";
 import { readDeskWatch } from "../world/desk-watch-read";
-import { createBrowserClients, logDetail } from "./clients";
+import { createBrowserClients, summarizeHerdrEvent } from "./clients";
 import { listen } from "./listener";
 import type { Clock, Scheduler, WorldAdapters } from "./ports";
 import { createRpcDispatcher } from "./rpc-dispatch";
@@ -102,20 +104,6 @@ export type WorldService = Awaited<ReturnType<typeof createWorldService>>;
 
 /** How long stop waits for requests that were running when it began. */
 const DRAIN_TIMEOUT_MS = 2_000;
-
-function summarizeHerdrEvent(event: any): string {
-  const type = logDetail(String(event?.event ?? event?.type ?? "unknown"));
-  const data = event?.data && typeof event.data === "object" ? event.data : {};
-  const ids = ["workspace_id", "tab_id", "pane_id", "agent_id", "terminal_id"]
-    .map((key) => {
-      const value = data[key] ?? event?.[key];
-      return typeof value === "string" && value
-        ? `${key}=${logDetail(value)}`
-        : "";
-    })
-    .filter(Boolean);
-  return [`type=${type}`, ...ids].join(" ");
-}
 
 /**
  * Claim the data folder, open storage and build one World service. Nothing
@@ -235,6 +223,12 @@ async function compose(
     countChanged: publishConnectionsChanged,
   });
   const { clients, safeSend, broadcast, clientLabel, markRpcError } = browsers;
+  const forwards = createServiceForwards(
+    config,
+    logger,
+    broadcast,
+    () => stopping,
+  );
   const legacyRoutingLogger = createLegacyRoutingLogger({
     log: (message) =>
       logger.warn("deprecated request routing", { detail: message }),
@@ -632,6 +626,7 @@ async function compose(
           config: profileConfig,
           settings,
           runtimeStatus: storage.runtimeStatus,
+          forwards: forwards.registry,
           logger: logger.child("connection"),
           safeSend,
           broadcast,
@@ -913,6 +908,7 @@ async function compose(
         },
       });
       worldCli.start();
+      forwards.listeningOn(server.port ?? config.port);
       return {
         port: server.port ?? config.port,
         connected: startTask!.catch(() => {}),
@@ -934,6 +930,8 @@ async function compose(
   };
 
   async function startConnections() {
+    await sweepOrphanedSshMasters();
+    if (stopping) return;
     await connectionProfiles.startConfigured();
     // Stopping fences startup: Ranger must not start after stop began.
     if (stopping) return;
@@ -978,6 +976,7 @@ async function compose(
       // Stop what in-flight work waits on: Ranger, then every runtime, which
       // also fails the Herdr calls still waiting. Startup then settles
       // fenced, and so does every request, within a bound.
+      await forwards.stop();
       await disposeAssistant();
       await connectionManager.stopAll();
       await startTask?.catch(() => {});

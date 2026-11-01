@@ -604,6 +604,25 @@ herdr-world --socket-path /path/to/herdr.sock \
 herdr-world --ssh-host workbox
 ```
 
+### SSH command sharing and port forwards
+
+World keeps a private command connection for each SSH runtime, alongside its
+independent terminal tunnel. Repeated file, Git and transcript reads can reuse
+that command connection. If it is unavailable, commands still use the same
+configured destination; they never borrow another profile's master. Set
+`HERDR_WORLD_DISABLE_SSH_MASTER=1` in the service environment and restart to use
+individual command connections. This does not change your OpenSSH authentication
+or host-key policy. Fixed keepalives end established sessions that stop answering.
+
+The service also supports explicit local and reverse port-forward RPCs for an
+authenticated loopback browser, bound to its selected connection and runtime.
+The web controls arrive in the later web/mobile integration part. A forward ends
+with its owning runtime and is never automatically reopened. Local forwards bind
+loopback. Reverse forwards request remote loopback, but the host's `GatewayPorts
+yes` policy can expose the remote listener to its network; check that host's SSH
+policy before exposing a local service. World's own listener and the development
+proxy cannot be exposed through its reverse-forward API.
+
 ## Agent profiles and the launcher
 
 **New agent** starts a harness in a new Herdr tab through the connection that
@@ -899,6 +918,12 @@ investigation, run `herdr-world --log-level debug` or set
 `info` afterwards. Debug output can contain paths and identifiers; review and
 redact diagnostic logs before sharing them. Authentication tokens are kept in
 protected files rather than logged startup URLs.
+
+Debug transport samples include Herdr method, byte counts, connection and response
+latency; SSH command labels, queue/process counts and startup failures; and terminal
+input-to-next-surface timing. The latter is an upper bound on echo, because unrelated
+output can produce the next surface, and expires after five seconds. These samples
+do not log terminal input or RPC payloads and do not establish a latency guarantee.
 
 ## User service
 
