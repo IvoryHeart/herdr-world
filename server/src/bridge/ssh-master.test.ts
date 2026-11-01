@@ -430,3 +430,37 @@ describe.skipIf(process.platform === "win32")("orphaned master sweep", () => {
     expect(existsSync(directory)).toBe(false);
   });
 });
+
+test("failed startup retains an unconfirmed child and refuses to replace or unlink it", async () => {
+  const signals: Array<number | undefined> = [];
+  let spawns = 0,
+    removals = 0;
+  const master = createSshMaster({
+    destination: "startup.example",
+    controlPath: "/synthetic/startup/m.ctl",
+    dependencies: {
+      spawn: () => {
+        spawns++;
+        return {
+          exited: new Promise<number>(() => {}),
+          kill: (signal) => signals.push(signal),
+        };
+      },
+      exists: () => false,
+      remove: () => {
+        removals++;
+      },
+      readyTimeoutMs: 0,
+      stopTimeoutMs: 0,
+      forceKillTimeoutMs: 0,
+    },
+  });
+  expect(await master.ensure()).toBe(false);
+  expect(master.isRunning()).toBe(true);
+  expect(await master.ensure()).toBe(false);
+  expect(spawns).toBe(1);
+  expect(signals).toEqual([undefined, 9]);
+  await expect(master.stop()).rejects.toThrow("did not exit");
+  expect(master.isRunning()).toBe(true);
+  expect(removals).toBe(1);
+});

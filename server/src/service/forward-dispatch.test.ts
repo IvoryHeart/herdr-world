@@ -6,7 +6,7 @@ import type { LegacyConnectionRuntime } from "../connections/runtime";
 import type { RpcServices } from "../rpc/context";
 import { createRpcDispatcher } from "./rpc-dispatch";
 
-test("forward dispatch requires a loopback browser and explicit current runtime owner", async () => {
+test("forward dispatch requires login and an explicit current runtime owner, without a peer-address gate", async () => {
   const manager = new ConnectionManager<LegacyConnectionRuntime>("alpha");
   const sent: any[] = [];
   const called: string[] = [];
@@ -62,11 +62,6 @@ test("forward dispatch requires a loopback browser and explicit current runtime 
     expect(sent.at(-1).error.message).toContain("explicit connection");
     await call(local, { connection_id: "beta" });
     expect(sent.at(-1).error.message).toContain("explicit connection");
-    await call(remote, {
-      connection_id: "beta",
-      connection_generation: generation,
-    });
-    expect(sent.at(-1).error.message).toContain("loopback");
     await call(local, {
       connection_id: "beta",
       connection_generation: generation + 1,
@@ -77,13 +72,25 @@ test("forward dispatch requires a loopback browser and explicit current runtime 
       connection_generation: generation,
     });
     expect(called).toEqual(["beta"]);
+    await call(remote, {
+      connection_id: "beta",
+      connection_generation: generation,
+    });
+    expect(called).toEqual(["beta", "beta"]);
     clients.delete(local);
     await call(local, {
       connection_id: "beta",
       connection_generation: generation,
     });
     expect(sent.at(-1).error).toBeDefined();
-    expect(called).toEqual(["beta"]);
+    expect(called).toEqual(["beta", "beta"]);
+    clients.delete(remote);
+    await call(remote, {
+      connection_id: "beta",
+      connection_generation: generation,
+    });
+    expect(sent.at(-1).error).toBeDefined();
+    expect(called).toEqual(["beta", "beta"]);
   } finally {
     await manager.stopAll();
   }

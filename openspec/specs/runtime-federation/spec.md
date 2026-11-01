@@ -549,11 +549,16 @@ World SHALL bind each reused SSH command connection to its owning runtime's priv
 control path, preserve the service user's OpenSSH policy, and never substitute a
 master belonging to another connection or generation. Background command sessions
 SHALL leave capacity for interactive commands; queueing and any safe read retry
-SHALL spend the caller's deadline. Mutating commands SHALL NOT be retried after an
-ambiguous master failure.
+SHALL spend the caller's deadline, including recovery health checks. Retirement
+SHALL abort queued work before process dispatch. A failed-start master whose exit
+is unconfirmed SHALL retain child/path ownership and prevent replacement.
+Mutating commands SHALL NOT be retried after an ambiguous master failure.
 
-On-demand local and reverse forwards SHALL require an authenticated loopback browser,
-an explicit connection ID and current runtime generation. The service SHALL own
+On-demand local and reverse forwards SHALL require authentication, an explicit
+connection ID and current runtime generation. As upstream, browser forwarding
+controls SHALL be offered only on pages served over loopback, because listeners
+bind on the service host. The service SHALL NOT add a forwarding-specific
+WebSocket-peer gate. The service SHALL own
 forward state independently of views, bound live processes and discovery, refuse
 reverse exposure of its own listener/development proxy, and stop only the retiring
 runtime's forwards without automatically reopening them. Remote loopback is a

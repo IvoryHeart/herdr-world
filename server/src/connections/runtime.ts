@@ -157,11 +157,15 @@ export function createLegacyConnectionRuntime(args: {
   const socketPath = config.socketPath;
   const clientSocketPath = config.clientSocketPath;
   const sshHost = () => config.sshHost;
+  const processAbort = new AbortController();
   // Label this runtime's ssh children with its connection in the debug log.
   const forConnection = (argv: string[]) =>
-    annotateSshArgv(bindSshCommand(argv, config.masterControlPath), {
-      connection: identity.id,
-    });
+    annotateSshArgv(
+      bindSshCommand(argv, config.masterControlPath, processAbort.signal),
+      {
+        connection: identity.id,
+      },
+    );
   const runProcess: typeof runProcessBase = (argv, ...rest) =>
     runProcessBase(forConnection(argv), ...rest);
   const runProcessWithCode: typeof runProcessWithCodeBase = (argv, ...rest) =>
@@ -321,7 +325,11 @@ export function createLegacyConnectionRuntime(args: {
     runProcessWithCodeTimeout,
     shQuote,
   });
-  const handleImageUpload = createImageUploadHandler({ sshHost });
+  const handleImageUpload = createImageUploadHandler({
+    sshHost,
+    sshControlPath: config.masterControlPath,
+    runtimeSignal: processAbort.signal,
+  });
   const onUploadCleanupError = (error: unknown) =>
     logger.warn("terminal upload cleanup failed", {
       connection: identity.id,
@@ -330,6 +338,7 @@ export function createLegacyConnectionRuntime(args: {
   const handleTerminalUpload = createTerminalUploadHandler({
     sshHost,
     sshControlPath: config.masterControlPath,
+    runtimeSignal: processAbort.signal,
     onCleanupError: onUploadCleanupError,
   });
   const sshTunnel = createSshTunnelManager({
@@ -807,6 +816,7 @@ export function createLegacyConnectionRuntime(args: {
     if (stopTask) return stopTask;
     if (disposed) return Promise.resolve();
     disposed = true;
+    processAbort.abort(new Error("connection runtime retired"));
     backgroundStarted = false;
     // Calls still waiting on Herdr belong to this retired runtime: fail them
     // now rather than at their timeout, so their callers can settle.

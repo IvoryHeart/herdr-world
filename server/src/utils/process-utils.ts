@@ -41,14 +41,20 @@ export async function runProcessWithCode(
   argv: string[],
   input?: string,
 ): Promise<{ code: number; stdout: string; stderr: string }> {
-  return runSshCommand(argv, (argv) => spawnWithCode(argv, input));
+  return runSshCommand(argv, (argv, _remainingMs, signal) =>
+    spawnWithCode(argv, input, signal),
+  );
 }
 
 async function spawnWithCode(
   argv: string[],
   input?: string,
+  signal?: AbortSignal,
 ): Promise<{ code: number; stdout: string; stderr: string }> {
+  signal?.throwIfAborted();
   const proc = Bun.spawn(argv, {
+    signal,
+    killSignal: "SIGKILL",
     stdin: input === undefined ? "ignore" : Buffer.from(input),
     stdout: "pipe",
     stderr: "pipe",
@@ -70,8 +76,8 @@ export async function runProcessWithCodeTimeout(
 ): Promise<{ code: number; stdout: string; stderr: string }> {
   return runSshCommand(
     argv,
-    (argv, remainingMs) =>
-      spawnWithCodeTimeout(argv, remainingMs ?? timeoutMs, options),
+    (argv, remainingMs, signal) =>
+      spawnWithCodeTimeout(argv, remainingMs ?? timeoutMs, options, signal),
     { timeoutMs },
   );
 }
@@ -80,8 +86,12 @@ async function spawnWithCodeTimeout(
   argv: string[],
   timeoutMs: number,
   options: { cwd?: string; env?: NodeJS.ProcessEnv },
+  signal?: AbortSignal,
 ): Promise<{ code: number; stdout: string; stderr: string }> {
+  signal?.throwIfAborted();
   const proc = Bun.spawn(argv, {
+    signal,
+    killSignal: "SIGKILL",
     ...options,
     stdin: "ignore",
     stdout: "pipe",

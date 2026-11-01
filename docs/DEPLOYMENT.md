@@ -614,14 +614,18 @@ configured destination; they never borrow another profile's master. Set
 individual command connections. This does not change your OpenSSH authentication
 or host-key policy. Fixed keepalives end established sessions that stop answering.
 
-The service also supports explicit local and reverse port-forward RPCs for an
-authenticated loopback browser, bound to its selected connection and runtime.
-The web controls arrive in the later web/mobile integration part. The loopback peer check is a scope restriction, not a security boundary or proof of the browser’s location. Authentication remains the access boundary; an authenticated terminal can already run forwarding commands. Forwarding controls remain local-machine only; LAN/mobile forwarding requires a later owner decision. A forward ends
-with its owning runtime and is never automatically reopened. Local forwards bind
-loopback. Reverse forwards request remote loopback, but the host's `GatewayPorts
-yes` policy can expose the remote listener to its network; check that host's SSH
-policy before exposing a local service. World's own listener and the development
-proxy cannot be exposed through its reverse-forward API.
+The service also supports explicit local and reverse port-forward RPCs after
+login, bound to the selected connection and runtime. As upstream, web forwarding
+controls are offered only on a page served over loopback: the forward binds where
+the World server runs, so a remote browser would address the wrong machine.
+The web controls arrive in the later web/mobile integration part. Authentication
+is the access boundary; the service adds no forwarding-specific WebSocket-peer
+restriction. An authenticated terminal can already run forwarding commands.
+A forward ends with its owning runtime and is never automatically reopened.
+Local forwards bind `127.0.0.1`. Reverse forwards request remote `127.0.0.1`,
+but the host's `GatewayPorts yes` policy can expose the remote listener to its
+network; check that host's SSH policy before exposing a local service. World's
+own listener and the development proxy cannot be exposed through its reverse-forward API.
 
 ## Agent profiles and the launcher
 

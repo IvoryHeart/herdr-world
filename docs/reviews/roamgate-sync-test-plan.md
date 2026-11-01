@@ -49,5 +49,8 @@ The first part includes upstream #522, #523, #525, #535, #545, #546, #547,
 remaining badge/prefetch consumers stay in the final web part. Its PR body records
 adopted/adapted/skipped decisions for these commits and the exact executed checks.
 Runtime/forward security regressions cover wrong connection, obsolete generation,
-replacement attempts, loopback admission and no destination-only master selection.
+replacement attempts, authenticated explicit runtime admission, queued command/upload
+retirement, bounded recovery health checks and no destination-only master selection.
+The later web part tests upstream's loopback-served-page forwarding visibility;
+service consumers assert that peer addresses do not add a forwarding access gate.
 Whole-system rows remain pending until actually exercised on the integration build.

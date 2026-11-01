@@ -7,14 +7,21 @@ export async function runBinaryProcessWithTimeout(
 ) {
   return runSshCommand(
     argv,
-    (argv, remainingMs) =>
-      spawnBinaryWithTimeout(argv, remainingMs ?? timeoutMs),
+    (argv, remainingMs, signal) =>
+      spawnBinaryWithTimeout(argv, remainingMs ?? timeoutMs, signal),
     { timeoutMs },
   );
 }
 
-async function spawnBinaryWithTimeout(argv: string[], timeoutMs: number) {
+async function spawnBinaryWithTimeout(
+  argv: string[],
+  timeoutMs: number,
+  signal?: AbortSignal,
+) {
+  signal?.throwIfAborted();
   const proc = Bun.spawn(argv, {
+    signal,
+    killSignal: "SIGKILL",
     env: { ...process.env, COPYFILE_DISABLE: "1" },
     stdin: "ignore",
     stdout: "pipe",
@@ -59,8 +66,8 @@ export async function runProcessWithInputTimeout(
 ) {
   return runSshCommand(
     argv,
-    (argv, remainingMs) =>
-      spawnWithInputTimeout(argv, input, remainingMs ?? timeoutMs),
+    (argv, remainingMs, signal) =>
+      spawnWithInputTimeout(argv, input, remainingMs ?? timeoutMs, signal),
     { timeoutMs },
   );
 }
@@ -69,8 +76,12 @@ async function spawnWithInputTimeout(
   argv: string[],
   input: Buffer | string,
   timeoutMs: number,
+  signal?: AbortSignal,
 ) {
+  signal?.throwIfAborted();
   const proc = Bun.spawn(argv, {
+    signal,
+    killSignal: "SIGKILL",
     env: { ...process.env, COPYFILE_DISABLE: "1" },
     stdin: "pipe",
     stdout: "pipe",

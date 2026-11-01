@@ -799,9 +799,14 @@ and again when queued work runs, preserving newer accepted review authority.
 
 The existing runtime-leases/control/drain models retain their accepted bounds.
 Candidate direct consumers add same-destination master isolation, generation-scoped
-forward list/close/retirement and attempt replacement, loopback and explicit owner
-admission, bounded interactive/background queues, deadlines, retry-safe reads and
-no replay of mutations. Real OpenSSH `-G` resolves the generated policy; a controlled
+forward list/close/retirement and attempt replacement, authenticated explicit owner
+admission without a forwarding-specific peer gate, bounded interactive/background
+queues, deadlines, retry-safe reads and no replay of mutations. Maintained direct
+consumers exercise an actual runtime's queued file mutation across retirement and
+same-destination peer continuation, queued upload/cleanup cancellation, retained
+failed-start child ownership and health-check abort/deadline slot release. The
+three independent lifecycle repros also pass; these claims remain consumer-level,
+not new abstract-model or native-platform acceptance. Real OpenSSH `-G` resolves the generated policy; a controlled
 SSH executable checks process execution and retry, not a live remote server.
 Herdr framing fixtures exercise UTF-8 and the exact 1 MiB boundary on Bun.connect
 and node:net while retaining runtime-stop cancellation. The store consumer checks
