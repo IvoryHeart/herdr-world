@@ -66,6 +66,11 @@ export function createEffectRunner(deps: {
   scheduler: Scheduler;
   incarnation: string;
   verb?: string;
+  /**
+   * Narrows this runner to some of the verb's entries, so independent lanes
+   * (for example one per connection) never wait behind each other's drain.
+   */
+  select?(entry: EffectEntry): boolean;
   retryDelay?(attempt: number): number;
   verbs?: EffectVerbLookup;
   driver(verb: string): EffectDriver | undefined;
@@ -78,6 +83,10 @@ export function createEffectRunner(deps: {
 }) {
   const verbs = deps.verbs ?? productionEffectVerb;
   const running = new Map<string, Promise<EffectEntry | null>>();
+  const due = async () =>
+    (await deps.store.list(deps.verb)).filter(
+      (entry) => !deps.select || deps.select(entry),
+    );
   let stopped = false;
   let timer: { cancel(): void } | undefined;
   let planning = Promise.resolve();
@@ -367,7 +376,7 @@ export function createEffectRunner(deps: {
         timer?.cancel();
         timer = undefined;
         if (stopped) return;
-        const next = (await deps.store.list(deps.verb))[0];
+        const next = (await due())[0];
         if (next && !stopped)
           timer = deps.scheduler.schedule(
             () => {
@@ -386,7 +395,7 @@ export function createEffectRunner(deps: {
     draining = (async () => {
       while (requested && !stopped) {
         requested = false;
-        for (const entry of await deps.store.list(deps.verb)) {
+        for (const entry of await due()) {
           if (stopped || entry.due_at > deps.clock.now()) break;
           await run(entry.id);
         }

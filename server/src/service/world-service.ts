@@ -61,6 +61,7 @@ import { runProcessWithCodeTimeout, shQuote } from "../utils/process-utils";
 import { createWorkspaceWorktree } from "../worktree/create";
 import { afterHerdrClose } from "../world/board-closing";
 import { createBoardRecipientRecorder } from "./board-recipients";
+import { createBinService } from "./bin-service";
 import type { createMoveQueue } from "../world/desk-move";
 import { reconcileReadyInterest } from "../world/interest-prune";
 import { serializeWorldInvalidation } from "../world/invalidation";
@@ -324,6 +325,21 @@ async function compose(
     publishBoard: publishBoardChanged,
     broadcast: (line) => broadcast(line, "world-ledger"),
   });
+  /** The agent bin: reversible countdowns, then a durable fenced close. */
+  const bin = createBinService({
+    incarnation: serviceIncarnation,
+    clock,
+    scheduler,
+    settings,
+    board,
+    ledger: () => storage.ledger(),
+    outbox: () => storage.attention(),
+    effects: () => storage.effects(),
+    connections: () => connectionManager,
+    publish: revisionPublisher("world_bin_changed", "world-bin"),
+    log: (message) => logger.warn(message),
+  });
+  void bin.start();
 
   const {
     observe: observeHost,
@@ -384,6 +400,7 @@ async function compose(
         status.generation,
         status.state === "ready",
       );
+      bin.connectionStatus(status);
       publishWorldInvalidation(status.id, status.generation);
       const fields = {
         connection: status.id,
@@ -791,6 +808,7 @@ async function compose(
     snapshotAdmission,
     townMoveQueues,
     ...terminalMarks,
+    bin,
     worldCli,
     worldSnapshots,
   };
@@ -953,6 +971,7 @@ async function compose(
     connectionProfiles.stopSupervision();
     webPush.stop();
     await worldCli.stop();
+    await bin.stop();
     // Drop browser sockets as a process exit does; pages reconnect.
     for (const ws of [...browsers.clients]) ws.terminate();
     try {
