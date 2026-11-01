@@ -568,7 +568,7 @@ export function layoutTown(
     let x = MARGIN;
     for (const lot of row) {
       // A single stacked lot is centred on its street so every floor plan
-      // shares one vertical axis on phones, and the side road stays straight.
+      // shares one vertical axis on phones; its side road runs beside it.
       const lx =
         row.length === 1 ? MARGIN + Math.floor((widestLot - lot.w) / 2) : x;
       const ly = top + (tallest - lot.h);
@@ -581,7 +581,7 @@ export function layoutTown(
           topRoadY: road,
         });
       else townHall = { x: lx, y: ly, w: lot.w, h: lot.h };
-      x = row.length === 1 ? MARGIN + widestLot : lx + lot.w;
+      x = lx + lot.w;
       verticalRoads.push({ x, y0: road + ROAD_GAP, y1: roadY });
       x += ROAD_GAP;
     }

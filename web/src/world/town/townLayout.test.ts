@@ -694,6 +694,9 @@ test("every building and the town hall have roads on at least three sides", () =
       { a: [3], b: [2], c: [5] },
       { a: [3], b: [2], c: [5], d: [1] },
       { a: [3], b: [2], c: [5], d: [1], e: [4], f: [2] },
+      // Mixed widths: stacked lots narrower than the widest keep their road.
+      { a: [24], b: [24, 24] },
+      { a: [24, 24, 24], b: [3], c: [24, 24] },
     ] as Record<string, number[]>[]) {
       const { layout } = layoutTown(town(hosts), shape);
       for (const building of layout.buildings)
