@@ -2,6 +2,7 @@ import type {
   ConversationSource,
   AnswerUnconfirmedReason,
 } from "./conversation";
+import { createMenuPresser } from "./menu-keys";
 import type { PendingPrompt } from "./pending-prompt";
 import type { HerdrCall } from "./session-types";
 import { isRecord, normalizeAgentName, stringValue } from "./session-utils";
@@ -21,8 +22,7 @@ function emptyDiscussionComposer(text: string | null) {
   );
 }
 
-/** Answer only the checked screen in its originating pane and session. */
-export function createPromptAnswerer(args: {
+type PromptActionArgs = {
   herdrCall: HerdrCall;
   agentInfo(paneId: string): Promise<Record<string, unknown> | null>;
   readPrompt(
@@ -30,7 +30,31 @@ export function createPromptAnswerer(args: {
     info: Record<string, unknown> | null,
   ): Promise<PendingPrompt | null>;
   isCodexBound(paneId: string): Promise<boolean>;
-}): ConversationSource["answer"] {
+};
+
+/** Answer only the checked screen in its originating pane and session. */
+export function createPromptAnswerer(
+  args: PromptActionArgs,
+): ConversationSource["answer"] {
+  return createPromptActions(args).answer;
+}
+
+/**
+ * Chat's input to an agent's pane, one action per pane at a time: answering
+ * its question, and pressing keys in its command menus or from the composer.
+ */
+export function createPromptActions(
+  args: PromptActionArgs & {
+    /** Read a command menu shown while the agent is idle or done. */
+    readMenu?(
+      paneId: string,
+      info: Record<string, unknown> | null,
+    ): Promise<PendingPrompt | null>;
+    /** The session Chat would send to in this pane, or null. */
+    sessionFingerprint?(paneId: string): Promise<string | null>;
+    delay?(ms: number): Promise<void>;
+  },
+): Pick<ConversationSource, "answer" | "press"> {
   const answer: ConversationSource["answer"] = async ({
     pane_id,
     key,
@@ -352,21 +376,36 @@ export function createPromptAnswerer(args: {
       prompt_fingerprint: prompt.fingerprint,
     };
   };
+  const press = createMenuPresser(args);
   const active = new Set<string>();
-  return async (target) => {
-    if (active.has(target.pane_id))
-      return {
-        status: "refused",
-        reason: "busy",
-        message:
-          "Chat is already answering this pane. Check the current question before trying again.",
-        pending_prompt: null,
-      };
-    active.add(target.pane_id);
-    try {
-      return await answer(target);
-    } finally {
-      active.delete(target.pane_id);
-    }
+  const once =
+    <T extends { pane_id: string }, R>(
+      run: (target: T) => Promise<R>,
+      busy: R,
+    ) =>
+    async (target: T) => {
+      if (active.has(target.pane_id)) return busy;
+      active.add(target.pane_id);
+      try {
+        return await run(target);
+      } finally {
+        active.delete(target.pane_id);
+      }
+    };
+  const message =
+    "Chat is already sending to this pane. Check the current question before trying again.";
+  return {
+    answer: once(answer, {
+      status: "refused",
+      reason: "busy",
+      message,
+      pending_prompt: null,
+    }),
+    press: once(press, {
+      status: "refused",
+      reason: "busy",
+      message,
+      menu: null,
+    }),
   };
 }

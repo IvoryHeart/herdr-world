@@ -1,8 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHerdrConversationSource } from "./herdr-conversation";
+import { parseCommandMenu } from "./pending-prompt";
 import { localAgentSessionFiles } from "./session-file-access";
 import { createSessionProjectionCache } from "./session-projection-cache";
 import { createAgentSessionResolverContext } from "./session-resolver";
@@ -434,5 +436,198 @@ describe("answering a blocked agent's prompt", () => {
     state.status = "working";
     const read = await source.read({ pane_id: "w1:p1" });
     expect(read.pending_prompt).toBeNull();
+  });
+});
+
+describe("a command menu open while the agent is idle", () => {
+  const menuScreen = () =>
+    readFileSync(
+      new URL(
+        "./fixtures/pending-prompts/menu-claude-permission-where.txt",
+        import.meta.url,
+      ),
+      "utf8",
+    );
+
+  test("Chat reads it when it asks for menus; others never do", async () => {
+    const { state, source } = fakeHerdr();
+    state.status = "idle";
+    state.screen = menuScreen();
+    expect((await source.latest({ pane_id: "w1:p1" })).pending_prompt).toBe(
+      null,
+    );
+    const shown = await source.latest({ pane_id: "w1:p1", menus: true });
+    expect(shown.pending_prompt).toMatchObject({
+      question: ["Add allow permission rule"],
+      menu: { footer: "Enter to confirm · Esc to cancel" },
+    });
+    // A working agent shows no menu Chat could answer.
+    state.status = "working";
+    expect(
+      (await source.latest({ pane_id: "w1:p1", menus: true })).pending_prompt,
+    ).toBe(null);
+  });
+
+  test("a blocked pane shows a menu only without a question or open tool call", async () => {
+    const listed = readFileSync(
+      new URL(
+        "./fixtures/pending-prompts/menu-claude-permissions-list.txt",
+        import.meta.url,
+      ),
+      "utf8",
+    );
+    const { state, source } = fakeHerdr();
+    state.screen = listed;
+    // Herdr's screen rules call this list a blocked form.
+    const shown = await source.latest({ pane_id: "w1:p1", menus: true });
+    expect(shown.pending_prompt?.menu?.footer).toStartWith("↑/↓ to navigate");
+    // Without menus (Town), the same screen stays an unreadable question.
+    const town = await source.latest({ pane_id: "w1:p1" });
+    expect(town.pending_prompt?.menu).toBeUndefined();
+    expect(town.pending_prompt?.options).toEqual([]);
+    // A recognised question wins over a menu-shaped screen.
+    state.screen = PROMPT;
+    expect(
+      (await source.latest({ pane_id: "w1:p1", menus: true })).pending_prompt
+        ?.menu,
+    ).toBeUndefined();
+    // So does a tool call still open in the transcript: it may be asking.
+    const asking = join(root, "asking.jsonl");
+    await writeFile(
+      asking,
+      `${JSON.stringify({
+        type: "assistant",
+        timestamp: new Date().toISOString(),
+        message: {
+          role: "assistant",
+          content: [
+            { type: "tool_use", id: "call-1", name: "Bash", input: {} },
+          ],
+        },
+      })}\n`,
+    );
+    state.session = asking;
+    state.screen = listed;
+    const open = await source.latest({ pane_id: "w1:p1", menus: true });
+    expect(open.running_tool?.id).toBe("call-1");
+    expect(open.pending_prompt?.menu).toBeUndefined();
+    const refused = await source.press({
+      pane_id: "w1:p1",
+      key: "down",
+      session_fingerprint: open.session_fingerprint!,
+      menu_fingerprint: shown.pending_prompt!.fingerprint,
+    });
+    expect(refused).toMatchObject({ status: "refused", menu: null });
+    expect(state.sent).toEqual([]);
+  });
+
+  test("a key reaches the menu only for the session Chat showed", async () => {
+    const { state, source } = fakeHerdr();
+    state.status = "idle";
+    state.screen = menuScreen();
+    const shown = await source.latest({ pane_id: "w1:p1", menus: true });
+    state.onSend = () => {
+      state.screen = "❯ /permissions\n  ⎿  Added allow rule Bash(ls *)\n";
+    };
+    const press = () =>
+      source.press({
+        pane_id: "w1:p1",
+        key: "1",
+        session_fingerprint: shown.session_fingerprint!,
+        menu_fingerprint: shown.pending_prompt!.fingerprint,
+      });
+    expect(await press()).toEqual({ status: "sent", key: "1", menu: null });
+    expect(state.sent).toEqual([{ pane_id: "w1:p1", text: "", keys: ["1"] }]);
+    // After the session changes, the same card's key is refused.
+    state.screen = menuScreen();
+    state.session = join(root, "other.jsonl");
+    expect(await press()).toMatchObject({
+      status: "refused",
+      reason: "changed",
+    });
+    expect(state.sent).toHaveLength(1);
+  });
+});
+
+const quotedConfirmation = [
+  "• The confirmation looks like this:",
+  "",
+  "    Enable full access?",
+  "    When Codex runs with full access, it can edit any file.",
+  "",
+  "  › 1. Yes, continue anyway  Apply full access for this session",
+  "    2. Cancel                Go back without enabling full access",
+  "",
+  "    enter select · esc back",
+  "",
+  "› Ask Codex to do anything",
+  "",
+  "  GPT-6.1-Sol high · Context 0% used",
+  "  ? for shortcuts",
+].join("\n");
+
+describe("a Codex menu drawn above its composer", () => {
+  const rollout = async (name: string, said: string) => {
+    const path = join(root, `rollout-${name}.jsonl`);
+    await writeFile(
+      path,
+      [
+        { type: "session_meta", payload: { id: name, cwd: root } },
+        {
+          type: "response_item",
+          timestamp: new Date().toISOString(),
+          payload: {
+            type: "message",
+            role: "assistant",
+            content: [{ type: "output_text", text: said }],
+          },
+        },
+      ]
+        .map((line) => JSON.stringify(line))
+        .join("\n") + "\n",
+    );
+    return path;
+  };
+
+  test("is the agent's message when its last message quotes it", async () => {
+    const { state, source } = fakeHerdr("codex");
+    state.status = "done";
+    state.screen = quotedConfirmation;
+    state.session = await rollout(
+      "quoting",
+      "The confirmation looks like this:\n\n    Enable full access?\n    enter select · esc back",
+    );
+    const shown = await source.latest({ pane_id: "w1:p1", menus: true });
+    expect(shown.session_fingerprint).toBeTruthy();
+    expect(shown.pending_prompt).toBeNull();
+    // Nor can a key reach the composer through it.
+    const fingerprint = parseCommandMenu("codex", quotedConfirmation, {
+      session: null,
+      seq: null,
+    })!.fingerprint;
+    expect(
+      await source.press({
+        pane_id: "w1:p1",
+        key: "1",
+        session_fingerprint: shown.session_fingerprint!,
+        menu_fingerprint: fingerprint,
+      }),
+    ).toMatchObject({ status: "refused", menu: null });
+    expect(state.sent).toEqual([]);
+  });
+
+  test("is Codex's confirmation when the transcript does not quote it", async () => {
+    const { state, source } = fakeHerdr("codex");
+    state.status = "done";
+    state.screen = readFileSync(
+      new URL(
+        "./fixtures/pending-prompts/menu-codex-full-access.txt",
+        import.meta.url,
+      ),
+      "utf8",
+    );
+    state.session = await rollout("confirming", "Permissions are set.");
+    const shown = await source.latest({ pane_id: "w1:p1", menus: true });
+    expect(shown.pending_prompt?.question).toEqual(["Enable full access?"]);
   });
 });

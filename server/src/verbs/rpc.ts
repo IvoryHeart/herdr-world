@@ -42,6 +42,12 @@ export const rpcVerbs = [
   rpc("agent_conversation.get", "read", "runtime", object({ pane_id: text })),
   rpc("agent_conversation.latest", "read", "runtime"),
   rpc(
+    "agent_conversation.press",
+    "opaque",
+    "runtime",
+    object({ pane_id: text }),
+  ),
+  rpc(
     "agent_conversation.send",
     "opaque",
     "runtime",

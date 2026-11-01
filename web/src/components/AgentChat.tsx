@@ -24,6 +24,8 @@ import { CodexSessionLink } from "./CodexSessionLink";
 import { QuestLog } from "./QuestLog";
 import { useStepEvidence } from "./chat/useStepEvidence";
 import { useChatBlocks } from "./chat/useChatBlocks";
+import { useChatKeys } from "./chat/useChatKeys";
+import { isSlashCommand } from "../../../shared/conversationInput";
 import { ChatAfterBlocks, decorateChat } from "./chat/blocks/registry";
 import type { WorkItem } from "../../../shared/worldSources";
 import {
@@ -105,7 +107,7 @@ export function AgentChat({
     const seq = ++seqRef.current;
     setLoading(true);
     connectionClient
-      .call("agent_conversation.latest", { pane_id: pane.pane_id })
+      .call("agent_conversation.latest", { pane_id: pane.pane_id, menus: true })
       .then((result) => {
         if (seq !== seqRef.current || !connectionClient.isCurrent()) return;
         const reply = result as Partial<Conversation> | null;
@@ -139,6 +141,22 @@ export function AgentChat({
   }, [connectionClient, pane.pane_id]);
   const loadRef = useRef(load);
   loadRef.current = load;
+  // Chat's interactions belong to this connection, runtime, pane and session.
+  const answerScope = JSON.stringify([
+    connectionClient.connectionId,
+    connectionClient.generation,
+    connectionClient.serverRuntimeGeneration,
+    pane.pane_id,
+    conversation?.session_fingerprint,
+  ]);
+  const keys = useChatKeys({
+    client: connectionClient,
+    paneId: pane.pane_id,
+    sessionFingerprint: conversation?.session_fingerprint ?? null,
+    scope: answerScope,
+    reload: load,
+  });
+  const { afterCommand } = keys;
   const history = useAgentHistoryWindow({
     pane,
     client: connectionClient,
@@ -202,10 +220,12 @@ export function AgentChat({
       }
       load();
       refreshHistory();
+      if (isSlashCommand(text)) afterCommand();
     },
     [
       connectionClient,
       conversation,
+      afterCommand,
       history.messages,
       load,
       pane.pane_id,
@@ -281,13 +301,6 @@ export function AgentChat({
     acknowledged: boolean;
     unconfirmed_reason: UnconfirmedReason | null;
   } | null>(null);
-  const answerScope = JSON.stringify([
-    connectionClient.connectionId,
-    connectionClient.generation,
-    connectionClient.serverRuntimeGeneration,
-    pane.pane_id,
-    conversation?.session_fingerprint,
-  ]);
   const [askNotice, setAskNotice] = useState<{
     scope: string;
     text: string;
@@ -722,8 +735,14 @@ export function AgentChat({
                 prompt={showAsk ? prompt : null}
                 agent={conversation?.agent ?? "The agent"}
                 answering={answering}
-                notice={askNotice?.scope === answerScope ? askNotice.text : ""}
+                notice={
+                  keys.notice ||
+                  (askNotice?.scope === answerScope ? askNotice.text : "")
+                }
                 onAnswer={(key, text) => void answer(key, text)}
+                pressing={keys.pressing}
+                onPress={(key) => keys.pressMenu(prompt!.fingerprint, key)}
+                onType={(text) => keys.pressMenu(prompt!.fingerprint, "", text)}
                 onOpenTerminal={onOpenTerminal}
               />
             }
@@ -767,6 +786,11 @@ export function AgentChat({
               : undefined
           }
           onSubmit={send}
+          onKey={(key) =>
+            void keys.press(key).then((refused) => {
+              if (refused) setNotice(refused);
+            })
+          }
           onError={setNotice}
         />
       ) : null}

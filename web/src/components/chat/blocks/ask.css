@@ -163,3 +163,40 @@
 .agent-chat-answered b {
   color: var(--text);
 }
+
+/* A command menu: the option under the harness's cursor, and its keys. */
+.agent-chat-ask-options button.is-cursor {
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.agent-chat-menu-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.agent-chat-menu-keys button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 4px 10px;
+  color: var(--text);
+  font-size: 12.5px;
+  background: var(--input-bg);
+  border: 1px solid var(--border-soft);
+  border-radius: 9px;
+  cursor: pointer;
+}
+
+.agent-chat-menu-keys button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.agent-chat-menu-keys kbd {
+  min-width: 1.4em;
+  font: 600 11px var(--font-mono, ui-monospace, monospace);
+  text-align: center;
+}
