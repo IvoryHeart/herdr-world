@@ -40,10 +40,13 @@ reset inactivity or suppress timeout reporting.
 If the alert cannot be delivered, the timeout and alert failure remain in the
 local ledger/feed; the slot stays released. Inspect `agent:crew runs --pr <N>`,
 `status`, the round's pane and its run log before deciding what to do next.
-Completion evidence observed before settlement releases the slot normally and
-keeps the completed chat, including a manual review with no action row. Manual
+Completion evidence observed before settlement releases the slot normally;
+reviewer sessions exit and remain available through `open --run`, including
+a manual review with no action row. Manual
 completion requires a valid RESULT from its reviewer on its pinned head, posted
-after that run started. A known Codex session remains readable in its original
+after that run started and no later than the observing pass. Trusted explicit
+pinned-head posts also finish manual reviews after an unreconciled push without
+carrying review acceptance to that new head. A known Codex session remains readable in its original
 date folder as newer session folders appear; only new-session discovery uses
 the two newest folders. Late worker finalization cannot erase a recorded
 timeout; a late valid reviewer RESULT clears its notice. A merged or closed PR
@@ -184,7 +187,7 @@ ledger. Everything after the hand-off already runs without you:
 - the crew watcher (`bun run agent:crew -- watch`) starts fresh reviewers for
   the first round, then admits scoped rounds after finding replies and a quiet
   period (see [review rounds](#review-rounds-and-evaluation)), sends findings back to the author
-  seat (or to a fresh fixer when that seat is busy on another PR), and marks a head
+  seat (or to a fresh fixer when that seat is absent or busy on another PR), and marks a head
   `crew/merge-ready` or `crew/needs-owner`;
 - the owner merges, and only PRs whose head shows a green `crew/merge-ready`.
 
