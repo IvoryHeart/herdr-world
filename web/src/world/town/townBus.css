@@ -72,7 +72,9 @@
   gap: 6px;
   min-height: 44px;
   min-width: 44px;
+  max-width: 140px;
   padding: 0 12px;
+  white-space: nowrap;
   border: 1px solid #1c1722;
   border-radius: 22px;
   background: #d7261e;
@@ -85,8 +87,7 @@
 }
 
 .town-bus-chip[data-carrying="true"] {
-  min-height: 56px;
-  padding: 0 16px;
+  min-height: 52px;
   box-shadow: 0 0 0 4px rgb(255 209 102 / 60%);
 }
 

@@ -111,3 +111,40 @@ test("put back, pause and close now act only on the staged countdown", async () 
   await f.rpc("world.bin.unknown");
   expect(f.errors).toEqual(["unknown bin operation"]);
 });
+
+test("every bridge-global verb, the bin's included, is admitted for the browser as dispatch routes it", async () => {
+  const { VERBS, registeredVerb } = await import("../verbs/registry");
+  const { admitVerb } = await import("../verbs/admission");
+  const { isBridgeGlobalMethod } = await import("../connections/protocol");
+  const { routeCapabilities } = await import("../service/rpc-dispatch");
+  const bridge = routeCapabilities("bridge");
+  const missing = VERBS.filter(
+    (verb) =>
+      verb.channel === "rpc" &&
+      isBridgeGlobalMethod(verb.name) &&
+      verb.policy.browser !== "deny" &&
+      verb.capabilities.some((capability) => !bridge.has(capability)),
+  ).map((verb) => verb.name);
+  expect(missing).toEqual([]);
+  expect(() =>
+    admitVerb(
+      registeredVerb("rpc", "world.bin.add"),
+      {
+        connection_id: "studio",
+        connection_generation: 3,
+        workspace_id: "w1",
+        tab_id: "t1",
+        pane_id: "p1",
+        terminal_id: "term-1",
+        label: "Example agent",
+        view: "town",
+      },
+      {
+        actor: "browser",
+        authorized: () => true,
+        capabilities: () => bridge,
+        preconditions: () => true,
+      },
+    ),
+  ).not.toThrow();
+});

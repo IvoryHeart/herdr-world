@@ -25,6 +25,7 @@
     "WorldViewErrorBoundary": 0.434,
     "groups/GroupsWindow": 7.594,
     "town/TownCanvas": 84.195,
+    "town/TownCanvas.bus": 20,
     "town/TownCanvas.extended": 77.432,
     "town/TownCanvas.fold": 32.469,
     "town/TownCanvas.navigation": 44.294,

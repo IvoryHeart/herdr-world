@@ -1,3 +1,4 @@
+import { createFakeBin } from "./testing/fakeBin";
 import {
   applyAppearance,
   type AppearanceTarget,
@@ -257,6 +258,13 @@ bridge.call = (async (method: string, params?: Record<string, unknown>) =>
   method === "world.asks.get"
     ? structuredClone(askLedger)
     : originalAskCall(method, params)) as typeof bridge.call;
+// The World bin's service: a fixture registry that never closes anything.
+const fakeBin = createFakeBin("board-fixture");
+const beforeBin = bridge.call.bind(bridge);
+bridge.call = (async (method: string, params?: Record<string, unknown>) =>
+  method.startsWith("world.bin.")
+    ? fakeBin.call(method, params)
+    : beforeBin(method, params)) as typeof bridge.call;
 
 let saved: BoardDocument = emptyDocument();
 // `?colors=demo` (for screenshots) starts with chosen workspace and host colours.
@@ -744,6 +752,95 @@ async function boardAction(selector: string) {
 
 /** Board scenarios, each on a fresh board (see fresh()); run in order. */
 const scenarios: [name: string, run: () => Promise<void>][] = [
+  [
+    "drops a tab card in the bin",
+    async () => {
+      for (let i = 0; i < 4; i++)
+        host
+          .querySelector<HTMLButtonElement>('[aria-label="Zoom in"]')!
+          .click();
+      await settle(100);
+      const binned = () =>
+        card("studio:w1:t1")?.classList.contains("board-binned") === true;
+      const calls = (method: string) =>
+        fakeBin.calls.filter((call) => call.method === method).length;
+      // Carry the card towards the corner: the bin rises; release over it.
+      const tab = card("studio:w1:t1")!;
+      const from = centre(tab);
+      pointer(tab, "pointerdown", from.x, from.y);
+      for (let step = 1; step <= 6; step++) {
+        pointer(tab, "pointermove", from.x + step * 10, from.y + step * 6);
+        await settle(16);
+      }
+      const can = host.querySelector<HTMLElement>(".world-bin-can")!;
+      await waitFor(
+        () => can.getBoundingClientRect().width > 0,
+        "the bin rises while a card is carried",
+      );
+      const bin = centre(can);
+      for (let step = 1; step <= 4; step++) {
+        pointer(tab, "pointermove", bin.x, bin.y);
+        await settle(16);
+      }
+      check(
+        /Release to bin|is working/.test(
+          host.querySelector(".world-bin-label")?.textContent ?? "",
+        ),
+        "over the bin it says what will happen",
+      );
+      pointer(tab, "pointerup", bin.x, bin.y);
+      await waitFor(
+        () => calls("world.bin.add") === 1,
+        "the drop adds to the bin",
+      );
+      const add = fakeBin.calls.find(
+        (call) => call.method === "world.bin.add",
+      )!;
+      check(
+        add.params.connection_id === "studio" &&
+          Number.isSafeInteger(add.params.connection_generation) &&
+          add.params.tab_id === "w1:t1" &&
+          typeof add.params.pane_id === "string" &&
+          typeof add.params.terminal_id === "string" &&
+          add.params.view === "board",
+        `the bin add is qualified: ${JSON.stringify(add.params)}`,
+      );
+      await waitFor(binned, "a waiting card is hidden");
+
+      // Open the bin: every countdown pauses; Put back returns the card.
+      host.querySelector<HTMLButtonElement>(".world-bin-can")!.click();
+      await waitFor(() => calls("world.bin.pause") === 1, "opening pauses");
+      const putBack = [
+        ...host.querySelectorAll<HTMLButtonElement>(".world-bin-tray button"),
+      ].find((button) => button.textContent === "Put back")!;
+      putBack.click();
+      await waitFor(
+        () => calls("world.bin.restore") === 1,
+        "Put back restores",
+      );
+      await waitFor(() => !binned(), "the card is back in its place");
+
+      // The selection bar's Close agent… does the same without dragging.
+      await bringIntoView(() => card("studio:w1:t1")!);
+      const t = centre(card("studio:w1:t1")!);
+      pointer(card("studio:w1:t1")!, "pointerdown", t.x, t.y);
+      pointer(card("studio:w1:t1")!, "pointerup", t.x, t.y);
+      await waitFor(
+        () => host.querySelector(".board-bin-action") !== null,
+        "a selected tab offers Close agent…",
+      );
+      host.querySelector<HTMLButtonElement>(".board-bin-action")!.click();
+      await waitFor(() => calls("world.bin.add") === 2, "Close agent… adds");
+      await waitFor(binned, "Close agent… hides the card too");
+      host.querySelector<HTMLButtonElement>(".world-bin-can")!.click();
+      await waitFor(() => calls("world.bin.pause") === 2, "opening pauses");
+      [...host.querySelectorAll<HTMLButtonElement>(".world-bin-tray button")]
+        .find((button) => button.textContent === "Put back")!
+        .click();
+      await waitFor(() => !binned(), "the card comes back again");
+      check(calls("world.bin.close_now") === 0, "nothing was closed");
+    },
+  ],
   [
     "Work stays labelled and note actions survive mobile overflow",
     async () => {

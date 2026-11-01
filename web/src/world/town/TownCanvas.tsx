@@ -616,7 +616,7 @@ export function TownCanvas({
           case "desk":
             return actions.onDropDesk(command.deskKey, command.roomKey);
           case "bin":
-            return busRef.current.send(command.agentKey);
+            return busRef.current.send(command.key, command.carried);
         }
       },
       ghost: {

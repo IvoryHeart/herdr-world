@@ -125,7 +125,22 @@ export function useTownBus({
   };
 
   /** Stage an agent for the bus; Town lands it at the stop or springs back. */
-  const send = async (agentKey: string): Promise<TownMoveResult> => {
+  const send = async (
+    key: string,
+    carried: "agent" | "desk" = "agent",
+  ): Promise<TownMoveResult> => {
+    // A desk sends its agent (its first agent pane).
+    const agentKey =
+      carried === "desk"
+        ? projection.rooms
+            .flatMap((room) => room.desks)
+            .find((desk) => desk.key === key)
+            ?.paneDevices.find((device) => device.agentKey)?.agentKey
+        : key;
+    if (!agentKey) {
+      report("Only agents ride the bus; this desk has none");
+      return "returned";
+    }
     const drop = binDropOfAgent(projection, agentKey, "town");
     if ("refusal" in drop) {
       report(drop.refusal);
@@ -161,6 +176,8 @@ export function useTownBus({
   useEffect(
     () =>
       hud().onFrame(() => {
+        // A carry shows the drag ghost; its absence ends a carry for sure.
+        setCarrying(document.querySelector(".town-drag-ghost") !== null);
         const camera = view.camera;
         const l = layout();
         if (!camera || !l) return;
@@ -169,7 +186,9 @@ export function useTownBus({
           l.busStop.y * 16 - 8,
         );
         const { width, height, inset } = camera.viewport;
-        const pad = 30;
+        // Keep the whole chip on screen (it is centred on this point).
+        const padX = 72,
+          padY = 32;
         const inside =
           stop.x > inset.left &&
           stop.x < width - inset.right &&
@@ -181,15 +200,15 @@ export function useTownBus({
               x:
                 Math.round(
                   Math.min(
-                    width - inset.right - pad,
-                    Math.max(inset.left + pad, stop.x),
+                    width - inset.right - padX,
+                    Math.max(inset.left + padX, stop.x),
                   ) / 4,
                 ) * 4,
               y:
                 Math.round(
                   Math.min(
-                    height - inset.bottom - pad,
-                    Math.max(inset.top + pad, stop.y),
+                    height - inset.bottom - padY,
+                    Math.max(inset.top + padY, stop.y),
                   ) / 4,
                 ) * 4,
             };
@@ -244,7 +263,7 @@ export function useTownBus({
           >
             <span aria-hidden="true">🚌</span>
             {carrying ? (
-              <span>Send to the bus stop</span>
+              <span>Bus stop</span>
             ) : next ? (
               <span>
                 {clock(next.remaining)} · {bin.entries.length}

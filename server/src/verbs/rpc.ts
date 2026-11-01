@@ -211,10 +211,12 @@ export const rpcVerbs = [
   rpc("world.ask.delivery.resend", "reconcilable", "world"),
   rpc("world.ask.dismiss", "reconcilable", "world"),
   rpc("world.asks.get", "read", "world"),
+  // The handler qualifies the named host's current runtime itself: world.*
+  // requests are bridge-global and never carry the runtime capability.
   rpc(
     "world.bin.add",
     "reconcilable",
-    "runtime",
+    "world",
     object({
       connection_id: text,
       connection_generation: Type.Integer({ minimum: 0 }),

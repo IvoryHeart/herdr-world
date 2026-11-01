@@ -39,4 +39,8 @@ export const townCanvasCases = {
     [390, 844, "navigation", 0],
     [1440, 900, "navigation", 0],
   ],
+  bus: [
+    [1440, 900, "bus", 0],
+    [390, 844, "bus", 0],
+  ],
 } satisfies Record<string, TownCanvasCase[]>;

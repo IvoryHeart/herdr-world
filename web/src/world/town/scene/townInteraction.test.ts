@@ -955,15 +955,17 @@ test("an agent carried to the bus stop is sent to the bin, and the town holds st
   t.frames.step();
   t.frames.step();
   expect(t.camera.x).toBe(x);
-  expect(t.ghost.at(-1)?.[3]).toBe("bin");
+  expect(t.ghost[t.ghost.length - 1]?.[3]).toBe("bin");
   t.lift(pointer, over);
-  expect(t.moves).toEqual([{ kind: "bin", agentKey }]);
+  expect(t.moves).toEqual([{ kind: "bin", carried: "agent", key: agentKey }]);
 });
 
-test("a desk carried over the bus stop is not sent to the bin", () => {
+test("a desk carried to the bus stop sends its agent to the bin", () => {
   const stop = { x: 600, y: 400, w: 120, h: 100 };
   const t = setup({ stop });
-  const at = t.deskCentre(t.deskCell(0));
-  carry(t, at, { x: 650, y: 450 });
-  expect(t.moves.some((move) => move.kind === "bin")).toBe(false);
+  const cell = t.deskCell(0);
+  carry(t, t.deskCentre(cell), { x: 650, y: 450 });
+  expect(t.moves).toEqual([
+    { kind: "bin", carried: "desk", key: cell.deskKey! },
+  ]);
 });

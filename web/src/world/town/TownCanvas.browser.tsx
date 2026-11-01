@@ -14,6 +14,8 @@ import { WORLD_AGENT_LAUNCH_EVENT, type LaunchTarget } from "../agentProfiles";
 import { sharedAsksStore, type WorldAsk } from "../worldAsks";
 import type { AnswerNotice } from "../worldAnswerDeliveries";
 import { checkTownRoomPlates } from "./townRoomPlates.browser";
+import { checkTownBus } from "./townBus.browser";
+import { createFakeBin } from "../testing/fakeBin";
 import { checkTownRoomFold, tapTownControl } from "./townRoomFold.browser";
 import type { BoardDocument, BoardOp } from "../board/boardDocument";
 import {
@@ -618,7 +620,9 @@ const completionSeen = {
     revision: number;
   }[],
 };
+const fakeBin = createFakeBin();
 worldBridge.call = async (method, params) => {
+  if (method.startsWith("world.bin.")) return fakeBin.call(method, params);
   if (method.startsWith("world.completion_seen.")) {
     const identity = params as {
       connection_id: string;
@@ -1276,6 +1280,13 @@ async function run() {
       ) !== null,
     "town targets did not finish progressive admission",
   );
+
+  if (scale === "bus" && mode === "test") {
+    await checkTownBus(host, check, waitFor, fakeBin);
+    root.unmount();
+    await settle();
+    return;
+  }
 
   if (scale === "plates" && mode === "test") {
     await checkTownRoomPlates(host, check, waitFor, {

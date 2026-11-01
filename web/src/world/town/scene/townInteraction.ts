@@ -64,8 +64,8 @@ export type TownMoveCommand =
   | { kind: "ungroup"; deskKey: string }
   /** Into `ontoDeskKey`'s slot, or last in its room when null. */
   | { kind: "reorder"; deskKey: string; ontoDeskKey: string | null }
-  /** To the bus stop: the agent waits in the bin for the bus. */
-  | { kind: "bin"; agentKey: string };
+  /** To the bus stop: the agent (or a desk's agent) waits for the bus. */
+  | { kind: "bin"; carried: "agent" | "desk"; key: string };
 
 export type TownInteractionPorts = {
   clock: TownClock;
@@ -408,8 +408,7 @@ export class TownInteraction {
   /** A carried agent rests over the bus stop or its chip. */
   private overBusStop(at: Point) {
     const stage = this.ports.stage();
-    if (this.carrying?.kind !== "agent" || !stage || !this.ports.busStop)
-      return false;
+    if (!this.carrying || !stage || !this.ports.busStop) return false;
     return this.ports.busStop(stage.camera.toWorld(at.x, at.y), at);
   }
 
@@ -473,7 +472,8 @@ export class TownInteraction {
 
   private drop(drag: TownDrag, targetKey: string): TownMoveCommand {
     const action = drag.target?.action;
-    if (action === "bin") return { kind: "bin", agentKey: drag.key };
+    if (action === "bin")
+      return { kind: "bin", carried: drag.kind, key: drag.key };
     if (drag.kind === "agent")
       return { kind: "agent", agentKey: drag.key, deskKey: targetKey };
     if (action === "group")
