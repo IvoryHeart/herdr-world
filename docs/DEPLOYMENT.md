@@ -422,7 +422,7 @@ verified release:
 
 ```bash
 herdr-world herdr status
-herdr-world herdr setup             # install if missing, then start a user service
+herdr-world herdr setup             # register future startup; start only if down
 herdr-world herdr upgrade           # Herdr, harness integrations and plugin
 herdr-world herdr upgrade --install # also install Herdr when none is found
 ```
@@ -432,6 +432,23 @@ location: `~/.local/bin/herdr` on Linux and macOS, or
 `%LOCALAPPDATA%\Programs\Herdr\bin\herdr.exe` on Windows (`HERDR_INSTALL_DIR`
 overrides both, as it does for Herdr's own installers). A Herdr that World installs
 lands there, so `herdr` and `herdr update` find it afterwards.
+
+Explicit `herdr setup` configures the default local user service even when Herdr
+is already reachable. A running server is preserved: systemd reloads/enables its
+unit without restarting, macOS writes/enables its LaunchAgent for the next login
+without bootout/bootstrap, and Windows registers its logon task without starting
+or stopping it. An unmanaged live process is not adopted by a new supervisor.
+The registered definition takes effect at the next user login (or a later
+explicit service start). If the running server's executable cannot be found,
+setup fails with guidance to set `HERDR_BIN_PATH`; it does not download a second
+runtime. Registration errors are failures, not reachability-only success.
+Before registering a running server's future startup, setup requires the selected
+binary to be a regular executable file. A directory or non-executable entry is
+preserved and reported for repair, without changing service registration.
+SSH, named sessions and custom control/render sockets remain ineligible for
+managed setup. Normal World startup reconnects to Herdr without registering a
+service. World service activation, downstream runtime readiness and browser/PWA
+reopening are separate; this setup behavior does not verify macOS login recovery.
 
 When it runs:
 
