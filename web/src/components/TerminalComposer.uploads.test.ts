@@ -121,6 +121,7 @@ async function registerDomTests() {
       return pending.promise;
     };
     let fileUpload: ComposerUpload = upload;
+    let pathInsertion: (() => (text: string) => Promise<void>) | undefined;
     const render = () =>
       root!.render(
         createElement(TerminalComposer, {
@@ -142,6 +143,7 @@ async function registerDomTests() {
           },
           onUploadImage: upload,
           onUploadFile: fileUpload,
+          onPreparePathInsertion: pathInsertion,
           onError: (message) => errors.push(message),
         }),
       );
@@ -219,6 +221,12 @@ async function registerDomTests() {
       fileUpload = next;
       await act(async () => render());
     };
+    const replacePathInsertion = async (
+      next: () => (text: string) => Promise<void>,
+    ) => {
+      pathInsertion = next;
+      await act(async () => render());
+    };
     return {
       key,
       connection,
@@ -235,6 +243,7 @@ async function registerDomTests() {
       remount,
       switchDraft,
       replaceFileUpload,
+      replacePathInsertion,
       directInput,
     };
   }
@@ -255,7 +264,7 @@ async function registerDomTests() {
     );
   }
 
-  async function pickerHarness() {
+  async function pickerHarness(pauseAfterFirstInsertion = false) {
     const h = await mount("", 0, 0, false, undefined, "chat");
     let current = true;
     const client = {
@@ -279,10 +288,12 @@ async function registerDomTests() {
     const key = chatComposerDraftKey(client, pane, fingerprint);
     await h.switchDraft(key);
     const requests: string[] = [];
+    const dispatchedGenerations: number[] = [];
     globalThis.fetch = (async (url) => {
       requests.push(String(url));
+      const name = new URL(String(url)).searchParams.get("filename");
       return Response.json(
-        { path: "/synthetic/owned.png" },
+        { path: `/synthetic/${name}` },
         {
           headers: {
             "X-Herdr-Connection-Id": client.connectionId,
@@ -293,9 +304,24 @@ async function registerDomTests() {
     }) as typeof fetch;
     const bind =
       (owner: ConnectionClient): ComposerUpload =>
-      (file) =>
-        uploadTerminalFile(owner, file);
+      (file) => {
+        dispatchedGenerations.push(owner.generation);
+        return uploadTerminalFile(owner, file);
+      };
     await h.replaceFileUpload(bind(client));
+    const firstInserted = Promise.withResolvers<void>();
+    const continueBatch = Promise.withResolvers<void>();
+    let paused = false;
+    if (pauseAfterFirstInsertion) {
+      await h.replacePathInsertion(() => async (text) => {
+        drafts.insertIntoTerminalComposerDraft(key, text);
+        if (!paused) {
+          paused = true;
+          firstInserted.resolve();
+          await continueBatch.promise;
+        }
+      });
+    }
     const input =
       h.container.querySelector<HTMLInputElement>('input[type="file"]')!;
     await act(async () =>
@@ -303,12 +329,14 @@ async function registerDomTests() {
         .querySelector<HTMLButtonElement>('[aria-label="Add a file"]')!
         .click(),
     );
-    const choose = async () => {
+    const choose = async (
+      files = [
+        new browser.File(["synthetic"], "owned.png", { type: "image/png" }),
+      ],
+    ) => {
       Object.defineProperty(input, "files", {
         configurable: true,
-        value: [
-          new browser.File(["synthetic"], "owned.png", { type: "image/png" }),
-        ],
+        value: files,
       });
       await act(async () =>
         input.dispatchEvent(
@@ -329,6 +357,11 @@ async function registerDomTests() {
       pane,
       fingerprint,
       requests,
+      dispatchedGenerations,
+      firstInserted: firstInserted.promise,
+      continueBatch: () => act(async () => continueBatch.resolve()),
+      replaceClient: (owner: ConnectionClient) =>
+        h.replaceFileUpload(bind(owner)),
       choose,
       reconnect,
       retire: () => {
@@ -398,6 +431,84 @@ async function registerDomTests() {
     ).toBe("failed");
     expect(h.textarea().value).toBe("");
   });
+
+  const sixFiles = () =>
+    [1, 2, 3, 1, 2, 3].map(
+      (size, index) =>
+        new browser.File(
+          [new Uint8Array(size * 1024 * 1024)],
+          `file-${index + 1}.png`,
+          { type: "image/png" },
+        ),
+    );
+
+  test.each([false, true])(
+    "six selected files keep their qualified owner and all insert, reconnect after first acknowledgement/insertion=%s",
+    async (reconnect) => {
+      const h = await pickerHarness(true);
+      const files = sixFiles();
+      await h.choose(files);
+      await h.firstInserted;
+      expect(h.requests).toHaveLength(1);
+      expect(h.textarea().value).toContain("/synthetic/file-1.png");
+      if (reconnect) await h.reconnect();
+      await h.continueBatch();
+      expect(h.requests).toHaveLength(6);
+      expect(h.dispatchedGenerations).toEqual(
+        reconnect ? [1, 2, 2, 2, 2, 2] : [1, 1, 1, 1, 1, 1],
+      );
+      for (const [index, url] of h.requests.entries()) {
+        const request = new URL(url);
+        expect(request.pathname).toBe(
+          `/api/connections/${h.connection}/terminal-upload`,
+        );
+        expect(request.searchParams.get("connection_generation")).toBe("1");
+        expect(request.searchParams.get("filename")).toBe(files[index].name);
+        expect(h.textarea().value).toContain(`/synthetic/${files[index].name}`);
+      }
+      expect(h.sent).toEqual([]);
+      expect(h.errors).toEqual([]);
+    },
+  );
+
+  test.each(["connection", "runtime", "pane", "session", "away-and-back"])(
+    "queued files refuse a changed %s after file one succeeds, retaining its original path",
+    async (change) => {
+      const h = await pickerHarness(true);
+      await h.choose(sixFiles());
+      await h.firstInserted;
+      const client = {
+        ...h.client,
+        generation: 2,
+        connectionId:
+          change === "connection" ? "other-connection" : h.connection,
+        serverRuntimeGeneration: change === "runtime" ? 2 : 1,
+        isCurrent: () => true,
+      };
+      const next = chatComposerDraftKey(
+        client,
+        change === "pane" || change === "away-and-back"
+          ? { ...h.pane, pane_id: "pane-b" }
+          : h.pane,
+        change === "session" ? "b".repeat(64) : h.fingerprint,
+      );
+      h.retire();
+      await h.switchDraft(next);
+      await h.replaceClient(client);
+      if (change === "away-and-back") await h.switchDraft(h.key);
+      await h.continueBatch();
+      expect(h.requests).toHaveLength(1);
+      expect(h.dispatchedGenerations).toEqual([1]);
+      expect(h.errors).toEqual(
+        Array(5).fill("Upload target changed during upload"),
+      );
+      expect(drafts.readTerminalComposerDraft(h.key)).toContain(
+        "/synthetic/file-1.png",
+      );
+      if (change !== "away-and-back") expect(h.textarea().value).toBe("");
+      expect(h.sent).toEqual([]);
+    },
+  );
 
   test("only focused multiline drafts expand, blur folds without losing caret, and refocus remeasures", async () => {
     const h = await mount("one\ntwo", 2, 2);

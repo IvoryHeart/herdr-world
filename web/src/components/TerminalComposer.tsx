@@ -704,7 +704,7 @@ export function TerminalComposer({
                 input.removeEventListener("cancel", cleanup);
                 pickerCleanupRef.current = null;
               };
-              // Chat refreshes a chooser's uploader across transport reconnects
+              // Chat refreshes each file's uploader across transport reconnects
               // only while the exact draft owner stays mounted.
               const selected = (event: Event) => {
                 event.stopPropagation();
@@ -719,7 +719,18 @@ export function TerminalComposer({
                   onError("Upload target changed while choosing files");
                   return;
                 }
-                pickFiles(input, { ...context, upload: latest.upload });
+                pickFiles(input, {
+                  ...context,
+                  upload: (file, progress) => {
+                    const current = pickerUploadRef.current;
+                    if (current.owner !== owner) {
+                      return Promise.reject(
+                        new Error("Upload target changed during upload"),
+                      );
+                    }
+                    return current.upload(file, progress);
+                  },
+                });
               };
               input.addEventListener("change", selected);
               input.addEventListener("cancel", cleanup);

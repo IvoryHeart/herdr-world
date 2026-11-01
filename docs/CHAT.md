@@ -213,10 +213,12 @@ that root; stat metadata cannot redirect the read to a different transcript.
   send or upload through the retired draft.
   **Add a file** (paperclip) or paste uploads to that pane's host with progress chips;
   completed paths enter at the saved caret, and **Send** waits for uploads.
-  An open file chooser can finish after browser sync reconnects to the same
-  conversation and runtime. If its host, runtime, pane or conversation changes
-  while choosing, World refuses the selection; open the paperclip again for
-  the intended conversation.
+  An open file chooser and the remaining files in a selection can continue after
+  browser sync reconnects to the same conversation and runtime. Each queued file
+  uses the current connection client. If its host, runtime, pane or conversation
+  changes, World refuses the selection or remaining files; completed paths are
+  never redirected into a different draft. Open the paperclip again for the
+  intended conversation.
   A completion after Chat closes updates only that conversation's draft.
   Failed sends restore the submitted text before any newer draft.
 - While Herdr reports the agent working, an accepted send shows
