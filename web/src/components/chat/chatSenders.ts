@@ -10,9 +10,37 @@ export type ChatSender =
 
 export type ChatRow = { sender: ChatSender; continued: boolean };
 
-// The name a relayed message starts with: what `herdr agent prompt` callers
-// put before their report, such as "alpha: Phase 2 done".
-const RELAY_PREFIX = /^([A-Za-z0-9][A-Za-z0-9._-]{0,63}):\s/;
+// An agent name a relay can carry: what `herdr agent prompt` callers put
+// before their report, such as "alpha: Phase 2 done".
+const AGENT_NAME = "[A-Za-z0-9][A-Za-z0-9._-]{0,63}";
+const VALID_NAME = new RegExp(`^${AGENT_NAME}$`);
+const RELAY_PREFIX = new RegExp(`^(${AGENT_NAME}):\\s`);
+
+/**
+ * The names a relay in `ownPaneId`'s Chat may carry: other live agents in
+ * the same Herdr session whose name is valid and unique there. A name two
+ * panes share, or that the pane itself has, names no one agent.
+ */
+export function relayNames(
+  panes: readonly { pane_id: string; agent?: string; agent_name?: string }[],
+  ownPaneId: string,
+): string[] {
+  const count = new Map<string, number>();
+  for (const pane of panes)
+    if (pane.agent && pane.agent_name)
+      count.set(pane.agent_name, (count.get(pane.agent_name) ?? 0) + 1);
+  return panes
+    .flatMap((pane) =>
+      pane.agent &&
+      pane.agent_name &&
+      pane.pane_id !== ownPaneId &&
+      count.get(pane.agent_name) === 1 &&
+      VALID_NAME.test(pane.agent_name)
+        ? [pane.agent_name]
+        : [],
+    )
+    .sort();
+}
 
 /**
  * The live agent a message typed into this pane names as its sender, or null.
@@ -30,10 +58,18 @@ export function relayedSender(
 const senderKey = (sender: ChatSender) =>
   sender.kind === "relayed" ? `relayed:${sender.name}` : sender.kind;
 
+/** The local calendar day Chat shows a time on, or null when unreadable. */
+function shownDay(at: string): string | null {
+  const date = new Date(at);
+  return Number.isNaN(date.getTime()) ? null : date.toDateString();
+}
+
 /**
  * Each message's sender and whether it continues the previous sender's run,
- * so the transcript names a sender and shows the time once per run. A tool
- * block is the agent's; a notice divider starts a new run.
+ * so the transcript names a sender and shows the time once per run. Tools
+ * continue an agent run but never start one: the agent's first message
+ * after another sender's (or at the top) names the agent. A notice divider,
+ * a new day or an unreadable time starts a new run.
  */
 export function chatRows(
   items: readonly HistoryChatItem[],
@@ -41,9 +77,10 @@ export function chatRows(
 ): Map<string, ChatRow> {
   const rows = new Map<string, ChatRow>();
   let previous: string | null = null;
+  let previousDay: string | null = null;
   for (const item of items) {
     if (item.type !== "message") {
-      previous = "agent";
+      if (previous !== "agent") previous = null;
       continue;
     }
     const { entry } = item;
@@ -61,8 +98,13 @@ export function chatRows(
         ? { kind: "user" }
         : { kind: "agent" };
     const key = senderKey(sender);
-    rows.set(entry.id, { sender, continued: key === previous });
+    const day = shownDay(entry.sent_at);
+    rows.set(entry.id, {
+      sender,
+      continued: key === previous && day !== null && day === previousDay,
+    });
     previous = key;
+    previousDay = day;
   }
   return rows;
 }

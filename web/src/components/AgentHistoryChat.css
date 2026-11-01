@@ -650,7 +650,10 @@
     margin-left: 40px;
   }
 
-  .agent-history-chat-tools {
+  /* Stretched beside the indent, never 100% plus the indent. */
+  .agent-history-chat-tools,
+  .agent-history-chat-tools.is-open {
+    width: auto;
     max-width: none;
     align-self: stretch;
     margin-top: 4px;

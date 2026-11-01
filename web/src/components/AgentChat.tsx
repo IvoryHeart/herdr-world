@@ -14,6 +14,7 @@ import { copyTextWithFeedback } from "../copyText";
 import type { Pane } from "../types";
 import { useConnectionClient } from "../useConnectionClient";
 import { useStoreSelector } from "../store/react";
+import { relayNames } from "./chat/chatSenders";
 import { AgentHistoryDrawer } from "./AgentHistoryDrawer";
 import { AgentHistoryChat } from "./AgentHistoryChat";
 import { AgentMessageDialog } from "./AgentMessageDialog";
@@ -81,24 +82,17 @@ export function AgentChat({
     active && focusIntent === undefined,
   );
   const connectionClient = useConnectionClient();
-  // The other live agents in this Herdr session, by name: a message typed
-  // here as "name: …" by one of them reads as relayed from it.
-  const otherAgents = useStoreSelector((state) =>
-    state.panes
-      .flatMap((other) =>
-        other.agent && other.agent_name && other.pane_id !== pane.pane_id
-          ? [other.agent_name]
-          : [],
-      )
-      .sort()
-      .join("\n"),
+  // The other live agents in this Herdr session whose names are valid and
+  // unique there: a message typed here as "name: …" reads as relayed from it.
+  const relayFrom = useStoreSelector((state) =>
+    JSON.stringify(relayNames(state.panes, pane.pane_id)),
   );
   const transcript = useMemo(
     () => ({
       agent: recipientLabel ?? pane.agent_name ?? pane.agent ?? "Agent",
-      agents: new Set(otherAgents ? otherAgents.split("\n") : []),
+      agents: new Set(JSON.parse(relayFrom) as string[]),
     }),
-    [otherAgents, pane.agent, pane.agent_name, recipientLabel],
+    [relayFrom, pane.agent, pane.agent_name, recipientLabel],
   );
   const [conversation, setConversation] = useState<Conversation | null>(null);
   // Set when the newest read failed; the last good conversation stays shown.

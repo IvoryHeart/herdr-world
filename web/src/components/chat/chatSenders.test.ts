@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { HistoryEntry } from "../agentHistory";
 import type { HistoryChatItem } from "../agentHistoryView";
-import { chatRows, relayedSender } from "./chatSenders";
+import { chatRows, relayNames, relayedSender } from "./chatSenders";
 
 const agents = new Set(["alpha", "beta-2"]);
 
@@ -88,5 +88,81 @@ describe("chatRows", () => {
   test("an agent's text never reads as relayed", () => {
     const rows = chatRows([message("assistant", "alpha: hi")], agents);
     expect([...rows.values()][0].sender).toEqual({ kind: "agent" });
+  });
+});
+
+describe("relayNames", () => {
+  const live = (pane_id: string, agent_name: string, agent = "claude") => ({
+    pane_id,
+    agent,
+    agent_name,
+  });
+
+  test("keeps a name's own characters, so a delimiter names no one", () => {
+    const names = relayNames(
+      [live("p1", "lead"), live("p2", "alpha\nbeta")],
+      "p1",
+    );
+    expect(names).toEqual([]);
+    expect(relayedSender("beta: report", new Set(names))).toBeNull();
+  });
+
+  test("a name two panes share, or the pane's own, names no one agent", () => {
+    expect(
+      relayNames(
+        [live("p1", "lead"), live("p2", "alpha"), live("p3", "alpha")],
+        "p1",
+      ),
+    ).toEqual([]);
+    expect(relayNames([live("p1", "lead"), live("p2", "lead")], "p1")).toEqual(
+      [],
+    );
+  });
+
+  test("other live agents with valid unique names, sorted", () => {
+    expect(
+      relayNames(
+        [
+          live("p1", "lead"),
+          live("p2", "beta-2"),
+          live("p3", "alpha"),
+          { pane_id: "p4", agent_name: "shell-only" },
+          live("p5", "has space"),
+        ],
+        "p1",
+      ),
+    ).toEqual(["alpha", "beta-2"]);
+  });
+});
+
+describe("chatRows runs", () => {
+  const at = (iso: string) => ({ sent_at: iso }) as Partial<HistoryEntry>;
+  const continued = (items: HistoryChatItem[]) =>
+    [...chatRows(items, agents).values()].map((row) => row.continued);
+
+  test("tools after another sender, or at the top, never continue it", () => {
+    expect(
+      continued([message("user", "go"), tools, message("assistant", "done")]),
+    ).toEqual([false, false]);
+    expect(continued([tools, message("assistant", "done")])).toEqual([false]);
+    expect(
+      continued([
+        message("user", "alpha: report"),
+        tools,
+        message("assistant", "seen"),
+      ]),
+    ).toEqual([false, false]);
+  });
+
+  test("a new day or an unreadable time starts a new run", () => {
+    expect(
+      continued([
+        message("assistant", "one", at("2026-10-31T10:00:00Z")),
+        message("assistant", "two", at("2026-11-01T10:00:00Z")),
+        message("assistant", "three", at("2026-11-01T10:05:00Z")),
+        message("assistant", "four", at("not a time")),
+        message("assistant", "five", at("not a time")),
+      ]),
+    ).toEqual([false, false, true, false, false]);
   });
 });
