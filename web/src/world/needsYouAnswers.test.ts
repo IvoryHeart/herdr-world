@@ -737,6 +737,18 @@ async function registerDomTest() {
     expect(sheet()).toBeNull();
     expect(app.hasAttribute("inert")).toBe(false);
     expect(document.activeElement).toBe(opener);
+    // The phone's picker re-renders its counter while an agent window is
+    // open: closing then focuses the counter that replaced the opener.
+    const counter = document.createElement("button");
+    counter.className = "needs-you-counter";
+    app.append(counter);
+    opener.focus();
+    await act(async () => opener.click());
+    await settle();
+    opener.remove();
+    await act(async () => closeNeedsYou());
+    await settle();
+    expect(document.activeElement).toBe(counter);
     await act(async () => shell.unmount());
     app.remove();
   });

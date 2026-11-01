@@ -248,13 +248,21 @@ function usePhoneSheetFocus(
       )?.focus();
     wasCovered.current = covered;
   }, [covered, active, panel]);
-  // Closing returns focus to the opener.
+  // Closing returns focus to the opener, or to the counter that replaced it
+  // (the phone's view picker re-renders while an agent window is open).
   useEffect(() => {
     if (active) return;
     const back = opener.current;
     opener.current = null;
     inside.current = null;
-    if (back instanceof HTMLElement && back.isConnected) back.focus();
+    if (back === null) return;
+    const target =
+      back instanceof HTMLElement && back.isConnected
+        ? back
+        : [
+            ...document.querySelectorAll<HTMLElement>(".needs-you-counter"),
+          ].find((counter) => counter.getClientRects().length > 0);
+    target?.focus();
   }, [active]);
 }
 

@@ -445,9 +445,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   (options, a typed answer, **Dismiss**, and why an owner alert may not have
   arrived), **!** blocked agents (the agent's own question, answered and confirmed
   as Chat does, with **Open Terminal** when the answer could not be confirmed) and
-  **✓** finished work, as Desk's To review lane counts it (**Mark reviewed** marks
-  the report shown, says so if the mark could not be saved, and offers **Retry**
-  if the report could not be read). Every item names its agent and marks an
+  **✓** finished work, done agents and idle agents the service saw finish in the
+  last 12 hours (**Mark reviewed** marks the report shown, says so if the mark
+  could not be saved, and offers **Retry** if the report could not be read; Desk's
+  To review lane can also list idle agents from recent transcript turns). Every item names its agent and marks an
   unverified asker; **Chat about this** (**Follow up…** for finished work) opens
   the agent's Chat, and hovering the agent's name (or **ⓘ**) shows its card with
   the latest message. An answered question folds to one line until the tab
