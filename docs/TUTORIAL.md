@@ -285,8 +285,10 @@ hosts stay usable.
    reception.
    **Next** cycles waiting agents, then finished agents when no other agent is
    waiting.
-7. To move a table to another room, zoom in until you see tables, then drag it
-   with the mouse, or hold it for a moment on a phone and then drag. Drop it on
+7. To move a table to another room, zoom in until you see tables (room
+   summaries are close enough), then drag it with the mouse, or hold it for a
+   moment on a phone and then drag. A hold works even where a room summary
+   covers the table; a tap on the summary still zooms into the room. Drop it on
    another room of the same building; the plaque under your pointer says where
    it will land, or why it cannot. Hold it near the edge of the view to scroll
    the town toward rooms out of sight, as on a phone where rooms stack. The table lifts off and swings along behind

@@ -369,6 +369,10 @@ export function TownCanvas({
   const visible = useTownHud(hud, "visible");
   /** Aims a carried desk or agent again at the frame just drawn. */
   const reaimCarry = useRef<(() => void) | null>(null);
+  /** Passes a room card's press to the town beneath it (TownWorldLayer). */
+  const roomCardPress = useRef<
+    ((event: PointerEvent, roomKey: string) => boolean) | null
+  >(null);
   const onFrame = (camera: TownRendererHandle["camera"], level: TownLevel) => {
     // The canvas and its targets show this camera until the next frame, so
     // presses are hit-tested against it (view.drawn).
@@ -675,6 +679,30 @@ export function TownCanvas({
       if (interaction.wheel(local(event), event.deltaY, event.ctrlKey))
         event.preventDefault();
     };
+    // A room card sits above the canvas: its presses join the town's gesture
+    // with the card's room as the tap target. Capturing the pointer on the
+    // host keeps the rest of the gesture (moves, lift, drop) on the canvas.
+    roomCardPress.current = (event, roomKey) => {
+      if (
+        !rendererRef.current ||
+        (event.pointerType === "mouse" && event.button !== 0)
+      )
+        return false;
+      scene.pointerDown();
+      try {
+        host.setPointerCapture(event.pointerId);
+      } catch {
+        return false;
+      }
+      interaction.down({
+        id: event.pointerId,
+        at: local(event),
+        primary: event.isPrimary,
+        pointerType: event.pointerType,
+        card: roomKey,
+      });
+      return true;
+    };
     host.addEventListener("pointerdown", down);
     host.addEventListener("pointermove", move);
     host.addEventListener("pointerup", up);
@@ -683,6 +711,7 @@ export function TownCanvas({
     host.addEventListener("wheel", wheel, { passive: false });
     return () => {
       reaimCarry.current = null;
+      roomCardPress.current = null;
       interaction.dispose();
       host.removeEventListener("pointerdown", down);
       host.removeEventListener("pointermove", move);
@@ -691,7 +720,7 @@ export function TownCanvas({
       host.removeEventListener("pointerleave", leave);
       host.removeEventListener("wheel", wheel);
     };
-  }, [view]);
+  }, [view, scene]);
 
   const keyboard = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (!rendererRef.current || event.target !== event.currentTarget) return;
@@ -772,6 +801,9 @@ export function TownCanvas({
               onActivateRoom(key);
               zoomToRoomKey(key);
             }}
+            onRoomCardPress={(event, roomKey) =>
+              roomCardPress.current?.(event, roomKey) ?? false
+            }
             onFocusTarget={focusTarget}
             targets={targets}
             deskBadges={deskBadges}

@@ -152,7 +152,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     (tap on touch screens) for Rename and Close below it, with 40px targets.
   - Drag a table onto another room of the same host, or an agent onto another
     table, to move it (hold, then drag on phones; **M** on a focused table or
-    agent from the keyboard). A carried table lifts and sways after the
+    agent from the keyboard). Tables lift from the room-summary zoom in, even
+    under a room summary, whose tap still zooms in; agents lift once zoomed
+    into a room. A carried table lifts and sways after the
     pointer, lands with a bounce and a puff of dust, and shakes and springs
     back when a move is refused; calm and reduced motion keep it under the
     pointer and end with a short fade. The live panes move, agents keep running, a failed

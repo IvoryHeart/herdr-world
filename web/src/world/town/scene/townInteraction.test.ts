@@ -139,9 +139,14 @@ function setup(
   const deskCell = (room: number, index = 0) =>
     rooms[room]!.cells.filter((cell) => cell.deskKey)[index]!;
   let id = 1;
-  const press = (at: Point, pointerType = "mouse", primary = true) => {
+  const press = (
+    at: Point,
+    pointerType = "mouse",
+    primary = true,
+    card?: string,
+  ) => {
     const pointer = id++;
-    interaction.down({ id: pointer, at, primary, pointerType });
+    interaction.down({ id: pointer, at, primary, pointerType, card });
     return pointer;
   };
   return {
@@ -921,4 +926,60 @@ test("an edge pan restarts the magnet's wait between the renderer's draws", () =
   }
   expect(desks.size).toBeGreaterThan(1);
   expect([...aims]).not.toContain("group");
+});
+
+test("at the room-card zoom a touch held on a desk lifts it, and a tap still opens it", () => {
+  const t = setup({ level: "overview" });
+  const cell = t.deskCell(0);
+  const at = t.deskCentre(cell);
+  const pointer = t.press(at, "touch");
+  t.time.advance(TOWN_HOLD_MS);
+  expect(t.log.find(([kind]) => kind === "begin")?.slice(0, 3)).toEqual([
+    "begin",
+    "desk",
+    cell.deskKey,
+  ]);
+  t.interaction.up({ id: pointer, at, cancel: true });
+  // A tap on the desk is unchanged: it selects (opens) the desk.
+  t.time.advance(1000);
+  t.lift(t.press(at, "touch"), at);
+  expect(t.log).toContainEqual(["select", cell.deskKey]);
+});
+
+test("a hold through a room card lifts the desk beneath; a tap on the card zooms its room", () => {
+  const t = setup({ level: "overview" });
+  const room = t.rooms[0]!;
+  const cell = t.deskCell(0);
+  const at = t.deskCentre(cell);
+  // Held over a desk of the card's room: the desk beneath lifts.
+  const pointer = t.press(at, "touch", true, room.key);
+  t.time.advance(TOWN_HOLD_MS);
+  expect(t.log.find(([kind]) => kind === "begin")?.slice(0, 3)).toEqual([
+    "begin",
+    "desk",
+    cell.deskKey,
+  ]);
+  t.interaction.up({ id: pointer, at, cancel: true });
+  // Tapped: the card's room opens and zooms; the desk is not selected.
+  t.log.length = 0;
+  t.reasons.length = 0;
+  t.time.advance(1000);
+  t.lift(t.press(at, "touch", true, room.key), at);
+  expect(t.log).toContainEqual(["room", room.key]);
+  expect(t.reasons).toContain("room");
+  expect(t.log.some(([kind]) => kind === "select")).toBe(false);
+  // Over the card but off any desk: a hold lifts nothing.
+  t.log.length = 0;
+  t.time.advance(1000);
+  const floor = t.screen({ x: room.x * T + 4, y: (room.y + room.h) * T - 4 });
+  const empty = t.press(floor, "touch", true, room.key);
+  t.time.advance(TOWN_HOLD_MS * 2);
+  expect(t.log.some(([kind]) => kind === "begin")).toBe(false);
+  t.interaction.up({ id: empty, at: floor, cancel: true });
+  // A card press never lifts another room's desk beneath it.
+  const other = t.rooms[1]!;
+  const stray = t.press(at, "touch", true, other.key);
+  t.time.advance(TOWN_HOLD_MS * 2);
+  expect(t.log.some(([kind]) => kind === "begin")).toBe(false);
+  t.interaction.up({ id: stray, at, cancel: true });
 });
