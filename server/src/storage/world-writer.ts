@@ -381,6 +381,7 @@ export function openWorldWriter(
         id,
         domain ? (JSON.parse(domain.body) as LedgerAsk) : null,
         effectVerbs,
+        incarnation,
       );
       if (contract && !contract.targets.length) {
         if (effect.contract && effect.initial_state !== "refused")

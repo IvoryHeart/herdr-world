@@ -306,12 +306,21 @@ test("complete absence and reused native pane clear records; labels never attach
   await f.seed();
   f.setPanes([{ ...pane(), terminal_id: "replacement-terminal" }]);
   await f.observe();
-  expect(f.store.terminalMarks.list()).toEqual([]);
-  expect(f.registries.desk.list().records).toEqual([]);
+  expect(
+    f.store.terminalMarks.list().filter((row) => row.kind !== "desk"),
+  ).toEqual([]);
+  expect(
+    f.store.terminalMarks.list().some((row) => row.binding.state === "ended"),
+  ).toBe(true);
+  expect(f.registries.desk.list().records).toMatchObject([
+    { terminal_id: "replacement-terminal", reviewed_stop: null },
+  ]);
   await f.close();
   const again = await fixture(f.root);
   await again.observe();
-  expect(again.store.terminalMarks.list()).toEqual([]);
+  expect(again.registries.desk.list().records).toMatchObject([
+    { reviewed_stop: null },
+  ]);
 });
 test("a positive session replacement ends Desk and seen, while a watch follows its terminal move", async () => {
   const f = await fixture();
@@ -321,12 +330,20 @@ test("a positive session replacement ends Desk and seen, while a watch follows i
     .find((row) => row.kind === "watchlist")!;
   f.setPanes([{ ...pane("session-b"), pane_id: "moved-pane" }]);
   await f.observe();
-  expect(f.registries.desk.list().records).toEqual([]);
+  expect(f.registries.desk.list().records).toMatchObject([
+    { reviewed_stop: null, opened_at: null },
+  ]);
   expect(f.registries.seen.list().records).toEqual([]);
   expect(f.registries.watchlist.list().records).toHaveLength(1);
-  expect(f.store.terminalMarks.list()).toMatchObject([
-    { id: watch.id, binding: { native_id: "moved-pane" } },
-  ]);
+  expect(
+    f.store.terminalMarks
+      .list()
+      .find((row) => row.kind === "desk" && row.body.reviewed_stop === "stop-a")
+      ?.binding.state,
+  ).toBe("ended");
+  expect(
+    f.store.terminalMarks.list().filter((row) => row.kind === "watchlist"),
+  ).toMatchObject([{ id: watch.id, binding: { native_id: "moved-pane" } }]);
 });
 test("fresh busy evidence or later completion sequence ends seen, including work missed during a restart", async () => {
   const f = await fixture();
@@ -485,12 +502,18 @@ test("the 40 recent-open bound is durable across sources, including equal-time a
       draft.desk.open(identity, 1000);
     });
   }
-  expect(f.registries.desk.list().records).toHaveLength(40);
-  expect(f.store.terminalMarks.list()).toHaveLength(40);
+  expect(f.registries.desk.list().records).toHaveLength(41);
+  expect(f.store.terminalMarks.list()).toHaveLength(41);
+  expect(
+    f.registries.desk.list().records.filter((row) => row.opened_at !== null),
+  ).toHaveLength(40);
   expect(
     f.store.terminalMarks
       .list()
-      .some((row) => row.binding.instance === "source-0"),
+      .some(
+        (row) =>
+          row.binding.instance === "source-0" && row.body.opened_at !== null,
+      ),
   ).toBe(false);
   expect(
     f.store.terminalMarks
@@ -896,7 +919,9 @@ test("an exact watch ID removes an unresolved restart capture without source acc
   again.setCurrent(false);
   expect(again.registries.watchlist.list().records).toEqual([]);
   await again.client.call("world.watchlist.unpin", capture);
-  expect(again.store.terminalMarks.list()).toEqual([]);
+  expect(
+    again.store.terminalMarks.list().filter((row) => row.kind === "watchlist"),
+  ).toEqual([]);
   again.setCurrent(true);
   await again.observe();
   expect(again.registries.watchlist.list().records).toEqual([]);

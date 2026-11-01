@@ -91,9 +91,15 @@ test("two real browser sockets agree before and after restarting the real servic
     }
     await clients[1]!.call("world.desk.open", desk);
     expect(await clients[0]!.call("world.desk.get")).toMatchObject({
-      records: [
-        { reviewed_stop: "synthetic-stop", opened_at: expect.any(Number) },
-      ],
+      records: expect.arrayContaining([
+        expect.objectContaining({
+          ...desk,
+          reviewed_stop: "synthetic-stop",
+          opened_at: expect.any(Number),
+          observed_stop_id: expect.any(String),
+          stopped_at: null,
+        }),
+      ]),
     });
     expect(await clients[1]!.call("world.watchlist.list")).toMatchObject({
       records: [{ terminal_id: pane.terminal_id }],
@@ -126,9 +132,13 @@ test("two real browser sockets agree before and after restarting the real servic
     await Promise.all(restored);
     for (const client of clients) {
       expect(await client.call("world.desk.get")).toMatchObject({
-        records: [
-          { reviewed_stop: "synthetic-stop", opened_at: expect.any(Number) },
-        ],
+        records: expect.arrayContaining([
+          expect.objectContaining({
+            terminal_id: pane.terminal_id,
+            reviewed_stop: "synthetic-stop",
+            opened_at: expect.any(Number),
+          }),
+        ]),
       });
       expect(await client.call("world.watchlist.list")).toMatchObject({
         records: [{ terminal_id: pane.terminal_id }],

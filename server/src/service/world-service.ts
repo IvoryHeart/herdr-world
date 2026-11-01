@@ -398,6 +398,7 @@ async function compose(
         status.id,
         status.generation,
         status.state === "ready",
+        !["error", "disconnected"].includes(status.state),
       );
       bin.connectionStatus(status);
       publishWorldInvalidation(status.id, status.generation);

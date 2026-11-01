@@ -62,8 +62,14 @@ export function createSharedTerminalMarks(options: Options) {
     persistentMarks: persistent,
     close: () => persistent?.close() ?? Promise.resolve(),
     observe: persistent ? persistent.observe.bind(persistent) : observe,
-    retire(connectionId: string, generation: number, ready = true) {
-      if (persistent) persistent.retire(connectionId, generation, ready);
+    retire(
+      connectionId: string,
+      generation: number,
+      ready = true,
+      recovering = false,
+    ) {
+      if (persistent)
+        persistent.retire(connectionId, generation, ready, recovering);
       else {
         desk.retire(connectionId, generation);
         retire(connectionId, generation);

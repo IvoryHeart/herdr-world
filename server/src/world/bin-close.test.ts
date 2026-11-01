@@ -505,7 +505,9 @@ test("stop revokes a lane that is mid-read while another commit is held", async 
 
 test("discovery pages past 256 removed hosts with uncertain closes to a ready host", async () => {
   // 260 hosts each lose a close's reply with the pane left in place, so
-  // their closes stay uncertain; then they are removed from World.
+  // their closes stay uncertain; then they are removed from World. That is
+  // about a thousand durable commits, whose time follows the disk, so the
+  // test has the storage crash tests' explicit bound, not the 5 s default.
   const hosts: Hosts = {};
   const removed = Array.from(
     { length: 260 },
@@ -564,7 +566,7 @@ test("discovery pages past 256 removed hosts with uncertain closes to a ready ho
   );
   expect(late.host.calls).toEqual([]);
   expect(await second.state(lost[0]!.id)).toBe("uncertain");
-});
+}, 60_000);
 
 test("a close recorded but not looked up at once is still tracked, never reported unrecorded", async () => {
   const studio = fakeHerdr("studio", [pane("p1"), pane("p2")]);
