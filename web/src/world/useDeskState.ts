@@ -19,6 +19,30 @@ export function deskIdentity(leaf: WorldLeafObject): DeskIdentity {
   };
 }
 
+/** Refresh missing metadata; a report without a service stop cannot name a review. */
+export async function qualifiedReviewRecord(
+  store: Pick<WorldDeskStore, "get" | "refresh">,
+  identity: DeskIdentity,
+  stop?: string,
+) {
+  const key = deskKey(identity);
+  const read = () => {
+    const state = store.get();
+    const record = state.verified
+      ? state.records.find((record) => deskKey(record) === key)
+      : undefined;
+    return record?.observed_stop_id != null || record?.stopped_at != null
+      ? record
+      : undefined;
+  };
+  let record = read();
+  if (!record) {
+    await store.refresh();
+    record = read();
+  }
+  return stop?.startsWith("stop:[null,") ? undefined : record;
+}
+
 export function deskMetadata(
   agents: readonly WorldLeafObject[],
   state: DeskStoreState,
@@ -60,7 +84,12 @@ export function useDeskState(
   const mark = async (handoffId: string, reviewed: boolean) => {
     const [identity, stop] = JSON.parse(handoffId) as [string, string];
     const leaf = agents.find((agent) => receiptIdentity(agent) === identity);
-    if (!leaf || !deskClient(clients, leaf)) return false;
+    if (
+      !leaf ||
+      !deskClient(clients, leaf) ||
+      !(await qualifiedReviewRecord(store, deskIdentity(leaf), stop))
+    )
+      return false;
     return store.mutate("world.desk.review", deskIdentity(leaf), {
       stop_id: stop,
       reviewed,

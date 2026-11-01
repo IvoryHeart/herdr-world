@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useSyncExternalStore } from "react";
 import { deskKey, type DeskRecord } from "../../../shared/deskState";
-import { deskIdentity } from "./useDeskState";
+import { deskIdentity, qualifiedReviewRecord } from "./useDeskState";
 import {
   sharedDeskStore,
   useSharedDeskStore,
@@ -65,20 +65,8 @@ export async function markReviewed(
   leaf: WorldLeafObject,
   stop?: string,
 ): Promise<boolean> {
-  const key = deskKey(deskIdentity(leaf));
-  const record = () => {
-    const state = store.get();
-    return state.verified
-      ? state.records.find((record) => deskKey(record) === key)
-      : undefined;
-  };
-  let current = record();
-  if (!reviewStopKnown(leaf, current)) {
-    await store.refresh();
-    current = record();
-  }
-  if (!reviewStopKnown(leaf, current) || stop === "stop:[null,null]")
-    return false;
+  const current = await qualifiedReviewRecord(store, deskIdentity(leaf), stop);
+  if (!current) return false;
   return store.mutate("world.desk.review", deskIdentity(leaf), {
     stop_id: stop ?? reviewStop(leaf, current),
     reviewed: true,

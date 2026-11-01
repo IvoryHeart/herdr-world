@@ -15,6 +15,25 @@ const stops = resolve(import.meta.dir, "review-stop-coverage.test.ts");
 const repairs = resolve(import.meta.dir, "review-stop-review.test.ts");
 const cases = [
   {
+    name: "positive browser review consumers",
+    entry: resolve(
+      import.meta.dir,
+      "../../../web/src/world/useReviewedWork.test.ts",
+    ),
+  },
+  {
+    name: "anonymous browser review fence",
+    entry: resolve(
+      import.meta.dir,
+      "../../../web/src/world/useReviewedWork.test.ts",
+    ),
+    file: "useDeskState.ts",
+    match: /stop\?\.startsWith\("stop:\[null,"\)/,
+    replacement: "false",
+    assertion:
+      "a report with only activity cannot claim review after a service stop appears",
+  },
+  {
     name: "positive archive consumers",
     entry: resolve(import.meta.dir, "legacy-review-resolution.test.ts"),
   },

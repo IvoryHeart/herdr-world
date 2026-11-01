@@ -208,3 +208,15 @@ test("Town's reviewed agents stay the same set while nothing changed", () => {
   expect(next).not.toBe(first);
   expect([...next].sort()).toEqual(["a", "b"]);
 });
+
+test("a report with only activity cannot claim review after a service stop appears", async () => {
+  const leaf = agent("done"),
+    f = stores();
+  f.store.refresh = async () => {
+    f.replace([record(leaf)]);
+  };
+  expect(await markReviewed(f.store, leaf, reviewStop(leaf, undefined))).toBe(
+    false,
+  );
+  expect(f.calls).toEqual([]);
+});
