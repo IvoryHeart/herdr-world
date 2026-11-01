@@ -66,6 +66,31 @@ export async function checkTownBus(
     "the bus never stood at the stop",
     8_000,
   );
+  // Real presses land on whatever is on top: when the stop is hidden (under
+  // the asks rail, the zoom column or off screen) its chip flies there, and
+  // then the bus must be the topmost thing under the finger.
+  const onTop = (element: Element, x: number, y: number) =>
+    element.contains(document.elementFromPoint(x, y));
+  const chip = host.querySelector<HTMLButtonElement>(".town-bus-chip");
+  if (chip) {
+    chip.click();
+    await waitFor(
+      () => host.querySelector(".town-bus-chip") === null,
+      "flying to the stop left it hidden",
+      4_000,
+    );
+  }
+  const holdAt = host
+    .querySelector<HTMLElement>(".town-bus-hold")!
+    .getBoundingClientRect();
+  check(
+    onTop(
+      host.querySelector(".town-bus-hold")!,
+      holdAt.left + holdAt.width / 2,
+      holdAt.bottom - 4,
+    ),
+    "the waiting bus is covered where a finger would hold it",
+  );
   const pauses = () =>
     bin.calls.filter((call) => call.method === "world.bin.pause").length;
   const resumes = () =>
@@ -138,6 +163,13 @@ export async function checkTownBus(
     const scale = box.width / strip.offsetWidth;
     return { clientX: box.left + x * scale, clientY: box.top + y * scale };
   };
+  {
+    const wheels = at(road()!, 31, 38);
+    check(
+      onTop(road()!, wheels.clientX, wheels.clientY),
+      "the bus driving away is covered where a finger would hold it",
+    );
+  }
   road()!.dispatchEvent(
     new PointerEvent("pointerdown", { bubbles: true, ...at(road()!, 4, 38) }),
   );

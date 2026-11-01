@@ -24,7 +24,13 @@ import {
 } from "./scene/townBus";
 import type { TownHud } from "./scene/townHud";
 import type { TownSceneCamera } from "./scene/townSceneCamera";
-import { BUS_H, BUS_W } from "./townBusGeometry";
+import { BUS_H, BUS_W, STOP_H, STOP_W } from "./townBusGeometry";
+import {
+  freeScreenArea,
+  insideScreenArea,
+  townPanels,
+  type ScreenRect,
+} from "./townBusReach";
 import { TownBusLayer } from "./townBusLayer";
 import type { TownLayout } from "./townLayout";
 import type { TownMoveResult } from "./townMoves";
@@ -32,11 +38,36 @@ import type { TownRendererHandle } from "./townRenderer";
 import "./townBus.css";
 
 type Point = { x: number; y: number };
-/** Town's floating zoom column at the right edge (town.css .town-zoom). */
-const ZOOM_COLUMN = 64;
 const clock = (ms: number) => {
   const s = Math.max(0, Math.ceil(ms / 1000));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+};
+
+type TownCamera = NonNullable<TownSceneCamera["camera"]>;
+
+/** The camera's view without its chrome insets, in screen pixels. */
+const viewArea = (camera: TownCamera): ScreenRect => {
+  const { width, height, inset } = camera.viewport;
+  return {
+    left: inset.left,
+    top: inset.top,
+    right: width - inset.right,
+    bottom: height - inset.bottom,
+  };
+};
+
+/** The stop, its sign and the bus standing beside it, in screen pixels. */
+const stopBox = (camera: TownCamera, l: TownLayout): ScreenRect => {
+  const pole = l.busStop.x * 16 + 8;
+  const a = camera.toScreen(
+    pole - STOP_W / 2 - BUS_W - 4,
+    l.busStop.y * 16 + 16 - STOP_H - 16,
+  );
+  const b = camera.toScreen(
+    pole + STOP_W,
+    l.busStop.road * 16 + 16 + 2 + BUS_H,
+  );
+  return { left: a.x, top: a.y, right: b.x, bottom: b.y };
 };
 
 /** The mounted Town's way to send an agent to the stop (the peek's action). */
@@ -53,6 +84,7 @@ export function useTownBus({
   layout,
   ready,
   rendererRef,
+  host,
   view,
   hud,
 }: {
@@ -61,6 +93,8 @@ export function useTownBus({
   layout(): TownLayout | null;
   ready: boolean;
   rendererRef: RefObject<TownRendererHandle | null>;
+  /** The town's canvas, whose screen the camera and the chip share. */
+  host: RefObject<HTMLElement | null>;
   view: TownSceneCamera;
   hud(): TownHud;
 }) {
@@ -193,42 +227,37 @@ export function useTownBus({
     () =>
       hud().onFrame(() => {
         // A carry shows the drag ghost; its absence ends a carry for sure.
-        setCarrying(document.querySelector(".town-drag-ghost") !== null);
+        const carried = document.querySelector(".town-drag-ghost") !== null;
+        setCarrying(carried);
         const camera = view.camera;
         const l = layout();
-        if (!camera || !l) return;
-        const stop = camera.toScreen(
-          l.busStop.x * 16 + 8,
-          l.busStop.y * 16 - 8,
-        );
-        const { width, height, inset } = camera.viewport;
-        // Keep the whole chip on screen (it is centred on this point).
+        const canvas = host.current;
+        if (!camera || !l || !canvas) return;
+        if (!carried && !latest.current.bin.entries.length) {
+          setEdge(null);
+          return;
+        }
+        // Where the stop and its waiting bus can be pressed: not off screen,
+        // and not under the asks rail or the zoom column.
+        const free = freeScreenArea(viewArea(camera), townPanels(canvas));
+        const box = stopBox(camera, l);
         const padX = 72,
           padY = 32;
-        const inside =
-          stop.x > inset.left &&
-          stop.x < width - inset.right &&
-          stop.y > inset.top &&
-          stop.y < height - inset.bottom;
-        const next = inside
+        const next = insideScreenArea(free, box)
           ? null
           : {
               x:
                 Math.round(
                   Math.min(
-                    // Clear of the zoom controls on the right edge.
-                    width - inset.right - padX - ZOOM_COLUMN,
-                    Math.max(inset.left + padX, stop.x),
+                    free.right - padX,
+                    Math.max(free.left + padX, (box.left + box.right) / 2),
                   ) / 4,
                 ) * 4,
               y:
                 Math.round(
                   Math.min(
-                    // On a phone the rail of asks fills the lower part.
-                    width < 600
-                      ? Math.min(height - inset.bottom - padY, height * 0.55)
-                      : height - inset.bottom - padY,
-                    Math.max(inset.top + padY, stop.y),
+                    free.bottom - padY,
+                    Math.max(free.top + padY, (box.top + box.bottom) / 2),
                   ) / 4,
                 ) * 4,
             };
@@ -236,13 +265,29 @@ export function useTownBus({
           current?.x === next?.x && current?.y === next?.y ? current : next,
         );
       }),
-    [hud, view, layout],
+    [hud, view, layout, host],
   );
+  /** Fly the stop and its bus into the middle of the town's free area. */
   const flyToStop = () => {
     const camera = view.camera;
     const l = layout();
-    if (!camera || !l) return;
-    camera.flyTo(l.busStop.x * 16, l.busStop.y * 16, camera.z, 0.6);
+    const canvas = host.current;
+    if (!camera || !l || !canvas) return;
+    const free = freeScreenArea(viewArea(camera), townPanels(canvas));
+    const box = stopBox(camera, l);
+    const focus = camera.focusPoint();
+    const z = camera.z;
+    // The stop box's centre, in world pixels, placed at the free area's centre.
+    const at = camera.toWorld(
+      (box.left + box.right) / 2,
+      (box.top + box.bottom) / 2,
+    );
+    camera.flyTo(
+      at.x - ((free.left + free.right) / 2 - focus.x) / z,
+      at.y - ((free.top + free.bottom) / 2 - focus.y) / z,
+      z,
+      0.6,
+    );
     rendererRef.current?.invalidate("bus-stop");
   };
 
