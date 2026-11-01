@@ -531,7 +531,11 @@ a starting brief and a look in Town. World starts it in a new tab for you.
    the brief, then opens its terminal. The tab takes the profile's colour and
    the agent wears the profile's look in Town. If the agent stops on a question
    first (for example Claude asking whether to trust a new folder), the
-   launcher says so and **Open its tab** lets you answer.
+   launcher says so and **Open its tab** lets you answer. Progress and the
+   outcome stay visible above the choices, even with a long readiness list.
+   The launcher closes when the start is confirmed. After an uncertain or
+   failed start, its start choices stay disabled: open the existing tab, or
+   close the launcher before deliberately starting another agent.
 
 The profile assignment follows its terminal when you move it and is shared
 with other Worlds connected to that Herdr. Each World uses its own profile

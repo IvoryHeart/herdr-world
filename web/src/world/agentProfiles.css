@@ -35,8 +35,27 @@
   font-family: var(--font-mono, ui-monospace, monospace);
 }
 
-.agent-launcher {
+.modal.agent-launcher {
   width: min(640px, 100%);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.agent-launcher > .modal-head,
+.agent-launcher-status {
+  flex-shrink: 0;
+}
+.agent-launcher-status {
+  max-height: min(240px, 40dvh);
+  overflow-y: auto;
+  margin-bottom: 12px;
+}
+.agent-launcher-status:empty {
+  display: none;
+}
+.agent-launcher-choices {
+  min-height: 0;
+  overflow-y: auto;
 }
 .agent-launcher-section-head {
   display: flex;

@@ -248,7 +248,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   creates an agent's tab, starts the harness
   through Herdr, waits until it is ready, then sends the first prompt; if the
   harness stops on a question (such as Claude's folder trust) or exits at
-  once, it says so and offers to open the tab.
+  once, it says so and offers to open the tab. Progress and outcomes stay in
+  view above the choices. A confirmed start closes the launcher; an uncertain
+  or failed attempt keeps its explanation and does not re-enable start choices.
+  Open its existing tab or close the launcher before another attempt.
   - The launcher shows whether each harness is installed and logged in on the
     host, asked with the harness's own status command (`claude auth status`,
     `codex login status`; Pi reports only whether it is installed). **Log in**

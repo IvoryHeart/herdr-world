@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { STARTER_PROFILES } from "../../../shared/agentProfile";
 import { createRoot } from "react-dom/client";
 import { bridge } from "../api";
 import { AgentLauncherDialog } from "../world/AgentLauncherDialog";
@@ -39,7 +40,7 @@ async function run() {
   bridge.call = async () => ({
     version: 1,
     revision: 1,
-    profiles: [],
+    profiles: STARTER_PROFILES,
     assignments: [],
     chimes: {},
     town_master: null,
@@ -58,7 +59,28 @@ async function run() {
           `${method} must use the captured room`,
         );
         if (method === "launcher.catalog")
-          return { kinds: ["codex"], skills: [], readiness: [] };
+          return {
+            kinds: [
+              "codex",
+              ...Array.from({ length: 27 }, (_, index) => `absent-${index}`),
+            ],
+            skills: [],
+            readiness: [
+              "codex",
+              ...Array.from({ length: 27 }, (_, index) => `absent-${index}`),
+            ].map((kind) => ({
+              kind,
+              installed: kind === "codex",
+              logged_in: kind === "codex",
+              can_log_in: false,
+              probe: {
+                source: "world-harness-probe",
+                state: "ok",
+                reason: "complete",
+                observed_at: 0,
+              },
+            })),
+          };
         if (method === "launcher.start") {
           starts++;
           return answer.promise;
@@ -93,15 +115,34 @@ async function run() {
       await settle();
       await settle();
       const start = container.querySelector<HTMLButtonElement>(
-        ".agent-launcher-kind",
+        status === "uncertain"
+          ? 'button[aria-label="Start Reviewer"]'
+          : ".agent-launcher-kind",
       )!;
       check(Boolean(start), `${status}: Codex must be offered`);
       start.click();
+      start.click();
       await settle();
       check(
-        start.disabled &&
-          container.textContent?.includes("Starting Codex") === true,
+        start.disabled && container.textContent?.includes("Starting") === true,
         `${status}: retain the pending launch and prevent a duplicate start`,
+      );
+      const visibleStatus = () => {
+        const dialog = container
+          .querySelector(".agent-launcher")!
+          .getBoundingClientRect();
+        const status = container
+          .querySelector(".agent-launcher-status")!
+          .getBoundingClientRect();
+        return (
+          status.height > 0 &&
+          status.top >= dialog.top &&
+          status.bottom <= dialog.bottom
+        );
+      };
+      check(
+        visibleStatus(),
+        `${status}: pending status must be visible without scrolling past harness probes`,
       );
       answer.resolve({
         status,
@@ -117,6 +158,20 @@ async function run() {
       );
       check(starts === before + 1, `${status}: start exactly once`);
       if (!confirmed) {
+        check(
+          start.disabled,
+          `${status}: an existing attempt must not re-arm any start choice`,
+        );
+        start.click();
+        await settle();
+        check(
+          starts === before + 1,
+          `${status}: clicking again must not create a second agent`,
+        );
+        check(
+          visibleStatus(),
+          `${status}: outcome and Open its tab must be visible without scrolling`,
+        );
         check(
           container.textContent?.includes(`${status} fixture`) === true,
           `${status}: retain the reason`,

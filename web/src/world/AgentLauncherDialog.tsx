@@ -100,6 +100,9 @@ export function AgentLauncherDialog({
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [checks, setChecks] = useState(0);
   const [busy, setBusy] = useState<string | null>(null);
+  const [attempted, setAttempted] = useState(false);
+  // Fence synchronous clicks as well as retries after an uncertain outcome.
+  const attempt = useRef(false);
   const [outcome, setOutcome] = useState<RetainedOutcome | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -126,7 +129,9 @@ export function AgentLauncherDialog({
   }, [connectionId, generation, workspaceId, checks]);
 
   const launch = async (choice: { profile?: AgentProfile; kind?: string }) => {
-    if (!target || busy) return;
+    if (!target || busy || attempt.current) return;
+    attempt.current = true;
+    setAttempted(true);
     const profile = choice.profile;
     const label = profile?.name ?? harnessLabel(choice.kind ?? "");
     const trimmed = task.trim();
@@ -172,7 +177,9 @@ export function AgentLauncherDialog({
   };
 
   const createTerminal = async () => {
-    if (!target || busy) return;
+    if (!target || busy || attempt.current) return;
+    attempt.current = true;
+    setAttempted(true);
     setBusy("Terminal");
     setOutcome(null);
     setError(null);
@@ -194,7 +201,7 @@ export function AgentLauncherDialog({
   };
 
   const logIn = async (kind: string) => {
-    if (!target) return;
+    if (!target || busy || attempt.current) return;
     setOutcome(null);
     setError(null);
     try {
@@ -236,148 +243,6 @@ export function AgentLauncherDialog({
           <h2>New agent</h2>
           <CloseButton onClick={onClose} label="Close new agent" />
         </div>
-        {rooms.length === 0 ? (
-          <p className="agent-launcher-note">
-            Connect a host and create a room first.
-          </p>
-        ) : (
-          <>
-            {!room ? (
-              <p className="agent-launcher-note" role="status">
-                The requested room is unavailable. Choose a current room to
-                continue.
-              </p>
-            ) : null}
-            <label className="agent-field">
-              <span>Room</span>
-              <select
-                value={room?.id ?? ""}
-                onChange={(event) => {
-                  const chosen = rooms.find(
-                    (space) => space.id === event.target.value,
-                  );
-                  setSelection(
-                    chosen
-                      ? { id: chosen.id, generation: chosen.generation }
-                      : null,
-                  );
-                }}
-              >
-                {!room ? (
-                  <option value="" disabled>
-                    Choose a current room
-                  </option>
-                ) : null}
-                {rooms.map((space) => (
-                  <option key={space.id} value={space.id}>
-                    {space.label} · {space.hostLabel}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="agent-field">
-              <span>Agent task (optional)</span>
-              <textarea
-                value={task}
-                rows={2}
-                placeholder="What should it do? It fills {{task}} in the profile's brief."
-                onChange={(event) => setTask(event.target.value)}
-              />
-            </label>
-            {loggedOut.map((kind) => (
-              <p key={kind} className="agent-launcher-login-row">
-                {harnessLabel(kind)} is logged out on this host.
-                <button
-                  type="button"
-                  className="agent-launcher-login"
-                  title={`Opens a tab and shows ${harnessLabel(kind)}'s login command to run there`}
-                  onClick={() => void logIn(kind)}
-                >
-                  <LogIn size={13} aria-hidden="true" /> Log in
-                </button>
-              </p>
-            ))}
-            <button
-              type="button"
-              className="agent-launcher-card"
-              disabled={!target || Boolean(busy)}
-              onClick={() => void createTerminal()}
-            >
-              <Terminal size={24} aria-hidden="true" />
-              <span>
-                <b>Terminal</b>
-                <small>A plain shell in this room</small>
-              </span>
-            </button>
-            <div className="agent-launcher-section-head">
-              <h3>From a profile</h3>
-              <button type="button" onClick={onEditProfiles}>
-                <Settings2 size={13} aria-hidden="true" /> Edit profiles
-              </button>
-            </div>
-            <div className="agent-launcher-profiles">
-              {profiles.map((profile) => {
-                const note = readinessNote(profile.harness, catalog);
-                return (
-                  <button
-                    key={profile.id}
-                    type="button"
-                    className="agent-launcher-card"
-                    disabled={
-                      !target || Boolean(busy) || !catalog || note?.blocked
-                    }
-                    title={note?.text ?? `Start ${profile.name} here`}
-                    aria-label={`Start ${profile.name}`}
-                    onClick={() => void launch({ profile })}
-                  >
-                    <ProfileSprite look={profile.look} scale={2} />
-                    <span>
-                      <b>{profile.name}</b>
-                      <small>
-                        {harnessLabel(profile.harness)}
-                        {profile.model ? ` · ${profile.model}` : ""}
-                      </small>
-                      {note ? <em>{note.text}</em> : null}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-            <div className="agent-launcher-section-head">
-              <h3>Quick start</h3>
-              <button
-                type="button"
-                title="Check installed harnesses and logins again"
-                onClick={() => setChecks((n) => n + 1)}
-              >
-                <RefreshCw size={13} aria-hidden="true" /> Check again
-              </button>
-            </div>
-            {catalog ? <HarnessReadinessSummary catalog={catalog} /> : null}
-            <div className="agent-launcher-kinds">
-              {target && !catalog && !catalogError ? (
-                <span className="agent-launcher-note">
-                  Asking the host which agents it supports…
-                </span>
-              ) : null}
-              {quickKinds.map((kind) => {
-                const note = readinessNote(kind, catalog);
-                return (
-                  <button
-                    key={kind}
-                    type="button"
-                    className="agent-launcher-kind"
-                    disabled={!target || Boolean(busy) || note?.blocked}
-                    title={note?.text ?? `Start ${harnessLabel(kind)} here`}
-                    onClick={() => void launch({ kind })}
-                  >
-                    <Play size={12} aria-hidden="true" /> {harnessLabel(kind)}
-                  </button>
-                );
-              })}
-            </div>
-          </>
-        )}
         <div className="agent-launcher-status" role="status">
           {catalogError ? (
             <p className="agent-launcher-error">{catalogError}</p>
@@ -424,6 +289,163 @@ export function AgentLauncherDialog({
             </p>
           ) : null}
           {error ? <p className="agent-launcher-error">{error}</p> : null}
+        </div>
+        <div className="agent-launcher-choices">
+          {rooms.length === 0 ? (
+            <p className="agent-launcher-note">
+              Connect a host and create a room first.
+            </p>
+          ) : (
+            <>
+              {!room ? (
+                <p className="agent-launcher-note" role="status">
+                  The requested room is unavailable. Choose a current room to
+                  continue.
+                </p>
+              ) : null}
+              <label className="agent-field">
+                <span>Room</span>
+                <select
+                  value={room?.id ?? ""}
+                  disabled={attempted}
+                  onChange={(event) => {
+                    const chosen = rooms.find(
+                      (space) => space.id === event.target.value,
+                    );
+                    setSelection(
+                      chosen
+                        ? { id: chosen.id, generation: chosen.generation }
+                        : null,
+                    );
+                  }}
+                >
+                  {!room ? (
+                    <option value="" disabled>
+                      Choose a current room
+                    </option>
+                  ) : null}
+                  {rooms.map((space) => (
+                    <option key={space.id} value={space.id}>
+                      {space.label} · {space.hostLabel}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="agent-field">
+                <span>Agent task (optional)</span>
+                <textarea
+                  value={task}
+                  disabled={attempted}
+                  rows={2}
+                  placeholder="What should it do? It fills {{task}} in the profile's brief."
+                  onChange={(event) => setTask(event.target.value)}
+                />
+              </label>
+              {loggedOut.map((kind) => (
+                <p key={kind} className="agent-launcher-login-row">
+                  {harnessLabel(kind)} is logged out on this host.
+                  <button
+                    type="button"
+                    className="agent-launcher-login"
+                    disabled={attempted || Boolean(busy)}
+                    title={`Opens a tab and shows ${harnessLabel(kind)}'s login command to run there`}
+                    onClick={() => void logIn(kind)}
+                  >
+                    <LogIn size={13} aria-hidden="true" /> Log in
+                  </button>
+                </p>
+              ))}
+              <button
+                type="button"
+                className="agent-launcher-card"
+                disabled={!target || Boolean(busy) || attempted}
+                onClick={() => void createTerminal()}
+              >
+                <Terminal size={24} aria-hidden="true" />
+                <span>
+                  <b>Terminal</b>
+                  <small>A plain shell in this room</small>
+                </span>
+              </button>
+              <div className="agent-launcher-section-head">
+                <h3>From a profile</h3>
+                <button
+                  type="button"
+                  onClick={onEditProfiles}
+                  disabled={attempted}
+                >
+                  <Settings2 size={13} aria-hidden="true" /> Edit profiles
+                </button>
+              </div>
+              <div className="agent-launcher-profiles">
+                {profiles.map((profile) => {
+                  const note = readinessNote(profile.harness, catalog);
+                  return (
+                    <button
+                      key={profile.id}
+                      type="button"
+                      className="agent-launcher-card"
+                      disabled={
+                        !target ||
+                        Boolean(busy) ||
+                        attempted ||
+                        !catalog ||
+                        note?.blocked
+                      }
+                      title={note?.text ?? `Start ${profile.name} here`}
+                      aria-label={`Start ${profile.name}`}
+                      onClick={() => void launch({ profile })}
+                    >
+                      <ProfileSprite look={profile.look} scale={2} />
+                      <span>
+                        <b>{profile.name}</b>
+                        <small>
+                          {harnessLabel(profile.harness)}
+                          {profile.model ? ` · ${profile.model}` : ""}
+                        </small>
+                        {note ? <em>{note.text}</em> : null}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="agent-launcher-section-head">
+                <h3>Quick start</h3>
+                <button
+                  type="button"
+                  title="Check installed harnesses and logins again"
+                  onClick={() => setChecks((n) => n + 1)}
+                >
+                  <RefreshCw size={13} aria-hidden="true" /> Check again
+                </button>
+              </div>
+              {catalog ? <HarnessReadinessSummary catalog={catalog} /> : null}
+              <div className="agent-launcher-kinds">
+                {target && !catalog && !catalogError ? (
+                  <span className="agent-launcher-note">
+                    Asking the host which agents it supports…
+                  </span>
+                ) : null}
+                {quickKinds.map((kind) => {
+                  const note = readinessNote(kind, catalog);
+                  return (
+                    <button
+                      key={kind}
+                      type="button"
+                      className="agent-launcher-kind"
+                      disabled={
+                        !target || Boolean(busy) || attempted || note?.blocked
+                      }
+                      title={note?.text ?? `Start ${harnessLabel(kind)} here`}
+                      onClick={() => void launch({ kind })}
+                    >
+                      <Play size={12} aria-hidden="true" /> {harnessLabel(kind)}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
