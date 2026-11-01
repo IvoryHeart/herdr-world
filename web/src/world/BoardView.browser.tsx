@@ -657,6 +657,14 @@ async function fresh() {
   // Kept drafts live for the page, beyond any one Board: a scenario that
   // failed after keeping one must not show it to the next.
   __boardDraftsTesting.clear();
+  // Each scenario gets its own bin state and RPC log as well as its board.
+  fakeBin.calls.length = 0;
+  fakeBin.state.entries = [];
+  fakeBin.state.closing = [];
+  fakeBin.state.outcomes = [];
+  fakeBin.state.paused = false;
+  fakeBin.state.revision += 1;
+  await worldBinStore(bridge).refresh();
   saved = emptyDocument();
   failingWrites = 0;
   holdNextWrite = null;
