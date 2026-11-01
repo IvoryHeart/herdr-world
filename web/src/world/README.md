@@ -183,12 +183,17 @@ visible materialization budget is complete; held Town reflow blocks readiness.
 Board reports from its paint seam after deferred observation, placement and
 culling commits; Desk uses committed DOM plus fonts/images and paint callbacks.
 Every commit/container resize invalidates the mount-qualified revision. Capture
-requests coalesce resource work, retain at most two paint callbacks and create no
+requests coalesce synchronous revision bursts, abort obsolete resource waits,
+retain at most two paint callbacks and create no
 React state updates or extra scene reconciliation. Hidden/unmounted owners and
 obsolete callbacks cannot publish fresh receipts. Only capture requests check
 resources or request an evidence frame; ordinary animation keeps its scheduler.
 Lifecycle-only DOM harnesses may lack FontFaceSet: mounting remains inert there,
 while actual capture still requires browser fonts, frames and pixel decoding.
+[captureAssets](captureAssets.ts) waits on removable font/image load listeners, then
+decoding; revision changes and deadlines cancel these waits without waiting for an
+obsolete network request to settle. [Resource regressions](captureAssets.test.ts)
+cover unresolved loads and decode cancellation.
 
 [The CDP helper](testing/captureScene.ts) fences resize, waits for a current receipt,
 checks fixture-specific content and sampled output, then rechecks currency before

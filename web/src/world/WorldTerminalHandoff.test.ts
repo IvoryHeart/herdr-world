@@ -73,6 +73,14 @@ test.skipIf(!chrome)(
               port!,
               resumeCaptureDir,
               path.endsWith("disconnected") ? "disconnected" : "recovery",
+              {
+                view: "board",
+                content: {
+                  selector:
+                    ".workspace-inspector .workspace-inspector-tabs, .workspace-inspector .workspace-inspector-view-select",
+                  scope: "document",
+                },
+              },
             );
           }
           return new Response(null, { status: 204 });
@@ -97,7 +105,14 @@ test.skipIf(!chrome)(
                   dimensions.width,
                   dimensions.height,
                 );
-              const screenshot = await captureScene(command, dimensions);
+              const screenshot = await captureScene(command, {
+                ...dimensions,
+                content: {
+                  selector:
+                    ".workspace-inspector .workspace-inspector-tabs, .workspace-inspector .workspace-inspector-view-select",
+                  scope: "document",
+                },
+              });
               await Bun.write(
                 join(captureDir, `${path.split("/").pop()}.png`),
                 screenshot.bytes,

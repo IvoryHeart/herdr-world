@@ -9,7 +9,7 @@ export type CaptureOptions = {
   height: number;
   timeoutMs?: number;
   /** Fixture-specific visible content. Omit for legitimately empty views. */
-  content?: { selector: string; minimum?: number };
+  content?: { selector: string; minimum?: number; scope?: "document" };
 };
 async function evaluate(command: CaptureCommand, expression: string) {
   const reply = await command("Runtime.evaluate", {
@@ -60,9 +60,18 @@ export async function captureScene(
     if (!root) throw new Error("Capture main surface missing");
     const content = ${JSON.stringify(options.content ?? null)};
     const visible = (el) => el.checkVisibility({checkOpacity:true,checkVisibilityCSS:true}) && (() => {const b=el.getBoundingClientRect();return b.right>0&&b.bottom>0&&b.left<innerWidth&&b.top<innerHeight;})();
-    if (content && [...root.querySelectorAll(content.selector)].filter(visible).length < (content.minimum ?? 1))
+    const contentRoot = content?.scope === "document" ? document : root;
+    const expected = content ? [...contentRoot.querySelectorAll(content.selector)].filter(visible) : [];
+    if (content && expected.length < (content.minimum ?? 1))
       throw new Error("Capture expected content missing: " + content.selector);
-    const b = root.getBoundingClientRect();
+    const surface = content?.scope === "document" ? {x:0,y:0,right:innerWidth,bottom:innerHeight} : root.getBoundingClientRect();
+    const rects = expected.map((el) => el.getBoundingClientRect());
+    const b = content ? {
+      x: Math.max(surface.x, Math.min(...rects.map((r) => r.x))),
+      y: Math.max(surface.y, Math.min(...rects.map((r) => r.y))),
+      right: Math.min(surface.right, Math.max(...rects.map((r) => r.right))),
+      bottom: Math.min(surface.bottom, Math.max(...rects.map((r) => r.bottom))),
+    } : surface;
     return {x:Math.max(0,b.x),y:Math.max(0,b.y),width:Math.min(innerWidth,b.right)-Math.max(0,b.x),height:Math.min(innerHeight,b.bottom)-Math.max(0,b.y)};
   })()`,
   );
@@ -84,7 +93,7 @@ export async function captureScene(
     for(let i=0;i<pixels.length;i+=4){const key=(pixels[i]>>4)*256+(pixels[i+1]>>4)*16+(pixels[i+2]>>4);const n=(bins.get(key)??0)+1;bins.set(key,n);dominant=Math.max(dominant,n);}
     const foreground=1-dominant/4096;
     if (${!!options.content} && foreground < 0.02) throw new Error("Capture predominantly background: " + foreground);
-    return {foreground,width:image.width,height:image.height};
+    return {foreground,width:image.width,height:image.height,sample:region};
   })()`,
   );
   if (!(await evaluate(command, check)))

@@ -11,7 +11,7 @@ type Cancel = () => void;
 type Options = {
   view: CaptureView;
   owner: number;
-  assets(): Promise<unknown>;
+  assets(signal: AbortSignal): Promise<unknown>;
   active(): boolean;
   viewport(): { width: number; height: number };
   wake(): void;
@@ -24,7 +24,8 @@ export class DrawReadiness {
   private revision = 0;
   private retired = false;
   private resources = false;
-  private loading = false;
+  private loading: AbortController | null = null;
+  private preparing = false;
   private stage = "idle";
   private receipt: DrawReceipt | null = null;
   private paint: Cancel | null = null;
@@ -38,6 +39,7 @@ export class DrawReadiness {
   invalidate(reason = "commit") {
     this.revision++;
     this.resources = false;
+    this.cancelResources();
     this.receipt = null;
     this.paint?.();
     this.paint = null;
@@ -45,36 +47,41 @@ export class DrawReadiness {
     this.options.publish(null);
     if (this.request) this.prepare();
   }
+  private cancelResources() {
+    const loading = this.loading;
+    this.loading = null;
+    loading?.abort();
+  }
   private prepare() {
-    const revision = this.revision,
-      request = this.request;
     this.stage = "assets";
-    if (this.loading) return;
-    this.loading = true;
-    const completed = () => {
-      this.loading = false;
-      if (
-        !request ||
-        request !== this.request ||
-        this.retired ||
-        revision !== this.revision
-      ) {
-        if (this.request && !this.retired) this.prepare();
-        return false;
-      }
-      return true;
-    };
-    void this.options.assets().then(
-      () => {
-        if (!completed()) return;
-        this.resources = true;
-        this.stage = "draw";
-        this.options.wake();
-      },
-      () => {
-        if (completed()) this.fail("assets failed");
-      },
-    );
+    if (this.preparing) return;
+    this.preparing = true;
+    // Coalesce a synchronous commit/resize burst without retaining obsolete work.
+    queueMicrotask(() => {
+      this.preparing = false;
+      const revision = this.revision,
+        request = this.request;
+      if (!request || this.retired) return;
+      const loading = new AbortController();
+      this.loading = loading;
+      const current = () =>
+        this.loading === loading &&
+        request === this.request &&
+        !this.retired &&
+        revision === this.revision;
+      void this.options.assets(loading.signal).then(
+        () => {
+          if (!current()) return;
+          this.loading = null;
+          this.resources = true;
+          this.stage = "draw";
+          this.options.wake();
+        },
+        () => {
+          if (current()) this.fail("assets failed");
+        },
+      );
+    });
   }
   wait(timeoutMs: number): Promise<DrawReceipt> {
     if (this.retired)
@@ -161,6 +168,7 @@ export class DrawReadiness {
     const request = this.request;
     if (!request) return;
     this.request = null;
+    this.cancelResources();
     request.cancel();
     this.paint?.();
     this.paint = null;

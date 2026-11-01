@@ -12,10 +12,12 @@ function fixture() {
   const frames: (() => void)[] = [],
     deadlines: (() => void)[] = [];
   const markers: unknown[] = [];
+  const signals: AbortSignal[] = [];
   const gate = new DrawReadiness({
     view: "town",
     owner: 1,
-    assets: () => {
+    assets: (signal) => {
+      signals.push(signal);
       loads++;
       return assets.promise;
     },
@@ -44,6 +46,7 @@ function fixture() {
     hide: () => (visible = false),
     wakes: () => wakes,
     loads: () => loads,
+    signals,
   };
 }
 const microtasks = async () => {
@@ -82,6 +85,7 @@ test.each(["revision", "resize"])(
     const f = fixture(),
       done = f.gate.wait(100);
     const oldAssets = f.assets();
+    await microtasks();
     f.replace();
     f.gate.invalidate(reason);
     oldAssets.resolve();
@@ -136,26 +140,56 @@ test("never-ready fails on the injected deadline with bounded stage diagnostics"
   expect(f.markers.filter(Boolean)).toHaveLength(0);
 });
 
-test("repeated revisions keep one resource barrier, and a new request fences timed-out work", async () => {
+test("revision bursts coalesce and retain only one active resource check", async () => {
   const f = fixture(),
-    oldAssets = f.assets(),
     first = f.gate.wait(100);
   const failed = first.catch((error: Error) => error);
-  for (let i = 0; i < 100; i++) f.gate.invalidate("commit");
+  await microtasks();
   expect(f.loads()).toBe(1);
-  f.deadlines[0]!();
-  expect(String(await failed)).toContain("deadline");
-  f.replace();
-  const second = f.gate.wait(100);
-  oldAssets.resolve();
+  for (let i = 0; i < 100; i++) f.gate.invalidate("commit");
+  expect(f.signals[0]!.aborted).toBe(true);
   await microtasks();
   expect(f.loads()).toBe(2);
-  f.gate.drawn();
-  paint(f);
-  expect(f.markers.filter(Boolean)).toHaveLength(0);
-  f.assets().resolve();
-  await microtasks();
-  f.gate.drawn();
-  paint(f);
-  expect(f.gate.matches(await second)).toBe(true);
+  expect(f.signals.filter((signal) => !signal.aborted)).toHaveLength(1);
+  f.deadlines[0]!();
+  expect(String(await failed)).toContain("deadline");
+  expect(f.signals.every((signal) => signal.aborted)).toBe(true);
 });
+
+test.each(["commit", "timeout"])(
+  "a valid replacement captures while the obsolete %s asset remains unresolved",
+  async (change) => {
+    const f = fixture();
+    let completed = false;
+    const first = f.gate.wait(100);
+    const firstResult = first.catch((error: Error) => error);
+    await microtasks();
+    let current = first;
+    if (change === "timeout") {
+      f.deadlines[0]!();
+      expect(String(await firstResult)).toContain("deadline");
+      f.replace();
+      current = f.gate.wait(100);
+    } else {
+      f.replace();
+      f.gate.invalidate("remove obsolete image");
+    }
+    const result = current.then(
+      () => {
+        completed = true;
+      },
+      () => {},
+    );
+    try {
+      f.assets().resolve();
+      await microtasks();
+      f.gate.drawn();
+      paint(f);
+      await microtasks();
+      expect(completed).toBe(true);
+    } finally {
+      f.gate.dispose();
+      await result;
+    }
+  },
+);

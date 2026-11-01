@@ -46,12 +46,18 @@ continues; readiness does not mean every animation has stopped. No fixed sleeps,
 status polling or per-frame React updates are used.
 
 For populated fixtures, pass a visible expected-content selector. The helper
-rejects missing content and a 64×64 sample with less than 2% outside its dominant
-quantized colour, as a cheap blank-output check. Omit the selector for legitimately
+rejects missing content and a 64×64 sample of its visible bounds with less than 2% outside its dominant
+quantized colour, as a cheap blank-output check. Sampling the expected content
+bounds admits populated but sparse component scenes on large viewports. For
+portalled Inspector controls, a custom consumer can explicitly set
+`content.scope: "document"`; the draw receipt still belongs to the active surface.
+Receipts include the sampled rectangle. Omit the selector for legitimately
 empty Board/Desk scenes. This heuristic supplements actual draw evidence; it cannot
 prove that every visual detail is correct. The 15-second readiness deadline names
 the surface, owner, revision and pending stage; changed/retired/hidden surfaces
-cannot authorize a screenshot. Failures return no bytes for that image. Keep
+cannot authorize a screenshot. Removing/replacing an unresolved asset or expiring a
+request cancels its owned waiters; a valid current revision can capture while the
+obsolete network request remains unresolved. Failures return no bytes for that image. Keep
 receipts and inspect all five originals, especially Town floors/buildings/desks.
 
 ## Town golden-image report

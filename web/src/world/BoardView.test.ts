@@ -226,24 +226,49 @@ test.skipIf(!chrome).each([
         30_000,
       );
       expect(failures).toEqual([]);
-      if (Bun.env.BOARD_CAPTURE_DIR && cdp) {
-        await mkdir(Bun.env.BOARD_CAPTURE_DIR, { recursive: true });
-        await cdp("Runtime.evaluate", {
-          expression:
-            "document.querySelector('.board-tray button[aria-label=Close]')?.click()",
-        });
-        const capture = await captureScene(cdp, {
-          view: "board",
-          width,
-          height,
-        });
-        await Bun.write(
-          join(
-            Bun.env.BOARD_CAPTURE_DIR,
-            `board-work-${width}x${height}${motion === " with reduced motion" ? "-reduced" : ""}.png`,
-          ),
-          capture.bytes,
-        );
+      if (cdp) {
+        const command = cdp;
+        const writeCapture = async (filename: string) => {
+          const capture = await captureScene(command, {
+            view: "board",
+            width,
+            height,
+            content: { selector: ".board-card:not(.board-note)" },
+          });
+          await Bun.write(filename, capture.bytes);
+        };
+        if (width === 1440 && height === 900 && motion === "") {
+          await command("Runtime.evaluate", {
+            expression: `(()=>{const s=document.createElement('style');s.id='missing-capture-content';s.textContent='.board-card{visibility:hidden!important}';document.head.append(s);})()`,
+          });
+          const missing = join(dir, "missing-content.png");
+          let failure = "";
+          try {
+            await writeCapture(missing);
+          } catch (error) {
+            failure = String(error);
+          } finally {
+            await command("Runtime.evaluate", {
+              expression:
+                "document.getElementById('missing-capture-content').remove()",
+            });
+          }
+          expect(failure).toContain("Capture expected content missing");
+          expect(existsSync(missing)).toBe(false);
+        }
+        if (Bun.env.BOARD_CAPTURE_DIR) {
+          await mkdir(Bun.env.BOARD_CAPTURE_DIR, { recursive: true });
+          await command("Runtime.evaluate", {
+            expression:
+              "document.querySelector('.board-tray button[aria-label=Close]')?.click()",
+          });
+          await writeCapture(
+            join(
+              Bun.env.BOARD_CAPTURE_DIR,
+              `board-work-${width}x${height}${motion === " with reduced motion" ? "-reduced" : ""}.png`,
+            ),
+          );
+        }
       }
     } finally {
       socket?.close();

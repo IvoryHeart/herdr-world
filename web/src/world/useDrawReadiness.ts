@@ -1,3 +1,4 @@
+import { captureAssets } from "./captureAssets";
 import { useLayoutEffect, useRef, type RefObject } from "react";
 import {
   DrawReadiness,
@@ -26,16 +27,6 @@ function visible(root: HTMLElement) {
     root.isConnected &&
     !document.hidden &&
     root.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })
-  );
-}
-async function assets(root: HTMLElement) {
-  // Force font discovery for this committed DOM before taking FontFaceSet.ready.
-  root.getBoundingClientRect();
-  await document.fonts.ready;
-  await Promise.all(
-    Array.from(root.querySelectorAll("img"))
-      .filter((image) => image.checkVisibility())
-      .map((image) => image.decode()),
   );
 }
 export const captureReadiness = {
@@ -103,7 +94,7 @@ export function useDrawReadiness(
     const current = new DrawReadiness({
       view,
       owner,
-      assets: () => assets(element),
+      assets: (signal) => captureAssets(element, signal),
       active: () => selected === owner && visible(element),
       viewport: () => ({ width: innerWidth, height: innerHeight }),
       wake: () => {

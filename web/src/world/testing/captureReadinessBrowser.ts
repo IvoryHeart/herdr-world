@@ -21,7 +21,7 @@ export function registerCaptureReadinessTests() {
       const dir = await mkdtemp(join(tmpdir(), "capture-readiness-"));
       const assets = new Map<string, Blob>();
       const mounted = Promise.withResolvers<void>();
-      const waiting = Promise.withResolvers<void>();
+      let waiting = Promise.withResolvers<void>();
       const image = Promise.withResolvers<void>(),
         font = Promise.withResolvers<void>();
       const requestedImage = Promise.withResolvers<void>(),
@@ -313,6 +313,31 @@ export function registerCaptureReadinessTests() {
         }
         expect(neverArtifact).toContain("stage=assets");
         expect(await readdir(failedDir)).toEqual([]);
+        // Recover on the same mounted owner without releasing /never-image.
+        await resizeCapture(command, dimensions.width, dimensions.height);
+        const ownerBeforeRemoval = await evaluate(
+          "document.querySelector('#root .town-shell').dataset.worldCaptureOwner",
+        );
+        waiting = Promise.withResolvers<void>();
+        const recovering = captureScene(command, {
+          view: "town",
+          ...dimensions,
+          content: { selector: "canvas[data-office-canvas]" },
+        });
+        await withBrowserDeadline(
+          waiting.promise,
+          "replacement capture waits on obsolete image",
+        );
+        await evaluate("captureFixture.removeAssets()");
+        const replacement = await recovering;
+        expect(String(replacement.receipt.owner)).toBe(ownerBeforeRemoval);
+        expect(replacement.sanity.foreground).toBeGreaterThan(0.02);
+        const nextCapture = await captureScene(command, {
+          view: "town",
+          ...dimensions,
+          content: { selector: "canvas[data-office-canvas]" },
+        });
+        expect(nextCapture.receipt.owner).toBe(replacement.receipt.owner);
         if (Bun.env.WORLD_CAPTURE_EVIDENCE_DIR) {
           await mkdir(Bun.env.WORLD_CAPTURE_EVIDENCE_DIR, { recursive: true });
           await Bun.write(
@@ -324,6 +349,8 @@ export function registerCaptureReadinessTests() {
                 slow: current.receipt,
                 resize: resized.receipt,
                 neverReady: failed,
+                replacementAfterNeverReady: replacement.receipt,
+                obsoleteImageReleasedBeforeReplacement: false,
                 loadAverage: loadavg(),
               },
               null,

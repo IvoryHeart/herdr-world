@@ -138,6 +138,12 @@ function retainHiddenTown() {
 }
 const fixture = {
   retainHiddenTown,
+  removeAssets() {
+    host
+      .querySelectorAll('img[src$="never-image"]')
+      .forEach((image) => image.remove());
+    mount("town");
+  },
   mount,
   asset(name: string) {
     const image = new Image();
