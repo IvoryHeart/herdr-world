@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
 import type { HerdrOfficeProjection } from "../../herdrOfficeProjection";
-import { TownCamera } from "../townCamera";
+import { TownCamera, townHostsWidth } from "../townCamera";
 import {
+  TOWN_PHONE_BOARD_ROWS,
   layoutTown,
   TOWN_TILE as T,
   townGeometryKey,
@@ -80,9 +81,22 @@ test("a wide town opens at home: every building, centred", () => {
   const { view, layout, viewport, camera, reasons } = setup();
   view.attach(camera, layout, viewport);
   expect(camera.z).toBe(camera.limits!.home);
-  // The town's centre sits at the focus point, between the panels' insets.
+  // The hosts' centre sits at the focus point, between the panels' insets;
+  // the reserved town-hall lot lies beyond them, and ALL shows it.
+  expect(camera.limits!.home).toBeGreaterThanOrEqual(camera.limits!.all);
+  const usable = viewport.width - viewport.inset.left - viewport.inset.right;
+  const fits = layout.width * T * camera.z <= usable;
+  if (!fits)
+    expect(camera.toScreen(0, 0).x).toBeLessThanOrEqual(
+      viewport.inset.left + 0.01,
+    );
   const centre = camera.toScreen(
-    (layout.width * T) / 2,
+    fits
+      ? (layout.width * T) / 2
+      : Math.max(
+          (townHostsWidth(layout) * T) / 2,
+          (camera.focusPoint().x - viewport.inset.left) / camera.z,
+        ),
     (layout.height * T) / 2,
   );
   expect(centre.x).toBeCloseTo(camera.focusPoint().x);
@@ -91,15 +105,16 @@ test("a wide town opens at home: every building, centred", () => {
   expect(reasons).toEqual(["home"]);
 });
 
-test("a phone opens at home: the first building's top under the top inset", () => {
+test("a phone opens at home: the first reception board under the top inset", () => {
   const { view, layout, viewport, camera } = setup(PHONE);
   expect(layout.formFactor).toBe("narrow");
   view.attach(camera, layout, viewport);
   const first = layout.buildings[0]!;
   expect(camera.z).toBe(camera.limits!.home);
-  expect(camera.toScreen(0, first.y * T - 24).y).toBeCloseTo(
-    viewport.inset.top,
-  );
+  // The reception board stands in the yard above the building.
+  expect(
+    camera.toScreen(0, (first.y - TOWN_PHONE_BOARD_ROWS) * T - 24).y,
+  ).toBeCloseTo(viewport.inset.top);
   expect(view.atHome()).toBe(true);
 });
 
@@ -111,7 +126,10 @@ test("each town shape keeps its own camera across visits", () => {
   first.camera.update(1 / 60);
   first.view.drew(first.camera, "overview", first.layout);
   const kept = { x: first.camera.x, y: first.camera.y, z: first.camera.z };
-  expect(poses.get(townShapeKey(first.layout.shape))).toEqual(kept);
+  expect(poses.get(townShapeKey(first.layout.shape))).toEqual({
+    ...kept,
+    home: false,
+  });
   // A later visit opens where the last one left, not at home.
   const again = setup(WIDE, poses);
   again.view.attach(again.camera, again.layout, again.viewport);
@@ -417,4 +435,49 @@ test("only an instant home framing counts as home for re-framing", () => {
     (next) => camera.configure(layout, next),
   );
   expect(reasons).toEqual([]);
+});
+
+test("a town viewed whole is framed again when it grows, then fits a narrower view", () => {
+  const { view, layout, viewport, camera } = setup();
+  view.attach(camera, layout, viewport);
+  view.follow(layout, viewport);
+  expect(view.atHome()).toBe(true);
+  const grown = layoutFor(
+    office({
+      alpha: working(24),
+      beta: working(3),
+      gamma: working(2),
+      delta: working(4),
+    }),
+    WIDE,
+  );
+  view.follow(grown, viewport);
+  expect(view.atHome()).toBe(true);
+  // Opening a panel narrows the view; the home view fits the town again, so
+  // every building stays on screen.
+  const narrower = townViewport(1100, WIDE.height, NO_CHROME);
+  view.reframe(grown, narrower, (next) => camera.configure(grown, next));
+  for (const building of grown.buildings) {
+    const left = camera.toScreen(building.x * 16, building.y * 16);
+    const right = camera.toScreen(
+      (building.x + building.w) * 16,
+      (building.y + building.h) * 16,
+    );
+    expect(left.x).toBeGreaterThanOrEqual(0);
+    expect(right.x).toBeLessThanOrEqual(1100);
+  }
+});
+
+test("a saved home view is framed again for the view it returns to", () => {
+  const poses = new Map<string, TownPose>();
+  const first = setup(WIDE, poses);
+  first.view.attach(first.camera, first.layout, first.viewport);
+  first.view.drew(first.camera, "overview", first.layout);
+  expect(poses.get(townShapeKey(first.layout.shape))?.home).toBe(true);
+  // A later visit to a narrower view of the same shape fits the town to it.
+  const narrower = { width: 1240, height: WIDE.height };
+  const again = setup(narrower, poses);
+  again.view.attach(again.camera, again.layout, again.viewport);
+  expect(again.view.atHome()).toBe(true);
+  expect(again.camera.z).toBe(again.camera.limits!.home);
 });

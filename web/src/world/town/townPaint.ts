@@ -175,6 +175,17 @@ const plazaTile = (odd: number) =>
     }
   });
 
+const lotTile = (variant: number) =>
+  preparedCanvas(`lot:${variant}`, T, T, (g) => {
+    const random = townRandom(variant * 15485863 + 3);
+    g.fillStyle = "#a88a62";
+    g.fillRect(0, 0, T, T);
+    for (let i = 0; i < 6; i += 1) {
+      g.fillStyle = random() < 0.5 ? "#977a54" : "#b89a70";
+      g.fillRect((random() * T) | 0, (random() * T) | 0, 2, 1);
+    }
+  });
+
 const tileHash = (tx: number, ty: number) =>
   (Math.imul(tx + 1, 73856093) ^ Math.imul(ty + 1, 19349663)) >>> 0;
 
@@ -212,7 +223,9 @@ export function paintTownGround(
             ? roadTile(hash % 4)
             : type === TownGround.plaza
               ? plazaTile(ty % 2)
-              : walkTile();
+              : type === TownGround.lot
+                ? lotTile(hash % 4)
+                : walkTile();
       g.drawImage(tile, x, y);
       if (
         ty > 0 &&
@@ -263,8 +276,9 @@ export function paintTownGround(
     g.fillStyle = "rgba(0,0,0,.2)";
     g.fillRect(b.x * T + 10, b.y * T - 4, b.w * T, (b.h + TOWN_FACADE) * T + 8);
     g.fillStyle = "rgba(60,40,30,.55)";
-    g.fillRect(b.doorX * T + 1, (b.y + b.h + TOWN_FACADE) * T, 14, 4);
+    g.fillRect(b.barDoorX * T + 1, (b.y + b.h + TOWN_FACADE) * T, 14, 4);
   }
+  paintTownHallLot(g, layout.townHall, inRegion);
   g.fillStyle = "rgba(10,30,10,.22)";
   for (const tree of layout.trees) {
     const x = tree.x * T + 11;
@@ -425,15 +439,28 @@ export function paintTownInterior(
       furniture?.carpetFor?.(room.key) ?? townCarpetFor(room.key),
       false,
     );
+  // The reception lobby: a tiled floor under the back wall, above the rooms.
   const lobby = (building.lobbyY - building.y) * T;
+  const lobbyBottom = lobby + LOBBY_ROWS * T;
   g.fillStyle = "#d8d2c4";
-  g.fillRect(6, lobby, Wp - 12, Hp - lobby);
+  g.fillRect(6, lobby, Wp - 12, lobbyBottom - lobby);
   g.fillStyle = "#cdc6b6";
-  for (let y = lobby; y < Hp; y += 16)
+  for (let y = lobby; y < lobbyBottom; y += 16)
     for (let x = 6 + ((y / 16) % 2) * 16; x < Wp - 6; x += 32)
       g.fillRect(x, y, 16, 16);
   g.fillStyle = "rgba(0,0,0,.15)";
-  g.fillRect(6, lobby, Wp - 12, 2);
+  g.fillRect(6, lobbyBottom - 2, Wp - 12, 2);
+  // The front door in the back wall, with a mat inside it.
+  const ex = (building.entryX - building.x) * T;
+  g.fillStyle = "#4a3a30";
+  g.fillRect(ex - 2, 4, 20, 28);
+  g.fillStyle = "#22180f";
+  g.fillRect(ex + 1, 7, 14, 25);
+  g.fillStyle = "#e3aa3a";
+  g.fillRect(ex + 12, 19, 2, 2);
+  g.fillStyle = "#6d5a4a";
+  g.fillRect(ex - 1, 33, 18, 6);
+  paintBar(g, building);
   const queueX = (building.doorX - building.x - 6) * T;
   const queueY = (building.lobbyY - building.y + 4) * T - 2;
   g.fillStyle = "#8a2f2f";
@@ -472,6 +499,98 @@ export function paintTownInterior(
   return canvas;
 }
 
+/**
+ * The town hall's reserved lot: a fenced plot with a signpost. What the town
+ * hall holds is not decided yet, so the lot has no door and takes no taps.
+ */
+function paintTownHallLot(
+  g: CanvasRenderingContext2D,
+  lot: TownLayout["townHall"],
+  inRegion: (x0: number, y0: number, x1: number, y1: number) => boolean,
+) {
+  const x = lot.x * T;
+  const y = lot.y * T;
+  const w = lot.w * T;
+  const h = lot.h * T;
+  if (!w || !inRegion(x - 4, y - 24, x + w + 4, y + h + 4)) return;
+  g.fillStyle = "#e9dcc0";
+  for (let px = x; px < x + w; px += 6) {
+    g.fillRect(px, y + 2, 4, 1);
+    g.fillRect(px, y + h - 4, 4, 1);
+  }
+  for (let py = y; py < y + h; py += 6) {
+    g.fillRect(x + 1, py, 1, 4);
+    g.fillRect(x + w - 2, py, 1, 4);
+  }
+  g.fillStyle = "#8a6a48";
+  for (let px = x; px <= x + w - 3; px += 24) {
+    g.fillRect(px, y, 3, 6);
+    g.fillRect(px, y + h - 6, 3, 6);
+  }
+  for (let py = y; py <= y + h - 6; py += 24) {
+    g.fillRect(x, py, 3, 6);
+    g.fillRect(x + w - 3, py, 3, 6);
+  }
+  const sx = x + Math.floor(w / 2) - 40;
+  const sy = y + Math.floor(h / 2) - 14;
+  g.fillStyle = "rgba(0,0,0,.2)";
+  g.fillRect(sx + 4, sy + 30, 76, 4);
+  g.fillStyle = "#5a3d28";
+  g.fillRect(sx + 38, sy + 18, 4, 16);
+  g.fillStyle = "#7a5536";
+  g.fillRect(sx, sy, 80, 20);
+  g.fillStyle = "#e7d3a8";
+  g.fillRect(sx + 2, sy + 2, 76, 16);
+  g.fillStyle = "#3a2b22";
+  g.font = "bold 10px monospace";
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  g.fillText("TOWN HALL", sx + 40, sy + 10);
+}
+
+/** Lobby rows: from the lobby's top row to the first room. */
+const LOBBY_ROWS = 7;
+
+/** The bar counter along the bar strip, with a stool at each stool spot. */
+function paintBar(g: CanvasRenderingContext2D, building: TownBuilding) {
+  const bar = building.lounge.bar;
+  if (bar.w <= 0) return;
+  const x = (bar.x - building.x) * T;
+  const y = (bar.y - building.y) * T;
+  const w = bar.w * T;
+  g.fillStyle = "rgba(0,0,0,.2)";
+  g.fillRect(x + 2, y + 16, w, 4);
+  g.fillStyle = "#7a4a2c";
+  g.fillRect(x, y + 4, w, 14);
+  g.fillStyle = townShade("#7a4a2c", -0.3);
+  for (let bx = x + 8; bx < x + w - 4; bx += 16) g.fillRect(bx, y + 7, 1, 10);
+  g.fillStyle = "#c89a64";
+  g.fillRect(x - 1, y, w + 2, 5);
+  g.fillStyle = "#e0b783";
+  g.fillRect(x - 1, y, w + 2, 1);
+  g.fillStyle = "#d4b25a";
+  g.fillRect(x, y + 15, w, 1);
+  const random = townRandom(townHash(building.hostKey) + 9);
+  const glass = ["#9fd8f5", "#5aa857", "#d9644a", "#e3aa3a", "#f1ece2"];
+  for (let bx = x + 5; bx < x + w - 6; bx += 7 + Math.floor(random() * 6)) {
+    g.fillStyle = glass[Math.floor(random() * glass.length)]!;
+    const tall = random() < 0.4;
+    g.fillRect(bx, y - (tall ? 6 : 3), 3, tall ? 6 : 3);
+  }
+  for (const spot of building.lounge.spots) {
+    if (spot.y !== bar.y + 1 || spot.x < bar.x) continue;
+    const sx = (spot.x - building.x) * T;
+    const sy = (spot.y - building.y) * T;
+    g.fillStyle = "#3a2f2b";
+    g.fillRect(sx + 7, sy + 6, 2, 8);
+    g.fillRect(sx + 4, sy + 13, 8, 1);
+    g.fillStyle = "#b44a3f";
+    g.fillRect(sx + 3, sy + 3, 10, 4);
+    g.fillStyle = "#d9644a";
+    g.fillRect(sx + 3, sy + 3, 10, 1);
+  }
+}
+
 /** Front wall below the building footprint, 32 px tall. */
 export function paintTownFacade(building: TownBuilding, theme: TownHostTheme) {
   const Wp = building.w * T;
@@ -496,7 +615,7 @@ export function paintTownFacade(building: TownBuilding, theme: TownHostTheme) {
   g.fillRect(0, 27, Wp, 5);
   g.fillStyle = "#9a8f80";
   g.fillRect(0, 27, Wp, 1);
-  const dx = (building.doorX - building.x) * T;
+  const dx = (building.barDoorX - building.x) * T;
   for (let x = 14; x < Wp - 20; x += 36) {
     if (Math.abs(x - dx) < 26) continue;
     g.fillStyle = "#4a3a30";

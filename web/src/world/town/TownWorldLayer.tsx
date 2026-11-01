@@ -20,12 +20,7 @@ import {
   townFoldedActivityLabel,
   type TownFoldedActivity,
 } from "./townFoldedActivity";
-import {
-  TOWN_FACADE,
-  TOWN_TILE as T,
-  townDeskSlots,
-  type TownLayout,
-} from "./townLayout";
+import { TOWN_TILE as T, townDeskSlots, type TownLayout } from "./townLayout";
 import { townAttention, townRoomCounts, type TownModel } from "./townModel";
 import { townCarpetFor, townCarpetOf } from "./townPaint";
 import { TownQuestPennant, type TownQuestMark } from "./townQuestPennant";
@@ -246,8 +241,9 @@ export const TownWorldLayer = memo(function TownWorldLayer({
               className={`town-reception${queue.length ? " town-reception-busy" : ""}`}
               data-stale={host?.stale || undefined}
               style={{
-                left: building.doorX * T,
-                top: (building.y + building.h + TOWN_FACADE) * T + 6,
+                // The board stands in the yard above the front door.
+                left: (building.entryX + 0.5) * T,
+                top: building.y * T - 18,
               }}
               role="group"
               aria-label={`${host?.displayLabel ?? "Host"} reception, ${queue.length} waiting`}
@@ -604,8 +600,9 @@ export const TownWorldLayer = memo(function TownWorldLayer({
         <div
           className="town-new-room-wrap"
           style={{
-            left: (newRoomBuilding.x + 18) * T,
-            top: (newRoomBuilding.y + 3) * T,
+            // In the lobby beside the front door, clear of the counter.
+            left: (newRoomBuilding.entryX + 2) * T,
+            top: (newRoomBuilding.y + 2) * T,
           }}
         >
           <button

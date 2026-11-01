@@ -180,9 +180,10 @@ hosts stay usable.
    opens its launcher with that room selected. Choose **Terminal** for a plain
    tab, a profile, or an agent kind. If the requested room is no longer
    available, choose a current room in the launcher before creating anything.
-3. Look at reception for blocked agents waiting for input, oldest first. Finished
-   agents also wait there until you open their terminal or mark that completion
-   reviewed, then join idle agents in the lounge. These locations visualize
+3. Look at reception, at the top of each building, for blocked agents waiting
+   for input, oldest first. Finished agents also wait there until you open
+   their terminal or mark that completion reviewed, then join idle agents at
+   the bar in the building's bottom corner. These locations visualize
    status; they do not move the underlying pane or change its host. For the
    whole picture, press **Summary** on the Town board (on a phone, tap the
    counts chip under the search bar): the **Town summary** window lists who
@@ -221,7 +222,7 @@ hosts stay usable.
    text; when the conversation cannot be read, it says why. It highlights a
    question when one can be identified, and refreshes when the conversation
    changes. Opening
-   an agent brings it back to its desk from reception or the lounge until its
+   an agent brings it back to its desk from reception or the bar until its
    status changes. To open terminals instead, set **Menu → Agents open** to
    **Terminal** (Board and Desk follow it too); that tap also brings the agent back and, like the chat, does
    not mark its work reviewed.
@@ -341,7 +342,7 @@ hosts stay usable.
    choose the same action from the window’s **⋯** menu.
    The table wears a pin, stays put
    when tabs are reordered or the room grows, and its agents stay at it rather
-   than taking breaks in the lounge; they still go to reception when they need
+   than taking breaks at the bar; they still go to reception when they need
    you or finish, and come straight back once seen. Choose **Unpin desk in
    Town** to let it follow the tab order again.
 
