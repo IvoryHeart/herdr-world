@@ -659,7 +659,13 @@ export function AgentChat({
       ) : (
         <div className="agent-chat-list">
           {history.messages.length === 0 ? (
-            <p className="agent-chat-empty">
+            <p
+              className={
+                history.history || history.error
+                  ? "agent-chat-empty"
+                  : "agent-chat-empty is-loading"
+              }
+            >
               {history.history
                 ? "No messages yet."
                 : history.error

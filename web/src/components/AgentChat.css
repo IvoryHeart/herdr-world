@@ -259,14 +259,37 @@
 }
 
 /* The composer's height before the first read says whether Chat can send:
-   its border, padding and one row of 40px controls. */
+   its border and padding (19px), one row of controls and the 4px grid gap
+   above its (empty) attachment row. */
 .agent-chat-composer.is-reserved {
   --chat-composer-button-size: 40px;
-  min-height: calc(var(--chat-composer-button-size) + 19px);
+  min-height: calc(var(--chat-composer-button-size) + 23px);
 }
 
 @media (pointer: coarse) {
   .agent-chat-composer.is-reserved {
     --chat-composer-button-size: 44px;
+  }
+}
+
+/* The empty and loading notes sit over the list, not above it, so the
+   messages arriving never move it; a quick load never shows the loading
+   note at all. */
+.agent-chat-list > .agent-chat-empty {
+  position: absolute;
+  inset: 0 0 auto;
+  pointer-events: none;
+}
+
+.agent-chat-list > .agent-chat-empty.is-loading {
+  animation: agent-chat-loading-note 0s linear 400ms both;
+}
+
+@keyframes agent-chat-loading-note {
+  from {
+    visibility: hidden;
+  }
+  to {
+    visibility: visible;
   }
 }
