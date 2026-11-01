@@ -24,6 +24,18 @@ connection before the 100-row bound, and lanes are found from storage
 (`EffectStore.lanes`), so one host's backlog never hides or delays another
 host's work. Without the option the runner behaves as before.
 
+Herdr dispatch authority is limited to the World run that captured it. New alert
+contracts record that run in `authorization.service_incarnation`; saved answers
+use their original recipient's `service_incarnation`, and bin closes the run that
+recorded them. This is World-run authority,
+not native runtime continuity proof. Herdr protocol 22 has no checkable boot token;
+matching connection, numeric generation, pane, terminal or session labels after
+World restarts cannot establish continuity. Old or missing authority refuses a
+provably unsent alert/answer; any possible send stays uncertain. Legacy migration
+never grants a new run's authority. Saved answers remain available through
+`herdr-world ask get ID`, and completed receipts/history remain intact. Even an
+explicit possible-duplicate decision cannot bypass this eligibility check.
+
 Each attempt is claimed with the current service incarnation and a monotonically
 increasing attempt number. Only one claim succeeds. Before external submission,
 the runner resolves fresh qualified targets and checks current authorization,
@@ -43,14 +55,17 @@ Production currently uses repeatable alerts, opaque saved answers and the
 reconcilable `world.bin.close` ([bin close](../server/src/world/bin-close.ts)): its
 decisive reconciliation reads the captured pane's workspace on the captured
 runtime generation, and it records nothing as sent once that generation is
-replaced. Synthetic keyed and reattachable sources exercise the kernel in tests
-and verification; they are absent from the production registry. A future source must
+replaced. Their same-run retries retain these classes; restart does not grant
+permission to send to a replacement Herdr. Synthetic keyed, reconcilable and
+reattachable sources exercise the kernel in tests and verification; they are
+absent from the production registry. A future source must
 implement its own decisive reconciliation or existing-run observation, including
 current target fences, before registering that recovery class. Recovery reads
 observe the original effect; they do not grant authority for a new submission or
 cleanup. There is no exactly-once execution claim.
 
-Claims interrupted before `dispatching` are released on restart. Offline bindings
+Claims interrupted before `dispatching` are released on restart, then subject to
+the driver's continuity/World-run eligibility. Offline bindings within a run
 wait without age expiry and are checked again when available. Ended or unconfirmed
 bindings are not sent only if no attempt ever reached `dispatching`; later loss
 preserves uncertainty. Cancellation before dispatch releases the claim. After
@@ -59,7 +74,7 @@ receipts or uncertainty. Permanent refusals keep their reasons and stop automati
 attempts. Closing an ask stops its alerts; an earlier possible alert remains
 recorded without claiming it was undone.
 
-An explicit owner decision may retry an uncertain intent or close its tracking.
+An explicit owner decision may retry an eligible uncertain intent or close its tracking.
 Closing preserves the actual attempt outcome, receipt, handle and possible-send
 evidence; it does not report that an earlier effect was undone. The internal close
 decision allows normal history retention only after that explicit resolution.

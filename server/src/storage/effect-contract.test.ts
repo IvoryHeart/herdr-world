@@ -166,7 +166,16 @@ test("the domain transaction durably stores the complete versioned intent before
         string,
         unknown
       >;
-      expect(row.contract).toBe(JSON.stringify(contract));
+      expect(row.contract).toBe(
+        JSON.stringify({
+          ...contract,
+          authorization: {
+            ...contract.authorization,
+            service_incarnation: "incarnation-one",
+          },
+        }),
+      );
+      expect(contract.authorization.service_incarnation).toBeUndefined();
       expect(row.state).toBe("pending");
       expect(row.ever_dispatched).toBe(0);
     } finally {

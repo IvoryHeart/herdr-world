@@ -50,6 +50,14 @@ release that World version verified, in Herdr's own default location.
   off live only when it can confirm that no service manager runs that server, and
   otherwise reports that a restart is needed
 
+#### Scenario: Explicit persistent setup finds a running Herdr
+- **WHEN** the user explicitly requests managed setup for the default local session and sockets
+- **THEN** World registers future user-service startup even if Herdr is already reachable,
+  without restarting, stopping or activating a competing server
+- **AND** missing executable discovery or failed registration reports failure rather than success
+- **AND** a discovered directory or non-executable entry is preserved and refused before service mutation
+- **AND** existing SSH, named-session and custom-socket setup restrictions remain enforced
+
 ### Requirement: Reviewed release identity
 Release preparation SHALL use a branch and reviewed PR. Final artifacts SHALL be built
 from the final reviewed immutable release tag.

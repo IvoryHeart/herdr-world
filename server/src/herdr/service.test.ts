@@ -89,6 +89,42 @@ describe("service definition renderers", () => {
 });
 
 describe("installHerdrService", () => {
+  test.each(["systemd", "launchd", "windows-task"] as const)(
+    "registers %s without activating or replacing the running process",
+    (platform) => {
+      const homeDir = scratch();
+      const commands: string[][] = [];
+      const paths = installHerdrService("/synthetic/herdr", {
+        platform,
+        homeDir,
+        appDataDir: join(homeDir, "appdata"),
+        uid: 501,
+        start: false,
+        runCommand: (argv) => {
+          commands.push(argv);
+          return 0;
+        },
+      });
+      expect(readFileSync(paths.definition, "utf8")).toContain(
+        HERDR_SERVICE_MARKER,
+      );
+      if (platform === "systemd")
+        expect(commands).toEqual([
+          ["systemctl", "--user", "daemon-reload"],
+          ["systemctl", "--user", "enable", "herdr-world-herdr.service"],
+        ]);
+      if (platform === "launchd")
+        expect(commands).toEqual([
+          ["launchctl", "enable", `gui/501/${HERDR_SERVICE_LABEL}`],
+        ]);
+      if (platform === "windows-task") {
+        expect(commands).toHaveLength(1);
+        expect(commands[0]).toContain("-File");
+        expect(commands[0]).toContain(paths.definition);
+      }
+    },
+  );
+
   test("writes the unit and runs the systemd activation sequence", () => {
     const homeDir = scratch();
     const commands: string[][] = [];

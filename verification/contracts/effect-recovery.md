@@ -38,6 +38,19 @@ observations when authorization is skipped, keys change, a creation generation
 is reused after restart, or possible dispatch is falsely reported as not sent. Unexpected parser, SQL, adapter and cleanup
 errors never count as controls being killed.
 
+The synthetic receiver persists across those reopens; fresh attempt fences and
+its continuity contract do not prove native Herdr continuity. The additional
+`world/effect-restart.test.ts` consumer reopens real SQLite with two distinct
+actual ConnectionManager lifetimes that both produce generation 1, deliberately
+reusing pane/terminal/reported-session/conversation evidence. Pending and claimed
+alerts/answers refuse unsent; possible sends remain uncertain; explicit duplicate
+approval cannot grant a replacement runtime authority. Same-run sends, retained
+receipts/manual close and legacy missing-authority/migration cases are controls.
+The pre-fix consumer failed six no-send assertions at actual receiver dispatch;
+opaque automatic uncertainty and valid same-run controls already passed.
+This direct consumer evidence is necessary because M5's synthetic continuity is
+intentional; changing it would not establish the Herdr platform boundary.
+
 `server/src/effects/recovery-matrix.test.ts` complements logical checkpoint replay
 with real SIGKILL before/after COMMIT, after claim/dispatch/source/receipt and
 during cancellation. Every design matrix row has a named source and standalone

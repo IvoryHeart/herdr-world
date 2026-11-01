@@ -11,7 +11,19 @@ seen as bounded rows paired with verified bindings. Service admission serializes
 mutations, rechecks runtime currency across storage waits, and publishes the old
 RPC projections/change notices only after COMMIT. Restart captures are unresolved
 until complete unambiguous original-source evidence verifies terminal/session
-continuity. No runtime fence is a durable key. See [storage and migration limits](DEPLOYMENT.md#desk-watchlist-and-completion-storage).
+continuity. Fresh initial stopped observations get stable identity without a
+historical timestamp; expiry removes display time only. Current stop rows are
+protected from the 500-row inactive history budget. Both the projection and
+serialized Desk rows have a 768 KiB budget below the unchanged 1 MiB frame limit;
+capacity is a labelled refusal, not current-row eviction. Known-session recovery
+waits for native verification; unknown-session history cannot reattach through
+terminal-only evidence. Live capture ownership remains process memory, and no
+runtime fence is a durable key. Re-entering recovery protects known captures
+before history trimming, and unknown ownership durably ends preceding known
+captures. Whole-plan capacity admission shares the writer's canonical binding
+accounting and reserves commit-time width; shrinking writes precede growth.
+Native identity validation shares the binding writer's limits and refuses an
+invalid complete observation nonfatally before mutation or absence inference. See [storage and migration limits](DEPLOYMENT.md#desk-watchlist-and-completion-storage).
 
 The composition root exposes `WorldStorage.ids.issue(kind)` through the existing
 SQLite worker. IDs have a kind prefix and eight random base32 symbols and become
