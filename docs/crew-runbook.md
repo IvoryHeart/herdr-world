@@ -116,10 +116,13 @@ the queue across pushes.
 The author pushes fixes and replies to **every** open finding, signed with
 `[<seat>]` (or `[fixer #<PR>]`), one line per finding naming its fixing commit.
 Use the finding's stable ID, such as `rev2:123:1`, or its exact `file:line`.
-A finding line starts with its P1/P2/P3 level, optionally inside a Markdown
+A finding line starts with its P1/P2/P3 level (also `[P2]`), optionally inside a Markdown
 bullet, numbered list or heading. Historical summaries mentioning a P-level
 inside ordinary prose are context, not additional findings. An open RESULT
 whose finding text cannot be parsed still remains held under its stable ID.
+This applies to mixed parsed/unparsed results too: declared remaining/new
+counts cannot be satisfied by replying only to the recognized items. Missing
+items retain an explicit unparsed hold with the original post text.
 A bare filename suffices only when there is one finding on that file. Two
 findings on a file require separate identifiers. A reviewer RESULT that cannot
 be mapped to a file still needs an explicit reply using its ID. Replies must

@@ -160,5 +160,21 @@ export function reviewStartError(
     )
   )
     return "existing crew rounds predate the adoption boundary; operator reconciliation required";
+  const admittedAction = crew
+    .query<{ admitted: number }, [number, number]>(
+      "SELECT 1 AS admitted FROM action WHERE pr = ? AND kind IN ('review', 'confirm') AND created_at < ? LIMIT 1",
+    )
+    .get(input.number, start.at);
+  const admittedRun = crew
+    .query<{ admitted: number }, [number, number, number]>(
+      `SELECT 1 AS admitted FROM run r LEFT JOIN action a ON a.key = r.action_key
+     LEFT JOIN round t ON t.pr = r.pr AND t.round = r.round
+     WHERE r.pr = ? AND r.cwd IS NULL AND
+       (a.key IS NULL OR a.kind IN ('review', 'confirm')) AND
+       (r.started_at < ? OR t.created_at < ?) LIMIT 1`,
+    )
+    .get(input.number, start.at, start.at);
+  if (admittedAction || admittedRun)
+    return "legacy admitted reviewer actions or runs predate the adoption boundary; operator reconciliation required";
   return null;
 }

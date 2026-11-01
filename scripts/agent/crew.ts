@@ -573,6 +573,7 @@ function act(
       entry.kind === "judgment" &&
       entry.target !== "owner" &&
       entry.target !== "github" &&
+      (!prs.length || observed.has(entry.pr)) &&
       (!deliverable(entry) || noticeHolds(crew, entry) === false)
     )
       setAction(crew, entry.key, "superseded", now, entry.detail);

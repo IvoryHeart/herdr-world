@@ -605,6 +605,9 @@ Settings go under `crew` in the gate's `config.json`:
   accepted crew rounds survive the boundary without a repeat review. A future
   time, unproved ancestry or crew round predating the boundary holds admission
   for operator reconciliation; changing a boundary cannot silently reset a round.
+  Legacy reviewer actions/runs also establish admission without cycle rows;
+  an empty placeholder round alone does not. Scoped passes preserve unobserved
+  PRs' pending, sent and failed coordinator receipts without rearming them.
 - `reviewJudgmentSeat` names the operator for attribution, adoption, run failures
   and other review-plumbing judgments. A `reviewStarts` boundary requires this
   seat. Each cause gets one queued prompt to that named seat, never an owner ask;

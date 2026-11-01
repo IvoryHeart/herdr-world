@@ -25,6 +25,7 @@ export function setup(
     roster?: Record<string, RosterEntry>;
     neverPrompt?: string[];
     settings?: Partial<CrewSettings>;
+    scope?: number[];
   } = {},
 ) {
   const root = mkdtempSync(join(tmpdir(), "crew-round-delivery-"));
@@ -132,7 +133,7 @@ export function setup(
       }),
       configPath,
       dir,
-      prs: [],
+      prs: options.scope ?? [],
       dryRun: false,
       now,
       deps,
