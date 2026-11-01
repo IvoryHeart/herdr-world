@@ -35,7 +35,13 @@ test("every maintained model has a measured weight and each Town group is regist
 });
 
 test("Town partitions retain exactly the 22 original width, mode and flight cases", () => {
-  const cases = Object.values(townCanvasCases).flat();
+  // Groups added after the split keep their own cases (the bus stop's two).
+  const { bus, ...split } = townCanvasCases;
+  expect(bus.map((item) => JSON.stringify(item))).toEqual([
+    JSON.stringify([1440, 900, "bus", 0]),
+    JSON.stringify([390, 844, "bus", 0]),
+  ]);
+  const cases = Object.values(split).flat();
   const original = [
     [1440, 900, "typical", 0],
     [390, 900, "typical", 0],
