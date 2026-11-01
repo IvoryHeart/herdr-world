@@ -1,0 +1,108 @@
+{
+  "source": "ae4293db115333e45529b9bab50522118d7bf60e",
+  "review": "PR #613 round 1 repair",
+  "images": [
+    {
+      "file": "town-phone.png",
+      "width": 390,
+      "height": 844,
+      "sha256": "40a782a54bd08086e59f30c1b6fadddebe20ec16f54c3daf3f3cc2941dcfa098"
+    },
+    {
+      "file": "town-mac-laptop.png",
+      "width": 1512,
+      "height": 982,
+      "sha256": "b5fc196e796cfd0640f357c62705343706d9f2c4d00b8b96796a16947160da83"
+    },
+    {
+      "file": "town-linux-half.png",
+      "width": 1280,
+      "height": 1440,
+      "sha256": "cd8ad18fb679f7fd39e321b09f0c50c7185f45e067e6e19bf5038d75cd13c034"
+    },
+    {
+      "file": "town-linux-wide.png",
+      "width": 2560,
+      "height": 1440,
+      "sha256": "9102b7500c2364a56d3393713f60f786871c74c94c70420c59f267a5301de170"
+    },
+    {
+      "file": "town-portrait.png",
+      "width": 1440,
+      "height": 2560,
+      "sha256": "914dd43d9615d4e096809cd1ec39485af5a4ff8bc46883fe89de09197b63fd6d"
+    },
+    {
+      "file": "board-phone.png",
+      "width": 390,
+      "height": 844,
+      "sha256": "b687b417d0a178a67270b1ee30729f2765884637dd572443659d8c3f58037b52"
+    },
+    {
+      "file": "board-mac-laptop.png",
+      "width": 1512,
+      "height": 982,
+      "sha256": "47cc0ebd5aaeb748aac0d75d7594c53c11660ab72761993cd8e22808fcf30d99"
+    },
+    {
+      "file": "board-linux-half.png",
+      "width": 1280,
+      "height": 1440,
+      "sha256": "2fa1909926688eef9f3b47f6959dabe4e7a6fb8d7f71b931bdeb694435d4240d"
+    },
+    {
+      "file": "board-linux-wide.png",
+      "width": 2560,
+      "height": 1440,
+      "sha256": "4eb570efe3829cb66b569effad607fdf360c2ba8b9bf995ec2131fe959d3d6b3"
+    },
+    {
+      "file": "board-portrait.png",
+      "width": 1440,
+      "height": 2560,
+      "sha256": "01a654884502fc828354b408fc86dc8f4fe83a077a0ce45afb92d5ab07e4533e"
+    },
+    {
+      "file": "desk-phone.png",
+      "width": 390,
+      "height": 844,
+      "sha256": "b8d1c9531034a15cc0d51d6bc75650800c35ad6f27e6cc44952670ad5af1a3e9"
+    },
+    {
+      "file": "desk-mac-laptop.png",
+      "width": 1512,
+      "height": 982,
+      "sha256": "fb71dd3def68b629e784ec7b41cf5ff6c62bb42a09af88744997a38088a08777"
+    },
+    {
+      "file": "desk-linux-half.png",
+      "width": 1280,
+      "height": 1440,
+      "sha256": "5259121969887452006b62895163bd909b15f9700ddb322704f156e708737850"
+    },
+    {
+      "file": "desk-linux-wide.png",
+      "width": 2560,
+      "height": 1440,
+      "sha256": "2bab8643570bcb186cbaf29091365c012b71b8d09d488ef1fa6f2f7abcd5fb08"
+    },
+    {
+      "file": "desk-portrait.png",
+      "width": 1440,
+      "height": 2560,
+      "sha256": "2854ad8bb7bebefa1f511ba82a27a75e9fab5402b6a74c92d78d274f68629a1c"
+    }
+  ],
+  "loadAverage": [
+    2.48,
+    2.34,
+    2.7
+  ],
+  "replacementAfterNeverReady": {
+    "view": "town",
+    "owner": 7,
+    "revision": 31,
+    "width": 1280,
+    "height": 1440
+  }
+}
