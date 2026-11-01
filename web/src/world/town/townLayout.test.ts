@@ -694,7 +694,7 @@ test("every building and the town hall have roads on at least three sides", () =
       { a: [3], b: [2], c: [5] },
       { a: [3], b: [2], c: [5], d: [1] },
       { a: [3], b: [2], c: [5], d: [1], e: [4], f: [2] },
-    ]) {
+    ] as Record<string, number[]>[]) {
       const { layout } = layoutTown(town(hosts), shape);
       for (const building of layout.buildings)
         expect(roadSides(layout, building, 2)).toBeGreaterThanOrEqual(3);

@@ -7,5 +7,7 @@
 
 ### Fixed
 
+- A Town viewed whole stays whole when it grows, when a panel narrows it, and
+  when you come back to it after a different screen shape.
 - A Town agent that starts walking inside its destination tile now stops at
   the tile's centre instead of where it stood.

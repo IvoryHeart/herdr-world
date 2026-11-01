@@ -23,7 +23,8 @@ import {
 } from "../townLayout";
 import type { TownTarget } from "../townTargets";
 
-export type TownPose = { x: number; y: number; z: number };
+/** A saved camera; `home` marks the home view, framed again when restored. */
+export type TownPose = { x: number; y: number; z: number; home?: boolean };
 
 /** Screen pixels covered by panels on wide screens (rail, chat dock). */
 export type TownChrome = { left: number; right: number };
@@ -74,7 +75,7 @@ export class TownSceneCamera {
     this.camera = camera;
     camera.configure(layout, viewport);
     const saved = this.poses.get(townShapeKey(layout.shape));
-    if (saved) {
+    if (saved && !saved.home) {
       camera.x = saved.x;
       camera.y = saved.y;
       camera.setZoom(
@@ -152,8 +153,9 @@ export class TownSceneCamera {
   }
 
   /**
-   * A new layout: a new shape returns to its saved pose (or home); rooms that
-   * moved under a still camera keep the room in view where it was.
+   * A new layout: a new shape returns to its saved pose (or home); a town at
+   * home is framed again; rooms that moved under a still camera elsewhere
+   * keep the room in view where it was.
    */
   follow(layout: TownLayout, viewport: TownViewport) {
     const camera = this.camera;
@@ -161,11 +163,21 @@ export class TownSceneCamera {
     const shapeKey = townShapeKey(layout.shape);
     const shapeChanged = camera.limits !== null && shapeKey !== this.lastShape;
     const previous = this.lastLayout;
+    const wasHome = this.atHome();
     camera.configure(layout, viewport);
     if (shapeChanged) {
       const saved = this.poses.get(shapeKey);
-      if (saved) camera.jumpTo(saved.x, saved.y, saved.z);
+      if (saved && !saved.home) camera.jumpTo(saved.x, saved.y, saved.z);
       else this.frameHome(layout, viewport, false);
+    } else if (
+      wasHome &&
+      !camera.flying &&
+      previous &&
+      previous !== layout &&
+      townGeometryKey(previous) !== townGeometryKey(layout)
+    ) {
+      // A town viewed whole stays whole as it grows or shrinks.
+      this.frameHome(layout, viewport, false);
     } else if (
       previous &&
       previous !== layout &&
@@ -210,6 +222,7 @@ export class TownSceneCamera {
         x: camera.x,
         y: camera.y,
         z: camera.z,
+        home: this.atHome(),
       });
     }
     return { moved, posed };
