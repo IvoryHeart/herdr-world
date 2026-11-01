@@ -335,10 +335,7 @@ export function useTownBus({
     const x = at.x + host.left,
       y = at.y + host.top;
     return (
-      x >= rect.left - 12 &&
-      x <= rect.right + 12 &&
-      y >= rect.top - 12 &&
-      y <= rect.bottom + 12
+      x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
     );
   };
 

@@ -10,3 +10,8 @@
   stop it until it leaves the map. Nothing is
   closed before then or before you choose Close now, and a World restart cancels
   every countdown without closing anything.
+
+### Fixed
+
+- Keep room-floor drops beside the bus chip as room moves. The chip accepts
+  drops within its visible touch target instead of capturing nearby floor.
