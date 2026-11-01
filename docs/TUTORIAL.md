@@ -391,6 +391,10 @@ text. It works for any agent you open from Town, Board or Desk.
    **Load earlier messages**) to load older pages while keeping your place.
    While you read back, **Jump to latest** counts new agent messages.
    **Menu → Configuration → Appearance → Chat text** sets the text size.
+   Expanded or in Zen, Chat fills the window like Terminal: each run of
+   messages names its sender, with the time at the right edge. A report
+   another agent typed in as `name: …` shows as that agent's, marked
+   **relayed**; on a phone or in a narrow window, messages stay bubbles.
 2. Check what the agent is doing now. The Now bar shows its status circle
    (hover for the word: blue working, yellow needs you, green done, grey
    idle), the task from its terminal title and how long it has been at it.

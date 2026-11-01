@@ -567,7 +567,12 @@ terminal title and delivery receipts) and History's window from its cursor
 (`agent_history.get`), which brings only the entries that changed. A burst of
 pushes runs at most one more read of each. Chat renders History's bubbles and
 collapsed tool cards, which load their text only when opened, so a long, busy
-transcript is never reread or redrawn whole. The window is kept per pane for
+transcript is never reread or redrawn whole. From 900px wide (a container
+query on the list), the same entries render as transcript rows that follow the
+window up to 1440px; a user entry that starts `name: ` with the name of
+another live agent in the pane's Herdr session (`agent.list`) is labelled as
+relayed from it. The label is display only: the text, receipts and Copy are
+unchanged, and Chat cannot prove who typed it. The window is kept per pane for
 the page, so a Chat that remounts, docks or reopens shows its conversation at
 once. Scrolling near the top of a full window, or **Load earlier messages**,
 reads the 100 conversation entries before the oldest one shown
