@@ -187,6 +187,8 @@ requests coalesce resource work, retain at most two paint callbacks and create n
 React state updates or extra scene reconciliation. Hidden/unmounted owners and
 obsolete callbacks cannot publish fresh receipts. Only capture requests check
 resources or request an evidence frame; ordinary animation keeps its scheduler.
+Lifecycle-only DOM harnesses may lack FontFaceSet: mounting remains inert there,
+while actual capture still requires browser fonts, frames and pixel decoding.
 
 [The CDP helper](testing/captureScene.ts) fences resize, waits for a current receipt,
 checks fixture-specific content and sampled output, then rechecks currency before

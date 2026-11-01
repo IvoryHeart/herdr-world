@@ -131,8 +131,8 @@ export function useDrawReadiness(
     observer.observe(element);
     window.addEventListener("resize", invalidate);
     document.addEventListener("visibilitychange", invalidate);
-    document.fonts.addEventListener("loading", invalidate);
-    document.fonts.addEventListener("loadingdone", invalidate);
+    document.fonts?.addEventListener("loading", invalidate);
+    document.fonts?.addEventListener("loadingdone", invalidate);
     return () => {
       current.dispose();
       surfaces.delete(owner);
@@ -141,8 +141,8 @@ export function useDrawReadiness(
       observer.disconnect();
       window.removeEventListener("resize", invalidate);
       document.removeEventListener("visibilitychange", invalidate);
-      document.fonts.removeEventListener("loading", invalidate);
-      document.fonts.removeEventListener("loadingdone", invalidate);
+      document.fonts?.removeEventListener("loading", invalidate);
+      document.fonts?.removeEventListener("loadingdone", invalidate);
     };
   }, [view, root]);
   useLayoutEffect(() => {
