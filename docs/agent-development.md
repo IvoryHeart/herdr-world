@@ -23,6 +23,23 @@ The helper places `agent/<slug>` below the primary checkout's `.agents/worktrees
 directory and rejects unsafe names or unknown refs. `bun run agent:worktree -- list`
 is read-only. Do not move, clean or reuse another agent's worktree.
 
+### Capture PR evidence
+
+Use the [capture helper and five-viewport recipe](SCREENSHOTS.md#pr-screenshot-viewports)
+for Town, Board and Desk evidence. Start a disposable synthetic fixture and its own
+Chrome with a dynamic CDP port, then run `bun scripts/capture-world.ts` with that
+port. The entry takes the shared browser queue. Never use fixed settlement sleeps
+or a direct screenshot call for PR assets. Supply the fixture's expected-content
+selector for populated scenes; empty Board/Desk captures may omit it.
+
+The helper requests current committed draw evidence after each viewport change,
+waits for required fonts/images and semantic layout, and crosses a browser paint
+opportunity. It checks revision currency before and after the screenshot and writes
+only validated images. A deadline, missing content or changed revision fails;
+inspect its diagnostic rather than retrying a partial image. Keep receipts and
+synthetic originals with the candidate evidence. Independent review and required CI
+remain separate acceptance conditions.
+
 ### Keep the disk healthy
 
 Many worktrees on one machine fill its disk quickly, and checks that run out of

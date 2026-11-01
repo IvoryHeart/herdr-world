@@ -125,6 +125,7 @@ test.skipIf(!chrome)(
             port,
             Bun.env.WORLD_ANSWER_CAPTURE_DIR,
             state,
+            { view: "town", content: { selector: ".town-building-sign" } },
           );
         }
       }

@@ -175,6 +175,40 @@ has a name; unnamed and multi-agent tabs keep the tab label.
 | New agent and agent profiles | [agentProfiles.ts](agentProfiles.ts) holds the profiles store, launcher calls and the events that open [AgentLauncherDialog.tsx](AgentLauncherDialog.tsx) and [ProfileEditor.tsx](ProfileEditor.tsx), which [WorldControlPlane.tsx](WorldControlPlane.tsx) mounts for every view; [ProfileSprite.tsx](ProfileSprite.tsx) draws a profile's look with Town's sprites, and `townRenderer` dresses agents launched from a profile. | [Browser helper tests](agentProfiles.test.ts) |
 | Town settings or the Town board's cost line | [officePreferences.ts](officePreferences.ts) (shared Inspector opening, Town calm motion), [officeObservability.ts](officeObservability.ts) and [OfficeObservabilityDialog.tsx](OfficeObservabilityDialog.tsx) (the optional Prometheus cost metrics), displayed by [TownBoard.tsx](town/TownBoard.tsx). | [Preference tests](officePreferences.test.ts), [metrics tests](officeObservability.test.ts) |
 
+### Evidence capture
+
+[useDrawReadiness](useDrawReadiness.ts) adapts committed Town/Board/Desk surfaces to
+[the bounded controller](drawReadiness.ts). Town reports after Pixi renders and its
+visible materialization budget is complete; held Town reflow blocks readiness.
+Board reports from its paint seam after deferred observation, placement and
+culling commits; Desk uses committed DOM plus fonts/images and paint callbacks.
+Every commit/container resize invalidates the mount-qualified revision. Capture
+requests coalesce synchronous revision bursts, abort obsolete resource waits,
+retain at most two paint callbacks and create no
+React state updates or extra scene reconciliation. Hidden/unmounted owners and
+obsolete callbacks cannot publish fresh receipts. Only capture requests check
+resources or request an evidence frame; ordinary animation keeps its scheduler.
+Lifecycle-only DOM harnesses may lack FontFaceSet: mounting remains inert there,
+while actual capture still requires browser fonts, frames and pixel decoding.
+[captureAssets](captureAssets.ts) waits on removable font/image load listeners, then
+decoding; revision changes and deadlines cancel these waits without waiting for an
+obsolete network request to settle. [Resource regressions](captureAssets.test.ts)
+cover unresolved loads and decode cancellation.
+
+[The CDP helper](testing/captureScene.ts) fences resize, waits for a current receipt,
+checks fixture-specific content and sampled output, then rechecks currency before
+returning bytes. [The five-size consumer](testing/resumeVisualCapture.ts) and
+[queued PR entry](../../../scripts/capture-world.ts) share it. See
+[the recipe](../../../docs/SCREENSHOTS.md#pr-screenshot-viewports),
+[deterministic schedules](drawReadiness.test.ts) and the production surface browser
+consumer registered in [BoardView.test.ts](BoardView.test.ts).
+
+The manual-clock Board artifact consumer advances scene frames from the existing
+`TestClock.real` native frame port while a readiness promise is pending. Its paint
+barrier also uses native frames, so real ResizeObserver delivery precedes the
+receipt; simulated frames alone do not establish browser paint completion.
+[The clock regression](testing/testClock.test.ts) keeps these ports separate.
+
 ### Town rendering performance
 
 Town's Summary reads per-room status totals counted with the canonical observed

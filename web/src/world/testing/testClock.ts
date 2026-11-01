@@ -38,7 +38,12 @@ export type TestClock = {
   /** Advance until `done()` holds, or fail after `limit` ms of test time. */
   until(done: () => boolean, message: string, limit?: number): Promise<void>;
   /** The page's real timers, for the fixture's own reporting. */
-  real: { setTimeout: typeof setTimeout; now: () => number };
+  real: {
+    setTimeout: typeof setTimeout;
+    now: () => number;
+    requestAnimationFrame?: typeof requestAnimationFrame;
+    cancelAnimationFrame?: typeof cancelAnimationFrame;
+  };
 };
 
 export const FRAME_MS = 16;
@@ -60,6 +65,8 @@ export function installTestClock(
   { running = false, startAt }: { running?: boolean; startAt?: number } = {},
 ): TestClock {
   const real = {
+    requestAnimationFrame: target.requestAnimationFrame?.bind(target),
+    cancelAnimationFrame: target.cancelAnimationFrame?.bind(target),
     setTimeout: globalThis.setTimeout.bind(globalThis),
     now: clockOf.now.bind(clockOf),
     MessageChannel: globalThis.MessageChannel,
@@ -281,7 +288,12 @@ export function installTestClock(
         await progress();
       }
     },
-    real: { setTimeout: real.setTimeout, now: real.now },
+    real: {
+      setTimeout: real.setTimeout,
+      now: real.now,
+      requestAnimationFrame: real.requestAnimationFrame,
+      cancelAnimationFrame: real.cancelAnimationFrame,
+    },
   };
 }
 

@@ -742,3 +742,33 @@ Move-colour schedules include explicit edits and resets both before and after
 native close cleanup. Closed-tab colour/pin tests interleave unrelated writes at
 both native absence reads, require fresh checks after revision conflicts, preserve
 a replacement tab, and cover runtime retirement and the three-attempt bound.
+
+### Revision-qualified capture (Q39)
+
+Allowed sequence: committed surface/mount and requested viewport → required
+fonts/images → owner draw without pending semantic layout/materialization →
+browser paint opportunity → current receipt → screenshot → unchanged receipt →
+artifact. Obsolete asset/frame callbacks, hidden/retired owners, held reflow,
+pre-resize evidence and deadline failures cannot authorize output. Actor/ambient
+motion need not stop. Revision includes semantic commits and viewport epochs;
+it is local to a mount, not the aggregate transport's snapshot generation.
+
+`drawReadiness.test.ts` directly controls resources, frames and deadlines, including
+revision/resize replacement, hidden/unmounted owners and bounded coalesced resource
+work. Revision/deadline cancellation abandons obsolete waiters: replacement captures
+succeed without releasing an old image/font promise. `captureAssets.test.ts` checks
+that cancellation removes browser load listeners, and stale decode cannot complete
+a retired waiter. `BoardView.test.ts` registers the actual production Town/Board/Desk consumer
+in `testing/captureReadinessBrowser.ts`: held image/font responses, current-dimension
+receipts, valid empty views, missing/blank output, screenshot-time replacement and
+never-ready failure with an empty output directory, then same-owner recovery after
+removing the still-unresolved image. The actual optional Board writer has a missing
+card negative control that leaves no PNG; populated handoff, Board and answer-gallery
+entry points all supply visible content expectations. Optional five-size evidence
+uses the same helper. Manual-clock Board evidence drives scene frames from
+`TestClock.real` native callbacks and uses native paint barriers; its clock regression
+keeps simulated draw work separate from native paint delivery. This direct alternative is appropriate for browser/GPU
+integration; no new Quint model is claimed. Existing Q39 lifecycle and Q43
+layout/work-bound consumers remain required, including all Town groups and dense
+production contexts. Sampled colour sanity is only a cheap negative control;
+it cannot establish semantic scene completeness or arbitrary device/load behavior.
