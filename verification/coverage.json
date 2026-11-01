@@ -2585,7 +2585,8 @@
         "server/src/storage/effect-contract.test.ts",
         "server/src/world/attention-dispatch.test.ts",
         "server/src/world/answer-dispatch.test.ts",
-        "server/src/storage/answer-delivery-crash.test.ts"
+        "server/src/storage/answer-delivery-crash.test.ts",
+        "server/src/world/bin-close.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/549",
       "technique": "bounded-model-and-real-sqlite-crash-matrix",

@@ -46,6 +46,14 @@ type LegacyRoutingLogger = ReturnType<typeof createLegacyRoutingLogger>;
  * One browser message: routing, then the rpc/ namespace handlers, then the
  * connection's terminal and settings handlers, then Herdr itself.
  */
+/**
+ * What a browser request may use: bridge-global methods (world.*, bridge.*,
+ * connections.*) carry no connection identity, so never the runtime
+ * capability; a handler that needs a host's runtime qualifies it itself.
+ */
+export const routeCapabilities = (scope: "bridge" | "connection") =>
+  new Set(scope === "bridge" ? ["world"] : ["world", "runtime"]);
+
 export function createRpcDispatcher(
   services: RpcServices,
   legacyRoutingLogger: LegacyRoutingLogger,
@@ -199,8 +207,7 @@ async function handleRpc(
   const requestIsCurrent = () =>
     services.clients.has(ws) && (route.scope === "bridge" || route.isCurrent());
   admission.preconditions = requestIsCurrent;
-  admission.capabilities = () =>
-    new Set(route.scope === "bridge" ? ["world"] : ["world", "runtime"]);
+  admission.capabilities = () => routeCapabilities(route.scope);
   const recheck = () => admitVerb(verb, params ?? {}, admission);
   const encode = (message: Record<string, unknown>) =>
     route.scope === "connection"

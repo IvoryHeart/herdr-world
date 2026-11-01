@@ -74,6 +74,8 @@ export type RpcServices = {
   snapshotAdmission: WorldSnapshotAdmission;
   townMoveQueues: Map<string, ReturnType<typeof createMoveQueue>>;
   worldWatchlist: WorldWatchlistRegistry;
+  /** The agent bin; absent without World storage's effect outbox. */
+  bin?: import("../service/bin-service").BinService;
   worldCompletionSeen: WorldCompletionSeenRegistry;
   worldDesk: DeskService["registry"];
   publishDeskChanged: DeskService["publish"];

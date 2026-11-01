@@ -66,6 +66,11 @@ export function createEffectRunner(deps: {
   scheduler: Scheduler;
   incarnation: string;
   verb?: string;
+  /**
+   * One connection's entries only, selected inside the bounded query, so
+   * independent lanes never wait behind (or hide) each other's work.
+   */
+  connection?: string;
   retryDelay?(attempt: number): number;
   verbs?: EffectVerbLookup;
   driver(verb: string): EffectDriver | undefined;
@@ -78,6 +83,7 @@ export function createEffectRunner(deps: {
 }) {
   const verbs = deps.verbs ?? productionEffectVerb;
   const running = new Map<string, Promise<EffectEntry | null>>();
+  const due = () => deps.store.list(deps.verb, deps.connection);
   let stopped = false;
   let timer: { cancel(): void } | undefined;
   let planning = Promise.resolve();
@@ -367,7 +373,7 @@ export function createEffectRunner(deps: {
         timer?.cancel();
         timer = undefined;
         if (stopped) return;
-        const next = (await deps.store.list(deps.verb))[0];
+        const next = (await due())[0];
         if (next && !stopped)
           timer = deps.scheduler.schedule(
             () => {
@@ -386,7 +392,7 @@ export function createEffectRunner(deps: {
     draining = (async () => {
       while (requested && !stopped) {
         requested = false;
-        for (const entry of await deps.store.list(deps.verb)) {
+        for (const entry of await due()) {
           if (stopped || entry.due_at > deps.clock.now()) break;
           await run(entry.id);
         }

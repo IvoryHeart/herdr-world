@@ -7,6 +7,7 @@ import {
 } from "../world/appearance-observation";
 import { handleAppearanceRpc } from "./appearance";
 import { handleDeskRpc } from "./desk";
+import { handleBinRpc } from "./bin";
 import { handleCompletionSeenRpc } from "./completion-seen";
 import { profileWrite } from "../agent/profile-store";
 import { recordSpawnClaims } from "../world/relations";
@@ -55,6 +56,7 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
   }
   if (method.startsWith("world.appearance.")) return handleAppearanceRpc(rpc);
   if (method.startsWith("world.desk.")) return handleDeskRpc(rpc);
+  if (method.startsWith("world.bin.")) return handleBinRpc(rpc);
   if (method.startsWith("world.completion_seen."))
     return handleCompletionSeenRpc(rpc);
   if (method === "world.snapshot") {

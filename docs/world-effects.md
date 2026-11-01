@@ -17,6 +17,12 @@ send path. Alerts capture only the original connection. Resource targets capture
 adapter, connection, kind, native ID and terminal/session evidence; a creation
 generation is never a durable target.
 
+A runner drains one verb serially. A dispatcher may instead run one lane per
+connection (the runner's `connection` option): each lane's query selects its
+connection before the 100-row bound, and lanes are found from storage
+(`EffectStore.lanes`), so one host's backlog never hides or delays another
+host's work. Without the option the runner behaves as before.
+
 Each attempt is claimed with the current service incarnation and a monotonically
 increasing attempt number. Only one claim succeeds. Before external submission,
 the runner resolves fresh qualified targets and checks current authorization,
@@ -32,9 +38,12 @@ cancellation or revocation because they describe an effect that already happened
 | `repeatable` | Retry; harmless duplicates are allowed |
 | `opaque` | Remain uncertain until an authorized explicit decision |
 
-Production currently uses repeatable alerts and opaque saved answers. Synthetic
-keyed, reconcilable and reattachable sources exercise the kernel in tests and
-verification; they are absent from the production registry. A future source must
+Production currently uses repeatable alerts, opaque saved answers and the
+reconcilable `world.bin.close` ([bin close](../server/src/world/bin-close.ts)): its
+decisive reconciliation reads the captured pane's workspace on the captured
+runtime generation, and it records nothing as sent once that generation is
+replaced. Synthetic keyed and reattachable sources exercise the kernel in tests
+and verification; they are absent from the production registry. A future source must
 implement its own decisive reconciliation or existing-run observation, including
 current target fences, before registering that recovery class. Recovery reads
 observe the original effect; they do not grant authority for a new submission or

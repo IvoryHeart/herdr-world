@@ -473,7 +473,9 @@ export function openWorldWriter(
               effect: effects.get(request.id),
               attention: attention(request.id),
             }
-          : effects.list(request.verb);
+          : request.lanes
+            ? effects.lanes(request.verb)
+            : effects.list(request.verb, request.connection);
       case "effect-transition":
         return effects.transition(request.change, at);
       case "load":

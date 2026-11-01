@@ -8,7 +8,8 @@ export function createRevisionPublisher<Client>(
       | "world_board_changed"
       | "world_profiles_changed"
       | "world_watchlist_changed"
-      | "world_completion_seen_changed",
+      | "world_completion_seen_changed"
+      | "world_bin_changed",
     context: string,
   ) =>
     (revision: number) => {

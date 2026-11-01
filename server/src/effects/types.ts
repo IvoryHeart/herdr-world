@@ -100,7 +100,10 @@ export type EffectTransition =
 export type EffectStore = {
   current(id: string): EffectEntry | null;
   get(id: string): Promise<EffectEntry | null>;
-  list(verb?: string): Promise<EffectEntry[]>;
+  /** At most 100 dispatchable entries; `connection` narrows before the bound. */
+  list(verb?: string, connection?: string): Promise<EffectEntry[]>;
+  /** Connections with dispatchable entries of `verb`. */
+  lanes?(verb?: string): Promise<string[]>;
   transition(change: EffectTransition): Promise<EffectEntry | null>;
 };
 export type EffectPolicyResult = "allowed" | "wait" | "refused";

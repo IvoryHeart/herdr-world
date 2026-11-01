@@ -15,7 +15,10 @@ export function createEffectStore(
     current: (id) => entries.get(id) ?? null,
     get: async (id) =>
       accept(await request<EffectReply>({ type: "effect-read", id })),
-    list: (verb) => request<EffectEntry[]>({ type: "effect-read", verb }),
+    list: (verb, connection) =>
+      request<EffectEntry[]>({ type: "effect-read", verb, connection }),
+    lanes: (verb) =>
+      request<string[]>({ type: "effect-read", verb, lanes: true }),
     transition: async (change) =>
       accept(await request<EffectReply>({ type: "effect-transition", change })),
   };
