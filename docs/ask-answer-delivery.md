@@ -12,6 +12,13 @@ pending; a changed or ended session records not sent. A definite refusal before
 input may wait and retry. Once a send might have happened, recovery is opaque:
 uncertain remains visible and is never automatically repeated.
 
+World restart ends the original recipient's dispatch authority. Current Herdr
+cannot prove native runtime continuity across that restart, even when connection,
+generation, pane, terminal and session values match. Unsent delivery records not
+sent; a possible send remains uncertain. The saved answer and history survive;
+retrieve it with `herdr-world ask get ID`. **Send again…** still requires a current
+eligible original recipient and cannot authorize a replacement runtime.
+
 Town Summary’s **Outbox** keeps recovery reachable without
 reopening the question or inflating Needs you. Reception has one compact Outbox
 row for unconfirmed/not-sent answers to check; waiting-only deliveries stay in

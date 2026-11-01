@@ -100,6 +100,7 @@ export function effectContract(
   id: string,
   ask: LedgerAsk | null,
   lookup = productionEffectVerb,
+  incarnation?: string,
 ): EffectContract | null {
   let contract = effect.contract;
   if (!contract && effect.kind === "ask.created" && ask) {
@@ -140,6 +141,16 @@ export function effectContract(
     };
   }
   if (!contract) return null;
+  // Only a new commit can grant this World run's alert dispatch authority.
+  // Migration/reload must retain old or missing authority, never refresh it.
+  if (incarnation && contract.verb === "notification.show")
+    contract = {
+      ...contract,
+      authorization: {
+        ...contract.authorization,
+        service_incarnation: incarnation,
+      },
+    };
   validateEffectContract(contract, effect.recovery, lookup);
   if (
     contract.verb === "notification.show" &&

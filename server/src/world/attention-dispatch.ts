@@ -57,13 +57,16 @@ export function createAttentionDispatcher(deps: {
     const ask = deps.ledger().ask(entry.record_id);
     return ask && !ask.answer && !ask.dismissed && !ask.withdrawn ? ask : null;
   };
+  const sameRun = (entry: EffectEntry) =>
+    entry.contract?.authorization.service_incarnation === deps.incarnation;
   const guard = (
     entry: EffectEntry,
     targets: readonly QualifiedEffectTarget[],
   ) => {
     const lease = current(entry);
     return Boolean(
-      open(entry) &&
+      sameRun(entry) &&
+        open(entry) &&
         lease &&
         targets.length === 1 &&
         targets[0]!.fence.generation === lease.generation &&
@@ -77,6 +80,12 @@ export function createAttentionDispatcher(deps: {
         : "refused",
     preconditions: (entry) => (open(entry) ? "allowed" : "refused"),
     resolve: (entry) => {
+      if (!sameRun(entry))
+        return {
+          state: "unconfirmed",
+          reason:
+            "Owner-alert dispatch authority is absent or belongs to an earlier World run",
+        };
       if (!entry.target || !deps.hasConnection(entry.target.connection_id))
         return {
           state: "ended",
