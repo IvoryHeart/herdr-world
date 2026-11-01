@@ -100,6 +100,37 @@ export function markReviewed(
   });
 }
 
+/**
+ * Keys of the finished agents (done, or idle ones Town saw finish) whose
+ * work is reviewed. Only finished agents are looked up, so a dense roster
+ * pays one cheap pass; the previous set is returned while its keys are
+ * unchanged, so Town's presented office stays the same object.
+ */
+export function reviewedAgentKeys(
+  roster: readonly {
+    agent: { key: string; nodeId: string; semanticStatus: string };
+  }[],
+  finished: ReadonlySet<string>,
+  leafOf: (nodeId: string) => WorldLeafObject | null,
+  reviewed: (leaf: WorldLeafObject) => boolean,
+  previous: ReadonlySet<string>,
+): ReadonlySet<string> {
+  const keys = new Set<string>();
+  for (const { agent } of roster) {
+    if (
+      agent.semanticStatus !== "done" &&
+      !(agent.semanticStatus === "idle" && finished.has(agent.key))
+    )
+      continue;
+    const leaf = leafOf(agent.nodeId);
+    if (leaf && reviewed(leaf)) keys.add(agent.key);
+  }
+  return keys.size === previous.size &&
+    [...keys].every((key) => previous.has(key))
+    ? previous
+    : keys;
+}
+
 type ReviewView = { records: readonly DeskRecord[]; verified: boolean };
 const NO_RECORDS: ReviewView = { records: [], verified: false };
 

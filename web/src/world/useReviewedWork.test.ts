@@ -9,6 +9,7 @@ import {
   markReviewed,
   reviewStop,
   reviewStopKnown,
+  reviewedAgentKeys,
 } from "./useReviewedWork";
 import type { WorldLeafObject } from "./worldObject";
 
@@ -151,4 +152,40 @@ test("a completion check counts as reviewed until the service ends it", () => {
   const leaf = agent("done");
   expect(awaitsReview(leaf, undefined, NOW, true)).toBe(false);
   expect(awaitsReview(leaf, undefined, NOW, false)).toBe(true);
+});
+
+test("Town's reviewed agents stay the same set while nothing changed", () => {
+  const roster = [
+    { agent: { key: "a", nodeId: "n-a", semanticStatus: "done" } },
+    { agent: { key: "b", nodeId: "n-b", semanticStatus: "idle" } },
+    { agent: { key: "c", nodeId: "n-c", semanticStatus: "working" } },
+  ];
+  const looked: string[] = [];
+  const leafOf = (nodeId: string) => (
+    looked.push(nodeId), { id: nodeId } as unknown as WorldLeafObject
+  );
+  const reviewed = (leaf: WorldLeafObject) => leaf.id !== "n-b";
+  const first = reviewedAgentKeys(
+    roster,
+    new Set(["b"]),
+    leafOf,
+    reviewed,
+    new Set(),
+  );
+  expect([...first]).toEqual(["a"]);
+  // Only finished agents (done, or idle that Town saw finish) are looked up.
+  expect(looked).toEqual(["n-a", "n-b"]);
+  // Same keys: the same set, so Town's presented office is not rebuilt.
+  expect(
+    reviewedAgentKeys(roster, new Set(["b"]), leafOf, reviewed, first),
+  ).toBe(first);
+  const next = reviewedAgentKeys(
+    roster,
+    new Set(["b"]),
+    leafOf,
+    () => true,
+    first,
+  );
+  expect(next).not.toBe(first);
+  expect([...next].sort()).toEqual(["a", "b"]);
 });

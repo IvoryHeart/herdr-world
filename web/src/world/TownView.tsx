@@ -84,7 +84,7 @@ import type { TownMoveFlow } from "./town/townMoveMenu";
 import type { WorldObject } from "./worldObject";
 import { WorldViewToolbar, worldSearchMatches } from "./WorldViewToolbar";
 import { officeRoomKeyForSelection } from "./officeRoomActions";
-import { useReviewedWork } from "./useReviewedWork";
+import { reviewedAgentKeys, useReviewedWork } from "./useReviewedWork";
 import { useShownReport } from "./shownReport";
 import { needsYouLeafKey, offerNeedsYouOutbox, openNeedsYou } from "./needsYou";
 import { preferredOfficeConnectorAnchor } from "./worldConnectorGeometry";
@@ -215,23 +215,23 @@ export default function TownView({
       );
   }, []);
 
-  const completionSeenKeys = useMemo(() => {
-    const keys = new Set<string>();
-    // Only finished agents are looked up, so a dense roster pays one pass.
-    for (const { agent } of observedOffice.roster) {
-      if (
-        agent.semanticStatus !== "done" &&
-        !(
-          agent.semanticStatus === "idle" &&
-          townFinished.finished.has(agent.key)
-        )
-      )
-        continue;
-      const leaf = townLeaf(world, agent.nodeId);
-      if (leaf && work.reviewed(leaf)) keys.add(agent.key);
-    }
-    return keys as ReadonlySet<string>;
-  }, [observedOffice, townFinished.finished, work, world]);
+  // Town's reviewed agents: recomputed only when the roster, Town's finishes
+  // or the reviewed record change, and the same set while its keys are.
+  const latestWorld = useRef(world);
+  latestWorld.current = world;
+  const checkedKeys = useRef<ReadonlySet<string>>(new Set());
+  const reviewedLeaf = work.reviewed;
+  const completionSeenKeys = useMemo(
+    () =>
+      (checkedKeys.current = reviewedAgentKeys(
+        observedOffice.roster,
+        townFinished.finished,
+        (nodeId) => townLeaf(latestWorld.current, nodeId),
+        reviewedLeaf,
+        checkedKeys.current,
+      )),
+    [observedOffice, townFinished.finished, reviewedLeaf],
+  );
   const office = useMemo(
     () =>
       withTownFinished(

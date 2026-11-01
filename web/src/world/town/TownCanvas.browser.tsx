@@ -2617,11 +2617,13 @@ async function run() {
   host.querySelector<HTMLButtonElement>(".town-room-card")!.click();
   // Without a Town rail the overview already uses the full width, so the
   // step into the room is smaller on narrow screens; it still leaves the
-  // overview and zooms in.
+  // overview and zooms in. The flight must land first: a looser zoom check
+  // alone passes mid-flight, and the seats then rebuild under later taps.
   await waitFor(
     () =>
       window.__HERDR_TOWN_RENDERER__!.zoom > zoomBefore * 1.1 &&
-      window.__HERDR_TOWN_RENDERER__!.level !== "overview",
+      window.__HERDR_TOWN_RENDERER__!.level !== "overview" &&
+      !window.__HERDR_TOWN_RENDERER__!.flying,
     "room card did not zoom in",
   );
   await waitFor(
