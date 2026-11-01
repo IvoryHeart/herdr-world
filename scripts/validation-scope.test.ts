@@ -1,5 +1,11 @@
 import { expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
@@ -230,6 +236,62 @@ test("build-version changes select native jobs because the module is compiled in
   ]);
   expect(selection.packaging).toBe(true);
 });
+
+const nativeJobTests = [
+  ["ci.yml", ["plugin-windows", "launchd"]],
+  ["installer-upgrade.yml", ["upgrade"]],
+] as const;
+const namedNativeTests = new Set<string>();
+for (const [file, jobs] of nativeJobTests) {
+  const workflow = Bun.YAML.parse(
+    readFileSync(
+      new URL(`../.github/workflows/${file}`, import.meta.url),
+      "utf8",
+    ),
+  ) as { jobs: Record<string, { steps: { run?: string }[] }> };
+  for (const job of jobs) {
+    const paths = workflow.jobs[job]!.steps.flatMap((step) =>
+      (step.run?.match(/[\w./-]+\.test\.[cm]?[jt]sx?/g) ?? []).map((path) =>
+        path.replace(/^\.\//, ""),
+      ),
+    );
+    test(`${file} ${job} names its native test consumers`, () => {
+      expect(paths.length).toBeGreaterThan(0);
+    });
+    for (const path of paths) namedNativeTests.add(path);
+  }
+}
+const unlistedNativeTests = [
+  "server/src/storage/unlisted.test.ts",
+  "scripts/build-version.test.ts",
+];
+const nativeTestGraph: Graph = {
+  ...graph,
+  files: new Set([...graph.files, ...namedNativeTests, ...unlistedNativeTests]),
+};
+test.each([...namedNativeTests])(
+  "native job consumer %s selects native packaging",
+  (path) => {
+    const selection = selectValidation(nativeTestGraph, [path]);
+    expect(selection.full).toBe(false);
+    expect(selection.packaging).toBe(true);
+    expect(selection.unit).toContain(path);
+    // Applicability uses the complete PR even when incremental unit scope narrows.
+    expect(
+      selectValidation(nativeTestGraph, [path], () => false, [unit]).packaging,
+    ).toBe(true);
+  },
+);
+test.each(unlistedNativeTests)(
+  "unlisted native test %s keeps its scoped selection",
+  (path) => {
+    expect(selectValidation(nativeTestGraph, [path])).toMatchObject({
+      full: false,
+      packaging: false,
+      unit: [path],
+    });
+  },
+);
 
 test("an incremental-only deletion keeps the repository's affected unit scope", () => {
   const root = mkdtempSync(join(tmpdir(), "validation-scope-"));

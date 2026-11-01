@@ -74,6 +74,16 @@ fixtures because it has no required POSIX shell. Keep those boundary checks,
 assertions and deadlines when optimizing fake startup. Measure alternating
 baseline/candidate runs and report negligible or negative results honestly.
 
+The native Board crash suite prepares each fault in bounded setup hooks before
+running its recovery assertions. Initial worker setup and recovery each keep
+Bun's default five-second deadline. The crash child retains its fifteen-second
+watchdog inside a twenty-second setup hook, leaving time to kill and reap it.
+Compilation has its own sixty-second hook. Child startup and termination do not
+consume the recovery deadline; a missing fault marker or a failed child still
+fails setup. Timer and stdout-reader cleanup also run if exit or stderr draining
+rejects; the stderr failure remains visible. These watchdogs are test lifecycle
+bounds, not storage latency claims.
+
 The test wrapper runs ordinary files in parallel using up to eight available CPUs.
 Set `HERDR_TEST_PARALLEL`
 to choose a default worker count and `HERDR_TEST_MAX_CONCURRENCY` to cap concurrent
