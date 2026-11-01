@@ -291,7 +291,10 @@ export function openFindings(input: GateInput, posts: CrewPost[]): Finding[] {
         });
       }
       const summary = resultLine(post.body, input.number) ?? "";
-      const counts = /^(\d+)\/(\d+) resolved,\s*(\d+) new$/u.exec(summary);
+      const counts =
+        /^(\d+)\/(\d+) resolved,\s*(\d+) new(?: at [0-9a-fA-F]{7,40})?$/u.exec(
+          summary,
+        );
       const count = /^(\d+)\s+(?:new\s+)?findings?\b/u.exec(summary);
       const expected = counts
         ? Math.max(0, Number(counts[2]) - Number(counts[1])) + Number(counts[3])

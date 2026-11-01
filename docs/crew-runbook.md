@@ -123,6 +123,9 @@ whose finding text cannot be parsed still remains held under its stable ID.
 This applies to mixed parsed/unparsed results too: declared remaining/new
 counts cannot be satisfied by replying only to the recognized items. Missing
 items retain an explicit unparsed hold with the original post text.
+For finding-count extraction, canonical fractional RESULTs may end with
+`at <7–40 digit hex SHA>`; other unknown trailing text keeps the unparsed hold.
+This suffix does not change reviewed-commit binding or the gate's verdict rules.
 A bare filename suffices only when there is one finding on that file. Two
 findings on a file require separate identifiers. A reviewer RESULT that cannot
 be mapped to a file still needs an explicit reply using its ID. Replies must

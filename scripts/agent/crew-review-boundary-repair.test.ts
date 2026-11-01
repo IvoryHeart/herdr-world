@@ -21,42 +21,94 @@ const settings = {
 };
 
 test.each([
-  "[P2] src/second.ts:20 second defect",
-  "The second defect has no parseable priority or location",
-])("mixed real and unparsed finding text stays open: %s", (second) => {
-  const value = input({
-    head: SHA.reviewed,
-    posts: [
-      { reviewer: "rev2", commit: SHA.reviewed, result: "0/0 resolved, 2 new" },
-    ],
-  });
-  const findings = openFindings(value, [
-    {
-      id: "201",
-      at: NOW,
-      url: "https://example.invalid/review/201",
-      body: `Reviewer: rev2\nRESULT #7: 0/0 resolved, 2 new\nP2 src/first.ts:10 first defect\n${second}\nHistorical summary: the old P2 and P3 remain resolved.`,
-    },
-  ]);
-  expect(findings).toHaveLength(2);
-  if (second.startsWith("[P2]"))
-    expect(findings[1]!.file).toBe("src/second.ts");
-  else expect(findings[1]!.file).toBeNull();
-  const replied = withReplies(
-    findings,
-    [
+  ["", 1],
+  [` at ${SHA.reviewed}`, 1],
+  [` at ${SHA.reviewed.slice(0, 7)}`, 1],
+  [` at ${SHA.reviewed.toUpperCase()}`, 1],
+  [` at \`${SHA.reviewed}\``, 1],
+  [" at not-a-sha", 2],
+  [` at ${SHA.reviewed.slice(0, 6)}`, 2],
+  [` at ${SHA.reviewed}a`, 2],
+  [` at ${SHA.reviewed} additional unknown text`, 2],
+  [" with unknown qualification", 2],
+] as const)(
+  "canonical fractional counts accept only the documented head suffix: %s",
+  (suffix, expected) => {
+    const result = `0/0 resolved, 1 new${suffix}`;
+    const value = input({
+      head: SHA.reviewed,
+      posts: [{ reviewer: "rev2", commit: SHA.reviewed, result }],
+    });
+    const findings = openFindings(value, [
       {
-        id: "reply",
-        at: NOW + 1,
-        url: "https://example.invalid/comment/1",
-        body: "[builder] src/first.ts:10 fixed in synthetic commit",
+        id: "201",
+        at: NOW,
+        url: "https://example.invalid/review/201",
+        body: `Reviewer: rev2\nReviewed commit: ${SHA.reviewed}\nRESULT #7: ${result}\nP2 src/first.ts:10 actual defect`,
       },
-    ],
-    "builder",
-    7,
-  );
-  expect(replied.filter((finding) => !finding.reply)).toHaveLength(1);
-});
+    ]);
+    expect(findings).toHaveLength(expected);
+    const replied = withReplies(
+      findings,
+      [
+        {
+          id: "reply",
+          at: NOW + 1,
+          url: "https://example.invalid/comment/1",
+          body: "[builder] src/first.ts:10 fixed in synthetic commit",
+        },
+      ],
+      "builder",
+      7,
+    );
+    expect(replied.every((finding) => finding.reply)).toBe(expected === 1);
+  },
+);
+
+test.each([
+  ["[P2] src/second.ts:20 second defect", ""],
+  ["The second defect has no parseable priority or location", ""],
+  ["[P2] src/second.ts:20 second defect", ` at ${SHA.reviewed}`],
+  [
+    "The second defect has no parseable priority or location",
+    ` at ${SHA.reviewed}`,
+  ],
+])(
+  "mixed real and unparsed finding text stays open: %s %s",
+  (second, suffix) => {
+    const result = `0/0 resolved, 2 new${suffix}`;
+    const value = input({
+      head: SHA.reviewed,
+      posts: [{ reviewer: "rev2", commit: SHA.reviewed, result }],
+    });
+    const findings = openFindings(value, [
+      {
+        id: "201",
+        at: NOW,
+        url: "https://example.invalid/review/201",
+        body: `Reviewer: rev2\nRESULT #7: ${result}\nP2 src/first.ts:10 first defect\n${second}\nHistorical summary: the old P2 and P3 remain resolved.`,
+      },
+    ]);
+    expect(findings).toHaveLength(2);
+    if (second.startsWith("[P2]"))
+      expect(findings[1]!.file).toBe("src/second.ts");
+    else expect(findings[1]!.file).toBeNull();
+    const replied = withReplies(
+      findings,
+      [
+        {
+          id: "reply",
+          at: NOW + 1,
+          url: "https://example.invalid/comment/1",
+          body: "[builder] src/first.ts:10 fixed in synthetic commit",
+        },
+      ],
+      "builder",
+      7,
+    );
+    expect(replied.filter((finding) => !finding.reply)).toHaveLength(1);
+  },
+);
 
 test.each(["pending", "sent", "failed"] as const)(
   "a PR-scoped pass preserves another PR's %s coordinator receipt",
