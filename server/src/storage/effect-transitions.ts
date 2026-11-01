@@ -5,7 +5,7 @@ import type {
   AttentionState,
   DispatchFence,
 } from "./world-protocol";
-import { attentionFinished } from "./world-protocol";
+import { attentionFinished, EFFECT_LANE_PAGE } from "./world-protocol";
 import {
   validateEffectContract,
   sameTarget,
@@ -196,14 +196,17 @@ export function effectTransitions(
           ) as { id: string }[]
       ).map(({ id }) => get(id)!);
     },
-    /** Every connection with dispatchable entries of `verb` (at most 256). */
-    lanes(verb?: string) {
+    /**
+     * Connections with dispatchable entries of `verb`, in order, one page of
+     * EFFECT_LANE_PAGE after the cursor: callers page until a short page.
+     */
+    lanes(verb?: string, after = "") {
       return (
         db
           .query(
-            `SELECT DISTINCT json_extract(target,'$.connection_id') AS connection FROM outbox WHERE ${DISPATCHABLE} AND json_extract(target,'$.connection_id') IS NOT NULL ORDER BY connection LIMIT 256`,
+            `SELECT DISTINCT json_extract(target,'$.connection_id') AS connection FROM outbox WHERE ${DISPATCHABLE} AND json_extract(target,'$.connection_id') > ? ORDER BY connection LIMIT ${EFFECT_LANE_PAGE}`,
           )
-          .all(verb ?? null, verb ?? null) as { connection: string }[]
+          .all(verb ?? null, verb ?? null, after) as { connection: string }[]
       ).map(({ connection }) => connection);
     },
     transition(change: EffectTransition, at: number): EffectReply {

@@ -109,6 +109,8 @@ export type StorageRequest =
       connection?: string;
       /** The connections that have entries, instead of the entries. */
       lanes?: boolean;
+      /** Lanes after this connection (the page cursor). */
+      after?: string;
     }
   | { type: "effect-transition"; change: EffectTransition }
   | { type: "load" }
@@ -276,6 +278,8 @@ export type WorkerReply =
 export class StorageOutcomeUnknown extends Error {
   readonly outcome = "unknown";
 }
+/** Connections per lanes page (EffectStore.lanes). */
+export const EFFECT_LANE_PAGE = 256;
 export class StorageWriteRejected extends Error {
   readonly outcome = "not-committed";
 }

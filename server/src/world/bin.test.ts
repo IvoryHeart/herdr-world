@@ -1,8 +1,16 @@
 import { expect, test } from "bun:test";
 import type { BinEntry } from "../../../shared/bin";
-import { MIN_JOIN_MS, WorldBinRegistry, type BinAdd } from "./bin";
+import {
+  BinCloseNotRecorded,
+  MIN_JOIN_MS,
+  WorldBinRegistry,
+  type BinAdd,
+} from "./bin";
 
-function fixture(epoch = "run1", options: { failCommit?: boolean } = {}) {
+function fixture(
+  epoch = "run1",
+  options: { failCommit?: "not-recorded" | "unknown" } = {},
+) {
   let now = 0;
   const timers = new Set<{ at: number; run(): void }>();
   const committed: BinEntry[][] = [];
@@ -20,7 +28,9 @@ function fixture(epoch = "run1", options: { failCommit?: boolean } = {}) {
     },
     commit: async (entries) => {
       committed.push([...entries]);
-      if (options.failCommit) throw new Error("disk full");
+      if (options.failCommit === "not-recorded")
+        throw new BinCloseNotRecorded("World storage is closing");
+      if (options.failCommit === "unknown") throw new Error("reply lost");
     },
     countdown: () => countdown,
     publish: (revision) => revisions.push(revision),
@@ -181,7 +191,9 @@ test("a host's new runtime returns its staged agents without closing them", asyn
 });
 
 test("a close that could not be recorded is reported as not sent", async () => {
-  const { registry, advance } = fixture("run1", { failCommit: true });
+  const { registry, advance } = fixture("run1", {
+    failCommit: "not-recorded",
+  });
   registry.add(agent("p1"));
   await advance(30_000);
   await Promise.resolve();
@@ -191,6 +203,16 @@ test("a close that could not be recorded is reported as not sent", async () => {
     result: "refused",
     detail: "World could not record the close, so nothing was sent.",
   });
+});
+
+test("a close whose recording is unknown stays closing, never reported unrecorded", async () => {
+  const { registry, advance } = fixture("run1", { failCommit: "unknown" });
+  const id = registry.add(agent("p1")).entries[0]!.id;
+  await advance(30_000);
+  await Promise.resolve();
+  const state = registry.list();
+  expect(state.closing).toEqual([id]);
+  expect(state.outcomes).toEqual([]);
 });
 
 test("invalid targets are refused before anything is staged", () => {

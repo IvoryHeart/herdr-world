@@ -46,6 +46,8 @@ export const effectVerbs = [
       workspace_id: text,
       tab_id: text,
       connection_generation: Type.Integer({ minimum: 0 }),
+      // The World run that recorded it: generations are per-run counters.
+      service_incarnation: text,
     }),
     object(),
     "reconcilable",
