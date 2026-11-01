@@ -260,7 +260,7 @@ bridge.call = (async (method: string, params?: Record<string, unknown>) =>
     ? structuredClone(askLedger)
     : originalAskCall(method, params)) as typeof bridge.call;
 // The World bin's service: a fixture registry that never closes anything.
-const fakeBin = createFakeBin("board-fixture");
+const fakeBin = createFakeBin("board-fixture", () => performance.now());
 const beforeBin = bridge.call.bind(bridge);
 bridge.call = (async (method: string, params?: Record<string, unknown>) =>
   method.startsWith("world.bin.")
@@ -753,6 +753,83 @@ async function boardAction(selector: string) {
 
 /** Board scenarios, each on a fresh board (see fresh()); run in order. */
 const scenarios: [name: string, run: () => Promise<void>][] = [
+  [
+    "Board drop A at 0:30 then B at 0:25 restarts both to 0:30",
+    async () => {
+      for (let i = 0; i < 4; i++)
+        host
+          .querySelector<HTMLButtonElement>('[aria-label="Zoom in"]')!
+          .click();
+      await settle(100);
+      const drop = async (key: string, id: number) => {
+        await bringIntoView(() => card(key)!);
+        const tab = card(key)!;
+        const from = centre(tab);
+        pointer(tab, "pointerdown", from.x, from.y, id);
+        for (let step = 1; step <= 6; step++) {
+          pointer(
+            tab,
+            "pointermove",
+            from.x + step * 10,
+            from.y + step * 6,
+            id,
+          );
+          await settle(16);
+        }
+        const can = host.querySelector<HTMLElement>(".world-bin-can")!;
+        await waitFor(() => can.getBoundingClientRect().width > 0, "bin rises");
+        const over = centre(can);
+        for (let step = 0; step < 4; step++) {
+          pointer(tab, "pointermove", over.x, over.y, id);
+          await settle(16);
+        }
+        pointer(tab, "pointerup", over.x, over.y, id);
+        await waitFor(
+          () => card(key)?.classList.contains("board-binned") === true,
+          "dropped card waits in bin",
+        );
+      };
+      const offset = () =>
+        Number(
+          host
+            .querySelector(".world-bin-progress")
+            ?.getAttribute("stroke-dashoffset"),
+        );
+      const store = worldBinStore(bridge);
+      const countdown = () =>
+        store
+          .get()
+          .entries.map((entry) =>
+            Math.ceil((store.remaining(entry) - entry.departure_ms) / 1000),
+          );
+      await drop("studio:w1:t1", 71);
+      check(countdown()[0] === 30, "A starts at 0:30");
+      await settle(5_000);
+      check(countdown()[0] === 25, "B is dropped when A reaches 0:25");
+      check(
+        offset() > 20,
+        "the first ring has counted down before another drop",
+      );
+      await drop("studio:w1:t2", 72);
+      await settle(100);
+      const entries = store.get().entries;
+      check(entries.length === 2, "both Board drops are staged");
+      check(
+        entries[0]!.trip === entries[1]!.trip,
+        "Board uses one shared trip",
+      );
+      check(
+        entries.every((entry) => store.remaining(entry) > 35_000),
+        "both agents receive the full reset countdown and departure",
+      );
+      check(
+        countdown().every((left) => left === 30),
+        "A and B both restart to 0:30",
+      );
+      check(offset() < 7, "the shared Board ring returns to full");
+      for (const entry of entries) await store.restore(entry.id);
+    },
+  ],
   [
     "drops a tab card in the bin",
     async () => {

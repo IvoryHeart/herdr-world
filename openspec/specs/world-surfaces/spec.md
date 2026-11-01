@@ -4037,12 +4037,15 @@ pull away, speeding up, and leave the map by the right edge exactly as the
 departure ends, which is when the close commits. The bus SHALL sound a short horn
 as it reaches the stop, under this device's sound setting. An agent sent while a
 bus has not yet pulled away SHALL board it, and the service SHALL restart the
-countdown in full for everyone on that bus (a bus still driving in re-times its
-approach from where it is to stop at 0:10 on the new clock; one at the stop keeps
-waiting); an agent sent after it pulled away SHALL wait for the next bus with its
+countdown in full for everyone on that bus. Drops from Board, Desk and Town SHALL
+use that same service rule without requiring a browser join hint. A bus still
+driving in SHALL retain its set-off trajectory and speed, arrive early after a
+reset and wait until 0:00; one already at the stop keeps
+waiting. An agent sent after it pulled away SHALL wait for the next bus with its
 own countdown. Its motion SHALL come from a
 mover character (cruising speed, acceleration, deceleration) shared by Town's
-movers, with the speed derived from the road's length and the time left. A bus seats eight; more riders
+movers, with the approach speed fixed from the road length and set-off countdown.
+A bus seats eight; more riders
 SHALL take more buses, and buses that cannot stand at the stop SHALL queue
 behind it on the same street, then in further lanes, so every rider has a place
 on the map. While the stop is off screen, a chip at the nearest screen edge
@@ -4099,6 +4102,21 @@ commits.
   another agent is sent to the stop
 - **THEN** both share the bus with the full countdown again, nothing closes at the
   first agent's old time, and they leave together on the new clock
+
+#### Scenario: A Board drop shares the reset countdown
+
+- **WHEN** agent A is dropped on Board at 0:30 and agent B is dropped at 0:25
+- **THEN** both share a full 0:30 service countdown, the Board ring returns to
+  full, A does not close at its old deadline, and both close together after
+  the reset countdown and departure
+
+#### Scenario: A reset preserves the approaching bus's speed
+
+- **WHEN** boarding resets the clock to 0:30 while a bus is one second from
+  arrival, including after an earlier reset
+- **THEN** its set-off trajectory and speed are unchanged, it arrives about
+  one second later, sounds its arrival cue and waits about 29 seconds until
+  0:00; another reset while parked only extends its wait
 
 #### Scenario: Catch the leaving bus
 

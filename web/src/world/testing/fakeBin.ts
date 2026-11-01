@@ -6,11 +6,12 @@ import {
 
 /**
  * A browser fixture's World bin: the service's world.bin.* answers with an
- * in-page registry and a call log. Countdowns are frozen at their duration
- * (fixtures never close anything); tests drive pause, resume and put back.
+ * in-page registry and a call log. Countdowns are frozen unless a fixture
+ * supplies its clock. Fixtures never close anything; tests drive the controls.
  */
-export function createFakeBin(epoch = "fixture-run") {
+export function createFakeBin(epoch = "fixture-run", now?: () => number) {
   const calls: { method: string; params: Record<string, unknown> }[] = [];
+  let readAt = now?.() ?? 0;
   let next = 1;
   const state: BinState = {
     epoch,
@@ -30,6 +31,16 @@ export function createFakeBin(epoch = "fixture-run") {
     calls,
     state,
     call(method: string, params: Record<string, unknown> = {}) {
+      if (now) {
+        const at = now();
+        if (!state.paused)
+          for (const entry of state.entries)
+            entry.remaining_ms = Math.max(
+              0,
+              entry.remaining_ms - (at - readAt),
+            );
+        readAt = at;
+      }
       calls.push({ method, params: structuredClone(params) });
       switch (method) {
         case "world.bin.list":
@@ -37,11 +48,11 @@ export function createFakeBin(epoch = "fixture-run") {
         case "world.bin.add": {
           // Like the service: boarding a bus that has not pulled away
           // restarts its countdown in full for everyone on it.
-          const soonest = state.entries.find(
-            (entry) =>
-              entry.id === params.join &&
-              entry.remaining_ms > entry.departure_ms,
+          const waiting = state.entries.filter(
+            (entry) => entry.remaining_ms > entry.departure_ms,
           );
+          const soonest =
+            waiting.find((entry) => entry.id === params.join) ?? waiting[0];
           if (soonest)
             for (const entry of state.entries)
               if (entry.trip === soonest.trip)

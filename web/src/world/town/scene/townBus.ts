@@ -2,7 +2,8 @@
  * Town's bus, headless: where the stop, its waiting riders and each bus are,
  * as a pure function of the bin's state and time left. One bus per departure
  * (a bin "trip"); it drives in from the town's left edge along the stop's
- * street, timed to stop there with 10 s still on the clock, waits with its
+ * street, initially timed to stop with 10 s on the clock. Boarding resets the
+ * departure clock without changing its set-off run, so it can arrive early. It waits with its
  * doors open until the countdown ends, then pulls away and leaves by the
  * right edge exactly when the close commits (the entry's departure time).
  * It moves as a mover with the bus's character (townMotion.ts): it slows
@@ -16,7 +17,7 @@ import type { BinEntry } from "../../../../../shared/bin";
 import { TOWN_TILE as T } from "../townLayout";
 import type { TownBusStop } from "../townBusStop";
 import { BUS_H, BUS_SEATS, BUS_W, STOP_H, STOP_W } from "../townBusGeometry";
-import { BUS_CHARACTER, moverRun } from "./townMotion";
+import { BUS_CHARACTER, moverRun, type MoverRun } from "./townMotion";
 
 /** The bus stops at the stop with this long left on the clock. */
 export const BUS_DUE_LEFT_MS = 10_000;
@@ -40,6 +41,13 @@ export type TownBusRider = {
   y: number;
 };
 
+/** A set-off trajectory and progress retained when boarding resets the clock. */
+export type TownBusApproach = {
+  start: number;
+  run: MoverRun;
+  elapsed: number;
+};
+
 export type TownBus = {
   trip: string;
   /** This bus of its trip (a trip of more than eight riders takes more). */
@@ -50,6 +58,7 @@ export type TownBus = {
   home: number;
   /** Time since its trip's clock started (a boarding restarts it), ms. */
   since: number;
+  approach: TownBusApproach;
   /** Departing: driving away (parked, doors shut, under reduced motion). */
   phase: "arriving" | "waiting" | "departing";
   doorsOpen: boolean;
@@ -83,11 +92,10 @@ export type TownBusInput = {
   paused: boolean;
   reducedMotion: boolean;
   /**
-   * Where each bus (by `TownBus.key`) was when its clock last restarted (an agent
-   * boarded), world px: it drives on to the stop from there instead of from
-   * the map's edge. A bus already at the stop just keeps waiting.
+   * Each bus's original trajectory and progress at the last boarding reset.
+   * Its departure clock restarts, but its approach keeps the set-off speed.
    */
-  starts?: ReadonlyMap<string, number>;
+  starts?: ReadonlyMap<string, TownBusApproach>;
 };
 
 export function townBusScene(input: TownBusInput): TownBusScene {
@@ -139,7 +147,17 @@ export function townBusScene(input: TownBusInput): TownBusScene {
     const slotX = frontX - slot * (BUS_W + GAP);
     const y = kerb + 2 + lane * LANE;
     const since = trip.duration + trip.departure - trip.remaining;
-    const approach = busApproachMs(trip.duration);
+    const plan = input.starts?.get(trip.key) ?? {
+      start: -BUS_W,
+      run: moverRun(
+        BUS_CHARACTER,
+        slotX + BUS_W,
+        { from: "moving", to: "rest" },
+        busApproachMs(trip.duration),
+      ),
+      elapsed: 0,
+    };
+    const approach = { ...plan, elapsed: plan.elapsed + since };
     let x = slotX;
     let phase: TownBus["phase"] = "waiting";
     if (trip.remaining < trip.departure) {
@@ -155,22 +173,11 @@ export function townBusScene(input: TownBusInput): TownBusScene {
             { from: "rest", to: "moving" },
             trip.departure,
           ).at(trip.departure - trip.remaining);
-    } else if (!input.reducedMotion && since < approach) {
-      // Driving in, timed to stop with BUS_DUE_LEFT_MS on the clock (from
-      // where it was if a boarding restarted its clock). Held, time stands
-      // still, so it stops where it is.
-      const start = Math.min(slotX, input.starts?.get(trip.key) ?? -BUS_W);
-      if (start < slotX) {
-        phase = "arriving";
-        x =
-          start +
-          moverRun(
-            BUS_CHARACTER,
-            slotX - start,
-            { from: "moving", to: "rest" },
-            approach,
-          ).at(since);
-      }
+    } else if (!input.reducedMotion && approach.elapsed < plan.run.duration) {
+      // Keep the original run, including its deceleration, across resets.
+      // An early arrival simply waits longer on the reset departure clock.
+      phase = "arriving";
+      x = Math.min(slotX, plan.start + plan.run.at(approach.elapsed));
     }
     const riders = trip.riders.map((entry, seat) => {
       const window = BUS_SEATS[seat]!;
@@ -196,6 +203,7 @@ export function townBusScene(input: TownBusInput): TownBusScene {
       y,
       home: slotX,
       since,
+      approach,
       phase,
       // Held (paused), a bus stands where it is with its doors open.
       doorsOpen: phase === "waiting" || input.paused,
@@ -237,12 +245,12 @@ export function townBusScene(input: TownBusInput): TownBusScene {
 /** Each bus as last drawn, by `TownBus.key`. */
 export type TownBusSeen = ReadonlyMap<
   string,
-  { since: number; x: number; phase: TownBus["phase"] }
+  { since: number; approach: TownBusApproach; phase: TownBus["phase"] }
 >;
 
 /**
  * What changed since the last drawn frame: buses whose clock restarted (an
- * agent boarded before they pulled away), with where they were, and how many
+ * agent boarded before they pulled away), with their original run/progress, and how many
  * pulled in at the stop (each sounds its horn). A held bus's clock stands
  * still, so holding is never a restart or an arrival.
  */
@@ -251,13 +259,13 @@ export function townBusChanges(
   buses: readonly TownBus[],
   paused: boolean,
 ) {
-  const restarts = new Map<string, number>();
+  const restarts = new Map<string, TownBusApproach>();
   let arrivals = 0;
   for (const bus of buses) {
     const was = seen.get(bus.key);
     if (!was) continue;
     if (bus.since < was.since - 250 && was.phase !== "departing")
-      restarts.set(bus.key, was.x);
+      restarts.set(bus.key, was.approach);
     else if (was.phase === "arriving" && bus.phase === "waiting" && !paused)
       arrivals += 1;
   }
@@ -268,7 +276,7 @@ export const townBusSeen = (buses: readonly TownBus[]): TownBusSeen =>
   new Map(
     buses.map((bus) => [
       bus.key,
-      { since: bus.since, x: bus.x, phase: bus.phase },
+      { since: bus.since, approach: bus.approach, phase: bus.phase },
     ]),
   );
 

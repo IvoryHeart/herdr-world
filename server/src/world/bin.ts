@@ -108,22 +108,28 @@ export class WorldBinRegistry {
     if (this.entries.size >= MAX_ENTRIES)
       throw new Error(`The bin holds at most ${MAX_ENTRIES} agents`);
     const now = this.deps.clock.monotonic();
+    // Every view drops into the same waiting trip. A caller may name its bus,
+    // but joining/resetting is a service rule, never a browser requirement.
+    const waiting = [...this.entries.values()]
+      .filter(
+        (entry) =>
+          (entry.deadline === null
+            ? entry.remaining_ms
+            : entry.deadline - now) > entry.departure_ms,
+      )
+      .sort(
+        (a, b) =>
+          (a.deadline ?? a.remaining_ms) - (b.deadline ?? b.remaining_ms),
+      );
     const joined =
-      typeof input.join === "string" ? this.entries.get(input.join) : undefined;
-    const joinedLeft = joined
-      ? joined.deadline === null
-        ? joined.remaining_ms
-        : joined.deadline - now
-      : 0;
-    // A bus that has pulled away takes no one else.
-    const joins = joined !== undefined && joinedLeft > joined.departure_ms;
+      waiting.find((entry) => entry.id === input.join) ?? waiting[0];
     const duration = parseBinCountdown(this.deps.countdown()) * 1000;
     const id = `bin-${this.deps.epoch}-${this.nextId++}`;
     const remaining = duration + BIN_DEPARTURE_MS;
     const deadline = this.paused ? null : now + remaining;
-    const trip = joins ? joined.trip : id;
+    const trip = joined ? joined.trip : id;
     // Boarding restarts the countdown in full for everyone on that bus.
-    if (joins)
+    if (joined)
       for (const entry of this.entries.values())
         if (entry.trip === trip)
           Object.assign(entry, {

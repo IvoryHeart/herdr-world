@@ -189,6 +189,22 @@ test("boarding restarts the countdown in full for everyone on the bus", async ()
   }
 });
 
+test("drops from Board, Desk and Town reset the shared clock without a join hint", async () => {
+  for (const view of ["board", "desk", "town"] as const) {
+    const { registry, advance, committed } = fixture();
+    const first = registry.add(agent("p1", { view: "town" })).entries[0]!;
+    await advance(29_000);
+    const entries = registry.add(agent("p2", { view })).entries;
+    expect(entries.map((entry) => entry.trip)).toEqual([
+      first.trip,
+      first.trip,
+    ]);
+    expect(entries.map((entry) => entry.remaining_ms)).toEqual([TOTAL, TOTAL]);
+    await advance(7_000);
+    expect(committed).toEqual([]);
+  }
+});
+
 test("once the bus has pulled away, a later agent waits for the next one", async () => {
   const { registry, committed, advance } = fixture();
   const bus = registry.add(agent("p1", { view: "town" })).entries[0]!;

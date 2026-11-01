@@ -7,6 +7,7 @@ import {
   townBusSeen,
   type TownBusScene,
   type TownBusSeen,
+  type TownBusApproach,
 } from "./scene/townBus";
 import { createTownLookResolver } from "./townAppearance";
 import {
@@ -41,8 +42,8 @@ export class TownBusLayer implements TownWorldOverlay {
   private current: TownBusScene | null = null;
   /** Each bus as last drawn, to see a restarted clock and an arrival. */
   private seen: TownBusSeen = new Map();
-  /** Where buses whose clock restarted drive on from (townBusScene `starts`). */
-  private readonly starts = new Map<string, number>();
+  /** Set-off trajectories survive boarding resets without a new cruise speed. */
+  private readonly starts = new Map<string, TownBusApproach>();
   /** Sprites reused frame to frame; those past `used` are hidden. */
   private readonly pool: Sprite[] = [];
   private used = 0;
@@ -79,7 +80,7 @@ export class TownBusLayer implements TownWorldOverlay {
     // from where it is rather than from the map's edge.
     const { restarts } = townBusChanges(this.seen, scene.buses, paused);
     if (restarts.size) {
-      for (const [key, x] of restarts) this.starts.set(key, x);
+      for (const [key, approach] of restarts) this.starts.set(key, approach);
       scene = sceneNow();
     }
     const { arrivals } = townBusChanges(this.seen, scene.buses, paused);
