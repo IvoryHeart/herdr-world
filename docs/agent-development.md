@@ -575,6 +575,12 @@ Settings go under `crew` in the gate's `config.json`:
 - `leads` maps each pod to its lead seat.
 - `authors` holds per-PR author overrides.
 - `neverPrompt` lists seats the watcher never prompts.
+- `readyAsk` defaults to `true`. Set it to `false` when a separate steward owns
+  the owner's ready notice: the crew still writes mechanical `crew/merge-ready`
+  marks, but does not generate READY owner asks. Review/fixer work and genuine
+  judgment, timeout and failure escalation remain active. The setting covers
+  every PR in this watcher's scope; keep a pilot explicitly PR-scoped. An
+  existing READY ask is withdrawn on the next pass, as for any retired cause.
 - `maxRuns` (default 3) bounds the runs working at once. A run without its
   completion evidence is stopped after `runTimeoutMinutes` without meaningful
   harness work (default 90, a positive finite duration). Conversation, reasoning,

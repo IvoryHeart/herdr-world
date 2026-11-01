@@ -10,6 +10,13 @@ other than the shared skills (`bun run check:agents`).
 The crew itself, its marks and its watcher are described in
 [agent development](agent-development.md#act-on-readiness-with-agentcrew).
 
+When a separate steward owns the owner's ready-to-try notice, set
+`crew.readyAsk: false` in the local gate config before starting the scoped crew.
+This suppresses only READY owner asks; mechanical readiness marks, review/fixer
+work and genuine judgment/timeout escalation are unchanged. The default is
+`true`. It applies to every PR in scope, so retain the pilot's explicit `--pr`
+selection. A mechanical mark alone does not establish UI trial acceptance.
+
 Every CI failure is real and blocks readiness for that head, including a
 failure followed by a green rerun or a failed aggregate job. Diagnose its cause
 and fix it; do not rerun to get green. The gate has no flake list or rerun budget,

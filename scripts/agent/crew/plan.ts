@@ -21,6 +21,8 @@ export type CrewSettings = {
   authors: Record<string, string>;
   /** Seats the watcher never types into, such as the owner's front desk. */
   neverPrompt: string[];
+  /** Whether READY generates an owner ask; mechanical marks remain independent. */
+  readyAsk: boolean;
   /** Reviewer runs at once. */
   maxRuns: number;
   /** A run without its completion evidence is stopped at this bound, without retry. */
@@ -82,6 +84,7 @@ export const SETTINGS_DEFAULTS: CrewSettings = {
   leads: {},
   authors: {},
   neverPrompt: [],
+  readyAsk: true,
   maxRuns: 3,
   runTimeoutMinutes: 90,
   stallMinutes: 30,
@@ -303,13 +306,15 @@ export function plan(
     ...(extra.since ? { since: extra.since } : {}),
   });
   if (verdict.state === "READY")
-    return [
-      make(
-        "ready",
-        "owner",
-        `READY #${pr} at ${at}: ${input.item?.title ?? ""}`.trim(),
-      ),
-    ];
+    return settings.readyAsk
+      ? [
+          make(
+            "ready",
+            "owner",
+            `READY #${pr} at ${at}: ${input.item?.title ?? ""}`.trim(),
+          ),
+        ]
+      : [];
 
   const actions: Action[] = [];
   const judgments: string[] = [];
@@ -447,6 +452,8 @@ export function loadSettings(path: string): CrewSettings {
     ...raw.crew,
     roster: { ...raw.roster, ...raw.crew?.roster },
   };
+  if (typeof settings.readyAsk !== "boolean")
+    throw new Error("crew.readyAsk must be a boolean");
   if (
     !Number.isFinite(settings.runTimeoutMinutes) ||
     settings.runTimeoutMinutes <= 0 ||
