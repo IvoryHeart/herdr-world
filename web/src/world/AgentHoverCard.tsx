@@ -38,7 +38,7 @@ export function AgentLatestMessage({
         >
           <MarkdownPreview
             text={latest.text}
-            className="agent-chat-markdown town-peek-markdown"
+            className="town-peek-markdown"
             breaks
           />
           <time dateTime={latest.sent_at} title={latest.sent_at}>

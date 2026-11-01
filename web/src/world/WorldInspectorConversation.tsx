@@ -65,9 +65,10 @@ import {
   type InspectorTerminalFileRequest,
 } from "./inspectorTerminalHandoff";
 import { townPortrait } from "./town/townSprites";
+import { loadWorkspaceInspector } from "./inspectorPreload";
 
 const WorkspaceInspectorHost = lazyWithReload("workspace-inspector", () =>
-  import("../components/WorkspaceInspectorHost").then((module) => ({
+  loadWorkspaceInspector().then((module) => ({
     default: module.WorkspaceInspectorHost,
   })),
 );

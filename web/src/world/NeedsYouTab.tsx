@@ -32,6 +32,7 @@ import {
   type NeedsYouState,
 } from "./needsYou";
 import { itemName, NeedsYouMessage } from "./NeedsYouItem";
+import { preloadWorkspaceInspector } from "./inspectorPreload";
 import "./needsYouTab.css";
 
 /**
@@ -110,6 +111,11 @@ export function NeedsYouHost({
   // A full screen on a phone: an agent window opened from it (Chat about
   // this) is a newer screen, so Back closes that first and returns here.
   useSystemBack(shared.open && mobile, closeNeedsYou, "screen");
+  // Chat about this opens the Inspector; fetch it while the list is open.
+  useEffect(
+    () => (shared.open ? preloadWorkspaceInspector() : undefined),
+    [shared.open],
+  );
   const sheet = shared.open && mobile;
   const panel = useRef<HTMLElement | null>(null);
   usePhoneSheetFocus(sheet, panel, shared.request);

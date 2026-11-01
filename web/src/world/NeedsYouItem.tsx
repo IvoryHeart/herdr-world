@@ -189,7 +189,7 @@ function NeedsYouAsk({
       <div id={questionId}>
         <MarkdownPreview
           text={question}
-          className="agent-chat-markdown needs-you-markdown"
+          className="needs-you-markdown"
           breaks
         />
       </div>
@@ -323,7 +323,7 @@ function NeedsYouAgent({
       {latest ? (
         <MarkdownPreview
           text={latest.text}
-          className="agent-chat-markdown needs-you-markdown"
+          className="needs-you-markdown"
           breaks
         />
       ) : (

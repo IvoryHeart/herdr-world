@@ -55,10 +55,17 @@
   color: var(--muted);
   font-size: 11px;
 }
-/* Up to three lines of each message; Chat about this has the rest. */
-.needs-you-markdown {
+/* Up to three lines of each message; Chat about this has the rest. The
+   preview is styled here in full: Chat's own stylesheet loads only with the
+   first Chat window, and a rule arriving then must not reflow the list. */
+.needs-you-item .needs-you-markdown {
   display: -webkit-box;
+  padding: 0;
   overflow: hidden;
+  color: inherit;
+  font-size: 13px;
+  line-height: 1.55;
+  background: transparent;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
   line-clamp: 3;
@@ -118,6 +125,15 @@
   display: flex;
   align-items: center;
   gap: 6px;
+}
+/* The card's report, styled in full for the same reason as the list's. */
+.agent-hover-card .town-peek-markdown {
+  padding: 0;
+  overflow: visible;
+  color: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  background: transparent;
 }
 .agent-hover-card .town-peek-screen {
   max-height: 12em;
