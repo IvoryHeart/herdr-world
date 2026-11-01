@@ -172,7 +172,9 @@ test("download deadline aborts stalled headers and bodies and releases the setup
         existsSync(join(homeDir, ".local", "bin", `.herdr.new-${process.pid}`)),
       ).toBe(false);
       running = true;
-      writeFileSync(join(homeDir, "herdr"), "synthetic binary");
+      writeFileSync(join(homeDir, "herdr"), "synthetic binary", {
+        mode: 0o755,
+      });
       expect((await handlers.handleHerdrSetup(request())).status).toBe(200);
     } finally {
       deadline.abort();
@@ -187,7 +189,7 @@ test("download deadline aborts stalled headers and bodies and releases the setup
 test("confirmed HTTP setup registers a running runtime without activation", async () => {
   const homeDir = mkdtempSync(join(tmpdir(), "herdr-running-setup-"));
   const binaryPath = join(homeDir, "herdr");
-  writeFileSync(binaryPath, "synthetic binary");
+  writeFileSync(binaryPath, "synthetic binary", { mode: 0o755 });
   const registrations: unknown[] = [];
   const handlers = createHerdrSetupHandlers({
     guard: () => ({}),

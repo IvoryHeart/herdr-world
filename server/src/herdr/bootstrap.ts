@@ -10,6 +10,7 @@ import {
   type Scheduler,
 } from "../service/ports";
 import {
+  assertHerdrBinaryRunnable,
   herdrDefaultBinaryPath,
   installVerifiedHerdr,
   legacyWindowsHerdrBinaries,
@@ -174,6 +175,7 @@ export async function setupHerdr(
       throw new Error(
         "Herdr is running but its executable could not be found; set HERDR_BIN_PATH to its absolute path and rerun herdr setup",
       );
+    assertHerdrBinaryRunnable(binaryPath, deps.platform);
     installService(binaryPath, { start: false });
     return {
       outcome: "already-running",

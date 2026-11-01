@@ -55,6 +55,7 @@ release that World version verified, in Herdr's own default location.
 - **THEN** World registers future user-service startup even if Herdr is already reachable,
   without restarting, stopping or activating a competing server
 - **AND** missing executable discovery or failed registration reports failure rather than success
+- **AND** a discovered directory or non-executable entry is preserved and refused before service mutation
 - **AND** existing SSH, named-session and custom-socket setup restrictions remain enforced
 
 ### Requirement: Reviewed release identity

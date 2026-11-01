@@ -1,4 +1,12 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
@@ -202,10 +210,55 @@ describe("detectHerdrSetup", () => {
 });
 
 describe("setupHerdr", () => {
+  for (const kind of ["directory", "non-executable"] as const) {
+    test.skipIf(kind === "non-executable" && process.platform === "win32")(
+      `running setup refuses a ${kind} before registration and preserves the entry`,
+      async () => {
+        const homeDir = scratch();
+        const binaryPath = join(
+          homeDir,
+          process.platform === "win32" ? "herdr.exe" : "herdr",
+        );
+        if (kind === "directory") mkdirSync(binaryPath);
+        else
+          writeFileSync(binaryPath, "preserve synthetic entry", {
+            mode: 0o644,
+          });
+        let mutations = 0;
+        await expect(
+          setupHerdr({
+            platform: process.platform,
+            homeDir,
+            pathEnv: homeDir,
+            binPathEnv: "",
+            ping: reachablePing,
+            installService: () => {
+              mutations++;
+            },
+            installRelease: async () => {
+              mutations++;
+              return { binaryPath: "/unused" };
+            },
+          }),
+        ).rejects.toThrow("blocked by non-executable entry");
+        expect(mutations).toBe(0);
+        expect(existsSync(binaryPath)).toBeTrue();
+        if (kind === "directory")
+          expect(statSync(binaryPath).isDirectory()).toBeTrue();
+        else {
+          expect(readFileSync(binaryPath, "utf8")).toBe(
+            "preserve synthetic entry",
+          );
+          expect(statSync(binaryPath).mode & 0o777).toBe(0o644);
+        }
+      },
+    );
+  }
+
   test("registers future startup without activating an already running Herdr", async () => {
     const homeDir = scratch();
     const binaryPath = join(homeDir, "herdr");
-    writeFileSync(binaryPath, "synthetic binary");
+    writeFileSync(binaryPath, "synthetic binary", { mode: 0o755 });
     let installs = 0;
     const registrations: unknown[] = [];
     const result = await setupHerdr({
@@ -250,7 +303,7 @@ describe("setupHerdr", () => {
 
   test("running setup reports registration failure instead of success", async () => {
     const homeDir = scratch();
-    writeFileSync(join(homeDir, "herdr"), "synthetic binary");
+    writeFileSync(join(homeDir, "herdr"), "synthetic binary", { mode: 0o755 });
     await expect(
       setupHerdr({
         platform: "linux",

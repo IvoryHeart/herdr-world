@@ -32,7 +32,7 @@ describe("runHerdrCommand", () => {
   test("explicit CLI setup reports persistent registration for a running runtime", async () => {
     const homeDir = mkdtempSync(join(tmpdir(), "herdr-cli-setup-"));
     const binaryPath = join(homeDir, "herdr");
-    writeFileSync(binaryPath, "synthetic binary");
+    writeFileSync(binaryPath, "synthetic binary", { mode: 0o755 });
     const registrations: unknown[] = [];
     const io = capture();
     try {
