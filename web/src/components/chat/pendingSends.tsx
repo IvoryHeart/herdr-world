@@ -16,8 +16,6 @@ export function placedSends(
   pending: readonly ConversationDelivery[],
   agent: string,
   onDismiss: (id: string) => void,
-  /** The agent is working now: a command it queued has not run yet. */
-  busy = false,
 ) {
   return pending.map((delivery) => ({
     key: delivery.id,
@@ -30,7 +28,7 @@ export function placedSends(
           text={delivery.text}
           at={delivery.sent_at}
           waiting={
-            busy && delivery.queued
+            delivery.waiting
               ? `waiting for ${agent}: it is busy and runs this when it reaches it`
               : undefined
           }

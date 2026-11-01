@@ -2056,12 +2056,15 @@ would send; a combination Herdr cannot name that way SHALL be disabled. Each SHA
 the session Chat shows and only after a second unchanged pane read; scrolling
 and keys Herdr does not name SHALL be disabled. A new connection, runtime, pane
 or session SHALL retire a shown menu and its notice. Chat SHALL NOT type a
-message or slash command into a pane that shows a command menu: Send SHALL be
-disabled while a menu card is shown, and the service SHALL read the pane before
-each send and refuse with nothing typed when it shows a command menu. A slash
-command queued while the agent was working SHALL show as waiting for the agent
-until it runs, and the same command SHALL NOT be queued again while the agent is
-still working. Keyboard focus SHALL stay on
+message or slash command into a pane that may show a menu: Send SHALL be
+disabled while a menu card is shown, and after its last preparation await the
+service SHALL read the screen regardless of reported status and refuse with
+nothing typed when the read fails or is malformed or the screen shows a menu,
+a question or a menu-like footer or cursor. World inputs to one pane SHALL NOT
+overlap. A slash command SHALL be reserved per pane, session and text before
+dispatch; it SHALL be released only when nothing reached the pane and SHALL
+otherwise stay reserved, and show as waiting, until a read shows another
+session or a non-working status. Dismissing its receipt SHALL NOT release it. Keyboard focus SHALL stay on
 the menu card across the menu's steps, unless the user moved it outside the card
 while a key was pending. Opening, changing or
 closing a menu SHALL keep the transcript, its scroll position, the composer

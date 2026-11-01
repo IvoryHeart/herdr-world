@@ -115,6 +115,8 @@ export type UnconfirmedReason =
 export type ConversationDelivery = {
   kind?: "command";
   queued?: boolean;
+  /** The service still holds this command as queued for the agent. */
+  waiting?: boolean;
   id: string;
   text: string;
   sent_at: string;

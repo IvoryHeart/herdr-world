@@ -168,7 +168,9 @@ export type ConversationSendResult =
         /** A harness menu is open: typed text would go into it as keys. */
         | "menu"
         /** The same command already waits for the busy agent to reach it. */
-        | "duplicate";
+        | "duplicate"
+        /** Another World input to this pane is in flight. */
+        | "busy";
       message: string;
     };
 

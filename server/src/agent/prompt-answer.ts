@@ -52,6 +52,8 @@ export function createPromptActions(
     ): Promise<PendingPrompt | null>;
     /** The session Chat would send to in this pane, or null. */
     sessionFingerprint?(paneId: string): Promise<string | null>;
+    /** Panes with a World input in flight, shared with Chat's sends. */
+    active?: Set<string>;
     delay?(ms: number): Promise<void>;
   },
 ): Pick<ConversationSource, "answer" | "press"> {
@@ -377,7 +379,7 @@ export function createPromptActions(
     };
   };
   const press = createMenuPresser(args);
-  const active = new Set<string>();
+  const active = args.active ?? new Set<string>();
   const once =
     <T extends { pane_id: string }, R>(
       run: (target: T) => Promise<R>,

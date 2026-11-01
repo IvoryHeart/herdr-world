@@ -731,7 +731,6 @@ export function AgentChat({
                   pane.agent ??
                   "the agent",
                 dismiss,
-                liveStatus === "working",
               ),
             ]}
             hasOlder={history.hasOlder}

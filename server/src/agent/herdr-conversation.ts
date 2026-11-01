@@ -1,6 +1,12 @@
 import { AgentClaims } from "./agent-claims";
 import { createPromptActions } from "./prompt-answer";
-import { menuSendRefusal } from "./menu-send-guard";
+import {
+  createSendGuard,
+  guardSource,
+  lastAgentMessage,
+  readScreenText as screenText,
+  sendScreenRefusal,
+} from "./menu-send-guard";
 import { isSlashCommand } from "../../../shared/conversationInput";
 import { existsSync, type FSWatcher, watch } from "node:fs";
 import { basename, join } from "node:path";
@@ -83,6 +89,8 @@ export function createHerdrConversationSource(args: {
 }): ConversationSource & { dispose(): void } {
   const deliveries = createDeliveryLedger();
   const claims = new AgentClaims();
+  const sendGuard = createSendGuard();
+  const { reservations, dispatched } = sendGuard;
   // Sessions this pane has shown, so a sent message can still be checked in
   // its own transcript after the pane moves on, and in the ones it moved to.
   const sessions = new Map<
@@ -537,7 +545,8 @@ export function createHerdrConversationSource(args: {
             })
             .catch(() => null)
         : null;
-    return { ...shown, deliveries: deliveries.list(pane_id), pending_prompt };
+    const list = reservations.deliveries(pane_id, shown, deliveries);
+    return { ...shown, deliveries: list, pending_prompt };
   };
 
   const latest = async (target: { pane_id: string; menus?: boolean }) =>
@@ -596,9 +605,10 @@ export function createHerdrConversationSource(args: {
     return results;
   };
 
-  return {
+  const source: ConversationSource & { dispose(): void } = {
     id: "herdr",
     ...createPromptActions({
+      active: sendGuard.active,
       herdrCall: args.herdrCall,
       agentInfo,
       readPrompt,
@@ -783,15 +793,17 @@ export function createHerdrConversationSource(args: {
         },
       );
     },
-    send: async ({
-      pane_id,
-      text,
-      session_fingerprint,
-      baseline,
-      beforeSubmit,
-      guard,
-      submitted,
-    }) => {
+    send: async (target) => {
+      dispatched.delete(target);
+      const {
+        pane_id,
+        text,
+        session_fingerprint,
+        baseline,
+        beforeSubmit,
+        guard,
+        submitted,
+      } = target;
       if (!text.trim())
         return {
           status: "refused",
@@ -858,19 +870,6 @@ export function createHerdrConversationSource(args: {
           message:
             "Chat could not read the SSH host's clock, so it could not check where the message goes. Nothing was sent; try again, or use the Terminal tab.",
         };
-      const menuInfo = await agentInfo(pane_id);
-      const refusal = menuSendRefusal({
-        text,
-        command,
-        agentStatus: stringValue(menuInfo?.agent_status),
-        openMenu: menuInfo
-          ? await readMenu(pane_id, menuInfo, shown ?? undefined).catch(
-              () => null,
-            )
-          : null,
-        deliveries: deliveries.list(pane_id),
-      });
-      if (refusal) return refusal;
       // Read the pane immediately before prompting, with no other await in
       // between. Herdr's prompt takes no expected session (#4764), so a
       // switch after this reply and before the prompt lands is still
@@ -893,12 +892,20 @@ export function createHerdrConversationSource(args: {
         info = await agentInfo(pane_id);
       }
       const agent = normalizeAgentName(stringValue(info?.agent));
-      const bound =
-        info && SESSION_AGENTS.has(agent)
-          ? paneBinding(agent, info, args.context, verified)
+      // The session this native observation ties to the pane, if any.
+      const bindingOf = (seen: Record<string, unknown> | null) => {
+        const name = normalizeAgentName(stringValue(seen?.agent));
+        return seen && SESSION_AGENTS.has(name)
+          ? paneBinding(name, seen, args.context, verified)
           : null;
+      };
+      const bound = bindingOf(info);
       if (!bound?.fingerprint)
-        return { status: "refused", reason: "unavailable", message: notBound };
+        return {
+          status: "refused",
+          reason: "unavailable",
+          message: notBound,
+        };
       if (bound.fingerprint !== session_fingerprint) return changed;
       // Claude Code runs “!” as a shell command and “#” as a memory note.
       if (agent === "claude" && /^[!#]/.test(text.trimStart()))
@@ -913,12 +920,7 @@ export function createHerdrConversationSource(args: {
         // The durable admission awaited a commit. Read the native session again
         // so no earlier observation spans that await into an agent.prompt.
         info = await agentInfo(pane_id);
-        const freshAgent = normalizeAgentName(stringValue(info?.agent));
-        const fresh =
-          info && SESSION_AGENTS.has(freshAgent)
-            ? paneBinding(freshAgent, info, args.context, verified)
-            : null;
-        if (!fresh?.fingerprint || fresh.fingerprint !== session_fingerprint)
+        if (bindingOf(info)?.fingerprint !== session_fingerprint)
           return changed;
         if (deliveries.full(pane_id))
           return {
@@ -928,9 +930,20 @@ export function createHerdrConversationSource(args: {
               "Chat is still checking earlier messages. Nothing was sent.",
           };
       }
+      // After every preparation await: no menu where the text goes, then the
+      // agent once more with no await before the prompt (#4764 remains).
+      const unsafe = await sendScreenRefusal(args.herdrCall, pane_id, {
+        agent,
+        context: promptContext(info),
+        said: lastAgentMessage(shown),
+      });
+      if (unsafe) return unsafe;
+      info = await agentInfo(pane_id);
+      if (bindingOf(info)?.fingerprint !== session_fingerprint) return changed;
       if (guard && (!info || !guard(info))) return changed;
       let result: unknown;
       const startedAt = Date.now();
+      dispatched.add(target);
       try {
         result = await args.herdrCall("agent.prompt", {
           target: pane_id,
@@ -983,15 +996,5 @@ export function createHerdrConversationSource(args: {
       return { status: "sent", delivery };
     },
   };
-}
-
-/** The text of a `pane.read` reply, wherever Herdr nests it. */
-function screenText(result: unknown): string | null {
-  if (!isRecord(result)) return null;
-  if (typeof result.text === "string") return result.text;
-  for (const value of Object.values(result)) {
-    const nested = screenText(value);
-    if (nested !== null) return nested;
-  }
-  return null;
+  return guardSource(source, sendGuard);
 }

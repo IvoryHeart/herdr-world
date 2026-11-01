@@ -127,3 +127,32 @@ test("a command queued while the agent is busy is not queued twice", async () =>
   expect(state.prompts).toEqual(["/permissions", "/model", "/permissions"]);
   source.dispose();
 });
+
+test("a queued command's waiting state follows the service, not the receipt", async () => {
+  const { state, source } = fakeHerdr();
+  const fingerprint = (await source.latest({ pane_id: "w1:p1" }))
+    .session_fingerprint!;
+  state.status = "working";
+  const sent = await source.send({
+    pane_id: "w1:p1",
+    text: "/permissions",
+    session_fingerprint: fingerprint,
+  });
+  if (sent.status !== "sent") throw new Error("not sent");
+  const waiting = (await source.latest({ pane_id: "w1:p1" })).deliveries;
+  expect(waiting.find((d) => d.id === sent.delivery.id)?.waiting).toBe(true);
+  // Dismissing the notice does not cancel the command in the agent's queue.
+  source.dismiss({ pane_id: "w1:p1", delivery_id: sent.delivery.id });
+  expect(
+    await source.send({
+      pane_id: "w1:p1",
+      text: "/permissions",
+      session_fingerprint: fingerprint,
+    }),
+  ).toMatchObject({ status: "refused", reason: "duplicate" });
+  // Once the agent is seen not working, the command is no longer waiting.
+  state.status = "idle";
+  const after = (await source.latest({ pane_id: "w1:p1" })).deliveries;
+  expect(after.some((d) => d.waiting)).toBe(false);
+  source.dispose();
+});

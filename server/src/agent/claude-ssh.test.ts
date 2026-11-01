@@ -141,6 +141,7 @@ async function fixture(host = "claude-fixture.example") {
     context: createAgentSessionResolverContext(),
     cache: createSessionProjectionCache(files),
     async herdrCall(method, params) {
+      if (method === "pane.read") return { read: { text: "❯ " } };
       if (method === "agent.get") return { agent: pane() };
       if (method === "agent.list") return { agents: [pane()] };
       if (method === "agent.prompt") {

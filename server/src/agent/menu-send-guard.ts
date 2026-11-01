@@ -1,46 +1,298 @@
-import type { ConversationSendResult } from "./conversation";
-import type { PendingPrompt } from "./pending-prompt";
+import type {
+  Conversation,
+  ConversationSendResult,
+  ConversationSource,
+} from "./conversation";
 import type { ConversationDelivery } from "./conversation-delivery";
+import {
+  menuQuoted,
+  parseCommandMenu,
+  parsePendingPrompt,
+  PROMPT_SCREEN_LINES,
+  type PromptContext,
+} from "./pending-prompt";
+import { isSlashCommand } from "../../../shared/conversationInput";
+import type { HerdrCall } from "./session-types";
 
 type Refusal = Extract<ConversationSendResult, { status: "refused" }>;
+type SendTarget = Parameters<ConversationSource["send"]>[0];
+
+// Footer and option shapes harness menus use. Typed text is safe only when
+// none shows: Chat refuses rather than guess (Claude's "Esc to cancel",
+// "Enter to confirm/select", Codex's "enter select · esc back", lists with a
+// cursor on a numbered option).
+const MENU_FOOTER =
+  /\b(esc|escape) to (cancel|close|go back|exit)\b|\benter to (confirm|select|set|continue|submit)\b|\benter select\b|\besc back\b|↑\/?↓ to (navigate|select|move)\b|\btab to (switch|cycle) (tabs|views)\b/i;
+const CURSOR_OPTION = /^\s*[❯›>]\s*\d+[.)]\s/;
 
 /**
- * Whether a send must not reach the pane: an open command menu would take the
- * typed text as its own keys (and could pick options with them), and a slash
- * command already queued while the agent works would be queued twice. A menu
- * that opens after this check and before the prompt lands is not caught (the
- * same gap as Herdr #4764).
+ * Why typing into this pane now could be unsafe, or null when the screen was
+ * read and shows no menu, question or menu-like panel. An unreadable or
+ * malformed screen refuses. A footer the agent's own last message quotes
+ * (Codex draws its messages where its menus go) does not count.
  */
-export function menuSendRefusal({
-  text,
-  command,
-  agentStatus,
-  openMenu,
-  deliveries,
+export function screenSendRefusal({
+  agent,
+  screen,
+  context,
+  said,
 }: {
-  text: string;
-  command: boolean;
-  agentStatus: string;
-  openMenu: PendingPrompt | null;
-  deliveries: readonly ConversationDelivery[];
+  agent: string;
+  screen: string | null;
+  context: PromptContext;
+  said: string | null;
 }): Refusal | null {
-  if (openMenu?.menu)
-    return {
-      status: "refused",
-      reason: "menu",
-      message: `A menu is open in the terminal (“${openMenu.question.join(" ").slice(0, 80)}”). Typing would go into it as keys, so nothing was sent. Close it first with the key its card names, then send again.`,
-    };
-  const sameQueued = deliveries.some(
-    (delivery) =>
-      delivery.kind === "command" &&
-      delivery.queued &&
-      delivery.text.trim() === text.trim(),
-  );
-  if (command && agentStatus === "working" && sameQueued)
-    return {
-      status: "refused",
-      reason: "duplicate",
-      message: `${text.trim().split(/\s/)[0]} is already waiting: the agent is busy and runs it when it reaches it. Nothing was sent.`,
-    };
+  const refuse = (message: string): Refusal => ({
+    status: "refused",
+    reason: "menu",
+    message: `${message} Nothing was sent.`,
+  });
+  if (screen === null)
+    return refuse(
+      "Chat could not read the terminal to check that no menu is open, so typing could go into one.",
+    );
+  const menu = parseCommandMenu(agent, screen, context);
+  if (menu && !(menu.menu?.overlay && menuQuoted(menu, said)))
+    return refuse(
+      `A menu is open in the terminal (“${menu.question.join(" ").slice(0, 80)}”). Typing would go into it as keys; close it first with the key its card names.`,
+    );
+  if (parsePendingPrompt(agent, screen, context)?.options.length)
+    return refuse(
+      "The agent is showing a question; answer it on its card first.",
+    );
+  const bottom = screen.split("\n").slice(-14);
+  const quoted = (line: string) =>
+    said !== null && line.trim().length > 0 && said.includes(line.trim());
+  if (
+    bottom.some(
+      (line) =>
+        (MENU_FOOTER.test(line) || CURSOR_OPTION.test(line)) && !quoted(line),
+    )
+  )
+    return refuse(
+      "The terminal shows what looks like a menu Chat cannot read. Typing would go into it as keys; close it in the Terminal first.",
+    );
   return null;
+}
+
+/**
+ * Read the pane's screen as the menu card does and check it for sending; a
+ * failed or malformed read refuses.
+ */
+export async function sendScreenRefusal(
+  herdrCall: HerdrCall,
+  paneId: string,
+  rest: Omit<Parameters<typeof screenSendRefusal>[0], "screen">,
+) {
+  const screen = await herdrCall("pane.read", {
+    pane_id: paneId,
+    source: "recent",
+    lines: PROMPT_SCREEN_LINES,
+    format: "text",
+    strip_ansi: true,
+  }).then(readScreenText, () => null);
+  return screenSendRefusal({ ...rest, screen });
+}
+
+/** The agent's last message text, for the quoted-footer exception. */
+export function lastAgentMessage(shown: Conversation | null): string | null {
+  if (!shown || shown.status !== "ok") return null;
+  let said: string | null = "";
+  for (const message of shown.messages ?? [])
+    if (message.role === "assistant" && message.kind === "message")
+      said = message.text;
+  return said;
+}
+
+type Reservation = {
+  paneId: string;
+  fingerprint: string;
+  text: string;
+  state: "admitting" | "queued";
+  deliveryId?: string;
+};
+
+/**
+ * Slash commands World has admitted to a pane that may still be waiting in
+ * the agent's own queue. An entry is reserved before any await, so two sends
+ * of one command cannot both reach the agent; it is released only when
+ * nothing reached the pane. A command sent while the agent worked, or whose
+ * acknowledgement was lost, stays until the session changes or a non-working
+ * status is observed. Dismissing its receipt does not retire it.
+ */
+export function createCommandReservations() {
+  const entries = new Set<Reservation>();
+  const key = (paneId: string, fingerprint: string, text: string) =>
+    JSON.stringify([paneId, fingerprint, text.trim()]);
+  const keyOf = (entry: Reservation) =>
+    key(entry.paneId, entry.fingerprint, entry.text);
+  return {
+    /** Reserve the command, or null when the same one is pending. */
+    reserve(paneId: string, fingerprint: string, text: string) {
+      const wanted = key(paneId, fingerprint, text);
+      for (const entry of entries) if (keyOf(entry) === wanted) return null;
+      const entry: Reservation = {
+        paneId,
+        fingerprint,
+        text,
+        state: "admitting",
+      };
+      entries.add(entry);
+      return entry;
+    },
+    /** Whether the same command is admitted and possibly queued. */
+    queued(paneId: string, fingerprint: string, text: string) {
+      const wanted = key(paneId, fingerprint, text);
+      for (const entry of entries)
+        if (keyOf(entry) === wanted && entry.state === "queued") return true;
+      return false;
+    },
+    release(entry: Reservation) {
+      entries.delete(entry);
+    },
+    queue(entry: Reservation, deliveryId?: string) {
+      entry.state = "queued";
+      entry.deliveryId = deliveryId;
+    },
+    /** Retire queued commands the pane's state shows are no longer queued. */
+    observe(paneId: string, fingerprint: string | null, status: string) {
+      for (const entry of entries)
+        if (
+          entry.paneId === paneId &&
+          entry.state === "queued" &&
+          (entry.fingerprint !== fingerprint || status !== "working")
+        )
+          entries.delete(entry);
+    },
+    /**
+     * A read's receipts, after retiring what that read shows is no longer
+     * queued; commands still waiting for the agent are marked `waiting`.
+     */
+    deliveries(
+      paneId: string,
+      shown: Pick<Conversation, "session_fingerprint" | "agent_status">,
+      ledger: { list(paneId: string): ConversationDelivery[] },
+    ) {
+      this.observe(
+        paneId,
+        shown.session_fingerprint ?? null,
+        shown.agent_status ?? "",
+      );
+      return this.mark(paneId, ledger.list(paneId));
+    },
+    /** Receipts of commands still waiting for the agent to reach them. */
+    mark(paneId: string, list: ConversationDelivery[]) {
+      const waiting = new Set<string>();
+      for (const entry of entries)
+        if (entry.paneId === paneId && entry.deliveryId)
+          waiting.add(entry.deliveryId);
+      return list.map((delivery) =>
+        waiting.has(delivery.id) ? { ...delivery, waiting: true } : delivery,
+      );
+    },
+  };
+}
+
+/**
+ * Chat's sends to a pane, one World input at a time (shared with answers and
+ * menu keys), with identical slash commands reserved before any await.
+ * `dispatched` holds the targets whose native prompt was attempted, so an
+ * error after it is treated as an uncertain submission, not as nothing sent.
+ */
+export function guardSends(
+  send: ConversationSource["send"],
+  reservations: ReturnType<typeof createCommandReservations>,
+  active: Set<string>,
+  dispatched: WeakSet<object>,
+  /** Read the pane once, so its reservations reflect its current state. */
+  observe: (paneId: string) => Promise<unknown>,
+): ConversationSource["send"] {
+  return async (target: SendTarget) => {
+    const command = isSlashCommand(target.text);
+    const { pane_id, session_fingerprint, text } = target;
+    let reservation = command
+      ? reservations.reserve(pane_id, session_fingerprint, text)
+      : undefined;
+    // A queued one may have run since: read the pane once, then try again.
+    // One still being admitted is in flight and always refuses.
+    if (
+      reservation === null &&
+      reservations.queued(pane_id, session_fingerprint, text)
+    ) {
+      await observe(pane_id).catch(() => undefined);
+      reservation = reservations.reserve(pane_id, session_fingerprint, text);
+    }
+    if (reservation === null)
+      return {
+        status: "refused",
+        reason: "duplicate",
+        message: `${target.text.trim().split(/\s/)[0]} is already waiting for the agent to reach it. Nothing was sent.`,
+      };
+    if (active.has(target.pane_id)) {
+      if (reservation) reservations.release(reservation);
+      return {
+        status: "refused",
+        reason: "busy",
+        message:
+          "Chat is already sending to this pane. Nothing was sent; try again in a moment.",
+      };
+    }
+    active.add(target.pane_id);
+    try {
+      const result = await send(target);
+      if (reservation) {
+        if (result.status === "sent" && result.delivery.queued)
+          reservations.queue(reservation, result.delivery.id);
+        else reservations.release(reservation);
+      }
+      return result;
+    } catch (error) {
+      // Nothing reached the pane unless the native prompt was attempted; if
+      // it was, its fate is unknown and an identical retry stays refused.
+      if (reservation) {
+        if (dispatched.has(target)) reservations.queue(reservation);
+        else reservations.release(reservation);
+      }
+      throw error;
+    } finally {
+      active.delete(target.pane_id);
+    }
+  };
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/** The text of a `pane.read` reply, wherever Herdr nests it. */
+export function readScreenText(result: unknown): string | null {
+  if (!isRecord(result)) return null;
+  if (typeof result.text === "string") return result.text;
+  for (const value of Object.values(result)) {
+    const nested = readScreenText(value);
+    if (nested !== null) return nested;
+  }
+  return null;
+}
+
+/** The per-source state of Chat's sends: reservations, lock and dispatches. */
+export function createSendGuard() {
+  return {
+    reservations: createCommandReservations(),
+    active: new Set<string>(),
+    dispatched: new WeakSet<object>(),
+  };
+}
+
+/** `source` with its sends guarded by `guard`. */
+export function guardSource<T extends ConversationSource>(
+  source: T,
+  guard: ReturnType<typeof createSendGuard>,
+): T {
+  const { reservations, active, dispatched } = guard;
+  return {
+    ...source,
+    send: guardSends(source.send, reservations, active, dispatched, (paneId) =>
+      source.latest({ pane_id: paneId }),
+    ),
+  };
 }
