@@ -221,13 +221,33 @@ export function useTownBus({
 
   // The off-screen chip: where the stop is, as of the last drawn frame.
   const chip = useRef<HTMLButtonElement | null>(null);
-  const [edge, setEdge] = useState<Point | null>(null);
-  const [carrying, setCarrying] = useState(false);
+  const [edge, setEdgeState] = useState<Point | null>(null);
+  const [carrying, setCarryingState] = useState(false);
+  // Called every frame: set state only when it changes, so Town does not
+  // render again each frame (each render derives the town's scene).
+  const shown = useRef<{ edge: Point | null; carrying: boolean }>({
+    edge: null,
+    carrying: false,
+  });
+  const setEdge = (next: Point | null) => {
+    const was = shown.current.edge;
+    if (was?.x === next?.x && was?.y === next?.y) return;
+    shown.current.edge = next;
+    setEdgeState(next);
+  };
+  const setCarrying = (next: boolean) => {
+    if (shown.current.carrying === next) return;
+    shown.current.carrying = next;
+    setCarryingState(next);
+  };
+  const setters = useRef({ setEdge, setCarrying });
+  setters.current = { setEdge, setCarrying };
   useEffect(
     () =>
       hud().onFrame(() => {
         // A carry shows the drag ghost; its absence ends a carry for sure.
         const carried = document.querySelector(".town-drag-ghost") !== null;
+        const { setEdge, setCarrying } = setters.current;
         setCarrying(carried);
         const camera = view.camera;
         const l = layout();
@@ -261,9 +281,7 @@ export function useTownBus({
                   ) / 4,
                 ) * 4,
             };
-        setEdge((current) =>
-          current?.x === next?.x && current?.y === next?.y ? current : next,
-        );
+        setEdge(next);
       }),
     [hud, view, layout, host],
   );
