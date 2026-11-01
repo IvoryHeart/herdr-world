@@ -772,3 +772,25 @@ integration; no new Quint model is claimed. Existing Q39 lifecycle and Q43
 layout/work-bound consumers remain required, including all Town groups and dense
 production contexts. Sampled colour sanity is only a cheap negative control;
 it cannot establish semantic scene completeness or arbitrary device/load behavior.
+
+### Current Desk stops and durable reviews (Q24/Q51)
+
+The [terminal-mark contract](contracts/terminal-marks.md#current-stop-coverage-and-retention)
+derives current-stop identity, display-only expiry, verified known-session restart,
+unknown no-carry and current/history/byte accounting before mapping. Real SQLite,
+production RPC, two browser stores and compiled fault controls cover the finite
+identity/persistence boundaries. Maintained 10-source inputs fit the unchanged
+frame with headroom; dense native input is explicitly refused before capture,
+without a composed dense success claim. These checks complement existing binding
+and runtime models; no SQL abstraction replaces actual savepoint/worker evidence.
+Completion-seen remains compatible pending the separately gated migration.
+
+PR #622 review repairs add real SQLite recovery re-entry, durable unknown-owner
+supersession across restart, atomic canonical-capacity refusal, shrinking-before-
+growth admission and whole-list malformed native input refusal to Q24/Q51.
+Four additional compiled controls demonstrate sensitivity. The binding validator
+is exported for shared ingress validation without changing its acceptance rules;
+its existing model contract is unchanged. Full required verification and the
+independent revised consumer-mapping review remain required.
+Whole-host observation age is checked before native ownership/absence admission
+and again when queued work runs, preserving newer accepted review authority.
