@@ -50,7 +50,13 @@ function testFrames() {
 }
 
 function setup(
-  options: { level?: TownLevel; zoom?: number; teams?: TownTeams } = {},
+  options: {
+    level?: TownLevel;
+    zoom?: number;
+    teams?: TownTeams;
+    /** Town's bus stop, as a canvas-point rectangle. */
+    stop?: { x: number; y: number; w: number; h: number };
+  } = {},
 ) {
   const projection = office({
     alpha: working(3),
@@ -128,6 +134,13 @@ function setup(
       remove: () => ghost.push(["remove"]),
     },
     held: () => log.push(["held"]),
+    busStop: options.stop
+      ? (_world, at) =>
+          at.x >= options.stop!.x &&
+          at.x < options.stop!.x + options.stop!.w &&
+          at.y >= options.stop!.y &&
+          at.y < options.stop!.y + options.stop!.h
+      : undefined,
   });
   /** Draw a frame, as the renderer does, so presses hit what is drawn. */
   const draw = () => view.drew(camera, level, layout);
@@ -921,4 +934,36 @@ test("an edge pan restarts the magnet's wait between the renderer's draws", () =
   }
   expect(desks.size).toBeGreaterThan(1);
   expect([...aims]).not.toContain("group");
+});
+
+test("an agent carried to the bus stop is sent to the bin, and the town holds still there", () => {
+  // The stop sits in the right edge band, where a carry would pan the town.
+  const stop = { x: WIDE.width - 40, y: 400, w: 40, h: 100 };
+  const t = setup({ level: "desk", stop });
+  const cell = t.deskCell(0, 0);
+  const agentKey = t.model.desks.get(cell.deskKey!)!.paneDevices[0]!.agentKey!;
+  const seat = townSeat(cell, 0);
+  const at = t.screen({
+    x: seat.cx,
+    y: seat.top ? cell.y * T + 10 : cell.y * T + 45,
+  });
+  const pointer = t.press(at);
+  t.moveTo(pointer, offset(at, 20));
+  const over = { x: WIDE.width - 20, y: 450 };
+  t.moveTo(pointer, over);
+  const x = t.camera.x;
+  t.frames.step();
+  t.frames.step();
+  expect(t.camera.x).toBe(x);
+  expect(t.ghost.at(-1)?.[3]).toBe("bin");
+  t.lift(pointer, over);
+  expect(t.moves).toEqual([{ kind: "bin", agentKey }]);
+});
+
+test("a desk carried over the bus stop is not sent to the bin", () => {
+  const stop = { x: 600, y: 400, w: 120, h: 100 };
+  const t = setup({ stop });
+  const at = t.deskCentre(t.deskCell(0));
+  carry(t, at, { x: 650, y: 450 });
+  expect(t.moves.some((move) => move.kind === "bin")).toBe(false);
 });

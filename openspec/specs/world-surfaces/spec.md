@@ -3967,3 +3967,99 @@ first observed complete on a ready runtime after this change. It SHALL:
   the runtime retires during it
 - **THEN** World shows the failure, does not show the setting as saved, and leaves the
   previous setting in place
+
+### Requirement: Agent bin
+
+World SHALL let the user close an agent's pane by dropping it in a bin, after a
+countdown the user chooses (10 s, 30 s by default, 1 min or 2 min, saved on the
+World service). The countdown is reversible staging held in the service's memory:
+it survives reloading or leaving World, and a service restart SHALL cancel every
+countdown without closing anything. Each agent SHALL have its own countdown.
+Opening the bin, or holding Town's bus, SHALL pause every countdown until the lid
+is closed or the bus is let go. Taking an agent out SHALL close nothing and
+return it to its place. Entry IDs and revisions SHALL name their service run, so
+no control from before a restart acts on an agent added after it.
+
+World SHALL send nothing to Herdr before a countdown ends or the user chooses
+Close now. Then it SHALL record one durable `world.bin.close` intent per agent
+(`world-effects`, reconcilable recovery), conditioned on the connection, runtime
+generation, workspace, tab, pane and terminal captured when the agent went in.
+Before dispatch World SHALL re-read the pane on that same runtime generation: a
+replaced generation, a removed host, or a pane that closed or changed SHALL end
+the intent unsent. The close SHALL be `pane.close`, or `workspace.close` for the
+workspace's last pane; a worktree root's pane SHALL be refused while its
+workspace has other panes. Closes on one connection SHALL run one at a time, so
+each reads the panes the previous one left, and a stalled host SHALL NOT delay
+another host's closes. A lost reply SHALL be settled by reading the panes back;
+World SHALL NOT re-send a close that may have happened. A pinned tab's last pane
+and a host whose topology is cached after failure SHALL be refused in the
+browser, where tab pins live, before anything is staged.
+
+Board and Desk SHALL use a plain bin that appears while a card is dragged and
+stays while it holds anything, showing the next countdown. Clicking it SHALL
+open it with Put back, Close now, Close all now and Close lid, and dragging a
+card out SHALL put the agent back. A selected tab card's bar SHALL offer Close
+agent… with the same countdown. A waiting card and its lines SHALL be hidden.
+
+Town SHALL have one London bus stop, drawn in the world on the topmost street
+just right of its right-hand crossing (a vertical road meeting the street from
+above or below), with buses using the lane beside it. Agents dropped at the
+stop, or sent from their peek, leave their desks and wait there. One bus per
+departure SHALL drive in from the town's left edge, wait with its doors open and
+leave by the right edge as the countdown ends. A bus seats eight; more riders
+SHALL take more buses, and buses that cannot stand at the stop SHALL queue
+behind it on the same street, then in further lanes, so every rider has a place
+on the map. While the stop is off screen, a chip at the nearest screen edge
+SHALL show the next departure and fly the camera to the stop; while an agent is
+carried it SHALL also accept the drop. The town SHALL hold still while a carried
+agent is over the stop. Pressing and holding a bus SHALL stop it with its doors
+open in every open World until one lets it go, and dragging a rider off (or
+pressing it) SHALL put them back at their desk. Drops, closes, returns and
+refusals SHALL play World's sounds under this device's sound setting, and the
+bus SHALL stay parked under reduced motion.
+
+#### Scenario: Change of mind
+
+- **WHEN** the user drops an agent in the bin, then opens the bin and puts it back
+- **THEN** the countdown paused while the bin was open, the agent is back in its
+  place, and Herdr received no close
+
+#### Scenario: The countdown ends after a reload
+
+- **WHEN** the user drops an agent in the bin and reloads World before the countdown ends
+- **THEN** the countdown continues on the service, and when it ends exactly that
+  pane closes on its original runtime, with its tab if it was the tab's last pane
+
+#### Scenario: World restarts during a countdown
+
+- **WHEN** the World service restarts while an agent waits in the bin
+- **THEN** the countdown is gone, nothing is closed, and the agent is back at its place
+
+#### Scenario: Two panes of one workspace leave together
+
+- **WHEN** both panes of a workspace close on the same departure
+- **THEN** the first closes with `pane.close` and the second, now the last pane,
+  with `workspace.close`
+
+#### Scenario: The host restarted before the close
+
+- **WHEN** an agent's host gets a new runtime generation before its close is dispatched
+- **THEN** the intent ends without sending anything and the bin reports it was not closed
+
+#### Scenario: Pinned tab
+
+- **WHEN** the user drags the last pane of a pinned tab over the bin
+- **THEN** the bin says to unpin the tab first, and dropping sends nothing
+
+#### Scenario: Hold the bus
+
+- **WHEN** the user presses and holds the bus carrying an agent in Town, then
+  drags the agent off it
+- **THEN** the countdown pauses with the bus's doors open, the agent returns to
+  their desk, and the empty bus leaves without closing anything
+
+#### Scenario: The stop is off screen
+
+- **WHEN** the user carries an agent while Town's bus stop is off screen
+- **THEN** a chip at the screen's edge points to the stop, and dropping the agent
+  on it sends the agent to the stop
