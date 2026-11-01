@@ -673,7 +673,13 @@ export function AgentChat({
       ) : (
         <div className="agent-chat-list">
           {history.messages.length === 0 ? (
-            <p className="agent-chat-empty">
+            <p
+              className={
+                history.history || history.error
+                  ? "agent-chat-empty"
+                  : "agent-chat-empty is-loading"
+              }
+            >
               {history.history
                 ? "No messages yet."
                 : history.error
@@ -784,6 +790,10 @@ export function AgentChat({
           onSubmit={send}
           onError={setNotice}
         />
+      ) : conversation === null ? (
+        // The composer's room while the first read is out, so the list does
+        // not shrink under the reader when the composer arrives.
+        <div className="agent-chat-composer is-reserved" aria-hidden="true" />
       ) : null}
     </div>
   );

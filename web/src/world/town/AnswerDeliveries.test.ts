@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AnswerDeliveries } from "./AnswerDeliveries";
-import { TownRail } from "./TownRail";
+import { NeedsYouOutbox } from "../NeedsYouTab";
 import type { AnswerNotice } from "../worldAnswerDeliveries";
 const notice: AnswerNotice = {
   ask: {
@@ -39,23 +39,21 @@ test("answered delivery recovery stays reachable with zero open questions, and n
     actions,
   });
   const html = renderToStaticMarkup(
-    createElement(TownRail, {
-      needsYouCount: 0,
-      deliveryCount: 1,
-
-      calls: [],
-      activeKey: null,
-      now: 1000,
-      collapsed: false,
-      onCollapsedChange() {},
-      onOpen() {},
-      onPeek() {},
-    }),
+    createElement(NeedsYouOutbox, { checks: 1, waiting: 0, onOpen() {} }),
   );
-  expect(html).toContain("OUTBOX");
+  // Needs you's route: a count and Summary, never the full cards.
+  expect(html).toContain("✉ Outbox · 1 to check");
+  expect(html).toContain(
+    'aria-label="Outbox, 1 answer to check. Open summary."',
+  );
   expect(html).not.toContain("Ship it");
   const full = renderToStaticMarkup(deliveries);
-  expect(html).not.toContain("NEEDS YOU");
+  // Nothing to check: no route.
+  expect(
+    renderToStaticMarkup(
+      createElement(NeedsYouOutbox, { checks: 0, waiting: 2, onOpen() {} }),
+    ),
+  ).toBe("");
   expect(full).toContain("It won&#x27;t send it again on its own");
   expect(full).toContain("Send again…");
   expect(full).toContain("Dismiss");

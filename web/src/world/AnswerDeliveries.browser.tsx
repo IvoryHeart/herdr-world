@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { AnswerDeliveries } from "./town/AnswerDeliveries";
 import { AnswerDeliverySign } from "./town/AnswerDeliverySign";
 import { AnswerOutboxContext } from "./town/answerOutbox";
-import { TownRail } from "./town/TownRail";
+import { NeedsYouOutbox } from "./NeedsYouTab";
 import { TownSummaryPanel } from "./town/TownSummaryPanel";
 import {
   WorldPanel,
@@ -17,7 +17,6 @@ import {
   useAnswerDeliveries,
   type AnswerNotice,
 } from "./worldAnswerDeliveries";
-import type { TownCall } from "./town/TownRail";
 import "../styles/tokens.css";
 import "../styles/base.css";
 import "./town/town.css";
@@ -116,15 +115,6 @@ const openQuestion = {
   owner_only: true,
   options: ["The fix", "The migration"],
 };
-const call: TownCall = {
-  agent: { key: "agent-fixture", displayLabel: "Moss" } as TownCall["agent"],
-  kind: "blocked",
-  since: 1000,
-  hostKey: "studio",
-  hostLabel: "Studio",
-  roomKey: "lantern",
-  roomLabel: "Lantern",
-};
 const askActions = {
   askers: new Map(),
   answer: async () => null,
@@ -138,8 +128,7 @@ function Fixture() {
   useDrawReadiness("town", captureRoot);
   const state = useAnswerDeliveries(store),
     registry = useWorldPanelRegistry();
-  const [collapsed, setCollapsed] = useState(false),
-    [summary, setSummary] = useState(false),
+  const [summary, setSummary] = useState(false),
     [focus, setFocus] = useState(0),
     [mixed, setMixed] = useState(true);
   const openOutbox = () => {
@@ -147,7 +136,6 @@ function Fixture() {
     setFocus((key) => key + 1);
   };
   scene = (value) => {
-    setCollapsed(value === "collapsed");
     setMixed(value !== "waiting");
     setSummary(value === "summary" || value === "confirm");
     setFocus((key) => key + 1);
@@ -208,20 +196,10 @@ function Fixture() {
               <AnswerDeliverySign connectionId="studio" store={store} />
             </div>
           </div>
-          <TownRail
-            needsYouCount={mixed ? 2 : 0}
-            asks={mixed ? [openQuestion] : []}
-            askActions={askActions}
-            deliveryCount={checks}
-            deliveryWaiting={waiting}
-            onOpenOutbox={openOutbox}
-            calls={mixed ? [call] : []}
-            activeKey={null}
-            now={4000}
-            onPeek={() => {}}
-            onOpen={() => {}}
-            collapsed={collapsed}
-            onCollapsedChange={setCollapsed}
+          <NeedsYouOutbox
+            checks={checks}
+            waiting={waiting}
+            onOpen={openOutbox}
           />
         </div>
         {summary ? (
@@ -279,7 +257,7 @@ const button = (label: string) =>
     (button) => button.textContent === label,
   )!;
 const outbox = () =>
-  document.querySelector<HTMLButtonElement>(".town-outbox-row")!;
+  document.querySelector<HTMLButtonElement>(".needs-you-outbox")!;
 const ready = new MutationObserver(() => {
   if (outbox()) {
     ready.disconnect();
@@ -315,11 +293,11 @@ Object.assign(window, {
       };
     check(
       document.querySelectorAll(".answer-delivery").length === 0,
-      "Full cards leaked into rail",
+      "Full cards leaked into the route",
     );
     check(
       outbox().textContent!.includes("2 to check · 1 waiting"),
-      "Independent rail counts changed",
+      "Independent route counts changed",
     );
     check(
       document.documentElement.scrollWidth <= innerWidth,
@@ -417,8 +395,8 @@ Object.assign(window, {
     );
     await reset("waiting");
     check(
-      !document.querySelector(".town-rail"),
-      "Waiting-only deliveries opened the rail",
+      !document.querySelector(".needs-you-outbox"),
+      "Waiting-only deliveries showed the Outbox route",
     );
     check(
       document.querySelector(".town-reception-letter")?.textContent === "✉1",

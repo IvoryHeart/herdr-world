@@ -1,0 +1,32 @@
+/* A card's attention badge (! or ✓); it opens Needs you at that agent. */
+.board-badge {
+  padding: 0;
+  border: 0;
+  cursor: pointer;
+  position: absolute;
+  top: -9px;
+  right: -9px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: none;
+  place-items: center;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--board-card);
+}
+.board-s-blocked .board-badge,
+.board-s-done .board-badge,
+.board-s-unknown .board-badge {
+  display: grid;
+  background: var(--pulse);
+}
+.board-s-blocked .board-badge::before {
+  content: "!";
+}
+.board-s-done .board-badge::before {
+  content: "\2713";
+}
+.board-s-unknown .board-badge::before {
+  content: "~";
+}

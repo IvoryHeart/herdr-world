@@ -19,7 +19,6 @@ import type { WorldObject } from "../worldObject";
 import { GroupsSummary } from "../groups/GroupsSummary";
 import {
   TownAsk,
-  townRailInset,
   townLocation,
   type TownAskActions,
   type TownCall,
@@ -95,7 +94,7 @@ export function TownSummaryPanel({
       {deliveries}
       <section aria-labelledby="town-summary-finished">
         <h3 id="town-summary-finished">
-          Finished, not reviewed <span>{summary.counts.finished}</span>
+          Done, not reviewed <span>{summary.counts.finished}</span>
         </h3>
         {summary.finished.length ? (
           <ul>
@@ -107,7 +106,7 @@ export function TownSummaryPanel({
                 // it finished, so the age says so.
                 detail={
                   item.since === null
-                    ? "finished"
+                    ? "done"
                     : `last active ${townSummaryAge(item.since, now)}`
                 }
                 action="Open"
@@ -193,7 +192,7 @@ function SummaryItem({
         <strong>
           {item.agent.displayLabel}
           {item.agent.semanticStatus === "blocked"
-            ? ` · blocked: ${item.agent.stateLabels.blocked?.trim() || "needs input"}`
+            ? ` · blocked: ${item.agent.stateLabels.blocked?.trim() || "needs you"}`
             : ""}
         </strong>
         <small>
@@ -214,7 +213,7 @@ function SummaryItem({
 const COUNT_LABELS: [keyof TownSummaryCounts, string][] = [
   ["needsYou", "need you"],
   ["working", "working"],
-  ["finished", "finished"],
+  ["finished", "done"],
   ["quiet", "quiet"],
   ["unknown", "unknown"],
 ];
@@ -240,7 +239,6 @@ function Counts({ counts }: { counts: TownSummaryCounts }) {
  * for the canvas; on a phone the window closes first, since it covers Town.
  */
 export function useTownSummary({
-  railCollapsed,
   world,
   office,
   calls,
@@ -250,7 +248,6 @@ export function useTownSummary({
   openTerminal,
   showRoom,
 }: {
-  railCollapsed: boolean;
   world: WorldObject;
   office: HerdrOfficeProjection;
   calls: readonly TownCall[];
@@ -266,7 +263,6 @@ export function useTownSummary({
   deliveryCount: number;
   deliveryWaiting: number;
   openOutbox(): void;
-  railInset: number;
   askActions: TownAskActions;
   openTerminal(nodeId: string): void;
   open(): void;
@@ -340,11 +336,6 @@ export function useTownSummary({
     deliveryCount,
     deliveryWaiting,
     openOutbox,
-    railInset: townRailInset(
-      viewportWidth,
-      railCollapsed,
-      summary.counts.needsYou || deliveryCount,
-    ),
     askActions,
     openTerminal,
     open: () => {
