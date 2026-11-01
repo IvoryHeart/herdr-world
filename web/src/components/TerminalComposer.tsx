@@ -78,7 +78,11 @@ export type { TerminalInputMode } from "../terminalInputMode";
 export type ComposerUpload = (
   file: File,
   onProgress?: UploadProgress,
+  retry?: boolean,
 ) => Promise<string>;
+
+/** Explicit Retry can bind the same draft again after its composer remounts. */
+const chatFileUploadBindings = new Map<string, { upload: ComposerUpload }>();
 
 /**
  * Bottom-docked mobile terminal composer. A plain textarea owns all editing
@@ -411,12 +415,24 @@ export function TerminalComposer({
   const pickerUploadRef = useRef({ draftKey, upload: onUploadFile, owner: {} });
   useLayoutEffect(() => {
     const previous = pickerUploadRef.current;
-    pickerUploadRef.current = {
+    const binding = {
       draftKey,
       upload: onUploadFile,
       owner: previous.draftKey === draftKey ? previous.owner : {},
     };
-  }, [draftKey, onUploadFile]);
+    pickerUploadRef.current = binding;
+    if (surface === "chat") chatFileUploadBindings.set(draftKey, binding);
+    return () => {
+      if (chatFileUploadBindings.get(draftKey) === binding)
+        chatFileUploadBindings.delete(draftKey);
+    };
+  }, [draftKey, onUploadFile, surface]);
+  useLayoutEffect(
+    () => () => {
+      pickerUploadRef.current.owner = {};
+    },
+    [],
+  );
 
   const uploadAndInsert = async (
     files: File[],
@@ -435,12 +451,14 @@ export function TerminalComposer({
     await startAttachmentUploads(
       uploadDraftKey,
       files,
-      async (file, onProgress) => {
+      async (file, onProgress, retry) => {
         if (!beginTerminalComposerUpload(uploadDraftKey))
           throw new Error("This pane's composer closed");
         let path: string | null = null;
         try {
-          path = await upload(file, onProgress);
+          path = await (retry
+            ? upload(file, onProgress, true)
+            : upload(file, onProgress));
           if (composingRef.current)
             throw new Error(
               "Path insertion deferred during text composition; path retained in Message draft",
@@ -721,7 +739,15 @@ export function TerminalComposer({
                 }
                 pickFiles(input, {
                   ...context,
-                  upload: (file, progress) => {
+                  upload: (file, progress, retry) => {
+                    if (retry) {
+                      const binding = chatFileUploadBindings.get(context.key);
+                      return binding
+                        ? binding.upload(file, progress)
+                        : Promise.reject(
+                            new Error("Upload target is not open"),
+                          );
+                    }
                     const current = pickerUploadRef.current;
                     if (current.owner !== owner) {
                       return Promise.reject(

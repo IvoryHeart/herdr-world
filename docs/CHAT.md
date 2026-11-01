@@ -219,7 +219,10 @@ that root; stat metadata cannot redirect the read to a different transcript.
   changes, World refuses the selection or remaining files; completed paths are
   never redirected into a different draft. Open the paperclip again for the
   intended conversation.
-  A completion after Chat closes updates only that conversation's draft.
+  Closing or replacing Chat retires files that have not started. An upload
+  already in flight can finish into its original conversation's draft. Reopen
+  that conversation and use **Retry** for refused files; Retry uses its current
+  client without reviving the old queue's dispatch authority.
   Failed sends restore the submitted text before any newer draft.
 - While Herdr reports the agent working, an accepted send shows
   **Queued · sent to <agent>**, with its send time. Herdr owns admission and
