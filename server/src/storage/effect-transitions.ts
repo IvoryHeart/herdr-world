@@ -5,7 +5,7 @@ import type {
   AttentionState,
   DispatchFence,
 } from "./world-protocol";
-import { attentionFinished } from "./world-protocol";
+import { attentionFinished, EFFECT_LANE_PAGE } from "./world-protocol";
 import {
   validateEffectContract,
   sameTarget,
@@ -21,6 +21,10 @@ import type {
 } from "../effects/types";
 
 /** The generic effect state is a projection of the same outbox, never another queue. */
+/** Entries a runner may claim now or after recovery (verb bound twice). */
+const DISPATCHABLE =
+  "contract IS NOT NULL AND (? IS NULL OR json_extract(contract,'$.verb')=?) AND needs_migration=0 AND claimed=0 AND (cancel_requested=0 OR (ever_dispatched=1 AND recovery IN ('reconcilable','reattachable'))) AND (state='pending' OR (state='uncertain' AND recovery<>'opaque'))";
+
 export function effectTransitions(
   db: Database,
   incarnation: string,
@@ -173,14 +177,37 @@ export function effectTransitions(
     );
   return {
     get,
-    list(verb?: string) {
+    /**
+     * Dispatchable entries, oldest deadline first, at most 100. `connection`
+     * narrows the query before its bound, so one host's backlog never hides
+     * another's work from a per-connection lane.
+     */
+    list(verb?: string, connection?: string) {
       return (
         db
           .query(
-            "SELECT id FROM outbox WHERE contract IS NOT NULL AND (? IS NULL OR json_extract(contract,'$.verb')=?) AND needs_migration=0 AND claimed=0 AND (cancel_requested=0 OR (ever_dispatched=1 AND recovery IN ('reconcilable','reattachable'))) AND (state='pending' OR (state='uncertain' AND recovery<>'opaque')) ORDER BY due_at,id LIMIT 100",
+            `SELECT id FROM outbox WHERE ${DISPATCHABLE} AND (? IS NULL OR json_extract(target,'$.connection_id')=?) ORDER BY due_at,id LIMIT 100`,
           )
-          .all(verb ?? null, verb ?? null) as { id: string }[]
+          .all(
+            verb ?? null,
+            verb ?? null,
+            connection ?? null,
+            connection ?? null,
+          ) as { id: string }[]
       ).map(({ id }) => get(id)!);
+    },
+    /**
+     * Connections with dispatchable entries of `verb`, in order, one page of
+     * EFFECT_LANE_PAGE after the cursor: callers page until a short page.
+     */
+    lanes(verb?: string, after = "") {
+      return (
+        db
+          .query(
+            `SELECT DISTINCT json_extract(target,'$.connection_id') AS connection FROM outbox WHERE ${DISPATCHABLE} AND json_extract(target,'$.connection_id') > ? ORDER BY connection LIMIT ${EFFECT_LANE_PAGE}`,
+          )
+          .all(verb ?? null, verb ?? null, after) as { connection: string }[]
+      ).map(({ connection }) => connection);
     },
     transition(change: EffectTransition, at: number): EffectReply {
       const entry = get(change.id);

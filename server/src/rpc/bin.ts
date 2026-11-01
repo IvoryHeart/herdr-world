@@ -22,7 +22,11 @@ export async function handleBinRpc(rpc: BridgeRpcContext): Promise<void> {
     if (method === "world.bin.restore")
       return reply(registry.restore(String(p.id)));
     if (method === "world.bin.close_now")
-      return reply(registry.closeNow(String(p.id)));
+      return reply(
+        registry.closeNow(
+          Array.isArray(p.ids) ? p.ids.map((id) => String(id)) : [],
+        ),
+      );
     if (method === "world.bin.countdown.set") {
       await bin.setCountdown(Number(p.countdown_s));
       return reply(registry.list());

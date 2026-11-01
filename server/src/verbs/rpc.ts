@@ -229,7 +229,13 @@ export const rpcVerbs = [
       join: Type.Optional(Type.String({ maxLength: 600 })),
     }),
   ),
-  rpc("world.bin.close_now", "reconcilable", "world", object({ id: text })),
+  rpc(
+    "world.bin.close_now",
+    "reconcilable",
+    "world",
+    // Explicit IDs of one service run: never an unscoped "everything".
+    object({ ids: Type.Array(text, { minItems: 1, maxItems: 64 }) }),
+  ),
   rpc(
     "world.bin.countdown.set",
     "reconcilable",

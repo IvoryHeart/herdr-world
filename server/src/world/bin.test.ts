@@ -1,15 +1,23 @@
 import { expect, test } from "bun:test";
 import type { BinEntry } from "../../../shared/bin";
-import { MIN_JOIN_MS, WorldBinRegistry, type BinAdd } from "./bin";
+import {
+  BinCloseNotRecorded,
+  MIN_JOIN_MS,
+  WorldBinRegistry,
+  type BinAdd,
+} from "./bin";
 
-function fixture(options: { failCommit?: boolean } = {}) {
+function fixture(
+  epoch = "run1",
+  options: { failCommit?: "not-recorded" | "unknown" } = {},
+) {
   let now = 0;
   const timers = new Set<{ at: number; run(): void }>();
   const committed: BinEntry[][] = [];
   const revisions: number[] = [];
   let countdown: 10 | 30 | 60 | 120 = 30;
   const registry = new WorldBinRegistry({
-    epoch: "run1",
+    epoch,
     clock: { now: () => 1_000_000 + now, monotonic: () => now },
     scheduler: {
       schedule(run, delay) {
@@ -20,7 +28,9 @@ function fixture(options: { failCommit?: boolean } = {}) {
     },
     commit: async (entries) => {
       committed.push([...entries]);
-      if (options.failCommit) throw new Error("disk full");
+      if (options.failCommit === "not-recorded")
+        throw new BinCloseNotRecorded("World storage is closing");
+      if (options.failCommit === "unknown") throw new Error("reply lost");
     },
     countdown: () => countdown,
     publish: (revision) => revisions.push(revision),
@@ -109,21 +119,32 @@ test("put back closes nothing and an emptied bin is no longer paused", async () 
   expect(committed).toEqual([]);
 });
 
-test("close now takes one entry, a trip or everything", async () => {
+test("close now takes exactly the entries named", async () => {
   const { registry, committed } = fixture();
   const a = registry.add(agent("p1")).entries[0]!.id;
   const b = registry.add(agent("p2", { view: "town" })).entries[1]!.id;
-  registry.add(agent("p3", { view: "town", join: b }));
+  const c = registry.add(agent("p3", { view: "town", join: b })).entries[2]!.id;
   registry.add(agent("p4"));
-  registry.closeNow(a);
+  registry.closeNow([a]);
   expect(committed.at(-1)!.map((e) => e.pane_id)).toEqual(["p1"]);
-  registry.closeNow(`trip:${b}`);
+  registry.closeNow([b, c]);
   expect(committed.at(-1)!.map((e) => e.pane_id)).toEqual(["p2", "p3"]);
-  registry.closeNow("all");
-  expect(committed.at(-1)!.map((e) => e.pane_id)).toEqual(["p4"]);
-  expect(registry.closeNow("nothing-here").revision).toBe(
-    registry.list().revision,
-  );
+  const before = registry.list().revision;
+  registry.closeNow([a]);
+  expect(registry.list().revision).toBe(before);
+  expect(registry.list().entries.map((e) => e.pane_id)).toEqual(["p4"]);
+});
+
+test("close now from a page showing an earlier service run closes nothing", async () => {
+  // The old page saw run1's entry; World restarted and run2 staged others.
+  const old = fixture().registry.add(agent("p1")).entries[0]!.id;
+  const { registry, committed } = fixture("run2");
+  const fresh = registry.add(agent("p2")).entries[0]!.id;
+  expect(fresh).toStartWith("bin-run2-");
+  for (const ids of [[old], [old, fresh], [], ["all"]])
+    expect(() => registry.closeNow(ids)).toThrow("nothing was closed");
+  expect(committed).toEqual([]);
+  expect(registry.list().entries.map((e) => e.id)).toEqual([fresh]);
 });
 
 test("a later agent joins a departure only with time to spare", async () => {
@@ -170,7 +191,9 @@ test("a host's new runtime returns its staged agents without closing them", asyn
 });
 
 test("a close that could not be recorded is reported as not sent", async () => {
-  const { registry, advance } = fixture({ failCommit: true });
+  const { registry, advance } = fixture("run1", {
+    failCommit: "not-recorded",
+  });
   registry.add(agent("p1"));
   await advance(30_000);
   await Promise.resolve();
@@ -180,6 +203,16 @@ test("a close that could not be recorded is reported as not sent", async () => {
     result: "refused",
     detail: "World could not record the close, so nothing was sent.",
   });
+});
+
+test("a close whose recording is unknown stays closing, never reported unrecorded", async () => {
+  const { registry, advance } = fixture("run1", { failCommit: "unknown" });
+  const id = registry.add(agent("p1")).entries[0]!.id;
+  await advance(30_000);
+  await Promise.resolve();
+  const state = registry.list();
+  expect(state.closing).toEqual([id]);
+  expect(state.outcomes).toEqual([]);
 });
 
 test("invalid targets are refused before anything is staged", () => {

@@ -13,6 +13,11 @@ const MAX_ENTRIES = 64;
 const MAX_OUTCOMES = 12;
 const MAX_ID_LENGTH = 512;
 const MAX_LABEL_LENGTH = 100;
+/** The close's intent is known not to be in storage: nothing will be sent. */
+export class BinCloseNotRecorded extends Error {}
+export const NOT_RECORDED =
+  "World could not record the close, so nothing was sent.";
+
 /** A later agent joins a departure only if it still has this long to go. */
 export const MIN_JOIN_MS = 3_000;
 
@@ -153,13 +158,18 @@ export class WorldBinRegistry {
     return this.list();
   }
 
-  /** Close now, without waiting: one entry, a whole trip, or "all". */
-  closeNow(id: string): BinState {
-    const due = [...this.entries.values()].filter(
-      (entry) =>
-        id === "all" ||
-        entry.id === id ||
-        (id.startsWith("trip:") && entry.trip === id.slice(5)),
+  /**
+   * Close now, without waiting: exactly the entries named, as the caller saw
+   * them. Every ID must belong to this service run, so a page still showing
+   * an earlier run's bin can never close agents staged since.
+   */
+  closeNow(ids: readonly string[]): BinState {
+    const run = `bin-${this.deps.epoch}-`;
+    if (!ids.length || ids.some((id) => !id.startsWith(run)))
+      throw new Error("The bin changed since it was shown; nothing was closed");
+    const named = new Set(ids);
+    const due = [...this.entries.values()].filter((entry) =>
+      named.has(entry.id),
     );
     if (!due.length) return this.list();
     this.depart(due);
@@ -266,13 +276,19 @@ export class WorldBinRegistry {
     this.emptied();
     this.changed();
     this.deps.commit(leaving).catch((error: unknown) => {
-      this.deps.log?.(`Bin close could not be recorded: ${String(error)}`);
+      // Only a write storage refused before sending is known not to be
+      // recorded; anything else may have committed and stays closing.
+      if (!(error instanceof BinCloseNotRecorded)) {
+        this.deps.log?.(`Bin close outcome unknown: ${String(error)}`);
+        return;
+      }
+      this.deps.log?.(`Bin close was not recorded: ${String(error)}`);
       for (const entry of leaving)
         if (this.closing.has(entry.id))
           this.settle(entry.id, {
             result: "refused",
             closed_tab: false,
-            detail: "World could not record the close, so nothing was sent.",
+            detail: NOT_RECORDED,
           });
     });
   }

@@ -16,6 +16,36 @@ type Pane = {
   workspace_id: string;
 };
 
+/** Something the test can hold, then let go of. */
+function gate() {
+  let open!: () => void;
+  const opened = new Promise<void>((resolve) => (open = resolve));
+  return { opened, open };
+}
+
+/**
+ * Event barriers instead of sleeps: `until` re-checks only when the closer
+ * reports a durable change or an outcome, registering before each check so
+ * no event between a check and the wait is missed.
+ */
+function signals() {
+  let waiters: (() => void)[] = [];
+  return {
+    fire() {
+      const ready = waiters;
+      waiters = [];
+      for (const wake of ready) wake();
+    },
+    async until(condition: () => boolean | Promise<boolean>) {
+      for (;;) {
+        const next = new Promise<void>((resolve) => waiters.push(resolve));
+        if (await condition()) return;
+        await next;
+      }
+    },
+  };
+}
+
 /** A scripted Herdr for one connection: panes, workspaces and a call log. */
 function fakeHerdr(connectionId: string, panes: Pane[]) {
   const host = {
@@ -24,10 +54,18 @@ function fakeHerdr(connectionId: string, panes: Pane[]) {
     panes: [...panes],
     worktreeRoots: new Set<string>(),
     calls: [] as string[],
-    /** Throw this from the next close, after applying it (a lost reply). */
+    /** Apply the next close, then lose its reply. */
     loseReply: false,
-    /** Never answer closes (a stalled host). */
-    stalled: false,
+    /** Hold closes until the test releases them (a stalled host). */
+    stall: null as ReturnType<typeof gate> | null,
+    /** Lose the reply AND leave the pane: the outcome cannot be known. */
+    ghostClose: false,
+    /** Hold pane reads until released; `reading` opens when one starts. */
+    listGate: null as ReturnType<typeof gate> | null,
+    reading: gate(),
+    /** Called after each pane read with its index (1-based). */
+    afterList: null as ((count: number) => void) | null,
+    lists: 0,
     replyDelay: 0,
   };
   const workspaces = () => [...new Set(host.panes.map((p) => p.workspace_id))];
@@ -40,12 +78,16 @@ function fakeHerdr(connectionId: string, panes: Pane[]) {
           async call(method, params, _timeout, beforeSend) {
             beforeSend?.();
             if (host.replyDelay) await Bun.sleep(host.replyDelay);
-            if (method === "pane.list")
-              return {
-                panes: host.panes.filter(
-                  (p) => p.workspace_id === params.workspace_id,
-                ),
-              };
+            if (method === "pane.list") {
+              host.reading.open();
+              if (host.listGate) await host.listGate.opened;
+              const panes = host.panes.filter(
+                (p) => p.workspace_id === params.workspace_id,
+              );
+              host.lists += 1;
+              host.afterList?.(host.lists);
+              return { panes };
+            }
             if (method === "workspace.list")
               return {
                 workspaces: workspaces().map((workspace_id) => ({
@@ -62,10 +104,11 @@ function fakeHerdr(connectionId: string, panes: Pane[]) {
                 },
               };
             host.calls.push(`${method} ${JSON.stringify(params)}`);
-            if (host.stalled)
-              return new Promise((_, reject) =>
-                setTimeout(() => reject(new Error(`timeout: ${method}`)), 1500),
-              );
+            if (host.stall) {
+              await host.stall.opened;
+              throw new Error(`timeout: ${method}`);
+            }
+            if (host.ghostClose) throw new Error(`timeout: ${method}`);
             if (method === "pane.close")
               host.panes = host.panes.filter(
                 (p) => p.pane_id !== params.pane_id,
@@ -86,7 +129,9 @@ function fakeHerdr(connectionId: string, panes: Pane[]) {
 const roots: string[] = [];
 const storages: WorldLedgerStorage[] = [];
 const closers: { stop(): Promise<void> }[] = [];
+const stalls: ReturnType<typeof gate>[] = [];
 afterEach(async () => {
+  for (const stall of stalls.splice(0)) stall.open();
   for (const closer of closers.splice(0)) await closer.stop();
   for (const storage of storages.splice(0)) await storage.close();
   for (const root of roots.splice(0))
@@ -103,33 +148,56 @@ const realTime = {
   },
 };
 
-async function fixture(hosts: Record<string, ReturnType<typeof fakeHerdr>>) {
+type Hosts = Record<string, ReturnType<typeof fakeHerdr>>;
+
+function storagePaths() {
   const root = mkdtempSync(join(tmpdir(), "world-bin-close-"));
   roots.push(root);
-  const storage = await openWorldLedger(
-    { database: join(root, "world.sqlite"), ledger: join(root, "ledger.json") },
-    realTime,
-  );
+  return {
+    database: join(root, "world.sqlite"),
+    ledger: join(root, "ledger.json"),
+  };
+}
+
+async function fixture(
+  hosts: Hosts,
+  paths = storagePaths(),
+  ledger?: (storage: WorldLedgerStorage) => WorldLedgerStorage["ledger"],
+  options: {
+    retryDelay?: number;
+    outbox?: (storage: WorldLedgerStorage) => WorldLedgerStorage["outbox"];
+  } = {},
+) {
+  const storage = await openWorldLedger(paths, realTime);
   storages.push(storage);
   const outcomes: Omit<BinOutcome, "label" | "view">[] = [];
+  const events = signals();
   const closer = createBinCloser({
-    ledger: () => storage.ledger,
-    outbox: () => storage.outbox,
+    ledger: () => ledger?.(storage) ?? storage.ledger,
+    outbox: () => options.outbox?.(storage) ?? storage.outbox,
     effects: () => storage.effects,
     incarnation: storage.incarnation,
     ...realTime,
     hasConnection: (id) => id in hosts,
     lease: (id) => hosts[id]?.lease() ?? null,
-    settle: (id, outcome) => outcomes.push({ id, ...outcome }),
+    settle: (id, outcome) => {
+      outcomes.push({ id, ...outcome });
+      events.fire();
+    },
+    changed: () => events.fire(),
     log: () => {},
-    retryDelay: () => 20,
+    retryDelay: () => options.retryDelay ?? 20,
   });
   closers.push(closer);
   const settled = async (count: number) => {
-    for (let i = 0; i < 400 && outcomes.length < count; i++) await Bun.sleep(5);
+    await events.until(() => outcomes.length >= count);
     return outcomes;
   };
-  return { storage, closer, outcomes, settled };
+  const state = async (id: string) =>
+    (await storage.outbox.forRecord(id)).find(
+      (item) => item.kind === BIN_CLOSE_VERB,
+    )?.state;
+  return { storage, closer, outcomes, settled, events, state };
 }
 
 let ids = 0;
@@ -213,8 +281,7 @@ test("a worktree root's pane is not closed while its workspace has others", asyn
   const studio = fakeHerdr("studio", [pane("p1"), pane("p2")]);
   studio.host.worktreeRoots.add("w1");
   const { closer, settled } = await fixture({ studio });
-  const one = entry("studio", pane("p1"));
-  await closer.commit([one]);
+  await closer.commit([entry("studio", pane("p1"))]);
   expect((await settled(1))[0]!.result).toBe("refused");
   expect(studio.host.calls).toEqual([]);
 });
@@ -233,28 +300,33 @@ test("a lost reply is read back and recorded as closed", async () => {
 
 test("a stalled host never holds back another host's close", async () => {
   const stalled = fakeHerdr("stalled", [pane("s1"), pane("s2")]);
-  stalled.host.stalled = true;
+  const stall = gate();
+  stalls.push(stall);
+  stalled.host.stall = stall;
   const local = fakeHerdr("local", [pane("l1"), pane("l2")]);
   const { closer, settled } = await fixture({ stalled, local });
   const waiting = entry("stalled", pane("s1"));
   const ready = entry("local", pane("l1"));
   await closer.commit([waiting, ready]);
+  // The local close completes while the stalled host still holds its send.
   expect(await settled(1)).toEqual([
     { id: ready.id, result: "closed", closed_tab: false },
   ]);
   expect(local.host.calls).toEqual(['pane.close {"pane_id":"l1"}']);
+  expect(stalled.host.calls).toEqual(['pane.close {"pane_id":"s1"}']);
 });
 
 test("an offline host's close waits, then runs when the same runtime returns", async () => {
   const studio = fakeHerdr("studio", [pane("p1"), pane("p2")]);
   studio.host.current = false;
-  const { closer, settled, storage } = await fixture({ studio });
+  const { closer, settled, storage, events } = await fixture({ studio });
   const one = entry("studio", pane("p1"));
   await closer.commit([one]);
-  await Bun.sleep(100);
-  const [pending] = await storage.outbox.forRecord(one.id);
-  expect(pending?.kind).toBe(BIN_CLOSE_VERB);
-  expect(pending?.state).toBe("pending");
+  // Its first attempt finishes as waiting, without sending.
+  await events.until(async () => {
+    const [item] = await storage.outbox.forRecord(one.id);
+    return item?.state === "pending" && item.attempt > 0;
+  });
   expect(studio.host.calls).toEqual([]);
   studio.host.current = true;
   await closer.wake("studio");
@@ -265,57 +337,287 @@ test("an offline host's close waits, then runs when the same runtime returns", a
   });
 });
 
-test("an intent left by a stopped World resumes after restart, fenced by its runtime", async () => {
+test("after a World restart, a reused generation and IDs never get a recorded close", async () => {
+  // The replacement runtime counts from generation 1 again and reuses the
+  // native IDs: nothing recorded before the restart may reach it.
   const studio = fakeHerdr("studio", [pane("p1"), pane("p2"), pane("p3")]);
-  studio.host.current = false;
-  const root = mkdtempSync(join(tmpdir(), "world-bin-restart-"));
-  roots.push(root);
-  const paths = {
-    database: join(root, "world.sqlite"),
-    ledger: join(root, "ledger.json"),
-  };
-  const open = async () => {
-    const storage = await openWorldLedger(paths, realTime);
-    const outcomes: string[] = [];
-    const closer = createBinCloser({
-      ledger: () => storage.ledger,
-      outbox: () => storage.outbox,
-      effects: () => storage.effects,
-      incarnation: storage.incarnation,
-      ...realTime,
-      hasConnection: (id) => id === "studio",
-      lease: () => studio.lease(),
-      settle: (id, outcome) => outcomes.push(`${id} ${outcome.result}`),
-      log: () => {},
-      retryDelay: () => 20,
-    });
-    return { storage, closer, outcomes };
-  };
-  const first = await open();
-  const same = entry("studio", pane("p1"));
-  const replaced = entry("studio", pane("p2"), 7);
-  await first.closer.commit([same, replaced]);
+  const paths = storagePaths();
+  let held: ReturnType<typeof gate> | null = null;
+  const first = await fixture({ studio }, paths, (s) => ({
+    ...s.ledger,
+    update: async (change, effects) => {
+      if (held) await held.opened;
+      return s.ledger.update(change, effects);
+    },
+  }));
+  // A close is sent and its outcome is lost (the pane stays): uncertain.
+  studio.host.ghostClose = true;
+  const maybe = entry("studio", pane("p2"));
+  await first.closer.commit([maybe]);
+  await first.events.until(
+    async () => (await first.state(maybe.id)) === "uncertain",
+  );
+  // Another is recorded but never attempted: its commit overlaps the stop.
+  held = gate();
+  const unsent = entry("studio", pane("p1"));
+  const committing = first.closer.commit([unsent]);
+  const stopping = first.closer.stop();
+  held.open();
+  await committing;
+  await stopping;
+  await first.storage.close();
+  storages.splice(storages.indexOf(first.storage), 1);
+  const sentBefore = [...studio.host.calls];
+  studio.host.ghostClose = false;
+  studio.host.lists = 0;
+
+  const second = await fixture({ studio }, paths);
+  await second.closer.wake();
+  await second.events.until(
+    async () =>
+      (await second.state(unsent.id)) === "refused" &&
+      (await second.state(maybe.id)) === "uncertain" &&
+      (await second.storage.outbox.forRecord(maybe.id))[0]!.evidence?.reason ===
+        "World restarted before it was sent, so it was not closed.",
+  );
+  // Unsent ends not sent; possibly sent stays uncertain; nothing is sent
+  // to, or read from, the replacement runtime.
+  expect(studio.host.calls).toEqual(sentBefore);
+  expect(studio.host.lists).toBe(0);
+});
+
+test("a ready host's close is sent while an offline host holds 100 older closes", async () => {
+  const far = fakeHerdr(
+    "far",
+    Array.from({ length: 100 }, (_, i) => pane(`f${i}`, "tf", "wf")),
+  );
+  far.host.current = false;
+  const near = fakeHerdr("near", [pane("n1"), pane("n2")]);
+  const { closer, events, state } = await fixture({ far, near });
+  // The offline host's closes are recorded first, so they come first by deadline.
+  const backlog = far.host.panes.map((p) => entry("far", p));
+  await closer.commit(backlog);
+  const waiting = entry("near", pane("n1"));
+  await closer.commit([waiting]);
+  await events.until(async () => (await state(waiting.id)) === "delivered");
+  expect(near.host.calls).toEqual(['pane.close {"pane_id":"n1"}']);
+  expect(far.host.calls).toEqual([]);
+  expect(await state(backlog[0]!.id)).toBe("pending");
+});
+
+test("after a restart, discovery reaches a host past the first 100 closes and ends it unsent", async () => {
+  const far = fakeHerdr(
+    "far",
+    Array.from({ length: 100 }, (_, i) => pane(`f${i}`, "tf", "wf")),
+  );
+  far.host.current = false;
+  const near = fakeHerdr("near", [pane("n1"), pane("n2")]);
+  near.host.current = false;
+  const paths = storagePaths();
+  const first = await fixture({ far, near }, paths, undefined, {
+    retryDelay: 0,
+  });
+  const backlog = far.host.panes.map((p) => entry("far", p));
+  await first.closer.commit(backlog);
+  const waiting = entry("near", pane("n1"));
+  await first.closer.commit([waiting]);
   await first.closer.stop();
   await first.storage.close();
-  expect(studio.host.calls).toEqual([]);
+  storages.splice(storages.indexOf(first.storage), 1);
 
-  studio.host.current = true;
-  const second = await open();
-  storages.push(second.storage);
-  closers.push(second.closer);
+  near.host.current = true;
+  const second = await fixture({ far, near }, paths);
   await second.closer.wake();
-  for (let i = 0; i < 100 && !studio.host.calls.length; i++)
-    await Bun.sleep(10);
-  await Bun.sleep(50);
-  // Only the intent captured on the current runtime generation is sent.
-  expect(studio.host.calls).toEqual(['pane.close {"pane_id":"p1"}']);
-  const states = Object.fromEntries(
-    await Promise.all(
-      [same, replaced].map(async (e) => [
-        e.pane_id,
-        (await second.storage.outbox.forRecord(e.id))[0]?.state,
-      ]),
-    ),
+  await second.events.until(
+    async () => (await second.state(waiting.id)) === "refused",
   );
-  expect(states).toEqual({ p1: "delivered", p2: "refused" });
+  expect(near.host.calls).toEqual([]);
+  expect(far.host.calls).toEqual([]);
+});
+
+test("a stop during a held commit sends nothing and keeps the recorded close", async () => {
+  const studio = fakeHerdr("studio", [pane("p1"), pane("p2")]);
+  const hold = gate();
+  const { closer, state } = await fixture({ studio }, storagePaths(), (s) => ({
+    ...s.ledger,
+    update: async (change, effects) => {
+      await hold.opened;
+      return s.ledger.update(change, effects);
+    },
+  }));
+  const one = entry("studio", pane("p1"));
+  const committing = closer.commit([one]);
+  const stopping = closer.stop();
+  hold.open();
+  // The commit resolves: the close is recorded, not reported as unrecorded.
+  await committing;
+  await stopping;
+  expect(studio.host.calls).toEqual([]);
+  expect(await state(one.id)).toBe("pending");
+  await expect(closer.commit([entry("studio", pane("p2"))])).rejects.toThrow(
+    "World is stopping",
+  );
+});
+
+test("a sibling that appears in the final read turns a workspace close into a pane close", async () => {
+  // Planned as the workspace's last pane; the read just before sending
+  // finds a new pane, so closing the workspace would take it too.
+  const studio = fakeHerdr("studio", [pane("p1")]);
+  studio.host.afterList = (count) => {
+    if (count === 1) studio.host.panes.push(pane("p9"));
+  };
+  const { closer, settled } = await fixture({ studio });
+  const one = entry("studio", pane("p1"));
+  await closer.commit([one]);
+  expect(await settled(1)).toEqual([
+    { id: one.id, result: "closed", closed_tab: false },
+  ]);
+  expect(studio.host.calls).toEqual(['pane.close {"pane_id":"p1"}']);
+  expect(studio.host.panes.map((p) => p.pane_id)).toEqual(["p9"]);
+});
+
+test("stop revokes a lane that is mid-read while another commit is held", async () => {
+  const studio = fakeHerdr("studio", [pane("p1"), pane("p2"), pane("p3")]);
+  studio.host.listGate = gate();
+  let updates = 0;
+  const hold = gate();
+  const { closer, state } = await fixture({ studio }, storagePaths(), (s) => ({
+    ...s.ledger,
+    update: async (change, effects) => {
+      if (++updates === 2) await hold.opened;
+      return s.ledger.update(change, effects);
+    },
+  }));
+  const first = entry("studio", pane("p1"));
+  await closer.commit([first]);
+  // The existing lane is now inside its pane read.
+  await studio.host.reading.opened;
+  const second = closer.commit([entry("studio", pane("p2"))]);
+  const stopping = closer.stop();
+  studio.host.listGate.open();
+  hold.open();
+  await second;
+  await stopping;
+  expect(studio.host.calls).toEqual([]);
+  expect(await state(first.id)).toBe("pending");
+});
+
+test("discovery pages past 256 removed hosts with uncertain closes to a ready host", async () => {
+  // 260 hosts each lose a close's reply with the pane left in place, so
+  // their closes stay uncertain; then they are removed from World.
+  const hosts: Hosts = {};
+  const removed = Array.from(
+    { length: 260 },
+    (_, i) => `gone-${String(i).padStart(3, "0")}`,
+  );
+  for (const id of removed) {
+    hosts[id] = fakeHerdr(id, [pane("x1"), pane("x2")]);
+    hosts[id]!.host.ghostClose = true;
+  }
+  const late = fakeHerdr("zz-ready", [pane("r1"), pane("r2")]);
+  late.host.current = false;
+  hosts["zz-ready"] = late;
+  const paths = storagePaths();
+  let held: ReturnType<typeof gate> | null = null;
+  // A long retry keeps each uncertain close idle once it is uncertain.
+  const first = await fixture(
+    hosts,
+    paths,
+    (s) => ({
+      ...s.ledger,
+      update: async (change, effects) => {
+        if (held) await held.opened;
+        return s.ledger.update(change, effects);
+      },
+    }),
+    { retryDelay: 600_000 },
+  );
+  const lost = removed.map((id) => entry(id, pane("x1")));
+  for (let i = 0; i < lost.length; i += 20) {
+    const batch = lost.slice(i, i + 20);
+    await first.closer.commit(batch);
+    await first.events.until(async () => {
+      for (const item of batch)
+        if ((await first.state(item.id)) !== "uncertain") return false;
+      return true;
+    });
+  }
+  // The ready host's close is recorded across the stop, never attempted.
+  held = gate();
+  const waiting = entry("zz-ready", pane("r1"));
+  const committing = first.closer.commit([waiting]);
+  const stopping = first.closer.stop();
+  held.open();
+  await committing;
+  await stopping;
+  await first.storage.close();
+  storages.splice(storages.indexOf(first.storage), 1);
+
+  for (const id of removed) delete hosts[id];
+  late.host.current = true;
+  const second = await fixture(hosts, paths);
+  await second.closer.wake();
+  // The ready host sorts after every removed one: only paging reaches it.
+  await second.events.until(
+    async () => (await second.state(waiting.id)) === "refused",
+  );
+  expect(late.host.calls).toEqual([]);
+  expect(await second.state(lost[0]!.id)).toBe("uncertain");
+});
+
+test("a close recorded but not looked up at once is still tracked, never reported unrecorded", async () => {
+  const studio = fakeHerdr("studio", [pane("p1"), pane("p2")]);
+  let fail = true;
+  const { closer, settled } = await fixture(
+    { studio },
+    storagePaths(),
+    undefined,
+    {
+      outbox: (s) => ({
+        ...s.outbox,
+        forRecord: async (id) => {
+          if (fail) {
+            fail = false;
+            throw new Error("lookup failed once");
+          }
+          return s.outbox.forRecord(id);
+        },
+      }),
+    },
+  );
+  const one = entry("studio", pane("p1"));
+  await closer.commit([one]);
+  expect(await settled(1)).toEqual([
+    { id: one.id, result: "closed", closed_tab: false },
+  ]);
+});
+
+test("an unconfirmed write that did commit is tracked; a refused write is not recorded", async () => {
+  const { StorageWriteRejected } = await import("../storage/world-protocol");
+  const { BinCloseNotRecorded } = await import("./bin");
+  const studio = fakeHerdr("studio", [pane("p1"), pane("p2"), pane("p3")]);
+  let mode: "lost-ack" | "refused" = "lost-ack";
+  const { closer, settled } = await fixture(
+    { studio },
+    storagePaths(),
+    (s) => ({
+      ...s.ledger,
+      update: async (change, effects) => {
+        if (mode === "refused")
+          throw new StorageWriteRejected("World storage is closing");
+        await s.ledger.update(change, effects);
+        throw new Error("worker reply lost");
+      },
+    }),
+  );
+  const one = entry("studio", pane("p1"));
+  await closer.commit([one]);
+  expect(await settled(1)).toEqual([
+    { id: one.id, result: "closed", closed_tab: false },
+  ]);
+  mode = "refused";
+  await expect(closer.commit([entry("studio", pane("p2"))])).rejects.toThrow(
+    BinCloseNotRecorded,
+  );
+  expect(studio.host.calls).toEqual(['pane.close {"pane_id":"p1"}']);
 });

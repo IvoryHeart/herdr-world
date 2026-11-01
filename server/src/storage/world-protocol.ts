@@ -101,7 +101,17 @@ export type StorageRequest =
       type: "terminal-mark";
       operation: import("./terminal-marks").TerminalMarkOperation;
     }
-  | { type: "effect-read"; id?: string; verb?: string }
+  | {
+      type: "effect-read";
+      id?: string;
+      verb?: string;
+      /** Only this connection's entries (a per-connection lane). */
+      connection?: string;
+      /** The connections that have entries, instead of the entries. */
+      lanes?: boolean;
+      /** Lanes after this connection (the page cursor). */
+      after?: string;
+    }
   | { type: "effect-transition"; change: EffectTransition }
   | { type: "load" }
   | { type: "board"; operation: import("./world-board").BoardOperation }
@@ -268,6 +278,8 @@ export type WorkerReply =
 export class StorageOutcomeUnknown extends Error {
   readonly outcome = "unknown";
 }
+/** Connections per lanes page (EffectStore.lanes). */
+export const EFFECT_LANE_PAGE = 256;
 export class StorageWriteRejected extends Error {
   readonly outcome = "not-committed";
 }

@@ -67,10 +67,10 @@ export function createEffectRunner(deps: {
   incarnation: string;
   verb?: string;
   /**
-   * Narrows this runner to some of the verb's entries, so independent lanes
-   * (for example one per connection) never wait behind each other's drain.
+   * One connection's entries only, selected inside the bounded query, so
+   * independent lanes never wait behind (or hide) each other's work.
    */
-  select?(entry: EffectEntry): boolean;
+  connection?: string;
   retryDelay?(attempt: number): number;
   verbs?: EffectVerbLookup;
   driver(verb: string): EffectDriver | undefined;
@@ -83,10 +83,7 @@ export function createEffectRunner(deps: {
 }) {
   const verbs = deps.verbs ?? productionEffectVerb;
   const running = new Map<string, Promise<EffectEntry | null>>();
-  const due = async () =>
-    (await deps.store.list(deps.verb)).filter(
-      (entry) => !deps.select || deps.select(entry),
-    );
+  const due = () => deps.store.list(deps.verb, deps.connection);
   let stopped = false;
   let timer: { cancel(): void } | undefined;
   let planning = Promise.resolve();

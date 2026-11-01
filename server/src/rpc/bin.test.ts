@@ -148,3 +148,21 @@ test("every bridge-global verb, the bin's included, is admitted for the browser 
     ),
   ).not.toThrow();
 });
+
+test("close now admits only an explicit list of entries, never an unscoped all", async () => {
+  const { registeredVerb } = await import("../verbs/registry");
+  const { admitVerb } = await import("../verbs/admission");
+  const { routeCapabilities } = await import("../service/rpc-dispatch");
+  const admission = {
+    actor: "browser" as const,
+    authorized: () => true,
+    capabilities: () => routeCapabilities("bridge"),
+    preconditions: () => true,
+  };
+  const verb = registeredVerb("rpc", "world.bin.close_now");
+  for (const params of [{ id: "all" }, { ids: [] }, { ids: "all" }])
+    expect(() => admitVerb(verb, params, admission)).toThrow();
+  expect(() =>
+    admitVerb(verb, { ids: ["bin-run-1", "bin-run-2"] }, admission),
+  ).not.toThrow();
+});

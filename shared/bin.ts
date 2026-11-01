@@ -24,7 +24,7 @@ export function parseBinCountdown(value: unknown): BinCountdown {
     : DEFAULT_BIN_COUNTDOWN;
 }
 
-/** Where the agent was dropped: Town shows the bus, other views the bin. */
+/** The view an agent was staged from (reported back with its outcome). */
 export type BinView = "board" | "town" | "desk" | "other";
 
 /** The pane to close, qualified by connection and runtime generation. */
