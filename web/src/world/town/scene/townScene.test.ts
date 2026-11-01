@@ -457,7 +457,7 @@ test("the moved semantic records carry their content, not only their identity", 
     "Room delta",
   ]);
   const waiting = shown.targets.find(
-    (target) => target.kind === "agent" && target.label.includes("needs input"),
+    (target) => target.kind === "agent" && target.label.includes("needs you"),
   );
   expect(waiting).toBeDefined();
 });

@@ -27,6 +27,8 @@ import { dockedWidthAfterPlace } from "./windows/windowManager";
 import { useWorldInspectorController } from "./useWorldInspectorController";
 import { useWorldVisualActions } from "./useWorldVisualActions";
 import WorldInspectorConversationView from "./WorldInspectorConversation";
+import { NeedsYouHost } from "./NeedsYouTab";
+import { worldNodeOpenView } from "./worldInspectorSelection";
 import WorldIntentProfile from "./WorldIntentProfile";
 import { WorldConnectionRequired } from "./WorldStatus";
 import { WindowFrame } from "./windows/WindowFrame";
@@ -365,6 +367,22 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
           ref={worldViewLayoutRef}
           className={`world-view-layout ${showSelectionProfile || contextRailInspector ? "has-context" : ""}`}
         >
+          {active ? (
+            <NeedsYouHost
+              // The Hosts filter applies, as in every view.
+              world={world}
+              onChat={(id) => {
+                const node = world.nodeById.get(id);
+                void applySelection(
+                  id,
+                  node ? worldNodeOpenView(node, "chat") : null,
+                ).catch(() => undefined);
+              }}
+              onOpenTerminal={(id) =>
+                void openTerminalById(id).catch(() => undefined)
+              }
+            />
+          ) : null}
           <section className="world-view-stage" aria-label={`${view} view`}>
             {active ? (
               <Suspense

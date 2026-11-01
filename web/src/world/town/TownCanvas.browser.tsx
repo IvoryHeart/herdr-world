@@ -31,6 +31,8 @@ import {
   type ConnectionClient,
 } from "../../api";
 import { completionSeenStore } from "../completionSeenState";
+import { NeedsYouCounter } from "../NeedsYouTab";
+import { needsYouLeafKey, needsYouState } from "../needsYou";
 import { worldSourcesStore } from "../worldSources";
 import "../world.css";
 import {
@@ -618,7 +620,50 @@ const completionSeen = {
     revision: number;
   }[],
 };
+/**
+ * The service's Desk review record: one record per agent identity, a mark
+ * naming the stop it reviewed. Undo clears only the exact mark it names.
+ */
+const deskReviews: Record<string, unknown>[] = [];
+const desk = {
+  revision: 0,
+  records: [] as (Record<string, unknown> & { reviewed_stop: string | null })[],
+};
+const deskKeyOf = (identity: Record<string, unknown>) =>
+  JSON.stringify([
+    identity.connection_id,
+    identity.connection_generation,
+    identity.terminal_id,
+    identity.agent_session_fingerprint ?? null,
+  ]);
 worldBridge.call = async (method, params) => {
+  if (method === "world.desk.get") return structuredClone(desk);
+  if (method === "world.desk.review") {
+    const mark = params as Record<string, unknown>;
+    deskReviews.push(mark);
+    let record = desk.records.find(
+      (entry) => deskKeyOf(entry) === deskKeyOf(mark),
+    );
+    if (mark.reviewed === false && record?.reviewed_stop !== mark.stop_id)
+      return structuredClone(desk);
+    if (!record) {
+      record = {
+        connection_id: mark.connection_id,
+        connection_generation: mark.connection_generation,
+        terminal_id: mark.terminal_id,
+        agent_session_fingerprint: mark.agent_session_fingerprint ?? null,
+        reviewed_stop: null,
+        stopped_at: null,
+        observed_stop_id: null,
+        opened_at: null,
+      };
+      desk.records.push(record);
+    }
+    record.reviewed_stop = mark.reviewed ? String(mark.stop_id) : null;
+    desk.revision++;
+    for (const handler of controls) handler({ type: "world_desk_changed" });
+    return structuredClone(desk);
+  }
   if (method.startsWith("world.completion_seen.")) {
     const identity = params as {
       connection_id: string;
@@ -1007,6 +1052,11 @@ async function run() {
     }, []);
     return (
       <>
+        {/* The shared Needs you counter, as the top bar shows it; kept out
+            of Town's layout. */}
+        <div hidden>
+          <NeedsYouCounter world={world} />
+        </div>
         <TownView
           world={world}
           selectedId={selectedId}
@@ -1531,16 +1581,13 @@ async function run() {
     return;
   }
 
-  // An agent's question leads the Needs you list, with its options.
+  // An agent's question reaches Needs you (counted there) and Summary,
+  // where its options are answered below.
+  const counterNeeds = () =>
+    Number(document.querySelector(".needs-you-counter b")?.textContent ?? "0");
   await waitFor(
-    () => host.querySelector(".town-ask") !== null,
-    "an agent's question is missing from the Needs you list",
-  );
-  check(
-    [...host.querySelectorAll(".town-ask-options button")].some(
-      (button) => button.textContent === "Ship",
-    ),
-    "the question's options are not offered",
+    () => sharedAsksStore().get().length > 0 && counterNeeds() > 0,
+    "an agent's question did not reach Needs you",
   );
 
   const diagnostics = window.__HERDR_TOWN_RENDERER__!;
@@ -1656,29 +1703,24 @@ async function run() {
     const windowNeeds = Number(
       panelBody.querySelector("#town-summary-needs span")?.textContent,
     );
-    const railNeeds = Number(
-      host.querySelector(".town-rail-head b")?.textContent ?? "0",
-    );
+    const counted = counterNeeds();
     check(
       windowNeeds === signNeeds &&
         windowNeeds === chipNeeds &&
-        windowNeeds === railNeeds,
-      `needs-you counts differ: summary ${windowNeeds}, sign ${signNeeds}, chip ${chipNeeds}, rail ${railNeeds}`,
+        windowNeeds === counted,
+      `needs-you counts differ: summary ${windowNeeds}, sign ${signNeeds}, chip ${chipNeeds}, Needs you ${counted}`,
     );
     check(
       ledger.asks.length > 0 &&
         panelBody.querySelectorAll(".town-ask").length === ledger.asks.length,
-      "the summary must show the rail's open questions",
+      "the summary must show every open question",
     );
     const summaryAsk = panelBody.querySelector<HTMLElement>(".town-ask")!;
-    const railAsk = host.querySelector<HTMLElement>(".town-ask")!;
     check(
-      getComputedStyle(summaryAsk).backgroundColor ===
-        getComputedStyle(railAsk).backgroundColor &&
-        getComputedStyle(summaryAsk).borderLeftColor ===
-          getComputedStyle(railAsk).borderLeftColor &&
-        getComputedStyle(summaryAsk).backgroundColor !== "rgba(0, 0, 0, 0)",
-      "the Summary portal lost the shared question card colors",
+      [...summaryAsk.querySelectorAll(".town-ask-options button")].some(
+        (button) => button.textContent === "Ship",
+      ) && getComputedStyle(summaryAsk).backgroundColor !== "rgba(0, 0, 0, 0)",
+      "the Summary portal lost the question card's options or colors",
     );
     const checkSummarySections = (state: string) => {
       const sections = [...panelBody.querySelectorAll("h3")].map((heading) =>
@@ -1686,7 +1728,7 @@ async function run() {
       );
       check(
         sections.join("|") ===
-          "Needs you|Outbox|Finished, not reviewed|Hosts and rooms|Pods|Spend",
+          "Needs you|Outbox|Done, not reviewed|Hosts and rooms|Pods|Spend",
         `summary sections out of order (${state} Outbox): ${sections.join(", ")}`,
       );
     };
@@ -1759,7 +1801,7 @@ async function run() {
         panelBody.querySelector("#town-summary-needs span")?.textContent,
         board.querySelectorAll("dd")[1]?.textContent,
         chip.querySelector('[data-status="blocked"]')?.textContent?.slice(1),
-        host.querySelector(".town-rail-head b")?.textContent ?? "0",
+        String(counterNeeds()),
       ];
       return counts.every((value) => Number(value) === windowNeeds - 1);
     }, "answering an ask did not update every needs-you count together");
@@ -1833,21 +1875,24 @@ async function run() {
         () => Boolean(watcherEntry()),
         "a watcher question must take a reception entry ahead of six finishes",
       );
+      // A letter at reception opens Needs you at its own question.
       const openedBefore = opened.length;
+      const requestBefore = needsYouState().request.sequence;
       watcherEntry()!.click();
       check(
-        opened.length === openedBefore + 1 &&
-          opened[openedBefore] === watcherId,
-        "the watcher reception entry opens its own original terminal in one action",
+        needsYouState().open &&
+          needsYouState().request.sequence === requestBefore + 1 &&
+          needsYouState().request.itemKey === needsYouLeafKey(watcherId) &&
+          opened.length === openedBefore,
+        "the watcher's reception letter opens Needs you at its question",
       );
-      opened.splice(openedBefore);
       await sharedAsksStore().answer("q-watcher-terminal", "Wait");
       await waitFor(
         () => !host.querySelector(".town-reception-question"),
         "answering a watcher terminal ask must clear reception",
       );
       // An unverified caller's ask that the service placed on this pane
-      // reaches reception too; the rail marks it, and Dismiss closes it.
+      // reaches reception too; Summary marks it, and Dismiss closes it.
       ledger.asks.push({
         id: "q-watcher-unverified",
         at: Date.now(),
@@ -1871,7 +1916,7 @@ async function run() {
         "an unverified ask placed on its pane must reach reception",
       );
       const unverifiedAsk = [
-        ...host.querySelectorAll<HTMLElement>(".town-ask"),
+        ...panelBody.querySelectorAll<HTMLElement>(".town-ask"),
       ].find((entry) => entry.textContent?.includes("Which brief next?"));
       check(
         Boolean(
@@ -1879,7 +1924,7 @@ async function run() {
             "(unverified) asks: Which brief next?",
           ),
         ) && !unverifiedAsk?.textContent?.includes("unverified unverified"),
-        "the rail must mark an unverified ask once, naming its asker",
+        "Summary must mark an unverified ask once, naming its asker",
       );
       // Open agent on a shell asker opens its own terminal, as reception does.
       const openedBeforeAsk = opened.length;
@@ -2120,14 +2165,14 @@ async function run() {
     "rooms with free spots need a new seat action",
   );
 
-  // The rail lists every agent that needs you.
+  // Needs you counts every agent that needs you and every open question.
   const blockedCount = base.agentPanes.filter(
     (p) => p.agent_status === "blocked",
   ).length;
   check(
-    host.querySelectorAll(".town-rail-tree .town-call-blocked").length ===
-      blockedCount,
-    `rail should list ${blockedCount} waiting agents`,
+    Number(document.querySelector(".needs-you-counter b")?.textContent) ===
+      blockedCount + sharedAsksStore().get().length,
+    `Needs you should count ${blockedCount} waiting agents and the open questions`,
   );
 
   // Tapping an agent opens its one window, World's Inspector, on Chat; no
@@ -2363,7 +2408,7 @@ async function run() {
       '.world-semantic-target[data-kind="agent"]',
     ),
   ].find((target) =>
-    target.getAttribute("aria-label")?.includes(", needs input, desk "),
+    target.getAttribute("aria-label")?.includes(", needs you, desk "),
   );
   check(waitingAgent !== undefined, "no waiting agent has a target");
   const [, , deskName, roomName, hostName] = waitingAgent!
@@ -2423,6 +2468,7 @@ async function run() {
     .getAttribute("aria-label")!
     .split(", ");
   const seenBefore = [...completionSeenStore.get().identities].sort().join();
+  const reviewsBefore = deskReviews.length;
   [
     ...host.querySelectorAll<HTMLButtonElement>(
       '.world-semantic-target[data-kind="desk"]',
@@ -2453,7 +2499,8 @@ async function run() {
     "Terminal mode did not bring the agent to its desk",
   );
   check(
-    [...completionSeenStore.get().identities].sort().join() === seenBefore,
+    [...completionSeenStore.get().identities].sort().join() === seenBefore &&
+      deskReviews.length === reviewsBefore,
     "Terminal mode marked the finished agent reviewed",
   );
   writeOfficePreferences(worldLocalStorage, {
@@ -2568,8 +2615,13 @@ async function run() {
   // Room card activation still has to zoom into the room from that overview.
   const zoomBefore = diagnostics.zoom;
   host.querySelector<HTMLButtonElement>(".town-room-card")!.click();
+  // Without a Town rail the overview already uses the full width, so the
+  // step into the room is smaller on narrow screens; it still leaves the
+  // overview and zooms in.
   await waitFor(
-    () => window.__HERDR_TOWN_RENDERER__!.zoom > zoomBefore * 1.3,
+    () =>
+      window.__HERDR_TOWN_RENDERER__!.zoom > zoomBefore * 1.1 &&
+      window.__HERDR_TOWN_RENDERER__!.level !== "overview",
     "room card did not zoom in",
   );
   await waitFor(

@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { SquareTerminal } from "lucide-react";
 import type { OfficeAgent } from "../herdrOfficeProjection";
-import { MarkdownPreview } from "../../components/markdown";
-import { formatUiDateTime } from "../../uiLocale";
+import { agentStateWord } from "../agentMarks";
+import { AgentLatestMessage } from "../AgentHoverCard";
 import type { TownChoice, TownConversation } from "./townChat";
 import { townPortrait } from "./townSprites";
 import { ColorSwatchButton } from "../../components/ColorSwatch";
@@ -12,18 +12,11 @@ import {
   type TerminalColor,
 } from "../terminalColor";
 
-const STATUS: Record<OfficeAgent["semanticStatus"], string> = {
-  working: "Working",
-  blocked: "Needs your input",
-  done: "Finished",
-  idle: "On a break",
-  unknown: "Unknown",
-};
-
 export function townStatusText(agent: OfficeAgent) {
   return agent.stale
     ? "Offline · last known state"
-    : (agent.stateLabels[agent.semanticStatus] ?? STATUS[agent.semanticStatus]);
+    : (agent.stateLabels[agent.semanticStatus] ??
+        agentStateWord(agent.semanticStatus));
 }
 
 /**
@@ -83,7 +76,6 @@ export function TownPeek({
   // Follow the newest message unless the reader has scrolled up in it.
   const follow = useRef(true);
   const latest = conversation?.latest ?? null;
-  const unavailable = conversation?.unavailable ?? null;
   const text = `${latest?.id ?? ""}${question.join("\n")}`;
   useEffect(() => {
     follow.current = true;
@@ -188,35 +180,11 @@ export function TownPeek({
             24;
         }}
       >
-        {unavailable ? (
-          <div className="town-peek-unavailable" role="status">
-            <strong>Conversation unavailable</strong>
-            <span>{unavailable.detail}</span>
-            {unavailable.command ? <code>{unavailable.command}</code> : null}
-          </div>
-        ) : latest ? (
-          <article
-            className={`town-peek-message${latest.kind === "error" ? " is-error" : ""}`}
-          >
-            <MarkdownPreview
-              text={latest.text}
-              className="agent-chat-markdown town-peek-markdown"
-              breaks
-            />
-            <time dateTime={latest.sent_at} title={latest.sent_at}>
-              {formatUiDateTime(latest.sent_at)}
-            </time>
-          </article>
-        ) : (
-          <p className="town-peek-empty">
-            {conversation
-              ? (agent.taskSummary ?? "No messages yet.")
-              : "Loading conversation…"}
-          </p>
-        )}
-        {question.length ? (
-          <pre className="town-question">{question.join("\n")}</pre>
-        ) : null}
+        <AgentLatestMessage
+          conversation={conversation}
+          taskSummary={agent.taskSummary}
+          question={question}
+        />
       </div>
       {choices.length && canReply ? (
         <div className="town-answers" role="group" aria-label="Answers">

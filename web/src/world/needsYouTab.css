@@ -1,0 +1,224 @@
+/* Needs you: short messages from agents, in a tab on the left (NeedsYouTab.tsx). */
+.needs-you {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: 10px;
+  min-height: 100%;
+  box-sizing: border-box;
+  overflow: auto;
+}
+.needs-you-count {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.needs-you-item {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.needs-you-item.is-focused {
+  border-color: var(--accent);
+}
+.needs-you-item.is-answered {
+  color: var(--muted);
+  font-size: 12px;
+}
+.needs-you-item.is-answered p {
+  margin: 0;
+}
+.needs-you-item header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.needs-you-item header b {
+  white-space: nowrap;
+}
+.needs-you-item header small {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.needs-you-tag {
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 11px;
+}
+/* Up to three lines of each message; Chat about this has the rest. */
+.needs-you-markdown {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+.needs-you-markdown > :first-child {
+  margin-top: 0;
+}
+.needs-you-empty {
+  margin: 0;
+  color: var(--muted);
+}
+.needs-you-answer {
+  display: grid;
+  gap: 8px;
+}
+.needs-you-options,
+.needs-you-reply {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.needs-you-reply input {
+  flex: 1 1 12em;
+  min-width: 0;
+}
+.needs-you-item button {
+  min-height: 30px;
+}
+.needs-you-item button.is-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--bg);
+}
+.needs-you-name {
+  cursor: default;
+}
+.needs-you-info {
+  flex: none;
+  min-height: 24px !important;
+  padding: 0 6px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+}
+.needs-you-chat {
+  margin-inline-start: auto;
+}
+.agent-hover-card {
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+}
+.agent-hover-card header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.agent-hover-card .town-peek-screen {
+  max-height: 12em;
+  overflow: auto;
+}
+.needs-you-more,
+.needs-you-outbox {
+  justify-self: start;
+}
+
+/* The tab: a list on the left, beside the view on wide screens. */
+.needs-you-tab {
+  --needs-you-width: clamp(320px, 24vw, 360px);
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  width: var(--needs-you-width);
+  border-inline-end: 1px solid var(--border);
+  background: var(--panel);
+  box-shadow: var(--shadow-lg);
+}
+.needs-you-tab .needs-you {
+  flex: 1;
+  min-height: 0;
+}
+.needs-you-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.needs-you-head h2 {
+  flex: 1;
+  margin: 0;
+  font-size: 14px;
+}
+.needs-you-close,
+.needs-you-back {
+  min-height: 32px;
+  padding: 0 10px;
+}
+@media (min-width: 1500px) and (orientation: landscape) {
+  .needs-you-tab {
+    box-shadow: none;
+  }
+  .world-view-layout:has(> .needs-you-tab) > .world-view-stage {
+    width: calc(100% - clamp(320px, 24vw, 360px));
+    margin-inline-start: clamp(320px, 24vw, 360px);
+  }
+}
+/* A phone: the whole screen, with Back at the top. */
+.needs-you-tab.is-sheet {
+  position: fixed;
+  inset: 0;
+  /* Above the floating view picker (121); agent windows stay above it. */
+  z-index: 125;
+  width: auto;
+  padding-top: env(safe-area-inset-top, 0px);
+  border: 0;
+  box-shadow: none;
+}
+
+/* An agent window opened from the list (Chat about this) covers it; Back
+   closes that window first and returns here. */
+body:has(.world-managed-window) .needs-you-tab.is-sheet {
+  visibility: hidden;
+}
+
+/* Closed: a handle at the left edge while anything waits. */
+.needs-you-handle {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 4px;
+  border: 1px solid var(--border);
+  border-left: 0;
+  border-radius: 0 8px 8px 0;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-50%);
+}
+.needs-you-handle span {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-size: 12px;
+}
+
+/* The counter that toggles the tab, in the top bar and Zen's picker. */
+.needs-you-counter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  white-space: nowrap;
+}

@@ -1,4 +1,10 @@
-import { type KeyboardEvent, useEffect, useRef, useState } from "react";
+import {
+  type KeyboardEvent,
+  type ReactNode,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { Maximize2 } from "lucide-react";
 import { useLayer } from "../layerStack";
 import type { WorldView } from "./worldViewRouting";
@@ -15,15 +21,19 @@ export function WorldViewPicker({
   mobile,
   onSelect,
   onExitZen,
+  extra,
 }: {
   view: WorldView;
   mobile: boolean;
   onSelect: (view: WorldView) => void;
   onExitZen: () => void;
+  /** Beside the views, such as the Needs you counter. */
+  extra?: ReactNode;
 }) {
   if (!mobile)
     return (
       <div className="world-view-picker" role="group" aria-label="World view">
+        {extra}
         {WORLD_VIEW_DESTINATIONS.map(({ view: destination, label, Icon }) => (
           <button
             key={destination}
@@ -42,7 +52,10 @@ export function WorldViewPicker({
       </div>
     );
   return (
-    <PhoneViewPicker view={view} onSelect={onSelect} onExitZen={onExitZen} />
+    <>
+      {extra ? <div className="world-view-picker-extra">{extra}</div> : null}
+      <PhoneViewPicker view={view} onSelect={onSelect} onExitZen={onExitZen} />
+    </>
   );
 }
 
