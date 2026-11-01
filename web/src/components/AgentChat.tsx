@@ -13,6 +13,7 @@ import { ChatComposer, chatComposerDraftKey } from "./chat/ChatComposer";
 import { copyTextWithFeedback } from "../copyText";
 import type { Pane } from "../types";
 import { useConnectionClient } from "../useConnectionClient";
+import { useStoreSelector } from "../store/react";
 import { AgentHistoryDrawer } from "./AgentHistoryDrawer";
 import { AgentHistoryChat } from "./AgentHistoryChat";
 import { AgentMessageDialog } from "./AgentMessageDialog";
@@ -80,6 +81,25 @@ export function AgentChat({
     active && focusIntent === undefined,
   );
   const connectionClient = useConnectionClient();
+  // The other live agents in this Herdr session, by name: a message typed
+  // here as "name: …" by one of them reads as relayed from it.
+  const otherAgents = useStoreSelector((state) =>
+    state.panes
+      .flatMap((other) =>
+        other.agent && other.agent_name && other.pane_id !== pane.pane_id
+          ? [other.agent_name]
+          : [],
+      )
+      .sort()
+      .join("\n"),
+  );
+  const transcript = useMemo(
+    () => ({
+      agent: recipientLabel ?? pane.agent_name ?? pane.agent ?? "Agent",
+      agents: new Set(otherAgents ? otherAgents.split("\n") : []),
+    }),
+    [otherAgents, pane.agent, pane.agent_name, recipientLabel],
+  );
   const [conversation, setConversation] = useState<Conversation | null>(null);
   // Set when the newest read failed; the last good conversation stays shown.
   const [stale, setStale] = useState("");
@@ -669,6 +689,7 @@ export function AgentChat({
           ) : null}
           <AgentHistoryChat
             items={chatItems}
+            transcript={transcript}
             listRef={listRef}
             contentRef={contentRef}
             followKey={JSON.stringify([
