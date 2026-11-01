@@ -102,6 +102,11 @@ window, renderer and Message-draft retention. See the
 
 ## CI and release validation
 
+For on-demand performance evidence, use the [synthetic scale harness](scale-harness.md)
+and [`scripts/scale/run.ts`](../scripts/scale/run.ts). It measures existing service
+and production view behavior under the shared heavy queue; it defines no CI
+wall-clock gate. Raw, bounded and rendered counts have separate evidence boundaries.
+
 The advisory [Town golden-image report](SCREENSHOTS.md#town-golden-image-report)
 uses the [capture harness](../scripts/town-golden.ts), its
 [synthetic production Town fixture](../web/src/world/testing/town-golden/TownGolden.browser.tsx),
