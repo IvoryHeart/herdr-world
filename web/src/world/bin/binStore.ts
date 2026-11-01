@@ -56,6 +56,10 @@ function parseEntry(value: unknown): BinEntry | null {
       ? (v.view as BinView)
       : "other",
     duration_ms: v.duration_ms as number,
+    // A service from before the drive away has none.
+    departure_ms: Number.isFinite(v.departure_ms)
+      ? Math.max(0, v.departure_ms as number)
+      : 0,
     remaining_ms: Math.max(0, v.remaining_ms as number),
     trip: v.trip as string,
   };

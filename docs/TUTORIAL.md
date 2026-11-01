@@ -670,8 +670,9 @@ to the intended workspace or pane. Read the target before using **Send**.
 Drag an agent's card towards the bottom-right corner (bottom-left on a phone,
 after holding the card still). A bin rises; drop the card in. The card leaves
 the board and the bin counts down (30 seconds unless you change **Menu → Bin
-countdown**). Nothing reaches Herdr until the countdown ends, and it keeps
-running on the World service if you reload. To change your mind, click the bin:
+countdown**), plus the 6 seconds Town's bus takes to drive away. Nothing
+reaches Herdr until then, and it keeps running on the World service if you
+reload. To change your mind, click the bin:
 every timer pauses and the bin opens. Drag the card out, or choose **Put back**,
 and it returns to its place. **Close now** skips the wait; **Close lid** resumes
 the timers. The last pane of a pinned tab is refused until you unpin the tab.
@@ -679,11 +680,14 @@ the timers. The last pane of a pinned tab is refused until you unpin the tab.
 In Town the bin is a London bus stop on the top street. Drag an agent to the
 stop (or use **Send to the bus stop** in its peek) and watch the bus pull in. If
 the stop is off screen, the red chip at the screen's edge takes you there, and
-you can drop a carried agent on it. Press and hold the bus to stop it with its
-doors open, then drag the agent off (or press it) to return them to their desk.
+you can drop a carried agent on it. When the countdown ends the bus drives
+away, and the agent closes only when the bus has left the map. Until then,
+press and hold the bus (even while it is moving) to stop it with its doors
+open, then drag the agent off (or press it, or use **Put back** in the panel at
+the top) to return them to their desk.
 
 **You are done when:** you have dropped an agent in the bin or at the bus stop
-and taken it back out before the countdown ended.
+and taken it back out before the bus left the map.
 
 ![Board with four workspace cards, terminal tabs and a note strung to an agent](./images/herdr-world-desktop-board.png)
 

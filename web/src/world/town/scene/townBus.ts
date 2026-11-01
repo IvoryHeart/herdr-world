@@ -2,8 +2,9 @@
  * Town's bus, headless: where the stop, its waiting riders and each bus are,
  * as a pure function of the bin's state and time left. One bus per departure
  * (a bin "trip"); it drives in from the town's left edge along the stop's
- * street, waits with its doors open, and leaves by the right edge as the
- * countdown ends. Buses that cannot all stand at the stop queue behind it to
+ * street, waits with its doors open for the countdown, then drives away and
+ * leaves by the right edge exactly when the close commits (the entry's
+ * departure time). Until then it can still be stopped. Buses that cannot all stand at the stop queue behind it to
  * the left, then in further lanes below, so every rider has a place on the
  * map that can be panned to and dragged from. World pixels throughout.
  */
@@ -13,9 +14,8 @@ import { TOWN_TILE as T } from "../townLayout";
 import type { TownBusStop } from "../townBusStop";
 import { BUS_H, BUS_SEATS, BUS_W, STOP_H, STOP_W } from "../townBusGeometry";
 
-/** Time to drive in, and to pull away (capped to a share of short countdowns). */
+/** Time to drive in (capped to a share of short countdowns). */
 export const BUS_ARRIVE_MS = 3_000;
-export const BUS_DEPART_MS = 3_000;
 const GAP = 6;
 const LANE = BUS_H + 4;
 
@@ -31,24 +31,29 @@ export type TownBus = {
   trip: string;
   x: number;
   y: number;
+  /** Where it stands at the stop (or in the queue): its drive away starts here. */
+  home: number;
+  /** Departing: driving away (parked, doors shut, under reduced motion). */
   phase: "arriving" | "waiting" | "departing";
   doorsOpen: boolean;
   /** Which of two wheel frames, from distance travelled. */
   wheel: 0 | 1;
-  /** Time left until it leaves, ms. */
+  /** Time left at the stop before it drives away, ms (0 once it has started). */
   remaining: number;
   riders: TownBusRider[];
 };
 
 export type TownBusScene = {
   stop: { x: number; y: number; w: number; h: number };
+  /** The map's right edge, world px: a bus past it has left. */
+  edge: number;
   /** Riders whose bus has not pulled up yet, standing by the stop with a box. */
   waiting: TownBusRider[];
   buses: TownBus[];
   /** Everything a dropped agent can land on: the stop, its pavement, the buses. */
   dropZone: { x: number; y: number; w: number; h: number };
-  /** The soonest departure, for the edge chip. */
-  next: { remaining: number; riders: number } | null;
+  /** The soonest departure, for the edge chip: its wait, or that it is leaving. */
+  next: { remaining: number; leaving: boolean; riders: number } | null;
 };
 
 export type TownBusInput = {
@@ -63,7 +68,8 @@ export type TownBusInput = {
 };
 
 const easeOut = (t: number) => 1 - (1 - t) ** 3;
-const easeIn = (t: number) => t ** 3;
+/** Pulling away: gathers speed, so it can be caught near the stop. */
+const easeIn = (t: number) => t ** 2;
 const clamp01 = (t: number) => Math.min(1, Math.max(0, t));
 
 export function townBusScene(input: TownBusInput): TownBusScene {
@@ -89,6 +95,7 @@ export function townBusScene(input: TownBusInput): TownBusScene {
       riders,
       remaining: Math.min(...riders.map(input.remaining)),
       duration: Math.max(...riders.map((r) => r.duration_ms)),
+      departure: Math.max(...riders.map((r) => r.departure_ms)),
     }))
     .sort((a, b) => a.remaining - b.remaining || a.trip.localeCompare(b.trip));
   // A trip with more riders than seats takes more than one bus.
@@ -112,17 +119,21 @@ export function townBusScene(input: TownBusInput): TownBusScene {
     const slot = index % perLane;
     const slotX = frontX - slot * (BUS_W + GAP);
     const y = kerb + 2 + lane * LANE;
-    const since = trip.duration - trip.remaining;
+    const since = trip.duration + trip.departure - trip.remaining;
     const arrive = Math.min(BUS_ARRIVE_MS, trip.duration * 0.15);
-    const depart = Math.min(BUS_DEPART_MS, trip.duration * 0.15);
     let x = slotX;
     let phase: TownBus["phase"] = "waiting";
-    if (!input.reducedMotion && !input.paused && since < arrive) {
+    if (trip.remaining < trip.departure) {
+      // The countdown is over: it drives off and leaves the map as the
+      // close commits. Reduced motion keeps it parked, doors shut.
+      phase = "departing";
+      if (!input.reducedMotion)
+        x =
+          slotX +
+          (input.width - slotX) * easeIn(1 - trip.remaining / trip.departure);
+    } else if (!input.reducedMotion && !input.paused && since < arrive) {
       phase = "arriving";
       x = -BUS_W + (slotX + BUS_W) * easeOut(clamp01(since / arrive));
-    } else if (!input.reducedMotion && trip.remaining < depart) {
-      phase = "departing";
-      x = slotX + (input.width - slotX) * easeIn(1 - trip.remaining / depart);
     }
     const riders = trip.riders.map((entry, seat) => {
       const window = BUS_SEATS[seat]!;
@@ -145,11 +156,12 @@ export function townBusScene(input: TownBusInput): TownBusScene {
       trip: trip.trip,
       x,
       y,
+      home: slotX,
       phase,
       // Held (paused), a bus stands where it is with its doors open.
       doorsOpen: phase === "waiting" || input.paused,
       wheel: (Math.floor(Math.abs(x) / 6) % 2) as 0 | 1,
-      remaining: trip.remaining,
+      remaining: Math.max(0, trip.remaining - trip.departure),
       riders: phase === "arriving" ? [] : riders,
     };
   });
@@ -169,11 +181,16 @@ export function townBusScene(input: TownBusInput): TownBusScene {
   const soonest = ordered[0];
   return {
     stop: stopBox,
+    edge: input.width,
     waiting,
     buses,
     dropZone,
     next: soonest
-      ? { remaining: soonest.remaining, riders: soonest.riders.length }
+      ? {
+          remaining: Math.max(0, soonest.remaining - soonest.departure),
+          leaving: soonest.remaining < soonest.departure,
+          riders: soonest.riders.length,
+        }
       : null,
   };
 }

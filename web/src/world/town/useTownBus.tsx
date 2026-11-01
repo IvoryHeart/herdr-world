@@ -17,7 +17,11 @@ import {
   binnedAgents,
   withoutBinnedAgents,
 } from "../bin/binTown";
-import { inTownBusDropZone, type TownBusScene } from "./scene/townBus";
+import {
+  inTownBusDropZone,
+  townBusRiderAt,
+  type TownBusScene,
+} from "./scene/townBus";
 import type { TownHud } from "./scene/townHud";
 import type { TownSceneCamera } from "./scene/townSceneCamera";
 import { BUS_H, BUS_W } from "./townBusGeometry";
@@ -275,7 +279,14 @@ export function useTownBus({
           // Screen space, at the top: never under the asks rail or past the
           // viewport's edge, wherever the held bus is drawn.
           <section className="town-bus-held" aria-label="Held bus">
-            <strong>Bus held{next ? ` · ${clock(next.remaining)}` : ""}</strong>
+            <strong>
+              Bus held
+              {next
+                ? next.leaving
+                  ? " on its way out"
+                  : ` · ${clock(next.remaining)}`
+                : ""}
+            </strong>
             <ul>
               {bin.entries.map((entry) => (
                 <li key={entry.id}>
@@ -318,7 +329,8 @@ export function useTownBus({
               <span>Bus stop</span>
             ) : next ? (
               <span>
-                {clock(next.remaining)} · {bin.entries.length}
+                {next.leaving ? "leaving" : clock(next.remaining)} ·{" "}
+                {bin.entries.length}
               </span>
             ) : null}
           </button>
@@ -334,6 +346,7 @@ export function useTownBus({
   const worldElement = (
     <TownBusControls
       scene={scene}
+      live={() => layerRef.current?.scene ?? null}
       entries={bin.entries}
       paused={bin.paused}
       remaining={(entry) => store.remaining(entry)}
@@ -356,10 +369,13 @@ export function useTownBus({
 /**
  * The bus's controls, in world space over the drawn bus: press and hold a
  * bus to stop it with its doors open, Let it go to drive on, and take any
- * rider off (drag it away, or press its button) to send it back.
+ * rider off (drag it away, or press its button) to send it back. A bus
+ * driving away can still be stopped until it leaves the map: its road ahead
+ * is one target, hit-tested against the bus as drawn when pressed.
  */
 function TownBusControls({
   scene,
+  live,
   entries,
   paused,
   remaining,
@@ -368,6 +384,8 @@ function TownBusControls({
   onPutBack,
 }: {
   scene: TownBusScene | null;
+  /** The scene as last drawn (it moves between React renders). */
+  live(): TownBusScene | null;
   entries: readonly BinEntry[];
   paused: boolean;
   remaining(entry: BinEntry): number;
@@ -397,7 +415,11 @@ function TownBusControls({
   };
   const riderDown = (id: string, event: ReactPointerEvent) => {
     event.stopPropagation();
-    event.currentTarget.setPointerCapture(event.pointerId);
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // A pointer that is no longer down: the drag ends on its own.
+    }
     drag.current = { id, x: event.clientX, y: event.clientY, moved: false };
   };
   const riderMove = (event: ReactPointerEvent) => {
@@ -415,6 +437,35 @@ function TownBusControls({
       onPutBack(entry);
     }
   };
+  /**
+   * A press on a bus driving away: a rider under it is taken off (pressed
+   * or dragged), anywhere else press and hold stops the bus.
+   */
+  const roadDown = (left: number, event: ReactPointerEvent<HTMLElement>) => {
+    const box = event.currentTarget.getBoundingClientRect();
+    const drawn = live();
+    const scale = box.width / Math.max(1, event.currentTarget.offsetWidth);
+    const id =
+      drawn &&
+      townBusRiderAt(
+        drawn,
+        left + (event.clientX - box.left) / scale,
+        Number.parseFloat(event.currentTarget.style.top) +
+          (event.clientY - box.top) / scale,
+      );
+    if (id) riderDown(id, event);
+    else startHold();
+  };
+  const roadUp = (event: ReactPointerEvent) => {
+    const d = drag.current;
+    stopHold();
+    if (!d) return;
+    drag.current = null;
+    const entry = byId.get(d.id);
+    dragged.current = true;
+    event.stopPropagation();
+    if (entry) onPutBack(entry);
+  };
   const riders = [
     ...scene.waiting,
     ...scene.buses.filter((bus) => bus.doorsOpen).flatMap((bus) => bus.riders),
@@ -425,36 +476,61 @@ function TownBusControls({
         className="town-bus-sign"
         style={{ left: scene.stop.x + scene.stop.w / 2, top: scene.stop.y - 4 }}
       >
-        {front ? clock(front.remaining) : null} · {entries.length}
+        {front
+          ? front.phase === "departing"
+            ? "leaving"
+            : clock(front.remaining)
+          : null}{" "}
+        · {entries.length}
         {paused ? " · held" : ""}
       </div>
       {scene.buses
-        .filter((bus) => bus.phase === "waiting" || paused)
-        .map((bus) => (
-          <button
-            key={`${bus.trip}:${bus.x}:${bus.y}`}
-            type="button"
-            className="town-bus-hold"
-            style={{ left: bus.x, top: bus.y, width: BUS_W, height: BUS_H }}
-            aria-label={
-              paused
-                ? "Bus held with its doors open"
-                : "Press and hold to stop the bus"
-            }
-            aria-pressed={paused}
-            onPointerDown={startHold}
-            onPointerUp={stopHold}
-            onPointerLeave={stopHold}
-            onPointerCancel={stopHold}
-            // Enter or Space (a click with no pointer) holds or lets go.
-            onClick={(event) => {
-              if (event.detail !== 0) return;
-              if (paused) onRelease();
-              else onHold();
-            }}
-            onContextMenu={(event) => event.preventDefault()}
-          />
-        ))}
+        .filter((bus) => bus.phase !== "arriving" || paused)
+        .map((bus) => {
+          // Driving away: the road from its stop to the map's edge, which
+          // holds the bus wherever it has got to.
+          const leaving = bus.phase === "departing" && !paused;
+          const left = leaving ? bus.home : bus.x;
+          return (
+            <button
+              key={`${bus.trip}:${bus.home}:${bus.y}`}
+              type="button"
+              className="town-bus-hold"
+              data-leaving={String(leaving)}
+              style={{
+                left,
+                top: bus.y,
+                width: leaving ? Math.max(BUS_W, scene.edge - left) : BUS_W,
+                height: BUS_H,
+              }}
+              aria-label={
+                paused
+                  ? "Bus held with its doors open"
+                  : leaving
+                    ? "The bus is leaving: press and hold to stop it"
+                    : "Press and hold to stop the bus"
+              }
+              aria-pressed={paused}
+              onPointerDown={(event) =>
+                leaving ? roadDown(left, event) : startHold()
+              }
+              onPointerMove={riderMove}
+              onPointerUp={(event) => (leaving ? roadUp(event) : stopHold())}
+              onPointerLeave={stopHold}
+              onPointerCancel={() => {
+                stopHold();
+                drag.current = null;
+              }}
+              // Enter or Space (a click with no pointer) holds or lets go.
+              onClick={(event) => {
+                if (event.detail !== 0) return;
+                if (paused) onRelease();
+                else onHold();
+              }}
+              onContextMenu={(event) => event.preventDefault()}
+            />
+          );
+        })}
       {riders.map((rider) => {
         const entry = byId.get(rider.entryId);
         if (!entry) return null;

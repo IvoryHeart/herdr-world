@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { BinState } from "../../../shared/bin";
+import { BIN_DEPARTURE_MS, type BinState } from "../../../shared/bin";
 import { WorldBinRegistry } from "../world/bin";
 import type { BinLease } from "../world/bin-close";
 import { handleBinRpc } from "./bin";
@@ -82,7 +82,9 @@ test("adding stages the agent only while its pane holds the same terminal", asyn
     pane_id: "p1",
     label: "Example agent",
     view: "town",
-    remaining_ms: 30_000,
+    duration_ms: 30_000,
+    departure_ms: BIN_DEPARTURE_MS,
+    remaining_ms: 30_000 + BIN_DEPARTURE_MS,
   });
 });
 

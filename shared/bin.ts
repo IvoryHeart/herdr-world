@@ -1,10 +1,11 @@
 /**
- * The agent bin. An agent dropped in it waits out a countdown and is then
- * closed, unless the owner takes it back first. The countdown is reversible
- * staging held in the service's memory: a reload keeps it and a service
- * restart cancels it without closing anything. Only when the countdown ends
- * (or the owner chooses Close now) does World record a durable close intent,
- * which the effect runner dispatches under its recovery rules.
+ * The agent bin. An agent dropped in it waits out a countdown, then its bus
+ * drives away, and it is closed when the bus has left the map, unless the
+ * owner takes it back first. Both are reversible staging held in the
+ * service's memory: a reload keeps them and a service restart cancels them
+ * without closing anything. Only when the departure ends (or the owner
+ * chooses Close now) does World record a durable close intent, which the
+ * effect runner dispatches under its recovery rules.
  */
 
 /** The countdowns the owner can choose, in seconds. */
@@ -17,6 +18,13 @@ export const BIN_COUNTDOWN_LABELS: Record<BinCountdown, string> = {
   60: "1 min",
   120: "2 min",
 };
+
+/**
+ * After the countdown the bus drives away for this long; the close commits
+ * only when it has left the map, and until then the owner can still stop it.
+ * Every entry has it, so an agent closes at the same moment in every view.
+ */
+export const BIN_DEPARTURE_MS = 6_000;
 
 export function parseBinCountdown(value: unknown): BinCountdown {
   return BIN_COUNTDOWNS.includes(value as BinCountdown)
@@ -42,9 +50,14 @@ export type BinEntry = BinTarget & {
   /** The agent's name, for the bin, the bus and the receipt. */
   label: string;
   view: BinView;
-  /** The countdown it went in with, in milliseconds. */
+  /** The countdown it went in with (the wait at the stop), in milliseconds. */
   duration_ms: number;
-  /** Time left when the state was read; it runs only while the bin isn't paused. */
+  /** The drive away after the countdown, in milliseconds; the close commits when it ends. */
+  departure_ms: number;
+  /**
+   * Time left until the close commits (the wait, then the drive) when the
+   * state was read; it runs only while the bin isn't paused.
+   */
   remaining_ms: number;
   /** Entries that share one departure (Town: everyone on one bus). */
   trip: string;

@@ -1,4 +1,8 @@
-import type { BinEntry, BinState } from "../../../../shared/bin";
+import {
+  BIN_DEPARTURE_MS,
+  type BinEntry,
+  type BinState,
+} from "../../../../shared/bin";
 
 /**
  * A browser fixture's World bin: the service's world.bin.* answers with an
@@ -46,7 +50,8 @@ export function createFakeBin(epoch = "fixture-run") {
             label: String(params.label ?? "Agent"),
             view: "town",
             duration_ms: 30_000,
-            remaining_ms: 30_000,
+            departure_ms: BIN_DEPARTURE_MS,
+            remaining_ms: 30_000 + BIN_DEPARTURE_MS,
             trip: soonest?.trip ?? id,
           };
           state.entries.push(entry);

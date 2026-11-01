@@ -161,12 +161,15 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     and flies you there; while you carry an agent you can drop it on the chip.
     The agent leaves its desk and waits with a box while a red double-decker
     drives in from the town's left edge, then rides it (eight to a bus; more take
-    more buses, queued behind the stop) and leaves by the right edge when the
-    countdown ends; that is when the agent closes. Press and hold a bus to stop
-    it with its doors open (every countdown pauses), then drag a rider off, or
-    press it, to send them back to their desk; **Let it go** drives on. It
-    shares the bin's countdown, refusals and sounds, and stays parked under
-    reduced motion.
+    more buses, queued behind the stop). When the countdown ends the bus drives
+    away, and the agent closes only once it has left the map by the right edge.
+    Until then press and hold a bus, waiting or moving, to stop it where it is
+    with its doors open (every countdown pauses; Enter or Space on a focused bus
+    does the same), or drag a rider off, or press it, to send them back to their
+    desk. A held bus shows a panel at the top of the screen listing its riders
+    with **Put back**, and **Let it go** drives on. It shares the bin's
+    countdown, refusals and sounds; under reduced motion it stays parked for the
+    countdown and the departure time.
   - Tables sit in Herdr's tab order, left to right and row by row, so moving a
     tab in Spaces or Herdr moves its table. Drag a table onto another table in
     its room to put it in that place, or onto the room's free spot to put it
@@ -378,7 +381,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     10 s, 30 s by default, 1 min or 2 min). Dragging from a pane row closes that
     pane; the header closes the tab's agent. The countdown runs on the World
     service, so it carries on if you reload or leave; a World restart cancels it
-    and closes nothing. Nothing reaches Herdr until the countdown ends. Click the
+    and closes nothing. After the countdown the ring keeps draining for the
+    6 seconds Town's bus takes to drive away, and nothing reaches Herdr until
+    then. Click the
     bin to pause every timer and open it: drag a card out (or **Put back**) to
     return it to its place, or **Close now** / **Close all now**; **Close lid**
     resumes. A pinned tab's last pane and a host that can't be reached are

@@ -1,11 +1,14 @@
+import { BIN_DEPARTURE_MS } from "../../../../shared/bin";
 import type { createFakeBin } from "../testing/fakeBin";
 import { townBusSender } from "./useTownBus";
 
 /**
  * Town's bus against the real scene and a fixture bin service: an agent sent
  * to the stop goes in qualified, leaves its desk and rides; holding the bus
- * pauses every countdown; Let it go resumes; pressing the rider puts it back.
- * Nothing here can close anything: the fixture's bin never does.
+ * pauses every countdown; Let it go resumes; once the countdown is over the
+ * bus drives away and can still be held, or its rider taken off, until it
+ * leaves the map. Nothing here can close anything: the fixture's bin never
+ * does.
  */
 export async function checkTownBus(
   host: HTMLElement,
@@ -116,15 +119,59 @@ export async function checkTownBus(
     () => host.querySelector(".town-bus-held .town-bus-go") !== null,
     "a held bus offers no Let it go",
   );
+  // Let it go with the countdown over: the bus drives away.
+  for (const entry of bin.state.entries)
+    entry.remaining_ms = BIN_DEPARTURE_MS - 300;
   host.querySelector<HTMLButtonElement>(".town-bus-held .town-bus-go")!.click();
   await waitFor(() => resumes() === 2, "Let it go did not resume the bin");
+  const road = () =>
+    host.querySelector<HTMLElement>('.town-bus-hold[data-leaving="true"]');
+  await waitFor(() => road() !== null, "the bus did not drive away");
+  check(
+    /leaving/.test(host.querySelector(".town-bus-sign")?.textContent ?? ""),
+    "the stop's sign does not say the bus is leaving",
+  );
 
-  // Pressing the rider sends it back to its desk; nothing is closed.
-  host.querySelector<HTMLButtonElement>(".town-bus-rider")!.click();
+  // Press and hold the moving bus (below its windows): it stops there.
+  const at = (strip: HTMLElement, x: number, y: number) => {
+    const box = strip.getBoundingClientRect();
+    const scale = box.width / strip.offsetWidth;
+    return { clientX: box.left + x * scale, clientY: box.top + y * scale };
+  };
+  road()!.dispatchEvent(
+    new PointerEvent("pointerdown", { bubbles: true, ...at(road()!, 4, 38) }),
+  );
+  await waitFor(() => pauses() === 3, "holding the moving bus did not stop it");
+  await waitFor(
+    () =>
+      /on its way out/.test(
+        host.querySelector(".town-bus-held")?.textContent ?? "",
+      ),
+    "the held panel does not say the bus was stopped on its way out",
+  );
+  check(road() === null, "a held bus still drives away");
+  host.querySelector<HTMLButtonElement>(".town-bus-held .town-bus-go")!.click();
+  await waitFor(() => resumes() === 3, "Let it go did not resume the bin");
+  await waitFor(() => road() !== null, "the bus did not drive on");
+
+  // Take the rider off the moving bus: press along its upper windows, as
+  // drawn in this frame, until one lands on the rider.
+  const strip = road()!;
+  for (let x = 0; x < strip.offsetWidth; x += 2) {
+    const point = at(strip, x, 10);
+    strip.dispatchEvent(
+      new PointerEvent("pointerdown", { bubbles: true, ...point }),
+    );
+    strip.dispatchEvent(
+      new PointerEvent("pointerup", { bubbles: true, ...point }),
+    );
+    if (bin.calls.some((call) => call.method === "world.bin.restore")) break;
+  }
   await waitFor(
     () => bin.calls.some((call) => call.method === "world.bin.restore"),
-    "pressing the rider did not put it back",
+    "taking the rider off the moving bus did not put it back",
   );
+  check(pauses() === 3, "pressing the moving bus's road held it");
   await waitFor(atDesk, "the rider did not return to its desk");
   check(
     !bin.calls.some((call) => call.method === "world.bin.close_now"),

@@ -4,7 +4,7 @@ World's existing `world.sqlite` outbox owns durable effects. Recording the domai
 change and its intent is one SQLite transaction. The service registry marks only
 three private effect verbs queueable: `notification.show` for owner alerts,
 `world.ask.deliver-answer` for one saved answer and its original recipient, and
-`world.bin.close` for one pane whose agent-bin countdown ended.
+`world.bin.close` for one pane whose agent-bin countdown and departure ended.
 Interactive terminal input and Chat sends stay nonqueueable. This substrate
 provides no workflow authoring API or new browser controls. Its schema migration
 follows the durable ID, binding, profile and runtime-status migrations, preserving
@@ -101,16 +101,18 @@ staging ends. Its browser RPCs (all bridge-scoped `world.*`, browser actor only)
 
 | Method | Effect |
 | --- | --- |
-| `world.bin.list` | The run's state: `epoch` (the service incarnation), revision, paused, entries with time left, closing IDs, recent outcomes, `countdown_s` |
+| `world.bin.list` | The run's state: `epoch` (the service incarnation), revision, paused, entries (`duration_ms` countdown, `departure_ms` drive away, `remaining_ms` until the close commits), closing IDs, recent outcomes, `countdown_s` |
 | `world.bin.add` | Stage one pane, qualified by connection, runtime generation, workspace, tab, pane and terminal; the handler re-reads the pane on that connection's current runtime first |
-| `world.bin.pause`, `world.bin.resume` | Stop or restart every countdown |
+| `world.bin.pause`, `world.bin.resume` | Stop or restart every countdown and departure |
 | `world.bin.restore` | Take one entry back out; nothing is closed |
 | `world.bin.close_now` | `ids`: an explicit list of this run's entry IDs (`bin-<incarnation>-<n>`). Any other run's ID refuses the whole request; there is no unscoped "all" |
 | `world.bin.countdown.set` | 10, 30 (default), 60 or 120 seconds, kept as `bin_countdown_s` in World's settings file |
 
 Staging lives only in the service's memory, on its monotonic clock: a reload
-keeps it, and a World restart drops it without closing anything. When a countdown
-ends, or on Close now, one `world.bin.close` intent per entry is recorded with the
+keeps it, and a World restart drops it without closing anything. Each entry waits
+out its countdown, then a fixed departure (`BIN_DEPARTURE_MS`, 6 s: Town's bus
+driving off the map), and stays reversible throughout. When the departure ends, or
+on Close now, one `world.bin.close` intent per entry is recorded with the
 captured target and the recording run's incarnation. A runtime generation is a
 per-run counter, so the close is sent only in the run that recorded it: in a later
 run an unsent close ends not sent and a possibly sent one stays uncertain; neither

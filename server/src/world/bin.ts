@@ -1,4 +1,5 @@
 import {
+  BIN_DEPARTURE_MS,
   parseBinCountdown,
   type BinCountdown,
   type BinEntry,
@@ -18,7 +19,7 @@ export class BinCloseNotRecorded extends Error {}
 export const NOT_RECORDED =
   "World could not record the close, so nothing was sent.";
 
-/** A later agent joins a departure only if it still has this long to go. */
+/** A later agent joins a bus only while it waits with this long still to go. */
 export const MIN_JOIN_MS = 3_000;
 
 type Staged = BinEntry & {
@@ -34,17 +35,18 @@ export type BinAdd = BinTarget & {
 };
 
 /**
- * Records the durable close intents for entries whose countdown ended. It
+ * Records the durable close intents for entries whose bus has left. It
  * resolves once they are committed; a rejection means nothing was recorded,
  * so nothing will be sent.
  */
 export type BinCommit = (entries: readonly BinEntry[]) => Promise<void>;
 
 /**
- * The service's bin: reversible staging in memory. Each agent's countdown runs
- * on the service clock, so a reload keeps it; a service restart loses it, so
- * nothing is closed. Nothing reaches Herdr from here: when a countdown ends,
- * or on Close now, the entry is handed to `commit`, which records one durable
+ * The service's bin: reversible staging in memory. Each agent's countdown and
+ * its bus's drive away run on the service clock, so a reload keeps them; a
+ * service restart loses them, so nothing is closed. Nothing reaches Herdr
+ * from here: when the drive away ends (the bus has left the map), or on
+ * Close now, the entry is handed to `commit`, which records one durable
  * close intent per entry for the effect runner. The runner reports back
  * through `settle`.
  */
@@ -112,15 +114,18 @@ export class WorldBinRegistry {
         ? joined.remaining_ms
         : joined.deadline - now
       : 0;
-    const joins = joined !== undefined && joinedLeft >= MIN_JOIN_MS;
+    // A bus that has started to drive away takes no one else.
+    const joins =
+      joined !== undefined && joinedLeft - joined.departure_ms >= MIN_JOIN_MS;
     const duration = parseBinCountdown(this.deps.countdown()) * 1000;
     const id = `bin-${this.deps.epoch}-${this.nextId++}`;
-    const remaining = joins ? joinedLeft : duration;
+    const remaining = joins ? joinedLeft : duration + BIN_DEPARTURE_MS;
     this.entries.set(id, {
       ...target,
       id,
       trip: joins ? joined.trip : id,
       duration_ms: joins ? joined.duration_ms : duration,
+      departure_ms: joins ? joined.departure_ms : BIN_DEPARTURE_MS,
       remaining_ms: remaining,
       deadline: this.paused ? null : now + remaining,
     });
@@ -262,7 +267,7 @@ export class WorldBinRegistry {
     this.depart(due);
   }
 
-  /** The countdown is over: from here on, only the durable intent decides. */
+  /** The bus has left: from here on, only the durable intent decides. */
   private depart(due: Staged[]) {
     const leaving = due.map((staged): BinEntry => {
       const entry: Partial<Staged> = { ...staged, remaining_ms: 0 };
@@ -300,7 +305,10 @@ export class WorldBinRegistry {
 
 function normalize(
   input: BinAdd,
-): Omit<Staged, "id" | "duration_ms" | "remaining_ms" | "deadline" | "trip"> {
+): Omit<
+  Staged,
+  "id" | "duration_ms" | "departure_ms" | "remaining_ms" | "deadline" | "trip"
+> {
   for (const key of [
     "connection_id",
     "workspace_id",

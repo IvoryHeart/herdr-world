@@ -117,7 +117,10 @@ export function WorldBin({
     null,
   );
   const left = next ? store.remaining(next) : 0;
-  const fraction = next ? Math.min(1, left / Math.max(1, next.duration_ms)) : 0;
+  // The ring runs down through the wait and the bus's drive away together.
+  const fraction = next
+    ? Math.min(1, left / Math.max(1, next.duration_ms + next.departure_ms))
+    : 0;
   const refused = !!drag?.refusal;
   const label = drag
     ? drag.refusal

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { BinEntry } from "../../../shared/bin";
+import { BIN_DEPARTURE_MS, type BinEntry } from "../../../shared/bin";
 import {
   BinCloseNotRecorded,
   MIN_JOIN_MS,
@@ -67,13 +67,23 @@ const agent = (pane: string, extra: Partial<BinAdd> = {}): BinAdd => ({
   ...extra,
 });
 
-test("a countdown hands the entry to the durable close only when it ends", async () => {
+const TOTAL = 30_000 + BIN_DEPARTURE_MS;
+
+test("the close commits only when the bus has left, not when the countdown ends", async () => {
   const { registry, committed, advance } = fixture();
   const state = registry.add(agent("p1"));
   const id = state.entries[0]!.id;
   expect(id).toStartWith("bin-run1-");
-  expect(state.entries[0]!.remaining_ms).toBe(30_000);
-  await advance(29_999);
+  expect(state.entries[0]).toMatchObject({
+    duration_ms: 30_000,
+    departure_ms: BIN_DEPARTURE_MS,
+    remaining_ms: TOTAL,
+  });
+  // The countdown ends; the bus drives away and can still be stopped.
+  await advance(30_000);
+  expect(committed).toEqual([]);
+  expect(registry.list().entries[0]!.remaining_ms).toBe(BIN_DEPARTURE_MS);
+  await advance(BIN_DEPARTURE_MS - 1);
   expect(committed).toEqual([]);
   expect(registry.list().entries[0]!.remaining_ms).toBe(1);
   await advance(1);
@@ -100,12 +110,27 @@ test("pause freezes every countdown; resume continues where it stopped", async (
   expect(registry.pause().paused).toBe(true);
   await advance(60_000);
   expect(committed).toEqual([]);
-  expect(registry.list().entries[0]!.remaining_ms).toBe(20_000);
+  expect(registry.list().entries[0]!.remaining_ms).toBe(TOTAL - 10_000);
   registry.resume();
-  await advance(19_999);
+  await advance(TOTAL - 10_000 - 1);
   expect(committed).toEqual([]);
   await advance(1);
   expect(committed).toHaveLength(1);
+});
+
+test("a bus held or emptied while it drives away closes nothing", async () => {
+  const { registry, committed, advance } = fixture();
+  const a = registry.add(agent("p1")).entries[0]!.id;
+  await advance(30_000 + BIN_DEPARTURE_MS / 2);
+  registry.pause();
+  await advance(120_000);
+  expect(committed).toEqual([]);
+  expect(registry.list().entries[0]!.remaining_ms).toBe(BIN_DEPARTURE_MS / 2);
+  registry.resume();
+  registry.restore(a);
+  await advance(BIN_DEPARTURE_MS);
+  expect(committed).toEqual([]);
+  expect(registry.list().entries).toEqual([]);
 });
 
 test("put back closes nothing and an emptied bin is no longer paused", async () => {
@@ -147,7 +172,7 @@ test("close now from a page showing an earlier service run closes nothing", asyn
   expect(registry.list().entries.map((e) => e.id)).toEqual([fresh]);
 });
 
-test("a later agent joins a departure only with time to spare", async () => {
+test("a later agent joins a waiting bus only with time to spare", async () => {
   const { registry, advance } = fixture();
   const bus = registry.add(agent("p1", { view: "town" })).entries[0]!;
   await advance(20_000);
@@ -155,13 +180,15 @@ test("a later agent joins a departure only with time to spare", async () => {
     .add(agent("p2", { view: "town", join: bus.id }))
     .entries.find((e) => e.pane_id === "p2")!;
   expect(joined.trip).toBe(bus.trip);
-  expect(joined.remaining_ms).toBe(10_000);
+  expect(joined.remaining_ms).toBe(10_000 + BIN_DEPARTURE_MS);
+  expect(joined.departure_ms).toBe(BIN_DEPARTURE_MS);
+  // The bus is about to leave the stop: a later agent takes the next one.
   await advance(10_000 - MIN_JOIN_MS + 1);
   const late = registry
     .add(agent("p3", { view: "town", join: bus.id }))
     .entries.find((e) => e.pane_id === "p3")!;
   expect(late.trip).toBe(late.id);
-  expect(late.remaining_ms).toBe(30_000);
+  expect(late.remaining_ms).toBe(TOTAL);
 });
 
 test("the same pane is never staged twice and the setting sets new countdowns", () => {
@@ -186,7 +213,7 @@ test("a host's new runtime returns its staged agents without closing them", asyn
   const state = registry.list();
   expect(state.entries.map((e) => e.connection_id)).toEqual(["other"]);
   expect(state.outcomes[0]).toMatchObject({ result: "gone" });
-  await advance(30_000);
+  await advance(TOTAL);
   expect(committed.flat().map((e) => e.connection_id)).toEqual(["other"]);
 });
 
@@ -195,7 +222,7 @@ test("a close that could not be recorded is reported as not sent", async () => {
     failCommit: "not-recorded",
   });
   registry.add(agent("p1"));
-  await advance(30_000);
+  await advance(TOTAL);
   await Promise.resolve();
   const state = registry.list();
   expect(state.closing).toEqual([]);
@@ -208,7 +235,7 @@ test("a close that could not be recorded is reported as not sent", async () => {
 test("a close whose recording is unknown stays closing, never reported unrecorded", async () => {
   const { registry, advance } = fixture("run1", { failCommit: "unknown" });
   const id = registry.add(agent("p1")).entries[0]!.id;
-  await advance(30_000);
+  await advance(TOTAL);
   await Promise.resolve();
   const state = registry.list();
   expect(state.closing).toEqual([id]);

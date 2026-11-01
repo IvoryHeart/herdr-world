@@ -3980,8 +3980,10 @@ is closed or the bus is let go. Taking an agent out SHALL close nothing and
 return it to its place. Entry IDs and revisions SHALL name their service run, so
 no control from before a restart acts on an agent added after it.
 
-World SHALL send nothing to Herdr before a countdown ends or the user chooses
-Close now. Then it SHALL record one durable `world.bin.close` intent per agent
+After its countdown each agent SHALL wait a fixed departure time (6 s, Town's
+bus driving off the map) that is still reversible, and World SHALL send nothing
+to Herdr before the countdown and departure end or the user chooses Close now.
+Then it SHALL record one durable `world.bin.close` intent per agent
 (`world-effects`, reconcilable recovery), conditioned on the connection, runtime
 generation, workspace, tab, pane and terminal captured when the agent went in.
 Before dispatch World SHALL re-read the pane on that same runtime generation: a
@@ -3996,7 +3998,8 @@ and a host whose topology is cached after failure SHALL be refused in the
 browser, where tab pins live, before anything is staged.
 
 Board and Desk SHALL use a plain bin that appears while a card is dragged and
-stays while it holds anything, showing the next countdown. Clicking it SHALL
+stays while it holds anything, showing the next countdown (its ring drains
+through the departure too). Clicking it SHALL
 open it with Put back, Close now, Close all now and Close lid, and dragging a
 card out SHALL put the agent back. A selected tab card's bar SHALL offer Close
 agent… with the same countdown. A waiting card and its lines SHALL be hidden.
@@ -4005,18 +4008,23 @@ Town SHALL have one London bus stop, drawn in the world on the topmost street
 just right of its right-hand crossing (a vertical road meeting the street from
 above or below), with buses using the lane beside it. Agents dropped at the
 stop, or sent from their peek, leave their desks and wait there. One bus per
-departure SHALL drive in from the town's left edge, wait with its doors open and
-leave by the right edge as the countdown ends. A bus seats eight; more riders
+departure SHALL drive in from the town's left edge, wait with its doors open for
+the whole countdown, then drive away and leave the map by the right edge exactly
+as the departure ends, which is when the close commits. A bus seats eight; more riders
 SHALL take more buses, and buses that cannot stand at the stop SHALL queue
 behind it on the same street, then in further lanes, so every rider has a place
 on the map. While the stop is off screen, a chip at the nearest screen edge
 SHALL show the next departure and fly the camera to the stop; while an agent is
 carried it SHALL also accept the drop. The town SHALL hold still while a carried
-agent is over the stop. Pressing and holding a bus SHALL stop it with its doors
-open in every open World until one lets it go, and dragging a rider off (or
-pressing it) SHALL put them back at their desk. Drops, closes, returns and
-refusals SHALL play World's sounds under this device's sound setting, and the
-bus SHALL stay parked under reduced motion.
+agent is over the stop. Pressing and holding a bus, waiting or driving away,
+SHALL stop it where it is with its doors open in every open World until one lets
+it go, and Enter or Space on a focused bus SHALL do the same. While a bus is held
+a panel at the top of the screen SHALL list its riders with Put back and offer
+Let it go. Dragging a rider off a waiting, held or moving bus (or pressing it)
+SHALL put them back at their desk. Drops, closes, returns and refusals SHALL
+play World's sounds under this device's sound setting. Under reduced motion the
+bus SHALL stay parked for the countdown and the departure time, then the close
+commits.
 
 #### Scenario: Change of mind
 
@@ -4027,7 +4035,7 @@ bus SHALL stay parked under reduced motion.
 #### Scenario: The countdown ends after a reload
 
 - **WHEN** the user drops an agent in the bin and reloads World before the countdown ends
-- **THEN** the countdown continues on the service, and when it ends exactly that
+- **THEN** the countdown continues on the service, and when it and the departure end exactly that
   pane closes on its original runtime, with its tab if it was the tab's last pane
 
 #### Scenario: World restarts during a countdown
@@ -4050,6 +4058,13 @@ bus SHALL stay parked under reduced motion.
 
 - **WHEN** the user drags the last pane of a pinned tab over the bin
 - **THEN** the bin says to unpin the tab first, and dropping sends nothing
+
+#### Scenario: Catch the leaving bus
+
+- **WHEN** the countdown ends and the bus is driving away with an agent, and the
+  user presses and holds it before it leaves the map, then drags the agent off
+- **THEN** the bus stops where it is, nothing is closed, and the agent returns
+  to their desk
 
 #### Scenario: Hold the bus
 

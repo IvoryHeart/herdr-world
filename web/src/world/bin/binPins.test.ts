@@ -39,7 +39,8 @@ const staged = (pane: string): BinEntry => ({
   label: pane,
   view: "board",
   duration_ms: 30_000,
-  remaining_ms: 30_000,
+  departure_ms: 6_000,
+  remaining_ms: 36_000,
   trip: pane,
 });
 

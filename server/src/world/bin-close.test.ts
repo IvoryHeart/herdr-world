@@ -213,6 +213,7 @@ const entry = (
   label: pane.pane_id,
   view: "board",
   duration_ms: 30_000,
+  departure_ms: 6_000,
   remaining_ms: 0,
   trip: "trip",
 });
