@@ -4109,8 +4109,9 @@ on the map. While the stop is off screen, a chip at the nearest screen edge
 SHALL show the next departure and fly the camera to the stop; while an agent is
 carried it SHALL also accept the drop. The town SHALL hold still while a carried
 agent is over the stop. While the stop is off screen, or under the asks rail or
-the zoom controls, its chip SHALL show and bring it into the free part of the
-screen. Pressing and holding a bus, driving in, waiting or driving away,
+the zoom controls or held-bus panel, its chip SHALL show and bring it into the
+free part of the screen. The full waiting and carry-chip touch regions SHALL
+remain clear of those panels. Pressing and holding a bus, driving in, waiting or driving away,
 SHALL stop it where it is with its doors open in every open World until one lets
 it go, and Enter or Space on a focused bus SHALL do the same. While a bus is held
 a panel at the top of the screen SHALL list its riders with Put back and offer

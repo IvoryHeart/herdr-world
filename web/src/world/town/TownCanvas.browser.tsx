@@ -18,6 +18,7 @@ import { checkTownBus } from "./townBus.browser";
 import {
   checkTownBusRemount,
   checkTownClosingPin,
+  checkHeldBusChip,
 } from "./townBusReview.browser";
 import { townBusSender } from "./useTownBus";
 import { worldBinStore } from "../bin/binStore";
@@ -1342,6 +1343,7 @@ async function run() {
 
   if (scale === "bus" && mode === "test") {
     await checkTownBus(host, check, waitFor, fakeBin);
+    await checkHeldBusChip(host, waitFor, check);
     await checkTownBusRemount(
       host,
       fakeBin,

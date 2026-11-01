@@ -131,6 +131,11 @@ trip-clock samples after an approach reset, while held, and after a parked reset
 The service owns original duration and active elapsed time; layout geometry stays
 in Town. These UI consumers do not replace the native source/stop fences.
 
+The held-panel chip regression checks every point of a 3×3 interior hit grid,
+viewport bounds and both 44px waiting / 52px carry heights at phone and laptop
+sizes. The carry geometry fixture supplies Town's existing carry-presence DOM
+port; this is presentation evidence, not a native pointer admission claim.
+
 These finite timing, RPC, SQLite and renderer boundaries use direct consumers
 rather than a model that repeats the countdown implementation. M5's maintained
 ordering/authority/recovery proof remains required in full. Synthetic source

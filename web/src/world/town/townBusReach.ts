@@ -1,7 +1,7 @@
 /**
  * Keeping the bus within reach: the part of the town's screen that no panel
- * covers (the asks rail, which on a phone floats over the lower town, and the
- * zoom column), so the stop's chip can tell when the stop is hidden and fly
+ * covers (the asks rail, which on a phone floats over the lower town, the
+ * zoom column and held-bus controls), so the stop's chip can tell when the stop is hidden and fly
  * the camera to put it where it can be pressed. Screen pixels, relative to
  * the town's canvas.
  */
@@ -56,7 +56,7 @@ export function townPanels(host: HTMLElement): ScreenRect[] {
   const origin = host.getBoundingClientRect();
   return [
     ...document.querySelectorAll<HTMLElement>(
-      ".town-rail:not(.town-rail-collapsed), .town-rail-collapsed .town-rail-head, .town-zoom",
+      ".town-rail:not(.town-rail-collapsed), .town-rail-collapsed .town-rail-head, .town-zoom, .town-bus-held",
     ),
   ]
     .map((element) => element.getBoundingClientRect())

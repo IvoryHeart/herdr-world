@@ -5,6 +5,76 @@ import { townBusSender } from "./useTownBus";
 import { setTabPinned } from "../../tabPins";
 import type { WorldLeafObject } from "../worldObject";
 
+/** Held controls must leave the full 44px waiting / 52px carry chip usable. */
+export async function checkHeldBusChip(
+  host: HTMLElement,
+  waitFor: (condition: () => boolean, message: string) => Promise<void>,
+  check: (condition: boolean, message: string) => void,
+) {
+  const key = host.querySelector<HTMLElement>(
+    '.world-semantic-target[data-kind="agent"]',
+  )!.dataset.targetKey!;
+  const store = worldBinStore(bridge);
+  await townBusSender.send!(key);
+  await store.pause();
+  const canvas = host.querySelector<HTMLElement>(".town-canvas-host")!;
+  for (let i = 0; i < 40; i++)
+    canvas.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }),
+    );
+  const chip = () => host.querySelector<HTMLElement>(".town-bus-chip");
+  await waitFor(
+    () => !!chip() && !!host.querySelector(".town-bus-held"),
+    "held bus chip did not appear after pan",
+  );
+  const probe = (size: number) => {
+    const e = chip()!,
+      r = e.getBoundingClientRect();
+    check(
+      r.height >= size &&
+        r.left >= 0 &&
+        r.top >= 0 &&
+        r.right <= innerWidth &&
+        r.bottom <= innerHeight,
+      `held ${size}px chip must fit the viewport`,
+    );
+    const hits = [0.1, 0.5, 0.9].flatMap((x) =>
+      [0.1, 0.5, 0.9].map((y) =>
+        e.contains(
+          document.elementFromPoint(r.left + r.width * x, r.top + r.height * y),
+        ),
+      ),
+    );
+    check(
+      hits.every(Boolean),
+      `held ${size}px chip must be topmost at all9points (got ${hits.filter(Boolean).length}/9)`,
+    );
+  };
+  probe(44);
+  // The fixture supplies the same carry-presence DOM port the real gesture
+  // produces; this is geometry evidence, not a native drag/admission claim.
+  const ghost = document.createElement("div");
+  ghost.className = "town-drag-ghost";
+  document.body.append(ghost);
+  canvas.dispatchEvent(
+    new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }),
+  );
+  await waitFor(
+    () => chip()?.dataset.carrying === "true",
+    "carry chip did not draw",
+  );
+  probe(52);
+  ghost.remove();
+  canvas.dispatchEvent(
+    new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }),
+  );
+  await waitFor(
+    () => chip()?.dataset.carrying === "false",
+    "carry presence did not clear",
+  );
+  for (const entry of [...store.get().entries]) await store.restore(entry.id);
+}
+
 /** Actual Town peek admissions; expiry is a service event, never a second UI add. */
 export async function checkTownClosingPin(
   host: HTMLElement,

@@ -18,3 +18,5 @@
 - Keep a pinned tab's last pane while a sibling close is pending, preserve the
   bus's trip progress after reloading, and wire Desk cards and Close agent…
   actions to the shared bin.
+- Keep the whole bus-stop chip clear of the held-bus panel, including while
+  carrying an agent on a phone.

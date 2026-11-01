@@ -202,7 +202,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     with **Put back**, and **Let it go** drives on. It shares the bin's
     countdown, refusals and sounds; under reduced motion it stays parked for the
     countdown and the departure time. When the stop is off screen or under the
-    asks rail or zoom buttons, the red chip brings it back into view.
+    asks rail, zoom buttons or held-bus panel, the red chip brings it back into
+    view. Its whole touch target stays clear of those controls while waiting
+    and while carrying an agent.
   - Tables sit in Herdr's tab order, left to right and row by row, so moving a
     tab in Spaces or Herdr moves its table. Drag a table onto another table in
     its room to put it in that place, or onto the room's free spot to put it

@@ -703,7 +703,8 @@ countdown again for both. A bus already coming keeps its speed, arrives early
 and waits until 0:00; one already at the stop waits longer. Reloading or opening
 another World keeps the trip's progress, including time held still. If
 the stop is off screen, the red chip at the screen's edge takes you there, and
-you can drop a carried agent on it. When the countdown ends the bus drives
+you can drop a carried agent on it. The chip stays clear of the held-bus panel
+and other Town controls. When the countdown ends the bus drives
 away, and the agent closes only when the bus has left the map. Until then,
 press and hold the bus (even while it is coming or leaving) to stop it with its doors
 open, then drag the agent off (or press it, or use **Put back** in the panel at
