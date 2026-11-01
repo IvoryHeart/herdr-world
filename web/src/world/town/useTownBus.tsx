@@ -70,6 +70,21 @@ const stopBox = (camera: TownCamera, l: TownLayout): ScreenRect => {
   return { left: a.x, top: a.y, right: b.x, bottom: b.y };
 };
 
+/**
+ * The soonest bus's clock, from the bin's own state rather than the last
+ * drawn frame, so a boarding shows at once: its wait left, or leaving.
+ */
+const soonestBus = (
+  entries: readonly BinEntry[],
+  remaining: (entry: BinEntry) => number,
+) => {
+  if (!entries.length) return null;
+  const left = Math.min(
+    ...entries.map((entry) => remaining(entry) - entry.departure_ms),
+  );
+  return { remaining: Math.max(0, left), leaving: left < 0 };
+};
+
 /** The mounted Town's way to send an agent to the stop (the peek's action). */
 export const townBusSender: {
   send: ((agentKey: string) => Promise<TownMoveResult>) | null;
@@ -328,7 +343,7 @@ export function useTownBus({
   };
 
   const scene = layerRef.current?.scene ?? null;
-  const next = scene?.next ?? null;
+  const next = soonestBus(bin.entries, (entry) => store.remaining(entry));
   const putBack = (entry: BinEntry) => {
     playBinSound("back");
     void store
@@ -468,7 +483,7 @@ function TownBusControls({
   const dragged = useRef(false);
   if (!scene || !entries.length) return null;
   const byId = new Map(entries.map((entry) => [entry.id, entry]));
-  const front = scene.buses[0];
+  const soon = soonestBus(entries, remaining);
   const startHold = () => {
     if (paused) return;
     holdTimer.current = window.setTimeout(onHold, 450);
@@ -541,12 +556,8 @@ function TownBusControls({
         className="town-bus-sign"
         style={{ left: scene.stop.x + scene.stop.w / 2, top: scene.stop.y - 4 }}
       >
-        {front
-          ? front.phase === "departing"
-            ? "leaving"
-            : clock(front.remaining)
-          : null}{" "}
-        · {entries.length}
+        {soon ? (soon.leaving ? "leaving" : clock(soon.remaining)) : null} ·{" "}
+        {entries.length}
         {paused ? " · held" : ""}
       </div>
       {scene.buses.map((bus) => {
