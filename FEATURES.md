@@ -201,7 +201,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     follows its tab when the tab moves to another room and goes when it closes.
   - Cached failed-host buildings, agents and Board cards stay stale and
     non-actionable. **Disconnected · Reconnect** appears on Town's building and
-    reception and Board's host label. Transient SSH outages keep retrying with
+    reception and Board's host label. Transient local socket failures and SSH outages keep retrying with
     capped backoff; explicit disconnect/removal and permanent failures stop
     recovery. Cached work never becomes current until a fresh runtime snapshot
     is admitted. Search and Hosts
