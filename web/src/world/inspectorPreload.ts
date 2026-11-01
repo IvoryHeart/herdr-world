@@ -1,17 +1,23 @@
 import type { WorkspaceInspectorHost as Host } from "../components/WorkspaceInspectorHost";
 
+type Loader = () => Promise<unknown>;
+
+let loader: Loader | null = null;
 let loaded: typeof Host | null = null;
 
 /**
- * The Inspector window's code and styles, shared by its lazy component and
- * by views that expect an open soon (an open Needs you list), so opening
- * Chat from them shows no loading shell and loads no stylesheet mid-view.
+ * The Inspector window registers how it loads its code and styles, so views
+ * that expect an open soon (an open Needs you list) can fetch them early
+ * without importing the Inspector's module graph themselves.
  */
-export const loadWorkspaceInspector = () =>
-  import("../components/WorkspaceInspectorHost").then((module) => {
-    loaded = module.WorkspaceInspectorHost;
-    return module;
-  });
+export function registerWorkspaceInspectorLoader(load: Loader) {
+  loader = load;
+}
+
+/** Recorded by the loader once the Inspector's code is at hand. */
+export function workspaceInspectorLoaded(host: typeof Host) {
+  loaded = host;
+}
 
 /**
  * The Inspector once its code has loaded: a window opened after that renders
@@ -20,9 +26,12 @@ export const loadWorkspaceInspector = () =>
  */
 export const loadedWorkspaceInspector = () => loaded;
 
-/** Fetch the Inspector when the browser is idle; a failure retries on open. */
+/**
+ * Fetch the Inspector when the browser is idle, if the Inspector window is
+ * part of this page; a failure retries on open.
+ */
 export function preloadWorkspaceInspector(): () => void {
-  const load = () => void loadWorkspaceInspector().catch(() => {});
+  const load = () => void loader?.().catch(() => {});
   if (typeof requestIdleCallback === "function") {
     const id = requestIdleCallback(load, { timeout: 2_000 });
     return () => cancelIdleCallback(id);

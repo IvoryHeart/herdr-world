@@ -67,8 +67,16 @@ import {
 import { townPortrait } from "./town/townSprites";
 import {
   loadedWorkspaceInspector,
-  loadWorkspaceInspector,
+  registerWorkspaceInspectorLoader,
+  workspaceInspectorLoaded,
 } from "./inspectorPreload";
+
+const loadWorkspaceInspector = () =>
+  import("../components/WorkspaceInspectorHost").then((module) => {
+    workspaceInspectorLoaded(module.WorkspaceInspectorHost);
+    return module;
+  });
+registerWorkspaceInspectorLoader(loadWorkspaceInspector);
 
 const WorkspaceInspectorHost = lazyWithReload("workspace-inspector", () =>
   loadWorkspaceInspector().then((module) => ({
