@@ -3,21 +3,21 @@
   "slow": {
     "view": "town",
     "owner": 1,
-    "revision": 19,
+    "revision": 20,
     "width": 1512,
     "height": 982
   },
   "resize": {
     "view": "town",
     "owner": 1,
-    "revision": 27,
+    "revision": 28,
     "width": 1280,
     "height": 1440
   },
-  "neverReady": "Error: Capture page: Error: Capture town owner=7 revision=9 deadline; stage=assets\n    at DrawReadiness.fail (http://127.0.0.1:43179/CaptureReadiness.browser.js:63918:20)\n    at http://127.0.0.1:43179/CaptureReadiness.browser.js:63852:55",
+  "neverReady": "Error: Capture page: Error: Capture town owner=7 revision=9 deadline; stage=assets\n    at DrawReadiness.fail (http://127.0.0.1:40833/CaptureReadiness.browser.js:63918:20)\n    at http://127.0.0.1:40833/CaptureReadiness.browser.js:63852:55",
   "loadAverage": [
-    4.68,
-    7.73,
-    5.55
+    2.46,
+    4.89,
+    5.06
   ]
 }

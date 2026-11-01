@@ -1,6 +1,6 @@
 # Revision-qualified evidence capture #530
 
-Product source: `f7e272800651ad5349c479f5c730f3b8d5aa9fb2`. Base: `75ac18f499014225c7c6b980268e355b2b6d1629`.
+Product source: `fc3c4ab1243def9006017aaa9e5c2f9c38a78092`. Base: `75ac18f499014225c7c6b980268e355b2b6d1629`.
 
 The production TownCanvas, BoardView and DeskBoard render two synthetic hosts, four rooms and sixteen desks, without a World/Herdr service. Every image uses the revision helper at DPR 1. Five sizes cover Phone 390×844, Mac laptop 1512×982, half-width Linux 1280×1440, wide Linux 2560×1440 and portrait 1440×2560.
 
