@@ -6,3 +6,6 @@
 - Prevent unknown-session Desk reviews from following a replacement agent or
   inheriting unproven ownership after restart. Known sessions restore their exact
   reviewed stop after fresh verification.
+- Preserve current known stops while reconnecting, retain replacement fences
+  across restart, and refuse oversized or malformed native observations without
+  partial current changes or stopping World.

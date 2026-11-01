@@ -4,11 +4,7 @@ import type {
   MarkKind,
   MarkBody,
 } from "../storage/terminal-marks";
-import type {
-  BindingEntity,
-  BindingFence,
-  BindingEvent,
-} from "./binding-types";
+import type { BindingFence, BindingEvent } from "./binding-types";
 import {
   bindingObservationAmbiguous,
   resolveBinding,
@@ -28,7 +24,11 @@ import {
   WorldCompletionSeenRegistry,
   type CompletionSeenIdentity,
 } from "./completion-seen";
-import { deskHistoryEvictions } from "./desk-retention";
+import { deskHistoryEvictions, estimateDeskWrite } from "./desk-retention";
+import {
+  terminalEntities,
+  TerminalMarkObservationRefused,
+} from "./terminal-mark-observation";
 
 type Identity = CompletionSeenIdentity & {
   agent_session_fingerprint?: string | null;
@@ -74,18 +74,6 @@ const revisions = (r: MarkRegistries) => [
   r.seen.list().revision,
 ];
 
-function terminalEntities(
-  panes: readonly Record<string, unknown>[],
-): BindingEntity[] {
-  return panes.map((pane) => ({
-    native_id: typeof pane.pane_id === "string" ? pane.pane_id : "",
-    terminals: typeof pane.terminal_id === "string" ? [pane.terminal_id] : [],
-    ...(deskSessionFingerprint(pane.agent_session)
-      ? { session: deskSessionFingerprint(pane.agent_session)! }
-      : {}),
-  }));
-}
-
 /** Serial admission, committed publication, and unresolved restart captures. */
 export class PersistentTerminalMarks {
   private tail: Promise<unknown> = Promise.resolve();
@@ -100,6 +88,17 @@ export class PersistentTerminalMarks {
   assertDeskAvailable() {
     const refusal = this.deskRefusals.values().next().value;
     if (refusal) throw new Error(refusal);
+  }
+  private refuse(connectionId: string, generation: number, error: Error) {
+    const changed = this.deskRefusals.get(connectionId) !== error.message;
+    this.deskRefusals.set(connectionId, error.message);
+    if (changed)
+      this.options.changed(
+        "desk",
+        this.options.registries.desk.list().revision,
+        connectionId,
+        generation,
+      );
   }
   private ownership = new Map<
     string,
@@ -225,7 +224,8 @@ export class PersistentTerminalMarks {
     ready = true,
     recovering = false,
   ) {
-    if (!recovering) this.recoveringSources.delete(connectionId);
+    if (recovering) this.recoveringSources.add(connectionId);
+    else this.recoveringSources.delete(connectionId);
     this.deskRefusals.delete(connectionId);
     for (const [key] of this.deskCaptures) {
       const [connection, capturedGeneration] = JSON.parse(key);
@@ -287,6 +287,31 @@ export class PersistentTerminalMarks {
     at: number,
     agents: readonly Record<string, unknown>[] = [],
   ) {
+    const observedLease = this.options.lease(connectionId);
+    if (
+      !observedLease ||
+      observedLease.generation !== generation ||
+      !observedLease.isCurrent() ||
+      !this.options.registries.desk.canObserveConnection(
+        connectionId,
+        generation,
+        at,
+      )
+    )
+      return Promise.resolve();
+    let entities;
+    try {
+      entities = terminalEntities(panes, {
+        adapter: "herdr",
+        instance: connectionId,
+        generation,
+        service_incarnation: this.options.incarnation,
+      });
+    } catch (error) {
+      if (!(error instanceof TerminalMarkObservationRefused)) throw error;
+      this.refuse(connectionId, generation, error);
+      return Promise.resolve();
+    }
     const epoch = this.runtimeEpoch.get(connectionId) ?? 0;
     const guards = [...this.admissions].filter(
       (guard) =>
@@ -299,10 +324,9 @@ export class PersistentTerminalMarks {
     if (guards.length || owners.length) {
       const lease = this.options.lease(connectionId);
       if (lease?.generation === generation && lease.isCurrent()) {
-        const entities = terminalEntities(panes),
-          ambiguous =
-            entities.some((entity) => !entity.native_id) ||
-            bindingObservationAmbiguous(entities);
+        const ambiguous =
+          entities.some((entity) => !entity.native_id) ||
+          bindingObservationAmbiguous(entities);
         const byTerminal = new Map(
           entities.flatMap((entity) =>
             entity.terminals.map((terminal) => [terminal, entity] as const),
@@ -361,16 +385,11 @@ export class PersistentTerminalMarks {
         epoch === (this.runtimeEpoch.get(connectionId) ?? 0)
       ) {
         if (
-          error instanceof Error &&
-          error.message.startsWith("Desk capacity exceeded:")
+          error instanceof TerminalMarkObservationRefused ||
+          (error instanceof Error &&
+            error.message.startsWith("Desk capacity exceeded:"))
         ) {
-          this.deskRefusals.set(connectionId, error.message);
-          this.options.changed(
-            "desk",
-            this.options.registries.desk.list().revision,
-            connectionId,
-            generation,
-          );
+          this.refuse(connectionId, generation, error);
         } else this.options.failed(error);
       }
     });
@@ -500,13 +519,22 @@ export class PersistentTerminalMarks {
     action?: (draft: MarkRegistries) => void,
   ) {
     if (!isCurrent()) throw new Error("terminal mark runtime retired");
+    if (
+      !action &&
+      !this.options.registries.desk.canObserveConnection(
+        connectionId,
+        generation,
+        at,
+      )
+    )
+      return;
     const fence: BindingFence = {
       adapter: "herdr",
       instance: connectionId,
       generation,
       service_incarnation: this.options.incarnation,
     };
-    const entities = terminalEntities(panes);
+    const entities = terminalEntities(panes, fence);
     const ambiguous =
       entities.some((entity) => !entity.native_id) ||
       bindingObservationAmbiguous(entities);
@@ -522,6 +550,12 @@ export class PersistentTerminalMarks {
     const ended: SavedTerminalMark[] = [];
     const savedRows = this.options.storage.list();
     const savedById = new Map(savedRows.map((row) => [row.id, row]));
+    const admitted = admittedAgentPanes(panes, agents);
+    const unknownOwners = new Set(
+      admitted
+        .filter((agent) => agent.session === null)
+        .map((agent) => agent.terminalId),
+    );
     for (const row of savedRows) {
       if (row.binding.instance !== connectionId) continue;
       if (row.kind === "desk") {
@@ -531,6 +565,14 @@ export class PersistentTerminalMarks {
           entity.terminals.includes(terminal),
         );
         const session = matches.length === 1 ? matches[0]!.session : undefined;
+        if (
+          !ambiguous &&
+          row.binding.evidence.session &&
+          unknownOwners.has(terminal)
+        ) {
+          ended.push(row);
+          continue;
+        }
         const captured = this.deskCaptures.get(
           watchKey({
             connection_id: connectionId,
@@ -580,7 +622,6 @@ export class PersistentTerminalMarks {
         entity.terminals.map((terminal) => [terminal, entity] as const),
       ),
     );
-    const admitted = admittedAgentPanes(panes, agents);
     const statusByTerminal = new Map(
       admitted.map((agent) => [agent.terminalId, agent]),
     );
@@ -704,39 +745,35 @@ export class PersistentTerminalMarks {
       const row = savedById.get(id);
       if (row) currentRows.set(id, row);
     }
+    let reserveBytes = 0;
+    const writeDeltas = new Map<string, number>();
     for (const [k, candidate] of candidates) {
       if (candidate.kind !== "desk") continue;
       const prior = active.get(k),
         entity = entityByTerminal.get(candidate.terminal);
       if (!entity || ambiguous) continue;
-      const id = prior?.id ?? `d-00000000:pending:${candidate.terminal}`;
-      currentRows.set(id, {
-        id,
-        kind: "desk",
-        revision: (prior?.revision ?? -1) + 1,
-        body: candidate.body,
-        binding: {
-          id: prior?.binding.id ?? "b-00000000",
-          record_id: id,
-          slot: "target",
-          revision: (prior?.binding.revision ?? 0) + 1,
-          state: "attached",
-          checked_at: at,
-          policy: "desk",
-          adapter: "herdr",
-          instance: connectionId,
-          kind: "pane",
-          native_id: entity.native_id,
-          evidence: prior?.binding.evidence ?? {
-            terminals: [candidate.terminal],
-            ...(entity.session ? { session: entity.session } : {}),
-          },
-        },
-      });
+      if (
+        prior &&
+        JSON.stringify(prior.body) === JSON.stringify(candidate.body) &&
+        prior.binding.native_id === savedById.get(prior.id)?.binding.native_id
+      )
+        continue;
+      const estimate = estimateDeskWrite(
+        prior,
+        candidate.body,
+        entity,
+        connectionId,
+        at,
+      );
+      currentRows.set(estimate.row.id, estimate.row);
+      reserveBytes += estimate.reserve;
+      writeDeltas.set(k, estimate.delta);
     }
-    for (const row of deskHistoryEvictions(savedRows, [
-      ...currentRows.values(),
-    ])) {
+    for (const row of deskHistoryEvictions(
+      savedRows,
+      [...currentRows.values()],
+      reserveBytes,
+    )) {
       ensureCurrent();
       await this.options.storage.remove(row.id, row.revision);
       savedById.delete(row.id);
@@ -754,7 +791,12 @@ export class PersistentTerminalMarks {
         savedById.delete(row.id);
       }
     }
-    for (const [k, candidate] of candidates) {
+    // Shrinking writes precede growing writes, so intermediate states cannot
+    // exceed the fully validated canonical resulting-plan budget.
+    const orderedCandidates = [...candidates].sort(
+      ([a], [b]) => (writeDeltas.get(a) ?? 0) - (writeDeltas.get(b) ?? 0),
+    );
+    for (const [k, candidate] of orderedCandidates) {
       const prior = active.get(k),
         entity = entityByTerminal.get(candidate.terminal);
       if (!entity || ambiguous) continue;

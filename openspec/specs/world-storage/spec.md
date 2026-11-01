@@ -300,3 +300,14 @@ Capacity refusals SHALL preserve every current capture, publish no partial
 projection, acknowledge no failed mutation and keep the service available.
 The existing completion-seen API and schema-v9 family SHALL remain available;
 migration/retirement belongs to the separately gated compatible-Chat follow-up.
+
+Re-entering source recovery SHALL protect known captures again before history
+trimming, even after prior successful observation. Admitting unknown ownership
+SHALL durably end preceding known Desk captures before a later restart can
+restore them; their acknowledgements SHALL remain ended, unassociated history.
+Capacity admission SHALL validate the complete resulting canonical writer state
+before the first row operation, including commit-time width and shrinking/growing
+write order. A capacity-refused observation SHALL leave durable current rows and
+the published projection unchanged. Malformed native identifiers SHALL refuse
+the entire observation nonfatally before any row operation or absence proof;
+filtering malformed rows SHALL NOT make a partial listing authoritative.

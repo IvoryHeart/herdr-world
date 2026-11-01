@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { buildShape, shapes } from "../../../scripts/scale/fixture";
 import { syntheticSources } from "../../../scripts/scale/source";
 import { HerdrClient } from "../bridge/herdr-client";
+import { terminalMarkStorageBytes } from "../storage/terminal-mark-budget";
 import {
   DESK_METADATA_MAX_BYTES,
   deskMetadataBytes,
@@ -35,7 +36,8 @@ test("scale sources-10: current stops, both browser consumers and SQLite retain 
       id: "synthetic-scale",
       result: wire,
     });
-    const sqliteBytes = deskMetadataBytes(rows);
+    const sqliteBytes = terminalMarkStorageBytes(rows);
+    const acknowledgedListBytes = deskMetadataBytes(rows);
     expect(wireBytes).toBeLessThan(DESK_METADATA_MAX_BYTES);
     expect(sqliteBytes).toBeLessThan(DESK_METADATA_MAX_BYTES);
     console.log(
@@ -44,6 +46,7 @@ test("scale sources-10: current stops, both browser consumers and SQLite retain 
         currentRows: rows.length,
         wireBytes,
         sqliteBytes,
+        acknowledgedListBytes,
         wireBytesPerRecord: wireBytes / rows.length,
         sqliteBytesPerRecord: sqliteBytes / rows.length,
         frameBytes: 1024 * 1024,

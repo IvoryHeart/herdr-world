@@ -114,7 +114,9 @@ to fail; existing session/publication/Undo/storage fault controls remain active.
 
 `world/review-stop-scale.test.ts` measures the maintained scale inputs. The
 10-source row has 360 current stops: 104,161 bytes on the Desk wire and 179,761
-serialized SQLite-row bytes (about 289/499 bytes per record). The dense-repair row
+acknowledged-list bytes. Canonical writer/restart accounting is 180,481 bytes
+(about 289 wire / 501 canonical SQLite bytes per record); attached memory rows
+use 179,761 bytes (about 499 per record). The dense-repair row
 contains 2,191,232 native panes across 64 sources; its first source's 34,238 panes
 produce a 13,639,096-byte native response and the real HerdrClient refuses it as
 `Herdr response line is too large` before any Desk capture. Desk row count is 0,
@@ -130,3 +132,27 @@ one-time review migration and API/table-family retirement are explicitly held
 until the compatible Chat rebuild and stop coverage merge; no retirement claim
 is made here. The supported native schema has no checkable runtime-instance
 signal, so null-session review continuity through restart remains excluded.
+
+## Review repair: recovery, replacement, atomic refusal and malformed ingress
+
+`world/review-stop-review.test.ts` adds seven real-consumer cases: 501 known stops
+survive re-entry to recovery; unknown ownership durably ends the preceding known
+capture before World restart; a writer budget filled exactly to 786,432 bytes
+refuses a two-stop advance without changing any durable current row; a near-full
+plan shrinks current rows before growth; malformed native identity is refused
+on the actual snapshot-to-persistence path without fatal callback or false
+absence; a retired runtime cannot poison the current projection with an invalid
+observation; and an older unknown listing cannot end a newer accepted review. Four compiled faults restore each reviewed defect and
+must fail its regression. This extends the finite direct evidence, not native
+runtime-instance proof or the separately gated completion migration.
+
+Storage admission and preflight share canonical unresolved-binding byte counts.
+A changed binding reserves the remaining width of a JSON number (at most 24
+bytes) for the worker's later checked_at; provisional new IDs overestimate the
+issued ID width. Unchanged rows retain exact accounting. Shrinking writes run
+before growing writes and open-recency trimming precedes the writer's capacity
+check, preventing an intermediate state from exceeding the validated plan.
+Crash/storage-fault prefix evidence remains distinct from atomic capacity
+refusal. Native listing validation uses the same binding writer validator and
+Desk identity bounds, rejects the complete listing rather than filtering it,
+and never converts arbitrary storage failures into benign input refusals.

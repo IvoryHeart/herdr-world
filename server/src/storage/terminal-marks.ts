@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import {
-  assertDeskMetadataSize,
+  assertDeskMetadataByteCount,
   DESK_IDLE_WINDOW_MS,
   parseDeskState,
 } from "../../../shared/deskState";
@@ -15,6 +15,7 @@ import type {
 import type { createBindingWriter } from "./world-bindings";
 import type { createWorldIds } from "./world-ids";
 import type { StorageRequest } from "./world-protocol";
+import { terminalMarkStorageBytes } from "./terminal-mark-budget";
 
 export type MarkKind = "desk" | "watchlist" | "completion-seen";
 export type MarkBody = {
@@ -310,10 +311,6 @@ export function createTerminalMarkWriter(
       JSON.stringify(value),
       openOrder,
     );
-    if (input.kind === "desk")
-      assertDeskMetadataSize(
-        readTerminalMarks(db).filter((row) => row.kind === "desk"),
-      );
     const trimmed: SavedTerminalMark[] = [],
       removed: string[] = [];
     if (opening) {
@@ -342,6 +339,12 @@ export function createTerminalMarkWriter(
         }
       }
     }
+    if (input.kind === "desk")
+      assertDeskMetadataByteCount(
+        terminalMarkStorageBytes(
+          readTerminalMarks(db).filter((row) => row.kind === "desk"),
+        ),
+      );
     return { row: next, trimmed, removed };
   };
 }

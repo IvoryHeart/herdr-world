@@ -91,6 +91,17 @@ export class WorldDeskRegistry {
       terminalKey({ ...identity, agent_session_fingerprint: null }),
     )?.identity.agent_session_fingerprint;
   }
+  /** A stale whole-host list cannot end bindings accepted by newer metadata. */
+  canObserveConnection(connectionId: string, generation: number, at: number) {
+    for (const previous of this.previous.values())
+      if (
+        previous.identity.connection_id === connectionId &&
+        previous.identity.connection_generation === generation &&
+        (previous.at > at || (previous.mutation && previous.at === at))
+      )
+        return false;
+    return true;
+  }
   storedRecords(): StoredDeskRecord[] {
     return [...this.records.values()].map((record) => ({ ...record }));
   }

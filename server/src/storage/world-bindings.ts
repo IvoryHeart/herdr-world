@@ -138,7 +138,10 @@ function entity(value: unknown): boolean {
     (value.session === undefined || text(value.session))
   );
 }
-function validateEvent(event: BindingEvent, current: BindingFence | null) {
+export function validateEvent(
+  event: BindingEvent,
+  current: BindingFence | null,
+) {
   if (current !== null) fence(current);
   if (!object(event)) fail();
   switch (event.type) {

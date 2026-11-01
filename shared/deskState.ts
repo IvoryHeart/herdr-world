@@ -22,7 +22,10 @@ export function deskMetadataBytes(value: unknown) {
   return new TextEncoder().encode(JSON.stringify(value)).byteLength;
 }
 export function assertDeskMetadataSize(value: unknown) {
-  if (deskMetadataBytes(value) > DESK_METADATA_MAX_BYTES)
+  assertDeskMetadataByteCount(deskMetadataBytes(value));
+}
+export function assertDeskMetadataByteCount(bytes: number) {
+  if (bytes > DESK_METADATA_MAX_BYTES)
     throw new Error(
       "Desk capacity exceeded: metadata exceeds the 768 KiB budget (1 MiB frame limit unchanged)",
     );

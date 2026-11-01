@@ -1072,7 +1072,10 @@ unreviewed stop for later review. Unknown-session Desk reviews remain shared
 within their admitted live ownership, but cannot safely carry across World or
 Herdr/runtime restart: supported Herdr observations expose no runtime-instance
 proof. Their acknowledgements stay in unassociated history; fresh observation
-gets a new current stop. A null-to-known owner never inherits the earlier review. Renewed work or later native completion progress clears a completion
+gets a new current stop. Admitting an unknown agent durably ends an earlier
+known capture, preserving its acknowledgement as ended history; a later World
+restart cannot forget that replacement. A null-to-known owner never inherits
+the earlier review. Renewed work or later native completion progress clears a completion
 check. Herdr restarting with new terminals therefore does not inherit old marks.
 
 Unpin removes its exact saved watch even while the host is unavailable. The browser
@@ -1098,13 +1101,22 @@ No terminal text, receipt content, credentials or runtime fences enter this fami
 Current Desk stops follow source/session lifetime and are never displaced by
 history. Inactive/ended Desk history retains at most 500 rows, oldest-first;
 known-session restart captures stay unresolved/protected during source recovery,
-and are classified only by fresh observation or confirmed unavailability. There
+and are classified only by fresh observation or confirmed unavailability.
+Entering reconnect recovery protects known captures again before any history
+trimming, including sources already observed earlier in the process. There
 are still at most 40 recent opens, 128 watches and 4,096 completion checks. Desk
 wire metadata and serialized SQLite rows each have a 768 KiB budget, leaving
 headroom below the unchanged 1 MiB frame ceiling. History yields first to the byte
 budget; if current metadata alone exceeds it, World reports `Desk capacity
 exceeded` and refuses the operation without evicting current stops, acknowledging
-a failed review or stopping the service. Completion checks remain compatible
+a failed review or stopping the service. Capacity preflight uses the writer's
+canonical unresolved binding representation for the entire resulting plan,
+reserves for the worker's commit timestamp and applies shrinking updates before
+growth, so a capacity-refused observation cannot leave a committed prefix.
+Malformed native identities refuse the whole observation before writes or
+absence classification. The refusal is nonfatal, leaves existing rows intact,
+and clears after a valid current observation; no partial filtered listing can
+prove terminal absence. Completion checks remain compatible
 until the separate reviewed-record migration/retirement is delivered. Without native progress, World cannot discover a complete
 work/completion cycle it never observed. Process-crash tests do not establish
 physical power-loss durability.

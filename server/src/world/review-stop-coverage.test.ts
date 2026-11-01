@@ -76,14 +76,13 @@ test("a known session missing on restart never lends its review to an unknown ag
       .list()
       .records.some((record) => record.reviewed_stop !== null),
   ).toBe(false);
-  expect(f.storage.terminalMarks.list()).toEqual(
-    expect.arrayContaining(
-      saved.map((row) => ({
-        ...row,
-        binding: { ...row.binding, state: "unresolved" },
-      })),
-    ),
-  );
+  for (const row of saved) {
+    const history = f.storage.terminalMarks
+      .list()
+      .find((entry) => entry.id === row.id);
+    expect(history?.body).toEqual(row.body);
+    expect(history?.binding.state).toBe("ended");
+  }
   expect(f.registries.desk.list().records[0]?.observed_stop_id).toBeString();
 });
 
