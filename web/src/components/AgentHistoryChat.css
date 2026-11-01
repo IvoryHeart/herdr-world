@@ -503,6 +503,8 @@
 
   .agent-history-chat-message:not(.is-command) {
     align-self: stretch;
+    /* Bubbles align your messages to the end; rows never do. */
+    align-items: start;
     max-width: none;
     display: grid;
     grid-template-columns: 28px minmax(0, 1fr) auto;
