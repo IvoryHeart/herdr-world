@@ -1,0 +1,4 @@
+### Fixed
+
+- Explicit Herdr setup now registers future user-service startup even when Herdr
+  is already running, preserving the live server and reporting registration errors.

@@ -1,4 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { setupHerdr } from "./bootstrap";
 import { runHerdrCommand } from "./cli";
 import { VERIFIED_HERDR_VERSION } from "./release";
 import type { HerdrUpgradeReport } from "./upgrade";
@@ -25,6 +29,41 @@ function capture() {
 }
 
 describe("runHerdrCommand", () => {
+  test("explicit CLI setup reports persistent registration for a running runtime", async () => {
+    const homeDir = mkdtempSync(join(tmpdir(), "herdr-cli-setup-"));
+    const binaryPath = join(homeDir, "herdr");
+    writeFileSync(binaryPath, "synthetic binary");
+    const registrations: unknown[] = [];
+    const io = capture();
+    try {
+      const code = await runHerdrCommand(["herdr", "setup"], "0.0.0", {
+        ...io,
+        loadConfig: () => fakeConfig() as never,
+        setup: () =>
+          setupHerdr({
+            platform: "linux",
+            homeDir,
+            binPathEnv: "",
+            pathEnv: homeDir,
+            ping: async () => ({
+              version: VERIFIED_HERDR_VERSION,
+              protocol: 22,
+            }),
+            installService: (...args) => {
+              registrations.push(args);
+            },
+          }),
+      });
+      expect(code).toBe(0);
+      expect(registrations).toEqual([[binaryPath, { start: false }]]);
+      expect(io.out.join("\n")).toContain(
+        "user service registered for future logins",
+      );
+    } finally {
+      rmSync(homeDir, { recursive: true, force: true });
+    }
+  });
+
   test("ignores non-herdr commands", async () => {
     expect(await runHerdrCommand(["service", "install"], "0.0.0")).toBeNull();
     expect(await runHerdrCommand([], "0.0.0")).toBeNull();

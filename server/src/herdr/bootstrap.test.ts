@@ -202,20 +202,67 @@ describe("detectHerdrSetup", () => {
 });
 
 describe("setupHerdr", () => {
-  test("does nothing when Herdr is already running", async () => {
+  test("registers future startup without activating an already running Herdr", async () => {
+    const homeDir = scratch();
+    const binaryPath = join(homeDir, "herdr");
+    writeFileSync(binaryPath, "synthetic binary");
     let installs = 0;
+    const registrations: unknown[] = [];
     const result = await setupHerdr({
+      platform: "linux",
+      homeDir,
+      binPathEnv: "",
+      pathEnv: homeDir,
       ping: reachablePing,
       installRelease: async () => {
         installs += 1;
         return { binaryPath: "/unused" };
       },
-      installService: () => {
-        installs += 1;
+      installService: (...args) => {
+        registrations.push(args);
       },
     });
     expect(result.outcome).toBe("already-running");
     expect(installs).toBe(0);
+    expect(registrations).toEqual([[binaryPath, { start: false }]]);
+  });
+
+  test("running setup fails honestly when its executable cannot be located", async () => {
+    let changes = 0;
+    await expect(
+      setupHerdr({
+        platform: "linux",
+        homeDir: scratch(),
+        pathEnv: "",
+        binPathEnv: "",
+        ping: reachablePing,
+        installRelease: async () => {
+          changes++;
+          return { binaryPath: "/unused" };
+        },
+        installService: () => {
+          changes++;
+        },
+      }),
+    ).rejects.toThrow("executable could not be found");
+    expect(changes).toBe(0);
+  });
+
+  test("running setup reports registration failure instead of success", async () => {
+    const homeDir = scratch();
+    writeFileSync(join(homeDir, "herdr"), "synthetic binary");
+    await expect(
+      setupHerdr({
+        platform: "linux",
+        homeDir,
+        pathEnv: homeDir,
+        binPathEnv: "",
+        ping: reachablePing,
+        installService: () => {
+          throw new Error("synthetic registration refused");
+        },
+      }),
+    ).rejects.toThrow("synthetic registration refused");
   });
 
   test("starts an installed binary as a service without downloading", async () => {

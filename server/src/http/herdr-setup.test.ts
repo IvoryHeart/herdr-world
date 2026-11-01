@@ -146,10 +146,10 @@ test("download deadline aborts stalled headers and bodies and releases the setup
         platform: "linux",
         arch: "x64",
         homeDir,
-        pathEnv: "",
+        pathEnv: homeDir,
         binPathEnv: "",
         installService: () => {
-          throw new Error("must not install a service");
+          if (!running) throw new Error("must not install a service");
         },
       },
     });
@@ -172,6 +172,7 @@ test("download deadline aborts stalled headers and bodies and releases the setup
         existsSync(join(homeDir, ".local", "bin", `.herdr.new-${process.pid}`)),
       ).toBe(false);
       running = true;
+      writeFileSync(join(homeDir, "herdr"), "synthetic binary");
       expect((await handlers.handleHerdrSetup(request())).status).toBe(200);
     } finally {
       deadline.abort();
@@ -180,6 +181,42 @@ test("download deadline aborts stalled headers and bodies and releases the setup
       await server.stop(true);
       rmSync(homeDir, { recursive: true, force: true });
     }
+  }
+});
+
+test("confirmed HTTP setup registers a running runtime without activation", async () => {
+  const homeDir = mkdtempSync(join(tmpdir(), "herdr-running-setup-"));
+  const binaryPath = join(homeDir, "herdr");
+  writeFileSync(binaryPath, "synthetic binary");
+  const registrations: unknown[] = [];
+  const handlers = createHerdrSetupHandlers({
+    guard: () => ({}),
+    ping: async () => ({ version: VERIFIED_HERDR_VERSION, protocol: 22 }),
+    bootstrap: {
+      platform: "linux",
+      homeDir,
+      binPathEnv: "",
+      pathEnv: homeDir,
+      installService: (...args) => {
+        registrations.push(args);
+      },
+      installRelease: async () => {
+        throw new Error("must not download");
+      },
+    },
+  });
+  try {
+    const response = await handlers.handleHerdrSetup(
+      new Request("http://localhost/api/herdr/setup", {
+        method: "POST",
+        headers: { "x-herdr-world-herdr-setup": "1" },
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect((await response.json()).outcome).toBe("already-running");
+    expect(registrations).toEqual([[binaryPath, { start: false }]]);
+  } finally {
+    rmSync(homeDir, { recursive: true, force: true });
   }
 });
 

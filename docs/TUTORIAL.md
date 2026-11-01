@@ -59,8 +59,9 @@ older World or Roamgate installation.
    the verified release. Set `HERDR_WORLD_SKIP_HERDR=1` to leave your Herdr
    untouched. Homebrew reuses existing Herdr and installs a missing runtime on
    first normal World launch; npm and Windows archives leave setup to you.
-   Run `herdr-world herdr setup` to install Herdr if needed and start its user
-   service before step 3. Explicit World updates retain a separate Herdr upgrade
+   Run `herdr-world herdr setup` to install Herdr if needed and configure its user
+   service before step 3. It starts Herdr if down; if already running, it registers
+   future startup without restarting the live server. Explicit World updates retain a separate Herdr upgrade
    step. See
    [Herdr installation and upgrades](./DEPLOYMENT.md#herdr-installation-and-upgrades).
 2. [Install Herdr World](./DEPLOYMENT.md#install-a-release). Standalone needs no Bun;

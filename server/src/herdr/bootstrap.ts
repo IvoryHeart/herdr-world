@@ -4,6 +4,12 @@ import { delimiter, isAbsolute, join } from "node:path";
 import { HerdrClient } from "../bridge/herdr-client";
 import { assertSupportedHerdrProtocol } from "../bridge/protocol-compat";
 import {
+  systemClock,
+  systemScheduler,
+  type Clock,
+  type Scheduler,
+} from "../service/ports";
+import {
   herdrDefaultBinaryPath,
   installVerifiedHerdr,
   legacyWindowsHerdrBinaries,
@@ -46,7 +52,9 @@ export interface HerdrBootstrapDeps {
   binPathEnv?: string;
   ping?: () => Promise<{ version: string; protocol: number }>;
   installRelease?: () => Promise<{ binaryPath: string }>;
-  installService?: (binaryPath: string) => void;
+  installService?: (binaryPath: string, options?: { start: boolean }) => void;
+  clock?: Clock;
+  scheduler?: Scheduler;
   startTimeoutMs?: number;
   pollIntervalMs?: number;
   sleep?: (ms: number) => Promise<void>;
@@ -134,7 +142,8 @@ function defaultSocketPath(): string {
 }
 
 /**
- * Make the local Herdr server reachable: install the verified release when no
+ * Ensure persistent local startup: register without activation when reachable,
+ * otherwise install the verified release when no
  * binary exists, then install and start the user service running
  * `herdr server`, and wait until the socket answers.
  */
@@ -142,12 +151,30 @@ export async function setupHerdr(
   deps: HerdrBootstrapDeps = {},
 ): Promise<HerdrSetupResult> {
   assertManagedSetupAllowed(deps.guard);
+  const clock = deps.clock ?? systemClock;
+  const scheduler = deps.scheduler ?? systemScheduler;
   const sleep =
-    deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+    deps.sleep ??
+    ((ms: number) => new Promise<void>((r) => scheduler.schedule(r, ms)));
   const ping = deps.ping ?? (() => new HerdrClient(defaultSocketPath()).ping());
 
   const state = await detectHerdrSetup({ ...deps, ping });
+  const installService =
+    deps.installService ??
+    ((path: string, options?: { start: boolean }) =>
+      installHerdrService(path, {
+        homeDir: deps.homeDir,
+        appDataDir: deps.appDataDir,
+        ...options,
+      }));
   if (state.state === "running") {
+    assertSupportedHerdrProtocol(state.protocol);
+    const binaryPath = findHerdrBinary(deps);
+    if (!binaryPath)
+      throw new Error(
+        "Herdr is running but its executable could not be found; set HERDR_BIN_PATH to its absolute path and rerun herdr setup",
+      );
+    installService(binaryPath, { start: false });
     return {
       outcome: "already-running",
       version: state.version,
@@ -160,18 +187,11 @@ export async function setupHerdr(
       ? state.binaryPath
       : (await (deps.installRelease ?? (() => installVerifiedHerdr(deps)))())
           .binaryPath;
-  (
-    deps.installService ??
-    ((path) =>
-      installHerdrService(path, {
-        homeDir: deps.homeDir,
-        appDataDir: deps.appDataDir,
-      }))
-  )(binaryPath);
+  installService(binaryPath);
 
   const timeoutMs = deps.startTimeoutMs ?? 15000;
   const intervalMs = deps.pollIntervalMs ?? 250;
-  const deadline = Date.now() + timeoutMs;
+  const deadline = clock.monotonic() + timeoutMs;
   let lastError: Error | undefined;
   for (;;) {
     try {
@@ -186,7 +206,7 @@ export async function setupHerdr(
       };
     } catch (error) {
       lastError = error as Error;
-      if (Date.now() >= deadline) break;
+      if (clock.monotonic() >= deadline) break;
       await sleep(intervalMs);
     }
   }

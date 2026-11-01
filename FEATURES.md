@@ -3,6 +3,10 @@
 A Web/PWA client for a running [Herdr](https://herdr.dev) server.
 [Install it](./docs/DEPLOYMENT.md) or follow the [tutorial](./docs/TUTORIAL.md).
 
+Explicit default-local `herdr-world herdr setup` configures persistent startup.
+If Herdr is already running, it registers future startup without restarting the
+server; its current workspaces and agents keep running.
+
 Agent questions, answers and task results survive service restarts in the
 instance's private `world.sqlite`. The service sends owner alerts from a durable
 outbox; an interrupted send retains explicit uncertainty. Retrieve answers with
