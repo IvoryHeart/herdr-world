@@ -450,13 +450,13 @@ function draftBuilding(
       ? MIN_PHONE_BUILDING_WIDTH
       : MIN_BUILDING_WIDTH,
   );
-  // The bar takes the bottom corner under the last room column, 12-20 tiles
-  // from its left edge (a counter too short for a stool is left out); the
-  // other columns may run down to the bottom wall.
+  // The bar: the bottom corner under the last room column, 12-20 tiles back
+  // from its right end; other columns may run down to the bottom wall.
   const last = spans.filter((span) => span.x1 > span.x0).pop();
-  const barLeft = Math.max(2, last ? last.x0 - 1 : 2);
-  const barWidth = Math.min(BAR_WIDTH, Math.max(SOFA_CORNER, w - 2 - barLeft));
-  const barX = Math.min(barLeft, w - 2 - barWidth);
+  const right = last ? Math.min(last.x1 + 1, w - 2) : w - 2;
+  const left = Math.max(2, last ? last.x0 - 1 : 2);
+  const barWidth = Math.min(BAR_WIDTH, Math.max(SOFA_CORNER, right - left));
+  const barX = right - barWidth;
   const bottomOf = (over: boolean) =>
     Math.max(
       ROOM_TOP,

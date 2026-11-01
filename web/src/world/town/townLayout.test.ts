@@ -777,19 +777,36 @@ test("rooms clear of the bar reach the bottom; the bar stays under its own colum
 
 test("the bar sits beneath the last room column in every shape and size", () => {
   for (const shape of Object.values(TOWN_SHAPES))
-    for (const rooms of [[], [1], [3], [9], [24], [24, 4], [4, 4, 4], [35]]) {
+    for (const rooms of [
+      [],
+      [1],
+      [3],
+      [9],
+      [24],
+      [35],
+      [100],
+      [24, 4],
+      [4, 100],
+      [4, 4, 4],
+    ]) {
       const { layout } = layoutTown(town({ a: rooms }), shape);
-      const { lounge, rooms: placed } = layout.buildings[0]!;
+      const building = layout.buildings[0]!;
+      const { lounge, rooms: placed } = building;
+      const wall = building.x + building.w - 2;
       expect(lounge.w).toBeGreaterThanOrEqual(12);
       expect(lounge.w).toBeLessThanOrEqual(20);
       expect(lounge.spots.length).toBeGreaterThanOrEqual(12);
       expect(lounge.spots.length).toBeLessThanOrEqual(15);
+      // With no rooms, the bar keeps the bottom-right corner.
+      if (!placed.length) expect(lounge.x + lounge.w).toBe(wall);
       if (!placed.length) continue;
       const lastX = Math.max(...placed.map((room) => room.x));
       const column = placed.filter((room) => room.x === lastX);
-      // Under the column, not beside it, and below its lowest room.
-      expect(lounge.x).toBeLessThanOrEqual(lastX);
-      expect(lounge.x + lounge.w).toBeGreaterThan(lastX);
+      const columnRight = Math.max(...column.map((room) => room.x + room.w));
+      // Under the column, not beside it, and below its lowest room; its right
+      // end is the column's (the right wall when no floor is spare).
+      expect(lounge.x).toBeLessThan(columnRight);
+      expect(lounge.x + lounge.w).toBe(Math.min(columnRight + 1, wall));
       for (const room of column)
         expect(room.y + room.h).toBeLessThanOrEqual(lounge.y);
     }
