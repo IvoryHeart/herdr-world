@@ -11,9 +11,75 @@ const workerUrl = pathToFileURL(
 ).href;
 const consumers = resolve(import.meta.dir, "persistent-terminal-marks.test.ts");
 const storage = resolve(import.meta.dir, "../storage/terminal-marks.test.ts");
+const stops = resolve(import.meta.dir, "review-stop-coverage.test.ts");
+const repairs = resolve(import.meta.dir, "review-stop-review.test.ts");
 const cases = [
   { name: "positive service consumers", entry: consumers },
   { name: "positive SQLite consumers", entry: storage },
+  {
+    name: "recovery re-entry protection",
+    entry: repairs,
+    file: "persistent-terminal-marks.ts",
+    match: /this\.recoveringSources\.add\(connectionId\)/,
+    replacement: "this.recoveringSources.delete(connectionId)",
+    assertion:
+      "re-entering recovery protects all 501 known current captures until fresh classification",
+  },
+  {
+    name: "durable unknown replacement fence",
+    entry: repairs,
+    file: "persistent-terminal-marks.ts",
+    match: /unknownOwners\.has\(terminal\)/,
+    replacement: "false",
+    assertion:
+      "unknown ownership durably ends a preceding known review before World restart",
+  },
+  {
+    name: "canonical capacity accounting",
+    entry: repairs,
+    file: "terminal-mark-budget.ts",
+    match: /row\.binding\.state === "ended"\s*\? "ended"\s*: "unresolved"/,
+    replacement: "row.binding.state",
+    assertion:
+      "a capacity-refused multi-stop observation changes no durable current row",
+  },
+  {
+    name: "malformed native ingress refusal",
+    entry: repairs,
+    file: "terminal-mark-observation.ts",
+    match: /validateEvent\(/,
+    replacement: "void (",
+    assertion:
+      "malformed snapshot native identity refuses the complete observation without fatal callback or absence proof",
+  },
+  {
+    name: "first observed stop coverage",
+    entry: stops,
+    file: "desk-state.ts",
+    match: / \|\| !existing\?\.observed_stop_id/,
+    replacement: "",
+    assertion:
+      "first observed done has a review identity without inventing a transition time",
+  },
+  {
+    name: "unreviewed stop expiry",
+    entry: stops,
+    file: "desk-state.ts",
+    match: /record\.observed_stop_id == null &&/,
+    replacement: "",
+    assertion:
+      "aged stop survives SQLite expiry and restart (reviewed before expiry: false)",
+  },
+  {
+    name: "unknown restart continuity",
+    entry: stops,
+    file: "persistent-terminal-marks.ts",
+    match:
+      /if\s*\(\s*!row\.binding\.evidence\.session &&\s*\(session !== undefined \|\| captured !== row\.id\)\s*\)\s*continue;/,
+    replacement: "",
+    assertion:
+      "unknown-session restart must not fabricate continuity for a saved review",
+  },
   {
     name: "reattached capture projection",
     entry: consumers,
@@ -53,8 +119,8 @@ const cases = [
     name: "retired publication",
     entry: consumers,
     file: "persistent-terminal-marks.ts",
-    match: /ensureCurrent\(\);\s*const committed = new Map/,
-    replacement: "const committed = new Map",
+    match: /ensureCurrent\(\);\s*const committedRows =/,
+    replacement: "const committedRows =",
     assertion:
       "a storage acknowledgement arriving after retirement never publishes its old projection",
   },
@@ -178,7 +244,12 @@ for (const [index, control] of cases.entries())
       process.execPath,
       "test",
       output,
-      ...(control.assertion ? ["--test-name-pattern", control.assertion] : []),
+      ...(control.assertion
+        ? [
+            "--test-name-pattern",
+            control.assertion.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+          ]
+        : []),
     ];
     const child = Bun.spawn(command, {
       cwd: root,

@@ -20,6 +20,7 @@ export async function handleDeskRpc(rpc: BridgeRpcContext): Promise<void> {
     if (method === "world.desk.get" && rpc.services.persistentMarks)
       await rpc.services.persistentMarks.expire();
     else if (!rpc.services.persistentMarks) worldDesk.expire(Date.now());
+    rpc.services.persistentMarks?.assertDeskAvailable();
     if (method !== "world.desk.get") {
       if (method !== "world.desk.review" && method !== "world.desk.open")
         throw new Error("unknown Desk operation");

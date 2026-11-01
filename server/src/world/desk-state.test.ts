@@ -25,7 +25,7 @@ test("shares latest marks with exact Undo and distinct host/session owners", () 
   expect(desk.list().records).toEqual([]);
 });
 
-test("service-observed stops have one timestamp, ignore obsolete reads and expire", () => {
+test("service-observed stop display times expire without losing their review identity", () => {
   const desk = new WorldDeskRegistry();
   desk.observeAgent(identity, "working", 1);
   desk.observeAgent(identity, "idle", 2);
@@ -33,7 +33,10 @@ test("service-observed stops have one timestamp, ignore obsolete reads and expir
   desk.observeAgent(identity, "idle", 3);
   expect(desk.list().records[0]!.stopped_at).toBe(2);
   desk.expire(DESK_IDLE_WINDOW_MS + 3);
-  expect(desk.list().records).toEqual([]);
+  expect(desk.list().records[0]).toMatchObject({
+    stopped_at: null,
+    observed_stop_id: expect.any(String),
+  });
 });
 
 test("replacement sessions clear marks, opens and observed stops", () => {
@@ -47,10 +50,17 @@ test("replacement sessions clear marks, opens and observed stops", () => {
     "idle",
     5,
   );
-  expect(desk.list().records).toEqual([]);
+  expect(desk.list().records).toMatchObject([
+    {
+      agent_session_fingerprint: "b".repeat(64),
+      reviewed_stop: null,
+      opened_at: null,
+      stopped_at: null,
+    },
+  ]);
 });
 
-test("records and recent opens are bounded and an identical mark is idempotent", () => {
+test("current records are not evicted at 500; recent opens stay bounded and marks idempotent", () => {
   const desk = new WorldDeskRegistry();
   for (let n = 0; n < 550; n++) {
     const agent = { ...identity, terminal_id: `terminal-${n}` };
@@ -58,7 +68,7 @@ test("records and recent opens are bounded and an identical mark is idempotent",
     desk.open(agent, n);
   }
   const state = desk.list();
-  expect(state.records.length).toBeLessThanOrEqual(500);
+  expect(state.records.length).toBe(550);
   expect(
     state.records.filter((entry) => entry.opened_at !== null),
   ).toHaveLength(40);

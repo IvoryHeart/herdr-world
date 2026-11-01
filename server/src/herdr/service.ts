@@ -35,6 +35,8 @@ export interface HerdrServicePaths {
 }
 
 export interface HerdrServiceDeps {
+  /** Register future startup only when false; never touch the live process. */
+  start?: boolean;
   platform?: ServicePlatform;
   homeDir?: string;
   appDataDir?: string;
@@ -240,6 +242,7 @@ export function installHerdrService(
       ]),
       "systemd service enable",
     );
+    if (deps.start === false) return paths;
     // Explicit restart: `enable` does not restart an already-active service.
     assertRunSucceeded(
       runCommand([
@@ -263,6 +266,15 @@ export function installHerdrService(
     );
     const domain = `gui/${uid}`;
     const service = `${domain}/${HERDR_SERVICE_LABEL}`;
+    if (deps.start === false) {
+      // RunAtLoad/KeepAlive take effect at the next login. Bootstrapping now
+      // would start a competing process; bootout would kill a managed one.
+      assertRunSucceeded(
+        runCommand(["launchctl", "enable", service]),
+        "launchd service enable",
+      );
+      return paths;
+    }
     if (runCommand(["launchctl", "print", service], { quiet: true }) === 0) {
       assertRunSucceeded(
         runCommand(["launchctl", "bootout", service]),
@@ -284,6 +296,7 @@ export function installHerdrService(
     registerWindowsTask(paths.definition, runCommand),
     "scheduled task registration",
   );
+  if (deps.start === false) return paths;
   assertRunSucceeded(
     restartWindowsTask(paths.taskName ?? "", runCommand),
     "scheduled task start",

@@ -149,7 +149,7 @@ or a claim about arbitrary concurrent workspace/transport schedules.
 | Q33 Git actions/auto-sync | Real Git repositories and process tests exercise dirty-tree refusal, fetch/merge failures, qualified actions and synchronization. | Git/network/platform behavior and uncommitted user changes are not represented by an abstract branch flag. |
 | Q34 Worktree create/remove/hooks | Real worktree/hook tests exercise fetch-before-create, failed fetch, one in-flight removal and retry after failure. | Native Git/filesystem/hook execution is required; shared-operation examples are bounded integration evidence, not all concurrent worktree schedules. |
 | Q35 Settings/private-file publication | Owned filesystem and fresh-process tests exercise private namespaces, permissions, settings publication and durable secrets. | Actual rename/fsync/permission behavior remains platform-dependent; unsupported power-loss guarantees are not inferred. |
-| Q36 Herdr setup/service/update | Real setup/update/service tests exercise verified assets, replacement failures, request budgets and installation ownership. Native compiled plugin fixtures with isolated homes and no Bun exercise every frozen verb and canonical service routing; system installer fixtures reject corrupt/mismatched releases and restore binaries on failed launcher promotion. | OS service managers and downloaded artifacts require supported-platform CI/live evidence; environment-gated checks must report prerequisites/skips. |
+| Q36 Herdr setup/service/update | Real setup/update/service tests exercise verified assets, replacement failures, request budgets and installation ownership. Native compiled plugin fixtures with isolated homes and no Bun exercise every frozen verb and canonical service routing; system installer fixtures reject corrupt/mismatched releases and restore binaries on failed launcher promotion. Explicit persistent setup has CLI/confirmed-HTTP bootstrap tests and per-platform registration-only command traces; running setup never activates or replaces the live process. | OS service managers and downloaded artifacts require supported-platform CI/live evidence; environment-gated checks must report prerequisites/skips. |
 | Q38 Optional metrics/cache work | Real provider/HTTP/cache tests exercise bounded read-only observation, unavailable providers, coalescing and validated credential-free configuration. | Metrics do not grant operation authority; provider availability and network deadlines are observed integration behavior. |
 | Q39 Renderer and lazy-module lifetime | Real rendering-resource and browser/lazy-module tests exercise graphics destruction, shared texture ownership and reload/lifetime behavior. The Town idle-draw case uses native WebGL context loss/restoration with controlled visibility and test time to check repaint after sleep, deferred hidden recovery, return to sleep and disposal. | GPU/browser/URL behavior requires the actual implementation; arbitrary device/driver failure schedules are excluded. |
 | Q40 Binary/control protocol parsing | Wire fixtures and actual endpoint/thin-client/Herdr parsers exercise protocol versions, truncation, close buffering and codec negotiation. | Chunk ownership has maintained models; byte parsing remains direct fixture/protocol evidence across supported versions, not all byte strings. |
@@ -772,3 +772,25 @@ integration; no new Quint model is claimed. Existing Q39 lifecycle and Q43
 layout/work-bound consumers remain required, including all Town groups and dense
 production contexts. Sampled colour sanity is only a cheap negative control;
 it cannot establish semantic scene completeness or arbitrary device/load behavior.
+
+### Current Desk stops and durable reviews (Q24/Q51)
+
+The [terminal-mark contract](contracts/terminal-marks.md#current-stop-coverage-and-retention)
+derives current-stop identity, display-only expiry, verified known-session restart,
+unknown no-carry and current/history/byte accounting before mapping. Real SQLite,
+production RPC, two browser stores and compiled fault controls cover the finite
+identity/persistence boundaries. Maintained 10-source inputs fit the unchanged
+frame with headroom; dense native input is explicitly refused before capture,
+without a composed dense success claim. These checks complement existing binding
+and runtime models; no SQL abstraction replaces actual savepoint/worker evidence.
+Completion-seen remains compatible pending the separately gated migration.
+
+PR #622 review repairs add real SQLite recovery re-entry, durable unknown-owner
+supersession across restart, atomic canonical-capacity refusal, shrinking-before-
+growth admission and whole-list malformed native input refusal to Q24/Q51.
+Four additional compiled controls demonstrate sensitivity. The binding validator
+is exported for shared ingress validation without changing its acceptance rules;
+its existing model contract is unchanged. Full required verification and the
+independent revised consumer-mapping review remain required.
+Whole-host observation age is checked before native ownership/absence admission
+and again when queued work runs, preserving newer accepted review authority.

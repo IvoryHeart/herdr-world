@@ -246,7 +246,15 @@ for (const missing of ["agent", "agent_session"] as const) {
     observeDeskPanes(registry, "alpha", 1, [pane], now + 1000, [
       { ...nativePane, state_change_seq: 3 },
     ]);
-    expect(registry.list().records).toEqual([]);
+    if (missing === "agent") expect(registry.list().records).toEqual([]);
+    else
+      expect(registry.list().records).toMatchObject([
+        {
+          agent_session_fingerprint: null,
+          stopped_at: null,
+          reviewed_stop: null,
+        },
+      ]);
   });
 }
 

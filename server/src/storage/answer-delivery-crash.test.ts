@@ -154,13 +154,15 @@ for (const compiled of [false, true]) {
       expect(code, error).toBe(0);
       expect(JSON.parse(output).answer).toBe("Stored fixture answer");
       const messages = received(directory);
-      expect(messages).toHaveLength(phase === "before-effect" ? 0 : 1);
+      expect(messages).toHaveLength(
+        phase === "after-effect" || delivered ? 1 : 0,
+      );
       if (messages.length)
         expect(messages[0]).toBe(
           "Answer to q-native:\nQuestion: Proceed with the fixture?\nAnswer from owner: Stored fixture answer",
         );
       expect(JSON.parse(output).state).toBe(
-        possible ? "uncertain" : "delivered",
+        possible ? "uncertain" : delivered ? "delivered" : "refused",
       );
     }, 60_000);
 }

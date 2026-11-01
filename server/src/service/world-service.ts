@@ -383,6 +383,7 @@ async function compose(
         status.id,
         status.generation,
         status.state === "ready",
+        !["error", "disconnected"].includes(status.state),
       );
       publishWorldInvalidation(status.id, status.generation);
       const fields = {

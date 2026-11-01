@@ -51,6 +51,14 @@ are not backfilled, and dismissals send no pane input. CLI callers on other
 platforms, SSH callers and asks without a supported verified binding remain
 retrieval-only.
 
+After World restarts, existing alert and answer intents cannot submit to Herdr:
+the current protocol supplies no native boot witness, and a recycled generation
+or matching session label does not establish runtime continuity. Provably unsent
+intents record not sent; possible sends stay uncertain for manual resolution.
+Missing legacy authority also refuses dispatch. Questions, answers and receipts
+are retained, with `herdr-world ask get ID` available for retrieval. New alerts
+and newly captured recipients have authority for the current World run only.
+
 A possible pane send is **opaque**: after a crash or lost receipt World records
 uncertain and never automatically repeats it. Town Summary’s Outbox exposes
 those deliveries
@@ -422,7 +430,7 @@ verified release:
 
 ```bash
 herdr-world herdr status
-herdr-world herdr setup             # install if missing, then start a user service
+herdr-world herdr setup             # register future startup; start only if down
 herdr-world herdr upgrade           # Herdr, harness integrations and plugin
 herdr-world herdr upgrade --install # also install Herdr when none is found
 ```
@@ -432,6 +440,23 @@ location: `~/.local/bin/herdr` on Linux and macOS, or
 `%LOCALAPPDATA%\Programs\Herdr\bin\herdr.exe` on Windows (`HERDR_INSTALL_DIR`
 overrides both, as it does for Herdr's own installers). A Herdr that World installs
 lands there, so `herdr` and `herdr update` find it afterwards.
+
+Explicit `herdr setup` configures the default local user service even when Herdr
+is already reachable. A running server is preserved: systemd reloads/enables its
+unit without restarting, macOS writes/enables its LaunchAgent for the next login
+without bootout/bootstrap, and Windows registers its logon task without starting
+or stopping it. An unmanaged live process is not adopted by a new supervisor.
+The registered definition takes effect at the next user login (or a later
+explicit service start). If the running server's executable cannot be found,
+setup fails with guidance to set `HERDR_BIN_PATH`; it does not download a second
+runtime. Registration errors are failures, not reachability-only success.
+Before registering a running server's future startup, setup requires the selected
+binary to be a regular executable file. A directory or non-executable entry is
+preserved and reported for repair, without changing service registration.
+SSH, named sessions and custom control/render sockets remain ineligible for
+managed setup. Normal World startup reconnects to Herdr without registering a
+service. World service activation, downstream runtime readiness and browser/PWA
+reopening are separate; this setup behavior does not verify macOS login recovery.
 
 When it runs:
 
@@ -1062,9 +1087,20 @@ After a restart or runtime replacement, saved records remain unresolved until
 World reads a complete, unambiguous list from the original connection. The same
 terminal and captured known session restore Desk/completion records. Watches
 follow the terminal across pane moves. A complete current terminal absence clears
-all three kinds; a positive known session replacement clears Desk and completion
-records. Missing session evidence and duplicate identities never attach a saved
-record. Renewed work or later native completion progress clears a completion
+watch/completion records and ends the Desk capture; a positive known session
+replacement ends Desk history and clears completion checks. Ended Desk captures
+are unassociated history and cannot attach again. Missing known-session evidence
+and duplicate identities never attach that saved Desk capture. Agents first seen
+stopped receive a fresh stop identity without inventing a historical stop time.
+The 12-hour idle display window expires only the display timestamp, retaining an
+unreviewed stop for later review. Unknown-session Desk reviews remain shared
+within their admitted live ownership, but cannot safely carry across World or
+Herdr/runtime restart: supported Herdr observations expose no runtime-instance
+proof. Their acknowledgements stay in unassociated history; fresh observation
+gets a new current stop. Admitting an unknown agent durably ends an earlier
+known capture, preserving its acknowledgement as ended history; a later World
+restart cannot forget that replacement. A null-to-known owner never inherits
+the earlier review. Renewed work or later native completion progress clears a completion
 check. Herdr restarting with new terminals therefore does not inherit old marks.
 
 Unpin removes its exact saved watch even while the host is unavailable. The browser
@@ -1087,7 +1123,25 @@ restarts. Board layout/Town pinned cells use the separate Board migration. Ordin
 Town placement and device preferences retain their current ownership.
 
 No terminal text, receipt content, credentials or runtime fences enter this family.
-Metadata retains its existing bounds (500 Desk records, 40 recent opens, 128 watches,
-4,096 completion checks). Without native progress, World cannot discover a complete
+Current Desk stops follow source/session lifetime and are never displaced by
+history. Inactive/ended Desk history retains at most 500 rows, oldest-first;
+known-session restart captures stay unresolved/protected during source recovery,
+and are classified only by fresh observation or confirmed unavailability.
+Entering reconnect recovery protects known captures again before any history
+trimming, including sources already observed earlier in the process. There
+are still at most 40 recent opens, 128 watches and 4,096 completion checks. Desk
+wire metadata and serialized SQLite rows each have a 768 KiB budget, leaving
+headroom below the unchanged 1 MiB frame ceiling. History yields first to the byte
+budget; if current metadata alone exceeds it, World reports `Desk capacity
+exceeded` and refuses the operation without evicting current stops, acknowledging
+a failed review or stopping the service. Capacity preflight uses the writer's
+canonical unresolved binding representation for the entire resulting plan,
+reserves for the worker's commit timestamp and applies shrinking updates before
+growth, so a capacity-refused observation cannot leave a committed prefix.
+Malformed native identities refuse the whole observation before writes or
+absence classification. The refusal is nonfatal, leaves existing rows intact,
+and clears after a valid current observation; no partial filtered listing can
+prove terminal absence. Completion checks remain compatible
+until the separate reviewed-record migration/retirement is delivered. Without native progress, World cannot discover a complete
 work/completion cycle it never observed. Process-crash tests do not establish
 physical power-loss durability.
