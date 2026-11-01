@@ -12,7 +12,14 @@ import {
   TextCursorInput,
   X,
 } from "lucide-react";
-import { type CSSProperties, useEffect, useId, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { flushSync } from "react-dom";
 import {
   type MobileTerminalShortcut,
@@ -401,6 +408,15 @@ export function TerminalComposer({
     insert: preparePathInsertion(),
   });
   const pickerCleanupRef = useRef<(() => void) | null>(null);
+  const pickerUploadRef = useRef({ draftKey, upload: onUploadFile, owner: {} });
+  useLayoutEffect(() => {
+    const previous = pickerUploadRef.current;
+    pickerUploadRef.current = {
+      draftKey,
+      upload: onUploadFile,
+      owner: previous.draftKey === draftKey ? previous.owner : {},
+    };
+  }, [draftKey, onUploadFile]);
 
   const uploadAndInsert = async (
     files: File[],
@@ -682,16 +698,28 @@ export function TerminalComposer({
               if (!input) return;
               pickerCleanupRef.current?.();
               const context = prepareUpload();
+              const owner = pickerUploadRef.current.owner;
               const cleanup = () => {
                 input.removeEventListener("change", selected);
                 input.removeEventListener("cancel", cleanup);
                 pickerCleanupRef.current = null;
               };
-              // The native chooser can finish after React replaces this pane.
+              // Chat refreshes a chooser's uploader across transport reconnects
+              // only while the exact draft owner stays mounted.
               const selected = (event: Event) => {
                 event.stopPropagation();
                 cleanup();
-                pickFiles(input, context);
+                if (surface !== "chat") {
+                  pickFiles(input, context);
+                  return;
+                }
+                const latest = pickerUploadRef.current;
+                if (!input.isConnected || latest.owner !== owner) {
+                  input.value = "";
+                  onError("Upload target changed while choosing files");
+                  return;
+                }
+                pickFiles(input, { ...context, upload: latest.upload });
               };
               input.addEventListener("change", selected);
               input.addEventListener("cancel", cleanup);

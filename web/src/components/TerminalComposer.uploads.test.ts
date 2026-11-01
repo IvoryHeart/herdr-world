@@ -3,7 +3,10 @@ import { Window } from "happy-dom";
 import type { Root } from "react-dom/client";
 import * as drafts from "../terminalComposer";
 import { defaultMobileTerminalShortcutRows } from "../mobileTerminalShortcuts";
-import type { TerminalInputMode } from "./TerminalComposer";
+import type { ComposerUpload, TerminalInputMode } from "./TerminalComposer";
+import type { ConnectionClient } from "../api";
+import type { Pane } from "../types";
+import { uploadTerminalFile } from "../terminalImageUpload";
 
 // Use real React commits: hook spies cannot reproduce batched completions or
 // the browser moving a hidden controlled textarea's selection on value changes.
@@ -53,10 +56,13 @@ async function registerDomTests() {
   const { act, createElement } = await import("react");
   const { createRoot } = await import("react-dom/client");
   const { TerminalComposer } = await import("./TerminalComposer");
+  const { chatComposerDraftKey } = await import("./chat/ChatComposer");
   let root: Root | null = null;
   let container: HTMLDivElement;
   let serial = 0;
+  const originalFetch = globalThis.fetch;
   afterEach(async () => {
+    globalThis.fetch = originalFetch;
     if (root) await act(async () => root?.unmount());
     root = null;
     document.body.replaceChildren();
@@ -87,6 +93,7 @@ async function registerDomTests() {
     end = 11,
     shortcuts = false,
     agent?: string,
+    surface: "terminal" | "chat" = "terminal",
   ) {
     const connection = `upload-dom-${++serial}`;
     drafts.activateTerminalComposerDraftScope(connection, 1);
@@ -113,9 +120,11 @@ async function registerDomTests() {
       progress.push(onProgress ?? (() => {}));
       return pending.promise;
     };
+    let fileUpload: ComposerUpload = upload;
     const render = () =>
       root!.render(
         createElement(TerminalComposer, {
+          surface,
           draftKey: activeKey,
           mode,
           onModeChange: (next) => {
@@ -132,7 +141,7 @@ async function registerDomTests() {
             sent.push(value);
           },
           onUploadImage: upload,
-          onUploadFile: upload,
+          onUploadFile: fileUpload,
           onError: (message) => errors.push(message),
         }),
       );
@@ -206,6 +215,10 @@ async function registerDomTests() {
       activeKey = next;
       await act(async () => render());
     };
+    const replaceFileUpload = async (next: ComposerUpload) => {
+      fileUpload = next;
+      await act(async () => render());
+    };
     return {
       key,
       connection,
@@ -221,6 +234,7 @@ async function registerDomTests() {
       edit,
       remount,
       switchDraft,
+      replaceFileUpload,
       directInput,
     };
   }
@@ -240,6 +254,150 @@ async function registerDomTests() {
       }) as unknown as PointerEvent,
     );
   }
+
+  async function pickerHarness() {
+    const h = await mount("", 0, 0, false, undefined, "chat");
+    let current = true;
+    const client = {
+      connectionId: h.connection,
+      generation: 1,
+      serverRuntimeGeneration: 1,
+      isCurrent: () => current,
+      acceptsServerGeneration: () => current,
+      call: async () => undefined,
+    } satisfies ConnectionClient;
+    const pane: Pane = {
+      pane_id: "pane-a",
+      terminal_id: "terminal-a",
+      workspace_id: "synthetic",
+      tab_id: "tab-a",
+      focused: true,
+      agent_status: "idle",
+      revision: 1,
+    };
+    const fingerprint = "a".repeat(64);
+    const key = chatComposerDraftKey(client, pane, fingerprint);
+    await h.switchDraft(key);
+    const requests: string[] = [];
+    globalThis.fetch = (async (url) => {
+      requests.push(String(url));
+      return Response.json(
+        { path: "/synthetic/owned.png" },
+        {
+          headers: {
+            "X-Herdr-Connection-Id": client.connectionId,
+            "X-Herdr-Connection-Generation": "1",
+          },
+        },
+      );
+    }) as typeof fetch;
+    const bind =
+      (owner: ConnectionClient): ComposerUpload =>
+      (file) =>
+        uploadTerminalFile(owner, file);
+    await h.replaceFileUpload(bind(client));
+    const input =
+      h.container.querySelector<HTMLInputElement>('input[type="file"]')!;
+    await act(async () =>
+      h.container
+        .querySelector<HTMLButtonElement>('[aria-label="Add a file"]')!
+        .click(),
+    );
+    const choose = async () => {
+      Object.defineProperty(input, "files", {
+        configurable: true,
+        value: [
+          new browser.File(["synthetic"], "owned.png", { type: "image/png" }),
+        ],
+      });
+      await act(async () =>
+        input.dispatchEvent(
+          new browser.Event("change", { bubbles: true }) as unknown as Event,
+        ),
+      );
+    };
+    const reconnect = async () => {
+      current = false;
+      await h.replaceFileUpload(
+        bind({ ...client, generation: 2, isCurrent: () => true }),
+      );
+    };
+    return {
+      ...h,
+      key,
+      client,
+      pane,
+      fingerprint,
+      requests,
+      choose,
+      reconnect,
+      retire: () => {
+        current = false;
+      },
+    };
+  }
+
+  test("normal paperclip upload uses its qualified client and inserts the acknowledged path without sending", async () => {
+    const h = await pickerHarness();
+    await h.choose();
+    expect(h.requests).toHaveLength(1);
+    const request = new URL(h.requests[0]);
+    expect(request.pathname).toBe(
+      `/api/connections/${h.connection}/terminal-upload`,
+    );
+    expect(request.searchParams.get("connection_generation")).toBe("1");
+    expect(h.textarea().value).toContain("/synthetic/owned.png");
+    expect(h.sent).toEqual([]);
+    expect(h.errors).toEqual([]);
+  });
+
+  test("an open paperclip chooser uses the fresh same-owner upload client after a transport reconnect", async () => {
+    const h = await pickerHarness();
+    await h.reconnect();
+    await h.choose();
+    expect(h.requests).toHaveLength(1);
+    expect(h.textarea().value).toContain("/synthetic/owned.png");
+    expect(h.sent).toEqual([]);
+    expect(h.errors).toEqual([]);
+  });
+
+  test.each(["connection", "runtime", "pane", "session", "away-and-back"])(
+    "an open paperclip chooser refuses a changed %s owner without uploading or redirecting the file",
+    async (change) => {
+      const h = await pickerHarness();
+      const next = chatComposerDraftKey(
+        change === "connection"
+          ? { ...h.client, connectionId: "other-connection" }
+          : change === "runtime"
+            ? { ...h.client, serverRuntimeGeneration: 2 }
+            : h.client,
+        change === "pane" || change === "away-and-back"
+          ? { ...h.pane, pane_id: "pane-b" }
+          : h.pane,
+        change === "session" ? "b".repeat(64) : h.fingerprint,
+      );
+      await h.switchDraft(next);
+      if (change === "away-and-back") await h.switchDraft(h.key);
+      await h.choose();
+      expect(h.requests).toHaveLength(0);
+      expect(h.errors).toContain("Upload target changed while choosing files");
+      expect(h.textarea().value).toBe("");
+      expect(h.sent).toEqual([]);
+    },
+  );
+
+  test("an open chooser with no current replacement still refuses its retired client before uploading", async () => {
+    const h = await pickerHarness();
+    h.retire();
+    await h.choose();
+    expect(h.requests).toHaveLength(0);
+    expect(h.errors).toEqual(["connection changed during upload"]);
+    expect(
+      h.container.querySelector<HTMLElement>(".attachment-chip")?.dataset
+        .status,
+    ).toBe("failed");
+    expect(h.textarea().value).toBe("");
+  });
 
   test("only focused multiline drafts expand, blur folds without losing caret, and refocus remeasures", async () => {
     const h = await mount("one\ntwo", 2, 2);
