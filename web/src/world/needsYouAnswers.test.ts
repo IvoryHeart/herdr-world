@@ -38,6 +38,7 @@ async function registerDomTest() {
     "Event",
     "CustomEvent",
     "MutationObserver",
+    "ResizeObserver",
     "KeyboardEvent",
     "MouseEvent",
     "FocusEvent",

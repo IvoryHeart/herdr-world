@@ -482,7 +482,8 @@ export default function WorldFoundationApp() {
                   ))}
                 </select>
               </label>
-              {needsYouInTopbar({
+              {!mobile &&
+              needsYouInTopbar({
                 view,
                 mobile,
                 zen: zenActive,
@@ -522,7 +523,18 @@ export default function WorldFoundationApp() {
                   <ArrowLeft size={20} aria-hidden="true" />
                 </button>
               ) : mobile ? (
-                <h1 className="world-mobile-title">{worldViewLabel(view)}</h1>
+                <>
+                  <h1 className="world-mobile-title">{worldViewLabel(view)}</h1>
+                  {/* A phone's counter follows the view's name, compact. */}
+                  {needsYouInTopbar({
+                    view,
+                    mobile,
+                    zen: zenActive,
+                    detail: false,
+                  }) ? (
+                    <NeedsYouCounter world={topbarWorld} compact />
+                  ) : null}
+                </>
               ) : null}
               {view !== "spaces" ? (
                 <>

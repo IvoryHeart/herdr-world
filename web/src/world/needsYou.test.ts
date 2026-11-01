@@ -133,10 +133,15 @@ test("each item names its agent, marks unverified asks and answers in place", ()
   expect(html).toContain('aria-label="Your answer to w1:asker (unverified)"');
   expect(html).toContain(">unverified</span>");
   expect(html.match(/>Dismiss</g)).toHaveLength(1);
-  // Blocked and finished agents: their Herdr names, Chat about this (Follow
-  // up for finished work), the hover card's ⓘ, and Mark reviewed only on
-  // finished work.
-  expect(html).toContain(">early-blocked</b>");
+  // Blocked and finished agents: their Herdr names (each opens its
+  // window; an asker World could not place is plain text), Chat about this
+  // (Follow up for finished work), the hover card's ⓘ, and Mark reviewed
+  // only on finished work.
+  expect(html).toContain('<b class="needs-you-name">w1:asker</b>');
+  expect(html).toContain(
+    'aria-label="Open early-blocked&#x27;s window" title="Open early-blocked&#x27;s window">early-blocked</button>',
+  );
+  expect(html.match(/class="needs-you-name"/g)).toHaveLength(6);
   expect(html).toContain('aria-label="Follow up with new-done about this"');
   expect(html).toContain('aria-label="Chat with early-blocked about this"');
   expect(html.match(/>Chat about this</g)).toHaveLength(2);

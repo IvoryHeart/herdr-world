@@ -451,7 +451,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   of **Manage connections**. Filtering preserves open resources and terminals;
   removed saved identities are pruned, with an explained return to All hosts
   when none remain. Offline hosts keep labelled roots; an empty catalogue offers onboarding.
-- **Needs you** in the top bar (in the view picker in Zen, including on a phone) counts
+- **Needs you** in the top bar (in the view picker in Zen, including on a phone;
+  outside Zen a phone shows it as an icon with a count badge right after the
+  view's name) counts
   open questions and the blocked agents of the hosts the Hosts filter shows, in
   every view, and opens the **Needs you** tab on the left: beside the view on
   wide landscape screens, over it on narrower ones, full screen with **Back** on a
@@ -466,8 +468,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   last 12 hours (**Mark reviewed** marks the report shown, says so if the mark
   could not be saved, and offers **Retry** if the report could not be read; Desk's
   To review lane can also list idle agents from recent transcript turns). Every item names its agent and marks an
-  unverified asker; **Chat about this** (**Follow up…** for finished work) opens
-  the agent's Chat, and hovering the agent's name (or **ⓘ**) shows its card with
+  unverified asker; the name, **Chat about this** and (for finished work)
+  **Follow up…** open the agent's Chat. A message longer than three lines
+  shows **More**: it, or a tap on the text, shows the whole message in place
+  with its links, and **Less** clips it again; and hovering the agent's name (or **ⓘ**) shows its card with
   the latest message. An answered question folds to one line until the tab
   closes. It shows a page of 30 items; **Show … more** and **Show the … before**
   turn the page, and every opener turns to its item's page. Town's reception

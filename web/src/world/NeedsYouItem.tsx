@@ -1,4 +1,11 @@
-import { type ReactNode, useEffect, useId, useState } from "react";
+import {
+  type ReactNode,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { agentMarkKind } from "./agentMarks";
 import { AgentMark } from "../components/AgentMark";
 import { ChatAfterBlocks } from "../components/chat/blocks/after";
@@ -79,18 +86,28 @@ export function NeedsYouMessage({
     >
       <header>
         <AgentMark kind={kind} />
-        <b
-          className="needs-you-name"
-          aria-describedby={card && leaf ? cardId : undefined}
-          onPointerEnter={(event) =>
-            event.pointerType === "mouse" && leaf && setCard("hover")
-          }
-          onPointerLeave={() =>
-            setCard((current) => (current === "hover" ? null : current))
-          }
-        >
-          {name}
-        </b>
+        {leaf ? (
+          // The name opens the agent's window, as on every item: its Chat
+          // holds the context behind a question or a report.
+          <button
+            type="button"
+            className="needs-you-name"
+            aria-label={`Open ${name}'s window`}
+            title={`Open ${name}'s window`}
+            aria-describedby={card ? cardId : undefined}
+            onPointerEnter={(event) =>
+              event.pointerType === "mouse" && setCard("hover")
+            }
+            onPointerLeave={() =>
+              setCard((current) => (current === "hover" ? null : current))
+            }
+            onClick={() => onChat(leaf.id)}
+          >
+            {name}
+          </button>
+        ) : (
+          <b className="needs-you-name">{name}</b>
+        )}
         {unverified ? (
           <span
             className="needs-you-tag"
@@ -151,6 +168,98 @@ export function NeedsYouMessage({
   );
 }
 
+/**
+ * An item's message, clipped to its first lines with More while it runs
+ * longer. Tapping the clipped text (not a link in it) or More shows all of it
+ * in place; Less clips it again. Only this box re-renders: the message is
+ * passed in as children, so toggling never re-renders the markdown.
+ */
+export function NeedsYouText({
+  id,
+  children,
+}: {
+  id?: string;
+  children: ReactNode;
+}) {
+  const ownId = useId();
+  const textId = id ?? ownId;
+  const box = useRef<HTMLDivElement | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [clipped, setClipped] = useState(false);
+  const clippedNow = useRef(clipped);
+  clippedNow.current = clipped;
+  // Measured before paint, so More arrives with the text, never after it.
+  // A clamped box keeps its height when its text changes, so watch both.
+  // Only a change renders: a resize elsewhere (the list's scrollbar) must
+  // not re-render every card.
+  useLayoutEffect(() => {
+    const element = box.current;
+    if (!element || expanded) return;
+    const measure = () => {
+      const next = element.scrollHeight > element.clientHeight + 1;
+      if (next !== clippedNow.current) {
+        clippedNow.current = next;
+        setClipped(next);
+      }
+    };
+    measure();
+    const resized = new ResizeObserver(measure);
+    resized.observe(element);
+    const changed = new MutationObserver(measure);
+    changed.observe(element, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+    return () => {
+      resized.disconnect();
+      changed.disconnect();
+    };
+  }, [expanded]);
+  const toggle = useRef<HTMLButtonElement | null>(null);
+  return (
+    <>
+      <div
+        ref={box}
+        id={textId}
+        className={`needs-you-text${expanded ? " is-expanded" : clipped ? " is-clipped" : ""}`}
+        onClick={(event) => {
+          if (expanded || !clipped) return;
+          // A link opens; a drag selects; neither expands.
+          if (
+            event.target instanceof Element &&
+            event.target.closest("a, button, input")
+          )
+            return;
+          if (window.getSelection()?.toString()) return;
+          setExpanded(true);
+        }}
+      >
+        {children}
+      </div>
+      {expanded || clipped ? (
+        <button
+          ref={toggle}
+          type="button"
+          className="needs-you-more-text"
+          aria-expanded={expanded}
+          aria-controls={textId}
+          onClick={() => {
+            setExpanded(!expanded);
+            // Less: keep the control in view when the text above it shrinks.
+            if (expanded)
+              requestAnimationFrame(() =>
+                toggle.current?.scrollIntoView?.({ block: "nearest" }),
+              );
+          }}
+        >
+          {expanded ? "Less" : "More"}
+        </button>
+      ) : null}
+    </>
+  );
+}
+
 /** An owner question: its options, a typed answer, or Dismiss. */
 function NeedsYouAsk({
   ask,
@@ -187,13 +296,13 @@ function NeedsYouAsk({
         void send(draft);
       }}
     >
-      <div id={questionId}>
+      <NeedsYouText id={questionId}>
         <MarkdownPreview
           text={question}
           className="needs-you-markdown"
           breaks
         />
-      </div>
+      </NeedsYouText>
       {options.length ? (
         <div className="needs-you-options">
           {options.map((option, index) => (
@@ -322,11 +431,13 @@ function NeedsYouAgent({
   return (
     <>
       {latest ? (
-        <MarkdownPreview
-          text={latest.text}
-          className="needs-you-markdown"
-          breaks
-        />
+        <NeedsYouText>
+          <MarkdownPreview
+            text={latest.text}
+            className="needs-you-markdown"
+            breaks
+          />
+        </NeedsYouText>
       ) : (
         <p className="needs-you-empty">
           {conversation?.status === "unavailable"

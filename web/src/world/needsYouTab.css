@@ -56,20 +56,45 @@
   color: var(--muted);
   font-size: 11px;
 }
-/* Up to three lines of each message; Chat about this has the rest. The
-   preview is styled here in full: Chat's own stylesheet loads only with the
-   first Chat window, and a rule arriving then must not reflow the list. */
+/* The preview is styled here in full: Chat's own stylesheet loads only with
+   the first Chat window, and a rule arriving then must not reflow the list. */
 .needs-you-item .needs-you-markdown {
-  display: -webkit-box;
   padding: 0;
-  overflow: hidden;
+  overflow: visible;
   color: inherit;
   font-size: 13px;
   line-height: 1.55;
   background: transparent;
+}
+/* Up to three lines of each message until More (or a tap) shows the rest in
+   place (NeedsYouText). */
+.needs-you-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.needs-you-text:not(.is-expanded) {
+  display: -webkit-box;
+  overflow: hidden;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
   line-clamp: 3;
+}
+.needs-you-text.is-clipped {
+  cursor: pointer;
+}
+.needs-you-item button.needs-you-more-text {
+  justify-self: start;
+  min-height: 24px;
+  margin-top: -4px;
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+}
+.needs-you-more-text:hover {
+  text-decoration: underline;
 }
 .needs-you-markdown > :first-child {
   margin-top: 0;
@@ -100,8 +125,23 @@
   background: var(--accent);
   color: var(--bg);
 }
-.needs-you-name {
-  cursor: default;
+/* The name opens the agent's window: bold text that reads as a link. */
+.needs-you-item button.needs-you-name {
+  min-height: 24px;
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.needs-you-item button.needs-you-name:hover {
+  text-decoration: underline;
 }
 .needs-you-info {
   flex: none;
@@ -252,4 +292,46 @@ body:has(.world-managed-window) .needs-you-tab.is-sheet {
   gap: 6px;
   min-height: 32px;
   white-space: nowrap;
+}
+
+/* A phone's top bar: an icon after the view's name, with a count badge like
+   the Hosts icon beside it (world-shell.css). */
+.needs-you-counter.is-compact {
+  position: relative;
+  flex: 0 0 auto;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  border: 1px solid var(--topbar-control-border, var(--border));
+  border-radius: 7px;
+  background: var(--topbar-control-bg, var(--panel));
+  color: var(--topbar-control-text, var(--text));
+}
+.needs-you-counter.is-compact[aria-pressed="true"] {
+  border-color: var(--accent);
+}
+.needs-you-badge {
+  position: absolute;
+  top: -7px;
+  right: -9px;
+  display: grid;
+  place-items: center;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 2px;
+  border-radius: 7px;
+  background: var(--accent);
+  color: var(--bg);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+}
+/* The bar's start and its view plane clip their overflow; give the badge
+   room above the icon without moving anything. */
+.topbar-start:has(.needs-you-counter.is-compact),
+.world-topbar-control-plane:has(> .needs-you-counter.is-compact) {
+  padding-block: 8px;
+  margin-block: -8px;
 }

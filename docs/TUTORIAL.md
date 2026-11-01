@@ -214,11 +214,14 @@ hosts stay usable.
    In Town it docks on the right at a readable width; drag its left edge to
    resize it (Town remembers the width), or drag its title to undock it.
    [Chat with an agent](#chat) explains reading, replying and answering there.
-   **Needs you** in the top bar (in the view picker in Zen and on a phone)
+   **Needs you** in the top bar (in the view picker in Zen and on a phone,
+   where outside Zen it is an icon with a count badge after the view's name)
    counts the questions and blocked agents waiting on you, in every view. Tap
    it to open the **Needs you** tab on the left: each question, blocked agent
    and finished task is a short message from its agent with its quick reply in
-   place, and **Chat about this** opens the agent's Chat. Hover an agent's name
+   place. Tap a long message (or **More**) to read all of it, links included;
+   **Less** shortens it again. The agent's name and **Chat about this** open
+   the agent's Chat for the context behind it. Hover an agent's name
    (or tap **ⓘ**) for its card. The tab stays open or closed on this device;
    **‹** (or **Back** on a phone) closes it. The Town master's chat (**Menu → Town master**, `firstmate` by
    default) opens docked once per visit on wide screens. Hover an agent for a

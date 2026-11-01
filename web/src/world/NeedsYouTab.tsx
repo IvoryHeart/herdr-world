@@ -64,14 +64,38 @@ function useWaitingCount(world: Pick<WorldObject, "leaves">) {
   return asks.length + blocked;
 }
 
-/** "Needs you N" in the existing top bar and Zen's picker: opens the tab. */
+/**
+ * "Needs you N" in the existing top bar and Zen's picker: opens the tab. A
+ * phone's top bar shows it compact, as an icon with a count badge like the
+ * bar's other icons.
+ */
 export function NeedsYouCounter({
   world,
+  compact = false,
 }: {
   world: Pick<WorldObject, "leaves">;
+  compact?: boolean;
 }) {
   const count = useWaitingCount(world);
   const { open } = useNeedsYouState();
+  if (compact)
+    return (
+      <button
+        type="button"
+        className="needs-you-counter is-compact"
+        aria-label={`Needs you, ${count}`}
+        aria-pressed={open}
+        title={open ? "Hide Needs you" : "Show Needs you"}
+        onClick={toggleNeedsYou}
+      >
+        <AgentMark kind={count ? "needs" : "idle"} />
+        {count ? (
+          <b className="needs-you-badge" aria-hidden="true">
+            {count}
+          </b>
+        ) : null}
+      </button>
+    );
   return (
     <button
       type="button"
@@ -234,8 +258,11 @@ function usePhoneSheetFocus(
       const item = request.itemKey
         ? sheet.querySelector<HTMLElement>(".needs-you-item.is-focused")
         : null;
+      // The item's first action, past its name (which opens its window).
       const target =
-        item?.querySelector<HTMLElement>("button:not([disabled]), input") ??
+        item?.querySelector<HTMLElement>(
+          "button:not([disabled]):not(.needs-you-name):not(.needs-you-info), input",
+        ) ??
         sheet.querySelector<HTMLElement>(".needs-you-back") ??
         sheet;
       target.focus();
