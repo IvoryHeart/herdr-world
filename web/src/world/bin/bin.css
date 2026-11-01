@@ -1,0 +1,418 @@
+/* The plain bin: Board's blackboard (dark) and whiteboard (light) palettes. */
+.world-bin,
+.world-bin-tray,
+.world-bin-toast {
+  --bin-ground: #1c2320;
+  --bin-card: #252d29;
+  --bin-panel: #202825;
+  --bin-line: #45504a;
+  --bin-ink: #e7ebe3;
+  --bin-soft: #a2aba1;
+  --bin-danger: #ff8b74;
+  --bin-danger-soft: rgb(255 139 116 / 14%);
+  --bin-lift: 0 14px 34px rgb(0 0 0 / 55%);
+  --bin-shadow: 0 1px 0 rgb(0 0 0 / 20%), 0 6px 18px rgb(0 0 0 / 35%);
+}
+:root[data-theme="light"] .world-bin,
+:root[data-theme="light"] .world-bin-tray,
+:root[data-theme="light"] .world-bin-toast {
+  --bin-ground: #f2f3ee;
+  --bin-card: #ffffff;
+  --bin-panel: #e8eae2;
+  --bin-line: #c2c7bb;
+  --bin-ink: #1e231f;
+  --bin-soft: #5a6159;
+  --bin-danger: #c8432d;
+  --bin-danger-soft: rgb(200 67 45 / 12%);
+  --bin-lift: 0 14px 34px rgb(30 35 31 / 24%);
+  --bin-shadow: 0 1px 0 rgb(30 35 31 / 6%), 0 6px 18px rgb(30 35 31 / 11%);
+}
+
+/* Above Board's bottom-right controls (36 px, 44 px on phones). */
+.world-bin {
+  position: absolute;
+  right: max(12px, env(safe-area-inset-right, 0px));
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 60px);
+  z-index: 35;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  width: 116px;
+  opacity: 0;
+  transform: translateY(24px);
+  pointer-events: none;
+  transition:
+    opacity 0.15s,
+    transform 0.15s;
+}
+/* Phones: the selection's Actions sit bottom-right, so the bin sits
+   bottom-left above the note button, and the open bin drops from the top. */
+@media (max-width: 720px) {
+  .world-bin {
+    right: auto;
+    left: max(8px, env(safe-area-inset-left, 0px));
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 72px);
+  }
+}
+.world-bin-shown {
+  opacity: 1;
+  transform: none;
+}
+.world-bin-holding {
+  pointer-events: auto;
+}
+.world-bin-can {
+  position: relative;
+  width: 84px;
+  height: 92px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--bin-ink);
+  cursor: pointer;
+}
+.world-bin-can:focus-visible {
+  outline: 2px solid var(--bin-danger);
+  outline-offset: 2px;
+  border-radius: 12px;
+}
+.world-bin-ring {
+  position: absolute;
+  inset: 0;
+  width: 84px;
+  height: 92px;
+}
+.world-bin-ring circle {
+  fill: none;
+  stroke-width: 4;
+}
+.world-bin-track {
+  stroke: var(--bin-line);
+}
+.world-bin-progress {
+  stroke: var(--bin-danger);
+  stroke-linecap: round;
+  transform: rotate(-90deg);
+  transform-origin: 42px 46px;
+  transition: stroke-dashoffset 0.25s linear;
+}
+.world-bin-paused .world-bin-progress {
+  stroke: var(--bin-soft);
+}
+.world-bin-body {
+  position: absolute;
+  left: 10px;
+  top: 12px;
+  width: 64px;
+  height: 76px;
+  overflow: visible;
+}
+.world-bin-lid rect {
+  fill: var(--bin-card);
+  stroke: var(--bin-ink);
+  stroke-width: 2;
+}
+.world-bin-lid .world-bin-handle {
+  fill: none;
+}
+.world-bin-shell {
+  fill: var(--bin-card);
+  stroke: var(--bin-ink);
+  stroke-width: 2;
+}
+.world-bin-ribs {
+  stroke: var(--bin-soft);
+  stroke-width: 2;
+}
+.world-bin-lid {
+  transform-origin: 8px 14px;
+  transition: transform 0.15s;
+}
+.world-bin-holding .world-bin-lid {
+  transform: rotate(-14deg) translateY(-3px);
+}
+.world-bin-hot .world-bin-lid {
+  transform: rotate(-26deg) translateY(-5px);
+}
+.world-bin-hot .world-bin-shell {
+  fill: var(--bin-danger-soft);
+  stroke: var(--bin-danger);
+}
+.world-bin-refused .world-bin-shell {
+  stroke: var(--bin-soft);
+  stroke-dasharray: 4 3;
+}
+.world-bin-peek {
+  position: absolute;
+  left: 30px;
+  top: 10px;
+  display: none;
+  width: 26px;
+  height: 16px;
+  border: 1px solid var(--bin-line);
+  border-radius: 3px;
+  background: var(--bin-card);
+  transform: rotate(-12deg);
+}
+.world-bin-holding .world-bin-peek {
+  display: block;
+}
+.world-bin-seconds {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 48px;
+  color: var(--bin-danger);
+  font: 700 15px var(--world-font-mono, ui-monospace, monospace);
+  text-align: center;
+  text-shadow: 0 1px 0 var(--bin-card);
+}
+.world-bin-label {
+  max-width: 116px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--bin-ground);
+  color: var(--bin-soft);
+  font-size: 11.5px;
+  line-height: 1.25;
+  text-align: center;
+}
+.world-bin-hot .world-bin-label {
+  color: var(--bin-danger);
+  font-weight: 600;
+}
+.world-bin-gulp .world-bin-can {
+  animation: world-bin-gulp 0.45s;
+}
+@keyframes world-bin-gulp {
+  30% {
+    transform: scale(1.12, 0.9);
+  }
+  60% {
+    transform: scale(0.95, 1.06);
+  }
+}
+.world-bin-close .world-bin-can {
+  animation: world-bin-shake 0.7s;
+}
+@keyframes world-bin-shake {
+  10%,
+  50% {
+    transform: translateX(-4px) rotate(-3deg);
+  }
+  30%,
+  70% {
+    transform: translateX(4px) rotate(3deg);
+  }
+}
+.world-bin-refuse .world-bin-can {
+  animation: world-bin-refuse 0.35s;
+}
+@keyframes world-bin-refuse {
+  25% {
+    transform: translateX(-5px);
+  }
+  75% {
+    transform: translateX(5px);
+  }
+}
+.world-bin-dust {
+  position: absolute;
+  left: 34px;
+  top: 4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--bin-soft);
+  box-shadow:
+    -18px 6px 0 -2px var(--bin-soft),
+    18px 4px 0 -3px var(--bin-soft),
+    -8px -10px 0 -4px var(--bin-soft),
+    10px -12px 0 -4px var(--bin-soft);
+  pointer-events: none;
+  animation: world-bin-dust 0.8s ease-out forwards;
+}
+@keyframes world-bin-dust {
+  to {
+    transform: translateY(-34px) scale(2.2);
+    opacity: 0;
+  }
+}
+
+.world-bin-tray {
+  position: absolute;
+  right: max(12px, env(safe-area-inset-right, 0px));
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 200px);
+  z-index: 41;
+  display: grid;
+  gap: 8px;
+  width: 320px;
+  max-width: calc(100% - 24px);
+  max-height: calc(100% - 220px);
+  overflow: auto;
+  padding: 10px;
+  border: 2px dashed var(--bin-danger);
+  border-radius: 14px;
+  background: var(--bin-panel);
+  box-shadow: var(--bin-lift);
+  color: var(--bin-ink);
+  font-size: 13px;
+  transform-origin: 85% 110%;
+  animation: world-bin-open 0.22s ease-out;
+}
+@media (max-width: 720px) {
+  .world-bin-tray {
+    top: calc(env(safe-area-inset-top, 0px) + 56px);
+    bottom: auto;
+    left: max(12px, env(safe-area-inset-left, 0px));
+    right: max(12px, env(safe-area-inset-right, 0px));
+    width: auto;
+    max-height: calc(100% - 200px);
+    transform-origin: 15% 0;
+  }
+}
+@keyframes world-bin-open {
+  from {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+}
+.world-bin-tray header,
+.world-bin-tray footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.world-bin-tray header b {
+  flex: 1;
+}
+.world-bin-tray footer {
+  justify-content: flex-end;
+}
+.world-bin-tray small,
+.world-bin-hint {
+  margin: 0;
+  color: var(--bin-soft);
+  font-size: 12px;
+}
+.world-bin-tray ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.world-bin-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--bin-line);
+  border-radius: 8px;
+  background: var(--bin-card);
+  box-shadow: var(--bin-shadow);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.world-bin-card b {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.world-bin-card code {
+  color: var(--bin-soft);
+  font: 12px var(--world-font-mono, ui-monospace, monospace);
+}
+.world-bin-card-lifting {
+  opacity: 0.3;
+}
+.world-bin-card-lifted {
+  position: fixed;
+  z-index: 60;
+  width: 180px;
+  box-shadow: var(--bin-lift);
+  cursor: grabbing;
+  pointer-events: none;
+  transform: rotate(2deg);
+}
+.world-bin-button {
+  min-height: 32px;
+  padding: 4px 10px;
+  border: 1px solid var(--bin-line);
+  border-radius: 8px;
+  background: var(--bin-card);
+  color: var(--bin-ink);
+  font: inherit;
+  cursor: pointer;
+}
+.world-bin-danger {
+  border-color: var(--bin-danger);
+  color: var(--bin-danger);
+}
+@media (max-width: 720px) {
+  .world-bin-button {
+    min-height: 44px;
+  }
+}
+
+.world-bin-toast {
+  position: absolute;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 120px);
+  z-index: 42;
+  max-width: calc(100% - 40px);
+  padding: 10px 16px;
+  border-radius: 12px;
+  background: var(--bin-ink);
+  color: var(--bin-ground);
+  font-size: 14px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .world-bin,
+  .world-bin-lid,
+  .world-bin-progress {
+    transition: none;
+  }
+  .world-bin-can,
+  .world-bin-tray,
+  .world-bin-dust {
+    animation: none !important;
+  }
+}
+
+/* Board: a binned card keeps its place, hidden until it is put back. */
+.board .board-card.board-binned,
+.board .board-pane.board-pane-binned {
+  display: none;
+}
+.board-bin-home {
+  opacity: 0.45;
+  outline: 2px dashed var(--board-soft);
+  outline-offset: 4px;
+}
+.board-over-bin {
+  opacity: 0.8;
+  scale: 0.8;
+  rotate: -8deg;
+}
+
+/* Desk scrolls its stage, so its bin stays put on the screen, above the phone nav. */
+.world-bin.world-bin-desk,
+.world-bin-tray.world-bin-desk,
+.world-bin-toast.world-bin-desk {
+  position: fixed;
+}
+@media (max-width: 720px) {
+  .world-bin.world-bin-desk {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 96px);
+  }
+  .world-bin-toast.world-bin-desk {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 150px);
+  }
+}

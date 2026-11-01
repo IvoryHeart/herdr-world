@@ -7,6 +7,8 @@
  * is live, and every room capacity step contains the previous one.
  */
 
+import { nearTownBusStop, townBusStop, type TownBusStop } from "./townBusStop";
+
 export const TOWN_TILE = 16;
 
 /**
@@ -174,6 +176,8 @@ export type TownLayout = {
   buildings: TownBuilding[];
   roads: number[];
   verticalRoads: { x: number; y0: number; y1: number }[];
+  /** Town's one bus stop, where the bin's bus collects agents (townBusStop.ts). */
+  busStop: TownBusStop;
   plaza: TownPoint;
   board: TownPoint;
   benches: TownPoint[];
@@ -658,10 +662,12 @@ export function layoutTown(
     if (get(tx, plaza.y) === TownGround.grass)
       set(tx, plaza.y, TownGround.walk);
 
+  const busStop = townBusStop(roads, verticalRoads, width, MARGIN);
   const lamps: TownPoint[] = [];
   for (const ry of roads)
     for (let tx = 6; tx < width - 4; tx += 11) {
       if (verticalRoads.some((v) => tx >= v.x - 1 && tx <= v.x + 5)) continue;
+      if (nearTownBusStop(busStop, { x: tx, y: ry })) continue;
       if (get(tx, ry) === TownGround.walk) lamps.push({ x: tx, y: ry });
     }
 
@@ -724,6 +730,7 @@ export function layoutTown(
       buildings,
       roads,
       verticalRoads,
+      busStop,
       plaza,
       board: { x: plaza.x + 4, y: plaza.y - 2 },
       benches: [

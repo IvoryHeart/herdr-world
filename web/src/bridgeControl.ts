@@ -12,6 +12,7 @@ export interface BridgeControlMsg {
     | "world_ledger_changed"
     | "world_ask_delivery_changed"
     | "world_profiles_changed"
+    | "world_bin_changed"
     | "agent_conversation_changed"
     | "world_agent_activity"
     | "world_focused_changed"
