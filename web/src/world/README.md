@@ -245,6 +245,13 @@ agents of presented rooms and precomputing per-room counts. Accessible targets
 are admitted 16 per task and memoized by identity, label and geometry, so
 refreshes do not remount unchanged targets.
 
+The summary's [asker lookup](town/townAskers.ts) returns a fresh empty map
+without reading World leaves or either office roster when there are no
+questions. Nonempty questions still resolve each original qualified target
+and use its Town label, falling back to the name recorded with the question.
+The [lookup regression](town/townAskers.test.ts) checks zero roster reads
+directly, alongside labels and agent-versus-terminal targets.
+
 Town has its own dense acceptance case (`ProductionContexts.town.test.ts`) under
 a 150 ms p95 / 450 ms maximum budget.
 
