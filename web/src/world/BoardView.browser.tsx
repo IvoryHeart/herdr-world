@@ -823,8 +823,10 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
       // The selection bar's Close agent… does the same without dragging.
       await bringIntoView(() => card("studio:w1:t1")!);
       const t = centre(card("studio:w1:t1")!);
-      pointer(card("studio:w1:t1")!, "pointerdown", t.x, t.y);
-      pointer(card("studio:w1:t1")!, "pointerup", t.x, t.y);
+      pointer(card("studio:w1:t1")!, "pointerdown", t.x, t.y, 41);
+      pointer(card("studio:w1:t1")!, "pointerup", t.x, t.y, 41);
+      // The host applies the selection, as World does.
+      mount(2, world, selected[selected.length - 1]!);
       await waitFor(
         () => host.querySelector(".board-bin-action") !== null,
         "a selected tab offers Close agent…",
