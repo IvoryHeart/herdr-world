@@ -482,3 +482,181 @@
   flex: 1;
   border-top: 1px solid var(--border-soft);
 }
+
+/* Chat's transcript: below 900px it keeps its bubbles, and the sender row
+   is hidden. From 900px the conversation follows the window (up to 1440px)
+   as rows: who, what, and the time at the right edge, once per run. */
+.agent-history-chat.is-transcript {
+  container: chat-transcript / inline-size;
+}
+
+.agent-history-chat-from {
+  display: none;
+}
+
+@container chat-transcript (min-width: 900px) {
+  .agent-history-chat-content {
+    max-width: 1440px;
+    gap: 0;
+    padding: 8px 24px 16px;
+  }
+
+  .agent-history-chat-message:not(.is-command) {
+    align-self: stretch;
+    /* Bubbles align your messages to the end; rows never do. */
+    align-items: start;
+    max-width: none;
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "avatar name meta"
+      "avatar body meta"
+      ". after after";
+    column-gap: 12px;
+    row-gap: 2px;
+    padding: 10px 0 4px;
+    border-top: 1px solid var(--border-soft);
+  }
+
+  .agent-history-chat-message.is-continued {
+    padding-top: 4px;
+    border-top: 0;
+  }
+
+  .agent-history-chat-from {
+    display: contents;
+  }
+
+  .agent-history-chat-message.is-continued .agent-history-chat-from {
+    display: none;
+  }
+
+  .agent-history-chat-avatar {
+    grid-area: avatar;
+    width: 28px;
+    height: 28px;
+    display: grid;
+    place-items: center;
+    color: var(--text-strong);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: lowercase;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+
+  .agent-history-chat-message.is-user .agent-history-chat-avatar {
+    color: var(--accent);
+    background: var(--accent-soft);
+    border-color: var(--accent);
+  }
+
+  .agent-history-chat-message.is-relayed .agent-history-chat-avatar {
+    color: var(--info-text);
+    border-color: color-mix(in srgb, var(--blue) 50%, transparent);
+  }
+
+  .agent-history-chat-name {
+    grid-area: name;
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    min-width: 0;
+    color: var(--text-strong);
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .agent-history-chat-message.is-user .agent-history-chat-name {
+    color: var(--accent);
+  }
+
+  .agent-history-chat-message.is-relayed .agent-history-chat-name {
+    color: var(--info-text);
+  }
+
+  .agent-history-chat-relayed {
+    padding: 0 6px;
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 400;
+    border: 1px solid var(--border-soft);
+    border-radius: 999px;
+  }
+
+  .agent-history-chat-bubble,
+  .agent-history-chat-message.is-user .agent-history-chat-bubble,
+  .agent-history-chat-message.is-error .agent-history-chat-bubble {
+    grid-area: body;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .agent-history-chat-message.is-user .agent-history-chat-bubble {
+    padding: 4px 10px;
+    background: linear-gradient(90deg, var(--accent-soft), transparent 70%);
+    border-left: 2px solid var(--accent);
+  }
+
+  .agent-history-chat-message.is-relayed .agent-history-chat-bubble {
+    background: transparent;
+    border-left-color: color-mix(in srgb, var(--blue) 70%, transparent);
+  }
+
+  .agent-history-chat-message.is-error .agent-history-chat-bubble {
+    padding: 4px 10px;
+    border-left: 2px solid var(--danger-border);
+  }
+
+  /* Prose wraps at a readable measure; tables and code use the full row. */
+  .agent-history-chat-bubble > p,
+  .agent-history-chat-markdown > :is(p, ul, ol, blockquote, h1, h2, h3, h4) {
+    max-width: 110ch;
+  }
+
+  .agent-history-chat-meta {
+    grid-area: meta;
+    align-self: start;
+    justify-content: flex-end;
+    padding: 2px 0 0;
+  }
+
+  /* A continued row shows its time on hover, beside its copy button. */
+  .agent-history-chat-message.is-continued .agent-history-chat-meta time {
+    opacity: 0;
+  }
+
+  .agent-history-chat-message.is-continued:hover .agent-history-chat-meta time,
+  .agent-history-chat-message.is-continued:focus-within
+    .agent-history-chat-meta
+    time {
+    opacity: 1;
+  }
+
+  .agent-history-chat-message
+    > :not(.agent-history-chat-from):not(.agent-history-chat-bubble):not(
+      .agent-history-chat-meta
+    ) {
+    grid-area: after;
+  }
+
+  /* The agent's tool steps sit under its text, across the full row. */
+  .agent-history-chat-tools,
+  .agent-history-chat-message.is-command,
+  .agent-history-chat-divider {
+    margin-left: 40px;
+  }
+
+  /* Stretched beside the indent, never 100% plus the indent. */
+  .agent-history-chat-tools,
+  .agent-history-chat-tools.is-open {
+    width: auto;
+    max-width: none;
+    align-self: stretch;
+    margin-top: 4px;
+    margin-bottom: 4px;
+  }
+}

@@ -77,7 +77,13 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     **Chat**: the conversation's latest 200 entries, which scroll inside the
     window, with **Jump to latest** when you have scrolled back (counting new
     agent messages until you reach the bottom) and the
-    composer always at the bottom. Explicitly opening or returning to Chat
+    composer always at the bottom. In a window 900px or wider (expanded or
+    Zen), the conversation fills the window up to 1440px as rows: who, the
+    text (prose wraps at about 110 characters; tables, code and tool steps use
+    the whole row) and the time at the right edge, once per run of messages.
+    A message typed into the terminal as `name: …` by another live agent in
+    the same Herdr session shows as that agent's, marked **relayed**. Narrower
+    windows and phones keep bubbles. Explicitly opening or returning to Chat
     focuses its message input when available; Desk previews keep focus in the
     queue. Reopening or redocking the window keeps the
     conversation. In Town it
