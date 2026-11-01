@@ -471,7 +471,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   unverified asker; the name, **Chat about this** and (for finished work)
   **Follow up…** open the agent's Chat. A message longer than three lines
   shows **More**: it, or a tap on the text, shows the whole message in place
-  with its links, and **Less** clips it again; and hovering the agent's name (or **ⓘ**) shows its card with
+  with its links, and **Less** clips it again. Keyboard focus entering the
+  message reveals its links. Hovering the agent's name (or **ⓘ**) shows its card with
   the latest message. An answered question folds to one line until the tab
   closes. It shows a page of 30 items; **Show … more** and **Show the … before**
   turn the page, and every opener turns to its item's page. Town's reception

@@ -1804,7 +1804,9 @@ which opens that exact agent's Chat; the agent's name SHALL open that same Chat
 on every item whose agent World can place. Every item's message SHALL show its
 first lines with a visible More while it runs longer, and SHALL expand in place
 to the whole message, links included, on More or a tap on the clipped text (a
-link opens rather than expands), and Less SHALL clip it again; expanding SHALL
+link opens rather than expands), and Less SHALL clip it again. Keyboard focus
+entering a clipped message SHALL reveal its content without moving focus;
+collapsing with Less SHALL keep focus on that control. Expanding SHALL
 move nothing above the item and keep its answer controls on it; hovering its agent (or a visible control on
 touch) SHALL show the agent's card with its latest message. A question SHALL be
 answerable with its options or typed text, or dismissed. A blocked agent's own

@@ -223,6 +223,12 @@ export function NeedsYouText({
         ref={box}
         id={textId}
         className={`needs-you-text${expanded ? " is-expanded" : clipped ? " is-clipped" : ""}`}
+        onFocus={(event) => {
+          // Tab can reach links below the clamp. Reveal keyboard focus before
+          // the user activates it; pointer clicks on visible links stay put.
+          if (!expanded && clipped && event.target.matches(":focus-visible"))
+            setExpanded(true);
+        }}
         onClick={(event) => {
           if (expanded || !clipped) return;
           // A link opens; a drag selects; neither expands.

@@ -220,7 +220,8 @@ hosts stay usable.
    it to open the **Needs you** tab on the left: each question, blocked agent
    and finished task is a short message from its agent with its quick reply in
    place. Tap a long message (or **More**) to read all of it, links included;
-   **Less** shortens it again. The agent's name and **Chat about this** open
+   **Less** shortens it again. Tabbing into a message reveals its links.
+   The agent's name and **Chat about this** open
    the agent's Chat for the context behind it. Hover an agent's name
    (or tap **ⓘ**) for its card. The tab stays open or closed on this device;
    **‹** (or **Back** on a phone) closes it. The Town master's chat (**Menu → Town master**, `firstmate` by
