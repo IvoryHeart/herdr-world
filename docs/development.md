@@ -74,15 +74,35 @@ fixtures because it has no required POSIX shell. Keep those boundary checks,
 assertions and deadlines when optimizing fake startup. Measure alternating
 baseline/candidate runs and report negligible or negative results honestly.
 
-The native Board crash suite prepares each fault in bounded setup hooks before
-running its recovery assertions. Initial worker setup and recovery each keep
-Bun's default five-second deadline. The crash child retains its fifteen-second
-watchdog inside a twenty-second setup hook, leaving time to kill and reap it.
-Compilation has its own sixty-second hook. Child startup and termination do not
-consume the recovery deadline; a missing fault marker or a failed child still
-fails setup. Timer and stdout-reader cleanup also run if exit or stderr draining
-rejects; the stderr failure remains visible. These watchdogs are test lifecycle
-bounds, not storage latency claims.
+All six storage `*-crash.test.ts` suites use the
+[shared crash harness](../server/src/storage/testing/crash-harness.ts).
+Compilation, seed initialization and fault setup finish before recovery assertions
+start. Seed initialization keeps its five-second hook; each child has its original
+watchdog plus a five-second kill/reap/stream-cleanup bound. Compilation keeps its
+own process budget with the same cleanup headroom. Recovery retains each suite's
+configured deadline, including storage reopening and the original assertions:
+
+| Suite | Compilation | Fault child | Recovery |
+| --- | --- | --- | --- |
+| Board, profiles, runtime status | 60 s | 15 s | 5 s |
+| World storage before/after COMMIT | 60 s | 15 s | 5 s |
+| World storage acknowledgements/drain and effect recovery | 60 s | 15 s per child | 30 s |
+| Terminal marks | 60 s | 15 s | 30 s |
+| Answer delivery | 120 s | 30 s | 60 s |
+
+World's two-child setups retain their order. Answer delivery's second process
+remains after its initial storage assertions, with its existing 30-second bound
+inside the 60-second recovery case. Source and standalone runs keep the same
+fault markers, forced kills, clean drains and embedded workers.
+
+Failures emit `compile`, `spawn`, `marker`, `kill` and `reopen` timings, including
+pending or not-reached phases. Repeated phases appear in execution order. These
+are failure diagnostics, not latency assertions. Native Bun hook/test timeouts
+also report unfinished phases at finalization. Timer/reader release is
+unconditional on stream or exit errors; cleanup failures retain an earlier
+failure as their cause. No suite retries a failed schedule. The
+[harness controls](../server/src/storage/testing/crash-harness.test.ts) use virtual
+time and process doubles for budget separation, diagnostic and cleanup failures.
 
 The test wrapper runs ordinary files in parallel using up to eight available CPUs.
 Set `HERDR_TEST_PARALLEL`
