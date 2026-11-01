@@ -257,3 +257,16 @@
   opacity: 0.7;
   border-style: dashed;
 }
+
+/* The composer's height before the first read says whether Chat can send:
+   its border, padding and one row of 40px controls. */
+.agent-chat-composer.is-reserved {
+  --chat-composer-button-size: 40px;
+  min-height: calc(var(--chat-composer-button-size) + 19px);
+}
+
+@media (pointer: coarse) {
+  .agent-chat-composer.is-reserved {
+    --chat-composer-button-size: 44px;
+  }
+}

@@ -69,15 +69,22 @@ export function AgentHoverCard({
   name,
   where,
   id,
+  floating = false,
 }: {
   leaf: WorldLeafObject;
   name: string;
   where: string;
   id?: string;
+  /** Shown over the content below instead of pushing it down (hover). */
+  floating?: boolean;
 }) {
   const read = useConversationRead(leaf, true);
   return (
-    <div className="agent-hover-card" id={id} role="tooltip">
+    <div
+      className={floating ? "agent-hover-card is-floating" : "agent-hover-card"}
+      id={id}
+      role="tooltip"
+    >
       <header>
         <AgentMark kind={agentMarkKind(leaf.status)} />
         <b>{name}</b>

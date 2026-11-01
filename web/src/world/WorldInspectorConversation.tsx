@@ -65,7 +65,10 @@ import {
   type InspectorTerminalFileRequest,
 } from "./inspectorTerminalHandoff";
 import { townPortrait } from "./town/townSprites";
-import { loadWorkspaceInspector } from "./inspectorPreload";
+import {
+  loadedWorkspaceInspector,
+  loadWorkspaceInspector,
+} from "./inspectorPreload";
 
 const WorkspaceInspectorHost = lazyWithReload("workspace-inspector", () =>
   loadWorkspaceInspector().then((module) => ({
@@ -227,6 +230,11 @@ function InspectorResources({
           : resourceScopeForWorkspace(conversation.connectionId, workspace)
         : null,
     [conversation.connectionId, workspace, worktree.view?.selected],
+  );
+  // The Inspector itself when its code is already loaded (no loading shell);
+  // chosen once per window, so the window never swaps component types.
+  const [InspectorHost] = useState(
+    () => loadedWorkspaceInspector() ?? WorkspaceInspectorHost,
   );
   const [fileSelection, setFileSelection] =
     useState<ActiveFilePreviewSelection>(emptyFile);
@@ -559,7 +567,7 @@ function InspectorResources({
               />
             }
           >
-            <WorkspaceInspectorHost
+            <InspectorHost
               state={inspectorState}
               visible={Boolean(target)}
               workspace={workspace}

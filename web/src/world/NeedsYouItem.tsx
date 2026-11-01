@@ -123,6 +123,7 @@ export function NeedsYouMessage({
           leaf={leaf}
           name={name}
           where={leafWhere(leaf)}
+          floating={card === "hover"}
         />
       ) : null}
       {item.kind === "asks" ? (

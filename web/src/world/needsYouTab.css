@@ -14,6 +14,7 @@
   font-size: 12px;
 }
 .needs-you-item {
+  position: relative;
   display: grid;
   gap: 8px;
   padding: 10px 12px;
@@ -125,6 +126,20 @@
   display: flex;
   align-items: center;
   gap: 6px;
+}
+/* A hover card floats over its item's own report, below the name, rather
+   than pushing the list down while the pointer passes; the pinned card (ⓘ)
+   stays in the flow. */
+.needs-you-item > .agent-hover-card.is-floating {
+  position: absolute;
+  top: 38px;
+  left: 8px;
+  right: 8px;
+  z-index: 5;
+  max-height: 320px;
+  overflow: auto;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
 }
 /* The card's report, styled in full for the same reason as the list's. */
 .agent-hover-card .town-peek-markdown {

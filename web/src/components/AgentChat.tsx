@@ -769,6 +769,10 @@ export function AgentChat({
           onSubmit={send}
           onError={setNotice}
         />
+      ) : conversation === null ? (
+        // The composer's room while the first read is out, so the list does
+        // not shrink under the reader when the composer arrives.
+        <div className="agent-chat-composer is-reserved" aria-hidden="true" />
       ) : null}
     </div>
   );
