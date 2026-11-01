@@ -448,8 +448,10 @@ plans the next step for every PR in scope and takes each step once:
   from the last reviewed round's head, excluding imports from main and preserving
   manual conflict resolutions. Every prompt checks the linked issue for scope drift.
   At most `maxRuns` reviewers work
-  at once. One that is still working after `runTimeoutMinutes` without posting
-  is reported to the owner, not stopped. A session that crashes before
+  at once. A run without completion evidence is stopped after
+  `runTimeoutMinutes` without meaningful harness work, releasing its slot and
+  reporting one timeout to the owner; a live PID alone does not renew that
+  inactivity window. A session that crashes before
   posting is retried once. One that is quit, or exits cleanly, without a
   RESULT on the head goes to the owner after 15 minutes. A post without a
   RESULT line doesn't count. A RESULT counts for the head it was given, even
@@ -457,6 +459,9 @@ plans the next step for every PR in scope and takes each step once:
   the task's explicit reviewed/evaluated commit, even when GitHub's submission
   commit differs or the new head's ancestry cannot be reconciled. Finishing
   the task does not carry its review to the new head or release a policy hold.
+  Manual reviewer runs use the same pinned-result recovery, but only posts
+  from that reviewer on its assigned head, timestamped between the run's start
+  and the current pass, can finish it.
 - **Where reviewers show.** A PR is a pod, and each head it reviews is a
   round. A round has its own Herdr tab, named like `#7 towncx-12-plates · r2`,
   with one pane per reviewer, named after the reviewer. Each pane keeps its

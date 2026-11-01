@@ -65,6 +65,63 @@ test("a reviewer finishes on its own RESULT after a push, even when gate binding
 });
 
 test.each([
+  "fresh",
+  "earlier",
+  "future",
+  "wrong reviewer",
+  "wrong head",
+  "invalid",
+])(
+  "manual pinned completion requires its own fresh trusted post: %s",
+  (scenario) => {
+    const f = setup({ seedCycle: false });
+    const id = addRun(
+      f.crew,
+      {
+        actionKey: `manual:7:${SHA.reviewed}:rev2`,
+        pr: 7,
+        head: SHA.reviewed,
+        reviewer: "rev2",
+        log: "synthetic.log",
+      },
+      NOW,
+    );
+    const post = review(
+      scenario === "invalid"
+        ? `Reviewer: rev2\nReviewed commit: ${SHA.reviewed}\nRESULT #7: pending`
+        : `Reviewer: ${scenario === "wrong reviewer" ? "rev-astra" : "rev2"}\nReviewed commit: ${scenario === "wrong head" ? SHA.other : SHA.reviewed}\nRESULT #7: 0/0 resolved, 1 new`,
+    );
+    if (scenario === "earlier") post.at = NOW - 1;
+    if (scenario === "future") post.at = NOW + 120_000;
+    const history = reviewerResults(
+      7,
+      [post],
+      [{ oid: SHA.fixed, at: NOW }],
+      SHA.fixed,
+    );
+    f.passInput(
+      {
+        ...input({ head: SHA.fixed, posts: [] }),
+        history,
+        reviewPosts: [post],
+      },
+      NOW + 60_000,
+    );
+    if (scenario === "fresh") {
+      expect(getRun(f.crew, id)).toMatchObject({
+        exitCode: 0,
+        finishedAt: NOW + 60_000,
+        result: "RESULT #7: 0/0 resolved, 1 new",
+      });
+      expect(activeRuns(f.crew).some((run) => run.id === id)).toBe(false);
+      expect(history[0]?.outcome).toBe("unknown");
+    } else {
+      expect(getRun(f.crew, id)?.finishedAt).toBeNull();
+    }
+  },
+);
+
+test.each([
   `Reviewer: rev2\nReviewed commit: ${SHA.other}\nRESULT #7: 0/0 resolved, 0 new`,
   `Reviewer: rev-astra\nReviewed commit: ${SHA.reviewed}\nRESULT #7: 0/0 resolved, 0 new`,
   `Reviewer: rev2\nReviewed commit: ${SHA.reviewed}\nRESULT #8: 0/0 resolved, 0 new`,
