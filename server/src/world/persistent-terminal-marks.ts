@@ -28,6 +28,7 @@ import {
   WorldCompletionSeenRegistry,
   type CompletionSeenIdentity,
 } from "./completion-seen";
+import { deskHistoryEvictions } from "./desk-retention";
 
 type Identity = CompletionSeenIdentity & {
   agent_session_fingerprint?: string | null;
@@ -91,6 +92,15 @@ export class PersistentTerminalMarks {
   private queued = 0;
   private closed = false;
   private runtimeEpoch = new Map<string, number>();
+  // Live ownership only. Unknown-session captures cannot cross a runtime or
+  // World restart; terminal reuse alone is never proof of agent continuity.
+  private deskCaptures = new Map<string, string>();
+  private deskRefusals = new Map<string, string>();
+  private recoveringSources: Set<string>;
+  assertDeskAvailable() {
+    const refusal = this.deskRefusals.values().next().value;
+    if (refusal) throw new Error(refusal);
+  }
   private ownership = new Map<
     string,
     {
@@ -152,7 +162,19 @@ export class PersistentTerminalMarks {
     owner?: { key: string; token: object };
     valid: boolean;
   }>();
-  constructor(private readonly options: Options) {}
+  constructor(private readonly options: Options) {
+    this.recoveringSources = new Set(
+      options.storage
+        .list()
+        .filter(
+          (row) =>
+            row.kind === "desk" &&
+            row.binding.state !== "ended" &&
+            row.binding.evidence.session,
+        )
+        .map((row) => row.binding.instance),
+    );
+  }
   private enqueue<T>(work: () => Promise<T>): Promise<T> {
     if (this.closed || this.queued >= 256)
       return Promise.reject(new Error("terminal marks are closing or busy"));
@@ -197,7 +219,22 @@ export class PersistentTerminalMarks {
     });
   }
   /** Runtime replacement hides the projection; saved identity waits for a fresh list. */
-  retire(connectionId: string, generation: number, ready = true) {
+  retire(
+    connectionId: string,
+    generation: number,
+    ready = true,
+    recovering = false,
+  ) {
+    if (!recovering) this.recoveringSources.delete(connectionId);
+    this.deskRefusals.delete(connectionId);
+    for (const [key] of this.deskCaptures) {
+      const [connection, capturedGeneration] = JSON.parse(key);
+      if (
+        connection === connectionId &&
+        (!ready || capturedGeneration !== generation)
+      )
+        this.deskCaptures.delete(key);
+    }
     if (!ready)
       this.runtimeEpoch.set(
         connectionId,
@@ -224,6 +261,24 @@ export class PersistentTerminalMarks {
     );
     r.seen.retireConnectionGeneration(connectionId, ready ? generation : -1);
     this.publish(before, connectionId, generation);
+    if (!this.closed)
+      void this.enqueue(async () => {
+        const rows = this.options.storage.list();
+        const ids = new Set(this.deskCaptures.values());
+        for (const row of rows)
+          if (
+            row.kind === "desk" &&
+            row.binding.state !== "ended" &&
+            row.binding.evidence.session &&
+            this.recoveringSources.has(row.binding.instance)
+          )
+            ids.add(row.id);
+        for (const row of deskHistoryEvictions(
+          rows,
+          rows.filter((row) => ids.has(row.id)),
+        ))
+          await this.options.storage.remove(row.id, row.revision);
+      }).catch(this.options.failed);
   }
   observe(
     connectionId: string,
@@ -297,14 +352,27 @@ export class PersistentTerminalMarks {
           lease.isCurrent() &&
           epoch === (this.runtimeEpoch.get(connectionId) ?? 0),
       );
+      this.deskRefusals.delete(connectionId);
     }).catch((error) => {
       const lease = this.options.lease(connectionId);
       if (
         lease?.generation === generation &&
         lease.isCurrent() &&
         epoch === (this.runtimeEpoch.get(connectionId) ?? 0)
-      )
-        this.options.failed(error);
+      ) {
+        if (
+          error instanceof Error &&
+          error.message.startsWith("Desk capacity exceeded:")
+        ) {
+          this.deskRefusals.set(connectionId, error.message);
+          this.options.changed(
+            "desk",
+            this.options.registries.desk.list().revision,
+            connectionId,
+            generation,
+          );
+        } else this.options.failed(error);
+      }
     });
   }
   unpin(identity: Identity) {
@@ -456,6 +524,37 @@ export class PersistentTerminalMarks {
     const savedById = new Map(savedRows.map((row) => [row.id, row]));
     for (const row of savedRows) {
       if (row.binding.instance !== connectionId) continue;
+      if (row.kind === "desk") {
+        if (row.binding.state === "ended") continue;
+        const terminal = row.binding.evidence.terminals[0]!;
+        const matches = entities.filter((entity) =>
+          entity.terminals.includes(terminal),
+        );
+        const session = matches.length === 1 ? matches[0]!.session : undefined;
+        const captured = this.deskCaptures.get(
+          watchKey({
+            connection_id: connectionId,
+            connection_generation: generation,
+            terminal_id: terminal,
+          }),
+        );
+        if (
+          !row.binding.evidence.session &&
+          (session !== undefined || captured !== row.id)
+        )
+          continue;
+        // A live intervening owner is stronger evidence than an old capture,
+        // even if its known fingerprint subsequently returns.
+        if (
+          row.binding.evidence.session &&
+          session === row.binding.evidence.session &&
+          captured &&
+          captured !== row.id
+        ) {
+          ended.push(row);
+          continue;
+        }
+      }
       const resolution = resolveBinding(row.binding, event, fence, at);
       if (resolution.binding.state === "ended") ended.push(row);
       else if (resolution.target)
@@ -470,6 +569,9 @@ export class PersistentTerminalMarks {
       watchlist: live.watchlist.fork(),
       seen: live.seen.fork(),
     };
+    const deskCaptures = new Map(this.deskCaptures);
+    for (const [capture] of deskCaptures)
+      if (JSON.parse(capture)[0] === connectionId) deskCaptures.delete(capture);
     const desk: StoredDeskRecord[] = [],
       watches: WorldWatchRecord[] = [],
       checks: CompletionSeenIdentity[] = [];
@@ -489,13 +591,15 @@ export class PersistentTerminalMarks {
         connection_generation: generation,
         terminal_id: terminal,
       };
-      if (row.kind === "desk")
+      if (row.kind === "desk") {
+        deskCaptures.set(watchKey(identity), row.id);
         desk.push({
           ...identity,
           agent_session_fingerprint:
             entityByTerminal.get(terminal)?.session ?? null,
           ...row.body,
         } as StoredDeskRecord);
+      }
       if (row.kind === "watchlist")
         watches.push({ ...identity, label: row.body.label!, watch_id: row.id });
       if (row.kind === "completion-seen") {
@@ -581,13 +685,74 @@ export class PersistentTerminalMarks {
     const ensureCurrent = () => {
       if (!isCurrent()) throw new Error("terminal mark runtime retired");
     };
+    const currentRows = new Map<string, SavedTerminalMark>();
+    for (const row of savedRows)
+      if (
+        row.kind === "desk" &&
+        row.binding.state !== "ended" &&
+        row.binding.evidence.session &&
+        this.recoveringSources.has(row.binding.instance) &&
+        (row.binding.instance !== connectionId || ambiguous)
+      )
+        currentRows.set(row.id, row);
+    for (const [capture] of deskCaptures) {
+      const [connection, , terminal] = JSON.parse(capture);
+      if (connection === connectionId && !candidates.has(key("desk", terminal)))
+        deskCaptures.delete(capture);
+    }
+    for (const id of deskCaptures.values()) {
+      const row = savedById.get(id);
+      if (row) currentRows.set(id, row);
+    }
+    for (const [k, candidate] of candidates) {
+      if (candidate.kind !== "desk") continue;
+      const prior = active.get(k),
+        entity = entityByTerminal.get(candidate.terminal);
+      if (!entity || ambiguous) continue;
+      const id = prior?.id ?? `d-00000000:pending:${candidate.terminal}`;
+      currentRows.set(id, {
+        id,
+        kind: "desk",
+        revision: (prior?.revision ?? -1) + 1,
+        body: candidate.body,
+        binding: {
+          id: prior?.binding.id ?? "b-00000000",
+          record_id: id,
+          slot: "target",
+          revision: (prior?.binding.revision ?? 0) + 1,
+          state: "attached",
+          checked_at: at,
+          policy: "desk",
+          adapter: "herdr",
+          instance: connectionId,
+          kind: "pane",
+          native_id: entity.native_id,
+          evidence: prior?.binding.evidence ?? {
+            terminals: [candidate.terminal],
+            ...(entity.session ? { session: entity.session } : {}),
+          },
+        },
+      });
+    }
+    for (const row of deskHistoryEvictions(savedRows, [
+      ...currentRows.values(),
+    ])) {
+      ensureCurrent();
+      await this.options.storage.remove(row.id, row.revision);
+      savedById.delete(row.id);
+    }
     for (const row of [
       ...ended,
       ...[...active].filter(([k]) => !candidates.has(k)).map(([, row]) => row),
     ]) {
+      if (!savedById.has(row.id)) continue;
       ensureCurrent();
-      await this.options.storage.remove(row.id, row.revision);
-      savedById.delete(row.id);
+      if (row.kind === "desk")
+        await this.options.storage.end(row.id, row.revision);
+      else {
+        await this.options.storage.remove(row.id, row.revision);
+        savedById.delete(row.id);
+      }
     }
     for (const [k, candidate] of candidates) {
       const prior = active.get(k),
@@ -607,15 +772,15 @@ export class PersistentTerminalMarks {
             row.binding.instance === connectionId &&
             row.binding.evidence.terminals[0] === candidate.terminal,
         );
-      if (conflict) {
+      if (conflict && candidate.kind !== "desk") {
         if (!action) continue;
         ensureCurrent();
         await this.options.storage.remove(conflict.id, conflict.revision);
         savedById.delete(conflict.id);
       }
       const rows = [...savedById.values()],
-        limit = candidate.kind === "desk" ? 500 : 4096;
-      if (!prior && candidate.kind !== "watchlist") {
+        limit = 4096;
+      if (!prior && candidate.kind === "completion-seen") {
         const sameKind = rows.filter((row) => row.kind === candidate.kind);
         if (sameKind.length >= limit) {
           ensureCurrent();
@@ -647,6 +812,15 @@ export class PersistentTerminalMarks {
         current: fence,
       });
       savedById.set(committed.id, committed);
+      if (committed.kind === "desk")
+        deskCaptures.set(
+          watchKey({
+            connection_id: connectionId,
+            connection_generation: generation,
+            terminal_id: candidate.terminal,
+          }),
+          committed.id,
+        );
       if (committed.kind === "watchlist")
         this.rememberWatch({
           connection_id: connectionId,
@@ -657,19 +831,23 @@ export class PersistentTerminalMarks {
         });
     }
     ensureCurrent();
+    const committedRows = this.options.storage.list();
+    const committedById = new Map(committedRows.map((row) => [row.id, row]));
     const committed = new Map(
-      this.options.storage
-        .list()
-        .map((row) => [
-          JSON.stringify([
-            row.binding.instance,
-            row.kind,
-            row.binding.evidence.terminals[0],
-          ]),
-          row,
+      committedRows.map((row) => [
+        JSON.stringify([
+          row.binding.instance,
+          row.kind,
+          row.binding.evidence.terminals[0],
         ]),
+        row,
+      ]),
     );
     const align = (view: MarkRegistries, connection: string) => {
+      const deskRow = (record: StoredDeskRecord) => {
+        const id = deskCaptures.get(watchKey(record));
+        return id ? committedById.get(id) : undefined;
+      };
       const retained = (kind: MarkKind, terminal: string) =>
         committed.get(JSON.stringify([connection, kind, terminal]));
       view.desk.replaceConnection(
@@ -677,13 +855,11 @@ export class PersistentTerminalMarks {
         view.desk
           .storedRecords()
           .filter(
-            (record) =>
-              record.connection_id === connection &&
-              retained("desk", record.terminal_id),
+            (record) => record.connection_id === connection && deskRow(record),
           )
           .map((record) => ({
             ...record,
-            ...retained("desk", record.terminal_id)!.body,
+            ...deskRow(record)!.body,
           })),
       );
       view.watchlist.replaceConnection(
@@ -735,6 +911,14 @@ export class PersistentTerminalMarks {
     live.desk.adopt(published.desk);
     live.watchlist.adopt(published.watchlist);
     live.seen.adopt(published.seen);
+    if (!ambiguous) this.recoveringSources.delete(connectionId);
+    for (const [capture, id] of this.deskCaptures)
+      if (JSON.parse(capture)[0] === connectionId || !committedById.has(id))
+        this.deskCaptures.delete(capture);
+    for (const [capture, id] of deskCaptures)
+      if (JSON.parse(capture)[0] === connectionId && committedById.has(id))
+        this.deskCaptures.set(capture, id);
+    this.deskRefusals.delete(connectionId);
     this.publish(before, connectionId, generation);
   }
 }

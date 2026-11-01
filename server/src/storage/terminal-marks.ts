@@ -1,5 +1,9 @@
 import type { Database } from "bun:sqlite";
-import { DESK_IDLE_WINDOW_MS, parseDeskState } from "../../../shared/deskState";
+import {
+  assertDeskMetadataSize,
+  DESK_IDLE_WINDOW_MS,
+  parseDeskState,
+} from "../../../shared/deskState";
 import { WorldWatchlistRegistry } from "../world/watchlist";
 import type {
   BindingEvent,
@@ -40,11 +44,13 @@ export type TerminalMarkPut = {
 export type TerminalMarkOperation =
   | { type: "expire"; at: number }
   | { type: "put"; input: TerminalMarkPut }
+  | { type: "end"; id: string; revision: number }
   | { type: "remove"; id: string; revision: number };
 export type TerminalMarksPort = {
   list(): SavedTerminalMark[];
   put(input: TerminalMarkPut): Promise<SavedTerminalMark>;
   remove(id: string, revision: number): Promise<void>;
+  end(id: string, revision: number): Promise<void>;
   expire(at: number): Promise<void>;
 };
 export const terminalMarksMigration = `CREATE TABLE terminal_marks (
@@ -61,7 +67,7 @@ export function readTerminalMarks(
     db
       .query(
         "SELECT m.id,m.kind,m.revision,m.body,b.body AS binding FROM terminal_marks m JOIN world_bindings b ON b.id=m.binding_id " +
-          (id ? "WHERE m.id=?" : "ORDER BY m.open_order,m.rowid"),
+          (id ? "WHERE m.id=?" : "ORDER BY m.rowid"),
       )
       .all(...(id ? [id] : [])) as {
       id: string;
@@ -146,7 +152,11 @@ export function createTerminalMarkWriter(
         )
           continue;
         row.body.stopped_at = null;
-        if (row.body.reviewed_stop == null && row.body.opened_at == null) {
+        if (
+          row.body.reviewed_stop == null &&
+          row.body.opened_at == null &&
+          row.body.observed_stop_id == null
+        ) {
           db.query("DELETE FROM terminal_marks WHERE id=?").run(row.id);
           bindings.execute({ type: "remove", id: row.binding.id }, at);
           removed.push(row.id);
@@ -167,6 +177,21 @@ export function createTerminalMarkWriter(
       operation.type === "put" ? operation.input.revision : operation.revision;
     if (id && (!existing || revision !== existing.revision))
       throw new Error("terminal mark revision conflict");
+    if (operation.type === "end") {
+      if (existing!.kind !== "desk")
+        throw new Error("only Desk captures retain ended history");
+      bindings.execute(
+        {
+          type: "resolve",
+          id: existing!.binding.id,
+          event: { type: "user-detach" },
+          current: null,
+          expectedRevision: existing!.binding.revision,
+        },
+        at,
+      );
+      return readTerminalMarks(db, id)[0];
+    }
     if (operation.type === "remove") {
       db.query("DELETE FROM terminal_marks WHERE id=?").run(id!);
       bindings.execute({ type: "remove", id: existing!.binding.id }, at);
@@ -181,15 +206,18 @@ export function createTerminalMarkWriter(
     const value = body(input.kind, input.body);
     if (
       !existing &&
-      db
-        .query(
-          "SELECT 1 FROM terminal_marks m JOIN world_bindings b ON b.id=m.binding_id WHERE m.kind=? AND json_extract(b.body,'$.instance')=? AND json_extract(b.body,'$.evidence.terminals[0]')=?",
-        )
-        .get(
-          input.kind,
-          input.target.instance,
-          input.target.evidence.terminals[0]!,
-        )
+      readTerminalMarks(db).some(
+        (row) =>
+          row.kind === input.kind &&
+          row.binding.instance === input.target.instance &&
+          row.binding.evidence.terminals[0] ===
+            input.target.evidence.terminals[0] &&
+          (input.kind !== "desk" ||
+            (row.binding.state !== "ended" &&
+              row.binding.evidence.session === input.target.evidence.session &&
+              (input.target.evidence.session !== undefined ||
+                row.body.observed_stop_id === value.observed_stop_id))),
+      )
     )
       throw new Error("terminal mark target already has a record");
 
@@ -245,9 +273,8 @@ export function createTerminalMarkWriter(
         .query("SELECT count(*) AS count FROM terminal_marks WHERE kind=?")
         .get(input.kind) as { count: number }
     ).count;
-    const limit =
-      input.kind === "watchlist" ? 128 : input.kind === "desk" ? 500 : 4096;
-    if (!existing && count >= limit)
+    const limit = input.kind === "watchlist" ? 128 : 4096;
+    if (input.kind !== "desk" && !existing && count >= limit)
       throw new Error("terminal mark store is full");
     const next = {
       id: recordId,
@@ -283,6 +310,10 @@ export function createTerminalMarkWriter(
       JSON.stringify(value),
       openOrder,
     );
+    if (input.kind === "desk")
+      assertDeskMetadataSize(
+        readTerminalMarks(db).filter((row) => row.kind === "desk"),
+      );
     const trimmed: SavedTerminalMark[] = [],
       removed: string[] = [];
     if (opening) {
@@ -294,7 +325,11 @@ export function createTerminalMarkWriter(
       for (const { id } of excess) {
         const row = readTerminalMarks(db, id)[0]!;
         row.body.opened_at = null;
-        if (row.body.reviewed_stop == null && row.body.stopped_at == null) {
+        if (
+          row.body.reviewed_stop == null &&
+          row.body.stopped_at == null &&
+          row.body.observed_stop_id == null
+        ) {
           db.query("DELETE FROM terminal_marks WHERE id=?").run(id);
           bindings.execute({ type: "remove", id: row.binding.id }, at);
           removed.push(id);
@@ -323,7 +358,6 @@ export function createTerminalMarksPort(
         trimmed: SavedTerminalMark[];
         removed: string[];
       }>({ type: "terminal-mark", operation: { type: "put", input } });
-      rows.delete(commit.row.id);
       rows.set(commit.row.id, commit.row);
       for (const row of commit.trimmed) rows.set(row.id, row);
       for (const id of commit.removed) rows.delete(id);
@@ -343,6 +377,13 @@ export function createTerminalMarksPort(
         operation: { type: "remove", id, revision },
       });
       rows.delete(id);
+    },
+    async end(id, revision) {
+      const row = await request<SavedTerminalMark>({
+        type: "terminal-mark",
+        operation: { type: "end", id, revision },
+      });
+      rows.set(row.id, row);
     },
   };
 }

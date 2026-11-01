@@ -9,9 +9,14 @@ in the existing SQLite worker. Restart captures remain unresolved until a fresh,
 complete, unambiguous observation of the original source verifies them. Runtime
 generation and service incarnation qualify work and projections, never durable
 identity. Watchlist follows the terminal; Desk and completion checks also require
-their captured session when known. Explicit unknown session binds to terminal.
+their captured session when known. Completion checks retain their compatible
+terminal-scoped unknown-session rule. Unknown-session Desk captures require live
+process ownership; terminal-only evidence cannot restore their review after
+World/runtime restart, null-to-known ownership or a returning known fingerprint
+after an intervening owner. Old acknowledgements stay unassociated in history.
 Complete current terminal absence clears each kind. Positive known-session
-replacement clears Desk and seen; watchlist survives. Busy evidence or later
+replacement ends Desk captures as non-reattachable history and clears seen;
+watchlist survives. Busy evidence or later
 native completion progress ends seen. Exact Undo retains a newer review mark.
 Publication merges the operation's connection into the latest live projection;
 another connection's retirement and every published revision remain monotonic.
@@ -82,3 +87,46 @@ uses bounded independent row transactions; a crash may retain a committed prefix
 which is freshly re-resolved after restart. A user mutation acknowledges only
 after all its resulting row writes finish. Browser/native CI and independent
 consumer-mapping acceptance remain separate from local evidence.
+
+## Current stop coverage and retention
+
+Properties precede mapping: every fresh admitted stopped agent has a current
+stop even on first observation/startup/new connection/runtime generation; no
+historical transition/time is invented. Every Town completion, including the
+blocked-to-idle inferred finish, can address a Desk review. Expiring display time
+never deletes a current stop merely because it has not yet been reviewed/opened.
+Current source/session captures are never evicted to make room for history.
+Inactive/ended history has a 500-row oldest-first limit; known-session recovery
+captures remain unresolved/protected until fresh classification or confirmed
+source unavailability. Serial Desk projection/SQLite state is bounded to 768 KiB,
+with labelled refusals and no increase to the existing 1 MiB frame ceiling.
+
+`world/review-stop-coverage.test.ts` uses real SQLite worker/RPC and two actual
+browser stores: initial done/idle/blocked, aged unreviewed/reviewed restart,
+known-session restoration, native successor, repeated review, null restart,
+null-to-known, known replacement and returning-known-after-unknown no-carry,
+550 current stops plus 500 oldest-first history, and byte-budget refusal without
+current eviction or acknowledgement. Existing deferred admission/commit,
+no-session ownership, retirement/replacement, crash and consumer tests remain
+mandatory. Compiled production controls remove initial capture, stable-ID
+retention or unknown continuity fences and require the corresponding regression
+to fail; existing session/publication/Undo/storage fault controls remain active.
+
+`world/review-stop-scale.test.ts` measures the maintained scale inputs. The
+10-source row has 360 current stops: 104,161 bytes on the Desk wire and 179,761
+serialized SQLite-row bytes (about 289/499 bytes per record). The dense-repair row
+contains 2,191,232 native panes across 64 sources; its first source's 34,238 panes
+produce a 13,639,096-byte native response and the real HerdrClient refuses it as
+`Herdr response line is too large` before any Desk capture. Desk row count is 0,
+wire state 27 bytes and SQLite list 2 bytes. This is native-admission refusal
+evidence, not composed-service/browser dense success or total native coverage.
+Both cases retain the unchanged 1 MiB ceiling. Direct finite consumer/storage
+and compiled fault tests exercise these identity and persistence boundaries;
+a second model of SQL would not establish the actual worker/SQLite behavior.
+Run the complete unfiltered `bun run verification:gate` and required consumers.
+
+Part 1 retains completion_seen and the schema-v9 terminal_marks family. Its
+one-time review migration and API/table-family retirement are explicitly held
+until the compatible Chat rebuild and stop coverage merge; no retirement claim
+is made here. The supported native schema has no checkable runtime-instance
+signal, so null-session review continuity through restart remains excluded.

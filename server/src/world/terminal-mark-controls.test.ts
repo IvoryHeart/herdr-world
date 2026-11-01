@@ -11,9 +11,38 @@ const workerUrl = pathToFileURL(
 ).href;
 const consumers = resolve(import.meta.dir, "persistent-terminal-marks.test.ts");
 const storage = resolve(import.meta.dir, "../storage/terminal-marks.test.ts");
+const stops = resolve(import.meta.dir, "review-stop-coverage.test.ts");
 const cases = [
   { name: "positive service consumers", entry: consumers },
   { name: "positive SQLite consumers", entry: storage },
+  {
+    name: "first observed stop coverage",
+    entry: stops,
+    file: "desk-state.ts",
+    match: / \|\| !existing\?\.observed_stop_id/,
+    replacement: "",
+    assertion:
+      "first observed done has a review identity without inventing a transition time",
+  },
+  {
+    name: "unreviewed stop expiry",
+    entry: stops,
+    file: "desk-state.ts",
+    match: /record\.observed_stop_id == null &&/,
+    replacement: "",
+    assertion:
+      "aged stop survives SQLite expiry and restart (reviewed before expiry: false)",
+  },
+  {
+    name: "unknown restart continuity",
+    entry: stops,
+    file: "persistent-terminal-marks.ts",
+    match:
+      /if\s*\(\s*!row\.binding\.evidence\.session &&\s*\(session !== undefined \|\| captured !== row\.id\)\s*\)\s*continue;/,
+    replacement: "",
+    assertion:
+      "unknown-session restart must not fabricate continuity for a saved review",
+  },
   {
     name: "reattached capture projection",
     entry: consumers,
@@ -53,8 +82,8 @@ const cases = [
     name: "retired publication",
     entry: consumers,
     file: "persistent-terminal-marks.ts",
-    match: /ensureCurrent\(\);\s*const committed = new Map/,
-    replacement: "const committed = new Map",
+    match: /ensureCurrent\(\);\s*const committedRows =/,
+    replacement: "const committedRows =",
     assertion:
       "a storage acknowledgement arriving after retirement never publishes its old projection",
   },
@@ -178,7 +207,12 @@ for (const [index, control] of cases.entries())
       process.execPath,
       "test",
       output,
-      ...(control.assertion ? ["--test-name-pattern", control.assertion] : []),
+      ...(control.assertion
+        ? [
+            "--test-name-pattern",
+            control.assertion.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+          ]
+        : []),
     ];
     const child = Bun.spawn(command, {
       cwd: root,

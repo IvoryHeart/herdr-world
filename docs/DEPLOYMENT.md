@@ -1062,9 +1062,17 @@ After a restart or runtime replacement, saved records remain unresolved until
 World reads a complete, unambiguous list from the original connection. The same
 terminal and captured known session restore Desk/completion records. Watches
 follow the terminal across pane moves. A complete current terminal absence clears
-all three kinds; a positive known session replacement clears Desk and completion
-records. Missing session evidence and duplicate identities never attach a saved
-record. Renewed work or later native completion progress clears a completion
+watch/completion records and ends the Desk capture; a positive known session
+replacement ends Desk history and clears completion checks. Ended Desk captures
+are unassociated history and cannot attach again. Missing known-session evidence
+and duplicate identities never attach that saved Desk capture. Agents first seen
+stopped receive a fresh stop identity without inventing a historical stop time.
+The 12-hour idle display window expires only the display timestamp, retaining an
+unreviewed stop for later review. Unknown-session Desk reviews remain shared
+within their admitted live ownership, but cannot safely carry across World or
+Herdr/runtime restart: supported Herdr observations expose no runtime-instance
+proof. Their acknowledgements stay in unassociated history; fresh observation
+gets a new current stop. A null-to-known owner never inherits the earlier review. Renewed work or later native completion progress clears a completion
 check. Herdr restarting with new terminals therefore does not inherit old marks.
 
 Unpin removes its exact saved watch even while the host is unavailable. The browser
@@ -1087,7 +1095,16 @@ restarts. Board layout/Town pinned cells use the separate Board migration. Ordin
 Town placement and device preferences retain their current ownership.
 
 No terminal text, receipt content, credentials or runtime fences enter this family.
-Metadata retains its existing bounds (500 Desk records, 40 recent opens, 128 watches,
-4,096 completion checks). Without native progress, World cannot discover a complete
+Current Desk stops follow source/session lifetime and are never displaced by
+history. Inactive/ended Desk history retains at most 500 rows, oldest-first;
+known-session restart captures stay unresolved/protected during source recovery,
+and are classified only by fresh observation or confirmed unavailability. There
+are still at most 40 recent opens, 128 watches and 4,096 completion checks. Desk
+wire metadata and serialized SQLite rows each have a 768 KiB budget, leaving
+headroom below the unchanged 1 MiB frame ceiling. History yields first to the byte
+budget; if current metadata alone exceeds it, World reports `Desk capacity
+exceeded` and refuses the operation without evicting current stops, acknowledging
+a failed review or stopping the service. Completion checks remain compatible
+until the separate reviewed-record migration/retirement is delivered. Without native progress, World cannot discover a complete
 work/completion cycle it never observed. Process-crash tests do not establish
 physical power-loss durability.

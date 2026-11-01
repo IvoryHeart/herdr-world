@@ -934,8 +934,17 @@ to another session or a same-named pane on another host.
 
 The World service SHALL hold review marks, observed stop times and recent Desk
 opens in world.sqlite, shared by every connected browser after COMMIT. It SHALL retain
-at most 500 qualified metadata records, 40 recent-open timestamps and 4,096 prior
-agent-status observations in memory. Each durable record SHALL have a World ID and
+current terminal/session stop records for as long as their source and session
+remain current. Current stops SHALL NOT be evicted by a record-count limit or by
+history. Inactive/ended captures SHALL form history, bounded to 500 rows with
+oldest-first eviction; history may yield earlier to the byte budget. Known-session
+restart captures SHALL remain unprojected and protected while their source is
+recovering, until fresh classification or confirmed unavailability. There SHALL
+still be at most 40 recent-open timestamps and 4,096 prior status observations in
+memory. Both the Desk projection and its serialized SQLite rows SHALL fit a
+768 KiB metadata budget, leaving headroom below the unchanged 1 MiB frame limit.
+An over-budget observation or mutation SHALL produce a labelled capacity refusal
+without evicting current stops or acknowledging an uncommitted review. Each durable record SHALL have a World ID and
 a verified binding to its original source, terminal and known agent-session
 fingerprint (or terminal alone for explicit unknown session). Runtime generation
 SHALL qualify only the current projection and admitted work. Review marks SHALL store only the latest marked stop per agent
@@ -950,13 +959,24 @@ read failures: the same service stop and native activity observation SHALL have
 one identity with or without a receipt. A later observed stop or native activity
 SHALL invalidate the older mark. Receipt content SHALL remain presentation data.
 The service SHALL assign a stable observed-stop identity separate from the
-12-hour display timestamp. Retained review marks SHALL keep that identity when
-only the timestamp expires. Qualified native `state_change_seq` progress in an
+12-hour display timestamp. Every fresh admitted stopped agent, including one
+already done on first observation/startup/new connection/runtime generation,
+SHALL receive a current stop identity. First observation SHALL NOT invent a
+historical transition or stop time: its display timestamp remains absent unless
+World observed a transition or qualified native progress. Timestamp expiry SHALL
+retain the identity even before the stop is reviewed or opened. The existing
+12-hour idle presentation window SHALL remain unchanged. Qualified native `state_change_seq` progress in an
 already stopped state SHALL reveal a subsequent stop even if no browser observed
 the intervening working state. Native progress checkpoints on retained metadata
 SHALL survive display/observation expiry. Equal, older, malformed or ambiguous
 native progress SHALL NOT invalidate a mark. Without a native sequence, a known
-idle/blocked-to-done transition SHALL still advance the stop.
+idle/blocked-to-done or blocked-to-idle completion transition SHALL still advance
+the stop. Unknown-session Desk captures SHALL NOT inherit review or stop identity
+across World/runtime restart or null-to-known ownership changes without native
+continuity proof. The currently supported native observations provide no runtime
+instance proof: old unknown captures remain unassociated bounded history and a
+fresh current stop is created. Returning to an earlier known fingerprint after
+an intervening owner SHALL NOT restore its old review.
 The stable observed-stop identity SHALL participate in receipt refresh and
 currency admission. A read started for a preceding stop SHALL NOT become current
 for its successor. While a new stop's receipt is pending or failing, the previous
@@ -990,7 +1010,9 @@ state as unverified, and accept a restarted service's empty revision-zero state.
 
 - **WHEN** a browser reloads while the World service still runs
 - **THEN** it reads the same qualified marks, stop times and recent opens; after
-  a service restart, reconnect replaces them with the new process's empty state
+  a service restart, captures remain unresolved until fresh complete identity
+  verification; known sessions restore their exact stop and review, while unknown
+  sessions receive fresh stops without inheriting unproven acknowledgements
 
 ### Requirement: Bounded turn receipts
 
