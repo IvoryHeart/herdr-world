@@ -4,7 +4,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { WorldDeskStore } from "./deskStateStore";
 import { NeedsYouList, needsYouPage } from "./NeedsYouTab";
-import { needsYouCount, needsYouItems } from "./needsYou";
+import { needsYouCount, needsYouInTopbar, needsYouItems } from "./needsYou";
 import type { WorldAsk, WorldAsksStore } from "./worldAsks";
 import type { WorldLeafObject } from "./worldObject";
 
@@ -207,4 +207,25 @@ test("every opener request finds its item's page, and a turned page stays put", 
     start: 60,
     focused: undefined,
   });
+});
+
+test("the counter is one tap away on every root screen, never twice", () => {
+  const place = (mobile: boolean, zen: boolean, detail = false) =>
+    needsYouInTopbar({ view: "town", mobile, zen, detail });
+  // Zen: the floating view picker carries it on every device.
+  expect(place(false, true)).toBe(false);
+  expect(place(true, true)).toBe(false);
+  // Outside Zen the top bar does, a phone's included (after Exit Zen).
+  expect(place(false, false)).toBe(true);
+  expect(place(true, false)).toBe(true);
+  // A phone's agent window bar is a detail screen's; Spaces has none.
+  expect(place(true, false, true)).toBe(false);
+  expect(
+    needsYouInTopbar({
+      view: "spaces",
+      mobile: false,
+      zen: false,
+      detail: false,
+    }),
+  ).toBe(false);
 });

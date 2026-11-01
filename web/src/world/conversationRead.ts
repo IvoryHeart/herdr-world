@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { bridge, type ConnectionClient } from "../api";
 import { watchConversation } from "../conversationWatch";
 import type { Conversation } from "../components/AgentChat";
@@ -16,9 +16,15 @@ export const leafOwner = (leaf: WorldLeafObject): ConnectionClient | null =>
 
 export type LatestConversation = Omit<Conversation, "messages">;
 
+/** The readFor of a conversation shown only to explain a failed read. */
+const UNREAD = "\u0000unread";
+
 export type ConversationRead = {
   conversation: LatestConversation | null;
-  /** The `readFor` the conversation shown was read for. */
+  /**
+   * The `readFor` the conversation shown was read for; never the requested
+   * one while that read failed.
+   */
   readFor: string | null;
   /** The newest read for this `readFor` failed. */
   failed: boolean;
@@ -52,11 +58,20 @@ export function useConversationRead(
   } | null>(null);
   const [attempt, setAttempt] = useState(0);
   const identity = leaf ? screenIdentity(leaf) : null;
+  // What is on screen for this pane, across stop changes and retries.
+  const displayed = useRef<{ id: string; ok: boolean } | null>(null);
+  const show = (next: {
+    id: string;
+    value: LatestConversation;
+    readFor: string | null;
+  }) => {
+    displayed.current = { id: next.id, ok: next.value.status === "ok" };
+    setConversation(next);
+  };
   useEffect(() => {
     const client = leaf && leafOwner(leaf);
     if (!leaf || !client || !active || !identity) return;
     let cancelled = false;
-    let shown: LatestConversation | null = null;
     // Only the newest read may answer; an older one can finish later.
     let sequence = 0;
     const read = async () => {
@@ -81,14 +96,18 @@ export function useConversationRead(
           (reply.status !== "ok" && reply.status !== "unavailable")
         )
           return fail();
-        if (
-          reply.unavailable?.reason === "read_failed" &&
-          shown?.status === "ok"
-        )
+        if (reply.unavailable?.reason === "read_failed") {
+          // The service could not read this report: a failed read, never a
+          // report of `readFor`. A readable conversation on screen stays
+          // (with the stop it was read for); with none, the reason shows
+          // without claiming the requested stop.
+          fail();
+          if (displayed.current?.id !== identity || !displayed.current.ok)
+            show({ id: identity, value: reply, readFor: UNREAD });
           return;
-        shown = reply;
+        }
         setFailed(null);
-        setConversation({ id: identity, value: reply, readFor });
+        show({ id: identity, value: reply, readFor });
       } catch {
         fail();
       }

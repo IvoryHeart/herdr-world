@@ -40,6 +40,10 @@ async function registerDomTest() {
     "MutationObserver",
     "KeyboardEvent",
     "MouseEvent",
+    "FocusEvent",
+    "localStorage",
+    "history",
+    "location",
   ] as const) {
     Object.defineProperty(globalThis, key, {
       value: key === "window" ? browser : browser[key],
@@ -50,6 +54,9 @@ async function registerDomTest() {
   Object.assign(globalThis, {
     getComputedStyle: browser.getComputedStyle.bind(browser),
     CSS: { escape: (value: string) => value },
+    requestAnimationFrame: (run: (at: number) => void) =>
+      setTimeout(() => run(Date.now()), 0) as unknown as number,
+    cancelAnimationFrame: (id: number) => clearTimeout(id),
     IS_REACT_ACT_ENVIRONMENT: true,
   });
   const { act, createElement } = await import("react");
@@ -58,7 +65,10 @@ async function registerDomTest() {
   const { WorldDeskStore } = await import("./deskStateStore");
   const { deskIdentity } = await import("./useDeskState");
   const { reviewStop, useReviewedWork } = await import("./useReviewedWork");
-  const { NeedsYouList } = await import("./NeedsYouTab");
+  const { NeedsYouHost, NeedsYouList } = await import("./NeedsYouTab");
+  const { closeNeedsYou, openNeedsYou } = await import("./needsYou");
+  const { useShownReport } = await import("./shownReport");
+  const { initializeLayoutPreferences } = await import("../layoutPreferences");
   const { useTownConversation } = await import("./town/townChat");
   type Leaf = import("./worldObject").WorldLeafObject;
   type Asks = import("./worldAsks").WorldAsksStore;
@@ -509,6 +519,226 @@ async function registerDomTest() {
     expect(text).toBe("First");
     client.call = realCall;
     await act(async () => probeRoot.unmount());
+  });
+
+  /** Renders the list alone for one case and returns its item lookup. */
+  const listFor = async (leaves: Leaf[]) => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const list = createRoot(host);
+    const render = (shown: Leaf[]) =>
+      act(async () =>
+        list.render(
+          createElement(NeedsYouList, {
+            world: { leaves: shown, nodeById: new Map() },
+            request: { sequence: 0 },
+            now: 2_000,
+            onChat: () => {},
+            onOpenTerminal: () => {},
+            asksStore,
+            deskStore,
+          }),
+        ),
+      );
+    await render(leaves);
+    await settle();
+    const of = (id: string) =>
+      host.querySelector<HTMLElement>(`[data-needs-you-item="leaf:${id}"]`)!;
+    return { host, of, render, unmount: () => act(async () => list.unmount()) };
+  };
+
+  test("a report the service could not read is a failed read, never the new stop's report", async () => {
+    stopId = "s4";
+    reports.set("w1:done", { latest: { text: "Report for stop four" } });
+    const view = await listFor([done]);
+    const mark = () => button(view.of("done"), "Mark reviewed");
+    expect(mark().disabled).toBe(false);
+    // The service answers a read of the new stop with its read_failed shape.
+    stopId = "s5";
+    reports.set("w1:done", {
+      status: "unavailable",
+      latest: null,
+      pending_prompt: null,
+      unavailable: {
+        reason: "read_failed",
+        detail: "Could not read transcript",
+      },
+    });
+    await act(async () => deskChanged!());
+    await settle();
+    expect(mark().disabled).toBe(true);
+    expect(view.of("done").textContent).toContain("Report for stop four");
+    expect(view.of("done").textContent).toContain("Retry");
+    reports.set("w1:done", { latest: { text: "Report for stop five" } });
+    await act(async () => button(view.of("done"), "Retry").click());
+    await settle();
+    expect(mark().disabled).toBe(false);
+    expect(view.of("done").textContent).toContain("Report for stop five");
+    await view.unmount();
+  });
+
+  test("a new agent session on the pane inherits no answer, question or late result", async () => {
+    reports.set("w1:picky", {
+      latest: { text: "Pick a colour" },
+      pending_prompt: prompt("picky-9", ["Red", "Blue"]),
+    });
+    const picky = leaf("picky", "blocked");
+    const view = await listFor([picky]);
+    await act(async () => button(view.of("picky"), "Red").click());
+    await settle();
+    expect(view.of("picky").textContent).toContain("Sent");
+    const replaced = (fingerprint: string) =>
+      ({ ...picky, agentSessionFingerprint: fingerprint }) as Leaf;
+    reports.set("w1:picky", {
+      latest: { text: "New session" },
+      pending_prompt: null,
+    });
+    await view.render([replaced("b".repeat(64))]);
+    await settle();
+    expect(view.of("picky").textContent).toContain("New session");
+    expect(view.of("picky").textContent).not.toContain("Sent");
+    // An answer still in flight when the session changes never lands.
+    reports.set("w1:picky", {
+      latest: { text: "Pick again" },
+      pending_prompt: prompt("picky-10", ["Red", "Blue"]),
+    });
+    await changed("w1:picky");
+    const realCall = client.call;
+    let release: (() => void) | null = null;
+    client.call = async (method, params) => {
+      if (method === "agent_conversation.answer")
+        await new Promise<void>((resolve) => (release = resolve));
+      return realCall(method, params);
+    };
+    await act(async () => button(view.of("picky"), "Red").click());
+    reports.set("w1:picky", {
+      latest: { text: "Third session" },
+      pending_prompt: null,
+    });
+    await view.render([replaced("c".repeat(64))]);
+    await settle();
+    release!();
+    await settle();
+    client.call = realCall;
+    expect(view.of("picky").textContent).toContain("Third session");
+    expect(view.of("picky").textContent).not.toContain("Sent");
+    await view.unmount();
+  });
+
+  test("Town's peek names the stop whose report it shows, and waits for a new one", async () => {
+    stopId = "s6";
+    reports.set("w1:done", { latest: { text: "Report six" } });
+    let shown: { stop: string | null; text: string | null; failed: boolean } = {
+      stop: null,
+      text: null,
+      failed: false,
+    };
+    let markShown: ReturnType<typeof useShownReport>["markShown"] | null = null;
+    const townMarks: string[] = [];
+    const townMark = async (_: Leaf, stop: string) => (
+      townMarks.push(stop), true
+    );
+    const Probe = () => {
+      const report = useShownReport(done, true, true, deskStore);
+      markShown = report.markShown;
+      shown = {
+        stop: report.stop,
+        text: report.conversation?.latest?.text ?? null,
+        failed: report.failed,
+      };
+      return null;
+    };
+    const probe = createRoot(document.createElement("div"));
+    await act(async () => probe.render(createElement(Probe)));
+    await settle();
+    const stopSix = reviewStop(done, deskState().records[0]);
+    expect(shown).toEqual({ stop: stopSix, text: "Report six", failed: false });
+    // The service sees stop seven while its report is still being read.
+    held = Promise.withResolvers<void>();
+    stopId = "s7";
+    await act(async () => deskChanged!());
+    await settle();
+    expect(shown).toEqual({ stop: null, text: "Report six", failed: false });
+    // Town's Mark reviewed marks nothing while the new report is read.
+    expect(await markShown!(townMark, "builder", () => {})).toBe(false);
+    expect(townMarks).toEqual([]);
+    reports.set("w1:done", { latest: { text: "Report seven" } });
+    held.resolve();
+    held = null;
+    await settle();
+    expect(shown.stop).toBe(reviewStop(done, deskState().records[0]));
+    expect(shown.stop).not.toBe(stopSix);
+    expect(shown.text).toBe("Report seven");
+    expect(await markShown!(townMark, "builder", () => {})).toBe(true);
+    expect(townMarks).toEqual([shown.stop!]);
+    await act(async () => probe.unmount());
+  });
+
+  test("the phone list takes focus, keeps the app behind it inert and gives focus back", async () => {
+    Object.defineProperty(window, "innerWidth", {
+      value: 390,
+      configurable: true,
+    });
+    initializeLayoutPreferences();
+    closeNeedsYou();
+    const app = document.createElement("div");
+    document.body.append(app);
+    const shell = createRoot(app);
+    await act(async () =>
+      shell.render(
+        createElement(
+          "div",
+          null,
+          createElement(
+            "button",
+            { id: "opener", onClick: () => openNeedsYou("leaf:picky") },
+            "Open Needs you",
+          ),
+          createElement(NeedsYouHost, {
+            world,
+            onChat: () => {},
+            onOpenTerminal: () => {},
+          }),
+        ),
+      ),
+    );
+    const opener = app.querySelector<HTMLButtonElement>("#opener")!;
+    opener.focus();
+    await act(async () => opener.click());
+    await settle();
+    const sheet = () =>
+      document.querySelector<HTMLElement>(
+        '.needs-you-tab.is-sheet[aria-modal="true"]',
+      );
+    expect(sheet()).not.toBeNull();
+    expect(sheet()!.contains(document.activeElement)).toBe(true);
+    expect(
+      sheet()!
+        .querySelector('[data-needs-you-item="leaf:picky"]')!
+        .contains(document.activeElement),
+    ).toBe(true);
+    expect(app.hasAttribute("inert")).toBe(true);
+    // Back's button, focused in the list, is where Chat returns to.
+    const back = sheet()!.querySelector<HTMLButtonElement>(".needs-you-back")!;
+    back.focus();
+    // Chat about this opened an agent window over the list.
+    const chat = document.createElement("div");
+    chat.className = "world-managed-window";
+    app.append(chat);
+    await settle();
+    expect(app.hasAttribute("inert")).toBe(false);
+    chat.remove();
+    await settle();
+    expect(app.hasAttribute("inert")).toBe(true);
+    expect(document.activeElement).toBe(back);
+    // Back closes the list and returns focus to its opener.
+    await act(async () => closeNeedsYou());
+    await settle();
+    expect(sheet()).toBeNull();
+    expect(app.hasAttribute("inert")).toBe(false);
+    expect(document.activeElement).toBe(opener);
+    await act(async () => shell.unmount());
+    app.remove();
   });
 
   test("Town's reviewed view ignores stop observations and follows review marks", async () => {

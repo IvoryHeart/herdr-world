@@ -71,6 +71,26 @@ export const needsYouCount = (items: readonly NeedsYouItem[]) =>
   items.filter((item) => item.kind !== "done").length;
 
 /**
+ * Whether the top bar carries the Needs you counter. Spaces has none. In Zen
+ * the floating view picker carries it (the top bar is hidden). A phone's top
+ * bar carries it on root screens outside Zen, so after Exit Zen the counter
+ * stays one tap away; an agent window's bar on a phone is a detail screen's.
+ */
+export function needsYouInTopbar({
+  view,
+  mobile,
+  zen,
+  detail,
+}: {
+  view: string;
+  mobile: boolean;
+  zen: boolean;
+  detail: boolean;
+}) {
+  return view !== "spaces" && !zen && !(mobile && detail);
+}
+
+/**
  * The Needs you tab's shared state: open or closed (remembered per device),
  * the newest opener request, and Town's Outbox opener while Town shows.
  * Every opener request gets a new sequence number, so asking again for the

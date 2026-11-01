@@ -95,6 +95,21 @@ let renderError: unknown = null;
 window.addEventListener("error", (event) => {
   if (event.error) renderError = event.error;
 });
+/** Needs you counters a person can see and reach. */
+const visibleNeedsYouCounters = () =>
+  [...document.querySelectorAll<HTMLElement>(".needs-you-counter")].filter(
+    (counter) => {
+      const box = counter.getBoundingClientRect();
+      return (
+        box.width > 0 &&
+        box.height > 0 &&
+        box.bottom > 0 &&
+        box.top < innerHeight &&
+        getComputedStyle(counter).visibility !== "hidden"
+      );
+    },
+  ).length;
+
 async function until(
   condition: () => unknown,
   message: string | (() => string),
@@ -2313,6 +2328,10 @@ async function run() {
         ?.getClientRects().length &&
       document.querySelector(".topbar")?.classList.contains("is-zen") === true,
     "the phone terminal window shows one bar of its own and no topbar above it",
+  );
+  check(
+    visibleNeedsYouCounters() === 0,
+    "the phone terminal window's bar carries no Needs you counter",
   );
   const mobileInput = mobileInspector.querySelector<HTMLTextAreaElement>(
     "textarea.terminal-composer-input",
@@ -5466,6 +5485,12 @@ async function run() {
   check(
     !document.querySelector('button[aria-label="Back to Town"]'),
     "return action disappears when no Inspector is open",
+  );
+  // A phone root screen keeps one Needs you counter in reach, in Zen's
+  // picker or, outside Zen, in the top bar.
+  check(
+    visibleNeedsYouCounters() === 1,
+    `a phone root screen shows ${visibleNeedsYouCounters()} Needs you counters, not one`,
   );
   // The closed terminal leaves no history entry: one system Back leaves
   // Town for the scene shown before it.

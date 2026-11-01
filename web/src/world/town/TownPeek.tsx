@@ -42,8 +42,14 @@ export function TownPeek({
   onClose,
   onHold,
   onReviewed,
+  review = { ready: true, failed: false, onRetry: () => {} },
   deskColor = null,
 }: {
+  /**
+   * Whether the report shown is the current stop's: Mark reviewed waits
+   * while a new stop's report is read, and offers Retry when it fails.
+   */
+  review?: { ready: boolean; failed: boolean; onRetry(): void };
   /** The colour of the agent's desk (its terminal), to change or reset. */
   deskColor?: {
     current: TerminalColor;
@@ -203,8 +209,24 @@ export function TownPeek({
       ) : null}
       <div className="town-answers" role="group" aria-label="Chat">
         {agent.semanticStatus === "done" ? (
-          <button type="button" onClick={onReviewed}>
+          <button
+            type="button"
+            disabled={!review.ready}
+            title={
+              review.ready
+                ? undefined
+                : review.failed
+                  ? "The latest report could not be read"
+                  : "Reading the latest report…"
+            }
+            onClick={onReviewed}
+          >
             <span>Mark reviewed</span>
+          </button>
+        ) : null}
+        {agent.semanticStatus === "done" && review.failed ? (
+          <button type="button" onClick={review.onRetry}>
+            <span>Retry</span>
           </button>
         ) : null}
         {canReply ? (

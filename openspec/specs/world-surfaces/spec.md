@@ -1646,7 +1646,9 @@ Marking it reviewed in any view SHALL write Desk's review mark for the stop
 whose report is shown when Desk can name that stop (the service saw it end, or
 Herdr reports the agent's last activity), and otherwise this check; a mark the
 service did not save SHALL be reported and leave the completion unchecked.
-Checks SHALL NOT represent approval or mutate Herdr. A desk SHALL show its sole
+Town's peek SHALL mark the stop whose report it shows: Mark reviewed SHALL wait
+while a new stop's report is read, offer Retry when that read fails, and confirm
+only a mark the service saved. Checks SHALL NOT represent approval or mutate Herdr. A desk SHALL show its sole
 agent's Herdr name when exactly one named agent occupies the tab; otherwise it
 SHALL show the tab label, or `Tab N` when the tab has no label. Each seat SHALL
 show its agent's or terminal's name at the desk level. An idle agent SHALL move to a lounge spot in its
@@ -1769,7 +1771,10 @@ agents oldest first, then finished work not yet reviewed newest first (done
 agents, and idle agents whose turn the service saw end within Desk's 12-hour
 window). On wide landscape screens the open tab SHALL sit on the left beside the
 view, on narrower screens over it, and on phones it SHALL be a full-screen list
-with Back; whether it is open SHALL persist per device, and while it is closed
+with Back that takes keyboard focus (the requested item, else Back), keeps the
+app behind it inert, and returns focus to its opener when it closes; an agent
+window opened from it SHALL cover it until that window closes, and focus SHALL
+then return to the list. Whether it is open SHALL persist per device, and while it is closed
 and something waits a handle at the left edge SHALL open it. Each item SHALL be
 a short message from its agent, name its agent, mark an asker World could not
 verify, show why an owner alert may not have arrived, and offer Chat about this,
@@ -1782,9 +1787,12 @@ Chat cannot answer SHALL offer the Terminal, never Chat. Finished work SHALL
 offer Mark reviewed for the stop whose report is shown, unavailable while the
 current stop's report is being read, SHALL say when that report could not be
 read and offer to read it again, and SHALL report a mark the service did not
-save. Blocked and finished items SHALL come from the hosts the Hosts filter
-admits. A Needs you counter in the existing top bar (in the view picker in Zen
-and on phones) SHALL count open questions and the admitted blocked agents and
+save. A report the service could not read SHALL count as a failed read, never
+as the current stop's report. An answer's receipt, question and pending result
+SHALL belong to the exact pane owner and agent session: a new session on the
+same pane SHALL start without them. Blocked and finished items SHALL come from
+the hosts the Hosts filter admits. A Needs you counter in the existing top bar (in the view picker in Zen; a phone's top bar
+outside Zen, never an agent window's bar) SHALL count open questions and the admitted blocked agents and
 open the tab; Town's reception letters, Desk's Answer and Board's attention
 badges SHALL open it at their item. The tab SHALL show and observe one bounded
 page of items at a time, with actions to show the next and earlier pages, and

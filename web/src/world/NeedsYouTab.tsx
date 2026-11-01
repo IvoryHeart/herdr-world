@@ -5,6 +5,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import { createPortal } from "react-dom";
 import { AgentMark } from "../components/AgentMark";
 import { useLayoutPreferences } from "../layoutPreferences";
 import { useSystemBack } from "../systemBack";
@@ -17,7 +18,7 @@ import {
 } from "./worldAsks";
 import { useAnswerDeliveryCounts } from "./worldAnswerDeliveries";
 import type { WorldDeskStore } from "./deskStateStore";
-import type { WorldObject } from "./worldObject";
+import type { WorldLeafObject, WorldObject } from "./worldObject";
 import {
   closeNeedsYou,
   needsYouCount,
@@ -109,6 +110,9 @@ export function NeedsYouHost({
   // A full screen on a phone: an agent window opened from it (Chat about
   // this) is a newer screen, so Back closes that first and returns here.
   useSystemBack(shared.open && mobile, closeNeedsYou, "screen");
+  const sheet = shared.open && mobile;
+  const panel = useRef<HTMLElement | null>(null);
+  usePhoneSheetFocus(sheet, panel, shared.request);
   if (!shared.open)
     return mobile || !count ? null : (
       <button
@@ -122,10 +126,12 @@ export function NeedsYouHost({
         <b>{count}</b>
       </button>
     );
-  return (
+  const tab = (
     <aside
+      ref={panel}
       className={`needs-you-tab${mobile ? " is-sheet" : ""}`}
       aria-label="Needs you"
+      {...(mobile ? { role: "dialog", "aria-modal": true, tabIndex: -1 } : {})}
     >
       <header className="needs-you-head">
         {mobile ? (
@@ -163,7 +169,103 @@ export function NeedsYouHost({
       />
     </aside>
   );
+  // On a phone the list is its own screen above the app.
+  return mobile ? createPortal(tab, document.body) : tab;
 }
+
+/** An agent window (Chat about this) covers the phone list while open. */
+const COVERING_WINDOW = ".world-managed-window";
+
+/**
+ * The phone list is a modal screen: the app behind it is inert and focus
+ * moves to the requested item (or Back) on every opener request, returning
+ * to the opener on close. While an agent window opened from the list covers
+ * it, the app is live again; when that window closes, focus returns to
+ * where it was in the list.
+ */
+function usePhoneSheetFocus(
+  active: boolean,
+  panel: { current: HTMLElement | null },
+  request: NeedsYouState["request"],
+) {
+  const [covered, setCovered] = useState(false);
+  const opener = useRef<Element | null>(null);
+  const inside = useRef<HTMLElement | null>(null);
+  // Who opened the list, so closing it returns there.
+  if (active && opener.current === null)
+    opener.current = document.activeElement;
+  useEffect(() => {
+    if (!active) return;
+    const check = () =>
+      setCovered(document.querySelector(COVERING_WINDOW) !== null);
+    check();
+    const observer = new MutationObserver(check);
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [active]);
+  useEffect(() => {
+    const sheet = panel.current;
+    if (!active || covered || !sheet) return;
+    const made = [...document.body.children].filter(
+      (element) => element !== sheet && !element.hasAttribute("inert"),
+    );
+    for (const element of made) element.setAttribute("inert", "");
+    const remember = (event: FocusEvent) => {
+      if (event.target instanceof HTMLElement) inside.current = event.target;
+    };
+    sheet.addEventListener("focusin", remember);
+    return () => {
+      sheet.removeEventListener("focusin", remember);
+      for (const element of made) element.removeAttribute("inert");
+    };
+  }, [active, covered, panel]);
+  // Each opener request: the requested item's first control, else Back.
+  useEffect(() => {
+    if (!active || covered) return;
+    const frame = requestAnimationFrame(() => {
+      const sheet = panel.current;
+      if (!sheet) return;
+      const item = request.itemKey
+        ? sheet.querySelector<HTMLElement>(".needs-you-item.is-focused")
+        : null;
+      const target =
+        item?.querySelector<HTMLElement>("button:not([disabled]), input") ??
+        sheet.querySelector<HTMLElement>(".needs-you-back") ??
+        sheet;
+      target.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+    // Only a new request moves focus, not every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, request.sequence]);
+  // Back from a covering window: where focus was in the list.
+  const wasCovered = useRef(false);
+  useEffect(() => {
+    if (wasCovered.current && !covered && active)
+      (inside.current?.isConnected
+        ? inside.current
+        : panel.current?.querySelector<HTMLElement>(".needs-you-back")
+      )?.focus();
+    wasCovered.current = covered;
+  }, [covered, active, panel]);
+  // Closing returns focus to the opener.
+  useEffect(() => {
+    if (active) return;
+    const back = opener.current;
+    opener.current = null;
+    inside.current = null;
+    if (back instanceof HTMLElement && back.isConnected) back.focus();
+  }, [active]);
+}
+
+/** The pane's exact owner and agent session, as answers are attributed. */
+export const needsYouOwnerKey = (leaf: WorldLeafObject) =>
+  JSON.stringify([
+    leaf.connectionId,
+    leaf.generation,
+    leaf.terminalId,
+    leaf.agentSessionIdentity ?? leaf.agentSessionFingerprint ?? null,
+  ]);
 
 /** Where the list starts: an opener's item's page, else the page turned to. */
 export function needsYouPage(
@@ -273,7 +375,9 @@ export function NeedsYouList({
       ) : null}
       {items.map((item) => (
         <NeedsYouMessage
-          key={item.key}
+          // A new owner or agent session on the same pane is a new item: no
+          // receipt, question or pending answer carries over to it.
+          key={`${item.key}|${item.leaf ? needsYouOwnerKey(item.leaf) : ""}`}
           item={item}
           now={now}
           focused={item.key === focused}

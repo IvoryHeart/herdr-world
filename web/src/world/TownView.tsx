@@ -41,7 +41,6 @@ import {
   townPaneIdentity,
   townQuestion,
   townScreenLines,
-  useTownConversation,
   useTownScreen,
 } from "./town/townChat";
 import { requestTerminalComposer } from "./terminalComposerRequest";
@@ -86,6 +85,7 @@ import type { WorldObject } from "./worldObject";
 import { WorldViewToolbar, worldSearchMatches } from "./WorldViewToolbar";
 import { officeRoomKeyForSelection } from "./officeRoomActions";
 import { useReviewedWork } from "./useReviewedWork";
+import { useShownReport } from "./shownReport";
 import { needsYouLeafKey, offerNeedsYouOutbox, openNeedsYou } from "./needsYou";
 import { preferredOfficeConnectorAnchor } from "./worldConnectorGeometry";
 import { officeCreationInputsEqual } from "./officeCreationInputs";
@@ -609,7 +609,13 @@ export default function TownView({
     Boolean(peekAgent) && peekBlocked,
     2_000,
   );
-  const peekConversation = useTownConversation(peekLeaf, Boolean(peekAgent));
+  // The peek's report and its stop: Mark reviewed names only that stop.
+  const peekReport = useShownReport(
+    peekLeaf,
+    Boolean(peekAgent),
+    peekAgent?.semanticStatus === "done",
+  );
+  const peekConversation = peekReport.conversation;
   const peekCanReply =
     Boolean(peekLeaf) && !!peekAgent?.canOpenInSpaces && !peekAgent.stale;
   // Answers come only from the question at the bottom of a waiting screen.
@@ -856,10 +862,14 @@ export default function TownView({
               void reply(peekLeaf, peekAgent.displayLabel, key, false)
             }
             deskColor={peekDeskColor(peekAgent.key)}
-            onReviewed={() => {
-              markCompletionSeen(peekAgent);
-              toast("ok", `${peekAgent.displayLabel}'s work reviewed`);
-            }}
+            review={peekReport.review}
+            onReviewed={() =>
+              void peekReport.markShown(
+                work.mark,
+                peekAgent.displayLabel,
+                toast,
+              )
+            }
             onChat={() => openChat(peekAgent.key)}
             onTerminal={() => {
               setPeek(null);

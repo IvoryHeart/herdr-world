@@ -132,6 +132,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     opens the agent's window, whose Files and Changes views hold the rest.
     **Next** opens the next waiting agent's window,
     then finished agents' if none wait.
+    **Mark reviewed** in the peek marks the report it shows: it waits while a
+    newer stop's report is read, offers **Retry** when that read fails, and
+    says so when the mark could not be saved.
     Review marks acknowledge a specific completion in the service's one
     reviewed record, shared by Town, Desk, Needs you and every browser of this
     World, without certifying its correctness. They survive a World restart
@@ -431,11 +434,12 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   of **Manage connections**. Filtering preserves open resources and terminals;
   removed saved identities are pruned, with an explained return to All hosts
   when none remain. Offline hosts keep labelled roots; an empty catalogue offers onboarding.
-- **Needs you** in the top bar (in the view picker in Zen and on a phone) counts
+- **Needs you** in the top bar (in the view picker in Zen, including on a phone) counts
   open questions and the blocked agents of the hosts the Hosts filter shows, in
   every view, and opens the **Needs you** tab on the left: beside the view on
   wide landscape screens, over it on narrower ones, full screen with **Back** on a
-  phone. It stays open or closed per device; while closed and anything waits, a
+  phone, where it takes focus, keeps the app behind it out of reach and gives
+  focus back when it closes. It stays open or closed per device; while closed and anything waits, a
   **Needs you** handle sits at the left edge. Each item is a short message from its
   agent with Chat's formatting and a quick reply in place: **?** questions
   (options, a typed answer, **Dismiss**, and why an owner alert may not have
