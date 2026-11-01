@@ -4034,7 +4034,13 @@ departure SHALL drive in from the town's left edge, timed to stop at the stop
 with 10 s left on the countdown (over its first 3 s when the countdown is 10 s),
 slowing as it arrives; wait with its doors open until the countdown ends; then
 pull away, speeding up, and leave the map by the right edge exactly as the
-departure ends, which is when the close commits. Its motion SHALL come from a
+departure ends, which is when the close commits. The bus SHALL sound a short horn
+as it reaches the stop, under this device's sound setting. An agent sent while a
+bus has not yet pulled away SHALL board it, and the service SHALL restart the
+countdown in full for everyone on that bus (a bus still driving in re-times its
+approach from where it is to stop at 0:10 on the new clock; one at the stop keeps
+waiting); an agent sent after it pulled away SHALL wait for the next bus with its
+own countdown. Its motion SHALL come from a
 mover character (cruising speed, acceleration, deceleration) shared by Town's
 movers, with the speed derived from the road's length and the time left. A bus seats eight; more riders
 SHALL take more buses, and buses that cannot stand at the stop SHALL queue
@@ -4086,6 +4092,13 @@ commits.
 
 - **WHEN** the user drags the last pane of a pinned tab over the bin
 - **THEN** the bin says to unpin the tab first, and dropping sends nothing
+
+#### Scenario: Boarding restarts the countdown
+
+- **WHEN** an agent waits on a bus with 11 s (or 1 s) of its countdown left and
+  another agent is sent to the stop
+- **THEN** both share the bus with the full countdown again, nothing closes at the
+  first agent's old time, and they leave together on the new clock
 
 #### Scenario: Catch the leaving bus
 

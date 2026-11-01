@@ -35,9 +35,17 @@ export function createFakeBin(epoch = "fixture-run") {
         case "world.bin.list":
           return structuredClone(state);
         case "world.bin.add": {
+          // Like the service: boarding a bus that has not pulled away
+          // restarts its countdown in full for everyone on it.
           const soonest = state.entries.find(
-            (entry) => entry.id === params.join,
+            (entry) =>
+              entry.id === params.join &&
+              entry.remaining_ms > entry.departure_ms,
           );
+          if (soonest)
+            for (const entry of state.entries)
+              if (entry.trip === soonest.trip)
+                entry.remaining_ms = 30_000 + BIN_DEPARTURE_MS;
           const id = `bin-${epoch}-${next++}`;
           const entry: BinEntry = {
             id,

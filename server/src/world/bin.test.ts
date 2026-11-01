@@ -1,11 +1,6 @@
 import { expect, test } from "bun:test";
 import { BIN_DEPARTURE_MS, type BinEntry } from "../../../shared/bin";
-import {
-  BinCloseNotRecorded,
-  MIN_JOIN_MS,
-  WorldBinRegistry,
-  type BinAdd,
-} from "./bin";
+import { BinCloseNotRecorded, WorldBinRegistry, type BinAdd } from "./bin";
 
 function fixture(
   epoch = "run1",
@@ -172,23 +167,49 @@ test("close now from a page showing an earlier service run closes nothing", asyn
   expect(registry.list().entries.map((e) => e.id)).toEqual([fresh]);
 });
 
-test("a later agent joins a waiting bus only with time to spare", async () => {
-  const { registry, advance } = fixture();
+test("boarding restarts the countdown in full for everyone on the bus", async () => {
+  // Boarding at 0:11 (the bus still driving in) and at 0:01 (at the stop).
+  for (const left of [11_000, 1_000]) {
+    const { registry, committed, advance } = fixture();
+    const bus = registry.add(agent("p1", { view: "town" })).entries[0]!;
+    await advance(30_000 - left);
+    const state = registry.add(agent("p2", { view: "town", join: bus.id }));
+    const [first, second] = state.entries;
+    expect(second!.trip).toBe(bus.trip);
+    for (const entry of [first!, second!])
+      expect(entry).toMatchObject({ duration_ms: 30_000, remaining_ms: TOTAL });
+    // The first agent's old deadline passes without a close.
+    await advance(left + BIN_DEPARTURE_MS);
+    expect(committed).toEqual([]);
+    // Both leave together on the new clock.
+    await advance(TOTAL - left - BIN_DEPARTURE_MS);
+    expect(committed.map((batch) => batch.map((e) => e.pane_id))).toEqual([
+      ["p1", "p2"],
+    ]);
+  }
+});
+
+test("once the bus has pulled away, a later agent waits for the next one", async () => {
+  const { registry, committed, advance } = fixture();
   const bus = registry.add(agent("p1", { view: "town" })).entries[0]!;
-  await advance(20_000);
-  const joined = registry
+  await advance(30_000 + 1);
+  const late = registry
     .add(agent("p2", { view: "town", join: bus.id }))
     .entries.find((e) => e.pane_id === "p2")!;
-  expect(joined.trip).toBe(bus.trip);
-  expect(joined.remaining_ms).toBe(10_000 + BIN_DEPARTURE_MS);
-  expect(joined.departure_ms).toBe(BIN_DEPARTURE_MS);
-  // The bus is about to leave the stop: a later agent takes the next one.
-  await advance(10_000 - MIN_JOIN_MS + 1);
-  const late = registry
-    .add(agent("p3", { view: "town", join: bus.id }))
-    .entries.find((e) => e.pane_id === "p3")!;
   expect(late.trip).toBe(late.id);
   expect(late.remaining_ms).toBe(TOTAL);
+  // The leaving bus keeps its own clock: p1 closes on time, p2 later.
+  await advance(BIN_DEPARTURE_MS);
+  expect(committed.flat().map((e) => e.pane_id)).toEqual(["p1"]);
+});
+
+test("boarding a held bus restarts its countdown and keeps it held", () => {
+  const { registry } = fixture();
+  const bus = registry.add(agent("p1", { view: "town" })).entries[0]!;
+  registry.pause();
+  const state = registry.add(agent("p2", { view: "town", join: bus.id }));
+  expect(state.paused).toBe(true);
+  expect(state.entries.map((e) => e.remaining_ms)).toEqual([TOTAL, TOTAL]);
 });
 
 test("the same pane is never staged twice and the setting sets new countdowns", () => {

@@ -19,9 +19,6 @@ export class BinCloseNotRecorded extends Error {}
 export const NOT_RECORDED =
   "World could not record the close, so nothing was sent.";
 
-/** A later agent joins a bus only while it waits with this long still to go. */
-export const MIN_JOIN_MS = 3_000;
-
 type Staged = BinEntry & {
   /** Monotonic ms when it closes; null while the bin is paused. */
   deadline: number | null;
@@ -30,7 +27,11 @@ type Staged = BinEntry & {
 export type BinAdd = BinTarget & {
   label: string;
   view: BinView;
-  /** Share this entry's departure (Town: one bus collects everyone at the stop). */
+  /**
+   * Board this entry's bus (Town: one bus collects everyone at the stop).
+   * Boarding before the bus pulls away restarts the countdown in full for
+   * everyone on it; once it has pulled away the agent waits for the next.
+   */
   join?: string;
 };
 
@@ -114,20 +115,31 @@ export class WorldBinRegistry {
         ? joined.remaining_ms
         : joined.deadline - now
       : 0;
-    // A bus that has started to drive away takes no one else.
-    const joins =
-      joined !== undefined && joinedLeft - joined.departure_ms >= MIN_JOIN_MS;
+    // A bus that has pulled away takes no one else.
+    const joins = joined !== undefined && joinedLeft > joined.departure_ms;
     const duration = parseBinCountdown(this.deps.countdown()) * 1000;
     const id = `bin-${this.deps.epoch}-${this.nextId++}`;
-    const remaining = joins ? joinedLeft : duration + BIN_DEPARTURE_MS;
+    const remaining = duration + BIN_DEPARTURE_MS;
+    const deadline = this.paused ? null : now + remaining;
+    const trip = joins ? joined.trip : id;
+    // Boarding restarts the countdown in full for everyone on that bus.
+    if (joins)
+      for (const entry of this.entries.values())
+        if (entry.trip === trip)
+          Object.assign(entry, {
+            duration_ms: duration,
+            departure_ms: BIN_DEPARTURE_MS,
+            remaining_ms: remaining,
+            deadline,
+          });
     this.entries.set(id, {
       ...target,
       id,
-      trip: joins ? joined.trip : id,
-      duration_ms: joins ? joined.duration_ms : duration,
-      departure_ms: joins ? joined.departure_ms : BIN_DEPARTURE_MS,
+      trip,
+      duration_ms: duration,
+      departure_ms: BIN_DEPARTURE_MS,
       remaining_ms: remaining,
-      deadline: this.paused ? null : now + remaining,
+      deadline,
     });
     this.changed();
     return this.list();

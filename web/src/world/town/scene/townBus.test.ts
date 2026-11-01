@@ -266,3 +266,44 @@ test("the edge chip reads the soonest departure's wait", () => {
   });
   expect(scene([]).scene.next).toBeNull();
 });
+
+test("an agent boarding restarts the clock; the bus drives on from where it was", () => {
+  const before = scene([rider("trip-r", TOTAL - 10_000).entry]).scene.buses[0]!;
+  expect(before.phase).toBe("arriving");
+  const starts = new Map([[before.key, before.x]]);
+  const at = (remaining: number) =>
+    scene([rider("trip-r", remaining).entry], { starts }).scene.buses[0]!;
+  // The clock is full again: it is where it was, not back at the map's edge.
+  expect(at(TOTAL).x).toBeCloseTo(before.x, 6);
+  expect(at(TOTAL).phase).toBe("arriving");
+  // Still due at the stop with 10 s on the new clock.
+  expect(at(BIN_DEPARTURE_MS + 10_500).x).toBeLessThan(before.home);
+  expect(at(BIN_DEPARTURE_MS + 10_000).x).toBe(before.home);
+  expect(at(BIN_DEPARTURE_MS + 10_000).phase).toBe("waiting");
+  // A bus already at the stop just keeps waiting.
+  const parked = new Map([[before.key, before.home]]);
+  const waiting = scene([rider("trip-r", TOTAL).entry], { starts: parked })
+    .scene.buses[0]!;
+  expect([waiting.phase, waiting.x]).toEqual(["waiting", before.home]);
+});
+
+test("a restarted clock and an arrival are told apart; holding is neither", async () => {
+  const { townBusChanges, townBusSeen } = await import("./townBus");
+  const coming = scene([rider("trip-c", BIN_DEPARTURE_MS + 10_100).entry]).scene
+    .buses;
+  const arrived = scene([rider("trip-c", BIN_DEPARTURE_MS + 9_900).entry]).scene
+    .buses;
+  const seen = townBusSeen(coming);
+  expect(townBusChanges(seen, arrived, false)).toEqual({
+    restarts: new Map(),
+    arrivals: 1,
+  });
+  // Held, the horn waits.
+  expect(townBusChanges(seen, arrived, true).arrivals).toBe(0);
+  // Boarding: the clock goes back to full.
+  const reset = scene([rider("trip-c", TOTAL).entry]).scene.buses;
+  expect(townBusChanges(seen, reset, false)).toEqual({
+    restarts: new Map([[coming[0]!.key, coming[0]!.x]]),
+    arrivals: 0,
+  });
+});

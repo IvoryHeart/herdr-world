@@ -117,7 +117,7 @@ staging ends. Its browser RPCs (all bridge-scoped `world.*`, browser actor only)
 | Method | Effect |
 | --- | --- |
 | `world.bin.list` | The run's state: `epoch` (the service incarnation), revision, paused, entries (`duration_ms` countdown, `departure_ms` drive away, `remaining_ms` until the close commits), closing IDs, recent outcomes, `countdown_s` |
-| `world.bin.add` | Stage one pane, qualified by connection, runtime generation, workspace, tab, pane and terminal; the handler re-reads the pane on that connection's current runtime first |
+| `world.bin.add` | Stage one pane, qualified by connection, runtime generation, workspace, tab, pane and terminal; the handler re-reads the pane on that connection's current runtime first. With `join` (an entry ID) it boards that entry's bus if it has not pulled away, restarting the countdown in full for every entry on it |
 | `world.bin.pause`, `world.bin.resume` | Stop or restart every countdown and departure |
 | `world.bin.restore` | Take one entry back out; nothing is closed |
 | `world.bin.close_now` | `ids`: an explicit list of this run's entry IDs (`bin-<incarnation>-<n>`). Any other run's ID refuses the whole request; there is no unscoped "all" |

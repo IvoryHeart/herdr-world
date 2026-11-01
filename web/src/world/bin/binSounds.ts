@@ -4,9 +4,10 @@ import { playEffect } from "../../chimes/player";
 /**
  * The bin's sounds, synthesised like the chimes and following this device's
  * sound setting: a rustle and lid thump on drop, a crunch and falling tone on
- * close, a rising blip when an agent comes back, and a double buzz on refusal.
+ * close, a rising blip when an agent comes back, a double buzz on refusal, and
+ * the bus's short two-note horn as it reaches the stop.
  */
-export type BinSound = "drop" | "close" | "back" | "refuse";
+export type BinSound = "drop" | "close" | "back" | "refuse" | "horn";
 
 function noise(
   ctx: AudioContext,
@@ -69,6 +70,12 @@ const SOUNDS: Record<BinSound, (ctx: AudioContext, out: AudioNode) => void> = {
   },
   back(ctx, out) {
     tone(ctx, out, 330, 660, 0.15, 0.15);
+  },
+  horn(ctx, out) {
+    // Parp-parp: two notes a third apart, twice.
+    for (const when of [0, 0.2])
+      for (const pitch of [349, 440])
+        tone(ctx, out, pitch, pitch * 0.97, 0.14, 0.09, when, "sawtooth");
   },
   refuse(ctx, out) {
     tone(ctx, out, 200, 180, 0.12, 0.2, 0, "square");

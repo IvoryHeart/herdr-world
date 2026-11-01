@@ -680,7 +680,8 @@ the timers. The last pane of a pinned tab is refused until you unpin the tab.
 
 In Town the bin is a London bus stop on the top street. Drag an agent to the
 stop (or use **Send to the bus stop** in its peek) and watch the bus drive in;
-it stops with 10 seconds left on the clock. If
+it stops with 10 seconds left on the clock and sounds its horn. Sending another
+agent before the bus pulls away starts the countdown again for both. If
 the stop is off screen, the red chip at the screen's edge takes you there, and
 you can drop a carried agent on it. When the countdown ends the bus drives
 away, and the agent closes only when the bus has left the map. Until then,

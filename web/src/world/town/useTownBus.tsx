@@ -132,6 +132,7 @@ export function useTownBus({
       remaining: (entry) => store.remaining(entry),
       paused: () => latest.current.bin.paused,
       agent: (id) => latest.current.riders.get(id),
+      onArrive: () => playBinSound("horn"),
     });
     layerRef.current = layer;
     renderer.setOverlay(layer);
@@ -525,7 +526,8 @@ function TownBusControls({
     if (!d) return;
     drag.current = null;
     const entry = byId.get(d.id);
-    dragged.current = true;
+    // The road's own click follows, not a rider's: leave `dragged` alone, or
+    // the next press on a rider would be swallowed.
     event.stopPropagation();
     if (entry) onPutBack(entry);
   };

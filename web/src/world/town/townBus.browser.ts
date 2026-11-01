@@ -213,6 +213,44 @@ export async function checkTownBus(
   );
   check(pauses() === 3, "pressing the moving bus's road held it");
   await waitFor(atDesk, "the rider did not return to its desk");
+  // Boarding: a second agent joins the first one's bus, and the countdown
+  // starts again in full for both (the service's rule, mirrored here).
+  await waitFor(atDesk, "the rider did not return to its desk");
+  const others = [
+    ...host.querySelectorAll<HTMLElement>(
+      '.world-semantic-target[data-kind="agent"]',
+    ),
+  ]
+    .map((target) => target.dataset.targetKey)
+    .filter((other): other is string => Boolean(other) && other !== key);
+  if (others[0]) {
+    await townBusSender.send(key);
+    await waitFor(() => bin.state.entries.length === 1, "no one is waiting");
+    bin.state.entries[0]!.remaining_ms = 12_000 + BIN_DEPARTURE_MS;
+    check(
+      (await townBusSender.send(others[0])) === "moved",
+      "a second agent could not board",
+    );
+    const [first, second] = bin.state.entries;
+    check(
+      first?.trip === second?.trip &&
+        [first, second].every(
+          (entry) => entry?.remaining_ms === 30_000 + BIN_DEPARTURE_MS,
+        ),
+      `boarding did not restart the countdown for the bus: ${JSON.stringify(bin.state.entries.map((e) => [e.trip, e.remaining_ms]))}`,
+    );
+    for (const _ of [0, 1]) {
+      await waitFor(
+        () => host.querySelector(".town-bus-rider") !== null,
+        "a waiting rider has no button",
+      );
+      host.querySelector<HTMLButtonElement>(".town-bus-rider")!.click();
+      await waitFor(
+        () => bin.state.entries.length === (_ === 0 ? 1 : 0),
+        "a rider was not put back",
+      );
+    }
+  }
   check(
     !bin.calls.some((call) => call.method === "world.bin.close_now"),
     "the bus closed something",

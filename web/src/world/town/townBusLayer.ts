@@ -1,7 +1,13 @@
 import { CanvasSource, Container, Sprite, Texture } from "pixi.js";
 import type { BinEntry } from "../../../../shared/bin";
 import type { OfficeAgent } from "../officeProjectionTypes";
-import { townBusScene, type TownBusScene } from "./scene/townBus";
+import {
+  townBusChanges,
+  townBusScene,
+  townBusSeen,
+  type TownBusScene,
+  type TownBusSeen,
+} from "./scene/townBus";
 import { createTownLookResolver } from "./townAppearance";
 import {
   busBoxSprite,
@@ -20,6 +26,8 @@ export type TownBusSource = {
   paused(): boolean;
   /** The agent riding as each entry, for its look. */
   agent(entryId: string): OfficeAgent | undefined;
+  /** A bus pulled in at the stop (its horn). */
+  onArrive?(): void;
 };
 
 /**
@@ -31,6 +39,10 @@ export class TownBusLayer implements TownWorldOverlay {
   private readonly textures = new Map<TownCanvas, Texture>();
   private readonly resolveLook = createTownLookResolver();
   private current: TownBusScene | null = null;
+  /** Each bus as last drawn, to see a restarted clock and an arrival. */
+  private seen: TownBusSeen = new Map();
+  /** Where buses whose clock restarted drive on from (townBusScene `starts`). */
+  private readonly starts = new Map<string, number>();
   /** Sprites reused frame to frame; those past `used` are hidden. */
   private readonly pool: Sprite[] = [];
   private used = 0;
@@ -51,14 +63,30 @@ export class TownBusLayer implements TownWorldOverlay {
       this.hideUnused();
       return false;
     }
-    const scene = townBusScene({
-      stop: layout.busStop,
-      width: layout.width * T,
-      entries: this.source.entries(),
-      remaining: (entry) => this.source.remaining(entry),
-      paused: this.source.paused(),
-      reducedMotion,
-    });
+    const paused = this.source.paused();
+    const sceneNow = () =>
+      townBusScene({
+        stop: layout.busStop,
+        width: layout.width * T,
+        entries: this.source.entries(),
+        remaining: (entry) => this.source.remaining(entry),
+        paused,
+        reducedMotion,
+        starts: this.starts,
+      });
+    let scene = sceneNow();
+    // An agent boarded: its bus's clock started again, and it drives on
+    // from where it is rather than from the map's edge.
+    const { restarts } = townBusChanges(this.seen, scene.buses, paused);
+    if (restarts.size) {
+      for (const [key, x] of restarts) this.starts.set(key, x);
+      scene = sceneNow();
+    }
+    const { arrivals } = townBusChanges(this.seen, scene.buses, paused);
+    if (arrivals) this.source.onArrive?.();
+    this.seen = townBusSeen(scene.buses);
+    for (const key of this.starts.keys())
+      if (!this.seen.has(key)) this.starts.delete(key);
     this.current = scene;
     this.add(busStopSprite(), scene.stop.x - 1, scene.stop.y - 1);
     const lookOf = (entryId: string) =>

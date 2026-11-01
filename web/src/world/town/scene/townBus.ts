@@ -42,10 +42,14 @@ export type TownBusRider = {
 
 export type TownBus = {
   trip: string;
+  /** This bus of its trip (a trip of more than eight riders takes more). */
+  key: string;
   x: number;
   y: number;
   /** Where it stands at the stop (or in the queue): its drive away starts here. */
   home: number;
+  /** Time since its trip's clock started (a boarding restarts it), ms. */
+  since: number;
   /** Departing: driving away (parked, doors shut, under reduced motion). */
   phase: "arriving" | "waiting" | "departing";
   doorsOpen: boolean;
@@ -78,6 +82,12 @@ export type TownBusInput = {
   remaining(entry: BinEntry): number;
   paused: boolean;
   reducedMotion: boolean;
+  /**
+   * Where each bus (by `TownBus.key`) was when its clock last restarted (an agent
+   * boarded), world px: it drives on to the stop from there instead of from
+   * the map's edge. A bus already at the stop just keeps waiting.
+   */
+  starts?: ReadonlyMap<string, number>;
 };
 
 export function townBusScene(input: TownBusInput): TownBusScene {
@@ -108,10 +118,11 @@ export function townBusScene(input: TownBusInput): TownBusScene {
     .sort((a, b) => a.remaining - b.remaining || a.trip.localeCompare(b.trip));
   // A trip with more riders than seats takes more than one bus.
   const departures = ordered.flatMap((trip) => {
-    const parts: (typeof trip)[] = [];
+    const parts: (typeof trip & { key: string })[] = [];
     for (let i = 0; i < trip.riders.length; i += BUS_SEATS.length)
       parts.push({
         ...trip,
+        key: `${trip.trip}#${i / BUS_SEATS.length}`,
         riders: trip.riders.slice(i, i + BUS_SEATS.length),
       });
     return parts;
@@ -145,17 +156,21 @@ export function townBusScene(input: TownBusInput): TownBusScene {
             trip.departure,
           ).at(trip.departure - trip.remaining);
     } else if (!input.reducedMotion && since < approach) {
-      // Driving in, timed to stop with BUS_DUE_LEFT_MS on the clock. Held,
-      // time stands still, so it stops where it is.
-      phase = "arriving";
-      x =
-        -BUS_W +
-        moverRun(
-          BUS_CHARACTER,
-          slotX + BUS_W,
-          { from: "moving", to: "rest" },
-          approach,
-        ).at(since);
+      // Driving in, timed to stop with BUS_DUE_LEFT_MS on the clock (from
+      // where it was if a boarding restarted its clock). Held, time stands
+      // still, so it stops where it is.
+      const start = Math.min(slotX, input.starts?.get(trip.key) ?? -BUS_W);
+      if (start < slotX) {
+        phase = "arriving";
+        x =
+          start +
+          moverRun(
+            BUS_CHARACTER,
+            slotX - start,
+            { from: "moving", to: "rest" },
+            approach,
+          ).at(since);
+      }
     }
     const riders = trip.riders.map((entry, seat) => {
       const window = BUS_SEATS[seat]!;
@@ -176,9 +191,11 @@ export function townBusScene(input: TownBusInput): TownBusScene {
       );
     return {
       trip: trip.trip,
+      key: trip.key,
       x,
       y,
       home: slotX,
+      since,
       phase,
       // Held (paused), a bus stands where it is with its doors open.
       doorsOpen: phase === "waiting" || input.paused,
@@ -216,6 +233,44 @@ export function townBusScene(input: TownBusInput): TownBusScene {
       : null,
   };
 }
+
+/** Each bus as last drawn, by `TownBus.key`. */
+export type TownBusSeen = ReadonlyMap<
+  string,
+  { since: number; x: number; phase: TownBus["phase"] }
+>;
+
+/**
+ * What changed since the last drawn frame: buses whose clock restarted (an
+ * agent boarded before they pulled away), with where they were, and how many
+ * pulled in at the stop (each sounds its horn). A held bus's clock stands
+ * still, so holding is never a restart or an arrival.
+ */
+export function townBusChanges(
+  seen: TownBusSeen,
+  buses: readonly TownBus[],
+  paused: boolean,
+) {
+  const restarts = new Map<string, number>();
+  let arrivals = 0;
+  for (const bus of buses) {
+    const was = seen.get(bus.key);
+    if (!was) continue;
+    if (bus.since < was.since - 250 && was.phase !== "departing")
+      restarts.set(bus.key, was.x);
+    else if (was.phase === "arriving" && bus.phase === "waiting" && !paused)
+      arrivals += 1;
+  }
+  return { restarts, arrivals };
+}
+
+export const townBusSeen = (buses: readonly TownBus[]): TownBusSeen =>
+  new Map(
+    buses.map((bus) => [
+      bus.key,
+      { since: bus.since, x: bus.x, phase: bus.phase },
+    ]),
+  );
 
 /**
  * The rider under a world point, searching in reverse draw order (later

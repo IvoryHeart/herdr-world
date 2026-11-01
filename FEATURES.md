@@ -165,8 +165,12 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     and flies you there; while you carry an agent you can drop it on the chip.
     The agent leaves its desk and waits with a box while a red double-decker
     drives in from the town's left edge, slowing as it reaches the stop with
-    10 seconds left on the clock, then rides it (eight to a bus; more take more
-    buses, queued behind the stop). When the countdown ends the bus pulls away,
+    10 seconds left on the clock and a short horn, then rides it (eight to a
+    bus; more take more buses, queued behind the stop). An agent who boards
+    before the bus pulls away starts the countdown again in full for everyone
+    on it (a bus still coming re-times itself to stop at 0:10; one at the stop
+    keeps waiting); after it has pulled away the agent waits for the next bus.
+    When the countdown ends the bus pulls away,
     speeding up, and the agent closes only once it has left the map by the
     right edge. Until then press and hold a bus, coming, waiting or leaving, to
     stop it where it is
