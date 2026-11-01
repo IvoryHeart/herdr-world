@@ -382,7 +382,9 @@
         "web/src/uiScale.test.ts",
         "web/src/components/AgentHistoryComposer.test.tsx",
         "web/src/components/AgentLauncher.dom.test.ts",
-        "web/src/agentLauncher.test.ts"
+        "web/src/agentLauncher.test.ts",
+        "web/src/components/chat/chatKeys.test.ts",
+        "web/src/chatMenus.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
       "technique": "alternative",
@@ -390,7 +392,7 @@
       "status": "alternative-evidence",
       "remaining": "No abstract shell semantics or automatic command execution is claimed; terminal dispatch authority is covered separately.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
-      "evidenceDecision": "Pure command resolution/catalogue and qualified draft tests cover aliases, key normalization and owner identity. The shared Chat composer DOM consumer covers native editing/completion, IME-safe Ctrl/Cmd+Enter send, multiline Enter, overflow command browsing, isolated drafts and transactional refusal restoration; source race tests cover native queued admission and unchecked slash-command receipts. History input and the mobile shell launcher share the single-submission lock and runtime-qualified draft. Composer DOM tests cover busy-agent confirmation, IME and touch release; the real History browser consumer checks runtime versus transport identity and retired-send draft restoration. Launcher DOM and TerminalView consumers check connection/pane replacement, empty-draft admission, explicit command selection and failed-send recovery. These are concrete editing/native-input contracts, so direct consumer evidence remains more useful than abstract shell semantics.",
+      "evidenceDecision": "Pure command resolution/catalogue and qualified draft tests cover aliases, key normalization and owner identity. The shared Chat composer DOM consumer covers native editing/completion, IME-safe Ctrl/Cmd+Enter send, multiline Enter, overflow command browsing, isolated drafts and transactional refusal restoration; source race tests cover native queued admission and unchecked slash-command receipts. History input and the mobile shell launcher share the single-submission lock and runtime-qualified draft. Composer DOM tests cover busy-agent confirmation, IME and touch release; the real History browser consumer checks runtime versus transport identity and retired-send draft restoration. Launcher DOM and TerminalView consumers check connection/pane replacement, empty-draft admission, explicit command selection and failed-send recovery. These are concrete editing/native-input contracts, so direct consumer evidence remains more useful than abstract shell semantics. Chat's ⋮ key controls reuse the configured Terminal shortcuts: the pure key-map test checks every Terminal control maps to a Herdr key name or is disabled, and the menu browser consumer checks the controls send only to the session Chat shows.",
       "partialEvidence": {
         "models": [],
         "contracts": ["verification/consumer-evidence.md"],
@@ -406,7 +408,9 @@
           "web/src/uiScale.test.ts",
           "web/src/components/AgentHistoryComposer.test.tsx",
           "web/src/components/AgentLauncher.dom.test.ts",
-          "web/src/agentLauncher.test.ts"
+          "web/src/agentLauncher.test.ts",
+          "web/src/components/chat/chatKeys.test.ts",
+          "web/src/chatMenus.test.ts"
         ],
         "checks": ["bun run check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
