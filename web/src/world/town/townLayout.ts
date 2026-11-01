@@ -87,10 +87,12 @@ const CELL = 5; // tiles per desk cell: aisle column plus a four-tile table
 /** The reception lobby's top row, under the back wall; rooms start below it. */
 const LOBBY_TOP = 2;
 const ROOM_TOP = 9;
-/** The bar strip at the bottom of a building, and the lobby above the rooms. */
+/** The bar's height with the wall row under it, and the lobby's height. */
 const LOBBY_HEIGHT = 7;
 /** The bar's sofa corner: its first twelve tiles keep the old lounge's spots. */
 const SOFA_CORNER = 12;
+/** The bar's widest: the sofa corner, then a short counter with three stools. */
+const BAR_WIDTH = SOFA_CORNER + 8;
 const MIN_BUILDING_WIDTH = 38;
 /** A phone's one-column building: the bar, counter and queue still fit. */
 const MIN_PHONE_BUILDING_WIDTH = 26;
@@ -162,8 +164,10 @@ export type TownBuilding = {
   y: number;
   w: number;
   h: number;
-  /** The bar's street door in the facade, and the reception counter's axis. */
+  /** The reception counter's axis. */
   doorX: number;
+  /** The bar's street door in the facade, onto the street below. */
+  barDoorX: number;
   /** The front door in the back wall, onto the street above the building. */
   entryX: number;
   /** The reception lobby's top row, above the rooms. */
@@ -171,8 +175,9 @@ export type TownBuilding = {
   /** The street below the building. */
   roadY: number;
   /**
-   * The bar across the bottom of the building: the sofa corner, then a bar
-   * counter (`bar`) with stools. Idle agents take `spots` in order.
+   * The bar in the building's bottom-right corner: the sofa corner, then a
+   * bar counter (`bar`) with stools. Idle agents take `spots` in order. The
+   * rest of the bottom is floor, which rooms clear of the bar may reach.
    */
   lounge: {
     x: number;
@@ -424,7 +429,7 @@ function draftBuilding(
     nextMemory.get(room.key)!.column = column;
   }
   let x = 2;
-  let bottom = ROOM_TOP;
+  const spans: { x0: number; x1: number; bottom: number }[] = [];
   for (const column of columns) {
     let y = ROOM_TOP;
     let widest = 0;
@@ -434,7 +439,7 @@ function draftBuilding(
       y += room.h + 2;
       widest = Math.max(widest, room.w);
     }
-    bottom = Math.max(bottom, y);
+    spans.push({ x0: x, x1: x + widest, bottom: y });
     if (column.length) x += widest + 2;
   }
   const w = Math.max(
@@ -443,21 +448,45 @@ function draftBuilding(
       ? MIN_PHONE_BUILDING_WIDTH
       : MIN_BUILDING_WIDTH,
   );
-  // Reception fills the lobby above the rooms; the bar spans the bottom.
-  const barY = bottom;
+  // Reception fills the lobby above the rooms. The bar takes the bottom-right
+  // corner under the last room column, as wide as that column allows (its
+  // sofa corner at least; a counter too short for a stool is left out). The
+  // other columns may run down to the bottom wall.
+  const last = spans.filter((span) => span.x1 > span.x0).pop();
+  const barWidth = Math.min(
+    BAR_WIDTH,
+    Math.max(SOFA_CORNER, w - 2 - (last ? last.x0 - 1 : 2)),
+  );
+  const barX = w - 2 - barWidth;
+  const bottomOf = (over: boolean) =>
+    Math.max(
+      ROOM_TOP,
+      ...spans
+        .filter(
+          (span) => (span.x0 < barX + barWidth && span.x1 > barX) === over,
+        )
+        .map((span) => span.bottom),
+    );
+  const h = Math.max(bottomOf(true) + LOBBY_HEIGHT, bottomOf(false));
+  const barY = h - LOBBY_HEIGHT;
   const doorX = Math.floor(w / 2);
-  const bar = { x: 2, y: barY, w: w - 4, h: LOBBY_HEIGHT - 1 };
+  const bar = { x: barX, y: barY, w: barWidth, h: LOBBY_HEIGHT - 1 };
   return {
     hostKey,
     w,
-    h: barY + LOBBY_HEIGHT,
+    h,
     doorX,
+    barDoorX: barX + Math.floor(barWidth / 2),
     entryX: doorX + 4,
     lobbyY: LOBBY_TOP,
     lounge: {
       ...bar,
       spots: [],
-      bar: { x: bar.x + SOFA_CORNER - 1, y: barY + 1, w: bar.w - SOFA_CORNER },
+      bar: {
+        x: bar.x + SOFA_CORNER - 1,
+        y: barY + 1,
+        w: bar.w - SOFA_CORNER >= 3 ? bar.w - SOFA_CORNER : 0,
+      },
     },
     counter: { x: doorX - 3, y: LOBBY_TOP + 1, w: 5 },
     queue: [],
@@ -647,14 +676,15 @@ export function layoutTown(
     // The bar's street door opens onto the street below; the front door in
     // the back wall opens onto the street above.
     const doorX = bx + draft.doorX;
+    const barDoorX = bx + draft.barDoorX;
     for (let ty = by + draft.h + TOWN_FACADE; ty < draft.roadY; ty += 1)
-      set(doorX, ty, TownGround.walk);
+      set(barDoorX, ty, TownGround.walk);
     const entryX = bx + draft.entryX;
     for (let ty = draft.topRoadY + ROAD_GAP; ty < by; ty += 1)
       set(entryX, ty, TownGround.walk);
     bushes.push(
-      { x: doorX - 2, y: by + draft.h + TOWN_FACADE },
-      { x: doorX + 2, y: by + draft.h + TOWN_FACADE },
+      { x: barDoorX - 2, y: by + draft.h + TOWN_FACADE },
+      { x: barDoorX + 2, y: by + draft.h + TOWN_FACADE },
     );
     const bar = {
       x: bx + draft.lounge.bar.x,
@@ -712,6 +742,7 @@ export function layoutTown(
       w: draft.w,
       h: draft.h,
       doorX,
+      barDoorX,
       entryX,
       lobbyY,
       roadY: draft.roadY,

@@ -106,9 +106,9 @@ test("rooms and buildings never overlap and stay inside their building", () => {
         expect(room.x + room.w).toBeLessThanOrEqual(
           building.x + building.w - 1,
         );
-        // Reception above the rooms, the bar below them.
+        // Reception above the rooms; the bar in a bottom corner, clear of them.
         expect(room.y).toBeGreaterThanOrEqual(building.lobbyY + LOBBY_ROWS);
-        expect(room.y + room.h).toBeLessThanOrEqual(building.lounge.y);
+        expect(room.y + room.h).toBeLessThanOrEqual(building.y + building.h);
         for (const other of building.rooms.slice(roomIndex + 1))
           expect(overlaps(room, other)).toBe(false);
         expect(overlaps(room, building.lounge)).toBe(false);
@@ -358,7 +358,7 @@ test("rooms extend to show every desk of real rooms, wide and narrow", () => {
           building.x + building.w,
         );
         expect(placed.y).toBeGreaterThanOrEqual(building.lobbyY + LOBBY_ROWS);
-        expect(placed.y + placed.h).toBeLessThanOrEqual(building.lounge.y);
+        expect(overlaps(placed, building.lounge)).toBe(false);
         for (const cell of placed.cells) {
           expect(cell.x + CELL_TILES).toBeLessThanOrEqual(placed.x + placed.w);
           expect(cell.y + CELL_TILES).toBeLessThanOrEqual(placed.y + placed.h);
@@ -605,10 +605,15 @@ test("reception, queue and bar stay on walkable floor in every shape", () => {
       expect(spot.y).toBeGreaterThan(building.counter.y);
       expect(spot.y).toBeLessThan(highest);
     }
-    expect(building.lounge.y).toBeGreaterThanOrEqual(lowest);
-    expect(building.lounge.y + building.lounge.h).toBeLessThanOrEqual(
-      building.y + building.h,
+    // The bar sits in the bottom-right corner, never across the whole bottom.
+    expect(building.lounge.y + building.lounge.h).toBe(
+      building.y + building.h - 1,
     );
+    expect(building.lounge.x + building.lounge.w).toBe(
+      building.x + building.w - 2,
+    );
+    expect(building.lounge.w).toBeLessThan(building.w - 4);
+    expect(lowest).toBeLessThanOrEqual(building.y + building.h);
     // The bar keeps at least the old lounge's twelve spots, all distinct.
     const spots = building.lounge.spots;
     expect(spots.length).toBeGreaterThanOrEqual(12);
@@ -748,10 +753,27 @@ test("front doors open onto the street above and bar doors onto the one below", 
         if (layout.roads.some((road) => y === road + ROAD_BAND - 1)) break;
       }
       expect(
-        layout.ground[(building.roadY - 1) * layout.width + building.doorX],
+        layout.ground[(building.roadY - 1) * layout.width + building.barDoorX],
       ).toBe(TownGround.walk);
     }
   }
+});
+
+test("rooms clear of the bar reach the bottom; the bar stays under its own column", () => {
+  // Two columns: the tall left one runs down beside the bar, which sits
+  // under the short right one without making the building taller.
+  const { layout } = layoutTown(town({ a: [24, 4] }), TOWN_SHAPES.wide);
+  const building = layout.buildings[0]!;
+  const [tall, short] = building.rooms;
+  const bottom = building.y + building.h;
+  expect(tall!.x + tall!.w).toBeLessThanOrEqual(building.lounge.x);
+  expect(tall!.y + tall!.h).toBe(bottom - 2);
+  expect(short!.y + short!.h).toBeLessThanOrEqual(building.lounge.y);
+  expect(building.lounge.y + building.lounge.h).toBe(bottom - 1);
+  expect(
+    building.barDoorX >= building.lounge.x &&
+      building.barDoorX < building.lounge.x + building.lounge.w,
+  ).toBe(true);
 });
 
 test("rooms keep their place inside the building", () => {

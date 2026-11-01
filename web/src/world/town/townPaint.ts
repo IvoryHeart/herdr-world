@@ -276,7 +276,7 @@ export function paintTownGround(
     g.fillStyle = "rgba(0,0,0,.2)";
     g.fillRect(b.x * T + 10, b.y * T - 4, b.w * T, (b.h + TOWN_FACADE) * T + 8);
     g.fillStyle = "rgba(60,40,30,.55)";
-    g.fillRect(b.doorX * T + 1, (b.y + b.h + TOWN_FACADE) * T, 14, 4);
+    g.fillRect(b.barDoorX * T + 1, (b.y + b.h + TOWN_FACADE) * T, 14, 4);
   }
   paintTownHallLot(g, layout.townHall, inRegion);
   g.fillStyle = "rgba(10,30,10,.22)";
@@ -615,7 +615,7 @@ export function paintTownFacade(building: TownBuilding, theme: TownHostTheme) {
   g.fillRect(0, 27, Wp, 5);
   g.fillStyle = "#9a8f80";
   g.fillRect(0, 27, Wp, 1);
-  const dx = (building.doorX - building.x) * T;
+  const dx = (building.barDoorX - building.x) * T;
   for (let x = 14; x < Wp - 20; x += 36) {
     if (Math.abs(x - dx) < 26) continue;
     g.fillStyle = "#4a3a30";

@@ -1,7 +1,7 @@
 ### Changed
 
 - Town buildings put reception at the top, under a front door onto the street
-  above, and a bar across the bottom where idle agents rest. Every building
+  above, and a bar in the bottom corner where idle agents rest. Every building
   has roads on at least three sides, and the last lot on the street grid is
   reserved for a town hall. Wide screens open on the hosts' buildings; **ALL**
   shows the whole town.

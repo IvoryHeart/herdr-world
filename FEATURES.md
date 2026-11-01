@@ -66,7 +66,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     data" without a provider). Press **Summary** again to restore its minimized
     window or bring it to the front.
   - Each building has its reception at the top, under the front door, and a
-    bar across the bottom. Blocked agents queue at reception oldest first.
+    bar in its bottom corner. Blocked agents queue at reception oldest first.
     Finished agents wait there until you open their terminal or mark that
     completion reviewed, then join idle agents at the bar. Movement only
     represents state.
