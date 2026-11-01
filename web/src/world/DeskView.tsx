@@ -1,3 +1,5 @@
+import { DeskScreen as Screen } from "./DeskScreen";
+import { useDeskBin } from "./bin/useDeskBin";
 import { useDrawReadiness } from "./useDrawReadiness";
 import { agentDirectory } from "./deskDirectory";
 export { agentDirectory, type DirectoryGroup } from "./deskDirectory";
@@ -12,14 +14,7 @@ import {
 import { useWorldAsks, type WorldAsk } from "./worldAsks";
 import { asksForWorld } from "./worldAskTargets";
 import { WorldAskMark } from "./WorldAskMark";
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { bridge } from "../api";
 import { worldSessionStorage } from "../browserStorage";
 import {
@@ -146,40 +141,6 @@ export function partitionDesk(
   return { needs, review, working, quiet };
 }
 
-function Screen({
-  lines,
-  live,
-  fallback,
-}: {
-  lines: string[];
-  live?: boolean;
-  fallback: string;
-}) {
-  const ref = useRef<HTMLPreElement | null>(null);
-  // Follow the newest lines (the question and its choices) unless the reader
-  // has scrolled up to read earlier output.
-  const pinned = useRef(true);
-  const text = lines.join("\n");
-  useLayoutEffect(() => {
-    const element = ref.current;
-    if (element && pinned.current) element.scrollTop = element.scrollHeight;
-  }, [text]);
-  if (!lines.length) return <p className="desk-card-missing">{fallback}</p>;
-  return (
-    <pre
-      ref={ref}
-      className={`desk-screen${live ? " is-live" : ""}`}
-      onScroll={(event) => {
-        const element = event.currentTarget;
-        pinned.current =
-          element.scrollHeight - element.scrollTop - element.clientHeight < 24;
-      }}
-    >
-      {text}
-    </pre>
-  );
-}
-
 export { useMediaQuery } from "./deskMediaQuery";
 
 export type DeskMode = "now" | "agents" | "reviewed";
@@ -269,7 +230,11 @@ export function DeskBoard({
   const now = useNow(10_000);
   const asks = useWorldAsks();
   const asking = useMemo(() => asksForWorld(asks, world), [asks, world]);
-  const agents = useMemo(() => deskAgents(world, asking), [world, asking]);
+  const bin = useDeskBin(world);
+  const agents = useMemo(
+    () => deskAgents(world, asking).filter((leaf) => !bin.hidden(leaf)),
+    [world, asking, bin.hidden],
+  );
   const {
     handled,
     stops,
@@ -621,12 +586,16 @@ export function DeskBoard({
     return (
       <li
         key={leaf.id}
+        {...bin.events(leaf)}
         className={`desk-card is-${item.lane}${item.handled ? " is-handled" : ""}${isFocused ? " is-focused" : ""}${reading === leaf.id ? " is-reading" : ""}`}
         data-desk-card={leaf.id}
         tabIndex={-1}
         // The active card follows keyboard and pointer focus, never hover.
         onFocus={() => setFocusedId(leaf.id)}
-        onPointerDown={() => setFocusedId(leaf.id)}
+        onPointerDown={(event) => {
+          setFocusedId(leaf.id);
+          bin.events(leaf).onPointerDown(event);
+        }}
         // On wide screens, clicking a card's text reads it in the side pane.
         onClick={(event) => {
           if (
@@ -765,6 +734,7 @@ export function DeskBoard({
                 : "Watch"}
             <kbd>↵</kbd>
           </button>
+          {bin.closeButton(leaf)}
           {item.lane === "review" ? (
             <button
               type="button"
@@ -799,7 +769,7 @@ export function DeskBoard({
       agentFolder(leaf),
     ].filter(Boolean);
     return (
-      <li key={leaf.id}>
+      <li key={leaf.id} className="desk-bin-row" {...bin.events(leaf)}>
         <button
           type="button"
           className={`desk-row is-${leaf.status}${focusedId === leaf.id && mode === "agents" ? " is-focused" : ""}${reading === leaf.id ? " is-reading" : ""}`}
@@ -825,6 +795,7 @@ export function DeskBoard({
             {at ? `${formatSpan(now - at)} ago` : ""}
           </span>
         </button>
+        {bin.closeButton(leaf)}
       </li>
     );
   };
@@ -1125,6 +1096,7 @@ export function DeskBoard({
           </span>
         ) : null}
       </footer>
+      {bin.element}
     </div>
   );
 }

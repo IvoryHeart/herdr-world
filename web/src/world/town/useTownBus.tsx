@@ -116,8 +116,8 @@ export function useTownBus({
   const store = worldBinStore(bridge);
   const bin = useWorldBin(store);
   const riders = useMemo(
-    () => binnedAgents(projection, bin.entries),
-    [projection, bin.entries],
+    () => binnedAgents(projection, store.activeTargets()),
+    [projection, bin.entries, bin.closing, bin.reservations, store],
   );
   const town = useMemo(
     () =>
@@ -145,6 +145,7 @@ export function useTownBus({
       layout: () => layoutRef.current(),
       entries: () => latest.current.bin.entries,
       remaining: (entry) => store.remaining(entry),
+      elapsed: (entry) => store.elapsed(entry),
       paused: () => latest.current.bin.paused,
       agent: (id) => latest.current.riders.get(id),
       onArrive: () => playBinSound("horn"),
@@ -207,7 +208,12 @@ export function useTownBus({
       report("Only agents ride the bus; this desk has none");
       return "returned";
     }
-    const drop = binDropOfAgent(projection, agentKey, "town", bin.entries);
+    const drop = binDropOfAgent(
+      projection,
+      agentKey,
+      "town",
+      store.reservedTargets(),
+    );
     if ("refusal" in drop) {
       report(drop.refusal);
       return "returned";
@@ -570,6 +576,8 @@ function TownBusControls({
             key={`${bus.trip}:${bus.home}:${bus.y}`}
             type="button"
             className="town-bus-hold"
+            data-phase={bus.phase}
+            data-trip-elapsed={bus.approach.elapsed}
             data-leaving={String(leaving)}
             data-coming={String(coming)}
             style={{

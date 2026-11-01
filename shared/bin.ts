@@ -61,7 +61,13 @@ export type BinEntry = BinTarget & {
   remaining_ms: number;
   /** Entries that share one departure (Town: everyone on one bus). */
   trip: string;
+  /** Original trip countdown; boarding never changes its set-off clock. */
+  trip_duration_ms?: number;
+  /** Active trip time at this sample, excluding holds and independent of resets. */
+  trip_elapsed_ms?: number;
 };
+
+export type BinReservation = BinTarget & { id: string };
 
 export type BinOutcome = {
   id: string;
@@ -91,6 +97,8 @@ export type BinState = {
   entries: BinEntry[];
   /** IDs whose countdown ended and whose close is being carried out. */
   closing: string[];
+  /** Qualified staged/closing/uncertain targets, retained until decisive release. */
+  reservations?: BinReservation[];
   /** The most recent results, newest last, so every open World can show them. */
   outcomes: BinOutcome[];
   /** The owner's countdown setting, in seconds. */
@@ -103,6 +111,7 @@ export const EMPTY_BIN: BinState = {
   paused: false,
   entries: [],
   closing: [],
+  reservations: [],
   outcomes: [],
   countdown_s: DEFAULT_BIN_COUNTDOWN,
 };

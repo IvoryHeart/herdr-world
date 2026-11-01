@@ -24,6 +24,7 @@ export type TownBusSource = {
   layout(): TownLayout | null;
   entries(): readonly BinEntry[];
   remaining(entry: BinEntry): number;
+  elapsed?(entry: BinEntry): number;
   paused(): boolean;
   /** The agent riding as each entry, for its look. */
   agent(entryId: string): OfficeAgent | undefined;
@@ -71,6 +72,7 @@ export class TownBusLayer implements TownWorldOverlay {
         width: layout.width * T,
         entries: this.source.entries(),
         remaining: (entry) => this.source.remaining(entry),
+        elapsed: this.source.elapsed,
         paused,
         reducedMotion,
         starts: this.starts,

@@ -1,0 +1,32 @@
+.desk-bin-ghost {
+  position: fixed;
+  z-index: 1000;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  padding: 10px 14px;
+  border: 2px solid #d7261e;
+  border-radius: 8px;
+  background: var(--surface, #252d29);
+  color: var(--text, #fff7e0);
+}
+
+.desk-bin-error {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  z-index: 8;
+  padding: 8px 12px;
+  background: var(--surface, #252d29);
+  color: var(--text, #fff7e0);
+}
+
+.desk-rows > .desk-bin-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.desk-bin-row > .desk-row {
+  flex: 1;
+  min-width: 0;
+}

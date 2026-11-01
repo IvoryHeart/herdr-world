@@ -4,6 +4,7 @@ import {
   type BinCountdown,
   type BinEntry,
   type BinOutcome,
+  type BinReservation,
   type BinState,
   type BinTarget,
   type BinView,
@@ -22,6 +23,7 @@ export const NOT_RECORDED =
 type Staged = BinEntry & {
   /** Monotonic ms when it closes; null while the bin is paused. */
   deadline: number | null;
+  trip_started: number | null;
 };
 
 export type BinAdd = BinTarget & {
@@ -33,6 +35,8 @@ export type BinAdd = BinTarget & {
    * everyone on it; once it has pulled away the agent waits for the next.
    */
   join?: string;
+  /** A captured browser pin: native admission must preserve this tab. */
+  preserve_tab?: boolean;
 };
 
 /**
@@ -56,6 +60,7 @@ export class WorldBinRegistry {
   private paused = false;
   private readonly entries = new Map<string, Staged>();
   private readonly closing = new Map<string, BinEntry>();
+  private readonly reservations = new Map<string, BinReservation>();
   private outcomes: BinOutcome[] = [];
   private timer: { cancel(): void } | null = null;
   private nextId = 1;
@@ -79,12 +84,20 @@ export class WorldBinRegistry {
       epoch: this.deps.epoch,
       revision: this.revision,
       paused: this.paused,
-      entries: [...this.entries.values()].map(({ deadline, ...entry }) => ({
-        ...entry,
-        remaining_ms:
-          deadline === null ? entry.remaining_ms : Math.max(0, deadline - now),
-      })),
+      entries: [...this.entries.values()].map(
+        ({ deadline, trip_started, ...entry }) => ({
+          ...entry,
+          trip_elapsed_ms:
+            (entry.trip_elapsed_ms ?? 0) +
+            (trip_started === null ? 0 : Math.max(0, now - trip_started)),
+          remaining_ms:
+            deadline === null
+              ? entry.remaining_ms
+              : Math.max(0, deadline - now),
+        }),
+      ),
       closing: [...this.closing.keys()],
+      reservations: [...this.reservations.values()],
       outcomes: [...this.outcomes],
       countdown_s: parseBinCountdown(this.deps.countdown()),
     };
@@ -105,7 +118,17 @@ export class WorldBinRegistry {
         entry.pane_id === target.pane_id,
     );
     if (same) return this.list();
-    if (this.entries.size >= MAX_ENTRIES)
+    if (
+      [...this.reservations.values()].some(
+        (entry) =>
+          entry.connection_id === target.connection_id &&
+          entry.connection_generation === target.connection_generation &&
+          entry.pane_id === target.pane_id &&
+          entry.terminal_id === target.terminal_id,
+      )
+    )
+      throw new Error("That agent's close is still pending or uncertain");
+    if (this.reservations.size >= MAX_ENTRIES)
       throw new Error(`The bin holds at most ${MAX_ENTRIES} agents`);
     const now = this.deps.clock.monotonic();
     // Every view drops into the same waiting trip. A caller may name its bus,
@@ -146,7 +169,16 @@ export class WorldBinRegistry {
       departure_ms: BIN_DEPARTURE_MS,
       remaining_ms: remaining,
       deadline,
+      trip_duration_ms: joined?.trip_duration_ms ?? duration,
+      trip_elapsed_ms: joined
+        ? (joined.trip_elapsed_ms ?? 0) +
+          (joined.trip_started === null
+            ? 0
+            : Math.max(0, now - joined.trip_started))
+        : 0,
+      trip_started: this.paused ? null : now,
     });
+    this.reservations.set(id, { id, ...target });
     this.changed();
     return this.list();
   }
@@ -157,6 +189,12 @@ export class WorldBinRegistry {
     for (const entry of this.entries.values()) {
       entry.remaining_ms = Math.max(0, (entry.deadline ?? now) - now);
       entry.deadline = null;
+      entry.trip_elapsed_ms =
+        (entry.trip_elapsed_ms ?? 0) +
+        (entry.trip_started === null
+          ? 0
+          : Math.max(0, now - entry.trip_started));
+      entry.trip_started = null;
     }
     this.paused = true;
     this.changed();
@@ -166,8 +204,10 @@ export class WorldBinRegistry {
   resume(): BinState {
     if (!this.paused) return this.list();
     const now = this.deps.clock.monotonic();
-    for (const entry of this.entries.values())
+    for (const entry of this.entries.values()) {
       entry.deadline = now + entry.remaining_ms;
+      entry.trip_started = now;
+    }
     this.paused = false;
     this.changed();
     return this.list();
@@ -176,6 +216,7 @@ export class WorldBinRegistry {
   /** Take an agent back out; nothing is closed. */
   restore(id: string): BinState {
     if (!this.entries.delete(id)) return this.list();
+    this.reservations.delete(id);
     this.emptied();
     this.changed();
     return this.list();
@@ -202,6 +243,14 @@ export class WorldBinRegistry {
   /** A connection's new runtime retires the old one's staged entries; none is closed. */
   retireConnectionGeneration(connectionId: string, generation: number) {
     let changed = false;
+    for (const [id, target] of this.reservations)
+      if (
+        target.connection_id === connectionId &&
+        target.connection_generation !== generation
+      ) {
+        this.reservations.delete(id);
+        changed = true;
+      }
     for (const [id, entry] of this.entries)
       if (
         entry.connection_id === connectionId &&
@@ -227,6 +276,7 @@ export class WorldBinRegistry {
   settle(id: string, outcome: Omit<BinOutcome, "id" | "label" | "view">) {
     const entry = this.closing.get(id);
     this.closing.delete(id);
+    if (outcome.result !== "uncertain") this.reservations.delete(id);
     this.record({
       id,
       label: entry?.label ?? "Agent",
@@ -241,6 +291,36 @@ export class WorldBinRegistry {
   touch() {
     this.revision += 1;
     this.deps.publish(this.revision);
+  }
+
+  /** A fresh native read can retire an uncertain target that no longer exists. */
+  observeWorkspace(
+    target: BinTarget,
+    panes: readonly Record<string, unknown>[],
+  ) {
+    let changed = false;
+    for (const [id, reserved] of this.reservations) {
+      if (
+        this.entries.has(id) ||
+        this.closing.has(id) ||
+        reserved.connection_id !== target.connection_id ||
+        reserved.connection_generation !== target.connection_generation ||
+        reserved.workspace_id !== target.workspace_id
+      )
+        continue;
+      if (
+        !panes.some(
+          (pane) =>
+            pane.pane_id === reserved.pane_id &&
+            pane.terminal_id === reserved.terminal_id &&
+            pane.tab_id === reserved.tab_id,
+        )
+      ) {
+        this.reservations.delete(id);
+        changed = true;
+      }
+    }
+    if (changed) this.changed();
   }
 
   dispose() {
@@ -290,6 +370,7 @@ export class WorldBinRegistry {
     const leaving = due.map((staged): BinEntry => {
       const entry: Partial<Staged> = { ...staged, remaining_ms: 0 };
       delete entry.deadline;
+      delete entry.trip_started;
       return entry as BinEntry;
     });
     for (const entry of leaving) {
@@ -325,7 +406,13 @@ function normalize(
   input: BinAdd,
 ): Omit<
   Staged,
-  "id" | "duration_ms" | "departure_ms" | "remaining_ms" | "deadline" | "trip"
+  | "id"
+  | "duration_ms"
+  | "departure_ms"
+  | "remaining_ms"
+  | "deadline"
+  | "trip"
+  | "trip_started"
 > {
   for (const key of [
     "connection_id",

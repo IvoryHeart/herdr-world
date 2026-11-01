@@ -89,6 +89,8 @@ export type TownBusInput = {
   entries: readonly BinEntry[];
   /** Time left of each entry now (the store's clock), by entry ID. */
   remaining(entry: BinEntry): number;
+  /** Service-owned active trip time, independent of boarding resets. */
+  elapsed?(entry: BinEntry): number;
   paused: boolean;
   reducedMotion: boolean;
   /**
@@ -122,6 +124,17 @@ export function townBusScene(input: TownBusInput): TownBusScene {
       remaining: Math.min(...riders.map(input.remaining)),
       duration: Math.max(...riders.map((r) => r.duration_ms)),
       departure: Math.max(...riders.map((r) => r.departure_ms)),
+      originalDuration: Math.max(
+        ...riders.map((r) => r.trip_duration_ms ?? r.duration_ms),
+      ),
+      elapsed: Math.min(
+        ...riders.map((r) => input.elapsed?.(r) ?? r.trip_elapsed_ms ?? 0),
+      ),
+      serviceClock: riders.every(
+        (r) =>
+          Number.isFinite(r.trip_duration_ms) &&
+          Number.isFinite(r.trip_elapsed_ms),
+      ),
     }))
     .sort((a, b) => a.remaining - b.remaining || a.trip.localeCompare(b.trip));
   // A trip with more riders than seats takes more than one bus.
@@ -147,17 +160,22 @@ export function townBusScene(input: TownBusInput): TownBusScene {
     const slotX = frontX - slot * (BUS_W + GAP);
     const y = kerb + 2 + lane * LANE;
     const since = trip.duration + trip.departure - trip.remaining;
-    const plan = input.starts?.get(trip.key) ?? {
+    const plan = (!trip.serviceClock
+      ? input.starts?.get(trip.key)
+      : undefined) ?? {
       start: -BUS_W,
       run: moverRun(
         BUS_CHARACTER,
         slotX + BUS_W,
         { from: "moving", to: "rest" },
-        busApproachMs(trip.duration),
+        busApproachMs(trip.originalDuration),
       ),
       elapsed: 0,
     };
-    const approach = { ...plan, elapsed: plan.elapsed + since };
+    const approach = {
+      ...plan,
+      elapsed: trip.serviceClock ? trip.elapsed : plan.elapsed + since,
+    };
     let x = slotX;
     let phase: TownBus["phase"] = "waiting";
     if (trip.remaining < trip.departure) {

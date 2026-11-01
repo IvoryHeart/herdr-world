@@ -113,6 +113,24 @@ boarding reset preserves the bus's set-off trajectory, including deceleration;
 it can arrive early and wait until 0:00. The one-second-out regression checks
 unchanged speed, arrival one second later and the remaining 29-second wait.
 
+I1 retains historical R5: qualified staged, pending-admission and closing targets
+all reserve their panes for pin admission. Native admission revalidates the
+captured pin against current siblings and reservations; uncertainty retains a
+reservation until fresh native absence/replacement or runtime retirement. RPC
+tests hold native close and concurrent admission. Board and Desk browser tests
+drive real cards/actions, hold the first sibling in closing after entries empty,
+and refuse the last pinned sibling against unchanged two-pane topology. Desk's
+browser case also exercises actual Close agent…, card drop, cancellation and
+Put back; a direct store.add labelled desk is not its UI consumer.
+
+I2's `bin-observers.test.ts` composes the registry with Town's production scene,
+without private trajectory maps: a reset at 19 active seconds, a 60-second hold,
+and one further active second preserve position, speed and early arrival.
+Town's bus browser case fully remounts the component/layer from service-shaped
+trip-clock samples after an approach reset, while held, and after a parked reset.
+The service owns original duration and active elapsed time; layout geometry stays
+in Town. These UI consumers do not replace the native source/stop fences.
+
 These finite timing, RPC, SQLite and renderer boundaries use direct consumers
 rather than a model that repeats the countdown implementation. M5's maintained
 ordering/authority/recovery proof remains required in full. Synthetic source

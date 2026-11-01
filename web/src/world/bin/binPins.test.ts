@@ -53,7 +53,7 @@ test("Board: a pinned tab keeps its last pane when its sibling already waits in 
   ).toBeNull();
   // With p1 already staged, p2 is the pinned tab's last pane.
   const waiting = stagedPaneKeys([staged("p1")]);
-  expect(waiting.has(binPaneKey("studio", 4, "p1"))).toBe(true);
+  expect(waiting.has(binPaneKey("studio", 4, "p1", "term-p1"))).toBe(true);
   expect(
     boardBinCandidate(tab, p2, "board", waiting, PINNED)!.drag.refusal,
   ).toContain("pinned tab");
@@ -92,6 +92,7 @@ function office(): HerdrOfficeProjection {
             key: "desk-1",
             paneDevices: ["p1", "p2"].map((pane) => ({
               paneRef: ref("pane", pane),
+              terminalRef: ref("terminal", `term-${pane}`),
             })),
           },
         ],

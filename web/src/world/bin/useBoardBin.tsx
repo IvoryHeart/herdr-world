@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { bridge } from "../../api";
-import type { BinEntry, BinView } from "../../../../shared/bin";
+import type { BinEntry, BinTarget, BinView } from "../../../../shared/bin";
 import { paneCloseBlockReason, tabPinsFor } from "../../tabPins";
 import type { BoardPane, BoardTab } from "../board/boardModel";
 import { playBinSound } from "./binSounds";
@@ -38,6 +38,7 @@ export function boardBinCandidate(
               item.leaf.connectionId,
               item.leaf.generation,
               item.leaf.nativeId,
+              item.leaf.terminalId,
             ),
           ),
       )
@@ -64,6 +65,7 @@ export function boardBinCandidate(
       terminal_id: leaf.terminalId,
       label,
       view,
+      preserve_tab: pins.has(leaf.tabId),
     },
     drag: {
       label,
@@ -79,15 +81,17 @@ export const binPaneKey = (
   connectionId: string,
   generation: number,
   paneId: string,
-) => `${connectionId}\u0000${generation}\u0000${paneId}`;
+  terminalId: string,
+) => `${connectionId}\u0000${generation}\u0000${paneId}\u0000${terminalId}`;
 
-export const stagedPaneKeys = (entries: readonly BinEntry[]) =>
+export const stagedPaneKeys = (entries: readonly BinTarget[]) =>
   new Set(
     entries.map((entry) =>
       binPaneKey(
         entry.connection_id,
         entry.connection_generation,
         entry.pane_id,
+        entry.terminal_id,
       ),
     ),
   );
@@ -141,23 +145,45 @@ export function useBoardBin({
   const [home, setHome] = useState<string | null>(null);
 
   const binned = (pane: BoardPane) =>
-    bin.entries.some(
-      (entry) =>
-        entry.connection_id === pane.leaf.connectionId &&
-        entry.connection_generation === pane.leaf.generation &&
-        entry.pane_id === pane.leaf.nativeId,
-    );
+    store
+      .activeTargets()
+      .some(
+        (entry) =>
+          entry.connection_id === pane.leaf.connectionId &&
+          entry.connection_generation === pane.leaf.generation &&
+          entry.pane_id === pane.leaf.nativeId &&
+          entry.terminal_id === pane.leaf.terminalId,
+      );
   const tabOf = (entry: BinEntry) =>
     tabs().find((tab) =>
       tab.panes.some(
         (pane) =>
           pane.leaf.connectionId === entry.connection_id &&
           pane.leaf.generation === entry.connection_generation &&
-          pane.leaf.nativeId === entry.pane_id,
+          pane.leaf.nativeId === entry.pane_id &&
+          pane.leaf.terminalId === entry.terminal_id,
       ),
     );
 
   const put = (candidate: Candidate) => {
+    const tab = tabs().find((tab) => tab.key === candidate.tabKey);
+    const pane = tab?.panes.find(
+      (pane) =>
+        pane.leaf.connectionId === candidate.drop.connection_id &&
+        pane.leaf.generation === candidate.drop.connection_generation &&
+        pane.leaf.nativeId === candidate.drop.pane_id &&
+        pane.leaf.terminalId === candidate.drop.terminal_id,
+    );
+    if (!tab || !pane) {
+      toast("That agent has already closed or moved.");
+      return;
+    }
+    candidate = boardBinCandidate(
+      tab,
+      pane,
+      view,
+      stagedPaneKeys(store.reservedTargets()),
+    )!;
     if (candidate.drag.refusal) {
       playBinSound("refuse");
       setShake((n) => n + 1);
@@ -178,7 +204,10 @@ export function useBoardBin({
 
   const changedRef = useRef(changed);
   changedRef.current = changed;
-  useEffect(() => changedRef.current(), [bin.entries]);
+  useEffect(
+    () => changedRef.current(),
+    [bin.entries, bin.closing, bin.reservations],
+  );
   useEffect(() => () => void (carrying.current = null), []);
 
   return {
@@ -193,7 +222,7 @@ export function useBoardBin({
             tab,
             paneFor(tab, pressed.current),
             view,
-            stagedPaneKeys(store.get().entries),
+            stagedPaneKeys(store.reservedTargets()),
           )
         : null;
       hotRef.current = false;
@@ -247,7 +276,7 @@ export function useBoardBin({
         tab,
         paneFor(tab, paneKey),
         view,
-        stagedPaneKeys(store.get().entries),
+        stagedPaneKeys(store.reservedTargets()),
       );
       if (candidate) put(candidate);
     },

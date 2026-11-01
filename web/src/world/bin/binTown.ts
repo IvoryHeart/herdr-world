@@ -1,4 +1,4 @@
-import type { BinEntry } from "../../../../shared/bin";
+import type { BinReservation, BinTarget } from "../../../../shared/bin";
 import type { HerdrOfficeProjection } from "../herdrOfficeProjection";
 import type { OfficeAgent } from "../officeProjectionTypes";
 import { withOfficeReadModel } from "../officeReadModel";
@@ -11,7 +11,7 @@ const terminalKey = (connectionId: string, terminalId: string) =>
 /** The agent each bin entry names, matched by its connection and terminal. */
 export function binnedAgents(
   office: HerdrOfficeProjection,
-  entries: readonly BinEntry[],
+  entries: readonly BinReservation[],
 ): Map<string, OfficeAgent> {
   const byTerminal = new Map<string, OfficeAgent>();
   for (const { agent } of office.roster)
@@ -72,7 +72,7 @@ export function binDropOfAgent(
   agentKey: string,
   view: BinDrop["view"],
   /** Entries already waiting in the bin: their panes close first. */
-  staged: readonly BinEntry[] = [],
+  staged: readonly BinTarget[] = [],
   pins?: ReadonlySet<string>,
 ): BinDrop | { refusal: string } {
   const agent = office.roster.find(
@@ -91,7 +91,7 @@ export function binDropOfAgent(
           entry.connection_id === agent.currentPaneRef.connectionId &&
           entry.connection_generation === agent.currentPaneRef.generation,
       )
-      .map((entry) => entry.pane_id),
+      .map((entry) => `${entry.pane_id}\u0000${entry.terminal_id}`),
   );
   const pinned = paneCloseBlockReason(
     agent.currentPaneRef.nativeId,
@@ -99,7 +99,9 @@ export function binDropOfAgent(
       .filter(
         (device) =>
           device.paneRef.nativeId === agent.currentPaneRef.nativeId ||
-          !waiting.has(device.paneRef.nativeId),
+          !waiting.has(
+            `${device.paneRef.nativeId}\u0000${device.terminalRef.nativeId}`,
+          ),
       )
       .map((device) => ({
         pane_id: device.paneRef.nativeId,
@@ -127,5 +129,6 @@ export function binDropOfAgent(
     terminal_id: terminal.nativeId,
     label: agent.agentName ?? agent.displayLabel,
     view,
+    preserve_tab: (pins ?? tabPinsFor(pane.connectionId)).has(tab.nativeId),
   };
 }

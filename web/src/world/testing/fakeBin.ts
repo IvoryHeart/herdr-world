@@ -19,6 +19,7 @@ export function createFakeBin(epoch = "fixture-run", now?: () => number) {
     paused: false,
     entries: [],
     closing: [],
+    reservations: [],
     outcomes: [],
     countdown_s: 30,
   };
@@ -30,6 +31,7 @@ export function createFakeBin(epoch = "fixture-run", now?: () => number) {
   return {
     calls,
     state,
+    holdCloses: false,
     call(method: string, params: Record<string, unknown> = {}) {
       if (now) {
         const at = now();
@@ -67,13 +69,20 @@ export function createFakeBin(epoch = "fixture-run", now?: () => number) {
             pane_id: String(params.pane_id),
             terminal_id: String(params.terminal_id),
             label: String(params.label ?? "Agent"),
-            view: "town",
+            view: params.view as BinEntry["view"],
             duration_ms: 30_000,
             departure_ms: BIN_DEPARTURE_MS,
             remaining_ms: 30_000 + BIN_DEPARTURE_MS,
             trip: soonest?.trip ?? id,
+            ...(soonest?.trip_duration_ms === undefined
+              ? {}
+              : {
+                  trip_duration_ms: soonest.trip_duration_ms,
+                  trip_elapsed_ms: soonest.trip_elapsed_ms,
+                }),
           };
           state.entries.push(entry);
+          state.reservations!.push(entry);
           return changed();
         }
         case "world.bin.pause":
@@ -84,6 +93,9 @@ export function createFakeBin(epoch = "fixture-run", now?: () => number) {
           return changed();
         case "world.bin.restore":
           state.entries = state.entries.filter((e) => e.id !== params.id);
+          state.reservations = state.reservations!.filter(
+            (e) => e.id !== params.id,
+          );
           return changed();
         case "world.bin.close_now": {
           // Fixtures never close: the named entries just leave the bin.
@@ -94,6 +106,16 @@ export function createFakeBin(epoch = "fixture-run", now?: () => number) {
           )
             throw new Error(
               "The bin changed since it was shown; nothing was closed",
+            );
+          if (this.holdCloses)
+            state.closing.push(
+              ...state.entries
+                .filter((e) => ids.includes(e.id))
+                .map((e) => e.id),
+            );
+          else
+            state.reservations = state.reservations!.filter(
+              (e) => !ids.includes(e.id),
             );
           state.entries = state.entries.filter((e) => !ids.includes(e.id));
           return changed();

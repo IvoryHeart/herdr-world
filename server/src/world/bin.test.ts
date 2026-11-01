@@ -205,6 +205,46 @@ test("drops from Board, Desk and Town reset the shared clock without a join hint
   }
 });
 
+test("the original trip clock survives boarding, holds and new observers", async () => {
+  const { registry, advance } = fixture();
+  registry.add(agent("p1", { view: "town" }));
+  await advance(19_000);
+  const reset = registry.add(agent("p2", { view: "board" }));
+  for (const entry of reset.entries)
+    expect(entry).toMatchObject({
+      trip_duration_ms: 30_000,
+      trip_elapsed_ms: 19_000,
+    });
+  registry.pause();
+  await advance(60_000);
+  expect(registry.list().entries.map((entry) => entry.trip_elapsed_ms)).toEqual(
+    [19_000, 19_000],
+  );
+  registry.resume();
+  await advance(1_000);
+  expect(registry.list().entries.map((entry) => entry.trip_elapsed_ms)).toEqual(
+    [20_000, 20_000],
+  );
+});
+
+test("closing and uncertain entries retain qualified pin reservations", () => {
+  const { registry } = fixture();
+  const first = registry.add(agent("p1")).entries[0]!;
+  registry.closeNow([first.id]);
+  expect(registry.list().entries).toEqual([]);
+  expect(registry.list().reservations).toEqual([
+    expect.objectContaining({
+      id: first.id,
+      pane_id: "p1",
+      terminal_id: "term-p1",
+      connection_id: "studio",
+      connection_generation: 3,
+    }),
+  ]);
+  registry.settle(first.id, { result: "uncertain", closed_tab: false });
+  expect(registry.list().reservations).toHaveLength(1);
+});
+
 test("once the bus has pulled away, a later agent waits for the next one", async () => {
   const { registry, committed, advance } = fixture();
   const bus = registry.add(agent("p1", { view: "town" })).entries[0]!;

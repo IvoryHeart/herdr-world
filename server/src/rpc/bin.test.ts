@@ -16,6 +16,7 @@ function fixture() {
       workspace_id: "w1",
     },
     reads: 0,
+    siblings: [] as Record<string, unknown>[],
   };
   const registry = new WorldBinRegistry({
     epoch: "run",
@@ -33,7 +34,7 @@ function fixture() {
           isCurrent: () => host.current,
           call: async () => {
             host.reads += 1;
-            return { panes: [host.pane] };
+            return { panes: [host.pane, ...host.siblings] };
           },
         }
       : null;
@@ -86,6 +87,43 @@ test("adding stages the agent only while its pane holds the same terminal", asyn
     departure_ms: BIN_DEPARTURE_MS,
     remaining_ms: 30_000 + BIN_DEPARTURE_MS,
   });
+});
+
+test("I1/R5: live pin admission keeps a sibling reserved through closing and uncertainty", async () => {
+  const f = fixture();
+  const first = { ...f.host.pane };
+  const second = { ...first, pane_id: "p2", terminal_id: "term-2" };
+  f.host.siblings = [second];
+  await f.add({ preserve_tab: true });
+  const id = f.registry.list().entries[0]!.id;
+  f.registry.closeNow([id]);
+  f.host.pane = second;
+  f.host.siblings = [first];
+  await f.add({ pane_id: "p2", terminal_id: "term-2", preserve_tab: true });
+  expect(f.errors.at(-1)).toContain("pinned tab");
+  expect(f.registry.list().entries).toEqual([]);
+  f.registry.settle(id, { result: "uncertain", closed_tab: false });
+  await f.add({ pane_id: "p2", terminal_id: "term-2", preserve_tab: true });
+  expect(f.errors.at(-1)).toContain("pinned tab");
+  // A decisive native absence releases the old reservation, but p2 is still
+  // the pinned tab's sole pane and cannot close against a stale browser view.
+  f.host.siblings = [];
+  await f.add({ pane_id: "p2", terminal_id: "term-2", preserve_tab: true });
+  expect(f.registry.list().reservations).toEqual([]);
+  expect(f.registry.list().entries).toEqual([]);
+  expect(f.errors.at(-1)).toContain("pinned tab");
+});
+
+test("I1/R5: concurrent native admissions cannot stage both panes of a pinned tab", async () => {
+  const f = fixture();
+  f.host.siblings = [{ ...f.host.pane, pane_id: "p2", terminal_id: "term-2" }];
+  await Promise.all([
+    f.add({ preserve_tab: true }),
+    f.add({ pane_id: "p2", terminal_id: "term-2", preserve_tab: true }),
+  ]);
+  expect(f.registry.list().entries).toHaveLength(1);
+  expect(f.errors).toHaveLength(1);
+  expect(f.errors[0]).toContain("pinned tab");
 });
 
 test("an old runtime, an absent host or a new occupant is refused", async () => {

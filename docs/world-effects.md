@@ -68,7 +68,15 @@ The bin's countdown and six-second drive-away are reversible service state:
 neither records an intent before expiry. A drop from Board, Desk or Town before
 pull-away resets the waiting trip for every rider, without a browser join hint;
 after pull-away it starts or joins the next waiting trip. Hold and Put back
-remain effective until expiry. The composed bin consumer checks these clocks
+remain effective until expiry. Original trip duration and active elapsed time
+are service-owned samples, independent of boarding resets and excluding holds;
+new Town observers reconstruct progress from them. Qualified target reservations
+survive staging into native close, including uncertain results. A fresh native
+observation can release an uncertain reservation only when its captured terminal
+is absent or replaced; a new connection generation retires old reservations.
+Admission counts staged, closing and in-flight targets against captured tab pins,
+and the service rechecks a requested pin against current native siblings. These
+reservations share the existing 64-target bound. The composed bin consumer checks these clocks
 through the actual RPC, browser stores, SQLite outbox and close driver; see the
 [bin recovery boundary](../verification/contracts/effect-recovery.md#agent-bin-reversible-departure-and-shared-boarding-clock).
 

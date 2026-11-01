@@ -1,4 +1,6 @@
 import { checkDeskRevealHook } from "./testing/deskRevealHookAcceptance";
+import { checkDeskBin } from "./testing/deskBinAcceptance";
+import { createFakeBin } from "./testing/fakeBin";
 import { checkDeskOtherHosts } from "./testing/deskOtherHostsAcceptance";
 import { bridge } from "../api";
 import { needsYouLeafKey, needsYouState } from "./needsYou";
@@ -29,6 +31,9 @@ function agent(id: string, fingerprint: string): WorldLeafObject {
   return {
     id,
     terminalId: id,
+    nativeId: `w1:${id}`,
+    workspaceId: "w1",
+    tabId: `t-${id}`,
     kind: "agent",
     status: "done",
     selectedHost: true,
@@ -130,10 +135,13 @@ const client = {
 
 const askLedger = { revision: 0, asks: [] as WorldAsk[] };
 const originalCall = bridge.call.bind(bridge);
+const fakeBin = createFakeBin("desk-bin");
 bridge.call = (async (method: string, params?: Record<string, unknown>) =>
-  method === "world.asks.get"
-    ? structuredClone(askLedger)
-    : originalCall(method, params)) as typeof bridge.call;
+  method.startsWith("world.bin.")
+    ? fakeBin.call(method, params)
+    : method === "world.asks.get"
+      ? structuredClone(askLedger)
+      : originalCall(method, params)) as typeof bridge.call;
 
 let revision = 0;
 const deskRecords = new Map<string, DeskRecord>(
@@ -227,6 +235,24 @@ async function run() {
   check(
     !!card("alpha") && !!card("beta") && !!card("gamma"),
     "all finished agents are in To review",
+  );
+  await checkDeskBin(
+    fakeBin,
+    leaves,
+    () =>
+      flushSync(() =>
+        root.render(
+          <DeskBoard
+            deskStore={deskStore}
+            world={{ ...world }}
+            client={client}
+            onOpen={async (id) => {
+              opened.push(id);
+            }}
+          />,
+        ),
+      ),
+    check,
   );
 
   // Admit the external-store render before mark() resumes, as a revision
@@ -606,10 +632,14 @@ async function run() {
   // must stay inside the guarded Desk without relying on a blur event.
   const markTarget = [
     ...document.querySelectorAll<HTMLElement>("[data-desk-card]"),
-  ].find((element) => element.querySelector("button:not(.is-primary)"));
-  const markButton = markTarget?.querySelector<HTMLButtonElement>(
-    "button:not(.is-primary)",
+  ].find((element) =>
+    [...element.querySelectorAll("button")].some((button) =>
+      button.textContent?.startsWith("Mark reviewed"),
+    ),
   );
+  const markButton = [
+    ...(markTarget?.querySelectorAll<HTMLButtonElement>("button") ?? []),
+  ].find((button) => button.textContent?.startsWith("Mark reviewed"));
   check(Boolean(markButton), "a review card offers Mark reviewed");
   markButton?.focus();
   markButton?.click();
@@ -643,9 +673,16 @@ async function run() {
   );
 
   // Enter on a focused control keeps its native meaning.
-  const mark = card("alpha")?.querySelectorAll<HTMLButtonElement>("button")[1];
+  const mark = [
+    ...(card("alpha")?.querySelectorAll<HTMLButtonElement>("button") ?? []),
+  ].find((button) => button.textContent?.startsWith("Mark reviewed"));
+  check(
+    Boolean(mark) && !mark!.disabled,
+    "the final Enter target is an enabled Mark reviewed action",
+  );
+  if (!mark) throw new Error("Mark reviewed keyboard target is missing");
   mark?.focus();
-  const event = press(mark!, "Enter");
+  const event = press(mark, "Enter");
   await settle();
   check(
     !event.defaultPrevented && opened.length === 1,
@@ -922,7 +959,11 @@ async function run() {
 }
 
 run()
-  .catch((error: unknown) => failures.push(String(error)))
+  .catch((error: unknown) =>
+    failures.push(
+      error instanceof Error ? (error.stack ?? error.message) : String(error),
+    ),
+  )
   .finally(() =>
     fetch("/result", {
       method: "POST",

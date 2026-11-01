@@ -227,6 +227,7 @@ export const rpcVerbs = [
       label: Type.Optional(Type.String({ maxLength: 200 })),
       view: Type.Optional(Type.String({ maxLength: 16 })),
       join: Type.Optional(Type.String({ maxLength: 600 })),
+      preserve_tab: Type.Optional(Type.Boolean()),
     }),
   ),
   rpc(

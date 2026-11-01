@@ -4042,7 +4042,8 @@ World SHALL let the user close an agent's pane by dropping it in a bin, after a
 countdown the user chooses (10 s, 30 s by default, 1 min or 2 min, saved on the
 World service). The countdown is reversible staging held in the service's memory:
 it survives reloading or leaving World, and a service restart SHALL cancel every
-countdown without closing anything. Each agent SHALL have its own countdown.
+countdown without closing anything. Entries in the same waiting trip SHALL share
+one countdown; a drop before pull-away restarts it in full for every member.
 Opening the bin, or holding Town's bus, SHALL pause every countdown until the lid
 is closed or the bus is let go. Taking an agent out SHALL close nothing and
 return it to its place. Entry IDs and revisions SHALL name their service run, so
@@ -4063,7 +4064,12 @@ each reads the panes the previous one left, and a stalled host SHALL NOT delay
 another host's closes. A lost reply SHALL be settled by reading the panes back;
 World SHALL NOT re-send a close that may have happened. A pinned tab's last pane
 and a host whose topology is cached after failure SHALL be refused in the
-browser, where tab pins live, before anything is staged.
+browser, where tab pins live, before anything is staged. Pending admissions and
+qualified closing siblings SHALL continue to reserve their panes until a
+decisive result, fresh native absence/replacement or runtime retirement releases
+them. The service SHALL revalidate a captured pin against current native topology
+and reservations at admission. An uncertain close SHALL retain its reservation
+until fresh absence/replacement or runtime retirement, without resending it.
 
 Board and Desk SHALL use a plain bin that appears while a card is dragged and
 stays while it holds anything, showing the next countdown (its ring drains
@@ -4071,6 +4077,8 @@ through the departure too). Clicking it SHALL
 open it with Put back, Close now, Close all now and Close lid, and dragging a
 card out SHALL put the agent back. A selected tab card's bar SHALL offer Close
 agent… with the same countdown. A waiting card and its lines SHALL be hidden.
+Desk cards and directory rows SHALL offer Close agent… and Desk cards SHALL
+support the same qualified drop and cancellation rules.
 
 Town SHALL have one London bus stop, drawn in the world on the topmost street
 just right of its right-hand crossing (a vertical road meeting the street from
@@ -4091,6 +4099,9 @@ waiting. An agent sent after it pulled away SHALL wait for the next bus with its
 own countdown. Its motion SHALL come from a
 mover character (cruising speed, acceleration, deceleration) shared by Town's
 movers, with the approach speed fixed from the road length and set-off countdown.
+The service SHALL publish the original trip duration and active elapsed time,
+excluding holds and independent of boarding resets, so a remount or new observer
+reconstructs the same progress without a private previous-trajectory map.
 A bus seats eight; more riders
 SHALL take more buses, and buses that cannot stand at the stop SHALL queue
 behind it on the same street, then in further lanes, so every rider has a place

@@ -62,6 +62,46 @@ test("within one run an older revision never replaces a newer one", () => {
   expect(store.get().entries.map((e) => e.id)).toEqual(["bin-run1-1"]);
 });
 
+test("I1/R5: pending admission and a fresh observer retain qualified closing targets", async () => {
+  const reply = Promise.withResolvers<unknown>();
+  const client = {
+    call: () => reply.promise,
+    onControl: () => () => {},
+    onStatus: () => () => {},
+  };
+  const store = new WorldBinStore(client);
+  store.accept(state("run1", 1));
+  const target = entry("bin-run1-1");
+  const pending = store.add({
+    connection_id: target.connection_id,
+    connection_generation: 1,
+    workspace_id: "w1",
+    tab_id: "t1",
+    pane_id: "p1",
+    terminal_id: "term-p1",
+    label: "Example",
+    view: "board",
+  });
+  expect(store.reservedTargets()).toEqual([
+    expect.objectContaining({ pane_id: "p1", terminal_id: "term-p1" }),
+  ]);
+  reply.resolve(
+    state("run1", 2, { entries: [target], reservations: [target] }),
+  );
+  await pending;
+  const closing = state("run1", 3, {
+    closing: [target.id],
+    reservations: [target],
+  });
+  store.accept(closing);
+  expect(store.activeTargets().map((entry) => entry.pane_id)).toEqual(["p1"]);
+  const observer = new WorldBinStore(client);
+  observer.accept(closing);
+  expect(observer.reservedTargets()).toEqual([
+    expect.objectContaining({ pane_id: "p1", terminal_id: "term-p1" }),
+  ]);
+});
+
 test("a new service run replaces the state whatever its revision", () => {
   const { store, heard } = fixture();
   store.accept(state("run1", 5, { entries: [entry("bin-run1-1")] }));

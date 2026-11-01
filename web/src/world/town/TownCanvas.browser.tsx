@@ -15,6 +15,10 @@ import { sharedAsksStore, type WorldAsk } from "../worldAsks";
 import type { AnswerNotice } from "../worldAnswerDeliveries";
 import { checkTownRoomPlates } from "./townRoomPlates.browser";
 import { checkTownBus } from "./townBus.browser";
+import {
+  checkTownBusRemount,
+  checkTownClosingPin,
+} from "./townBusReview.browser";
 import { townBusSender } from "./useTownBus";
 import { worldBinStore } from "../bin/binStore";
 import { createFakeBin } from "../testing/fakeBin";
@@ -1203,13 +1207,16 @@ async function run() {
     };
   }
   const root = createRoot(host);
-  root.render(
-    <StrictMode>
-      <WorldPanelsContext.Provider value={panels}>
-        <Harness />
-      </WorldPanelsContext.Provider>
-    </StrictMode>,
-  );
+  let mountKey = 0;
+  const render = () =>
+    root.render(
+      <StrictMode>
+        <WorldPanelsContext.Provider value={panels}>
+          <Harness key={mountKey} />
+        </WorldPanelsContext.Provider>
+      </StrictMode>,
+    );
+  render();
   if (scale === "recovery") {
     try {
       await checkTownBuildingSigns(host, waitFor, check);
@@ -1335,6 +1342,64 @@ async function run() {
 
   if (scale === "bus" && mode === "test") {
     await checkTownBus(host, check, waitFor, fakeBin);
+    await checkTownBusRemount(
+      host,
+      fakeBin,
+      async () => {
+        const previous = host.querySelector("canvas[data-office-canvas]");
+        mountKey++;
+        render();
+        await waitFor(() => {
+          const current = host.querySelector("canvas[data-office-canvas]");
+          return (
+            !!current &&
+            current !== previous &&
+            window.__HERDR_TOWN_RENDERER__?.ready === true
+          );
+        }, "I2: full Town layer remount did not finish");
+        await waitFor(
+          () =>
+            !!host.querySelector(
+              '.world-semantic-targets-overlay[aria-busy="false"]',
+            ),
+          "I2: remounted Town targets did not finish admission",
+        );
+      },
+      waitFor,
+      check,
+    );
+    const source = base.connections.find((connection) =>
+      connection.snapshot?.tabs.some((tab) => {
+        const panes = connection.snapshot!.panes.filter(
+          (pane) => pane.tab_id === tab.tab_id,
+        );
+        return panes.length === 2 && panes.every((pane) => !!pane.agent);
+      }),
+    )!;
+    const native = source.snapshot!;
+    const tab = native.tabs.find((tab) => {
+      const panes = native.panes.filter((pane) => pane.tab_id === tab.tab_id);
+      return panes.length === 2 && panes.every((pane) => !!pane.agent);
+    })!;
+    const oldStatuses = native.panes.map((pane) => pane.agent_status);
+    for (const pane of native.panes)
+      pane.agent_status = pane.tab_id === tab.tab_id ? "blocked" : "idle";
+    const pinWorld = worldFor(base.connections);
+    setWorld(pinWorld);
+    await checkTownClosingPin(
+      host,
+      fakeBin,
+      pinWorld.leaves.filter(
+        (leaf) =>
+          leaf.connectionId === source.connectionId &&
+          leaf.tabId === tab.tab_id,
+      ),
+      waitFor,
+      check,
+    );
+    native.panes.forEach((pane, index) => {
+      pane.agent_status = oldStatuses[index]!;
+    });
     root.unmount();
     await settle();
     return;

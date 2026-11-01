@@ -1,5 +1,6 @@
 import { createFakeBin } from "./testing/fakeBin";
 import { worldBinStore } from "./bin/binStore";
+import { setTabPinned } from "../tabPins";
 import {
   applyAppearance,
   type AppearanceTarget,
@@ -661,6 +662,8 @@ async function fresh() {
   fakeBin.calls.length = 0;
   fakeBin.state.entries = [];
   fakeBin.state.closing = [];
+  fakeBin.state.reservations = [];
+  fakeBin.holdCloses = false;
   fakeBin.state.outcomes = [];
   fakeBin.state.paused = false;
   fakeBin.state.revision += 1;
@@ -761,6 +764,88 @@ async function boardAction(selector: string) {
 
 /** Board scenarios, each on a fresh board (see fresh()); run in order. */
 const scenarios: [name: string, run: () => Promise<void>][] = [
+  [
+    "I1/R5: closing sibling reserves the remaining pinned pane",
+    async () => {
+      const key = "studio:w1:t4";
+      const pair = world.leaves.filter(
+        (leaf) => leaf.connectionId === "studio" && leaf.tabId === "w1:t4",
+      );
+      check(pair.length === 2, "pair fixture must contain two native siblings");
+      setTabPinned("studio", "w1:t4", true);
+      fakeBin.holdCloses = true;
+      for (let i = 0; i < 4; i++)
+        host
+          .querySelector<HTMLButtonElement>('[aria-label="Zoom in"]')!
+          .click();
+      await settle(100);
+      const drop = async (pane: number, id: number) => {
+        await bringIntoView(() => card(key)!);
+        const tab = card(key)!;
+        const row = tab.querySelectorAll<HTMLElement>("[data-pane]")[pane]!;
+        const from = centre(row);
+        pointer(row, "pointerdown", from.x, from.y, id);
+        for (let step = 1; step <= 6; step++) {
+          pointer(
+            tab,
+            "pointermove",
+            from.x + step * 10,
+            from.y + step * 6,
+            id,
+          );
+          await settle(16);
+        }
+        const can = host.querySelector<HTMLElement>(".world-bin-can")!;
+        await waitFor(
+          () => can.getBoundingClientRect().width > 0,
+          "bin rises for pane carry",
+        );
+        const over = centre(can);
+        for (let step = 0; step < 4; step++) {
+          pointer(tab, "pointermove", over.x, over.y, id);
+          await settle(16);
+        }
+        pointer(tab, "pointerup", over.x, over.y, id);
+        await settle(100);
+      };
+      await drop(0, 81);
+      await waitFor(
+        () => fakeBin.state.entries.length === 1,
+        "first sibling enters through Board drop",
+      );
+      host.querySelector<HTMLButtonElement>(".world-bin-can")!.click();
+      await waitFor(
+        () => !!host.querySelector(".world-bin-tray"),
+        "Board bin opens",
+      );
+      [...host.querySelectorAll<HTMLButtonElement>(".world-bin-tray button")]
+        .find((b) => b.textContent === "Close now")!
+        .click();
+      await waitFor(
+        () =>
+          fakeBin.state.closing.length === 1 && !fakeBin.state.entries.length,
+        "first native close held",
+      );
+      const before = fakeBin.calls.filter(
+        (call) => call.method === "world.bin.add",
+      ).length;
+      await drop(1, 82);
+      check(
+        fakeBin.calls.filter((call) => call.method === "world.bin.add")
+          .length === before,
+        "I1/R5: Board must refuse the last pinned pane while its sibling closes",
+      );
+      check(
+        !card(key)?.classList.contains("board-binned"),
+        "remaining pinned pane stays on Board",
+      );
+      check(
+        world.leaves.includes(pair[0]!) && world.leaves.includes(pair[1]!),
+        "native topology remains unchanged during held close",
+      );
+      setTabPinned("studio", "w1:t4", false);
+    },
+  ],
   [
     "Board drop A at 0:30 then B at 0:25 restarts both to 0:30",
     async () => {

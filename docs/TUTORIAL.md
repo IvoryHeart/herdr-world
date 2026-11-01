@@ -690,14 +690,18 @@ reaches Herdr until then, and it keeps running on the World service if you
 reload. To change your mind, click the bin:
 every timer pauses and the bin opens. Drag the card out, or choose **Put back**,
 and it returns to its place. **Close now** skips the wait; **Close lid** resumes
-the timers. The last pane of a pinned tab is refused until you unpin the tab.
+the timers. On Desk, drag a card in the same way or choose **Close agent…** on
+its card or directory row. All three views share the same bin. The last pane
+of a pinned tab is refused until you unpin the tab, including while a sibling's
+close is still being completed.
 
 In Town the bin is a London bus stop on the top street. Drag an agent to the
 stop (or use **Send to the bus stop** in its peek) and watch the bus drive in;
 it stops with 10 seconds left on the clock and sounds its horn. Sending another
 agent from Board, Desk or Town before the bus pulls away starts the shared
 countdown again for both. A bus already coming keeps its speed, arrives early
-and waits until 0:00; one already at the stop waits longer. If
+and waits until 0:00; one already at the stop waits longer. Reloading or opening
+another World keeps the trip's progress, including time held still. If
 the stop is off screen, the red chip at the screen's edge takes you there, and
 you can drop a carried agent on it. When the countdown ends the bus drives
 away, and the agent closes only when the bus has left the map. Until then,

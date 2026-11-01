@@ -186,7 +186,12 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     before the bus pulls away starts the countdown again in full for everyone
     on it. Board and Desk drops reset that same service countdown. The bus keeps
     its set-off speed after a reset, arrives early and waits until 0:00; one
-    already at the stop keeps waiting. After pull-away, drops join the next bus.
+    already at the stop keeps waiting. Reloading or opening another World
+    reconstructs that same progress; holds freeze the trip as well as the
+    countdown. Desk cards and directory rows offer **Close agent…**, and Desk
+    cards can be dropped into its bin. Pinned tabs retain their last pane even
+    while a previously admitted sibling's native close is pending.
+    After pull-away, drops join the next bus.
     When the countdown ends the bus pulls away,
     speeding up, and the agent closes only once it has left the map by the
     right edge. Until then press and hold a bus, coming, waiting or leaving, to

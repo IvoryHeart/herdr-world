@@ -5,6 +5,7 @@ import {
   parseBinCountdown,
   type BinEntry,
   type BinOutcome,
+  type BinReservation,
   type BinState,
   type BinTarget,
   type BinView,
@@ -62,7 +63,32 @@ function parseEntry(value: unknown): BinEntry | null {
       : 0,
     remaining_ms: Math.max(0, v.remaining_ms as number),
     trip: v.trip as string,
+    ...(Number.isFinite(v.trip_duration_ms) &&
+    Number.isFinite(v.trip_elapsed_ms)
+      ? {
+          trip_duration_ms: v.trip_duration_ms as number,
+          trip_elapsed_ms: Math.max(0, v.trip_elapsed_ms as number),
+        }
+      : {}),
   };
+}
+
+function parseReservation(value: unknown): BinReservation | null {
+  const v = value as Record<string, unknown> | null;
+  if (
+    !v ||
+    ![
+      "id",
+      "connection_id",
+      "workspace_id",
+      "tab_id",
+      "pane_id",
+      "terminal_id",
+    ].every((key) => text(v[key])) ||
+    !Number.isSafeInteger(v.connection_generation)
+  )
+    return null;
+  return v as unknown as BinReservation;
 }
 
 function parseOutcome(value: unknown): BinOutcome | null {
@@ -103,6 +129,13 @@ export function parseBinState(value: unknown): BinState | null {
     closing: Array.isArray(v.closing)
       ? v.closing.filter((id): id is string => text(id))
       : [],
+    reservations: Array.isArray(v.reservations)
+      ? v.reservations
+          .map(parseReservation)
+          .filter((entry): entry is BinReservation => entry !== null)
+      : v.entries
+          .map(parseEntry)
+          .filter((entry): entry is BinEntry => entry !== null),
     outcomes: Array.isArray(v.outcomes)
       ? v.outcomes.map(parseOutcome).filter((o): o is BinOutcome => o !== null)
       : [],
@@ -114,6 +147,7 @@ export type BinDrop = BinTarget & {
   label: string;
   view: BinView;
   join?: string;
+  preserve_tab?: boolean;
 };
 
 /**
@@ -133,6 +167,7 @@ export class WorldBinStore {
   private seen = new Set<string>();
   private loaded = false;
   private unlisten: (() => void)[] = [];
+  private readonly pending = new Set<BinDrop>();
 
   constructor(
     private readonly client: Client,
@@ -184,6 +219,33 @@ export class WorldBinStore {
       : Math.max(0, entry.remaining_ms - (at - this.state.readAt));
   }
 
+  /** Shared active trip clock: a countdown reset never starts it again. */
+  elapsed(entry: BinEntry, at = this.now()) {
+    const elapsed =
+      entry.trip_elapsed_ms ??
+      Math.max(0, entry.duration_ms + entry.departure_ms - entry.remaining_ms);
+    return (
+      elapsed + (this.state.paused ? 0 : Math.max(0, at - this.state.readAt))
+    );
+  }
+
+  reservedTargets(): readonly BinTarget[] {
+    return [
+      ...(this.state.reservations ?? this.state.entries),
+      ...this.pending,
+    ];
+  }
+
+  activeTargets(): readonly BinReservation[] {
+    const closing = new Set(this.state.closing);
+    return [
+      ...this.state.entries,
+      ...(this.state.reservations ?? []).filter((entry) =>
+        closing.has(entry.id),
+      ),
+    ];
+  }
+
   async refresh() {
     try {
       this.accept(await this.client.call("world.bin.list"));
@@ -194,8 +256,16 @@ export class WorldBinStore {
     }
   }
 
-  add(drop: BinDrop) {
-    return this.mutate("world.bin.add", drop);
+  async add(drop: BinDrop) {
+    const captured = { ...drop };
+    this.pending.add(captured);
+    this.set({ ...this.state });
+    try {
+      return await this.mutate("world.bin.add", captured);
+    } finally {
+      this.pending.delete(captured);
+      this.set({ ...this.state });
+    }
   }
   restore(id: string) {
     return this.mutate("world.bin.restore", { id });

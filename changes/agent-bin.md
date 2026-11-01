@@ -15,3 +15,6 @@
 
 - Keep room-floor drops beside the bus chip as room moves. The chip accepts
   drops within its visible touch target instead of capturing nearby floor.
+- Keep a pinned tab's last pane while a sibling close is pending, preserve the
+  bus's trip progress after reloading, and wire Desk cards and Close agent…
+  actions to the shared bin.
