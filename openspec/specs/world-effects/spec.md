@@ -210,6 +210,34 @@ recipient, such as an ask's answer to its asker, MAY be queueable only when it:
 - uses the opaque recovery class;
 - dispatches through the same guarded send checks as an interactive send.
 
+A declared verb that closes one captured pane, such as the agent bin's
+`world.bin.close`, MAY be queueable only when it is conditioned on the captured
+connection, runtime generation and terminal and on the World run that recorded
+it, ends unsent once that generation is replaced, and uses the reconcilable
+recovery class. A runtime generation is a per-run counter, so in a later World run
+such a close SHALL NOT be dispatched or reconciled against the host's current
+runtime: an unsent one SHALL be recorded as not sent and a possibly sent one SHALL
+stay uncertain.
+
+A dispatcher MAY run one lane per connection. Each lane SHALL select its
+connection before the dispatch query's bound, and lanes SHALL be found from
+storage, so one connection's backlog never hides or delays another's work.
+
+#### Scenario: One host's backlog
+- **WHEN** one offline host holds more queued intents than one query returns and
+  another host's intent is due
+- **THEN** that host's lane finds and dispatches its intent
+
+#### Scenario: A queued close after World restarts
+- **WHEN** World restarts and a host's new runtime reuses the old generation number
+  and native IDs
+- **THEN** an unsent pane close recorded before the restart is recorded as not sent,
+  a possibly sent one stays uncertain, and nothing reaches the new runtime
+
+#### Scenario: A queued close after the host restarted
+- **WHEN** a queued pane close's host returns with a new runtime generation
+- **THEN** the close is recorded as not sent and nothing reaches the new runtime
+
 #### Scenario: Unchanged target on reconnect
 - **WHEN** a host reconnects after a long outage and a queued intent's target state is
   unchanged

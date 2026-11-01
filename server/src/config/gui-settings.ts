@@ -37,6 +37,8 @@ export type GuiSettings = {
   repositories: Record<string, GuiRepoSettings>;
   workspace_auto_sync: Record<string, GuiWorkspaceAutoSyncSettings>;
   terminal_transport?: Record<string, { surface_codecs: boolean }>;
+  /** How long an agent waits in the bin before it is closed (shared/bin.ts). */
+  bin_countdown_s?: number;
   custom: Record<string, unknown>;
 };
 
@@ -138,6 +140,9 @@ function normalizeGuiSettings(
   return {
     version: 1,
     title_suffix: storedTitleSuffix(obj.title_suffix),
+    ...(Number.isSafeInteger(obj.bin_countdown_s)
+      ? { bin_countdown_s: obj.bin_countdown_s as number }
+      : {}),
     repositories: normalizedRepos,
     workspace_auto_sync: normalizedWorkspaceAutoSync,
     terminal_transport: Object.fromEntries(
