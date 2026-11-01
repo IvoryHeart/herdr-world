@@ -20,12 +20,7 @@ import {
   townFoldedActivityLabel,
   type TownFoldedActivity,
 } from "./townFoldedActivity";
-import {
-  TOWN_FACADE,
-  TOWN_TILE as T,
-  townDeskSlots,
-  type TownLayout,
-} from "./townLayout";
+import { TOWN_TILE as T, townDeskSlots, type TownLayout } from "./townLayout";
 import { townAttention, townRoomCounts, type TownModel } from "./townModel";
 import { townCarpetFor, townCarpetOf } from "./townPaint";
 import { TownQuestPennant, type TownQuestMark } from "./townQuestPennant";
@@ -246,8 +241,9 @@ export const TownWorldLayer = memo(function TownWorldLayer({
               className={`town-reception${queue.length ? " town-reception-busy" : ""}`}
               data-stale={host?.stale || undefined}
               style={{
+                // The board stands in the yard above the front door.
                 left: building.doorX * T,
-                top: (building.y + building.h + TOWN_FACADE) * T + 6,
+                top: building.y * T - 18,
               }}
               role="group"
               aria-label={`${host?.displayLabel ?? "Host"} reception, ${queue.length} waiting`}

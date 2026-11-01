@@ -97,7 +97,8 @@ export class TownSceneCamera {
     if (!camera || !limits) return;
     if (layout.formFactor === "narrow") {
       const first = layout.buildings[0];
-      const x = (layout.width * T) / 2;
+      // The stacked buildings share one axis; side roads run to its right.
+      const x = first ? (first.x + first.w / 2) * T : (layout.width * T) / 2;
       const focus = camera.focusPoint();
       const y = first
         ? first.y * T - 24 + (focus.y - viewport.inset.top) / limits.home

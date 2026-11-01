@@ -73,7 +73,9 @@ function setup(
   const camera = new TownCamera();
   camera.viewport = viewport;
   view.attach(camera, layout, viewport);
-  camera.jumpTo(camera.x, camera.y, options.zoom ?? 1.2);
+  // Look at the first building, whatever else stands on its street.
+  const first = layout.buildings[0]!;
+  camera.jumpTo((first.x + first.w / 2) * T, camera.y, options.zoom ?? 1.2);
   const time = manualClock();
   const frames = testFrames();
   const log: unknown[][] = [];
@@ -752,6 +754,7 @@ test("staying on the same desk keeps the magnet's time; another desk restarts it
 
 test("a desk held at the edge never snaps to desks the town scrolls under it", () => {
   const t = setup();
+  const start = { x: t.camera.x, y: t.camera.y };
   const at = t.deskCentre(t.deskCell(0));
   const pointer = t.press(at);
   t.moveTo(pointer, offset(at, 20));
@@ -777,6 +780,8 @@ test("a desk held at the edge never snaps to desks the town scrolls under it", (
   expect([...aims]).not.toContain("group");
   // Once the town stops under it, resting on a desk still snaps.
   t.moveTo(pointer, { x: 720, y: 450 });
+  t.camera.jumpTo(start.x, start.y, t.camera.z);
+  if (t.draw().moved) t.interaction.reaim();
   const still = t.deskCentre(t.deskCell(1, 0));
   t.moveTo(pointer, still);
   t.frames.step();

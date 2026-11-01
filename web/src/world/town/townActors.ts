@@ -3,8 +3,8 @@
  *
  * Where an agent stands follows its authoritative status: seated while working,
  * unknown; at its host reception while blocked (oldest first) or finished
- * (after the waiting agents); and in the lounge while idle. When reception or
- * the lounge is full, the rest stay at their desks. An agent the user opened
+ * (after the waiting agents); and in the bar (the lounge) while idle. When
+ * reception or the bar is full, the rest stay at their desks. An agent the user opened
  * (summoned) walks back to its desk whatever its status, until that status
  * changes. An agent at a pinned desk never goes to the lounge: it leaves its
  * desk only to wait at reception (blocked, or finished and not yet seen), and
@@ -79,6 +79,7 @@ export class TownNavigation {
         if (y < 2 || x === 0 || x === w - 1) this.grid[y * w + x] = Infinity;
     const L = building.lounge;
     for (const dx of [1, 2, 3, 7, 8]) this.block(L.x + dx, L.y + 1);
+    for (let x = L.bar.x; x < L.bar.x + L.bar.w; x += 1) this.block(x, L.bar.y);
     for (
       let x = building.counter.x;
       x < building.counter.x + building.counter.w;
@@ -212,7 +213,7 @@ export function townNavigationKey(building: TownBuilding) {
     y,
     w,
     h,
-    [lounge.x, lounge.y],
+    [lounge.x, lounge.y, lounge.bar.x, lounge.bar.y, lounge.bar.w],
     [counter.x, counter.y, counter.w],
     plants.map((plant) => [plant.x, plant.y]),
     desks,
@@ -551,7 +552,11 @@ export class TownActors {
         target.tile[0],
         target.tile[1],
       );
-      actor.path = (path ?? [target.tile]).map(([x, y]) => tileCenter(x, y));
+      // Already in the goal tile (an empty path), still walk to its centre:
+      // arriving off-centre would leave the actor where a later settle snaps.
+      actor.path = (path?.length ? path : [target.tile]).map(([x, y]) =>
+        tileCenter(x, y),
+      );
       actor.mode = "walk";
     };
     if (actor.mode === "seat") {

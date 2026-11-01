@@ -70,10 +70,10 @@
     visibility 0.2s;
 }
 
-/* Boards hang from their world point rather than centring on it. */
+/* Reception boards stand on their world point, above the front door. */
 .town-reception {
-  transform: translate(-50%, 0) scale(var(--iz));
-  transform-origin: 50% 0;
+  transform: translate(-50%, -100%) scale(var(--iz));
+  transform-origin: 50% 100%;
 }
 
 .town-building-sign {

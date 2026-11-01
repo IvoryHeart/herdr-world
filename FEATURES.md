@@ -65,9 +65,14 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     with its counts (tap a room to go there), and spend per model ("No cost
     data" without a provider). Press **Summary** again to restore its minimized
     window or bring it to the front.
-  - Blocked agents queue at reception oldest first. Finished agents wait there
-    until you open their terminal or mark that completion reviewed, then join
-    idle agents in the lounge. Movement only represents state.
+  - Each building has its reception at the top, under the front door, and a
+    bar across the bottom. Blocked agents queue at reception oldest first.
+    Finished agents wait there until you open their terminal or mark that
+    completion reviewed, then join idle agents at the bar. Movement only
+    represents state.
+  - Every building has roads on at least three sides: a street above and below
+    each row and a side road to its right. The last lot on the grid is
+    reserved for a town hall: a fenced plot with a sign, not yet in use.
   - Each agent has one window: World's Inspector, with one top selector
     (**Chat**, **Terminal**, **Files**, **Changes**, then secondary controls such as **Commits**).
     On phones, a header dropdown shows Chat, Terminal, Files and Changes;
@@ -123,7 +128,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     where replies and attachments go. The card refreshes when the conversation
     changes, without polling.
   - Tapping an agent or its table brings the agent back: from reception or the
-    lounge it walks to its desk and stays there until its status changes. A
+    bar it walks to its desk and stays there until its status changes. A
     table stands for an agent that needs you (waiting, then finished) before
     the one seated there. **Menu → Agents open** chooses whether that tap opens
     the chat (the default) or the terminal, in Town, Board and Desk alike; either way the tap does not mark
@@ -197,7 +202,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     it (other tables fill the free places in tab order). A saved pin applies
     only while its tab is in the room's visible native-order prefix. A pinned
     desk beyond the fold stays hidden until you expand to reveal it. Its agents stay at it:
-    they never go to the lounge, leave only to wait at reception (blocked, or
+    they never go to the bar, leave only to wait at reception (blocked, or
     finished and not yet seen) and walk straight back once you have seen them.
     The pin is a World view setting, saved on the World service beside
     terminal colours, so every device sees it; Herdr is unchanged, and
@@ -209,7 +214,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     capped backoff; explicit disconnect/removal and permanent failures stop
     recovery. Cached work never becomes current until a fresh runtime snapshot
     is admitted. Search and Hosts
-    use the shared aggregate. Reception and lounge positions only show status;
+    use the shared aggregate. Reception and bar positions only show status;
     only an explicit move changes Herdr's layout, always within one host.
   See the [Town exercise](./docs/TUTORIAL.md#town).
 - **Reuse existing Herdr.** The standalone installer and Homebrew launcher keep
