@@ -435,6 +435,19 @@ test("installer upgrades run native released artifacts on every supported platfo
     ).text(),
   ) as any;
   const job = workflow.jobs.upgrade;
+  const nativeStorage = job.steps.find(
+    (step: any) =>
+      step.name ===
+      "Verify native SQLite and standalone compiled worker crash recovery",
+  )?.run;
+  const crashSuites = [
+    ...new Bun.Glob("*-crash.test.ts").scanSync({
+      cwd: fileURLToPath(new URL("../server/src/storage/", import.meta.url)),
+    }),
+  ];
+  expect(crashSuites.length).toBeGreaterThan(0);
+  for (const suite of crashSuites)
+    expect(nativeStorage).toContain(`./server/src/storage/${suite}`);
   // runner context is available to steps, but not reusable-workflow job env.
   expect(JSON.stringify(job.env)).not.toContain("runner.");
   expect(Object.keys(workflow.on)).toEqual([

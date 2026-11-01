@@ -31,6 +31,8 @@ export type AttachmentUpload = {
 export type AttachmentTask = (
   file: File,
   onProgress: UploadProgress,
+  /** True only for an explicit Retry, never automatic queue continuation. */
+  retry?: boolean,
 ) => Promise<string | void>;
 
 type Job = AttachmentUpload & {
@@ -79,14 +81,16 @@ export function dismissAttachmentUpload(scope: string, id: string) {
   );
 }
 
-async function run(scope: string, id: string) {
+async function run(scope: string, id: string, retry = false) {
   const job = jobs.get(scope)?.find((candidate) => candidate.id === id);
   if (!job) return;
   patch(scope, id, { status: "uploading", loaded: 0, error: null });
   try {
-    const text = await job.task(job.file, (loaded, total) =>
-      patch(scope, id, { loaded, size: total || job.size }),
-    );
+    const progress: UploadProgress = (loaded, total) =>
+      patch(scope, id, { loaded, size: total || job.size });
+    const text = await (retry
+      ? job.task(job.file, progress, true)
+      : job.task(job.file, progress));
     // Kept before the chip says done, so a done chip's path always lands.
     if (text) {
       deliveries.set(scope, [...(deliveries.get(scope) ?? []), text]);
@@ -158,7 +162,7 @@ export async function startAttachmentUploads(
 export function retryAttachmentUpload(scope: string, id: string) {
   const job = jobs.get(scope)?.find((candidate) => candidate.id === id);
   // run marks it uploading before it yields, so a second Retry is refused.
-  if (job?.status === "failed") void run(scope, id);
+  if (job?.status === "failed") void run(scope, id, true);
 }
 
 export function attachmentUploads(scope: string): readonly AttachmentUpload[] {

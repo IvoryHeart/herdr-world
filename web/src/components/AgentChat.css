@@ -293,3 +293,22 @@
     visibility: visible;
   }
 }
+
+/* The composer lines up with the wide transcript (AgentHistoryChat.css).
+   Chat's frame, which always fills its parent, is the container: the composer
+   itself sizes to its content in some hosts and must keep that size. */
+.agent-chat {
+  container: agent-chat / inline-size;
+}
+
+@container agent-chat (min-width: 900px) {
+  .agent-chat-composer .terminal-composer[data-surface="chat"],
+  .agent-chat-composer .agent-chat-notice,
+  .agent-chat-composer .attachment-chips {
+    max-width: 1440px;
+  }
+
+  .agent-chat-composer .terminal-composer[data-surface="chat"] {
+    padding: 0 14px;
+  }
+}
