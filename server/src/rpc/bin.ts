@@ -37,8 +37,6 @@ export async function handleBinRpc(rpc: BridgeRpcContext): Promise<void> {
       !lease.isCurrent()
     )
       throw new Error("That agent's host is unavailable");
-    if (bin.pinned(target.connection_id, target.tab_id))
-      throw new Error("Unpin this tab before closing it");
     const result = (await lease.call(
       "pane.list",
       { workspace_id: target.workspace_id },

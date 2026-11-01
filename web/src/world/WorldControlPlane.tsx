@@ -1,4 +1,5 @@
 import { Suspense, useEffect, useState } from "react";
+import { WorldBin } from "./bin/WorldBin";
 import { worldLocalStorage } from "../browserStorage";
 import { useChimeHost, WORLD_SOUNDS_EVENT } from "../chimes/chimeHost";
 import { CreateWorkspaceDialog } from "../components/CreateWorkspaceDialog";
@@ -386,6 +387,14 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                       }
                       onPreview={deskReadingPane ? previewTerminalById : null}
                       onCloseReading={closeDeskReading}
+                    />
+                  ) : null}
+                  {/* Board and Town draw their own bin; Desk shows what waits in it. */}
+                  {view === "desk" ? (
+                    <WorldBin
+                      drag={null}
+                      hot={false}
+                      className="world-bin-desk"
                     />
                   ) : view === "town" ? (
                     <Suspense

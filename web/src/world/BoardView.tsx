@@ -1,4 +1,5 @@
 import { useDrawReadiness } from "./useDrawReadiness";
+import { useBoardBin } from "./bin/useBoardBin";
 import { worldRuntimeStore } from "./runtimeStore";
 import { AppearanceAvatar } from "./AppearanceAvatar";
 import { visibleAppearanceColors, saveAppearance } from "./appearance";
@@ -600,6 +601,24 @@ export default function BoardView({
   const panVelocity = useRef<Point | null>(null);
   const layout = useRef<BoardLayout>(emptyLayout());
   const cards = useRef(new Map<string, PhysicsCard>());
+  // The bin: a card dragged over it closes its agent when the countdown ends.
+  const boardBin = useBoardBin({
+    view: "board",
+    tabs: () => latest.current.model.tabs,
+    toast: (text) => setToast({ text }),
+    cardEl: (key) => cardEls.current.get(key),
+    returned: (key, at) => {
+      const card = cards.current.get(key);
+      if (card && at) {
+        // Fly home from where it was dropped.
+        const from = toWorld(at.x, at.y);
+        card.x = from.x;
+        card.y = from.y;
+      }
+      travelToLayout(latest.current.model);
+    },
+    changed: () => invalidate("bin"),
+  });
   const physics = useRef<PhysicsState>({ heat: 0 });
   // Moves the board makes itself (tidy, Undo, unfold) travel on a short
   // tween so every card arrives; physics is only for moves made by hand.
@@ -1438,6 +1457,9 @@ export default function BoardView({
     if (!farRef.current)
       for (const tab of m.tabs) {
         if (latest.current.collapsed.has(tab.workspaceKey)) continue;
+        // A card waiting in the bin is hidden, and so is its line.
+        if (cardEls.current.get(tab.key)?.classList.contains("board-binned"))
+          continue;
         const a = cards.current.get(tab.workspaceKey),
           b = cards.current.get(tab.key);
         if (!a || !b) continue;
@@ -1754,7 +1776,12 @@ export default function BoardView({
   /* ---------- Pointer input ---------- */
   /** What a pointer landed on; null for controls and text being edited. */
   function classify(target: HTMLElement): GestureTarget | null {
-    if (target.closest("[contenteditable='true'], .work-lens")) return null;
+    if (
+      target.closest(
+        "[contenteditable='true'], .work-lens, .world-bin, .world-bin-tray",
+      )
+    )
+      return null;
     if (
       target.closest("button, input, a, label") &&
       !target.closest(".board-card")
@@ -1766,11 +1793,9 @@ export default function BoardView({
     if (card?.dataset.key) {
       if (target.closest(".board-handle"))
         return { kind: "handle", key: card.dataset.key };
-      return {
-        kind: "card",
-        key: card.dataset.key,
-        paneKey: target.closest<HTMLElement>("[data-pane]")?.dataset.pane,
-      };
+      const paneKey = target.closest<HTMLElement>("[data-pane]")?.dataset.pane;
+      boardBin.press(paneKey);
+      return { kind: "card", key: card.dataset.key, paneKey };
     }
     const host = target.closest<HTMLElement>(".board-zone-label");
     if (host?.dataset.host) return { kind: "host", key: host.dataset.host };
@@ -1902,6 +1927,7 @@ export default function BoardView({
         };
         tweens.current.delete(effect.key);
         card.gliding = false;
+        boardBin.lift(latest.current.model.tabByKey.get(effect.key));
         cardEls.current.get(effect.key)?.classList.add("board-lifted");
         if (effect.held) navigator.vibrate?.(12);
         moveHeld(effect.at);
@@ -2030,6 +2056,13 @@ export default function BoardView({
     warmUp();
     const tab = latest.current.model.tabByKey.get(h.key);
     if (!tab) return;
+    if (boardBin.over(screen.x, screen.y)) {
+      for (const key of [teammate.current, glue.current])
+        if (key) cardEls.current.get(key)?.classList.remove("board-glue");
+      cardEls.current.get(h.key)?.classList.remove("board-gluing");
+      teammate.current = glue.current = null;
+      return;
+    }
     // Over another tab card it glows, and a drop there groups the two. No
     // dwell as in Town: Board's elastic cards slide away from a resting one,
     // and they do not overlap unless dragged onto each other.
@@ -2094,6 +2127,11 @@ export default function BoardView({
     const card = cards.current.get(h.key);
     cardEls.current.get(h.key)?.classList.remove("board-lifted");
     if (!card) return;
+    if (boardBin.drop()) {
+      // The card keeps its place while it waits in the bin.
+      travelToLayout(m);
+      return;
+    }
     if (isNoteKey(h.key)) {
       const note = latest.current.saved?.notes.find(
         (n) => NOTE_PREFIX + n.id === h.key,
@@ -3295,7 +3333,7 @@ export default function BoardView({
           if (
             card ||
             target.closest(
-              ".board-controls, .board-zone-label, .board-notebar, .board-chooser, .board-cut, .board-toast, .board-trace, .board-banner, .board-tray, .work-lens",
+              ".board-controls, .board-zone-label, .board-notebar, .board-chooser, .board-cut, .board-toast, .board-trace, .board-banner, .board-tray, .work-lens, .world-bin, .world-bin-tray",
             )
           )
             return;
@@ -3508,6 +3546,7 @@ export default function BoardView({
                     tab.shellOnly ? "board-terminal" : "",
                     multi ? "board-multi" : "",
                     tab.stale ? "board-stale" : "",
+                    boardBin.tabClass(tab),
                     selectedKeys.has(tab.key) ? "board-selected" : "",
                     matches && !matches.has(tab.key) ? "board-dim" : "",
                   ].join(" ")}
@@ -3553,7 +3592,7 @@ export default function BoardView({
                           data-world-node-anchor={row.leaf.id}
                           role="button"
                           aria-pressed={selectedId === row.leaf.id}
-                          className={`board-pane${row.isAgent ? ` board-s-${row.status}` : " board-pane-shell"}${selectedId === row.leaf.id ? " board-pane-selected" : ""}`}
+                          className={`board-pane${row.isAgent ? ` board-s-${row.status}` : " board-pane-shell"}${selectedId === row.leaf.id ? " board-pane-selected" : ""}${boardBin.paneBinned(row) ? " board-pane-binned" : ""}`}
                           aria-label={`${paneName(row)}, ${row.isAgent ? STATUS_LABEL[row.status] : "shell"}`}
                         >
                           {row.isAgent ? (
@@ -3893,6 +3932,7 @@ export default function BoardView({
             })}
           </div>
         ) : null}
+        {boardBin.element}
         {/* The bars ride above their card, clear of the Inspector. */}
         <div ref={barRef} className="board-bar-anchor">
           {!noteSelected && colorKey ? (
@@ -3922,6 +3962,17 @@ export default function BoardView({
               }
               pinned={pinnedKeys.has(colorKey)}
               onPin={() => togglePin(colorKey)}
+              onBin={
+                model.tabByKey.has(colorKey)
+                  ? () =>
+                      boardBin.closeAgent(
+                        model.tabByKey.get(colorKey)!,
+                        model.tabByKey
+                          .get(colorKey)!
+                          .panes.find((p) => p.leaf.id === selectedId)?.key,
+                      )
+                  : undefined
+              }
             />
           ) : null}
           {noteSelected && saved?.notes.find((n) => n.id === noteSelected) ? (
@@ -4443,6 +4494,7 @@ function CardBar({
   team,
   pinned,
   onPin,
+  onBin,
 }: {
   label: string;
   color: CardColor | null;
@@ -4457,6 +4509,8 @@ function CardBar({
   };
   pinned: boolean;
   onPin(): void;
+  /** For a tab: put its agent in the bin (the visible twin of dragging it there). */
+  onBin?: () => void;
 }) {
   return (
     <div
@@ -4505,6 +4559,12 @@ function CardBar({
         <Pin size={14} aria-hidden="true" />
         {pinned ? "Unpin" : "Pin"}
       </button>
+      {onBin ? (
+        <button type="button" className="board-bin-action" onClick={onBin}>
+          <Trash2 size={14} aria-hidden="true" />
+          Close agent…
+        </button>
+      ) : null}
     </div>
   );
 }

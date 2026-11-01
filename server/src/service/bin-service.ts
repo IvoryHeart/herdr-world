@@ -1,5 +1,4 @@
 import {
-  binPinKeys,
   DEFAULT_BIN_COUNTDOWN,
   parseBinCountdown,
   type BinCountdown,
@@ -7,7 +6,6 @@ import {
 import type { GuiSettingsStore } from "../config/gui-settings";
 import type { EffectStore } from "../effects/types";
 import type { AttentionOutbox } from "../storage/world-protocol";
-import type { BoardStorePort } from "../world/board-store";
 import { createBinCloser, type BinLease } from "../world/bin-close";
 import { WorldBinRegistry } from "../world/bin";
 import type { LedgerStore } from "../world/world-ledger";
@@ -38,7 +36,6 @@ export function createBinService(deps: {
   clock: Clock;
   scheduler: Scheduler;
   settings: GuiSettingsStore;
-  board(): BoardStorePort;
   ledger(): LedgerStore;
   outbox(): AttentionOutbox;
   effects(): EffectStore;
@@ -56,10 +53,6 @@ export function createBinService(deps: {
       countdown = parseBinCountdown(settings.bin_countdown_s);
     })
     .catch(() => {});
-  const pinned = (connectionId: string, tabId: string) => {
-    const pins = deps.board().get().layout.desk_pins;
-    return binPinKeys(connectionId, tabId).some((key) => Boolean(pins[key]));
-  };
   const lease = (id: string): BinLease | null => {
     const current = deps.connections().readyRuntimeLease(id);
     return current
@@ -95,7 +88,6 @@ export function createBinService(deps: {
         .list()
         .some((entry) => entry.id === id),
     lease,
-    pinned,
     settle: (id, outcome) => {
       if (registry.owns(id)) registry.settle(id, outcome);
     },
@@ -104,7 +96,6 @@ export function createBinService(deps: {
 
   return {
     registry,
-    pinned,
     lease,
     /** Intents left by an earlier run resume under their recovery rules. */
     start: () => closer.wake(),

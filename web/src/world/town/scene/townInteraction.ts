@@ -63,7 +63,9 @@ export type TownMoveCommand =
   | { kind: "group"; deskKey: string; targetDeskKey: string }
   | { kind: "ungroup"; deskKey: string }
   /** Into `ontoDeskKey`'s slot, or last in its room when null. */
-  | { kind: "reorder"; deskKey: string; ontoDeskKey: string | null };
+  | { kind: "reorder"; deskKey: string; ontoDeskKey: string | null }
+  /** To the bus stop: the agent waits in the bin for the bus. */
+  | { kind: "bin"; agentKey: string };
 
 export type TownInteractionPorts = {
   clock: TownClock;
@@ -92,6 +94,12 @@ export type TownInteractionPorts = {
   };
   /** A touch hold lifted something. */
   held(): void;
+  /**
+   * The bus stop, when Town has one: whether a carried agent at this world
+   * and canvas point is over it (or its off-screen chip). The town holds
+   * still there, so a drop near the stop lands on it.
+   */
+  busStop?(world: Point, at: Point): boolean;
   /** Development builds: each step of the gesture machine. */
   trace?(
     before: string,
@@ -342,7 +350,7 @@ export class TownInteraction {
   /** How far a carry at canvas point `at` pans the town each frame. */
   private edgePush(at: Point) {
     const stage = this.ports.stage();
-    if (!stage) return { dx: 0, dy: 0 };
+    if (!stage || this.overBusStop(at)) return { dx: 0, dy: 0 };
     const { width, height, inset } = stage.camera.viewport;
     const push = (p: number, low: number, high: number) =>
       p < low + EDGE
@@ -397,11 +405,30 @@ export class TownInteraction {
     return drag;
   }
 
+  /** A carried agent rests over the bus stop or its chip. */
+  private overBusStop(at: Point) {
+    const stage = this.ports.stage();
+    if (this.carrying?.kind !== "agent" || !stage || !this.ports.busStop)
+      return false;
+    return this.ports.busStop(stage.camera.toWorld(at.x, at.y), at);
+  }
+
   /** Show where the carried desk or agent would land, and snap to it. */
   private aim(hit: TownHit | null, at: Point) {
     const stage = this.ports.stage();
     if (!this.carrying || !stage) return;
     const { model, teams } = this.ports.world();
+    if (this.overBusStop(at)) {
+      this.carrying.target = {
+        key: "bin",
+        label: `Send ${this.carrying.label} to the bus stop`,
+        action: "bin",
+      };
+      this.ports.ghost.aim(this.carrying.target.label, true, "bin", at);
+      const world = stage.camera.toWorld(at.x, at.y);
+      stage.moveDrag(world.x, world.y, null);
+      return;
+    }
     const target = townDropTarget(
       this.carrying,
       hit,
@@ -446,6 +473,7 @@ export class TownInteraction {
 
   private drop(drag: TownDrag, targetKey: string): TownMoveCommand {
     const action = drag.target?.action;
+    if (action === "bin") return { kind: "bin", agentKey: drag.key };
     if (drag.kind === "agent")
       return { kind: "agent", agentKey: drag.key, deskKey: targetKey };
     if (action === "group")

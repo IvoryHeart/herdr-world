@@ -93,9 +93,3 @@ export const EMPTY_BIN: BinState = {
   outcomes: [],
   countdown_s: DEFAULT_BIN_COUNTDOWN,
 };
-
-/** A desk pin keeps a tab's agents at their desk; unpin before closing. */
-export const binPinKeys = (connectionId: string, tabId: string) => [
-  `${connectionId}:tab:${tabId}`,
-  `${connectionId}:${tabId}`,
-];

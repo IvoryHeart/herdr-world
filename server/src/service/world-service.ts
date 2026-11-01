@@ -331,7 +331,6 @@ async function compose(
     clock,
     scheduler,
     settings,
-    board,
     ledger: () => storage.ledger(),
     outbox: () => storage.attention(),
     effects: () => storage.effects(),

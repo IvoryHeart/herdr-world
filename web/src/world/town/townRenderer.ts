@@ -84,6 +84,13 @@ export type { TownRendererDiagnostics } from "./townDiagnostics";
 
 export type { TownSceneState } from "./scene/townSceneDiff";
 
+/** Something drawn in the world above the scene, such as the bin's bus. */
+export type TownWorldOverlay = {
+  readonly container: Container;
+  /** Place everything for this frame; true while something still moves. */
+  update(reducedMotion: boolean): boolean;
+};
+
 export type TownRendererHandle = {
   camera: TownCamera;
   readonly level: TownLevel;
@@ -108,6 +115,8 @@ export type TownRendererHandle = {
   endDrag(mode: "cancel" | "park"): void;
   /** Land on the target with a puff, spring home, or fade when uncertain. */
   finishMove(result: TownMoveResult): void;
+  /** Draw `overlay` above the scene, under drags (null removes it). */
+  setOverlay(overlay: TownWorldOverlay | null): void;
   destroy(): void;
 };
 
@@ -215,6 +224,7 @@ export async function createTownRenderer(
   const puffLayer = new Graphics();
   world.addChild(groundLayer, sceneLayer, fxLayer, dragLayer, puffLayer);
   app.stage.addChild(world, screenLayer);
+  let overlay: TownWorldOverlay | null = null;
 
   let model: TownModel | null = null;
   /** A desk's table is drawn in its terminal colour. */
@@ -755,6 +765,7 @@ export async function createTownRenderer(
       clock,
       ambient,
     );
+    const overlayMoving = overlay?.update(camera.reducedMotion) ?? false;
     onFrame(camera, level); // before the drag, so a carry aims at this frame
     const dragging = dragEffects.update(dt);
     app.renderer.render(app.stage);
@@ -781,7 +792,8 @@ export async function createTownRenderer(
       actorsMoved ||
       camera.flying ||
       materializing ||
-      dragging;
+      dragging ||
+      overlayMoving;
     const next = moving
       ? "state"
       : !camera.reducedMotion && !state.calm && ambient.next === clock
@@ -808,6 +820,7 @@ export async function createTownRenderer(
         flight: camera.flying,
         materialize: materializing,
         drag: dragging,
+        overlay: overlayMoving,
       })
         .filter(([, on]) => on)
         .map(([name]) => name);
@@ -930,9 +943,18 @@ export async function createTownRenderer(
     roofAlpha(hostKey) {
       return buildings.find((b) => b.hostKey === hostKey)?.roofAlpha ?? 0;
     },
+    setOverlay(next) {
+      if (overlay) world.removeChild(overlay.container);
+      overlay = next;
+      if (next)
+        world.addChildAt(next.container, world.getChildIndex(dragLayer));
+      request("overlay");
+    },
     destroy() {
       if (disposed) return;
       disposed = true;
+      if (overlay) world.removeChild(overlay.container);
+      overlay = null;
       cancelAmbient();
       dragEffects.clear();
       motion.removeEventListener("change", onMotion);

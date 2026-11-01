@@ -37,7 +37,6 @@ const GONE = {
   moved: "It had already closed or moved, so nothing was sent.",
 } as const;
 const GONE_REASONS = new Set<string>(Object.values(GONE));
-const PINNED = "Unpin this tab before closing it.";
 const WORKTREE_ROOT =
   "A worktree root's pane closes only with its workspace; close its other panes first.";
 
@@ -130,7 +129,6 @@ export function binCloseEffect(entry: BinEntry): OutboxEffect {
         connection_generation: entry.connection_generation,
         terminal_id: entry.terminal_id,
         tab_id: entry.tab_id,
-        not_pinned: true,
       },
       origin: `world.bin.${entry.view}`,
     },
@@ -152,7 +150,6 @@ export function createBinCloser(deps: {
   scheduler: StoragePorts["scheduler"];
   hasConnection(id: string): boolean;
   lease(id: string): BinLease | null | undefined;
-  pinned(connectionId: string, tabId: string): boolean;
   settle(
     binId: string,
     outcome: Omit<BinOutcome, "id" | "label" | "view">,
@@ -183,13 +180,7 @@ export function createBinCloser(deps: {
         ? "allowed"
         : "refused";
     },
-    preconditions: (entry) => {
-      const target = captured(entry);
-      if (!target) return "refused";
-      return deps.pinned(target.connection_id, target.tab_id)
-        ? "refused"
-        : "allowed";
-    },
+    preconditions: (entry) => (captured(entry) ? "allowed" : "refused"),
     async resolve(entry) {
       const target = captured(entry);
       if (!target || !deps.hasConnection(target.connection_id))
@@ -234,8 +225,7 @@ export function createBinCloser(deps: {
         target &&
           targets.length === 1 &&
           targets[0]!.fence.generation === target.generation &&
-          current(target.connection_id, target.generation) &&
-          !deps.pinned(target.connection_id, target.tab_id),
+          current(target.connection_id, target.generation),
       );
     },
     async invoke(entry, context) {
@@ -418,8 +408,7 @@ export function createBinCloser(deps: {
             : {
                 result: entry.ever_dispatched ? "uncertain" : "refused",
                 closed_tab: false,
-                detail:
-                  reason === "Effect precondition is refused" ? PINNED : reason,
+                detail: reason,
               },
       );
     }

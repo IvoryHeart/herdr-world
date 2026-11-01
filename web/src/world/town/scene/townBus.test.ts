@@ -33,7 +33,9 @@ test("the stop stands on the topmost street's pavement, right of its last crossi
     const { busStop, roads, verticalRoads, width } = layout;
     expect(busStop.road).toBe(Math.min(...roads));
     expect(layout.ground[busStop.y * width + busStop.x]).toBe(TownGround.walk);
-    const crossings = verticalRoads.filter((v) => v.y1 === busStop.road);
+    const crossings = verticalRoads.filter(
+      (v) => v.y1 === busStop.road || v.y0 === busStop.road + 5,
+    );
     if (crossings.length)
       expect(busStop.x).toBeGreaterThan(Math.max(...crossings.map((v) => v.x)));
     expect(
@@ -127,6 +129,24 @@ test("held or under reduced motion, the bus stands still with its doors open", (
     reducedMotion: true,
   }).scene.buses[0]!;
   expect([still.phase, still.x]).toEqual(["waiting", parked.x]);
+});
+
+test("a crossing meeting the street from above or from below both count", async () => {
+  const { townBusStop } = await import("../townBusStop");
+  // Today's grid: the vertical road ends on the street.
+  expect(townBusStop([10], [{ x: 20, y0: 2, y1: 10 }], 60, 3)).toMatchObject({
+    road: 10,
+    x: 26,
+    y: 10,
+  });
+  // The top-road grid: the vertical road starts below the street's band.
+  expect(townBusStop([10], [{ x: 20, y0: 15, y1: 40 }], 60, 3)).toMatchObject({
+    road: 10,
+    x: 26,
+    y: 10,
+  });
+  // A vertical road elsewhere is not a crossing of this street.
+  expect(townBusStop([10], [{ x: 20, y0: 30, y1: 40 }], 60, 3).x).toBe(54);
 });
 
 test("every rider of a crowded town has a seat on the map and is found under the pointer", () => {

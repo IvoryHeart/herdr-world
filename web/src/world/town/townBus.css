@@ -1,0 +1,113 @@
+/* Town's bus stop and buses: controls drawn in world space over the bus. */
+.town-bus-controls {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+.town-bus-sign,
+.town-bus-go {
+  position: absolute;
+  transform: translate(-50%, -100%) scale(var(--iz));
+  transform-origin: 50% 100%;
+  white-space: nowrap;
+}
+
+.town-bus-sign {
+  padding: 2px 6px;
+  border: 1px solid #1c1722;
+  border-radius: 3px;
+  background: #1f3b8f;
+  color: #fff7e0;
+  font:
+    700 11px "Silkscreen",
+    "Pixelify Sans",
+    ui-monospace,
+    monospace;
+  pointer-events: none;
+}
+
+.town-bus-go {
+  min-height: 32px;
+  padding: 4px 10px;
+  border: 1px solid #1c1722;
+  border-radius: 4px;
+  background: #fff7e0;
+  color: #1c1722;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.town-bus-hold,
+.town-bus-rider {
+  position: absolute;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  pointer-events: auto;
+  touch-action: none;
+  cursor: pointer;
+}
+
+.town-bus-rider {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  cursor: grab;
+}
+
+.town-bus-rider:focus-visible,
+.town-bus-hold:focus-visible,
+.town-bus-go:focus-visible {
+  outline: 2px solid #ffd166;
+  outline-offset: 1px;
+}
+
+/* Screen space: the stop's direction while it is off screen. */
+.town-bus-chip {
+  position: absolute;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 12px;
+  border: 1px solid #1c1722;
+  border-radius: 22px;
+  background: #d7261e;
+  color: #fff7e0;
+  font:
+    600 13px system-ui,
+    sans-serif;
+  transform: translate(-50%, -50%);
+  cursor: pointer;
+}
+
+.town-bus-chip[data-carrying="true"] {
+  min-height: 56px;
+  padding: 0 16px;
+  box-shadow: 0 0 0 4px rgb(255 209 102 / 60%);
+}
+
+.town-bus-toast {
+  position: absolute;
+  left: 50%;
+  bottom: 72px;
+  z-index: 7;
+  max-width: min(420px, calc(100% - 32px));
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: rgb(28 23 34 / 92%);
+  color: #fff7e0;
+  font:
+    13px system-ui,
+    sans-serif;
+  transform: translateX(-50%);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .town-bus-chip {
+    transition: box-shadow 0.15s ease;
+  }
+}

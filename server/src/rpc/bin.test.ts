@@ -9,7 +9,6 @@ function fixture() {
   const host = {
     generation: 3,
     current: true,
-    pins: new Set<string>(),
     pane: {
       pane_id: "p1",
       tab_id: "t1",
@@ -56,8 +55,6 @@ function fixture() {
         bin: {
           registry,
           lease,
-          pinned: (connection: string, tab: string) =>
-            host.pins.has(`${connection}:${tab}`),
           setCountdown: async () => {},
         },
       },
@@ -89,19 +86,15 @@ test("adding stages the agent only while its pane holds the same terminal", asyn
   });
 });
 
-test("an old runtime, an absent host, a pin or a new occupant is refused", async () => {
+test("an old runtime, an absent host or a new occupant is refused", async () => {
   const f = fixture();
   await f.add({ connection_generation: 2 });
   await f.add({ connection_id: "elsewhere" });
-  f.host.pins.add("studio:t1");
-  await f.add();
-  f.host.pins.clear();
   f.host.pane = { ...f.host.pane, terminal_id: "someone-else" };
   await f.add();
   expect(f.errors).toEqual([
     "That agent's host is unavailable",
     "That agent's host is unavailable",
-    "Unpin this tab before closing it",
     "That agent has already closed or moved",
   ]);
   expect(f.registry.list().entries).toEqual([]);

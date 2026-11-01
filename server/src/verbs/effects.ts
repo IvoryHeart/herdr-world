@@ -54,7 +54,6 @@ export const effectVerbs = [
     [
       "captured runtime generation is current",
       "the pane still holds the captured terminal",
-      "the tab is not pinned",
       "a worktree root closes only as its workspace's last pane",
     ],
     [],

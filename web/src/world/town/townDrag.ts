@@ -23,7 +23,8 @@ export type TownDrag = {
 export type TownDropTarget = {
   key: string | null;
   label: string;
-  action?: "move" | "reorder" | "group" | "ungroup";
+  /** `bin`: an agent dropped at the bus stop waits for the bus (bin). */
+  action?: "move" | "reorder" | "group" | "ungroup" | "bin";
 };
 
 /** What a held press picks up: a desk or a seated agent, zoomed in. */

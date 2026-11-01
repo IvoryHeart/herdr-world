@@ -2,6 +2,7 @@ import { useDrawReadiness } from "../useDrawReadiness";
 import "../worldAsks.css";
 import { TownBoard } from "./TownBoard";
 import { TownTeamsLayer, TownWorldLayer } from "./TownWorldLayer";
+import { useTownBus } from "./useTownBus";
 import { TownBuildingSigns } from "./townBuildingSigns";
 import {
   useCallback,
@@ -236,8 +237,19 @@ export function TownCanvas({
         rendererRef.current?.invalidate(reason),
       ),
   );
-  const semantics = scene.derive({
+  // Agents waiting in the bin ride Town's bus instead of sitting at desks.
+  const bus = useTownBus({
     projection,
+    layout: () => latest.current.layout,
+    ready,
+    rendererRef,
+    view,
+    hud: () => hud,
+  });
+  const busRef = useRef(bus);
+  busRef.current = bus;
+  const semantics = scene.derive({
+    projection: bus.town,
     terminalColors,
     deskPins,
     relations,
@@ -603,10 +615,13 @@ export function TownCanvas({
             return actions.onReorderDesk(command.deskKey, command.ontoDeskKey);
           case "desk":
             return actions.onDropDesk(command.deskKey, command.roomKey);
+          case "bin":
+            return busRef.current.send(command.agentKey);
         }
       },
       ghost: {
         lift(label, at) {
+          busRef.current.setCarrying(true);
           ghost.textContent = label;
           ghost.dataset.valid = "false";
           place(at);
@@ -618,9 +633,13 @@ export function TownCanvas({
           ghost.dataset.action = action;
           place(at);
         },
-        remove: () => ghost.remove(),
+        remove: () => {
+          busRef.current.setCarrying(false);
+          ghost.remove();
+        },
       },
       held: () => navigator.vibrate?.(12),
+      busStop: (world, at) => busRef.current.over(world, at),
       // Town's targets are live hits and drags: trace a summary of each.
       trace: DEVTOOLS
         ? (before, after, event, effects) =>
@@ -779,8 +798,10 @@ export function TownCanvas({
             renderer={rendererRef}
             pennants={pennants.current}
           />
+          {bus.worldElement}
         </TownHudContext.Provider>
       </div>
+      {bus.hudElement}
       <TownBoard
         model={model}
         observability={observability}

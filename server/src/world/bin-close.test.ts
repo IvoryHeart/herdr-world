@@ -103,10 +103,7 @@ const realTime = {
   },
 };
 
-async function fixture(
-  hosts: Record<string, ReturnType<typeof fakeHerdr>>,
-  pins: string[] = [],
-) {
+async function fixture(hosts: Record<string, ReturnType<typeof fakeHerdr>>) {
   const root = mkdtempSync(join(tmpdir(), "world-bin-close-"));
   roots.push(root);
   const storage = await openWorldLedger(
@@ -123,7 +120,6 @@ async function fixture(
     ...realTime,
     hasConnection: (id) => id in hosts,
     lease: (id) => hosts[id]?.lease() ?? null,
-    pinned: (connectionId, tabId) => pins.includes(`${connectionId}:${tabId}`),
     settle: (id, outcome) => outcomes.push({ id, ...outcome }),
     log: () => {},
     retryDelay: () => 20,
@@ -189,20 +185,18 @@ test("two panes of one workspace close as pane.close then workspace.close", asyn
   expect(studio.host.calls[1]).toBe('workspace.close {"workspace_id":"w1"}');
 });
 
-test("a new runtime generation, a changed occupant or a pin sends nothing", async () => {
+test("a new runtime generation or a changed occupant sends nothing", async () => {
   const studio = fakeHerdr("studio", [
     pane("p1"),
     { ...pane("p2"), terminal_id: "someone-else" },
-    pane("p3", "pinned-tab"),
     pane("p4"),
   ]);
-  const { closer, settled } = await fixture({ studio }, ["studio:pinned-tab"]);
+  const { closer, settled } = await fixture({ studio });
   const restarted = entry("studio", pane("p1"), 0);
   const moved = entry("studio", pane("p2"));
-  const pinned = entry("studio", pane("p3", "pinned-tab"));
-  await closer.commit([restarted, moved, pinned]);
+  await closer.commit([restarted, moved]);
   const results = Object.fromEntries(
-    (await settled(3)).map((o) => [o.id, [o.result, o.detail]]),
+    (await settled(2)).map((o) => [o.id, [o.result, o.detail]]),
   );
   expect(results[restarted.id]).toEqual([
     "gone",
@@ -211,10 +205,6 @@ test("a new runtime generation, a changed occupant or a pin sends nothing", asyn
   expect(results[moved.id]).toEqual([
     "gone",
     "It had already closed or moved, so nothing was sent.",
-  ]);
-  expect(results[pinned.id]).toEqual([
-    "refused",
-    "Unpin this tab before closing it.",
   ]);
   expect(studio.host.calls).toEqual([]);
 });
@@ -295,7 +285,6 @@ test("an intent left by a stopped World resumes after restart, fenced by its run
       ...realTime,
       hasConnection: (id) => id === "studio",
       lease: () => studio.lease(),
-      pinned: () => false,
       settle: (id, outcome) => outcomes.push(`${id} ${outcome.result}`),
       log: () => {},
       retryDelay: () => 20,
