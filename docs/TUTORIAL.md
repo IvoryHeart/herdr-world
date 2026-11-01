@@ -899,7 +899,9 @@ attention, and `done`/`idle` suggest when to return. **Status is not verificatio
 
 Open **Chat** in the Inspector to read the conversation and reply. Chat shows
 user and agent messages, with one line for each run of tool calls, and updates
-while the agent works. If Chat cannot read the conversation it says why and
+while the agent works. A new agent without a session shows **No messages yet.**
+A missing or unreadable reported transcript still shows an error.
+If Chat cannot read the conversation it says why and
 offers the fix it names, or **Open Terminal**. A message you send shows as
 not yet seen until the transcript has the same words; if it went to another session, a red
 notice names it. Slash commands such as `/compact` work from Chat too (see

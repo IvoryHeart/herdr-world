@@ -455,7 +455,18 @@ export function AgentChat({
     );
   }
 
-  const unavailable = conversation?.unavailable;
+  // No session means there is no record to read. A named transcript that
+  // disappeared (file_missing) or a failed read still needs its error.
+  const noRecord =
+    conversation?.status === "unavailable" &&
+    !conversation.session_fingerprint &&
+    (!conversation.session_binding ||
+      conversation.unavailable?.reason === "no_messages_yet") &&
+    history.messages.length === 0 &&
+    ["no_session", "codex_unlinked", "no_messages_yet"].includes(
+      conversation.unavailable?.reason ?? "",
+    );
+  const unavailable = noRecord ? null : conversation?.unavailable;
   const deliveries = conversation?.deliveries ?? [];
   const pending = deliveries.filter(
     (delivery) =>
@@ -675,12 +686,12 @@ export function AgentChat({
           {history.messages.length === 0 ? (
             <p
               className={
-                history.history || history.error
+                noRecord || history.history || history.error
                   ? "agent-chat-empty"
                   : "agent-chat-empty is-loading"
               }
             >
-              {history.history
+              {noRecord || history.history
                 ? "No messages yet."
                 : history.error
                   ? "Messages could not be read. Use Refresh to try again."

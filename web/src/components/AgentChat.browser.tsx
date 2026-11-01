@@ -2567,6 +2567,67 @@ async function run() {
       );
       latestAnswer = null;
     }
+    // A fresh supported agent has no record to read yet. A bound record
+    // that disappeared, an ambiguous identity or a read failure stays visible.
+    for (const reason of [
+      "no_session",
+      "codex_unlinked",
+      "no_messages_yet",
+      "file_missing",
+      "read_failed",
+      "ambiguous",
+      "remote_lookup",
+    ]) {
+      const empty = [
+        "no_session",
+        "codex_unlinked",
+        "no_messages_yet",
+      ].includes(reason);
+      const paneId = `new-agent-${reason}`;
+      reply = {
+        ...conversation([]),
+        status: "unavailable",
+        session_binding: empty ? null : "reported",
+        session_fingerprint: empty ? null : "a".repeat(64),
+        session_label: null,
+        unavailable: { reason, detail: `Fixture ${reason}` },
+      };
+      root.render(
+        <AgentChat
+          key={paneId}
+          pane={{ ...pane("idle"), pane_id: paneId }}
+          active
+          onClose={() => {}}
+        />,
+      );
+      await settle();
+      await settle();
+      check(
+        Boolean(container.querySelector(".agent-chat-unavailable")) === !empty,
+        `${reason}: only an expected record or unsupported lookup should show unavailable`,
+      );
+      if (empty) {
+        check(
+          container.querySelector(".agent-chat-empty")?.textContent ===
+            "No messages yet.",
+          `${reason}: a new agent must show the plain empty Chat`,
+        );
+        check(
+          !container.querySelector("textarea"),
+          `${reason}: no session must not grant Send authority`,
+        );
+        // The same mounted Chat becomes readable when the first session arrives.
+        reply = conversation([message("first", "user", "Hello")]);
+        push(paneId);
+        await settle();
+        await settle();
+        check(
+          container.textContent?.includes("Hello") === true &&
+            Boolean(container.querySelector("textarea")),
+          `${reason}: session arrival must replace empty Chat and enable qualified Send`,
+        );
+      }
+    }
     for (const width of [390, 320]) {
       container.style.width = `${width}px`;
       root.render(
