@@ -66,6 +66,7 @@ let pressReply: (params: Record<string, unknown>) => unknown = () => ({
   key: "",
   menu: null,
 });
+const sends: unknown[] = [];
 const client = {
   connectionId: "menu-host",
   generation: 1,
@@ -105,6 +106,7 @@ const client = {
       };
     if (method === "agent_conversation.press") return pressReply(params);
     if (method === "agent_conversation.send") {
+      sends.push(params);
       // The command opens its menu a moment after it lands.
       setTimeout(() => (menu = modelMenu), 300);
       return { status: "sent" };
@@ -189,8 +191,37 @@ try {
     "An option no digit can pick is reached with the arrows only",
   );
 
-  // A draft typed while the menu is open survives its steps.
+  // While a menu is open, typing a message would go into it as keys: Chat
+  // refuses to send and says why; the draft stays.
   await act(async () => setValue(textarea, "keep this draft"));
+  check(
+    document.querySelector<HTMLButtonElement>('button[aria-label="Send"]')
+      ?.disabled === true,
+    "Send is disabled while a menu is open",
+  );
+  check(
+    document
+      .querySelector(".agent-chat-composer")
+      ?.textContent?.includes("A menu is open in the terminal"),
+    "The composer says a menu is open and must be closed first",
+  );
+  const sendsBefore = sends.length;
+  await act(async () =>
+    textarea.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Enter",
+        ctrlKey: true,
+        bubbles: true,
+      }),
+    ),
+  );
+  await settle();
+  check(
+    sends.length === sendsBefore,
+    "Ctrl+Enter sends nothing while a menu is open",
+  );
+
+  // A draft typed while the menu is open survives its steps.
   pressReply = (params) => {
     menu = null;
     return { status: "sent", key: params.key, menu: null };

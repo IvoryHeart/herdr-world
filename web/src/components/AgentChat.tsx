@@ -731,6 +731,7 @@ export function AgentChat({
                   pane.agent ??
                   "the agent",
                 dismiss,
+                liveStatus === "working",
               ),
             ]}
             hasOlder={history.hasOlder}
@@ -798,7 +799,9 @@ export function AgentChat({
           disabledReason={
             misdelivered.length
               ? "Read and dismiss the session-switch notice before sending."
-              : undefined
+              : conversation?.pending_prompt?.menu
+                ? "A menu is open in the terminal; typing would go into it as keys. Close it with the key its card names, then send."
+                : undefined
           }
           onSubmit={send}
           onKey={(key) =>

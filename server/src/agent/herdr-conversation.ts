@@ -1,5 +1,6 @@
 import { AgentClaims } from "./agent-claims";
 import { createPromptActions } from "./prompt-answer";
+import { menuSendRefusal } from "./menu-send-guard";
 import { isSlashCommand } from "../../../shared/conversationInput";
 import { existsSync, type FSWatcher, watch } from "node:fs";
 import { basename, join } from "node:path";
@@ -857,6 +858,19 @@ export function createHerdrConversationSource(args: {
           message:
             "Chat could not read the SSH host's clock, so it could not check where the message goes. Nothing was sent; try again, or use the Terminal tab.",
         };
+      const menuInfo = await agentInfo(pane_id);
+      const refusal = menuSendRefusal({
+        text,
+        command,
+        agentStatus: stringValue(menuInfo?.agent_status),
+        openMenu: menuInfo
+          ? await readMenu(pane_id, menuInfo, shown ?? undefined).catch(
+              () => null,
+            )
+          : null,
+        deliveries: deliveries.list(pane_id),
+      });
+      if (refusal) return refusal;
       // Read the pane immediately before prompting, with no other await in
       // between. Herdr's prompt takes no expected session (#4764), so a
       // switch after this reply and before the prompt lands is still

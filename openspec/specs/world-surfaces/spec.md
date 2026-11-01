@@ -2055,7 +2055,13 @@ controls on desktop and phone, with the characters and modifiers the Terminal
 would send; a combination Herdr cannot name that way SHALL be disabled. Each SHALL be sent only as a Herdr key name for
 the session Chat shows and only after a second unchanged pane read; scrolling
 and keys Herdr does not name SHALL be disabled. A new connection, runtime, pane
-or session SHALL retire a shown menu and its notice. Keyboard focus SHALL stay on
+or session SHALL retire a shown menu and its notice. Chat SHALL NOT type a
+message or slash command into a pane that shows a command menu: Send SHALL be
+disabled while a menu card is shown, and the service SHALL read the pane before
+each send and refuse with nothing typed when it shows a command menu. A slash
+command queued while the agent was working SHALL show as waiting for the agent
+until it runs, and the same command SHALL NOT be queued again while the agent is
+still working. Keyboard focus SHALL stay on
 the menu card across the menu's steps, unless the user moved it outside the card
 while a key was pending. Opening, changing or
 closing a menu SHALL keep the transcript, its scroll position, the composer

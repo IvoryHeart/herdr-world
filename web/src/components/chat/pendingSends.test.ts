@@ -25,6 +25,25 @@ test("native queued receipts and unchecked commands never claim delivery", () =>
   expect(command).not.toContain("agent-history-chat-bubble");
 });
 
+test("a command queued while the agent is busy says it is waiting, not sent", () => {
+  const html = (busy: boolean, extra: Partial<ConversationDelivery>) =>
+    renderToStaticMarkup(
+      placedSends(
+        [delivery({ text: "/permissions", kind: "command", ...extra })],
+        "Mira-claude",
+        () => {},
+        busy,
+      )[0]!.node,
+    );
+  const waiting = html(true, { queued: true });
+  expect(waiting).toContain("waiting for Mira-claude");
+  expect(waiting).toContain('data-delivery="waiting"');
+  expect(waiting).not.toContain("sent, not checked");
+  // Not queued, or the agent is free again: an ordinary unchecked command.
+  expect(html(true, {})).toContain("sent, not checked");
+  expect(html(false, { queued: true })).toContain("sent, not checked");
+});
+
 const delivery = (
   extra: Partial<ConversationDelivery>,
 ): ConversationDelivery => ({

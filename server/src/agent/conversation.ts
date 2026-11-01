@@ -164,7 +164,11 @@ export type ConversationSendResult =
         | "unavailable"
         | "empty"
         | "command"
-        | "unsettled";
+        | "unsettled"
+        /** A harness menu is open: typed text would go into it as keys. */
+        | "menu"
+        /** The same command already waits for the busy agent to reach it. */
+        | "duplicate";
       message: string;
     };
 

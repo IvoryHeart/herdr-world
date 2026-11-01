@@ -201,6 +201,18 @@ that root; stat metadata cannot redirect the read to a different transcript.
   it (a click included) focus returns to the card, so ↓ ↓ Enter walks a list.
   Focus moved elsewhere, such as the composer, while the key is pending stays
   there, so later typing never reaches the menu.
+- Never types into an open menu. A message or slash command goes to the pane
+  as typed keys, which an open menu would take as its own keys and could pick
+  options with. While Chat shows a menu card, Send is disabled with "A menu is
+  open in the terminal"; and every send first reads the pane, and when it
+  shows a command menu by the rules above it refuses (`menu`) with nothing
+  typed. A menu that opens between that read and the prompt is not caught
+  (the same gap as #4764). Close the menu with the key its card names.
+- A slash command Herdr queued while the agent was working runs only when the
+  agent reaches it, so its menu can open late. Until then its receipt says
+  "waiting for <agent>: it is busy and runs this when it reaches it" instead
+  of "sent, not checked", and sending the same command again while the agent
+  is still working is refused (`duplicate`) rather than queued twice.
 - Each menu key calls `agent_conversation.press` with the session and the
   menu's fingerprint. The service checks that the session is the one Chat
   showed, the pane still shows a menu by the rules above, the screen shows that exact
