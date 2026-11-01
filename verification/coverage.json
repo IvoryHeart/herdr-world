@@ -61,7 +61,9 @@
       "existingTests": [
         "server/src/connections/profile-service.test.ts",
         "server/src/connections/ssh-preflight-recovery.test.ts",
-        "server/src/connections/profiles.test.ts"
+        "server/src/connections/profiles.test.ts",
+        "server/src/connections/local-recovery.test.ts",
+        "server/src/service/local-recovery.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/145",
       "technique": "shared-lifecycle",
@@ -78,12 +80,14 @@
         "tests": [
           "server/src/connections/profile-service.test.ts",
           "server/src/connections/ssh-preflight-recovery.test.ts",
-          "server/src/connections/profiles.test.ts"
+          "server/src/connections/profiles.test.ts",
+          "server/src/connections/local-recovery.test.ts",
+          "server/src/service/local-recovery.test.ts"
         ],
         "checks": ["bun run check", "bun run verification:check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
       },
-      "evidenceDecision": "Manager replacement and drain guarantees are consumed by profile persistence/retry admission; real profile tests retain default persistence, rollback and cancellation during cleanup.",
+      "evidenceDecision": "Manager replacement and drain guarantees are consumed by profile persistence/retry admission; real profile tests retain default persistence, rollback and cancellation during cleanup. Local initial-socket retry consumes the same unchanged runtime-control/drain transitions; deterministic scheduler cancellation/backoff tests and a production-composition native-socket test verify late readiness, fresh admission and retired-generation refusal. This does not establish macOS login activation.",
       "promotion": {
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
