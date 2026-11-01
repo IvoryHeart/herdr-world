@@ -242,7 +242,7 @@ export const TownWorldLayer = memo(function TownWorldLayer({
               data-stale={host?.stale || undefined}
               style={{
                 // The board stands in the yard above the front door.
-                left: building.doorX * T,
+                left: (building.entryX + 0.5) * T,
                 top: building.y * T - 18,
               }}
               role="group"
