@@ -28,6 +28,8 @@ import type { TownRendererHandle } from "./townRenderer";
 import "./townBus.css";
 
 type Point = { x: number; y: number };
+/** Town's floating zoom column at the right edge (town.css .town-zoom). */
+const ZOOM_COLUMN = 64;
 const clock = (ms: number) => {
   const s = Math.max(0, Math.ceil(ms / 1000));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
@@ -210,7 +212,8 @@ export function useTownBus({
               x:
                 Math.round(
                   Math.min(
-                    width - inset.right - padX,
+                    // Clear of the zoom controls on the right edge.
+                    width - inset.right - padX - ZOOM_COLUMN,
                     Math.max(inset.left + padX, stop.x),
                   ) / 4,
                 ) * 4,
