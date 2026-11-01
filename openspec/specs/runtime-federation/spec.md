@@ -50,6 +50,14 @@ with that World service rather than connecting to independently deployed bridges
   per-host Reconnect controls; healthy sibling hosts keep their own authority
 - **AND** a ready lifecycle signal alone cannot promote an older cached generation
 
+#### Scenario: Local Herdr becomes available after initial startup
+- **WHEN** a configured local connection initially fails with a classified transient socket error
+- **THEN** World retries that exact connection with capped exponential jitter until recovery or
+  explicit cancellation, without starting or installing Herdr
+- **AND** permanent, permission, protocol and unclassified failures do not acquire indefinite retries
+- **AND** disconnect, removal, replacement, generation retirement and shutdown cancel old retry work;
+  explicit Reconnect remains available and failed topology remains non-actionable until freshly observed
+
 ### Requirement: Return bounded aggregate observation with host-local progress
 
 `world.snapshot` SHALL return the complete managed-connection catalogue within 20 seconds when
