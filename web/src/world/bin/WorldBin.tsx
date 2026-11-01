@@ -57,6 +57,8 @@ export function WorldBin({
   const store = worldBinStore(bridge);
   const bin = useWorldBin(store);
   const [open, setOpen] = useState(false);
+  const openRef = useRef(open);
+  openRef.current = open;
   const [toast, setToast] = useState<string | null>(null);
   const [pulse, setPulse] = useState<"gulp" | "close" | "refuse" | null>(null);
   const [, tick] = useState(0);
@@ -72,7 +74,6 @@ export function WorldBin({
   useEffect(() => {
     if (bin.entries.length > count.current) setPulse("gulp");
     count.current = bin.entries.length;
-    if (!bin.entries.length) setOpen(false);
   }, [bin.entries.length]);
 
   useEffect(() => {
@@ -103,10 +104,10 @@ export function WorldBin({
     return () => window.clearTimeout(timer);
   }, [pulse]);
 
-  // Another World closing the lid closes it here too.
+  // Emptied, or the lid closed from another World: it closes here too.
   useEffect(() => {
-    if (!bin.paused) setOpen(false);
-  }, [bin.paused]);
+    if (openRef.current && (!bin.entries.length || !bin.paused)) setOpen(false);
+  }, [bin.entries.length, bin.paused]);
 
   const next = bin.entries.reduce<BinEntry | null>(
     (soonest, entry) =>

@@ -183,12 +183,10 @@ export class WorldBinStore {
   async refresh() {
     try {
       this.accept(await this.client.call("world.bin.list"));
-    } catch (error) {
-      this.set({
-        ...this.state,
-        verified: false,
-        error: error instanceof Error ? error.message : String(error),
-      });
+    } catch {
+      // A failed read changes nothing shown unless the bin was live: the
+      // next connection reads it again.
+      if (this.state.verified) this.set({ ...this.state, verified: false });
     }
   }
 
