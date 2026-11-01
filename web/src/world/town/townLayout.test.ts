@@ -605,12 +605,9 @@ test("reception, queue and bar stay on walkable floor in every shape", () => {
       expect(spot.y).toBeGreaterThan(building.counter.y);
       expect(spot.y).toBeLessThan(highest);
     }
-    // The bar sits in the bottom-right corner, never across the whole bottom.
+    // The bar sits in a bottom corner, never across the whole bottom.
     expect(building.lounge.y + building.lounge.h).toBe(
       building.y + building.h - 1,
-    );
-    expect(building.lounge.x + building.lounge.w).toBe(
-      building.x + building.w - 2,
     );
     expect(building.lounge.w).toBeLessThan(building.w - 4);
     expect(lowest).toBeLessThanOrEqual(building.y + building.h);
@@ -702,6 +699,8 @@ test("every building and the town hall have roads on at least three sides", () =
       // Mixed widths: stacked lots narrower than the widest keep their road.
       { a: [24], b: [24, 24] },
       { a: [24, 24, 24], b: [3], c: [24, 24] },
+      // A first lot far shorter than its neighbour still meets the street above.
+      { a: [24, 4], b: [35] },
     ] as Record<string, number[]>[]) {
       const { layout } = layoutTown(town(hosts), shape);
       for (const building of layout.buildings)
@@ -774,6 +773,26 @@ test("rooms clear of the bar reach the bottom; the bar stays under its own colum
     building.barDoorX >= building.lounge.x &&
       building.barDoorX < building.lounge.x + building.lounge.w,
   ).toBe(true);
+});
+
+test("the bar sits beneath the last room column in every shape and size", () => {
+  for (const shape of Object.values(TOWN_SHAPES))
+    for (const rooms of [[], [1], [3], [9], [24], [24, 4], [4, 4, 4], [35]]) {
+      const { layout } = layoutTown(town({ a: rooms }), shape);
+      const { lounge, rooms: placed } = layout.buildings[0]!;
+      expect(lounge.w).toBeGreaterThanOrEqual(12);
+      expect(lounge.w).toBeLessThanOrEqual(20);
+      expect(lounge.spots.length).toBeGreaterThanOrEqual(12);
+      expect(lounge.spots.length).toBeLessThanOrEqual(15);
+      if (!placed.length) continue;
+      const lastX = Math.max(...placed.map((room) => room.x));
+      const column = placed.filter((room) => room.x === lastX);
+      // Under the column, not beside it, and below its lowest room.
+      expect(lounge.x).toBeLessThanOrEqual(lastX);
+      expect(lounge.x + lounge.w).toBeGreaterThan(lastX);
+      for (const room of column)
+        expect(room.y + room.h).toBeLessThanOrEqual(lounge.y);
+    }
 });
 
 test("rooms keep their place inside the building", () => {

@@ -112,6 +112,8 @@ export const TOWN_FACADE = 2;
  */
 export const TOWN_AGENT_SCALE = 1.4;
 const YARD = 2;
+/** The most rows a building sits below the street above its row. */
+const FRONT_YARD = 12;
 const PARK_HEIGHT = 12;
 const QUEUE_OFFSETS = [0, 1, -1, 2, -2, 3, -3, 4, -4, 5];
 
@@ -175,7 +177,7 @@ export type TownBuilding = {
   /** The street below the building. */
   roadY: number;
   /**
-   * The bar in the building's bottom-right corner: the sofa corner, then a
+   * The bar in a bottom corner under the last room column: sofa corner, then a
    * bar counter (`bar`) with stools. Idle agents take `spots` in order. The
    * rest of the bottom is floor, which rooms clear of the bar may reach.
    */
@@ -448,16 +450,13 @@ function draftBuilding(
       ? MIN_PHONE_BUILDING_WIDTH
       : MIN_BUILDING_WIDTH,
   );
-  // Reception fills the lobby above the rooms. The bar takes the bottom-right
-  // corner under the last room column, as wide as that column allows (its
-  // sofa corner at least; a counter too short for a stool is left out). The
+  // The bar takes the bottom corner under the last room column, 12-20 tiles
+  // from its left edge (a counter too short for a stool is left out); the
   // other columns may run down to the bottom wall.
   const last = spans.filter((span) => span.x1 > span.x0).pop();
-  const barWidth = Math.min(
-    BAR_WIDTH,
-    Math.max(SOFA_CORNER, w - 2 - (last ? last.x0 - 1 : 2)),
-  );
-  const barX = w - 2 - barWidth;
+  const barLeft = Math.max(2, last ? last.x0 - 1 : 2);
+  const barWidth = Math.min(BAR_WIDTH, Math.max(SOFA_CORNER, w - 2 - barLeft));
+  const barX = Math.min(barLeft, w - 2 - barWidth);
   const bottomOf = (over: boolean) =>
     Math.max(
       ROOM_TOP,
@@ -600,16 +599,17 @@ export function layoutTown(
       // shares one vertical axis on phones; its side road runs beside it.
       const lx =
         row.length === 1 ? MARGIN + Math.floor((widestLot - lot.w) / 2) : x;
-      const ly = top + (tallest - lot.h);
-      if (lot.draft)
-        placedBuildings.push({
-          ...lot.draft,
-          x: lx,
-          y: ly,
-          roadY,
-          topRoadY: road,
-        });
-      else townHall = { x: lx, y: ly, w: lot.w, h: lot.h };
+      // A lot far shorter than its row grows (a building gains floor above
+      // its bar), so it sits at most FRONT_YARD rows below the street above.
+      const h = Math.max(lot.h, tallest + YARD - FRONT_YARD);
+      const ly = top + tallest - h;
+      const draft = lot.draft;
+      if (draft) {
+        draft.lounge.y += h - draft.h;
+        draft.lounge.bar.y += h - draft.h;
+        draft.h = h;
+        placedBuildings.push({ ...draft, x: lx, y: ly, roadY, topRoadY: road });
+      } else townHall = { x: lx, y: ly, w: lot.w, h };
       x = lx + lot.w;
       verticalRoads.push({ x, y0: road + ROAD_GAP, y1: roadY });
       x += ROAD_GAP;
