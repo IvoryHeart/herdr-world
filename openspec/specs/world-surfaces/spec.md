@@ -2063,13 +2063,27 @@ nothing typed when the read fails or is malformed or the screen shows a menu,
 a question or a menu-like footer or cursor. World inputs to one pane SHALL NOT
 overlap. A slash command SHALL be reserved per pane, session and text before
 dispatch; it SHALL be released only when nothing reached the pane and SHALL
-otherwise stay reserved, and show as waiting, until a read shows another
-session or a non-working status. Dismissing its receipt SHALL NOT release it. Keyboard focus SHALL stay on
+otherwise stay reserved, and show as waiting, until a successful qualified
+read begun after dispatch shows another session or an idle/done status. Known
+native non-submission, including `agent_not_ready`, SHALL release the reservation
+so a legitimate retry can succeed. Unknown, failed, blocked or older observations
+SHALL NOT retire a live reservation or remove its waiting presentation.
+Dismissing its receipt SHALL NOT release it. Keyboard focus SHALL stay on
 the menu card across the menu's steps, unless the user moved it outside the card
 while a key was pending. Opening, changing or
 closing a menu SHALL keep the transcript, its scroll position, the composer
 draft, attachments and send receipts. Herdr's lack of conditional input
 remains a documented gap between the last check and the key.
+
+#### Scenario: Retry a command after native refusal
+
+- **WHEN** the native runtime rejects a command before submitting input and the same session becomes ready
+- **THEN** an identical retry may submit once; a lost acknowledgement keeps it reserved
+
+#### Scenario: A late idle observation arrives after queue admission
+
+- **WHEN** an idle read starts before a command is admitted to a working session and returns after dispatch
+- **THEN** the command remains reserved and its receipt remains waiting; a malformed observation also cannot clear either
 
 #### Scenario: Pick a model from Chat
 

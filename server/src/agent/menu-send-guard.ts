@@ -110,6 +110,7 @@ type Reservation = {
   text: string;
   state: "admitting" | "queued";
   deliveryId?: string;
+  epoch: number;
 };
 
 /**
@@ -117,11 +118,12 @@ type Reservation = {
  * the agent's own queue. An entry is reserved before any await, so two sends
  * of one command cannot both reach the agent; it is released only when
  * nothing reached the pane. A command sent while the agent worked, or whose
- * acknowledgement was lost, stays until the session changes or a non-working
- * status is observed. Dismissing its receipt does not retire it.
+ * acknowledgement was lost, stays until a fresh qualified read shows a new
+ * session or an idle/done state. Dismissing its receipt does not retire it.
  */
 export function createCommandReservations() {
   const entries = new Set<Reservation>();
+  let epoch = 0;
   const key = (paneId: string, fingerprint: string, text: string) =>
     JSON.stringify([paneId, fingerprint, text.trim()]);
   const keyOf = (entry: Reservation) =>
@@ -136,6 +138,7 @@ export function createCommandReservations() {
         fingerprint,
         text,
         state: "admitting",
+        epoch: ++epoch,
       };
       entries.add(entry);
       return entry;
@@ -151,33 +154,51 @@ export function createCommandReservations() {
       entries.delete(entry);
     },
     queue(entry: Reservation, deliveryId?: string) {
+      entry.epoch = ++epoch;
       entry.state = "queued";
       entry.deliveryId = deliveryId;
     },
-    /** Retire queued commands the pane's state shows are no longer queued. */
-    observe(paneId: string, fingerprint: string | null, status: string) {
-      for (const entry of entries)
-        if (
-          entry.paneId === paneId &&
-          entry.state === "queued" &&
-          (entry.fingerprint !== fingerprint || status !== "working")
-        )
-          entries.delete(entry);
+    /** Capture before the native read, never when its response arrives. */
+    beginObservation() {
+      return ++epoch;
     },
     /**
-     * A read's receipts, after retiring what that read shows is no longer
-     * queued; commands still waiting for the agent are marked `waiting`.
+     * Only a qualified, successful read begun after dispatch can establish
+     * that this session/queue interval ended. Unknown states (including a
+     * blocked turn still awaiting input) cannot establish consumption.
      */
     deliveries(
       paneId: string,
-      shown: Pick<Conversation, "session_fingerprint" | "agent_status">,
+      shown: Pick<
+        Conversation,
+        "status" | "session_binding" | "session_fingerprint" | "agent_status"
+      >,
       ledger: { list(paneId: string): ConversationDelivery[] },
+      observedAt: number,
     ) {
-      this.observe(
-        paneId,
-        shown.session_fingerprint ?? null,
-        shown.agent_status ?? "",
-      );
+      const fingerprint = shown.session_fingerprint;
+      const status = shown.agent_status;
+      if (
+        shown.status === "ok" &&
+        (shown.session_binding === "reported" ||
+          shown.session_binding === "title") &&
+        fingerprint &&
+        (status === "working" ||
+          status === "idle" ||
+          status === "done" ||
+          status === "blocked")
+      ) {
+        for (const entry of entries)
+          if (
+            entry.paneId === paneId &&
+            entry.state === "queued" &&
+            observedAt > entry.epoch &&
+            (entry.fingerprint !== fingerprint ||
+              status === "idle" ||
+              status === "done")
+          )
+            entries.delete(entry);
+      }
       return this.mark(paneId, ledger.list(paneId));
     },
     /** Receipts of commands still waiting for the agent to reach them. */
@@ -191,6 +212,37 @@ export function createCommandReservations() {
       );
     },
   };
+}
+
+/** Native precondition failures establish no input; other errors are uncertain. */
+export async function submitPrompt(
+  call: HerdrCall,
+  target: SendTarget,
+  dispatched: WeakSet<object>,
+): Promise<{ result: unknown } | Refusal> {
+  dispatched.add(target);
+  try {
+    return {
+      result: await call("agent.prompt", {
+        target: target.pane_id,
+        text: target.text,
+      }),
+    };
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      /^(agent_blocked|agent_not_ready|agent_not_found):/.test(error.message)
+    )
+      dispatched.delete(target);
+    if (error instanceof Error && /^agent_blocked:/.test(error.message))
+      return {
+        status: "refused",
+        reason: "blocked",
+        message:
+          "The agent is waiting on a question; answer it first. Nothing was sent.",
+      };
+    throw error;
+  }
 }
 
 /**

@@ -6,6 +6,7 @@ import {
   lastAgentMessage,
   readScreenText as screenText,
   sendScreenRefusal,
+  submitPrompt,
 } from "./menu-send-guard";
 import { isSlashCommand } from "../../../shared/conversationInput";
 import { existsSync, type FSWatcher, watch } from "node:fs";
@@ -524,6 +525,7 @@ export function createHerdrConversationSource(args: {
     pane_id: string;
     menus?: boolean;
   }): Promise<Conversation> => {
+    const observedAt = reservations.beginObservation();
     const shown = await readShown(pane_id);
     await settle(pane_id, shown);
     const status = shown.agent_status ?? "";
@@ -545,7 +547,12 @@ export function createHerdrConversationSource(args: {
             })
             .catch(() => null)
         : null;
-    const list = reservations.deliveries(pane_id, shown, deliveries);
+    const list = reservations.deliveries(
+      pane_id,
+      shown,
+      deliveries,
+      observedAt,
+    );
     return { ...shown, deliveries: list, pending_prompt };
   };
 
@@ -941,25 +948,10 @@ export function createHerdrConversationSource(args: {
       info = await agentInfo(pane_id);
       if (bindingOf(info)?.fingerprint !== session_fingerprint) return changed;
       if (guard && (!info || !guard(info))) return changed;
-      let result: unknown;
       const startedAt = Date.now();
-      dispatched.add(target);
-      try {
-        result = await args.herdrCall("agent.prompt", {
-          target: pane_id,
-          text,
-        });
-      } catch (error) {
-        // Herdr rejects a blocked agent before submitting any input.
-        if (error instanceof Error && /^agent_blocked:/.test(error.message))
-          return {
-            status: "refused",
-            reason: "blocked",
-            message:
-              "The agent is waiting on a question; answer it first. Nothing was sent.",
-          };
-        throw error;
-      }
+      const submission = await submitPrompt(args.herdrCall, target, dispatched);
+      if (!("result" in submission)) return submission;
+      const { result } = submission;
       const endedAt = Date.now();
       const sent =
         isRecord(result) && isRecord(result.agent) ? result.agent : null;

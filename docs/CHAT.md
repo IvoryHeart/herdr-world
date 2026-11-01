@@ -216,9 +216,12 @@ that root; stat metadata cannot redirect the read to a different transcript.
   second while one is in flight is refused (`busy`).
 - A slash command is reserved for its pane, session and text before any
   await, so two sends of it cannot both reach the agent (`duplicate`). The
-  reservation is dropped when nothing reached the pane. A command admitted
+  reservation is dropped when nothing reached the pane, including native
+  `agent_not_ready`, `agent_not_found` and `agent_blocked` refusals. A command admitted
   while the agent was working, or whose acknowledgement was lost, stays
-  reserved until a read shows another session or a non-working status; its
+  reserved until a successful, session-qualified read begun after dispatch
+  shows another session or an idle/done status. Unknown, failed, blocked and
+  older reads keep it reserved. While reserved, its
   receipt then says "waiting for <agent>: it is busy and runs this when it
   reaches it" instead of "sent, not checked". Dismissing the receipt only
   hides the notice: the command stays reserved. Waiting means World has not
