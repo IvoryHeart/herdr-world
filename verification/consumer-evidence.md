@@ -742,3 +742,27 @@ Move-colour schedules include explicit edits and resets both before and after
 native close cleanup. Closed-tab colour/pin tests interleave unrelated writes at
 both native absence reads, require fresh checks after revision conflicts, preserve
 a replacement tab, and cover runtime retirement and the three-attempt bound.
+
+### Revision-qualified capture (Q39)
+
+Allowed sequence: committed surface/mount and requested viewport → required
+fonts/images → owner draw without pending semantic layout/materialization →
+browser paint opportunity → current receipt → screenshot → unchanged receipt →
+artifact. Obsolete asset/frame callbacks, hidden/retired owners, held reflow,
+pre-resize evidence and deadline failures cannot authorize output. Actor/ambient
+motion need not stop. Revision includes semantic commits and viewport epochs;
+it is local to a mount, not the aggregate transport's snapshot generation.
+
+`drawReadiness.test.ts` directly controls resources, frames and deadlines, including
+revision/resize replacement, hidden/unmounted owners and bounded coalesced resource
+work. `BoardView.test.ts` registers the actual production Town/Board/Desk consumer
+in `testing/captureReadinessBrowser.ts`: held image/font responses, current-dimension
+receipts, valid empty views, missing/blank output, screenshot-time replacement and
+never-ready failure with an empty output directory. Optional five-size evidence
+uses the same helper. Manual-clock Board evidence drives scene frames from
+`TestClock.real` native callbacks and uses native paint barriers; its clock regression
+keeps simulated draw work separate from native paint delivery. This direct alternative is appropriate for browser/GPU
+integration; no new Quint model is claimed. Existing Q39 lifecycle and Q43
+layout/work-bound consumers remain required, including all Town groups and dense
+production contexts. Sampled colour sanity is only a cheap negative control;
+it cannot establish semantic scene completeness or arbitrary device/load behavior.

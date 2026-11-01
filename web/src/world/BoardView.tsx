@@ -1,3 +1,4 @@
+import { useDrawReadiness } from "./useDrawReadiness";
 import { worldRuntimeStore } from "./runtimeStore";
 import { AppearanceAvatar } from "./AppearanceAvatar";
 import { visibleAppearanceColors, saveAppearance } from "./appearance";
@@ -632,6 +633,7 @@ export default function BoardView({
   // data-moving says whether the board still has work to draw: true from a
   // request until a frame finds nothing moving (tests wait on it).
   const invalidate = (reason: string) => {
+    if (reason !== "capture") capture.current?.invalidate(reason);
     const board = boardRef.current;
     if (board && board.dataset.moving !== "true") board.dataset.moving = "true";
     loopRef.current?.invalidate(reason);
@@ -641,6 +643,9 @@ export default function BoardView({
     invalidate("physics");
   };
   const fitted = useRef(false);
+  const capture = useDrawReadiness("board", boardRef, () =>
+    invalidate("capture"),
+  );
   const farRef = useRef(far);
   const yarnEls = useRef(new Map<string, SVGPathElement[]>());
   /** Strings between cards whose terminals know each other (relations). */
@@ -775,6 +780,7 @@ export default function BoardView({
     return cards.current.get(key)?.size ?? DEFAULT_SIZE[kind];
   }, []);
 
+  const placedModel = useRef<BoardModel | null>(null);
   /* ---------- Model changes: measure, place new cards, keep the rest ---------- */
   useLayoutEffect(() => {
     large.current = model.workspaces.length + model.tabs.length > CULL_ABOVE;
@@ -791,6 +797,7 @@ export default function BoardView({
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [model, sizeOf]);
   function placeModel() {
+    placedModel.current = model;
     if (!farRef.current && !large.current)
       for (const [key, el] of cardEls.current) {
         const card = cards.current.get(key);
@@ -1188,6 +1195,16 @@ export default function BoardView({
     }
     const svg = svgRef.current;
     if (svg) paint(svg, m);
+    capture.current?.drawn(
+      !built ||
+        shownWorld !== world ||
+        placedModel.current !== model ||
+        (cards.current.size > 0 && !fitted.current) ||
+        renderKeys !== renderKeysRef.current ||
+        !saved
+        ? "placement/observation"
+        : undefined,
+    );
     return (
       tweens.current.size > 0 ||
       physics.current.heat > 0 ||

@@ -142,6 +142,9 @@ export async function createTownRenderer(
   onTrace?: (frame: TownFrameTrace) => void,
   /** The scene's camera (scene/townSceneCamera.ts); the renderer steps it. */
   camera = new TownCamera(),
+  /** Evidence only, after a real render; materialization retains its work budget. */
+  onDrawn?: (pending: boolean) => void,
+  onInvalidate?: (reason: string) => void,
 ): Promise<TownRendererHandle> {
   if (window.__HERDR_WORLD_FORCE_RENDERER_FAILURE__)
     throw new Error("renderer unavailable");
@@ -700,6 +703,7 @@ export async function createTownRenderer(
   const frameReasons = new Set<string>();
   let lastTraced = "";
   const request = (reason: string) => {
+    if (reason !== "capture") onInvalidate?.(reason);
     if (DEVTOOLS && onTrace) frameReasons.add(reason);
     frames?.request("state");
   };
@@ -754,6 +758,7 @@ export async function createTownRenderer(
     onFrame(camera, level); // before the drag, so a carry aims at this frame
     const dragging = dragEffects.update(dt);
     app.renderer.render(app.stage);
+    onDrawn?.(materializing);
     stats.level = level;
     stats.zoom = camera.z;
     stats.flying = camera.flying;

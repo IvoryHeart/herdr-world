@@ -9,6 +9,17 @@ Work in the required branch worktree. During editing, run focused tests or quick
 type checks only when they answer a specific question. Do not run mutating
 formatting after each patch.
 
+For Town, Board or Desk PR assets, use `bun scripts/capture-world.ts` against your
+own disposable browser's dynamic CDP port, following
+[the five-viewport recipe](../../../docs/SCREENSHOTS.md#pr-screenshot-viewports).
+The entry takes the shared browser queue. Existing fixture consumers call
+`captureResumeViewports` / `captureScene` under their test runner's browser slot.
+Supply expected-content selectors for populated fixtures; legitimate empty views
+may omit them. Never substitute fixed sleeps or direct screenshot calls. Retain
+the helper's revision/dimension/sanity receipts. A deadline or stale revision fails
+without saving that image; fix the cause before delivery. This does not freeze
+animation or replace visual review, lifecycle checks, independent review or CI.
+
 When the candidate and focused regressions are complete, stage only intended
 files. Run `bun run format:staged` once, restage its changes, and inspect the
 final diff. The command rejects staged files that also have unstaged edits;

@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useDrawReadiness } from "./useDrawReadiness";
+import { useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { AnswerDeliveries } from "./town/AnswerDeliveries";
 import { AnswerDeliverySign } from "./town/AnswerDeliverySign";
@@ -132,6 +133,9 @@ const askActions = {
 };
 let scene: (value: string) => void = () => {};
 function Fixture() {
+  const captureRoot = useRef<HTMLDivElement | null>(null);
+  // This story contains DOM Town components; no Pixi scene is claimed.
+  useDrawReadiness("town", captureRoot);
   const state = useAnswerDeliveries(store),
     registry = useWorldPanelRegistry();
   const [collapsed, setCollapsed] = useState(false),
@@ -172,6 +176,7 @@ function Fixture() {
       <WorldPanelsContext.Provider value={registry}>
         <style>{`.answer-capture-window{position:fixed;right:24px;top:64px;bottom:24px;width:min(620px,calc(100vw - 310px));z-index:50;border:1px solid #536154;border-radius:8px;background:#11151d;overflow:hidden}.answer-capture-window .world-panel-window{height:100%;display:flex;flex-direction:column}.answer-capture-window .world-panel-body{flex:1;overflow:auto}@media(max-width:640px){.answer-capture-window{inset:0;width:100%;border:0;border-radius:0}}`}</style>
         <div
+          ref={captureRoot}
           className="town-view-shell"
           style={{
             position: "relative",

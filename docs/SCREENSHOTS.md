@@ -19,6 +19,41 @@ repeatable reference images; this does not claim high-DPR or mobile-device cover
 | Wide Linux monitor | 2560 × 1440 |
 | Portrait monitor | 1440 × 2560 |
 
+Capture Town/Board/Desk PR assets only through the shared helper, using a fresh
+browser profile and a dynamic CDP port from your disposable synthetic fixture:
+
+```bash
+bun scripts/capture-world.ts "$CAPTURE_CDP_PORT" .agents/captures example-town town 'canvas[data-office-canvas]'
+bun scripts/capture-world.ts "$CAPTURE_CDP_PORT" .agents/captures example-board board '.board-workspace'
+bun scripts/capture-world.ts "$CAPTURE_CDP_PORT" .agents/captures example-desk desk '.desk-card'
+```
+
+Select the requested view in the fixture before running each command. The entry
+uses the shared browser queue and saves five PNGs plus a JSON receipt. Existing
+browser fixtures use `captureResumeViewports`; custom consumers use `resizeCapture`
+and `captureScene` with an existing CDP command function, then save the returned
+bytes. `resizeCapture` invalidates before changing metrics, including same-topology
+resizes. Capture explicitly names its desired CSS dimensions; do not read a
+pre-resize viewport and use it as the new target.
+
+Readiness is requested on demand: the surface's committed revision (including
+resize epochs) and mount owner must survive required font/image loading, the
+owner's actual draw with no pending semantic layout/materialization, and a browser
+paint opportunity. The document's `data-world-drawn` receipt records view, owner,
+revision and dimensions; the helper checks the live controller before and after
+capturing. Do not read an old marker alone. Ongoing actor, roof and ambient motion
+continues; readiness does not mean every animation has stopped. No fixed sleeps,
+status polling or per-frame React updates are used.
+
+For populated fixtures, pass a visible expected-content selector. The helper
+rejects missing content and a 64×64 sample with less than 2% outside its dominant
+quantized colour, as a cheap blank-output check. Omit the selector for legitimately
+empty Board/Desk scenes. This heuristic supplements actual draw evidence; it cannot
+prove that every visual detail is correct. The 15-second readiness deadline names
+the surface, owner, revision and pending stage; changed/retired/hidden surfaces
+cannot authorize a screenshot. Failures return no bytes for that image. Keep
+receipts and inspect all five originals, especially Town floors/buildings/desks.
+
 ## Town golden-image report
 
 The advisory [Town golden images workflow](../.github/workflows/town-golden.yml)

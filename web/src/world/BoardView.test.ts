@@ -1,3 +1,6 @@
+import { captureScene } from "./testing/captureScene";
+import { registerCaptureReadinessTests } from "./testing/captureReadinessBrowser";
+registerCaptureReadinessTests();
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
@@ -90,6 +93,12 @@ test.skipIf(!chrome).each([
         }
         if (path.startsWith("/api/world/observability"))
           return Response.json(unavailableObservability);
+        if (path === "/herdr-world-logo.svg")
+          return new Response(
+            Bun.file(
+              join(import.meta.dir, "../../public/herdr-world-logo.svg"),
+            ),
+          );
         const asset = assets.get(path);
         if (asset) return new Response(asset);
         if (path === "/")
@@ -223,16 +232,17 @@ test.skipIf(!chrome).each([
           expression:
             "document.querySelector('.board-tray button[aria-label=Close]')?.click()",
         });
-        const capture = await cdp("Page.captureScreenshot", {
-          format: "png",
-          captureBeyondViewport: false,
+        const capture = await captureScene(cdp, {
+          view: "board",
+          width,
+          height,
         });
         await Bun.write(
           join(
             Bun.env.BOARD_CAPTURE_DIR,
             `board-work-${width}x${height}${motion === " with reduced motion" ? "-reduced" : ""}.png`,
           ),
-          Buffer.from(String(capture.data), "base64"),
+          capture.bytes,
         );
       }
     } finally {

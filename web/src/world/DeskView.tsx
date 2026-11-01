@@ -1,3 +1,4 @@
+import { useDrawReadiness } from "./useDrawReadiness";
 import { agentDirectory } from "./deskDirectory";
 export { agentDirectory, type DirectoryGroup } from "./deskDirectory";
 import { AppearanceAvatar } from "./AppearanceAvatar";
@@ -303,6 +304,7 @@ export function DeskBoard({
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  useDrawReadiness("desk", rootRef);
 
   const { needs, review, working, quiet } = partitionDesk(
     agents,

@@ -1,8 +1,15 @@
+import { useDrawReadiness } from "../useDrawReadiness";
 import "../worldAsks.css";
 import { TownBoard } from "./TownBoard";
 import { TownTeamsLayer, TownWorldLayer } from "./TownWorldLayer";
 import { TownBuildingSigns } from "./townBuildingSigns";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import type { TownMoveResult } from "./townMoves";
 import { TOWN_GESTURES } from "./townGesture";
 import { DEVTOOLS, NO_TRACE, type ViewTrace } from "../devtools/flag";
@@ -203,6 +210,10 @@ export function TownCanvas({
   const pennants = useRef(new Set<HTMLElement>());
   const [failure, setFailure] = useState(false);
   const [ready, setReady] = useState(false);
+  const capture = useDrawReadiness("town", shellRef, () =>
+    rendererRef.current?.invalidate("capture"),
+  );
+  const captureHolding = useRef(false);
   const sources = useWorldSources();
   // The town's shape follows its container, measured on every resize.
   const [shape, setShape] = useState<TownShape>(() =>
@@ -233,6 +244,9 @@ export function TownCanvas({
     sources,
     shape,
     foldRevision,
+  });
+  useLayoutEffect(() => {
+    captureHolding.current = semantics.holding;
   });
   const { model, placed, layout, teams, targets, deskBadges, blockedSince } =
     semantics;
@@ -442,6 +456,11 @@ export function TownCanvas({
         : undefined,
       DEVTOOLS ? (frame) => traceRef.current.record("frame", frame) : undefined,
       camera,
+      (pending) =>
+        capture.current?.drawn(
+          pending || captureHolding.current ? "materialize/reflow" : undefined,
+        ),
+      (reason) => capture.current?.invalidate(reason),
     )
       .then(async (renderer) => {
         holdPixiSystemTicker();
@@ -496,7 +515,7 @@ export function TownCanvas({
       rendererRef.current?.destroy();
       rendererRef.current = null;
     };
-  }, [view, diff]);
+  }, [view, diff, capture]);
 
   useEffect(() => {
     const renderer = rendererRef.current;
