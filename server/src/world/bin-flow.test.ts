@@ -205,13 +205,14 @@ for (const view of ["board", "town", "desk"] as const)
     }
   });
 
-for (const left of [11_000, 1_000, 0])
+for (const left of [25_000, 11_000, 1_000, 0])
   test(`boarding with ${left} ms wait left shares a reset only before departure`, async () => {
     const f = await fixture();
     try {
       const first = (await f.add(0, "town"))!.entries[0]!;
       await f.advance(30_000 - left);
-      const boarded = (await f.add(1, "town", first.id))!.entries;
+      // Board supplies no join hint: the service owns the shared countdown.
+      const boarded = (await f.add(1, "board"))!.entries;
       const joins = left > 0;
       expect(boarded[1]!.trip === first.trip).toBe(joins);
       await f.advance(left + BIN_DEPARTURE_MS);

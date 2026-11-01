@@ -64,6 +64,14 @@ current target fences, before registering that recovery class. Recovery reads
 observe the original effect; they do not grant authority for a new submission or
 cleanup. There is no exactly-once execution claim.
 
+The bin's countdown and six-second drive-away are reversible service state:
+neither records an intent before expiry. A drop from Board, Desk or Town before
+pull-away resets the waiting trip for every rider, without a browser join hint;
+after pull-away it starts or joins the next waiting trip. Hold and Put back
+remain effective until expiry. The composed bin consumer checks these clocks
+through the actual RPC, browser stores, SQLite outbox and close driver; see the
+[bin recovery boundary](../verification/contracts/effect-recovery.md#agent-bin-reversible-departure-and-shared-boarding-clock).
+
 Claims interrupted before `dispatching` are released on restart, then subject to
 the driver's continuity/World-run eligibility. Offline bindings within a run
 wait without age expiry and are checked again when available. Ended or unconfirmed

@@ -82,3 +82,40 @@ source that honors its declared recovery contract. It does not prove power-loss
 or filesystem safety, network delivery, source idempotency implementations,
 external agent execution/reading, or temporal fairness. The unchanged platform
 and native consumer jobs remain required.
+
+## Agent bin: reversible departure and shared boarding clock
+
+Allowed: Board, Desk and Town stage the same service-owned countdown; a drop
+before pull-away resets every member of the waiting trip in full, even without
+a browser join hint. A drop at/after pull-away waits for another trip. No intent
+or native close exists before the countdown plus six-second departure ends;
+hold freezes departure, and restore cancels it. Close now remains explicit and
+run-scoped. Source replacement cannot grant the staged capture close authority.
+Forbidden: an earlier rider closing on its old deadline after another drop;
+recording a durable intent during reversible staging; per-view commit clocks;
+resending a potentially applied close or inheriting another service's authority.
+
+`server/src/world/bin-flow.test.ts` composes three actual browser stores with
+production RPC, the registry, real SQLite worker/outbox and production closer
+against a synthetic native source. Deterministic registry time checks each view
+at one millisecond before expiry and at expiry, with durable outcome barriers.
+Board drops without a join hint at 0:25, 0:11 and 0:01 retain the first rider
+past its old deadline and close both on the new deadline; a drop at pull-away
+does not reset the departing trip. Hold/restore leaves no intent and source
+replacement refuses dispatch. `bin-close.test.ts` retains the independent
+lane-discovery, shutdown, restart authority and lost-reply consumers from the
+foundation; this composition does not replace them.
+
+The actual Board browser case drops A at 0:30, advances to 0:25, drops B and
+checks the shared full ring and both reset clocks. Town scene/browser cases
+cover departure, hold, rescue, keyboard activation and reduced motion. A
+boarding reset preserves the bus's set-off trajectory, including deceleration;
+it can arrive early and wait until 0:00. The one-second-out regression checks
+unchanged speed, arrival one second later and the remaining 29-second wait.
+
+These finite timing, RPC, SQLite and renderer boundaries use direct consumers
+rather than a model that repeats the countdown implementation. M5's maintained
+ordering/authority/recovery proof remains required in full. Synthetic source
+and browser fixtures do not establish native Herdr execution or wall-clock
+smoothness; source-bound isolated Herdr evidence and independent whole-PR and
+consumer-mapping review remain separate acceptance requirements.

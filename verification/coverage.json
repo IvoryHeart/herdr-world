@@ -2602,7 +2602,14 @@
         "server/src/world/attention-dispatch.test.ts",
         "server/src/world/answer-dispatch.test.ts",
         "server/src/storage/answer-delivery-crash.test.ts",
-        "server/src/world/bin-close.test.ts"
+        "server/src/world/bin-close.test.ts",
+        "server/src/world/bin-flow.test.ts",
+        "server/src/world/bin.test.ts",
+        "server/src/rpc/bin.test.ts",
+        "web/src/world/bin/binStore.test.ts",
+        "web/src/world/town/scene/townBus.test.ts",
+        "web/src/world/town/TownCanvas.bus.test.ts",
+        "web/src/world/BoardView.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/549",
       "technique": "bounded-model-and-real-sqlite-crash-matrix",
@@ -2617,7 +2624,9 @@
           "server/src/effects/recovery-matrix.test.ts",
           "server/src/effects/admission.test.ts",
           "server/src/world/effect-restart.test.ts",
-          "server/src/storage/answer-delivery-crash.test.ts"
+          "server/src/storage/answer-delivery-crash.test.ts",
+          "server/src/world/bin-close.test.ts",
+          "server/src/world/bin-flow.test.ts"
         ],
         "checks": [
           "bun run verification:gate",
