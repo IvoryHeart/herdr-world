@@ -2628,6 +2628,37 @@ async function run() {
         );
       }
     }
+    for (const binding of ["reported", "title", "guessed"] as const) {
+      for (const reason of [
+        "no_session",
+        "codex_unlinked",
+        "no_messages_yet",
+      ]) {
+        const paneId = `bound-${binding}-${reason}`;
+        reply = {
+          ...conversation([]),
+          status: "unavailable",
+          session_binding: binding,
+          session_fingerprint: null,
+          unavailable: { reason, detail: "Named record unavailable" },
+        };
+        root.render(
+          <AgentChat
+            key={paneId}
+            pane={{ ...pane("idle"), pane_id: paneId }}
+            active
+            onClose={() => {}}
+          />,
+        );
+        await settle();
+        await settle();
+        check(
+          !!container.querySelector(".agent-chat-unavailable") &&
+            !container.querySelector(".agent-chat-empty"),
+          `${binding}/${reason}: a named binding without a fingerprint must retain its unavailable record error`,
+        );
+      }
+    }
     for (const width of [390, 320]) {
       container.style.width = `${width}px`;
       root.render(

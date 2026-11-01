@@ -52,7 +52,20 @@ export function AgentLauncherDialog({
   onClose(): void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  useLayer(true, () => onClose(), { element: () => ref.current });
+  const lifetime = useRef<object | null>({});
+  useEffect(() => {
+    const current = {};
+    lifetime.current = current;
+    return () => {
+      if (lifetime.current === current) lifetime.current = null;
+    };
+  }, []);
+  const dismiss = () => {
+    if (!lifetime.current) return;
+    lifetime.current = null;
+    onClose();
+  };
+  useLayer(true, dismiss, { element: () => ref.current });
   const { document } = useAgentProfiles();
   const profiles = document?.profiles ?? [];
   const rooms = useMemo(
@@ -103,6 +116,9 @@ export function AgentLauncherDialog({
   const [attempted, setAttempted] = useState(false);
   // Fence synchronous clicks as well as retries after an uncertain outcome.
   const attempt = useRef(false);
+  const operation = useRef(false);
+  const [loginBusy, setLoginBusy] = useState<string | null>(null);
+  const locked = attempted || Boolean(busy) || Boolean(loginBusy);
   const [outcome, setOutcome] = useState<RetainedOutcome | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -112,13 +128,16 @@ export function AgentLauncherDialog({
   useEffect(() => {
     setCatalog(null);
     setCatalogError(null);
-    if (!connectionId || generation === undefined || !workspaceId) return;
+    const owner = lifetime.current;
+    if (!owner || !connectionId || generation === undefined || !workspaceId)
+      return;
     let current = true;
     launcherCatalog({ connectionId, generation, workspaceId })
-      .then((next) => current && setCatalog(next))
+      .then((next) => current && lifetime.current === owner && setCatalog(next))
       .catch(
         (cause: unknown) =>
           current &&
+          lifetime.current === owner &&
           setCatalogError(
             cause instanceof Error ? cause.message : String(cause),
           ),
@@ -129,7 +148,9 @@ export function AgentLauncherDialog({
   }, [connectionId, generation, workspaceId, checks]);
 
   const launch = async (choice: { profile?: AgentProfile; kind?: string }) => {
-    if (!target || busy || attempt.current) return;
+    const owner = lifetime.current;
+    if (!owner || !target || operation.current || attempt.current) return;
+    operation.current = true;
     attempt.current = true;
     setAttempted(true);
     const profile = choice.profile;
@@ -155,6 +176,7 @@ export function AgentLauncherDialog({
         label,
         text,
       });
+      if (lifetime.current !== owner) return;
       // A ready agent opens and the dialog closes; anything else stays
       // here with its reason and a way to open the tab.
       if (
@@ -165,19 +187,25 @@ export function AgentLauncherDialog({
           connectionId: target.connectionId,
           terminalId: result.terminal_id,
         });
-        onClose();
+        if (lifetime.current === owner) dismiss();
         return;
       }
       setOutcome(retainedOutcome(target, result));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      if (lifetime.current === owner)
+        setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
-      setBusy(null);
+      if (lifetime.current === owner) {
+        operation.current = false;
+        setBusy(null);
+      }
     }
   };
 
   const createTerminal = async () => {
-    if (!target || busy || attempt.current) return;
+    const owner = lifetime.current;
+    if (!owner || !target || operation.current || attempt.current) return;
+    operation.current = true;
     attempt.current = true;
     setAttempted(true);
     setBusy("Terminal");
@@ -192,21 +220,29 @@ export function AgentLauncherDialog({
         target.workspaceId,
         { numberedLabel: true },
       );
-      onClose();
+      if (lifetime.current === owner) dismiss();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      if (lifetime.current === owner)
+        setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
-      setBusy(null);
+      if (lifetime.current === owner) {
+        operation.current = false;
+        setBusy(null);
+      }
     }
   };
 
   const logIn = async (kind: string) => {
-    if (!target || busy || attempt.current) return;
+    const owner = lifetime.current;
+    if (!owner || !target || operation.current || attempt.current) return;
+    operation.current = true;
+    setLoginBusy(kind);
     setOutcome(null);
     setError(null);
     try {
       // World types nothing into the tab; the user runs the command there.
       const opened = await openHarnessLogin(target, kind);
+      if (lifetime.current !== owner) return;
       setOutcome(
         retainedOutcome(target, {
           status: "opened",
@@ -216,7 +252,13 @@ export function AgentLauncherDialog({
         }),
       );
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      if (lifetime.current === owner)
+        setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      if (lifetime.current === owner) {
+        operation.current = false;
+        setLoginBusy(null);
+      }
     }
   };
 
@@ -241,11 +283,14 @@ export function AgentLauncherDialog({
       >
         <div className="modal-head">
           <h2>New agent</h2>
-          <CloseButton onClick={onClose} label="Close new agent" />
+          <CloseButton onClick={dismiss} label="Close new agent" />
         </div>
         <div className="agent-launcher-status" role="status">
           {catalogError ? (
             <p className="agent-launcher-error">{catalogError}</p>
+          ) : null}
+          {loginBusy ? (
+            <p>Opening a login tab for {harnessLabel(loginBusy)}…</p>
           ) : null}
           {busy ? (
             <p>
@@ -279,8 +324,10 @@ export function AgentLauncherDialog({
                   type="button"
                   className="agent-launcher-login"
                   onClick={() => {
+                    const owner = lifetime.current;
+                    if (!owner) return;
                     onOpen(outcome.terminal!);
-                    onClose();
+                    if (lifetime.current === owner) dismiss();
                   }}
                 >
                   Open its tab
@@ -307,7 +354,7 @@ export function AgentLauncherDialog({
                 <span>Room</span>
                 <select
                   value={room?.id ?? ""}
-                  disabled={attempted}
+                  disabled={locked}
                   onChange={(event) => {
                     const chosen = rooms.find(
                       (space) => space.id === event.target.value,
@@ -335,7 +382,7 @@ export function AgentLauncherDialog({
                 <span>Agent task (optional)</span>
                 <textarea
                   value={task}
-                  disabled={attempted}
+                  disabled={locked}
                   rows={2}
                   placeholder="What should it do? It fills {{task}} in the profile's brief."
                   onChange={(event) => setTask(event.target.value)}
@@ -347,7 +394,7 @@ export function AgentLauncherDialog({
                   <button
                     type="button"
                     className="agent-launcher-login"
-                    disabled={attempted || Boolean(busy)}
+                    disabled={locked}
                     title={`Opens a tab and shows ${harnessLabel(kind)}'s login command to run there`}
                     onClick={() => void logIn(kind)}
                   >
@@ -358,7 +405,7 @@ export function AgentLauncherDialog({
               <button
                 type="button"
                 className="agent-launcher-card"
-                disabled={!target || Boolean(busy) || attempted}
+                disabled={!target || locked}
                 onClick={() => void createTerminal()}
               >
                 <Terminal size={24} aria-hidden="true" />
@@ -372,7 +419,7 @@ export function AgentLauncherDialog({
                 <button
                   type="button"
                   onClick={onEditProfiles}
-                  disabled={attempted}
+                  disabled={locked}
                 >
                   <Settings2 size={13} aria-hidden="true" /> Edit profiles
                 </button>
@@ -385,13 +432,7 @@ export function AgentLauncherDialog({
                       key={profile.id}
                       type="button"
                       className="agent-launcher-card"
-                      disabled={
-                        !target ||
-                        Boolean(busy) ||
-                        attempted ||
-                        !catalog ||
-                        note?.blocked
-                      }
+                      disabled={!target || locked || !catalog || note?.blocked}
                       title={note?.text ?? `Start ${profile.name} here`}
                       aria-label={`Start ${profile.name}`}
                       onClick={() => void launch({ profile })}
@@ -433,9 +474,7 @@ export function AgentLauncherDialog({
                       key={kind}
                       type="button"
                       className="agent-launcher-kind"
-                      disabled={
-                        !target || Boolean(busy) || attempted || note?.blocked
-                      }
+                      disabled={!target || locked || note?.blocked}
                       title={note?.text ?? `Start ${harnessLabel(kind)} here`}
                       onClick={() => void launch({ kind })}
                     >

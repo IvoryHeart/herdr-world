@@ -522,6 +522,7 @@ a starting brief and a look in Town. World starts it in a new tab for you.
    opens a small tab and shows the harness's own login command
    (`claude auth login`, `codex login --device-auth`). **Copy** it, **Open its
    tab**, run it and finish the login there, then **Check again**.
+   The launcher finishes opening a login tab before accepting a start.
    Failed, incomplete or unsupported checks show **unknown**, never “not
    installed” or “logged out”. You can still try a supported harness; use
    **Check again** to retry or **Edit profiles** to review its configuration.
@@ -535,7 +536,9 @@ a starting brief and a look in Town. World starts it in a new tab for you.
    outcome stay visible above the choices, even with a long readiness list.
    The launcher closes when the start is confirmed. After an uncertain or
    failed start, its start choices stay disabled: open the existing tab, or
-   close the launcher before deliberately starting another agent.
+   close the launcher before deliberately starting another agent. Closing it
+   while a launch is pending leaves any created tab in its room; a late reply
+   does not reopen its window or close a new launcher.
 
 The profile assignment follows its terminal when you move it and is shared
 with other Worlds connected to that Herdr. Each World uses its own profile

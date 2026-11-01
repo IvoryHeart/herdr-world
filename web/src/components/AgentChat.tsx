@@ -460,8 +460,7 @@ export function AgentChat({
   const noRecord =
     conversation?.status === "unavailable" &&
     !conversation.session_fingerprint &&
-    (!conversation.session_binding ||
-      conversation.unavailable?.reason === "no_messages_yet") &&
+    !conversation.session_binding &&
     history.messages.length === 0 &&
     ["no_session", "codex_unlinked", "no_messages_yet"].includes(
       conversation.unavailable?.reason ?? "",

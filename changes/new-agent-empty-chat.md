@@ -4,3 +4,5 @@
   while retaining errors for missing or unreadable conversation records.
 - Keep New agent progress and outcomes visible above harness checks, and
   prevent repeated clicks or a startup timeout from creating duplicate agents.
+- Ignore replies from a dismissed New agent window and finish opening a login
+  tab before accepting another start, preserving the active attempt's result.

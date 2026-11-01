@@ -2,6 +2,7 @@ import { useState } from "react";
 import { STARTER_PROFILES } from "../../../shared/agentProfile";
 import { createRoot } from "react-dom/client";
 import { bridge } from "../api";
+import { store } from "../store";
 import { AgentLauncherDialog } from "../world/AgentLauncherDialog";
 import type { WorldObject } from "../world/worldObject";
 import type { LaunchOutcome } from "../world/agentProfiles";
@@ -33,9 +34,15 @@ const initial = { connectionId: "alpha", generation: 7, workspaceId: "room" };
 async function run() {
   const originalConnection = bridge.connection;
   const originalCall = bridge.call;
+  const originalCreate = store.createQualifiedTab;
   const opened: { connectionId: string; terminalId: string }[] = [];
   const targets: unknown[] = [];
   let starts = 0;
+  let includeLogin = false;
+  let loginAnswer = Promise.withResolvers<{
+    terminal_id: string;
+    command: string;
+  }>();
   let answer = Promise.withResolvers<LaunchOutcome>();
   bridge.call = async () => ({
     version: 1,
@@ -58,21 +65,20 @@ async function run() {
           params?.workspace_id === "room",
           `${method} must use the captured room`,
         );
-        if (method === "launcher.catalog")
+        if (method === "launcher.catalog") {
+          const kinds = [
+            "codex",
+            ...(includeLogin ? ["claude"] : []),
+            ...Array.from({ length: 27 }, (_, index) => `absent-${index}`),
+          ];
           return {
-            kinds: [
-              "codex",
-              ...Array.from({ length: 27 }, (_, index) => `absent-${index}`),
-            ],
+            kinds,
             skills: [],
-            readiness: [
-              "codex",
-              ...Array.from({ length: 27 }, (_, index) => `absent-${index}`),
-            ].map((kind) => ({
+            readiness: kinds.map((kind) => ({
               kind,
-              installed: kind === "codex",
+              installed: kind === "codex" || kind === "claude",
               logged_in: kind === "codex",
-              can_log_in: false,
+              can_log_in: kind === "claude",
               probe: {
                 source: "world-harness-probe",
                 state: "ok",
@@ -81,6 +87,8 @@ async function run() {
               },
             })),
           };
+        }
+        if (method === "launcher.login") return loginAnswer.promise;
         if (method === "launcher.start") {
           starts++;
           return answer.promise;
@@ -100,7 +108,9 @@ async function run() {
         onClose={() => setOpen(false)}
       />
     ) : (
-      <p>Launcher closed</p>
+      <button type="button" onClick={() => setOpen(true)}>
+        Reopen launcher
+      </button>
     );
   }
   const container = document.createElement("div");
@@ -197,6 +207,111 @@ async function run() {
         `${status}: open only the returned terminal on its captured host`,
       );
     }
+    // A dismissed attempt may finish after a new launcher is already open.
+    const closeAndReopen = async () => {
+      container
+        .querySelector<HTMLButtonElement>(
+          'button[aria-label="Close new agent"]',
+        )!
+        .click();
+      await settle();
+      Array.from(container.querySelectorAll("button"))
+        .find((button) => button.textContent === "Reopen launcher")!
+        .click();
+      await settle();
+      await settle();
+    };
+    for (const status of ["started", "sent"] as const) {
+      answer = Promise.withResolvers<LaunchOutcome>();
+      opened.length = 0;
+      root.render(<Harness key={`dismissed-${status}`} />);
+      await settle();
+      await settle();
+      container
+        .querySelector<HTMLButtonElement>(".agent-launcher-kind")!
+        .click();
+      await settle();
+      await closeAndReopen();
+      answer.resolve({ status, terminal_id: "old-terminal" });
+      await settle();
+      await settle();
+      check(
+        opened.length === 0 && !!container.querySelector(".agent-launcher"),
+        `${status}: a dismissed completion must not open its terminal or close a reopened launcher`,
+      );
+    }
+    const terminalAnswer = Promise.withResolvers<void>();
+    store.createQualifiedTab = async (owner, workspaceId) => {
+      check(
+        owner.connectionId === "alpha" &&
+          owner.runtimeGeneration === 7 &&
+          workspaceId === "room",
+        "Terminal creation must retain its runtime owner",
+      );
+      await terminalAnswer.promise;
+    };
+    root.render(<Harness key="dismissed-terminal" />);
+    await settle();
+    await settle();
+    container.querySelector<HTMLButtonElement>(".agent-launcher-card")!.click();
+    await settle();
+    await closeAndReopen();
+    terminalAnswer.resolve();
+    await settle();
+    await settle();
+    check(
+      !!container.querySelector(".agent-launcher"),
+      "A dismissed terminal creation must not close a reopened launcher",
+    );
+
+    // Login owns the dialog until it settles; a deliberate start is allowed after it.
+    includeLogin = true;
+    loginAnswer = Promise.withResolvers<{
+      terminal_id: string;
+      command: string;
+    }>();
+    answer = Promise.withResolvers<LaunchOutcome>();
+    root.render(<Harness key="login-before-start" />);
+    await settle();
+    await settle();
+    const beforeLoginStart = starts;
+    container
+      .querySelector<HTMLButtonElement>(".agent-launcher-login-row button")!
+      .click();
+    await settle();
+    container.querySelector<HTMLButtonElement>(".agent-launcher-kind")!.click();
+    await settle();
+    check(
+      starts === beforeLoginStart,
+      "A pending login must serialize against agent start",
+    );
+    answer.resolve({
+      status: "uncertain",
+      terminal_id: "agent-after-login",
+      message: "Agent uncertainty remains",
+    });
+    await settle();
+    loginAnswer.resolve({
+      terminal_id: "login-terminal",
+      command: "example login",
+    });
+    await settle();
+    await settle();
+    check(
+      container.querySelector<HTMLButtonElement>(".agent-launcher-kind")
+        ?.disabled === false,
+      "A completed login must permit a deliberate Check again/start flow",
+    );
+    container.querySelector<HTMLButtonElement>(".agent-launcher-kind")!.click();
+    await settle();
+    await settle();
+    check(
+      starts === beforeLoginStart + 1 &&
+        container
+          .querySelector(".agent-launcher-status")
+          ?.textContent?.includes("Agent uncertainty remains") === true,
+      "A login reply must never replace a later uncertain agent outcome",
+    );
     check(
       targets.every((target) => JSON.stringify(target) === '["alpha",7]'),
       "Every catalog/start must retain its host and runtime generation",
@@ -206,6 +321,7 @@ async function run() {
     container.remove();
     bridge.connection = originalConnection;
     bridge.call = originalCall;
+    store.createQualifiedTab = originalCreate;
   }
 }
 run()
