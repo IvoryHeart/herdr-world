@@ -55,9 +55,19 @@ function model(pinned: string[] = []) {
   } as unknown as TownModel;
 }
 
-test("a held press picks up a desk or a seated agent only when zoomed in", () => {
+test("a held press picks up a desk from the room-card zoom in, an agent only zoomed in", () => {
   const m = model();
-  expect(townDragFor({ kind: "desk", key: "d1" }, m, "overview")).toBeNull();
+  // Roofs: nothing lifts.
+  expect(townDragFor({ kind: "desk", key: "d1" }, m, "town")).toBeNull();
+  // Room cards: desks are finger-sized, so a desk lifts; agents wait for room zoom.
+  expect(townDragFor({ kind: "desk", key: "d1" }, m, "overview")).toMatchObject(
+    { kind: "desk", key: "d1", from: "r1" },
+  );
+  expect(townDragFor({ kind: "agent", key: "ag" }, m, "overview")).toBeNull();
+  // A pinned desk stays put at every zoom.
+  expect(
+    townDragFor({ kind: "desk", key: "d1" }, model(["d1"]), "overview"),
+  ).toBeNull();
   expect(townDragFor({ kind: "desk", key: "d1" }, m, "room")).toMatchObject({
     kind: "desk",
     key: "d1",

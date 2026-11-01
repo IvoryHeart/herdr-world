@@ -29,6 +29,14 @@ export type TownZoomLimits = {
   max: number;
 };
 
+/** Tiles from the town's left edge past the last host's side road. */
+export function townHostsWidth(layout: TownLayout) {
+  if (!layout.buildings.length) return layout.width;
+  const right = Math.max(...layout.buildings.map((b) => b.x + b.w));
+  // The side road right of the last building, and a tile of verge.
+  return Math.min(layout.width, right + 6);
+}
+
 /** Above this many rooms, the default wide view shows roofs instead of cards. */
 export const TOWN_OVERVIEW_ROOMS = 48;
 
@@ -51,7 +59,18 @@ export function townZoomLimits(
     ) * 0.98;
   const narrow = layout.formFactor === "narrow";
   const widest = Math.max(1, ...layout.buildings.map((b) => b.w));
-  const home = narrow ? (usableWidth - 12) / ((widest + 2) * TOWN_TILE) : all;
+  // Wide screens open on the hosts' buildings; lots beyond them (the
+  // reserved town hall) stay just off-screen, and ALL shows them.
+  const hosts = townHostsWidth(layout);
+  const home = narrow
+    ? (usableWidth - 12) / ((widest + 2) * TOWN_TILE)
+    : Math.max(
+        all,
+        Math.min(
+          usableWidth / (hosts * TOWN_TILE),
+          usableHeight / (layout.height * TOWN_TILE),
+        ) * 0.98,
+      );
   const desk = narrow ? 1.05 : 1.3;
   const card = narrow ? Math.max(0.5, home * 1.35) : 0.62;
   // A town too large for readable room cards opens at roof level; zooming in

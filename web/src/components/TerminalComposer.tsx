@@ -12,7 +12,14 @@ import {
   TextCursorInput,
   X,
 } from "lucide-react";
-import { type CSSProperties, useEffect, useId, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { flushSync } from "react-dom";
 import {
   type MobileTerminalShortcut,
@@ -71,7 +78,11 @@ export type { TerminalInputMode } from "../terminalInputMode";
 export type ComposerUpload = (
   file: File,
   onProgress?: UploadProgress,
+  retry?: boolean,
 ) => Promise<string>;
+
+/** Explicit Retry can bind the same draft again after its composer remounts. */
+const chatFileUploadBindings = new Map<string, { upload: ComposerUpload }>();
 
 /**
  * Bottom-docked mobile terminal composer. A plain textarea owns all editing
@@ -401,6 +412,27 @@ export function TerminalComposer({
     insert: preparePathInsertion(),
   });
   const pickerCleanupRef = useRef<(() => void) | null>(null);
+  const pickerUploadRef = useRef({ draftKey, upload: onUploadFile, owner: {} });
+  useLayoutEffect(() => {
+    const previous = pickerUploadRef.current;
+    const binding = {
+      draftKey,
+      upload: onUploadFile,
+      owner: previous.draftKey === draftKey ? previous.owner : {},
+    };
+    pickerUploadRef.current = binding;
+    if (surface === "chat") chatFileUploadBindings.set(draftKey, binding);
+    return () => {
+      if (chatFileUploadBindings.get(draftKey) === binding)
+        chatFileUploadBindings.delete(draftKey);
+    };
+  }, [draftKey, onUploadFile, surface]);
+  useLayoutEffect(
+    () => () => {
+      pickerUploadRef.current.owner = {};
+    },
+    [],
+  );
 
   const uploadAndInsert = async (
     files: File[],
@@ -419,12 +451,14 @@ export function TerminalComposer({
     await startAttachmentUploads(
       uploadDraftKey,
       files,
-      async (file, onProgress) => {
+      async (file, onProgress, retry) => {
         if (!beginTerminalComposerUpload(uploadDraftKey))
           throw new Error("This pane's composer closed");
         let path: string | null = null;
         try {
-          path = await upload(file, onProgress);
+          path = await (retry
+            ? upload(file, onProgress, true)
+            : upload(file, onProgress));
           if (composingRef.current)
             throw new Error(
               "Path insertion deferred during text composition; path retained in Message draft",
@@ -682,16 +716,47 @@ export function TerminalComposer({
               if (!input) return;
               pickerCleanupRef.current?.();
               const context = prepareUpload();
+              const owner = pickerUploadRef.current.owner;
               const cleanup = () => {
                 input.removeEventListener("change", selected);
                 input.removeEventListener("cancel", cleanup);
                 pickerCleanupRef.current = null;
               };
-              // The native chooser can finish after React replaces this pane.
+              // Chat refreshes each file's uploader across transport reconnects
+              // only while the exact draft owner stays mounted.
               const selected = (event: Event) => {
                 event.stopPropagation();
                 cleanup();
-                pickFiles(input, context);
+                if (surface !== "chat") {
+                  pickFiles(input, context);
+                  return;
+                }
+                const latest = pickerUploadRef.current;
+                if (!input.isConnected || latest.owner !== owner) {
+                  input.value = "";
+                  onError("Upload target changed while choosing files");
+                  return;
+                }
+                pickFiles(input, {
+                  ...context,
+                  upload: (file, progress, retry) => {
+                    if (retry) {
+                      const binding = chatFileUploadBindings.get(context.key);
+                      return binding
+                        ? binding.upload(file, progress)
+                        : Promise.reject(
+                            new Error("Upload target is not open"),
+                          );
+                    }
+                    const current = pickerUploadRef.current;
+                    if (current.owner !== owner) {
+                      return Promise.reject(
+                        new Error("Upload target changed during upload"),
+                      );
+                    }
+                    return current.upload(file, progress);
+                  },
+                });
               };
               input.addEventListener("change", selected);
               input.addEventListener("cancel", cleanup);

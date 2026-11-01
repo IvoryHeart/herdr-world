@@ -89,10 +89,7 @@
 }
 
 @media (max-width: 640px) {
-  .town-view-shell .town-rail {
-    flex-wrap: wrap;
-  }
-  /* Questions take a full row above the rail's head and strip. */
+  /* Questions take a full row. */
   .town-asks {
     order: -1;
     flex: 1 0 100%;

@@ -213,7 +213,16 @@ that root; stat metadata cannot redirect the read to a different transcript.
   send or upload through the retired draft.
   **Add a file** (paperclip) or paste uploads to that pane's host with progress chips;
   completed paths enter at the saved caret, and **Send** waits for uploads.
-  A completion after Chat closes updates only that conversation's draft.
+  An open file chooser and the remaining files in a selection can continue after
+  browser sync reconnects to the same conversation and runtime. Each queued file
+  uses the current connection client. If its host, runtime, pane or conversation
+  changes, World refuses the selection or remaining files; completed paths are
+  never redirected into a different draft. Open the paperclip again for the
+  intended conversation.
+  Closing or replacing Chat retires files that have not started. An upload
+  already in flight can finish into its original conversation's draft. Reopen
+  that conversation and use **Retry** for refused files; Retry uses its current
+  client without reviving the old queue's dispatch authority.
   Failed sends restore the submitted text before any newer draft.
 - While Herdr reports the agent working, an accepted send shows
   **Queued · sent to <agent>**, with its send time. Herdr owns admission and
@@ -496,7 +505,12 @@ terminal title and delivery receipts) and History's window from its cursor
 (`agent_history.get`), which brings only the entries that changed. A burst of
 pushes runs at most one more read of each. Chat renders History's bubbles and
 collapsed tool cards, which load their text only when opened, so a long, busy
-transcript is never reread or redrawn whole. The window is kept per pane for
+transcript is never reread or redrawn whole. From 900px wide (a container
+query on the list), the same entries render as transcript rows that follow the
+window up to 1440px; a user entry that starts `name: ` with the name of
+another live agent in the pane's Herdr session (`agent.list`) is labelled as
+relayed from it. The label is display only: the text, receipts and Copy are
+unchanged, and Chat cannot prove who typed it. The window is kept per pane for
 the page, so a Chat that remounts, docks or reopens shows its conversation at
 once. Scrolling near the top of a full window, or **Load earlier messages**,
 reads the 100 conversation entries before the oldest one shown
