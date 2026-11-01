@@ -121,6 +121,36 @@ test("claims are compare-and-set and every later transition uses the full attemp
   expect((await f.store.get(f.id))?.claimed).toBe(true);
 });
 
+test("read-only reconciliation after reopen grants no new submission authority", async () => {
+  const root = mkdtempSync(join(tmpdir(), "effect-reconcile-authority-"));
+  let f = effectFixture(root, "reconcilable", {
+    checkpoint: (phase) => {
+      if (phase === "dispatching") throw new EffectExecutionStopped();
+    },
+  });
+  try {
+    await expect(f.runner.run(f.id)).rejects.toBeInstanceOf(
+      EffectExecutionStopped,
+    );
+    await f.close();
+    f = effectFixture(root, "reconcilable", {
+      incarnation: "effect-incarnation-two",
+    });
+    f.set("authorized", "0");
+    f.advance(1_000_000);
+    expect(await f.runner.run(f.id)).toMatchObject({
+      state: "uncertain",
+      not_sent: false,
+    });
+    expect(f.read("probes")).toBe("1");
+    expect(f.read("calls")).toBe("0");
+    expect(f.applied()).toHaveLength(0);
+  } finally {
+    await f.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("P8: early and backwards wakes rearm within 60 seconds; sleep across a deadline dispatches once", async () => {
   const f = fixture();
   await f.store.transition({

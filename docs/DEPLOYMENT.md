@@ -51,6 +51,14 @@ are not backfilled, and dismissals send no pane input. CLI callers on other
 platforms, SSH callers and asks without a supported verified binding remain
 retrieval-only.
 
+After World restarts, existing alert and answer intents cannot submit to Herdr:
+the current protocol supplies no native boot witness, and a recycled generation
+or matching session label does not establish runtime continuity. Provably unsent
+intents record not sent; possible sends stay uncertain for manual resolution.
+Missing legacy authority also refuses dispatch. Questions, answers and receipts
+are retained, with `herdr-world ask get ID` available for retrieval. New alerts
+and newly captured recipients have authority for the current World run only.
+
 A possible pane send is **opaque**: after a crash or lost receipt World records
 uncertain and never automatically repeats it. Town Summary’s Outbox exposes
 those deliveries

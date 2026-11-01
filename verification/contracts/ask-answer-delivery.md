@@ -6,7 +6,7 @@ This supplements Q29; independent mapping review and CI acceptance remain requir
 
 Allowed: one immutable answer and reference-only opaque intent commit together;
 new verified original source/terminal/session binding; pending during outages;
-re-resolution after runtime replacement only on the same original binding;
+same-run re-resolution only on the same original binding;
 claim, current authorization/version/binding checks, durable dispatching, guarded
 Chat input, and an honest native receipt. CLI output can settle exact receipt
 only as the verified original asker, after stdout succeeds. Owner resend/close
@@ -19,6 +19,10 @@ or another connection; generic queued Chat/terminal input; automatic opaque repl
 a stale decision/receipt settling a newer attempt; interpreting a queued native
 receipt as agent execution or model reading; using a synthetic receiver's dedupe
 as a Herdr guarantee.
+World restart with old/missing recipient authority also forbids submission:
+native IDs and session labels are not native runtime continuity proof. An owner
+duplicate decision cannot bypass this rule. Unsent work resolves not-sent,
+possible sends remain uncertain, and manual close retains the actual history.
 
 `answer-transitions.test.ts` covers the finite owner-decision matrix across pending,
 claimed, dispatching, uncertain, refused, delivered and cancelled states, including
@@ -43,8 +47,11 @@ The Linux-specific caller test does not establish verification on other platform
 processes before claim, after claim, before a native effect, after a native effect,
 and after its receipt. It uses the production Chat source, temporary SQLite
 worker and a synthetic external receiver that records every prompt without
-deduplicating. A pre-send claim can resume safely; a possible send remains
-uncertain and does not replay. Native CI repeats these schedules and the schema
+deduplicating. A pre-send claim is released and then refused without current-run
+authority; a possible send remains uncertain and does not replay. Same-run actual
+Chat consumers retain normal sending. `world/effect-restart.test.ts` adds distinct
+actual managers with recycled generations and native/session values, plus explicit
+retry, old-record refusal and receipt/history controls. Native CI repeats these schedules and the schema
 transition tests. These are finite process-fault schedules, not power-loss or
 all-schedule proofs.
 

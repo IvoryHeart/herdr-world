@@ -117,6 +117,12 @@ export function createAskRecipients(deps: {
         state: "unconfirmed",
         reason: "No verified original recipient binding; use ask get",
       };
+    if (recipient.service_incarnation !== deps.incarnation)
+      return {
+        state: "unconfirmed",
+        reason:
+          "The original runtime cannot be established after a World restart; use ask get",
+      };
     if (!exists(recipient.connection_id))
       return {
         state: "ended",
@@ -230,7 +236,11 @@ export function createAskRecipients(deps: {
     resolve,
     authorize,
     fence(recipient: AnswerRecipient | null | undefined) {
-      if (!validRecipient(recipient)) return;
+      if (
+        !validRecipient(recipient) ||
+        recipient.service_incarnation !== deps.incarnation
+      )
+        return;
       const lease = deps
         .connections()
         .readyRuntimeLease(recipient.connection_id);
@@ -247,6 +257,7 @@ export function createAskRecipients(deps: {
       info: Record<string, unknown>,
     ) {
       return (
+        recipient.service_incarnation === deps.incarnation &&
         lease.isCurrent() &&
         info.pane_id === recipient.pane_id &&
         info.terminal_id === recipient.terminal_id &&
