@@ -74,23 +74,33 @@ export function useTownBus({
   );
   const latest = useRef({ riders, bin });
   latest.current = { riders, bin };
-  const [layer] = useState(
-    () =>
-      new TownBusLayer({
-        layout,
-        entries: () => latest.current.bin.entries,
-        remaining: (entry) => store.remaining(entry),
-        paused: () => latest.current.bin.paused,
-        agent: (id) => latest.current.riders.get(id),
-      }),
-  );
-  useEffect(() => () => layer.destroy(), [layer]);
+  const layoutRef = useRef(layout);
+  layoutRef.current = layout;
+  /**
+   * The bus layer lives exactly as long as its attachment: made when the
+   * renderer is ready, destroyed in the same effect's cleanup. (StrictMode
+   * runs setup, cleanup, setup: a layer kept in state would come back
+   * destroyed and be attached again.)
+   */
+  const layerRef = useRef<TownBusLayer | null>(null);
   useEffect(() => {
     const renderer = rendererRef.current;
     if (!ready || !renderer) return;
+    const layer = new TownBusLayer({
+      layout: () => layoutRef.current(),
+      entries: () => latest.current.bin.entries,
+      remaining: (entry) => store.remaining(entry),
+      paused: () => latest.current.bin.paused,
+      agent: (id) => latest.current.riders.get(id),
+    });
+    layerRef.current = layer;
     renderer.setOverlay(layer);
-    return () => renderer.setOverlay(null);
-  }, [ready, rendererRef, layer]);
+    return () => {
+      renderer.setOverlay(null);
+      if (layerRef.current === layer) layerRef.current = null;
+      layer.destroy();
+    };
+  }, [ready, rendererRef, store]);
 
   // A second clock for the sign and chip, and to start each departure.
   const [, tick] = useState(0);
@@ -141,7 +151,7 @@ export function useTownBus({
       report("Only agents ride the bus; this desk has none");
       return "returned";
     }
-    const drop = binDropOfAgent(projection, agentKey, "town");
+    const drop = binDropOfAgent(projection, agentKey, "town", bin.entries);
     if ("refusal" in drop) {
       report(drop.refusal);
       return "returned";
@@ -231,7 +241,7 @@ export function useTownBus({
 
   /** A carried agent at this point is over the stop, its buses or the chip. */
   const over = (world: Point, at: Point) => {
-    const scene = layer.scene;
+    const scene = layerRef.current?.scene;
     if (scene && inTownBusDropZone(scene, world.x, world.y)) return true;
     const rect = chip.current?.getBoundingClientRect();
     const host = chip.current?.parentElement?.getBoundingClientRect();
@@ -246,10 +256,46 @@ export function useTownBus({
     );
   };
 
-  const next = layer.scene?.next ?? null;
+  const scene = layerRef.current?.scene ?? null;
+  const next = scene?.next ?? null;
+  const putBack = (entry: BinEntry) => {
+    playBinSound("back");
+    void store
+      .restore(entry.id)
+      .then(() => setToast(`${entry.label} is back at its desk.`), report);
+  };
+  const held = bin.paused && holding;
   const hudElement =
-    (edge && (holding || carrying)) || toast ? (
+    (edge && (holding || carrying)) || toast || held ? (
       <>
+        {held ? (
+          // Screen space, at the top: never under the asks rail or past the
+          // viewport's edge, wherever the held bus is drawn.
+          <section className="town-bus-held" aria-label="Held bus">
+            <strong>Bus held{next ? ` · ${clock(next.remaining)}` : ""}</strong>
+            <ul>
+              {bin.entries.map((entry) => (
+                <li key={entry.id}>
+                  <span title={entry.label}>{entry.label}</span>
+                  <button
+                    type="button"
+                    aria-label={`Put ${entry.label} back at its desk`}
+                    onClick={() => putBack(entry)}
+                  >
+                    Put back
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <button
+              type="button"
+              className="town-bus-go"
+              onClick={() => void store.resume().catch(report)}
+            >
+              Let it go
+            </button>
+          </section>
+        ) : null}
         {edge && (holding || carrying) ? (
           <button
             ref={chip}
@@ -284,18 +330,13 @@ export function useTownBus({
 
   const worldElement = (
     <TownBusControls
-      scene={layer.scene}
+      scene={scene}
       entries={bin.entries}
       paused={bin.paused}
       remaining={(entry) => store.remaining(entry)}
       onHold={() => void store.pause().catch(report)}
       onRelease={() => void store.resume().catch(report)}
-      onPutBack={(entry) => {
-        playBinSound("back");
-        void store
-          .restore(entry.id)
-          .then(() => setToast(`${entry.label} is back at its desk.`), report);
-      }}
+      onPutBack={putBack}
     />
   );
 
@@ -397,10 +438,17 @@ function TownBusControls({
                 ? "Bus held with its doors open"
                 : "Press and hold to stop the bus"
             }
+            aria-pressed={paused}
             onPointerDown={startHold}
             onPointerUp={stopHold}
             onPointerLeave={stopHold}
             onPointerCancel={stopHold}
+            // Enter or Space (a click with no pointer) holds or lets go.
+            onClick={(event) => {
+              if (event.detail !== 0) return;
+              if (paused) onRelease();
+              else onHold();
+            }}
             onContextMenu={(event) => event.preventDefault()}
           />
         ))}
@@ -425,16 +473,6 @@ function TownBusControls({
           />
         );
       })}
-      {paused && front ? (
-        <button
-          type="button"
-          className="town-bus-go"
-          style={{ left: front.x + BUS_W / 2, top: front.y + BUS_H + 4 }}
-          onClick={onRelease}
-        >
-          Let it go
-        </button>
-      ) : null}
     </div>
   );
 }

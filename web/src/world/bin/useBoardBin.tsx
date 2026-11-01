@@ -17,17 +17,35 @@ export function boardBinCandidate(
   tab: BoardTab,
   pane: BoardPane | undefined,
   view: BinView,
+  /** Panes already waiting in the bin (binPaneKey): they will close first. */
+  staged: ReadonlySet<string> = new Set(),
+  pins: ReadonlySet<string> = pane
+    ? tabPinsFor(pane.leaf.connectionId)
+    : new Set(),
 ): Candidate | null {
   if (!pane) return null;
   const leaf = pane.leaf;
   const label = leaf.agentName || leaf.agentLabel || leaf.label || "Agent";
+  // A pin keeps a tab's last pane: siblings already staged count as gone.
   const pinned = paneCloseBlockReason(
     leaf.nativeId,
-    tab.panes.map((item) => ({
-      pane_id: item.leaf.nativeId,
-      tab_id: item.leaf.tabId,
-    })),
-    tabPinsFor(leaf.connectionId),
+    tab.panes
+      .filter(
+        (item) =>
+          item === pane ||
+          !staged.has(
+            binPaneKey(
+              item.leaf.connectionId,
+              item.leaf.generation,
+              item.leaf.nativeId,
+            ),
+          ),
+      )
+      .map((item) => ({
+        pane_id: item.leaf.nativeId,
+        tab_id: item.leaf.tabId,
+      })),
+    pins,
   );
   const refusal =
     leaf.stale || !leaf.actionable
@@ -55,6 +73,24 @@ export function boardBinCandidate(
     },
   };
 }
+
+/** One staged pane, as pin admission compares them. */
+export const binPaneKey = (
+  connectionId: string,
+  generation: number,
+  paneId: string,
+) => `${connectionId}\u0000${generation}\u0000${paneId}`;
+
+export const stagedPaneKeys = (entries: readonly BinEntry[]) =>
+  new Set(
+    entries.map((entry) =>
+      binPaneKey(
+        entry.connection_id,
+        entry.connection_generation,
+        entry.pane_id,
+      ),
+    ),
+  );
 
 /** Whether a screen point is over the bin (with a forgiving margin). */
 export function overBin(x: number, y: number) {
@@ -153,7 +189,12 @@ export function useBoardBin({
     /** A tab card was lifted: the pane pressed is the one that would close. */
     lift(tab: BoardTab | undefined) {
       carrying.current = tab
-        ? boardBinCandidate(tab, paneFor(tab, pressed.current), view)
+        ? boardBinCandidate(
+            tab,
+            paneFor(tab, pressed.current),
+            view,
+            stagedPaneKeys(store.get().entries),
+          )
         : null;
       hotRef.current = false;
       setDrag(carrying.current?.drag ?? null);
@@ -202,7 +243,12 @@ export function useBoardBin({
     },
     /** The selection bar's Close agent…: the visible twin of dragging. */
     closeAgent(tab: BoardTab, paneKey?: string) {
-      const candidate = boardBinCandidate(tab, paneFor(tab, paneKey), view);
+      const candidate = boardBinCandidate(
+        tab,
+        paneFor(tab, paneKey),
+        view,
+        stagedPaneKeys(store.get().entries),
+      );
       if (candidate) put(candidate);
     },
     paneBinned: binned,

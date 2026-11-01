@@ -71,6 +71,9 @@ export function binDropOfAgent(
   office: HerdrOfficeProjection,
   agentKey: string,
   view: BinDrop["view"],
+  /** Entries already waiting in the bin: their panes close first. */
+  staged: readonly BinEntry[] = [],
+  pins?: ReadonlySet<string>,
 ): BinDrop | { refusal: string } {
   const agent = office.roster.find(
     (entry) => entry.agent.key === agentKey,
@@ -80,13 +83,29 @@ export function binDropOfAgent(
   const room = office.rooms.find((item) => item.key === agent.roomKey);
   // A tab pin (kept in this browser) protects the tab's last pane.
   const desk = room?.desks.find((item) => item.key === agent.deskKey);
+  // Siblings already waiting in the bin count as gone.
+  const waiting = new Set(
+    staged
+      .filter(
+        (entry) =>
+          entry.connection_id === agent.currentPaneRef.connectionId &&
+          entry.connection_generation === agent.currentPaneRef.generation,
+      )
+      .map((entry) => entry.pane_id),
+  );
   const pinned = paneCloseBlockReason(
     agent.currentPaneRef.nativeId,
-    (desk?.paneDevices ?? []).map((device) => ({
-      pane_id: device.paneRef.nativeId,
-      tab_id: agent.currentTabRef.nativeId,
-    })),
-    tabPinsFor(agent.currentPaneRef.connectionId),
+    (desk?.paneDevices ?? [])
+      .filter(
+        (device) =>
+          device.paneRef.nativeId === agent.currentPaneRef.nativeId ||
+          !waiting.has(device.paneRef.nativeId),
+      )
+      .map((device) => ({
+        pane_id: device.paneRef.nativeId,
+        tab_id: agent.currentTabRef.nativeId,
+      })),
+    pins ?? tabPinsFor(agent.currentPaneRef.connectionId),
   );
   if (pinned) return { refusal: pinned.replace(/\.$/u, "") };
   const workspace = room?.workspaceRef;

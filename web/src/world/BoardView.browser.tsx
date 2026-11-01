@@ -765,6 +765,34 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         card("studio:w1:t1")?.classList.contains("board-binned") === true;
       const calls = (method: string) =>
         fakeBin.calls.filter((call) => call.method === method).length;
+      // A carry cancelled over the bin (lost capture, a second finger)
+      // settles without going in.
+      {
+        const tab = card("studio:w1:t1")!;
+        const from = centre(tab);
+        pointer(tab, "pointerdown", from.x, from.y, 7);
+        for (let step = 1; step <= 6; step++) {
+          pointer(tab, "pointermove", from.x + step * 10, from.y + step * 6, 7);
+          await settle(16);
+        }
+        const can = host.querySelector<HTMLElement>(".world-bin-can")!;
+        await waitFor(
+          () => can.getBoundingClientRect().width > 0,
+          "the bin rises while a card is carried",
+        );
+        const over = centre(can);
+        for (let step = 1; step <= 4; step++) {
+          pointer(tab, "pointermove", over.x, over.y, 7);
+          await settle(16);
+        }
+        pointer(tab, "pointercancel", over.x, over.y, 7);
+        await settle(200);
+        check(
+          calls("world.bin.add") === 0,
+          "a cancelled carry went in the bin",
+        );
+        check(!binned(), "a cancelled carry hid its card");
+      }
       // Carry the card towards the corner: the bin rises; release over it.
       const tab = card("studio:w1:t1")!;
       const from = centre(tab);
