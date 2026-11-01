@@ -1,4 +1,5 @@
 import { createFakeBin } from "./testing/fakeBin";
+import { worldBinStore } from "./bin/binStore";
 import {
   applyAppearance,
   type AppearanceTarget,
@@ -3442,6 +3443,30 @@ if (mode === "preview")
       .querySelector<HTMLButtonElement>('[aria-label="Fit everything"]')
       ?.click();
     for (let frame = 0; frame < 120; frame += 1) await clock.advance(16);
+    // `&bin=open`: one synthetic agent waits in the bin, opened (paused).
+    if (params.get("bin") === "open") {
+      let leaf: Parameters<Parameters<typeof variant>[0]>[0] | undefined;
+      variant((item) => {
+        if (item.connectionId === "studio" && item.nativeId === "w1:p1")
+          leaf = item;
+        return item;
+      });
+      if (leaf)
+        await worldBinStore(bridge).add({
+          connection_id: leaf.connectionId,
+          connection_generation: leaf.generation,
+          workspace_id: leaf.workspaceId,
+          tab_id: leaf.tabId,
+          pane_id: leaf.nativeId,
+          terminal_id: leaf.terminalId,
+          label: leaf.agentName || leaf.label || "Agent",
+          view: "board",
+        });
+      for (let frame = 0; frame < 30; frame += 1) await clock.advance(16);
+      document.querySelector<HTMLButtonElement>(".world-bin-can")?.click();
+      for (let frame = 0; frame < 30; frame += 1) await clock.advance(16);
+      document.body.dataset.binReady = "true";
+    }
   });
 
 if (mode === "test")

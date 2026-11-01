@@ -207,7 +207,10 @@ export function useTownBus({
               y:
                 Math.round(
                   Math.min(
-                    height - inset.bottom - padY,
+                    // On a phone the rail of asks fills the lower part.
+                    width < 600
+                      ? Math.min(height - inset.bottom - padY, height * 0.55)
+                      : height - inset.bottom - padY,
                     Math.max(inset.top + padY, stop.y),
                   ) / 4,
                 ) * 4,

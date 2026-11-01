@@ -15,6 +15,8 @@ import { sharedAsksStore, type WorldAsk } from "../worldAsks";
 import type { AnswerNotice } from "../worldAnswerDeliveries";
 import { checkTownRoomPlates } from "./townRoomPlates.browser";
 import { checkTownBus } from "./townBus.browser";
+import { townBusSender } from "./useTownBus";
+import { worldBinStore } from "../bin/binStore";
 import { createFakeBin } from "../testing/fakeBin";
 import { checkTownRoomFold, tapTownControl } from "./townRoomFold.browser";
 import type { BoardDocument, BoardOp } from "../board/boardDocument";
@@ -1453,6 +1455,55 @@ async function run() {
       "protected-room unmount left a renderer",
     );
     return;
+  }
+
+  if (mode === "preview" && scale === "bus") {
+    // For screenshots: one synthetic agent waits on a held bus at the stop.
+    const agent = host.querySelector<HTMLElement>(
+      '.world-semantic-target[data-kind="agent"]',
+    )?.dataset.targetKey;
+    if (agent && townBusSender.send) await townBusSender.send(agent);
+    await waitFor(
+      () => host.querySelector(".town-bus-hold") !== null,
+      "the bus never stood at the stop",
+    );
+    await worldBinStore(bridge).pause();
+    // Off screen, the chip flies there; then double-tap twice beside the stop.
+    host.querySelector<HTMLButtonElement>(".town-bus-chip")?.click();
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    const canvas = host.querySelector<HTMLElement>(".town-canvas-host");
+    for (
+      let zoom = 0;
+      canvas && zoom < (window.innerWidth < 600 ? 1 : 2);
+      zoom += 1
+    ) {
+      const sign = host
+        .querySelector(".town-bus-sign")
+        ?.getBoundingClientRect();
+      if (!sign) break;
+      const point = {
+        clientX: sign.left + sign.width / 2,
+        clientY: sign.bottom + 24,
+      };
+      for (const type of [
+        "pointerdown",
+        "pointerup",
+        "pointerdown",
+        "pointerup",
+      ])
+        canvas.dispatchEvent(
+          new PointerEvent(type, {
+            bubbles: true,
+            pointerId: 42,
+            pointerType: "mouse",
+            button: 0,
+            buttons: type === "pointerdown" ? 1 : 0,
+            ...point,
+          }),
+        );
+      await new Promise((resolve) => setTimeout(resolve, 900));
+    }
+    document.body.dataset.busReady = "true";
   }
 
   if (mode === "preview") {
