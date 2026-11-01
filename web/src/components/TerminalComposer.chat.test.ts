@@ -378,4 +378,280 @@ if (process.env.CHAT_COMPOSER_DOM_TEST !== "1") {
       await browser.happyDOM.close();
     }
   });
+  test.each([
+    "pane",
+    "session",
+    "terminal",
+    "connection",
+    "runtime",
+    "away-and-back",
+  ])(
+    "keyed Chat replacement refuses queued files after %s changes but recovers the begun result",
+    async (change) => exerciseUploadLifecycle(change),
+  );
+  test.each(["close-result", "remount-retry", "replaced-owner-retry"])(
+    "Chat upload lifecycle preserves %s for the original draft",
+    async (change) => exerciseUploadLifecycle(change),
+  );
+}
+
+async function exerciseUploadLifecycle(change: string) {
+  const browser = new Window({ url: "https://world.example.test" });
+  const originals = new Map<string, PropertyDescriptor | undefined>();
+  for (const [key, value] of Object.entries({
+    window: browser,
+    document: browser.document,
+    navigator: browser.navigator,
+    HTMLElement: browser.HTMLElement,
+    Element: browser.Element,
+    Node: browser.Node,
+    Event: browser.Event,
+    localStorage: browser.localStorage,
+    IS_REACT_ACT_ENVIRONMENT: true,
+  })) {
+    originals.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
+    Object.defineProperty(globalThis, key, {
+      configurable: true,
+      writable: true,
+      value,
+    });
+  }
+  const previousXHR = Object.getOwnPropertyDescriptor(
+    globalThis,
+    "XMLHttpRequest",
+  );
+  const { createRoot } = await import("react-dom/client");
+  const { ChatComposer, chatComposerDraftKey } = await import(
+    "./chat/ChatComposer"
+  );
+  const { attachmentUploads, retryAttachmentUpload } = await import(
+    "../attachmentUploads"
+  );
+  const drafts = await import("../terminalComposer");
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  let current = true;
+  let client: import("../api").ConnectionClient = {
+    connectionId: `lifecycle-${change}`,
+    generation: 1,
+    serverRuntimeGeneration: 1,
+    isCurrent: () => current,
+    acceptsServerGeneration: () => current,
+    call: async () => undefined,
+  };
+  let pane: import("../types").Pane = {
+    pane_id: "pane-a",
+    terminal_id: "terminal-a",
+    workspace_id: "synthetic",
+    tab_id: "tab-a",
+    focused: true,
+    agent_status: "idle",
+    revision: 1,
+  };
+  let fingerprint = "a".repeat(64);
+  const originalKey = chatComposerDraftKey(client, pane, fingerprint);
+  const originalClient = client;
+  drafts.activateTerminalComposerDraftScope(client.connectionId, 1);
+  const requests: {
+    name: string;
+    generation: string | null;
+    xhr: FixtureXHR;
+  }[] = [];
+  const errors: string[] = [];
+  const sends: string[] = [];
+  class FixtureXHR {
+    upload = { onprogress: null };
+    onload: (() => void) | null = null;
+    onerror: (() => void) | null = null;
+    onabort: (() => void) | null = null;
+    responseType = "";
+    response: Blob | null = null;
+    status = 200;
+    statusText = "OK";
+    url = new URL(browser.location.origin);
+    open(_method: string, url: URL) {
+      this.url = new URL(String(url));
+    }
+    setRequestHeader() {}
+    getAllResponseHeaders() {
+      return `X-Herdr-Connection-Id: ${originalClient.connectionId}\r\nX-Herdr-Connection-Generation: 1\r\nContent-Type: application/json\r\n`;
+    }
+    send() {
+      const name = this.url.searchParams.get("filename")!;
+      requests.push({
+        name,
+        generation: this.url.searchParams.get("connection_generation"),
+        xhr: this,
+      });
+      this.response = new Blob([
+        JSON.stringify({ path: `/synthetic/${name}` }),
+      ]);
+      if (requests.length > 1) queueMicrotask(() => this.onload?.());
+    }
+  }
+  Object.defineProperty(globalThis, "XMLHttpRequest", {
+    configurable: true,
+    writable: true,
+    value: FixtureXHR,
+  });
+  const render = async () =>
+    act(async () =>
+      root.render(
+        createElement(ChatComposer, {
+          key: JSON.stringify([
+            client.connectionId,
+            client.serverRuntimeGeneration,
+            pane.terminal_id,
+            pane.pane_id,
+            fingerprint,
+          ]),
+          client,
+          pane,
+          fingerprint,
+          recipient: "synthetic",
+          notice: "",
+          focusIntent: null,
+          onSubmit: async (text: string) => {
+            sends.push(text);
+          },
+          onError: (text: string) => errors.push(text),
+        }),
+      ),
+    );
+  const close = async () => act(async () => root.render(createElement("div")));
+  try {
+    await render();
+    const input =
+      container.querySelector<HTMLInputElement>('input[type="file"]')!;
+    await act(async () =>
+      container
+        .querySelector<HTMLButtonElement>('[aria-label="Add a file"]')!
+        .click(),
+    );
+    const count =
+      change === "close-result" || change === "remount-retry" ? 1 : 6;
+    Object.defineProperty(input, "files", {
+      configurable: true,
+      value: Array.from(
+        { length: count },
+        (_, i) =>
+          new browser.File(["synthetic"], `file-${i + 1}.png`, {
+            type: "image/png",
+          }),
+      ),
+    });
+    await act(async () =>
+      input.dispatchEvent(
+        new browser.Event("change", { bubbles: true }) as unknown as Event,
+      ),
+    );
+    expect(requests.map((r) => r.name)).toEqual(["file-1.png"]);
+    if (change === "remount-retry") {
+      requests[0].xhr.status = 507;
+      requests[0].xhr.response = new Blob([
+        JSON.stringify({ error: "synthetic failure" }),
+      ]);
+      await act(async () => requests[0].xhr.onload?.());
+      expect(
+        container.querySelector<HTMLElement>(".attachment-chip")?.dataset
+          .status,
+      ).toBe("failed");
+      await close();
+      current = false;
+      client = {
+        ...client,
+        generation: 2,
+        isCurrent: () => true,
+        acceptsServerGeneration: () => true,
+      };
+      await render();
+      expect(requests).toHaveLength(1);
+      await act(async () =>
+        container.querySelector<HTMLButtonElement>('[title="Retry"]')!.click(),
+      );
+      expect(requests.map((r) => r.name)).toEqual(["file-1.png", "file-1.png"]);
+      expect(requests[1].generation).toBe("1");
+      expect(container.querySelector("textarea")!.value).toContain(
+        "/synthetic/file-1.png",
+      );
+    } else {
+      if (change === "close-result") await close();
+      else {
+        if (
+          change === "pane" ||
+          change === "away-and-back" ||
+          change === "replaced-owner-retry"
+        )
+          pane = { ...pane, pane_id: "pane-b" };
+        if (change === "session") fingerprint = "b".repeat(64);
+        if (change === "terminal")
+          pane = { ...pane, terminal_id: "terminal-b" };
+        if (change === "connection")
+          client = { ...client, connectionId: "other-connection" };
+        if (change === "runtime")
+          client = { ...client, serverRuntimeGeneration: 2 };
+        await render();
+        if (change === "away-and-back") {
+          pane = { ...pane, pane_id: "pane-a" };
+          await render();
+        }
+      }
+      await act(async () => requests[0].xhr.onload?.());
+      expect(requests).toHaveLength(1);
+      expect(drafts.readTerminalComposerDraft(originalKey)).toContain(
+        "/synthetic/file-1.png",
+      );
+      if (change === "close-result") await render();
+      const nextKey = chatComposerDraftKey(client, pane, fingerprint);
+      if (nextKey !== originalKey) {
+        expect(drafts.readTerminalComposerDraft(nextKey)).toBe("");
+        const failed = attachmentUploads(originalKey).find(
+          (upload) => upload.status === "failed",
+        )!;
+        await act(async () => retryAttachmentUpload(originalKey, failed.id));
+        expect(requests).toHaveLength(1);
+      } else
+        expect(container.querySelector("textarea")!.value).toContain(
+          "/synthetic/file-1.png",
+        );
+      if (change === "replaced-owner-retry") {
+        pane = { ...pane, pane_id: "pane-a" };
+        current = false;
+        client = {
+          ...client,
+          generation: 2,
+          isCurrent: () => true,
+          acceptsServerGeneration: () => true,
+        };
+        await render();
+        expect(requests).toHaveLength(1);
+        await act(async () =>
+          container
+            .querySelector<HTMLButtonElement>(
+              '[aria-label="Retry file-2.png"]',
+            )!
+            .click(),
+        );
+        expect(requests.map((request) => request.name)).toEqual([
+          "file-1.png",
+          "file-2.png",
+        ]);
+        expect(drafts.readTerminalComposerDraft(originalKey)).toContain(
+          "/synthetic/file-2.png",
+        );
+      }
+    }
+    expect(sends).toEqual([]);
+  } finally {
+    await act(async () => root.unmount());
+    if (previousXHR)
+      Object.defineProperty(globalThis, "XMLHttpRequest", previousXHR);
+    else delete (globalThis as { XMLHttpRequest?: unknown }).XMLHttpRequest;
+    for (const [key, descriptor] of originals) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+      else delete (globalThis as Record<string, unknown>)[key];
+    }
+    await browser.happyDOM.close();
+  }
 }
