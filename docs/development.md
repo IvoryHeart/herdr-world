@@ -80,7 +80,9 @@ Bun's default five-second deadline. The crash child retains its fifteen-second
 watchdog inside a twenty-second setup hook, leaving time to kill and reap it.
 Compilation has its own sixty-second hook. Child startup and termination do not
 consume the recovery deadline; a missing fault marker or a failed child still
-fails setup. These watchdogs are test lifecycle bounds, not storage latency claims.
+fails setup. Timer and stdout-reader cleanup also run if exit or stderr draining
+rejects; the stderr failure remains visible. These watchdogs are test lifecycle
+bounds, not storage latency claims.
 
 The test wrapper runs ordinary files in parallel using up to eight available CPUs.
 Set `HERDR_TEST_PARALLEL`

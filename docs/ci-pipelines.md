@@ -106,8 +106,12 @@ are the nearest consumers; web suites come from their maintained inventory.
 World runtime changes also select the dense end-to-end World suites
 (`worldRuntimeSuites`: production and concurrent contexts, terminal handoff).
 Native checks cover install/plugin/package inputs, server/shared binary sources,
-compiled `scripts/build-version.ts` metadata and installation consumers. The
-agent-tooling exception remains explicit.
+compiled `scripts/build-version.ts` metadata and installation consumers. Changes
+to tests explicitly named by the installer upgrade, Windows plugin and native
+launchd jobs also select packaging, including when incremental unit scope narrows.
+The selector derives these consumer paths from the workflow commands; there is
+no separate test allowlist to maintain. Other test-only changes retain their
+existing scoped selection. The agent-tooling exception remains explicit.
 
 Main and non-PR dispatches force the full plan. Code receives all static checks;
 ordinary docs receive `check:docs`. Non-browser tests and web suites are partitioned

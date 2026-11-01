@@ -1,4 +1,12 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import {
+  afterAll,
+  beforeAll,
+  describe,
+  expect,
+  jest,
+  mock,
+  test,
+} from "bun:test";
 import { Database } from "bun:sqlite";
 import {
   copyFileSync,
@@ -70,12 +78,18 @@ async function crash(
   directory: string,
   phase: string,
   kill = true,
+  createChild?: () => Pick<
+    Bun.Subprocess<"ignore", "pipe", "pipe">,
+    "stdout" | "stderr" | "kill" | "exited"
+  >,
 ) {
-  const child = Bun.spawn([...command, directory, phase], {
-    cwd: join(root, "standalone"),
-    stdout: "pipe",
-    stderr: "pipe",
-  });
+  const child =
+    createChild?.() ??
+    Bun.spawn([...command, directory, phase], {
+      cwd: join(root, "standalone"),
+      stdout: "pipe",
+      stderr: "pipe",
+    });
   const reader = child.stdout.getReader();
   let output = "";
   const errors = new Response(child.stderr).text();
@@ -97,15 +111,60 @@ async function crash(
     }
     expect(output.trim()).toBe(phase);
   } finally {
-    if (kill) child.kill("SIGKILL");
-    code = await child.exited;
-    await errors;
-    clearTimeout(timeout);
-    reader.releaseLock();
+    try {
+      if (kill) child.kill("SIGKILL");
+      code = await child.exited;
+      await errors;
+    } finally {
+      clearTimeout(timeout);
+      reader.releaseLock();
+    }
   }
   if (timedOut) throw new Error(`${timeoutMessage}: ${await errors}`);
   if (!kill) expect(code).toBe(0);
 }
+
+test("rejected stderr drain still reaps the crash child and releases cleanup resources", async () => {
+  jest.useFakeTimers();
+  const failure = new Error("synthetic stderr read failure");
+  const stdout = new ReadableStream<Uint8Array<ArrayBuffer>>({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode("after-commit\n"));
+      controller.close();
+    },
+  });
+  const stderr = new ReadableStream<Uint8Array<ArrayBuffer>>({
+    start(controller) {
+      controller.error(failure);
+    },
+  });
+  const exit = Promise.withResolvers<number>();
+  const kill = mock(() => exit.resolve(137));
+  try {
+    await expect(
+      crash(
+        ["synthetic-command"],
+        "synthetic-db",
+        "after-commit",
+        true,
+        () => ({
+          stdout,
+          stderr,
+          kill,
+          exited: exit.promise,
+        }),
+      ),
+    ).rejects.toBe(failure);
+    expect(kill).toHaveBeenCalledWith("SIGKILL");
+    expect({ timers: jest.getTimerCount(), locked: stdout.locked }).toEqual({
+      timers: 0,
+      locked: false,
+    });
+  } finally {
+    jest.clearAllTimers();
+    jest.useRealTimers();
+  }
+});
 for (const compiled of [false, true]) {
   const label = compiled ? "standalone" : "source",
     command = () => (compiled ? [binary] : [process.execPath, source]);
