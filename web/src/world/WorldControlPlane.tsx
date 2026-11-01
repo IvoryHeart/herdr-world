@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useState } from "react";
+import { memo, Suspense, useEffect, useState } from "react";
 import { worldLocalStorage } from "../browserStorage";
 import { useChimeHost, WORLD_SOUNDS_EVENT } from "../chimes/chimeHost";
 import { CreateWorkspaceDialog } from "../components/CreateWorkspaceDialog";
@@ -14,6 +14,7 @@ import {
 } from "./agentProfiles";
 import { useDeskReveal } from "./deskReveal";
 import { DeskView } from "./DeskView";
+import { useStableCallback } from "./useStableCallback";
 import { GroupsWindow } from "./groups/GroupsWindow";
 import {
   floatingTerminalGeometryId,
@@ -60,8 +61,13 @@ function switchToRank(status: WorldAgentStatus) {
   return status === "blocked" ? 0 : status === "done" ? 1 : 2;
 }
 
-const TownView = lazyWithReload("world-town", () => import("./TownView"));
-const BoardView = lazyWithReload("world-board", () => import("./BoardView"));
+// Memoized: an agent window opening, moving or updating changes none of a
+// view's data, so the view must not re-render with the control plane.
+const TownView = memo(lazyWithReload("world-town", () => import("./TownView")));
+const BoardView = memo(
+  lazyWithReload("world-board", () => import("./BoardView")),
+);
+const MemoDeskView = memo(DeskView);
 
 const AgentLauncherDialog = lazyWithReload("world-agent-launcher", () =>
   import("./AgentLauncherDialog").then((module) => ({
@@ -316,6 +322,26 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
       : null;
   };
 
+  // Stable identities for the memoized views; each always calls the
+  // current handler, so a view never acts on an older selection or host.
+  const stableOpenNodeById = useStableCallback(openNodeById);
+  const stableRevealDeskAgent = useStableCallback(revealDeskAgent);
+  const stablePreviewTerminalById = useStableCallback(previewTerminalById);
+  const stableCloseDeskReading = useStableCallback(closeDeskReading);
+  const stableSelectNode = useStableCallback(selectNode);
+  const stableOpenTerminalById = useStableCallback(openTerminalById);
+  const stableOpenInspectorView = useStableCallback(
+    (
+      id: string,
+      view: Parameters<typeof openInBackground>[1],
+      focus = true,
+    ) => {
+      // An unfocused open (the docked Town master) stays in the background:
+      // no selection, not raised.
+      if (focus) void applySelection(id, view);
+      else openInBackground(id, view);
+    },
+  );
   return (
     <main
       className="world-control-plane"
@@ -392,18 +418,20 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
               >
                 <WorldViewErrorBoundary key={view}>
                   {view === "desk" ? (
-                    <DeskView
+                    <MemoDeskView
                       world={world}
                       aggregate={aggregateWorld}
-                      onOpen={openNodeById}
-                      onReveal={revealDeskAgent}
+                      onOpen={stableOpenNodeById}
+                      onReveal={stableRevealDeskAgent}
                       reading={
                         deskReadingPane && contextRailInspector
                           ? contextRailInspector.nodeId
                           : null
                       }
-                      onPreview={deskReadingPane ? previewTerminalById : null}
-                      onCloseReading={closeDeskReading}
+                      onPreview={
+                        deskReadingPane ? stablePreviewTerminalById : null
+                      }
+                      onCloseReading={stableCloseDeskReading}
                     />
                   ) : view === "town" ? (
                     <Suspense
@@ -413,20 +441,15 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                     >
                       <TownView
                         world={presentedWorld}
-                        onOpenInspectorView={(id, view, focus = true) => {
-                          // An unfocused open (the docked Town master) stays
-                          // in the background: no selection, not raised.
-                          if (focus) void applySelection(id, view);
-                          else openInBackground(id, view);
-                        }}
+                        onOpenInspectorView={stableOpenInspectorView}
                         toolbarPortal={viewToolbarPortal}
                         selectedId={selectedId}
-                        onSelect={selectNode}
+                        onSelect={stableSelectNode}
                         floatingTerminals={inspectorConversations}
                         onConversationNodeAnchorsChange={
                           setVisualConversationAnchors
                         }
-                        onOpenTerminal={openTerminalById}
+                        onOpenTerminal={stableOpenTerminalById}
                       />
                     </Suspense>
                   ) : (
@@ -440,8 +463,8 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                         toolbarPortal={viewToolbarPortal}
                         selectedId={selectedId}
                         conversationNodeIds={conversationNodeIds}
-                        onSelect={selectNode}
-                        onOpen={openNodeById}
+                        onSelect={stableSelectNode}
+                        onOpen={stableOpenNodeById}
                         onNodeAnchorsChange={setVisualConversationAnchors}
                       />
                     </Suspense>
