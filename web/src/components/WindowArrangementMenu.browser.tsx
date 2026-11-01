@@ -1,3 +1,4 @@
+import { initializeLayoutPreferences } from "../layoutPreferences";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import "../styles/tokens.css";
@@ -15,6 +16,7 @@ const check = (condition: boolean, message: string) => {
 const settle = () => new Promise((resolve) => setTimeout(resolve, 60));
 
 async function run() {
+  initializeLayoutPreferences();
   const root = createRoot(document.getElementById("root")!);
   flushSync(() =>
     root.render(

@@ -99,7 +99,7 @@
   background: var(--accent-soft);
   color: var(--text);
 }
-.world-window-controls > button:last-of-type:hover {
+.world-window-controls > .world-window-close:hover {
   background: var(--danger-soft);
   color: var(--danger-text);
 }
@@ -319,6 +319,21 @@
   background: transparent;
   color: var(--muted);
 }
+.world-window-controls > .world-window-switcher-trigger {
+  display: flex;
+  width: auto;
+  padding: 4px 7px;
+}
+.world-window-switcher-trigger.is-floating {
+  position: fixed;
+  left: max(12px, env(safe-area-inset-left, 0px));
+  bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+  z-index: 78;
+  min-width: 44px;
+  min-height: 44px;
+  background: var(--shell-panel);
+  box-shadow: 0 3px 12px #0005;
+}
 .world-window-switcher-menu {
   position: fixed;
   z-index: 6000;
@@ -377,6 +392,24 @@
   width: 32px;
   height: 32px;
   padding: 0;
+}
+.world-managed-window.is-compact
+  :is(.world-window-controls > button, .world-window-back) {
+  min-width: 44px;
+  min-height: 44px;
+}
+[data-layout="mobile"] .world-window-switcher-trigger {
+  min-width: 44px;
+  min-height: 44px;
+}
+@media (max-width: 760px), (pointer: coarse) {
+  .world-window-switcher-trigger {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .world-window-switcher-menu > button {
+    min-height: 44px;
+  }
 }
 /* Town draws the agent's window as the Town prototype's chat panel: a dark
    translucent panel with a 2px edge, chunky targets and a pixel name. The
@@ -450,6 +483,48 @@
 }
 .is-town-skin .world-window-controls {
   gap: 6px;
+}
+/* Fine pointers can use smaller controls in narrow desktop Columns. */
+@media (pointer: fine) {
+  @container workspace-inspector (max-width: 279px) {
+    .world-managed-window.is-town-skin:not(.is-compact)
+      .workspace-inspector-agent-identity {
+      column-gap: 4px;
+    }
+    .world-managed-window.is-town-skin:not(.is-compact)
+      :is(.world-window-back, .world-window-controls > button) {
+      min-width: 30px;
+      min-height: 30px;
+      width: 30px;
+      height: 30px;
+    }
+  }
+}
+/* Touch tablets and devices without a pointer use desktop Columns too.
+   Give the name the pane map's space, keeping 40px Town window actions. */
+@media (pointer: coarse), (pointer: none) {
+  @container workspace-inspector (max-width: 279px) {
+    .world-managed-window.is-town-skin:not(.is-compact)
+      .workspace-inspector-agent-identity {
+      grid-template-columns: 32px minmax(0, 1fr);
+      column-gap: 4px;
+    }
+    .world-managed-window.is-town-skin:not(.is-compact)
+      .workspace-inspector-agent-identity
+      > .inspector-pane-map-glyph {
+      display: none;
+    }
+    .world-managed-window.is-town-skin:not(.is-compact)
+      .workspace-inspector-agent-identity
+      > .workspace-inspector-agent-avatar {
+      grid-column: 1;
+    }
+    .world-managed-window.is-town-skin:not(.is-compact)
+      .workspace-inspector-agent-identity
+      > :not(.inspector-pane-map-glyph, .workspace-inspector-agent-avatar) {
+      grid-column: 2;
+    }
+  }
 }
 .is-town-skin .workspace-inspector-tabs {
   padding: 3px;

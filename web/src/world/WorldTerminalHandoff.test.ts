@@ -24,6 +24,7 @@ test.skipIf(!chrome)(
     const assets = new Map<string, Blob>();
     const captureDir = Bun.env.WORLD_WINDOW_CAPTURE_DIR;
     const resumeCaptureDir = Bun.env.WORLD_RESUME_CAPTURE_DIR;
+    const controlsCaptureDir = Bun.env.WORLD_WINDOW_CONTROLS_CAPTURE_DIR;
     const result = Promise.withResolvers<unknown>();
     const publicDir = join(import.meta.dir, "..", "..", "public");
     const pageRequested = Promise.withResolvers<void>();
@@ -58,6 +59,18 @@ test.skipIf(!chrome)(
         if (path === "/result" && request.method === "POST") {
           result.resolve(await request.json());
           return new Response("ok");
+        }
+        if (path === "/capture/window-controls" && controlsCaptureDir) {
+          const [port] = (
+            await readFile(join(dir, "profile", "DevToolsActivePort"), "utf8")
+          ).split("\n");
+          await captureResumeViewports(
+            port!,
+            controlsCaptureDir,
+            "window-controls",
+            `innerWidth > 768 || (() => { const b = document.querySelector('button[aria-label^="Open windows ("]'); if (!b) return false; const r = b.getBoundingClientRect(); return r.width >= 44 && r.height >= 44 && r.top >= 0 && r.left >= 0 && r.right <= innerWidth && r.bottom <= innerHeight && document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.closest('button') === b && [...document.querySelectorAll('.world-managed-window.is-compact.is-active textarea.terminal-composer-input, .world-managed-window.is-compact.is-active .terminal-composer-toolbar button')].every(c => { const q = c.getBoundingClientRect(); return !q.width || !q.height || r.right <= q.left || r.left >= q.right || r.bottom <= q.top || r.top >= q.bottom; }); })()`,
+          );
+          return new Response(null, { status: 204 });
         }
         if (
           path === "/capture/resume-disconnected" ||
@@ -235,7 +248,7 @@ test.skipIf(!chrome)(
         [
           chrome!,
           "--headless=new",
-          ...(captureDir || resumeCaptureDir
+          ...(captureDir || resumeCaptureDir || controlsCaptureDir
             ? ["--remote-debugging-port=0"]
             : []),
           "--window-size=1440,1000",
@@ -246,7 +259,7 @@ test.skipIf(!chrome)(
           "--no-first-run",
           "--no-default-browser-check",
           `--user-data-dir=${join(dir, "profile")}`,
-          `${server.url.href}town${resumeCaptureDir ? "?resume-gallery" : ""}`,
+          `${server.url.href}town${resumeCaptureDir ? "?resume-gallery" : controlsCaptureDir ? "?window-control-captures" : ""}`,
         ],
         { stdout: "ignore", stderr: Bun.file(browserLog) },
       );

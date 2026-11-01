@@ -31,6 +31,7 @@ if (process.env.INSPECTOR_VIEW_DOM !== "1") {
     "HTMLTextAreaElement",
     "NodeFilter",
     "MutationObserver",
+    "ResizeObserver",
     "CustomEvent",
   ])
     Object.defineProperty(globalThis, key, {
