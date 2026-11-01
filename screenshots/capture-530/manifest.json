@@ -1,0 +1,103 @@
+{
+  "source": "f7e272800651ad5349c479f5c730f3b8d5aa9fb2",
+  "base": "75ac18f499014225c7c6b980268e355b2b6d1629",
+  "fixture": "Production TownCanvas, BoardView and DeskBoard; synthetic hosts, rooms and agents; no World/Herdr service",
+  "loadAverage": [
+    4.68,
+    7.73,
+    5.55
+  ],
+  "controlledDelay": "image and font held until capture pending with no marker or screenshot",
+  "images": [
+    {
+      "file": "town-phone.png",
+      "width": 390,
+      "height": 844,
+      "sha256": "1dae5902bfa816c6e25e8e9a5066f13b49f46f89ad9591f5e4eb5cb5a3dab4da"
+    },
+    {
+      "file": "town-mac-laptop.png",
+      "width": 1512,
+      "height": 982,
+      "sha256": "03afc63047ba7710769a1f79cf978babd1d872b20d55625127a84d42bab854ac"
+    },
+    {
+      "file": "town-linux-half.png",
+      "width": 1280,
+      "height": 1440,
+      "sha256": "3943191033304b34495e50b92d3ff051343f2e29d97fada9c656b7f2f38d0899"
+    },
+    {
+      "file": "town-linux-wide.png",
+      "width": 2560,
+      "height": 1440,
+      "sha256": "9102b7500c2364a56d3393713f60f786871c74c94c70420c59f267a5301de170"
+    },
+    {
+      "file": "town-portrait.png",
+      "width": 1440,
+      "height": 2560,
+      "sha256": "d2aee5ccc2f0c2bbe3a3e2faca3a7662fc088d034a54b8ddb69be2a25f0f985e"
+    },
+    {
+      "file": "board-phone.png",
+      "width": 390,
+      "height": 844,
+      "sha256": "f4543f0c7adf90d124498cf3ba19c7d05ffbf06868cd3aaf1e9a0d4839dd3aac"
+    },
+    {
+      "file": "board-mac-laptop.png",
+      "width": 1512,
+      "height": 982,
+      "sha256": "7a412d909cd4fe44dc6e7c1ae00729a4af39a50a9613781b21eed2d0822f9ab7"
+    },
+    {
+      "file": "board-linux-half.png",
+      "width": 1280,
+      "height": 1440,
+      "sha256": "2fa1909926688eef9f3b47f6959dabe4e7a6fb8d7f71b931bdeb694435d4240d"
+    },
+    {
+      "file": "board-linux-wide.png",
+      "width": 2560,
+      "height": 1440,
+      "sha256": "4eb570efe3829cb66b569effad607fdf360c2ba8b9bf995ec2131fe959d3d6b3"
+    },
+    {
+      "file": "board-portrait.png",
+      "width": 1440,
+      "height": 2560,
+      "sha256": "92bc662696f209bbc8a3c67e197559d74dc625c4f5253ef7b19bc4097e57e5e0"
+    },
+    {
+      "file": "desk-phone.png",
+      "width": 390,
+      "height": 844,
+      "sha256": "b8d1c9531034a15cc0d51d6bc75650800c35ad6f27e6cc44952670ad5af1a3e9"
+    },
+    {
+      "file": "desk-mac-laptop.png",
+      "width": 1512,
+      "height": 982,
+      "sha256": "fb71dd3def68b629e784ec7b41cf5ff6c62bb42a09af88744997a38088a08777"
+    },
+    {
+      "file": "desk-linux-half.png",
+      "width": 1280,
+      "height": 1440,
+      "sha256": "5259121969887452006b62895163bd909b15f9700ddb322704f156e708737850"
+    },
+    {
+      "file": "desk-linux-wide.png",
+      "width": 2560,
+      "height": 1440,
+      "sha256": "2bab8643570bcb186cbaf29091365c012b71b8d09d488ef1fa6f2f7abcd5fb08"
+    },
+    {
+      "file": "desk-portrait.png",
+      "width": 1440,
+      "height": 2560,
+      "sha256": "2854ad8bb7bebefa1f511ba82a27a75e9fab5402b6a74c92d78d274f68629a1c"
+    }
+  ]
+}

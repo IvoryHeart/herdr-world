@@ -1,0 +1,112 @@
+{
+  "capturedAt": "2026-11-01T01:40:23.920Z",
+  "browser": {
+    "protocolVersion": "1.3",
+    "product": "Chrome/156.0.8078.79",
+    "revision": "@a21ce95c24ce3964416f09ae1862f53f319eb4d0",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+    "jsVersion": "15.6.75.27"
+  },
+  "receipts": [
+    {
+      "name": "phone",
+      "label": "Phone",
+      "width": 390,
+      "height": 844,
+      "state": "board",
+      "filename": "board-phone.png",
+      "receipt": {
+        "view": "board",
+        "owner": 3,
+        "revision": 23,
+        "width": 390,
+        "height": 844
+      },
+      "sanity": {
+        "foreground": 0.268310546875,
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "name": "mac-laptop",
+      "label": "Mac laptop",
+      "width": 1512,
+      "height": 982,
+      "state": "board",
+      "filename": "board-mac-laptop.png",
+      "receipt": {
+        "view": "board",
+        "owner": 3,
+        "revision": 26,
+        "width": 1512,
+        "height": 982
+      },
+      "sanity": {
+        "foreground": 0.219482421875,
+        "width": 1512,
+        "height": 982
+      }
+    },
+    {
+      "name": "linux-half",
+      "label": "Half-width Linux window",
+      "width": 1280,
+      "height": 1440,
+      "state": "board",
+      "filename": "board-linux-half.png",
+      "receipt": {
+        "view": "board",
+        "owner": 3,
+        "revision": 29,
+        "width": 1280,
+        "height": 1440
+      },
+      "sanity": {
+        "foreground": 0.142333984375,
+        "width": 1280,
+        "height": 1440
+      }
+    },
+    {
+      "name": "linux-wide",
+      "label": "Wide Linux monitor",
+      "width": 2560,
+      "height": 1440,
+      "state": "board",
+      "filename": "board-linux-wide.png",
+      "receipt": {
+        "view": "board",
+        "owner": 3,
+        "revision": 32,
+        "width": 2560,
+        "height": 1440
+      },
+      "sanity": {
+        "foreground": 0.132568359375,
+        "width": 2560,
+        "height": 1440
+      }
+    },
+    {
+      "name": "portrait",
+      "label": "Portrait monitor",
+      "width": 1440,
+      "height": 2560,
+      "state": "board",
+      "filename": "board-portrait.png",
+      "receipt": {
+        "view": "board",
+        "owner": 3,
+        "revision": 35,
+        "width": 1440,
+        "height": 2560
+      },
+      "sanity": {
+        "foreground": 0.149169921875,
+        "width": 1440,
+        "height": 2560
+      }
+    }
+  ]
+}

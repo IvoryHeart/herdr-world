@@ -1,0 +1,23 @@
+{
+  "controlledDelay": "image and font held until capture pending with no marker or screenshot",
+  "slow": {
+    "view": "town",
+    "owner": 1,
+    "revision": 19,
+    "width": 1512,
+    "height": 982
+  },
+  "resize": {
+    "view": "town",
+    "owner": 1,
+    "revision": 27,
+    "width": 1280,
+    "height": 1440
+  },
+  "neverReady": "Error: Capture page: Error: Capture town owner=7 revision=9 deadline; stage=assets\n    at DrawReadiness.fail (http://127.0.0.1:43179/CaptureReadiness.browser.js:63918:20)\n    at http://127.0.0.1:43179/CaptureReadiness.browser.js:63852:55",
+  "loadAverage": [
+    4.68,
+    7.73,
+    5.55
+  ]
+}
