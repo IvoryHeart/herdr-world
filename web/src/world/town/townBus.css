@@ -112,3 +112,9 @@
     transition: box-shadow 0.15s ease;
   }
 }
+
+/* Let it go hangs under the held bus, clear of the stop's sign. */
+.town-bus-go {
+  transform: translate(-50%, 0) scale(var(--iz));
+  transform-origin: 50% 0;
+}

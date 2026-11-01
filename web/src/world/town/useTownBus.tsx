@@ -426,7 +426,7 @@ function TownBusControls({
         <button
           type="button"
           className="town-bus-go"
-          style={{ left: front.x + BUS_W / 2, top: front.y - 18 }}
+          style={{ left: front.x + BUS_W / 2, top: front.y + BUS_H + 4 }}
           onClick={onRelease}
         >
           Let it go
