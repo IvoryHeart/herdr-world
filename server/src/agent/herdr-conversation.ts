@@ -842,7 +842,7 @@ export function createHerdrConversationSource(args: {
           "The conversation in this pane changed. Nothing was sent; check it and send again.",
       } as const;
       // What Chat showed is the baseline a delivery is checked against. Over
-      // SSH the browser's own read is used rather than reading again.
+      // SSH the browser supplies those IDs; quote context is read below.
       let shown: Conversation | null = null;
       if (!(args.files.remote && baseline)) {
         shown = await read({ pane_id });
@@ -939,6 +939,9 @@ export function createHerdrConversationSource(args: {
       }
       // After every preparation await: no menu where the text goes, then the
       // agent once more with no await before the prompt (#4764 remains).
+      // Browser baseline IDs cannot supply authority for quoted screen text.
+      shown ??= await readShown(pane_id);
+      if (shown.session_fingerprint !== session_fingerprint) return changed;
       const unsafe = await sendScreenRefusal(args.herdrCall, pane_id, {
         agent,
         context: promptContext(info),

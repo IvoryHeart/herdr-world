@@ -210,8 +210,10 @@ that root; stat metadata cannot redirect the read to a different transcript.
   nothing typed when the read fails or is malformed, when it shows a command
   menu or a question, or when its last lines show a menu-like footer or a
   cursor on a numbered option (except a footer the agent's own last message
-  quotes). It then reads the agent once more and prompts with no await in
-  between. A menu that opens after that read is not caught (as #4764).
+  quotes). Over SSH, quote text comes from that same bound session even
+  when the browser supplies the delivery baseline. It then reads the agent
+  once more and prompts with no await in between. A menu that opens after
+  that read is not caught (as #4764).
 - Answers, menu keys and sends to one pane are one World input at a time; a
   second while one is in flight is refused (`busy`).
 - A slash command is reserved for its pane, session and text before any

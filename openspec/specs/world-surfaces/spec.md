@@ -2060,7 +2060,10 @@ message or slash command into a pane that may show a menu: Send SHALL be
 disabled while a menu card is shown, and after its last preparation await the
 service SHALL read the screen regardless of reported status and refuse with
 nothing typed when the read fails or is malformed or the screen shows a menu,
-a question or a menu-like footer or cursor. World inputs to one pane SHALL NOT
+a question or a menu-like footer or cursor. Ordinary prose quoted by the same
+session's last assistant message SHALL remain sendable, including over SSH
+with a browser delivery baseline; that baseline SHALL NOT supply quote authority.
+World inputs to one pane SHALL NOT
 overlap. A slash command SHALL be reserved per pane, session and text before
 dispatch; it SHALL be released only when nothing reached the pane and SHALL
 otherwise stay reserved, and show as waiting, until a successful qualified
@@ -2074,6 +2077,11 @@ while a key was pending. Opening, changing or
 closing a menu SHALL keep the transcript, its scroll position, the composer
 draft, attachments and send receipts. Herdr's lack of conditional input
 remains a documented gap between the last check and the key.
+
+#### Scenario: Quoted terminal instructions in an SSH reply
+
+- **WHEN** a bound SSH session's last assistant reply quotes terminal footer instructions and Chat supplies a delivery baseline
+- **THEN** ordinary text may be sent after checking quote text from that session; actual menus and unknown screen reads still refuse
 
 #### Scenario: Retry a command after native refusal
 

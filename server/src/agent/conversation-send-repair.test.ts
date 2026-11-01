@@ -5,6 +5,7 @@
 // busy interval, independent of dismissible receipts.
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHerdrConversationSource } from "./herdr-conversation";
@@ -16,6 +17,15 @@ import type { HerdrCall } from "./session-types";
 const prompt = ["❯ ", "──────", "  ? for shortcuts"].join("\n");
 let root = "";
 let transcript = "";
+let quotedTranscript = "";
+const footerQuote = "Press Enter to submit and Escape to cancel";
+const permissionMenu = readFileSync(
+  new URL(
+    "./fixtures/pending-prompts/menu-claude-permission-where.txt",
+    import.meta.url,
+  ),
+  "utf8",
+);
 beforeAll(async () => {
   root = await mkdtemp(join(tmpdir(), "review-629-"));
   transcript = join(root, "first.jsonl");
@@ -26,12 +36,23 @@ beforeAll(async () => {
       message: { role: "user", content: "Tidy the README" },
     }) + "\n";
   await writeFile(transcript, line);
+  quotedTranscript = join(root, "quoted.jsonl");
+  await writeFile(
+    quotedTranscript,
+    line +
+      JSON.stringify({
+        type: "assistant",
+        timestamp: "2026-10-01T00:00:01Z",
+        message: { role: "assistant", content: footerQuote },
+      }) +
+      "\n",
+  );
 });
 afterAll(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-function setup() {
+function setup(remote = false) {
   const state = {
     status: "idle",
     screen: prompt,
@@ -94,11 +115,12 @@ function setup() {
     }
     throw new Error(`unexpected ${method}`);
   };
+  const files = { ...localAgentSessionFiles, remote };
   const source = createHerdrConversationSource({
     herdrCall: call,
-    files: localAgentSessionFiles,
+    files,
     context: createAgentSessionResolverContext(),
-    cache: createSessionProjectionCache(localAgentSessionFiles),
+    cache: createSessionProjectionCache(files),
   });
   return { source, state };
 }
@@ -240,3 +262,83 @@ for (const error of [
     }
   });
 }
+
+// Remote file operations are fake-host adapters over disposable files; no SSH,
+// native harness or user configuration is touched.
+for (const mode of ["local", "ssh", "ssh-baseline"]) {
+  test(`an assistant's quoted footer permits ordinary text (${mode})`, async () => {
+    const { source, state } = setup(mode !== "local");
+    try {
+      state.file = quotedTranscript;
+      state.screen = footerQuote + "\n❯ ";
+      const shown = await source.read({ pane_id: "w1:p1" });
+      for (const text of ["Thanks, continue", "Explain the next step"]) {
+        expect(
+          await source.send({
+            pane_id: "w1:p1",
+            text,
+            session_fingerprint: shown.session_fingerprint!,
+            ...(mode === "ssh-baseline"
+              ? {
+                  baseline: shown.messages
+                    .filter((m) => m.role === "user")
+                    .map((m) => m.id),
+                }
+              : {}),
+          }),
+        ).toMatchObject({ status: "sent" });
+      }
+      expect(state.prompts).toEqual([
+        "Thanks, continue",
+        "Explain the next step",
+      ]);
+    } finally {
+      source.dispose();
+    }
+  });
+}
+
+for (const screen of ["menu", "failed", "malformed"]) {
+  test(`an SSH baseline and quoted reply never exempt a ${screen} screen`, async () => {
+    const { source, state } = setup(true);
+    try {
+      state.file = quotedTranscript;
+      const shown = await source.read({ pane_id: "w1:p1" });
+      state.screen = screen === "menu" ? permissionMenu : footerQuote + "\n❯ ";
+      state.readFails = screen === "failed";
+      state.readMalformed = screen === "malformed";
+      expect(
+        await source.send({
+          pane_id: "w1:p1",
+          text: "Continue",
+          session_fingerprint: shown.session_fingerprint!,
+          baseline: [],
+        }),
+      ).toMatchObject({ status: "refused", reason: "menu" });
+      expect(state.prompts).toEqual([]);
+    } finally {
+      source.dispose();
+    }
+  });
+}
+
+test("an SSH baseline cannot borrow a former session's quoted footer", async () => {
+  const { source, state } = setup(true);
+  try {
+    state.file = quotedTranscript;
+    const shown = await source.read({ pane_id: "w1:p1" });
+    state.file = transcript;
+    state.screen = footerQuote + "\n❯ ";
+    expect(
+      await source.send({
+        pane_id: "w1:p1",
+        text: "Continue",
+        session_fingerprint: shown.session_fingerprint!,
+        baseline: [],
+      }),
+    ).toMatchObject({ status: "refused", reason: "changed" });
+    expect(state.prompts).toEqual([]);
+  } finally {
+    source.dispose();
+  }
+});
