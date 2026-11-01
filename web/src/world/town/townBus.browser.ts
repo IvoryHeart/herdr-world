@@ -1,5 +1,6 @@
 import { BIN_DEPARTURE_MS } from "../../../../shared/bin";
 import type { createFakeBin } from "../testing/fakeBin";
+import { BUS_W } from "./townBusGeometry";
 import { townBusSender } from "./useTownBus";
 
 /**
@@ -80,14 +81,21 @@ export async function checkTownBus(
       4_000,
     );
   }
-  const holdAt = host
-    .querySelector<HTMLElement>(".town-bus-hold")!
-    .getBoundingClientRect();
+  // Staged at 0:30, the bus is still driving in (due at the stop at 0:10),
+  // and is already held along its road.
+  check(
+    host.querySelector('.town-bus-hold[data-coming="true"]') !== null,
+    "the bus driving in to the stop cannot be held",
+  );
+  // Where it stands at the stop: the stop end of its road while it comes.
+  const holdTarget = host.querySelector<HTMLElement>(".town-bus-hold")!;
+  const holdAt = holdTarget.getBoundingClientRect();
+  const holdScale = holdAt.width / holdTarget.offsetWidth;
   check(
     onTop(
-      host.querySelector(".town-bus-hold")!,
-      holdAt.left + holdAt.width / 2,
-      holdAt.bottom - 4,
+      holdTarget,
+      holdAt.right - (BUS_W / 2) * holdScale,
+      holdAt.bottom - 4 * holdScale,
     ),
     "the waiting bus is covered where a finger would hold it",
   );

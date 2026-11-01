@@ -679,11 +679,12 @@ and it returns to its place. **Close now** skips the wait; **Close lid** resumes
 the timers. The last pane of a pinned tab is refused until you unpin the tab.
 
 In Town the bin is a London bus stop on the top street. Drag an agent to the
-stop (or use **Send to the bus stop** in its peek) and watch the bus pull in. If
+stop (or use **Send to the bus stop** in its peek) and watch the bus drive in;
+it stops with 10 seconds left on the clock. If
 the stop is off screen, the red chip at the screen's edge takes you there, and
 you can drop a carried agent on it. When the countdown ends the bus drives
 away, and the agent closes only when the bus has left the map. Until then,
-press and hold the bus (even while it is moving) to stop it with its doors
+press and hold the bus (even while it is coming or leaving) to stop it with its doors
 open, then drag the agent off (or press it, or use **Put back** in the panel at
 the top) to return them to their desk.
 

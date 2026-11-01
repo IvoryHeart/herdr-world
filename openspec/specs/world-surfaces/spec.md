@@ -4030,15 +4030,21 @@ Town SHALL have one London bus stop, drawn in the world on the topmost street
 just right of its right-hand crossing (a vertical road meeting the street from
 above or below), with buses using the lane beside it. Agents dropped at the
 stop, or sent from their peek, leave their desks and wait there. One bus per
-departure SHALL drive in from the town's left edge, wait with its doors open for
-the whole countdown, then drive away and leave the map by the right edge exactly
-as the departure ends, which is when the close commits. A bus seats eight; more riders
+departure SHALL drive in from the town's left edge, timed to stop at the stop
+with 10 s left on the countdown (over its first 3 s when the countdown is 10 s),
+slowing as it arrives; wait with its doors open until the countdown ends; then
+pull away, speeding up, and leave the map by the right edge exactly as the
+departure ends, which is when the close commits. Its motion SHALL come from a
+mover character (cruising speed, acceleration, deceleration) shared by Town's
+movers, with the speed derived from the road's length and the time left. A bus seats eight; more riders
 SHALL take more buses, and buses that cannot stand at the stop SHALL queue
 behind it on the same street, then in further lanes, so every rider has a place
 on the map. While the stop is off screen, a chip at the nearest screen edge
 SHALL show the next departure and fly the camera to the stop; while an agent is
 carried it SHALL also accept the drop. The town SHALL hold still while a carried
-agent is over the stop. Pressing and holding a bus, waiting or driving away,
+agent is over the stop. While the stop is off screen, or under the asks rail or
+the zoom controls, its chip SHALL show and bring it into the free part of the
+screen. Pressing and holding a bus, driving in, waiting or driving away,
 SHALL stop it where it is with its doors open in every open World until one lets
 it go, and Enter or Space on a focused bus SHALL do the same. While a bus is held
 a panel at the top of the screen SHALL list its riders with Put back and offer

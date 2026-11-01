@@ -2,9 +2,12 @@
  * Town's bus, headless: where the stop, its waiting riders and each bus are,
  * as a pure function of the bin's state and time left. One bus per departure
  * (a bin "trip"); it drives in from the town's left edge along the stop's
- * street, waits with its doors open for the countdown, then drives away and
- * leaves by the right edge exactly when the close commits (the entry's
- * departure time). Until then it can still be stopped. Buses that cannot all stand at the stop queue behind it to
+ * street, timed to stop there with 10 s still on the clock, waits with its
+ * doors open until the countdown ends, then pulls away and leaves by the
+ * right edge exactly when the close commits (the entry's departure time).
+ * It moves as a mover with the bus's character (townMotion.ts): it slows
+ * into the stop and speeds up away from it. Until it has left it can still be
+ * stopped. Buses that cannot all stand at the stop queue behind it to
  * the left, then in further lanes below, so every rider has a place on the
  * map that can be panned to and dragged from. World pixels throughout.
  */
@@ -13,9 +16,19 @@ import type { BinEntry } from "../../../../../shared/bin";
 import { TOWN_TILE as T } from "../townLayout";
 import type { TownBusStop } from "../townBusStop";
 import { BUS_H, BUS_SEATS, BUS_W, STOP_H, STOP_W } from "../townBusGeometry";
+import { BUS_CHARACTER, moverRun } from "./townMotion";
 
-/** Time to drive in (capped to a share of short countdowns). */
-export const BUS_ARRIVE_MS = 3_000;
+/** The bus stops at the stop with this long left on the clock. */
+export const BUS_DUE_LEFT_MS = 10_000;
+/** A countdown too short for that still sees the bus pull in over this. */
+export const BUS_SHORT_APPROACH_MS = 3_000;
+
+/** How long a countdown's bus takes to drive in from the map's edge. */
+export const busApproachMs = (countdownMs: number) =>
+  Math.max(
+    countdownMs - BUS_DUE_LEFT_MS,
+    Math.min(BUS_SHORT_APPROACH_MS, countdownMs * 0.3),
+  );
 const GAP = 6;
 const LANE = BUS_H + 4;
 
@@ -67,11 +80,6 @@ export type TownBusInput = {
   reducedMotion: boolean;
 };
 
-const easeOut = (t: number) => 1 - (1 - t) ** 3;
-/** Pulling away: gathers speed, so it can be caught near the stop. */
-const easeIn = (t: number) => t ** 2;
-const clamp01 = (t: number) => Math.min(1, Math.max(0, t));
-
 export function townBusScene(input: TownBusInput): TownBusScene {
   const { stop } = input;
   const poleX = stop.x * T + T / 2;
@@ -120,20 +128,34 @@ export function townBusScene(input: TownBusInput): TownBusScene {
     const slotX = frontX - slot * (BUS_W + GAP);
     const y = kerb + 2 + lane * LANE;
     const since = trip.duration + trip.departure - trip.remaining;
-    const arrive = Math.min(BUS_ARRIVE_MS, trip.duration * 0.15);
+    const approach = busApproachMs(trip.duration);
     let x = slotX;
     let phase: TownBus["phase"] = "waiting";
     if (trip.remaining < trip.departure) {
-      // The countdown is over: it drives off and leaves the map as the
+      // The countdown is over: it pulls away and leaves the map as the
       // close commits. Reduced motion keeps it parked, doors shut.
       phase = "departing";
       if (!input.reducedMotion)
         x =
           slotX +
-          (input.width - slotX) * easeIn(1 - trip.remaining / trip.departure);
-    } else if (!input.reducedMotion && !input.paused && since < arrive) {
+          moverRun(
+            BUS_CHARACTER,
+            input.width - slotX,
+            { from: "rest", to: "moving" },
+            trip.departure,
+          ).at(trip.departure - trip.remaining);
+    } else if (!input.reducedMotion && since < approach) {
+      // Driving in, timed to stop with BUS_DUE_LEFT_MS on the clock. Held,
+      // time stands still, so it stops where it is.
       phase = "arriving";
-      x = -BUS_W + (slotX + BUS_W) * easeOut(clamp01(since / arrive));
+      x =
+        -BUS_W +
+        moverRun(
+          BUS_CHARACTER,
+          slotX + BUS_W,
+          { from: "moving", to: "rest" },
+          approach,
+        ).at(since);
     }
     const riders = trip.riders.map((entry, seat) => {
       const window = BUS_SEATS[seat]!;

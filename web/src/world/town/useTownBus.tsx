@@ -529,53 +529,61 @@ function TownBusControls({
         · {entries.length}
         {paused ? " · held" : ""}
       </div>
-      {scene.buses
-        .filter((bus) => bus.phase !== "arriving" || paused)
-        .map((bus) => {
-          // Driving away: the road from its stop to the map's edge, which
-          // holds the bus wherever it has got to.
-          const leaving = bus.phase === "departing" && !paused;
-          const left = leaving ? bus.home : bus.x;
-          return (
-            <button
-              key={`${bus.trip}:${bus.home}:${bus.y}`}
-              type="button"
-              className="town-bus-hold"
-              data-leaving={String(leaving)}
-              style={{
-                left,
-                top: bus.y,
-                width: leaving ? Math.max(BUS_W, scene.edge - left) : BUS_W,
-                height: BUS_H,
-              }}
-              aria-label={
-                paused
-                  ? "Bus held with its doors open"
+      {scene.buses.map((bus) => {
+        // Driving in or away: the road it is on (from the map's edge to its
+        // stop, or from its stop to the edge), which holds the bus
+        // wherever it has got to.
+        const moving = bus.phase !== "waiting" && !paused;
+        const coming = moving && bus.phase === "arriving";
+        const leaving = moving && !coming;
+        const left = coming ? 0 : leaving ? bus.home : bus.x;
+        return (
+          <button
+            key={`${bus.trip}:${bus.home}:${bus.y}`}
+            type="button"
+            className="town-bus-hold"
+            data-leaving={String(leaving)}
+            data-coming={String(coming)}
+            style={{
+              left,
+              top: bus.y,
+              width: coming
+                ? bus.home + BUS_W
+                : leaving
+                  ? Math.max(BUS_W, scene.edge - left)
+                  : BUS_W,
+              height: BUS_H,
+            }}
+            aria-label={
+              paused
+                ? "Bus held with its doors open"
+                : coming
+                  ? "The bus is coming: press and hold to stop it"
                   : leaving
                     ? "The bus is leaving: press and hold to stop it"
                     : "Press and hold to stop the bus"
-              }
-              aria-pressed={paused}
-              onPointerDown={(event) =>
-                leaving ? roadDown(left, event) : startHold()
-              }
-              onPointerMove={riderMove}
-              onPointerUp={(event) => (leaving ? roadUp(event) : stopHold())}
-              onPointerLeave={stopHold}
-              onPointerCancel={() => {
-                stopHold();
-                drag.current = null;
-              }}
-              // Enter or Space (a click with no pointer) holds or lets go.
-              onClick={(event) => {
-                if (event.detail !== 0) return;
-                if (paused) onRelease();
-                else onHold();
-              }}
-              onContextMenu={(event) => event.preventDefault()}
-            />
-          );
-        })}
+            }
+            aria-pressed={paused}
+            onPointerDown={(event) =>
+              moving ? roadDown(left, event) : startHold()
+            }
+            onPointerMove={riderMove}
+            onPointerUp={(event) => (moving ? roadUp(event) : stopHold())}
+            onPointerLeave={stopHold}
+            onPointerCancel={() => {
+              stopHold();
+              drag.current = null;
+            }}
+            // Enter or Space (a click with no pointer) holds or lets go.
+            onClick={(event) => {
+              if (event.detail !== 0) return;
+              if (paused) onRelease();
+              else onHold();
+            }}
+            onContextMenu={(event) => event.preventDefault()}
+          />
+        );
+      })}
       {riders.map((rider) => {
         const entry = byId.get(rider.entryId);
         if (!entry) return null;

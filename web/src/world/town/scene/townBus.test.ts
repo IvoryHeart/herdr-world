@@ -94,42 +94,54 @@ function scene(
 const TOTAL = 30_000 + BIN_DEPARTURE_MS;
 const HALF_GONE = BIN_DEPARTURE_MS / 2;
 
-test("a bus waits out the whole countdown, then leaves the map as the close commits", () => {
+test("a bus drives in to stop at 0:10, waits, and leaves the map as the close commits", () => {
+  const D = BIN_DEPARTURE_MS;
+  // Remaining counts the 30 s countdown, then the 6 s drive away.
   const at = [
     TOTAL - 1_000,
-    TOTAL - 2_500,
-    20_000,
-    BIN_DEPARTURE_MS,
+    TOTAL - 12_000,
+    D + 10_500,
+    D + 10_000,
+    D + 4_000,
+    D,
     HALF_GONE,
     0,
   ];
-  const buses = at.map((remaining) => {
-    const { entry } = rider("trip-a", remaining);
-    return scene([entry]).scene;
-  });
-  const xs = buses.map((s) => s.buses[0]!);
+  const scenes = at.map(
+    (remaining) => scene([rider("trip-a", remaining).entry]).scene,
+  );
+  const xs = scenes.map((s) => s.buses[0]!);
   expect(xs.map((b) => b.phase)).toEqual([
     "arriving",
     "arriving",
+    "arriving",
+    "waiting",
     "waiting",
     "waiting",
     "departing",
     "departing",
   ]);
+  // Driving in, ever nearer, and slowing: the last half second covers less
+  // than the first second did.
   expect(xs[0]!.x).toBeLessThan(xs[1]!.x);
   expect(xs[1]!.x).toBeLessThan(xs[2]!.x);
-  // The countdown's last moment: still at the stop, doors open.
-  expect(xs[3]!.x).toBe(xs[2]!.x);
-  expect(xs[3]!.doorsOpen).toBe(true);
-  expect(xs[3]!.remaining).toBe(0);
-  // Driving away, part way to the edge, doors shut.
+  const slot = xs[3]!.home;
+  expect(xs[2]!.x).toBeLessThan(slot);
+  const first = scene([rider("trip-b0", TOTAL).entry]).scene.buses[0]!.x;
+  expect(slot - xs[2]!.x).toBeLessThan(xs[0]!.x - first);
+  // At the stop from 0:10 to 0:00, doors open, the clock showing the wait.
+  expect([xs[3]!.x, xs[4]!.x, xs[5]!.x]).toEqual([slot, slot, slot]);
+  expect(xs[3]!.doorsOpen && xs[5]!.doorsOpen).toBe(true);
+  expect([xs[3]!.remaining, xs[5]!.remaining]).toEqual([10_000, 0]);
+  // Pulling away, doors shut; off the map exactly when the close commits.
   const { layout } = scene([]);
-  expect(xs[4]!.doorsOpen).toBe(false);
-  expect(xs[4]!.x).toBeGreaterThan(xs[4]!.home);
-  expect(xs[4]!.x).toBeLessThan(layout.width * T);
-  // Off the map exactly when the close commits.
-  expect(xs[5]!.x).toBe(layout.width * T);
-  expect(buses.map((s) => s.next?.leaving)).toEqual([
+  expect(xs[6]!.doorsOpen).toBe(false);
+  expect(xs[6]!.x).toBeGreaterThan(slot);
+  expect(xs[6]!.x).toBeLessThan(layout.width * T);
+  expect(xs[7]!.x).toBe(layout.width * T);
+  expect(scenes.map((s) => s.next?.leaving)).toEqual([
+    false,
+    false,
     false,
     false,
     false,
@@ -137,6 +149,26 @@ test("a bus waits out the whole countdown, then leaves the map as the close comm
     true,
     true,
   ]);
+});
+
+test("a short countdown's bus still pulls in, over its first 3 s", () => {
+  const short = (remaining: number) =>
+    scene([rider("trip-s", remaining, 10_000).entry]).scene.buses[0]!;
+  const total = 10_000 + BIN_DEPARTURE_MS;
+  expect(short(total - 1_000).phase).toBe("arriving");
+  expect(short(total - 3_000).phase).toBe("waiting");
+});
+
+test("held while driving in, the bus stops where it is", () => {
+  const moving = scene([rider("trip-h", TOTAL - 8_000).entry]).scene.buses[0]!;
+  const held = scene([rider("trip-h2", TOTAL - 8_000).entry], { paused: true })
+    .scene.buses[0]!;
+  expect([held.phase, held.x, held.doorsOpen]).toEqual([
+    "arriving",
+    moving.x,
+    true,
+  ]);
+  expect(held.x).toBeLessThan(held.home);
 });
 
 test("while a bus pulls in its riders wait at the stop with their box", () => {
@@ -163,7 +195,8 @@ test("held while driving away, the bus stops where it is with its doors open", (
 });
 
 test("under reduced motion the bus stays parked through the countdown and the departure", () => {
-  const parked = scene([rider("trip-p", 20_000).entry]).scene.buses[0]!;
+  const parked = scene([rider("trip-p", BIN_DEPARTURE_MS + 5_000).entry]).scene
+    .buses[0]!;
   const arriving = scene([rider("trip-d", TOTAL - 100).entry], {
     reducedMotion: true,
   }).scene.buses[0]!;
@@ -197,8 +230,9 @@ test("a crossing meeting the street from above or from below both count", async 
 
 test("every rider of a crowded town has a seat on the map and is found under the pointer", () => {
   const entries = [
-    ...Array.from({ length: 11 }, () => rider("trip-big", 20_000).entry),
-    ...Array.from({ length: 30 }, (_, i) => rider("", 15_000 + i * 10).entry),
+    // All at the stop (inside the last 10 s of their countdowns).
+    ...Array.from({ length: 11 }, () => rider("trip-big", 14_000).entry),
+    ...Array.from({ length: 30 }, (_, i) => rider("", 11_000 + i * 10).entry),
   ];
   const { scene: s, layout } = scene(entries, {}, 2);
   const seated = s.buses.flatMap((bus) => bus.riders);

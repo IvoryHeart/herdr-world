@@ -164,16 +164,19 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     stop is off screen, a red chip at the screen's edge shows the next departure
     and flies you there; while you carry an agent you can drop it on the chip.
     The agent leaves its desk and waits with a box while a red double-decker
-    drives in from the town's left edge, then rides it (eight to a bus; more take
-    more buses, queued behind the stop). When the countdown ends the bus drives
-    away, and the agent closes only once it has left the map by the right edge.
-    Until then press and hold a bus, waiting or moving, to stop it where it is
+    drives in from the town's left edge, slowing as it reaches the stop with
+    10 seconds left on the clock, then rides it (eight to a bus; more take more
+    buses, queued behind the stop). When the countdown ends the bus pulls away,
+    speeding up, and the agent closes only once it has left the map by the
+    right edge. Until then press and hold a bus, coming, waiting or leaving, to
+    stop it where it is
     with its doors open (every countdown pauses; Enter or Space on a focused bus
     does the same), or drag a rider off, or press it, to send them back to their
     desk. A held bus shows a panel at the top of the screen listing its riders
     with **Put back**, and **Let it go** drives on. It shares the bin's
     countdown, refusals and sounds; under reduced motion it stays parked for the
-    countdown and the departure time.
+    countdown and the departure time. When the stop is off screen or under the
+    asks rail or zoom buttons, the red chip brings it back into view.
   - Tables sit in Herdr's tab order, left to right and row by row, so moving a
     tab in Spaces or Herdr moves its table. Drag a table onto another table in
     its room to put it in that place, or onto the room's free spot to put it
