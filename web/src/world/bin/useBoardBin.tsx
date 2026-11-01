@@ -173,6 +173,19 @@ export function useBoardBin({
       }
       return next;
     },
+    /**
+     * The carry was abandoned (pointer cancel, lost capture, a second
+     * finger): it never goes in, even if it was over the bin.
+     */
+    cancel() {
+      const candidate = carrying.current;
+      carrying.current = null;
+      hotRef.current = false;
+      setHot(false);
+      setDrag(null);
+      if (candidate)
+        cardEl(candidate.tabKey)?.classList.remove("board-over-bin");
+    },
     /** The carry ended: true when the bin took it (or refused it). */
     drop() {
       const candidate = carrying.current;

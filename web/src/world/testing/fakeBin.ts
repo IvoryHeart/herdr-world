@@ -61,13 +61,19 @@ export function createFakeBin(epoch = "fixture-run") {
         case "world.bin.restore":
           state.entries = state.entries.filter((e) => e.id !== params.id);
           return changed();
-        case "world.bin.close_now":
-          // Fixtures never close: the entry just leaves the bin.
-          state.entries =
-            params.id === "all"
-              ? []
-              : state.entries.filter((e) => e.id !== params.id);
+        case "world.bin.close_now": {
+          // Fixtures never close: the named entries just leave the bin.
+          const ids = Array.isArray(params.ids) ? params.ids : [];
+          if (
+            !ids.length ||
+            ids.some((id) => !String(id).startsWith(`bin-${epoch}-`))
+          )
+            throw new Error(
+              "The bin changed since it was shown; nothing was closed",
+            );
+          state.entries = state.entries.filter((e) => !ids.includes(e.id));
           return changed();
+        }
         default:
           throw new Error(`unknown bin operation ${method}`);
       }

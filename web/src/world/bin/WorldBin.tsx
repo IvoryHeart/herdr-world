@@ -139,7 +139,7 @@ export function WorldBin({
 
   const report = (text: string) => setToast(text);
   const toggle = () => {
-    if (!holding) return;
+    if (!holding || (!open && !bin.verified)) return;
     if (open) {
       setOpen(false);
       void store
@@ -164,10 +164,13 @@ export function WorldBin({
       (error) => report(String(error?.message ?? error)),
     );
   };
-  const closeNow = (id: string) =>
+  // Only what this page shows, and only while it shows the live bin.
+  const closeNow = (ids: readonly string[]) => {
+    if (!bin.verified) return report("The bin is reconnecting; try again.");
     void store
-      .closeNow(id)
+      .closeNow(ids)
       .catch((error) => report(String(error?.message ?? error)));
+  };
 
   return (
     <>
@@ -282,7 +285,7 @@ function BinTray({
   timeLeft: (entry: BinEntry) => number;
   onShut: () => void;
   onPutBack: (entry: BinEntry, at: { x: number; y: number } | null) => void;
-  onCloseNow: (id: string) => void;
+  onCloseNow: (ids: readonly string[]) => void;
   onDragOut?: (entry: BinEntry | null) => void;
   className?: string;
 }) {
@@ -366,7 +369,7 @@ function BinTray({
               <button
                 type="button"
                 className="world-bin-button world-bin-danger"
-                onClick={() => onCloseNow(entry.id)}
+                onClick={() => onCloseNow([entry.id])}
               >
                 Close now
               </button>
@@ -379,7 +382,7 @@ function BinTray({
           <button
             type="button"
             className="world-bin-button world-bin-danger"
-            onClick={() => onCloseNow("all")}
+            onClick={() => onCloseNow(entries.map((entry) => entry.id))}
           >
             Close all now
           </button>

@@ -196,8 +196,12 @@ export class WorldBinStore {
   restore(id: string) {
     return this.mutate("world.bin.restore", { id });
   }
-  closeNow(id: string) {
-    return this.mutate("world.bin.close_now", { id });
+  /**
+   * Close now exactly these entries, as this page shows them: their IDs name
+   * the service run, which refuses another run's (no unscoped "all").
+   */
+  closeNow(ids: readonly string[]) {
+    return this.mutate("world.bin.close_now", { ids: [...ids] });
   }
   pause() {
     return this.mutate("world.bin.pause");

@@ -1940,6 +1940,8 @@ export default function BoardView({
         dropHeld(effect.vx / cam.current.s, effect.vy / cam.current.s);
         return;
       case "settleCard":
+        // An abandoned carry settles where it is and never goes in the bin.
+        boardBin.cancel();
         dropHeld(0, 0);
         return;
       case "tap":
