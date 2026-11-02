@@ -1873,7 +1873,12 @@
       "properties": "Concurrent callers share bounded work; obsolete results cannot repopulate retired caches; failures do not change action authority",
       "existingTests": [
         "server/src/world/observability.test.ts",
-        "server/src/world/observability-http.test.ts"
+        "server/src/world/observability-http.test.ts",
+        "server/src/usage/projection.test.ts",
+        "server/src/usage/collector.test.ts",
+        "server/src/usage/host.test.ts",
+        "server/src/usage/service.test.ts",
+        "server/src/rpc/usage.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/155",
       "technique": "alternative",
@@ -1881,13 +1886,21 @@
       "status": "alternative-evidence",
       "remaining": "Metrics do not grant operation authority; provider availability and network deadlines are observed integration behavior.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
-      "evidenceDecision": "Real provider/HTTP/cache tests exercise bounded read-only observation, unavailable providers, coalescing and validated credential-free configuration.",
+      "evidenceDecision": "Real provider/HTTP/cache tests exercise bounded read-only observation, unavailable providers, coalescing and validated credential-free configuration. Harness-log usage adds direct parser, host-program, attribution/lease, retention/size and real RPC admission consumers under verification/contracts/world-usage.md; the new mapping awaits independent PR review and does not expand accepted model claims.",
       "partialEvidence": {
         "models": [],
-        "contracts": ["verification/consumer-evidence.md"],
+        "contracts": [
+          "verification/consumer-evidence.md",
+          "verification/contracts/world-usage.md"
+        ],
         "tests": [
           "server/src/world/observability.test.ts",
-          "server/src/world/observability-http.test.ts"
+          "server/src/world/observability-http.test.ts",
+          "server/src/usage/projection.test.ts",
+          "server/src/usage/collector.test.ts",
+          "server/src/usage/host.test.ts",
+          "server/src/usage/service.test.ts",
+          "server/src/rpc/usage.test.ts"
         ],
         "checks": ["bun run check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."

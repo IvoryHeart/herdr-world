@@ -81,6 +81,7 @@ export type RpcServices = {
   publishDeskChanged: DeskService["publish"];
   worldCli: ReturnType<typeof createWorldCliService>;
   worldSnapshots: WorldSnapshotService<LegacyConnectionRuntime> | null;
+  worldUsage?: import("../usage/service").WorldUsageService;
 };
 
 type RpcRoute = ReturnType<typeof resolveRpcRoute<LegacyConnectionRuntime>>;

@@ -176,6 +176,7 @@
   "rpc:world.profiles.get": "allow deny deny deny deny deny",
   "rpc:world.profiles.save": "allow deny deny deny deny deny",
   "rpc:world.snapshot": "allow deny deny deny deny deny",
+  "rpc:world.usage.get": "allow deny deny deny deny deny",
   "rpc:world.town_master.set": "allow deny deny deny deny deny",
   "rpc:world.watchlist.list": "allow deny deny deny deny deny",
   "rpc:world.watchlist.pin": "allow deny deny deny deny deny",

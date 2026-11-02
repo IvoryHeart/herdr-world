@@ -79,6 +79,7 @@ import {
 } from "./subscription-loop";
 import { type ConnectionIdentity, STARTUP_DEFAULT_CONNECTION } from "./types";
 import { unixOnlyHandlers } from "./unix-only";
+import { createRuntimeUsage } from "../usage/host";
 
 const DEFAULT_EVENTS = [
   "workspace.created",
@@ -154,6 +155,11 @@ export function createLegacyConnectionRuntime(args: {
     sshHost: config.sshHost,
     runBinaryProcessWithTimeout,
     shQuote,
+  });
+  const usage = createRuntimeUsage({
+    herdrCall: (...args) => herdr.call(...args),
+    files: agentSessionFiles,
+    sshHost: config.sshHost,
   });
   // These helper groups run Unix shell commands over SSH.
   const agentSessions = unixOnlyHandlers(
@@ -800,6 +806,7 @@ export function createLegacyConnectionRuntime(args: {
     worktreeRemovalRuntime,
     terminalBridge,
     agentSessions,
+    usage,
     agentCheckout,
     agentWorktree,
     recoveryIdentity,

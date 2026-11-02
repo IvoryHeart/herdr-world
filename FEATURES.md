@@ -17,6 +17,12 @@ from open questions; the owner can close a delivery or explicitly resend to the
 same session after accepting a possible duplicate. A changed session is skipped.
 See [migration and backups](./docs/DEPLOYMENT.md#durable-questions-results-and-backups).
 
+The service also exposes shared [harness usage data](./docs/usage.md): bounded
+token records from Claude Code, Codex, Pi and Gemini logs on qualified local or
+SSH hosts, with source health, host/workspace/tab/pane rollups and optional
+versioned price-table estimates. The `world.usage.get` read contract is ready
+for expenses projections in Town and Board.
+
 ## World update notifications
 
 - An available release notifies once per version in each browser profile and World
