@@ -808,8 +808,12 @@ remote path inspection and the shared worktree synchronization adapter. Allowed
 current, forbidden retired and independent sibling controls cross session acquisition
 and spawn for each of those adapters. Consumers also cover queued terminal
 upload/cleanup cancellation, retained
-failed-start child ownership and health-check abort/deadline slot release. The
-three independent lifecycle repros also pass; these claims remain consumer-level,
+failed-start child ownership and health-check abort/deadline slot release. A single 14-path table also reaches transitive ignore marking after its directory
+read, both forwarding scan directions, launcher readiness/skills and integration
+version enrichment; it checks current dispatch, queued-owner retirement and an
+independent already-queued sibling. Required runner call sites are recorded in the
+[bounded audit](../docs/reviews/roamgate-runner-audit.md). The independent lifecycle
+and direct-adapter repros also pass; these claims remain consumer-level,
 not new abstract-model or native-platform acceptance. Real OpenSSH `-G` resolves the generated policy; a controlled
 SSH executable checks process execution and retry, not a live remote server.
 Herdr framing fixtures exercise UTF-8 and the exact 1 MiB boundary on Bun.connect

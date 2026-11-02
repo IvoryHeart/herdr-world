@@ -598,7 +598,11 @@ caller's deadline. Runtime retirement aborts queued commands before process disp
 and cancels active command/upload children without affecting another runtime.
 Workspace Files uploads, streamed file search, remote path checks and worktree base
 synchronization receive that runtime capability explicitly; remote path checks
-refuse a missing owner rather than using a global process helper. Browser
+refuse a missing owner rather than using a global process helper.
+Ignore detection, local directory archives, launcher probes and integration-version
+enrichment also require their caller's runner; no transitive helper supplies a
+global default. The [required call-site audit](reviews/roamgate-runner-audit.md)
+records production injection sites and the shared retirement controls. Browser
 background calls run at most four per connection and share identical in-flight
 reads within their captured transport/runtime scope. Scheduled focused-list reads
 use the background lane. Git status returns cached values, refreshing stale entries

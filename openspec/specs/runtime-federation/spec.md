@@ -550,7 +550,9 @@ control path, preserve the service user's OpenSSH policy, and never substitute a
 master belonging to another connection or generation. Background command sessions
 SHALL leave capacity for interactive commands; queueing and any safe read retry
 SHALL spend the caller's deadline, including recovery health checks. Retirement
-SHALL abort queued work before process dispatch. A failed-start master whose exit
+SHALL abort queued work before process dispatch. Runtime command helpers SHALL
+require their owning caller's runner and SHALL NOT substitute a module-global
+command runner. A failed-start master whose exit
 is unconfirmed SHALL retain child/path ownership and prevent replacement.
 Mutating commands SHALL NOT be retried after an ambiguous master failure.
 

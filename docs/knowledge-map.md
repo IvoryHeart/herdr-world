@@ -305,3 +305,7 @@ Ownership consumers are [SSH routing](../server/src/bridge/ssh-owner.test.ts),
 [inactive-host status reconciliation](../web/src/store/gitStatusPush.test.ts).
 The [integration test plan](reviews/roamgate-sync-test-plan.md) keeps whole-system
 acceptance separate from the transport part's evidence.
+
+The SSH transport [runner ownership audit](reviews/roamgate-runner-audit.md) maps
+required runtime process ports through file/Git/ignore, status, discovery and
+forwarding helpers to the shared retirement control.

@@ -15,6 +15,7 @@ import type {
   FileResolution,
   RunProcessWithCodeTimeout,
   RunProcessWithInputTimeout,
+  RunBinaryProcessWithTimeout,
 } from "./file-types";
 import { FileDownloadError } from "./file-download";
 import {
@@ -71,6 +72,7 @@ export function createFileHandlers({
   sshHost,
   runProcessWithCodeTimeout,
   runProcessWithInputTimeout,
+  runBinaryProcessWithTimeout,
   bindProcess,
   shQuote,
   lastStepBaselines,
@@ -81,6 +83,7 @@ export function createFileHandlers({
   sshHost: () => string | undefined;
   runProcessWithCodeTimeout: RunProcessWithCodeTimeout;
   runProcessWithInputTimeout: RunProcessWithInputTimeout;
+  runBinaryProcessWithTimeout: RunBinaryProcessWithTimeout;
   bindProcess: (argv: string[]) => string[];
   shQuote: (value: string) => string;
   lastStepBaselines?: LastStepBaselineStore;
@@ -207,6 +210,7 @@ export function createFileHandlers({
       : await listLocalFiles(rootPath, relativePath, showHidden, filesystem);
     if (list.entries.length) {
       const ignored = await collectIgnoredNames({
+        runProcess: runProcessWithInputTimeout,
         host,
         directory: relativePath ? `${list.root}/${relativePath}` : list.root,
         names: list.entries.map((entry) => entry.name),
@@ -433,7 +437,12 @@ export function createFileHandlers({
             shQuote,
             options,
           })
-        : await downloadLocalFile(checkoutPath, path, options);
+        : await downloadLocalFile(
+            checkoutPath,
+            path,
+            runBinaryProcessWithTimeout,
+            options,
+          );
     } catch (error) {
       if (!(error instanceof FileDownloadError)) throw error;
       return new Response(error.message, {

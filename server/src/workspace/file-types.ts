@@ -88,3 +88,6 @@ export type RunProcessWithCodeTimeout =
 
 export type RunProcessWithInputTimeout =
   typeof import("./process").runProcessWithInputTimeout;
+
+export type RunBinaryProcessWithTimeout =
+  typeof import("./process").runBinaryProcessWithTimeout;

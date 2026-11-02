@@ -1,5 +1,6 @@
 import { sshReadCommandArgv } from "../bridge/ssh-command";
-import { runProcessWithCodeTimeout, shQuote } from "../utils/process-utils";
+import { shQuote } from "../utils/process-utils";
+import type { RunProcessWithCodeTimeout } from "../workspace/file-types";
 import { findHerdrBinary } from "./bootstrap";
 
 const CLI_TIMEOUT_MS = 5_000;
@@ -50,7 +51,7 @@ export async function enrichIntegrationVersions(
   options: {
     sshHost?: string;
     ping: () => Promise<{ version?: unknown }>;
-    run?: typeof runProcessWithCodeTimeout;
+    run: RunProcessWithCodeTimeout;
     findBinary?: typeof findHerdrBinary;
   },
 ): Promise<unknown> {
@@ -76,7 +77,7 @@ export async function enrichIntegrationVersions(
           item.available_version === undefined)));
   if (!items.some(needsVersions)) return result;
   try {
-    const run = options.run ?? runProcessWithCodeTimeout;
+    const run = options.run;
     const { version } = await options.ping();
     if (typeof version !== "string" || !version) return result;
     let stdout: string;

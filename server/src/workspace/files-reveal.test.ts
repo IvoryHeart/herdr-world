@@ -1,4 +1,7 @@
-import { runProcessWithInputTimeout } from "./process";
+import {
+  runProcessWithInputTimeout,
+  runBinaryProcessWithTimeout,
+} from "./process";
 import { afterEach, expect, test } from "bun:test";
 import {
   mkdir,
@@ -43,6 +46,7 @@ async function fixture(sshHost?: string) {
   await writeFile(join(checkout, "existing.md"), "file");
   const launches: string[][] = [];
   const files = createFileHandlers({
+    runBinaryProcessWithTimeout,
     bindProcess: (argv) => argv,
     runProcessWithInputTimeout,
     herdr: {

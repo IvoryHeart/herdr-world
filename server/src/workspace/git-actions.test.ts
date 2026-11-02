@@ -1,4 +1,7 @@
-import { runProcessWithInputTimeout } from "./process";
+import {
+  runProcessWithInputTimeout,
+  runBinaryProcessWithTimeout,
+} from "./process";
 import { describe, expect, test } from "bun:test";
 import {
   lstat,
@@ -480,6 +483,7 @@ describe("runGitRepoAction", () => {
 describe("createFileHandlers git support end to end", () => {
   function handlersFor(root: string) {
     return createFileHandlers({
+      runBinaryProcessWithTimeout,
       bindProcess: (argv) => argv,
       runProcessWithInputTimeout,
       herdr: {
@@ -567,6 +571,7 @@ describe("collectIgnoredNames", () => {
       await writeFile(join(root, ".gitignore"), "build/\n*.log\n");
       await writeFile(join(root, "debug.log"), "log\n");
       const names = await collectIgnoredNames({
+        runProcess: runProcessWithInputTimeout,
         directory: root,
         names: ["tracked.txt", "debug.log", ".gitignore", "missing dir"],
         shQuote: context.shQuote,
@@ -579,6 +584,7 @@ describe("collectIgnoredNames", () => {
     const dir = await mkdtemp(join(tmpdir(), "herdr-not-a-repo-"));
     try {
       const names = await collectIgnoredNames({
+        runProcess: runProcessWithInputTimeout,
         directory: dir,
         names: ["file.txt"],
         shQuote,

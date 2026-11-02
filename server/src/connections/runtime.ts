@@ -269,6 +269,7 @@ export function createLegacyConnectionRuntime(args: {
       sshHost,
       runProcessWithCodeTimeout,
       runProcessWithInputTimeout,
+      runBinaryProcessWithTimeout,
       bindProcess: forConnection,
       shQuote,
       lastStepBaselines,

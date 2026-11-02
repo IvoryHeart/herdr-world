@@ -1,4 +1,7 @@
-import { runProcessWithInputTimeout } from "./process";
+import {
+  runProcessWithInputTimeout,
+  runBinaryProcessWithTimeout,
+} from "./process";
 import { describe, expect, spyOn, test } from "bun:test";
 import { mkdtemp, mkdir, open, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -8,7 +11,6 @@ import { shQuote } from "../utils/process-utils";
 import { createFileHandlers } from "./files";
 import { readHtmlPreviewFile, HtmlPreviewError } from "./html-preview-files";
 import { HTML_PREVIEW_CSP, renderHtmlPreview } from "./html-preview";
-import { runBinaryProcessWithTimeout } from "./process";
 
 const png = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=",
@@ -46,6 +48,7 @@ for (const remote of [false, true]) {
     });
     const handlers = (root: string) =>
       createFileHandlers({
+        runBinaryProcessWithTimeout,
         bindProcess: (argv) => argv,
         runProcessWithInputTimeout,
         herdr: {

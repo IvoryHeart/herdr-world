@@ -460,6 +460,7 @@ async function handleRpc(
       connection.remotePlatform !== "windows"
     ) {
       result = await enrichIntegrationVersions(result, {
+        run: connection.runProcessWithCodeTimeout,
         sshHost: sshHost(),
         ping: () => herdr.ping(),
       });

@@ -1,4 +1,7 @@
-import { runProcessWithInputTimeout } from "./process";
+import {
+  runProcessWithInputTimeout,
+  runBinaryProcessWithTimeout,
+} from "./process";
 import { expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -104,6 +107,7 @@ test("Inspector Files, Changes and HTTP downloads use the agent's linked checkou
       candidateId: selected.candidateId,
     };
     const files = createFileHandlers({
+      runBinaryProcessWithTimeout,
       bindProcess: (argv) => argv,
       runProcessWithInputTimeout,
       herdr: herdr as HerdrClient,
