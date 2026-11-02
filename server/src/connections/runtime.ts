@@ -67,7 +67,10 @@ import {
   type LastStepBaselineStore,
 } from "../workspace/git-diff";
 import { createLastStepTurnTracker } from "../workspace/last-step-turns";
-import { runBinaryProcessWithTimeout as runBinaryProcessWithTimeoutBase } from "../workspace/process";
+import {
+  runBinaryProcessWithTimeout as runBinaryProcessWithTimeoutBase,
+  runProcessWithInputTimeout as runProcessWithInputTimeoutBase,
+} from "../workspace/process";
 import { createStatusEnricher } from "../workspace/status";
 import { createWorktreeHookRunner } from "../worktree/worktree-hooks";
 import { createWorktreeParentStore } from "../worktree/parents";
@@ -178,6 +181,10 @@ export function createLegacyConnectionRuntime(args: {
     argv,
     ...rest
   ) => runBinaryProcessWithTimeoutBase(forConnection(argv), ...rest);
+  const runProcessWithInputTimeout: typeof runProcessWithInputTimeoutBase = (
+    argv,
+    ...rest
+  ) => runProcessWithInputTimeoutBase(forConnection(argv), ...rest);
   const herdr = new HerdrClient(socketPath, {
     logger: logger.child("herdr"),
     connectionId: identity.id,
@@ -261,6 +268,8 @@ export function createLegacyConnectionRuntime(args: {
       herdr,
       sshHost,
       runProcessWithCodeTimeout,
+      runProcessWithInputTimeout,
+      bindProcess: forConnection,
       shQuote,
       lastStepBaselines,
       resolveAgentWorktreeTarget: agentWorktree.resolve,
@@ -865,6 +874,7 @@ export function createLegacyConnectionRuntime(args: {
     clientSocketPath,
     remotePlatform,
     sshHost,
+    runProcessWithCodeTimeout,
     herdr,
     worktreeParents,
     handleHerdrInfo,

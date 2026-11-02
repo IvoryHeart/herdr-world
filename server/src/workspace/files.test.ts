@@ -1,3 +1,4 @@
+import { runProcessWithInputTimeout } from "./process";
 import { describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -20,6 +21,8 @@ describe("workspace file handlers", () => {
     const diagnostic =
       "fatal: not a git repository (or any of the parent directories): .git";
     const handlers = createFileHandlers({
+      bindProcess: (argv) => argv,
+      runProcessWithInputTimeout,
       herdr: {
         call: async (method: string) => {
           if (method === "workspace.get")
@@ -52,6 +55,8 @@ describe("workspace file handlers", () => {
   test("commit history uses the workspace checkout and renders an unborn HEAD as empty", async () => {
     const processes: string[][] = [];
     const handlers = createFileHandlers({
+      bindProcess: (argv) => argv,
+      runProcessWithInputTimeout,
       herdr: {
         call: async (method: string) => {
           if (method === "workspace.get")
@@ -99,6 +104,8 @@ describe("workspace file handlers", () => {
       const processes: string[][] = [];
       const target = "/repo with 'quote/topic";
       const handlers = createFileHandlers({
+        bindProcess: (argv) => argv,
+        runProcessWithInputTimeout,
         herdr: {
           call: async (method: string, params: Record<string, unknown>) => {
             expect(params.workspace_id).toBe("w1");
@@ -166,6 +173,8 @@ describe("workspace file handlers", () => {
       await writeFile(join(root, "README.md"), "hello");
       const calls: string[] = [];
       const handlers = createFileHandlers({
+        bindProcess: (argv) => argv,
+        runProcessWithInputTimeout,
         herdr: {
           call: async (method: string) => {
             calls.push(method);
@@ -212,6 +221,8 @@ describe("workspace file handlers", () => {
   test("prefers pane cwd over an agent foreground directory for git operations", async () => {
     const calls: string[][] = [];
     const handlers = createFileHandlers({
+      bindProcess: (argv) => argv,
+      runProcessWithInputTimeout,
       herdr: {
         call: async (method: string) => {
           if (method === "workspace.get") {
@@ -253,6 +264,8 @@ describe("workspace file handlers", () => {
       await writeFile(join(root, "测试.txt"), "hello");
       await writeFile(join(root, "guide.pdf"), "%PDF-1.7");
       const handlers = createFileHandlers({
+        bindProcess: (argv) => argv,
+        runProcessWithInputTimeout,
         herdr: {
           call: async (method: string) => {
             if (method === "workspace.get") {
@@ -343,6 +356,8 @@ describe("workspace file handlers", () => {
       await mkdir(join(root, "a", "b"), { recursive: true });
       await writeFile(join(root, "a", "b", "c.png"), "image");
       const handlers = createFileHandlers({
+        bindProcess: (argv) => argv,
+        runProcessWithInputTimeout,
         herdr: {
           call: async (method: string) => {
             if (method === "workspace.get") {
@@ -390,6 +405,8 @@ describe("workspace file handlers", () => {
 
   test("validates required workspace ids", async () => {
     const handlers = createFileHandlers({
+      bindProcess: (argv) => argv,
+      runProcessWithInputTimeout,
       herdr: { call: async () => ({}) } as any,
       sshHost: () => undefined,
       runProcessWithCodeTimeout: async () => ({

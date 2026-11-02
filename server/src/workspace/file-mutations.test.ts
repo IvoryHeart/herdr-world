@@ -1,3 +1,4 @@
+import { runProcessWithInputTimeout } from "./process";
 import { describe, expect, spyOn, test } from "bun:test";
 import { renameSync, writeFileSync } from "node:fs";
 import {
@@ -34,6 +35,8 @@ for (const remote of [false, true]) {
       await mkdir(root);
       await mkdir(outside);
       const files = createFileHandlers({
+        bindProcess: (argv) => argv,
+        runProcessWithInputTimeout,
         herdr: {
           call: async () => ({
             workspace: {

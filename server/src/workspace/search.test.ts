@@ -32,6 +32,7 @@ for (const [color, column] of [
       await writeFile(join(root, ".untracked"), "needle hidden untracked\n");
 
       const content = await searchWorkspaceFiles({
+        bindProcess: (argv) => argv,
         root,
         query: "needle",
         mode: "content",
@@ -70,6 +71,7 @@ test("searches unloaded checkout files and content while respecting ignores and 
     );
 
     const files = await searchWorkspaceFiles({
+      bindProcess: (argv) => argv,
       root,
       query: "target",
       mode: "files",
@@ -82,6 +84,7 @@ test("searches unloaded checkout files and content while respecting ignores and 
     });
 
     const content = await searchWorkspaceFiles({
+      bindProcess: (argv) => argv,
       root,
       query: "NEEDLE",
       mode: "content",
@@ -94,6 +97,7 @@ test("searches unloaded checkout files and content while respecting ignores and 
     });
 
     const hidden = await searchWorkspaceFiles({
+      bindProcess: (argv) => argv,
       root,
       query: "needle",
       mode: "content",
@@ -112,6 +116,7 @@ test("searches unloaded checkout files and content while respecting ignores and 
     ).toBe(0);
     await writeFile(join(root, ".gitignore"), "ignored/\n*.log\n");
     const tracked = await searchWorkspaceFiles({
+      bindProcess: (argv) => argv,
       root,
       query: "needle",
       mode: "content",
@@ -131,6 +136,7 @@ test("searches unloaded checkout files and content while respecting ignores and 
       await writeFile(join(root, `match-${index}.txt`), "needle\n");
     }
     const bounded = await searchWorkspaceFiles({
+      bindProcess: (argv) => argv,
       root,
       query: "match-",
       mode: "files",

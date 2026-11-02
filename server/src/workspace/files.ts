@@ -14,6 +14,7 @@ import type {
   FileDownloadResult,
   FileResolution,
   RunProcessWithCodeTimeout,
+  RunProcessWithInputTimeout,
 } from "./file-types";
 import { FileDownloadError } from "./file-download";
 import {
@@ -69,6 +70,8 @@ export function createFileHandlers({
   herdr,
   sshHost,
   runProcessWithCodeTimeout,
+  runProcessWithInputTimeout,
+  bindProcess,
   shQuote,
   lastStepBaselines,
   revealPath = revealLocalPath,
@@ -77,6 +80,8 @@ export function createFileHandlers({
   herdr: HerdrClient;
   sshHost: () => string | undefined;
   runProcessWithCodeTimeout: RunProcessWithCodeTimeout;
+  runProcessWithInputTimeout: RunProcessWithInputTimeout;
+  bindProcess: (argv: string[]) => string[];
   shQuote: (value: string) => string;
   lastStepBaselines?: LastStepBaselineStore;
   revealPath?: typeof revealLocalPath;
@@ -272,6 +277,7 @@ export function createFileHandlers({
     const result = await searchWorkspaceFiles({
       root,
       host: sshHost(),
+      bindProcess,
       query: params.query.trim(),
       mode: params.mode,
       showHidden: params.show_hidden === true,
@@ -478,6 +484,7 @@ export function createFileHandlers({
     const host = sshHost();
     const upload = host
       ? await uploadRemoteFile({
+          runProcessWithInputTimeout,
           host,
           rootPath: checkoutPath,
           directory,

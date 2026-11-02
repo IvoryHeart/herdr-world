@@ -1,3 +1,4 @@
+import { runProcessWithInputTimeout } from "./process";
 import { expect, test } from "bun:test";
 import { mkdtemp, open, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -66,6 +67,8 @@ test.each([false, true])(
     let current = true;
     let changeBeforeRead = false;
     const handlers = createFileHandlers({
+      bindProcess: (argv) => argv,
+      runProcessWithInputTimeout,
       herdr: {
         call: async () => ({
           workspace: { worktree: { checkout_path: root } },

@@ -10,7 +10,7 @@ import { workspaceRepoSettingsKey } from "../config/gui-settings";
 import { validateConnectionId } from "../connections/protocol";
 import type { LegacyConnectionRuntime } from "../connections/runtime";
 import { assertUnixHost } from "../connections/unix-only";
-import { inspectWorkspacePath } from "../workspace/path";
+import { inspectRuntimeWorkspacePath } from "../workspace/path";
 import { checkoutPath } from "../workspace/utils";
 import { surfaceAssistantUserError } from "./errors";
 
@@ -378,11 +378,7 @@ export async function prepareAssistantAction(args: {
               "A workspace with this label already exists. No duplicate was created.",
           };
         const directory = await read(() =>
-          inspectWorkspacePath(
-            cwd,
-            { host: runtime.sshHost(), remotePlatform: runtime.remotePlatform },
-            false,
-          ),
+          inspectRuntimeWorkspacePath(runtime, cwd, false),
         );
         if (directory.error)
           return {

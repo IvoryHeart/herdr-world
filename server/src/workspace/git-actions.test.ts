@@ -1,3 +1,4 @@
+import { runProcessWithInputTimeout } from "./process";
 import { describe, expect, test } from "bun:test";
 import {
   lstat,
@@ -479,6 +480,8 @@ describe("runGitRepoAction", () => {
 describe("createFileHandlers git support end to end", () => {
   function handlersFor(root: string) {
     return createFileHandlers({
+      bindProcess: (argv) => argv,
+      runProcessWithInputTimeout,
       herdr: {
         call: async (method: string) => {
           if (method === "workspace.get") {

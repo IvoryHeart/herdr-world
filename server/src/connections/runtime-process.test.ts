@@ -3,6 +3,9 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createLegacyConnectionRuntime } from "./runtime";
+import { sshCommandArgv } from "../bridge/ssh-command";
+import { inspectRuntimeWorkspacePath } from "../workspace/path";
+import { createWorkspaceWorktree } from "../worktree/create";
 import { createGuiSettingsStore } from "../config/gui-settings";
 import { systemClock, systemScheduler } from "../service/ports";
 import { memoryRuntimeStatus } from "../storage/testing/runtime-status";
@@ -13,9 +16,14 @@ import {
   SSH_SESSION_LIMIT,
 } from "../bridge/ssh-sessions";
 
-test.each([false, true])(
-  "queued mutation dispatch retains runtime authority (retired=%s)",
-  async (retired) => {
+const cases = ["directory", "upload", "search", "path", "worktree"] as const;
+test.each(
+  cases.flatMap((operation) =>
+    [false, true].map((retired) => ({ operation, retired })),
+  ),
+)(
+  "queued $operation retains runtime authority (retired=$retired)",
+  async ({ operation, retired }) => {
     const root = mkdtempSync(join(tmpdir(), "runtime-process-"));
     const held = await Promise.all(
       Array.from({ length: SSH_SESSION_LIMIT }, () =>
@@ -82,26 +90,71 @@ test.each([false, true])(
     const spawn = spyOn(Bun, "spawn").mockImplementation((argv: any) => {
       spawns.push(argv);
       return {
-        exited: Promise.resolve(1),
-        stdout: new Response("").body!,
-        stderr: new Response("synthetic refusal").body!,
+        exited: Promise.resolve(0),
+        stdin: {
+          write() {
+            return 0;
+          },
+          end() {
+            return 0;
+          },
+        },
+        stdout: new Response(
+          operation === "upload"
+            ? "META\tc2FtcGxlLnR4dA==\t7\t0\n"
+            : operation === "search"
+              ? "sample.txt\0"
+              : operation === "path"
+                ? `PATH\t${Buffer.from("/synthetic/checkout").toString("base64")}\nERROR\t\n`
+                : "",
+        ).body!,
+        stderr: new Response("").body!,
         kill() {},
       } as any;
     });
-    const mutation = alpha.files
-      .createWorkspaceDirectory({ workspace_id: "w1", name: "new-directory" })
-      .catch((error) => error);
+    function run(value: typeof alpha, name: string) {
+      if (operation === "directory")
+        return value.files.createWorkspaceDirectory({
+          workspace_id: "w1",
+          name,
+        });
+      if (operation === "upload")
+        return value.files.uploadWorkspaceFile(
+          { workspace_id: "w1", filename: "sample.txt", directory: "" },
+          new Request("http://world.example/upload", {
+            method: "POST",
+            body: "payload",
+          }),
+        );
+      if (operation === "search")
+        return value.files.searchWorkspaceFiles({
+          workspace_id: "w1",
+          query: "sample",
+          mode: "files",
+        });
+      if (operation === "path")
+        return inspectRuntimeWorkspacePath(value, "/synthetic/checkout");
+      return createWorkspaceWorktree(
+        value,
+        { workspace_id: "w1" },
+        () => true,
+        () => {},
+        async ({ runProcessWithCodeTimeout }) => {
+          await runProcessWithCodeTimeout(
+            sshCommandArgv("queued.example", "git fetch origin"),
+            1000,
+          );
+          throw new Error("synthetic base sync complete");
+        },
+      );
+    }
+    const mutation = run(alpha, "new-directory").catch((error) => error);
     let peer: Promise<unknown> | undefined;
     try {
       await reached[0].promise;
       expect(spawns).toHaveLength(0);
       if (retired) {
-        peer = beta.files
-          .createWorkspaceDirectory({
-            workspace_id: "w1",
-            name: "peer-directory",
-          })
-          .catch((error) => error);
+        peer = run(beta, "peer-directory").catch((error) => error);
         await reached[1].promise;
         await alpha.stop();
       }
@@ -114,9 +167,20 @@ test.each([false, true])(
         "-S",
         `/synthetic/${retired ? "beta" : "alpha"}/m.ctl`,
       ]);
-      expect(spawns[0].at(-1)).toContain(
-        retired ? "peer-directory" : "new-directory",
-      );
+      if (operation === "directory")
+        expect(spawns[0].at(-1)).toContain(
+          retired ? "peer-directory" : "new-directory",
+        );
+      if (retired)
+        expect(await mutation).toMatchObject({
+          message: "connection runtime retired",
+        });
+      if (
+        operation === "upload" ||
+        operation === "search" ||
+        operation === "path"
+      )
+        expect(await (retired ? peer : mutation)).not.toBeInstanceOf(Error);
     } finally {
       for (const release of held) release();
       await mutation;

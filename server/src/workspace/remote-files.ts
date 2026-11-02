@@ -28,8 +28,8 @@ import type {
   FilePreviewResult,
   FileUploadResult,
   RunProcessWithCodeTimeout,
+  RunProcessWithInputTimeout,
 } from "./file-types";
-import { runProcessWithInputTimeout } from "./process";
 import { decodePreviewBuffer, previewLimitForPath } from "./preview";
 import { REMOTE_EXCLUSIVE_RENAME } from "./atomic-file-move";
 
@@ -482,6 +482,7 @@ export function parseRemoteFileUpload(stdout: string): FileUploadResult {
 }
 
 export async function uploadRemoteFile({
+  runProcessWithInputTimeout,
   host,
   rootPath,
   directory,
@@ -489,6 +490,7 @@ export async function uploadRemoteFile({
   body,
   shQuote,
 }: {
+  runProcessWithInputTimeout: RunProcessWithInputTimeout;
   host: string;
   rootPath: string;
   directory: string;

@@ -1,3 +1,4 @@
+import { runProcessWithInputTimeout } from "./process";
 import { afterEach, expect, test } from "bun:test";
 import {
   mkdir,
@@ -42,6 +43,8 @@ async function fixture(sshHost?: string) {
   await writeFile(join(checkout, "existing.md"), "file");
   const launches: string[][] = [];
   const files = createFileHandlers({
+    bindProcess: (argv) => argv,
+    runProcessWithInputTimeout,
     herdr: {
       call: async () => ({ workspace: { cwd: checkout } }),
     } as unknown as HerdrClient,

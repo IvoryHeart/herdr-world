@@ -803,7 +803,11 @@ forward list/close/retirement and attempt replacement, authenticated explicit ow
 admission without a forwarding-specific peer gate, bounded interactive/background
 queues, deadlines, retry-safe reads and no replay of mutations. Maintained direct
 consumers exercise an actual runtime's queued file mutation across retirement and
-same-destination peer continuation, queued upload/cleanup cancellation, retained
+same-destination peer continuation, actual workspace Files uploads, streamed searches,
+remote path inspection and the shared worktree synchronization adapter. Allowed
+current, forbidden retired and independent sibling controls cross session acquisition
+and spawn for each of those adapters. Consumers also cover queued terminal
+upload/cleanup cancellation, retained
 failed-start child ownership and health-check abort/deadline slot release. The
 three independent lifecycle repros also pass; these claims remain consumer-level,
 not new abstract-model or native-platform acceptance. Real OpenSSH `-G` resolves the generated policy; a controlled

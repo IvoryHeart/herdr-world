@@ -585,3 +585,11 @@ requested bind subject to the SSH server's GatewayPorts policy.
 - **WHEN** checkout status changes on a current inactive connection during a browser refresh
 - **THEN** that connection retains the newer status over the older catalogue reply,
   without changing a different connection with the same checkout path
+
+#### Scenario: A workspace file upload waits while its runtime retires
+
+- **WHEN** a Files upload has read its body and is queued for an SSH command slot
+- **AND** its owning runtime stops before a slot becomes available
+- **THEN** it SHALL abort without spawning a process or writing the remote target
+- **AND** a current sibling runtime to the same destination SHALL retain its own
+  private master and remain able to upload

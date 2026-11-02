@@ -4,7 +4,7 @@ import { GIT_PULL_TIMEOUT_MS } from "../workspace/file-constants";
 import type { RunProcessWithCodeTimeout } from "../workspace/file-types";
 import type { LegacyConnectionRuntime } from "../connections/runtime";
 import { assertUnixHost } from "../connections/unix-only";
-import { runProcessWithCodeTimeout, shQuote } from "../utils/process-utils";
+import { shQuote } from "../utils/process-utils";
 import type { WorktreeHookExpectation } from "./worktree-hooks";
 
 type GitRootResolver = (workspaceId: string) => Promise<{ root: string }>;
@@ -99,7 +99,7 @@ export async function createWorkspaceWorktree(
     shQuote,
     runProcessWithCodeTimeout: async (argv, timeout) => {
       beforeSend();
-      const result = await runProcessWithCodeTimeout(argv, timeout);
+      const result = await runtime.runProcessWithCodeTimeout(argv, timeout);
       assertCurrent();
       return result;
     },

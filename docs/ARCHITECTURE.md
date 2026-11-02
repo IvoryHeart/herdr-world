@@ -595,7 +595,10 @@ Host commands retain at most eight SSH sessions per destination, with at most fi
 held by background reads. Interactive work is admitted first; each queue is bounded
 to 64 waiters; queueing, recovery health checks and safe read retries spend the
 caller's deadline. Runtime retirement aborts queued commands before process dispatch
-and cancels active command/upload children without affecting another runtime. Browser
+and cancels active command/upload children without affecting another runtime.
+Workspace Files uploads, streamed file search, remote path checks and worktree base
+synchronization receive that runtime capability explicitly; remote path checks
+refuse a missing owner rather than using a global process helper. Browser
 background calls run at most four per connection and share identical in-flight
 reads within their captured transport/runtime scope. Scheduled focused-list reads
 use the background lane. Git status returns cached values, refreshing stale entries
