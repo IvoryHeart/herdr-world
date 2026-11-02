@@ -14,11 +14,14 @@ queue. Transcript, session and connection updates do not move your focus. If
 you move to another input or window while a conversation loads, its delayed
 reply box leaves focus where you put it.
 
-A new agent without a session shows **No messages yet.** Send remains available
-only when Herdr identifies its conversation; you can use **Terminal** for the
-first prompt. A reported transcript that is missing or cannot be read still
-shows why it is unavailable, with Refresh to retry. Chat updates when the
-agent's session and first messages arrive.
+A new agent without a conversation opens on **Terminal**, so startup questions
+are visible. Its window switches to **Chat** when the session arrives, unless
+you chose a view by hand. If you open Chat before then, it shows **No messages
+yet**, explains that the agent is starting or waiting for you, and offers
+**Open Terminal**. Missing or unreadable named records still show their error.
+Integration advice is offered only after Herdr has shown the same terminal
+working or ready without a session for at least 30 seconds; Refresh can retry.
+Send still requires Herdr to identify the conversation.
 
 ## What Chat does
 

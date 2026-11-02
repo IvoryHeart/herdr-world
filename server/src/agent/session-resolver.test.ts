@@ -244,13 +244,13 @@ describe("Codex thread from the pane title", () => {
     expect(resolved.path).toContain(threadA);
   });
 
-  test("without a title ID or report, says how to turn it on", async () => {
+  test("without a title ID or report, explains startup without premature integration advice", async () => {
     await codexHome([threadA]);
     const resolved = await resolveTitle("project");
     expect(resolved.status).toBe("missing_session");
-    expect(resolved.detail).toContain("/title");
-    expect(resolved.detail).toContain("--no-daemon");
-    expect(resolved.command).toBe("herdr integration install codex");
+    expect(resolved.detail).toContain("Terminal");
+    expect(resolved.detail).not.toContain("--no-daemon");
+    expect(resolved.command).toBeUndefined();
   });
 
   test("searches the remote host, not this machine, over SSH", async () => {

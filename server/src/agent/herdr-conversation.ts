@@ -555,6 +555,7 @@ export function createHerdrConversationSource(args: {
       codexWatch?.close();
       codexWatch = null;
       args.context.codexDiscovery.clear();
+      args.context.sessionStartup.clearAll();
     },
     read,
     latest,
@@ -596,6 +597,8 @@ export function createHerdrConversationSource(args: {
           base.session_binding,
           base.session_fingerprint,
           resolved.reason ?? null,
+          resolved.detail,
+          resolved.command ?? null,
           resolved.session?.value ?? null,
           file?.path ?? null,
           file?.mtimeMs ?? null,

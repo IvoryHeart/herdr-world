@@ -1947,7 +1947,7 @@ Opening the terminal from a peek SHALL follow the Inspector presentation prefere
 
 - **WHEN** Agents open names Chat and the user taps the table of an agent that is
   waiting at reception
-- **THEN** that agent's window opens on Chat, the agent walks back to its desk,
+- **THEN** that agent's window opens on Chat when its conversation exists (otherwise on Terminal under the startup rule), the agent walks back to its desk,
   and no terminal or peek card opens
 
 #### Scenario: Board opens an agent on Chat
@@ -1955,7 +1955,7 @@ Opening the terminal from a peek SHALL follow the Inspector presentation prefere
 - **WHEN** Agents open names Chat and the user opens an agent's tab in Board
   whose harness Chat reads, then a plain shell's tab and an agent whose harness
   Chat cannot read
-- **THEN** the first window opens on Chat and the other two on their terminals
+- **THEN** the first window opens on Chat when a conversation exists, otherwise on Terminal under the startup rule, and the other two open on their terminals
 
 #### Scenario: Town opens Terminal
 
@@ -1969,6 +1969,39 @@ Opening the terminal from a peek SHALL follow the Inspector presentation prefere
 - **WHEN** a blocked agent's latest lines contain neither a numbered menu nor a
   yes/no prompt
 - **THEN** the peek offers Reply and the terminal without answer buttons
+
+### Requirement: Honest agent startup presentation
+
+When an agent is opened with Chat as the desired view but has not reported a
+conversation, its qualified window SHALL start on Terminal. The window MAY
+switch to Chat when its captured source admits the conversation or a current
+reported session arrives. A manual view choice SHALL cancel this automatic
+handoff for that window. Late replies, another pane/terminal, and retired
+runtime generations SHALL NOT revive the cancelled intent.
+
+Chat opened before a conversation exists SHALL show an empty conversation,
+plain startup/waiting guidance and an Open Terminal action where available.
+Unknown, blocked and pending launches SHALL NOT be diagnosed as missing an
+integration. Integration advice MAY appear only after the same native terminal
+has been observed working or interactively ready without a session for a
+30-second grace period. Named missing/unreadable records SHALL retain their
+errors, and startup evidence SHALL NOT grant Send or prompt-answer authority.
+
+#### Scenario: A new agent is waiting on folder trust
+
+- **WHEN** its window is opened before any conversation is reported
+- **THEN** Terminal opens so the question is visible; manually opened Chat
+  explains startup/waiting without an installation instruction
+
+#### Scenario: A session arrives while the opening intent is still armed
+
+- **WHEN** the same admitted runtime and pane report a conversation
+- **THEN** the existing window switches to Chat without opening another window
+
+#### Scenario: The owner chooses a view before a late session reply
+
+- **WHEN** the owner switches views and a pending conversation read then completes
+- **THEN** the chosen view remains selected and no late reply re-arms the handoff
 
 ### Requirement: Shared Chat composer and honest send receipts
 

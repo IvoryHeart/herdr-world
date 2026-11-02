@@ -3,7 +3,7 @@ import type {
   InspectorView,
   WorkspaceInspectorContext,
 } from "../workspaceResource";
-import type { WorldObjectNode } from "./worldObject";
+import type { WorldObject, WorldObjectNode } from "./worldObject";
 import type { ChatFocusIntent } from "../chatFocus";
 
 /** One independently navigable Inspector backed by the shared app runtime. */
@@ -17,6 +17,8 @@ export type WorldInspectorConversation = {
   paneId?: string;
   terminalId?: string;
   agentSessionFingerprint?: string;
+  /** Per-window opening intent; an explicit view choice cancels it. */
+  awaitChatSession?: boolean;
   label: string;
   hostLabel: string;
   spaceLabel: string;
@@ -140,13 +142,31 @@ export function reconcileWorldInspectorConversation(
     current.connectionId === observed.connectionId &&
     current.runtimeGeneration === observed.runtimeGeneration &&
     current.workspaceId === observed.workspaceId;
+  const samePane =
+    sameWorkspace &&
+    current.paneId === observed.paneId &&
+    current.terminalId === observed.terminalId &&
+    current.context.agent === observed.context.agent;
+  const waiting = samePane && current.awaitChatSession === true;
+  const arrived =
+    waiting &&
+    Boolean(observed.agentSessionFingerprint) &&
+    observed.availableViews.includes("history");
   const keepView =
     sameWorkspace &&
     observed.availableViews.includes(current.view) &&
-    (current.paneId !== observed.paneId || sameResource);
+    (current.paneId !== observed.paneId ||
+      sameResource ||
+      (samePane && current.awaitChatSession === false));
   const next: WorldInspectorConversation = {
     ...observed,
-    view: keepView ? current.view : observed.view,
+    view: arrived ? "history" : keepView ? current.view : observed.view,
+    ...(current.awaitChatSession !== undefined
+      ? {
+          awaitChatSession:
+            samePane && !observed.agentSessionFingerprint ? waiting : undefined,
+        }
+      : {}),
     dock: current.dock,
     expanded: current.expanded,
     size: current.size,
@@ -158,6 +178,26 @@ export function reconcileWorldInspectorConversation(
       : {}),
   };
   return inspectorConversationEqual(current, next) ? current : next;
+}
+
+/** Explicit opens use the resolved startup view, rather than bypassing it. */
+export function applyRequestedInspectorView(
+  current: WorldInspectorConversation,
+  observed: WorldInspectorConversation,
+  requested: InspectorView | null | undefined,
+) {
+  return requested && current.availableViews.includes(requested)
+    ? {
+        ...current,
+        view: observed.view,
+        awaitChatSession:
+          observed.awaitChatSession ??
+          (current.awaitChatSession !== undefined &&
+          !observed.agentSessionFingerprint
+            ? false
+            : undefined),
+      }
+    : current;
 }
 
 function inspectorConversationEqual(
@@ -174,6 +214,7 @@ function inspectorConversationEqual(
     left.paneId === right.paneId &&
     left.terminalId === right.terminalId &&
     left.agentSessionFingerprint === right.agentSessionFingerprint &&
+    left.awaitChatSession === right.awaitChatSession &&
     left.label === right.label &&
     left.hostLabel === right.hostLabel &&
     left.spaceLabel === right.spaceLabel &&
@@ -225,6 +266,11 @@ export function worldInspectorForNode(
         leaf.agentSessionFingerprint ?? null,
       ])
     : JSON.stringify([node.connectionId, node.generation, node.nativeId]);
+  const awaiting =
+    view === "history" &&
+    leaf?.kind === "agent" &&
+    !leaf.agentSessionFingerprint &&
+    availableViews.includes("terminal");
   return {
     nodeId: node.id,
     connectionId: node.connectionId,
@@ -241,7 +287,8 @@ export function worldInspectorForNode(
     spaceLabel: leaf?.spaceLabel ?? node.label,
     context,
     availableViews,
-    view,
+    view: awaiting ? "terminal" : view,
+    ...(awaiting ? { awaitChatSession: true } : {}),
     ...preferences,
   };
 }
@@ -298,5 +345,23 @@ export function floatingTerminalForNode(
       ...(node.taskSummary ? { taskSummary: node.taskSummary } : {}),
     },
     { dock: "right", expanded: false, size: 520 },
+  );
+}
+
+/** A delayed launcher receipt never retargets a replacement runtime. */
+export function launchedWorldLeaf(
+  world: Pick<WorldObject, "leaves">,
+  target: {
+    connectionId: string;
+    runtimeGeneration: number;
+    terminalId: string;
+  },
+) {
+  return world.leaves.find(
+    (leaf) =>
+      leaf.actionable &&
+      leaf.connectionId === target.connectionId &&
+      leaf.generation === target.runtimeGeneration &&
+      leaf.terminalId === target.terminalId,
   );
 }

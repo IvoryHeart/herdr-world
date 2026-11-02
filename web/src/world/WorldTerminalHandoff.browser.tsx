@@ -172,6 +172,12 @@ const tabs: Tab[] = [
     agent_status: "idle",
   },
 ];
+const initialReviewerSession = {
+  source: "herdr:claude",
+  agent: "claude",
+  kind: "id",
+  value: "review-a",
+};
 const panes: Pane[] = [
   {
     pane_id: "builder-pane",
@@ -194,6 +200,8 @@ const panes: Pane[] = [
     // harness is one Chat cannot read, so it opens its terminal.
     agent: "claude",
     display_agent: "Reviewer",
+    // Match the native session already advertised by this fixture's agent list.
+    agent_session: initialReviewerSession,
     agent_status: "idle",
     revision: 1,
   },
@@ -232,7 +240,7 @@ let agents: Record<string, unknown>[] = [
     pane_id: "reviewer-pane",
     terminal_id: "reviewer-terminal",
     agent: "claude",
-    agent_session: { agent: "claude", kind: "id", value: "review-a" },
+    agent_session: initialReviewerSession,
   },
 ];
 const terminalListeners = new Set<(push: TerminalPush) => void>();
@@ -583,6 +591,23 @@ let client: ConnectionClient = {
           "Agent checkout unavailable: this session has not reported a valid checkout.",
       };
     }
+    // This fixture already exposes readable History. Its summary admits a
+    // read-only conversation without inventing a native session or Send authority.
+    if (method === "agent_conversation.latest")
+      return {
+        conversation_version: 1,
+        source: "synthetic",
+        pane_id: String(params.pane_id),
+        agent: "claude",
+        agent_status: "idle",
+        session_binding: "guessed",
+        session_fingerprint: null,
+        session_label: "Synthetic readable conversation",
+        status: "ok",
+        unavailable: null,
+        messages: [],
+        latest: null,
+      };
     if (method === "agent_history.get") {
       return {
         status: "ok",

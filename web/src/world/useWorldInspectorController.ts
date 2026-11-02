@@ -21,6 +21,7 @@ import { createWorldAnchorFeed } from "./worldAnchorFeed";
 import type { WorldConnectorTargetBounds } from "./worldConnectorGeometry";
 import {
   reconcileWorldInspectorConversation,
+  applyRequestedInspectorView,
   worldInspectorForNode,
   worldInspectorWindowId,
   worldInspectorWindowIdForNode,
@@ -279,10 +280,11 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
           currentExisting,
           observed,
         );
-        const viewed =
-          inspectorView && reconciled.availableViews.includes(inspectorView)
-            ? { ...reconciled, view: inspectorView }
-            : reconciled;
+        const viewed = applyRequestedInspectorView(
+          reconciled,
+          observed,
+          inspectorView,
+        );
         const admitted = { ...viewed, chatFocusIntent };
         windowCommand({ type: "focus", id: worldInspectorWindowId(admitted) });
         if (admitted !== currentExisting) {
@@ -992,10 +994,11 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
         observedConversation,
         observed,
       );
-      const viewed =
-        requestedView && reconciled.availableViews.includes(requestedView)
-          ? { ...reconciled, view: requestedView }
-          : reconciled;
+      const viewed = applyRequestedInspectorView(
+        reconciled,
+        observed,
+        requestedView,
+      );
       const currentConversation = focusTarget
         ? { ...viewed, chatFocusIntent }
         : viewed;

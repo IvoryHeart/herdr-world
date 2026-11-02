@@ -47,7 +47,11 @@ export function AgentLauncherDialog({
   world: WorldObject;
   initial: Partial<LaunchTarget> & { profileId?: string };
   /** Open this terminal (a new agent or a login) once World shows it. */
-  onOpen(terminal: { connectionId: string; terminalId: string }): void;
+  onOpen(terminal: {
+    connectionId: string;
+    runtimeGeneration: number;
+    terminalId: string;
+  }): void;
   onEditProfiles(): void;
   onClose(): void;
 }) {
@@ -185,6 +189,7 @@ export function AgentLauncherDialog({
       ) {
         onOpen({
           connectionId: target.connectionId,
+          runtimeGeneration: target.generation,
           terminalId: result.terminal_id,
         });
         if (lifetime.current === owner) dismiss();

@@ -202,7 +202,11 @@ async function run() {
       check(
         JSON.stringify(opened) ===
           JSON.stringify([
-            { connectionId: "alpha", terminalId: "new-terminal" },
+            {
+              connectionId: "alpha",
+              runtimeGeneration: 7,
+              terminalId: "new-terminal",
+            },
           ]),
         `${status}: open only the returned terminal on its captured host`,
       );

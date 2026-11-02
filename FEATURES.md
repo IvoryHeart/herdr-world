@@ -92,7 +92,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     focuses its message input when available; Desk previews keep focus in the
     queue. Reopening or redocking the window keeps the
     conversation. A new agent without a session shows **No messages yet**;
-    missing or unreadable reported transcripts still show their error. In Town it
+    missing or unreadable reported transcripts still show their error. A window
+    without a conversation opens on Terminal and switches to Chat when the
+    session arrives, unless you choose a view by hand. Chat describes startup
+    or a question plainly and offers Open Terminal; integration guidance waits
+    for at least 30 seconds of confirmed running/ready status without a session. In Town it
     docks on the right by default (**Menu → Inspector opening**), 520px wide
     (at most half the screen) so Town stays in view and lines stay readable.
     Drag its inner edge to resize it; Town remembers the width. It can be
@@ -350,7 +354,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   carries strung notes along. Zoomed out, workspaces show a square per pane.
   - Tapping or double-clicking a tab or pane row opens an agent on Chat (as in
     Town, by **Agents open**), and a plain shell, or an agent without Chat, on
-    its terminal.
+    its terminal. Without a conversation yet, an agent starts on Terminal and
+    switches to Chat when its session arrives unless you choose another view.
   - **Pin** in a selected card's bar keeps the card where it is: it shows a
     pin, and placement, Tidy and settling leave it until **Unpin** (a drag
     still moves it). On a phone, where the card's terminal covers Board, the

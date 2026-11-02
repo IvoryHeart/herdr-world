@@ -1,3 +1,4 @@
+import { useAgentChatStartup } from "./useAgentChatStartup";
 import { TerminalAppearanceEditor } from "./TerminalAppearanceEditor";
 import { leafAppearance, useAppearanceDocument } from "./appearance";
 import { useAgentWorktree } from "../useAgentWorktree";
@@ -123,7 +124,7 @@ function InspectorResources({
   floating,
   terminalActive,
   embedded = false,
-  onChange,
+  onChange: patchConversation,
   onClose,
   onDockOut,
   onDockIn,
@@ -220,6 +221,27 @@ function InspectorResources({
     foregroundCwd: historyPane?.foreground_cwd,
   });
   const connectionClient = worktree.client;
+  const cancelAutoChat = useAgentChatStartup(
+    baseConnectionClient,
+    historyPane,
+    Boolean(
+      target &&
+        conversation.awaitChatSession &&
+        conversation.view === "terminal",
+    ),
+    () => patchConversation({ view: "history", awaitChatSession: false }),
+  );
+  const onChange = (change: Partial<WorldInspectorConversation>) => {
+    if (change.view) {
+      cancelAutoChat();
+      patchConversation({
+        ...change,
+        ...(conversation.awaitChatSession !== undefined
+          ? { awaitChatSession: false }
+          : {}),
+      });
+    } else patchConversation(change);
+  };
   const scope = useMemo(
     () =>
       workspace
