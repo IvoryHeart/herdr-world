@@ -149,7 +149,16 @@ export function reconcileWorldInspectorConversation(
     current.paneId === observed.paneId &&
     current.terminalId === observed.terminalId &&
     current.context.agent === observed.context.agent;
-  const waiting = samePane && current.awaitChatSession === true;
+  const witness = current.startupIntent;
+  const sameStartupOwner = witness
+    ? witness.connectionId === observed.connectionId &&
+      witness.runtimeGeneration === observed.runtimeGeneration &&
+      witness.paneId === observed.paneId &&
+      witness.terminalId === observed.terminalId &&
+      witness.agent === observed.context.agent
+    : samePane;
+  const waiting =
+    samePane && sameStartupOwner && current.awaitChatSession === true;
   const arrived =
     waiting &&
     Boolean(observed.agentSessionFingerprint) &&
@@ -159,15 +168,17 @@ export function reconcileWorldInspectorConversation(
     observed.availableViews.includes(current.view) &&
     (current.paneId !== observed.paneId ||
       sameResource ||
-      (samePane && current.awaitChatSession === false));
+      current.awaitChatSession !== undefined);
   const next: WorldInspectorConversation = {
     ...observed,
     view: arrived ? "history" : keepView ? current.view : observed.view,
     ...(current.awaitChatSession !== undefined
       ? {
-          awaitChatSession: !observed.agentSessionFingerprint
-            ? waiting
-            : undefined,
+          awaitChatSession: !sameStartupOwner
+            ? false
+            : !observed.agentSessionFingerprint
+              ? waiting
+              : undefined,
         }
       : {}),
     ...(current.startupIntent ? { startupIntent: current.startupIntent } : {}),

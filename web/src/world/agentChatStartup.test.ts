@@ -149,3 +149,35 @@ test("aggregate replacement permanently retires the original window intent until
   expect(explicit.startupIntent).toBe(replacement.startupIntent);
   expect(explicit.startupIntent).not.toBe(original.startupIntent);
 });
+
+test.each(["terminal", "harness"])(
+  "aggregate %s replacement with a ready session cannot inherit the old switch",
+  (kind) => {
+    const original = create();
+    const replacementNode = {
+      ...node,
+      ...(kind === "terminal"
+        ? { terminalId: "replacement-terminal" }
+        : { pane: { agent: "claude" } }),
+      agentSessionFingerprint: "b".repeat(64),
+    } as WorldObjectNode;
+    const replacementContext =
+      kind === "harness" ? { ...context, agent: "claude" } : context;
+    const observed = worldInspectorForNode(
+      replacementNode,
+      "history",
+      ["terminal", "history", "files"],
+      replacementContext,
+      { dock: "right", expanded: false, size: 520 },
+    )!;
+    const next = reconcileWorldInspectorConversation(original, observed);
+    expect(next.view).toBe("terminal");
+    expect(next.awaitChatSession).toBe(false);
+    expect(
+      reconcileWorldInspectorConversation(next, {
+        ...observed,
+        resourceIdentity: "next-native-session",
+      }).view,
+    ).toBe("terminal");
+  },
+);
