@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { bridge } from "../api";
 import { WorldDeskStore } from "./deskStateStore";
+import { NeedsYouMessage } from "./NeedsYouItem";
 import { NeedsYouCounter, NeedsYouList } from "./NeedsYouTab";
 import type { WorldAsk, WorldAsksStore } from "./worldAsks";
 import type { WorldLeafObject, WorldObject } from "./worldObject";
@@ -12,8 +13,9 @@ import "./world.css";
 
 // One Needs you card anatomy, in a real browser: a long question clips to
 // its first lines with More, expands in place (tap or More), keeps its links,
-// and only its own box changes; the name opens the agent's window; the
-// phone's compact counter names its count. Synthetic data only.
+// and only its own box changes; the name opens the agent's window; every
+// kind ends in the same footer row; the phone's compact counter names its
+// count. Synthetic data only.
 
 const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
@@ -82,6 +84,8 @@ const ask = (
 
 const asker = leaf("atlas", "working");
 const blocked = leaf("beacon", "blocked");
+// Finished work, shown beside the list to compare its footer with the ask's.
+const finished = leaf("comet", "done");
 const world = {
   leaves: [asker, blocked],
   nodeById: new Map([
@@ -174,6 +178,22 @@ flushSync(() =>
           />
         </Profiler>
       </aside>
+      <div
+        className="needs-you fixture-done"
+        style={{ position: "absolute", top: 48, left: 400, width: 340 }}
+      >
+        <NeedsYouMessage
+          item={{ kind: "done", key: "leaf:comet", leaf: finished }}
+          now={60_000}
+          focused={false}
+          stop="stop-1"
+          onChat={() => {}}
+          onOpenTerminal={() => {}}
+          onAnswer={async () => null}
+          onDismiss={async () => null}
+          onReviewed={async () => true}
+        />
+      </div>
     </>,
   ),
 );
@@ -395,6 +415,102 @@ async function run() {
   check(
     chats.join() === "atlas,beacon",
     "a blocked agent's name opens its window the same way",
+  );
+
+  // One anatomy: quick replies, then the field with Answer inline at its
+  // height, then one footer row with the kind's action at the start and
+  // Chat at the end, aligned like finished work's Mark reviewed/Follow up….
+  const doneCard = card("leaf:comet");
+  const rect = (element: Element | null | undefined) =>
+    element?.getBoundingClientRect() ?? null;
+  const content = (element: HTMLElement) => {
+    const box = element.getBoundingClientRect();
+    const style = getComputedStyle(element);
+    return {
+      left:
+        box.left +
+        parseFloat(style.borderLeftWidth) +
+        parseFloat(style.paddingLeft),
+      right:
+        box.right -
+        parseFloat(style.borderRightWidth) -
+        parseFloat(style.paddingRight),
+    };
+  };
+  const footer = (item: HTMLElement) => {
+    const row = item.querySelector<HTMLElement>(".needs-you-footer");
+    const buttons = [...(row?.querySelectorAll("button") ?? [])];
+    return {
+      row,
+      buttons: buttons.map((button) => button.getBoundingClientRect()),
+      labels: buttons.map((button) => button.textContent),
+    };
+  };
+  const near = (a: number, b: number) => Math.abs(a - b) <= 1;
+  const layouts = [
+    ["ask", longCard, ["Dismiss", "Chat about this"]],
+    ["blocked", agentCard, ["Chat about this"]],
+    ["done", doneCard, ["Mark reviewed", "Follow up…"]],
+  ] as const;
+  const footerHeights: number[] = [];
+  for (const [kind, item, labels] of layouts) {
+    const { row, buttons, labels: shown } = footer(item);
+    const box = content(item);
+    check(
+      Boolean(row) &&
+        row === item.querySelector(".needs-you-footer:last-of-type") &&
+        JSON.stringify(shown) === JSON.stringify(labels),
+      `the ${kind} card ends in one footer row: ${JSON.stringify(shown)}`,
+    );
+    const last = buttons[buttons.length - 1];
+    check(
+      Boolean(last) && near(last!.right, box.right),
+      `the ${kind} card's Chat ends at the card's right edge (${last?.right} vs ${box.right})`,
+    );
+    if (buttons.length === 2)
+      check(
+        near(buttons[0]!.left, box.left) &&
+          near(buttons[0]!.top, buttons[1]!.top),
+        `the ${kind} card's action starts the footer row on Chat's line`,
+      );
+    footerHeights.push(...buttons.map((button) => Math.round(button.height)));
+    // Nothing else in the card sits below the footer but a notice.
+    const below = [...item.querySelectorAll("button, input")].filter(
+      (control) => rect(control)!.top > rect(row)!.bottom,
+    );
+    check(below.length === 0, `no ${kind} control sits below the footer`);
+  }
+  check(
+    new Set(footerHeights).size === 1,
+    `every footer button has one height (${footerHeights.join()})`,
+  );
+  const reply = longCard.querySelector<HTMLElement>(".needs-you-reply")!;
+  const field = rect(reply.querySelector("input"))!;
+  const answer = rect(reply.querySelector("button"))!;
+  check(
+    near(field.top, answer.top) &&
+      near(field.height, answer.height) &&
+      near(field.height, footerHeights[0]!),
+    `Answer sits inline at the field's height (${field.height}, ${answer.height})`,
+  );
+  check(
+    near(field.left, content(longCard).left) &&
+      near(answer.right, content(longCard).right),
+    "the answer row spans the card",
+  );
+  const options = [
+    ...longCard.querySelectorAll<HTMLButtonElement>(
+      ".needs-you-answer > .needs-you-options button",
+    ),
+  ].map((button) => button.getBoundingClientRect());
+  check(
+    options.length === 2 &&
+      options.every(
+        (option) =>
+          near(option.top, options[0]!.top) &&
+          near(option.height, footerHeights[0]!),
+      ),
+    "quick replies are one row of equal-height buttons",
   );
 
   // Answer and Dismiss stay on the card and act as before.

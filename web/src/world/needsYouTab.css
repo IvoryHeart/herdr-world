@@ -107,15 +107,32 @@
   display: grid;
   gap: 8px;
 }
+/* One anatomy for every card (NeedsYouMessage): quick replies wrap as one
+   row of equal-height buttons; the typed answer keeps Answer inline at the
+   field's height; the footer puts the kind's action at the start and Chat at
+   the end. Every control row is 30px tall, 6px apart. */
 .needs-you-options,
-.needs-you-reply {
+.needs-you-footer {
   display: flex;
   flex-wrap: wrap;
+  align-items: stretch;
+  gap: 6px;
+}
+.needs-you-reply {
+  display: flex;
+  align-items: stretch;
   gap: 6px;
 }
 .needs-you-reply input {
-  flex: 1 1 12em;
+  flex: 1 1 auto;
   min-width: 0;
+  min-height: 30px;
+  box-sizing: border-box;
+  margin: 0;
+  padding-block: 5px;
+}
+.needs-you-reply button {
+  flex: none;
 }
 .needs-you-item button {
   min-height: 30px;

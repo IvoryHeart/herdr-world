@@ -33,6 +33,10 @@ export const itemName = (item: NeedsYouItem) =>
  * One item in Needs you: a question (?), a blocked agent (!) or finished work
  * (✓), as a short message from its agent with its quick reply in place.
  * Chat about this opens the agent's Chat for anything longer.
+ *
+ * Every kind has one anatomy: header (agent, place, age), the message with
+ * More, its kind's replies, then one footer row (NeedsYouFooter) with the
+ * kind's own action at the start and Chat at the end.
  */
 export function NeedsYouMessage({
   item,
@@ -67,7 +71,7 @@ export function NeedsYouMessage({
   const cardId = useId();
   // Hover (or ⓘ on touch) shows the agent's card beside the item.
   const [card, setCard] = useState<"hover" | "pinned" | null>(null);
-  // Chat about this; finished work offers it beside Mark reviewed.
+  // Chat about this, at the end of every card's footer.
   const chat = leaf ? (
     <button
       type="button"
@@ -149,6 +153,7 @@ export function NeedsYouMessage({
           who={who}
           onAnswer={onAnswer}
           onDismiss={onDismiss}
+          chat={chat}
         />
       ) : (
         <NeedsYouAgent
@@ -161,9 +166,6 @@ export function NeedsYouMessage({
           chat={chat}
         />
       )}
-      {leaf && item.kind !== "done" ? (
-        <div className="needs-you-options">{chat}</div>
-      ) : null}
     </article>
   );
 }
@@ -266,17 +268,47 @@ export function NeedsYouText({
   );
 }
 
+/**
+ * A card's last row, the same on every kind: its own action at the start
+ * (Dismiss, Mark reviewed), Chat at the end, and any notice below them.
+ */
+function NeedsYouFooter({
+  start,
+  chat,
+  notice,
+}: {
+  start?: ReactNode;
+  chat: ReactNode;
+  notice?: ReactNode;
+}) {
+  if (!start && !chat && !notice) return null;
+  return (
+    <>
+      {start || chat ? (
+        <div className="needs-you-footer">
+          {start}
+          {chat}
+        </div>
+      ) : null}
+      {notice}
+    </>
+  );
+}
+
 /** An owner question: its options, a typed answer, or Dismiss. */
 function NeedsYouAsk({
   ask,
   who,
   onAnswer,
   onDismiss,
+  chat,
 }: {
   ask: WorldAsk;
   who: string;
   onAnswer(text: string): Promise<string | null>;
   onDismiss(): Promise<string | null>;
+  /** Chat about this, at the footer's end. */
+  chat: ReactNode;
 }) {
   const { question, options } = ask;
   const deliveryMessage = askDeliveryMessage(ask);
@@ -335,20 +367,27 @@ function NeedsYouAsk({
         <button type="submit" disabled={busy || !draft.trim()}>
           Answer
         </button>
-        <button
-          type="button"
-          aria-label={`Dismiss the question from ${who} without answering`}
-          disabled={busy}
-          onClick={() => void act(onDismiss)}
-        >
-          Dismiss
-        </button>
       </div>
-      {error || deliveryMessage ? (
-        <small role={error ? "alert" : "status"}>
-          {error ?? deliveryMessage}
-        </small>
-      ) : null}
+      <NeedsYouFooter
+        start={
+          <button
+            type="button"
+            aria-label={`Dismiss the question from ${who} without answering`}
+            disabled={busy}
+            onClick={() => void act(onDismiss)}
+          >
+            Dismiss
+          </button>
+        }
+        chat={chat}
+        notice={
+          error || deliveryMessage ? (
+            <small role={error ? "alert" : "status"}>
+              {error ?? deliveryMessage}
+            </small>
+          ) : null
+        }
+      />
     </form>
   );
 }
@@ -379,7 +418,7 @@ function NeedsYouAgent({
   stop: string | null;
   onOpenTerminal(): void;
   onReviewed(stop: string): Promise<boolean>;
-  /** Follow up…, shown beside Mark reviewed. */
+  /** Chat about this (Follow up… on finished work), at the footer's end. */
   chat: ReactNode;
 }) {
   // Read again when the stop moves on, so the report and the mark agree.
@@ -488,39 +527,43 @@ function NeedsYouAgent({
           </button>
         </div>
       ) : null}
-      {kind === "done" ? (
-        <div className="needs-you-options">
-          <button
-            type="button"
-            className="is-primary"
-            disabled={marking || !current}
-            title={
-              current
-                ? undefined
-                : unread
-                  ? "The latest report could not be read"
-                  : "Reading the latest report…"
-            }
-            onClick={() => {
-              if (!current || stop === null) return;
-              setMarking(true);
-              setMarkError(false);
-              void onReviewed(stop)
-                .then((saved) => setMarkError(!saved))
-                .finally(() => setMarking(false));
-            }}
-          >
-            Mark reviewed
-          </button>
-          {chat}
-          {markError ? (
+      <NeedsYouFooter
+        start={
+          kind === "done" ? (
+            <button
+              type="button"
+              className="is-primary"
+              disabled={marking || !current}
+              title={
+                current
+                  ? undefined
+                  : unread
+                    ? "The latest report could not be read"
+                    : "Reading the latest report…"
+              }
+              onClick={() => {
+                if (!current || stop === null) return;
+                setMarking(true);
+                setMarkError(false);
+                void onReviewed(stop)
+                  .then((saved) => setMarkError(!saved))
+                  .finally(() => setMarking(false));
+              }}
+            >
+              Mark reviewed
+            </button>
+          ) : null
+        }
+        chat={chat}
+        notice={
+          markError ? (
             <small role="alert">
               Could not save the review mark. Try again when the connection is
               ready.
             </small>
-          ) : null}
-        </div>
-      ) : null}
+          ) : null
+        }
+      />
     </>
   );
 }
