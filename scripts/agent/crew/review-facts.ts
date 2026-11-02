@@ -2,6 +2,10 @@ import { join } from "node:path";
 import type { GateInput } from "../gate/predicate";
 import type { Run } from "../gate/observe";
 import type { Finding } from "./round-policy-store";
+import {
+  resultLine,
+  resultOutcome,
+} from "../../../server/src/sources/pullRequestDetail";
 
 export type CrewPost = {
   id: string;
@@ -244,6 +248,7 @@ export function openFindings(input: GateInput, posts: CrewPost[]): Finding[] {
           comment.path &&
           /\bP[123]\b/u.test(comment.body),
       );
+      let parsed = inline.length;
       for (const comment of inline)
         findings.push({
           id: `${reviewer}:${comment.id}:1`,
@@ -257,7 +262,9 @@ export function openFindings(input: GateInput, posts: CrewPost[]): Finding[] {
           respondAfter,
         });
       for (const line of post.body.split("\n")) {
-        if (!/\bP[123]\b/u.test(line)) continue;
+        if (!/^\s*(?:(?:[-*]|\d+[.)]|#{1,6})\s+)?[*_`]*\[?P[123]\b/u.test(line))
+          continue;
+        parsed++;
         const location =
           /(?:`|\s|\(|^)((?:[\w.@-]+\/)*[\w.@-]+):(\d+)/u.exec(line) ??
           /(?:`|\s|\(|^)((?:[\w.@-]+\/)*[\w.@-]+\.[\w.-]+)/u.exec(line);
@@ -283,6 +290,35 @@ export function openFindings(input: GateInput, posts: CrewPost[]): Finding[] {
           respondAfter,
         });
       }
+      const summary = resultLine(post.body, input.number) ?? "";
+      const counts =
+        /^(\d+)\/(\d+) resolved,\s*(\d+) new(?: at [0-9a-fA-F]{7,40})?$/u.exec(
+          summary,
+        );
+      const count = /^(\d+)\s+(?:new\s+)?findings?\b/u.exec(summary);
+      const expected = counts
+        ? Math.max(0, Number(counts[2]) - Number(counts[1])) + Number(counts[3])
+        : count
+          ? Number(count[1])
+          : null;
+      const added = counts ? Number(counts[3]) : expected;
+      const retained = findings.filter(
+        (finding) => finding.reviewer === reviewer,
+      ).length;
+      if (
+        (expected !== null && (retained < expected || parsed < (added ?? 0))) ||
+        (expected === null && resultOutcome(summary) === "open")
+      )
+        findings.push({
+          id: `${reviewer}:${post.id}:unparsed`,
+          reviewer,
+          file: null,
+          line: null,
+          text: `Unparsed open findings require explicit disposition: ${post.body}`,
+          at: post.at,
+          url: post.url,
+          respondAfter,
+        });
     }
     // An unparseable open RESULT must never silently count as answered.
     if (!findings.some((finding) => finding.reviewer === reviewer))
