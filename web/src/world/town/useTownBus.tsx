@@ -39,10 +39,12 @@ import type { TownRendererHandle } from "./townRenderer";
 import "./townBus.css";
 
 type Point = { x: number; y: number };
-/** The carrying chip's centre below the free area's top: past the 56 px edge-pan band. */
-const CHIP_DROP_TOP = 96;
-/** How far beyond its edge the chip still takes a carried agent, screen px. */
-const CHIP_REACH = 24;
+/**
+ * The carrying chip's centre below the free area's top: its 64 px face
+ * (72 px grown) starts 24 px past the 56 px edge-pan band, so a finger near
+ * the chip never pans the town.
+ */
+const CHIP_DROP_TOP = 116;
 const clock = (ms: number) => {
   const s = Math.max(0, Math.ceil(ms / 1000));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
@@ -349,8 +351,9 @@ export function useTownBus({
 
   /**
    * A carried agent at this point is over the stop, its buses or the chip.
-   * The chip catches a finger a little beyond its edge, and lights up (with
-   * a light buzz where the device has one) while it would take the drop.
+   * The chip takes a drop within its visible face only (never the floor
+   * around it); under the finger it grows and lights up, with a light buzz
+   * where the device has one.
    */
   const over = (world: Point, at: Point) => {
     const scene = layerRef.current?.scene;
@@ -363,10 +366,7 @@ export function useTownBus({
       const x = at.x + host.left,
         y = at.y + host.top;
       onChip =
-        x >= rect.left - CHIP_REACH &&
-        x <= rect.right + CHIP_REACH &&
-        y >= rect.top - CHIP_REACH &&
-        y <= rect.bottom + CHIP_REACH;
+        x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
       if (onChip !== (element.dataset.over === "true")) {
         element.dataset.over = String(onChip);
         if (onChip) navigator.vibrate?.(12);

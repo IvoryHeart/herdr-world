@@ -22,3 +22,8 @@
   carrying an agent on a phone.
 - Use one held tray in Town, Board and Desk with a visible Resume control after
   switching views; a normal tap or click on the bus opens it on phones too.
+- Make Town's Bus stop chip an easy phone drop target: it moves near the top
+  of the screen while you carry an agent, grows under your finger, is named in
+  the carry hint, and the town no longer edge-pans beside it. Tapping the stop
+  or its chip opens the bin tray, and a bus emptied by Put back drives away
+  instead of vanishing. The tray shows its held state and the shared wait.

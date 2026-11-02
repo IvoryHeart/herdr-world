@@ -177,8 +177,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   - **The bus stop** is Town's bin: a London bus stop on the top street, right
     of its last crossing. Drag an agent there (or **Send to the bus stop** in
     its peek); the town holds still while you hover over the stop. While the
-    stop is off screen, a red chip at the screen's edge shows the next departure
-    and flies you there; while you carry an agent you can drop it on the chip.
+    stop is off screen, a red chip at the screen's edge shows the next departure;
+    tap it, the stop or its sign to open the bin tray and see the bus. While
+    you carry an agent the chip becomes a large **Bus stop** drop target near
+    the top of the screen, lighting up under your finger (the carry hint names
+    it), and the town does not edge-pan beside it.
     The agent leaves its desk and waits with a box while a red double-decker
     drives in from the town's left edge, slowing as it reaches the stop with
     10 seconds left on the clock and a short horn, then rides it (eight to a
@@ -200,7 +203,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     with Put back, Close now, Close all now and **Resume**. A view switch keeps
     the hold visible; Resume closes the tray and continues from the held time.
     Closing the holding browser window releases its hold. Riders can still be
-    dragged back to their desks. It shares the bin's
+    dragged back to their desks; a bus whose last rider is put back drives on
+    off the map rather than vanishing. It shares the bin's
     countdown, refusals and sounds; under reduced motion it stays parked for the
     countdown and the departure time. When the stop is off screen or under the
     asks rail, zoom buttons or held-bus panel, the red chip brings it back into

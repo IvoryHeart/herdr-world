@@ -4106,9 +4106,15 @@ A bus seats eight; more riders
 SHALL take more buses, and buses that cannot stand at the stop SHALL queue
 behind it on the same street, then in further lanes, so every rider has a place
 on the map. While the stop is off screen, a chip at the nearest screen edge
-SHALL show the next departure and fly the camera to the stop; while an agent is
-carried it SHALL also accept the drop. The town SHALL hold still while a carried
-agent is over the stop. While the stop is off screen, or under the asks rail or
+SHALL show the next departure; a tap SHALL open the common tray and fly the
+camera to the stop. While an agent is carried the chip SHALL be a large drop
+target near the top of the free screen, clear of the edge-pan band, and SHALL
+grow and highlight under the finger; it SHALL accept a drop only within its
+visible face. A carry over no room or desk SHALL name the bus stop in its hint.
+The town SHALL hold still while a carried agent is over the stop or the chip.
+A tap on the stop or its sign SHALL open the same tray as a tap on the bus.
+A bus emptied before it leaves (Put back, Close now) SHALL drive on off the map
+by the right edge, never vanish in place; under reduced motion it MAY go at once. While the stop is off screen, or under the asks rail or
 the zoom controls or held-bus panel, its chip SHALL show and bring it into the
 free part of the screen. The full waiting and carry-chip touch regions SHALL
 remain clear of those panels. A plain tap/click on a bus with riders, approaching,
@@ -4199,5 +4205,13 @@ commits.
 #### Scenario: The stop is off screen
 
 - **WHEN** the user carries an agent while Town's bus stop is off screen
-- **THEN** a chip at the screen's edge points to the stop, and dropping the agent
-  on it sends the agent to the stop
+- **THEN** a Bus stop chip near the top of the screen grows under the finger,
+  the town does not edge-pan beside it, and dropping the agent on it sends the
+  agent to the stop
+
+#### Scenario: Put back the last rider
+
+- **WHEN** the user opens the tray from the bus, the stop or its chip and puts
+  back the bus's only rider
+- **THEN** the agent returns to their desk and the empty bus pulls away and
+  leaves the map without closing anything
