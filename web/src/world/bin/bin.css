@@ -10,6 +10,9 @@
   --bin-soft: #a2aba1;
   --bin-danger: #ff8b74;
   --bin-danger-soft: rgb(255 139 116 / 14%);
+  --bin-held: #f2b84b;
+  --bin-held-soft: rgb(242 184 75 / 14%);
+  --bin-on-held: #1c1722;
   --bin-lift: 0 14px 34px rgb(0 0 0 / 55%);
   --bin-shadow: 0 1px 0 rgb(0 0 0 / 20%), 0 6px 18px rgb(0 0 0 / 35%);
 }
@@ -24,6 +27,9 @@
   --bin-soft: #5a6159;
   --bin-danger: #c8432d;
   --bin-danger-soft: rgb(200 67 45 / 12%);
+  --bin-held: #a5670a;
+  --bin-held-soft: rgb(165 103 10 / 12%);
+  --bin-on-held: #ffffff;
   --bin-lift: 0 14px 34px rgb(30 35 31 / 24%);
   --bin-shadow: 0 1px 0 rgb(30 35 31 / 6%), 0 6px 18px rgb(30 35 31 / 11%);
 }
@@ -245,18 +251,24 @@
   bottom: calc(env(safe-area-inset-bottom, 0px) + 200px);
   z-index: 41;
   display: grid;
-  gap: 8px;
-  width: 320px;
+  gap: 10px;
+  width: 340px;
   max-width: calc(100% - 24px);
   max-height: calc(100% - 220px);
   overflow: auto;
-  padding: 10px;
-  border: 2px dashed var(--bin-danger);
+  box-sizing: border-box;
+  padding: 12px;
+  border: 1px solid var(--bin-line);
+  border-top: 4px solid var(--bin-held);
   border-radius: 14px;
   background: var(--bin-panel);
   box-shadow: var(--bin-lift);
   color: var(--bin-ink);
-  font-size: 13px;
+  font:
+    13px / 1.35 system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
   transform-origin: 85% 110%;
   animation: world-bin-open 0.22s ease-out;
 }
@@ -277,17 +289,47 @@
     opacity: 0;
   }
 }
-.world-bin-tray header,
-.world-bin-tray footer {
+
+/* Header: the shared clock, what the tray is and why it stopped, Resume. */
+.world-bin-tray header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
-.world-bin-tray header b {
+.world-bin-tray-clock {
+  min-width: 3.4em;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: var(--bin-held-soft);
+  color: var(--bin-held);
+  font: 700 20px / 1.1 var(--world-font-mono, ui-monospace, monospace);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.world-bin-tray-title {
+  display: grid;
   flex: 1;
+  min-width: 0;
 }
-.world-bin-tray footer {
-  justify-content: flex-end;
+.world-bin-tray-title b {
+  font-size: 15px;
+}
+.world-bin-state {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--bin-held);
+  color: var(--bin-on-held);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  vertical-align: 2px;
+}
+.world-bin-tray header[data-held="false"] .world-bin-state {
+  background: var(--bin-line);
+  color: var(--bin-ink);
 }
 .world-bin-tray small,
 .world-bin-hint {
@@ -302,13 +344,21 @@
   padding: 0;
   list-style: none;
 }
+.world-bin-tray footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* A card per agent: name and time; its two actions wrap below on a phone. */
 .world-bin-card {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
+  gap: 6px 8px;
+  padding: 8px 10px;
   border: 1px solid var(--bin-line);
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--bin-card);
   box-shadow: var(--bin-shadow);
   cursor: grab;
@@ -316,15 +366,22 @@
   user-select: none;
 }
 .world-bin-card b {
-  flex: 1;
+  flex: 1 1 8em;
   min-width: 0;
   overflow: hidden;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .world-bin-card code {
   color: var(--bin-soft);
   font: 12px var(--world-font-mono, ui-monospace, monospace);
+  font-variant-numeric: tabular-nums;
+}
+.world-bin-card-actions {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
 }
 .world-bin-card-lifting {
   opacity: 0.3;
@@ -340,21 +397,52 @@
 }
 .world-bin-button {
   min-height: 32px;
-  padding: 4px 10px;
+  padding: 4px 12px;
   border: 1px solid var(--bin-line);
   border-radius: 8px;
   background: var(--bin-card);
   color: var(--bin-ink);
   font: inherit;
+  font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
+}
+.world-bin-button:focus-visible {
+  outline: 2px solid var(--bin-held);
+  outline-offset: 2px;
+}
+.world-bin-resume {
+  border-color: var(--bin-ink);
+  background: var(--bin-ink);
+  color: var(--bin-ground);
 }
 .world-bin-danger {
   border-color: var(--bin-danger);
+  background: transparent;
   color: var(--bin-danger);
+}
+.world-bin-danger-strong {
+  background: var(--bin-danger);
+  color: var(--bin-ground);
+}
+@media (hover: hover) {
+  .world-bin-button:hover {
+    filter: brightness(1.12);
+  }
+  .world-bin-danger:hover {
+    background: var(--bin-danger-soft);
+  }
+  .world-bin-danger-strong:hover {
+    background: var(--bin-danger);
+  }
 }
 @media (max-width: 720px) {
   .world-bin-button {
     min-height: 44px;
+  }
+  .world-bin-card-actions {
+    flex: 1 0 100%;
+    justify-content: flex-end;
   }
 }
 

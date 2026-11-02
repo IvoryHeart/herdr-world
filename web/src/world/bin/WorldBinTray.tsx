@@ -2,6 +2,12 @@ import { useRef, useState, type PointerEvent } from "react";
 import type { BinEntry } from "../../../../shared/bin";
 import "./bin.css";
 
+/** m:ss, rounded up: a countdown never shows 0:00 before it is over. */
+const clock = (ms: number) => {
+  const s = Math.max(0, Math.ceil(ms / 1000));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+};
+
 /** One tray renderer for Board, Desk and Town; only its anchor differs. */
 export function WorldBinTray({
   entries,
@@ -57,6 +63,8 @@ export function WorldBinTray({
     onPutBack(entry, { x: event.clientX, y: event.clientY });
   };
 
+  const soonest = Math.min(...entries.map(timeLeft));
+
   return (
     <div
       ref={tray}
@@ -65,14 +73,24 @@ export function WorldBinTray({
       role="dialog"
       aria-label="Bin contents"
     >
-      <header>
-        <b>{paused ? "Bin · held" : "Bin · pausing…"}</b>
-        <small>
-          {entries.length} inside
-          {entries.some((entry) => timeLeft(entry) < entry.departure_ms)
-            ? " · departure held"
-            : ""}
-        </small>
+      <header data-held={String(paused)}>
+        <code className="world-bin-tray-clock" aria-label="Time left">
+          {clock(soonest)}
+        </code>
+        <div className="world-bin-tray-title">
+          <b>
+            Bin{" "}
+            <span className="world-bin-state">
+              {paused ? "held" : "holding…"}
+            </span>
+          </b>
+          <small>
+            {entries.length === 1 ? "1 agent" : `${entries.length} agents`}
+            {entries.some((entry) => timeLeft(entry) < entry.departure_ms)
+              ? " · departure held"
+              : " · countdown stopped"}
+          </small>
+        </div>
         <button
           type="button"
           className="world-bin-button world-bin-resume"
@@ -83,8 +101,8 @@ export function WorldBinTray({
         </button>
       </header>
       <p className="world-bin-hint">
-        Drag a card out to put it back where it was. The timers continue when
-        you close the lid.
+        Put back (or drag a card out) returns an agent to its desk. Resume
+        starts the countdown again.
       </p>
       <ul>
         {entries.map((entry) => (
@@ -103,21 +121,23 @@ export function WorldBinTray({
               onPointerCancel={(event) => endDrag(event, true)}
             >
               <b>{entry.label}</b>
-              <code>{Math.ceil(timeLeft(entry) / 1000)}s</code>
-              <button
-                type="button"
-                className="world-bin-button"
-                onClick={() => onPutBack(entry, null)}
-              >
-                Put back
-              </button>
-              <button
-                type="button"
-                className="world-bin-button world-bin-danger"
-                onClick={() => onCloseNow([entry.id])}
-              >
-                Close now
-              </button>
+              <code>{clock(timeLeft(entry))}</code>
+              <span className="world-bin-card-actions">
+                <button
+                  type="button"
+                  className="world-bin-button"
+                  onClick={() => onPutBack(entry, null)}
+                >
+                  Put back
+                </button>
+                <button
+                  type="button"
+                  className="world-bin-button world-bin-danger"
+                  onClick={() => onCloseNow([entry.id])}
+                >
+                  Close now
+                </button>
+              </span>
             </div>
           </li>
         ))}
@@ -126,7 +146,7 @@ export function WorldBinTray({
         <footer>
           <button
             type="button"
-            className="world-bin-button world-bin-danger"
+            className="world-bin-button world-bin-danger world-bin-danger-strong"
             onClick={() => onCloseNow(entries.map((entry) => entry.id))}
           >
             Close all now
