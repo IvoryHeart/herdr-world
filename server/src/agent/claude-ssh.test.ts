@@ -24,7 +24,8 @@ const quote = (text: string) => `'${text.replaceAll("'", "'\\''")}'`;
 
 function isolatedPayload(shell: string, projects: string) {
   const ordinary =
-    shell.startsWith("\nset -eu\npath=") ||
+    /^\n?set -eu\npath=/.test(shell) ||
+    shell.startsWith("f=") ||
     shell.startsWith("set -eu\ncat ") ||
     shell === "date +%s%N";
   if (ordinary) {
@@ -32,7 +33,7 @@ function isolatedPayload(shell: string, projects: string) {
       throw new Error("Unexpected home access in a fixture file operation.");
     return shell;
   }
-  const anchor = 'root="$HOME/.claude/projects"';
+  const anchor = 'root="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects"';
   if (shell.split(anchor).length !== 2)
     throw new Error("Expected exactly one fixture home substitution.");
   return shell.replace(anchor, `root=${quote(projects)}`);
@@ -86,7 +87,6 @@ async function fixture(host = "claude-fixture.example") {
       expect(argv[argv.length - 2]).toBe(host);
       expect(argv).toContain("BatchMode=yes");
       expect(argv).toContain("StrictHostKeyChecking=yes");
-      expect(timeout).toBe(15_000);
       // Execute the production POSIX payload locally. Only the remote home
       // boundary is replaced; this is not a native OpenSSH acceptance test.
       const command = argv[argv.length - 1]!;
@@ -94,6 +94,11 @@ async function fixture(host = "claude-fixture.example") {
       const shell = command
         .slice("bash -lc '".length, -1)
         .replaceAll("'\\''", "'");
+      // Appended transcript reads retain their existing longer transfer budget;
+      // discovery, stat, successor lookup and clock probes keep the file budget.
+      expect(timeout).toBe(
+        shell.startsWith("set -eu\npath=") ? 60_000 : 15_000,
+      );
       const result = await runBinaryProcessWithTimeout(
         [
           "bash",
@@ -180,7 +185,7 @@ describe.skipIf(process.platform === "win32" || !Bun.which("bash"))(
       const f = await fixture();
       try {
         const shown = await f.chat.read({ pane_id: "w7:p2" });
-        expect(shown.status).toBe("ok");
+        expect(shown).toMatchObject({ status: "ok" });
         expect(shown.messages.map((message) => message.text)).toEqual([
           "Read the example README.",
           "It describes a synthetic project.",
@@ -217,7 +222,7 @@ describe.skipIf(process.platform === "win32" || !Bun.which("bash"))(
       const f = await fixture();
       try {
         const shown = await f.chat.read({ pane_id: "w7:p2" });
-        expect(shown.status).toBe("ok");
+        expect(shown).toMatchObject({ status: "ok" });
         f.switchSession();
         const result = await f.chat.send({
           pane_id: "w7:p2",
