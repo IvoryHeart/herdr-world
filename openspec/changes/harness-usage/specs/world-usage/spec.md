@@ -28,6 +28,14 @@ Usage SHALL identify its host and SHALL name pane, tab and workspace only with o
 - **WHEN** the supplied agent count exceeds the attribution budget or a complete revalidation observes a changed, new or conflicting claim
 - **THEN** usage remains host-attributed and candidate-budget truncation is explicit rather than implying unique pane ownership
 
+#### Scenario: An older session conflicts with a current title prefix
+- **WHEN** a Codex session file outside numeric retention shares the current displayed prefix with another session
+- **THEN** its identity still participates in ambiguity checks, recent usage remains host-attributed, and expired token rows do not enter totals
+
+#### Scenario: Older identity evidence cannot be completed
+- **WHEN** older Codex metadata is unavailable or its bounded discovery capacity is exhausted
+- **THEN** the prefix remains unresolved while current numeric observations stay available with explicit incomplete coverage
+
 ### Requirement: Counted-once windows and retention
 
 The read contract SHALL offer today and seven UTC calendar days including today as half-open bounded windows. Per-message/turn identity SHALL prevent repeated Claude/Pi/Gemini usage from counting twice; Codex cumulative counts SHALL contribute only known nonnegative deltas, without assigning an unknown baseline to a model or window. Daily session/model rollups SHALL retain at most seven days. Response and collection bounds SHALL be fixed and any loss of coverage SHALL be explicit, with each response below the 1 MiB frame. Time SHALL mean usage-observation span, not active or billable time.

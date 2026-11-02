@@ -64,15 +64,19 @@ test("the operation deadline terminates a worker without waiting for its blocked
   let exited = false;
   try {
     await expect(
-      runUsageWorker("await new Promise(()=>{});", owner.signal, (program) => {
-        const worker = new Worker(
-          new URL(`data:text/javascript,${encodeURIComponent(program)}`),
-        );
-        worker.once("exit", () => {
-          exited = true;
-        });
-        return worker;
-      }),
+      runUsageWorker(
+        "const {parentPort}=await import('node:worker_threads'); parentPort.on('message',()=>{}); await new Promise(()=>{});",
+        owner.signal,
+        (program) => {
+          const worker = new Worker(
+            new URL(`data:text/javascript,${encodeURIComponent(program)}`),
+          );
+          worker.once("exit", () => {
+            exited = true;
+          });
+          return worker;
+        },
+      ),
     ).rejects.toThrow("cancelled");
     expect(exited).toBe(true);
   } finally {

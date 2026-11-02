@@ -73,6 +73,12 @@ export async function collectHarnessUsage(
     string,
     { harness: string; path: string; size: number; mtime: number }
   >();
+  // Numeric retention never proves identity absence. Keep old Codex metadata
+  // in a separate bounded inventory so it cannot crowd out current usage.
+  const identityOnly: typeof candidates = new Map();
+  const needCodexIdentity = (options.codex_prefixes ?? []).some((prefix) =>
+    /^[0-9a-f-]{17,36}$/i.test(prefix),
+  );
   const sessions = new Map<
     string,
     { harness: string; reader: ReturnType<typeof project>; files: Set<string> }
@@ -94,9 +100,27 @@ export async function collectHarnessUsage(
   async function add(harness: string, path: string, priority = false) {
     try {
       const info = await fs.lstat(path);
-      if (!info.isFile() || info.isSymbolicLink() || info.mtimeMs < start)
+      if (!info.isFile() || info.isSymbolicLink()) {
+        if (harness === "codex" && needCodexIdentity && info.isSymbolicLink())
+          fail(harness);
         return;
-      if (candidates.has(path)) return;
+      }
+      if (candidates.has(path) || identityOnly.has(path)) return;
+      if (info.mtimeMs < start) {
+        if (harness !== "codex" || !needCodexIdentity) return;
+        if (identityOnly.size >= 64) {
+          truncated = true;
+          fail(harness);
+          return;
+        }
+        identityOnly.set(path, {
+          harness,
+          path,
+          size: info.size,
+          mtime: info.mtimeMs,
+        });
+        return;
+      }
       if (
         candidates.size >= 384 ||
         (!priority && (fileCounts.get(harness) ?? 0) >= 64)
@@ -138,6 +162,8 @@ export async function collectHarnessUsage(
           break;
         }
         const path = join(directory, entry.name);
+        if (harness === "codex" && needCodexIdentity && entry.isSymbolicLink())
+          fail(harness);
         if (entry.isDirectory()) await walk(harness, path, depth + 1);
         else if (
           entry.isFile() &&
@@ -154,8 +180,8 @@ export async function collectHarnessUsage(
   for (const f of (options.files ?? []).slice(0, 128))
     if (states.has(f.harness)) await add(f.harness, f.path, true);
   for (const [harness, root] of roots) await walk(harness!, root!, 0);
-  const nativeSessions = new Map<string, string>();
-  for (const file of [...candidates.values()].sort(
+  const codexSessions = new Map<string, string>();
+  for (const file of [...candidates.values(), ...identityOnly.values()].sort(
     (a, b) => b.mtime - a.mtime,
   )) {
     if (
@@ -168,7 +194,11 @@ export async function collectHarnessUsage(
       break;
     }
     const { harness, path } = file;
-    if (path.endsWith(".zst") && candidates.has(path.slice(0, -4))) continue;
+    if (
+      path.endsWith(".zst") &&
+      (candidates.has(path.slice(0, -4)) || identityOnly.has(path.slice(0, -4)))
+    )
+      continue;
     let broken = false,
       fileBytes = 0;
     let materialized: string | undefined;
@@ -296,6 +326,11 @@ export async function collectHarnessUsage(
       return nativeId === null;
     });
     const key = hash(`${harness}\0${nativeId ?? path.replace(/\.zst$/, "")}`);
+    if (harness === "codex" && nativeId) codexSessions.set(key, nativeId);
+    if (identityOnly.has(path)) {
+      if (broken || !nativeId) fail(harness);
+      continue;
+    }
     let current = sessions.get(key);
     if (!current) {
       current = {
@@ -305,8 +340,7 @@ export async function collectHarnessUsage(
       };
       sessions.set(key, current);
     }
-    if (nativeId) nativeSessions.set(key, nativeId);
-    else broken = true; // No canonical identity is explicitly partial.
+    if (!nativeId) broken = true; // No canonical identity is explicitly partial.
     if (current.files.size < 16)
       current.files.add(hash(path.replace(/\.zst$/, "")));
     else {
@@ -357,10 +391,8 @@ export async function collectHarnessUsage(
   if (!result.truncated && states.get("codex") === "available") {
     for (const prefix of (options.codex_prefixes ?? []).slice(0, 128)) {
       if (!/^[0-9a-f-]{17,36}$/i.test(prefix)) continue;
-      const matches = [...nativeSessions].filter(
-        ([key, id]) =>
-          sessions.get(key)?.harness === "codex" &&
-          id.toLowerCase().startsWith(prefix.toLowerCase()),
+      const matches = [...codexSessions].filter(([, id]) =>
+        id.toLowerCase().startsWith(prefix.toLowerCase()),
       );
       if (matches.length === 1)
         result.title_matches.push({

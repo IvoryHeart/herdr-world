@@ -11,6 +11,13 @@
 
 ## Privacy and bounds
 
+Codex identity discovery is independent of numeric retention. When prefixes
+need resolution, metadata from up to 64 older session files supplements the
+current numeric inventory without retaining old token rows or displacing
+current usage capacity. A prefix needs complete identity evidence across both
+inventories; age never establishes identity absence. Unreadable or exhausted
+metadata leaves prefixes unresolved within the existing resource lifetime.
+
 The complete operation has one owned 20-second deadline through session resolution, I/O, decompression and claim revalidation. Runtime/service cancellation propagates to the local worker, SSH child and one-shot Herdr read; settlement includes termination/reaping. SSH stdin is a lifetime channel, not transcript transport. Streaming stdout/stderr caps are 768 KiB/16 KiB; crossing either cap kills and reaps the child before returning. Service coalescing is generation-specific, with replaced operations cancelled and drained independently. A deadline failure on a current generation publishes unavailable/stale health, never fresh zero.
 
 No prompts, responses, reasoning, tool arguments/results, paths, native session IDs or raw errors enter public usage records, retained caches, tracked fixtures or logs. JSON decoding is transient at the transcript host; projection retains only approved IDs (hashed), model identifiers, timestamps and validated numeric counters. Tests use disposable synthetic roots and session records. Bounds and health are correctness information, not hidden clipping.

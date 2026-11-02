@@ -53,6 +53,13 @@ and verify cancellation cannot settle before reaping; a real noisy child and
 the SSH input lifetime channel exercise the production execution primitives.
 The generated host program also executes after minified bundling.
 
+The prefix-retention follow-up uses the real collector/runtime/service with
+current, ambiguous, older-conflicting and older-unrelated sessions. An eight-day
+mtime cannot remove an identity claim or move another session's current tokens
+onto its pane. Focused unavailable-metadata and identity-budget controls keep
+current numbers, disclose incomplete coverage and refuse a uniqueness claim.
+These extend the existing Q38 consumer files; model mappings are unchanged.
+
 `server/src/usage/service.test.ts` checks rollups, independent host identity,
 duplicate/unlinked claims, lost sources, replacement during collection,
 attribution invalidation, cache reuse, UTC reset, frame bounds, prices, optional

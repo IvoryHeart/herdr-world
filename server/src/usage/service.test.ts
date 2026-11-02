@@ -494,3 +494,102 @@ test("a source deadline retains prior numbers as stale and reports the failed re
   expect(result.total.records).toBe(0);
   await s.service.close();
 });
+
+test.each(["current", "ambiguous", "old-conflict", "old-unrelated"])(
+  "Codex prefix attribution uses all session identities independently of numeric retention: %s",
+  async (scenario) => {
+    const root = await fs.mkdtemp(join(tmpdir(), "usage-prefix-")),
+      s = setup();
+    const currentId = "11111111-1111-4111-8111-111111111111",
+      otherId = currentId.slice(0, -1) + "2";
+    const currentAgent = {
+      ...agent,
+      agent: "codex",
+      terminal_title: `${currentId.slice(0, 29)}...`,
+      agent_session: { kind: "id", value: currentId },
+    };
+    s.agents([currentAgent]);
+    const write = async (id: string, when: number, archived: boolean) => {
+      const directory = join(
+        root,
+        ".codex",
+        archived ? "archived_sessions" : "sessions",
+        "synthetic",
+      );
+      await fs.mkdir(directory, { recursive: true });
+      const path = join(directory, `${id}.jsonl`);
+      const records = [
+        { type: "session_meta", payload: { id } },
+        { type: "turn_context", payload: { model: "synthetic-model" } },
+        {
+          type: "event_msg",
+          timestamp: new Date(when).toISOString(),
+          payload: {
+            type: "token_count",
+            info: {
+              total_token_usage: { input_tokens: 10, output_tokens: 0 },
+              last_token_usage: { input_tokens: 10, output_tokens: 0 },
+            },
+          },
+          content: "PRIVATE_SENTINEL",
+        },
+      ];
+      await fs.writeFile(
+        path,
+        records.map((record) => JSON.stringify(record)).join("\n") + "\n",
+      );
+      await fs.utimes(path, new Date(when), new Date(when));
+    };
+    await write(
+      currentId,
+      scenario === "old-conflict" ? at - 8 * 86_400_000 : at - 100,
+      scenario === "old-conflict",
+    );
+    if (scenario === "ambiguous" || scenario === "old-conflict")
+      await write(otherId, at - 100, false);
+    if (scenario === "old-unrelated")
+      await write(
+        "22222222-2222-4222-8222-222222222222",
+        at - 8 * 86_400_000,
+        true,
+      );
+    const usage = createRuntimeUsage({
+      herdrCall: async () => ({ agents: [currentAgent] }),
+      collect: (options) =>
+        collectHarnessUsage(options, createUsageProjection, {
+          fs,
+          home: root,
+          env: {},
+          join,
+          hash: usageDigest,
+        }),
+    });
+    s.read((signal) => usage([currentAgent], at, () => true, signal));
+    try {
+      const result = await s.service.get(),
+        ambiguous = scenario === "ambiguous" || scenario === "old-conflict";
+      const total = scenario === "ambiguous" ? 20 : 10;
+      expect(result.total.total_tokens).toBe(total);
+      expect(result.unattributed.total_tokens).toBe(ambiguous ? total : 0);
+      expect(
+        result.entities.every(
+          (entity) => entity.pane_id === (ambiguous ? null : "p1"),
+        ),
+      ).toBe(true);
+      expect(
+        result.sources.find((source) => source.harness === "codex")?.state,
+      ).toBe("available");
+      expect(result.truncated).toBe(false);
+      expect(
+        result.entities.every((entity) => entity.day === "2026-11-01"),
+      ).toBe(true);
+      const serialized = JSON.stringify(result);
+      for (const privateValue of [root, currentId, otherId, "PRIVATE_SENTINEL"])
+        expect(serialized).not.toContain(privateValue);
+    } finally {
+      await s.service.close();
+      await usage.close();
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  },
+);

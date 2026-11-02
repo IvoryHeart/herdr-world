@@ -413,3 +413,65 @@ test("Codex title prefixes resolve only against a unique complete numeric sessio
   );
   expect((await read()).title_matches).toEqual([]);
 });
+
+test.each(["budget", "unavailable"])(
+  "incomplete old-session identity evidence preserves current numbers without guessing a prefix: %s",
+  async (reason) => {
+    const home = await fixture(),
+      id = "11111111-1111-4111-8111-111111111111",
+      prefix = id.slice(0, 29);
+    await write(home, ".codex/sessions/synthetic/current.jsonl", [
+      { type: "session_meta", payload: { id } },
+      { type: "turn_context", payload: { model: "m" } },
+      {
+        type: "event_msg",
+        timestamp: new Date(now - 500).toISOString(),
+        payload: {
+          type: "token_count",
+          info: {
+            total_token_usage: { input_tokens: 10, output_tokens: 0 },
+            last_token_usage: { input_tokens: 10, output_tokens: 0 },
+          },
+        },
+      },
+    ]);
+    let unavailable = "";
+    for (let i = 0; i < (reason === "budget" ? 65 : 1); i++) {
+      const path = await write(
+        home,
+        `.codex/archived_sessions/synthetic/old-${i}.jsonl`,
+        [
+          {
+            type: "session_meta",
+            payload: {
+              id: `22222222-2222-4222-8222-${String(i).padStart(12, "0")}`,
+            },
+          },
+        ],
+      );
+      const old = new Date(now - 8 * 86_400_000);
+      await fs.utimes(path, old, old);
+      if (reason === "unavailable") unavailable = path;
+    }
+    const files = {
+      ...fs,
+      async open(...args: Parameters<typeof fs.open>) {
+        if (args[0] === unavailable)
+          throw new Error("synthetic unavailable metadata");
+        return fs.open(...args);
+      },
+    };
+    const result = await collectHarnessUsage(
+      { now, codex_prefixes: [prefix] },
+      createUsageProjection,
+      { fs: files, home, env: {}, join, hash: usageDigest },
+    );
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0]?.tokens.input).toBe(10);
+    expect(result.title_matches).toEqual([]);
+    expect(
+      result.sources.find((source) => source.harness === "codex")?.state,
+    ).toBe("partial");
+    expect(result.truncated).toBe(reason === "budget");
+  },
+);

@@ -22,6 +22,7 @@
 - [x] Refuse pane attribution beyond the candidate budget or after complete revalidation changes/adds claims.
 - [x] Own cancellation/deadline and exit/reap receipts for local workers, SSH streams, decompression and one-shot revalidation; isolate generation replacement and drain shutdown.
 - [x] Exercise streaming stdout/stderr limits, blocked I/O/decompression, lifecycle cancellation and failed-source health; update the current guide and scoped evidence.
+- [x] Resolve Codex prefix ambiguity independently of token retention; cover current, ambiguous, older-conflicting and unavailable/over-budget identity evidence without retaining old usage.
 
 Delivery: stage and format once, inspect privacy/diff, commit and push through
 required hooks. Open one ready PR with checked description and send review

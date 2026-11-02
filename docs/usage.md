@@ -40,6 +40,10 @@ agent session evidence receive inventory capacity first. File identity is read
 before projection, so preambles and copied files cannot create independent
 readers for one known session. Plain prefixes are replayed within the read
 budgets; compressed/JSON materialization is reused within that file's worker.
+Codex prefix identity checks include older session metadata independently of
+the seven-day token window. Expired usage never enters totals; an older session
+can still make a displayed title prefix ambiguous. Incomplete, unreadable or
+over-budget identity evidence leaves that prefix unresolved.
 
 ## Read contract
 
@@ -128,6 +132,10 @@ or raw filesystem/SSH errors. The service keeps no usage transcript archive.
 
 Collection admits at most 128 exact bound files plus ordinary inventory within
 a 384-file cap, with 64 ordinary files and 2,048 directory entries per harness.
+When resolving Codex title prefixes, a separate cap of 64 older identity-only
+files keeps metadata discovery from crowding out current numeric observations.
+That cap shares the existing read/deadline budgets; exhaustion discloses
+truncation and refuses prefix attribution.
 Depth is at most eight. Reads have a 10-second work budget, 64 MiB per plain or
 decoded file, 16 MiB per compressed/JSON input, 256 MiB plain/input host budget,
 500,000 lines and 32,768 response identities per session. Oversized/incomplete
