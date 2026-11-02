@@ -218,7 +218,6 @@ export function NeedsYouText({
       changed.disconnect();
     };
   }, [expanded]);
-  const toggle = useRef<HTMLButtonElement | null>(null);
   return (
     <>
       <div
@@ -247,19 +246,11 @@ export function NeedsYouText({
       </div>
       {expanded || clipped ? (
         <button
-          ref={toggle}
           type="button"
           className="needs-you-more-text"
           aria-expanded={expanded}
           aria-controls={textId}
-          onClick={() => {
-            setExpanded(!expanded);
-            // Less: keep the control in view when the text above it shrinks.
-            if (expanded)
-              requestAnimationFrame(() =>
-                toggle.current?.scrollIntoView?.({ block: "nearest" }),
-              );
-          }}
+          onClick={() => setExpanded(!expanded)}
         >
           {expanded ? "Less" : "More"}
         </button>

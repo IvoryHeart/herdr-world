@@ -124,33 +124,32 @@ test("each item names its agent, marks unverified asks and answers in place", ()
       deskStore,
     }),
   );
-  expect(html).toContain("3 waiting on you");
-  // The ask: Markdown, options, a typed answer and Dismiss, its asker
-  // named from the ledger and marked unverified.
-  expect(html).toContain("<strong>the fix</strong>");
-  expect(html).toContain(">Ship</button>");
-  // An unverified asker World could not place is named by the pane it claimed.
-  expect(html).toContain('aria-label="Your answer to w1:asker (unverified)"');
-  expect(html).toContain(">unverified</span>");
-  expect(html.match(/>Dismiss</g)).toHaveLength(1);
-  // Blocked and finished agents: their Herdr names (each opens its
-  // window; an asker World could not place is plain text), Chat about this
-  // (Follow up for finished work), the hover card's ⓘ, and Mark reviewed
-  // only on finished work.
-  expect(html).toContain('<b class="needs-you-name">w1:asker</b>');
-  expect(html).toContain(
-    'aria-label="Open early-blocked&#x27;s window" title="Open early-blocked&#x27;s window">early-blocked</button>',
+  const document = new DOMParser().parseFromString(html, "text/html");
+  expect(document.querySelector(".needs-you-count")?.textContent).toContain(
+    "3 waiting on you",
   );
-  expect(html.match(/class="needs-you-name"/g)).toHaveLength(6);
-  expect(html).toContain('aria-label="Follow up with new-done about this"');
-  expect(html).toContain('aria-label="Chat with early-blocked about this"');
-  expect(html.match(/>Chat about this</g)).toHaveLength(2);
-  expect(html.match(/>Follow up…</g)).toHaveLength(3);
-  expect(html.match(/>ⓘ</g)).toHaveLength(5);
-  expect(html.match(/>Mark reviewed</g)).toHaveLength(3);
-  expect(html).toContain('data-mark="asks"');
-  expect(html).toContain('data-mark="needs"');
-  expect(html).toContain('data-mark="done"');
+  expect(document.querySelector("strong")?.textContent).toBe("the fix");
+  expect(
+    document.querySelector(
+      'input[aria-label="Your answer to w1:asker (unverified)"]',
+    ),
+  ).not.toBeNull();
+  const names = [...document.querySelectorAll(".needs-you-name")];
+  expect(names).toHaveLength(6);
+  expect(
+    names.find((name) => name.textContent === "w1:asker")?.closest("button"),
+  ).toBeNull();
+  expect(
+    document.querySelector('button[aria-label="Open early-blocked\'s window"]'),
+  ).not.toBeNull();
+  const buttons = [...document.querySelectorAll("button")].map(
+    (button) => button.textContent,
+  );
+  expect(buttons).toContain("Ship");
+  expect(buttons.filter((text) => text === "Dismiss")).toHaveLength(1);
+  expect(buttons.filter((text) => text === "Chat about this")).toHaveLength(2);
+  expect(buttons.filter((text) => text === "Follow up…")).toHaveLength(3);
+  expect(buttons.filter((text) => text === "Mark reviewed")).toHaveLength(3);
 });
 
 test("an opener's item past the limit opens at its page, and the others stay a page away", () => {

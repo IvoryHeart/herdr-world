@@ -303,6 +303,12 @@ export default function WorldFoundationApp() {
     inspectorConversations.length > 0 &&
     visualArrangementControl &&
     !visualArrangementControl.disabledReasons["close-all"];
+  const showNeedsYouCounter = needsYouInTopbar({
+    view,
+    mobile,
+    zen: zenActive,
+    detail: Boolean(canReturnToView),
+  });
   const returnLabel = `Back to ${view[0].toUpperCase()}${view.slice(1)}`;
   // The phone's Back gesture leaves a terminal for the scene, like the button.
   useSystemBack(
@@ -482,13 +488,7 @@ export default function WorldFoundationApp() {
                   ))}
                 </select>
               </label>
-              {!mobile &&
-              needsYouInTopbar({
-                view,
-                mobile,
-                zen: zenActive,
-                detail: Boolean(canReturnToView),
-              }) ? (
+              {!mobile && showNeedsYouCounter ? (
                 <NeedsYouCounter world={topbarWorld} />
               ) : null}
               {canReturnToView ? (
@@ -526,12 +526,7 @@ export default function WorldFoundationApp() {
                 <>
                   <h1 className="world-mobile-title">{worldViewLabel(view)}</h1>
                   {/* A phone's counter follows the view's name, compact. */}
-                  {needsYouInTopbar({
-                    view,
-                    mobile,
-                    zen: zenActive,
-                    detail: false,
-                  }) ? (
+                  {showNeedsYouCounter ? (
                     <NeedsYouCounter world={topbarWorld} compact />
                   ) : null}
                 </>
