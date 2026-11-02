@@ -6,5 +6,6 @@
   Recovered counters and copied transcripts count once; incomplete or changing
   claims remain host-level, and cancelled or oversized reads release owned resources.
   Reuse bounded host-local parser caches for incremental reads. Old Codex trees
-  may be pruned from numeric discovery; incomplete identity evidence never
-  establishes a unique title-prefix match.
+  use bounded metadata discovery for recent activity; incomplete identity evidence
+  never establishes a unique title-prefix match. Verified file handles, retryable
+  offsets and owned reader failures preserve containment and cache recovery.

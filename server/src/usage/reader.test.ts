@@ -131,3 +131,65 @@ test("the local reader deadline terminates blocked source work before rejecting"
     await reader.close();
   }
 });
+
+test.each(["numeric", "idle"])(
+  "failed %s replies reap their SSH owner without a future read",
+  async (failure) => {
+    const sent = Promise.withResolvers<{ id: number }>(),
+      exit = Promise.withResolvers<number>();
+    let output!: ReadableStreamDefaultController<Uint8Array>,
+      kills = 0;
+    const child = {
+      stdin: {
+        end() {},
+        write(text: string) {
+          sent.resolve(JSON.parse(text));
+        },
+        flush() {},
+      },
+      stdout: new ReadableStream<Uint8Array>({
+        start(controller) {
+          output = controller;
+        },
+      }),
+      stderr: new ReadableStream<Uint8Array>(),
+      exited: exit.promise,
+      kill() {
+        kills++;
+        exit.resolve(137);
+      },
+    };
+    const reader = new UsageReader("operator@example.test", {
+      spawn: () => child,
+    });
+    const empty = {
+      rows: [],
+      sources: ["claude", "codex", "pi", "gemini"].map((harness) => ({
+        harness,
+        state: "missing",
+      })),
+      truncated: false,
+    };
+    const emit = (id: number, value: unknown) =>
+      output.enqueue(Buffer.from(JSON.stringify({ id, value }) + "\n"));
+    try {
+      const work = reader.read({ now: 1 }, new AbortController().signal),
+        request = await sent.promise;
+      emit(
+        request.id,
+        failure === "numeric"
+          ? { ...empty, rows: [{ tokens: { input: -1 } }] }
+          : empty,
+      );
+      if (failure === "numeric") await expect(work).rejects.toThrow("failed");
+      else {
+        await work;
+        emit(request.id, empty);
+        await exit.promise;
+      }
+      expect(kills).toBe(1);
+    } finally {
+      await reader.close();
+    }
+  },
+);

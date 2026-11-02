@@ -1,8 +1,9 @@
 import { Worker } from "node:worker_threads";
 import { sshCommandArgv } from "../bridge/ssh-command";
 import { shQuote } from "../utils/process-utils";
-import type { CollectorOptions } from "./collector";
+import type { CollectorOptions, HostUsage } from "./collector";
 import { usageHostProgram } from "./program";
+import { validateHostUsage } from "./validation";
 import {
   runUsageProcess,
   type SpawnUsageProcess,
@@ -24,7 +25,7 @@ export class UsageReader {
   #channel?: Channel;
   #pending?: {
     id: number;
-    resolve(value: unknown): void;
+    resolve(value: HostUsage): void;
     reject(error: Error): void;
   };
   #serial = 0;
@@ -37,8 +38,13 @@ export class UsageReader {
 
   #start() {
     const fail = () => {
+      if (channel.failed) return;
       channel.failed = true;
-      this.#pending?.reject(new Error("Usage reader failed"));
+      const pending = this.#pending;
+      this.#pending = undefined;
+      // Failure owns teardown even while idle; rejection follows the exit receipt.
+      const reject = () => pending?.reject(new Error("Usage reader failed"));
+      void channel.stop().then(reject, reject);
     };
     const receive = (message: any) => {
       if (
@@ -50,7 +56,14 @@ export class UsageReader {
         fail();
         return;
       }
-      this.#pending.resolve(message.value);
+      try {
+        const value = validateHostUsage(message.value),
+          pending = this.#pending;
+        this.#pending = undefined;
+        pending.resolve(value);
+      } catch {
+        fail();
+      }
     };
     let channel: Channel;
     if (!this.host) {
@@ -118,7 +131,7 @@ export class UsageReader {
     return channel;
   }
 
-  read(options: CollectorOptions, signal: AbortSignal): Promise<unknown> {
+  read(options: CollectorOptions, signal: AbortSignal): Promise<HostUsage> {
     const work = this.#queue.then(async () => {
       signal.throwIfAborted();
       if (this.#closed) throw new Error("Usage reader closed");
@@ -126,12 +139,12 @@ export class UsageReader {
         await this.#channel.stop();
         this.#channel = undefined;
       }
-      const channel = this.#channel ?? this.#start();
       const id = ++this.#serial;
       const request = JSON.stringify({ id, options }) + "\n";
       if (Buffer.byteLength(request) > 256 * 1024)
         throw new Error("Usage request limit");
-      const result = new Promise<unknown>((resolve, reject) => {
+      const channel = this.#channel ?? this.#start();
+      const result = new Promise<HostUsage>((resolve, reject) => {
         this.#pending = { id, resolve, reject };
       });
       const abort = () =>

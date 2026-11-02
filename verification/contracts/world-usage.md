@@ -36,13 +36,15 @@ new platform conformance is claimed.
 - `server/src/usage/projection.test.ts`: response deduplication, cumulative
   high-water recovery, model/cache conventions, unknown baselines and UTC bounds.
 - `collector.test.ts`: synthetic production parsers, copied preambles,
-  incremental complete-line offsets, rewrite invalidation, bounded cache eviction,
-  newest-first admission, root/extension containment, date pruning and conservative
+  retryable complete-line offsets, bounded continuity samples/daily rebuilds,
+  parser/cursor budget recovery, bounded cache eviction, newest-first admission,
+  verified-descriptor containment, old-date activity and conservative
   prefix ambiguity across current and older evidence. Generated programs also run
   under Bun/Node and after minified bundling.
 - `reader.test.ts`, `process.test.ts`, `host.test.ts`: persistent host-owned local
   and SSH caches, stdin request privacy, exact host selection, incomplete claims,
-  cancellation/deadline termination, stream overflow and exit/reap ownership.
+  cancellation/deadline termination, stream overflow, invalid/idle reply failure
+  teardown and exit/reap ownership.
 - `service.test.ts`: host isolation, rollups, unique complete revalidation, lease
   replacement, stale/missing sources, windows, deterministic IDs without writes,
   estimates, telemetry exclusion, frame limits and shutdown.

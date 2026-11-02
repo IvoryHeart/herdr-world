@@ -27,6 +27,7 @@ export type CollectorPorts = {
   join(...parts: string[]): string;
   resolve?(path: string): string;
   hash(value: string): string;
+  clock?(): number;
   decompress?(value: Uint8Array): Uint8Array | Promise<Uint8Array>;
 };
 export type CollectorCache = {
@@ -46,6 +47,9 @@ export type CollectorCache = {
       known: boolean;
       model: string;
       prefixes: string[];
+      head: string;
+      tail: string;
+      verified_day: number;
     }
   >;
   sessions: Map<
@@ -119,7 +123,8 @@ export async function collectHarnessUsage(
     identityComplete = true,
     bytes = 0,
     lines = 0;
-  const deadline = performance.now() + 10_000;
+  const workNow = ports.clock ?? (() => performance.now());
+  const deadline = workNow() + 10_000;
   const fail = (h: string) => {
     states.set(h, "partial");
     if (h === "codex") identityComplete = false;
@@ -151,6 +156,7 @@ export async function collectHarnessUsage(
     path: string,
     priority = false,
     alias?: string,
+    datedOld = false,
   ) {
     if (!extension(harness, path)) {
       if (priority) fail(harness);
@@ -165,6 +171,10 @@ export async function collectHarnessUsage(
       const info = await fs.lstat(path);
       if (!info.isFile() || info.isSymbolicLink()) {
         if (harness === "codex" || priority) fail(harness);
+        return;
+      }
+      if (datedOld && info.mtimeMs < start) {
+        identityComplete = false;
         return;
       }
       if (
@@ -240,6 +250,7 @@ export async function collectHarnessUsage(
     harness: string,
     directory: string,
     parts: string[] = [],
+    datedOld = false,
   ) {
     if (
       harness === "codex" &&
@@ -257,10 +268,10 @@ export async function collectHarnessUsage(
             : Date.UTC(y!, m! - 1, d! + 1);
       if (end <= start) {
         identityComplete = false;
-        return;
+        datedOld = true;
       }
     }
-    if (!visit(harness) || parts.length > 8 || performance.now() > deadline) {
+    if (!visit(harness) || parts.length > 8 || workNow() > deadline) {
       truncated = true;
       fail(harness);
       return;
@@ -285,8 +296,9 @@ export async function collectHarnessUsage(
           continue;
         }
         if (entry.isDirectory())
-          await walk(harness, path, [...parts, entry.name]);
-        else if (entry.isFile()) await add(harness, path);
+          await walk(harness, path, [...parts, entry.name], datedOld);
+        else if (entry.isFile())
+          await add(harness, path, false, undefined, datedOld);
       }
     } catch {
       fail(harness);
@@ -322,6 +334,72 @@ export async function collectHarnessUsage(
     selected.push(file);
   }
   const admitted = new Map(selected.map((f) => [fileKey(f.path), f]));
+  const day = Math.floor(options.now / 86_400_000);
+  const dropSession = (session: string) => {
+    cache.sessions.delete(session);
+    for (const [key, old] of cache.files)
+      if (old.session === session) cache.files.delete(key);
+  };
+  // Never read an admitted pathname through a replacement symlink/inode. Header
+  // and numeric parsing below share this verified descriptor, including containers.
+  const openVerified = async (file: Candidate) => {
+    const handle = await fs.open(
+      file.path,
+      fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0),
+    );
+    try {
+      const info = await handle.stat();
+      if (
+        !info.isFile() ||
+        hash(`${info.dev}:${info.ino}`) !== file.identity ||
+        info.size !== file.size ||
+        info.mtimeMs !== file.mtime ||
+        (await fs.realpath(file.path)) !== file.path ||
+        !roots.some(
+          (root) =>
+            root.harness === file.harness && inside(root.path, file.path),
+        )
+      )
+        throw new Error("Usage file changed");
+      return handle;
+    } catch (error) {
+      await handle.close();
+      throw error;
+    }
+  };
+  const readAt = async (
+    handle: Fs.FileHandle,
+    position: number,
+    length: number,
+  ) => {
+    if (bytes + length > 256 * 1024 * 1024 || workNow() > deadline) {
+      truncated = true;
+      throw new Error("Usage read limit");
+    }
+    const buffer = Buffer.alloc(length);
+    let offset = 0;
+    while (offset < length) {
+      const { bytesRead } = await handle.read(
+        buffer,
+        offset,
+        length - offset,
+        position + offset,
+      );
+      if (!bytesRead) throw new Error("Usage file shortened");
+      bytes += bytesRead;
+      offset += bytesRead;
+    }
+    return buffer;
+  };
+  const samples = async (handle: Fs.FileHandle, offset: number) => {
+    const length = Math.min(offset, 4096);
+    return {
+      head: hash((await readAt(handle, 0, length)).toString("base64")),
+      tail: hash(
+        (await readAt(handle, offset - length, length)).toString("base64"),
+      ),
+    };
+  };
   const reset = new Set<string>();
   for (const [key, old] of cache.files) {
     const file = admitted.get(key),
@@ -329,28 +407,38 @@ export async function collectHarnessUsage(
     if (
       !file ||
       file.identity !== old.identity ||
-      file.size < old.offset ||
+      file.size < old.size ||
+      file.mtime < old.mtime ||
+      old.verified_day !== day ||
       (whole && (file.size !== old.size || file.mtime !== old.mtime)) ||
       (file.mtime !== old.mtime && file.size <= old.size)
-    )
+    ) {
       reset.add(old.session);
+      continue;
+    }
+    if (!whole && (file.size !== old.size || file.mtime !== old.mtime)) {
+      let handle: Fs.FileHandle | undefined;
+      try {
+        handle = await openVerified(file);
+        const current = await samples(handle, old.offset);
+        if (current.head !== old.head || current.tail !== old.tail)
+          reset.add(old.session);
+      } catch {
+        reset.add(old.session);
+        fail(old.harness);
+      } finally {
+        await handle?.close();
+      }
+    }
   }
-  for (const session of reset) {
-    cache.sessions.delete(session);
-    for (const [key, old] of cache.files)
-      if (old.session === session) cache.files.delete(key);
-  }
+  for (const session of reset) dropSession(session);
   for (const session of cache.sessions.values()) {
     session.files.clear();
     session.reader.refresh(options.now);
   }
   const codexIdentities = new Map<string, Set<string>>();
   for (const file of selected) {
-    if (
-      performance.now() > deadline ||
-      bytes >= 256 * 1024 * 1024 ||
-      lines > 500_000
-    ) {
+    if (workNow() > deadline || bytes >= 256 * 1024 * 1024 || lines > 500_000) {
       truncated = true;
       for (const h of states.keys()) fail(h);
       break;
@@ -358,117 +446,126 @@ export async function collectHarnessUsage(
     const key = fileKey(file.path),
       old = cache.files.get(key),
       metadataOnly = file.mtime < start;
-    let broken = false,
-      permanent = false,
-      fileBytes = 0,
-      materialized: string | undefined;
-    const unchanged =
-      old &&
-      old.identity === file.identity &&
-      old.size === file.size &&
-      old.mtime === file.mtime &&
-      old.complete;
-    const cursor = old ?? {
-      path: file.path,
-      harness: file.harness,
-      size: file.size,
-      mtime: file.mtime,
-      identity: file.identity,
-      offset: 0,
-      complete: false,
-      partial: false,
-      skip: false,
-      session: "",
-      known: false,
-      model: "unknown",
-      prefixes: [],
-    };
-    const identity = (record: any) => {
-      const id =
-        record?.sessionId ??
-        (record?.type === "session_meta"
-          ? record.payload?.id
-          : record?.type === "session"
-            ? record.id
-            : undefined);
-      return typeof id === "string" &&
-        /^[a-zA-Z0-9][a-zA-Z0-9_.:/@+-]{0,159}$/.test(id)
-        ? id
-        : null;
-    };
-    const scan = async (consume: (record: any) => boolean, from: number) => {
-      let stopped = false,
-        position = from,
-        committed = from,
-        pending = Buffer.alloc(0),
-        skipping = from > 0 && cursor.skip;
-      const parse = (line: string) => {
-        if (!line.trim()) return;
-        if (++lines > 500_000) {
-          broken = true;
-          return;
-        }
-        try {
-          stopped = !consume(JSON.parse(line));
-        } catch {
-          broken = true;
-          permanent = true;
-        }
+    let handle: Fs.FileHandle | undefined;
+    try {
+      let broken = false,
+        permanent = false,
+        fileBytes = 0,
+        materialized: string | undefined;
+      const unchanged =
+        old &&
+        old.identity === file.identity &&
+        old.size === file.size &&
+        old.mtime === file.mtime &&
+        old.complete;
+      const cursor = old ?? {
+        path: file.path,
+        harness: file.harness,
+        size: file.size,
+        mtime: file.mtime,
+        identity: file.identity,
+        offset: 0,
+        complete: false,
+        partial: false,
+        skip: false,
+        session: "",
+        known: false,
+        model: "unknown",
+        prefixes: [],
+        head: "",
+        tail: "",
+        verified_day: day,
       };
-      try {
-        if (/\.(json|zst)$/.test(file.path)) {
-          if (materialized === undefined) {
-            if (
-              file.size > 16 * 1024 * 1024 ||
-              bytes + file.size > 256 * 1024 * 1024
-            ) {
-              truncated = true;
-              broken = true;
-              return {
-                offset: from,
-                complete: false,
-                skip: false,
-                tail: false,
-              };
-            }
-            let raw: Uint8Array = await fs.readFile(file.path);
-            bytes += raw.byteLength;
-            if (file.path.endsWith(".zst")) {
-              if (!ports.decompress) throw new Error("No decoder");
-              raw = await ports.decompress(raw);
-              bytes += Math.max(0, raw.byteLength - file.size);
-            }
-            if (raw.byteLength > 64 * 1024 * 1024 || bytes > 256 * 1024 * 1024)
-              throw new Error("Usage read limit");
-            materialized = Buffer.from(raw).toString("utf8");
+      const identity = (record: any) => {
+        const id =
+          record?.sessionId ??
+          (record?.type === "session_meta"
+            ? record.payload?.id
+            : record?.type === "session"
+              ? record.id
+              : undefined);
+        return typeof id === "string" &&
+          /^[a-zA-Z0-9][a-zA-Z0-9_.:/@+-]{0,159}$/.test(id)
+          ? id
+          : null;
+      };
+      const scan = async (consume: (record: any) => boolean, from: number) => {
+        let stopped = false,
+          position = from,
+          committed = from,
+          pending = Buffer.alloc(0),
+          skipping = from > 0 && cursor.skip;
+        let budgetStop = false;
+        const parse = (line: string) => {
+          if (!line.trim()) return true;
+          if (lines >= 500_000) {
+            truncated = broken = budgetStop = stopped = true;
+            return false;
           }
-          if (file.path.endsWith(".json")) {
-            consume(JSON.parse(materialized));
-          } else
-            for (const line of materialized.split("\n")) {
-              if (line.length > 4 * 1024 * 1024) {
-                permanent = true;
-                continue;
-              }
-              parse(line);
-              if (stopped) break;
-            }
-          return {
-            offset: file.size,
-            complete: true,
-            skip: false,
-            tail: false,
-          };
-        }
-        const handle = await fs.open(file.path, "r");
+          lines++;
+          try {
+            stopped = !consume(JSON.parse(line));
+          } catch {
+            broken = true;
+            permanent = true;
+          }
+          return true;
+        };
         try {
+          handle ??= await openVerified(file);
+          if (/\.(json|zst)$/.test(file.path)) {
+            if (materialized === undefined) {
+              if (
+                file.size > 16 * 1024 * 1024 ||
+                bytes + file.size > 256 * 1024 * 1024
+              ) {
+                truncated = true;
+                broken = true;
+                return {
+                  offset: from,
+                  complete: false,
+                  skip: false,
+                  tail: false,
+                };
+              }
+              let raw: Uint8Array = await readAt(handle, 0, file.size);
+              if (file.path.endsWith(".zst")) {
+                if (!ports.decompress) throw new Error("No decoder");
+                raw = await ports.decompress(raw);
+                bytes += Math.max(0, raw.byteLength - file.size);
+              }
+              if (
+                raw.byteLength > 64 * 1024 * 1024 ||
+                bytes > 256 * 1024 * 1024
+              )
+                throw new Error("Usage read limit");
+              materialized = Buffer.from(raw).toString("utf8");
+            }
+            if (file.path.endsWith(".json")) {
+              consume(JSON.parse(materialized));
+            } else
+              for (const line of materialized.split("\n")) {
+                if (line.length > 4 * 1024 * 1024) {
+                  permanent = true;
+                  continue;
+                }
+                parse(line);
+                if (stopped) break;
+              }
+            return {
+              offset: file.size,
+              complete: !budgetStop,
+              skip: false,
+              tail: false,
+            };
+          }
           const buffer = Buffer.alloc(64 * 1024);
           while (!stopped && position < file.size) {
             if (
               fileBytes >= 64 * 1024 * 1024 ||
               bytes >= 256 * 1024 * 1024 ||
               lines > 500_000 ||
-              performance.now() > deadline
+              workNow() > deadline
             ) {
               truncated = true;
               broken = true;
@@ -491,12 +588,16 @@ export async function collectHarnessUsage(
             let end;
             while (!stopped && (end = pending.indexOf(10)) >= 0) {
               const boundary = position - pending.length + end + 1;
-              if (!skipping) parse(pending.subarray(0, end).toString("utf8"));
+              if (
+                !skipping &&
+                !parse(pending.subarray(0, end).toString("utf8"))
+              )
+                break;
               skipping = false;
               committed = boundary;
               pending = pending.subarray(end + 1);
             }
-            if (pending.length > 4 * 1024 * 1024) {
+            if (!budgetStop && pending.length > 4 * 1024 * 1024) {
               pending = Buffer.alloc(0);
               skipping = true;
               permanent = true;
@@ -505,96 +606,102 @@ export async function collectHarnessUsage(
           }
           return {
             offset: skipping ? position : committed,
-            complete: stopped || position >= file.size,
+            complete: !budgetStop && (stopped || position >= file.size),
             skip: skipping,
             tail: !stopped && pending.length > 0,
           };
-        } finally {
-          await handle.close();
+        } catch {
+          broken = true;
+          return {
+            offset: committed,
+            complete: false,
+            skip: skipping,
+            tail: false,
+          };
         }
-      } catch {
-        broken = true;
-        return {
-          offset: committed,
-          complete: false,
-          skip: skipping,
-          tail: false,
-        };
-      }
-    };
-    if (!unchanged && !cursor.known) {
-      await scan((record) => {
-        const id = identity(record);
-        if (!id) return true;
-        const canonical = hash(`${file.harness}\0${id}`);
-        if (cursor.session && cursor.session !== canonical)
-          cache.sessions.delete(cursor.session);
-        cursor.session = canonical;
-        cursor.known = true;
-        if (file.harness === "codex")
-          cursor.prefixes = Array.from(
-            { length: Math.max(0, Math.min(36, id.length) - 16) },
-            (_, n) => hash(id.slice(0, n + 17).toLowerCase()),
-          );
-        return false;
-      }, 0);
-    }
-    cursor.session ||= hash(`${file.harness}\0${file.path}`);
-    if (!cursor.known) {
-      broken = true;
-      identityComplete = file.harness === "codex" ? false : identityComplete;
-    }
-    if (file.harness === "codex" && cursor.known) {
-      const known = codexIdentities.get(cursor.session) ?? new Set<string>();
-      for (const prefix of cursor.prefixes) known.add(prefix);
-      codexIdentities.set(cursor.session, known);
-    }
-    if (!metadataOnly) {
-      let session = cache.sessions.get(cursor.session);
-      if (!session) {
-        session = {
-          harness: file.harness,
-          reader: project(file.harness, options.now, hash),
-          files: new Set(),
-        };
-        cache.sessions.set(cursor.session, session);
-        cursor.offset = 0;
-      }
-      if (!unchanged || !old) {
-        session.reader.context(cursor.model);
-        const next = await scan((record) => {
+      };
+      if (!unchanged && !cursor.known) {
+        await scan((record) => {
           const id = identity(record);
-          if (id && hash(`${file.harness}\0${id}`) !== cursor.session) {
-            permanent = true;
-            identityComplete = false;
-            return false;
-          }
-          session.reader.accept(record);
-          return true;
-        }, cursor.offset);
-        cursor.offset = next.offset;
-        cursor.complete = next.complete;
-        cursor.skip = next.skip;
-        cursor.partial = next.tail || broken;
-        cursor.model = session.reader.context();
-        if (permanent) session.reader.incomplete();
+          if (!id) return true;
+          const canonical = hash(`${file.harness}\0${id}`);
+          if (cursor.session && cursor.session !== canonical)
+            dropSession(cursor.session);
+          cursor.session = canonical;
+          cursor.known = true;
+          if (file.harness === "codex")
+            cursor.prefixes = Array.from(
+              { length: Math.max(0, Math.min(36, id.length) - 16) },
+              (_, n) => hash(id.slice(0, n + 17).toLowerCase()),
+            );
+          return false;
+        }, 0);
       }
-      for (const alias of file.aliases)
-        if (session.files.size < 16 || session.files.has(alias))
-          session.files.add(alias);
-        else {
-          session.reader.incomplete();
-          truncated = true;
+      cursor.session ||= hash(`${file.harness}\0${file.path}`);
+      if (!cursor.known) {
+        broken = true;
+        identityComplete = file.harness === "codex" ? false : identityComplete;
+      }
+      if (file.harness === "codex" && cursor.known) {
+        const known = codexIdentities.get(cursor.session) ?? new Set<string>();
+        for (const prefix of cursor.prefixes) known.add(prefix);
+        codexIdentities.set(cursor.session, known);
+      }
+      if (!metadataOnly) {
+        let session = cache.sessions.get(cursor.session);
+        const newSession = !session;
+        if (!session) {
+          session = {
+            harness: file.harness,
+            reader: project(file.harness, options.now, hash),
+            files: new Set(),
+          };
+          cache.sessions.set(cursor.session, session);
+          cursor.offset = 0;
         }
-    } else if (!unchanged) {
-      cursor.complete = cursor.known && !broken;
-      cursor.partial = broken;
+        if (!unchanged || !old || newSession) {
+          session.reader.context(cursor.model);
+          const next = await scan((record) => {
+            const id = identity(record);
+            if (id && hash(`${file.harness}\0${id}`) !== cursor.session) {
+              permanent = true;
+              identityComplete = false;
+              return false;
+            }
+            session.reader.accept(record);
+            return true;
+          }, cursor.offset);
+          cursor.offset = next.offset;
+          cursor.complete = next.complete;
+          cursor.skip = next.skip;
+          cursor.partial = next.tail || broken;
+          cursor.model = session.reader.context();
+          if (permanent) session.reader.incomplete();
+        }
+        for (const alias of file.aliases)
+          if (session.files.size < 16 || session.files.has(alias))
+            session.files.add(alias);
+          else {
+            session.reader.incomplete();
+            truncated = true;
+          }
+      } else if (!unchanged) {
+        cursor.complete = cursor.known && !broken;
+        cursor.partial = broken;
+      }
+      cursor.size = file.size;
+      cursor.mtime = file.mtime;
+      cursor.identity = file.identity;
+      if (!unchanged && !metadataOnly && cursor.offset > 0 && handle)
+        Object.assign(cursor, await samples(handle, cursor.offset));
+      cursor.verified_day = day;
+      cache.files.set(key, cursor);
+      if (broken || cursor.partial) fail(file.harness);
+    } catch {
+      fail(file.harness);
+    } finally {
+      await handle?.close();
     }
-    cursor.size = file.size;
-    cursor.mtime = file.mtime;
-    cursor.identity = file.identity;
-    cache.files.set(key, cursor);
-    if (broken || cursor.partial) fail(file.harness);
   }
   const result: HostUsage = {
     rows: [],
@@ -604,7 +711,7 @@ export async function collectHarnessUsage(
   };
   for (const [sessionKey, session] of cache.sessions) {
     if (!session.files.size) {
-      cache.sessions.delete(sessionKey);
+      dropSession(sessionKey);
       continue;
     }
     const projected = session.reader.finish();
@@ -677,9 +784,7 @@ export async function collectHarnessUsage(
     ([, a], [, b]) => a.mtime - b.mtime,
   )) {
     if (cache.files.size <= maxEntries && cache.bytes <= maxBytes) break;
-    cache.sessions.delete(cursor.session);
-    for (const [key, entry] of cache.files)
-      if (entry.session === cursor.session) cache.files.delete(key);
+    dropSession(cursor.session);
     cache.bytes = account();
   }
   return result;

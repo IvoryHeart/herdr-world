@@ -118,7 +118,8 @@ test("cached files read only appended complete records and reset on truncation",
   const completed = await read();
   expect(completed.rows[0]?.tokens.input).toBe(20);
   expect(completed.rows[0]?.partial).toBe(false);
-  expect(bytes).toBe(Buffer.byteLength(appended));
+  expect(bytes).toBeGreaterThanOrEqual(Buffer.byteLength(appended));
+  expect(bytes).toBeLessThanOrEqual(Buffer.byteLength(appended) + 16 * 1024);
   await fs.writeFile(path, JSON.stringify(assistant("response-c")) + "\n");
   expect((await read()).rows[0]?.tokens.input).toBe(10);
 });
@@ -615,6 +616,11 @@ test("pruned Codex dates are never opened or treated as proof a title prefix is 
     `.codex/sessions/${day(now - 8 * 86400000)}/older.jsonl`,
     records(id.slice(0, -1) + "2"),
   );
+  await fs.utimes(
+    old,
+    new Date(now - 8 * 86400000),
+    new Date(now - 8 * 86400000),
+  );
   const opened: string[] = [];
   const files = {
     ...fs,
@@ -675,3 +681,315 @@ test("bound paths cannot escape harness roots or select unsupported extensions",
   await fs.symlink(outside, join(warm, ".."));
   expect((await read()).rows).toEqual([]);
 });
+
+test("growing rewrites rebuild the canonical session and match a cold reader", async () => {
+  const home = await fixture(),
+    path = await write(home, ".claude/projects/synthetic/session.jsonl", [
+      {
+        ...assistant("old"),
+        message: {
+          ...assistant("old").message,
+          usage: { input_tokens: 90, output_tokens: 0 },
+        },
+      },
+    ]);
+  const cache: CollectorCache = { files: new Map(), sessions: new Map() };
+  const read = (retained = cache) =>
+    collectHarnessUsage(
+      { now },
+      createUsageProjection,
+      { fs, home, env: {}, join, hash: usageDigest },
+      retained,
+    );
+  expect((await read()).rows[0]?.tokens.input).toBe(90);
+  await fs.writeFile(
+    path,
+    [10, 20]
+      .map((input, index) =>
+        JSON.stringify({
+          ...assistant(`new-${index}`),
+          message: {
+            ...assistant(`new-${index}`).message,
+            usage: { input_tokens: input, output_tokens: 0 },
+          },
+        }),
+      )
+      .join("\n") + "\n",
+  );
+  expect((await read()).rows[0]?.tokens.input).toBe(30);
+  expect(
+    (await read({ files: new Map(), sessions: new Map() })).rows[0]?.tokens
+      .input,
+  ).toBe(30);
+  const day = [...cache.files.values()][0]!.verified_day;
+  await collectHarnessUsage(
+    { now: now + 86400000 },
+    createUsageProjection,
+    { fs, home, env: {}, join, hash: usageDigest },
+    cache,
+  );
+  expect([...cache.files.values()][0]!.verified_day).toBe(day + 1);
+});
+
+test("line budget retry resumes before rejected records and clears partial only after recovery", async () => {
+  const home = await fixture(),
+    path = await write(home, ".claude/projects/synthetic/session.jsonl", [
+      assistant(),
+    ]);
+  await fs.appendFile(
+    path,
+    "{}\n".repeat(499999) + JSON.stringify(assistant("response-b")) + "\n",
+  );
+  const cache: CollectorCache = { files: new Map(), sessions: new Map() };
+  const read = () =>
+    collectHarnessUsage(
+      { now },
+      createUsageProjection,
+      { fs, home, env: {}, join, hash: usageDigest },
+      cache,
+    );
+  const first = await read();
+  expect(first.truncated).toBe(true);
+  expect(first.rows[0]?.partial).toBe(true);
+  expect([...cache.files.values()][0]!.offset).toBeLessThan(
+    (await fs.stat(path)).size,
+  );
+  await fs.appendFile(path, JSON.stringify(assistant("response-c")) + "\n");
+  const next = await read();
+  expect(next.rows[0]?.tokens.input).toBe(30);
+  expect(next.rows[0]?.responses).toBe(3);
+  expect(next.rows[0]?.partial).toBe(false);
+  expect(next.truncated).toBe(false);
+});
+
+test.each(["deadline", "host-bytes"])(
+  "cached sessions recover together with cursors after %s exhaustion",
+  async (reason) => {
+    const home = await fixture(),
+      first = await write(home, ".claude/projects/synthetic/a.jsonl", [
+        assistant(),
+      ]);
+    await write(home, ".claude/projects/synthetic/b.jsonl", [
+      { ...assistant("other"), sessionId: "other-session" },
+    ]);
+    let clock = 0,
+      exhaust = false;
+    const cache: CollectorCache = { files: new Map(), sessions: new Map() };
+    const files = {
+      ...fs,
+      async open(...args: Parameters<typeof fs.open>) {
+        if (exhaust && reason === "deadline") clock = 20000;
+        return fs.open(...args);
+      },
+    };
+    const read = (retained = cache) =>
+      collectHarnessUsage(
+        { now },
+        createUsageProjection,
+        {
+          fs: files,
+          home,
+          env: {},
+          join,
+          hash: usageDigest,
+          clock: () => clock,
+          decompress: () => ({ byteLength: 256 * 1024 * 1024 }) as Uint8Array,
+        },
+        retained,
+      );
+    const total = (result: Awaited<ReturnType<typeof read>>) =>
+      result.rows.reduce((sum, row) => sum + row.tokens.input, 0);
+    expect(total(await read())).toBe(20);
+    await fs.appendFile(first, JSON.stringify(assistant("appended")) + "\n");
+    const compressed = join(home, ".codex/sessions/synthetic/budget.jsonl.zst");
+    if (reason === "host-bytes") {
+      await fs.mkdir(join(compressed, ".."), { recursive: true });
+      await fs.writeFile(compressed, "synthetic");
+      await fs.utimes(compressed, new Date(now), new Date(now));
+    }
+    exhaust = true;
+    expect((await read()).truncated).toBe(true);
+    exhaust = false;
+    clock = 0;
+    if (reason === "host-bytes") await fs.unlink(compressed);
+    expect(total(await read())).toBe(30);
+    expect(total(await read({ files: new Map(), sessions: new Map() }))).toBe(
+      30,
+    );
+  },
+);
+
+test("fresh Codex activity in older dates survives warm and cold readers while expired bodies stay pruned", async () => {
+  const home = await fixture(),
+    id = "11111111-1111-4111-8111-111111111111";
+  const day = new Date(now - 8 * 86400000)
+    .toISOString()
+    .slice(0, 10)
+    .replaceAll("-", "/");
+  const path = await write(home, `.codex/sessions/${day}/active.jsonl`, [
+    { type: "session_meta", payload: { id } },
+    { type: "turn_context", payload: { model: "m" } },
+    {
+      type: "event_msg",
+      timestamp: new Date(now - 1).toISOString(),
+      payload: {
+        type: "token_count",
+        info: {
+          total_token_usage: { input_tokens: 10, output_tokens: 0 },
+          last_token_usage: { input_tokens: 10, output_tokens: 0 },
+        },
+      },
+    },
+  ]);
+  const cache: CollectorCache = { files: new Map(), sessions: new Map() };
+  const read = (retained = cache, bound = false) =>
+    collectHarnessUsage(
+      {
+        now,
+        codex_prefixes: [id.slice(0, 29)],
+        files: bound ? [{ harness: "codex", path }] : [],
+      },
+      createUsageProjection,
+      { fs, home, env: {}, join, hash: usageDigest },
+      retained,
+    );
+  for (const result of [
+    await read(cache, true),
+    await read(),
+    await read({ files: new Map(), sessions: new Map() }),
+  ]) {
+    expect(result.rows[0]?.tokens.input).toBe(10);
+    expect(result.title_matches).toEqual([]);
+    expect(
+      result.sources.find((source) => source.harness === "codex")?.state,
+    ).toBe("available");
+  }
+});
+
+test.each(["file", "parent", "json", "compressed"])(
+  "verified handles refuse admission-to-open %s replacement",
+  async (kind) => {
+    const home = await fixture(),
+      outside = await fixture();
+    const gemini = kind === "json",
+      compressed = kind === "compressed";
+    const name = gemini
+      ? "session-example.json"
+      : compressed
+        ? "session.jsonl.zst"
+        : "session.jsonl";
+    const directory = gemini
+      ? ".gemini/tmp/example/chats"
+      : compressed
+        ? ".codex/sessions/synthetic"
+        : ".claude/projects/synthetic";
+    const path = join(home, directory, name),
+      target = join(outside, name);
+    await fs.mkdir(join(path, ".."), { recursive: true });
+    const content = (input: number) =>
+      gemini
+        ? JSON.stringify({
+            sessionId: "synthetic-session",
+            messages: [
+              {
+                id: "response-a",
+                type: "gemini",
+                model: "m",
+                timestamp: new Date(now - 1).toISOString(),
+                tokens: { input, output: 0 },
+              },
+            ],
+          })
+        : compressed
+          ? Bun.zstdCompressSync(
+              [
+                { type: "session_meta", payload: { id: "synthetic-session" } },
+                { type: "turn_context", payload: { model: "m" } },
+                {
+                  type: "event_msg",
+                  timestamp: new Date(now - 1).toISOString(),
+                  payload: {
+                    type: "token_count",
+                    info: {
+                      total_token_usage: {
+                        input_tokens: input,
+                        output_tokens: 0,
+                      },
+                      last_token_usage: {
+                        input_tokens: input,
+                        output_tokens: 0,
+                      },
+                    },
+                  },
+                },
+              ]
+                .map((record) => JSON.stringify(record))
+                .join("\n") + "\n",
+            )
+          : JSON.stringify({
+              ...assistant(),
+              message: {
+                ...assistant().message,
+                usage: { input_tokens: input, output_tokens: 0 },
+              },
+            }) + "\n";
+    await fs.writeFile(path, content(10));
+    await fs.writeFile(target, content(90));
+    const allowed = await collectHarnessUsage({ now }, createUsageProjection, {
+      fs,
+      home,
+      env: {},
+      join,
+      hash: usageDigest,
+      decompress: boundedUsageDecompress,
+    });
+    expect(allowed.rows[0]?.tokens.input).toBe(10);
+    let switched = false,
+      closed = 0;
+    const files = {
+      ...fs,
+      async open(...args: Parameters<typeof fs.open>) {
+        if (args[0] === path && !switched) {
+          switched = true;
+          if (kind === "parent") {
+            await fs.rm(join(path, ".."), { recursive: true });
+            await fs.symlink(outside, join(path, ".."));
+          } else {
+            await fs.unlink(path);
+            await fs.symlink(target, path);
+          }
+        }
+        const handle = await fs.open(...args);
+        return new Proxy(handle, {
+          get(target, key) {
+            if (key === "close")
+              return async () => {
+                closed++;
+                await target.close();
+              };
+            const value = Reflect.get(target, key, target);
+            return typeof value === "function" ? value.bind(target) : value;
+          },
+        });
+      },
+    };
+    const result = await collectHarnessUsage({ now }, createUsageProjection, {
+      fs: files,
+      home,
+      env: {},
+      join,
+      hash: usageDigest,
+      decompress: boundedUsageDecompress,
+    });
+    expect(switched).toBe(true);
+    expect(result.rows).toEqual([]);
+    expect(
+      result.sources.find(
+        (source) =>
+          source.harness ===
+          (gemini ? "gemini" : compressed ? "codex" : "claude"),
+      )?.state,
+    ).toBe("partial");
+    if (kind === "parent") expect(closed).toBeGreaterThan(0);
+  },
+);

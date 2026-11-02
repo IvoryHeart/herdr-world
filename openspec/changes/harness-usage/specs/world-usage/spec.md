@@ -54,7 +54,23 @@ The read contract SHALL offer today and seven UTC calendar days including today 
 
 #### Scenario: Repeated reads and appends
 - **WHEN** a transcript is unchanged or gains complete JSONL records
-- **THEN** its host-local reader reuses numeric parser state and reads only appended bytes; changed/replaced files rebuild the affected session within entry and byte bounds
+- **THEN** its host-local reader reuses numeric parser state, checks bounded head/offset samples on changes and parses appended bytes; a failed sample, shrink, inode change or backward mtime rebuilds the affected session, and each UTC day forces a full rebuild within entry and byte bounds
+
+#### Scenario: Admission changes before open
+- **WHEN** an admitted file or parent is replaced before reading, including a JSON or compressed input
+- **THEN** a non-following descriptor must match admitted identity and containment before any bytes are parsed, and input bounds apply on that descriptor
+
+#### Scenario: A budget interrupts cached collection
+- **WHEN** a line or host-work budget stops collection before processing all bytes or cached sessions
+- **THEN** truncation is explicit, unprocessed bytes remain retryable, and parser retirement cannot leave a complete cursor that silently skips rebuilding
+
+#### Scenario: Current activity in an older Codex date
+- **WHEN** a session in an older dated tree has recent file activity
+- **THEN** bounded metadata discovery can find its current usage after restart; exhausted discovery reports partial/truncated coverage and incomplete identity cannot prove title-prefix uniqueness
+
+#### Scenario: A persistent reader fails while idle
+- **WHEN** a reply is malformed, numerically invalid or unsolicited after a completed request
+- **THEN** the reader stops and reaps its owned channel without requiring a future request or explicit runtime close
 
 #### Scenario: Cancellation or output overflow
 - **WHEN** collection is cancelled, exceeds its owned deadline, or crosses either subprocess stream bound

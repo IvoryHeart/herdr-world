@@ -30,16 +30,28 @@ Node zstd support is optional; without a decoder compressed sources report parti
 coverage. Remote failures never select local files. Harness roots honor
 `CLAUDE_CONFIG_DIR`, `CODEX_HOME` and `PI_CODING_AGENT_DIR` on the transcript host.
 Exact runtime-reported files must be inside those roots with a supported extension.
+Reads share one descriptor for identity and numeric parsing, checked against
+admitted file identity and containment before reading. Opening refuses symlinks
+where supported; the descriptor identity check is required on every platform. JSON/compressed input limits
+apply while reading that descriptor, including concurrent pathname replacement.
 
 Each reader keeps a private per-file stat/offset and numeric parser cache on its
 own host. Unchanged files need no transcript read; append-only JSONL reads resume
-at the last complete line. Rewrites, truncation and file replacement reset the
-affected session. JSON and compressed files are reloaded only when changed.
+at the last complete line. Changed JSONL files check 4 KiB digest samples at the
+head and just before the saved offset. A changed sample, shrink, inode change or
+backward mtime rebuilds the affected session. Each UTC day also forces a full
+rebuild. These bounded checks can miss a pathological same-inode growing rewrite
+that preserves both samples until the daily rebuild; token observations and
+prices remain estimates. Unchanged files require no transcript reads within that
+day. JSON and compressed files are reloaded only when changed or rebuilt.
 Canonical identity precedes projection, so preambles and copies share one reader.
-Inventory favors bound files, then newest files. Old Codex dated directories are
-pruned from discovery. A pruned or otherwise incomplete identity inventory never
-proves a title prefix unique; unresolved usage stays host-level. Older metadata
-outside pruned trees may disprove uniqueness without contributing expired tokens.
+Inventory favors bound files, then newest files. Older Codex dated directories
+receive a bounded metadata scan: recent file activity is collected even after a
+cold restart, while expired bodies stay out of numeric reads. Hitting discovery
+capacity reports partial/truncated coverage. A directory date never proves source
+absence or a title prefix unique; incomplete identity evidence stays unresolved.
+Older metadata outside those trees may disprove uniqueness without adding expired
+tokens.
 
 ## Read contract
 
@@ -136,8 +148,9 @@ truncation and refuses prefix attribution.
 Depth is at most eight. Reads have a 10-second work budget, 64 MiB per plain or
 decoded file, 16 MiB per compressed/JSON input, 256 MiB plain/input host budget,
 500,000 lines and 32,768 response identities per session. Oversized/incomplete
-lines, unreadable files and exhausted capacity are disclosed. Daily rollups
-retain at most seven UTC dates, 1,024 rows and a 512 KiB numeric host response.
+lines, unreadable files and exhausted capacity are disclosed. A line-budget stop
+leaves unparsed bytes retryable; retiring parser state also retires its cursors.
+Daily rollups retain at most seven UTC dates, 1,024 rows and a 512 KiB numeric host response.
 
 The service refreshes on reads, at most once per 30 seconds per runtime, with
 up to four collectors concurrently and a two-second wait before returning the
@@ -155,7 +168,9 @@ service shutdown abort that work. Local workers terminate and report exit even
 when a filesystem promise is blocked. SSH keeps an input lifetime channel open;
 closing it ends the remote program. The service bounds each stdout response frame at 768 KiB and
 lifetime stderr at 16 KiB while reading, and kills and reaps the owned SSH process on
-overflow, cancellation or failure. A replacement generation starts independently
-of its cancelled predecessor; shutdown drains the owned resources before
+overflow, cancellation or failure. Numeric replies are validated inside that
+ownership boundary; malformed or unsolicited idle replies stop and reap the
+reader without waiting for another request. A replacement generation starts
+independently of its cancelled predecessor; shutdown drains the owned resources before
 finishing. A still-current source that times out reports unavailable and retains
 its last bounded numbers as stale, outside current totals.
