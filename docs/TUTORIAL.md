@@ -536,9 +536,10 @@ a starting brief and a look in Town. World starts it in a new tab for you.
    first (for example Claude asking whether to trust a new folder), the
    launcher says so and **Open its tab** lets you answer. Progress and the
    outcome stay visible above the choices, even with a long readiness list.
-   The launcher closes when the start is confirmed. After an uncertain or
-   failed start, its start choices stay disabled: open the existing tab, or
-   close the launcher before deliberately starting another agent. Closing it
+   The launcher closes when the start is confirmed. After an uncertain
+   start, its start choices stay disabled: open the existing tab, or
+   close the launcher before deliberately starting another agent. A definite
+   failure lets you retry, log in or edit profiles. Closing it
    while a launch is pending leaves any created tab in its room; a late reply
    does not reopen its window or close a new launcher.
 
@@ -911,8 +912,8 @@ user and agent messages, with one line for each run of tool calls, and updates
 while the agent works. A new agent without a session shows **No messages yet.**
 Its window starts on **Terminal** for startup questions and switches to Chat
 when its session arrives, unless you have chosen a view yourself. Chat offers
-**Open Terminal** while it is starting; integration advice waits until Herdr has
-confirmed it working or ready without a session for at least 30 seconds.
+**Open Terminal** while it is starting or waiting for you, rather than
+suggesting an integration install.
 A missing or unreadable reported transcript still shows an error.
 If Chat cannot read the conversation it says why and
 offers the fix it names, or **Open Terminal**. A message you send shows as

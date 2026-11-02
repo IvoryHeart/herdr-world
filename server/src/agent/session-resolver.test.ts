@@ -21,6 +21,29 @@ afterEach(async () => {
 });
 
 describe("agent session resolver context", () => {
+  test("startup guidance follows reported readiness without a timer", async () => {
+    for (const [state, ready] of [
+      [{ agent_status: "unknown" }, false],
+      [{ agent_status: "blocked" }, false],
+      [{ agent_status: "idle" }, false],
+      [{ agent_status: "working", launch_pending: true }, false],
+      [{ agent_status: "working" }, true],
+      [{ agent_status: "idle", interactive_ready: true }, true],
+    ] as const) {
+      const resolved = await resolveAgentSession(
+        { pane_id: "p1" },
+        async () => ({ agent: { agent: "claude", ...state } }),
+        localAgentSessionFiles,
+        createAgentSessionResolverContext(),
+      );
+      expect(resolved.status).toBe("missing_session");
+      expect(resolved.detail.includes("integration")).toBe(ready);
+      expect(Boolean(resolved.command)).toBe(ready);
+      if (state.agent_status === "blocked")
+        expect(resolved.detail).toContain("waiting for you in Terminal");
+    }
+  });
+
   test("keeps session path caches isolated per connection context", async () => {
     const root = await mkdtemp(join(tmpdir(), "herdr-gui-session-cache-"));
     tempDirectories.push(root);

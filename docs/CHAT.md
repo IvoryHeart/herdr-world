@@ -20,9 +20,8 @@ you chose a view by hand. Replacing the agent cancels that automatic switch;
 choose Chat or reopen its window for the new agent. If you open Chat before then, it shows **No messages
 yet**, explains that the agent is starting or waiting for you, and offers
 **Open Terminal**. Missing or unreadable named records still show their error.
-Integration advice is offered only after Herdr has shown the same terminal
-working or ready without a session for at least 30 seconds; Refresh can retry.
-Send still requires Herdr to identify the conversation.
+While an agent is starting or waiting, Chat points you to Terminal rather than
+suggesting an integration install. Send still needs an identified conversation.
 
 ## What Chat does
 

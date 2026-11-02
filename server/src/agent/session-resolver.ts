@@ -41,13 +41,10 @@ import {
   stringValue,
 } from "./session-utils";
 
-import { createSessionStartupTracker } from "./session-startup";
-
 export { SESSION_AGENTS };
 
 export type AgentSessionResolverContext = {
   pathCache: Map<string, string>;
-  sessionStartup: ReturnType<typeof createSessionStartupTracker>;
   museMetadata: MuseMetadataCache;
   /** Codex title ID (or prefix) → the one transcript it resolved to. */
   codexTitles: Map<string, { id: string; path: string }>;
@@ -61,7 +58,6 @@ export function createAgentSessionResolverContext(
 ): AgentSessionResolverContext {
   return {
     pathCache: new Map(),
-    sessionStartup: createSessionStartupTracker(),
     museMetadata: new Map(),
     codexTitles: new Map(),
     codexDiscovery: createCodexDiscoveryCache(scope),
@@ -493,8 +489,6 @@ export async function resolveAgentSessionInfo(
       context,
       options.reuseCodexTitle,
     );
-    if (title.kind !== "none")
-      context.sessionStartup.clear(stringValue(params.pane_id));
     if (title.kind === "found") {
       // The title follows thread switches; a Herdr report may be stale.
       file = title.file;
@@ -596,40 +590,47 @@ export async function resolveAgentSessionInfo(
     }
   }
   if (!resolvedSession) {
-    const guidance = context.sessionStartup.message(
-      stringValue(params.pane_id),
-      agent,
-      agentInfo,
-    );
-    // Discovery-only harnesses retain their explicit configuration/platform diagnosis.
-    const startup = ["grok", "agy", "muse"].includes(agent) ? null : guidance;
+    const status = stringValue(agentInfo?.agent_status);
+    const running =
+      agentInfo?.launch_pending !== true &&
+      (status === "working" ||
+        (["idle", "done"].includes(status) &&
+          agentInfo?.interactive_ready === true));
+    const starting = !running;
+    const label = agent ? agent[0].toUpperCase() + agent.slice(1) : "The agent";
+    const startup = starting
+      ? status === "blocked"
+        ? `${label} is waiting for you in Terminal and has not reported a conversation yet.`
+        : `${label} has not reported a conversation yet. Open Terminal to finish startup or check for a question.`
+      : null;
+    const detail =
+      agent === "muse"
+        ? files.remote
+          ? "Muse session inspection over SSH requires a Herdr-reported transcript path. Local session discovery is not used for remote panes."
+          : cwd
+            ? `No local Muse Code session was found for ${cwd}. Start Muse Code in this directory without --no-session-log, then refresh.`
+            : "Herdr did not report a working directory for this Muse Code pane."
+        : (agent === "grok" || agent === "agy") && files.remote
+          ? "World cannot read this agent's sessions on an SSH host yet."
+          : agent === "grok"
+            ? cwd
+              ? `No local Grok Build session was found for ${cwd}. Start Grok Build in this directory, then refresh.`
+              : "Herdr did not report a working directory for this Grok Build pane."
+            : agent === "agy"
+              ? cwd
+                ? `No local Antigravity session was found for ${cwd}. Start Antigravity in this directory, then refresh.`
+                : "Herdr did not report a working directory for this Antigravity pane."
+              : (startup ??
+                (agent === "codex"
+                  ? "Herdr has not received this pane's Codex session. Install or update the Codex integration on the agent's machine, then start or resume Codex with --no-daemon so its hooks use this pane's environment. For an existing conversation, use /title and add Thread ID to identify it without restarting."
+                  : "Herdr has not received an agent session id for this pane. Install the Herdr integration for this agent and start a new agent session."));
     return {
       ...base,
       status: "missing_session",
       reason: agent === "codex" ? "codex_unlinked" : "no_session",
-      detail:
-        startup ??
-        (agent === "muse"
-          ? files.remote
-            ? "Muse session inspection over SSH requires a Herdr-reported transcript path. Local session discovery is not used for remote panes."
-            : cwd
-              ? `No local Muse Code session was found for ${cwd}. Start Muse Code in this directory without --no-session-log, then refresh.`
-              : "Herdr did not report a working directory for this Muse Code pane."
-          : (agent === "grok" || agent === "agy") && files.remote
-            ? "World cannot read this agent's sessions on an SSH host yet."
-            : agent === "grok"
-              ? cwd
-                ? `No local Grok Build session was found for ${cwd}. Start Grok Build in this directory, then refresh.`
-                : "Herdr did not report a working directory for this Grok Build pane."
-              : agent === "agy"
-                ? cwd
-                  ? `No local Antigravity session was found for ${cwd}. Start Antigravity in this directory, then refresh.`
-                  : "Herdr did not report a working directory for this Antigravity pane."
-                : agent === "codex"
-                  ? "Herdr has not received this pane's Codex session. Install or update the Codex integration on the agent's machine, then start or resume Codex with --no-daemon so its hooks use this pane's environment. For an existing conversation, use /title and add Thread ID to identify it without restarting."
-                  : "Herdr has not received an agent session id for this pane. Install the Herdr integration for this agent and start a new agent session."),
+      detail,
       command:
-        startup || agent === "grok" || agent === "muse"
+        detail === startup || agent === "grok" || agent === "muse"
           ? undefined
           : integrationInstallCommand(agent),
       updated_at: new Date(0).toISOString(),
@@ -639,7 +640,6 @@ export async function resolveAgentSessionInfo(
     };
   }
 
-  context.sessionStartup.clear(stringValue(params.pane_id));
   file ??= await sessionFileFor(agent, resolvedSession, cwd, files, context);
   if (!file) {
     return {

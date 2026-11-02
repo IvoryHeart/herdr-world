@@ -96,7 +96,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     without a conversation opens on Terminal and switches to Chat when the
     session arrives, unless you choose a view by hand. Chat describes startup
     or a question plainly and offers Open Terminal; integration guidance waits
-    for at least 30 seconds of confirmed running/ready status without a session. In Town it
+    while the agent is starting or waiting for you in Terminal. In Town it
     docks on the right by default (**Menu → Inspector opening**), 520px wide
     (at most half the screen) so Town stays in view and lines stay readable.
     Drag its inner edge to resize it; Town remembers the width. It can be
@@ -254,8 +254,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   harness stops on a question (such as Claude's folder trust) or exits at
   once, it says so and offers to open the tab. Progress and outcomes stay in
   view above the choices. A confirmed start closes the launcher; an uncertain
-  or failed attempt keeps its explanation and does not re-enable start choices.
-  Open its existing tab or close the launcher before another attempt.
+  attempt keeps its explanation and disables start choices. Open its existing
+  tab or close the launcher before another attempt. A definite failure lets
+  you retry, log in or edit profiles.
   - The launcher shows whether each harness is installed and logged in on the
     host, asked with the harness's own status command (`claude auth status`,
     `codex login status`; Pi reports only whether it is installed). **Log in**

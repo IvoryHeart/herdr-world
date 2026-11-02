@@ -466,19 +466,6 @@ export function AgentChat({
       conversation.unavailable?.reason ?? "",
     );
   const unavailable = noRecord ? null : conversation?.unavailable;
-  const startingLabel = (conversation?.agent ?? pane.agent ?? "Agent").replace(
-    /^./,
-    (letter) => letter.toUpperCase(),
-  );
-  const runningWithoutSession = ["working", "idle", "done"].includes(
-    conversation?.agent_status ?? "",
-  );
-  const startingDetail =
-    conversation?.agent_status === "blocked"
-      ? `${startingLabel} is waiting for you in Terminal and has not reported a conversation yet.`
-      : runningWithoutSession
-        ? conversation?.unavailable?.detail
-        : `${startingLabel} is starting. Check Terminal for setup or a question.`;
   const deliveries = conversation?.deliveries ?? [];
   const pending = deliveries.filter(
     (delivery) =>
@@ -780,13 +767,13 @@ export function AgentChat({
       )}
       {noRecord ? (
         <div className="agent-chat-starting agent-chat-guessed" role="status">
-          <span>{startingDetail}</span>
+          <span>{conversation?.unavailable?.detail}</span>
           {onOpenTerminal ? (
             <button type="button" onClick={onOpenTerminal}>
               <SquareTerminal size={13} /> Open Terminal
             </button>
           ) : null}
-          {runningWithoutSession && conversation?.unavailable?.command ? (
+          {conversation?.unavailable?.command ? (
             <span className="agent-chat-command">
               <code>{conversation.unavailable.command}</code>
               <button

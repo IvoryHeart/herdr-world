@@ -4,7 +4,6 @@ import type {
   WorkspaceInspectorContext,
 } from "../workspaceResource";
 import type { WorldObject, WorldObjectNode } from "./worldObject";
-import type { AgentChatStartupIntent } from "./useAgentChatStartup";
 import type { ChatFocusIntent } from "../chatFocus";
 
 /** One independently navigable Inspector backed by the shared app runtime. */
@@ -20,7 +19,6 @@ export type WorldInspectorConversation = {
   agentSessionFingerprint?: string;
   /** Per-window opening intent; an explicit view choice cancels it. */
   awaitChatSession?: boolean;
-  startupIntent?: AgentChatStartupIntent;
   label: string;
   hostLabel: string;
   spaceLabel: string;
@@ -149,16 +147,7 @@ export function reconcileWorldInspectorConversation(
     current.paneId === observed.paneId &&
     current.terminalId === observed.terminalId &&
     current.context.agent === observed.context.agent;
-  const witness = current.startupIntent;
-  const sameStartupOwner = witness
-    ? witness.connectionId === observed.connectionId &&
-      witness.runtimeGeneration === observed.runtimeGeneration &&
-      witness.paneId === observed.paneId &&
-      witness.terminalId === observed.terminalId &&
-      witness.agent === observed.context.agent
-    : samePane;
-  const waiting =
-    samePane && sameStartupOwner && current.awaitChatSession === true;
+  const waiting = samePane && current.awaitChatSession === true;
   const arrived =
     waiting &&
     Boolean(observed.agentSessionFingerprint) &&
@@ -174,14 +163,9 @@ export function reconcileWorldInspectorConversation(
     view: arrived ? "history" : keepView ? current.view : observed.view,
     ...(current.awaitChatSession !== undefined
       ? {
-          awaitChatSession: !sameStartupOwner
-            ? false
-            : !observed.agentSessionFingerprint
-              ? waiting
-              : undefined,
+          awaitChatSession: arrived ? undefined : waiting,
         }
       : {}),
-    ...(current.startupIntent ? { startupIntent: current.startupIntent } : {}),
     dock: current.dock,
     expanded: current.expanded,
     size: current.size,
@@ -193,27 +177,6 @@ export function reconcileWorldInspectorConversation(
       : {}),
   };
   return inspectorConversationEqual(current, next) ? current : next;
-}
-
-/** Explicit opens use the resolved startup view, rather than bypassing it. */
-export function applyRequestedInspectorView(
-  current: WorldInspectorConversation,
-  observed: WorldInspectorConversation,
-  requested: InspectorView | null | undefined,
-) {
-  return requested && current.availableViews.includes(requested)
-    ? {
-        ...current,
-        view: observed.view,
-        startupIntent: observed.startupIntent ?? current.startupIntent,
-        awaitChatSession:
-          observed.awaitChatSession ??
-          (current.awaitChatSession !== undefined &&
-          !observed.agentSessionFingerprint
-            ? false
-            : undefined),
-      }
-    : current;
 }
 
 function inspectorConversationEqual(
@@ -231,7 +194,6 @@ function inspectorConversationEqual(
     left.terminalId === right.terminalId &&
     left.agentSessionFingerprint === right.agentSessionFingerprint &&
     left.awaitChatSession === right.awaitChatSession &&
-    left.startupIntent === right.startupIntent &&
     left.label === right.label &&
     left.hostLabel === right.hostLabel &&
     left.spaceLabel === right.spaceLabel &&
@@ -305,18 +267,7 @@ export function worldInspectorForNode(
     context,
     availableViews,
     view: awaiting ? "terminal" : view,
-    ...(awaiting && leaf
-      ? {
-          awaitChatSession: true,
-          startupIntent: {
-            connectionId: node.connectionId,
-            runtimeGeneration: node.generation,
-            paneId: leaf.nativeId,
-            terminalId: leaf.terminalId,
-            agent: leaf.pane.agent,
-          },
-        }
-      : {}),
+    ...(awaiting ? { awaitChatSession: true } : {}),
     ...preferences,
   };
 }

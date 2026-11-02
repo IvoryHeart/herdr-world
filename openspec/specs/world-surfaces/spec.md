@@ -1972,38 +1972,31 @@ Opening the terminal from a peek SHALL follow the Inspector presentation prefere
 
 ### Requirement: Honest agent startup presentation
 
-When an agent is opened with Chat as the desired view but has not reported a
-conversation, its qualified window SHALL start on Terminal. The window MAY
-switch to Chat when its captured source admits the conversation or a current
-reported session arrives. A manual view choice SHALL cancel this automatic
-handoff for that window. Late replies, another pane/terminal/harness, and retired
-runtime generations SHALL NOT revive the cancelled intent. Focused topology
-replacement SHALL retire the original captured intent before aggregate
-reconciliation; replacement or restoration alone SHALL NOT re-arm it.
+When Chat is the chosen opening view, an agent without a reported conversation
+SHALL open on Terminal. When the same agent reports its session, the window
+SHALL switch to Chat unless the user has chosen a view. Replacing the terminal
+or harness SHALL cancel that automatic switch.
 
-Chat opened before a conversation exists SHALL show an empty conversation,
-plain startup/waiting guidance and an Open Terminal action where available.
-Unknown, blocked and pending launches SHALL NOT be diagnosed as missing an
-integration. Integration advice MAY appear only after the same native terminal
-has been observed working or interactively ready without a session for a
-30-second grace period. Named missing/unreadable records SHALL retain their
-errors, and startup evidence SHALL NOT grant Send or prompt-answer authority.
+Chat before a conversation exists SHALL show an empty conversation, plain
+starting/waiting guidance and Open Terminal. A named record that is missing or
+unreadable SHALL keep its error. Startup presentation SHALL NOT allow sending
+messages or answering prompts without their existing authority checks.
 
-#### Scenario: A new agent is waiting on folder trust
+#### Scenario: An agent is waiting at a startup question
 
-- **WHEN** its window is opened before any conversation is reported
-- **THEN** Terminal opens so the question is visible; manually opened Chat
-  explains startup/waiting without an installation instruction
+- **WHEN** the agent has not reported a conversation
+- **THEN** its window opens on Terminal; manually opened Chat explains startup
+  without suggesting an integration install
 
-#### Scenario: A session arrives while the opening intent is still armed
+#### Scenario: The first session arrives
 
-- **WHEN** the same admitted runtime and pane report a conversation
-- **THEN** the existing window switches to Chat without opening another window
+- **WHEN** the same agent reports its session and no view was chosen by hand
+- **THEN** the existing window switches to Chat
 
-#### Scenario: The owner chooses a view before a late session reply
+#### Scenario: A view was chosen or the agent was replaced
 
-- **WHEN** the owner switches views and a pending conversation read then completes
-- **THEN** the chosen view remains selected and no late reply re-arms the handoff
+- **WHEN** a session is later reported
+- **THEN** the old automatic switch does not change the chosen view
 
 ### Requirement: Shared Chat composer and honest send receipts
 

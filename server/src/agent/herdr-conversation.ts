@@ -555,7 +555,6 @@ export function createHerdrConversationSource(args: {
       codexWatch?.close();
       codexWatch = null;
       args.context.codexDiscovery.clear();
-      args.context.sessionStartup.clearAll();
     },
     read,
     latest,

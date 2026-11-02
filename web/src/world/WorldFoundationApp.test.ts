@@ -38,6 +38,7 @@ import { worldNodeOpenView } from "./worldInspectorSelection";
 import { worldPathNeedsCanonical } from "./worldViewRouting";
 import {
   reconcileWorldInspectorConversation,
+  launchedWorldLeaf,
   retainWorldInspectorConversations,
   upsertWorldInspectorConversation,
   worldInspectorForNode,
@@ -704,6 +705,18 @@ describe("World view preference", () => {
       "host-a",
     );
     const agent = world.leaves.find(({ kind }) => kind === "agent")!;
+    const receipt = {
+      connectionId: agent.connectionId,
+      runtimeGeneration: agent.generation,
+      terminalId: agent.terminalId,
+    };
+    expect(launchedWorldLeaf(world, receipt)).toBe(agent);
+    expect(
+      launchedWorldLeaf(world, {
+        ...receipt,
+        runtimeGeneration: receipt.runtimeGeneration + 1,
+      }),
+    ).toBeUndefined();
     const terminal = world.leaves.find(({ kind }) => kind === "terminal")!;
 
     expect(worldIntentViews(world.hosts[0])).toEqual([]);
@@ -1723,4 +1736,35 @@ test("presentation retention follows exact catalogue owners regardless of host r
   expect(retainWorldInspectorConversations(retained, owners.slice(1))).toEqual([
     beta,
   ]);
+});
+
+test("a waiting window follows its first session; manual views and replacements cancel it", () => {
+  const waiting = { ...inspectorConversation(0), awaitChatSession: true };
+  const arrived = {
+    ...waiting,
+    view: "history" as const,
+    resourceIdentity: "session",
+    agentSessionFingerprint: "session",
+  };
+  expect(reconcileWorldInspectorConversation(waiting, arrived).view).toBe(
+    "history",
+  );
+  expect(
+    reconcileWorldInspectorConversation(
+      { ...waiting, view: "files", awaitChatSession: false },
+      arrived,
+    ).view,
+  ).toBe("files");
+  const replaced = reconcileWorldInspectorConversation(waiting, {
+    ...arrived,
+    terminalId: "replacement",
+  });
+  expect(replaced).toMatchObject({ view: "terminal", awaitChatSession: false });
+  expect(
+    reconcileWorldInspectorConversation(replaced, {
+      ...arrived,
+      terminalId: "replacement",
+      resourceIdentity: "next",
+    }).view,
+  ).toBe("terminal");
 });
