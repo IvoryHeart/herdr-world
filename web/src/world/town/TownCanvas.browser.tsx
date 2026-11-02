@@ -63,6 +63,7 @@ import {
   writeOfficePreferences,
 } from "../officePreferences";
 import { waitForElement } from "../testing/waitForElement";
+import { isTownRoomMoveCandidate } from "../testing/townRoomMoveCandidate";
 
 /*
  * Synthetic Office town fixture. `?mode=test` runs checks and posts them to
@@ -74,6 +75,9 @@ const params = new URL(location.href).searchParams;
 const mode = params.get("mode") ?? "test";
 const scale = params.get("scale") ?? "typical";
 const failures: string[] = [];
+const releaseWitnesses: unknown[] = [];
+const boundaryWitnesses: { kind: string; detail?: unknown }[] = [];
+const binCalls: { method: string; params?: Record<string, unknown> }[] = [];
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
@@ -650,7 +654,11 @@ const deskKeyOf = (identity: Record<string, unknown>) =>
     identity.agent_session_fingerprint ?? null,
   ]);
 worldBridge.call = async (method, params) => {
-  if (method.startsWith("world.bin.")) return fakeBin.call(method, params);
+  if (method.startsWith("world.bin.")) {
+    if (params && new URL(location.href).searchParams.has("releaseWitness"))
+      binCalls.push({ method, params: { ...params } });
+    return fakeBin.call(method, params);
+  }
   if (method === "world.desk.get") return structuredClone(desk);
   if (method === "world.desk.review") {
     const mark = params as Record<string, unknown>;
@@ -3109,13 +3117,56 @@ async function run() {
     );
   };
   if (fromDesk && ontoDesk) {
+    const observationTrace = window.__HERDR_TOWN_RENDERER__?.trace;
+    const oldObservationTrace = observationTrace && {
+      enabled: observationTrace.enabled,
+      record: observationTrace.record,
+    };
+    if (params.has("releaseWitness") && observationTrace) {
+      observationTrace.enabled = true;
+      observationTrace.record = (kind, detail) => {
+        if (kind !== "frame") boundaryWitnesses.push({ kind, detail });
+      };
+    }
+    let intendedRoom: HTMLElement | null = null;
     const before = moves.length;
     const drawn = { ...drags() };
     const at = (target: HTMLElement) => {
       const box = target.getBoundingClientRect();
       return [box.left + box.width / 2, box.top + box.height / 2] as const;
     };
-    const press = (type: string, [x, y]: readonly [number, number]) =>
+    const observeRelease = () => {
+      const ghost = host.querySelector<HTMLElement>(".town-drag-ghost");
+      const renderer = window.__HERDR_TOWN_RENDERER__;
+      const layer = host.querySelector<HTMLElement>(".town-world");
+      return {
+        label: ghost?.textContent ?? null,
+        valid: ghost?.dataset.valid ?? null,
+        action: ghost?.dataset.action ?? null,
+        camera: {
+          level: renderer?.level,
+          zoom: renderer?.zoom,
+          flying: renderer?.flying,
+          frames: renderer?.frames,
+          transform: layer ? getComputedStyle(layer).transform : null,
+        },
+        viewport: [window.innerWidth, window.innerHeight],
+        room: intendedRoom && {
+          id:
+            intendedRoom.dataset.id ?? intendedRoom.getAttribute("aria-label"),
+          rect: intendedRoom.getBoundingClientRect().toJSON(),
+        },
+      };
+    };
+    const press = (type: string, [x, y]: readonly [number, number]) => {
+      const release =
+        params.has("releaseWitness") && type === "pointerup"
+          ? {
+              point: [x, y],
+              before: observeRelease(),
+              movesBefore: moves.length,
+            }
+          : null;
       canvasHost.dispatchEvent(
         new PointerEvent(type, {
           bubbles: true,
@@ -3127,6 +3178,13 @@ async function run() {
           clientY: y,
         }),
       );
+      if (release)
+        releaseWitnesses.push({
+          ...release,
+          after: observeRelease(),
+          moves: moves.slice(release.movesBefore),
+        });
+    };
     // A carry aiming at what is drawn under it after a pan is a scene rule,
     // checked headless in scene/townInteraction.test.ts.
     press("pointerdown", at(fromDesk));
@@ -3195,24 +3253,39 @@ async function run() {
       townTrace.enabled = true;
       townTrace.record = (kind, detail) => {
         if (kind === "frame") return;
+        if (params.has("releaseWitness"))
+          boundaryWitnesses.push({ kind, detail });
         gestures.push({ kind, detail });
         if (gestures.length > 20) gestures.shift();
       };
     }
     for (const room of phone && scale === "extended" ? [] : rooms) {
+      intendedRoom = room;
       const ghost = () => host.querySelector<HTMLElement>(".town-drag-ghost");
       // On failure, say why: where the press landed against where the desk is
       // now, and the camera at the press and after the wait. Diagnostic only:
       // the wait is unchanged.
       const camera = () => {
         const renderer = window.__HERDR_TOWN_RENDERER__;
+        const layer = host.querySelector<HTMLElement>(".town-world");
+        const transform = layer ? getComputedStyle(layer).transform : null;
         return {
           level: renderer?.level,
           zoom: Number(renderer?.zoom.toFixed(3)),
           flying: renderer?.flying,
           frames: renderer?.frames,
+          transform,
         };
       };
+      const aim = () => ({
+        label: ghost()?.textContent ?? null,
+        valid: ghost()?.dataset.valid ?? null,
+        action: ghost()?.dataset.action ?? null,
+        camera: camera(),
+        floor: floor(room),
+        viewport: [window.innerWidth, window.innerHeight],
+        room: room.dataset.id ?? room.getAttribute("aria-label"),
+      });
       const pressedAt = at(fromDesk);
       const cameraAtPress = camera();
       gestures.length = 0;
@@ -3250,6 +3323,7 @@ async function run() {
           })}`,
       );
       press("pointermove", floor(room));
+      const atMove = aim();
       // The ghost judges the drop target on a later frame, whose timing
       // depends on the renderer (SwiftShader or the GPU); give it a few.
       for (let frame = 0; frame < 10; frame += 1) {
@@ -3257,14 +3331,17 @@ async function run() {
         if (ghost()?.dataset.valid === "true") break;
       }
       const label = ghost()?.textContent ?? "";
+      if (params.has("releaseWitness"))
+        boundaryWitnesses.push({ kind: "room-candidate", detail: aim() });
       tried.push(
         `${room.dataset.id ?? room.getAttribute("aria-label") ?? "room"}: ${ghost()?.dataset.valid ?? "no ghost"} ${JSON.stringify(label)}`,
       );
       if (
-        ghost()?.dataset.valid !== "true" ||
-        label.includes("’s place") ||
-        label.includes("last of") ||
-        label === "Leave the team"
+        !isTownRoomMoveCandidate(
+          ghost()?.dataset.valid === "true",
+          ghost()?.dataset.action,
+          label,
+        )
       ) {
         // Not another room here (its own floor, where a grouped desk would
         // leave its team): carry it back home and let it go.
@@ -3275,10 +3352,20 @@ async function run() {
       }
       const before = moves.length;
       const drawn = { ...drags() };
+      const atRelease = aim();
       press("pointerup", floor(room));
+      const afterRelease = aim();
       await waitFor(
         () => moves.length === before + 1,
-        "dropping a desk in another room did not move it",
+        () =>
+          `dropping a desk in another room did not move it ${JSON.stringify({
+            atMove,
+            atRelease,
+            afterRelease,
+            cameraNow: camera(),
+            moves: moves.slice(before),
+            gestures,
+          })}`,
       );
       check(
         moves[before]!.method === "town.move_desk",
@@ -3293,6 +3380,7 @@ async function run() {
       townTrace.record = traced.record;
     }
     if (!moved) {
+      intendedRoom = null;
       const target = await prepareTownEdgeDrop({
         host,
         canvasHost,
@@ -3327,6 +3415,10 @@ async function run() {
       moved,
       `no room took a carried desk (${rooms.length} visible; ${tried.join("; ")})`,
     );
+    if (observationTrace && oldObservationTrace) {
+      observationTrace.enabled = oldObservationTrace.enabled;
+      observationTrace.record = oldObservationTrace.record;
+    }
 
     // A press landing on what Town last drew after an undrawn pan (#553) is
     // a scene rule, checked headless in scene/townInteraction.test.ts.
@@ -3723,7 +3815,21 @@ run()
       error instanceof Error ? (error.stack ?? error.message) : String(error),
     );
   })
-  .finally(() => {
-    if (mode === "test")
-      void fetch("/result", { method: "POST", body: JSON.stringify(failures) });
+  .finally(async () => {
+    if (mode === "test") {
+      if (params.has("releaseWitness"))
+        await fetch("/release-witness", {
+          method: "POST",
+          body: JSON.stringify({
+            releases: releaseWitnesses,
+            boundaries: boundaryWitnesses,
+            binCalls,
+            moves,
+          }),
+        });
+      await fetch("/result", {
+        method: "POST",
+        body: JSON.stringify(failures),
+      });
+    }
   });

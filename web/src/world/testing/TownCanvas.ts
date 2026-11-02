@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
 import { townCanvasCases } from "../town/TownCanvas.cases";
 import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import {
@@ -40,14 +41,26 @@ export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
       const assets = new Map<string, Blob>();
       const result = Promise.withResolvers<unknown>();
       const pageRequested = Promise.withResolvers<void>();
+      const diagnosticRoot = Bun.env.HERDR_WORLD_TOWN_DIAGNOSTIC_DIR;
+      const diagnosticDir = diagnosticRoot && join(diagnosticRoot, group);
+      let rawResult = "";
       const server = Bun.serve({
         hostname: "127.0.0.1",
         port: 0,
         async fetch(request) {
           const path = new URL(request.url).pathname;
           if (path === "/") pageRequested.resolve();
+          if (path === "/release-witness" && diagnosticDir) {
+            await writeFile(
+              join(diagnosticDir, `${width}x${height}.releases.json`),
+              await request.text(),
+              { mode: 0o600 },
+            );
+            return new Response("ok");
+          }
           if (path === "/result" && request.method === "POST") {
-            result.resolve(await request.json());
+            rawResult = await request.text();
+            result.resolve(JSON.parse(rawResult));
             return new Response("ok");
           }
           if (path.startsWith("/api/world/observability"))
@@ -63,7 +76,7 @@ export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
         },
       });
       const exactViewport = group === "bus";
-      const fixtureUrl = `${server.url.href}?mode=test&scale=${scale}&flightFrameDelay=${flightFrameDelay}&edgeFrameDelay=${width === 390 && height === 844 && scale === "extended" ? 300 : 0}${exactViewport ? `&width=${width}&height=${height}` : ""}`;
+      const fixtureUrl = `${server.url.href}?mode=test&scale=${scale}&flightFrameDelay=${flightFrameDelay}&edgeFrameDelay=${width === 390 && height === 844 && scale === "extended" ? 300 : 0}${exactViewport ? `&width=${width}&height=${height}` : ""}${diagnosticDir ? "&releaseWitness=1" : ""}`;
       let browser: ReturnType<typeof Bun.spawn> | undefined;
       let capture: Awaited<ReturnType<typeof connectCapture>> | undefined;
       let stderrDone: Promise<void> | undefined;
@@ -78,6 +91,24 @@ export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
         expect(build.success).toBe(true);
         for (const output of build.outputs)
           assets.set(`/${basename(output.path)}`, output);
+        if (diagnosticDir) {
+          await mkdir(diagnosticDir, { recursive: true, mode: 0o700 });
+          await writeFile(
+            join(diagnosticDir, `${width}x${height}.build.json`),
+            JSON.stringify({
+              bun: Bun.version,
+              outputs: await Promise.all(
+                build.outputs.map(async (output) => ({
+                  name: basename(output.path),
+                  sha256: createHash("sha256")
+                    .update(new Uint8Array(await output.arrayBuffer()))
+                    .digest("hex"),
+                })),
+              ),
+            }),
+            { mode: 0o600 },
+          );
+        }
         const browserLog = join(dir, "browser.log");
         const child = Bun.spawn(
           [
@@ -148,6 +179,13 @@ export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
           // Extended towns at large windows paint far more pixels in software.
           scale === "extended" || scale === "protected" ? 80_000 : 40_000,
         );
+        if (diagnosticDir) {
+          const path = join(diagnosticDir, `${width}x${height}.result.json`);
+          await writeFile(path, rawResult, { mode: 0o600 });
+          console.info(
+            `Town raw result ${path} sha256=${createHash("sha256").update(rawResult).digest("hex")}`,
+          );
+        }
         expect(failures).toEqual([]);
       } finally {
         capture?.close();
