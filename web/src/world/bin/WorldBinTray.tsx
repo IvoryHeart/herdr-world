@@ -2,9 +2,14 @@ import { useRef, useState, type PointerEvent } from "react";
 import type { BinEntry } from "../../../../shared/bin";
 import "./bin.css";
 
-/** m:ss, rounded up: a countdown never shows 0:00 before it is over. */
-const clock = (ms: number) => {
-  const s = Math.max(0, Math.ceil(ms / 1000));
+/**
+ * The wait left before the bus pulls away (the bin's lid shuts), as m:ss
+ * rounded up, like the stop's sign; the drive away after it reads "leaving".
+ */
+const clock = (entry: BinEntry, timeLeft: (entry: BinEntry) => number) => {
+  const wait = timeLeft(entry) - entry.departure_ms;
+  if (wait < 0) return "leaving";
+  const s = Math.ceil(wait / 1000);
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 };
 
@@ -63,7 +68,7 @@ export function WorldBinTray({
     onPutBack(entry, { x: event.clientX, y: event.clientY });
   };
 
-  const soonest = Math.min(...entries.map(timeLeft));
+  const soonest = [...entries].sort((a, b) => timeLeft(a) - timeLeft(b))[0];
 
   return (
     <div
@@ -75,7 +80,7 @@ export function WorldBinTray({
     >
       <header data-held={String(paused)}>
         <code className="world-bin-tray-clock" aria-label="Time left">
-          {clock(soonest)}
+          {soonest ? clock(soonest, timeLeft) : "0:00"}
         </code>
         <div className="world-bin-tray-title">
           <b>
@@ -88,7 +93,7 @@ export function WorldBinTray({
             {entries.length === 1 ? "1 agent" : `${entries.length} agents`}
             {entries.some((entry) => timeLeft(entry) < entry.departure_ms)
               ? " · departure held"
-              : " · countdown stopped"}
+              : ""}
           </small>
         </div>
         <button
@@ -121,7 +126,7 @@ export function WorldBinTray({
               onPointerCancel={(event) => endDrag(event, true)}
             >
               <b>{entry.label}</b>
-              <code>{clock(timeLeft(entry))}</code>
+              <code>{clock(entry, timeLeft)}</code>
               <span className="world-bin-card-actions">
                 <button
                   type="button"
