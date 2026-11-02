@@ -100,6 +100,11 @@ export type TownInteractionPorts = {
    * still there, so a drop near the stop lands on it.
    */
   busStop?(world: Point, at: Point): boolean;
+  /**
+   * Whether a carry at this canvas point is near the bus stop's chip: the
+   * town does not edge-pan there, though only the chip itself takes a drop.
+   */
+  nearBusStop?(at: Point): boolean;
   /** Development builds: each step of the gesture machine. */
   trace?(
     before: string,
@@ -359,7 +364,12 @@ export class TownInteraction {
   /** How far a carry at canvas point `at` pans the town each frame. */
   private edgePush(at: Point) {
     const stage = this.ports.stage();
-    if (!stage || this.overBusStop(at)) return { dx: 0, dy: 0 };
+    if (
+      !stage ||
+      this.overBusStop(at) ||
+      (this.carrying && this.ports.nearBusStop?.(at))
+    )
+      return { dx: 0, dy: 0 };
     const { width, height, inset } = stage.camera.viewport;
     const push = (p: number, low: number, high: number) =>
       p < low + EDGE

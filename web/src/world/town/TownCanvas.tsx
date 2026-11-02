@@ -645,6 +645,7 @@ export function TownCanvas({
       },
       held: () => navigator.vibrate?.(12),
       busStop: (world, at) => busRef.current.over(world, at),
+      nearBusStop: (at) => busRef.current.near(at),
       // Town's targets are live hits and drags: trace a summary of each.
       trace: DEVTOOLS
         ? (before, after, event, effects) =>

@@ -4108,9 +4108,9 @@ behind it on the same street, then in further lanes, so every rider has a place
 on the map. While the stop is off screen, a chip at the nearest screen edge
 SHALL show the next departure; a tap SHALL open the common tray and fly the
 camera to the stop. While an agent is carried the chip SHALL be a large drop
-target near the top of the free screen, clear of the edge-pan band, and SHALL
-grow and highlight under the finger; it SHALL accept a drop only within its
-visible face. A carry over no room or desk SHALL name the bus stop in its hint.
+target at the top of the free screen, where the town SHALL NOT edge-pan over
+or near it, and SHALL grow and highlight under the finger; it SHALL accept a
+drop only within its visible face. A carry over no room or desk SHALL name the bus stop in its hint.
 The town SHALL hold still while a carried agent is over the stop or the chip.
 A tap on the stop or its sign SHALL open the same tray as a tap on the bus.
 A bus emptied before it leaves (Put back, Close now) SHALL drive on off the map

@@ -56,6 +56,8 @@ function setup(
     teams?: TownTeams;
     /** Town's bus stop, as a canvas-point rectangle. */
     stop?: { x: number; y: number; w: number; h: number };
+    /** Near the stop's chip, as a canvas-point rectangle: no edge pan. */
+    near?: { x: number; y: number; w: number; h: number };
   } = {},
 ) {
   const projection = office({
@@ -142,6 +144,13 @@ function setup(
           at.x < options.stop!.x + options.stop!.w &&
           at.y >= options.stop!.y &&
           at.y < options.stop!.y + options.stop!.h
+      : undefined,
+    nearBusStop: options.near
+      ? (at) =>
+          at.x >= options.near!.x &&
+          at.x < options.near!.x + options.near!.w &&
+          at.y >= options.near!.y &&
+          at.y < options.near!.y + options.near!.h
       : undefined,
   });
   /** Draw a frame, as the renderer does, so presses hit what is drawn. */
@@ -1050,4 +1059,29 @@ test("over no room, a carry's hint names the bus stop when the town has one", ()
     );
     t.lift(pointer, t.screen({ x: -4 * T, y: -4 * T }));
   }
+});
+
+test("a carry near the bus stop's chip holds the edge pan but drops only on the chip", () => {
+  // The chip sits in the top edge band; beside it (still "near") the town
+  // stays still, yet a drop there is not a bin drop.
+  const near = { x: 600, y: 0, w: 240, h: 110 };
+  const stop = { x: 632, y: 8, w: 176, h: 64 };
+  const t = setup({ stop, near });
+  const at = t.deskCentre(t.deskCell(0));
+  const pointer = t.press(at);
+  t.moveTo(pointer, offset(at, 20));
+  const beside = { x: 610, y: 20 };
+  t.moveTo(pointer, beside);
+  const y = t.camera.y;
+  t.frames.step();
+  t.frames.step();
+  expect(t.camera.y).toBe(y);
+  expect(last(t.ghost)?.[3]).not.toBe("bin");
+  // Away from the chip the same band pans the town.
+  t.moveTo(pointer, { x: 200, y: 20 });
+  t.frames.step();
+  t.frames.step();
+  expect(t.camera.y).not.toBe(y);
+  t.lift(pointer, { x: 200, y: 20 });
+  expect(t.moves.some((move) => move.kind === "bin")).toBe(false);
 });

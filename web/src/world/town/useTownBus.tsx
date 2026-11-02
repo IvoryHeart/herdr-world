@@ -40,11 +40,13 @@ import "./townBus.css";
 
 type Point = { x: number; y: number };
 /**
- * The carrying chip's centre below the free area's top: its 64 px face
- * (72 px grown) starts 24 px past the 56 px edge-pan band, so a finger near
- * the chip never pans the town.
+ * The carrying chip's centre below the free area's top: it sits in the top
+ * edge-pan band, a strip a carry cannot drop on anyway, so it hides little
+ * of the town; the band does not pan over or near it (CHIP_NEAR).
  */
-const CHIP_DROP_TOP = 116;
+const CHIP_DROP_TOP = 44;
+/** How near the chip, screen px, a carry holds the town still. */
+const CHIP_NEAR = 32;
 const clock = (ms: number) => {
   const s = Math.max(0, Math.ceil(ms / 1000));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
@@ -350,6 +352,23 @@ export function useTownBus({
   };
 
   /**
+   * A carry at this canvas point is near the chip (never pans the town).
+   */
+  const near = (at: Point) => {
+    const rect = chip.current?.getBoundingClientRect();
+    const host = chip.current?.parentElement?.getBoundingClientRect();
+    if (!rect || !host) return false;
+    const x = at.x + host.left,
+      y = at.y + host.top;
+    return (
+      x >= rect.left - CHIP_NEAR &&
+      x <= rect.right + CHIP_NEAR &&
+      y >= rect.top - CHIP_NEAR &&
+      y <= rect.bottom + CHIP_NEAR
+    );
+  };
+
+  /**
    * A carried agent at this point is over the stop, its buses or the chip.
    * The chip takes a drop within its visible face only (never the floor
    * around it); under the finger it grows and lights up, with a light buzz
@@ -463,6 +482,7 @@ export function useTownBus({
     town,
     send,
     over,
+    near,
     setCarrying,
     hudElement,
     worldElement,
