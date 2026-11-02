@@ -2,9 +2,8 @@
 
 Requirement authority: issue #213 owner direction and the approved
 [World usage delta](../../openspec/changes/harness-usage/specs/world-usage/spec.md).
-This extends Q38's read-only numeric observation consumer, without changing the
-accepted runtime lease or verb-policy models. The new mapping awaits the PR's
-independent review; earlier Q38 acceptance does not accept this addition.
+This extends Q38's read-only numeric observation consumer; accepted runtime lease
+and verb-policy models continue to supply operation authority.
 
 ## Properties derived before implementation
 
@@ -24,7 +23,7 @@ independent review; earlier Q38 acceptance does not accept this addition.
 - Unknown prices preserve tokens and null estimates. OTel comparison data cannot
   change canonical log totals without disjoint-scope/event identity evidence.
 - Closing the service drains its collectors and fences further publication and
-  ID allocation before storage closes.
+  resources before storage closes; reads never allocate durable identity records.
 
 ## Direct evidence choice and bounds
 
@@ -34,44 +33,23 @@ projection while the existing runtime manager remains the source of lease
 authority. Direct evidence is therefore selected; no expanded model proof or
 new platform conformance is claimed.
 
-`server/src/usage/projection.test.ts` checks response deduplication, cumulative
-deltas, model changes, unknown baselines, counter decreases, invalid counters,
-provider cache conventions, privacy sentinels and UTC boundaries.
-`collector.test.ts` executes production projection against synthetic disposable
-files, including duplicate sessions, incomplete writes, symlinks, compressed
-rollouts, response validation, and the exact generated SSH program under Bun
-and Node. `host.test.ts` checks qualified SSH selection, unavailable-source
-behavior, unlinked Codex and changed terminal ownership.
-
-Review repair controls additionally cover 625 bounded Codex decrease/recovery
-schedules, copied preamble files through the real collector/runtime/service,
-claims beyond 128 agents, complete revalidation conflicts and newly added
-claims. Local worker controls block metadata, read and decompression promises
-and require termination/exit without releasing the blocked source. Process
-controls exceed stdout/stderr bounds, hold streams open after nonzero exit,
-and verify cancellation cannot settle before reaping; a real noisy child and
-the SSH input lifetime channel exercise the production execution primitives.
-The generated host program also executes after minified bundling.
-
-The prefix-retention follow-up uses the real collector/runtime/service with
-current, ambiguous, older-conflicting and older-unrelated sessions. An eight-day
-mtime cannot remove an identity claim or move another session's current tokens
-onto its pane. Focused unavailable-metadata and identity-budget controls keep
-current numbers, disclose incomplete coverage and refuse a uniqueness claim.
-These extend the existing Q38 consumer files; model mappings are unchanged.
-
-`server/src/usage/service.test.ts` checks rollups, independent host identity,
-duplicate/unlinked claims, lost sources, replacement during collection,
-attribution invalidation, cache reuse, UTC reset, frame bounds, prices, optional
-telemetry exclusion and service close. `server/src/rpc/usage.test.ts` exercises
-the real dispatcher/verb registry, window validation, socket revocation and
-absence of default-runtime routing.
-
-Service generation-replacement and close controls propagate cancellation to
-unreleased sources; a current-generation deadline preserves stale numbers and
-failed-source health. Herdr client controls verify that an aborted one-shot
-read destroys its socket and a pre-aborted read opens none. These are direct
-resource/admission consumers, not an expansion of the runtime state models.
+- `server/src/usage/projection.test.ts`: response deduplication, cumulative
+  high-water recovery, model/cache conventions, unknown baselines and UTC bounds.
+- `collector.test.ts`: synthetic production parsers, copied preambles,
+  incremental complete-line offsets, rewrite invalidation, bounded cache eviction,
+  newest-first admission, root/extension containment, date pruning and conservative
+  prefix ambiguity across current and older evidence. Generated programs also run
+  under Bun/Node and after minified bundling.
+- `reader.test.ts`, `process.test.ts`, `host.test.ts`: persistent host-owned local
+  and SSH caches, stdin request privacy, exact host selection, incomplete claims,
+  cancellation/deadline termination, stream overflow and exit/reap ownership.
+- `service.test.ts`: host isolation, rollups, unique complete revalidation, lease
+  replacement, stale/missing sources, windows, deterministic IDs without writes,
+  estimates, telemetry exclusion, frame limits and shutdown.
+- `server/src/rpc/usage.test.ts`: real verb admission, window validation, socket
+  revocation and absence of default-runtime routing.
+- `server/src/bridge/herdr-client.test.ts`: cancellation destroys the owned
+  one-shot socket; a pre-aborted read opens none.
 
 Run the complete consumer set with:
 

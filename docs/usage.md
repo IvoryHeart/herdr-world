@@ -8,13 +8,6 @@ metrics provider.
 
 ## Sources and inventory
 
-The implementation inventory on 2026-11-02 found Claude Code 2.1.316, Codex CLI
-0.166.0, Pi 0.87.1 and Gemini CLI 0.57.0 installed. Version commands and installed
-Gemini recorder code were inspected; local collection returned numeric records
-with disclosed partial coverage. No real session paths, IDs or conversation
-content were copied into this guide or fixtures. SSH transport is exercised
-with synthetic host programs, not claimed as a live fleet inventory.
-
 | Harness | Host-local source | Accounting and evidence |
 | --- | --- | --- |
 | Claude Code | Projects under the Claude configuration directory | Assistant `message.id`, `message.model`, `message.usage` and timestamp; repeated response blocks preserve the highest observed counters once per ID. Existing crew usage tooling provides repository prior art. |
@@ -30,20 +23,23 @@ These are format references rather than a promise that arbitrary future versions
 will retain the same schema. Unsupported or invalid records disclose partial
 coverage. Other detected harnesses report `unsupported`.
 
-Local collection runs in an owned worker in the service's Bun runtime. SSH collection sends the same
-numeric projection program through the owning OpenSSH destination and requires
-Bun or Node on that host. Node zstd support is optional; without a decoder,
-compressed sources report partial coverage. Remote failures never read this
-machine's files. Harness roots honor `CLAUDE_CONFIG_DIR`, `CODEX_HOME` and
-`PI_CODING_AGENT_DIR` on the transcript host. Exact files resolved from current
-agent session evidence receive inventory capacity first. File identity is read
-before projection, so preambles and copied files cannot create independent
-readers for one known session. Plain prefixes are replayed within the read
-budgets; compressed/JSON materialization is reused within that file's worker.
-Codex prefix identity checks include older session metadata independently of
-the seven-day token window. Expired usage never enters totals; an older session
-can still make a displayed title prefix ambiguous. Incomplete, unreadable or
-over-budget identity evidence leaves that prefix unresolved.
+Local collection runs in a runtime-owned worker. SSH runs the same collector
+through the owning OpenSSH destination, using Bun or Node with a plain `sh -c`
+command. Request paths/options travel over stdin; only numeric projections return.
+Node zstd support is optional; without a decoder compressed sources report partial
+coverage. Remote failures never select local files. Harness roots honor
+`CLAUDE_CONFIG_DIR`, `CODEX_HOME` and `PI_CODING_AGENT_DIR` on the transcript host.
+Exact runtime-reported files must be inside those roots with a supported extension.
+
+Each reader keeps a private per-file stat/offset and numeric parser cache on its
+own host. Unchanged files need no transcript read; append-only JSONL reads resume
+at the last complete line. Rewrites, truncation and file replacement reset the
+affected session. JSON and compressed files are reloaded only when changed.
+Canonical identity precedes projection, so preambles and copies share one reader.
+Inventory favors bound files, then newest files. Old Codex dated directories are
+pruned from discovery. A pruned or otherwise incomplete identity inventory never
+proves a title prefix unique; unresolved usage stays host-level. Older metadata
+outside pruned trees may disprove uniqueness without contributing expired tokens.
 
 ## Read contract
 
@@ -60,9 +56,10 @@ harness logs. A service restart rebuilds observations from available logs.
 
 The response is typed by `shared/usage.ts`:
 
-- `entities`: store-issued `usage` IDs, connector, harness, exact model, UTC day,
+- `entities`: digest-derived `usage` IDs, connector, harness, exact model, UTC day,
   numeric counters, response count, first/last observation, estimate and source
-  health. IDs remain stable for retained entities during one service incarnation.
+  health. IDs derive from the qualified connection/generation and session/day/model;
+  reads do not allocate durable ID records.
 - Qualified host ownership (`connection_id`, `connection_generation`), plus
   `workspace_id`, `tab_id` and `pane_id` only for a unique current session/file
   match. A title prefix must resolve uniquely in a complete source inventory;
@@ -124,9 +121,9 @@ reprices the retained observations and reports the new version.
 
 ## Privacy, limits and lifetime
 
-JSON is decoded transiently on the transcript host. Only hashed source/session
-evidence, model identifiers, timestamps and validated numeric counters survive
-projection. SSH transfers that projection, never transcript contents. The API
+JSON is decoded transiently on the transcript host. The private cache keeps
+file paths/stats/offsets and numeric parser context, with hashed session/response
+evidence. No content or unfinished-line text is cached. SSH transfers that projection, never transcript contents. The API
 returns no paths, native session IDs, prompts, replies, reasoning, tool content
 or raw filesystem/SSH errors. The service keeps no usage transcript archive.
 
@@ -148,14 +145,16 @@ current observation plus `refreshing`. It admits 16 connections and returns at
 most 128 entities plus their rollups, with a 768 KiB response budget below the
 1 MiB frame. Bounds set `truncated`; totals describe the returned entities.
 Fixed counts and deadlines bound work and do not promise full host history.
-Store ID reservations survive restart; numeric caches and bindings do not.
+The private cache admits at most 448 files and 32 MiB of encoded state, evicting
+oldest session groups when either bound is reached. Runtime replacement, close
+or service restart drops it; bindings and observations are rebuilt.
 
 One owned 20-second operation deadline covers identity discovery, collection,
 decompression and claim revalidation. Runtime retirement, replacement and
 service shutdown abort that work. Local workers terminate and report exit even
 when a filesystem promise is blocked. SSH keeps an input lifetime channel open;
-closing it ends the remote program. The service bounds stdout at 768 KiB and
-stderr at 16 KiB while reading, and kills and reaps the owned SSH process on
+closing it ends the remote program. The service bounds each stdout response frame at 768 KiB and
+lifetime stderr at 16 KiB while reading, and kills and reaps the owned SSH process on
 overflow, cancellation or failure. A replacement generation starts independently
 of its cancelled predecessor; shutdown drains the owned resources before
 finishing. A still-current source that times out reports unavailable and retains

@@ -2,7 +2,7 @@
 
 ### Requirement: Numeric usage entities from host connectors
 
-World SHALL collect usage by default from available Claude, Codex, Pi and Gemini session files through each service-owned local or SSH runtime. Usage SHALL be view-neutral World entities, with store-issued identity, source provenance, qualified connection ID and runtime generation. Collection SHALL retain and return only validated numeric counters, model identifiers, timestamps and opaque attribution/deduplication evidence, never conversation content, transcript paths, native session IDs or raw source errors. Unsupported formats and missing prerequisites SHALL be explicit.
+World SHALL collect usage by default from available Claude, Codex, Pi and Gemini session files through each service-owned local or SSH runtime. Usage SHALL be view-neutral World entities, with deterministic digest-derived identity, source provenance, qualified connection ID and runtime generation. Published observations SHALL contain only validated numeric counters, model identifiers, timestamps and opaque attribution/deduplication evidence, never conversation content, transcript paths, native session IDs or raw source errors. A bounded private parser/offset cache MAY retain file metadata on its own transcript host, never content, and SHALL be dropped on runtime generation change. Reads SHALL NOT allocate durable ID records. Unsupported formats and missing prerequisites SHALL be explicit.
 
 #### Scenario: Default collection without OTel
 - **WHEN** a host has readable supported harness logs and no OTel configuration
@@ -33,8 +33,8 @@ Usage SHALL identify its host and SHALL name pane, tab and workspace only with o
 - **THEN** its identity still participates in ambiguity checks, recent usage remains host-attributed, and expired token rows do not enter totals
 
 #### Scenario: Older identity evidence cannot be completed
-- **WHEN** older Codex metadata is unavailable or its bounded discovery capacity is exhausted
-- **THEN** the prefix remains unresolved while current numeric observations stay available with explicit incomplete coverage
+- **WHEN** older Codex metadata is pruned, unavailable or exceeds bounded discovery capacity
+- **THEN** the prefix remains unresolved; pruned numeric history cannot prove unique identity, and failures or exhausted capacity disclose incomplete coverage
 
 ### Requirement: Counted-once windows and retention
 
@@ -51,6 +51,10 @@ The read contract SHALL offer today and seven UTC calendar days including today 
 #### Scenario: A transcript starts with a preamble
 - **WHEN** a preamble precedes the canonical session identity in copied transcript files
 - **THEN** both copies feed one session reader with response deduplication and exact ID attribution
+
+#### Scenario: Repeated reads and appends
+- **WHEN** a transcript is unchanged or gains complete JSONL records
+- **THEN** its host-local reader reuses numeric parser state and reads only appended bytes; changed/replaced files rebuild the affected session within entry and byte bounds
 
 #### Scenario: Cancellation or output overflow
 - **WHEN** collection is cancelled, exceeds its owned deadline, or crosses either subprocess stream bound

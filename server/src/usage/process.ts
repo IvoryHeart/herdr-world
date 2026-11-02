@@ -1,5 +1,5 @@
 export type UsageProcess = {
-  stdin: { end(): unknown };
+  stdin: { end(): unknown; write?(value: string): unknown; flush?(): unknown };
   stdout: ReadableStream<Uint8Array>;
   stderr: ReadableStream<Uint8Array>;
   exited: Promise<number>;
@@ -19,6 +19,7 @@ export async function runUsageProcess(
   argv: string[],
   signal: AbortSignal,
   create = spawn,
+  onFrame?: (value: string) => void,
 ) {
   signal.throwIfAborted();
   const child = create(argv);
@@ -52,16 +53,37 @@ export async function runUsageProcess(
   const read = async (index: number, limit: number) => {
     const chunks: Uint8Array[] = [];
     let size = 0;
+    let pending = Buffer.alloc(0);
     while (true) {
       signal.throwIfAborted();
       const next = await readers[index]!.read();
-      if (next.done) return Buffer.concat(chunks, size).toString("utf8");
+      if (next.done) {
+        if (onFrame && index === 0 && pending.length)
+          throw new Error("Incomplete usage frame");
+        return onFrame ? "" : Buffer.concat(chunks, size).toString("utf8");
+      }
+      if (onFrame && index === 0) {
+        // Bound before concatenation, including a child that never sends a newline.
+        let offset = 0;
+        while (offset < next.value.length) {
+          const end = next.value.indexOf(10, offset);
+          const part = next.value.subarray(offset, end < 0 ? undefined : end);
+          if (pending.length + part.length > limit)
+            throw new Error("Usage process output limit");
+          pending = Buffer.concat([pending, part]);
+          if (end < 0) break;
+          onFrame(pending.toString("utf8"));
+          pending = Buffer.alloc(0);
+          offset = end + 1;
+        }
+        continue;
+      }
       size += next.value.byteLength;
       if (size > limit) {
         stop();
         throw new Error("Usage process output limit");
       }
-      chunks.push(next.value);
+      if (!onFrame) chunks.push(next.value);
     }
   };
   try {

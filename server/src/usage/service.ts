@@ -7,7 +7,6 @@ import type {
 import type { ConnectionStatus } from "../connections/types";
 import type { WorldSnapshotResult } from "../world/snapshot";
 import type { OfficeObservabilitySnapshot } from "../world/observability";
-import type { WorldIds } from "../storage/world-ids";
 import type { RuntimeUsage } from "./host";
 import {
   estimateUsage,
@@ -20,7 +19,10 @@ import { usageDigest } from "./host";
 import type { Scheduler } from "../service/ports";
 import { usageScope } from "./lifetime";
 
+import type { HerdrCall } from "../agent/session-types";
+
 type UsageRuntime = {
+  herdr: { call: HerdrCall };
   usage(
     agents: Record<string, unknown>[],
     now: number,
@@ -39,12 +41,10 @@ type Cached = {
   success: Map<string, number>;
   topology: string;
   value: RuntimeUsage;
-  ids: Map<string, string>;
   stale: Set<string>;
 };
 type Options = {
   incarnation: string;
-  ids: WorldIds;
   connections: {
     list(): ConnectionStatus[];
     readyRuntimeLease(id: string): Lease | null;
@@ -62,15 +62,19 @@ const rowKey = (r: RuntimeUsage["rows"][number]) =>
 const topologyKey = (agents: Record<string, unknown>[]) =>
   usageDigest(
     JSON.stringify(
-      agents.map((a) => [
-        a.agent,
-        a.agent_session,
-        a.terminal_id,
-        a.terminal_title,
-        a.pane_id,
-        a.tab_id,
-        a.workspace_id,
-      ]),
+      agents
+        .map((a) =>
+          JSON.stringify([
+            a.agent,
+            a.agent_session,
+            a.terminal_id,
+            a.terminal_title,
+            a.pane_id,
+            a.tab_id,
+            a.workspace_id,
+          ]),
+        )
+        .sort(),
     ),
   );
 const unavailable = (): RuntimeUsage => ({
@@ -146,6 +150,29 @@ export class WorldUsageService {
           () => !this.#closed && lease.isCurrent(),
           owner.signal,
         );
+        if (value.bindings.length) {
+          // One native post-read inventory checks all claims, including new or
+          // previously unlinked agents. A failed/changed inventory is unattributed.
+          try {
+            const current = (await lease.runtime.herdr.call(
+              "agent.list",
+              {},
+              8000,
+              undefined,
+              owner.signal,
+            )) as { agents?: Record<string, unknown>[] };
+            value.truncated ||=
+              Array.isArray(current.agents) && current.agents.length > 128;
+            if (
+              !Array.isArray(current.agents) ||
+              value.truncated ||
+              topologyKey(agents) !== topologyKey(current.agents)
+            )
+              value.bindings = [];
+          } catch {
+            value.bindings = [];
+          }
+        }
       } catch {
         value = unavailable();
       }
@@ -173,20 +200,6 @@ export class WorldUsageService {
       }
       // Retention and admission limits bound the service cache as well as replies.
       value.rows = value.rows.slice(0, 1024);
-      const ids = new Map<string, string>();
-      for (const row of value.rows) {
-        if (
-          this.#closed ||
-          (!failed && owner.signal.aborted) ||
-          !lease.isCurrent()
-        )
-          return;
-        const key = rowKey(row);
-        ids.set(
-          key,
-          old?.ids.get(key) ?? (await this.options.ids.issue("usage")),
-        );
-      }
       if (
         this.#closed ||
         (!failed && owner.signal.aborted) ||
@@ -199,7 +212,6 @@ export class WorldUsageService {
         success,
         topology: topologyKey(agents),
         value,
-        ids,
         stale,
       });
     })();
@@ -347,7 +359,7 @@ export class WorldUsageService {
               ? "partial"
               : "available";
         entities.push({
-          id: cached!.ids.get(rowKey(row))!,
+          id: `usage_${usageDigest(JSON.stringify([status.id, cached!.generation, rowKey(row)]))}`,
           kind: "usage",
           connector: "harness-log",
           connection_id: status.id,

@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import * as fs from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { collectHarnessUsage } from "./collector";
+import { collectHarnessUsage, type CollectorCache } from "./collector";
 import { createUsageProjection } from "./projection";
 import {
   usageDigest,
@@ -74,6 +74,55 @@ test("host inventory counts sessions without pane links and dedupes copied sessi
     expect(serialized).not.toContain(privateValue);
 });
 
+test("cached files read only appended complete records and reset on truncation", async () => {
+  const home = await fixture(),
+    path = await write(home, ".claude/projects/synthetic/session.jsonl", [
+      assistant(),
+    ]);
+  const cache = { files: new Map(), sessions: new Map() };
+  let bytes = 0;
+  const files = {
+    ...fs,
+    async open(...args: Parameters<typeof fs.open>) {
+      const handle = await fs.open(...args);
+      return new Proxy(handle, {
+        get(target, key) {
+          if (key === "read")
+            return async (...values: any[]) => {
+              const result = await Reflect.apply(target.read, target, values);
+              bytes += result.bytesRead;
+              return result;
+            };
+          const value = Reflect.get(target, key, target);
+          return typeof value === "function" ? value.bind(target) : value;
+        },
+      });
+    },
+  };
+  const read = () =>
+    collectHarnessUsage(
+      { now },
+      createUsageProjection,
+      { fs: files, home, env: {}, join, hash: usageDigest },
+      cache,
+    );
+  expect((await read()).rows[0]?.tokens.input).toBe(10);
+  bytes = 0;
+  await read();
+  expect(bytes).toBe(0);
+  const appended = JSON.stringify(assistant("response-b")) + "\n";
+  await fs.appendFile(path, appended.slice(0, 20));
+  expect((await read()).rows[0]?.partial).toBe(true);
+  bytes = 0;
+  await fs.appendFile(path, appended.slice(20));
+  const completed = await read();
+  expect(completed.rows[0]?.tokens.input).toBe(20);
+  expect(completed.rows[0]?.partial).toBe(false);
+  expect(bytes).toBe(Buffer.byteLength(appended));
+  await fs.writeFile(path, JSON.stringify(assistant("response-c")) + "\n");
+  expect((await read()).rows[0]?.tokens.input).toBe(10);
+});
+
 test("host projection bounds and incomplete writes disclose coverage loss", async () => {
   const home = await fixture();
   const path = await write(home, ".claude/projects/synthetic/session.jsonl", [
@@ -138,7 +187,19 @@ test("numeric collector ignores symlink files and reads configured session roots
     createUsageProjection,
     { fs, home, env: {}, join, hash: usageDigest },
   );
-  expect(found.rows).toHaveLength(1);
+  expect(found.rows).toHaveLength(0);
+  const allowed = await write(home, ".claude/projects/synthetic/bound.jsonl", [
+    assistant(),
+  ]);
+  expect(
+    (
+      await collectHarnessUsage(
+        { now, files: [{ harness: "claude", path: allowed }] },
+        createUsageProjection,
+        { fs, home, env: {}, join, hash: usageDigest },
+      )
+    ).rows,
+  ).toHaveLength(1);
 });
 
 test("the exact SSH program executes under Node and Bun with only numeric output", async () => {
@@ -211,14 +272,28 @@ test("compressed Codex representations are read once with bounded decompression"
     Bun.zstdCompressSync(await fs.readFile(path)),
   );
   await fs.unlink(path);
-  const result = await collectHarnessUsage({ now }, createUsageProjection, {
-    fs,
-    home,
-    env: {},
-    join,
-    hash: usageDigest,
-    decompress: boundedUsageDecompress,
-  });
+  const cache = { files: new Map(), sessions: new Map() };
+  let decodes = 0;
+  const read = () =>
+    collectHarnessUsage(
+      { now },
+      createUsageProjection,
+      {
+        fs,
+        home,
+        env: {},
+        join,
+        hash: usageDigest,
+        decompress: async (value) => {
+          decodes++;
+          return boundedUsageDecompress(value);
+        },
+      },
+      cache,
+    );
+  const result = await read();
+  await read();
+  expect(decodes).toBe(1);
   expect(result.rows[0]).toMatchObject({
     harness: "codex",
     tokens: { input: 10, output: 2 },
@@ -249,9 +324,11 @@ test("ordinary inventory cannot crowd out an exact bound file and discloses its 
     await write(home, `.claude/projects/synthetic/session-${i}.jsonl`, [
       { ...assistant(`response-${i}`), sessionId: `session-${i}` },
     ]);
-  const bound = await write(home, "bound/session.jsonl", [
+  const bound = await write(home, ".claude/projects/bound/session.jsonl", [
     { ...assistant("bound-response"), sessionId: "bound-session" },
   ]);
+  const newest = join(home, ".claude/projects/synthetic/session-0.jsonl");
+  await fs.utimes(newest, new Date(now), new Date(now));
   const result = await collectHarnessUsage(
     { now, files: [{ harness: "claude", path: bound }] },
     createUsageProjection,
@@ -259,6 +336,11 @@ test("ordinary inventory cannot crowd out an exact bound file and discloses its 
   );
   expect(result.truncated).toBe(true);
   expect(result.rows.length).toBeLessThanOrEqual(64);
+  expect(
+    result.rows.some(
+      (row) => row.session_key === usageDigest("claude\0session-0"),
+    ),
+  ).toBe(true);
   expect(
     result.rows.some(
       (r) => r.session_key === usageDigest("claude\0bound-session"),
@@ -341,8 +423,8 @@ process.stdout.write(JSON.stringify(await readHostUsage({now:${now}})));`;
 test("the SSH program's input lifetime channel ends blocked remote work", async () => {
   const home = await fixture();
   const source = usageHostProgram({ now }, "ssh").replace(
-    "const fs =",
-    "process.stderr.write('ready'); await new Promise(()=>{}); const fs =",
+    "value:await collect(request.options,project,ports,cache)",
+    "value:await (async()=>{process.stderr.write('ready');await new Promise(()=>{});})()",
   );
   const proc = Bun.spawn(["node", "--input-type=module", "-e", source], {
     stdin: "pipe",
@@ -356,6 +438,8 @@ test("the SSH program's input lifetime channel ends blocked remote work", async 
       PI_CODING_AGENT_DIR: join(home, "pi"),
     },
   });
+  await proc.stdin.write(JSON.stringify({ id: 1, options: { now } }) + "\n");
+  await proc.stdin.flush();
   const fallback = setTimeout(() => proc.kill("SIGKILL"), 2000);
   const reader = proc.stderr.getReader();
   try {
@@ -475,3 +559,119 @@ test.each(["budget", "unavailable"])(
     expect(result.truncated).toBe(reason === "budget");
   },
 );
+
+test("the private parser cache evicts whole sessions to honor entry and byte caps", async () => {
+  const home = await fixture();
+  for (const id of ["first", "second"])
+    await write(home, `.claude/projects/synthetic/${id}.jsonl`, [
+      { ...assistant(id), sessionId: id },
+    ]);
+  const cache: CollectorCache = {
+    files: new Map(),
+    sessions: new Map(),
+    maxEntries: 1,
+  };
+  const read = () =>
+    collectHarnessUsage(
+      { now },
+      createUsageProjection,
+      { fs, home, env: {}, join, hash: usageDigest },
+      cache,
+    );
+  expect((await read()).rows).toHaveLength(2);
+  expect(cache.files.size).toBe(1);
+  expect(cache.sessions.size).toBe(1);
+  cache.maxBytes = 0;
+  expect((await read()).rows).toHaveLength(2);
+  expect(cache.files.size).toBe(0);
+  expect(cache.sessions.size).toBe(0);
+  expect(cache.bytes).toBe(0);
+});
+
+test("pruned Codex dates are never opened or treated as proof a title prefix is unique", async () => {
+  const home = await fixture(),
+    id = "11111111-1111-4111-8111-111111111111",
+    prefix = id.slice(0, 29);
+  const records = (session: string) => [
+    { type: "session_meta", payload: { id: session } },
+    { type: "turn_context", payload: { model: "m" } },
+    {
+      type: "event_msg",
+      timestamp: new Date(now - 1).toISOString(),
+      payload: {
+        type: "token_count",
+        info: {
+          total_token_usage: { input_tokens: 10, output_tokens: 0 },
+          last_token_usage: { input_tokens: 10, output_tokens: 0 },
+        },
+      },
+    },
+  ];
+  const day = (at: number) =>
+    new Date(at).toISOString().slice(0, 10).replaceAll("-", "/");
+  await write(home, `.codex/sessions/${day(now)}/current.jsonl`, records(id));
+  const old = await write(
+    home,
+    `.codex/sessions/${day(now - 8 * 86400000)}/older.jsonl`,
+    records(id.slice(0, -1) + "2"),
+  );
+  const opened: string[] = [];
+  const files = {
+    ...fs,
+    async open(...args: Parameters<typeof fs.open>) {
+      opened.push(String(args[0]));
+      return fs.open(...args);
+    },
+  };
+  const result = await collectHarnessUsage(
+    { now, codex_prefixes: [prefix] },
+    createUsageProjection,
+    { fs: files, home, env: {}, join, hash: usageDigest },
+  );
+  expect(result.rows[0]?.tokens.input).toBe(10);
+  expect(result.title_matches).toEqual([]);
+  expect(result.truncated).toBe(false);
+  expect(opened).not.toContain(old);
+});
+
+test("bound paths cannot escape harness roots or select unsupported extensions", async () => {
+  const home = await fixture(),
+    outside = await fixture();
+  const target = await write(outside, "private.jsonl", [assistant()]);
+  const wrong = await write(home, ".claude/projects/synthetic/private.txt", [
+    assistant(),
+  ]);
+  const link = join(home, ".claude/projects/synthetic/escape");
+  await fs.symlink(outside, link);
+  const result = await collectHarnessUsage(
+    {
+      now,
+      files: [
+        { harness: "claude", path: target },
+        { harness: "claude", path: wrong },
+        { harness: "claude", path: join(link, "private.jsonl") },
+      ],
+    },
+    createUsageProjection,
+    { fs, home, env: {}, join, hash: usageDigest },
+  );
+  expect(result.rows).toEqual([]);
+  expect(
+    result.sources.find((source) => source.harness === "claude")?.state,
+  ).toBe("partial");
+  const cache = { files: new Map(), sessions: new Map() };
+  const warm = await write(home, ".claude/projects/warm/private.jsonl", [
+    assistant(),
+  ]);
+  const read = () =>
+    collectHarnessUsage(
+      { now },
+      createUsageProjection,
+      { fs, home, env: {}, join, hash: usageDigest },
+      cache,
+    );
+  expect((await read()).rows).toHaveLength(1);
+  await fs.rm(join(warm, ".."), { recursive: true });
+  await fs.symlink(outside, join(warm, ".."));
+  expect((await read()).rows).toEqual([]);
+});

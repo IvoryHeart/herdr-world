@@ -63,9 +63,11 @@ function setup(hosts = ["alpha"], collectionMs = 20_000) {
   let data = value(),
     agents = [agent],
     calls = 0;
+  let inventory: Record<string, unknown>[] | undefined;
   let read: (signal: AbortSignal) => Promise<RuntimeUsage> = async () =>
     structuredClone(data);
   const runtime = {
+    herdr: { call: async () => ({ agents: inventory ?? agents }) },
     usage: async (
       _agents: unknown,
       _now: number,
@@ -76,7 +78,9 @@ function setup(hosts = ["alpha"], collectionMs = 20_000) {
       return read(signal);
     },
   };
-  const service = new WorldUsageService({
+  const options: ConstructorParameters<typeof WorldUsageService>[0] & {
+    ids: { issue(): Promise<string> };
+  } = {
     incarnation: "synthetic-incarnation",
     now: () => now,
     scheduler: systemScheduler,
@@ -132,10 +136,12 @@ function setup(hosts = ["alpha"], collectionMs = 20_000) {
       observedAt: now,
       windowSeconds: 86400,
     }),
-  });
+  };
+  const service = new WorldUsageService(options);
   return {
     service,
     calls: () => calls,
+    idsIssued: () => serial,
     data: (v: RuntimeUsage) => {
       data = v;
     },
@@ -149,6 +155,9 @@ function setup(hosts = ["alpha"], collectionMs = 20_000) {
       generation++;
       for (const id of hosts)
         service.connectionStatus({ id, generation, state: "ready" });
+    },
+    inventory: (v: Record<string, unknown>[]) => {
+      inventory = v;
     },
     agents: (v: typeof agents) => {
       agents = v;
@@ -168,7 +177,6 @@ test("shared read returns view-neutral entities and all four attribution rollups
     unpriced_records: 0,
   });
   expect(result.entities[0]).toMatchObject({
-    id: "usage_1",
     connector: "harness-log",
     pane_id: "p1",
     workspace_id: "w1",
@@ -190,8 +198,19 @@ test("shared read returns view-neutral entities and all four attribution rollups
   expect(
     result.sources.find((s) => s.harness === "pi")?.last_success_at,
   ).toBeNull();
-  expect((await s.service.get()).entities[0]?.id).toBe("usage_1");
+  expect((await s.service.get()).entities[0]?.id).toBe(result.entities[0]?.id);
   expect(s.calls()).toBe(1);
+  await s.service.close();
+});
+
+test("usage reads derive stable IDs without allocating durable records", async () => {
+  const s = setup(),
+    first = await s.service.get();
+  expect(s.idsIssued()).toBe(0);
+  expect(first.entities[0]?.id).toMatch(/^usage_[a-f0-9]{64}$/);
+  s.advance(31_000);
+  expect((await s.service.get()).entities[0]?.id).toBe(first.entities[0]?.id);
+  expect(s.idsIssued()).toBe(0);
   await s.service.close();
 });
 
@@ -306,21 +325,6 @@ test("admission and aggregate frames are bounded and clipping is visible", async
   await s.service.close();
 });
 
-test("shutdown drains in-flight collection and fences later allocations and reads", async () => {
-  const s = setup(),
-    pending = Promise.withResolvers<RuntimeUsage>();
-  s.read(() => pending.promise);
-  const response = s.service.get();
-  await Promise.resolve();
-  await Promise.resolve();
-  expect(s.calls()).toBe(1);
-  const close = s.service.close();
-  pending.resolve(value());
-  await close;
-  expect((await response).entities).toEqual([]);
-  await expect(s.service.get()).rejects.toThrow("closed");
-});
-
 test("a slow connector returns explicit refreshing state and concurrent reads coalesce", async () => {
   const s = setup(),
     pending = Promise.withResolvers<RuntimeUsage>();
@@ -364,7 +368,7 @@ test("price table validation preserves unknown cost and never bills reasoning tw
   ).toBeNull();
 });
 
-test("a replacement generation cancels old work and starts without waiting for its source release", async () => {
+test("service cancellation drains shutdown and replaces a generation without releasing its blocked source", async () => {
   const s = setup(),
     started = Promise.withResolvers<void>();
   let oldSignal: AbortSignal | undefined;
@@ -384,18 +388,13 @@ test("a replacement generation cancels old work and starts without waiting for i
   expect(oldSignal?.aborted).toBe(true);
   expect((await s.service.get()).entities[0]?.connection_generation).toBe(2);
   await old;
-  expect(s.calls()).toBe(2);
-  await s.service.close();
-});
-
-test("service shutdown actively cancels and drains an unreleased source", async () => {
-  const s = setup(),
-    started = Promise.withResolvers<void>();
+  const nextStarted = Promise.withResolvers<void>();
   let aborted = false;
+  s.advance(31_000);
   s.read(
     (signal) =>
       new Promise((_resolve, reject) => {
-        started.resolve();
+        nextStarted.resolve();
         signal.addEventListener(
           "abort",
           () => {
@@ -407,10 +406,11 @@ test("service shutdown actively cancels and drains an unreleased source", async 
       }),
   );
   const response = s.service.get();
-  await started.promise;
+  await nextStarted.promise;
   await s.service.close();
   expect(aborted).toBe(true);
   expect((await response).entities).toEqual([]);
+  await expect(s.service.get()).rejects.toThrow("closed");
 });
 
 test("preambles and copied files keep exact ID attribution through the collector, runtime and service", async () => {
@@ -441,7 +441,6 @@ test("preambles and copied files keep exact ID attribution through the collector
       records.map((record) => JSON.stringify(record)).join("\n") + "\n",
     );
   const usage = createRuntimeUsage({
-    herdrCall: async () => ({ agents: [agent] }),
     collect: (options) =>
       collectHarnessUsage(options, createUsageProjection, {
         fs,
@@ -554,7 +553,6 @@ test.each(["current", "ambiguous", "old-conflict", "old-unrelated"])(
         true,
       );
     const usage = createRuntimeUsage({
-      herdrCall: async () => ({ agents: [currentAgent] }),
       collect: (options) =>
         collectHarnessUsage(options, createUsageProjection, {
           fs,
@@ -593,3 +591,23 @@ test.each(["current", "ambiguous", "old-conflict", "old-unrelated"])(
     }
   },
 );
+
+test("one native revalidation preserves changed, new and previously unlinked claims", async () => {
+  const unlinked = {
+    ...agent,
+    pane_id: "p2",
+    terminal_id: "term2",
+    agent_session: null,
+  };
+  for (const before of [[agent], [agent, unlinked]]) {
+    const s = setup();
+    s.agents(before as (typeof agent)[]);
+    s.inventory([agent, { ...unlinked, agent_session: agent.agent_session }]);
+    expect((await s.service.get()).entities[0]?.pane_id).toBeNull();
+    await s.service.close();
+  }
+  const s = setup();
+  s.inventory([{ ...agent, terminal_id: "replacement" }]);
+  expect((await s.service.get()).entities[0]?.pane_id).toBeNull();
+  await s.service.close();
+});

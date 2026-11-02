@@ -16,7 +16,11 @@ export type SessionUsage = {
 
 /** Self-contained: the exact same function runs on the transcript's SSH host.
  * Decode transiently; retain no content, native record objects or raw errors. */
-export function createUsageProjection(harness: string, now: number) {
+export function createUsageProjection(
+  harness: string,
+  now: number,
+  hash = (value: string) => value,
+) {
   type RecordValue = Record<string, any>;
   type Event = { id: string; at: number; model: string; tokens: UsageTokens };
   const events = new Map<string, Event>();
@@ -27,12 +31,12 @@ export function createUsageProjection(harness: string, now: number) {
     "output",
     "reasoning",
   ] as const;
-  const start = Math.floor(now / 86_400_000) * 86_400_000 - 6 * 86_400_000;
+  let start = Math.floor(now / 86_400_000) * 86_400_000 - 6 * 86_400_000;
   let session = "",
     model = "unknown",
     partial = false;
   let previous: UsageTokens | null = null;
-  const cumulativeStates = new Set<string>();
+  const cumulativeStates = new Map<string, number>();
   const object = (v: any): RecordValue =>
     v && typeof v === "object" && !Array.isArray(v) ? v : {};
   const identifier = (v: any) =>
@@ -51,19 +55,20 @@ export function createUsageProjection(harness: string, now: number) {
       typeof id !== "string" ||
       !id ||
       id.length > 256 ||
-      !Number.isFinite(at)
+      !Number.isFinite(new Date(at).getTime())
     ) {
       partial = true;
       return;
     }
-    if (at < start || at >= now) return;
-    if (events.size >= 32_768 && !events.has(id)) {
+    if (at < start) return;
+    const key = hash(id);
+    if (events.size >= 32_768 && !events.has(key)) {
       partial = true;
       return;
     }
     if (!identifier(name) || name === "unknown") partial = true;
     let normalized = identifier(name) || "unknown";
-    const prior = events.get(id);
+    const prior = events.get(key);
     if (prior) {
       if (prior.model !== normalized) {
         partial = true;
@@ -72,7 +77,7 @@ export function createUsageProjection(harness: string, now: number) {
       for (const k of keys) tokens[k] = Math.max(prior.tokens[k], tokens[k]);
       at = Math.max(prior.at, at);
     }
-    events.set(id, { id, at, model: normalized, tokens });
+    events.set(key, { id: key, at, model: normalized, tokens });
   };
   const accept = (raw: unknown) => {
     const r = object(raw),
@@ -80,7 +85,7 @@ export function createUsageProjection(harness: string, now: number) {
       m = object(r.message);
     try {
       if (harness === "codex") {
-        if (r.type === "session_meta") session = identifier(p.id) || session;
+        if (r.type === "session_meta" && identifier(p.id)) session = hash(p.id);
         if (r.type === "turn_context") model = identifier(p.model) || "unknown";
         if (r.type !== "event_msg" || p.type !== "token_count" || !p.info)
           return;
@@ -103,11 +108,12 @@ export function createUsageProjection(harness: string, now: number) {
           throw new Error("invalid usage");
         const identity = JSON.stringify(current);
         if (cumulativeStates.has(identity)) return;
-        if (cumulativeStates.size >= 32_768) {
+        if (cumulativeStates.size >= 32_768 && time(r.timestamp) >= start) {
           partial = true;
           return;
         }
-        cumulativeStates.add(identity);
+        if (time(r.timestamp) >= start)
+          cumulativeStates.set(identity, time(r.timestamp));
         const before = previous;
         if (before && keys.some((k) => current[k] < before[k])) {
           partial = true;
@@ -134,7 +140,7 @@ export function createUsageProjection(harness: string, now: number) {
         return;
       }
       if (harness === "claude") {
-        session = identifier(r.sessionId) || session;
+        if (identifier(r.sessionId)) session = hash(r.sessionId);
         if (r.type !== "assistant" || !m.usage) return;
         const u = object(m.usage);
         remember(m.id, time(r.timestamp), m.model, {
@@ -147,7 +153,7 @@ export function createUsageProjection(harness: string, now: number) {
         return;
       }
       if (harness === "pi") {
-        if (r.type === "session") session = identifier(r.id) || session;
+        if (r.type === "session" && identifier(r.id)) session = hash(r.id);
         if (r.type !== "message" || m.role !== "assistant" || !m.usage) return;
         const u = object(m.usage);
         remember(r.id, time(m.timestamp ?? r.timestamp), m.model, {
@@ -160,7 +166,7 @@ export function createUsageProjection(harness: string, now: number) {
         return;
       }
       if (harness === "gemini") {
-        session = identifier(r.sessionId) || session;
+        if (identifier(r.sessionId)) session = hash(r.sessionId);
         // Legacy JSON conversation and current JSONL message/event records.
         if (Array.isArray(r.messages)) {
           for (const message of r.messages) accept(message);
@@ -192,9 +198,34 @@ export function createUsageProjection(harness: string, now: number) {
     incomplete() {
       partial = true;
     },
+    refresh(at: number) {
+      now = at;
+      start = Math.floor(now / 86_400_000) * 86_400_000 - 6 * 86_400_000;
+      for (const [key, event] of events)
+        if (event.at < start) events.delete(key);
+      for (const [key, at] of cumulativeStates)
+        if (at < start) cumulativeStates.delete(key);
+    },
+    context(value?: string) {
+      if (value !== undefined) model = value;
+      return model;
+    },
+    cacheBytes() {
+      return Buffer.byteLength(
+        JSON.stringify([
+          [...events],
+          [...cumulativeStates],
+          previous,
+          model,
+          session,
+          partial,
+        ]),
+      );
+    },
     finish(): SessionUsage {
       const rows = new Map<string, NumericUsageRow>();
       for (const e of events.values()) {
+        if (e.at < start || e.at >= now) continue;
         const day = new Date(e.at).toISOString().slice(0, 10),
           key = `${day}\0${e.model}`;
         let row = rows.get(key);

@@ -18,13 +18,10 @@ const empty = () => ({
   truncated: false,
 });
 
-test("runtime usage remains on the exact SSH host and revalidates pane continuity", async () => {
-  let current = agent,
-    collectedHost: string | undefined;
+test("runtime usage stays on the exact SSH host and prepares a qualified binding", async () => {
+  let collectedHost: string | undefined;
   const usage = createRuntimeUsage({
     sshHost: "operator@example.test",
-
-    herdrCall: async () => ({ agents: [current] }),
     collect: async (_options, host) => {
       collectedHost = host;
       return empty();
@@ -36,17 +33,11 @@ test("runtime usage remains on the exact SSH host and revalidates pane continuit
     session_key: usageDigest("claude\0synthetic-session"),
     pane_id: "p1",
   });
-  current = { ...agent, terminal_id: "replacement" };
-  expect((await usage([agent], Date.now())).bindings).toEqual([]);
+  await usage.close();
 });
 
 test("unlinked Codex remains unattributed without cwd-based session guessing", async () => {
-  let reads = 0;
   const usage = createRuntimeUsage({
-    herdrCall: async () => {
-      reads++;
-      throw new Error("must not infer");
-    },
     collect: async () => empty(),
   });
   const result = await usage(
@@ -61,7 +52,6 @@ test("unlinked Codex remains unattributed without cwd-based session guessing", a
     Date.now(),
   );
   expect(result.bindings).toEqual([]);
-  expect(reads).toBe(0);
 });
 
 test("an unavailable SSH collector never retries through local files", async () => {
@@ -69,7 +59,6 @@ test("an unavailable SSH collector never retries through local files", async () 
   const usage = createRuntimeUsage({
     sshHost: "operator@example.test",
 
-    herdrCall: async () => ({ agent }),
     collect: async (_options, host) => {
       hosts.push(host);
       throw new Error("missing remote tooling");
@@ -82,13 +71,8 @@ test("an unavailable SSH collector never retries through local files", async () 
 });
 
 test("retiring a runtime during collection prevents further pane reads", async () => {
-  let current = true,
-    reads = 0;
+  let current = true;
   const usage = createRuntimeUsage({
-    herdrCall: async () => {
-      reads++;
-      return { agent };
-    },
     collect: async () => {
       current = false;
       return empty();
@@ -97,7 +81,6 @@ test("retiring a runtime during collection prevents further pane reads", async (
   await expect(usage([agent], Date.now(), () => current)).rejects.toThrow(
     "retired",
   );
-  expect(reads).toBe(0);
 });
 
 test("claims after the 128-agent resolution budget cannot establish unique attribution", async () => {
@@ -111,10 +94,6 @@ test("claims after the 128-agent resolution budget cannot establish unique attri
     },
   }));
   const usage = createRuntimeUsage({
-    herdrCall: async (_method, params) => ({
-      agent: agents.find((a) => a.pane_id === params?.target),
-      agents,
-    }),
     collect: async () => empty(),
   });
   const result = await usage(agents, Date.now());
@@ -122,30 +101,10 @@ test("claims after the 128-agent resolution budget cannot establish unique attri
   expect(result.bindings).toEqual([]);
 });
 
-test("a newly conflicting session claim seen during revalidation invalidates attribution", async () => {
-  const second = {
-    ...agent,
-    pane_id: "p2",
-    terminal_id: "term2",
-    agent_session: { kind: "id", value: "other-session" },
-  };
-  const conflict = { ...second, agent_session: agent.agent_session };
-  const usage = createRuntimeUsage({
-    herdrCall: async (_method, params) => ({
-      agent: params?.target === "p1" ? agent : conflict,
-      agents: [agent, conflict],
-    }),
-    collect: async () => empty(),
-  });
-  const result = await usage([agent, second], Date.now());
-  expect(result.bindings).toEqual([]);
-});
-
 test("the connection runtime owns cancellation of its unreleased collector", async () => {
   const started = Promise.withResolvers<void>();
   let cancelled = false;
   const usage = createRuntimeUsage({
-    herdrCall: async () => ({ agents: [agent] }),
     collect: async (_options, _host, signal) =>
       new Promise((_resolve, reject) => {
         started.resolve();
@@ -165,22 +124,4 @@ test("the connection runtime owns cancellation of its unreleased collector", asy
   await expect(work).rejects.toThrow("cancelled");
   await closed;
   expect(cancelled).toBe(true);
-});
-
-test("newly added and previously unlinked revalidation claims cannot disappear from uniqueness", async () => {
-  const unlinked = {
-    ...agent,
-    pane_id: "p2",
-    terminal_id: "term2",
-    agent_session: null,
-  };
-  const conflicting = { ...unlinked, agent_session: agent.agent_session };
-  for (const before of [[agent], [agent, unlinked]]) {
-    const usage = createRuntimeUsage({
-      herdrCall: async () => ({ agents: [agent, conflicting] }),
-      collect: async () => empty(),
-    });
-    expect((await usage(before, Date.now())).bindings).toEqual([]);
-    await usage.close();
-  }
 });

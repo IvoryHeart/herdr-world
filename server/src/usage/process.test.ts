@@ -48,6 +48,7 @@ for (const output of ["stdout", "stderr"] as const)
         ["synthetic"],
         new AbortController().signal,
         () => c.child,
+        () => {},
       ),
     ).rejects.toThrow("output limit");
     expect(c.consumed()).toBeLessThanOrEqual(

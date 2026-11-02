@@ -157,7 +157,6 @@ export function createLegacyConnectionRuntime(args: {
     shQuote,
   });
   const usage = createRuntimeUsage({
-    herdrCall: (...args) => herdr.call(...args),
     sshHost: config.sshHost,
   });
   // These helper groups run Unix shell commands over SSH.

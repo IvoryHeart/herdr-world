@@ -1,27 +1,20 @@
-## Decisions
+# Usage collection design
 
-1. World owns numeric daily usage entities; Town and Board consume the same read API. Store-issued IDs identify the in-memory entities for this service incarnation. Source digests are deduplication evidence, not World IDs. No durable conversation or usage archive is added.
-2. A host collector scans only standard harness session roots and exact runtime-reported files. The same standalone collector executes in a local owned worker or over the owning OpenSSH connection. SSH requires an available Bun or Node executable; absence reports unavailable, never falls back to local files. Only its numeric projection crosses SSH. Canonical session identity is resolved before projecting usage, including files with preambles and duplicate copies.
-3. Inventory discovered session files independently of pane discovery. Join only a uniquely resolved session/file to one current pane and its tab/workspace. Duplicate claims and unlinked sessions remain host-attributed, not guessed from cwd or labels. A title prefix requires a unique match in a complete source inventory. More than 128 supplied agents disclose truncation and refuse all pane attribution; a complete post-collection listing must preserve the candidate claims, including previously unlinked agents. Recheck the runtime and active bindings after collection; stale generations publish no fresh entities.
-4. Claude responses dedupe by message ID preserving the highest observed counters once; Pi and Gemini use response IDs. Contradictory models on one response are partial with unknown model. Codex cumulative snapshots yield nonnegative component deltas; repeated snapshots count once. A counter decrease or invalid record never lowers the last defensible high-water baseline; recovery contributes only proven increments above it. Model changes assign only a known delta, never a whole cumulative session to the latest model. Malformed, unsupported or bounded reads report partial/missing/unsupported states.
-5. Retention covers seven UTC calendar days including today. The default window is today; the other window is those seven days. Reset is a query boundary at UTC midnight, not deleting source logs. Per-response evidence is reduced into daily session/model rollups during collection, with fixed file, byte, record and output limits. API entity and byte limits stay below the 1 MiB frame and disclose truncation. Restart rebuilds this bounded cache from logs; no lifetime total is claimed.
-6. Tokens are disjoint uncached input, cache read, cache creation and output; reasoning is a subset of output. `total_tokens` sums only those disjoint categories. Time means the first-to-last usage observation span, not CPU, active or billable time. Unknown fields or counter baselines yield partial coverage.
-7. An optional local `world_usage_prices_v1` settings value declares table version and exact model rates in USD per million disjoint token categories. All rates must be finite and nonnegative. No fuzzy model aliases or hardcoded current prices. Missing/inapplicable tables give null cost while tokens remain available. Estimated token cost is never a subscription charge or invoice. Source-reported cost is excluded.
-8. Logs are canonical for a covered session. OTel with the same event identity is a replacement candidate only when its log event is absent; the log wins. Scoped OTel totals may count only when no log connector covers that scope at all. Existing Prometheus observations have neither qualified session identity nor the UTC query window, so they remain explicitly separate rolling-24-hour comparison data, never silently added to attributed totals.
+The shared API, accounting, privacy, health, pricing and fixed limits are defined
+in [the usage guide](../../../docs/usage.md). Town and Board consume that contract.
 
-## Privacy and bounds
+A runtime owns one persistent worker or SSH reader and its host-local cache.
+Per-file stats and complete-line offsets avoid replaying unchanged JSONL; changed
+containers and replaced/truncated files rebuild only their canonical session.
+The cache retains numeric parser state and hashed identity evidence, with fixed
+entry/byte limits and whole-session eviction. No conversation content is retained.
+Runtime generation replacement or cancellation terminates and reaps that reader.
 
-Codex identity discovery is independent of numeric retention. When prefixes
-need resolution, metadata from up to 64 older session files supplements the
-current numeric inventory without retaining old token rows or displacing
-current usage capacity. A prefix needs complete identity evidence across both
-inventories; age never establishes identity absence. Unreadable or exhausted
-metadata leaves prefixes unresolved within the existing resource lifetime.
+The service coalesces refreshes, checks one native post-read claim inventory, and
+fences publication by the captured connection/generation. Digest-derived entity
+IDs require no storage writes. Numeric discovery and identity completeness are
+separate: pruning an old Codex tree cannot prove a title prefix unique.
 
-The complete operation has one owned 20-second deadline through session resolution, I/O, decompression and claim revalidation. Runtime/service cancellation propagates to the local worker, SSH child and one-shot Herdr read; settlement includes termination/reaping. SSH stdin is a lifetime channel, not transcript transport. Streaming stdout/stderr caps are 768 KiB/16 KiB; crossing either cap kills and reaps the child before returning. Service coalescing is generation-specific, with replaced operations cancelled and drained independently. A deadline failure on a current generation publishes unavailable/stale health, never fresh zero.
-
-No prompts, responses, reasoning, tool arguments/results, paths, native session IDs or raw errors enter public usage records, retained caches, tracked fixtures or logs. JSON decoding is transient at the transcript host; projection retains only approved IDs (hashed), model identifiers, timestamps and validated numeric counters. Tests use disposable synthetic roots and session records. Bounds and health are correctness information, not hidden clipping.
-
-## Verification choice
-
-Direct parser/property matrices and runtime race tests are more useful than a new state model for this read-only numeric projection. Existing runtime lease models remain unchanged. Verify deduplication, cache conventions, mixed models, missing baseline, reset windows, duplicate pane claims, retired generations, host isolation, source health, unknown prices and byte limits against real adapters. Assess the relevant coverage inventory and record the scoped evidence boundary. Live installed-harness inventory verifies availability/format metadata only and is not copied into fixtures.
+Direct parser, collector, transport, service and RPC controls exercise these
+read-only contracts; existing lease and verb-policy models retain their authority.
+The scoped evidence boundary is [world usage](../../../verification/contracts/world-usage.md).

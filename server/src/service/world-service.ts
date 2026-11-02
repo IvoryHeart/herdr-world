@@ -766,7 +766,6 @@ async function compose(
 
   worldUsage = new WorldUsageService({
     incarnation: serviceIncarnation,
-    ids: storage.ids,
     connections: connectionManager,
     topology: () => worldSnapshots!.snapshot({}),
     prices: async () => (await settings.read()).custom.world_usage_prices_v1,

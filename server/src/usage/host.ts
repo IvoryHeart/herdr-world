@@ -1,48 +1,15 @@
 import { createHash } from "node:crypto";
 import { isAbsolute } from "node:path";
-import { createUsageProjection } from "./projection";
-import {
-  collectHarnessUsage,
-  type CollectorOptions,
-  type HostUsage,
-} from "./collector";
-import { sshCommandArgv } from "../bridge/ssh-command";
-import { shQuote } from "../utils/process-utils";
-import { runUsageProcess } from "./process";
-import { runUsageWorker } from "./worker";
+import { UsageReader } from "./reader";
+export { usageHostProgram, boundedUsageDecompress } from "./program";
+import { type CollectorOptions, type HostUsage } from "./collector";
 import { usageScope } from "./lifetime";
 import { codexIdsFromTitle } from "../agent/session-resolver";
 import { normalizeAgentName } from "../agent/chat-harnesses";
-import type { HerdrCall } from "../agent/session-types";
 
 export const usageDigest = (value: string) =>
   createHash("sha256").update(value).digest("hex");
 
-/** Stop streaming decompression at the same per-file output budget as plain logs. */
-export async function boundedUsageDecompress(
-  value: Uint8Array,
-): Promise<Uint8Array> {
-  const Decoder = DecompressionStream as unknown as new (
-    format: string,
-  ) => ReadableWritablePair<Uint8Array, Uint8Array>;
-  const reader = new Response(Uint8Array.from(value))
-    .body!.pipeThrough(new Decoder("zstd"))
-    .getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  try {
-    while (true) {
-      const next = await reader.read();
-      if (next.done) return Buffer.concat(chunks, size);
-      size += next.value.length;
-      if (size > 64 * 1024 * 1024) throw new Error("Usage decompression limit");
-      chunks.push(next.value);
-    }
-  } finally {
-    await reader.cancel().catch(() => {});
-    reader.releaseLock();
-  }
-}
 export type UsageBinding = {
   harness: string;
   session_key: string | null;
@@ -56,60 +23,18 @@ export type RuntimeUsage = HostUsage & {
   unsupported: string[];
 };
 
-/** Generated from the actual production functions; no second parser to drift.
- * stdin carries trusted code; stdout contains only the bounded numeric projection. */
-export function usageHostProgram(
-  options: CollectorOptions,
-  mode: "stdio" | "ssh" | "worker" = "stdio",
-) {
-  return `${
-    mode === "ssh"
-      ? `process.stdin.resume();
-process.stdin.once('end', () => process.exit(1));
-process.once('SIGHUP', () => process.exit(1));
-setTimeout(() => process.exit(1), 20000).unref();`
-      : ""
-  }
-const fs = await import('node:fs/promises');
-const os = await import('node:os');
-const path = await import('node:path');
-const crypto = await import('node:crypto');
-const zlib = await import('node:zlib');
-const project = ${createUsageProjection.toString()};
-const collect = ${collectHarnessUsage.toString()};
-const boundedDecompress = ${boundedUsageDecompress.toString()};
-const result = await collect(${JSON.stringify(options)}, project, {
-fs, home: os.homedir(), env: process.env, join: path.join,
-hash: value => crypto.createHash('sha256').update(value).digest('hex'),
-decompress: typeof Bun !== 'undefined' ? boundedDecompress :
-typeof zlib.zstdDecompressSync === 'function' ? value => zlib.zstdDecompressSync(value, { maxOutputLength: 67108864 }) : undefined,
-});
-${
-  mode === "worker"
-    ? `const { parentPort } = await import('node:worker_threads'); parentPort.postMessage(result);`
-    : `await new Promise((resolve, reject) => process.stdout.write(JSON.stringify(result), error => error ? reject(error) : resolve()));${mode === "ssh" ? "process.exit(0);" : ""}`
-}`;
-}
-
+/** A one-shot diagnostic; managed runtimes retain their own reader/cache. */
 export async function readHostUsage(
   options: CollectorOptions,
   sshHost?: string,
   signal?: AbortSignal,
 ): Promise<HostUsage> {
-  const owner = usageScope(signal);
+  const reader = new UsageReader(sshHost),
+    owner = usageScope(signal);
   try {
-    if (!sshHost)
-      return validateHostUsage(
-        await runUsageWorker(usageHostProgram(options, "worker"), owner.signal),
-      );
-    const program = shQuote(usageHostProgram(options, "ssh"));
-    const command = `if command -v bun >/dev/null 2>&1; then exec bun -e ${program}; elif command -v node >/dev/null 2>&1; then exec node --input-type=module -e ${program}; else exit 69; fi`;
-    const result = await runUsageProcess(
-      sshCommandArgv(sshHost, `bash -lc ${shQuote(command)}`),
-      owner.signal,
-    );
-    return validateHostUsage(JSON.parse(result));
+    return validateHostUsage(await reader.read(options, owner.signal));
   } finally {
+    await reader.close();
     owner.dispose();
   }
 }
@@ -215,25 +140,13 @@ export function validateHostUsage(raw: any): HostUsage {
   return { rows, sources, truncated: raw.truncated, title_matches };
 }
 
-function witness(agent: Record<string, unknown>) {
-  return JSON.stringify([
-    agent.agent,
-    agent.agent_session,
-    agent.terminal_id,
-    agent.terminal_title,
-    agent.pane_id,
-    agent.tab_id,
-    agent.workspace_id,
-  ]);
-}
-
 /** A runtime owns all of its readers, sockets and child execution. */
 export function createRuntimeUsage(args: {
-  herdrCall: HerdrCall;
   sshHost?: string;
   collect?: typeof readHostUsage;
 }) {
   const lifetime = new AbortController();
+  const reader = args.collect ? null : new UsageReader(args.sshHost);
   const active = new Set<Promise<RuntimeUsage>>();
   const read = (
     agents: Record<string, unknown>[],
@@ -257,7 +170,7 @@ export function createRuntimeUsage(args: {
       const bindings: UsageBinding[] = [];
       // The inexpensive inventory is complete. If expensive attribution capacity
       // is exceeded, keep every number host-level rather than invent uniqueness.
-      let truncated = agents.length > 128;
+      const truncated = agents.length > 128;
       const titleBindings = new Map<string, UsageBinding>();
       for (const agent of agents.slice(0, 128)) {
         const harness = normalizeAgentName(String(agent.agent ?? ""));
@@ -326,11 +239,10 @@ export function createRuntimeUsage(args: {
           );
         else if (session || path) bindings.push(binding);
       }
-      const result = await (args.collect ?? readHostUsage)(
-        { now, files, codex_prefixes: [...prefixes] },
-        args.sshHost,
-        owner.signal,
-      );
+      const options = { now, files, codex_prefixes: [...prefixes] };
+      const result = args.collect
+        ? await args.collect(options, args.sshHost, owner.signal)
+        : validateHostUsage(await reader!.read(options, owner.signal));
       check();
       for (const match of result.title_matches ?? [])
         for (const [key, binding] of titleBindings)
@@ -351,39 +263,11 @@ export function createRuntimeUsage(args: {
           ),
         ) &&
         new Set(agents.map((agent) => agent.pane_id)).size === agents.length;
-      let unchanged = !truncated && complete;
-      if (bindings.length) {
-        try {
-          // A complete post-collection listing preserves newly observed claims
-          // and conflicts. Any changed or added candidate invalidates attribution
-          // for this observation, including candidates previously unlinked.
-          const current = (await args.herdrCall(
-            "agent.list",
-            {},
-            8000,
-            undefined,
-            owner.signal,
-          )) as { agents?: Record<string, unknown>[] };
-          truncated ||=
-            Array.isArray(current.agents) && current.agents.length > 128;
-          const before = agents.map(witness).sort(),
-            after = Array.isArray(current.agents)
-              ? current.agents.map(witness).sort()
-              : null;
-          unchanged =
-            !truncated &&
-            complete &&
-            after !== null &&
-            JSON.stringify(before) === JSON.stringify(after);
-        } catch {
-          unchanged = false;
-        }
-      }
       check();
       return {
         ...result,
         truncated: truncated || result.truncated,
-        bindings: unchanged ? bindings : [],
+        bindings: !truncated && complete ? bindings : [],
         unsupported: [...unsupported],
       };
     })();
@@ -403,6 +287,7 @@ export function createRuntimeUsage(args: {
   return Object.assign(read, {
     async close() {
       lifetime.abort();
+      await reader?.close();
       await Promise.allSettled(active);
     },
   });

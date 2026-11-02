@@ -25,8 +25,40 @@ export type CollectorPorts = {
   home: string;
   env: Record<string, string | undefined>;
   join(...parts: string[]): string;
+  resolve?(path: string): string;
   hash(value: string): string;
   decompress?(value: Uint8Array): Uint8Array | Promise<Uint8Array>;
+};
+export type CollectorCache = {
+  files: Map<
+    string,
+    {
+      path: string;
+      harness: string;
+      size: number;
+      mtime: number;
+      identity: string;
+      offset: number;
+      complete: boolean;
+      partial: boolean;
+      skip: boolean;
+      session: string;
+      known: boolean;
+      model: string;
+      prefixes: string[];
+    }
+  >;
+  sessions: Map<
+    string,
+    {
+      harness: string;
+      reader: ReturnType<typeof createUsageProjection>;
+      files: Set<string>;
+    }
+  >;
+  bytes?: number;
+  maxEntries?: number;
+  maxBytes?: number;
 };
 
 /** Self-contained, with explicit builtin ports, so SSH executes this same code.
@@ -35,10 +67,15 @@ export async function collectHarnessUsage(
   options: CollectorOptions,
   project: typeof createUsageProjection,
   ports: CollectorPorts,
+  suppliedCache?: CollectorCache,
 ): Promise<HostUsage> {
   const { fs, home, env, join, hash } = ports;
+  const cache =
+    suppliedCache ??
+    ({ files: new Map(), sessions: new Map() } as CollectorCache);
   const start =
     Math.floor(options.now / 86_400_000) * 86_400_000 - 6 * 86_400_000;
+  const resolve = ports.resolve ?? ((value: string) => join(value));
   const expand = (value: string) =>
     value === "~"
       ? home
@@ -46,8 +83,8 @@ export async function collectHarnessUsage(
         ? join(home, value.slice(2))
         : value;
   const configured = (name: string, fallback: string) =>
-    expand(env[name]?.trim() || fallback);
-  const roots = [
+    resolve(expand(env[name]?.trim() || fallback));
+  const configuredRoots = [
     [
       "claude",
       join(configured("CLAUDE_CONFIG_DIR", join(home, ".claude")), "projects"),
@@ -69,139 +106,283 @@ export async function collectHarnessUsage(
   const states = new Map<string, UsageState>(
     ["claude", "codex", "pi", "gemini"].map((h) => [h, "missing"]),
   );
-  const candidates = new Map<
-    string,
-    { harness: string; path: string; size: number; mtime: number }
-  >();
-  // Numeric retention never proves identity absence. Keep old Codex metadata
-  // in a separate bounded inventory so it cannot crowd out current usage.
-  const identityOnly: typeof candidates = new Map();
-  const needCodexIdentity = (options.codex_prefixes ?? []).some((prefix) =>
-    /^[0-9a-f-]{17,36}$/i.test(prefix),
-  );
-  const sessions = new Map<
-    string,
-    { harness: string; reader: ReturnType<typeof project>; files: Set<string> }
-  >();
-  const visits = new Map<string, number>();
-  const fileCounts = new Map<string, number>();
-  let bytes = 0,
-    lines = 0,
-    truncated = false;
+  const roots: { harness: string; raw: string; path: string }[] = [];
+  const inside = (root: string, path: string) =>
+    path.startsWith(join(root, "/"));
+  const extension = (h: string, path: string) =>
+    h === "gemini"
+      ? /(?:^|[/\\])session-[^/\\]+\.jsonl?$/.test(path)
+      : h === "codex"
+        ? /\.jsonl(?:\.zst)?$/.test(path)
+        : /\.jsonl$/.test(path);
+  let truncated = false,
+    identityComplete = true,
+    bytes = 0,
+    lines = 0;
   const deadline = performance.now() + 10_000;
   const fail = (h: string) => {
     states.set(h, "partial");
+    if (h === "codex") identityComplete = false;
   };
-  const visit = (harness: string) => {
-    const count = (visits.get(harness) ?? 0) + 1;
-    visits.set(harness, count);
-    return count <= 2048;
-  };
-  async function add(harness: string, path: string, priority = false) {
+  for (const [harness, raw] of configuredRoots) {
     try {
-      const info = await fs.lstat(path);
-      if (!info.isFile() || info.isSymbolicLink()) {
-        if (harness === "codex" && needCodexIdentity && info.isSymbolicLink())
-          fail(harness);
-        return;
-      }
-      if (candidates.has(path) || identityOnly.has(path)) return;
-      if (info.mtimeMs < start) {
-        if (harness !== "codex" || !needCodexIdentity) return;
-        if (identityOnly.size >= 64) {
-          truncated = true;
-          fail(harness);
-          return;
-        }
-        identityOnly.set(path, {
-          harness,
-          path,
-          size: info.size,
-          mtime: info.mtimeMs,
-        });
-        return;
-      }
-      if (
-        candidates.size >= 384 ||
-        (!priority && (fileCounts.get(harness) ?? 0) >= 64)
-      ) {
-        truncated = true;
+      roots.push({
+        harness: harness!,
+        raw: raw!,
+        path: await fs.realpath(raw!),
+      });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") fail(harness!);
+    }
+  }
+  type Candidate = {
+    harness: string;
+    path: string;
+    size: number;
+    mtime: number;
+    identity: string;
+    priority: boolean;
+    aliases: string[];
+  };
+  const discovered = new Map<string, Candidate>();
+  const fileKey = (path: string) => hash(path.replace(/\.zst$/, ""));
+  async function add(
+    harness: string,
+    path: string,
+    priority = false,
+    alias?: string,
+  ) {
+    if (!extension(harness, path)) {
+      if (priority) fail(harness);
+      return;
+    }
+    try {
+      // A cached canonical path may now contain a replaced symlinked parent.
+      if ((await fs.realpath(path)) !== path) {
         fail(harness);
         return;
       }
-      candidates.set(path, {
+      const info = await fs.lstat(path);
+      if (!info.isFile() || info.isSymbolicLink()) {
+        if (harness === "codex" || priority) fail(harness);
+        return;
+      }
+      if (
+        info.mtimeMs < start &&
+        (harness !== "codex" || !options.codex_prefixes?.length)
+      )
+        return;
+      const prior = discovered.get(path);
+      if (prior) {
+        prior.priority ||= priority;
+        if (alias) prior.aliases.push(fileKey(alias));
+        return;
+      }
+      discovered.set(path, {
         harness,
         path,
         size: info.size,
         mtime: info.mtimeMs,
+        identity: hash(`${info.dev}:${info.ino}`),
+        priority,
+        aliases: [fileKey(path), ...(alias ? [fileKey(alias)] : [])],
       });
-      fileCounts.set(harness, (fileCounts.get(harness) ?? 0) + 1);
     } catch {
       fail(harness);
     }
   }
-  async function walk(harness: string, directory: string, depth: number) {
-    if (!visit(harness) || depth > 8 || performance.now() > deadline) {
+  // Bound paths are data, never shell arguments. Resolve symlinks at this host
+  // and admit only known harness roots and native transcript extensions.
+  for (const bound of (options.files ?? []).slice(0, 128)) {
+    const path = resolve(expand(bound.path));
+    const root = roots.find(
+      (r) =>
+        r.harness === bound.harness &&
+        (inside(r.raw, path) || inside(r.path, path)),
+    );
+    if (!root || !extension(bound.harness, path)) {
+      fail(bound.harness);
+      continue;
+    }
+    try {
+      const actual = await fs.realpath(path).catch(async (error) => {
+        if (
+          bound.harness !== "codex" ||
+          !path.endsWith(".jsonl") ||
+          error.code !== "ENOENT"
+        )
+          throw error;
+        return fs.realpath(`${path}.zst`);
+      });
+      if (!inside(root.path, actual) || !extension(bound.harness, actual)) {
+        fail(bound.harness);
+        continue;
+      }
+      await add(bound.harness, actual, true, path);
+    } catch {
+      fail(bound.harness);
+    }
+  }
+  // Known active files still participate when their dated parent is pruned.
+  for (const old of cache.files.values())
+    if (
+      old.mtime >= start &&
+      roots.some((r) => r.harness === old.harness && inside(r.path, old.path))
+    )
+      await add(old.harness, old.path);
+  const visits = new Map<string, number>();
+  const visit = (h: string) => {
+    const n = (visits.get(h) ?? 0) + 1;
+    visits.set(h, n);
+    return n <= 2048;
+  };
+  async function walk(
+    harness: string,
+    directory: string,
+    parts: string[] = [],
+  ) {
+    if (
+      harness === "codex" &&
+      parts.length > 0 &&
+      parts.length <= 3 &&
+      /^\d{4}$/.test(parts[0]!) &&
+      parts.slice(1).every((p) => /^\d{2}$/.test(p))
+    ) {
+      const [y, m, d] = parts.map(Number);
+      const end =
+        parts.length === 1
+          ? Date.UTC(y! + 1, 0, 1)
+          : parts.length === 2
+            ? Date.UTC(y!, m!, 1)
+            : Date.UTC(y!, m! - 1, d! + 1);
+      if (end <= start) {
+        identityComplete = false;
+        return;
+      }
+    }
+    if (!visit(harness) || parts.length > 8 || performance.now() > deadline) {
       truncated = true;
       fail(harness);
       return;
     }
-    let directoryHandle;
     try {
-      directoryHandle = await fs.opendir(directory);
-    } catch (e) {
-      if ((e as NodeJS.ErrnoException).code !== "ENOENT") fail(harness);
-      return;
-    }
-    if (states.get(harness) === "missing") states.set(harness, "available");
-    try {
-      for await (const entry of directoryHandle) {
+      const handle = await fs.opendir(directory),
+        entries = [];
+      if (states.get(harness) === "missing") states.set(harness, "available");
+      for await (const entry of handle) {
         if (!visit(harness)) {
           truncated = true;
           fail(harness);
           break;
         }
+        entries.push(entry);
+      }
+      entries.sort((a, b) => b.name.localeCompare(a.name));
+      for (const entry of entries) {
         const path = join(directory, entry.name);
-        if (harness === "codex" && needCodexIdentity && entry.isSymbolicLink())
-          fail(harness);
-        if (entry.isDirectory()) await walk(harness, path, depth + 1);
-        else if (
-          entry.isFile() &&
-          /\.(jsonl|jsonl\.zst|json)$/.test(entry.name) &&
-          (harness !== "gemini" || /^session-/.test(entry.name))
-        )
-          await add(harness, path);
+        if (entry.isSymbolicLink()) {
+          if (harness === "codex") identityComplete = false;
+          continue;
+        }
+        if (entry.isDirectory())
+          await walk(harness, path, [...parts, entry.name]);
+        else if (entry.isFile()) await add(harness, path);
       }
     } catch {
       fail(harness);
     }
   }
-  // Exact bound files get capacity before ordinary inventory.
-  for (const f of (options.files ?? []).slice(0, 128))
-    if (states.has(f.harness)) await add(f.harness, f.path, true);
-  for (const [harness, root] of roots) await walk(harness!, root!, 0);
-  const codexSessions = new Map<string, string>();
-  for (const file of [...candidates.values(), ...identityOnly.values()].sort(
-    (a, b) => b.mtime - a.mtime,
+  for (const root of roots) await walk(root.harness, root.path);
+  const selected: Candidate[] = [],
+    counts = new Map<string, number>();
+  let oldIdentities = 0;
+  for (const file of [...discovered.values()].sort(
+    (a, b) => Number(b.priority) - Number(a.priority) || b.mtime - a.mtime,
   )) {
+    if (file.path.endsWith(".zst") && discovered.has(file.path.slice(0, -4)))
+      continue;
+    if (file.mtime < start) {
+      if (++oldIdentities > 64) {
+        truncated = true;
+        fail(file.harness);
+        continue;
+      }
+    } else {
+      const count = (counts.get(file.harness) ?? 0) + 1;
+      if (
+        selected.filter((f) => f.mtime >= start).length >= 384 ||
+        (!file.priority && count > 64)
+      ) {
+        truncated = true;
+        fail(file.harness);
+        continue;
+      }
+      counts.set(file.harness, count);
+    }
+    selected.push(file);
+  }
+  const admitted = new Map(selected.map((f) => [fileKey(f.path), f]));
+  const reset = new Set<string>();
+  for (const [key, old] of cache.files) {
+    const file = admitted.get(key),
+      whole = /\.(json|zst)$/.test(old.path);
+    if (
+      !file ||
+      file.identity !== old.identity ||
+      file.size < old.offset ||
+      (whole && (file.size !== old.size || file.mtime !== old.mtime)) ||
+      (file.mtime !== old.mtime && file.size <= old.size)
+    )
+      reset.add(old.session);
+  }
+  for (const session of reset) {
+    cache.sessions.delete(session);
+    for (const [key, old] of cache.files)
+      if (old.session === session) cache.files.delete(key);
+  }
+  for (const session of cache.sessions.values()) {
+    session.files.clear();
+    session.reader.refresh(options.now);
+  }
+  const codexIdentities = new Map<string, Set<string>>();
+  for (const file of selected) {
     if (
       performance.now() > deadline ||
       bytes >= 256 * 1024 * 1024 ||
       lines > 500_000
     ) {
       truncated = true;
-      for (const harness of states.keys()) fail(harness);
+      for (const h of states.keys()) fail(h);
       break;
     }
-    const { harness, path } = file;
-    if (
-      path.endsWith(".zst") &&
-      (candidates.has(path.slice(0, -4)) || identityOnly.has(path.slice(0, -4)))
-    )
-      continue;
+    const key = fileKey(file.path),
+      old = cache.files.get(key),
+      metadataOnly = file.mtime < start;
     let broken = false,
-      fileBytes = 0;
-    let materialized: string | undefined;
+      permanent = false,
+      fileBytes = 0,
+      materialized: string | undefined;
+    const unchanged =
+      old &&
+      old.identity === file.identity &&
+      old.size === file.size &&
+      old.mtime === file.mtime &&
+      old.complete;
+    const cursor = old ?? {
+      path: file.path,
+      harness: file.harness,
+      size: file.size,
+      mtime: file.mtime,
+      identity: file.identity,
+      offset: 0,
+      complete: false,
+      partial: false,
+      skip: false,
+      session: "",
+      known: false,
+      model: "unknown",
+      prefixes: [],
+    };
     const identity = (record: any) => {
       const id =
         record?.sessionId ??
@@ -215,24 +396,27 @@ export async function collectHarnessUsage(
         ? id
         : null;
     };
-    // Resolve identity before committing a reader. Preambles retain no content;
-    // replaying the prefix into the canonical reader also dedupes copied files.
-    const read = async (consume: (record: any) => boolean) => {
-      let stop = false;
+    const scan = async (consume: (record: any) => boolean, from: number) => {
+      let stopped = false,
+        position = from,
+        committed = from,
+        pending = Buffer.alloc(0),
+        skipping = from > 0 && cursor.skip;
       const parse = (line: string) => {
-        if (stop || !line.trim()) return;
-        if (++lines > 500_000 || line.length > 4 * 1024 * 1024) {
+        if (!line.trim()) return;
+        if (++lines > 500_000) {
           broken = true;
           return;
         }
         try {
-          stop = !consume(JSON.parse(line));
+          stopped = !consume(JSON.parse(line));
         } catch {
           broken = true;
+          permanent = true;
         }
       };
       try {
-        if (path.endsWith(".json") || path.endsWith(".zst")) {
+        if (/\.(json|zst)$/.test(file.path)) {
           if (materialized === undefined) {
             if (
               file.size > 16 * 1024 * 1024 ||
@@ -240,129 +424,189 @@ export async function collectHarnessUsage(
             ) {
               truncated = true;
               broken = true;
-              return;
+              return {
+                offset: from,
+                complete: false,
+                skip: false,
+                tail: false,
+              };
             }
-            let raw: Uint8Array = await fs.readFile(path);
+            let raw: Uint8Array = await fs.readFile(file.path);
             bytes += raw.byteLength;
-            if (path.endsWith(".zst")) {
-              if (!ports.decompress) {
-                broken = true;
-                return;
-              }
+            if (file.path.endsWith(".zst")) {
+              if (!ports.decompress) throw new Error("No decoder");
               raw = await ports.decompress(raw);
               bytes += Math.max(0, raw.byteLength - file.size);
             }
+            if (raw.byteLength > 64 * 1024 * 1024 || bytes > 256 * 1024 * 1024)
+              throw new Error("Usage read limit");
+            materialized = Buffer.from(raw).toString("utf8");
+          }
+          if (file.path.endsWith(".json")) {
+            consume(JSON.parse(materialized));
+          } else
+            for (const line of materialized.split("\n")) {
+              if (line.length > 4 * 1024 * 1024) {
+                permanent = true;
+                continue;
+              }
+              parse(line);
+              if (stopped) break;
+            }
+          return {
+            offset: file.size,
+            complete: true,
+            skip: false,
+            tail: false,
+          };
+        }
+        const handle = await fs.open(file.path, "r");
+        try {
+          const buffer = Buffer.alloc(64 * 1024);
+          while (!stopped && position < file.size) {
             if (
-              raw.byteLength > 64 * 1024 * 1024 ||
-              bytes > 256 * 1024 * 1024
+              fileBytes >= 64 * 1024 * 1024 ||
+              bytes >= 256 * 1024 * 1024 ||
+              lines > 500_000 ||
+              performance.now() > deadline
             ) {
               truncated = true;
               broken = true;
-              return;
+              break;
             }
-            materialized = Buffer.from(raw).toString("utf8");
-          }
-          const text = materialized;
-          if (path.endsWith(".json")) {
-            try {
-              consume(JSON.parse(text));
-            } catch {
+            const { bytesRead } = await handle.read(
+              buffer,
+              0,
+              Math.min(buffer.length, file.size - position),
+              position,
+            );
+            if (!bytesRead) {
               broken = true;
+              break;
             }
-          } else
-            for (const line of text.split("\n")) {
-              parse(line);
-              if (stop) break;
-            }
-        } else {
-          const handle = await fs.open(path, "r");
-          try {
-            const buffer = Buffer.alloc(64 * 1024),
-              decoder = new TextDecoder();
-            let tail = "",
+            position += bytesRead;
+            fileBytes += bytesRead;
+            bytes += bytesRead;
+            pending = Buffer.concat([pending, buffer.subarray(0, bytesRead)]);
+            let end;
+            while (!stopped && (end = pending.indexOf(10)) >= 0) {
+              const boundary = position - pending.length + end + 1;
+              if (!skipping) parse(pending.subarray(0, end).toString("utf8"));
               skipping = false;
-            while (!stop) {
-              if (
-                fileBytes >= 64 * 1024 * 1024 ||
-                bytes >= 256 * 1024 * 1024 ||
-                lines > 500_000 ||
-                performance.now() > deadline
-              ) {
-                truncated = true;
-                broken = true;
-                break;
-              }
-              const { bytesRead } = await handle.read(buffer, 0, buffer.length);
-              if (!bytesRead) break;
-              fileBytes += bytesRead;
-              bytes += bytesRead;
-              tail += decoder.decode(buffer.subarray(0, bytesRead), {
-                stream: true,
-              });
-              let end;
-              while (!stop && (end = tail.indexOf("\n")) >= 0) {
-                if (!skipping) parse(tail.slice(0, end));
-                skipping = false;
-                tail = tail.slice(end + 1);
-              }
-              if (tail.length > 4 * 1024 * 1024) {
-                tail = "";
-                skipping = true;
-                broken = true;
-              }
+              committed = boundary;
+              pending = pending.subarray(end + 1);
             }
-            if (!stop && (tail || skipping)) broken = true;
-          } finally {
-            await handle.close();
+            if (pending.length > 4 * 1024 * 1024) {
+              pending = Buffer.alloc(0);
+              skipping = true;
+              permanent = true;
+              committed = position;
+            }
           }
+          return {
+            offset: skipping ? position : committed,
+            complete: stopped || position >= file.size,
+            skip: skipping,
+            tail: !stopped && pending.length > 0,
+          };
+        } finally {
+          await handle.close();
         }
       } catch {
         broken = true;
+        return {
+          offset: committed,
+          complete: false,
+          skip: skipping,
+          tail: false,
+        };
       }
     };
-    let nativeId: string | null = null;
-    await read((record) => {
-      nativeId = identity(record);
-      return nativeId === null;
-    });
-    const key = hash(`${harness}\0${nativeId ?? path.replace(/\.zst$/, "")}`);
-    if (harness === "codex" && nativeId) codexSessions.set(key, nativeId);
-    if (identityOnly.has(path)) {
-      if (broken || !nativeId) fail(harness);
+    if (!unchanged && !cursor.known) {
+      await scan((record) => {
+        const id = identity(record);
+        if (!id) return true;
+        const canonical = hash(`${file.harness}\0${id}`);
+        if (cursor.session && cursor.session !== canonical)
+          cache.sessions.delete(cursor.session);
+        cursor.session = canonical;
+        cursor.known = true;
+        if (file.harness === "codex")
+          cursor.prefixes = Array.from(
+            { length: Math.max(0, Math.min(36, id.length) - 16) },
+            (_, n) => hash(id.slice(0, n + 17).toLowerCase()),
+          );
+        return false;
+      }, 0);
+    }
+    cursor.session ||= hash(`${file.harness}\0${file.path}`);
+    if (!cursor.known) {
+      broken = true;
+      identityComplete = file.harness === "codex" ? false : identityComplete;
+    }
+    if (file.harness === "codex" && cursor.known) {
+      const known = codexIdentities.get(cursor.session) ?? new Set<string>();
+      for (const prefix of cursor.prefixes) known.add(prefix);
+      codexIdentities.set(cursor.session, known);
+    }
+    if (!metadataOnly) {
+      let session = cache.sessions.get(cursor.session);
+      if (!session) {
+        session = {
+          harness: file.harness,
+          reader: project(file.harness, options.now, hash),
+          files: new Set(),
+        };
+        cache.sessions.set(cursor.session, session);
+        cursor.offset = 0;
+      }
+      if (!unchanged || !old) {
+        session.reader.context(cursor.model);
+        const next = await scan((record) => {
+          const id = identity(record);
+          if (id && hash(`${file.harness}\0${id}`) !== cursor.session) {
+            permanent = true;
+            identityComplete = false;
+            return false;
+          }
+          session.reader.accept(record);
+          return true;
+        }, cursor.offset);
+        cursor.offset = next.offset;
+        cursor.complete = next.complete;
+        cursor.skip = next.skip;
+        cursor.partial = next.tail || broken;
+        cursor.model = session.reader.context();
+        if (permanent) session.reader.incomplete();
+      }
+      for (const alias of file.aliases)
+        if (session.files.size < 16 || session.files.has(alias))
+          session.files.add(alias);
+        else {
+          session.reader.incomplete();
+          truncated = true;
+        }
+    } else if (!unchanged) {
+      cursor.complete = cursor.known && !broken;
+      cursor.partial = broken;
+    }
+    cursor.size = file.size;
+    cursor.mtime = file.mtime;
+    cursor.identity = file.identity;
+    cache.files.set(key, cursor);
+    if (broken || cursor.partial) fail(file.harness);
+  }
+  const result: HostUsage = {
+    rows: [],
+    sources: [],
+    truncated,
+    title_matches: [],
+  };
+  for (const [sessionKey, session] of cache.sessions) {
+    if (!session.files.size) {
+      cache.sessions.delete(sessionKey);
       continue;
     }
-    let current = sessions.get(key);
-    if (!current) {
-      current = {
-        harness,
-        reader: project(harness, options.now),
-        files: new Set(),
-      };
-      sessions.set(key, current);
-    }
-    if (!nativeId) broken = true; // No canonical identity is explicitly partial.
-    if (current.files.size < 16)
-      current.files.add(hash(path.replace(/\.zst$/, "")));
-    else {
-      current.reader.incomplete();
-      truncated = true;
-    }
-    await read((record) => {
-      const nextId = identity(record);
-      if (nextId && nativeId && nextId !== nativeId) {
-        broken = true;
-        return false;
-      }
-      current.reader.accept(record);
-      return true;
-    });
-    if (broken) {
-      current.reader.incomplete();
-      fail(harness);
-    }
-  }
-  const result: HostUsage = { rows: [], sources: [], truncated };
-  for (const [session_key, session] of sessions) {
     const projected = session.reader.finish();
     if (projected.partial) fail(session.harness);
     for (const row of projected.rows) {
@@ -374,9 +618,9 @@ export async function collectHarnessUsage(
       result.rows.push({
         ...row,
         harness: session.harness,
-        session_key,
+        session_key: sessionKey,
         file_keys: [...session.files],
-        partial: projected.partial,
+        partial: projected.partial || states.get(session.harness) === "partial",
       });
     }
   }
@@ -386,21 +630,24 @@ export async function collectHarnessUsage(
       !result.rows.some((r) => r.harness === harness)
     )
       states.set(harness, "missing");
-  result.sources = [...states].map(([harness, state]) => ({ harness, state }));
-  result.title_matches = [];
-  if (!result.truncated && states.get("codex") === "available") {
+  if (
+    identityComplete &&
+    !result.truncated &&
+    states.get("codex") === "available"
+  ) {
     for (const prefix of (options.codex_prefixes ?? []).slice(0, 128)) {
-      if (!/^[0-9a-f-]{17,36}$/i.test(prefix)) continue;
-      const matches = [...codexSessions].filter(([, id]) =>
-        id.toLowerCase().startsWith(prefix.toLowerCase()),
-      );
+      const digest = hash(prefix.toLowerCase()),
+        matches = [...codexIdentities].filter(([, values]) =>
+          values.has(digest),
+        );
       if (matches.length === 1)
-        result.title_matches.push({
-          prefix_key: hash(prefix.toLowerCase()),
+        result.title_matches!.push({
+          prefix_key: digest,
           session_key: matches[0]![0],
         });
     }
   }
+  result.sources = [...states].map(([harness, state]) => ({ harness, state }));
   while (
     Buffer.byteLength(JSON.stringify(result)) > 512 * 1024 &&
     result.rows.length
@@ -411,6 +658,29 @@ export async function collectHarnessUsage(
       harness,
       state,
     }));
+  }
+  const account = () =>
+    (cache.files.size
+      ? Buffer.byteLength(JSON.stringify([...cache.files]))
+      : 0) +
+    [...cache.sessions.values()].reduce(
+      (sum, session) => sum + session.reader.cacheBytes(),
+      0,
+    );
+  const maxEntries = Math.max(0, Math.min(448, cache.maxEntries ?? 448)),
+    maxBytes = Math.max(
+      0,
+      Math.min(32 * 1024 * 1024, cache.maxBytes ?? 32 * 1024 * 1024),
+    );
+  cache.bytes = account();
+  for (const [, cursor] of [...cache.files].sort(
+    ([, a], [, b]) => a.mtime - b.mtime,
+  )) {
+    if (cache.files.size <= maxEntries && cache.bytes <= maxBytes) break;
+    cache.sessions.delete(cursor.session);
+    for (const [key, entry] of cache.files)
+      if (entry.session === cursor.session) cache.files.delete(key);
+    cache.bytes = account();
   }
   return result;
 }
