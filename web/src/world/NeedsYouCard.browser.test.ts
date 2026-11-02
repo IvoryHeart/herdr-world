@@ -114,6 +114,34 @@ test.skipIf(!chrome)(
       const state = () =>
         evaluate(`({ expanded: ${card}.querySelector('.needs-you-more-text').getAttribute('aria-expanded'),
       href: document.activeElement.getAttribute('href'), toggle: document.activeElement.matches('.needs-you-more-text') })`);
+      const pointerClick = async (element: string) => {
+        const point = await evaluate(`(() => {
+          const rect = ${element}.getClientRects()[0];
+          return { x: rect.left + 2, y: rect.top + 2 };
+        })()`);
+        for (const type of ["mousePressed", "mouseReleased"])
+          await command("Input.dispatchMouseEvent", {
+            ...point,
+            type,
+            button: "left",
+            clickCount: 1,
+          });
+        await evaluate(
+          "new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))",
+        );
+      };
+      // Native pointer focus must not reveal a visible link; plain text must.
+      await evaluate(
+        `${card}.querySelector('.needs-you-text a').addEventListener('click', event => event.preventDefault(), { once: true })`,
+      );
+      await pointerClick(`${card}.querySelector('.needs-you-text a')`);
+      expect(await state()).toMatchObject({
+        expanded: "false",
+        href: "https://example.com/pull/42",
+      });
+      await pointerClick(`${card}.querySelector('.needs-you-text')`);
+      expect((await state()).expanded).toBe("true");
+      await evaluate(`${card}.querySelector('.needs-you-more-text').click()`);
       // Traverse from before the text, including the link hidden below the clamp.
       await evaluate(`${card}.querySelector('.needs-you-name').focus()`);
       await key("Tab", 9); // About.
