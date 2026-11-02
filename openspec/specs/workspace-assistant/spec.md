@@ -147,3 +147,10 @@ at each new run admission. It SHALL require all-workspace permission, then captu
 and validate that run's current owners. Fixed-scope tasks SHALL retain their saved
 identity checks. Membership selection SHALL NOT authorize a stale active run to
 retarget a replacement runtime.
+
+#### Scenario: Refresh membership for a new run only
+
+- **WHEN** a new run of an explicit all-workspace task is admitted with the required
+  all-workspace permission
+- **THEN** that run SHALL capture the currently authorized workspace owners
+- **AND** an earlier admitted run SHALL NOT retarget a replacement runtime
